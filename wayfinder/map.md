@@ -34,6 +34,8 @@ label: wayfinder:map
 - [Codex 在 Windows 的原生通道可行性](tickets/001-codex-windows-feasibility.md): 原生可行——本机活体验证 `codex app-server proxy` + WebSocket over stdio + `initialize`/`thread/list` JSON-RPC 全链路成功，schema 含 `thread/resume`/`turn/start`/`turn/steer`，无需降级轮询（缺口仅为移植项：三元组/目录名、socket 见证模型、进程收割、env 变量双读）。
 - [Claude Windows named pipe 实测验证](tickets/002-claude-windows-pipe-verification.md): 原生可行但需适配——用户帧逐字节兼容并在自建会话上端到端注入成功（回复 OK）；Windows 强制先写 auth 行（peerToken 来自 `<pid>.<sha256(管道路径)>.key`）、管道名随机须读注册表、接收会话需 `crossSessionInbound:"accept"` 否则消息被 parity hold、会话生命周期须网关自管。
 - [一期 broker 架构设计](tickets/003-broker-phase1-design.md): **无需 broker**——一期 = 无状态 CLI 四命令（`send`/`status`/`install-skills`/`claude` 包装）；skill+信封双教学、双侧自动发现零注册、同步 send 不重试、自包含会话引用、防乒乓文件限流、Node22+TS；考虑并否决 Claude 原生 ListAgents 伪 peer 广告（embassy v4.0.0 主动移除同款）；broker 回归条件 = 忙时持久队列/异步回执/跨机不占线。
+- [长对话的上下文策略](tickets/004-context-strategy.md): 一期 = 预算+计数提示——单条 16KiB 上限、ref 内嵌轮次计数、信封显示第 N 轮、接近预算 skill 自动收尾；一切超限同步显式报错（MESSAGE_TOO_LARGE / RATE_LIMITED）交 agent 自纠，长内容落盘发路径引用（同机文件系统=天然泄压阀）；摘要轮换/外部档案留二期。
+- **一期全部设计票关闭，frontier 清空——目的地达成，进入实施（B0✅ B1…B5）**
 
 ## Not yet specified
 
@@ -41,7 +43,6 @@ label: wayfinder:map
 - 完整集的范围与节奏：持久账本、回执、投递状态机、TUI、服务安装 + 看门狗（launchd `KeepAlive{Crashed}` 语义等价物）、Windows 安全见证模型（named pipe ACL 哲学）；broker 回归条件已定（003），联邦 v1 可先 ssh+远端 CLI
 - mac/linux 平台适配排期
 - agent 侧 skill 文案（embassy-peer 等价物）——形式已定（003：skill+信封双保险），具体文案实施时写
-- 上下文策略的具体实施细节（策略本身见对应票）
 - 工具命名
 
 ## Out of scope
