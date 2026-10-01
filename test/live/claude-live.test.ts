@@ -139,7 +139,7 @@ describe.skipIf(!process.env.MULTICHAT_LIVE)('claude live end-to-end injection',
         })}\n`,
       );
 
-      let registryEntryGone = false;
+      let cleanedUp = false;
       try {
         // Target = the registry entry that appeared after our spawn and lives in our workDir.
         const target = await waitFor<RawRegistryEntry>(() => {
@@ -178,18 +178,25 @@ describe.skipIf(!process.env.MULTICHAT_LIVE)('claude live end-to-end injection',
         }, 180_000, `marker ${marker} in transcript`);
         console.log(`[live] marker ${marker} verified in ${transcript}`);
 
-        // Cleanup: kill our own process tree, remove the temp dir, registry entry must vanish.
+        // Cleanup: kill our own process tree, remove the temp dir. A hard kill
+        // (TerminateProcess) leaves the raw registry .json behind; the product
+        // routes by pid liveness, so assert the pid left the routable set and
+        // GC our own stale registry files (pid verified dead above).
         spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F']);
         await waitFor(() => (child.exitCode !== null ? child.exitCode : undefined), 30_000, 'child exit');
         rmSync(workDir, { recursive: true, force: true });
-        registryEntryGone = await waitFor(() => {
-          const stillThere = readRegistry(sessionsDir).some((entry) => entry.pid === target.pid);
-          return stillThere ? undefined : true;
-        }, 30_000, `registry entry for pid ${target.pid} to disappear`);
-        expect(registryEntryGone).toBe(true);
-        console.log(`[live] cleanup done: pid ${child.pid} killed, temp dir removed, registry entry gone`);
+        const notRoutable = await waitFor(() => {
+          const scan = listClaudeSessions();
+          return scan.sessions.some((session) => session.pid === target.pid) ? undefined : true;
+        }, 30_000, `pid ${target.pid} to leave the routable set`);
+        expect(notRoutable).toBe(true);
+        for (const file of readdirSync(sessionsDir)) {
+          if (file.startsWith(`${target.pid}.`)) rmSync(join(sessionsDir, file), { force: true });
+        }
+        cleanedUp = true;
+        console.log(`[live] cleanup done: pid ${child.pid} killed, temp dir removed, stale registry files GC'd`);
       } finally {
-        if (!registryEntryGone) {
+        if (!cleanedUp) {
           child.stdin?.end();
           child.kill();
           rmSync(workDir, { recursive: true, force: true });
