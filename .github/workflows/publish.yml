@@ -16,11 +16,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org/
-
-      - name: Upgrade npm (Trusted Publishing needs npm >= 11.5)
-        run: npm install -g npm@latest
 
       - name: Verify version matches release tag
         env:
