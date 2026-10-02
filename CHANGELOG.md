@@ -2,6 +2,10 @@
 
 本项目的全部显著变更记录于此。格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [1.0.1] - 2026-10-02
+
+- README 移除曾用名注记；首验 Trusted Publisher (OIDC) 自动发布管线
+
 ## [1.0.0] - 2026-10-02
 
 首个公开版本。Windows 一期：本机 Claude Code ↔ Codex CLI 跨会话消息，无守护进程，原生投递。

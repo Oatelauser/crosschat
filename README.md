@@ -6,8 +6,6 @@
 
 **让本机的 Claude Code 与 Codex CLI 互相对话** —— 无守护进程、原生投递、双向实测。
 
-*曾用名 multichat（`multichat` 命令作为过渡别名保留）*
-
 ![CI](https://github.com/Oatelauser/crosschat/actions/workflows/ci.yml/badge.svg) ![npm](https://img.shields.io/npm/v/@oatelauser/crosschat) ![license](https://img.shields.io/badge/license-MIT-green) ![node](https://img.shields.io/badge/node-%3E%3D22-339933) ![platform](https://img.shields.io/badge/platform-Windows-blue) ![agents](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 </div>
