@@ -10,7 +10,7 @@ npm install && npm run build && npm link
 multichat install-skills        # 把 multichat skill 装进 ~/.claude 与 ~/.codex
 ```
 
-前置：本机已登录 claude CLI 与 codex CLI；codex 侧需先启动 daemon（见下）。
+前置：本机已登录 claude CLI 与 codex CLI；codex 侧需先启动 daemon（见下）。**daemon 必须从干净终端启动**——勿在 Claude 会话/带 `CLAUDE_CODE_*` 环境变量的终端里启动 daemon，否则它派生的所有 shell 都被身份污染（触发 `CALLER_IDENTITY_CONFLICT`）。
 
 ## 使用流程
 
@@ -81,6 +81,7 @@ status 里 codex 段显示 `unavailable` 时，按序排查：
 | RATE_LIMITED | 每对端点 60s 内最多 30 条；按提示等待后重试，或总结收尾 |
 | CODEX_THREAD_LOCKED | 线程被 codex 窗口占用；关窗口后重发，或改投其他信箱线程 |
 | CODEX_PROXY_SPAWN_FAILED | 看 stderr 摘要/OS 错误；多为 daemon 未启动，先 `codex app-server daemon start` |
+| CALLER_IDENTITY_CONFLICT | 环境同时残留 CLAUDE_CODE_* 与 CODEX_* 身份变量。临时：命令前缀 `env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID`（PowerShell 先 `Remove-Item Env:CLAUDE_CODE_*`）；根治：从干净终端重启 daemon（`codex app-server daemon stop && codex app-server daemon start`） |
 | CODEX_APPROVAL_REQUIRED | 线程在等审批，只有用户能答；去 codex 窗口处理后重发 |
 | CALLER_NOT_IN_CONVERSATION | 当前会话不是该对话端点；检查 reply-ref 是否完整照抄 |
 | CANNOT_REPLY_TO_HUMAN | 对话由人类发起，没有可回投的 agent 会话 |

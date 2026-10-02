@@ -39,7 +39,11 @@ export function resolveCallerIdentity(
   if (claude !== undefined && codexId !== '') {
     throw new MultichatError(
       'CALLER_IDENTITY_CONFLICT',
-      `Environment declares both a Claude session (socket ${socket}) and a Codex thread (${codexId}); cannot determine the sender.`,
+      `Caller identity conflict: both CLAUDE_CODE_* and CODEX_* identity variables are present (socket ${socket}, thread ${codexId}). ` +
+        `自纠（临时）: 命令前缀 env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID ` +
+        `（PowerShell 先 Remove-Item Env:CLAUDE_CODE_*）。` +
+        `根治: 从干净终端重启 codex daemon（codex app-server daemon stop && codex app-server daemon start）` +
+        `——daemon 会把启动时的环境传给它派生的所有 shell。`,
     );
   }
   if (claude !== undefined) return claude;

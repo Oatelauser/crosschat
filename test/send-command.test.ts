@@ -157,14 +157,19 @@ describe('runSend validation', () => {
 });
 
 describe('runSend identity rules', () => {
-  it('refuses when both identity families are present in env', async () => {
-    await expectCode(
+  it('refuses when both identity families are present in env, with self-fix guidance', async () => {
+    const err = await expectCode(
       send(
         { to: 'alpha', bodyArg: 'h' },
         { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha', CODEX_THREAD_ID: 'team1111-aaaa' },
       ),
       'CALLER_IDENTITY_CONFLICT',
     );
+    expect(err.message).toContain(
+      'env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID',
+    );
+    expect(err.message).toContain('Remove-Item Env:CLAUDE_CODE_*');
+    expect(err.message).toContain('daemon stop');
   });
 
   it('refuses when the claude socket matches no routable session', async () => {

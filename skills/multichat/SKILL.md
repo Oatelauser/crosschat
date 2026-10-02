@@ -46,6 +46,13 @@ multichat send --to <名字> --body "正文"
 
 - `MESSAGE_TOO_LARGE`：正文超过 16KiB。把完整内容**写入一个文件，只发文件路径**（接收方会按需读取，这也是长内容的标准做法）。
 - `RATE_LIMITED`：发送过快（每对端点 60 秒最多 30 条）。**等待后重试**，或直接总结收尾；系统不会静默丢弃或自动重试。
+- `CALLER_IDENTITY_CONFLICT`：环境里同时残留 `CLAUDE_CODE_*` 与 `CODEX_*` 身份变量（常见于从 Claude 终端启动的 codex daemon 派生的 shell）。临时自纠 = 给命令加前缀，照抄：
+
+  ```
+  env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID multichat send --conversation mc1_XXXX --body "正文"
+  ```
+
+  （PowerShell 先 `Remove-Item Env:CLAUDE_CODE_*` 再发送。）根治 = 让用户从干净终端重启 daemon：`codex app-server daemon stop && codex app-server daemon start`。
 - 其他错误码：错误信息已写明原因与出路，按信息处理即可。multichat 只有 `send` / `status` / `install-skills` / `claude` 四个命令，不要猜测不存在的子命令或参数。
 
 ## 会话纪律
