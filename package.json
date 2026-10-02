@@ -1,14 +1,30 @@
 {
-  "name": "crosschat",
+  "name": "@oatelauser/crosschat",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
+  "description": "Let Claude Code and Codex CLI talk to each other on your machine: native delivery via named pipe and app-server, stateless CLI, no daemon.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Oatelauser/crosschat.git"
+  },
+  "license": "MIT",
   "bin": {
     "crosschat": "dist/cli.js",
     "multichat": "dist/cli.js"
   },
   "engines": {
     "node": ">=22"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   },
   "scripts": {
     "build": "tsc",

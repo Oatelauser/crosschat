@@ -1,0 +1,40 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org/
+
+      - name: Upgrade npm (Trusted Publishing needs npm >= 11.5)
+        run: npm install -g npm@latest
+
+      - name: Verify version matches release tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "v${PKG_VERSION}" != "${RELEASE_TAG}" ]; then
+            echo "::error::version mismatch: package.json=${PKG_VERSION} but release tag=${RELEASE_TAG}"
+            exit 1
+          fi
+          echo "Publishing @oatelauser/crosschat@${PKG_VERSION}"
+
+      - run: npm ci
+      - run: npm run check
+
+      - name: Publish to npm (Trusted Publisher / OIDC)
+        run: npm publish --access public --provenance
