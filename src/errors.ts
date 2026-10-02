@@ -1,4 +1,4 @@
-/** Machine-readable error shared by all multichat modules. */
+/** Machine-readable error shared by all crosschat modules. */
 export class MultichatError extends Error {
   readonly code: string;
   /** Bounded stderr tail of a spawned child process, when one failed. */

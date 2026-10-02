@@ -3,7 +3,7 @@ import { MultichatError } from '../errors.js';
 import { resolveClaudeExe } from '../claude/resolve-exe.js';
 
 /**
- * `multichat claude [args...]`: start the real claude CLI with
+ * `crosschat claude [args...]`: start the real claude CLI with
  * `crossSessionInbound: accept` so peer sessions can inject messages
  * (ticket 002: without it inbound frames sit in parity hold).
  */
@@ -35,7 +35,7 @@ export async function runClaudeWrapper(
   if (args.some((token) => token === '--settings' || token.startsWith('--settings='))) {
     throw new MultichatError(
       'SETTINGS_CONFLICT',
-      'multichat claude passes its own --settings {"crossSessionInbound":"accept"}. '
+      'crosschat claude passes its own --settings {"crossSessionInbound":"accept"}. '
         + 'Merge that JSON into your settings file and start claude directly instead.',
     );
   }

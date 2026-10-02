@@ -21,7 +21,7 @@ const version: string = (
   }
 ).version;
 
-const usage = `usage: multichat <command> [options]
+const usage = `usage: crosschat <command> [options]
 
 commands:
   send --to <name> | --conversation <ref>
@@ -129,7 +129,7 @@ function printFailure(err: unknown): number {
     err instanceof MultichatError
       ? err
       : new MultichatError('INTERNAL', err instanceof Error ? err.message : String(err), { cause: err });
-  process.stderr.write(`multichat: ${me.code}: ${me.message}\n`);
+  process.stderr.write(`crosschat: ${me.code}: ${me.message}\n`);
   return 1;
 }
 
@@ -199,7 +199,7 @@ async function main(argv: string[]): Promise<number> {
       return printFailure(err);
     }
   }
-  process.stderr.write(`multichat: USAGE: unknown command: ${command}\n\n`);
+  process.stderr.write(`crosschat: USAGE: unknown command: ${command}\n\n`);
   process.stderr.write(usage);
   return 1;
 }

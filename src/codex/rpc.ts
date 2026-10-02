@@ -17,7 +17,7 @@ const WHITELISTED_METHODS = new Set([
   'turn/steer',
   'thread/unsubscribe',
   // Used only by the isolated live self-test (thread/start creates a fresh
-  // thread owned by multichat; thread/delete removes it). deliver() and
+  // thread owned by crosschat; thread/delete removes it). deliver() and
   // discovery() never call these on user threads.
   'thread/start',
   'thread/delete',
@@ -61,7 +61,7 @@ export class CodexRpcClient {
   readonly notifications: CodexRpcNotification[] = [];
   /**
    * Server-initiated requests (approval family etc.), recorded as evidence.
-   * multichat never answers approvals, so no response is ever sent back.
+   * crosschat never answers approvals, so no response is ever sent back.
    */
   readonly serverRequests: CodexRpcNotification[] = [];
 

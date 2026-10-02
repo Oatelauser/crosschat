@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { checkAndRecord, rateKey, RATE_LIMIT_MAX } from '../src/rate-limit.js';
 import { MultichatError } from '../src/errors.js';
 
-const dir = mkdtempSync(join(tmpdir(), 'multichat-rate-'));
+const dir = mkdtempSync(join(tmpdir(), 'crosschat-rate-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 function expectCode(fn: () => unknown, code: string): void {

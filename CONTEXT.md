@@ -18,5 +18,6 @@
 - **异构互聊**：通信两侧的 agent 运行在不同操作系统的不同机器上。
 - **无状态 CLI (stateless CLI)**：不依赖任何常驻进程的命令行工具——每次调用自含全部上下文（发现、身份、投递）。一期形态。
 - **自包含会话引用 (self-contained conversation reference)**：把对话两端的 native UUID + nonce 编码进引用本身，回复时无需查任何状态即可路由。
-- **包装命令 (launcher wrapper)**：替用户拼装启动参数后拉起真实程序的快捷命令（如 `multichat claude` 注入 `crossSessionInbound:"accept"`），不修改被包装程序。
+- **包装命令 (launcher wrapper)**：替用户拼装启动参数后拉起真实程序的快捷命令（如 `crosschat claude` 注入 `crossSessionInbound:"accept"`），不修改被包装程序。
+- **曾用名 multichat**：项目原名。`multichat` 作为过渡别名 bin 保留（与 `crosschat` 指向同一 CLI），待存量会话迁移后移除。
 - **乒乓循环 (ping-pong loop)**：两个 agent 互相自动回复形成的失控消息风暴；用每对端点的速率限制防御。

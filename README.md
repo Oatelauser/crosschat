@@ -1,13 +1,16 @@
-# multichat
+<!-- badges -->
+
+# crosschat
 
 > Windows 一期：Claude Code ↔ Codex CLI 跨会话消息。无守护进程，原生投递，四个方向双向实测。
+> 曾用名 `multichat`——`multichat` 命令作为过渡别名保留（bin 双名指向同一 CLI），存量会话照常可用。
 > 设计决策见 `docs/wayfinder/map.md`；联调实证见 `docs/drill-reports/`。
 
 ## 1. 心智模型（30 秒）
 
-multichat 是本机 agent 之间的**邮差**：无守护进程、无驻留服务，每次发送就是一条命令。
+crosschat 是本机 agent 之间的**邮差**：无守护进程、无驻留服务，每次发送就是一条命令。
 
-- **Claude 侧**收消息 = 会话里出现一条"来自另一会话"的用户消息（需 `multichat claude` 启动开启接收许可）
+- **Claude 侧**收消息 = 会话里出现一条"来自另一会话"的用户消息（需 `crosschat claude` 启动开启接收许可）
 - **Codex 侧**收消息 = 线程被投一个新 turn，由 app-server daemon **headless 执行**（不需要窗口在场）
 - 教学内建：agent 侧装有 skill（`install-skills`），且每条消息信封自带回复命令——**题词只写角色，不写协议**
 
@@ -21,8 +24,8 @@ multichat 是本机 agent 之间的**邮差**：无守护进程、无驻留服�
 
 ```powershell
 cd D:\workspace\CC\multichat
-npm install && npm run build && npm link    # multichat 上 PATH
-multichat install-skills                    # 协议教学装到两侧 agent
+npm install && npm run build && npm link    # crosschat（及过渡别名 multichat）上 PATH
+crosschat install-skills                    # 协议教学装到两侧 agent
 ```
 
 **daemon 必须从干净终端启动**（别在 Claude 会话内启动，否则派生 shell 身份污染，codex 回信撞 `CALLER_IDENTITY_CONFLICT`）：
@@ -37,16 +40,16 @@ codex app-server daemon start
 
 | 发起者 | 怎么发 | 特性 |
 |---|---|---|
-| **claude** | 会话内 agent 跑 `multichat send --to <codex 线程名> --body "…"` | 最顺，推荐默认 |
-| **codex** | 会话内 agent 跑 `multichat send --to <claude 会话名> --body "…"` | 发送随意；回信开窗关窗都能收（daemon 0.160+，见 3.5） |
-| **人** | 任意终端直接跑 `multichat send --to <名字> --body "…"` | 身份是 human：**能发、不能被回复**（单向指令/通知） |
+| **claude** | 会话内 agent 跑 `crosschat send --to <codex 线程名> --body "…"` | 最顺，推荐默认 |
+| **codex** | 会话内 agent 跑 `crosschat send --to <claude 会话名> --body "…"` | 发送随意；回信开窗关窗都能收（daemon 0.160+，见 3.5） |
+| **人** | 任意终端直接跑 `crosschat send --to <名字> --body "…"` | 身份是 human：**能发、不能被回复**（单向指令/通知） |
 
-第一条消息永远用 `--to`（此刻生成对话引用 reply-ref）；对方名字用 `multichat status` 查（名字含空格加引号）。
+第一条消息永远用 `--to`（此刻生成对话引用 reply-ref）；对方名字用 `crosschat status` 查（名字含空格加引号）。
 
 ### 3.2 往复规则（谁说话、怎么接）
 
 1. 收到方看到一条**信封消息**：`<cross-session-message from-name="发送方" turn="N">` + 正文 + **回复提示**（一条完整命令）
-2. 回复 = **逐字照抄回复提示里的命令**，把 `<你的回复>` 换成正文：`multichat send --conversation mc1_… --body "…"`
+2. 回复 = **逐字照抄回复提示里的命令**，把 `<你的回复>` 换成正文：`crosschat send --conversation mc1_… --body "…"`
 3. 引用随每轮自动轮转，`turn` 递增——**无需记住任何历史**，每条消息自带下一步
 4. 防失控：每对端点 30 条/60 秒限流（`RATE_LIMITED` → 等待或收尾）
 
@@ -59,7 +62,7 @@ codex app-server daemon start
 
 ```
 步骤   动作主体   发生什么                                  窗口状态
-1      你        终端 A：multichat claude + 角色题词         A 开
+1      你        终端 A：crosschat claude + 角色题词         A 开
 2      你        确认 codex 信箱线程已存在（窗口开/关均可）     任意
 3      claude    send --to <线程名> "任务…" → delivered(1)    —
 4      codex     headless 收 turn、干活、照提示回信           任意
@@ -81,7 +84,7 @@ codex app-server daemon start
 6      ——        循环 4-5；想看 codex 侧就开窗 resume          —
 ```
 
-★ 已非关键步：daemon **0.160+** 且 TUI 附着 daemon 时，codex 线程**开窗也能直接收信**（headless 执行，TUI 不实时刷新）。仅当开窗被锁（旧 daemon ≤0.157 或 `--no-daemon`/未附着 TUI）时 multichat 才等待（默认 120s），关窗瞬间送达；超时报 `CODEX_THREAD_LOCKED` 指引重发。
+★ 已非关键步：daemon **0.160+** 且 TUI 附着 daemon 时，codex 线程**开窗也能直接收信**（headless 执行，TUI 不实时刷新）。仅当开窗被锁（旧 daemon ≤0.157 或 `--no-daemon`/未附着 TUI）时 crosschat 才等待（默认 120s），关窗瞬间送达；超时报 `CODEX_THREAD_LOCKED` 指引重发。
 
 **不对称速记**：claude 收发都随意；codex 收信开窗关窗均可（0.160+），关窗永远是最稳路径。
 
@@ -94,7 +97,7 @@ codex app-server daemon start
 
 **第 1 步 · 左窗启动 claude（接收方先开机）**
 ```
-D:\workspace\CC\demo> multichat claude
+D:\workspace\CC\demo> crosschat claude
 ```
 进入后输入 `/rename worker`（给领导一个明确的名字），然后什么都不贴，待命。
 
@@ -103,7 +106,7 @@ D:\workspace\CC\demo> multichat claude
 D:\workspace\CC\demo> codex
 ```
 ```
-你是领导。用 multichat（先 status 确认名字）给 claude 会话「worker」下发任务：
+你是领导。用 crosschat（先 status 确认名字）给 claude 会话「worker」下发任务：
 在当前目录创建 notes.txt，内容三行：买牛奶、交电费、给妈妈打电话。
 收到完成报告后，亲自打开文件验证内容；通过则回复"验收通过，任务结束"并停止；
 不通过则下发返工任务。
@@ -111,23 +114,23 @@ D:\workspace\CC\demo> codex
 
 **第 3 步 · 右窗屏幕——任务由 codex 发出**
 ```
-● exec: multichat status
-● exec: multichat send --to worker --body "任务1：在当前目录创建 notes.txt…"
+● exec: crosschat status
+● exec: crosschat send --to worker --body "任务1：在当前目录创建 notes.txt…"
 ● delivered to worker (turn 1)          ← 任务飞进左窗，发起方是 codex
 ```
 
-**第 4 步 · 右窗开着也没关系**（daemon 0.160+ 下开窗可投；旧环境被锁时 multichat 会等关窗，此时再关右窗即可）
+**第 4 步 · 右窗开着也没关系**（daemon 0.160+ 下开窗可投；旧环境被锁时 crosschat 会等关窗，此时再关右窗即可）
 
 **第 5 步 · 左窗屏幕——claude 收令干活**
 ```
 📨 来自另一会话的消息:
 <cross-session-message from-name="codex/01a0f…" turn="1">
 任务1：在当前目录创建 notes.txt，内容三行…
-回复请运行: multichat send --conversation mc1_xxx --body "<你的回复>"
+回复请运行: crosschat send --conversation mc1_xxx --body "<你的回复>"
 </cross-session-message>
 
 ⏺ Write: notes.txt（三行待办）
-⏺ Bash: multichat send --conversation mc1_xxx --body "已完成：notes.txt 已创建，内容为要求的三行。"
+⏺ Bash: crosschat send --conversation mc1_xxx --body "已完成：notes.txt 已创建，内容为要求的三行。"
 ⏺ delivered (turn 2)                     ← 报告发回给 codex
 ```
 
@@ -144,8 +147,8 @@ claude 停止。**全程在左窗直播**；想看领导的验收细节：开右
 
 ## 4. 每日标准流程（速览）
 
-1. `multichat status` —— 环境体检（codex 段 unavailable → 先修 daemon，见 §11）
-2. `multichat claude` + 角色题词（终端 A）
+1. `crosschat status` —— 环境体检（codex 段 unavailable → 先修 daemon，见 §11）
+2. `crosschat claude` + 角色题词（终端 A）
 3. `codex` + 角色题词（终端 B）（开窗关窗均可收信，关窗最稳）
 4. 在终端 A 围观，必要时人插话（见 §5）
 5. 预算耗尽 → agent 总结收尾 → 关会话
@@ -154,8 +157,8 @@ claude 停止。**全程在左窗直播**；想看领导的验收细节：开右
 
 | 场景 | 操作 |
 |---|---|
-| 人插话 | 任意终端 `multichat send --to <名字> --body "…"`（单向，对方无法回你） |
-| claude ↔ claude | 双方都 `multichat claude` 启动，其余同流程 A |
+| 人插话 | 任意终端 `crosschat send --to <名字> --body "…"`（单向，对方无法回你） |
+| claude ↔ claude | 双方都 `crosschat claude` 启动，其余同流程 A |
 | 向开着的 codex 窗口投递 | 直接发：0.160+ daemon 附着 TUI 时开窗即达；被锁则等待关窗，120s 超时报错指引 |
 | 看 codex 侧历史 | 开窗 resume 该线程（开窗不影响收信） |
 | 新话题 | agent 用 `--to` 新发，不续旧引用 |
@@ -164,23 +167,23 @@ claude 停止。**全程在左窗直播**；想看领导的验收细节：开右
 ## 6. 命令速查
 
 ```
-multichat send --to <名字> --body "<正文>"          # 新消息
-multichat send --conversation <ref> --body "<正文>" # 回复（ref 照抄信封）
-echo … | multichat send --to <名字>                 # 正文走 stdin
-multichat status [--json]                           # 双侧总览（名字/目录/时间/状态）
-multichat install-skills [--dir <根>]               # 安装/更新 skill（幂等）
-multichat claude [任意 claude 参数…]                 # 带接收许可启动 claude（透传）
+crosschat send --to <名字> --body "<正文>"          # 新消息
+crosschat send --conversation <ref> --body "<正文>" # 回复（ref 照抄信封）
+echo … | crosschat send --to <名字>                 # 正文走 stdin
+crosschat status [--json]                           # 双侧总览（名字/目录/时间/状态）
+crosschat install-skills [--dir <根>]               # 安装/更新 skill（幂等）
+crosschat claude [任意 claude 参数…]                 # 带接收许可启动 claude（透传）
 ```
 
 ## 7. 投递语义矩阵
 
 | 接收方 | 状态 | 行为 |
 |---|---|---|
-| claude（`multichat claude` 启动） | 窗口开 | ✅ 秒达，会话内出现信封消息 |
-| claude（裸 `claude` 启动） | 任何 | ❌ 无接收许可（换 `multichat claude` 重启） |
+| claude（`crosschat claude` 启动） | 窗口开 | ✅ 秒达，会话内出现信封消息 |
+| claude（裸 `claude` 启动） | 任何 | ❌ 无接收许可（换 `crosschat claude` 重启） |
 | codex | 窗口关 | ✅ 立即 headless 执行并回信 |
 | codex | 窗口开（daemon 0.160+ 且 TUI 附着） | ✅ 直接送达，headless 执行（TUI 不实时刷新） |
-| codex | 窗口开（旧 daemon ≤0.157 / `--no-daemon`） | ⏳ multichat 等待，关窗瞬间送达；120s 超时报错 |
+| codex | 窗口开（旧 daemon ≤0.157 / `--no-daemon`） | ⏳ crosschat 等待，关窗瞬间送达；120s 超时报错 |
 | codex | turn 进行中 | ⏳ 排队等空闲（同一机制） |
 
 ## 8. 错误码排障
@@ -193,15 +196,15 @@ multichat claude [任意 claude 参数…]                 # 带接收许可启�
 
 ## 9. 边界与限制
 
-单条 ≤16KiB；每对端点 30 条/60s；等待上限默认 120s；信任边界=同一 Windows 用户；接收许可只授予 `multichat claude` 启动的会话；长对话靠轮次计数+落盘引用控制上下文。
+单条 ≤16KiB；每对端点 30 条/60s；等待上限默认 120s；信任边界=同一 Windows 用户；接收许可只授予 `crosschat claude` 启动的会话；长对话靠轮次计数+落盘引用控制上下文。
 
 ## 10. FAQ
 
-**Q：codex 窗口开着能收到吗？** daemon 0.160+ 且 TUI 附着 daemon 时能（实测同 daemon 多连接不互斥）。旧 daemon（≤0.157）或 `--no-daemon` 时窗口独占线程（跨进程单写者锁），multichat 等你关窗再投。
+**Q：codex 窗口开着能收到吗？** daemon 0.160+ 且 TUI 附着 daemon 时能（实测同 daemon 多连接不互斥）。旧 daemon（≤0.157）或 `--no-daemon` 时窗口独占线程（跨进程单写者锁），crosschat 等你关窗再投。
 
-**Q：为什么必须 `multichat claude`？** 它注入跨会话接收许可；裸 `claude` 的会话收不到。
+**Q：为什么必须 `crosschat claude`？** 它注入跨会话接收许可；裸 `claude` 的会话收不到。
 
-**Q：`codex queue` 不是能开窗收吗？** 0.160 + 附着 TUI 下实测可秒级消费；但 multichat 主通道本身已可开窗投递，不引入 queue。
+**Q：`codex queue` 不是能开窗收吗？** 0.160 + 附着 TUI 下实测可秒级消费；但 crosschat 主通道本身已可开窗投递，不引入 queue。
 
 **Q：消息历史在哪看？** claude 侧=会话 transcript；codex 侧=开窗 resume 线程。
 
@@ -211,15 +214,15 @@ multichat claude [任意 claude 参数…]                 # 带接收许可启�
 |---|---|
 | status 的 codex 段 unavailable | 干净终端 `codex app-server daemon start` |
 | codex 回信撞身份冲突 | 同上（重启 daemon 即根治） |
-| skill 误删/过期 | `multichat install-skills` |
-| 升级 multichat 代码后 | `npm run build`（skill 有变再 install-skills） |
+| skill 误删/过期 | `crosschat install-skills` |
+| 升级 crosschat 代码后 | `npm run build`（skill 有变再 install-skills） |
 | 消息发出对方没反应 | 先 `status` 确认对方在线；UNCERTAIN 类错误勿重发先核实 |
 
 ## 12. 开发说明
 
 ```powershell
 npm run check          # lint + build + test（125 项）
-MULTICHAT_LIVE=1 npx vitest run --dir test   # 真机 live 测试（会 spawn 一次性会话）
+CROSSCHAT_LIVE=1 npx vitest run --dir test   # 真机 live 测试（会 spawn 一次性会话）
 ```
 
 - 目录：`src/claude`（注册表/管道/鉴权）· `src/codex`（proxy/RPC/投递）· `src/commands`（CLI）· `src/platform`（平台接缝，二期 mac/linux 扩展点）· `skills/`（agent 教学）

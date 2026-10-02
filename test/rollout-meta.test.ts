@@ -27,7 +27,7 @@ const REAL_FIRST_LINE = JSON.stringify({
 const tempDirs: string[] = [];
 
 function makeCodexHome(): string {
-  const home = mkdtempSync(join(tmpdir(), 'multichat-rollout-'));
+  const home = mkdtempSync(join(tmpdir(), 'crosschat-rollout-'));
   tempDirs.push(home);
   return home;
 }

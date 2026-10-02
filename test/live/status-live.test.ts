@@ -30,7 +30,7 @@ function runCli(args: string[]): Promise<ExecResult> {
   });
 }
 
-describe.skipIf(!process.env.MULTICHAT_LIVE)('status live (read-only)', () => {
+describe.skipIf(!process.env.CROSSCHAT_LIVE)('status live (read-only)', () => {
   it('exits 0 and prints one line of parseable JSON', { timeout: 300_000 }, async () => {
     expect(existsSync(cliJs), 'dist/cli.js is missing; run npm run build first').toBe(true);
     const result = await runCli(['status', '--json']);

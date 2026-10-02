@@ -46,7 +46,7 @@ function makeClient(requestTimeoutMs?: number): { channel: FakeChannel; client: 
 describe('codex rpc client', () => {
   it('resolves responses that carry no jsonrpc field (verified wire behavior)', async () => {
     const { channel, client } = makeClient();
-    const promise = client.request('initialize', { clientInfo: { name: 'multichat' } });
+    const promise = client.request('initialize', { clientInfo: { name: 'crosschat' } });
     const frame = JSON.parse(channel.sent[0]) as { id: number; method: string };
     expect(frame.method).toBe('initialize');
     channel.push(JSON.stringify({ id: frame.id, result: { userAgent: 'codex' } }));

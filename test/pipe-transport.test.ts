@@ -7,7 +7,7 @@ import {
   WindowsNamedPipeTransport,
 } from '../src/platform/pipe-transport.js';
 
-const testPipe = () => `\\\\.\\pipe\\LOCAL\\multichat-test-${randomBytes(8).toString('hex')}`;
+const testPipe = () => `\\\\.\\pipe\\LOCAL\\crosschat-test-${randomBytes(8).toString('hex')}`;
 
 const servers: import('node:net').Server[] = [];
 afterEach(() => {

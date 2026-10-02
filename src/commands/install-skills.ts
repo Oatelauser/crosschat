@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * `multichat install-skills`: copy the repo's skills/multichat into
- * <root>/.claude/skills/multichat and <root>/.codex/skills/multichat so both
+ * `crosschat install-skills`: copy the repo's skills/crosschat into
+ * <root>/.claude/skills/crosschat and <root>/.codex/skills/crosschat so both
  * agent families learn the protocol from a local skill (low-invasion: the
  * mechanism ships its own teaching, prompts stay role-only).
  */
@@ -23,7 +23,7 @@ export interface InstallSkillsDeps {
 export function defaultInstallSkillsDeps(): InstallSkillsDeps {
   return {
     // src/commands/ and dist/commands/ are both two levels below the package root.
-    sourceDir: () => fileURLToPath(new URL('../../skills/multichat', import.meta.url)),
+    sourceDir: () => fileURLToPath(new URL('../../skills/crosschat', import.meta.url)),
     defaultRoot: () => homedir(),
   };
 }
@@ -39,7 +39,7 @@ export function runInstallSkills(
   const root = args.dir ?? deps.defaultRoot();
   const installed: string[] = [];
   for (const destRoot of DEST_ROOTS) {
-    const dest = join(root, destRoot, 'skills', 'multichat');
+    const dest = join(root, destRoot, 'skills', 'crosschat');
     mkdirSync(dest, { recursive: true });
     cpSync(source, dest, { recursive: true });
     installed.push(dest);

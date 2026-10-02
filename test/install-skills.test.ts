@@ -7,8 +7,8 @@ import { parseInstallSkillsArgs } from '../src/cli.js';
 import { runInstallSkills } from '../src/commands/install-skills.js';
 import { MultichatError } from '../src/errors.js';
 
-const realSourceDir = fileURLToPath(new URL('../skills/multichat', import.meta.url));
-const tmpRoot = mkdtempSync(join(tmpdir(), 'multichat-skills-'));
+const realSourceDir = fileURLToPath(new URL('../skills/crosschat', import.meta.url));
+const tmpRoot = mkdtempSync(join(tmpdir(), 'crosschat-skills-'));
 afterAll(() => rmSync(tmpRoot, { recursive: true, force: true }));
 
 /** Recursive file snapshot (path -> content) for equality checks. */
@@ -27,8 +27,8 @@ describe('runInstallSkills', () => {
     const root = join(tmpRoot, 'default-root');
     const paths = runInstallSkills({}, { sourceDir: () => realSourceDir, defaultRoot: () => root });
     expect(paths).toEqual([
-      join(root, '.claude', 'skills', 'multichat'),
-      join(root, '.codex', 'skills', 'multichat'),
+      join(root, '.claude', 'skills', 'crosschat'),
+      join(root, '.codex', 'skills', 'crosschat'),
     ]);
     const source = snapshot(realSourceDir);
     expect(source.size).toBeGreaterThan(0);
@@ -39,20 +39,20 @@ describe('runInstallSkills', () => {
     const root = join(tmpRoot, 'idem-root');
     const deps = { sourceDir: () => realSourceDir, defaultRoot: () => root };
     runInstallSkills({}, deps);
-    const first = snapshot(join(root, '.claude', 'skills', 'multichat'));
+    const first = snapshot(join(root, '.claude', 'skills', 'crosschat'));
     runInstallSkills({}, deps);
-    expect(snapshot(join(root, '.claude', 'skills', 'multichat'))).toEqual(first);
+    expect(snapshot(join(root, '.claude', 'skills', 'crosschat'))).toEqual(first);
   });
 
   it('honors --dir override for the root', () => {
     const alt = join(tmpRoot, 'alt-root');
     const paths = runInstallSkills({ dir: alt }, { sourceDir: () => realSourceDir, defaultRoot: () => join(tmpRoot, 'should-not-exist') });
     expect(paths).toEqual([
-      join(alt, '.claude', 'skills', 'multichat'),
-      join(alt, '.codex', 'skills', 'multichat'),
+      join(alt, '.claude', 'skills', 'crosschat'),
+      join(alt, '.codex', 'skills', 'crosschat'),
     ]);
-    expect(existsSync(join(alt, '.claude', 'skills', 'multichat', 'SKILL.md'))).toBe(true);
-    expect(existsSync(join(alt, '.codex', 'skills', 'multichat', 'SKILL.md'))).toBe(true);
+    expect(existsSync(join(alt, '.claude', 'skills', 'crosschat', 'SKILL.md'))).toBe(true);
+    expect(existsSync(join(alt, '.codex', 'skills', 'crosschat', 'SKILL.md'))).toBe(true);
     expect(existsSync(join(tmpRoot, 'should-not-exist'))).toBe(false);
   });
 
@@ -63,7 +63,7 @@ describe('runInstallSkills', () => {
     writeFileSync(join(source, 'extra.md'), 'extra file');
     const root = join(tmpRoot, 'fixture-root');
     runInstallSkills({ dir: root }, { sourceDir: () => source, defaultRoot: () => root });
-    expect(readFileSync(join(root, '.claude', 'skills', 'multichat', 'extra.md'), 'utf8')).toBe('extra file');
+    expect(readFileSync(join(root, '.claude', 'skills', 'crosschat', 'extra.md'), 'utf8')).toBe('extra file');
   });
 });
 

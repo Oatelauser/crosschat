@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { MultichatError } from '../errors.js';
 import { isProcessAlive } from '../platform/process-inspector.js';
 
-/** Registry kinds multichat can route to. daemon/daemon-worker are not user sessions. */
+/** Registry kinds crosschat can route to. daemon/daemon-worker are not user sessions. */
 const ROUTABLE_KINDS = new Set(['interactive', 'bg']);
 
 export interface ClaudeSessionEntry {

@@ -1,9 +1,10 @@
 {
-  "name": "multichat",
-  "version": "0.1.0",
+  "name": "crosschat",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "bin": {
+    "crosschat": "dist/cli.js",
     "multichat": "dist/cli.js"
   },
   "engines": {

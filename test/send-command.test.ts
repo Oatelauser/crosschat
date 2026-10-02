@@ -32,7 +32,7 @@ const threads: CodexThreadSummary[] = [
   { id: 'other222-bbbb', name: null, status: 'idle' },
 ];
 
-const rateDir = mkdtempSync(join(tmpdir(), 'multichat-send-'));
+const rateDir = mkdtempSync(join(tmpdir(), 'crosschat-send-'));
 afterAll(() => rmSync(rateDir, { recursive: true, force: true }));
 
 const claudeDeliveries: { pid: number; content: string }[] = [];
@@ -87,9 +87,9 @@ describe('runSend happy paths', () => {
     expect(claudeDeliveries.at(-1)?.pid).toBe(101);
     const content = claudeDeliveries.at(-1)!.content;
     expect(content.startsWith('<cross-session-message from-name="human" turn="1">')).toBe(true);
-    expect(content).toContain('<multichat-reply-hint conversation="mc1_');
+    expect(content).toContain('<crosschat-reply-hint conversation="mc1_');
     expect(content).toContain('reply-as="alpha"');
-    expect(content).toContain('multichat send --conversation mc1_');
+    expect(content).toContain('crosschat send --conversation mc1_');
     expect(content).toContain('hello world');
     expect(content.endsWith('</cross-session-message>')).toBe(true);
   });

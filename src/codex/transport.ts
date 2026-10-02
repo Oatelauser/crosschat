@@ -50,7 +50,7 @@ const KILL_EXIT_TIMEOUT_MS = 1_500;
  * spawned without a shell, so the native exe is located explicitly.
  */
 export function resolveCodexExecutable(): string {
-  const override = process.env.MULTICHAT_CODEX_BIN;
+  const override = process.env.CROSSCHAT_CODEX_BIN;
   if (override) return override;
   if (process.platform !== 'win32') return 'codex';
   const candidates: string[] = [];

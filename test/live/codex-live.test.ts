@@ -34,7 +34,7 @@ function daemonRunning(): boolean {
 
 /** Confirm thread/start and thread/delete exist in the generated protocol schema. */
 function confirmSelfTestMethodsInSchema(): void {
-  const dir = mkdtempSync(join(tmpdir(), 'multichat-b2-schema-'));
+  const dir = mkdtempSync(join(tmpdir(), 'crosschat-b2-schema-'));
   try {
     const exe = resolveCodexExecutable();
     const gen = spawnSync(exe, ['app-server', 'generate-json-schema', '--out', dir], {
@@ -66,7 +66,7 @@ function providerDegradedEvidence(session: CodexSession, threadId: string): stri
   return hits;
 }
 
-describe.skipIf(!process.env.MULTICHAT_LIVE)('codex live', () => {
+describe.skipIf(!process.env.CROSSCHAT_LIVE)('codex live', () => {
   it(
     'live-a: read-only initialize + thread/list against the real daemon',
     { timeout: 300_000 },
@@ -94,7 +94,7 @@ describe.skipIf(!process.env.MULTICHAT_LIVE)('codex live', () => {
       }
       confirmSelfTestMethodsInSchema();
 
-      const workDir = mkdtempSync(join(tmpdir(), 'multichat-b2-selftest-'));
+      const workDir = mkdtempSync(join(tmpdir(), 'crosschat-b2-selftest-'));
       const session: CodexSession = await openCodexSession({ requestTimeoutMs: 30_000 })();
       let threadId = '';
       let turnAccepted = false;
@@ -111,7 +111,7 @@ describe.skipIf(!process.env.MULTICHAT_LIVE)('codex live', () => {
         // applies to pre-existing threads, which always have rollouts.
         const turn = await session.startTurn(
           threadId,
-          'multichat channel self-test. Reply with the single word: OK',
+          'crosschat channel self-test. Reply with the single word: OK',
         );
         console.log(`[live-b] turn/start accepted: turnId=${turn.id} status=${turn.status}`);
         // Channel acceptance proof: the server took the turn and reports it running.
@@ -152,7 +152,7 @@ describe.skipIf(!process.env.MULTICHAT_LIVE)('codex live', () => {
           await session.deleteThread(threadId).then(
             () => console.log('[live-b] self-test thread deleted'),
             (err) => {
-              console.log(`[live-b] thread/delete failed; thread remains named multichat-b2-selftest: ${String(err)}`);
+              console.log(`[live-b] thread/delete failed; thread remains named crosschat-b2-selftest: ${String(err)}`);
             },
           );
         }

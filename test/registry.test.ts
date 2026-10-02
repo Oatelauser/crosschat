@@ -12,7 +12,7 @@ import {
 // A pid that has already exited (spawnSync runs to completion).
 const deadPid = spawnSync(process.execPath, ['-e', ''], { encoding: 'utf8' }).pid ?? -1;
 
-const tmp = mkdtempSync(join(tmpdir(), 'multichat-registry-'));
+const tmp = mkdtempSync(join(tmpdir(), 'crosschat-registry-'));
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 
 function writeEntry(file: string, body: string): void {

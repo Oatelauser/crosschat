@@ -35,7 +35,7 @@ export interface CodexSession {
   startTurn(threadId: string, text: string): Promise<CodexTurn>;
   steerTurn(threadId: string, expectedTurnId: string, text: string): Promise<string>;
   unsubscribe(threadId: string): Promise<void>;
-  /** Isolated live self-test only: creates a thread owned by multichat. */
+  /** Isolated live self-test only: creates a thread owned by crosschat. */
   startThread(cwd: string): Promise<string>;
   /** Isolated live self-test only: deletes a thread created by startThread. */
   deleteThread(threadId: string): Promise<void>;
@@ -98,7 +98,7 @@ export function openCodexSession(options: CodexSessionOptions = {}): CodexSessio
       async initialize(): Promise<void> {
         await rpc.request('initialize', {
           capabilities: { experimentalApi: true },
-          clientInfo: { name: 'multichat', title: 'multichat', version: '0.1.0' },
+          clientInfo: { name: 'crosschat', title: 'crosschat', version: '1.0.0' },
         });
         rpc.notify('initialized', {});
       },
@@ -137,7 +137,7 @@ export function openCodexSession(options: CodexSessionOptions = {}): CodexSessio
         const result = await rpc.request('turn/start', {
           input: input(text),
           threadId,
-          turnTrigger: 'multichat',
+          turnTrigger: 'crosschat',
         });
         if (
           !isRecord(result) ||

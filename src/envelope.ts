@@ -10,8 +10,10 @@ export const FROM_NAME_MAX_CODEPOINTS = 64;
 /**
  * Tags the envelope protocol owns. Occurrences in the body are rewritten with
  * a `<\` prefix (embassy-style) so a body cannot forge envelope framing.
+ * `multichat-*` stays reserved so bodies quoting envelopes from legacy
+ * sessions (pre-rename) are neutralized just the same.
  */
-const RESERVED_TAG_PATTERN = /<(?=\/?(?:cross-session-message|multichat-[a-z0-9-]*)(?:[>\s/]|$))/giu;
+const RESERVED_TAG_PATTERN = /<(?=\/?(?:cross-session-message|multichat-[a-z0-9-]*|crosschat-[a-z0-9-]*)(?:[>\s/]|$))/giu;
 
 export interface EnvelopeInput {
   /** Sender display name (claude session name, codex/<id8>, or "human"). */
@@ -41,9 +43,9 @@ export function composeEnvelope(input: EnvelopeInput): string {
   const body = neutralizeReservedTags(input.body);
   return (
     `<cross-session-message from-name="${escapeAttr(fromName)}" turn="${input.turn}"${aliasAttr}>\n` +
-    `<multichat-reply-hint conversation="${input.ref}" reply-as="${escapeAttr(input.toName)}">` +
-    `回复请运行: multichat send --conversation ${input.ref} --body "<你的回复>"</multichat-reply-hint>\n` +
-    `新话题: multichat send --to <名字> --body "..."；超 16KiB 请写文件后只发路径\n` +
+    `<crosschat-reply-hint conversation="${input.ref}" reply-as="${escapeAttr(input.toName)}">` +
+    `回复请运行: crosschat send --conversation ${input.ref} --body "<你的回复>"</crosschat-reply-hint>\n` +
+    `新话题: crosschat send --to <名字> --body "..."；超 16KiB 请写文件后只发路径\n` +
     `${body}\n` +
     `</cross-session-message>`
   );

@@ -20,7 +20,7 @@ const KEY_24900 = `24900.${SHA_24900}.key`;
 const REAL_KEY_BODY =
   '{"peerToken":"578ba13cbe83cdbe8dd9d63c3932704","procStartFt":"134353221215414169","pidDomain":"win32:yang"}';
 
-const tmp = mkdtempSync(join(tmpdir(), 'multichat-keyfile-'));
+const tmp = mkdtempSync(join(tmpdir(), 'crosschat-keyfile-'));
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 
 describe('key file name derivation (report samples)', () => {

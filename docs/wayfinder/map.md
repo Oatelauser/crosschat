@@ -8,6 +8,7 @@ label: wayfinder:map
 
 ## Notes
 
+- 2026-10-02 项目更名 multichat → crosschat（双命令过渡，历史文档保留旧名）
 - 领域：本地 agent 间通信（Claude Code / Codex CLI）。借鉴 embassy 设计，不 fork（Q8c）。
 - 背景资料：
   - `docs/research/embassy-architecture.md` —— embassy v4.7.0 源码研究报告（机制 + Windows 依赖清单，含 file:line 引用）

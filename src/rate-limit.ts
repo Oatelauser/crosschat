@@ -8,7 +8,7 @@ import { MultichatError } from './errors.js';
 /**
  * File-based anti-ping-pong rate limit (tickets 003/004): max 30 messages per
  * endpoint pair per 60s sliding window. State lives in one JSON file per pair
- * under %LOCALAPPDATA%/multichat/rate/, replaced atomically via tmp+rename.
+ * under %LOCALAPPDATA%/crosschat/rate/, replaced atomically via tmp+rename.
  */
 
 export const RATE_LIMIT_MAX = 30;
@@ -21,7 +21,7 @@ export function rateKey(a: string, b: string): string {
 }
 
 export function defaultRateDir(): string {
-  return join(process.env.LOCALAPPDATA ?? homedir(), 'multichat', 'rate');
+  return join(process.env.LOCALAPPDATA ?? homedir(), 'crosschat', 'rate');
 }
 
 /**

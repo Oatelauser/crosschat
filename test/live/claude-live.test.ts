@@ -89,7 +89,7 @@ async function waitFor<T>(
   }
 }
 
-describe.skipIf(!process.env.MULTICHAT_LIVE)('claude live registry', () => {
+describe.skipIf(!process.env.CROSSCHAT_LIVE)('claude live registry', () => {
   it(
     'lists real ~/.claude/sessions without throwing',
     { timeout: 300_000 },
@@ -108,7 +108,7 @@ describe.skipIf(!process.env.MULTICHAT_LIVE)('claude live registry', () => {
   );
 });
 
-describe.skipIf(!process.env.MULTICHAT_LIVE)('claude live end-to-end injection', () => {
+describe.skipIf(!process.env.CROSSCHAT_LIVE)('claude live end-to-end injection', () => {
   it(
     'delivers a marked message to a disposable spawned session and verifies the transcript',
     { timeout: 300_000 },
@@ -116,7 +116,7 @@ describe.skipIf(!process.env.MULTICHAT_LIVE)('claude live end-to-end injection',
       const sessionsDir = defaultClaudeSessionsDir();
       const knownPids = new Set(readRegistry(sessionsDir).map((entry) => entry.pid));
 
-      const workDir = mkdtempSync(join(tmpdir(), 'multichat-b1-live-'));
+      const workDir = mkdtempSync(join(tmpdir(), 'crosschat-b1-live-'));
       const marker = `B1PIPE_${randomBytes(6).toString('hex')}`;
       const child = spawn(
         resolveClaudeExe(),
