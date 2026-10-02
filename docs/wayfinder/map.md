@@ -38,7 +38,8 @@ label: wayfinder:map
 - **一期全部设计票关闭，frontier 清空——目的地达成，进入实施（B0✅ B1…B5）**
 
 - [B5 联调决策（非票，实施期实测定型）](../drill-reports/b5-drill-report.md): codex 接收一期语义 = headless 信箱模型——投递目标为未被 TUI 占用的线程，"开着=只读（对 multichat），关着=可投"，原生 turn 零轮询（3 轮全链路实测通过）；claude↔claude、codex→claude、daemon headless 回信均实测通过。二轮加固：同线程开窗即拒/关窗即通 3 拒 3 通零误报；`--no-daemon` 假设证伪（daemon 模式 TUI 开窗仍锁）；新已知问题 CALLER_IDENTITY_CONFLICT（daemon 从带 CLAUDE_CODE_* 环境的终端启动致派生 shell 身份污染，B5.3 加自纠指引）。
-- [codex 开窗注入调研票（2026-10-02，结论两度修正）](../research/codex-open-window-injection.md): 研究票发现 `codex queue`（底层 `thread/queue/add`）并 E2E"验证"开窗秒达 → B6 接入 → **实地联调证伪**：本地普通 TUI 下 queue 是黑洞（exit 0 但消息既不进开窗现场也不进历史，2 条静默丢失；疑似 remote 架构专用，`--remote` 参数佐证；研究代理的成功 E2E 推测用了自建 remote 形态）。B7 修复 = 删 queue 路径，active-writer 改为等待释放循环（开窗时 multichat 侧轮询等待、关窗即 headless 送达、默认 120s 超时报错指引）。**教训已记**：子代理研究报告的 E2E 结论必须标注其环境形态（本地/remote），集成批次不得以此替代己方 live 验证。附加发现仍有效：`thread/inject_items` 入 0.160.0 公开 schema；`remote-control` 为云端遥控方向；`daemon bootstrap --remote` 为受管前端形态备选（二期若走受管形态，queue 或可复用——须先在目标形态下实测）。
+- [codex 开窗注入调研票（2026-10-02，结论两度修正）](../research/codex-open-window-injection.md): 研究票发现 `codex queue`（底层 `thread/queue/add`）并 E2E"验证"开窗秒达 → B6 接入 → **实地联调证伪**：本地普通 TUI 下 queue 是黑洞（exit 0 但消息既不进开窗现场也不进历史，2 条静默丢失；疑似 remote 架构专用，`--remote` 参数佐证；研究代理的成功 E2E 推测用了自建 remote 形态）。B7 修复 = 删 queue 路径，active-writer 改为等待释放循环（开窗时 multichat 侧轮询等待、关窗即 headless 送达、默认 120s 超时报错指引）。**教训已记**：子代理研究报告的 E2E 结论必须标注其环境形态（本地/remote），集成批次不得以此替代己方 live 验证。
+- [B8 开窗投递终局（2026-10-02，daemon 升 0.160 后）](../research/codex-0160-inject-items.md): **开窗投递 ✅ 落地，零代码改动**——根因链闭合：`codex app-server proxy` 是 daemon 桥接（同进程多连接），0.160 TUI 自动附着 daemon，写者锁仅跨进程形态出现（旧 daemon ≤0.157 / `--no-daemon`）。实测：TUI 附着开窗 6s delivered、模型答 OPEN-OK 并经 reply-ref 回投；关窗无回归；`codex queue` 在 0.160+附着下复活为可见投递通道（12s 消费）。等待循环保留为旧环境兜底。daemon 升级实录：update 的 error 5（疑似安全软件拦句柄）→ 干净 home 官方安装器置备 0.160 成品移植 + junction 重建；旧 0.157.1 保留于 app-server-daemon.bak-0157 可回滚。
 
 ## Not yet specified
 
