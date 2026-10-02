@@ -37,6 +37,8 @@ label: wayfinder:map
 - [长对话的上下文策略](tickets/004-context-strategy.md): 一期 = 预算+计数提示——单条 16KiB 上限、ref 内嵌轮次计数、信封显示第 N 轮、接近预算 skill 自动收尾；一切超限同步显式报错（MESSAGE_TOO_LARGE / RATE_LIMITED）交 agent 自纠，长内容落盘发路径引用（同机文件系统=天然泄压阀）；摘要轮换/外部档案留二期。
 - **一期全部设计票关闭，frontier 清空——目的地达成，进入实施（B0✅ B1…B5）**
 
+- [B5 联调决策（非票，实施期实测定型）](../b5-drill-report.md): codex 接收一期语义 = headless 信箱模型——投递目标为未被 TUI 占用的线程，"开着=只读（对 multichat），关着=可投"，原生 turn 零轮询（3 轮全链路实测通过）；claude↔claude、codex→claude、daemon headless 回信均实测通过。
+
 ## Not yet specified
 
 - 联邦协议与异构互聊设计（win↔linux 跨机）；与 embassy 生态的互通性评估（Q9）
@@ -46,6 +48,9 @@ label: wayfinder:map
 - mac/linux 平台适配排期
 - agent 侧 skill 文案（embassy-peer 等价物）——形式已定（003：skill+信封双保险），具体文案实施时写
 - 工具命名
+- codex TUI 占用标注：status 显示哪个线程被 live TUI 持有；需查写者锁存储位置（状态库 lease vs daemon 内存表）；禁止用 resume 探测（会抢写者）
+- codex TUI 侧注入调研票：`hooks/list` 能力探明——"开着也能投"的唯一残余希望（daemon 协议已证死路：全量方法表无注入路径，单写者锁是上游安全设计）；codex 官方放开注入 API 则另说
+- 专用信箱线程机制化：每机一个 multichat 自有的常闭 operator 线程作默认收件地址，避免工作线程混用（一期靠 README 文档指导）
 
 ## Out of scope
 
