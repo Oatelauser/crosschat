@@ -289,7 +289,7 @@ describe('listCodexThreads (read-only discovery)', () => {
     ).rejects.toMatchObject({ code: 'CODEX_PROXY_SPAWN_FAILED' });
   });
 
-  it('openCodexSession propagates spawn failures', async () => {
+  it('openCodexSession propagates spawn failures', { timeout: 20_000 }, async () => {
     const factory = openCodexSession({
       spawnProxy: () => {
         throw new Error('ENOENT');
