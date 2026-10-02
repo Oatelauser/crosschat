@@ -49,7 +49,7 @@ label: wayfinder:map
 - agent 侧 skill 文案（embassy-peer 等价物）——形式已定（003：skill+信封双保险），具体文案实施时写
 - 工具命名
 - codex TUI 占用标注：status 显示哪个线程被 live TUI 持有；需查写者锁存储位置（状态库 lease vs daemon 内存表）；禁止用 resume 探测（会抢写者）
-- codex TUI 侧注入调研票：`hooks/list` 能力探明——"开着也能投"的唯一残余希望（daemon 协议已证死路：全量方法表无注入路径，单写者锁是上游安全设计）；codex 官方放开注入 API 则另说
+- codex "开着也能收"调研票（2026-10-02 经 embassy 源码对照后聚焦）：核心问题 = **Windows 上如何让 codex 会话跑在 daemon 里**（macOS 受管 standalone 的等价物：`codex app-server daemon bootstrap` SSH-driven 模式 / `~/.codex/packages/app-server-daemon` 受管安装的 TUI·exec 启动方式）。embassy 的排队投递（busy→ROUTE_BUSY→空闲投递）前提是会话本就跑在 daemon 里；它同样无法投递非受管 TUI 占用的线程（CONFIGURATION.md:99、OPERATIONS.md:146），我们不是特例。受管形态若可行，B3 已实现的 busy-wait 直接复用。次选：`hooks/list` 能力探明；再次：等 codex 官方注入 API
 - 专用信箱线程机制化：每机一个 multichat 自有的常闭 operator 线程作默认收件地址，避免工作线程混用（一期靠 README 文档指导）
 
 ## Out of scope
