@@ -41,11 +41,13 @@ multichat send --to <名字> --body "正文"
 
 - 名字 = claude 会话名或 codex 线程名（status 列出全部可路由对象）。
 - 长正文可省略 `--body`，改为管道：`<正文文件路径的内容> | multichat send --to <名字>`。
+- 投给 codex 的消息双通道自动选择：线程空闲 = headless 立即执行（`delivered`）；对方 codex 窗口开着 = 队列秒达、现场跑（`queued ... (live window)`，约 2 秒内出现在该窗口）。两种输出都算送达成功，无需重发。
 
 ## 报错自纠（读错误码，不要即兴发明命令）
 
 - `MESSAGE_TOO_LARGE`：正文超过 16KiB。把完整内容**写入一个文件，只发文件路径**（接收方会按需读取，这也是长内容的标准做法）。
 - `RATE_LIMITED`：发送过快（每对端点 60 秒最多 30 条）。**等待后重试**，或直接总结收尾；系统不会静默丢弃或自动重试。
+- `CODEX_THREAD_LOCKED`：罕见（双通道均失败——headless 被窗口写者锁拒且 queue 通道也失败）。读错误信息里的 queue 失败摘要；等对方关窗口后重试一次，或改投其他信箱线程。
 - `CALLER_IDENTITY_CONFLICT`：环境里同时残留 `CLAUDE_CODE_*` 与 `CODEX_*` 身份变量（常见于从 Claude 终端启动的 codex daemon 派生的 shell）。临时自纠 = 给命令加前缀，照抄：
 
   ```

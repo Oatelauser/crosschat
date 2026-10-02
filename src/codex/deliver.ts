@@ -1,11 +1,14 @@
 import { MultichatError } from '../errors.js';
 import { openCodexSession, type CodexSession, type CodexSessionFactory } from './client.js';
+import { queueToCodexThread, type CodexQueueOptions } from './queue.js';
 import { CodexRpcRejectedError } from './rpc.js';
 
 /**
  * One-shot delivery of a message into a Codex thread. Every operation runs the
  * full fresh flow: spawn proxy -> initialize -> resume -> disposition ->
- * turn/start -> confirm inProgress -> unsubscribe -> close. Never retried;
+ * turn/start -> confirm inProgress -> unsubscribe -> close. When resume is
+ * rejected because a TUI window holds the writer, delivery falls back to
+ * `codex queue` (open/closed window both deliver). Never retried otherwise;
  * approvals are never answered on the user's behalf.
  */
 
@@ -15,12 +18,11 @@ export interface CodexDeliveryOptions {
   busyTimeoutMs?: number;
   /** Re-resume poll interval while waiting for a busy thread (default 3s). */
   pollIntervalMs?: number;
+  /** Passthrough to the queue fallback (spawn seam, timeout, executable). */
+  queue?: CodexQueueOptions;
 }
 
-export interface CodexDeliveryResult {
-  status: 'accepted';
-  turnId: string;
-}
+export type CodexDeliveryResult = { status: 'accepted'; turnId: string } | { status: 'queued' };
 
 const DEFAULT_BUSY_TIMEOUT_MS = 120_000;
 const DEFAULT_POLL_INTERVAL_MS = 3_000;
@@ -86,15 +88,22 @@ export async function deliverToCodexThread(
         throw err;
       }
       // A thread held open by a codex TUI window has an active writer; the
-      // server rejects resume for it. This is a routing fact, not a protocol
-      // fault, so it gets its own actionable code.
+      // server rejects resume for it. The queue channel is immune to the
+      // writer lock, so delivery falls back to `codex queue` (open window =
+      // delivered live, closed window = stored for the next resume). Only if
+      // that also fails does CODEX_THREAD_LOCKED surface.
       if (err instanceof CodexRpcRejectedError && ACTIVE_WRITER_PATTERN.test(err.message)) {
-        throw new MultichatError(
-          'CODEX_THREAD_LOCKED',
-          `Codex thread ${threadId} 正被 codex 窗口占用（开着=只读，关着=可投）。` +
-            '关闭该窗口后重发，或改投未被占用的信箱线程。',
-          { cause: err },
-        );
+        try {
+          return await queueToCodexThread(threadId, content, options.queue);
+        } catch (queueErr) {
+          const queueDetail = queueErr instanceof Error ? queueErr.message : String(queueErr);
+          throw new MultichatError(
+            'CODEX_THREAD_LOCKED',
+            `Codex thread ${threadId} 正被 codex 窗口占用，且 queue 通道也失败: ${queueDetail} ` +
+              '关闭该窗口后重发，或改投未被占用的信箱线程。',
+            { cause: queueErr },
+          );
+        }
       }
       // Pre-write failures (timeout, transport closed, rpc rejection, bad
       // frames) all collapse to CODEX_PROTOCOL_ERROR: nothing was written.

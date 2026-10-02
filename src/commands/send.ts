@@ -40,7 +40,10 @@ export interface SendDeps {
   listClaudeSessions(): ClaudeRegistryScan;
   listCodexThreads(): Promise<CodexThreadSummary[]>;
   deliverClaude(target: ClaudeDeliveryTarget, content: string): Promise<{ status: 'delivered' }>;
-  deliverCodex(threadId: string, content: string): Promise<{ status: 'accepted'; turnId: string }>;
+  deliverCodex(
+    threadId: string,
+    content: string,
+  ): Promise<{ status: 'accepted'; turnId: string } | { status: 'queued' }>;
   rateDir: string;
   now(): number;
 }
@@ -120,8 +123,16 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   const threadName = threads.find((thread) => thread.id === target.id)?.name;
   const toName = threadName ?? shortId('codex', target.id);
   const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body });
-  await deps.deliverCodex(target.id, content);
-  return formatDelivery(args.json === true, toName, turn, replyRef);
+  const delivered = await deps.deliverCodex(target.id, content);
+  // 'queued' = the thread's codex window is open; the message was queued and
+  // will appear live there. 'accepted' = headless turn started immediately.
+  return formatDelivery(
+    args.json === true,
+    toName,
+    turn,
+    replyRef,
+    delivered.status === 'queued',
+  );
 }
 
 function resolveTargetArgs(args: SendArgs): void {
@@ -157,7 +168,16 @@ function shortId(prefix: string, id: string): string {
   return `${prefix}/${id.slice(0, 8)}`;
 }
 
-function formatDelivery(json: boolean, toName: string, turn: number, replyRef: string): string {
-  if (json) return JSON.stringify({ status: 'delivered', to: toName, turn, replyRef });
-  return `delivered to ${toName} (turn ${turn})\nreply-ref: ${replyRef}`;
+function formatDelivery(
+  json: boolean,
+  toName: string,
+  turn: number,
+  replyRef: string,
+  queued = false,
+): string {
+  if (json) {
+    return JSON.stringify({ status: queued ? 'queued' : 'delivered', to: toName, turn, replyRef });
+  }
+  const lead = queued ? `queued to ${toName} (turn ${turn}, live window)` : `delivered to ${toName} (turn ${turn})`;
+  return `${lead}\nreply-ref: ${replyRef}`;
 }
