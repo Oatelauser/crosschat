@@ -85,26 +85,62 @@ codex app-server daemon start
 
 **不对称速记**：claude 收发都随意；codex 发随意、收需要线程空闲（窗口关）。
 
-### 3.6 实战示例：codex 决策者 × claude 执行者
+### 3.6 完整示例：codex 当领导派活给 claude（剧本式，照抄可跑）
 
-**终端 A 题词（claude，执行者，先启动）：**
+> **先启动 ≠ 先说话**：claude 是被叫方，电话得先开机；但任务由 codex 发起。
+> 多任务循环 = 把示例里的单个任务换成一串任务清单，领导验收通过 N 后自动下发 N+1。
 
-> 你是执行者 mc-worker，服从 codex 决策者的任务调度。
-> 1. 收到任务消息后，在本目录实施（改代码/写文件/跑命令都行）
-> 2. 完成后按消息里的回复命令返回报告，必须包含：做了什么、改动文件清单、自验方式
-> 3. 报告太长就写进 reports/task-N.md，消息里只发文件路径
-> 4. 收到返工要求按同流程重做；收到"全部完成"总结后停止，不再发消息
+**任务目标**：codex（领导）命令 claude（工人）在 `D:\workspace\CC\demo` 创建 `notes.txt` 写三行待办，并验收。
 
-**终端 B 题词（codex，决策者，后启动）：**
+**第 1 步 · 左窗启动 claude（接收方先开机）**
+```
+D:\workspace\CC\demo> multichat claude
+```
+进入后输入 `/rename worker`（给领导一个明确的名字），然后什么都不贴，待命。
 
-> 你是决策者 codex-leader，执行者是 claude 会话「mc-worker」。
-> 1. 先运行 multichat status 确认 mc-worker 在线
-> 2. 把目标 <写你的目标> 拆成小任务，用 multichat send --to mc-worker --body "任务1：<要求>" 逐个下发
-> 3. 每收到报告亲自验证（读改动文件、跑命令核实），不要只信报告
-> 4. 通过 → 下发下一个；不通过 → 下发返工任务
-> 5. 全部完成并验证后发总结并停止。规则：超长内容写文件只发路径；总预算 8 个任务。
+**第 2 步 · 右窗启动 codex（领导）并贴题词**
+```
+D:\workspace\CC\demo> codex
+```
+```
+你是领导。用 multichat（先 status 确认名字）给 claude 会话「worker」下发任务：
+在当前目录创建 notes.txt，内容三行：买牛奶、交电费、给妈妈打电话。
+收到完成报告后，亲自打开文件验证内容；通过则回复"验收通过，任务结束"并停止；
+不通过则下发返工任务。
+```
 
-**操作顺序**：① A：`multichat claude` → `/rename mc-worker` → 贴执行者题词 ② B：`codex` → 贴决策者题词（它自动 status/拆任务/发任务1）③ B 看到 `delivered` 后**关掉 B** ④ 之后全自动：claude 干活→报告→codex 无窗口验证→下发下一个（新任务又出现在 A）⑤ 全程盯终端 A 直播；想看 codex 验证过程就开 B resume 看历史、看完关。
+**第 3 步 · 右窗屏幕——任务由 codex 发出**
+```
+● exec: multichat status
+● exec: multichat send --to worker --body "任务1：在当前目录创建 notes.txt…"
+● delivered to worker (turn 1)          ← 任务飞进左窗，发起方是 codex
+```
+
+**第 4 步 · 关掉右窗**（领导要在线程里收报告了；收报告需要它的窗口关着）
+
+**第 5 步 · 左窗屏幕——claude 收令干活**
+```
+📨 来自另一会话的消息:
+<cross-session-message from-name="codex/01a0f…" turn="1">
+任务1：在当前目录创建 notes.txt，内容三行…
+回复请运行: multichat send --conversation mc1_xxx --body "<你的回复>"
+</cross-session-message>
+
+⏺ Write: notes.txt（三行待办）
+⏺ Bash: multichat send --conversation mc1_xxx --body "已完成：notes.txt 已创建，内容为要求的三行。"
+⏺ delivered (turn 2)                     ← 报告发回给 codex
+```
+
+**第 6 步 · 自动发生（无任何窗口，看不见但它在跑）**
+报告落进 codex 线程 → codex 被唤醒 → 亲自打开 notes.txt 核对三行 → 通过 → 它跑 `send --conversation mc1_yyy --body "验收通过，任务结束"`。
+
+**第 7 步 · 左窗几秒后——收工**
+```
+📨 <cross-session-message from-name="codex/01a0f…" turn="3">
+验收通过，任务结束
+</cross-session-message>
+```
+claude 停止。**全程在左窗直播**；想看领导的验收细节：开右窗 `codex resume` 翻历史，看完关。
 
 ## 4. 每日标准流程（速览）
 
