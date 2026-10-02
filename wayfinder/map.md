@@ -37,7 +37,7 @@ label: wayfinder:map
 - [长对话的上下文策略](tickets/004-context-strategy.md): 一期 = 预算+计数提示——单条 16KiB 上限、ref 内嵌轮次计数、信封显示第 N 轮、接近预算 skill 自动收尾；一切超限同步显式报错（MESSAGE_TOO_LARGE / RATE_LIMITED）交 agent 自纠，长内容落盘发路径引用（同机文件系统=天然泄压阀）；摘要轮换/外部档案留二期。
 - **一期全部设计票关闭，frontier 清空——目的地达成，进入实施（B0✅ B1…B5）**
 
-- [B5 联调决策（非票，实施期实测定型）](../b5-drill-report.md): codex 接收一期语义 = headless 信箱模型——投递目标为未被 TUI 占用的线程，"开着=只读（对 multichat），关着=可投"，原生 turn 零轮询（3 轮全链路实测通过）；claude↔claude、codex→claude、daemon headless 回信均实测通过。
+- [B5 联调决策（非票，实施期实测定型）](../b5-drill-report.md): codex 接收一期语义 = headless 信箱模型——投递目标为未被 TUI 占用的线程，"开着=只读（对 multichat），关着=可投"，原生 turn 零轮询（3 轮全链路实测通过）；claude↔claude、codex→claude、daemon headless 回信均实测通过。二轮加固：同线程开窗即拒/关窗即通 3 拒 3 通零误报；`--no-daemon` 假设证伪（daemon 模式 TUI 开窗仍锁）；新已知问题 CALLER_IDENTITY_CONFLICT（daemon 从带 CLAUDE_CODE_* 环境的终端启动致派生 shell 身份污染，B5.3 加自纠指引）。
 
 ## Not yet specified
 
@@ -49,7 +49,7 @@ label: wayfinder:map
 - agent 侧 skill 文案（embassy-peer 等价物）——形式已定（003：skill+信封双保险），具体文案实施时写
 - 工具命名
 - codex TUI 占用标注：status 显示哪个线程被 live TUI 持有；需查写者锁存储位置（状态库 lease vs daemon 内存表）；禁止用 resume 探测（会抢写者）
-- codex "开着也能收"调研票（2026-10-02 经 embassy 源码对照后聚焦）：核心问题 = **Windows 上如何让 codex 会话跑在 daemon 里**（macOS 受管 standalone 的等价物：`codex app-server daemon bootstrap` SSH-driven 模式 / `~/.codex/packages/app-server-daemon` 受管安装的 TUI·exec 启动方式）。embassy 的排队投递（busy→ROUTE_BUSY→空闲投递）前提是会话本就跑在 daemon 里；它同样无法投递非受管 TUI 占用的线程（CONFIGURATION.md:99、OPERATIONS.md:146），我们不是特例。受管形态若可行，B3 已实现的 busy-wait 直接复用。次选：`hooks/list` 能力探明；再次：等 codex 官方注入 API
+- codex "开着也能收"调研票（2026-10-02 经 embassy 源码对照后聚焦）：核心问题 = **Windows 上如何让 codex 会话跑在 daemon 里**（macOS 受管 standalone 的等价物：`codex app-server daemon bootstrap` SSH-driven 模式 / `~/.codex/packages/app-server-daemon` 受管安装的 TUI·exec 启动方式）。embassy 的排队投递（busy→ROUTE_BUSY→空闲投递）前提是会话本就跑在 daemon 里；它同样无法投递非受管 TUI 占用的线程（CONFIGURATION.md:99、OPERATIONS.md:146），我们不是特例。受管形态若可行，B3 已实现的 busy-wait 直接复用。次选：`hooks/list` 能力探明；再次：等 codex 官方注入 API。**已证伪捷径**：去掉 `--no-daemon` 普通 daemon 模式 TUI 开窗仍锁（2026-10-02 联调2 实测，npm codex 0.159.3）
 - 专用信箱线程机制化：每机一个 multichat 自有的常闭 operator 线程作默认收件地址，避免工作线程混用（一期靠 README 文档指导）
 
 ## Out of scope
