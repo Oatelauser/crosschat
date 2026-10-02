@@ -18,7 +18,7 @@ const SHA_24900 = 'a532ca3841f5936d975e2b70398dbc97206833b3d14b317d80eca2f767590
 const KEY_17324 = `17324.${SHA_17324}.key`;
 const KEY_24900 = `24900.${SHA_24900}.key`;
 const REAL_KEY_BODY =
-  '{"peerToken":"578ba13cbe83cdbe8dd9d63c3932704","procStartFt":"134353221215414169","pidDomain":"win32:yang"}';
+  '{"peerToken":"00112233445566778899aabbccddeeff","procStartFt":"134353221215414169","pidDomain":"win32:<host>"}';
 
 const tmp = mkdtempSync(join(tmpdir(), 'crosschat-keyfile-'));
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
@@ -53,7 +53,7 @@ describe('key file name derivation (report samples)', () => {
 describe('readPeerToken', () => {
   it('reads peerToken from the derived key file', () => {
     writeFileSync(join(tmp, KEY_17324), REAL_KEY_BODY, 'utf8');
-    expect(readPeerToken(tmp, 17324, PIPE_17324)).toBe('578ba13cbe83cdbe8dd9d63c3932704');
+    expect(readPeerToken(tmp, 17324, PIPE_17324)).toBe('00112233445566778899aabbccddeeff');
   });
 
   it('throws CLAUDE_KEY_FILE_MISSING when the key file is absent', () => {

@@ -1,7 +1,7 @@
 # codex 0.160.0 `thread/inject_items` 开窗注入实测报告
 
 - 日期：2026-10-02
-- 环境：Windows 11 Pro for Workstations；CLI 0.160.0（npm 包装，真实二进制 `C:\Users\yangsheng\AppData\Roaming\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-x64\vendor\x86_64-pc-windows-msvc\bin\codex.exe`）
+- 环境：Windows 11 Pro for Workstations；CLI 0.160.0（npm 包装，真实二进制 `C:\Users\<user>\AppData\Roaming\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-x64\vendor\x86_64-pc-windows-msvc\bin\codex.exe`）
 - 方法：隔离 CODEX_HOME（`D:\tmp\codex-inject\home`，已删）自管 daemon + 自建线程 + 隐藏 TUI 开窗 + WebSocket 双连接活体实验；全部 spawn 均剥离 `CLAUDE_CODE_MESSAGING_SOCKET/TOKEN/SESSION_ID`
 - 用户 daemon（0.157.1，pid 15408）、用户线程、`~/.codex`：零接触（config.toml 只读复制过 token，未改动）
 

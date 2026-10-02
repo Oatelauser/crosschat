@@ -1,6 +1,6 @@
 # Claude Code Windows named pipe 实测验证报告
 
-日期:2026-10-01 · 环境:Windows 11 Pro for Workstations 10.0.26200,Claude Code v2.1.286(npm 全局安装,原生二进制 `C:\Users\yangsheng\AppData\Roaming\npm\node_modules\@anthropic-ai\claude-code\node_modules\@anthropic-ai\claude-code-win32-x64\claude.exe`,245 MB Bun 打包)
+日期:2026-10-01 · 环境:Windows 11 Pro for Workstations 10.0.26200,Claude Code v2.1.286(npm 全局安装,原生二进制 `C:\Users\<user>\AppData\Roaming\npm\node_modules\@anthropic-ai\claude-code\node_modules\@anthropic-ai\claude-code-win32-x64\claude.exe`,245 MB Bun 打包)
 对应票:`wayfinder/tickets/002-claude-windows-pipe-verification.md`
 对照材料:`docs/embassy-main/src/gateway/claude-peer.ts`(macOS 侧实现)、`research/embassy-architecture.md` §2.1
 
@@ -22,10 +22,10 @@ $ ls -la ~/.claude/sessions/
 
 ```json
 {"pid":17324,"sessionId":"26304c9c-3b7f-4bc9-b344-89f262a5992a",
- "cwd":"D:\\workspace\\CC\\jauth-hub","startedAt":1790848521966,
+ "cwd":"D:\\workspace\\CC\\<proj>","startedAt":1790848521966,
  "procStart":"134353221215414169","version":"2.1.286","peerProtocol":1,
  "peerFeatures":["notify_idle","artifact_yield"],"kind":"interactive","entrypoint":"cli",
- "pidDomain":"win32:yang",
+ "pidDomain":"win32:<host>",
  "messagingSocketPath":"\\\\.\\pipe\\LOCAL\\cc-msg-0e4d56cd5b3e15b7d6c3d675995318ce",
  "name":"v1.2","nameSource":"user","nameSince":1790848527377,
  "status":"busy","updatedAt":1790850176180,"statusUpdatedAt":1790850176180}
@@ -40,7 +40,7 @@ $ ls -la ~/.claude/sessions/
 | `peerFeatures` | (未记录) | `["notify_idle","artifact_yield"]` | 新信息 |
 | `kind` | interactive/bg/daemon/daemon-worker | 实测均为 `interactive` | **`claude -p`(entrypoint `sdk-cli`)也注册为 `interactive`**,靠 `entrypoint` 区分(cli/sdk-cli) |
 | `messagingSocketPath` | `/tmp/cc-socks/<pid>.sock` | `\\.\pipe\LOCAL\cc-msg-<32hex>` | 平台差异核心 |
-| `pidDomain` | (未记录) | `"win32:yang"` | 新字段 |
+| `pidDomain` | (未记录) | `"win32:<host>"` | 新字段 |
 | `status` | busy/shell/idle/waiting | busy/idle/waiting(+`waitingFor:"input needed"`) | 一致 |
 | `name`/`nameSource` | (embassy 用作别名匹配) | `user`/`derived` 两种都见 | `nameSince` 新字段 |
 
@@ -55,7 +55,7 @@ $ echo $CLAUDE_CODE_MESSAGING_SOCKET
 \\.\pipe\LOCAL\cc-msg-5e265dab4154233cf0d28ed48349d427     # 与 24900.json 的 messagingSocketPath 一致
 $ env | grep -i claude | head
 CLAUDE_CODE_MESSAGING_SOCKET=\\.\pipe\LOCAL\cc-msg-5e265dab4154233cf0d28ed48349d427
-CLAUDE_CODE_MESSAGING_TOKEN=86fea84ac9ce71b0465d17728009b6ff      # ← 新发现
+CLAUDE_CODE_MESSAGING_TOKEN=<redacted>      # ← 新发现
 CLAUDE_CODE_SESSION_ID=000b7c84-…  CLAUDE_PID=24900  CLAUDE_CODE_ENTRYPOINT=cli …
 ```
 
@@ -65,7 +65,7 @@ PowerShell 工具进程同样确认:
 [System.Environment]::GetEnvironmentVariable('CLAUDE_CODE_MESSAGING_SOCKET','Process')
 # \\.\pipe\LOCAL\cc-msg-5e265dab4154233cf0d28ed48349d427
 [System.Environment]::GetEnvironmentVariable('CLAUDE_CODE_MESSAGING_TOKEN','Process')
-# 86fea84ac9ce71b0465d17728009b6ff
+# <redacted>
 ```
 
 结论:**Windows 上两个变量都注入**。`CLAUDE_CODE_MESSAGING_SOCKET` 与 macOS 语义相同(反查发送方身份用它);`CLAUDE_CODE_MESSAGING_TOKEN` 是二进制里的 **childToken**(见 §3)——只发给本会话自己 spawn 的子进程,子进程凭它向父会话注入时被归类为 `"child"`(信任级高于外部 peer)。macOS 研究报告未提及 TOKEN,embassy 源码也不用它。
@@ -78,7 +78,7 @@ PowerShell 工具进程同样确认:
 
 ```bash
 $ cat ~/.claude/sessions/17324.cfb5a69d….key
-{"peerToken":"578ba13cbe83cdbe8dd9d63c3932704","procStartFt":"134353221215414169","pidDomain":"win32:yang"}
+{"peerToken":"<redacted>","procStartFt":"134353221215414169","pidDomain":"win32:<host>"}
 ```
 
 从 claude.exe 字符串/反汇编(Bun 字节码里保留了可读 JS)挖出的完整机制(chunk 于偏移 ~203451000 与 ~228941500):

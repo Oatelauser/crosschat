@@ -1,109 +1,79 @@
-<!-- badges -->
+<div align="center">
+
+<img src="docs/assets/logo.svg" width="128" alt="crosschat logo"/>
 
 # crosschat
 
-> Windows 一期：Claude Code ↔ Codex CLI 跨会话消息。无守护进程，原生投递，四个方向双向实测。
-> 曾用名 `multichat`——`multichat` 命令作为过渡别名保留（bin 双名指向同一 CLI），存量会话照常可用。
-> 设计决策见 `docs/wayfinder/map.md`；联调实证见 `docs/drill-reports/`。
+**让本机的 Claude Code 与 Codex CLI 互相对话** —— 无守护进程、原生投递、双向实测。
 
-## 1. 心智模型（30 秒）
+*曾用名 multichat（`multichat` 命令作为过渡别名保留）*
 
-crosschat 是本机 agent 之间的**邮差**：无守护进程、无驻留服务，每次发送就是一条命令。
+![version](https://img.shields.io/badge/version-1.0.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![node](https://img.shields.io/badge/node-%3E%3D22-339933) ![platform](https://img.shields.io/badge/platform-Windows-blue) ![agents](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
-- **Claude 侧**收消息 = 会话里出现一条"来自另一会话"的用户消息（需 `crosschat claude` 启动开启接收许可）
-- **Codex 侧**收消息 = 线程被投一个新 turn，由 app-server daemon **headless 执行**（不需要窗口在场）
-- 教学内建：agent 侧装有 skill（`install-skills`），且每条消息信封自带回复命令——**题词只写角色，不写协议**
+</div>
 
-## 2. 环境与一次性安装
+---
 
-| 依赖 | 要求 |
-|---|---|
-| Node | ≥ 22 |
-| Claude Code | 已安装 |
-| Codex CLI | 已安装，app-server daemon 可用 |
+## ✨ 为什么用 crosschat
 
-```powershell
-cd D:\workspace\CC\multichat
-npm install && npm run build && npm link    # crosschat（及过渡别名 multichat）上 PATH
-crosschat install-skills                    # 协议教学装到两侧 agent
-```
+- **🔌 原生投递，零轮询**：消息经 Claude 的 named pipe / Codex 的 App Server daemon 直接注入运行中的会话——接收方像收到一条用户消息一样开始工作，不需要任何轮询或常驻服务
+- **🪶 无守护进程**：整个工具就是一条无状态 CLI。没有后台进程要看护、没有崩溃丢状态、没有端口要占——`send` 就是发消息，`status` 就是看在线
+- **🤖 教学内建，低入侵**：agent 侧装一次 skill，且**每条消息的信封自带回复命令**——照抄即可回话。题词只写角色，不写协议；长对话也不会忘
+- **📮 忙时不丢**：对方正在跑长任务？消息自动进本地发件箱（outbox），对方空闲后任意一次调用自动补投——不需要你重发
+- **🔐 同用户信任边界**：全部通道按 Windows 用户隔离，接收许可只授予 `crosschat claude` 启动的会话——你手敲开的会话不会被外部投递
+- **🧪 每个结论都有实证**：通道可行性、写者锁、daemon 版本行为，全部真机联调验证（见 [📚 更多文档](#-更多文档)）
 
-**daemon 必须从干净终端启动**（别在 Claude 会话内启动，否则派生 shell 身份污染，codex 回信撞 `CALLER_IDENTITY_CONFLICT`）：
+> 灵感与部分模块实现来自 [embassy](https://github.com/YuanpingSong/embassy)（macOS-only，MIT）——crosschat 是它的 Windows 原生、无守护进程重实现。
 
-```powershell
-codex app-server daemon start
-```
+## 🧰 环境搭建
 
-## 3. 对话生命周期（规则总纲）⭐
-
-### 3.1 三种发起方式
-
-| 发起者 | 怎么发 | 特性 |
+| 依赖 | 版本要求 | 说明 |
 |---|---|---|
-| **claude** | 会话内 agent 跑 `crosschat send --to <codex 线程名> --body "…"` | 最顺，推荐默认 |
-| **codex** | 会话内 agent 跑 `crosschat send --to <claude 会话名> --body "…"` | 发送随意；回信开窗关窗都能收（daemon 0.160+，见 3.5） |
-| **人** | 任意终端直接跑 `crosschat send --to <名字> --body "…"` | 身份是 human：**能发、不能被回复**（单向指令/通知） |
+| Node.js | ≥ 22 | |
+| Claude Code | 任意近期版 | 接收需 `crosschat claude` 启动（工具自动注入许可） |
+| Codex CLI | ≥ 0.160 推荐 | 0.160 daemon 支持开窗投递；接收需 app-server daemon |
+| OS | Windows（一期） | mac/linux 在路线图 |
 
-第一条消息永远用 `--to`（此刻生成对话引用 reply-ref）；对方名字用 `crosschat status` 查（名字含空格加引号）。
-
-### 3.2 往复规则（谁说话、怎么接）
-
-1. 收到方看到一条**信封消息**：`<cross-session-message from-name="发送方" turn="N">` + 正文 + **回复提示**（一条完整命令）
-2. 回复 = **逐字照抄回复提示里的命令**，把 `<你的回复>` 换成正文：`crosschat send --conversation mc1_… --body "…"`
-3. 引用随每轮自动轮转，`turn` 递增——**无需记住任何历史**，每条消息自带下一步
-4. 防失控：每对端点 30 条/60 秒限流（`RATE_LIMITED` → 等待或收尾）
-
-### 3.3 轮次与终止
-
-- 信封显示 `turn="N"`；题词里给预算（如"10 轮内完成"）；接近预算时 agent 按 skill 准则**总结收尾**
-- 协议层不强制终止；人随时可停（会话里直接说、或 Ctrl+C）
-
-### 3.4 流程 A：claude 发起（推荐）
-
-```
-步骤   动作主体   发生什么                                  窗口状态
-1      你        终端 A：crosschat claude + 角色题词         A 开
-2      你        确认 codex 信箱线程已存在（窗口开/关均可）     任意
-3      claude    send --to <线程名> "任务…" → delivered(1)    —
-4      codex     headless 收 turn、干活、照提示回信           任意
-5      claude    收到信封（你在终端 A 当场看到）→ 验收/追问    —
-6      ——        循环 4-5，直到预算 → 总结收尾                —
+```powershell
+git clone https://github.com/Oatelauser/crosschat.git
+cd crosschat
+npm install && npm run build && npm link   # crosschat 上 PATH
+crosschat install-skills                   # 协议教学装到两侧 agent
 ```
 
-你的全程动作：步骤 1、2，然后在**终端 A 直播围观**（双方消息都出现在 claude 会话里）。
+**Codex daemon**（接收方向必需；从**干净终端**启动——勿在 Claude 会话内启动，否则派生 shell 身份污染）：
 
-### 3.5 流程 B：codex 发起
-
-```
-步骤   动作主体   发生什么                                  窗口状态
-1      你        终端 B：codex + 角色题词（教它主动联系）      B 开
-2      codex     send --to mc-claude "…" → delivered(1)      B 开（发送不受窗口影响）
-3      你        （可选）关掉 codex 窗口                     B 开/关
-4      claude    收到信封（终端 A 看到）→ 照提示回复           —
-5      codex     回信 headless 落进线程、处理、再回            B 开/关
-6      ——        循环 4-5；想看 codex 侧就开窗 resume          —
+```powershell
+codex app-server daemon start    # 重启电脑后需重新执行
 ```
 
-★ 已非关键步：daemon **0.160+** 且 TUI 附着 daemon 时，codex 线程**开窗也能直接收信**（headless 执行，TUI 不实时刷新）。仅当开窗被锁（旧 daemon ≤0.157 或 `--no-daemon`/未附着 TUI）时 crosschat 才等待（默认 120s），关窗瞬间送达；超时报 `CODEX_THREAD_LOCKED` 指引重发。
+## 🚀 快速入门
 
-**不对称速记**：claude 收发都随意；codex 收信开窗关窗均可（0.160+），关窗永远是最稳路径。
+### 30 秒版：两终端互发一句问候
 
-### 3.6 完整示例：codex 当领导派活给 claude（剧本式，照抄可跑）
+```powershell
+# 终端 A（claude，能收）
+crosschat claude          # 进入后 /rename alice
 
-> **先启动 ≠ 先说话**：claude 是被叫方，电话得先开机；但任务由 codex 发起。
-> 多任务循环 = 把示例里的单个任务换成一串任务清单，领导验收通过 N 后自动下发 N+1。
-
-**任务目标**：codex（领导）命令 claude（工人）在 `D:\workspace\CC\demo` 创建 `notes.txt` 写三行待办，并验收。
-
-**第 1 步 · 左窗启动 claude（接收方先开机）**
+# 终端 B（任意终端，人手发）
+crosschat status          # 看到 alice
+crosschat send --to alice --body "你好 alice！"
+# → 终端 A 里几秒后出现这条消息
 ```
-D:\workspace\CC\demo> crosschat claude
+
+### 完整剧本：codex 当领导派活给 claude（多任务循环的经典形态）
+
+**任务目标**：codex（领导）命令 claude（工人）在 `D:\workspace\demo` 创建 `notes.txt` 写三行待办，并验收。
+
+**第 1 步 · 左窗启动 claude（接收方先开机；先启动 ≠ 先说话）**
 ```
-进入后输入 `/rename worker`（给领导一个明确的名字），然后什么都不贴，待命。
+D:\workspace\demo> crosschat claude
+```
+进入后输入 `/rename worker`，待命。
 
 **第 2 步 · 右窗启动 codex（领导）并贴题词**
 ```
-D:\workspace\CC\demo> codex
+D:\workspace\demo> codex
 ```
 ```
 你是领导。用 crosschat（先 status 确认名字）给 claude 会话「worker」下发任务：
@@ -119,96 +89,124 @@ D:\workspace\CC\demo> codex
 ● delivered to worker (turn 1)          ← 任务飞进左窗，发起方是 codex
 ```
 
-**第 4 步 · 右窗开着也没关系**（daemon 0.160+ 下开窗可投；旧环境被锁时 crosschat 会等关窗，此时再关右窗即可）
+**第 4 步 ·（0.160+ 可跳过）关掉右窗**：旧版 daemon（≤0.157）下收报告需关窗；**0.160+ 开窗也能收**（headless 执行）。
 
 **第 5 步 · 左窗屏幕——claude 收令干活**
 ```
 📨 来自另一会话的消息:
-<cross-session-message from-name="codex/01a0f…" turn="1">
+<cross-session-message from-name="codex/01a…" turn="1">
 任务1：在当前目录创建 notes.txt，内容三行…
 回复请运行: crosschat send --conversation mc1_xxx --body "<你的回复>"
 </cross-session-message>
 
 ⏺ Write: notes.txt（三行待办）
-⏺ Bash: crosschat send --conversation mc1_xxx --body "已完成：notes.txt 已创建，内容为要求的三行。"
+⏺ Bash: crosschat send --conversation mc1_xxx --body "已完成：notes.txt 已创建…"
 ⏺ delivered (turn 2)                     ← 报告发回给 codex
 ```
 
-**第 6 步 · 自动发生（无任何窗口，看不见但它在跑）**
-报告落进 codex 线程 → codex 被唤醒 → 亲自打开 notes.txt 核对三行 → 通过 → 它跑 `send --conversation mc1_yyy --body "验收通过，任务结束"`。
+**第 6 步 · 自动发生**：报告落进 codex 线程 → codex 验证 → 下发下一个/验收结论 → 又出现在左窗。
 
-**第 7 步 · 左窗几秒后——收工**
-```
-📨 <cross-session-message from-name="codex/01a0f…" turn="3">
-验收通过，任务结束
-</cross-session-message>
-```
-claude 停止。**全程在左窗直播**；想看领导的验收细节：开右窗 `codex resume` 翻历史（开着也不影响它收信）。
+**第 7 步 · 左窗收到"验收通过，任务结束"——收工**。全程在左窗直播；想看领导的验收细节：开右窗 `codex resume` 翻历史。
 
-## 4. 每日标准流程（速览）
-
-1. `crosschat status` —— 环境体检（codex 段 unavailable → 先修 daemon，见 §11）
-2. `crosschat claude` + 角色题词（终端 A）
-3. `codex` + 角色题词（终端 B）（开窗关窗均可收信，关窗最稳）
-4. 在终端 A 围观，必要时人插话（见 §5）
-5. 预算耗尽 → agent 总结收尾 → 关会话
-
-## 5. 场景速查
-
-| 场景 | 操作 |
-|---|---|
-| 人插话 | 任意终端 `crosschat send --to <名字> --body "…"`（单向，对方无法回你） |
-| claude ↔ claude | 双方都 `crosschat claude` 启动，其余同流程 A |
-| 向开着的 codex 窗口投递 | 直接发：0.160+ daemon 附着 TUI 时开窗即达；被锁则等待关窗，120s 超时报错指引 |
-| 看 codex 侧历史 | 开窗 resume 该线程（开窗不影响收信） |
-| 新话题 | agent 用 `--to` 新发，不续旧引用 |
-| 超长内容（>16KiB） | 写文件、消息只发路径（对方按需读，也省上下文） |
-
-## 6. 命令速查
+## 📋 命令列表
 
 ```
-crosschat send --to <名字> --body "<正文>"          # 新消息
-crosschat send --conversation <ref> --body "<正文>" # 回复（ref 照抄信封）
+crosschat send --to <名字> --body "<正文>"          # 新消息（名字含空格加引号）
+crosschat send --conversation <ref> --body "<正文>" # 回复（ref 照抄收到的信封）
 echo … | crosschat send --to <名字>                 # 正文走 stdin
 crosschat status [--json]                           # 双侧总览（名字/目录/时间/状态）
-crosschat install-skills [--dir <根>]               # 安装/更新 skill（幂等）
+crosschat install-skills [--dir <根>]               # 安装/更新 agent skill（幂等）
 crosschat claude [任意 claude 参数…]                 # 带接收许可启动 claude（透传）
+crosschat -v | --version | help                     # 版本 / 帮助
 ```
 
-## 7. 投递语义矩阵
+发送输出三种状态：`delivered`（已投递）/ `parked`（对方忙，已入发件箱待补投）/ 错误码（见排障）。
+
+## 📖 对话生命周期（规则总纲）
+
+### 三种发起方式
+
+| 发起者 | 怎么发 | 特性 |
+|---|---|---|
+| **claude** | 会话内 agent 跑 `crosschat send --to <codex 线程名> --body "…"` | 最顺，推荐默认 |
+| **codex** | 会话内 agent 跑 `crosschat send --to <claude 会话名> --body "…"` | 发送随意；回信开窗关窗都能收（daemon 0.160+） |
+| **人** | 任意终端直接 `crosschat send --to <名字> --body "…"` | 身份是 human：**能发、不能被回复**（单向指令） |
+
+第一条消息永远用 `--to`（此刻生成对话引用 reply-ref）；对方名字用 `status` 查。
+
+### 往复规则
+
+1. 收到方看到**信封消息**（`from-name` + `turn="N"` + 回复提示）
+2. 回复 = **逐字照抄回复提示里的命令**，换掉 `<你的回复>`——引用自动轮转，无需记任何历史
+3. 防失控：每对端点 30 条/60 秒限流
+
+### 轮次与终止
+
+信封显示 `turn="N"`；题词给预算（如"10 轮内完成"）；接近预算时 agent 按 skill 准则总结收尾；协议层不强制终止。
+
+## 📡 投递语义矩阵
 
 | 接收方 | 状态 | 行为 |
 |---|---|---|
 | claude（`crosschat claude` 启动） | 窗口开 | ✅ 秒达，会话内出现信封消息 |
 | claude（裸 `claude` 启动） | 任何 | ❌ 无接收许可（换 `crosschat claude` 重启） |
-| codex | 窗口关 | ✅ 立即 headless 执行并回信 |
-| codex | 窗口开（daemon 0.160+ 且 TUI 附着） | ✅ 直接送达，headless 执行（TUI 不实时刷新） |
-| codex | 窗口开（旧 daemon ≤0.157 / `--no-daemon`） | ⏳ crosschat 等待，关窗瞬间送达；120s 超时报错 |
-| codex | turn 进行中 | ⏳ 排队等空闲（同一机制） |
+| codex（daemon ≥0.160） | 窗口开/关 | ✅ 送达（headless 执行；TUI 不实时刷新，翻历史可见） |
+| codex（旧 daemon ≤0.157 / `--no-daemon`） | 窗口开 | ⏳ 等待 120s，关窗瞬间送达；超时 `parked` 入发件箱 |
+| codex | turn 进行中（忙） | 📮 `parked` 入发件箱，对方空闲后任意一次 crosschat 调用自动补投 |
 
-## 8. 错误码排障
+**不对称速记**：claude 收发都随意；codex 收信在 0.160+ 开窗关窗均可，关窗永远是最稳路径。
 
-**使用类**：`NAME_NOT_FOUND`（错误信息列出全部可用名，照抄）· `NAME_COLLISION`（重名，`status --json` 看 id）· `MESSAGE_TOO_LARGE`（>16KiB → 落盘发路径）· `RATE_LIMITED`（30 条/60s → 等待或收尾）· `TARGET_*`/`BODY_*`/`USAGE`（参数错误照提示改）
+## 🤝 Agent 兼容性
 
-**身份类**：`CALLER_IDENTITY_CONFLICT`（环境双身份残留。临时：命令前缀 `env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID`；根治：干净终端重启 daemon）· `CALLER_NOT_IN_CONVERSATION`（非参与者不能借引用回复）· `CANNOT_REPLY_TO_HUMAN`（对话由人发起，无处回信）
+| Agent | 发送 | 接收 | 实测版本 |
+|---|---|---|---|
+| Claude Code | ✅ | ✅（需 `crosschat claude` 启动） | 2.1.287 |
+| Codex CLI | ✅ | ✅（需 daemon；0.160+ 开窗可收） | 0.159.3 / 0.160.0 |
+| 任意有 shell 的 agent | ✅（装 skill 后） | 🔜 按适配器扩展（GLM 等） | 路线图 |
 
-**通道类**：`CODEX_PROXY_SPAWN_FAILED`（看 stderr 摘录；通常 daemon 未跑 → `codex app-server daemon start`）· `CODEX_THREAD_LOCKED`（等待超时，多见于旧 daemon ≤0.157 或 `--no-daemon`/未附着 TUI——升级 `codex app-server daemon update` 后开窗即可投：关对方 codex 窗口后重发，立即送达）· `CODEX_THREAD_BUSY_TIMEOUT`（忙满 120s，稍后重发）· `CODEX_APPROVAL_REQUIRED`（codex 等人工审批，**工具永不代答**）· `CLAUDE_PIPE_*`/`CODEX_*UNCERTAIN`（写入中途失败状态不明——**勿盲目重发**，先 `status` 核实对方是否已收到）
+## 🗺️ 路线图
 
-## 9. 边界与限制
+**已完成（v1.0.0）**
+- [x] Claude ↔ Codex / Claude ↔ Claude / Codex ↔ Codex 双向消息（真机联调验证）
+- [x] 无状态 CLI 四命令 + 自包含会话引用 + 轮次计数
+- [x] 双侧自动发现（含目录/时间标注）、信封自带教学 skill
+- [x] 16KiB 上限、30 条/60s 防乒乓限流、身份冲突自纠指引
+- [x] 忙/锁超时 → 本地发件箱自动补投（outbox）
+- [x] daemon 0.160 开窗投递（实证：同 daemon 多连接绕过写者锁）
 
-单条 ≤16KiB；每对端点 30 条/60s；等待上限默认 120s；信任边界=同一 Windows 用户；接收许可只授予 `crosschat claude` 启动的会话；长对话靠轮次计数+落盘引用控制上下文。
+**计划中**
+- [ ] 🌐 跨机联邦（SSH，异构 win ↔ linux 互聊）
+- [ ] 🐧 mac / linux 平台适配（平台接缝已预留：PipeTransport / ProcessInspector / PathLayout）
+- [ ] 📦 常驻 broker（忙时持久队列、异步回执、投递状态机——embassy 完整集对齐）
+- [ ] 🖼️ TUI 看板与服务安装（开机自启）
+- [ ] 🤖 新 agent 适配器（GLM 等；有原生唤醒通道则原生，否则论证降级）
+- [ ] 👀 status 标注 TUI 占用线程；专用信箱线程机制化
 
-## 10. FAQ
+## 🧯 错误码排障
 
-**Q：codex 窗口开着能收到吗？** daemon 0.160+ 且 TUI 附着 daemon 时能（实测同 daemon 多连接不互斥）。旧 daemon（≤0.157）或 `--no-daemon` 时窗口独占线程（跨进程单写者锁），crosschat 等你关窗再投。
+**使用类**：`NAME_NOT_FOUND`（错误信息列出全部可用名）· `NAME_COLLISION`（重名，`status --json` 看 id）· `MESSAGE_TOO_LARGE`（>16KiB → 落盘发路径）· `RATE_LIMITED`（等待或收尾）· `TARGET_*`/`BODY_*`/`USAGE`（参数错误）
+
+**身份类**：`CALLER_IDENTITY_CONFLICT`（环境双身份残留。临时：命令前缀 `env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID`；根治：干净终端重启 daemon）· `CALLER_NOT_IN_CONVERSATION` · `CANNOT_REPLY_TO_HUMAN`（对话由人发起）
+
+**通道类**：`CODEX_PROXY_SPAWN_FAILED`（看 stderr 摘录；通常 daemon 未跑）· `CODEX_THREAD_LOCKED`/`CODEX_THREAD_BUSY_TIMEOUT`（已自动转 `parked` 入发件箱，无需重发）· `OUTBOX_FULL`（每线程 20 条积压上限，等待排涝或人工介入）· `CODEX_APPROVAL_REQUIRED`（**工具永不代答审批**）· `CLAUDE_PIPE_*`/`CODEX_*UNCERTAIN`（写入中途失败状态不明——**勿盲目重发**，先 `status` 核实）
+
+## ⚠️ 边界与限制
+
+单条 ≤16KiB；每对端点 30 条/60s；发件箱每线程 20 条；信任边界=同一 Windows 用户；接收许可仅 `crosschat claude` 启动的会话；重启电脑后需重新 `codex app-server daemon start`。
+
+## ❓ FAQ
+
+**Q：codex 窗口开着收不到？** daemon ≥0.160 开窗也能收（headless，界面不实时刷新）；旧 daemon/`--no-daemon` 下等待或已入发件箱，关窗后自动送达。
 
 **Q：为什么必须 `crosschat claude`？** 它注入跨会话接收许可；裸 `claude` 的会话收不到。
 
-**Q：`codex queue` 不是能开窗收吗？** 0.160 + 附着 TUI 下实测可秒级消费；但 crosschat 主通道本身已可开窗投递，不引入 queue。
+**Q：`codex queue` 能用吗？** 仅当 TUI 附着 daemon（0.160+）时会被消费；旧形态下是黑洞，故 crosschat 不依赖它。
+
+**Q：人能发消息吗？** 能（`--to`），身份 human，单向不能被回复。
 
 **Q：消息历史在哪看？** claude 侧=会话 transcript；codex 侧=开窗 resume 线程。
 
-## 11. 故障恢复
+## 🔧 故障恢复
 
 | 症状 | 动作 |
 |---|---|
@@ -216,16 +214,28 @@ crosschat claude [任意 claude 参数…]                 # 带接收许可启�
 | codex 回信撞身份冲突 | 同上（重启 daemon 即根治） |
 | skill 误删/过期 | `crosschat install-skills` |
 | 升级 crosschat 代码后 | `npm run build`（skill 有变再 install-skills） |
-| 消息发出对方没反应 | 先 `status` 确认对方在线；UNCERTAIN 类错误勿重发先核实 |
+| 消息发出对方没反应 | 先 `status` 确认在线；`parked` 的等对方空闲自动补投；UNCERTAIN 类勿重发先核实 |
 
-## 12. 开发说明
+## 📚 更多文档
+
+| 文档 | 内容 |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | **底层原理**：注册表/命名管道/daemon 通道、写者锁本质、信封与自包含引用、完整投递流程图 |
+| [docs/wayfinder/map.md](docs/wayfinder/map.md) | 设计决策地图（全部拍板过程与依据） |
+| [docs/research/](docs/research/) | 实测研究报告（embassy 源码分析、两侧通道验证、0.160 inject_items 实验） |
+| [docs/drill-reports/](docs/drill-reports/) | 联调实证记录 |
+
+## 🛠️ 开发说明
 
 ```powershell
-npm run check          # lint + build + test（125 项）
-CROSSCHAT_LIVE=1 npx vitest run --dir test   # 真机 live 测试（会 spawn 一次性会话）
+npm run check                              # lint + build + test
+$env:CROSSCHAT_LIVE='1'; npx vitest run --dir test   # 真机 live 测试
 ```
 
-- 目录：`src/claude`（注册表/管道/鉴权）· `src/codex`（proxy/RPC/投递）· `src/commands`（CLI）· `src/platform`（平台接缝，二期 mac/linux 扩展点）· `skills/`（agent 教学）
-- 平台接缝：PipeTransport / ProcessInspector / PathLayout；二期适配只动这三个实现
-- 过程档案：`docs/wayfinder/`（决策地图）· `docs/research/`（研究报告）· `docs/drill-reports/`（联调实证）· `docs/embassy-main/`（embassy 源码参考副本，未入库）
-- 二期入口：`docs/wayfinder/map.md` 雾区（联邦/受管形态/mac/linux/完整集）
+- 目录：`src/claude`（注册表/管道/鉴权）· `src/codex`（proxy/RPC/投递）· `src/commands`（CLI）· `src/platform`（平台接缝）· `src/outbox.ts`（发件箱）· `skills/`（agent 教学）
+- 铭谢：[embassy](https://github.com/YuanpingSong/embassy)（MIT）的信封格式与 codex 传输模式
+- License：[MIT](LICENSE)
+
+---
+
+<div align="center">Made with 🤝 between agents — crosschat 让它们自己对话</div>

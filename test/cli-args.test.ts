@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { parseSendArgs, parseStatusArgs } from '../src/cli.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll, describe, expect, it } from 'vitest';
+import { drainOutboxAtEntry, parseSendArgs, parseStatusArgs } from '../src/cli.js';
+import { park } from '../src/outbox.js';
 import { MultichatError } from '../src/errors.js';
 
 function expectUsage(fn: () => unknown, needle: string): void {
@@ -61,5 +65,41 @@ describe('parseStatusArgs', () => {
   it('rejects anything else', () => {
     expectUsage(() => parseStatusArgs(['--to', 'x']), 'only --json');
     expectUsage(() => parseStatusArgs(['--json', '--json']), 'only --json');
+  });
+});
+
+describe('drainOutboxAtEntry', () => {
+  const outboxDir = mkdtempSync(join(tmpdir(), 'crosschat-cli-drain-'));
+  afterAll(() => rmSync(outboxDir, { recursive: true, force: true }));
+
+  function run(
+    deliverCodex: (threadId: string, content: string, busyTimeoutMs: number) => Promise<unknown>,
+  ) {
+    const lines: string[] = [];
+    return drainOutboxAtEntry({
+      outboxDir,
+      deliverCodex,
+      err: (line) => lines.push(line),
+    }).then(() => lines);
+  }
+
+  it('reports one stderr line per relieved thread, with the short drain wait', async () => {
+    park(outboxDir, 't-cli-1', { envelope: 'e-1', toName: 'alpha' });
+    park(outboxDir, 't-cli-1', { envelope: 'e-2', toName: 'alpha' });
+    const calls: number[] = [];
+    const lines = await run(async (_id, _c, busyTimeoutMs) => {
+      calls.push(busyTimeoutMs);
+    });
+    expect(lines).toEqual(['outbox: 补投 2 条给 alpha']);
+    expect(calls).toEqual([5_000, 5_000]);
+  });
+
+  it('stays silent when nothing was parked or nothing went through', async () => {
+    expect(await run(async () => undefined)).toEqual([]);
+    park(outboxDir, 't-cli-stuck', { envelope: 's-1', toName: 'beta' });
+    const lines = await run(async () => {
+      throw new MultichatError('CODEX_THREAD_BUSY_TIMEOUT', 'still busy');
+    });
+    expect(lines).toEqual([]);
   });
 });

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- crosschat logo: two agent terminals exchanging a message envelope -->
+  <rect x="8" y="28" width="46" height="58" rx="8" fill="#1f6feb"/>
+  <rect x="74" y="42" width="46" height="58" rx="8" fill="#2ea043"/>
+  <rect x="16" y="40" width="30" height="4" rx="2" fill="#ffffff" opacity="0.85"/>
+  <rect x="16" y="50" width="22" height="4" rx="2" fill="#ffffff" opacity="0.55"/>
+  <rect x="82" y="54" width="30" height="4" rx="2" fill="#ffffff" opacity="0.85"/>
+  <rect x="82" y="64" width="22" height="4" rx="2" fill="#ffffff" opacity="0.55"/>
+  <!-- envelope in transit -->
+  <g transform="translate(46 52)">
+    <rect x="0" y="0" width="36" height="26" rx="4" fill="#f0883e" stroke="#ffffff" stroke-width="2.5"/>
+    <path d="M2 3 L18 15 L34 3" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+  <!-- motion arrows -->
+  <path d="M30 96 Q64 116 98 92" fill="none" stroke="#8b949e" stroke-width="3" stroke-dasharray="5 5" stroke-linecap="round"/>
+  <path d="M98 92 l6 -3 l-1 7 z" fill="#8b949e"/>
+</svg>

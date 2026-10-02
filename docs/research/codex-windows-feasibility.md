@@ -2,7 +2,7 @@
 
 - 票：`wayfinder/tickets/001-codex-windows-feasibility.md`
 - 日期：2026-10-01
-- 实测机器：Windows 11 Pro for Workstations（10.0.26200），本机用户 `yangsheng`
+- 实测机器：Windows 11 Pro for Workstations（10.0.26200），本机用户 `<user>`
 - 对照基准：embassy v4.7.0 源码研究报告 `research/embassy-architecture.md` §2.2（macOS 上 spawn `codex app-server proxy`、stdin/stdout 当 WebSocket 传输、`thread/resume` + `turn/start` / `turn/steer`）
 - 所有实测均为只读或一次性临时调用（用完即杀），未修改任何用户配置
 
@@ -23,14 +23,14 @@ $ codex --version
 codex-cli 0.159.3
 
 $ where codex
-C:\Users\yangsheng\AppData\Roaming\npm\codex
-C:\Users\yangsheng\AppData\Roaming\npm\codex.cmd
+C:\Users\<user>\AppData\Roaming\npm\codex
+C:\Users\<user>\AppData\Roaming\npm\codex.cmd
 ```
 
 npm 全局安装（`@openai/codex`），shim 指向 `codex.js`，真实二进制在：
 
 ```
-C:\Users\yangsheng\AppData\Roaming\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-x64\vendor\x86_64-pc-windows-msvc\bin\codex.exe
+C:\Users\<user>\AppData\Roaming\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-x64\vendor\x86_64-pc-windows-msvc\bin\codex.exe
 ```
 
 即 Windows 原生 Rust 二进制（三元组 `x86_64-pc-windows-msvc`），非 WSL、非 node 实现。
@@ -79,7 +79,7 @@ Commands:
 
 ```
 $ codex app-server daemon version
-{"status":"running","backend":"pid","managedCodexPath":"C:\\Users\\yangsheng\\.codex\\packages/app-server-daemon\\current\\bin\\codex.exe","managedCodexVersion":"0.157.1","socketPath":"C:\\Users\\yangsheng\\.codex\\app-server-control\\app-server-control.sock","cliVersion":"0.159.3","appServerVersion":"0.157.1"}
+{"status":"running","backend":"pid","managedCodexPath":"C:\\Users\\<user>\\.codex\\packages/app-server-daemon\\current\\bin\\codex.exe","managedCodexVersion":"0.157.1","socketPath":"C:\\Users\\<user>\\.codex\\app-server-control\\app-server-control.sock","cliVersion":"0.159.3","appServerVersion":"0.157.1"}
 ```
 
 PowerShell 确认进程：pid 7948，路径 `...packages\app-server-daemon\releases\0.157.1-x86_64-pc-windows-msvc\bin\codex.exe`，启动于 2026-10-01 12:57。即：**Windows 上由 CLI 自管的 app-server 守护进程已作为常驻进程运行**（`codex app-server daemon start/stop/bootstrap/update` 全套管理子命令可用），控制 socket 为文件系统路径上的 AF_UNIX socket，可正常应答。
@@ -97,12 +97,12 @@ sec-websocket-accept: UPKxwzQTfx6VR4D1vK/7Jpurnp8=
 x-codex-websocket-max-unfragmented-message-bytes: 16777216
 
 <<< TEXT: {"id":1,"result":{"userAgent":"codex-tui/0.157.1 (Windows 10.0.26200; x86_64)",
-           "codexHome":"C:\\Users\\yangsheng\\.codex","platformFamily":"windows","platformOs":"windows"}}
+           "codexHome":"C:\\Users\\<user>\\.codex","platformFamily":"windows","platformOs":"windows"}}
 <<< TEXT: {"method":"configWarning","params":{...}}
 <<< TEXT: {"method":"remoteControl/status/changed","params":{"status":"disabled",...}}
 <<< TEXT: {"id":2,"result":{"data":[{"id":"01a0f50a-...","sessionId":"01a0f50a-...","status":{"type":"notLoaded"},
-           "path":"C:\\Users\\yangsheng\\.codex\\sessions\\2026\\10\\01\\rollout-...jsonl",
-           "cwd":"D:\\workspace\\CC\\ai-front-spec","name":"架构升级整改",...}, ...]}}
+           "path":"C:\\Users\\<user>\\.codex\\sessions\\2026\\10\\01\\rollout-...jsonl",
+           "cwd":"D:\\workspace\\CC\\<proj>","name":"架构升级整改",...}, ...]}}
 === PROBE SUCCESS ===
 ```
 

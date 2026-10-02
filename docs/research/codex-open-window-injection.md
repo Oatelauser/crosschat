@@ -1,7 +1,7 @@
 # codex 开窗注入通道探测报告
 
 - 日期：2026-10-02
-- 环境：Windows 11 Pro for Workstations，codex-cli 0.160.0（npm 包装，真实二进制 `C:\Users\yangsheng\AppData\Roaming\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-x64\vendor\x86_64-pc-windows-msvc\bin\codex.exe`），共享 daemon 0.157.1 运行中
+- 环境：Windows 11 Pro for Workstations，codex-cli 0.160.0（npm 包装，真实二进制 `C:\Users\<user>\AppData\Roaming\npm\node_modules\@openai\codex\node_modules\@openai\codex-win32-x64\vendor\x86_64-pc-windows-msvc\bin\codex.exe`），共享 daemon 0.157.1 运行中
 - 方法：help 树全扫 + schema 生成分析 + 自有探针线程端到端活体实验（所有写操作仅针对自己 spawn 的线程）
 
 ## 结论：✅ 找到开窗注入通道 —— `codex queue`
@@ -45,7 +45,7 @@ Commands:
 
 实测（`CODEX_HOME=D:\tmp\codex-probe\home2` 隔离实例，未触碰真 daemon）：
 
-- `remote-control start`：先安装 daemon 包到 `<CODEX_HOME>\packages\app-server-daemon\`（0.160.0），拉起 daemon，然后报 `Error: Remote control is enabled on yang but the connection is errored.`——**"yang" 是本机设备名**，说明 remote-control 是向 OpenAI 云端中继注册本机设备（供 ChatGPT 网页/移动端反过来控制本机 codex），出站连接需登录态，临时 home 无 auth 故失败。
+- `remote-control start`：先安装 daemon 包到 `<CODEX_HOME>\packages\app-server-daemon\`（0.160.0），拉起 daemon，然后报 `Error: Remote control is enabled on <host> but the connection is errored.`——**"<host>" 是本机设备名（原文本机名，已打码）**，说明 remote-control 是向 OpenAI 云端中继注册本机设备（供 ChatGPT 网页/移动端反过来控制本机 codex），出站连接需登录态，临时 home 无 auth 故失败。
 - `remote-control pair`：`Error: remoteControl/pairing/start failed: remote control pairing is unavailable until enrollment completes`——配对码必须先完成设备 enrollment（云端注册，需登录）。底层方法 `remoteControl/pairing/start` 同样不在公开 schema。
 - `remote-control stop`（对临时实例）：返回 JSON 确认按 pid 停止，控制 socket 路径 `<CODEX_HOME>\app-server-control\app-server-control.sock` ——**daemon 按 CODEX_HOME 完全隔离**。
 

@@ -4,6 +4,7 @@ import type { ClaudeRegistryScan } from '../claude/registry.js';
 import type { CodexThreadSummary } from '../codex/client.js';
 import type { ClaudeDeliveryTarget } from '../claude/deliver.js';
 import { checkAndRecord, rateKey } from '../rate-limit.js';
+import { park } from '../outbox.js';
 import {
   endpointOfIdentity,
   identityKey,
@@ -42,6 +43,8 @@ export interface SendDeps {
   deliverClaude(target: ClaudeDeliveryTarget, content: string): Promise<{ status: 'delivered' }>;
   deliverCodex(threadId: string, content: string): Promise<{ status: 'accepted'; turnId: string }>;
   rateDir: string;
+  /** Outbox root for parking busy/locked codex deliveries (%LOCALAPPDATA%/crosschat/outbox). */
+  outboxDir: string;
   now(): number;
 }
 
@@ -120,7 +123,20 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   const threadName = threads.find((thread) => thread.id === target.id)?.name;
   const toName = threadName ?? shortId('codex', target.id);
   const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body });
-  await deps.deliverCodex(target.id, content);
+  try {
+    await deps.deliverCodex(target.id, content);
+  } catch (err) {
+    // Busy/locked = definitively not delivered (deliver.ts polls before giving
+    // up): park the composed envelope verbatim; the next CLI call drains it.
+    if (
+      err instanceof MultichatError &&
+      (err.code === 'CODEX_THREAD_BUSY_TIMEOUT' || err.code === 'CODEX_THREAD_LOCKED')
+    ) {
+      park(deps.outboxDir, target.id, { envelope: content, toName }, deps.now());
+      return formatParked(args.json === true, toName, turn, replyRef);
+    }
+    throw err;
+  }
   return formatDelivery(args.json === true, toName, turn, replyRef);
 }
 
@@ -162,4 +178,11 @@ function formatDelivery(json: boolean, toName: string, turn: number, replyRef: s
     return JSON.stringify({ status: 'delivered', to: toName, turn, replyRef });
   }
   return `delivered to ${toName} (turn ${turn})\nreply-ref: ${replyRef}`;
+}
+
+function formatParked(json: boolean, toName: string, turn: number, replyRef: string): string {
+  if (json) {
+    return JSON.stringify({ status: 'parked', to: toName, turn, replyRef });
+  }
+  return `parked to ${toName} (busy; 将在对方空闲后由任意 crosschat 调用自动补投)\nreply-ref: ${replyRef}`;
 }

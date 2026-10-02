@@ -10,6 +10,7 @@ import { runStatus, type StatusDeps } from './commands/status.js';
 import { runInstallSkills, type InstallSkillsArgs } from './commands/install-skills.js';
 import { runClaudeWrapper } from './commands/claude-wrapper.js';
 import { defaultRateDir } from './rate-limit.js';
+import { defaultOutboxDir, drain } from './outbox.js';
 import { listClaudeSessions } from './claude/registry.js';
 import { deliverToClaudeSession } from './claude/deliver.js';
 import { listCodexThreads } from './codex/discovery.js';
@@ -113,6 +114,7 @@ function realSendDeps(stdinText: string | undefined): SendDeps {
     deliverClaude: (target, content) => deliverToClaudeSession(target, content),
     deliverCodex: (threadId, content) => deliverToCodexThread(threadId, content),
     rateDir: defaultRateDir(),
+    outboxDir: defaultOutboxDir(),
     now: () => Date.now(),
   };
 }
@@ -124,6 +126,15 @@ function realStatusDeps(): StatusDeps {
   };
 }
 
+function drainAtEntry(): Promise<void> {
+  return drainOutboxAtEntry({
+    outboxDir: defaultOutboxDir(),
+    deliverCodex: (threadId, content, busyTimeoutMs) =>
+      deliverToCodexThread(threadId, content, { busyTimeoutMs }),
+    err: (line) => process.stderr.write(`${line}\n`),
+  });
+}
+
 function printFailure(err: unknown): number {
   const me =
     err instanceof MultichatError
@@ -131,6 +142,32 @@ function printFailure(err: unknown): number {
       : new MultichatError('INTERNAL', err instanceof Error ? err.message : String(err), { cause: err });
   process.stderr.write(`crosschat: ${me.code}: ${me.message}\n`);
   return 1;
+}
+
+export interface DrainEntryDeps {
+  outboxDir: string;
+  deliverCodex(threadId: string, content: string, busyTimeoutMs: number): Promise<unknown>;
+  err(line: string): void;
+}
+
+/**
+ * Opportunistic outbox drain at command entry (send/status only): re-deliver
+ * parked messages with a short busy wait, one stderr line per thread that got
+ * relief; silent when nothing was parked or nothing went through. Drain
+ * failures never fail the invoking command.
+ */
+export async function drainOutboxAtEntry(deps: DrainEntryDeps): Promise<void> {
+  let results;
+  try {
+    results = await drain(deps.outboxDir, (threadId, content, busyTimeoutMs) =>
+      deps.deliverCodex(threadId, content, busyTimeoutMs),
+    );
+  } catch {
+    return; // opportunistic: the real command still runs
+  }
+  for (const result of results) {
+    if (result.delivered > 0) deps.err(`outbox: 补投 ${result.delivered} 条给 ${result.toName}`);
+  }
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -154,6 +191,7 @@ async function main(argv: string[]): Promise<number> {
     }
     try {
       const args = parseSendArgs(rest);
+      await drainAtEntry();
       // Only read stdin when --body is absent: agent harnesses often leave the
       // stdin pipe open forever, and blocking on it with --body given would hang.
       const stdinText = args.bodyArg === undefined ? await readStdinText() : undefined;
@@ -171,6 +209,7 @@ async function main(argv: string[]): Promise<number> {
     }
     try {
       const { json } = parseStatusArgs(rest);
+      await drainAtEntry();
       const output = await runStatus(realStatusDeps(), json);
       process.stdout.write(`${output}\n`);
       return 0;

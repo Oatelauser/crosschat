@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { MAX_BODY_BYTES, runSend, type SendArgs, type SendDeps } from '../src/commands/send.js';
 import { decodeRef, encodeRef, newConversationRef } from '../src/ref.js';
 import { MultichatError } from '../src/errors.js';
+import { drain } from '../src/outbox.js';
 import type { ClaudeRegistryScan, ClaudeSessionEntry } from '../src/claude/registry.js';
 import type { CodexThreadSummary } from '../src/codex/client.js';
 
@@ -33,7 +34,11 @@ const threads: CodexThreadSummary[] = [
 ];
 
 const rateDir = mkdtempSync(join(tmpdir(), 'crosschat-send-'));
-afterAll(() => rmSync(rateDir, { recursive: true, force: true }));
+const outboxDir = mkdtempSync(join(tmpdir(), 'crosschat-send-outbox-'));
+afterAll(() => {
+  rmSync(rateDir, { recursive: true, force: true });
+  rmSync(outboxDir, { recursive: true, force: true });
+});
 
 const claudeDeliveries: { pid: number; content: string }[] = [];
 const codexDeliveries: { threadId: string; content: string }[] = [];
@@ -55,6 +60,7 @@ function makeDeps(env: Record<string, string | undefined> = {}, stdinText?: stri
       return { status: 'accepted', turnId: 'turn-1' };
     },
     rateDir,
+    outboxDir,
     now: () => 9_000_000,
   };
 }
@@ -263,5 +269,74 @@ describe('runSend rate limiting', () => {
     // Other pairs are unaffected.
     const ok = await send({ to: 'alpha', bodyArg: 'fine' });
     expect(ok).toContain('delivered to alpha');
+  });
+});
+
+describe('runSend outbox parking (B10)', () => {
+  // Fresh outbox per test: parking accumulates per thread file.
+  const freshOutbox = (): string => mkdtempSync(join(outboxDir, 'case-'));
+
+  function failingDeps(code: string, outDir: string): SendDeps {
+    const deps = makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' });
+    return {
+      ...deps,
+      outboxDir: outDir,
+      deliverCodex: async () => {
+        throw new MultichatError(code, `simulated ${code}`);
+      },
+    };
+  }
+
+  it('parks on CODEX_THREAD_BUSY_TIMEOUT and returns the parked output (exit 0 path)', async () => {
+    const out = await runSend(
+      { to: 'workteam', bodyArg: 'stuck message' },
+      failingDeps('CODEX_THREAD_BUSY_TIMEOUT', freshOutbox()),
+    );
+    expect(out).toContain('parked to workteam (busy; 将在对方空闲后由任意 crosschat 调用自动补投)');
+    expect(out).toContain('reply-ref: mc1_');
+  });
+
+  it('parks on CODEX_THREAD_LOCKED as well', async () => {
+    const out = await runSend(
+      { to: 'workteam', bodyArg: 'locked out' },
+      failingDeps('CODEX_THREAD_LOCKED', freshOutbox()),
+    );
+    expect(out).toContain('parked to workteam');
+  });
+
+  it('reports status parked as single-line JSON with --json', async () => {
+    const out = await runSend(
+      { to: 'workteam', bodyArg: 'j', json: true },
+      failingDeps('CODEX_THREAD_BUSY_TIMEOUT', freshOutbox()),
+    );
+    const parsed = JSON.parse(out) as { status: string; to: string; turn: number };
+    expect(parsed).toMatchObject({ status: 'parked', to: 'workteam', turn: 1 });
+    expect(out).not.toContain('\n');
+  });
+
+  it('parks the composed envelope verbatim and a drain delivers it unchanged', async () => {
+    const dir = freshOutbox();
+    await runSend({ to: 'workteam', bodyArg: 'round trip' }, failingDeps('CODEX_THREAD_BUSY_TIMEOUT', dir));
+    const file = join(dir, 'team1111-aaaa.json');
+    const parked = JSON.parse(readFileSync(file, 'utf8')) as { items: { envelope: string; toName: string }[] };
+    expect(parked.items).toHaveLength(1);
+    expect(parked.items[0]!.toName).toBe('workteam');
+    expect(parked.items[0]!.envelope).toContain('round trip');
+    expect(parked.items[0]!.envelope).toContain('<cross-session-message');
+    const delivered: string[] = [];
+    await drain(dir, async (_threadId, content) => {
+      delivered.push(content);
+    });
+    expect(delivered).toEqual([parked.items[0]!.envelope]);
+    expect(existsSync(file)).toBe(false);
+  });
+
+  it('does not park other codex errors', async () => {
+    const dir = freshOutbox();
+    await expectCode(
+      runSend({ to: 'workteam', bodyArg: 'h' }, failingDeps('CODEX_APPROVAL_REQUIRED', dir)),
+      'CODEX_APPROVAL_REQUIRED',
+    );
+    expect(existsSync(join(dir, 'team1111-aaaa.json'))).toBe(false);
   });
 });

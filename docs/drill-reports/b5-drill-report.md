@@ -35,7 +35,7 @@
 ### 排障辅助命令（非 multichat，供复盘）
 
 - `codex --version` → `codex-cli 0.159.3`；`where.exe codex` → 只返回两个 npm shim（`codex` / `codex.cmd`），**无 .exe**
-- `codex app-server proxy`（手动复现）→ `Error: failed to connect to socket at C:\Users\yangsheng\.codex\app-server-control\app-server-control.sock` / `Caused by: 由于目标计算机积极拒绝，无法连接。 (os error 10061)`
+- `codex app-server proxy`（手动复现）→ `Error: failed to connect to socket at C:\Users\<user>\.codex\app-server-control\app-server-control.sock` / `Caused by: 由于目标计算机积极拒绝，无法连接。 (os error 10061)`
 - `codex app-server daemon start` → `{"status":"started","backend":"pid","pid":11128,"managedCodexVersion":"0.157.1","cliVersion":"0.159.3","appServerVersion":"0.157.1",...}`
 - `codex app-server generate-ts --out ...` → 提取 `ClientRequest.ts` 全量方法表（见 §4）
 
