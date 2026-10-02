@@ -7,6 +7,8 @@ import process from 'node:process';
 import { MultichatError } from './errors.js';
 import { runSend, type SendArgs, type SendDeps } from './commands/send.js';
 import { runStatus, type StatusDeps } from './commands/status.js';
+import { runInstallSkills, type InstallSkillsArgs } from './commands/install-skills.js';
+import { runClaudeWrapper } from './commands/claude-wrapper.js';
 import { defaultRateDir } from './rate-limit.js';
 import { listClaudeSessions } from './claude/registry.js';
 import { deliverToClaudeSession } from './claude/deliver.js';
@@ -25,8 +27,11 @@ commands:
   send --to <name> | --conversation <ref>
                             send a message (--body <text> or stdin)
   status                    show claude/codex session status
-  install-skills            install agent-side skills         (not implemented yet)
-  claude                    claude adapter helpers            (not implemented yet)
+  install-skills [--dir <root>]
+                            install the agent skill into <root>/.claude and
+                            <root>/.codex (default root: home directory)
+  claude [args...]          run the real claude CLI with inbound peer
+                            messaging enabled; other args pass through
 
 options:
   --json                    single-line JSON output (send/status)
@@ -66,6 +71,25 @@ export function parseStatusArgs(argv: readonly string[]): { json: boolean } {
   if (argv.length === 0) return { json: false };
   if (argv.length === 1 && argv[0] === '--json') return { json: true };
   throw new MultichatError('USAGE', `status takes only --json; got: ${argv.join(' ')}`);
+}
+
+/** install-skills accepts only --dir <root> (space or = separated). */
+export function parseInstallSkillsArgs(argv: readonly string[]): InstallSkillsArgs {
+  const args: InstallSkillsArgs = {};
+  for (let i = 0; i < argv.length; i++) {
+    const token = argv[i];
+    if (token === undefined || !token.startsWith('--')) {
+      throw new MultichatError('USAGE', `install-skills: unexpected argument: ${token ?? ''}`);
+    }
+    const eq = token.indexOf('=');
+    const name = eq > 0 ? token.slice(0, eq) : token;
+    const inline = eq > 0 ? token.slice(eq + 1) : undefined;
+    if (name !== '--dir') throw new MultichatError('USAGE', `install-skills: unknown option: ${name}`);
+    const value = inline !== undefined ? inline : argv[++i];
+    if (value === undefined) throw new MultichatError('USAGE', 'install-skills: --dir requires a value');
+    args.dir = value;
+  }
+  return args;
 }
 
 function readStdinText(): Promise<string | undefined> {
@@ -153,9 +177,26 @@ async function main(argv: string[]): Promise<number> {
       return printFailure(err);
     }
   }
-  if (command === 'install-skills' || command === 'claude') {
-    process.stderr.write(`multichat: NOT_IMPLEMENTED: ${command} is not implemented yet (planned for B4).\n`);
-    return 1;
+  if (command === 'install-skills') {
+    if (rest.includes('--help')) {
+      process.stdout.write(usage);
+      return 0;
+    }
+    try {
+      const args = parseInstallSkillsArgs(rest);
+      for (const path of runInstallSkills(args)) process.stdout.write(`installed: ${path}\n`);
+      return 0;
+    } catch (err) {
+      return printFailure(err);
+    }
+  }
+  if (command === 'claude') {
+    // Everything passes through to the real claude CLI (including --help).
+    try {
+      return await runClaudeWrapper(rest);
+    } catch (err) {
+      return printFailure(err);
+    }
   }
   process.stderr.write(`multichat: USAGE: unknown command: ${command}\n\n`);
   process.stderr.write(usage);

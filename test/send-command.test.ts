@@ -86,9 +86,12 @@ describe('runSend happy paths', () => {
     expect(ref.c).toBe(1);
     expect(claudeDeliveries.at(-1)?.pid).toBe(101);
     const content = claudeDeliveries.at(-1)!.content;
-    expect(content.startsWith('hello world')).toBe(true);
-    expect(content).toContain('from: human (turn 1)');
-    expect(content).toContain('--conversation mc1_');
+    expect(content.startsWith('<cross-session-message from-name="human" turn="1">')).toBe(true);
+    expect(content).toContain('<multichat-reply-hint conversation="mc1_');
+    expect(content).toContain('reply-as="alpha"');
+    expect(content).toContain('multichat send --conversation mc1_');
+    expect(content).toContain('hello world');
+    expect(content.endsWith('</cross-session-message>')).toBe(true);
   });
 
   it('delivers to a codex thread and names the sender from env identity', async () => {
@@ -98,7 +101,8 @@ describe('runSend happy paths', () => {
     );
     expect(out).toContain('delivered to workteam (turn 1)');
     expect(codexDeliveries.at(-1)?.threadId).toBe('team1111-aaaa');
-    expect(codexDeliveries.at(-1)!.content).toContain('from: alpha (turn 1)');
+    expect(codexDeliveries.at(-1)!.content).toContain('from-name="alpha" turn="1"');
+    expect(codexDeliveries.at(-1)!.content).toContain('reply-as="workteam"');
     const ref = decodeRef(out.match(REF_RE)![0]);
     expect(ref.f).toEqual({ p: 'claude', id: 'cs-alpha' });
   });
@@ -106,7 +110,8 @@ describe('runSend happy paths', () => {
   it('reads the body from stdin when --body is absent', async () => {
     const out = await send({ to: 'beta' }, undefined, 'piped body');
     expect(out).toContain('delivered to beta (turn 1)');
-    expect(claudeDeliveries.at(-1)!.content.startsWith('piped body')).toBe(true);
+    expect(claudeDeliveries.at(-1)!.content.startsWith('<cross-session-message')).toBe(true);
+    expect(claudeDeliveries.at(-1)!.content).toContain('piped body');
   });
 
   it('emits single-line closed JSON with --json', async () => {
@@ -197,7 +202,8 @@ describe('runSend reply routing via --conversation', () => {
     );
     expect(reply).toContain('(turn 2)');
     expect(claudeDeliveries.at(-1)?.pid).toBe(101);
-    expect(claudeDeliveries.at(-1)!.content).toContain('from: codex/team1111 (turn 2)');
+    expect(claudeDeliveries.at(-1)!.content).toContain('from-name="codex/team1111" turn="2"');
+    expect(claudeDeliveries.at(-1)!.content).toContain('reply-as="alpha"');
     const next = decodeRef(reply.match(REF_RE)![0]);
     expect(next.c).toBe(2);
     expect(next.f).toEqual({ p: 'claude', id: 'cs-alpha' });

@@ -12,6 +12,7 @@ import {
   type CallerIdentity,
 } from '../identity.js';
 import { resolveTargetByName } from '../resolve.js';
+import { composeEnvelope } from '../envelope.js';
 import {
   decodeRef,
   encodeRef,
@@ -93,7 +94,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   }
 
   const replyRef = encodeRef(newRef);
-  const content = composeContent(body, displayName(caller), turn, newRef);
+  const fromName = displayName(caller);
 
   if (target.p === 'claude') {
     const claudeSession = scan.sessions.find((session) => session.sessionId === target.id);
@@ -105,6 +106,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     }
     checkAndRecord(deps.rateDir, rateKey(identityKey(caller), `claude:${target.id}`), deps.now());
     const toName = claudeSession.name ?? shortId('claude', claudeSession.sessionId);
+    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body });
     await deps.deliverClaude(
       { pid: claudeSession.pid, messagingSocketPath: claudeSession.messagingSocketPath },
       content,
@@ -117,6 +119,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   const threads = await deps.listCodexThreads();
   const threadName = threads.find((thread) => thread.id === target.id)?.name;
   const toName = threadName ?? shortId('codex', target.id);
+  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body });
   await deps.deliverCodex(target.id, content);
   return formatDelivery(args.json === true, toName, turn, replyRef);
 }
@@ -152,10 +155,6 @@ function displayName(identity: CallerIdentity): string {
 
 function shortId(prefix: string, id: string): string {
   return `${prefix}/${id.slice(0, 8)}`;
-}
-
-function composeContent(body: string, fromName: string, turn: number, ref: ConversationRef): string {
-  return `${body}\n\n--- multichat ---\nfrom: ${fromName} (turn ${turn})\nreply with: multichat send --conversation ${encodeRef(ref)} --body "<your reply>"`;
 }
 
 function formatDelivery(json: boolean, toName: string, turn: number, replyRef: string): string {
