@@ -19,8 +19,8 @@ Windows 版 Claude Code 的消息插座（named pipe）是否与 embassy 记录�
 - `notify_idle` 等 peerFeatures 在 Windows 的行为（可观测则记录）
 
 结论决定：Claude 半边是"改路径直接用"还是"换通道重设计"。
-产出：`research/claude-windows-pipe.md`（中文，含实测代码片段与结果）。
+产出：`docs/research/claude-windows-pipe.md`（中文，含实测代码片段与结果）。
 
 ## Resolution
 
-实测结论：**需要适配，但适配面小且全部明确**。peer protocol 1 用户帧与 embassy 的 `encodeClaudePeerUserFrame` 产出逐字节兼容，在自建 stream-json 保活会话上完成了端到端注入（会话回复 OK，transcript 落盘）。Windows 差异共四项：管道名 `\\.\pipe\LOCAL\cc-msg-<随机128位hex>` 只能读注册表获得；连接后必须先写 `{"type":"auth","token":"<peerToken>"}\n`（peerToken 在 `<pid>.<sha256(规范化管道路径)>.key` 文件里，Windows 上 auth 强制、无凭证可绕）；接收会话需 `crossSessionInbound:"accept"`（`--settings` 实测有效）否则消息被 permission-mode parity 挂起直至过期；目标会话生命周期需网关自管（`-p` 单发会话不消费排队消息）。`CLAUDE_CODE_MESSAGING_SOCKET` 与新增的 `CLAUDE_CODE_MESSAGING_TOKEN`（childToken）均确认注入子进程。详见 `research/claude-windows-pipe.md`。
+实测结论：**需要适配，但适配面小且全部明确**。peer protocol 1 用户帧与 embassy 的 `encodeClaudePeerUserFrame` 产出逐字节兼容，在自建 stream-json 保活会话上完成了端到端注入（会话回复 OK，transcript 落盘）。Windows 差异共四项：管道名 `\\.\pipe\LOCAL\cc-msg-<随机128位hex>` 只能读注册表获得；连接后必须先写 `{"type":"auth","token":"<peerToken>"}\n`（peerToken 在 `<pid>.<sha256(规范化管道路径)>.key` 文件里，Windows 上 auth 强制、无凭证可绕）；接收会话需 `crossSessionInbound:"accept"`（`--settings` 实测有效）否则消息被 permission-mode parity 挂起直至过期；目标会话生命周期需网关自管（`-p` 单发会话不消费排队消息）。`CLAUDE_CODE_MESSAGING_SOCKET` 与新增的 `CLAUDE_CODE_MESSAGING_TOKEN`（childToken）均确认注入子进程。详见 `docs/research/claude-windows-pipe.md`。

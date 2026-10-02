@@ -23,7 +23,7 @@ export function encodeUserFrame(content: string, messageId: string = randomUUID(
   return JSON.stringify(frame);
 }
 
-/** Mandatory first line on Windows pipes (research/claude-windows-pipe.md §3). */
+/** Mandatory first line on Windows pipes (docs/research/claude-windows-pipe.md §3). */
 export function encodeAuthLine(token: string): string {
   return JSON.stringify({ type: 'auth', token });
 }

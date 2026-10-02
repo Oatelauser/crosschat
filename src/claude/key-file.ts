@@ -7,7 +7,7 @@ import { PIPE_PREFIX } from '../platform/pipe-transport.js';
 /**
  * Claude Code normalizes the pipe path before hashing: keep the
  * `\\.\pipe\` prefix, lowercase everything after it
- * (research/claude-windows-pipe.md §3, verified against live samples).
+ * (docs/research/claude-windows-pipe.md §3, verified against live samples).
  */
 export function normalizePipePath(messagingSocketPath: string): string {
   if (!messagingSocketPath.startsWith(PIPE_PREFIX)) {

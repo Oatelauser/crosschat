@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { keyFileName, normalizePipePath, readPeerToken } from '../src/claude/key-file.js';
 
 /**
- * Real fixtures from research/claude-windows-pipe.md: registry pipe paths of
+ * Real fixtures from docs/research/claude-windows-pipe.md: registry pipe paths of
  * live sessions 17324 and 24900 (§1/§2), and their key-file sha256 prefixes
  * cfb5a69d… / a532ca38… (§3, rule verified 6/6 on the live machine). The full
  * digests below are the completion of those prefixes under the documented rule.

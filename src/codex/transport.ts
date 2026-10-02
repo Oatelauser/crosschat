@@ -8,7 +8,7 @@ import WebSocket from 'ws';
 import { MultichatError } from '../errors.js';
 
 /**
- * Transport for the Codex app-server on Windows (research/codex-windows-feasibility.md):
+ * Transport for the Codex app-server on Windows (docs/research/codex-windows-feasibility.md):
  * spawn `codex app-server proxy`, use its stdin/stdout as a transparent byte pipe,
  * and run a WebSocket upgrade (`ws://localhost/rpc`) over that pipe. JSON-RPC
  * frames travel as ws text messages. The proxy is short-lived and every session

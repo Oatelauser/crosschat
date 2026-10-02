@@ -1,110 +1,170 @@
 # multichat
 
-> **操作手册**：`docs/manual.md`（安装、每日流程、场景、排障、FAQ）。本 README 为简介与开发说明。
+> Windows 一期：Claude Code ↔ Codex CLI 跨会话消息。无守护进程，原生投递，四个方向双向实测。
+> 设计决策见 `docs/wayfinder/map.md`；联调实证见 `docs/drill-reports/`。
 
-Windows 上的本机跨 agent 消息 CLI：让 Claude Code 会话与 Codex CLI 线程互发消息、多轮往返。
-架构：无状态单命令——每次 send/status 现场发现端点、建立通道、投递、退出，无常驻进程（详见 [wayfinder/map.md](wayfinder/map.md)）。
+## 1. 心智模型（30 秒）
 
-## 安装
+multichat 是本机 agent 之间的**邮差**：无守护进程、无驻留服务，每次发送就是一条命令。
+
+- **Claude 侧**收消息 = 会话里出现一条"来自另一会话"的用户消息（需 `multichat claude` 启动开启接收许可）
+- **Codex 侧**收消息 = 线程被投一个新 turn，由 app-server daemon **headless 执行**（不需要窗口在场）
+- 教学内建：agent 侧装有 skill（`install-skills`），且每条消息信封自带回复命令——**题词只写角色，不写协议**
+
+## 2. 环境与一次性安装
+
+| 依赖 | 要求 |
+|---|---|
+| Node | ≥ 22 |
+| Claude Code | 已安装 |
+| Codex CLI | 已安装，app-server daemon 可用 |
+
+```powershell
+cd D:\workspace\CC\multichat
+npm install && npm run build && npm link    # multichat 上 PATH
+multichat install-skills                    # 协议教学装到两侧 agent
+```
+
+**daemon 必须从干净终端启动**（别在 Claude 会话内启动，否则派生 shell 身份污染，codex 回信撞 `CALLER_IDENTITY_CONFLICT`）：
+
+```powershell
+codex app-server daemon start
+```
+
+## 3. 对话生命周期（规则总纲）⭐
+
+### 3.1 三种发起方式
+
+| 发起者 | 怎么发 | 特性 |
+|---|---|---|
+| **claude** | 会话内 agent 跑 `multichat send --to <codex 线程名> --body "…"` | 最顺，推荐默认 |
+| **codex** | 会话内 agent 跑 `multichat send --to <claude 会话名> --body "…"` | 发送随意；但**发出后要关掉 codex 窗口**（见 3.5） |
+| **人** | 任意终端直接跑 `multichat send --to <名字> --body "…"` | 身份是 human：**能发、不能被回复**（单向指令/通知） |
+
+第一条消息永远用 `--to`（此刻生成对话引用 reply-ref）；对方名字用 `multichat status` 查（名字含空格加引号）。
+
+### 3.2 往复规则（谁说话、怎么接）
+
+1. 收到方看到一条**信封消息**：`<cross-session-message from-name="发送方" turn="N">` + 正文 + **回复提示**（一条完整命令）
+2. 回复 = **逐字照抄回复提示里的命令**，把 `<你的回复>` 换成正文：`multichat send --conversation mc1_… --body "…"`
+3. 引用随每轮自动轮转，`turn` 递增——**无需记住任何历史**，每条消息自带下一步
+4. 防失控：每对端点 30 条/60 秒限流（`RATE_LIMITED` → 等待或收尾）
+
+### 3.3 轮次与终止
+
+- 信封显示 `turn="N"`；题词里给预算（如"10 轮内完成"）；接近预算时 agent 按 skill 准则**总结收尾**
+- 协议层不强制终止；人随时可停（会话里直接说、或 Ctrl+C）
+
+### 3.4 流程 A：claude 发起（推荐）
 
 ```
-npm install && npm run build && npm link
-multichat install-skills        # 把 multichat skill 装进 ~/.claude 与 ~/.codex
+步骤   动作主体   发生什么                                  窗口状态
+1      你        终端 A：multichat claude + 角色题词         A 开
+2      你        确认 codex 信箱线程已存在 → 关掉它的窗口     codex 关
+3      claude    send --to <线程名> "任务…" → delivered(1)    —
+4      codex     headless 收 turn、干活、照提示回信           codex 关
+5      claude    收到信封（你在终端 A 当场看到）→ 验收/追问    —
+6      ——        循环 4-5，直到预算 → 总结收尾                —
 ```
 
-前置：本机已登录 claude CLI 与 codex CLI；codex 侧需先启动 daemon（见下）。**daemon 必须从干净终端启动**——勿在 Claude 会话/带 `CLAUDE_CODE_*` 环境变量的终端里启动 daemon，否则它派生的所有 shell 都被身份污染（触发 `CALLER_IDENTITY_CONFLICT`）。
+你的全程动作：步骤 1、2，然后在**终端 A 直播围观**（双方消息都出现在 claude 会话里）。
 
-## 使用流程
-
-1. 启动 codex daemon（一次即可，见"排障"）：
-
-   ```
-   codex app-server daemon start
-   ```
-
-2. 启动 claude 会话——必须经由包装命令，它自动附加 peer 消息接收许可；直接 `claude` 启动的会话收不到消息：
-
-   ```
-   multichat claude
-   ```
-
-3. codex 侧照常启动（TUI 或 exec 均可），线程名即寻址名。
-
-4. 给 claude 会话的题词示例（简短角色型即可，协议细节由 skill 自带）：
-
-   > 你是值守信箱。用 `multichat status` 查看可投对象；收到 `<cross-session-message>` 信封时，按其中的 multichat-reply-hint 原样命令回复。
-
-5. 发送与查询：
-
-   ```
-   multichat status
-   multichat send --to reviewer --body "B5 代码已就绪，请 review src/codex/deliver.ts"
-   ```
-
-   send 输出样例：
-
-   ```
-   delivered to reviewer (turn 1)
-   reply-ref: mc1_eyJmIjp7InAiOiJjbGF1ZGUiLCJpZCI6ImExIn0sInQiOnsicCI6ImNvZGV4In0sCiJjIjoxfQ
-   ```
-
-   status 输出样例：
-
-   ```
-   claude:
-     reviewer                 interactive  idle             pid 12345
-   codex:
-     mailbox                  idle         a1b2c3d4
-   ```
-
-   回复 = 把上一条消息里的 reply-ref **原样照抄**（勿截断改写）：
-
-   ```
-   multichat send --conversation mc1_xxx --body "review 完成，两处小问题已留言"
-   ```
-
-## 信箱语义
-
-- **开窗 = multichat 侧等待（默认至多 120s），关窗即自动送达；关窗 = 立即 headless 执行**：投给 codex 线程的消息统一走 headless turn——线程空闲（窗口关着）时直接开 turn，不需要窗口在场；线程被 codex TUI 窗口打开时，multichat 在发送侧等待写者释放（每 3s 重试，默认至多 120s），对方关窗后立即送达，超时报 `CODEX_THREAD_LOCKED`。
-- **直播围观**：投给 claude 会话的消息直接进入其对话流——想围观"对方读到了什么、如何回应"，盯着 claude 窗口看即可，无需另开日志。投给 codex 的消息一律 headless 投递，可事后 `codex resume <thread>` 围观。
-- 脚注（queue 通道弃用取证，2026-10-02）：codex 官方 `queue` 特性经实测对本地 TUI 不生效，故不采用。取证两条：① `codex queue --help` 含 `--remote <ADDR>`，原文 "Connect the TUI to a remote app server endpoint"（另有 `--remote-auth-token-env`），表明该特性面向 remote app-server 架构；② 本地 `~/.codex/queue_1.sqlite` 确实存在（含 `-shm`/`-wal` 伴生文件），但 exit 0 的 queued 消息既不出现在开着的 TUI 窗口、也不出现在关窗重开的历史（实测 2 条静默丢失）。
-- **专用信箱线程**：给收件用途留一个专门线程（如起名 `mailbox`），不要混用正在人工编辑/对话的工作线程，避免外部写入与窗口操作互相干扰。
-
-## 排障
-
-status 里 codex 段显示 `unavailable` 时，按序排查：
-
-1. daemon 起了吗：`codex app-server daemon start` 后重试。
-2. codex CLI 可用吗：终端直接运行 `codex --version`。
-3. 仍失败：读错误信息内嵌的 proxy stderr 摘要与 OS 错误码（如 10061 = 连接拒绝）。
-
-| 错误码 | 处置 |
-| --- | --- |
-| MESSAGE_TOO_LARGE | 正文超 16KiB；把内容写入文件，只发路径 |
-| RATE_LIMITED | 每对端点 60s 内最多 30 条；按提示等待后重试，或总结收尾 |
-| CODEX_THREAD_LOCKED | 等待超时：关闭对方 codex 窗口后重发将立即送达；或改投其它信箱线程 |
-| CODEX_PROXY_SPAWN_FAILED | 看 stderr 摘要/OS 错误；多为 daemon 未启动，先 `codex app-server daemon start` |
-| CALLER_IDENTITY_CONFLICT | 环境同时残留 CLAUDE_CODE_* 与 CODEX_* 身份变量。临时：命令前缀 `env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID`（PowerShell 先 `Remove-Item Env:CLAUDE_CODE_*`）；根治：从干净终端重启 daemon（`codex app-server daemon stop && codex app-server daemon start`） |
-| CODEX_APPROVAL_REQUIRED | 线程在等审批，只有用户能答；去 codex 窗口处理后重发 |
-| CALLER_NOT_IN_CONVERSATION | 当前会话不是该对话端点；检查 reply-ref 是否完整照抄 |
-| CANNOT_REPLY_TO_HUMAN | 对话由人类发起，没有可回投的 agent 会话 |
-| NAME_NOT_FOUND | status 里没有此名；先 `multichat status` 核对名字 |
-| NAME_COLLISION | 同名多个对象；改用 --conversation 精确路由 |
-| TARGET_NOT_FOUND | claude 会话已退出/未注册；确认对方仍在运行 |
-| CODEX_THREAD_BUSY_TIMEOUT | 线程持续忙超 120s；稍后重发 |
-| CODEX_TURN_REJECTED / CODEX_WRITE_UNCERTAIN | 写入被拒或接受状态未知；**不要原样重发**，先查线程状态 |
-| CLAUDE_PIPE_* / CODEX_PROTOCOL_ERROR 等传输错误 | 通道故障；可重试一次，持续出现按上面 unavailable 顺序排查 |
-| USAGE / TARGET_* / BODY_* | 参数用法错误；`multichat --help` |
-
-## 限制与边界
-
-- 单条正文上限 16KiB（UTF-8 字节），超出报错、不截断。
-- 限流：每对端点 60 秒 30 条，超出即拒；不排队、不静默丢弃。
-- 信任边界：仅同用户（同机同账号）的会话互信；消息内容是请求而非授权。
-- 接收许可：只有 `multichat claude` 启动的会话开启 inbound，直接 `claude` 启动的会话不可投。
-
-## 开发
+### 3.5 流程 B：codex 发起
 
 ```
-npm run check        # lint + build + test
+步骤   动作主体   发生什么                                  窗口状态
+1      你        终端 B：codex + 角色题词（教它主动联系）      B 开
+2      codex     send --to mc-claude "…" → delivered(1)      B 开（发送不受窗口影响）
+3      你        ★ 关掉 codex 窗口                           B 关
+4      claude    收到信封（终端 A 看到）→ 照提示回复           —
+5      codex     回信 headless 落进线程、处理、再回            B 关
+6      ——        循环 4-5；想看 codex 侧就开窗 resume，看完关  —
 ```
+
+★ 是关键步：claude 的回信要进 codex 的线程，而**线程被开着的窗口独占**（codex 单写者锁，上游设计）。忘了关也不会丢——multichat 会等待（默认 120s），你关窗瞬间送达；超时报 `CODEX_THREAD_LOCKED` 指引重发。
+
+**不对称速记**：claude 收发都随意；codex 发随意、收需要线程空闲（窗口关）。
+
+## 4. 每日标准流程（速览）
+
+1. `multichat status` —— 环境体检（codex 段 unavailable → 先修 daemon，见 §11）
+2. `multichat claude` + 角色题词（终端 A）
+3. `codex` + 角色题词（终端 B）→ **关掉 B**
+4. 在终端 A 围观，必要时人插话（见 §5）
+5. 预算耗尽 → agent 总结收尾 → 关会话
+
+## 5. 场景速查
+
+| 场景 | 操作 |
+|---|---|
+| 人插话 | 任意终端 `multichat send --to <名字> --body "…"`（单向，对方无法回你） |
+| claude ↔ claude | 双方都 `multichat claude` 启动，其余同流程 A |
+| 向开着的 codex 窗口投递 | 直接发：multichat 等待，关窗瞬间送达；120s 超时报错指引 |
+| 看 codex 侧历史 | 开窗 resume 该线程，看完关掉恢复收信 |
+| 新话题 | agent 用 `--to` 新发，不续旧引用 |
+| 超长内容（>16KiB） | 写文件、消息只发路径（对方按需读，也省上下文） |
+
+## 6. 命令速查
+
+```
+multichat send --to <名字> --body "<正文>"          # 新消息
+multichat send --conversation <ref> --body "<正文>" # 回复（ref 照抄信封）
+echo … | multichat send --to <名字>                 # 正文走 stdin
+multichat status [--json]                           # 双侧总览（名字/目录/时间/状态）
+multichat install-skills [--dir <根>]               # 安装/更新 skill（幂等）
+multichat claude [任意 claude 参数…]                 # 带接收许可启动 claude（透传）
+```
+
+## 7. 投递语义矩阵
+
+| 接收方 | 状态 | 行为 |
+|---|---|---|
+| claude（`multichat claude` 启动） | 窗口开 | ✅ 秒达，会话内出现信封消息 |
+| claude（裸 `claude` 启动） | 任何 | ❌ 无接收许可（换 `multichat claude` 重启） |
+| codex | 窗口关 | ✅ 立即 headless 执行并回信 |
+| codex | 窗口开 | ⏳ multichat 等待，关窗瞬间送达；120s 超时报错 |
+| codex | turn 进行中 | ⏳ 排队等空闲（同一机制） |
+
+## 8. 错误码排障
+
+**使用类**：`NAME_NOT_FOUND`（错误信息列出全部可用名，照抄）· `NAME_COLLISION`（重名，`status --json` 看 id）· `MESSAGE_TOO_LARGE`（>16KiB → 落盘发路径）· `RATE_LIMITED`（30 条/60s → 等待或收尾）· `TARGET_*`/`BODY_*`/`USAGE`（参数错误照提示改）
+
+**身份类**：`CALLER_IDENTITY_CONFLICT`（环境双身份残留。临时：命令前缀 `env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID`；根治：干净终端重启 daemon）· `CALLER_NOT_IN_CONVERSATION`（非参与者不能借引用回复）· `CANNOT_REPLY_TO_HUMAN`（对话由人发起，无处回信）
+
+**通道类**：`CODEX_PROXY_SPAWN_FAILED`（看 stderr 摘录；通常 daemon 未跑 → `codex app-server daemon start`）· `CODEX_THREAD_LOCKED`（等待超时：关对方 codex 窗口后重发，立即送达）· `CODEX_THREAD_BUSY_TIMEOUT`（忙满 120s，稍后重发）· `CODEX_APPROVAL_REQUIRED`（codex 等人工审批，**工具永不代答**）· `CLAUDE_PIPE_*`/`CODEX_*UNCERTAIN`（写入中途失败状态不明——**勿盲目重发**，先 `status` 核实对方是否已收到）
+
+## 9. 边界与限制
+
+单条 ≤16KiB；每对端点 30 条/60s；等待上限默认 120s；信任边界=同一 Windows 用户；接收许可只授予 `multichat claude` 启动的会话；长对话靠轮次计数+落盘引用控制上下文。
+
+## 10. FAQ
+
+**Q：codex 窗口为什么开着收不到？** codex 单写者锁（上游设计）：窗口独占线程。multichat 的处理是等你关窗再投。二期研究 remote 形态 TUI 取消此限制。
+
+**Q：为什么必须 `multichat claude`？** 它注入跨会话接收许可；裸 `claude` 的会话收不到。
+
+**Q：`codex queue` 不是能开窗收吗？** 实测对本地 TUI 是黑洞（exit 0 但永不送达），已弃用。
+
+**Q：消息历史在哪看？** claude 侧=会话 transcript；codex 侧=开窗 resume 线程。
+
+## 11. 故障恢复
+
+| 症状 | 动作 |
+|---|---|
+| status 的 codex 段 unavailable | 干净终端 `codex app-server daemon start` |
+| codex 回信撞身份冲突 | 同上（重启 daemon 即根治） |
+| skill 误删/过期 | `multichat install-skills` |
+| 升级 multichat 代码后 | `npm run build`（skill 有变再 install-skills） |
+| 消息发出对方没反应 | 先 `status` 确认对方在线；UNCERTAIN 类错误勿重发先核实 |
+
+## 12. 开发说明
+
+```powershell
+npm run check          # lint + build + test（125 项）
+MULTICHAT_LIVE=1 npx vitest run --dir test   # 真机 live 测试（会 spawn 一次性会话）
+```
+
+- 目录：`src/claude`（注册表/管道/鉴权）· `src/codex`（proxy/RPC/投递）· `src/commands`（CLI）· `src/platform`（平台接缝，二期 mac/linux 扩展点）· `skills/`（agent 教学）
+- 平台接缝：PipeTransport / ProcessInspector / PathLayout；二期适配只动这三个实现
+- 过程档案：`docs/wayfinder/`（决策地图）· `docs/research/`（研究报告）· `docs/drill-reports/`（联调实证）· `docs/embassy-main/`（embassy 源码参考副本，未入库）
+- 二期入口：`docs/wayfinder/map.md` 雾区（联邦/受管形态/mac/linux/完整集）

@@ -3,7 +3,7 @@ import type { CodexMessageChannel } from './transport.js';
 
 /**
  * JSON-RPC client for the codex app-server wire protocol. Wire facts verified
- * on this machine (research/codex-windows-feasibility.md §1.5): response and
+ * on this machine (docs/research/codex-windows-feasibility.md §1.5): response and
  * notification frames carry NO `jsonrpc` field (`{id,result}` / `{method,params}`),
  * so parsing must not require it.
  */

@@ -9,7 +9,7 @@ import { deliverToClaudeSession } from '../../src/claude/deliver.js';
 import { keyFileName } from '../../src/claude/key-file.js';
 import { defaultClaudeSessionsDir, listClaudeSessions } from '../../src/claude/registry.js';
 
-/** Keep-alive recipe from research/claude-windows-pipe.md §5.1. */
+/** Keep-alive recipe from docs/research/claude-windows-pipe.md §5.1. */
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface RawRegistryEntry {
@@ -46,7 +46,7 @@ function readRegistry(dir: string): RawRegistryEntry[] {
   return entries;
 }
 
-/** Binary path per research/claude-windows-pipe.md §header (npm global layout). */
+/** Binary path per docs/research/claude-windows-pipe.md §header (npm global layout). */
 function resolveClaudeExe(): string {
   const candidates: string[] = [];
   if (process.env.APPDATA) {
