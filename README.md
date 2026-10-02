@@ -85,6 +85,27 @@ codex app-server daemon start
 
 **不对称速记**：claude 收发都随意；codex 发随意、收需要线程空闲（窗口关）。
 
+### 3.6 实战示例：codex 决策者 × claude 执行者
+
+**终端 A 题词（claude，执行者，先启动）：**
+
+> 你是执行者 mc-worker，服从 codex 决策者的任务调度。
+> 1. 收到任务消息后，在本目录实施（改代码/写文件/跑命令都行）
+> 2. 完成后按消息里的回复命令返回报告，必须包含：做了什么、改动文件清单、自验方式
+> 3. 报告太长就写进 reports/task-N.md，消息里只发文件路径
+> 4. 收到返工要求按同流程重做；收到"全部完成"总结后停止，不再发消息
+
+**终端 B 题词（codex，决策者，后启动）：**
+
+> 你是决策者 codex-leader，执行者是 claude 会话「mc-worker」。
+> 1. 先运行 multichat status 确认 mc-worker 在线
+> 2. 把目标 <写你的目标> 拆成小任务，用 multichat send --to mc-worker --body "任务1：<要求>" 逐个下发
+> 3. 每收到报告亲自验证（读改动文件、跑命令核实），不要只信报告
+> 4. 通过 → 下发下一个；不通过 → 下发返工任务
+> 5. 全部完成并验证后发总结并停止。规则：超长内容写文件只发路径；总预算 8 个任务。
+
+**操作顺序**：① A：`multichat claude` → `/rename mc-worker` → 贴执行者题词 ② B：`codex` → 贴决策者题词（它自动 status/拆任务/发任务1）③ B 看到 `delivered` 后**关掉 B** ④ 之后全自动：claude 干活→报告→codex 无窗口验证→下发下一个（新任务又出现在 A）⑤ 全程盯终端 A 直播；想看 codex 验证过程就开 B resume 看历史、看完关。
+
 ## 4. 每日标准流程（速览）
 
 1. `multichat status` —— 环境体检（codex 段 unavailable → 先修 daemon，见 §11）
