@@ -25,7 +25,8 @@ const usage = `usage: multichat <command> [options]
 
 commands:
   send --to <name> | --conversation <ref>
-                            send a message (--body <text> or stdin)
+                            send a message (--body <text> or stdin);
+                            quote <name> if it contains spaces
   status                    show claude/codex session status
   install-skills [--dir <root>]
                             install the agent skill into <root>/.claude and
