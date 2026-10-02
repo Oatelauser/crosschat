@@ -1,28 +1,31 @@
 import { MultichatError } from '../errors.js';
-import { openCodexSession, type CodexSession, type CodexSessionFactory } from './client.js';
-import { queueToCodexThread, type CodexQueueOptions } from './queue.js';
+import {
+  openCodexSession,
+  type CodexSession,
+  type CodexSessionFactory,
+  type CodexThreadStatus,
+} from './client.js';
 import { CodexRpcRejectedError } from './rpc.js';
 
 /**
  * One-shot delivery of a message into a Codex thread. Every operation runs the
  * full fresh flow: spawn proxy -> initialize -> resume -> disposition ->
  * turn/start -> confirm inProgress -> unsubscribe -> close. When resume is
- * rejected because a TUI window holds the writer, delivery falls back to
- * `codex queue` (open/closed window both deliver). Never retried otherwise;
- * approvals are never answered on the user's behalf.
+ * rejected because a TUI window holds the writer, delivery polls until the
+ * window releases it (busyTimeoutMs), then delivers headless; on timeout it
+ * fails with CODEX_THREAD_LOCKED. Never retried otherwise; approvals are never
+ * answered on the user's behalf.
  */
 
 export interface CodexDeliveryOptions {
   sessionFactory?: CodexSessionFactory;
-  /** How long a busy thread is polled before giving up (default 120s). */
+  /** How long a busy or writer-locked thread is polled before giving up (default 120s). */
   busyTimeoutMs?: number;
-  /** Re-resume poll interval while waiting for a busy thread (default 3s). */
+  /** Re-resume poll interval while waiting for a busy or writer-locked thread (default 3s). */
   pollIntervalMs?: number;
-  /** Passthrough to the queue fallback (spawn seam, timeout, executable). */
-  queue?: CodexQueueOptions;
 }
 
-export type CodexDeliveryResult = { status: 'accepted'; turnId: string } | { status: 'queued' };
+export type CodexDeliveryResult = { status: 'accepted'; turnId: string };
 
 const DEFAULT_BUSY_TIMEOUT_MS = 120_000;
 const DEFAULT_POLL_INTERVAL_MS = 3_000;
@@ -56,23 +59,51 @@ export async function deliverToCodexThread(
     try {
       await session.initialize();
       const deadline = Date.now() + busyTimeoutMs;
-      // Disposition: idle -> proceed; busy -> wait for idle; waiting_approval
-      // -> APPROVAL_REQUIRED (never answered for the user); not_loaded keeps
-      // polling (the server loads asynchronously after resume).
+      // Disposition loop: idle -> proceed; busy or TUI active-writer -> poll
+      // for release (both release into the same headless delivery);
+      // waiting_approval -> APPROVAL_REQUIRED (never answered for the user);
+      // system_error -> fail; not_loaded keeps polling (the server loads
+      // asynchronously after resume).
+      let writerHeld = false;
       for (;;) {
-        const status = await session.resumeThread(threadId);
-        resumed = true;
-        if (status === 'idle') break;
-        if (status === 'waiting_approval') {
-          throw new MultichatError(
-            'CODEX_APPROVAL_REQUIRED',
-            `Codex thread ${threadId} is waiting for an approval; only the user can answer it.`,
-          );
+        let status: CodexThreadStatus | undefined;
+        try {
+          status = await session.resumeThread(threadId);
+        } catch (err) {
+          // A codex TUI window holds the thread writer, so the server rejects
+          // resume. `codex queue` is NOT a fallback: it exits 0 but the
+          // message never reaches the local TUI (measured black hole; the
+          // feature looks remote-architecture only). Instead, wait for the
+          // window to release the writer, then deliver headless.
+          if (err instanceof CodexRpcRejectedError && ACTIVE_WRITER_PATTERN.test(err.message)) {
+            writerHeld = true;
+          } else {
+            throw err;
+          }
         }
-        if (status === 'system_error') {
-          throw protocolFailure(`Codex thread ${threadId} is in system_error state.`, undefined);
+        if (status !== undefined) {
+          resumed = true;
+          if (status === 'idle') break;
+          if (status === 'waiting_approval') {
+            throw new MultichatError(
+              'CODEX_APPROVAL_REQUIRED',
+              `Codex thread ${threadId} is waiting for an approval; only the user can answer it.`,
+            );
+          }
+          if (status === 'system_error') {
+            throw protocolFailure(`Codex thread ${threadId} is in system_error state.`, undefined);
+          }
+          // Resume succeeded, so no writer lock; the thread is merely busy.
+          writerHeld = false;
         }
         if (Date.now() + pollIntervalMs > deadline) {
+          if (writerHeld) {
+            throw new MultichatError(
+              'CODEX_THREAD_LOCKED',
+              `Codex thread ${threadId} 正被 codex 窗口占用，等待 ${busyTimeoutMs / 1000}s 未释放。` +
+                '关闭该窗口后重发将立即送达；或改投其它线程。',
+            );
+          }
           throw new MultichatError(
             'CODEX_THREAD_BUSY_TIMEOUT',
             `Codex thread ${threadId} stayed busy longer than ${busyTimeoutMs}ms.`,
@@ -83,27 +114,11 @@ export async function deliverToCodexThread(
     } catch (err) {
       if (
         err instanceof MultichatError &&
-        (err.code === 'CODEX_APPROVAL_REQUIRED' || err.code === 'CODEX_THREAD_BUSY_TIMEOUT')
+        (err.code === 'CODEX_APPROVAL_REQUIRED' ||
+          err.code === 'CODEX_THREAD_BUSY_TIMEOUT' ||
+          err.code === 'CODEX_THREAD_LOCKED')
       ) {
         throw err;
-      }
-      // A thread held open by a codex TUI window has an active writer; the
-      // server rejects resume for it. The queue channel is immune to the
-      // writer lock, so delivery falls back to `codex queue` (open window =
-      // delivered live, closed window = stored for the next resume). Only if
-      // that also fails does CODEX_THREAD_LOCKED surface.
-      if (err instanceof CodexRpcRejectedError && ACTIVE_WRITER_PATTERN.test(err.message)) {
-        try {
-          return await queueToCodexThread(threadId, content, options.queue);
-        } catch (queueErr) {
-          const queueDetail = queueErr instanceof Error ? queueErr.message : String(queueErr);
-          throw new MultichatError(
-            'CODEX_THREAD_LOCKED',
-            `Codex thread ${threadId} 正被 codex 窗口占用，且 queue 通道也失败: ${queueDetail} ` +
-              '关闭该窗口后重发，或改投未被占用的信箱线程。',
-            { cause: queueErr },
-          );
-        }
       }
       // Pre-write failures (timeout, transport closed, rpc rejection, bad
       // frames) all collapse to CODEX_PROTOCOL_ERROR: nothing was written.

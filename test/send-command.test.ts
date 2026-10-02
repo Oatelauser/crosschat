@@ -127,22 +127,11 @@ describe('runSend happy paths', () => {
     expect(out).toContain('delivered to alpha');
   });
 
-  it('reports the queued state when codex delivery went through an open window', async () => {
-    // Thread 1: this conversation pair is fresh (human -> workteam) so no
-    // rate-limit interference; deliverCodex reports the queue channel.
-    const deps = makeDeps({ CODEX_THREAD_ID: 'other222-bbbb' });
-    deps.deliverCodex = async () => ({ status: 'queued' });
-    const out = await runSend({ to: 'workteam', bodyArg: 'live window ping' }, deps);
-    expect(out).toContain('queued to workteam (turn 1, live window)');
-    expect(out).not.toContain('delivered to');
-
-    const jsonOut = await runSend({ to: 'workteam', bodyArg: 'again', json: true }, {
-      ...deps,
-      deliverCodex: async () => ({ status: 'queued' }),
-    });
-    const parsed = JSON.parse(jsonOut) as { status: string; to: string; turn: number };
-    expect(parsed).toMatchObject({ status: 'queued', to: 'workteam', turn: 1 });
-    expect(jsonOut).not.toContain('\n');
+  it('codex delivery reports the single delivered state, never queued', async () => {
+    const out = await send({ to: 'workteam', bodyArg: 'single state' });
+    expect(out).toContain('delivered to workteam (turn 1)');
+    expect(out).not.toContain('queued');
+    expect(out).not.toContain('live window');
   });
 });
 

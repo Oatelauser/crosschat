@@ -63,8 +63,9 @@ multichat install-skills        # 把 multichat skill 装进 ~/.claude 与 ~/.co
 
 ## 信箱语义
 
-- **开窗=队列秒达，关窗=headless 立即执行**：投给 codex 线程的消息走双通道——线程空闲时 headless 直接开 turn（不需要窗口在场）；线程被 codex TUI 窗口打开时自动改走 `codex queue`，消息约 2 秒内出现在该窗口并现场触发 turn（输出显示 `queued ... (live window)`）。
-- **直播围观**：投给 claude 会话的消息直接进入其对话流——想围观"对方读到了什么、如何回应"，盯着 claude 窗口看即可，无需另开日志。投给 codex 的消息若线程开窗，同样在该窗口实时可见（queue 通道）；关窗投递则可事后 `codex resume <thread>` 围观。
+- **开窗 = multichat 侧等待（默认至多 120s），关窗即自动送达；关窗 = 立即 headless 执行**：投给 codex 线程的消息统一走 headless turn——线程空闲（窗口关着）时直接开 turn，不需要窗口在场；线程被 codex TUI 窗口打开时，multichat 在发送侧等待写者释放（每 3s 重试，默认至多 120s），对方关窗后立即送达，超时报 `CODEX_THREAD_LOCKED`。
+- **直播围观**：投给 claude 会话的消息直接进入其对话流——想围观"对方读到了什么、如何回应"，盯着 claude 窗口看即可，无需另开日志。投给 codex 的消息一律 headless 投递，可事后 `codex resume <thread>` 围观。
+- 脚注（queue 通道弃用取证，2026-10-02）：codex 官方 `queue` 特性经实测对本地 TUI 不生效，故不采用。取证两条：① `codex queue --help` 含 `--remote <ADDR>`，原文 "Connect the TUI to a remote app server endpoint"（另有 `--remote-auth-token-env`），表明该特性面向 remote app-server 架构；② 本地 `~/.codex/queue_1.sqlite` 确实存在（含 `-shm`/`-wal` 伴生文件），但 exit 0 的 queued 消息既不出现在开着的 TUI 窗口、也不出现在关窗重开的历史（实测 2 条静默丢失）。
 - **专用信箱线程**：给收件用途留一个专门线程（如起名 `mailbox`），不要混用正在人工编辑/对话的工作线程，避免外部写入与窗口操作互相干扰。
 
 ## 排障
@@ -79,7 +80,7 @@ status 里 codex 段显示 `unavailable` 时，按序排查：
 | --- | --- |
 | MESSAGE_TOO_LARGE | 正文超 16KiB；把内容写入文件，只发路径 |
 | RATE_LIMITED | 每对端点 60s 内最多 30 条；按提示等待后重试，或总结收尾 |
-| CODEX_THREAD_LOCKED | 罕见：headless 投递被窗口写者锁拒且 `codex queue` 通道也失败（双通道均失败）。看错误信息内嵌的 queue 失败摘要排查；关窗口后重发，或改投其他信箱线程 |
+| CODEX_THREAD_LOCKED | 等待超时：关闭对方 codex 窗口后重发将立即送达；或改投其它信箱线程 |
 | CODEX_PROXY_SPAWN_FAILED | 看 stderr 摘要/OS 错误；多为 daemon 未启动，先 `codex app-server daemon start` |
 | CALLER_IDENTITY_CONFLICT | 环境同时残留 CLAUDE_CODE_* 与 CODEX_* 身份变量。临时：命令前缀 `env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID`（PowerShell 先 `Remove-Item Env:CLAUDE_CODE_*`）；根治：从干净终端重启 daemon（`codex app-server daemon stop && codex app-server daemon start`） |
 | CODEX_APPROVAL_REQUIRED | 线程在等审批，只有用户能答；去 codex 窗口处理后重发 |

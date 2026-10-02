@@ -1,47 +1,17 @@
-import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import { deliverToCodexThread } from '../src/codex/deliver.js';
 import { listCodexThreads } from '../src/codex/discovery.js';
 import { openCodexSession, type CodexSession, type CodexThreadStatus } from '../src/codex/client.js';
-import type { CodexQueueOptions, CodexQueueProcess } from '../src/codex/queue.js';
 import { CodexRpcRejectedError } from '../src/codex/rpc.js';
 import { MultichatError } from '../src/errors.js';
-
-/** Fake `codex queue` child for the active-writer fallback tests. */
-function fakeQueue(script: { code?: number; stderr?: string }): {
-  options: CodexQueueOptions;
-  calls: { command: string; args: string[] }[];
-} {
-  const calls: { command: string; args: string[] }[] = [];
-  return {
-    calls,
-    options: {
-      executable: 'codex',
-      spawnProcess: (command, args) => {
-        calls.push({ command, args: [...args] });
-        const child = new EventEmitter() as unknown as CodexQueueProcess;
-        child.stderr = {
-          on(event, listener) {
-            if (event === 'data' && script.stderr) {
-              setTimeout(() => listener(Buffer.from(script.stderr)), 0);
-            }
-          },
-        };
-        child.kill = () => undefined;
-        setTimeout(() => child.emit('close', script.code ?? 0, null), 5);
-        return child;
-      },
-    },
-  };
-}
 
 /**
  * Fake CodexSession scripting the whole app-server surface. Records every
  * call so tests can assert exact operation ordering and no-retry behavior.
+ * A resume step may be a status or an Error (thrown = server rejection).
  */
 function makeFakeSession(script: {
-  resumeStatuses?: CodexThreadStatus[];
-  resumeError?: Error;
+  resumeStatuses?: Array<CodexThreadStatus | Error>;
   turn?: { id: string; status: string };
   turnError?: Error;
   initializeError?: Error;
@@ -62,11 +32,11 @@ function makeFakeSession(script: {
     },
     async resumeThread(threadId: string) {
       calls.push(`resume:${threadId}`);
-      if (script.resumeError) throw script.resumeError;
       const statuses = script.resumeStatuses ?? ['idle'];
-      const status = statuses[Math.min(resumeCount, statuses.length - 1)];
+      const step = statuses[Math.min(resumeCount, statuses.length - 1)];
       resumeCount += 1;
-      return status;
+      if (step instanceof Error) throw step;
+      return step;
     },
     async startTurn(threadId: string, text: string) {
       calls.push(`turn/start:${threadId}:${text}`);
@@ -206,42 +176,52 @@ describe('deliverToCodexThread', () => {
     ).rejects.toMatchObject({ code: 'CODEX_PROXY_SPAWN_FAILED' });
   });
 
-  it('falls back to codex queue when resume hits an active writer, and reports queued', async () => {
+  it('waits out an active writer, then delivers headless once the window releases', async () => {
     const { session, calls } = makeFakeSession({
-      resumeError: new CodexRpcRejectedError(-32001, 'thread t1 already has an active writer'),
+      resumeStatuses: [
+        new CodexRpcRejectedError(-32001, 'thread t1 already has an active writer'),
+        new CodexRpcRejectedError(-32001, 'thread t1 already has an active writer'),
+        'idle',
+      ],
     });
-    const queue = fakeQueue({});
     const result = await deliverToCodexThread('t1', 'hello', {
-      ...fast,
+      busyTimeoutMs: 1_000,
+      pollIntervalMs: 5,
       sessionFactory: factoryFor(async () => session),
-      queue: queue.options,
     });
-    expect(result).toEqual({ status: 'queued' });
-    expect(queue.calls).toEqual([
-      { command: 'codex', args: ['queue', '--thread', 't1', '--message', 'hello'] },
+    expect(result).toEqual({ status: 'accepted', turnId: 'turn-1' });
+    expect(calls).toEqual([
+      'initialize',
+      'resume:t1',
+      'resume:t1',
+      'resume:t1',
+      'turn/start:t1:hello',
+      'unsubscribe:t1',
+      'close',
     ]);
-    // Zero turn writes; resume never succeeded so no unsubscribe; the proxy
-    // session is still closed before queue delivery is returned.
-    expect(calls).toEqual(['initialize', 'resume:t1', 'close']);
   });
 
-  it('maps an active-writer resume rejection to CODEX_THREAD_LOCKED when queue also fails', async () => {
+  it('times out with CODEX_THREAD_LOCKED while a window holds the writer', async () => {
     const { session, calls } = makeFakeSession({
-      resumeError: new CodexRpcRejectedError(-32001, 'thread t1 already has an active writer'),
+      resumeStatuses: [new CodexRpcRejectedError(-32001, 'thread t1 already has an active writer')],
     });
-    const queue = fakeQueue({ code: 1, stderr: 'Error: daemon socket refused' });
     const err = (await deliverToCodexThread('t1', 'hello', {
-      ...fast,
+      busyTimeoutMs: 30,
+      pollIntervalMs: 5,
       sessionFactory: factoryFor(async () => session),
-      queue: queue.options,
     }).catch((e: unknown) => e)) as MultichatError;
     expect(err.code).toBe('CODEX_THREAD_LOCKED');
-    expect(err.message).toContain('queue 通道也失败');
-    expect(err.message).toContain('daemon socket refused');
-    expect(err.message).toContain('关闭该窗口后重发，或改投未被占用的信箱线程');
-    expect(queue.calls).toHaveLength(1);
-    // Zero writes: no turn, and resume never succeeded so no unsubscribe.
-    expect(calls).toEqual(['initialize', 'resume:t1', 'close']);
+    expect(err.message).toContain('正被 codex 窗口占用');
+    expect(err.message).toContain('关闭该窗口后重发将立即送达');
+    expect(err.message).toContain('或改投其它线程');
+    // Polled repeatedly; zero turn writes; resume never succeeded so no
+    // unsubscribe; the proxy session is still closed.
+    expect(calls.filter((c) => c.startsWith('resume:'))).toHaveLength(calls.length - 2);
+    expect(calls.filter((c) => c.startsWith('resume:')).length).toBeGreaterThanOrEqual(3);
+    expect(calls).not.toContain('turn/start:t1:hello');
+    expect(calls).not.toContain('unsubscribe:t1');
+    expect(calls[0]).toBe('initialize');
+    expect(calls.at(-1)).toBe('close');
   });
 
   it('attaches proxy stderr evidence and daemon guidance to CODEX_PROXY_SPAWN_FAILED', async () => {
