@@ -8,7 +8,7 @@
 
 *曾用名 multichat（`multichat` 命令作为过渡别名保留）*
 
-![version](https://img.shields.io/badge/version-1.0.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![node](https://img.shields.io/badge/node-%3E%3D22-339933) ![platform](https://img.shields.io/badge/platform-Windows-blue) ![agents](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-blueviolet)
+![CI](https://github.com/Oatelauser/crosschat/actions/workflows/ci.yml/badge.svg) ![version](https://img.shields.io/badge/version-1.0.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![node](https://img.shields.io/badge/node-%3E%3D22-339933) ![platform](https://img.shields.io/badge/platform-Windows-blue) ![agents](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 </div>
 
@@ -115,6 +115,7 @@ crosschat send --to <名字> --body "<正文>"          # 新消息（名字含�
 crosschat send --conversation <ref> --body "<正文>" # 回复（ref 照抄收到的信封）
 echo … | crosschat send --to <名字>                 # 正文走 stdin
 crosschat status [--json]                           # 双侧总览（名字/目录/时间/状态）
+crosschat doctor                                    # 一键环境体检（有 ❌ 时退出码 1）
 crosschat install-skills [--dir <根>]               # 安装/更新 agent skill（幂等）
 crosschat claude [任意 claude 参数…]                 # 带接收许可启动 claude（透传）
 crosschat -v | --version | help                     # 版本 / 帮助
@@ -210,6 +211,7 @@ crosschat -v | --version | help                     # 版本 / 帮助
 
 | 症状 | 动作 |
 |---|---|
+| 任何异常 | 先跑 `crosschat doctor` 一键体检（逐项 ✅/⚠️/❌ 定位） |
 | status 的 codex 段 unavailable | 干净终端 `codex app-server daemon start` |
 | codex 回信撞身份冲突 | 同上（重启 daemon 即根治） |
 | skill 误删/过期 | `crosschat install-skills` |
@@ -221,6 +223,7 @@ crosschat -v | --version | help                     # 版本 / 帮助
 | 文档 | 内容 |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | **底层原理**：注册表/命名管道/daemon 通道、写者锁本质、信封与自包含引用、完整投递流程图 |
+| [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 |
 | [docs/wayfinder/map.md](docs/wayfinder/map.md) | 设计决策地图（全部拍板过程与依据） |
 | [docs/research/](docs/research/) | 实测研究报告（embassy 源码分析、两侧通道验证、0.160 inject_items 实验） |
 | [docs/drill-reports/](docs/drill-reports/) | 联调实证记录 |

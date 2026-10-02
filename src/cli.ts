@@ -8,6 +8,7 @@ import { MultichatError } from './errors.js';
 import { runSend, type SendArgs, type SendDeps } from './commands/send.js';
 import { runStatus, type StatusDeps } from './commands/status.js';
 import { runInstallSkills, type InstallSkillsArgs } from './commands/install-skills.js';
+import { runDoctor } from './commands/doctor.js';
 import { runClaudeWrapper } from './commands/claude-wrapper.js';
 import { defaultRateDir } from './rate-limit.js';
 import { defaultOutboxDir, drain } from './outbox.js';
@@ -29,6 +30,7 @@ commands:
                             send a message (--body <text> or stdin);
                             quote <name> if it contains spaces
   status                    show claude/codex session status
+  doctor                    environment health check (exits 1 on any ❌)
   install-skills [--dir <root>]
                             install the agent skill into <root>/.claude and
                             <root>/.codex (default root: home directory)
@@ -129,6 +131,7 @@ function realStatusDeps(): StatusDeps {
 function drainAtEntry(): Promise<void> {
   return drainOutboxAtEntry({
     outboxDir: defaultOutboxDir(),
+    rateDir: defaultRateDir(),
     deliverCodex: (threadId, content, busyTimeoutMs) =>
       deliverToCodexThread(threadId, content, { busyTimeoutMs }),
     err: (line) => process.stderr.write(`${line}\n`),
@@ -146,27 +149,35 @@ function printFailure(err: unknown): number {
 
 export interface DrainEntryDeps {
   outboxDir: string;
+  /** Rate-limit dir shared with send: drained re-deliveries consume the same per-pair window. */
+  rateDir: string;
   deliverCodex(threadId: string, content: string, busyTimeoutMs: number): Promise<unknown>;
   err(line: string): void;
 }
 
 /**
  * Opportunistic outbox drain at command entry (send/status only): re-deliver
- * parked messages with a short busy wait, one stderr line per thread that got
- * relief; silent when nothing was parked or nothing went through. Drain
- * failures never fail the invoking command.
+ * parked messages with a short busy wait under the B11 round budget, one
+ * stderr line per thread that got relief, and one dead-letter line for a
+ * thread that no longer exists; silent when nothing was parked or nothing
+ * went through. Drain failures never fail the invoking command.
  */
 export async function drainOutboxAtEntry(deps: DrainEntryDeps): Promise<void> {
   let results;
   try {
-    results = await drain(deps.outboxDir, (threadId, content, busyTimeoutMs) =>
-      deps.deliverCodex(threadId, content, busyTimeoutMs),
+    results = await drain(
+      deps.outboxDir,
+      (threadId, content, busyTimeoutMs) => deps.deliverCodex(threadId, content, busyTimeoutMs),
+      { rateDir: deps.rateDir },
     );
   } catch {
     return; // opportunistic: the real command still runs
   }
   for (const result of results) {
     if (result.delivered > 0) deps.err(`outbox: 补投 ${result.delivered} 条给 ${result.toName}`);
+    if (result.dropped > 0) {
+      deps.err(`outbox: 线程 ${result.threadId} 已不存在，丢弃 ${result.dropped} 条暂存消息`);
+    }
   }
 }
 
@@ -216,6 +227,20 @@ async function main(argv: string[]): Promise<number> {
     } catch (err) {
       return printFailure(err);
     }
+  }
+  if (command === 'doctor') {
+    if (rest.includes('--help')) {
+      process.stdout.write(usage);
+      return 0;
+    }
+    if (rest.length > 0) {
+      process.stderr.write(`crosschat: USAGE: doctor takes no options; got: ${rest.join(' ')}\n\n`);
+      process.stderr.write(usage);
+      return 1;
+    }
+    const report = runDoctor();
+    process.stdout.write(`${report.output}\n`);
+    return report.failed ? 1 : 0;
   }
   if (command === 'install-skills') {
     if (rest.includes('--help')) {

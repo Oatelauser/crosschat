@@ -132,7 +132,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
       err instanceof MultichatError &&
       (err.code === 'CODEX_THREAD_BUSY_TIMEOUT' || err.code === 'CODEX_THREAD_LOCKED')
     ) {
-      park(deps.outboxDir, target.id, { envelope: content, toName }, deps.now());
+      park(deps.outboxDir, target.id, { envelope: content, toName, callerKey: identityKey(caller) }, deps.now());
       return formatParked(args.json === true, toName, turn, replyRef);
     }
     throw err;

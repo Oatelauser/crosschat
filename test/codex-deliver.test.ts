@@ -129,6 +129,23 @@ describe('deliverToCodexThread', () => {
     expect(calls).toEqual(['initialize', 'resume:t1', 'unsubscribe:t1', 'close']);
   });
 
+  it('maps a not_found resume rejection to CODEX_THREAD_NOT_FOUND (B11)', async () => {
+    const { session, calls } = makeFakeSession({
+      resumeStatuses: [new CodexRpcRejectedError(-32001, 'thread not found: t1')],
+    });
+    const err = (await deliverToCodexThread('t1', 'hello', {
+      ...fast,
+      sessionFactory: factoryFor(async () => session),
+    }).catch((e: unknown) => e)) as MultichatError;
+    expect(err).toBeInstanceOf(MultichatError);
+    expect(err.code).toBe('CODEX_THREAD_NOT_FOUND');
+    expect(err.message).toBe('Codex thread t1 不存在（可能已删除），无法投递。');
+    expect(calls).not.toContain('turn/start:t1:hello');
+    expect(calls).not.toContain('unsubscribe:t1'); // resume never succeeded
+    expect(calls[0]).toBe('initialize');
+    expect(calls.at(-1)).toBe('close');
+  });
+
   it('maps a rejected turn to CODEX_TURN_REJECTED without retrying', async () => {
     const { session, calls } = makeFakeSession({
       turnError: new CodexRpcRejectedError(-32001, 'thread not found: t1'),

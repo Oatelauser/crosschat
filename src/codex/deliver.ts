@@ -32,6 +32,12 @@ const DEFAULT_POLL_INTERVAL_MS = 3_000;
 
 /** Server-side rejection text when a codex TUI window holds the thread writer. */
 const ACTIVE_WRITER_PATTERN = /already has an active writer/i;
+/**
+ * Server-side rejection texts when the thread does not exist (deleted or
+ * archived); same evidence embassy's codex transport classifies as not_found.
+ */
+const THREAD_NOT_FOUND_PATTERN =
+  /^(thread not found: |no rollout found for thread id |session .+ is archived\.)/i;
 const OS_ERROR_PATTERN = /os error \d+/gi;
 const STDERR_EXCERPT_CHARS = 300;
 const DAEMON_START_HINT = 'codex app-server daemon 可能未启动，可运行: codex app-server daemon start';
@@ -77,6 +83,15 @@ export async function deliverToCodexThread(
           // window to release the writer, then deliver headless.
           if (err instanceof CodexRpcRejectedError && ACTIVE_WRITER_PATTERN.test(err.message)) {
             writerHeld = true;
+          } else if (
+            err instanceof CodexRpcRejectedError &&
+            THREAD_NOT_FOUND_PATTERN.test(err.message)
+          ) {
+            throw new MultichatError(
+              'CODEX_THREAD_NOT_FOUND',
+              `Codex thread ${threadId} 不存在（可能已删除），无法投递。`,
+              { cause: err },
+            );
           } else {
             throw err;
           }
@@ -116,7 +131,8 @@ export async function deliverToCodexThread(
         err instanceof MultichatError &&
         (err.code === 'CODEX_APPROVAL_REQUIRED' ||
           err.code === 'CODEX_THREAD_BUSY_TIMEOUT' ||
-          err.code === 'CODEX_THREAD_LOCKED')
+          err.code === 'CODEX_THREAD_LOCKED' ||
+          err.code === 'CODEX_THREAD_NOT_FOUND')
       ) {
         throw err;
       }

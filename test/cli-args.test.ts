@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -70,7 +70,11 @@ describe('parseStatusArgs', () => {
 
 describe('drainOutboxAtEntry', () => {
   const outboxDir = mkdtempSync(join(tmpdir(), 'crosschat-cli-drain-'));
-  afterAll(() => rmSync(outboxDir, { recursive: true, force: true }));
+  const rateDir = mkdtempSync(join(tmpdir(), 'crosschat-cli-rate-'));
+  afterAll(() => {
+    rmSync(outboxDir, { recursive: true, force: true });
+    rmSync(rateDir, { recursive: true, force: true });
+  });
 
   function run(
     deliverCodex: (threadId: string, content: string, busyTimeoutMs: number) => Promise<unknown>,
@@ -78,6 +82,7 @@ describe('drainOutboxAtEntry', () => {
     const lines: string[] = [];
     return drainOutboxAtEntry({
       outboxDir,
+      rateDir,
       deliverCodex,
       err: (line) => lines.push(line),
     }).then(() => lines);
@@ -101,5 +106,18 @@ describe('drainOutboxAtEntry', () => {
       throw new MultichatError('CODEX_THREAD_BUSY_TIMEOUT', 'still busy');
     });
     expect(lines).toEqual([]);
+  });
+
+  it('dead-letters a deleted thread with one stderr line', async () => {
+    park(outboxDir, 't-cli-dead', { envelope: 'd-1', toName: 'gamma' });
+    park(outboxDir, 't-cli-dead', { envelope: 'd-2', toName: 'gamma' });
+    const lines = await run(async (threadId) => {
+      if (threadId === 't-cli-dead') {
+        throw new MultichatError('CODEX_THREAD_NOT_FOUND', 'Codex thread t-cli-dead 不存在（可能已删除），无法投递。');
+      }
+      throw new MultichatError('CODEX_THREAD_BUSY_TIMEOUT', 'still busy');
+    });
+    expect(lines).toEqual(['outbox: 线程 t-cli-dead 已不存在，丢弃 2 条暂存消息']);
+    expect(existsSync(join(outboxDir, 't-cli-dead.json'))).toBe(false);
   });
 });

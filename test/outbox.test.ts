@@ -10,6 +10,7 @@ import {
   type OutboxItem,
 } from '../src/outbox.js';
 import { MultichatError } from '../src/errors.js';
+import { checkAndRecord, rateKey, RATE_LIMIT_MAX } from '../src/rate-limit.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-outbox-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -91,7 +92,9 @@ describe('drain', () => {
       ['t-drain', 'd-1', 5_000],
       ['t-drain', 'd-2', 5_000],
     ]);
-    expect(results).toEqual([{ threadId: 't-drain', toName: 'alpha', delivered: 2, remaining: 0 }]);
+    expect(results).toEqual([
+      { threadId: 't-drain', toName: 'alpha', delivered: 2, remaining: 0, dropped: 0 },
+    ]);
     expect(existsSync(join(dir, 't-drain.json'))).toBe(false);
   });
 
@@ -112,7 +115,9 @@ describe('drain', () => {
     const results = await drain(dir, async () => {
       throw busy('CODEX_THREAD_LOCKED');
     });
-    expect(results).toEqual([{ threadId: 't-busy', toName: 'alpha', delivered: 0, remaining: 2 }]);
+    expect(results).toEqual([
+      { threadId: 't-busy', toName: 'alpha', delivered: 0, remaining: 2, dropped: 0 },
+    ]);
     expect(itemsOf(dir, 't-busy')).toEqual([
       { envelope: 'b-1', toName: 'alpha', parkedAt: 1_000, attempts: 1 },
       { envelope: 'b-2', toName: 'alpha', parkedAt: 2_000, attempts: 1 },
@@ -125,7 +130,9 @@ describe('drain', () => {
     const results = await drain(dir, async () => {
       throw new MultichatError('CODEX_WRITE_UNCERTAIN', 'unknown state');
     });
-    expect(results).toEqual([{ threadId: 't-uncertain', toName: 'alpha', delivered: 0, remaining: 1 }]);
+    expect(results).toEqual([
+      { threadId: 't-uncertain', toName: 'alpha', delivered: 0, remaining: 1, dropped: 0 },
+    ]);
     expect(itemsOf(dir, 't-uncertain')).toEqual([
       { envelope: 'u-1', toName: 'alpha', parkedAt: 5_000, attempts: 0 },
     ]);
@@ -156,7 +163,118 @@ describe('drain', () => {
     park(dir, 't-ok', { envelope: 'fine', toName: 'alpha' });
     writeFileSync(join(dir, 't-corrupt.json'), 'not json', 'utf8');
     const results = await drain(dir, ok);
-    expect(results).toEqual([{ threadId: 't-ok', toName: 'alpha', delivered: 1, remaining: 0 }]);
+    expect(results).toEqual([
+      { threadId: 't-ok', toName: 'alpha', delivered: 1, remaining: 0, dropped: 0 },
+    ]);
     expect(existsSync(join(dir, 't-corrupt.json'))).toBe(true);
+  });
+});
+
+describe('drain rate limiting, budget, dead letters (B11)', () => {
+  it('parks the caller identity key alongside the envelope', () => {
+    const dir = freshDir();
+    park(dir, 't-key', { envelope: 'env', toName: 'alpha', callerKey: 'claude:s-1' }, 1_000);
+    expect(itemsOf(dir, 't-key')).toEqual([
+      { envelope: 'env', toName: 'alpha', callerKey: 'claude:s-1', parkedAt: 1_000, attempts: 0 },
+    ]);
+  });
+
+  it('skips an item whose rate window is full, keeping it verbatim for the next round', async () => {
+    const dir = freshDir();
+    const rateDir = freshDir();
+    park(dir, 't-rate', { envelope: 'r-1', toName: 'alpha', callerKey: 'claude:s-1' }, 1_000);
+    const key = rateKey('claude:s-1', 'codex:t-rate');
+    for (let i = 0; i < RATE_LIMIT_MAX; i++) checkAndRecord(rateDir, key, 5_000);
+    const attempted: string[] = [];
+    const results = await drain(
+      dir,
+      async (_t, content) => {
+        attempted.push(content);
+      },
+      { rateDir, now: () => 6_000 },
+    );
+    expect(attempted).toEqual([]);
+    expect(results).toEqual([
+      { threadId: 't-rate', toName: 'alpha', delivered: 0, remaining: 1, dropped: 0 },
+    ]);
+    expect(itemsOf(dir, 't-rate')).toEqual([
+      { envelope: 'r-1', toName: 'alpha', callerKey: 'claude:s-1', parkedAt: 1_000, attempts: 0 },
+    ]);
+  });
+
+  it('consumes the shared rate window: deliveries beyond the cap wait for the next round', async () => {
+    const dir = freshDir();
+    const rateDir = freshDir();
+    park(dir, 't-shared', { envelope: 'a', toName: 'alpha', callerKey: 'claude:s-1' }, 1_000);
+    park(dir, 't-shared', { envelope: 'b', toName: 'alpha', callerKey: 'claude:s-1' }, 2_000);
+    const key = rateKey('claude:s-1', 'codex:t-shared');
+    for (let i = 0; i < RATE_LIMIT_MAX - 1; i++) checkAndRecord(rateDir, key, 5_000);
+    const attempted: string[] = [];
+    const results = await drain(
+      dir,
+      async (_t, content) => {
+        attempted.push(content);
+      },
+      { rateDir, now: () => 6_000 },
+    );
+    expect(attempted).toEqual(['a']); // the 30th send goes through, the 31st is skipped
+    expect(results).toEqual([
+      { threadId: 't-shared', toName: 'alpha', delivered: 1, remaining: 1, dropped: 0 },
+    ]);
+  });
+
+  it('stops at maxItems and leaves the rest for the next round', async () => {
+    const dir = freshDir();
+    for (let i = 0; i < 7; i++) park(dir, 't-cap', { envelope: `e-${i}`, toName: 'alpha' }, i);
+    const attempted: string[] = [];
+    const results = await drain(
+      dir,
+      async (_t, content) => {
+        attempted.push(content);
+      },
+      { maxItems: 3, now: () => 1_000 },
+    );
+    expect(attempted).toEqual(['e-0', 'e-1', 'e-2']);
+    expect(results).toEqual([
+      { threadId: 't-cap', toName: 'alpha', delivered: 3, remaining: 4, dropped: 0 },
+    ]);
+    expect(itemsOf(dir, 't-cap')).toHaveLength(4);
+  });
+
+  it('stops when the wall-clock budget is exhausted (injected clock, no real sleep)', async () => {
+    const dir = freshDir();
+    park(dir, 't-budget', { envelope: 'one', toName: 'alpha' }, 1_000);
+    park(dir, 't-budget', { envelope: 'two', toName: 'alpha' }, 2_000);
+    let t = 1_000;
+    const now = () => (t += 8_000); // drain start reads 9_000; each item check advances 8s
+    const attempted: string[] = [];
+    const results = await drain(
+      dir,
+      async (_t, content) => {
+        attempted.push(content);
+      },
+      { now, budgetMs: 15_000 },
+    );
+    expect(attempted).toEqual(['one']);
+    expect(results).toEqual([
+      { threadId: 't-budget', toName: 'alpha', delivered: 1, remaining: 1, dropped: 0 },
+    ]);
+  });
+
+  it('dead-letters the whole thread on CODEX_THREAD_NOT_FOUND and deletes the file', async () => {
+    const dir = freshDir();
+    park(dir, 't-dead', { envelope: 'd-1', toName: 'alpha' }, 1_000);
+    park(dir, 't-dead', { envelope: 'd-2', toName: 'alpha' }, 2_000);
+    park(dir, 't-dead', { envelope: 'd-3', toName: 'alpha' }, 3_000);
+    const attempted: string[] = [];
+    const results = await drain(dir, async (_t, content) => {
+      attempted.push(content);
+      throw new MultichatError('CODEX_THREAD_NOT_FOUND', 'Codex thread t-dead 不存在（可能已删除），无法投递。');
+    });
+    expect(attempted).toEqual(['d-1']);
+    expect(results).toEqual([
+      { threadId: 't-dead', toName: 'alpha', delivered: 0, remaining: 0, dropped: 3 },
+    ]);
+    expect(existsSync(join(dir, 't-dead.json'))).toBe(false);
   });
 });
