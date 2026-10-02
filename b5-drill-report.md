@@ -99,4 +99,19 @@
 
 ---
 
-*附：联调期间未向「代码实现」等其他 claude 会话发送任何 multichat 消息。*
+---
+
+## 6. 补记（报告写完后追加的第二次联调，2026-10-02 晚）
+
+**信箱模型前后对照实证（线程 01a0fa49，codex 自命名「联调2」）**：
+
+| 状态 | 操作 | 结果 |
+|---|---|---|
+| TUI 窗口开着 | 向该线程投递 | ❌ `CODEX_THREAD_LOCKED`（新错误码已实战触发，文案与指引正确） |
+| 用户关闭窗口后 | 同一线程、同一引用投递 | ✅ `delivered (turn 2)`，daemon headless 跑 turn，codex 回信 turn 3（标记 `MC-DM-5501` 原样回显）；turn 4 收尾送达，turn 5 codex 确认"联调测试通过" |
+
+至此写者锁模型有了最硬的证据：**同一线程、开窗即拒、关窗即通**。加上首轮 01a0fa14/01a0fa3f 两次，`CODEX_THREAD_LOCKED` 共触发 3 次，全部与窗口开闭状态吻合，无误报。
+
+**新已知问题（codex 侧报告，转记）**：daemon 模式 codex 会话首次回复时遇到 `CALLER_IDENTITY_CONFLICT`——环境同时残留 `CLAUDE_CODE_*`（MESSAGING_SOCKET/TOKEN/SESSION_ID）与 `CODEX_THREAD_ID` 两套身份变量，移除 CLAUDE_CODE_* 三个后恢复。建议：multichat 在 codex 侧调用方做身份变量隔离（spawn codex turn 前清掉 CLAUDE_CODE_*），或把该冲突码加入自纠指引。
+
+*附：联调期间未向「代码实现」以外的 claude 会话主动发起 multichat 消息（「代码实现」为先发方，仅按 reply-hint 回执）。*
