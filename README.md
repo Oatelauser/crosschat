@@ -8,7 +8,7 @@
 
 *曾用名 multichat（`multichat` 命令作为过渡别名保留）*
 
-![CI](https://github.com/Oatelauser/crosschat/actions/workflows/ci.yml/badge.svg) ![version](https://img.shields.io/badge/version-1.0.0-blue) ![license](https://img.shields.io/badge/license-MIT-green) ![node](https://img.shields.io/badge/node-%3E%3D22-339933) ![platform](https://img.shields.io/badge/platform-Windows-blue) ![agents](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-blueviolet)
+![CI](https://github.com/Oatelauser/crosschat/actions/workflows/ci.yml/badge.svg) ![npm](https://img.shields.io/npm/v/@oatelauser/crosschat) ![license](https://img.shields.io/badge/license-MIT-green) ![node](https://img.shields.io/badge/node-%3E%3D22-339933) ![platform](https://img.shields.io/badge/platform-Windows-blue) ![agents](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 </div>
 
@@ -35,11 +35,18 @@
 | OS | Windows（一期） | mac/linux 在路线图 |
 
 ```powershell
-git clone https://github.com/Oatelauser/crosschat.git
-cd crosschat
-npm install && npm run build && npm link   # crosschat 上 PATH
-crosschat install-skills                   # 协议教学装到两侧 agent
+npm i -g @oatelauser/crosschat    # 一行安装（提供 crosschat / multichat 双命令）
+crosschat install-skills          # 协议教学装到两侧 agent
 ```
+
+<details><summary>从源码安装（开发者）</summary>
+
+```powershell
+git clone https://github.com/Oatelauser/crosschat.git
+cd crosschat && npm ci && npm run build && npm link
+crosschat install-skills
+```
+</details>
 
 **Codex daemon**（接收方向必需；从**干净终端**启动——勿在 Claude 会话内启动，否则派生 shell 身份污染）：
 
