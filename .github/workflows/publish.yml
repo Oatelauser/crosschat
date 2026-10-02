@@ -36,14 +36,7 @@ jobs:
       - run: npm ci
       - run: npm run check
 
-      - name: Publish to npm (token if provided, else Trusted Publisher OIDC)
+      - name: Publish to npm (Trusted Publisher / OIDC)
         run: |
-          if [ -n "$NODE_AUTH_TOKEN" ]; then
-            echo "publishing with NPM_TOKEN"
-            npm publish --access public
-          else
-            echo "no NPM_TOKEN secret; publishing via Trusted Publisher (OIDC)"
-            npm publish --access public --provenance
-          fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          npm --version
+          npm publish --access public --provenance
