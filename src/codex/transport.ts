@@ -373,6 +373,7 @@ export async function openCodexProxySession(
   const spawnError = (message: string, cause?: unknown): MultichatError =>
     new MultichatError('CODEX_PROXY_SPAWN_FAILED', message, {
       cause: cause ?? (stderr.text() ? new Error(stderr.text()) : undefined),
+      stderrText: stderr.text(),
     });
 
   try {
@@ -389,7 +390,12 @@ export async function openCodexProxySession(
   } catch (err) {
     duplex.destroy();
     await killProxyTree(child).catch(() => undefined);
-    if (err instanceof MultichatError) throw err;
+    if (err instanceof MultichatError) {
+      // The ws-level error knows nothing of the child; carry the bounded
+      // stderr capture out so callers can report why the proxy died.
+      if (err.stderrText === undefined && stderr.text() !== '') err.stderrText = stderr.text();
+      throw err;
+    }
     throw spawnError('The codex app-server proxy channel could not be established.', err);
   }
 

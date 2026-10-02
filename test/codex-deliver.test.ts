@@ -11,6 +11,7 @@ import { MultichatError } from '../src/errors.js';
  */
 function makeFakeSession(script: {
   resumeStatuses?: CodexThreadStatus[];
+  resumeError?: Error;
   turn?: { id: string; status: string };
   turnError?: Error;
   initializeError?: Error;
@@ -31,6 +32,7 @@ function makeFakeSession(script: {
     },
     async resumeThread(threadId: string) {
       calls.push(`resume:${threadId}`);
+      if (script.resumeError) throw script.resumeError;
       const statuses = script.resumeStatuses ?? ['idle'];
       const status = statuses[Math.min(resumeCount, statuses.length - 1)];
       resumeCount += 1;
@@ -172,6 +174,38 @@ describe('deliverToCodexThread', () => {
         },
       }),
     ).rejects.toMatchObject({ code: 'CODEX_PROXY_SPAWN_FAILED' });
+  });
+
+  it('maps an active-writer resume rejection to CODEX_THREAD_LOCKED with guidance', async () => {
+    const { session, calls } = makeFakeSession({
+      resumeError: new CodexRpcRejectedError(-32001, 'thread t1 already has an active writer'),
+    });
+    await expect(
+      deliverToCodexThread('t1', 'hello', {
+        ...fast,
+        sessionFactory: factoryFor(async () => session),
+      }),
+    ).rejects.toMatchObject({
+      code: 'CODEX_THREAD_LOCKED',
+      message: expect.stringContaining('关闭该窗口后重发，或改投未被占用的信箱线程'),
+    });
+    // Zero writes: no turn, and resume never succeeded so no unsubscribe.
+    expect(calls).toEqual(['initialize', 'resume:t1', 'close']);
+  });
+
+  it('attaches proxy stderr evidence and daemon guidance to CODEX_PROXY_SPAWN_FAILED', async () => {
+    const dead = new MultichatError('CODEX_TRANSPORT_CLOSED', 'codex proxy connection failed.');
+    dead.stderrText = 'Error: Io error: daemon socket refused (os error 10061)';
+    const err = (await deliverToCodexThread('t1', 'hello', {
+      ...fast,
+      sessionFactory: async () => {
+        throw dead;
+      },
+    }).catch((e: MultichatError) => e)) as MultichatError;
+    expect(err.code).toBe('CODEX_PROXY_SPAWN_FAILED');
+    expect(err.message).toContain('os error 10061');
+    expect(err.message).toContain('codex app-server daemon start');
+    expect(err.cause).toBe(dead);
   });
 
   it('collapses pre-write protocol failures to CODEX_PROTOCOL_ERROR', async () => {

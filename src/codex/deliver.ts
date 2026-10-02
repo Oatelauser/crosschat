@@ -25,6 +25,12 @@ export interface CodexDeliveryResult {
 const DEFAULT_BUSY_TIMEOUT_MS = 120_000;
 const DEFAULT_POLL_INTERVAL_MS = 3_000;
 
+/** Server-side rejection text when a codex TUI window holds the thread writer. */
+const ACTIVE_WRITER_PATTERN = /already has an active writer/i;
+const OS_ERROR_PATTERN = /os error \d+/gi;
+const STDERR_EXCERPT_CHARS = 300;
+const DAEMON_START_HINT = 'codex app-server daemon 可能未启动，可运行: codex app-server daemon start';
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function deliverToCodexThread(
@@ -40,12 +46,7 @@ export async function deliverToCodexThread(
   try {
     session = await sessionFactory();
   } catch (err) {
-    if (err instanceof MultichatError && err.code === 'CODEX_PROXY_SPAWN_FAILED') throw err;
-    throw new MultichatError(
-      'CODEX_PROXY_SPAWN_FAILED',
-      'Failed to establish the codex app-server proxy channel.',
-      { cause: err },
-    );
+    throw spawnFailure(err);
   }
 
   let resumed = false;
@@ -83,6 +84,17 @@ export async function deliverToCodexThread(
         (err.code === 'CODEX_APPROVAL_REQUIRED' || err.code === 'CODEX_THREAD_BUSY_TIMEOUT')
       ) {
         throw err;
+      }
+      // A thread held open by a codex TUI window has an active writer; the
+      // server rejects resume for it. This is a routing fact, not a protocol
+      // fault, so it gets its own actionable code.
+      if (err instanceof CodexRpcRejectedError && ACTIVE_WRITER_PATTERN.test(err.message)) {
+        throw new MultichatError(
+          'CODEX_THREAD_LOCKED',
+          `Codex thread ${threadId} 正被 codex 窗口占用（开着=只读，关着=可投）。` +
+            '关闭该窗口后重发，或改投未被占用的信箱线程。',
+          { cause: err },
+        );
       }
       // Pre-write failures (timeout, transport closed, rpc rejection, bad
       // frames) all collapse to CODEX_PROTOCOL_ERROR: nothing was written.
@@ -126,4 +138,40 @@ export async function deliverToCodexThread(
 
 function protocolFailure(message: string, cause: unknown): MultichatError {
   return new MultichatError('CODEX_PROTOCOL_ERROR', message, { cause });
+}
+
+/**
+ * CODEX_PROXY_SPAWN_FAILED with the underlying evidence attached: the bounded
+ * stderr tail of the dead proxy (<=300 chars) and any os-error mentions from
+ * the cause chain (e.g. "os error 10061", daemon socket refused).
+ */
+function spawnFailure(err: unknown): MultichatError {
+  const base =
+    err instanceof MultichatError && err.code === 'CODEX_PROXY_SPAWN_FAILED'
+      ? err.message
+      : 'Failed to establish the codex app-server proxy channel.';
+  const { stderrTail, osErrors } = proxyFailureEvidence(err);
+  const parts: string[] = [base];
+  if (osErrors.length > 0) parts.push(`底层 OS 错误: ${osErrors.join(', ')}.`);
+  if (stderrTail !== '') parts.push(`proxy stderr 尾部: ${stderrTail}`);
+  if (!base.includes('executable not found')) parts.push(DAEMON_START_HINT);
+  return new MultichatError('CODEX_PROXY_SPAWN_FAILED', parts.join(' '), { cause: err });
+}
+
+function proxyFailureEvidence(err: unknown): { stderrTail: string; osErrors: string[] } {
+  const osErrors = new Set<string>();
+  let stderrTail = '';
+  const seen = new Set<unknown>();
+  let current: unknown = err;
+  while (current instanceof Error && !seen.has(current)) {
+    seen.add(current);
+    const text = (current as MultichatError).stderrText;
+    if (stderrTail === '' && typeof text === 'string' && text !== '') {
+      stderrTail = text.replace(/\s+/g, ' ').trim().slice(-STDERR_EXCERPT_CHARS);
+    }
+    for (const match of current.message.matchAll(OS_ERROR_PATTERN)) osErrors.add(match[0]);
+    current = current.cause;
+  }
+  for (const match of stderrTail.matchAll(OS_ERROR_PATTERN)) osErrors.add(match[0]);
+  return { stderrTail, osErrors: [...osErrors] };
 }
