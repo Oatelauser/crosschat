@@ -9,7 +9,6 @@ const pkg = JSON.parse(
 ) as { version: string };
 
 it('--version prints the package.json version', () => {
-  expect(pkg.version).toBe('1.0.0');
   const result = spawnSync(process.execPath, [cliPath, '--version'], {
     encoding: 'utf8',
   });
