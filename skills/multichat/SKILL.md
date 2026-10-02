@@ -41,13 +41,13 @@ multichat send --to <名字> --body "正文"
 
 - 名字 = claude 会话名或 codex 线程名（status 列出全部可路由对象）。
 - 长正文可省略 `--body`，改为管道：`<正文文件路径的内容> | multichat send --to <名字>`。
-- 投给 codex 的消息：**开窗 = multichat 侧等待（默认至多 120s），关窗即自动送达；关窗 = 立即 headless 执行**。输出恒为 `delivered`，即代表已送达，无需重发。
+- 投给 codex 的消息：**开窗、关窗均可投**（daemon 0.160+ 且 TUI 附着 daemon 时开窗直接送达；headless turn 在后台执行，TUI 窗口不实时刷新）。若开窗被锁（旧 daemon ≤0.157 或 `--no-daemon`/未附着 TUI），multichat 侧等待（默认至多 120s），关窗即自动送达。输出恒为 `delivered`，即代表已送达，无需重发。
 
 ## 报错自纠（读错误码，不要即兴发明命令）
 
 - `MESSAGE_TOO_LARGE`：正文超过 16KiB。把完整内容**写入一个文件，只发文件路径**（接收方会按需读取，这也是长内容的标准做法）。
 - `RATE_LIMITED`：发送过快（每对端点 60 秒最多 30 条）。**等待后重试**，或直接总结收尾；系统不会静默丢弃或自动重试。
-- `CODEX_THREAD_LOCKED`：等待超时——对方 codex 窗口持续占用线程写者超过 120s。关闭对方 codex 窗口后重发将立即送达；或改投其它信箱线程。（脚注：codex 的 queue 特性经实测对本地 TUI 不生效——exit 0 但消息静默丢失，疑似 remote 架构专用——故 multichat 不采用，改为等待窗口释放。）
+- `CODEX_THREAD_LOCKED`：等待超时——对方 codex 窗口持续占用线程写者超过 120s。**多见于旧 daemon（≤0.157）或 `--no-daemon`/未附着 daemon 的 TUI**；0.160+ 且附着时开窗可直接投，不应出现此错。关闭对方 codex 窗口后重发将立即送达；或改投其它信箱线程。（脚注：multichat 主通道已可开窗投递，无需 codex 的 queue 特性；0.160 实测 queue 对附着 TUI 也能秒级消费，仅作人工兜底。）
 - `CALLER_IDENTITY_CONFLICT`：环境里同时残留 `CLAUDE_CODE_*` 与 `CODEX_*` 身份变量（常见于从 Claude 终端启动的 codex daemon 派生的 shell）。临时自纠 = 给命令加前缀，照抄：
 
   ```

@@ -38,7 +38,7 @@ codex app-server daemon start
 | 发起者 | 怎么发 | 特性 |
 |---|---|---|
 | **claude** | 会话内 agent 跑 `multichat send --to <codex 线程名> --body "…"` | 最顺，推荐默认 |
-| **codex** | 会话内 agent 跑 `multichat send --to <claude 会话名> --body "…"` | 发送随意；但**发出后要关掉 codex 窗口**（见 3.5） |
+| **codex** | 会话内 agent 跑 `multichat send --to <claude 会话名> --body "…"` | 发送随意；回信开窗关窗都能收（daemon 0.160+，见 3.5） |
 | **人** | 任意终端直接跑 `multichat send --to <名字> --body "…"` | 身份是 human：**能发、不能被回复**（单向指令/通知） |
 
 第一条消息永远用 `--to`（此刻生成对话引用 reply-ref）；对方名字用 `multichat status` 查（名字含空格加引号）。
@@ -60,9 +60,9 @@ codex app-server daemon start
 ```
 步骤   动作主体   发生什么                                  窗口状态
 1      你        终端 A：multichat claude + 角色题词         A 开
-2      你        确认 codex 信箱线程已存在 → 关掉它的窗口     codex 关
+2      你        确认 codex 信箱线程已存在（窗口开/关均可）     任意
 3      claude    send --to <线程名> "任务…" → delivered(1)    —
-4      codex     headless 收 turn、干活、照提示回信           codex 关
+4      codex     headless 收 turn、干活、照提示回信           任意
 5      claude    收到信封（你在终端 A 当场看到）→ 验收/追问    —
 6      ——        循环 4-5，直到预算 → 总结收尾                —
 ```
@@ -75,15 +75,15 @@ codex app-server daemon start
 步骤   动作主体   发生什么                                  窗口状态
 1      你        终端 B：codex + 角色题词（教它主动联系）      B 开
 2      codex     send --to mc-claude "…" → delivered(1)      B 开（发送不受窗口影响）
-3      你        ★ 关掉 codex 窗口                           B 关
+3      你        （可选）关掉 codex 窗口                     B 开/关
 4      claude    收到信封（终端 A 看到）→ 照提示回复           —
-5      codex     回信 headless 落进线程、处理、再回            B 关
-6      ——        循环 4-5；想看 codex 侧就开窗 resume，看完关  —
+5      codex     回信 headless 落进线程、处理、再回            B 开/关
+6      ——        循环 4-5；想看 codex 侧就开窗 resume          —
 ```
 
-★ 是关键步：claude 的回信要进 codex 的线程，而**线程被开着的窗口独占**（codex 单写者锁，上游设计）。忘了关也不会丢——multichat 会等待（默认 120s），你关窗瞬间送达；超时报 `CODEX_THREAD_LOCKED` 指引重发。
+★ 已非关键步：daemon **0.160+** 且 TUI 附着 daemon 时，codex 线程**开窗也能直接收信**（headless 执行，TUI 不实时刷新）。仅当开窗被锁（旧 daemon ≤0.157 或 `--no-daemon`/未附着 TUI）时 multichat 才等待（默认 120s），关窗瞬间送达；超时报 `CODEX_THREAD_LOCKED` 指引重发。
 
-**不对称速记**：claude 收发都随意；codex 发随意、收需要线程空闲（窗口关）。
+**不对称速记**：claude 收发都随意；codex 收信开窗关窗均可（0.160+），关窗永远是最稳路径。
 
 ### 3.6 完整示例：codex 当领导派活给 claude（剧本式，照抄可跑）
 
@@ -116,7 +116,7 @@ D:\workspace\CC\demo> codex
 ● delivered to worker (turn 1)          ← 任务飞进左窗，发起方是 codex
 ```
 
-**第 4 步 · 关掉右窗**（领导要在线程里收报告了；收报告需要它的窗口关着）
+**第 4 步 · 右窗开着也没关系**（daemon 0.160+ 下开窗可投；旧环境被锁时 multichat 会等关窗，此时再关右窗即可）
 
 **第 5 步 · 左窗屏幕——claude 收令干活**
 ```
@@ -140,13 +140,13 @@ D:\workspace\CC\demo> codex
 验收通过，任务结束
 </cross-session-message>
 ```
-claude 停止。**全程在左窗直播**；想看领导的验收细节：开右窗 `codex resume` 翻历史，看完关。
+claude 停止。**全程在左窗直播**；想看领导的验收细节：开右窗 `codex resume` 翻历史（开着也不影响它收信）。
 
 ## 4. 每日标准流程（速览）
 
 1. `multichat status` —— 环境体检（codex 段 unavailable → 先修 daemon，见 §11）
 2. `multichat claude` + 角色题词（终端 A）
-3. `codex` + 角色题词（终端 B）→ **关掉 B**
+3. `codex` + 角色题词（终端 B）（开窗关窗均可收信，关窗最稳）
 4. 在终端 A 围观，必要时人插话（见 §5）
 5. 预算耗尽 → agent 总结收尾 → 关会话
 
@@ -156,8 +156,8 @@ claude 停止。**全程在左窗直播**；想看领导的验收细节：开右
 |---|---|
 | 人插话 | 任意终端 `multichat send --to <名字> --body "…"`（单向，对方无法回你） |
 | claude ↔ claude | 双方都 `multichat claude` 启动，其余同流程 A |
-| 向开着的 codex 窗口投递 | 直接发：multichat 等待，关窗瞬间送达；120s 超时报错指引 |
-| 看 codex 侧历史 | 开窗 resume 该线程，看完关掉恢复收信 |
+| 向开着的 codex 窗口投递 | 直接发：0.160+ daemon 附着 TUI 时开窗即达；被锁则等待关窗，120s 超时报错指引 |
+| 看 codex 侧历史 | 开窗 resume 该线程（开窗不影响收信） |
 | 新话题 | agent 用 `--to` 新发，不续旧引用 |
 | 超长内容（>16KiB） | 写文件、消息只发路径（对方按需读，也省上下文） |
 
@@ -179,7 +179,8 @@ multichat claude [任意 claude 参数…]                 # 带接收许可启�
 | claude（`multichat claude` 启动） | 窗口开 | ✅ 秒达，会话内出现信封消息 |
 | claude（裸 `claude` 启动） | 任何 | ❌ 无接收许可（换 `multichat claude` 重启） |
 | codex | 窗口关 | ✅ 立即 headless 执行并回信 |
-| codex | 窗口开 | ⏳ multichat 等待，关窗瞬间送达；120s 超时报错 |
+| codex | 窗口开（daemon 0.160+ 且 TUI 附着） | ✅ 直接送达，headless 执行（TUI 不实时刷新） |
+| codex | 窗口开（旧 daemon ≤0.157 / `--no-daemon`） | ⏳ multichat 等待，关窗瞬间送达；120s 超时报错 |
 | codex | turn 进行中 | ⏳ 排队等空闲（同一机制） |
 
 ## 8. 错误码排障
@@ -188,7 +189,7 @@ multichat claude [任意 claude 参数…]                 # 带接收许可启�
 
 **身份类**：`CALLER_IDENTITY_CONFLICT`（环境双身份残留。临时：命令前缀 `env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID`；根治：干净终端重启 daemon）· `CALLER_NOT_IN_CONVERSATION`（非参与者不能借引用回复）· `CANNOT_REPLY_TO_HUMAN`（对话由人发起，无处回信）
 
-**通道类**：`CODEX_PROXY_SPAWN_FAILED`（看 stderr 摘录；通常 daemon 未跑 → `codex app-server daemon start`）· `CODEX_THREAD_LOCKED`（等待超时：关对方 codex 窗口后重发，立即送达）· `CODEX_THREAD_BUSY_TIMEOUT`（忙满 120s，稍后重发）· `CODEX_APPROVAL_REQUIRED`（codex 等人工审批，**工具永不代答**）· `CLAUDE_PIPE_*`/`CODEX_*UNCERTAIN`（写入中途失败状态不明——**勿盲目重发**，先 `status` 核实对方是否已收到）
+**通道类**：`CODEX_PROXY_SPAWN_FAILED`（看 stderr 摘录；通常 daemon 未跑 → `codex app-server daemon start`）· `CODEX_THREAD_LOCKED`（等待超时，多见于旧 daemon ≤0.157 或 `--no-daemon`/未附着 TUI——升级 `codex app-server daemon update` 后开窗即可投：关对方 codex 窗口后重发，立即送达）· `CODEX_THREAD_BUSY_TIMEOUT`（忙满 120s，稍后重发）· `CODEX_APPROVAL_REQUIRED`（codex 等人工审批，**工具永不代答**）· `CLAUDE_PIPE_*`/`CODEX_*UNCERTAIN`（写入中途失败状态不明——**勿盲目重发**，先 `status` 核实对方是否已收到）
 
 ## 9. 边界与限制
 
@@ -196,11 +197,11 @@ multichat claude [任意 claude 参数…]                 # 带接收许可启�
 
 ## 10. FAQ
 
-**Q：codex 窗口为什么开着收不到？** codex 单写者锁（上游设计）：窗口独占线程。multichat 的处理是等你关窗再投。二期研究 remote 形态 TUI 取消此限制。
+**Q：codex 窗口开着能收到吗？** daemon 0.160+ 且 TUI 附着 daemon 时能（实测同 daemon 多连接不互斥）。旧 daemon（≤0.157）或 `--no-daemon` 时窗口独占线程（跨进程单写者锁），multichat 等你关窗再投。
 
 **Q：为什么必须 `multichat claude`？** 它注入跨会话接收许可；裸 `claude` 的会话收不到。
 
-**Q：`codex queue` 不是能开窗收吗？** 实测对本地 TUI 是黑洞（exit 0 但永不送达），已弃用。
+**Q：`codex queue` 不是能开窗收吗？** 0.160 + 附着 TUI 下实测可秒级消费；但 multichat 主通道本身已可开窗投递，不引入 queue。
 
 **Q：消息历史在哪看？** claude 侧=会话 transcript；codex 侧=开窗 resume 线程。
 
