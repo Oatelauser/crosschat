@@ -1,5 +1,7 @@
 # multichat
 
+> **操作手册**：`docs/manual.md`（安装、每日流程、场景、排障、FAQ）。本 README 为简介与开发说明。
+
 Windows 上的本机跨 agent 消息 CLI：让 Claude Code 会话与 Codex CLI 线程互发消息、多轮往返。
 架构：无状态单命令——每次 send/status 现场发现端点、建立通道、投递、退出，无常驻进程（详见 [wayfinder/map.md](wayfinder/map.md)）。
 
