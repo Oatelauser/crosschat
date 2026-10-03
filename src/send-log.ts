@@ -1,4 +1,4 @@
-import { appendFileSync, closeSync, mkdirSync, openSync, readSync } from 'node:fs';
+import { appendFileSync, closeSync, fstatSync, mkdirSync, openSync, readSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import process from 'node:process';
@@ -72,6 +72,56 @@ export async function confirmInRollout(
     await sleep(delayMs);
   }
   return 'unconfirmed';
+}
+
+/** Tail window the conversation summaries (status batch B0) ever parse; never a full scan. */
+export const SEND_LOG_TAIL_LINES = 200;
+
+/**
+ * Last ~maxLines entries, read backwards from the end (stat the size, then
+ * 64KB chunks like fileContains below) so a large log costs a bounded read.
+ * The window's first line is dropped as a fragment when the cut landed
+ * mid-line; unparsable lines are skipped — the log is best-effort anyway.
+ * Missing file → empty; never throws.
+ */
+export function readSendLogTail(file: string, maxLines: number = SEND_LOG_TAIL_LINES): SendLogEntry[] {
+  let fd: number | undefined;
+  try {
+    fd = openSync(file, 'r');
+  } catch {
+    return [];
+  }
+  try {
+    const size = fstatSync(fd).size;
+    const parts: Buffer[] = [];
+    let pos = size;
+    let newlines = 0;
+    while (pos > 0 && newlines <= maxLines) {
+      const len = Math.min(64 * 1024, pos);
+      pos -= len;
+      const buf = Buffer.alloc(len);
+      readSync(fd, buf, 0, len, pos);
+      parts.unshift(buf);
+      // 0x0A never appears inside a multi-byte UTF-8 sequence: byte count = line count.
+      for (const byte of buf) if (byte === 0x0a) newlines++;
+    }
+    let lines = Buffer.concat(parts).toString('utf8').split('\n');
+    if (pos > 0) lines = lines.slice(1); // window cut the first line mid-line
+    const entries: SendLogEntry[] = [];
+    for (const line of lines) {
+      if (line.trim() === '') continue;
+      try {
+        entries.push(JSON.parse(line) as SendLogEntry);
+      } catch {
+        // corrupt line: skip
+      }
+    }
+    return entries.slice(-maxLines);
+  } catch {
+    return [];
+  } finally {
+    closeSync(fd);
+  }
 }
 
 /** Chunked substring scan; carries a tail so a marker spanning chunks is found. */

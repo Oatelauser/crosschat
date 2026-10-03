@@ -288,6 +288,31 @@ export function outboxCount(dir: string, threadId: string): number {
   return readItems(dir, threadId)?.length ?? 0;
 }
 
+/**
+ * Parked counts keyed by unordered pair key — caller identity × `codex:<thread>`,
+ * joined with the same sort + '\n' convention as conversations.ts pairKeyOf
+ * (status batch B0). Items without a caller key count under 'human', the same
+ * fallback the drain's rate limiter uses. Corrupt files are skipped.
+ */
+export function outboxPairCounts(dir: string): Map<string, number> {
+  let files: string[];
+  try {
+    files = readdirSync(dir);
+  } catch {
+    return new Map();
+  }
+  const counts = new Map<string, number>();
+  for (const file of files) {
+    if (!file.endsWith('.json')) continue;
+    const threadId = file.slice(0, -'.json'.length);
+    for (const item of readItems(dir, threadId) ?? []) {
+      const key = [item.callerKey ?? 'human', `codex:${threadId}`].sort().join('\n');
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
 function shortThread(threadId: string): string {
   return `codex/${threadId.slice(0, 8)}`;
 }
