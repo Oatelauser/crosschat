@@ -2,6 +2,12 @@
 
 本项目的全部显著变更记录于此。格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 变更（B23：conversations 视图裸身份键译名）
+
+- `status --conversations` 渲染层补翻译：无名字证据的 pair 槽位（裸身份键 `claude:<id>` / `codex:<id>` 或 id8 缩写 `claude/<id8>` / `codex/<id8>`）按 claude 注册表与 codex 线程清单译成显示名；已有显示名（to/fromName 证据）一律不动，证据优先。claude 侧同源可证：身份键本就由注册表 `sessionId` 构成（identity.ts `claudeIdentity` → `identityKey`），join 精确。codex 清单失败按主视图同款降级（空表不报错）。文本与 JSON 两路径同表，JSON `pair` 值随之变好、八字段形状不变；`lastFrom`（机器字段）与 `endpoints` 不译。数据层与发送路径零改动
+
 ## [1.2.1] - 2026-10-03
 
 ### 发布说明

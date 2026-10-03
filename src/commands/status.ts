@@ -110,6 +110,13 @@ export async function runStatus(
 async function conversationsView(deps: StatusDeps, json: boolean): Promise<string> {
   const rows = deps.listConversations?.() ?? [];
   await recheckReceipts(rows, deps);
+  // B23: bare identity-key / id8 pair slots become display names (render-only).
+  // Slots already carrying evidence names (to/fromName) never match a table
+  // key, so they keep priority; `lastFrom` and `endpoints` stay identity keys.
+  const names = rows.length === 0 ? new Map<string, string>() : await endpointDisplayNames(deps);
+  for (const row of rows) {
+    row.pair = [names.get(row.pair[0]) ?? row.pair[0], names.get(row.pair[1]) ?? row.pair[1]];
+  }
   if (json) {
     // Frozen JSON contract: exactly the eight summary fields (B22 added `receipt`);
     // `endpoints` is render-only.
@@ -127,6 +134,33 @@ async function conversationsView(deps: StatusDeps, json: boolean): Promise<strin
     );
   }
   return lines.join('\n');
+}
+
+/**
+ * Display names keyed by every bare form a pair slot can render (B23): the
+ * full identity key (`claude:<id>` / `codex:<id>`) and the id8 descriptor
+ * `shortEndpoint` produces (`claude/<id8>`). Same-source on the claude side:
+ * identity keys are built from this very registry's sessionId
+ * (identity.ts claudeIdentity → identityKey), so the join is exact. A codex
+ * listing failure degrades to claude-only names (same stance as the main
+ * view); a nameless session/thread is simply not in the table.
+ */
+async function endpointDisplayNames(deps: StatusDeps): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  const add = (prefix: string, id: string, name: string | null | undefined) => {
+    if (name === undefined || name === null || name === '') return;
+    names.set(`${prefix}:${id}`, name);
+    names.set(`${prefix}/${id.slice(0, 8)}`, name);
+  };
+  for (const session of deps.listClaudeSessions().sessions) {
+    if (session.sessionId !== '') add('claude', session.sessionId, session.name);
+  }
+  try {
+    for (const thread of await deps.listCodexThreads()) add('codex', thread.id, thread.name);
+  } catch {
+    // codex down is a valid status answer — translate the claude side only
+  }
+  return names;
 }
 
 /**

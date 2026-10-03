@@ -7,6 +7,8 @@ import { conversationSummaries } from '../src/conversation-summary.js';
 import { pairKeyOf } from '../src/conversations.js';
 import { appendSendLog, type SendLogEntry } from '../src/send-log.js';
 import { park } from '../src/outbox.js';
+import type { ClaudeSessionEntry } from '../src/claude/registry.js';
+import type { CodexThreadWithMeta } from '../src/codex/discovery.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-statusconv-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -30,6 +32,7 @@ function deps(
   tail: SendLogEntry[] = [],
   parked = 0,
   confirmReceipt?: (threadId: string, marker: string) => Promise<'confirmed' | 'unconfirmed'>,
+  listings?: { claude?: ClaudeSessionEntry[]; codex?: CodexThreadWithMeta[]; codexError?: Error },
 ): StatusDeps {
   const dir = mkdtempSync(join(root, 'case-'));
   const conversationsFile = join(dir, 'conversations.json');
@@ -41,8 +44,11 @@ function deps(
     park(outboxDir, 't-9', { envelope: `e-${i}`, toName: 'peer', callerKey: 'claude:sc-1' }, NOW - 60_000);
   }
   return {
-    listClaudeSessions: () => ({ sessions: [], malformed: 0 }),
-    listCodexThreads: () => Promise.resolve([]),
+    listClaudeSessions: () => ({ sessions: listings?.claude ?? [], malformed: 0 }),
+    listCodexThreads: () =>
+      listings?.codexError !== undefined
+        ? Promise.reject(listings.codexError)
+        : Promise.resolve(listings?.codex ?? []),
     listConversations: () => conversationSummaries({ conversationsFile, sendLogFile, outboxDir }),
     confirmReceipt,
     now: () => NOW,
@@ -228,6 +234,98 @@ describe('status --conversations receipt recheck (B22)', () => {
     expect(text).toContain('已确认');
     expect(text).not.toContain('回执未确认');
     expect(text).toContain('queued');
+  });
+});
+
+describe('status --conversations bare-slot translation (B23)', () => {
+  const claudeEntry = (id: string, name?: string): ClaudeSessionEntry => ({
+    pid: 1,
+    sessionId: id,
+    kind: 'interactive',
+    status: 'idle',
+    messagingSocketPath: `sock-${id}`,
+    name,
+  });
+  const codexEntry = (id: string, name: string | null): CodexThreadWithMeta => ({
+    id,
+    name,
+    status: 'idle',
+  });
+
+  it('text: translates bare identity-key slots (claude:<id> and codex:<id>) into display names', async () => {
+    const d = deps(
+      { [keyAB]: { ref: 'mc1_x', updatedAt: NOW - 60_000 } },
+      [entry({ from: 'codex:t-9', target: 'claude:sc-1', to: 'Alice', turn: 2 })],
+      0,
+      undefined,
+      { claude: [claudeEntry('sc-1', 'Alice')], codex: [codexEntry('t-9', 'drill线程')] },
+    );
+    const row = await firstRow(d);
+    expect(row).toContain('drill线程 → Alice'); // lastFrom codex:t-9 → pair[1] first
+    expect(row).not.toContain('codex:t-9');
+  });
+
+  it('text: translates bare id8 descriptor slots (claude/<id8>, codex/<id8>) for tail-less pairs', async () => {
+    const d = deps(
+      { [keyAB]: { ref: 'mc1_x', updatedAt: NOW - 60_000 } },
+      [],
+      0,
+      undefined,
+      { claude: [claudeEntry('sc-1', 'Alice')], codex: [codexEntry('t-9', 'drill线程')] },
+    );
+    const row = await firstRow(d);
+    expect(row).toContain('Alice ↔ drill线程');
+    expect(row).not.toContain('claude/');
+    expect(row).not.toContain('codex/');
+  });
+
+  it('keeps evidence display names: a to-name slot is never overwritten by the registry', async () => {
+    const d = deps(
+      { [keyAB]: { ref: 'mc1_x', updatedAt: NOW - 60_000 } },
+      [entry({ from: 'claude:sc-1', to: '架构改造3', turn: 1 })],
+      0,
+      undefined,
+      { claude: [claudeEntry('sc-1', 'Alice')], codex: [codexEntry('t-9', 'drill线程')] },
+    );
+    const row = await firstRow(d);
+    expect(row).toContain('Alice → 架构改造3'); // bare claude slot translated, evidence name kept
+    expect(row).not.toContain('drill线程');
+  });
+
+  it('degrades silently when the codex listing fails: no crash, codex slots untranslated', async () => {
+    const d = deps(
+      { [keyAB]: { ref: 'mc1_x', updatedAt: NOW - 60_000 } },
+      [],
+      0,
+      undefined,
+      { claude: [claudeEntry('sc-1', 'Alice')], codexError: new Error('codex down') },
+    );
+    const text = await runStatus(d, false, true);
+    expect(text).not.toContain('unavailable');
+    expect(text.split('\n')[1] ?? '').toContain('Alice ↔ codex/t-9'); // claude translated, codex bare
+  });
+
+  it('json: translated pair keeps the eight-field shape and lastFrom stays an identity key', async () => {
+    const d = deps(
+      { [keyAB]: { ref: 'mc1_x', updatedAt: NOW - 60_000 } },
+      [entry({ from: 'codex:t-9', target: 'claude:sc-1', to: 'Alice', status: 'parked', turn: 4 })],
+      0,
+      undefined,
+      { codex: [codexEntry('t-9', 'drill线程')] },
+    );
+    const parsed = JSON.parse(await runStatus(d, true, true)) as Array<Record<string, unknown>>;
+    expect(Object.keys(parsed[0]!).sort()).toEqual([
+      'lastFrom',
+      'lastStatus',
+      'pair',
+      'parked',
+      'receipt',
+      'ref',
+      'turn',
+      'updatedAt',
+    ]);
+    expect(parsed[0]!.pair).toEqual(['Alice', 'drill线程']);
+    expect(parsed[0]!.lastFrom).toBe('codex:t-9');
   });
 });
 
