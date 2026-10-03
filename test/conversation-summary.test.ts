@@ -7,7 +7,7 @@ import {
   conversationSummaries,
 } from '../src/conversation-summary.js';
 import { appendSendLog, readSendLogTail, type SendLogEntry } from '../src/send-log.js';
-import { pairKeyOf } from '../src/conversations.js';
+import { pairKeyOf, recordConversation } from '../src/conversations.js';
 import { park } from '../src/outbox.js';
 import { encodeRef, newConversationRef } from '../src/ref.js';
 
@@ -192,5 +192,53 @@ describe('conversationSummaries', () => {
         outboxDir: join(dir, 'outbox'),
       }),
     ).toEqual([]);
+  });
+
+  it('aggregates per-pair shards into the same rows the legacy global file produced', () => {
+    const ref = newConversationRef(claudeA, codexB);
+    const legacyDir = freshDir();
+    const legacyFile = join(legacyDir, 'conversations.json');
+    writeFileSync(legacyFile, JSON.stringify({ pairs: { [keyAB]: { ref: encodeRef(ref), updatedAt: 5_000 } } }), 'utf8');
+    const expected = conversationSummaries({
+      conversationsFile: legacyFile,
+      sendLogFile: join(legacyDir, 'none.jsonl'),
+      outboxDir: join(legacyDir, 'outbox'),
+    });
+    const shardDir = freshDir();
+    const shardStateFile = join(shardDir, 'conversations.json');
+    recordConversation(shardStateFile, ref, 5_000); // same record, sharded
+    expect(
+      conversationSummaries({
+        conversationsFile: shardStateFile,
+        sendLogFile: join(shardDir, 'none.jsonl'),
+        outboxDir: join(shardDir, 'outbox'),
+      }),
+    ).toEqual(expected);
+    expect(expected).toHaveLength(1);
+  });
+
+  it('lets shards supersede legacy records while legacy still supplies unmigrated pairs', () => {
+    const dir = freshDir();
+    const conversationsFile = join(dir, 'conversations.json');
+    const refAB = newConversationRef(claudeA, codexB);
+    writeFileSync(
+      conversationsFile,
+      JSON.stringify({
+        pairs: {
+          [keyAB]: { ref: encodeRef(refAB), updatedAt: 1_000 },
+          [keyCD]: { ref: 'mc1_cd', updatedAt: 2_000 },
+        },
+      }),
+      'utf8',
+    );
+    recordConversation(conversationsFile, refAB, 9_000); // keyAB moves to a shard
+    const rows = conversationSummaries({
+      conversationsFile,
+      sendLogFile: join(dir, 'none.jsonl'),
+      outboxDir: join(dir, 'outbox'),
+    });
+    expect(rows.map((r) => r.updatedAt)).toEqual([9_000, 2_000]);
+    expect(rows[0]!.ref).toBe(encodeRef(refAB)); // shard wins for keyAB
+    expect(rows[1]!.endpoints).toEqual(['claude:abcdefghijklmnop', 'codex:qrstuvwxyz12']); // keyCD still from legacy
   });
 });

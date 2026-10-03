@@ -1,13 +1,13 @@
-import { readFileSync } from 'node:fs';
-import { defaultConversationsFile, pairKeyOf } from './conversations.js';
+import { defaultConversationsFile, loadAllPairs, pairKeyOf } from './conversations.js';
 import { defaultOutboxDir, outboxPairCounts } from './outbox.js';
 import { type SendLogEntry, defaultSendLogFile, readSendLogTail } from './send-log.js';
 import { decodeRef } from './ref.js';
 
 /**
  * Per-pair conversation overview rows for a future `status --conversations`
- * (status batch B0: pure data, no rendering). conversations.json is the
- * existence authority — only pairs recorded there get a row — enriched with
+ * (status batch B0: pure data, no rendering). The conversations store
+ * (B20: per-pair shards + legacy-file fallback) is the existence
+ * authority — only pairs recorded there get a row — enriched with
  * the send-log tail (a bounded ~200-line window, never a full scan) and
  * per-pair outbox parked counts.
  *
@@ -55,7 +55,7 @@ export function conversationSummaries(
   deps: ConversationSummaryDeps = defaultConversationSummaryDeps(),
 ): ConversationSummary[] {
   return aggregateSummaries(
-    loadPairs(deps.conversationsFile),
+    loadAllPairs(deps.conversationsFile),
     readSendLogTail(deps.sendLogFile),
     outboxPairCounts(deps.outboxDir),
   );
@@ -160,18 +160,4 @@ function shortEndpoint(endpoint: string): string {
   const sep = endpoint.indexOf(':');
   if (sep === -1) return endpoint;
   return `${endpoint.slice(0, sep)}/${endpoint.slice(sep + 1, sep + 9)}`;
-}
-
-function loadPairs(file: string): Record<string, { ref: string; updatedAt: number }> {
-  try {
-    const parsed = JSON.parse(readFileSync(file, 'utf8')) as {
-      pairs?: Record<string, { ref: string; updatedAt: number }>;
-    };
-    if (parsed !== null && typeof parsed === 'object' && typeof parsed.pairs === 'object') {
-      return parsed.pairs;
-    }
-  } catch {
-    // missing/corrupt: no recorded conversations → no rows
-  }
-  return {};
 }
