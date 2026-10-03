@@ -363,7 +363,11 @@ export interface CodexProxySessionOptions {
 export async function openCodexProxySession(
   options: CodexProxySessionOptions = {},
 ): Promise<CodexProxySession> {
-  const command = options.executable ?? resolveCodexExecutable();
+  // An injected spawnProxy ignores the command argument entirely: resolve the
+  // real executable only when the default spawner will run, so hermetic tests
+  // (and codex-less CI runners) do not require a local codex install.
+  const command =
+    options.executable ?? (options.spawnProxy !== undefined ? 'codex' : resolveCodexExecutable());
   const doSpawn: CodexProxySpawner =
     options.spawnProxy ??
     ((cmd, args) =>
