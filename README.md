@@ -45,7 +45,7 @@ cd crosschat && npm ci && npm run build && npm link
 crosschat install-skills
 ```
 
-开发期反复重装本地目录时用 `npm i -g . --force`（或先 bump 版本）：版本号未变时 npm 会报 "up to date" 而**跳过文件更新**，装到的还是旧代码。
+开发期反复重装本地目录：`npm run build && npm i -g . --force`——**build 不可省**（包没有 prepare 脚本，npm 不会自动构建，`files` 只打包 dist/ 现状，漏 build 会把旧 dist 装回去）；`--force`（或先 bump 版本）是因为版本号未变时 npm 会报 "up to date" 而**跳过文件更新**。若首次用的是 `npm link`（符号链接直连仓库），则每次只需 `npm run build`，无需重装。
 </details>
 
 **Codex daemon**（接收方向必需；从**干净终端**启动——勿在 Claude 会话内启动，否则派生 shell 身份污染）：
