@@ -16,21 +16,33 @@ import { CodexRpcRejectedError } from './rpc.js';
  * 2026-10-03, probe thread 01a10009-b314), landing in history the moment the
  * running turn ends — inbox semantics. Polling remains only for a
  * not-yet-loaded thread and for the legacy writer-held rejection (old daemon /
- * non-attached TUI), which fails with CODEX_THREAD_LOCKED on timeout.
+ * non-attached TUI); both bail into parked (CODEX_THREAD_LOCKED /
+ * CODEX_THREAD_BUSY_TIMEOUT) after a ~10s stall budget (B19) instead of 120s.
  * Approvals are never answered on the user's behalf.
  */
 
 export interface CodexDeliveryOptions {
   sessionFactory?: CodexSessionFactory;
-  /** How long a busy or writer-locked thread is polled before giving up (default 120s). */
+  /**
+   * Stall budget for the two remaining poll loops (writer lock held, thread
+   * not_loaded): default ~10s, capped at ~10s; smaller injected values (tests,
+   * drain) are honored. Busy threads never wait — daemon >=0.160 queues the
+   * turn immediately.
+   */
   busyTimeoutMs?: number;
-  /** Re-resume poll interval while waiting for a busy or writer-locked thread (default 3s). */
+  /** Re-resume poll interval while waiting for a writer-locked or loading thread (default 3s). */
   pollIntervalMs?: number;
 }
 
 export type CodexDeliveryResult = { status: 'accepted'; turnId: string; queued?: boolean };
 
-const DEFAULT_BUSY_TIMEOUT_MS = 120_000;
+/**
+ * B19 stall budget: a writer lock that never releases or a thread that never
+ * loads parks after ~10s (about 3 polls at the default 3s interval — enough to
+ * ride out transient stalls) instead of blocking the sender for the old 120s.
+ * send.ts maps both outcomes to parked; the watchdog re-delivers.
+ */
+const STALL_PARK_TIMEOUT_MS = 10_000;
 const DEFAULT_POLL_INTERVAL_MS = 3_000;
 
 /** Server-side rejection text when a codex TUI window holds the thread writer. */
@@ -52,7 +64,7 @@ export async function deliverToCodexThread(
   content: string,
   options: CodexDeliveryOptions = {},
 ): Promise<CodexDeliveryResult> {
-  const busyTimeoutMs = options.busyTimeoutMs ?? DEFAULT_BUSY_TIMEOUT_MS;
+  const stallTimeoutMs = Math.min(options.busyTimeoutMs ?? STALL_PARK_TIMEOUT_MS, STALL_PARK_TIMEOUT_MS);
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   const sessionFactory = options.sessionFactory ?? openCodexSession();
 
@@ -69,7 +81,7 @@ export async function deliverToCodexThread(
   try {
     try {
       await session.initialize();
-      const deadline = Date.now() + busyTimeoutMs;
+      const deadline = Date.now() + stallTimeoutMs;
       // Disposition loop: idle -> proceed; busy -> proceed too (daemon
       // >=0.160 accepts turn/start against a busy thread and serializes it —
       // measured inbox semantics); waiting_approval -> APPROVAL_REQUIRED
@@ -125,13 +137,13 @@ export async function deliverToCodexThread(
           if (writerHeld) {
             throw new MultichatError(
               'CODEX_THREAD_LOCKED',
-              `Codex thread ${threadId} 正被 codex 窗口占用，等待 ${busyTimeoutMs / 1000}s 未释放。` +
+              `Codex thread ${threadId} 正被 codex 窗口占用，等待 ${stallTimeoutMs / 1000}s 未释放。` +
                 '关闭该窗口后重发将立即送达；或改投其它线程。',
             );
           }
           throw new MultichatError(
             'CODEX_THREAD_BUSY_TIMEOUT',
-            `Codex thread ${threadId} did not become reachable within ${busyTimeoutMs}ms.`,
+            `Codex thread ${threadId} did not become reachable within ${stallTimeoutMs}ms.`,
           );
         }
         await sleep(pollIntervalMs);

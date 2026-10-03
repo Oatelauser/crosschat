@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deliverToCodexThread } from '../src/codex/deliver.js';
 import { listCodexThreads } from '../src/codex/discovery.js';
 import { openCodexSession, type CodexSession, type CodexThreadStatus } from '../src/codex/client.js';
@@ -300,6 +300,78 @@ describe('deliverToCodexThread', () => {
     ).rejects.toMatchObject({ code: 'CODEX_PROTOCOL_ERROR' });
     // Never resumed, so no unsubscribe; the session is still closed.
     expect(calls).toEqual(['initialize', 'close']);
+  });
+});
+
+describe('deliverToCodexThread stall budget (B19: park early, never 120s)', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const writerRejection = () =>
+    new CodexRpcRejectedError(-32001, 'thread t1 already has an active writer');
+
+  /** Advance fake time in 1s steps until the attempt settles; report fake ms spent. */
+  async function drive(attempt: Promise<unknown>, budgetMs = 120_000): Promise<number> {
+    let settled = false;
+    let elapsed = 0;
+    attempt.then(
+      () => { settled = true; },
+      () => { settled = true; },
+    );
+    while (!settled && elapsed < budgetMs) {
+      await vi.advanceTimersByTimeAsync(1_000);
+      elapsed += 1_000;
+    }
+    return elapsed;
+  }
+
+  it('parks (CODEX_THREAD_LOCKED) after ~10s when the writer lock never releases', async () => {
+    const { session, calls } = makeFakeSession({ resumeStatuses: [writerRejection()] });
+    const attempt = deliverToCodexThread('t1', 'hello', { sessionFactory: async () => session });
+    let rejection: unknown;
+    attempt.catch((e: unknown) => { rejection = e; });
+    const elapsed = await drive(attempt);
+    expect(rejection).toBeInstanceOf(MultichatError);
+    expect((rejection as MultichatError).code).toBe('CODEX_THREAD_LOCKED');
+    // Bailed at the ~10s stall budget, not the old 120s.
+    expect(elapsed).toBeGreaterThanOrEqual(9_000);
+    expect(elapsed).toBeLessThanOrEqual(10_000);
+    // ~3 poll rounds at the default 3s interval before giving up; zero writes.
+    expect(calls.filter((c) => c.startsWith('resume:'))).toHaveLength(4);
+    expect(calls).not.toContain('turn/start:t1:hello');
+    expect(calls.at(-1)).toBe('close');
+  });
+
+  it('parks (CODEX_THREAD_BUSY_TIMEOUT) after ~10s when the thread never loads', async () => {
+    const { session, calls } = makeFakeSession({ resumeStatuses: ['not_loaded'] });
+    const attempt = deliverToCodexThread('t1', 'hello', { sessionFactory: async () => session });
+    let rejection: unknown;
+    attempt.catch((e: unknown) => { rejection = e; });
+    const elapsed = await drive(attempt);
+    expect(rejection).toBeInstanceOf(MultichatError);
+    expect((rejection as MultichatError).code).toBe('CODEX_THREAD_BUSY_TIMEOUT');
+    expect(elapsed).toBeGreaterThanOrEqual(9_000);
+    expect(elapsed).toBeLessThanOrEqual(10_000);
+    expect(calls).not.toContain('turn/start:t1:hello');
+    // Resume succeeded, so the subscription is released before close.
+    expect(calls).toContain('unsubscribe:t1');
+    expect(calls.at(-1)).toBe('close');
+  });
+
+  it('still delivers when the writer releases within the stall budget (round-2 recovery)', async () => {
+    const { session, calls } = makeFakeSession({ resumeStatuses: [writerRejection(), 'idle'] });
+    const attempt = deliverToCodexThread('t1', 'hello', { sessionFactory: async () => session });
+    let result: unknown;
+    let rejection: unknown;
+    attempt.then(
+      (r: unknown) => { result = r; },
+      (e: unknown) => { rejection = e; },
+    );
+    const elapsed = await drive(attempt, 30_000);
+    expect(rejection).toBeUndefined();
+    expect(result).toEqual({ status: 'accepted', turnId: 'turn-1', queued: false });
+    expect(elapsed).toBe(3_000); // one default-interval poll rode out the stall
+    expect(calls).toContain('turn/start:t1:hello');
   });
 });
 

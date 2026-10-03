@@ -407,3 +407,45 @@ describe('runSend outbox parking (B10)', () => {
     expect(existsSync(join(dir, 'team1111-aaaa.json'))).toBe(false);
   });
 });
+
+describe('runSend receipt probing (B19: queued never probes)', () => {
+  const freshOutbox = (): string => mkdtempSync(join(outboxDir, 'case-'));
+
+  function probingDeps(queued: boolean, probes: Array<[string, string]>): SendDeps {
+    return {
+      ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }),
+      outboxDir: freshOutbox(),
+      deliverCodex: async (threadId, content) => {
+        codexDeliveries.push({ threadId, content });
+        return queued
+          ? { status: 'accepted', turnId: 'turn-1', queued: true }
+          : { status: 'accepted', turnId: 'turn-1' };
+      },
+      confirmReceipt: async (threadId, marker) => {
+        probes.push([threadId, marker]);
+        return 'confirmed';
+      },
+    };
+  }
+
+  it('queued skips the receipt probe and points at status --conversations', async () => {
+    const probes: Array<[string, string]> = [];
+    const out = await runSend({ to: 'workteam', bodyArg: 'behind your turn' }, probingDeps(true, probes));
+    // Never probed: the message sits behind the recipient's running turn, so
+    // the 1.5s probe is structurally unconfirmable.
+    expect(probes).toEqual([]);
+    expect(out).toContain('对方正忙，已入队，本轮结束即处理'); // main queued line retained
+    expect(out).toContain('已入对方服务端队列，本轮结束即处理；终态可查 crosschat status --conversations');
+    expect(out).not.toContain('回执');
+  });
+
+  it('delivered still probes the receipt', async () => {
+    const probes: Array<[string, string]> = [];
+    const out = await runSend({ to: 'workteam', bodyArg: 'straight through' }, probingDeps(false, probes));
+    expect(probes).toHaveLength(1);
+    expect(probes[0]![0]).toBe('team1111-aaaa');
+    expect(probes[0]![1]).toMatch(/^mc1_/);
+    expect(out).toContain('delivered to workteam (turn 1)');
+    expect(out).not.toContain('回执'); // confirmed → no caveat line
+  });
+});

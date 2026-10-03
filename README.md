@@ -162,7 +162,7 @@ crosschat -v | --version | help                     # 版本 / 帮助
 | claude（裸 `claude` 启动） | 任何 | ❌ 无接收许可（换 `crosschat claude` 重启） |
 | codex（daemon ≥0.160） | 窗口开/关 | ✅ 送达（headless 执行；TUI 不实时刷新，翻历史可见） |
 | codex（daemon ≥0.160） | turn 进行中（忙） | ✅ **入队即达**：`queued`（按线程串行，轮结束瞬间落历史并被处理）——与 Claude 收件箱同粒度 |
-| codex（旧 daemon ≤0.157 / `--no-daemon`） | 窗口开 | ⏳ 等待 120s，关窗瞬间送达；超时 `parked` 入发件箱（看门狗自动重投） |
+| codex（旧 daemon ≤0.157 / `--no-daemon`） | 窗口开 | ⏳ 等待 ~10s，关窗瞬间送达；超时 `parked` 入发件箱（看门狗自动重投） |
 | codex | 排队被旧 daemon 拒绝等罕见态 | 📮 `parked` 入发件箱（新消息排队不插队），看门狗每 0.5–5 分钟自动重投 |
 
 **不对称速记**：claude 收发都随意；codex 收信在 0.160+ 开窗关窗均可，关窗永远是最稳路径。

@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### 变更（B19：忙端早退 parked + queued 回执措辞）
+
+- 写者锁持续被拒 / 线程持续 `not_loaded`：等待从 120s 收敛到 ~10s（`STALL_PARK_TIMEOUT_MS`，3s 轮询约 3 轮，排除瞬时抖动）即抛同名错误码落 `parked`，看门狗照常补投
+- `queued` 投递不再做 1.5s 回执探测（排在对方当前 turn 后，结构上不可能确认），输出改为指向 `crosschat status --conversations`
+
+### 记账补漏（B17/B18，随前两批提交，此处补记）
+
+- B17：`status` 会话列表数据层——send-log 尾读 + send-log/conversations/注册表三源聚合
+- B18：`status --conversations` 会话列表视图
+
 ### 变更（B16：审计补缺）
 
 - send-log 条目新增 `from`（发送方身份键）——多 agent 并发时审计需要「谁发的」，此前只有「发给谁」

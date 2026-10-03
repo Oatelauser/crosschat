@@ -175,10 +175,15 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   try {
     const delivered = await deps.deliverCodex(target.id, content);
     const queued = delivered.queued === true;
-    const receipt = await deps.confirmReceipt?.(target.id, replyRef);
+    // Queued sits behind the recipient's running turn: a rollout receipt is
+    // structurally impossible within the probe budget, so do not even look.
+    const receipt = queued ? undefined : await deps.confirmReceipt?.(target.id, replyRef);
     logNow({ to: toName, target: `codex:${target.id}`, status: queued ? 'queued' : 'delivered', turn, replyRef, receipt });
     const out = formatDelivery(args.json === true, toName, turn, replyRef, queued);
     if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now());
+    if (queued) {
+      return `${out}\n已入对方服务端队列，本轮结束即处理；终态可查 crosschat status --conversations`;
+    }
     if (receipt === 'unconfirmed') {
       return `${out}\n回执: 暂未在对方会话记录中确认（可能仍在落盘）；稍后查 send-log.jsonl 或重跑 status`;
     }
