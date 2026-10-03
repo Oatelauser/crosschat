@@ -118,6 +118,7 @@ describe('aggregateSummaries', () => {
     expect(rows).toEqual([
       {
         pair: ['claude/abcdefgh', 'codex/qrstuvwx'],
+        endpoints: ['claude:abcdefghijklmnop', 'codex:qrstuvwxyz12'],
         ref: 'mc1_cd',
         updatedAt: 1,
         turn: null,
@@ -171,6 +172,7 @@ describe('conversationSummaries', () => {
     expect(conversationSummaries({ conversationsFile, sendLogFile, outboxDir })).toEqual([
       {
         pair: ['claude:cs-1', 'worker'],
+        endpoints: ['claude:cs-1', 'codex:t-1'],
         ref: 'mc1_live',
         updatedAt: 5_000,
         turn: 7,

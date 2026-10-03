@@ -57,14 +57,18 @@ describe('parseSendArgs', () => {
 });
 
 describe('parseStatusArgs', () => {
-  it('accepts nothing or --json', () => {
-    expect(parseStatusArgs([])).toEqual({ json: false });
-    expect(parseStatusArgs(['--json'])).toEqual({ json: true });
+  it('accepts nothing, --json, --conversations, or both', () => {
+    expect(parseStatusArgs([])).toEqual({ json: false, conversations: false });
+    expect(parseStatusArgs(['--json'])).toEqual({ json: true, conversations: false });
+    expect(parseStatusArgs(['--conversations'])).toEqual({ json: false, conversations: true });
+    expect(parseStatusArgs(['--conversations', '--json'])).toEqual({ json: true, conversations: true });
   });
 
   it('rejects anything else', () => {
     expectUsage(() => parseStatusArgs(['--to', 'x']), 'only --json');
     expectUsage(() => parseStatusArgs(['--json', '--json']), 'only --json');
+    expectUsage(() => parseStatusArgs(['--conversations', '--conversations']), 'only --json');
+    expectUsage(() => parseStatusArgs(['--wat']), 'only --json');
   });
 });
 

@@ -22,6 +22,12 @@ import { decodeRef } from './ref.js';
 export interface ConversationSummary {
   /** Display names, in pair-key endpoint order (sorted). */
   pair: [string, string];
+  /**
+   * Endpoint identity keys (`claude:<id>` / `codex:<id>` / `human`), in the
+   * same slots as `pair`. Render support: lets a view map `lastFrom` (an
+   * identity key) onto a display-name slot; not part of the JSON contract.
+   */
+  endpoints: [string, string];
   ref: string;
   updatedAt: number;
   /** Max turn across both directions in the tail window; null when the pair has no tail entries. */
@@ -74,8 +80,10 @@ export function aggregateSummaries(
     .map(([key, { ref, updatedAt }]) => {
       const entries = byPair.get(key) ?? [];
       const latest = latestByTs(entries);
+      const [a = '', b = ''] = key.split('\n');
       return {
         pair: namesOf(key, entries),
+        endpoints: [a, b],
         ref,
         updatedAt,
         turn: maxTurn(entries),

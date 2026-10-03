@@ -121,7 +121,7 @@ D:\workspace\demo> codex
 crosschat send --to <名字> --body "<正文>"          # 新消息（名字含空格加引号）
 crosschat send --conversation <ref> --body "<正文>" # 回复（ref 照抄收到的信封）
 echo … | crosschat send --to <名字>                 # 正文走 stdin
-crosschat status [--json]                           # 双侧总览（名字/目录/时间/状态）
+crosschat status [--json] [--conversations]        # 双侧总览（名字/目录/时间/状态）
 crosschat doctor                                    # 一键环境体检（有 ❌ 时退出码 1）
 crosschat install-skills [--dir <根>]               # 安装/更新 agent skill（幂等）
 crosschat claude [任意 claude 参数…]                 # 带接收许可启动 claude（透传）
@@ -129,6 +129,8 @@ crosschat -v | --version | help                     # 版本 / 帮助
 ```
 
 发送输出三种状态：`delivered`（已投递）/ `parked`（对方忙，已入发件箱，看门狗自动重投；输出含队列深度与 mailbox 镜像路径）/ 错误码（见排障）。
+
+`status --conversations` 另看对话总览：每对端点的最近方向、相对时间、轮次、末条状态与滞留数（与 `--json` 组合输出同结构数组）。
 
 ## 📖 对话生命周期（规则总纲）
 

@@ -1,17 +1,23 @@
 import type { ClaudeRegistryScan } from '../claude/registry.js';
 import type { CodexThreadWithMeta } from '../codex/discovery.js';
+import type { ConversationSummary } from '../conversation-summary.js';
 import { MultichatError } from '../errors.js';
 
 /**
  * Read-only `status`: claude registry sessions (name/kind/status/pid/dir) plus
  * codex threads (name/dir/created/originator/id/status). A codex discovery
  * failure degrades to an "unavailable" marker instead of failing the whole
- * command — a side being down is a valid status answer.
+ * command — a side being down is a valid status answer. `--conversations`
+ * switches to the per-pair conversation overview instead.
  */
 
 export interface StatusDeps {
   listClaudeSessions(): ClaudeRegistryScan;
   listCodexThreads(): Promise<CodexThreadWithMeta[]>;
+  /** Per-pair conversation rows for `status --conversations`; omitted → none. */
+  listConversations?(): ConversationSummary[];
+  /** Clock for the conversations view's relative times; omitted → Date.now(). */
+  now?(): number;
 }
 
 /** Last two segments of a session cwd (`D:\workspace\CC\foo` -> `CC\foo`). */
@@ -31,7 +37,12 @@ export function formatCreatedAt(iso: string | undefined): string {
   return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export async function runStatus(deps: StatusDeps, json: boolean): Promise<string> {
+export async function runStatus(
+  deps: StatusDeps,
+  json: boolean,
+  conversations = false,
+): Promise<string> {
+  if (conversations) return conversationsView(deps, json);
   const scan = deps.listClaudeSessions();
   let threads: CodexThreadWithMeta[] | undefined;
   let codexError: string | undefined;
@@ -87,4 +98,41 @@ export async function runStatus(deps: StatusDeps, json: boolean): Promise<string
     }
   }
   return lines.join('\n');
+}
+
+/** `status --conversations`: per-pair rows (direction, freshness, turn, last status, parked). */
+function conversationsView(deps: StatusDeps, json: boolean): string {
+  const rows = deps.listConversations?.() ?? [];
+  if (json) {
+    // Frozen JSON contract: exactly the seven summary fields; `endpoints` is render-only.
+    return JSON.stringify(rows, (key, value) => (key === 'endpoints' ? undefined : value));
+  }
+  const now = deps.now?.() ?? Date.now();
+  const lines = ['会话:'];
+  if (rows.length === 0) lines.push('  (none)');
+  for (const row of rows) {
+    lines.push(
+      `  ${pairArrow(row).padEnd(30)}${formatRelativeTime(row.updatedAt, now).padEnd(12)}` +
+        `turn ${String(row.turn ?? '?').padEnd(4)}${row.lastStatus ?? '未知'}` +
+        `${row.parked > 0 ? `  滞留 ${row.parked}` : ''}`,
+    );
+  }
+  return lines.join('\n');
+}
+
+/** `A → B` along the last message's direction (`lastFrom`'s slot first); `↔` when unknown. */
+function pairArrow(row: ConversationSummary): string {
+  const [a, b] = row.pair;
+  if (row.lastFrom === row.endpoints[0]) return `${a} → ${b}`;
+  if (row.lastFrom === row.endpoints[1]) return `${b} → ${a}`;
+  return `${a} ↔ ${b}`;
+}
+
+/** `X 分钟前` / `X 小时前` / `X 天前` (rounded, cf. doctor); absolute `MM-DD HH:mm` past a week. */
+export function formatRelativeTime(updatedAtMs: number, nowMs: number): string {
+  const minutes = (nowMs - updatedAtMs) / 60_000;
+  if (minutes < 60) return `${Math.max(1, Math.round(minutes))} 分钟前`;
+  if (minutes < 60 * 24) return `${Math.round(minutes / 60)} 小时前`;
+  if (minutes < 60 * 24 * 7) return `${Math.round(minutes / 1_440)} 天前`;
+  return formatCreatedAt(new Date(updatedAtMs).toISOString());
 }

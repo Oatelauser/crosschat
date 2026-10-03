@@ -15,6 +15,7 @@ import { defaultOutboxDir, drain } from './outbox.js';
 import { runWatchdog, spawnWatchdog as ensureWatchdog } from './watchdog.js';
 import { appendSendLog, confirmInRollout, defaultSendLogFile } from './send-log.js';
 import { defaultConversationsFile } from './conversations.js';
+import { conversationSummaries } from './conversation-summary.js';
 import { codexHomeDir } from './codex/rollout-meta.js';
 import { listClaudeSessions } from './claude/registry.js';
 import { deliverToClaudeSession } from './claude/deliver.js';
@@ -33,7 +34,8 @@ commands:
   send --to <name> | --conversation <ref>
                             send a message (--body <text> or stdin);
                             quote <name> if it contains spaces
-  status                    show claude/codex session status
+  status [--conversations]   show claude/codex session status, or per-pair
+                            conversation overview with --conversations
   doctor                    environment health check (exits 1 on any ❌)
   install-skills [--dir <root>]
                             install the agent skill into <root>/.claude and
@@ -74,11 +76,18 @@ export function parseSendArgs(argv: readonly string[]): SendArgs {
   return args;
 }
 
-/** status accepts no options except --json. */
-export function parseStatusArgs(argv: readonly string[]): { json: boolean } {
-  if (argv.length === 0) return { json: false };
-  if (argv.length === 1 && argv[0] === '--json') return { json: true };
-  throw new MultichatError('USAGE', `status takes only --json; got: ${argv.join(' ')}`);
+/** status accepts only --json and --conversations (each at most once). */
+export function parseStatusArgs(argv: readonly string[]): { json: boolean; conversations: boolean } {
+  let json = false;
+  let conversations = false;
+  for (const token of argv) {
+    if (token === '--json' && !json) json = true;
+    else if (token === '--conversations' && !conversations) conversations = true;
+    else {
+      throw new MultichatError('USAGE', `status takes only --json/--conversations; got: ${argv.join(' ')}`);
+    }
+  }
+  return { json, conversations };
 }
 
 /** install-skills accepts only --dir <root> (space or = separated). */
@@ -133,6 +142,7 @@ function realStatusDeps(): StatusDeps {
   return {
     listClaudeSessions: () => listClaudeSessions(),
     listCodexThreads: () => listCodexThreads(),
+    listConversations: () => conversationSummaries(),
   };
 }
 
@@ -241,9 +251,9 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     }
     try {
-      const { json } = parseStatusArgs(rest);
+      const { json, conversations } = parseStatusArgs(rest);
       await drainAtEntry();
-      const output = await runStatus(realStatusDeps(), json);
+      const output = await runStatus(realStatusDeps(), json, conversations);
       process.stdout.write(`${output}\n`);
       return 0;
     } catch (err) {
