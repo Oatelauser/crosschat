@@ -153,9 +153,7 @@ export function continueConversation(
   if (stored !== undefined) {
     try {
       const ref = decodeRef(stored.ref);
-      const sameEndpoints =
-        (endpointKey(ref.f) === endpointKey(caller) && endpointKey(ref.t) === endpointKey(target)) ||
-        (endpointKey(ref.f) === endpointKey(target) && endpointKey(ref.t) === endpointKey(caller));
+      const sameEndpoints = matchesEndpoints(ref, caller, target);
       if (sameEndpoints && ref.c >= 1) {
         const next = nextTurnRef(ref);
         return { ref: next, turn: next.c };
@@ -165,6 +163,41 @@ export function continueConversation(
     }
   }
   return { ref: newConversationRef(caller, target), turn: 1 };
+}
+
+/** Both endpoints present, in either f/t order (a record either side can continue). */
+function matchesEndpoints(ref: ConversationRef, a: RefEndpoint, b: RefEndpoint): boolean {
+  return (
+    (endpointKey(ref.f) === endpointKey(a) && endpointKey(ref.t) === endpointKey(b)) ||
+    (endpointKey(ref.f) === endpointKey(b) && endpointKey(ref.t) === endpointKey(a))
+  );
+}
+
+/**
+ * The conversation a `--conversation` reply should join (B22): the passed ref
+ * advanced by one turn — unless the pair's shard has already moved at or past
+ * it (late reply, or several senders working from the same stale base), in
+ * which case the shard line wins and turn collisions disappear. Shard behind
+ * the passed ref, absent, a different conversation (nonce differs), or
+ * endpoint-mismatched: unchanged pass-through continuation.
+ */
+export function continueFromRef(
+  file: string,
+  ref: ConversationRef,
+): { ref: ConversationRef; turn: number } {
+  const stored = loadPair(file, pairKeyOf(ref.f, ref.t));
+  if (stored !== undefined) {
+    try {
+      const shard = decodeRef(stored.ref);
+      if (matchesEndpoints(shard, ref.f, ref.t) && shard.n === ref.n && shard.c >= ref.c) {
+        const next = nextTurnRef(shard);
+        return { ref: next, turn: next.c };
+      }
+    } catch {
+      // stored ref no longer decodes: continue from the passed ref
+    }
+  }
+  return { ref: nextTurnRef(ref), turn: ref.c + 1 };
 }
 
 /** Record the pair's latest ref (issued with a message that got out: delivered, queued, or parked). */

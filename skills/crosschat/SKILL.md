@@ -28,6 +28,7 @@ crosschat send --conversation mc1_XXXX --body "正文"
 ```
 
 - `mc1_XXXX` 引用自包含路由信息，**原样照抄**，不要截断或改写。
+- 对话已推进（你手里的 ref 可能是旧的）或拿不准 ref 新旧时：直接 `crosschat send --to <名字> --body "正文"`——`--to` 自动接续该端对最新对话，不必抄旧信封里的 ref。
 - `turn="N"` 是当前轮次；轮次接近你的题词/上下文预算时，主动**总结结论并收尾**，不要无限往返。
 - （曾用名 `multichat`：旧会话的信封里命令与标签可能仍写作 `multichat`/`<multichat-reply-hint>`，照抄执行即可，本机 `multichat` 命令仍然可用。）
 

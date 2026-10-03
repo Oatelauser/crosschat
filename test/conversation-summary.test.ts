@@ -125,6 +125,7 @@ describe('aggregateSummaries', () => {
         lastStatus: null,
         lastFrom: null,
         parked: 0,
+        receipt: null,
       },
     ]);
   });
@@ -183,6 +184,34 @@ describe('aggregateSummaries', () => {
     expect(rows[0]!.turn).toBe(4);
     expect(rows[0]!.lastFrom).toBeNull();
   });
+
+  it('surfaces the latest delivered entry receipt, null for non-delivered or absent (B22)', () => {
+    const pairs = { [keyAB]: { ref: 'mc1_ab', updatedAt: 1 } };
+    const unconfirmed = aggregateSummaries(
+      pairs,
+      [entry({ from: 'claude:cs-1', turn: 2, receipt: 'unconfirmed' })],
+      new Map(),
+    );
+    expect(unconfirmed[0]!.receipt).toBe('unconfirmed');
+    const confirmed = aggregateSummaries(
+      pairs,
+      [entry({ from: 'claude:cs-1', turn: 3, receipt: 'confirmed' })],
+      new Map(),
+    );
+    expect(confirmed[0]!.receipt).toBe('confirmed');
+    // Non-delivered latest (receipt fields never ride these) and a delivered
+    // entry that never probed (claude target, pre-B14 log) both read null.
+    expect(
+      aggregateSummaries(pairs, [entry({ from: 'claude:cs-1', status: 'queued', turn: 4 })], new Map())[0]!.receipt,
+    ).toBeNull();
+    expect(
+      aggregateSummaries(
+        pairs,
+        [entry({ from: 'claude:cs-1', target: 'claude:cs-2', turn: 5 })],
+        new Map(),
+      )[0]!.receipt,
+    ).toBeNull();
+  });
 });
 
 describe('conversationSummaries', () => {
@@ -212,6 +241,7 @@ describe('conversationSummaries', () => {
         lastStatus: 'delivered',
         lastFrom: 'claude:cs-1',
         parked: 2,
+        receipt: null, // delivered but never probed (no receipt on the entry)
       },
     ]);
   });

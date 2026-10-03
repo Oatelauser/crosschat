@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { MAX_BODY_BYTES, runSend, type SendArgs, type SendDeps } from '../src/commands/send.js';
-import { decodeRef, encodeRef, newConversationRef } from '../src/ref.js';
+import { decodeRef, encodeRef, newConversationRef, nextTurnRef } from '../src/ref.js';
 import { MultichatError } from '../src/errors.js';
 import { drain, park } from '../src/outbox.js';
 import type { SendLogEntry } from '../src/send-log.js';
@@ -449,5 +449,37 @@ describe('runSend receipt probing (B19: queued never probes)', () => {
     expect(probes[0]![1]).toMatch(/^mc1_/);
     expect(out).toContain('delivered to workteam (turn 1)');
     expect(out).not.toContain('回执'); // confirmed → no caveat line
+  });
+});
+
+describe('runSend --conversation stale-ref guard (B22)', () => {
+  const freshState = (): string =>
+    join(mkdtempSync(join(outboxDir, 'state-')), 'conversations.json');
+
+  it('two repliers from the same old base get distinct turns, not a collision', async () => {
+    const state = freshState();
+    const base = { ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }), conversationStateFile: state };
+    // claude alpha opens: turn 1, shard line c=1, envelope carries that ref.
+    const first = await runSend({ to: 'workteam', bodyArg: 'one' }, base);
+    expect(first).toContain('(turn 1)');
+    const baseRef = first.match(REF_RE)![0];
+    // codex replies via the copied ref: turn 2, shard advances to c=2.
+    const reply = await runSend(
+      { conversation: baseRef, bodyArg: 'two' },
+      { ...base, env: { CODEX_THREAD_ID: 'team1111-aaaa' } },
+    );
+    expect(reply).toContain('(turn 2)');
+    // claude alpha answers from the SAME stale baseRef: turn 3 (was 2 before B22 — collision).
+    const late = await runSend({ conversation: baseRef, bodyArg: 'three' }, base);
+    expect(late).toContain('(turn 3)');
+    const lateRef = decodeRef(late.match(REF_RE)![0]);
+    expect(lateRef.c).toBe(3);
+  });
+
+  it('without wired state the --conversation path keeps the exact legacy nextTurnRef behavior', async () => {
+    const deps = makeDeps({ CODEX_THREAD_ID: 'team1111-aaaa' });
+    const ref = newConversationRef({ p: 'claude', id: 'cs-alpha' }, { p: 'codex', id: 'team1111-aaaa' });
+    const out = await runSend({ conversation: encodeRef(nextTurnRef(ref)), bodyArg: 'legacy' }, deps);
+    expect(out).toContain('(turn 3)'); // passed c=2 -> 3, no state consulted
   });
 });

@@ -3,8 +3,8 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { continueConversation, pairKeyOf, recordConversation } from '../src/conversations.js';
-import { encodeRef, newConversationRef } from '../src/ref.js';
+import { continueConversation, continueFromRef, pairKeyOf, recordConversation } from '../src/conversations.js';
+import { encodeRef, newConversationRef, nextTurnRef } from '../src/ref.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-conv-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -120,5 +120,66 @@ describe('sharded storage (B20)', () => {
     mkdirSync(dirname(shard), { recursive: true });
     writeFileSync(shard, 'not json', 'utf8');
     expect(continueConversation(file, claudeA, codexB).turn).toBe(1);
+  });
+});
+
+describe('continueFromRef (B22: stale --conversation refs cannot roll back)', () => {
+  it('follows the shard line when it has moved at or past the passed ref', () => {
+    const file = freshFile();
+    const base = newConversationRef(claudeA, codexB); // c=1
+    recordConversation(file, nextTurnRef(nextTurnRef(base)), 1_000); // shard line at c=3
+    const got = continueFromRef(file, nextTurnRef(base)); // stale reply base c=2
+    expect(got.turn).toBe(4); // shard c + 1, not stale c + 1
+    expect(got.ref.n).toBe(base.n);
+    // Equal line (the normal case: replying to the latest message) is the same result.
+    const exact = continueFromRef(file, nextTurnRef(nextTurnRef(base)));
+    expect(exact.turn).toBe(4);
+  });
+
+  it('keeps the passed ref when it is ahead of the shard line', () => {
+    const file = freshFile();
+    const base = newConversationRef(claudeA, codexB);
+    recordConversation(file, nextTurnRef(base), 1_000); // shard at c=2
+    const passed = nextTurnRef(nextTurnRef(base)); // c=3, ahead of the shard
+    const got = continueFromRef(file, passed);
+    expect(got.turn).toBe(4);
+    expect(got.ref.n).toBe(base.n);
+  });
+
+  it('keeps the passed ref when no record exists', () => {
+    const ref = newConversationRef(claudeA, codexB);
+    const got = continueFromRef(freshFile(), ref);
+    expect(got.turn).toBe(2);
+    expect(got.ref).toEqual(nextTurnRef(ref));
+  });
+
+  it('keeps the passed ref when the shard holds a different conversation or endpoints', () => {
+    // Same pair, different conversation (nonce): the reply stays in its own thread.
+    const file = freshFile();
+    const passed = newConversationRef(claudeA, codexB); // c=1
+    recordConversation(file, newConversationRef(claudeA, codexB), 1_000); // other nonce, c=1
+    const got = continueFromRef(file, passed);
+    expect(got.turn).toBe(2);
+    expect(got.ref.n).toBe(passed.n);
+    // Endpoint-mismatched shard content (hand-written): pass-through as well.
+    const alien = newConversationRef(claudeC, codexD);
+    const alienShard = shardPath(file, pairKeyOf(claudeA, codexB));
+    writeFileSync(alienShard, JSON.stringify({ pair: pairKeyOf(claudeA, codexB), ref: encodeRef(alien), updatedAt: 1 }), 'utf8');
+    const alienGot = continueFromRef(file, passed);
+    expect(alienGot.turn).toBe(2);
+    expect(alienGot.ref.n).toBe(passed.n);
+  });
+
+  it('multi-sender repeats of one old base no longer collide on the turn number', () => {
+    const file = freshFile();
+    const base = newConversationRef(claudeA, codexB); // c=1, the envelope everyone copies
+    recordConversation(file, base, 1_000);
+    // Sender X replies from the base: joins at c=2, shard advances.
+    const x = continueFromRef(file, base);
+    recordConversation(file, x.ref, 2_000);
+    // Sender Y replies from the SAME stale base: must land on c=3, not c=2.
+    const y = continueFromRef(file, base);
+    expect(y.turn).toBe(3);
+    expect(y.ref.n).toBe(base.n);
   });
 });

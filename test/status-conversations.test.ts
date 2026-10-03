@@ -29,6 +29,7 @@ function deps(
   pairs: Record<string, { ref: string; updatedAt: number }>,
   tail: SendLogEntry[] = [],
   parked = 0,
+  confirmReceipt?: (threadId: string, marker: string) => Promise<'confirmed' | 'unconfirmed'>,
 ): StatusDeps {
   const dir = mkdtempSync(join(root, 'case-'));
   const conversationsFile = join(dir, 'conversations.json');
@@ -43,6 +44,7 @@ function deps(
     listClaudeSessions: () => ({ sessions: [], malformed: 0 }),
     listCodexThreads: () => Promise.resolve([]),
     listConversations: () => conversationSummaries({ conversationsFile, sendLogFile, outboxDir }),
+    confirmReceipt,
     now: () => NOW,
   };
 }
@@ -116,7 +118,7 @@ describe('status --conversations (text)', () => {
 });
 
 describe('status --conversations --json', () => {
-  it('outputs the bare seven-field array (endpoints stripped)', async () => {
+  it('outputs the bare eight-field array (endpoints stripped; B22 added receipt)', async () => {
     const d = deps(
       { [keyAB]: { ref: 'mc1_x', updatedAt: NOW - 3 * 60_000 } },
       [entry({ from: 'codex:t-9', to: 'Alice', target: 'claude:sc-1', status: 'parked', turn: 4 })],
@@ -128,6 +130,7 @@ describe('status --conversations --json', () => {
       'lastStatus',
       'pair',
       'parked',
+      'receipt',
       'ref',
       'turn',
       'updatedAt',
@@ -140,12 +143,91 @@ describe('status --conversations --json', () => {
       lastStatus: 'parked',
       lastFrom: 'codex:t-9',
       parked: 0,
+      receipt: null,
     });
   });
 
   it('pure --json keeps the {claude, codex} shape with the conversations dep wired', async () => {
     const parsed = JSON.parse(await runStatus(deps({ [keyAB]: { ref: 'r', updatedAt: NOW } }), true));
     expect(Object.keys(parsed).sort()).toEqual(['claude', 'codex']);
+  });
+});
+
+describe('status --conversations receipt recheck (B22)', () => {
+  it('re-probes an unconfirmed codex delivery with the row ref and flips to 已确认', async () => {
+    const probes: Array<[string, string]> = [];
+    const d = deps(
+      { [keyAB]: { ref: 'mc1_probe', updatedAt: NOW - 60_000 } },
+      [entry({ from: 'claude:sc-1', turn: 2, receipt: 'unconfirmed', replyRef: 'mc1_probe' })],
+      0,
+      async (threadId, marker) => {
+        probes.push([threadId, marker]);
+        return 'confirmed';
+      },
+    );
+    const row = await firstRow(d);
+    expect(probes).toEqual([['t-9', 'mc1_probe']]); // codex endpoint of the pair, row ref as marker
+    expect(row).toContain('delivered');
+    expect(row).toContain('已确认');
+    expect(row).not.toContain('回执未确认');
+    // JSON reflects the post-recheck verdict, not the stale log value.
+    const parsed = JSON.parse(await runStatus(d, true, true)) as Array<{ receipt: string }>;
+    expect(parsed[0]!.receipt).toBe('confirmed');
+  });
+
+  it('keeps 回执未确认 when the recheck still cannot see the rollout write', async () => {
+    const d = deps(
+      { [keyAB]: { ref: 'mc1_slow', updatedAt: NOW - 60_000 } },
+      [entry({ from: 'claude:sc-1', turn: 1, receipt: 'unconfirmed', replyRef: 'mc1_slow' })],
+      0,
+      async () => 'unconfirmed',
+    );
+    const row = await firstRow(d);
+    expect(row).toContain('delivered');
+    expect(row).toContain('回执未确认');
+  });
+
+  it('skips the recheck for a pair with no codex endpoint (claude has no rollout)', async () => {
+    const probes: Array<[string, string]> = [];
+    const keyAAC = pairKeyOf(claudeA, { p: 'claude', id: 'sc-2' });
+    const d = deps(
+      { [keyAAC]: { ref: 'mc1_cc', updatedAt: NOW - 60_000 } },
+      [entry({ from: 'claude:sc-1', target: 'claude:sc-2', turn: 3, receipt: 'unconfirmed', replyRef: 'mc1_cc' })],
+      0,
+      async (threadId, marker) => {
+        probes.push([threadId, marker]);
+        return 'confirmed';
+      },
+    );
+    const row = await firstRow(d);
+    expect(probes).toEqual([]); // nothing probed
+    expect(row).toContain('delivered');
+    expect(row).toContain('回执未确认'); // log value passes through untouched
+  });
+
+  it('does not probe rows that are already confirmed or not delivered', async () => {
+    const probes: Array<[string, string]> = [];
+    const confirm = async (threadId: string, marker: string) => {
+      probes.push([threadId, marker]);
+      return 'confirmed';
+    };
+    const d = deps(
+      {
+        [keyAB]: { ref: 'mc1_ok', updatedAt: NOW - 60_000 },
+        [pairKeyOf(claudeA, { p: 'claude', id: 'sc-3' })]: { ref: 'mc1_q', updatedAt: NOW - 120_000 },
+      },
+      [
+        entry({ ts: '2026-10-03T09:00:00.000Z', from: 'claude:sc-1', turn: 1, receipt: 'confirmed', replyRef: 'mc1_ok' }),
+        entry({ ts: '2026-10-03T08:00:00.000Z', from: 'claude:sc-1', target: 'claude:sc-3', status: 'queued', turn: 2 }),
+      ],
+      0,
+      confirm,
+    );
+    const text = await runStatus(d, false, true);
+    expect(probes).toEqual([]);
+    expect(text).toContain('已确认');
+    expect(text).not.toContain('回执未确认');
+    expect(text).toContain('queued');
   });
 });
 

@@ -15,7 +15,7 @@ import {
 import { resolveTargetByName } from '../resolve.js';
 import { composeEnvelope } from '../envelope.js';
 import type { SendLogEntry } from '../send-log.js';
-import { continueConversation, recordConversation } from '../conversations.js';
+import { continueConversation, continueFromRef, recordConversation } from '../conversations.js';
 import {
   decodeRef,
   encodeRef,
@@ -92,8 +92,16 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
         'This conversation was started by a human; there is no agent session to deliver a reply to.',
       );
     }
-    turn = ref.c + 1;
-    newRef = nextTurnRef(ref);
+    // B22: the reply-hint ref is a snapshot of send time; when the pair's
+    // stored line has already moved at or past it (late reply, parallel
+    // senders from one old base), the stored line wins — no turn collisions.
+    // Unwired state keeps the exact legacy nextTurnRef behavior.
+    const continued =
+      deps.conversationStateFile === undefined
+        ? { ref: nextTurnRef(ref), turn: ref.c + 1 }
+        : continueFromRef(deps.conversationStateFile, ref);
+    newRef = continued.ref;
+    turn = continued.turn;
   } else {
     const threads = await deps.listCodexThreads();
     // Guard above ensures exactly one of --to/--conversation; here it is --to.

@@ -45,7 +45,7 @@ export function composeEnvelope(input: EnvelopeInput): string {
     `<cross-session-message from-name="${escapeAttr(fromName)}" turn="${input.turn}"${aliasAttr}>\n` +
     `<crosschat-reply-hint conversation="${input.ref}" reply-as="${escapeAttr(input.toName)}">` +
     `回复请运行: crosschat send --conversation ${input.ref} --body "<你的回复>"</crosschat-reply-hint>\n` +
-    `新话题: crosschat send --to <名字> --body "..."；超 16KiB 请写文件后只发路径\n` +
+    `新话题或对话已推进时: crosschat send --to <名字> --body "..."（--to 自动接续该端对最近对话）；超 16KiB 请写文件后只发路径\n` +
     `${body}\n` +
     `</cross-session-message>`
   );

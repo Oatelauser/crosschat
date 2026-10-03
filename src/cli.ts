@@ -143,6 +143,10 @@ function realStatusDeps(): StatusDeps {
     listClaudeSessions: () => listClaudeSessions(),
     listCodexThreads: () => listCodexThreads(),
     listConversations: () => conversationSummaries(),
+    // B22: bounded recheck budget (2 polls × 200ms per unconfirmed row) so the
+    // conversations view stays snappy while catching slow rollout flushes.
+    confirmReceipt: (threadId, marker) =>
+      confirmInRollout(codexHomeDir(), threadId, marker, { tries: 2, delayMs: 200 }),
   };
 }
 

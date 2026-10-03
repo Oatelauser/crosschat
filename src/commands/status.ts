@@ -16,6 +16,12 @@ export interface StatusDeps {
   listCodexThreads(): Promise<CodexThreadWithMeta[]>;
   /** Per-pair conversation rows for `status --conversations`; omitted → none. */
   listConversations?(): ConversationSummary[];
+  /**
+   * Live rollout receipt re-probe for `status --conversations` (B22): rows that
+   * left the sender "unconfirmed" get one bounded recheck here. Injected with a
+   * small poll budget (cli wires 2 tries × 200ms) so status never slows down.
+   */
+  confirmReceipt?(threadId: string, marker: string): Promise<'confirmed' | 'unconfirmed'>;
   /** Clock for the conversations view's relative times; omitted → Date.now(). */
   now?(): number;
 }
@@ -100,24 +106,46 @@ export async function runStatus(
   return lines.join('\n');
 }
 
-/** `status --conversations`: per-pair rows (direction, freshness, turn, last status, parked). */
-function conversationsView(deps: StatusDeps, json: boolean): string {
+/** `status --conversations`: per-pair rows (direction, freshness, turn, last status, receipt, parked). */
+async function conversationsView(deps: StatusDeps, json: boolean): Promise<string> {
   const rows = deps.listConversations?.() ?? [];
+  await recheckReceipts(rows, deps);
   if (json) {
-    // Frozen JSON contract: exactly the seven summary fields; `endpoints` is render-only.
+    // Frozen JSON contract: exactly the eight summary fields (B22 added `receipt`);
+    // `endpoints` is render-only.
     return JSON.stringify(rows, (key, value) => (key === 'endpoints' ? undefined : value));
   }
   const now = deps.now?.() ?? Date.now();
   const lines = ['会话:'];
   if (rows.length === 0) lines.push('  (none)');
   for (const row of rows) {
+    const receipt = row.receipt === 'confirmed' ? '  已确认' : row.receipt === 'unconfirmed' ? '  回执未确认' : '';
     lines.push(
       `  ${pairArrow(row).padEnd(30)}${formatRelativeTime(row.updatedAt, now).padEnd(12)}` +
         `turn ${String(row.turn ?? '?').padEnd(4)}${row.lastStatus ?? '未知'}` +
-        `${row.parked > 0 ? `  滞留 ${row.parked}` : ''}`,
+        `${row.parked > 0 ? `  滞留 ${row.parked}` : ''}${receipt}`,
     );
   }
   return lines.join('\n');
+}
+
+/**
+ * One live re-probe per row that left the sender unconfirmed (B22): the
+ * rollout write often lands after send's own 1.5s budget, so status is the
+ * natural second look. Only delivered+unconfirmed rows whose pair has a codex
+ * endpoint are probed (claude has no rollout concept); any verdict other than
+ * 'confirmed' leaves the row as it was — 'unconfirmed' means "not seen", the
+ * row already says so.
+ */
+async function recheckReceipts(rows: ConversationSummary[], deps: StatusDeps): Promise<void> {
+  const confirm = deps.confirmReceipt;
+  if (confirm === undefined) return;
+  for (const row of rows) {
+    if (row.lastStatus !== 'delivered' || row.receipt !== 'unconfirmed') continue;
+    const codexId = row.endpoints.find((endpoint) => endpoint.startsWith('codex:'))?.slice('codex:'.length);
+    if (codexId === undefined) continue;
+    if ((await confirm(codexId, row.ref)) === 'confirmed') row.receipt = 'confirmed';
+  }
 }
 
 /** `A → B` along the last message's direction (`lastFrom`'s slot first); `↔` when unknown. */

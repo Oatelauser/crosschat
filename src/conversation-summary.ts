@@ -35,6 +35,12 @@ export interface ConversationSummary {
   lastStatus: SendLogEntry['status'] | null;
   lastFrom: string | null;
   parked: number;
+  /**
+   * Rollout receipt of the pair's latest entry (B22): 'confirmed'/'unconfirmed'
+   * when that entry is a delivered codex send that probed; null = no record or
+   * the latest entry is not a delivered codex delivery (claude has no rollout).
+   */
+  receipt: SendLogEntry['receipt'] | null;
 }
 
 export interface ConversationSummaryDeps {
@@ -90,6 +96,7 @@ export function aggregateSummaries(
         lastStatus: latest?.status ?? null,
         lastFrom: latest?.from ?? null,
         parked: parked.get(key) ?? 0,
+        receipt: latest?.status === 'delivered' ? (latest.receipt ?? null) : null,
       };
     });
 }

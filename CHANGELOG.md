@@ -2,6 +2,15 @@
 
 本项目的全部显著变更记录于此。格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 变更（B22：视图实时回执确认 + 旧 ref 防倒退）
+
+- `status --conversations` 聚合行新增第 8 字段 `receipt`（`'confirmed' | 'unconfirmed' | null`，取自该对 send-log 最新一条 delivered 消息的 rollout 回执；null = 无记录或非 delivered）——**JSON 契约加键**：原七字段变八字段，`endpoints` 仍为渲染专用不透出
+- 视图实时复核：渲染前对「delivered 且 unconfirmed 且对端含 codex」的行用该行 ref 现场调一次 `confirmInRollout`（2 次轮询 ×200ms 预算，不拖慢 status；claude 端点无 rollout 概念跳过），查到即翻转为已确认——慢落盘的送达时刻不再无处可查。文本视图 delivered 行行尾追加 `已确认` / `回执未确认`；JSON 的 `receipt` 反映复核后结果
+- `--conversation` 旧 ref 防倒退（机制）：`conversations.ts` 新增 `continueFromRef`——分片线 c ≥ 传入 ref c 且同对话（nonce 相同）且端点匹配时以分片线为准（`nextTurnRef(分片ref)`），消除迟到回复 / 多人从同一旧 base 续造成的 turn 撞号与倒退分叉（实测三条消息全 turn 27）；分片落后 / 缺失 / 不同对话 / 端点不匹配时维持按传入 ref 续的原行为；`--to` 路径（`continueConversation`）语义不动
+- 教学少抄旧 ref：信封教学第二行改为「新话题或对话已推进时: `crosschat send --to <名字> --body "..."`（--to 自动接续该端对最近对话）；超 16KiB 请写文件后只发路径」（两行结构不变）；SKILL.md「收到消息后如何回复」补一条：对话已推进 / 拿不准 ref 新旧时直接 `--to`，不必抄旧信封的 ref
+
 ## [1.2.0] - 2026-10-03
 
 ### 变更（B21：exec 线程可见 + 发送端显示名）

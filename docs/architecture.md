@@ -50,7 +50,7 @@
 <cross-session-message from-name="发送方" turn="N">
 <crosschat-reply-hint conversation="mc1_<base64url>" reply-as="接收方">
 回复请运行: crosschat send --conversation mc1_… --body "<你的回复>"</crosschat-reply-hint>
-新话题: crosschat send --to <名字> …；超 16KiB 请写文件后只发路径
+新话题或对话已推进时: crosschat send --to <名字> …（--to 自动接续该端对最近对话）；超 16KiB 请写文件后只发路径
 <正文（保留字标签已中性化，防伪造信封）>
 </cross-session-message>
 ```
