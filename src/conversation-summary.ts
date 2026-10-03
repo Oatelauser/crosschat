@@ -140,13 +140,21 @@ function namesOf(pairKey: string, entries: SendLogEntry[]): [string, string] {
 
 /**
  * Newest evidence wins: an entry addressing the endpoint carries its display
- * name (`to`); otherwise a sending entry supplies its identity key (`from`,
- * raw); no entries at all → shortened descriptor (id8 style, cf. status.ts).
+ * name (`to`); otherwise a sending entry carries the sender's display name
+ * (`fromName`, B21 — before the peer ever replies); otherwise a sending entry
+ * supplies its identity key (`from`, raw — pre-B21 entries); no entries at
+ * all → shortened descriptor (id8 style, cf. status.ts).
  */
 function nameOf(endpoint: string, entries: SendLogEntry[]): string {
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i]!;
     if (entry.target === endpoint && entry.to !== '') return entry.to;
+  }
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i]!;
+    if (entry.from === endpoint && entry.fromName !== undefined && entry.fromName !== '') {
+      return entry.fromName;
+    }
   }
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i]!;

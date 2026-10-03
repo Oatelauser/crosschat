@@ -23,6 +23,13 @@ export interface SendLogEntry {
   ts: string;
   /** Sender identity key ("claude:<id>" / "codex:<id>" / "human"); audit needs who, not just whom. */
   from?: string;
+  /**
+   * Display name of the sender (B21): recorded at the source so the
+   * conversations view can render the sender by name before the peer has
+   * ever replied (only a reply's `to` carried a sender name before).
+   * Absent on pre-B21 entries; readers must fall back to `from`.
+   */
+  fromName?: string;
   /** Display name of the recipient. */
   to: string;
   /** 'claude:<sessionId>' | 'codex:<threadId>'. */

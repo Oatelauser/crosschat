@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EventEmitter } from 'node:events';
+import { Readable, Writable } from 'node:stream';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { deliverToCodexThread } from '../src/codex/deliver.js';
 import { listCodexThreads } from '../src/codex/discovery.js';
 import { openCodexSession, type CodexSession, type CodexThreadStatus } from '../src/codex/client.js';
 import { CodexRpcRejectedError } from '../src/codex/rpc.js';
-import { sanitizeProxyEnv } from '../src/codex/transport.js';
+import { sanitizeProxyEnv, type CodexMessageChannel } from '../src/codex/transport.js';
 import { MultichatError } from '../src/errors.js';
 
 describe('sanitizeProxyEnv', () => {
@@ -400,5 +403,81 @@ describe('listCodexThreads (read-only discovery)', () => {
       },
     });
     await expect(factory()).rejects.toMatchObject({ code: 'CODEX_PROXY_SPAWN_FAILED' });
+  });
+});
+
+/**
+ * Wire-level check of the real thread/list request openCodexSession sends:
+ * a fake child process + fake channel, so the JSON-RPC frames are captured
+ * verbatim and answered like the app-server would.
+ */
+class FakeProxyChild extends EventEmitter {
+  readonly pid = undefined;
+  exitCode: number | null = 0; // waitForExit resolves immediately on close
+  signalCode: string | null = null;
+  readonly stdin = new Writable({ write: (_chunk, _enc, callback) => callback() });
+  readonly stdout = new Readable({ read() { /* no proxy output */ } });
+  readonly stderr = new Readable({ read() { /* no proxy output */ } });
+}
+
+function makeFakeWire(): {
+  channel: CodexMessageChannel;
+  frames: Array<{ id: number; method: string; params: Record<string, unknown> }>;
+} {
+  const frames: Array<{ id: number; method: string; params: Record<string, unknown> }> = [];
+  let listener: ((payload: string) => void) | undefined;
+  const channel: CodexMessageChannel = {
+    send(payload: string): void {
+      const frame = JSON.parse(payload) as { id: number; method: string; params: Record<string, unknown> };
+      frames.push(frame);
+      if (frame.id !== undefined) {
+        const result =
+          frame.method === 'thread/list'
+            ? { data: [{ id: 't-exec', name: 'execbox', status: { type: 'idle' } }] }
+            : {};
+        listener?.(JSON.stringify({ id: frame.id, result }));
+      }
+    },
+    onMessage(l: (payload: string) => void): () => void {
+      listener = l;
+      return () => {
+        listener = undefined;
+      };
+    },
+    onClose(): () => void {
+      return () => undefined;
+    },
+    async close(): Promise<void> {},
+    get stderrText(): string {
+      return '';
+    },
+  };
+  return { channel, frames };
+}
+
+describe('openCodexSession thread/list wire shape (B21: exec visibility)', () => {
+  it('requests sourceKinds cli+vscode+exec so codex-exec threads are listed', async () => {
+    const { channel, frames } = makeFakeWire();
+    const session = await openCodexSession({
+      spawnProxy: () => {
+        const child = new FakeProxyChild();
+        setImmediate(() => child.emit('spawn')); // real spawns are async
+        return child as unknown as ChildProcessWithoutNullStreams;
+      },
+      channelFactory: () => Promise.resolve(channel),
+    })();
+    try {
+      await session.initialize();
+      const threads = await session.listThreads();
+      expect(threads).toEqual([{ id: 't-exec', name: 'execbox', status: 'idle' }]);
+      const list = frames.find((f) => f.method === 'thread/list');
+      expect(list?.params).toMatchObject({
+        archived: false,
+        sortKey: 'recency_at',
+        sourceKinds: ['cli', 'vscode', 'exec'],
+      });
+    } finally {
+      await session.close();
+    }
   });
 });

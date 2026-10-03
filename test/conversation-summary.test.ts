@@ -139,6 +139,39 @@ describe('aggregateSummaries', () => {
     expect(rows[0]!.turn).toBeNull();
   });
 
+  it('resolves a never-addressed sender from its recorded fromName (B21)', () => {
+    const rows = aggregateSummaries(
+      { [keyAB]: { ref: 'mc1_ab', updatedAt: 1 } },
+      [
+        entry({ ts: '2026-10-03T05:00:00.000Z', from: 'claude:cs-1', fromName: '代码优化3', turn: 1 }),
+        // Newer pre-B21 line from the same endpoint (no fromName): the older
+        // fromName is still the newest name evidence for that endpoint.
+        entry({ ts: '2026-10-03T06:00:00.000Z', from: 'claude:cs-1', turn: 2 }),
+      ],
+      new Map(),
+    );
+    expect(rows[0]!.pair).toEqual(['代码优化3', 'worker']);
+  });
+
+  it('still prefers a to-addressing entry over fromName (B21)', () => {
+    const rows = aggregateSummaries(
+      { [keyAB]: { ref: 'mc1_ab', updatedAt: 1 } },
+      [
+        entry({ ts: '2026-10-03T05:00:00.000Z', from: 'claude:cs-1', fromName: '代码优化3', turn: 1 }),
+        entry({
+          ts: '2026-10-03T06:00:00.000Z',
+          from: 'codex:t-1',
+          to: 'Alice',
+          target: 'claude:cs-1',
+          status: 'queued',
+          turn: 2,
+        }),
+      ],
+      new Map(),
+    );
+    expect(rows[0]!.pair).toEqual(['Alice', 'worker']);
+  });
+
   it('attributes pre-B16 entries (no from) via their embedded replyRef', () => {
     const ref = newConversationRef(claudeA, codexB);
     const rows = aggregateSummaries(

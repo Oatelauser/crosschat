@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### 变更（B21：exec 线程可见 + 发送端显示名）
+
+- codex 发现的 `thread/list` 显式传 `sourceKinds: ["cli","vscode","exec"]`：`codex exec` 建的线程（source=exec）进入 status 清单；此前服务端默认只收 interactive 源（cli/vscode），exec 线程永不可见（B19/B20 演练 §5.1）
+- send-log 条目新增可选 `fromName`（发送方显示名，发送时源头记账）：conversations 视图在"对端还没回信 addressed 我"时不再把发送端渲染成裸身份键；旧条目无 `fromName` 走原路径，行为不变
+
 ### 变更（B20：conversations 按端对分片）
 
 - 会话连续性状态从单一全局 `conversations.json`（每次发送整读整写、无锁，任意两对并发发送毫秒窗内互相覆盖）改为 `conversations/` 目录下每端对一个 `<sha256(对键)>.json` 分片（照 `rate/` 先例，tmp+rename 原子写）——跨端对并发发送互不相干

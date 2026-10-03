@@ -103,10 +103,15 @@ export function openCodexSession(options: CodexSessionOptions = {}): CodexSessio
         rpc.notify('initialized', {});
       },
       async listThreads(): Promise<CodexThreadSummary[]> {
+        // Absent sourceKinds, the server defaults to interactive-only sources
+        // (cli/vscode — app-server filters.rs INTERACTIVE_SESSION_SOURCES), so
+        // `codex exec` threads (source=exec, B19/B20 drill §5.1) would never be
+        // listed. Legal values = ThreadSourceKind enum (v2 protocol schema).
         const result = await rpc.request('thread/list', {
           archived: false,
           limit: 20,
           sortKey: 'recency_at',
+          sourceKinds: ['cli', 'vscode', 'exec'],
           useStateDbOnly: true,
         });
         if (!isRecord(result) || !Array.isArray(result.data)) {

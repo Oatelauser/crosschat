@@ -298,6 +298,8 @@ describe('runSend --to conversation continuity (B15)', () => {
       'claude:cs-alpha',
       'claude:cs-alpha',
     ]);
+    // B21: entries also carry the sender's display name (source-side accounting).
+    expect(entries.map((entry) => entry.fromName)).toEqual(['alpha', 'alpha', 'alpha']);
   });
 
   it('a parked send still records the conversation for later continuation', async () => {

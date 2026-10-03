@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { appendSendLog, confirmInRollout, defaultSendLogFile } from '../src/send-log.js';
+import { appendSendLog, confirmInRollout, defaultSendLogFile, readSendLogTail } from '../src/send-log.js';
 import { findRolloutFile } from '../src/codex/rollout-meta.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-sendlog-'));
@@ -36,6 +36,22 @@ describe('appendSendLog', () => {
     expect(() => appendSendLog(join(freshDir(), 'nope', 'deep', 'x.jsonl'), {
       ts: 'x', to: 'a', target: 'claude:1', status: 'delivered',
     })).not.toThrow();
+  });
+
+  it('round-trips the optional fromName field through the tail reader (B21)', () => {
+    const file = join(freshDir(), 'send-log.jsonl');
+    appendSendLog(file, {
+      ts: '2026-10-03T06:00:00.000Z',
+      from: 'claude:cs-1',
+      fromName: '代码优化3',
+      to: 'workteam',
+      target: 'codex:t-1',
+      status: 'delivered',
+      turn: 2,
+    });
+    expect(readSendLogTail(file)).toEqual([
+      expect.objectContaining({ from: 'claude:cs-1', fromName: '代码优化3', status: 'delivered' }),
+    ]);
   });
 
   it('defaultSendLogFile lives under the crosschat state root', () => {

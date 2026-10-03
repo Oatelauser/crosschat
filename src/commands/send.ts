@@ -116,9 +116,9 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
 
   const replyRef = encodeRef(newRef);
   const fromName = displayName(caller);
-  /** Every exit path logs who sent what to whom (B14, +from in B16). */
+  /** Every exit path logs who sent what to whom (B14, +from in B16, +fromName in B21). */
   const logNow = (fields: Omit<SendLogEntry, 'ts'>): void => {
-    deps.appendLog?.(logEntry(deps, { from: identityKey(caller), ...fields }));
+    deps.appendLog?.(logEntry(deps, { from: identityKey(caller), fromName, ...fields }));
   };
 
   if (target.p === 'claude') {
