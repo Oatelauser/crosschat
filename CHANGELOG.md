@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### 变更（B14：发送存根与 rollout 回执，整改第三步）
+
+- 发送存根：每次 send 的最终结果（delivered/queued/parked/failed + 时间/对端/轮次/错误码）追加写入 `%LOCALAPPDATA%\crosschat\send-log.jsonl`（仅元数据，不含消息体）——工具层超时转后台的发送事后可查
+- rollout 回执：codex 投递被接受后，轮询对方会话记录文件确认消息（按唯一 reply-ref）真实落入对话历史，回执写入 send-log；短暂未确认时输出提示行
+- `findRolloutFile` 从 rollout-meta 导出（threadId → rollout 路径）
+
 ### 变更（B13：忙时入队——codex 收件箱语义，整改第二步）
 
 - **忙线程直接入队**：daemon ≥0.160 上对运行中的 turn 调 `turn/start` 会被接受并按线程串行排队，当前轮结束瞬间落历史并被处理（实测证据：一次性探针线程 01a10009-b314，两条探针消息在计数轮结束后同刻落历史并被依次回答）。`deliverToCodexThread` 不再对 busy 轮询 120s 后超时，busy 即投递，返回 `queued: true`；`send` 输出新状态 `queued to <名字>（对方正忙，已入队，本轮结束即处理）`

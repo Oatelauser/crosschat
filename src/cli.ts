@@ -13,6 +13,8 @@ import { runClaudeWrapper } from './commands/claude-wrapper.js';
 import { defaultRateDir } from './rate-limit.js';
 import { defaultOutboxDir, drain } from './outbox.js';
 import { runWatchdog, spawnWatchdog as ensureWatchdog } from './watchdog.js';
+import { appendSendLog, confirmInRollout, defaultSendLogFile } from './send-log.js';
+import { codexHomeDir } from './codex/rollout-meta.js';
 import { listClaudeSessions } from './claude/registry.js';
 import { deliverToClaudeSession } from './claude/deliver.js';
 import { listCodexThreads } from './codex/discovery.js';
@@ -120,6 +122,8 @@ function realSendDeps(stdinText: string | undefined): SendDeps {
     outboxDir: defaultOutboxDir(),
     now: () => Date.now(),
     spawnWatchdog: () => ensureWatchdog(defaultOutboxDir()),
+    appendLog: (entry) => appendSendLog(defaultSendLogFile(), entry),
+    confirmReceipt: (threadId, marker) => confirmInRollout(codexHomeDir(), threadId, marker),
   };
 }
 

@@ -197,6 +197,8 @@ crosschat -v | --version | help                     # 版本 / 帮助
 
 **通道类**：`CODEX_PROXY_SPAWN_FAILED`（看 stderr 摘录；通常 daemon 未跑）· `CODEX_THREAD_LOCKED`/`CODEX_THREAD_BUSY_TIMEOUT`（已自动转 `parked` 入发件箱，无需重发）· `OUTBOX_FULL`（每线程 200 条积压上限，读 mailbox 镜像取回内容）· `CODEX_APPROVAL_REQUIRED`（**工具永不代答审批**）· `CLAUDE_PIPE_*`/`CODEX_*UNCERTAIN`（写入中途失败状态不明——**勿盲目重发**，先 `status` 核实）
 
+**发送审计**：每次发送的最终结果（delivered/queued/parked/failed、时间、对端、回执）追加记录在 `%LOCALAPPDATA%\crosschat\send-log.jsonl`；codex 投递附 rollout 回执（消息已确认落入对方会话历史 = `receipt: confirmed`）。命令超时转后台后结果同样在案，事后可查。
+
 ## ⚠️ 边界与限制
 
 单条 ≤16KiB；每对端点 30 条/60s；发件箱每线程 200 条（满时读 `%LOCALAPPDATA%\crosschat\mailbox\<线程ID>.md` 取回内容）；信任边界=同一 Windows 用户；接收许可仅 `crosschat claude` 启动的会话。

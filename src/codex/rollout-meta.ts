@@ -132,3 +132,9 @@ export function lookupRolloutMetas(
 export function lookupRolloutMeta(codexHome: string, threadId: string): RolloutMeta | undefined {
   return lookupRolloutMetas(codexHome, [threadId]).get(threadId);
 }
+
+/** Rollout file path for one thread id; undefined when no rollout exists. */
+export function findRolloutFile(codexHome: string, threadId: string): string | undefined {
+  if (threadId.length === 0) return undefined;
+  return findRolloutFiles(join(codexHome, 'sessions'), new Set([threadId])).get(threadId);
+}

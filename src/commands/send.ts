@@ -14,6 +14,7 @@ import {
 } from '../identity.js';
 import { resolveTargetByName } from '../resolve.js';
 import { composeEnvelope } from '../envelope.js';
+import type { SendLogEntry } from '../send-log.js';
 import {
   decodeRef,
   encodeRef,
@@ -48,6 +49,10 @@ export interface SendDeps {
   now(): number;
   /** Detached retry loop spawner (B12); optional so tests stay process-free. */
   spawnWatchdog?(): void;
+  /** Sender-side send log (B14); optional so tests stay file-free. */
+  appendLog?(entry: SendLogEntry): void;
+  /** Rollout receipt probe for codex deliveries (B14). */
+  confirmReceipt?(threadId: string, marker: string): Promise<'confirmed' | 'unconfirmed'>;
 }
 
 export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
@@ -112,10 +117,16 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     checkAndRecord(deps.rateDir, rateKey(identityKey(caller), `claude:${target.id}`), deps.now());
     const toName = claudeSession.name ?? shortId('claude', claudeSession.sessionId);
     const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body });
-    await deps.deliverClaude(
-      { pid: claudeSession.pid, messagingSocketPath: claudeSession.messagingSocketPath },
-      content,
-    );
+    try {
+      await deps.deliverClaude(
+        { pid: claudeSession.pid, messagingSocketPath: claudeSession.messagingSocketPath },
+        content,
+      );
+    } catch (err) {
+      deps.appendLog?.(logEntry(deps, { to: toName, target: `claude:${target.id}`, status: 'failed', code: errorCode(err), turn, replyRef }));
+      throw err;
+    }
+    deps.appendLog?.(logEntry(deps, { to: toName, target: `claude:${target.id}`, status: 'delivered', turn, replyRef }));
     return formatDelivery(args.json === true, toName, turn, replyRef, false);
   }
 
@@ -146,7 +157,16 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   }
   try {
     const delivered = await deps.deliverCodex(target.id, content);
-    return formatDelivery(args.json === true, toName, turn, replyRef, delivered.queued === true);
+    const queued = delivered.queued === true;
+    const receipt = await deps.confirmReceipt?.(target.id, replyRef);
+    deps.appendLog?.(
+      logEntry(deps, { to: toName, target: `codex:${target.id}`, status: queued ? 'queued' : 'delivered', turn, replyRef, receipt }),
+    );
+    const out = formatDelivery(args.json === true, toName, turn, replyRef, queued);
+    if (receipt === 'unconfirmed') {
+      return `${out}\n回执: 暂未在对方会话记录中确认（可能仍在落盘）；稍后查 send-log.jsonl 或重跑 status`;
+    }
+    return out;
   } catch (err) {
     // Busy/locked = definitively not delivered (deliver.ts polls before giving
     // up): park the composed envelope verbatim; the watchdog retries it.
@@ -155,10 +175,23 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
       (err.code === 'CODEX_THREAD_BUSY_TIMEOUT' || err.code === 'CODEX_THREAD_LOCKED')
     ) {
       const queue = parkNow();
+      deps.appendLog?.(logEntry(deps, { to: toName, target: `codex:${target.id}`, status: 'parked', turn, replyRef }));
       return formatParked(args.json === true, toName, turn, replyRef, queue, mailboxPath);
     }
+    deps.appendLog?.(logEntry(deps, { to: toName, target: `codex:${target.id}`, status: 'failed', code: errorCode(err), turn, replyRef }));
     throw err;
   }
+}
+
+function logEntry(
+  deps: SendDeps,
+  fields: Omit<SendLogEntry, 'ts'>,
+): SendLogEntry {
+  return { ...fields, ts: new Date(deps.now()).toISOString() };
+}
+
+function errorCode(err: unknown): string {
+  return err instanceof MultichatError ? err.code : 'INTERNAL';
 }
 
 function resolveTargetArgs(args: SendArgs): void {
