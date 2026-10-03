@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { listClaudeSessions, type ClaudeRegistryScan } from '../claude/registry.js';
 import { resolveClaudeExe } from '../claude/resolve-exe.js';
 import { resolveCodexExecutable } from '../codex/transport.js';
-import { defaultOutboxDir, outboxSummary } from '../outbox.js';
+import { defaultOutboxDir, mailboxFileFor, outboxSummary } from '../outbox.js';
+import { watchdogStatus } from '../watchdog.js';
 
 /**
  * `crosschat doctor` (B11): one-shot environment health check. Every probe is
@@ -28,7 +29,11 @@ export interface DoctorDeps {
   /** Undefined = missing/unreadable. */
   readFile(path: string): string | undefined;
   homeDir(): string;
-  listOutbox(): { threadId: string; count: number }[];
+  listOutbox(): { threadId: string; count: number; oldestParkedAt?: number }[];
+  /** Outbox watchdog probe (B12); defaults to the real lockfile check. */
+  watchdogRunning?(): { running: boolean; pid?: number };
+  /** Clock for parked-age display; defaults to Date.now. */
+  now?(): number;
   /** Repo's skills/crosschat/SKILL.md content; undefined = not locatable (skip compare). */
   repoSkillContent(): string | undefined;
 }
@@ -166,14 +171,20 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
     );
   } else ok('✅ 无双身份残留');
 
-  // 7. outbox state (informational)
+  // 7. outbox state + watchdog + mailbox (informational)
   const parked = deps.listOutbox();
   if (parked.length === 0) {
     ok('✅ 发件箱空（无暂存消息）');
   } else {
-    for (const { threadId, count } of parked) {
+    const watchdog = deps.watchdogRunning?.() ?? watchdogStatus(defaultOutboxDir());
+    const nowMs = deps.now?.() ?? Date.now();
+    for (const { threadId, count, oldestParkedAt } of parked) {
       pass += 1;
-      lines.push(`⏳ 线程 ${threadId.slice(0, 8)} 暂存 ${count} 条（将在对方空闲时自动补投）`);
+      const age = oldestParkedAt === undefined ? '' : `，最旧 ${Math.max(1, Math.round((nowMs - oldestParkedAt) / 60_000))} 分钟`;
+      lines.push(
+        `⏳ 线程 ${threadId.slice(0, 8)} 暂存 ${count} 条${age}（看门狗${watchdog.running ? '运行中' : '未运行'}；` +
+          `滞留内容: ${mailboxFileFor(defaultOutboxDir(), threadId)}）`,
+      );
     }
   }
 

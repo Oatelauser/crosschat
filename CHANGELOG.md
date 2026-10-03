@@ -2,6 +2,26 @@
 
 本项目的全部显著变更记录于此。格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 变更（B13：忙时入队——codex 收件箱语义，整改第二步）
+
+- **忙线程直接入队**：daemon ≥0.160 上对运行中的 turn 调 `turn/start` 会被接受并按线程串行排队，当前轮结束瞬间落历史并被处理（实测证据：一次性探针线程 01a10009-b314，两条探针消息在计数轮结束后同刻落历史并被依次回答）。`deliverToCodexThread` 不再对 busy 轮询 120s 后超时，busy 即投递，返回 `queued: true`；`send` 输出新状态 `queued to <名字>（对方正忙，已入队，本轮结束即处理）`
+- 旧 daemon 拒绝排队型 turn/start 时映射为 `CODEX_THREAD_BUSY_TIMEOUT`，落发件箱由看门狗重投（行为兜底）
+- 投递子进程环境剥离双身份残留（`CLAUDE_CODE_*` / `CODEX_*` 会话变量），根治 CALLER_IDENTITY_CONFLICT 的环境侧诱因
+- README 新增 daemon 依赖说明（版本要求、未运行时的退化行为、重启后需重新 start）
+
+### 变更（B12：发件箱活性与诚实语义，2026-10-02 双智能体事故整改第一步）
+
+- 排涝看门狗：`parked` 后自动派生独立的短期重投进程（`__drain --watch`），30s→60s→120s→300s 退避，箱空即退——不再依赖「碰巧有人调 crosschat 且碰巧空闲」
+- 队列纪律：发件箱非空时新消息直接入队，不再借 120s 轮询插队越过更早的滞留（FIFO 保序）
+- 排涝公平化：busy/locked 属线程级状态，首次失败即中止该线程本轮，不再把整轮预算烧在必然失败的后续条目上（修复队尾 12 小时 attempts=0 的饿死）
+- 诚实文案：`parked` 输出队列深度与 mailbox 镜像路径；`OUTBOX_FULL` 指向镜像文件而非「线程疑似已死」
+- mailbox 镜像：每条寄存/送达/丢弃追加到 `%LOCALAPPDATA%\crosschat\mailbox\<线程ID>.md`，滞留内容随时人读
+- 并发安全：park/drain 按线程加锁（lockfile，60s 过期抢占），看门狗单实例（pid+心跳锁）
+- 上限放宽：每线程 20 → 200 条；doctor 显示每线程深度/最旧年龄/看门狗状态/镜像路径
+- 兼容：pre-B12 无 id 的旧寄存条目读取时稳定合成 id，可继续排涝
+
 ## [1.0.1] - 2026-10-02
 
 - README 移除曾用名注记；首验 Trusted Publisher (OIDC) 自动发布管线

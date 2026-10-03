@@ -3,7 +3,22 @@ import { deliverToCodexThread } from '../src/codex/deliver.js';
 import { listCodexThreads } from '../src/codex/discovery.js';
 import { openCodexSession, type CodexSession, type CodexThreadStatus } from '../src/codex/client.js';
 import { CodexRpcRejectedError } from '../src/codex/rpc.js';
+import { sanitizeProxyEnv } from '../src/codex/transport.js';
 import { MultichatError } from '../src/errors.js';
+
+describe('sanitizeProxyEnv', () => {
+  it('strips dual-identity residue from both sides before spawning the proxy', () => {
+    const clean = sanitizeProxyEnv({
+      PATH: 'keep',
+      CLAUDE_CODE_MESSAGING_SOCKET: 'sock',
+      CLAUDE_CODE_MESSAGING_TOKEN: 'token',
+      CLAUDE_CODE_SESSION_ID: 'cs-1',
+      CODEX_THREAD_ID: 't-1',
+      CODEX_SESSION_ID: 's-1',
+    } as NodeJS.ProcessEnv);
+    expect(clean).toEqual({ PATH: 'keep' });
+  });
+});
 
 /**
  * Fake CodexSession scripting the whole app-server surface. Records every
@@ -80,7 +95,7 @@ describe('deliverToCodexThread', () => {
       ...fast,
       sessionFactory: factoryFor(async () => session),
     });
-    expect(result).toEqual({ status: 'accepted', turnId: 'turn-1' });
+    expect(result).toEqual({ status: 'accepted', turnId: 'turn-1', queued: false });
     expect(calls).toEqual([
       'initialize',
       'resume:t1',
@@ -90,20 +105,37 @@ describe('deliverToCodexThread', () => {
     ]);
   });
 
-  it('waits for a busy thread to become idle, then delivers', async () => {
+  it('queues a turn immediately on a busy thread (daemon >=0.160 inbox semantics)', async () => {
     const { session, calls } = makeFakeSession({ resumeStatuses: ['busy', 'busy', 'idle'] });
     const result = await deliverToCodexThread('t1', 'hello', {
       busyTimeoutMs: 1_000,
       pollIntervalMs: 5,
       sessionFactory: factoryFor(async () => session),
     });
-    expect(result.status).toBe('accepted');
-    expect(calls.filter((c) => c.startsWith('resume:'))).toHaveLength(3);
+    expect(result).toEqual({ status: 'accepted', turnId: 'turn-1', queued: true });
+    // No busy polling: exactly one resume, then the queued turn/start.
+    expect(calls.filter((c) => c.startsWith('resume:'))).toHaveLength(1);
     expect(calls).toContain('turn/start:t1:hello');
   });
 
-  it('times out with CODEX_THREAD_BUSY_TIMEOUT when the thread stays busy', async () => {
-    const { session, calls } = makeFakeSession({ resumeStatuses: ['busy'] });
+  it('parks (CODEX_THREAD_BUSY_TIMEOUT) when an old daemon rejects the queued turn/start', async () => {
+    const { session, calls } = makeFakeSession({
+      resumeStatuses: ['busy'],
+      turnError: new CodexRpcRejectedError(-32600, 'thread is busy'),
+    });
+    await expect(
+      deliverToCodexThread('t1', 'hello', {
+        ...fast,
+        sessionFactory: factoryFor(async () => session),
+      }),
+    ).rejects.toMatchObject({ code: 'CODEX_THREAD_BUSY_TIMEOUT' });
+    expect(calls).toContain('turn/start:t1:hello');
+    expect(calls).toContain('unsubscribe:t1');
+    expect(calls).toContain('close');
+  });
+
+  it('times out with CODEX_THREAD_BUSY_TIMEOUT when the thread never loads', async () => {
+    const { session, calls } = makeFakeSession({ resumeStatuses: ['not_loaded'] });
     await expect(
       deliverToCodexThread('t1', 'hello', {
         busyTimeoutMs: 30,
@@ -112,7 +144,7 @@ describe('deliverToCodexThread', () => {
       }),
     ).rejects.toMatchObject({ code: 'CODEX_THREAD_BUSY_TIMEOUT' });
     expect(calls).not.toContain('turn/start:t1:hello');
-    // The busy thread was resumed (subscribed), so it must be unsubscribed.
+    // The thread was resumed (subscribed), so it must be unsubscribed.
     expect(calls).toContain('unsubscribe:t1');
     expect(calls).toContain('close');
   });
@@ -206,7 +238,7 @@ describe('deliverToCodexThread', () => {
       pollIntervalMs: 5,
       sessionFactory: factoryFor(async () => session),
     });
-    expect(result).toEqual({ status: 'accepted', turnId: 'turn-1' });
+    expect(result).toEqual({ status: 'accepted', turnId: 'turn-1', queued: false });
     expect(calls).toEqual([
       'initialize',
       'resume:t1',

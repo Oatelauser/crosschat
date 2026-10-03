@@ -12,6 +12,7 @@ import { runDoctor } from './commands/doctor.js';
 import { runClaudeWrapper } from './commands/claude-wrapper.js';
 import { defaultRateDir } from './rate-limit.js';
 import { defaultOutboxDir, drain } from './outbox.js';
+import { runWatchdog, spawnWatchdog as ensureWatchdog } from './watchdog.js';
 import { listClaudeSessions } from './claude/registry.js';
 import { deliverToClaudeSession } from './claude/deliver.js';
 import { listCodexThreads } from './codex/discovery.js';
@@ -118,6 +119,7 @@ function realSendDeps(stdinText: string | undefined): SendDeps {
     rateDir: defaultRateDir(),
     outboxDir: defaultOutboxDir(),
     now: () => Date.now(),
+    spawnWatchdog: () => ensureWatchdog(defaultOutboxDir()),
   };
 }
 
@@ -193,6 +195,20 @@ async function main(argv: string[]): Promise<number> {
   }
   if (command === 'help' || command === '--help') {
     process.stdout.write(usage);
+    return 0;
+  }
+  // Hidden maintenance entry (B12): one drain round by hand, or the watchdog
+  // loop when spawned with --watch. Not in usage on purpose.
+  if (command === '__drain') {
+    if (rest.includes('--watch')) {
+      await runWatchdog(defaultOutboxDir(), defaultRateDir(), {
+        deliverCodex: (threadId, content, busyTimeoutMs) =>
+          deliverToCodexThread(threadId, content, { busyTimeoutMs }),
+        err: (line) => process.stderr.write(`${line}\n`),
+      });
+    } else {
+      await drainAtEntry();
+    }
     return 0;
   }
   if (command === 'send') {

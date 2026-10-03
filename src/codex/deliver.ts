@@ -9,12 +9,15 @@ import { CodexRpcRejectedError } from './rpc.js';
 
 /**
  * One-shot delivery of a message into a Codex thread. Every operation runs the
- * full fresh flow: spawn proxy -> initialize -> resume -> disposition ->
- * turn/start -> confirm inProgress -> unsubscribe -> close. When resume is
- * rejected because a TUI window holds the writer, delivery polls until the
- * window releases it (busyTimeoutMs), then delivers headless; on timeout it
- * fails with CODEX_THREAD_LOCKED. Never retried otherwise; approvals are never
- * answered on the user's behalf.
+ * full fresh flow: spawn proxy (-> daemon control socket) -> initialize ->
+ * resume -> disposition -> turn/start -> confirm inProgress -> unsubscribe ->
+ * close. Busy threads no longer wait: on daemon >=0.160 a turn/start against
+ * a busy thread is ACCEPTED and queued (serialized per thread; measured
+ * 2026-10-03, probe thread 01a10009-b314), landing in history the moment the
+ * running turn ends — inbox semantics. Polling remains only for a
+ * not-yet-loaded thread and for the legacy writer-held rejection (old daemon /
+ * non-attached TUI), which fails with CODEX_THREAD_LOCKED on timeout.
+ * Approvals are never answered on the user's behalf.
  */
 
 export interface CodexDeliveryOptions {
@@ -25,7 +28,7 @@ export interface CodexDeliveryOptions {
   pollIntervalMs?: number;
 }
 
-export type CodexDeliveryResult = { status: 'accepted'; turnId: string };
+export type CodexDeliveryResult = { status: 'accepted'; turnId: string; queued?: boolean };
 
 const DEFAULT_BUSY_TIMEOUT_MS = 120_000;
 const DEFAULT_POLL_INTERVAL_MS = 3_000;
@@ -61,15 +64,18 @@ export async function deliverToCodexThread(
   }
 
   let resumed = false;
+  /** True when the turn/start below queues onto a running turn (daemon >=0.160). */
+  let queuedOnBusyThread = false;
   try {
     try {
       await session.initialize();
       const deadline = Date.now() + busyTimeoutMs;
-      // Disposition loop: idle -> proceed; busy or TUI active-writer -> poll
-      // for release (both release into the same headless delivery);
-      // waiting_approval -> APPROVAL_REQUIRED (never answered for the user);
-      // system_error -> fail; not_loaded keeps polling (the server loads
-      // asynchronously after resume).
+      // Disposition loop: idle -> proceed; busy -> proceed too (daemon
+      // >=0.160 accepts turn/start against a busy thread and serializes it —
+      // measured inbox semantics); waiting_approval -> APPROVAL_REQUIRED
+      // (never answered for the user); system_error -> fail; a TUI
+      // active-writer rejection or not_loaded keep polling (legacy old-daemon
+      // path; the server also loads asynchronously after resume).
       let writerHeld = false;
       for (;;) {
         let status: CodexThreadStatus | undefined;
@@ -98,7 +104,10 @@ export async function deliverToCodexThread(
         }
         if (status !== undefined) {
           resumed = true;
-          if (status === 'idle') break;
+          if (status === 'idle' || status === 'busy') {
+            queuedOnBusyThread = status === 'busy';
+            break;
+          }
           if (status === 'waiting_approval') {
             throw new MultichatError(
               'CODEX_APPROVAL_REQUIRED',
@@ -108,7 +117,8 @@ export async function deliverToCodexThread(
           if (status === 'system_error') {
             throw protocolFailure(`Codex thread ${threadId} is in system_error state.`, undefined);
           }
-          // Resume succeeded, so no writer lock; the thread is merely busy.
+          // Resume succeeded, so no writer lock; only not_loaded remains,
+          // which resolves asynchronously — keep polling.
           writerHeld = false;
         }
         if (Date.now() + pollIntervalMs > deadline) {
@@ -121,7 +131,7 @@ export async function deliverToCodexThread(
           }
           throw new MultichatError(
             'CODEX_THREAD_BUSY_TIMEOUT',
-            `Codex thread ${threadId} stayed busy longer than ${busyTimeoutMs}ms.`,
+            `Codex thread ${threadId} did not become reachable within ${busyTimeoutMs}ms.`,
           );
         }
         await sleep(pollIntervalMs);
@@ -147,6 +157,15 @@ export async function deliverToCodexThread(
       turn = await session.startTurn(threadId, content);
     } catch (err) {
       if (err instanceof CodexRpcRejectedError) {
+        // An old daemon may reject a turn/start against a busy thread where
+        // 0.160+ queues it: surface as BUSY so the outbox parks it.
+        if (queuedOnBusyThread) {
+          throw new MultichatError(
+            'CODEX_THREAD_BUSY_TIMEOUT',
+            `Codex thread ${threadId} is busy and this daemon does not queue turns: ${err.message}`,
+            { cause: err },
+          );
+        }
         throw new MultichatError(
           'CODEX_TURN_REJECTED',
           `Codex rejected the turn for thread ${threadId}: ${err.message}`,
@@ -167,7 +186,7 @@ export async function deliverToCodexThread(
         `Turn for thread ${threadId} returned unexpected status: ${turn.status}.`,
       );
     }
-    return { status: 'accepted', turnId: turn.id };
+    return { status: 'accepted', turnId: turn.id, queued: queuedOnBusyThread };
   } finally {
     if (resumed) {
       await session.unsubscribe(threadId).catch(() => undefined);

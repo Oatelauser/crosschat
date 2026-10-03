@@ -136,7 +136,8 @@ describe('runDoctor', () => {
       makeDeps({ listOutbox: () => [{ threadId: 'abcdefgh1234', count: 3 }] }),
     );
     expect(report.failed).toBe(false);
-    expect(report.output).toContain('⏳ 线程 abcdefgh 暂存 3 条（将在对方空闲时自动补投）');
+    expect(report.output).toContain('⏳ 线程 abcdefgh 暂存 3 条');
+    expect(report.output).toContain('看门狗未运行');
   });
 
   it('exposes exit code semantics: failed iff any ❌ was reported', () => {

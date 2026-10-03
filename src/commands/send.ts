@@ -4,7 +4,7 @@ import type { ClaudeRegistryScan } from '../claude/registry.js';
 import type { CodexThreadSummary } from '../codex/client.js';
 import type { ClaudeDeliveryTarget } from '../claude/deliver.js';
 import { checkAndRecord, rateKey } from '../rate-limit.js';
-import { park } from '../outbox.js';
+import { mailboxFileFor, outboxCount, park } from '../outbox.js';
 import {
   endpointOfIdentity,
   identityKey,
@@ -41,11 +41,13 @@ export interface SendDeps {
   listClaudeSessions(): ClaudeRegistryScan;
   listCodexThreads(): Promise<CodexThreadSummary[]>;
   deliverClaude(target: ClaudeDeliveryTarget, content: string): Promise<{ status: 'delivered' }>;
-  deliverCodex(threadId: string, content: string): Promise<{ status: 'accepted'; turnId: string }>;
+  deliverCodex(threadId: string, content: string): Promise<{ status: 'accepted'; turnId: string; queued?: boolean }>;
   rateDir: string;
   /** Outbox root for parking busy/locked codex deliveries (%LOCALAPPDATA%/crosschat/outbox). */
   outboxDir: string;
   now(): number;
+  /** Detached retry loop spawner (B12); optional so tests stay process-free. */
+  spawnWatchdog?(): void;
 }
 
 export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
@@ -114,7 +116,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
       { pid: claudeSession.pid, messagingSocketPath: claudeSession.messagingSocketPath },
       content,
     );
-    return formatDelivery(args.json === true, toName, turn, replyRef);
+    return formatDelivery(args.json === true, toName, turn, replyRef, false);
   }
 
   // Codex delivers by threadId; a missing thread surfaces as a codex adapter error.
@@ -123,21 +125,40 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   const threadName = threads.find((thread) => thread.id === target.id)?.name;
   const toName = threadName ?? shortId('codex', target.id);
   const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body });
+  const parkNow = (): number => {
+    park(
+      deps.outboxDir,
+      target.id,
+      { envelope: content, toName, callerKey: identityKey(caller) },
+      deps.now(),
+    );
+    deps.spawnWatchdog?.();
+    return outboxCount(deps.outboxDir, target.id);
+  };
+  const mailboxPath = mailboxFileFor(deps.outboxDir, target.id);
+  // Queue discipline (B12): when older items are still parked, a fresh send
+  // joins the queue instead of jumping it — order stays FIFO even though a
+  // direct attempt could squeeze through an idle window the drain missed.
+  const queuedBefore = outboxCount(deps.outboxDir, target.id);
+  if (queuedBefore > 0) {
+    const queue = parkNow();
+    return formatParked(args.json === true, toName, turn, replyRef, queue, mailboxPath);
+  }
   try {
-    await deps.deliverCodex(target.id, content);
+    const delivered = await deps.deliverCodex(target.id, content);
+    return formatDelivery(args.json === true, toName, turn, replyRef, delivered.queued === true);
   } catch (err) {
     // Busy/locked = definitively not delivered (deliver.ts polls before giving
-    // up): park the composed envelope verbatim; the next CLI call drains it.
+    // up): park the composed envelope verbatim; the watchdog retries it.
     if (
       err instanceof MultichatError &&
       (err.code === 'CODEX_THREAD_BUSY_TIMEOUT' || err.code === 'CODEX_THREAD_LOCKED')
     ) {
-      park(deps.outboxDir, target.id, { envelope: content, toName, callerKey: identityKey(caller) }, deps.now());
-      return formatParked(args.json === true, toName, turn, replyRef);
+      const queue = parkNow();
+      return formatParked(args.json === true, toName, turn, replyRef, queue, mailboxPath);
     }
     throw err;
   }
-  return formatDelivery(args.json === true, toName, turn, replyRef);
 }
 
 function resolveTargetArgs(args: SendArgs): void {
@@ -173,16 +194,30 @@ function shortId(prefix: string, id: string): string {
   return `${prefix}/${id.slice(0, 8)}`;
 }
 
-function formatDelivery(json: boolean, toName: string, turn: number, replyRef: string): string {
+function formatDelivery(json: boolean, toName: string, turn: number, replyRef: string, queued: boolean): string {
   if (json) {
-    return JSON.stringify({ status: 'delivered', to: toName, turn, replyRef });
+    return JSON.stringify({ status: 'delivered', to: toName, turn, replyRef, queued });
+  }
+  if (queued) {
+    return `queued to ${toName} (turn ${turn}; 对方正忙，已入队，本轮结束即处理)\nreply-ref: ${replyRef}`;
   }
   return `delivered to ${toName} (turn ${turn})\nreply-ref: ${replyRef}`;
 }
 
-function formatParked(json: boolean, toName: string, turn: number, replyRef: string): string {
+function formatParked(
+  json: boolean,
+  toName: string,
+  turn: number,
+  replyRef: string,
+  queue: number,
+  mailboxPath: string,
+): string {
   if (json) {
-    return JSON.stringify({ status: 'parked', to: toName, turn, replyRef });
+    return JSON.stringify({ status: 'parked', to: toName, turn, replyRef, queue, mailbox: mailboxPath });
   }
-  return `parked to ${toName} (busy; 将在对方空闲后由任意 crosschat 调用自动补投)\nreply-ref: ${replyRef}`;
+  return [
+    `已寄存给 ${toName}（对方忙，未送达）。队列共 ${queue} 条，看门狗每 0.5–5 分钟自动重试，无需手动 status。`,
+    `人工随时可读滞留内容: ${mailboxPath}`,
+    `reply-ref: ${replyRef}`,
+  ].join('\n');
 }

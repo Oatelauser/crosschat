@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { MAX_BODY_BYTES, runSend, type SendArgs, type SendDeps } from '../src/commands/send.js';
 import { decodeRef, encodeRef, newConversationRef } from '../src/ref.js';
 import { MultichatError } from '../src/errors.js';
-import { drain } from '../src/outbox.js';
+import { drain, park } from '../src/outbox.js';
 import type { ClaudeRegistryScan, ClaudeSessionEntry } from '../src/claude/registry.js';
 import type { CodexThreadSummary } from '../src/codex/client.js';
 
@@ -287,12 +287,13 @@ describe('runSend outbox parking (B10)', () => {
     };
   }
 
-  it('parks on CODEX_THREAD_BUSY_TIMEOUT and returns the parked output (exit 0 path)', async () => {
+  it('parks on CODEX_THREAD_BUSY_TIMEOUT with the honest B12 output (exit 0 path)', async () => {
     const out = await runSend(
       { to: 'workteam', bodyArg: 'stuck message' },
       failingDeps('CODEX_THREAD_BUSY_TIMEOUT', freshOutbox()),
     );
-    expect(out).toContain('parked to workteam (busy; 将在对方空闲后由任意 crosschat 调用自动补投)');
+    expect(out).toContain('已寄存给 workteam（对方忙，未送达）');
+    expect(out).toContain('看门狗每 0.5–5 分钟自动重试');
     expect(out).toContain('reply-ref: mc1_');
   });
 
@@ -301,7 +302,27 @@ describe('runSend outbox parking (B10)', () => {
       { to: 'workteam', bodyArg: 'locked out' },
       failingDeps('CODEX_THREAD_LOCKED', freshOutbox()),
     );
-    expect(out).toContain('parked to workteam');
+    expect(out).toContain('已寄存给 workteam');
+  });
+
+  it('joins the queue instead of jumping it when older items are parked (B12)', async () => {
+    const dir = freshOutbox();
+    // Seed one parked item straight into the outbox.
+    park(dir, 'team1111-aaaa', { envelope: 'older', toName: 'workteam' }, 1_000);
+    const calls: string[] = [];
+    const deps = {
+      ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }),
+      outboxDir: dir,
+      deliverCodex: async (_t: string, content: string) => {
+        calls.push(content);
+      },
+    };
+    const out = await runSend({ to: 'workteam', bodyArg: 'fresh' }, deps);
+    // The fresh send must NOT go direct while the queue is non-empty.
+    expect(calls).toEqual([]);
+    expect(out).toContain('队列共 2 条');
+    const items = (JSON.parse(readFileSync(join(dir, 'team1111-aaaa.json'), 'utf8')) as { items: { envelope: string }[] }).items;
+    expect(items.map((item) => item.envelope)).toEqual(['older', expect.stringContaining('fresh')]);
   });
 
   it('reports status parked as single-line JSON with --json', async () => {

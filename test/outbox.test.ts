@@ -5,6 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import {
   drain,
   OUTBOX_MAX_PER_THREAD,
+  outboxCount,
   park,
   type DrainDeliverFn,
   type OutboxItem,
@@ -27,14 +28,23 @@ function itemsOf(dir: string, threadId: string): OutboxItem[] {
     .items;
 }
 
+/** Matches an item ignoring the generated id. */
+const sansId = (envelope: string, toName: string, parkedAt: number, attempts: number) => ({
+  envelope,
+  toName,
+  parkedAt,
+  attempts,
+  id: expect.any(String) as string,
+});
+
 describe('park', () => {
-  it('appends FIFO with parkedAt/attempts and persists the composed envelope', () => {
+  it('appends FIFO with id/parkedAt/attempts and persists the composed envelope', () => {
     const dir = freshDir();
     park(dir, 't-park', { envelope: 'env-1', toName: 'alpha' }, 1_000);
     park(dir, 't-park', { envelope: 'env-2', toName: 'alpha' }, 2_000);
     expect(itemsOf(dir, 't-park')).toEqual([
-      { envelope: 'env-1', toName: 'alpha', parkedAt: 1_000, attempts: 0 },
-      { envelope: 'env-2', toName: 'alpha', parkedAt: 2_000, attempts: 0 },
+      sansId('env-1', 'alpha', 1_000, 0),
+      sansId('env-2', 'alpha', 2_000, 0),
     ]);
   });
 
@@ -46,7 +56,7 @@ describe('park', () => {
     expect(itemsOf(dir, 't-b')).toHaveLength(1);
   });
 
-  it('refuses honestly at 20 per thread and leaves the file untouched', () => {
+  it('refuses honestly at the per-thread cap and leaves the file untouched', () => {
     const dir = freshDir();
     for (let i = 0; i < OUTBOX_MAX_PER_THREAD; i++) {
       park(dir, 't-full', { envelope: `env-${i}`, toName: 'gamma' }, 4_000 + i);
@@ -73,9 +83,20 @@ describe('park', () => {
     const dir = freshDir();
     writeFileSync(join(dir, 't-corrupt.json'), 'not json', 'utf8');
     park(dir, 't-corrupt', { envelope: 'env', toName: 'alpha' }, 7_000);
-    expect(itemsOf(dir, 't-corrupt')).toEqual([
-      { envelope: 'env', toName: 'alpha', parkedAt: 7_000, attempts: 0 },
-    ]);
+    expect(itemsOf(dir, 't-corrupt')).toEqual([sansId('env', 'alpha', 7_000, 0)]);
+  });
+
+  it('mirrors every parked item into the mailbox file', () => {
+    const dir = freshDir();
+    const mailbox = freshDir();
+    park(dir, 't-mirror', { envelope: 'env-1', toName: 'alpha' }, 1_000, mailbox);
+    park(dir, 't-mirror', { envelope: 'env-2', toName: 'alpha' }, 2_000, mailbox);
+    const mirror = readFileSync(join(mailbox, 't-mirror.md'), 'utf8');
+    expect(mirror).toContain('寄存');
+    expect(mirror).toContain('env-1');
+    expect(mirror).toContain('env-2');
+    expect(mirror).toContain('队列第 1 位');
+    expect(mirror).toContain('队列第 2 位');
   });
 });
 
@@ -108,7 +129,7 @@ describe('drain', () => {
     expect(timeouts).toEqual([250]);
   });
 
-  it('keeps items with attempts+1 when the thread is still busy/locked', async () => {
+  it('aborts the thread on the first busy/locked failure: only the head gains attempts (B12)', async () => {
     const dir = freshDir();
     park(dir, 't-busy', { envelope: 'b-1', toName: 'alpha' }, 1_000);
     park(dir, 't-busy', { envelope: 'b-2', toName: 'alpha' }, 2_000);
@@ -118,9 +139,12 @@ describe('drain', () => {
     expect(results).toEqual([
       { threadId: 't-busy', toName: 'alpha', delivered: 0, remaining: 2, dropped: 0 },
     ]);
+    // Busy is thread-level: item 2 would fail identically, so the round must
+    // not burn budget on it (the pre-B12 loop attempted everything it could
+    // and starved long queues).
     expect(itemsOf(dir, 't-busy')).toEqual([
-      { envelope: 'b-1', toName: 'alpha', parkedAt: 1_000, attempts: 1 },
-      { envelope: 'b-2', toName: 'alpha', parkedAt: 2_000, attempts: 1 },
+      sansId('b-1', 'alpha', 1_000, 1),
+      sansId('b-2', 'alpha', 2_000, 0),
     ]);
   });
 
@@ -133,9 +157,16 @@ describe('drain', () => {
     expect(results).toEqual([
       { threadId: 't-uncertain', toName: 'alpha', delivered: 0, remaining: 1, dropped: 0 },
     ]);
-    expect(itemsOf(dir, 't-uncertain')).toEqual([
-      { envelope: 'u-1', toName: 'alpha', parkedAt: 5_000, attempts: 0 },
-    ]);
+    expect(itemsOf(dir, 't-uncertain')).toEqual([sansId('u-1', 'alpha', 5_000, 0)]);
+  });
+
+  it('marks delivered items in the mailbox mirror', async () => {
+    const dir = freshDir();
+    const mailbox = freshDir();
+    park(dir, 't-marked', { envelope: 'm-1', toName: 'alpha' }, 1_000, mailbox);
+    await drain(dir, ok, { mailboxDir: mailbox });
+    const mirror = readFileSync(join(mailbox, 't-marked.md'), 'utf8');
+    expect(mirror).toMatch(/> [0-9a-z-]+ 送达 /);
   });
 
   it('retries a previously busy item successfully on the next drain', async () => {
@@ -175,7 +206,7 @@ describe('drain rate limiting, budget, dead letters (B11)', () => {
     const dir = freshDir();
     park(dir, 't-key', { envelope: 'env', toName: 'alpha', callerKey: 'claude:s-1' }, 1_000);
     expect(itemsOf(dir, 't-key')).toEqual([
-      { envelope: 'env', toName: 'alpha', callerKey: 'claude:s-1', parkedAt: 1_000, attempts: 0 },
+      { ...sansId('env', 'alpha', 1_000, 0), callerKey: 'claude:s-1' },
     ]);
   });
 
@@ -198,7 +229,7 @@ describe('drain rate limiting, budget, dead letters (B11)', () => {
       { threadId: 't-rate', toName: 'alpha', delivered: 0, remaining: 1, dropped: 0 },
     ]);
     expect(itemsOf(dir, 't-rate')).toEqual([
-      { envelope: 'r-1', toName: 'alpha', callerKey: 'claude:s-1', parkedAt: 1_000, attempts: 0 },
+      { ...sansId('r-1', 'alpha', 1_000, 0), callerKey: 'claude:s-1' },
     ]);
   });
 
@@ -276,5 +307,47 @@ describe('drain rate limiting, budget, dead letters (B11)', () => {
       { threadId: 't-dead', toName: 'alpha', delivered: 0, remaining: 0, dropped: 3 },
     ]);
     expect(existsSync(join(dir, 't-dead.json'))).toBe(false);
+  });
+});
+
+describe('B12: locks, migration, queue depth', () => {
+  it('synthesizes stable ids for pre-B12 files without rewriting them eagerly', () => {
+    const dir = freshDir();
+    writeFileSync(
+      join(dir, 't-old.json'),
+      JSON.stringify({ items: [{ envelope: 'legacy', toName: 'old', parkedAt: 123, attempts: 4 }] }),
+      'utf8',
+    );
+    const first = itemsOf(dir, 't-old');
+    const second = itemsOf(dir, 't-old');
+    expect(first[0]!.id).toBe(second[0]!.id);
+    expect(first[0]!.envelope).toBe('legacy');
+  });
+
+  it('outboxCount reports the queue depth and 0 for unknown threads', () => {
+    const dir = freshDir();
+    expect(outboxCount(dir, 't-none')).toBe(0);
+    park(dir, 't-count', { envelope: 'a', toName: 'alpha' }, 1_000);
+    park(dir, 't-count', { envelope: 'b', toName: 'alpha' }, 2_000);
+    expect(outboxCount(dir, 't-count')).toBe(2);
+  });
+
+  it('a drain delivers in strict FIFO order across interleaved parks', async () => {
+    const dir = freshDir();
+    park(dir, 't-fifo', { envelope: 'first', toName: 'alpha' }, 1_000);
+    park(dir, 't-fifo', { envelope: 'second', toName: 'alpha' }, 2_000);
+    const attempted: string[] = [];
+    await drain(dir, async (_t, content) => {
+      attempted.push(content);
+      if (content === 'first') park(dir, 't-fifo', { envelope: 'late', toName: 'alpha' }, 3_000);
+    });
+    expect(attempted).toEqual(['first', 'second', 'late']);
+  });
+
+  it('leaves no lockfiles behind after a drain round', async () => {
+    const dir = freshDir();
+    park(dir, 't-lockclean', { envelope: 'x', toName: 'alpha' }, 1_000);
+    await drain(dir, ok);
+    expect(readdirSync(dir).filter((f) => f.endsWith('.lock'))).toEqual([]);
   });
 });

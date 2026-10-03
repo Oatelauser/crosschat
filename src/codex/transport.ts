@@ -46,6 +46,25 @@ const GRACEFUL_EXIT_MS = 2_000;
 const KILL_EXIT_TIMEOUT_MS = 1_500;
 
 /**
+ * Identity vars that must never leak into the spawned codex proxy: a parent
+ * Claude Code or Codex CLI session would otherwise make the codex side see a
+ * dual identity (CALLER_IDENTITY_CONFLICT, measured 2026-10-02 B5).
+ */
+const STRIP_ENV_KEYS = [
+  'CLAUDE_CODE_MESSAGING_SOCKET',
+  'CLAUDE_CODE_MESSAGING_TOKEN',
+  'CLAUDE_CODE_SESSION_ID',
+  'CODEX_THREAD_ID',
+  'CODEX_SESSION_ID',
+];
+
+export function sanitizeProxyEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const clean: NodeJS.ProcessEnv = { ...env };
+  for (const key of STRIP_ENV_KEYS) delete clean[key];
+  return clean;
+}
+
+/**
  * Resolve the codex executable. On Windows the npm shim (`codex.cmd`) cannot be
  * spawned without a shell, so the native exe is located explicitly.
  */
@@ -352,7 +371,7 @@ export async function openCodexProxySession(
         stdio: ['pipe', 'pipe', 'pipe'],
         shell: false,
         windowsHide: true,
-        env: process.env,
+        env: sanitizeProxyEnv(process.env),
       }));
   const channelFactory = options.channelFactory ?? wsChannelFactory;
 

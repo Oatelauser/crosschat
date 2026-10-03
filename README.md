@@ -17,7 +17,7 @@
 - **🔌 原生投递，零轮询**：消息经 Claude 的 named pipe / Codex 的 App Server daemon 直接注入运行中的会话——接收方像收到一条用户消息一样开始工作，不需要任何轮询或常驻服务
 - **🪶 无守护进程**：整个工具就是一条无状态 CLI。没有后台进程要看护、没有崩溃丢状态、没有端口要占——`send` 就是发消息，`status` 就是看在线
 - **🤖 教学内建，低入侵**：agent 侧装一次 skill，且**每条消息的信封自带回复命令**——照抄即可回话。题词只写角色，不写协议；长对话也不会忘
-- **📮 忙时不丢**：对方正在跑长任务？消息自动进本地发件箱（outbox），对方空闲后任意一次调用自动补投——不需要你重发
+- **📮 忙时不丢**：对方正在跑长任务？消息自动进本地发件箱（outbox），并由看门狗进程每 0.5–5 分钟自动重投，对方一空闲就送达——不需要你手动重发；滞留内容随时可在 mailbox 镜像文件里读到
 - **🔐 同用户信任边界**：全部通道按 Windows 用户隔离，接收许可只授予 `crosschat claude` 启动的会话——你手敲开的会话不会被外部投递
 - **🧪 每个结论都有实证**：通道可行性、写者锁、daemon 版本行为，全部真机联调验证（见 [📚 更多文档](#-更多文档)）
 
@@ -126,7 +126,7 @@ crosschat claude [任意 claude 参数…]                 # 带接收许可启�
 crosschat -v | --version | help                     # 版本 / 帮助
 ```
 
-发送输出三种状态：`delivered`（已投递）/ `parked`（对方忙，已入发件箱待补投）/ 错误码（见排障）。
+发送输出三种状态：`delivered`（已投递）/ `parked`（对方忙，已入发件箱，看门狗自动重投；输出含队列深度与 mailbox 镜像路径）/ 错误码（见排障）。
 
 ## 📖 对话生命周期（规则总纲）
 
@@ -157,8 +157,9 @@ crosschat -v | --version | help                     # 版本 / 帮助
 | claude（`crosschat claude` 启动） | 窗口开 | ✅ 秒达，会话内出现信封消息 |
 | claude（裸 `claude` 启动） | 任何 | ❌ 无接收许可（换 `crosschat claude` 重启） |
 | codex（daemon ≥0.160） | 窗口开/关 | ✅ 送达（headless 执行；TUI 不实时刷新，翻历史可见） |
-| codex（旧 daemon ≤0.157 / `--no-daemon`） | 窗口开 | ⏳ 等待 120s，关窗瞬间送达；超时 `parked` 入发件箱 |
-| codex | turn 进行中（忙） | 📮 `parked` 入发件箱，对方空闲后任意一次 crosschat 调用自动补投 |
+| codex（daemon ≥0.160） | turn 进行中（忙） | ✅ **入队即达**：`queued`（按线程串行，轮结束瞬间落历史并被处理）——与 Claude 收件箱同粒度 |
+| codex（旧 daemon ≤0.157 / `--no-daemon`） | 窗口开 | ⏳ 等待 120s，关窗瞬间送达；超时 `parked` 入发件箱（看门狗自动重投） |
+| codex | 排队被旧 daemon 拒绝等罕见态 | 📮 `parked` 入发件箱（新消息排队不插队），看门狗每 0.5–5 分钟自动重投 |
 
 **不对称速记**：claude 收发都随意；codex 收信在 0.160+ 开窗关窗均可，关窗永远是最稳路径。
 
@@ -177,7 +178,7 @@ crosschat -v | --version | help                     # 版本 / 帮助
 - [x] 无状态 CLI 四命令 + 自包含会话引用 + 轮次计数
 - [x] 双侧自动发现（含目录/时间标注）、信封自带教学 skill
 - [x] 16KiB 上限、30 条/60s 防乒乓限流、身份冲突自纠指引
-- [x] 忙/锁超时 → 本地发件箱自动补投（outbox）
+- [x] 忙/锁超时 → 本地发件箱 + 看门狗自动重投（outbox，FIFO 不插队，mailbox 镜像可读）
 - [x] daemon 0.160 开窗投递（实证：同 daemon 多连接绕过写者锁）
 
 **计划中**
@@ -194,11 +195,13 @@ crosschat -v | --version | help                     # 版本 / 帮助
 
 **身份类**：`CALLER_IDENTITY_CONFLICT`（环境双身份残留。临时：命令前缀 `env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID`；根治：干净终端重启 daemon）· `CALLER_NOT_IN_CONVERSATION` · `CANNOT_REPLY_TO_HUMAN`（对话由人发起）
 
-**通道类**：`CODEX_PROXY_SPAWN_FAILED`（看 stderr 摘录；通常 daemon 未跑）· `CODEX_THREAD_LOCKED`/`CODEX_THREAD_BUSY_TIMEOUT`（已自动转 `parked` 入发件箱，无需重发）· `OUTBOX_FULL`（每线程 20 条积压上限，等待排涝或人工介入）· `CODEX_APPROVAL_REQUIRED`（**工具永不代答审批**）· `CLAUDE_PIPE_*`/`CODEX_*UNCERTAIN`（写入中途失败状态不明——**勿盲目重发**，先 `status` 核实）
+**通道类**：`CODEX_PROXY_SPAWN_FAILED`（看 stderr 摘录；通常 daemon 未跑）· `CODEX_THREAD_LOCKED`/`CODEX_THREAD_BUSY_TIMEOUT`（已自动转 `parked` 入发件箱，无需重发）· `OUTBOX_FULL`（每线程 200 条积压上限，读 mailbox 镜像取回内容）· `CODEX_APPROVAL_REQUIRED`（**工具永不代答审批**）· `CLAUDE_PIPE_*`/`CODEX_*UNCERTAIN`（写入中途失败状态不明——**勿盲目重发**，先 `status` 核实）
 
 ## ⚠️ 边界与限制
 
-单条 ≤16KiB；每对端点 30 条/60s；发件箱每线程 20 条；信任边界=同一 Windows 用户；接收许可仅 `crosschat claude` 启动的会话；重启电脑后需重新 `codex app-server daemon start`。
+单条 ≤16KiB；每对端点 30 条/60s；发件箱每线程 200 条（满时读 `%LOCALAPPDATA%\crosschat\mailbox\<线程ID>.md` 取回内容）；信任边界=同一 Windows 用户；接收许可仅 `crosschat claude` 启动的会话。
+
+**daemon 依赖（重要）**：向 codex 会话投递走 `codex app-server proxy`，它连接**运行中的 app-server daemon** control socket。要获得完整能力（TUI 开窗可投、忙时入队），需要 `codex app-server daemon start` 且 daemon ≥0.160，TUI 用同版本 CLI 打开（0.160 起 TUI 自动附着 daemon）。daemon 未运行时投递会报 `CODEX_PROXY_SPAWN_FAILED` 并提示启动命令；旧版本 daemon 下开窗投递与忙时入队退化为「关窗投递 + 发件箱」。重启电脑后需重新 `codex app-server daemon start`。
 
 ## ❓ FAQ
 
