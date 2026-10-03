@@ -2,7 +2,7 @@
 
 本项目的全部显著变更记录于此。格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [1.2.0] - 2026-10-03
 
 ### 变更（B21：exec 线程可见 + 发送端显示名）
 
