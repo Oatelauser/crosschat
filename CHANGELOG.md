@@ -2,7 +2,7 @@
 
 本项目的全部显著变更记录于此。格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [1.1.0] - 2026-10-03
 
 ### 变更（B14：发送存根与 rollout 回执，整改第三步）
 
@@ -49,4 +49,5 @@
 ### 过程档案
 - 设计决策地图（wayfinder）、实测研究报告 ×4、联调实证 ×2 随仓库公开（已脱敏）
 
+[1.1.0]: https://github.com/Oatelauser/crosschat/releases/tag/v1.1.0
 [1.0.0]: https://github.com/Oatelauser/crosschat/releases/tag/v1.0.0

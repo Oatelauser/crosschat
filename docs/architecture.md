@@ -65,24 +65,28 @@
 - 都没有 → 身份 `human`（可发送，不能被回复）
 - 同时存在两族 → `CALLER_IDENTITY_CONFLICT`（典型根因：daemon 从带 Claude 环境的终端启动，污染了它派生的所有 shell）
 
-## 6. 发件箱（outbox）
+## 6. 发件箱（outbox）与看门狗（B12–B14）
 
-对方忙（turn 进行中）或被锁超过等待上限（120s）时，消息不丢弃：完整信封（含 reply-ref）落 `%LOCALAPPDATA%\crosschat\outbox\<threadId>.json`，返回 `parked`。**每次 `send`/`status` 调用入口先排涝**：短等待（5s）逐条补投，成功即出队。活跃对话中 agent 频繁调用 CLI，补投最终必达；每线程 20 条封顶防积压。
+daemon ≥0.160 上**忙线程不再等待**：turn/start 被接受并按线程串行排队，当前轮结束即落历史（`queued`，实测收件箱语义）。发件箱只服务旧 daemon 异常态：消息完整落 `%LOCALAPPDATA%\crosschat\outbox\<threadId>.json`（返回 `parked`），**看门狗子进程每 0.5–5 分钟自动重投**（30s→60s→120s→300s 退避，箱空即退，非常驻）；busy 属线程级状态，排涝首败即止轮；队列非空时新消息入队不插队；每线程 200 条封顶，每条寄存/送达/丢弃都镜像到 `%LOCALAPPDATA%\crosschat\mailbox\<threadId>.md` 供人随时读。park/drain 按线程加锁，看门狗单实例。
+
+**发送审计（B14）**：每次 send 的最终结果（delivered/queued/parked/failed + 时间/对端/轮次/错误码）追加 `%LOCALAPPDATA%\crosschat\send-log.jsonl`（仅元数据）；codex 投递后按唯一 reply-ref 轮询对方 rollout 文件出回执（`receipt: confirmed` = 消息已确认落入对方会话历史）。
 
 ## 7. 一次 `send` 的完整流程
 
 ```
 crosschat send --to X --body "…"
-  ├─ 排涝 outbox（存量 parked 消息先试补投）
+  ├─ 排涝 outbox（入口机会式补投，加锁）
   ├─ body ≤16KiB？超 → MESSAGE_TOO_LARGE（指引落盘发路径）
   ├─ 身份反查（env）→ 限流检查（30 条/60s/对端点）
   ├─ 解析 X：claude 注册表精确名 / codex thread/list 名（未找到/碰撞 → 错误+候选清单）
   ├─ 组信封（from/turn/reply-ref/教学提示/中性化）
   ├─ 目标是 claude → 读注册表拿管道 → key 文件取 token → auth 行+帧 一次写入
-  ├─ 目标是 codex → spawn proxy → resume → 处置：
+  ├─ 目标是 codex → spawn proxy（连 daemon control socket，环境剥离双身份残留）→ resume → 处置：
   │     idle → turn/start → delivered
-  │     busy/locked → 等待(3s×N≤120s) → 仍忙 → park 入 outbox → parked
-  └─ 输出 delivered/parked + 下轮 reply-ref
+  │     busy → turn/start 直接入队（同线程串行，轮末落历史）→ queued
+  │     旧 daemon 拒绝/写者锁 → park 入 outbox → 派看门狗 → parked
+  ├─ rollout 回执（按 reply-ref 确认落入对方会话历史）
+  └─ 输出 delivered/queued/parked + 下轮 replyRef，结果入 send-log.jsonl
 ```
 
 ## 8. 安全模型

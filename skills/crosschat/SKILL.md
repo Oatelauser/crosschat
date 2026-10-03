@@ -42,13 +42,13 @@ crosschat send --to <名字> --body "正文"
 
 - 名字 = claude 会话名或 codex 线程名（status 列出全部可路由对象）。
 - 长正文可省略 `--body`，改为管道：`<正文文件路径的内容> | crosschat send --to <名字>`。
-- 投给 codex 的消息：**开窗、关窗均可投**（daemon 0.160+ 且 TUI 附着 daemon 时开窗直接送达；headless turn 在后台执行，TUI 窗口不实时刷新）。若开窗被锁（旧 daemon ≤0.157 或 `--no-daemon`/未附着 TUI），crosschat 侧等待（默认至多 120s），关窗即自动送达。输出为 `delivered`（已送达）或 `parked`（对方忙，已暂存待自动补投），两者都**无需重发**。
+- 投给 codex 的消息：**开窗、关窗、忙时均可投**（daemon 0.160+）。对方正在跑 turn 也不阻塞——消息直接**入队**（输出 `queued`），当前轮结束即进入对话被处理；TUI 窗口会实时刷出。输出 `delivered`（已送达）/ `queued`（已入队，轮末处理）/ `parked`（仅旧 daemon 异常态，已暂存），三者都**无需重发**。
 
 ## 报错自纠（读错误码，不要即兴发明命令）
 
 - `MESSAGE_TOO_LARGE`：正文超过 16KiB。把完整内容**写入一个文件，只发文件路径**（接收方会按需读取，这也是长内容的标准做法）。
 - `RATE_LIMITED`：发送过快（每对端点 60 秒最多 30 条）。**等待后重试**，或直接总结收尾；系统不会静默丢弃或自动重试。
-- `CODEX_THREAD_LOCKED` / `CODEX_THREAD_BUSY_TIMEOUT`：对方 codex 线程被窗口占用或长 turn 在跑，等待超时。消息**已暂存（parked，exit 0），无需重发**——对方空闲后任意一次 crosschat 调用（send/status）会自动补投（每线程最多暂存 20 条）。想立即送达：关闭对方 codex 窗口后再跑任意 crosschat 命令即触发补投；或改投其它信箱线程。旧 daemon（≤0.157）或 `--no-daemon`/未附着 TUI 更易触发；0.160+ 且附着时开窗可直接投。（脚注：crosschat 主通道已可开窗投递，无需 codex 的 queue 特性；0.160 实测 queue 对附着 TUI 也能秒级消费，仅作人工兜底。）
+- `CODEX_THREAD_LOCKED` / `CODEX_THREAD_BUSY_TIMEOUT`：旧 daemon（≤0.157 / 未附着 TUI）下线程被窗口占用或长 turn 在跑。消息**已暂存（parked，exit 0），无需重发**——**看门狗每 0.5–5 分钟自动重投，不需要手动跑 status**；每线程最多暂存 200 条，滞留内容随时可读 `%LOCALAPPDATA%\crosschat\mailbox\<线程ID>.md`。0.160+ 正常不会再遇到：忙时直接入队（`queued`）。
 - `CALLER_IDENTITY_CONFLICT`：环境里同时残留 `CLAUDE_CODE_*` 与 `CODEX_*` 身份变量（常见于从 Claude 终端启动的 codex daemon 派生的 shell）。临时自纠 = 给命令加前缀，照抄：
 
   ```
