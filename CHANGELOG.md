@@ -2,7 +2,15 @@
 
 本项目的全部显著变更记录于此。格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [1.2.1] - 2026-10-03
+
+### 发布说明
+
+- v1.2.0 的 npm 发布失败于 CI（B21 wire 测试依赖本机装有 codex，runner 上必挂；本版修复）。**1.2.1 含 1.2.0 全部功能**。
+
+### 修复（CI 封闭性）
+
+- `openCodexProxySession` 在注入 `spawnProxy` 时跳过真实 codex.exe 解析（注入路径本就不使用解析结果）——无 codex 环境的 CI runner 不再必挂，两次 CI 红（push + publish 同根因）闭合
 
 ### 变更（B22：视图实时回执确认 + 旧 ref 防倒退）
 
