@@ -21,6 +21,8 @@ export function defaultSendLogFile(): string {
 export interface SendLogEntry {
   /** ISO timestamp of the outcome. */
   ts: string;
+  /** Sender identity key ("claude:<id>" / "codex:<id>" / "human"); audit needs who, not just whom. */
+  from?: string;
   /** Display name of the recipient. */
   to: string;
   /** 'claude:<sessionId>' | 'codex:<threadId>'. */

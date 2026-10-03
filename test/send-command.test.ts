@@ -6,6 +6,7 @@ import { MAX_BODY_BYTES, runSend, type SendArgs, type SendDeps } from '../src/co
 import { decodeRef, encodeRef, newConversationRef } from '../src/ref.js';
 import { MultichatError } from '../src/errors.js';
 import { drain, park } from '../src/outbox.js';
+import type { SendLogEntry } from '../src/send-log.js';
 import type { ClaudeRegistryScan, ClaudeSessionEntry } from '../src/claude/registry.js';
 import type { CodexThreadSummary } from '../src/codex/client.js';
 
@@ -279,9 +280,11 @@ describe('runSend --to conversation continuity (B15)', () => {
 
   it('repeated --to sends to the same codex thread count turns 1, 2, 3', async () => {
     const state = freshState();
+    const entries: SendLogEntry[] = [];
     const deps = {
       ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }),
       conversationStateFile: state,
+      appendLog: (entry: SendLogEntry) => entries.push(entry),
     };
     const first = await runSend({ to: 'workteam', bodyArg: 'one' }, deps);
     const second = await runSend({ to: 'workteam', bodyArg: 'two' }, deps);
@@ -289,6 +292,12 @@ describe('runSend --to conversation continuity (B15)', () => {
     expect(first).toContain('delivered to workteam (turn 1)');
     expect(second).toContain('delivered to workteam (turn 2)');
     expect(third).toContain('delivered to workteam (turn 3)');
+    // B16: audit entries carry the sender identity, not just the recipient.
+    expect(entries.map((entry) => entry.from)).toEqual([
+      'claude:cs-alpha',
+      'claude:cs-alpha',
+      'claude:cs-alpha',
+    ]);
   });
 
   it('a parked send still records the conversation for later continuation', async () => {

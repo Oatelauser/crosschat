@@ -44,6 +44,8 @@ git clone https://github.com/Oatelauser/crosschat.git
 cd crosschat && npm ci && npm run build && npm link
 crosschat install-skills
 ```
+
+开发期反复重装本地目录时用 `npm i -g . --force`（或先 bump 版本）：版本号未变时 npm 会报 "up to date" 而**跳过文件更新**，装到的还是旧代码。
 </details>
 
 **Codex daemon**（接收方向必需；从**干净终端**启动——勿在 Claude 会话内启动，否则派生 shell 身份污染）：
