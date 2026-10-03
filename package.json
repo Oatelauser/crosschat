@@ -9,8 +9,7 @@
   },
   "license": "MIT",
   "bin": {
-    "crosschat": "dist/cli.js",
-    "multichat": "dist/cli.js"
+    "crosschat": "dist/cli.js"
   },
   "engines": {
     "node": ">=22"
