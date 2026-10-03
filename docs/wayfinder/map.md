@@ -41,6 +41,7 @@ label: wayfinder:map
 - [B5 联调决策（非票，实施期实测定型）](../drill-reports/b5-drill-report.md): codex 接收一期语义 = headless 信箱模型——投递目标为未被 TUI 占用的线程，"开着=只读（对 multichat），关着=可投"，原生 turn 零轮询（3 轮全链路实测通过）；claude↔claude、codex→claude、daemon headless 回信均实测通过。二轮加固：同线程开窗即拒/关窗即通 3 拒 3 通零误报；`--no-daemon` 假设证伪（daemon 模式 TUI 开窗仍锁）；新已知问题 CALLER_IDENTITY_CONFLICT（daemon 从带 CLAUDE_CODE_* 环境的终端启动致派生 shell 身份污染，B5.3 加自纠指引）。
 - [codex 开窗注入调研票（2026-10-02，结论两度修正）](../research/codex-open-window-injection.md): 研究票发现 `codex queue`（底层 `thread/queue/add`）并 E2E"验证"开窗秒达 → B6 接入 → **实地联调证伪**：本地普通 TUI 下 queue 是黑洞（exit 0 但消息既不进开窗现场也不进历史，2 条静默丢失；疑似 remote 架构专用，`--remote` 参数佐证；研究代理的成功 E2E 推测用了自建 remote 形态）。B7 修复 = 删 queue 路径，active-writer 改为等待释放循环（开窗时 multichat 侧轮询等待、关窗即 headless 送达、默认 120s 超时报错指引）。**教训已记**：子代理研究报告的 E2E 结论必须标注其环境形态（本地/remote），集成批次不得以此替代己方 live 验证。
 - [B8 开窗投递终局（2026-10-02，daemon 升 0.160 后）](../research/codex-0160-inject-items.md): **开窗投递 ✅ 落地，零代码改动**——根因链闭合：`codex app-server proxy` 是 daemon 桥接（同进程多连接），0.160 TUI 自动附着 daemon，写者锁仅跨进程形态出现（旧 daemon ≤0.157 / `--no-daemon`）。实测：TUI 附着开窗 6s delivered、模型答 OPEN-OK 并经 reply-ref 回投；关窗无回归；`codex queue` 在 0.160+附着下复活为可见投递通道（12s 消费）。等待循环保留为旧环境兜底。daemon 升级实录：update 的 error 5（疑似安全软件拦句柄）→ 干净 home 官方安装器置备 0.160 成品移植 + junction 重建；旧 0.157.1 保留于 app-server-daemon.bak-0157 可回滚。
+- [跨平台（Linux/WSL）可行性研究](tickets/005-cross-platform-linux-wsl-feasibility.md): **可行（a）**——unix 消息插座原生存在且更简单：WSL 实测 socket `/run/user/<uid>/cc-socks/<pid>.sock`、无 auth 行（内核同 uid 凭证）、帧与 Windows 逐字节同格式，注册表/key 文件/env 语义跨平台一致（embassy 源码 + 2.1.288 bundle + WSL 实装三层证据）；差异仅"unix 不发 auth 行/不读 key 文件"与"socket 目录以注册表为准不硬编码"。分批 B1 平台层 → B2 claude unix 投递联调 → B3 codex/CI ubuntu/文档/发版 1.3.0-experimental；零回归铁律 + subagent 编排模式执行。详见 `../research/claude-unix-socket.md`。
 
 ## Not yet specified
 
@@ -48,7 +49,7 @@ label: wayfinder:map
 - 完整集的范围与节奏：持久账本、回执、投递状态机、TUI、服务安装 + 看门狗（launchd `KeepAlive{Crashed}` 语义等价物）、Windows 安全见证模型（named pipe ACL 哲学）；broker 回归条件已定（003），联邦 v1 可先 ssh+远端 CLI
 - 二期长对话机制（004 遗留）：换轨续传模式 = 自动档案（broker 回归后邮差全程落盘）+ 摘要服务 + 新会话读档接续；不做"原地压缩"（transcript 归 provider 所有，外部工具做不到）
 - 二期上限可配置化（2026-10-01 用户追问）：单条上限从 16KiB 常量改为按端点的 `maxBodyBytes`，各传输协议封顶（claude peer 帧 64KiB / codex ws 1MiB / 新适配器各自定）；004 轮次预算按两端模型窗口的最小值定；Claude Code 挂 GLM 等大窗口模型时传输层无感；GLM 自家 agent CLI 属二期新适配器问题（有无原生唤醒通道决定原生 or 降级，同 codex 评估流程）
-- mac/linux 平台适配排期
+- Mac 实机验证（无环境；unix 实现共享 + embassy 实证外推，跨平台批次 B3 后如有实机再补）
 - agent 侧 skill 文案（embassy-peer 等价物）——形式已定（003：skill+信封双保险），具体文案实施时写
 - 工具命名
 - codex TUI 占用标注：status 显示哪个线程被 live TUI 持有；需查写者锁存储位置（状态库 lease vs daemon 内存表）；禁止用 resume 探测（会抢写者）
