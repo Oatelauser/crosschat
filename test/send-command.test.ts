@@ -272,6 +272,43 @@ describe('runSend rate limiting', () => {
   });
 });
 
+describe('runSend --to conversation continuity (B15)', () => {
+  const freshOutbox = (): string => mkdtempSync(join(outboxDir, 'case-'));
+  const freshState = (): string =>
+    join(mkdtempSync(join(outboxDir, 'state-')), 'conversations.json');
+
+  it('repeated --to sends to the same codex thread count turns 1, 2, 3', async () => {
+    const state = freshState();
+    const deps = {
+      ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }),
+      conversationStateFile: state,
+    };
+    const first = await runSend({ to: 'workteam', bodyArg: 'one' }, deps);
+    const second = await runSend({ to: 'workteam', bodyArg: 'two' }, deps);
+    const third = await runSend({ to: 'workteam', bodyArg: 'three' }, deps);
+    expect(first).toContain('delivered to workteam (turn 1)');
+    expect(second).toContain('delivered to workteam (turn 2)');
+    expect(third).toContain('delivered to workteam (turn 3)');
+  });
+
+  it('a parked send still records the conversation for later continuation', async () => {
+    const state = freshState();
+    const okDeps = { ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }), conversationStateFile: state };
+    await runSend({ to: 'workteam', bodyArg: 'hello' }, okDeps);
+    const busyDeps = {
+      ...okDeps,
+      outboxDir: freshOutbox(),
+      deliverCodex: async () => {
+        throw new MultichatError('CODEX_THREAD_BUSY_TIMEOUT', 'busy');
+      },
+    };
+    const parked = await runSend({ to: 'workteam', bodyArg: 'queued up' }, busyDeps);
+    expect(parked).toContain('已寄存给 workteam');
+    const again = await runSend({ to: 'workteam', bodyArg: 'next' }, okDeps);
+    expect(again).toContain('delivered to workteam (turn 3)'); // 1 + parked 2 + this 3
+  });
+});
+
 describe('runSend outbox parking (B10)', () => {
   // Fresh outbox per test: parking accumulates per thread file.
   const freshOutbox = (): string => mkdtempSync(join(outboxDir, 'case-'));

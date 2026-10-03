@@ -2,6 +2,15 @@
 
 本项目的全部显著变更记录于此。格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 变更（B15：对话连续性——`--to` 消息的 turn 计数修复）
+
+- `--to` 发送现在**自动接续该端对最近的对话**（本地 `conversations.json` 按无序端对记 latest ref），turn 随每条消息递增；任一端用 `--to` 回复都续同一线程。修复 2026-10-02 实测的「30 条不同消息全部标 turn=1」失真
+- 送达/入队/寄存都记账；寄存的消息也占轮次（它终将送达）
+- 状态文件损坏自愈为新对话；端对不匹配的记录被忽略
+- `TARGET_NOT_FOUND`（claude 会话已退出）错误附指引：`status` 查在线会话后 `--to <新名字>` 重新寻址
+
 ## [1.1.0] - 2026-10-03
 
 ### 变更（B14：发送存根与 rollout 回执，整改第三步）

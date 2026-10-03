@@ -15,6 +15,7 @@ import {
 import { resolveTargetByName } from '../resolve.js';
 import { composeEnvelope } from '../envelope.js';
 import type { SendLogEntry } from '../send-log.js';
+import { continueConversation, recordConversation } from '../conversations.js';
 import {
   decodeRef,
   encodeRef,
@@ -53,6 +54,8 @@ export interface SendDeps {
   appendLog?(entry: SendLogEntry): void;
   /** Rollout receipt probe for codex deliveries (B14). */
   confirmReceipt?(threadId: string, marker: string): Promise<'confirmed' | 'unconfirmed'>;
+  /** Pair-conversation continuity state (B15); absent = always fresh threads. */
+  conversationStateFile?: string;
 }
 
 export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
@@ -99,8 +102,16 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
       resolved.side === 'claude'
         ? { p: 'claude', id: resolved.session.sessionId }
         : { p: 'codex', id: resolved.thread.id };
-    newRef = newConversationRef(endpointOfIdentity(caller), target);
-    turn = 1;
+    // B15: --to continues the pair's latest conversation when state is wired
+    // (meaningful turn counting); absent state keeps the legacy fresh-thread
+    // behavior so existing tests/embeddings stay untouched.
+    const callerEndpoint = endpointOfIdentity(caller);
+    const continued =
+      deps.conversationStateFile === undefined
+        ? { ref: newConversationRef(callerEndpoint, target), turn: 1 }
+        : continueConversation(deps.conversationStateFile, callerEndpoint, target);
+    newRef = continued.ref;
+    turn = continued.turn;
   }
 
   const replyRef = encodeRef(newRef);
@@ -111,7 +122,8 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     if (claudeSession === undefined) {
       throw new MultichatError(
         'TARGET_NOT_FOUND',
-        `Claude session ${target.id} is not currently routable (process exited or unregistered).`,
+        `Claude session ${target.id} is not currently routable (process exited or unregistered). ` +
+          '对端会话可能已退出：跑 crosschat status 查在线会话，用 --to <新名字> 重新寻址。',
       );
     }
     checkAndRecord(deps.rateDir, rateKey(identityKey(caller), `claude:${target.id}`), deps.now());
@@ -127,6 +139,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
       throw err;
     }
     deps.appendLog?.(logEntry(deps, { to: toName, target: `claude:${target.id}`, status: 'delivered', turn, replyRef }));
+    if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now());
     return formatDelivery(args.json === true, toName, turn, replyRef, false);
   }
 
@@ -163,6 +176,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
       logEntry(deps, { to: toName, target: `codex:${target.id}`, status: queued ? 'queued' : 'delivered', turn, replyRef, receipt }),
     );
     const out = formatDelivery(args.json === true, toName, turn, replyRef, queued);
+    if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now());
     if (receipt === 'unconfirmed') {
       return `${out}\n回执: 暂未在对方会话记录中确认（可能仍在落盘）；稍后查 send-log.jsonl 或重跑 status`;
     }
@@ -176,6 +190,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     ) {
       const queue = parkNow();
       deps.appendLog?.(logEntry(deps, { to: toName, target: `codex:${target.id}`, status: 'parked', turn, replyRef }));
+      if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now());
       return formatParked(args.json === true, toName, turn, replyRef, queue, mailboxPath);
     }
     deps.appendLog?.(logEntry(deps, { to: toName, target: `codex:${target.id}`, status: 'failed', code: errorCode(err), turn, replyRef }));

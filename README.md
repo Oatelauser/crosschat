@@ -138,7 +138,7 @@ crosschat -v | --version | help                     # 版本 / 帮助
 | **codex** | 会话内 agent 跑 `crosschat send --to <claude 会话名> --body "…"` | 发送随意；回信开窗关窗都能收（daemon 0.160+） |
 | **人** | 任意终端直接 `crosschat send --to <名字> --body "…"` | 身份是 human：**能发、不能被回复**（单向指令） |
 
-第一条消息永远用 `--to`（此刻生成对话引用 reply-ref）；对方名字用 `status` 查。
+第一条消息永远用 `--to`（此刻生成对话引用 reply-ref）；对方名字用 `status` 查。`--to` 不必只用于第一条：对同一端对的重复 `--to` 发送会**自动接续你们最近的对话**（turn 递增，本地记账，无需手带引用）；要另起线程时用 `--conversation` 显式切换即可。
 
 ### 往复规则
 

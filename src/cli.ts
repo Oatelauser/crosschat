@@ -14,6 +14,7 @@ import { defaultRateDir } from './rate-limit.js';
 import { defaultOutboxDir, drain } from './outbox.js';
 import { runWatchdog, spawnWatchdog as ensureWatchdog } from './watchdog.js';
 import { appendSendLog, confirmInRollout, defaultSendLogFile } from './send-log.js';
+import { defaultConversationsFile } from './conversations.js';
 import { codexHomeDir } from './codex/rollout-meta.js';
 import { listClaudeSessions } from './claude/registry.js';
 import { deliverToClaudeSession } from './claude/deliver.js';
@@ -124,6 +125,7 @@ function realSendDeps(stdinText: string | undefined): SendDeps {
     spawnWatchdog: () => ensureWatchdog(defaultOutboxDir()),
     appendLog: (entry) => appendSendLog(defaultSendLogFile(), entry),
     confirmReceipt: (threadId, marker) => confirmInRollout(codexHomeDir(), threadId, marker),
+    conversationStateFile: defaultConversationsFile(),
   };
 }
 
