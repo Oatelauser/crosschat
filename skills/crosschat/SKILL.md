@@ -58,7 +58,7 @@ crosschat send --to <名字> --body "正文"
   ```
 
   （PowerShell 先 `Remove-Item Env:CLAUDE_CODE_*` 再发送。）根治 = 让用户从干净终端重启 daemon：`codex app-server daemon stop && codex app-server daemon start`。
-- 其他错误码：错误信息已写明原因与出路，按信息处理即可。crosschat 只有 `send` / `status` / `install-skills` / `claude` 四个命令，不要猜测不存在的子命令或参数。
+- 其他错误码：错误信息已写明原因与出路，按信息处理即可。crosschat 只有 `send` / `status` / `doctor` / `install-skills` / `claude` 五个命令，不要猜测不存在的子命令或参数。
 
 ## 会话纪律
 
