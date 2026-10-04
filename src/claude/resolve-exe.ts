@@ -5,9 +5,11 @@ import process from 'node:process';
 import { MultichatError } from '../errors.js';
 
 /**
- * Resolves the real claude executable on Windows: the npm global APPDATA
- * layout first (same binary the live tests spawn), then `where.exe` hits.
- * Extracted from test/live/claude-live.test.ts so the product shares it.
+ * Resolves the claude executable cross-platform. On Unix: the
+ * CROSSCHAT_CLAUDE_BIN override first, else bare `claude` from PATH. On
+ * Windows: the npm global APPDATA layout first (same binary the live tests
+ * spawn), then `where.exe` hits. Extracted from test/live/claude-live.test.ts
+ * so the product shares it.
  */
 
 export interface ResolveExeDeps {
@@ -26,6 +28,11 @@ export function defaultResolveExeDeps(): ResolveExeDeps {
 }
 
 export function resolveClaudeExe(deps: ResolveExeDeps = defaultResolveExeDeps()): string {
+  if (process.platform !== 'win32') {
+    const override = deps.env.CROSSCHAT_CLAUDE_BIN;
+    if (override) return override;
+    return 'claude';
+  }
   const candidates: string[] = [];
   if (deps.env.APPDATA) {
     candidates.push(

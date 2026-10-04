@@ -1,3 +1,4 @@
+import process from 'node:process';
 import { MultichatError } from './errors.js';
 import type { ClaudeRegistryScan } from './claude/registry.js';
 import type { RefEndpoint } from './ref.js';
@@ -37,11 +38,15 @@ export function resolveCallerIdentity(
   const claude = socket !== '' ? claudeIdentity(socket, scan) : undefined;
   const codexId = env.CODEX_THREAD_ID || env.CODEX_SESSION_ID || '';
   if (claude !== undefined && codexId !== '') {
+    const unsetHint =
+      process.platform === 'win32'
+        ? `（PowerShell 先 Remove-Item Env:CLAUDE_CODE_*）。`
+        : `（bash 先 unset CLAUDE_CODE_*；单次用 env -u 前缀）。`;
     throw new MultichatError(
       'CALLER_IDENTITY_CONFLICT',
       `Caller identity conflict: both CLAUDE_CODE_* and CODEX_* identity variables are present (socket ${socket}, thread ${codexId}). ` +
         `自纠（临时）: 命令前缀 env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID ` +
-        `（PowerShell 先 Remove-Item Env:CLAUDE_CODE_*）。` +
+        unsetHint +
         `根治: 从干净终端重启 codex daemon（codex app-server daemon stop && codex app-server daemon start）` +
         `——daemon 会把启动时的环境传给它派生的所有 shell。`,
     );
