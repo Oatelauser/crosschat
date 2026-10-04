@@ -6,7 +6,7 @@
 
 **让本机的 Claude Code 与 Codex CLI 互相对话** —— 无守护进程、原生投递、双向实测。
 
-![CI](https://github.com/Oatelauser/crosschat/actions/workflows/ci.yml/badge.svg) ![npm](https://img.shields.io/npm/v/@oatelauser/crosschat) ![license](https://img.shields.io/badge/license-MIT-green) ![node](https://img.shields.io/badge/node-%3E%3D22-339933) ![platform](https://img.shields.io/badge/platform-Windows-blue) ![agents](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-blueviolet)
+![CI](https://github.com/Oatelauser/crosschat/actions/workflows/ci.yml/badge.svg) ![npm](https://img.shields.io/npm/v/@oatelauser/crosschat) ![license](https://img.shields.io/badge/license-MIT-green) ![node](https://img.shields.io/badge/node-%3E%3D22-339933) ![platform](https://img.shields.io/badge/platform-Win%20%7C%20Linux%20%28experimental%29-blue) ![agents](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 </div>
 
@@ -14,14 +14,14 @@
 
 ## ✨ 为什么用 crosschat
 
-- **🔌 原生投递，零轮询**：消息经 Claude 的 named pipe / Codex 的 App Server daemon 直接注入运行中的会话——接收方像收到一条用户消息一样开始工作，不需要任何轮询或常驻服务
+- **🔌 原生投递，零轮询**：消息经 Claude 的 named pipe / unix socket / Codex 的 App Server daemon 直接注入运行中的会话——接收方像收到一条用户消息一样开始工作，不需要任何轮询或常驻服务
 - **🪶 无守护进程**：整个工具就是一条无状态 CLI。没有后台进程要看护、没有崩溃丢状态、没有端口要占——`send` 就是发消息，`status` 就是看在线
 - **🤖 教学内建，低入侵**：agent 侧装一次 skill，且**每条消息的信封自带回复命令**——照抄即可回话。题词只写角色，不写协议；长对话也不会忘
 - **📮 忙时不丢**：对方正在跑长任务？消息自动进本地发件箱（outbox），并由看门狗进程每 0.5–5 分钟自动重投，对方一空闲就送达——不需要你手动重发；滞留内容随时可在 mailbox 镜像文件里读到
-- **🔐 同用户信任边界**：全部通道按 Windows 用户隔离，接收许可只授予 `crosschat claude` 启动的会话——你手敲开的会话不会被外部投递
+- **🔐 同用户信任边界**：全部通道按系统用户隔离（Windows 用户 / unix uid），接收许可只授予 `crosschat claude` 启动的会话——你手敲开的会话不会被外部投递
 - **🧪 每个结论都有实证**：通道可行性、写者锁、daemon 版本行为，全部真机联调验证（见 [📚 更多文档](#-更多文档)）
 
-> 灵感与部分模块实现来自 [embassy](https://github.com/YuanpingSong/embassy)（macOS-only，MIT）——crosschat 是它的 Windows 原生、无守护进程重实现。
+> 灵感与部分模块实现来自 [embassy](https://github.com/YuanpingSong/embassy)（macOS-only，MIT）——crosschat 是它的 Windows 原生、无守护进程重实现（1.3.0 起亦支持 Linux/WSL，experimental）。
 
 ## 🧰 环境搭建
 
@@ -30,16 +30,16 @@
 | Node.js | ≥ 22 | |
 | Claude Code | 任意近期版 | 接收需 `crosschat claude` 启动（工具自动注入许可） |
 | Codex CLI | ≥ 0.160 推荐 | 0.160 daemon 支持开窗投递；接收需 app-server daemon |
-| OS | Windows（一期） | mac/linux 在路线图 |
+| OS | Windows（稳定）· Linux/WSL（experimental，1.3.0） | mac 未实测（unix 实现共享，理论可达） |
 
-```powershell
+```bash
 npm i -g @oatelauser/crosschat    # 一行安装（提供 crosschat / multichat 双命令）
 crosschat install-skills          # 协议教学装到两侧 agent
 ```
 
 <details><summary>从源码安装（开发者）</summary>
 
-```powershell
+```bash
 git clone https://github.com/Oatelauser/crosschat.git
 cd crosschat && npm ci && npm run build && npm link
 crosschat install-skills
@@ -50,15 +50,22 @@ crosschat install-skills
 
 **Codex daemon**（接收方向必需；从**干净终端**启动——勿在 Claude 会话内启动，否则派生 shell 身份污染）：
 
-```powershell
+```bash
 codex app-server daemon start    # 重启电脑后需重新执行
 ```
+
+**Linux / WSL（experimental，1.3.0）**——**独立部署**：unix 侧自成一套（状态目录 `~/crosschat`、发件箱、投递），与 Windows 侧互不相通，管道/socket 不过系统边界，**agent 必须与 crosschat 同侧运行**：
+
+- 前置：Node ≥ 22、claude / codex CLI 装在**同一侧**（WSL 内用 unix 版）
+- claude 安装（受限网络）：claude.ai/install.sh 可能被区域屏蔽（302），改用 npm 直装 `npm i -g @anthropic-ai/claude-code`；仍不可达时按架构直装平台包 tarball（如 `@anthropic-ai/claude-code-linux-x64`，镜像源可拉，解包即含原生 `claude` 二进制）
+- 状态目录：unix `~/crosschat`（Windows 侧为 `%LOCALAPPDATA%\crosschat`，两侧各自独立）
+- mac：unix 实现共享，理论可达、未实测
 
 ## 🚀 快速入门
 
 ### 30 秒版：两终端互发一句问候
 
-```powershell
+```bash
 # 终端 A（claude，能收）
 crosschat claude          # 进入后 /rename alice
 
@@ -185,9 +192,12 @@ crosschat -v | --version | help                     # 版本 / 帮助
 - [x] 忙/锁超时 → 本地发件箱 + 看门狗自动重投（outbox，FIFO 不插队，mailbox 镜像可读）
 - [x] daemon 0.160 开窗投递（实证：同 daemon 多连接绕过写者锁）
 
+**已完成（v1.3.0）**
+- [x] 🐧 Linux/WSL 平台支持（experimental）：PosixPipeTransport + claude unix 投递（免 auth 行，同 uid 内核凭证）+ CI ubuntu 矩阵；mac 外推未实测
+
 **计划中**
 - [ ] 🌐 跨机联邦（SSH，异构 win ↔ linux 互聊）
-- [ ] 🐧 mac / linux 平台适配（平台接缝已预留：PipeTransport / ProcessInspector / PathLayout）
+- [ ] 🐧 mac 平台适配（unix 代码路径已共享，待实机验证；平台接缝：PipeTransport / ProcessInspector / PathLayout）
 - [ ] 📦 常驻 broker（忙时持久队列、异步回执、投递状态机——embassy 完整集对齐）
 - [ ] 🖼️ TUI 看板与服务安装（开机自启）
 - [ ] 🤖 新 agent 适配器（GLM 等；有原生唤醒通道则原生，否则论证降级）
@@ -201,11 +211,11 @@ crosschat -v | --version | help                     # 版本 / 帮助
 
 **通道类**：`CODEX_PROXY_SPAWN_FAILED`（看 stderr 摘录；通常 daemon 未跑）· `CODEX_THREAD_LOCKED`/`CODEX_THREAD_BUSY_TIMEOUT`（已自动转 `parked` 入发件箱，无需重发）· `OUTBOX_FULL`（每线程 200 条积压上限，读 mailbox 镜像取回内容）· `CODEX_APPROVAL_REQUIRED`（**工具永不代答审批**）· `CLAUDE_PIPE_*`/`CODEX_*UNCERTAIN`（写入中途失败状态不明——**勿盲目重发**，先 `status` 核实）
 
-**发送审计**：每次发送的最终结果（delivered/queued/parked/failed、时间、对端、发送方显示名 fromName、回执）追加记录在 `%LOCALAPPDATA%\crosschat\send-log.jsonl`；codex 投递附 rollout 回执（消息已确认落入对方会话历史 = `receipt: confirmed`）。命令超时转后台后结果同样在案，事后可查。
+**发送审计**：每次发送的最终结果（delivered/queued/parked/failed、时间、对端、发送方显示名 fromName、回执）追加记录在状态目录的 `send-log.jsonl`（Windows `%LOCALAPPDATA%\crosschat\`；unix `~/crosschat/`）；codex 投递附 rollout 回执（消息已确认落入对方会话历史 = `receipt: confirmed`）。命令超时转后台后结果同样在案，事后可查。
 
 ## ⚠️ 边界与限制
 
-单条 ≤16KiB；每对端点 30 条/60s；发件箱每线程 200 条（满时读 `%LOCALAPPDATA%\crosschat\mailbox\<线程ID>.md` 取回内容）；信任边界=同一 Windows 用户；接收许可仅 `crosschat claude` 启动的会话。
+单条 ≤16KiB；每对端点 30 条/60s；发件箱每线程 200 条（满时读状态目录 `mailbox\<线程ID>.md` 镜像取回内容：Windows `%LOCALAPPDATA%\crosschat\mailbox\`、unix `~/crosschat/mailbox/`）；信任边界=同一系统用户（Windows 用户 / unix uid）；接收许可仅 `crosschat claude` 启动的会话。
 
 **daemon 依赖（重要）**：向 codex 会话投递走 `codex app-server proxy`，它连接**运行中的 app-server daemon** control socket。要获得完整能力（TUI 开窗可投、忙时入队），需要 `codex app-server daemon start` 且 daemon ≥0.160，TUI 用同版本 CLI 打开（0.160 起 TUI 自动附着 daemon）。daemon 未运行时投递会报 `CODEX_PROXY_SPAWN_FAILED` 并提示启动命令；旧版本 daemon 下开窗投递与忙时入队退化为「关窗投递 + 发件箱」。重启电脑后需重新 `codex app-server daemon start`。
 
@@ -244,9 +254,10 @@ crosschat -v | --version | help                     # 版本 / 帮助
 
 ## 🛠️ 开发说明
 
-```powershell
-npm run check                              # lint + build + test
-$env:CROSSCHAT_LIVE='1'; npx vitest run --dir test   # 真机 live 测试
+```bash
+npm run check                                        # lint + build + test
+CROSSCHAT_LIVE=1 npx vitest run --dir test           # 真机 live 测试（unix）
+# PowerShell: $env:CROSSCHAT_LIVE='1'; npx vitest run --dir test
 ```
 
 - 目录：`src/claude`（注册表/管道/鉴权）· `src/codex`（proxy/RPC/投递）· `src/commands`（CLI）· `src/platform`（平台接缝）· `src/outbox.ts`（发件箱）· `skills/`（agent 教学）

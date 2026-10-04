@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-04
+
+### 变更（B1/B2/B3：跨平台 Linux/WSL experimental）
+
+- 平台层 unix 支持（B1）：`PosixPipeTransport` 落地（AF_UNIX socket，Windows 语义零变化），`resolve-exe` / `identity` 补 unix 分支（自纠措辞按平台给 `env -u` / `Remove-Item` 两种写法）
+- claude unix 投递（B2）：deliver 平台分支——unix 侧**免 auth 行**（同 uid 由内核 peer credentials 保证身份，错 token 反而被丢），只发用户帧；send 的 codex 侧缺席时优雅降级。WSL（uid 1000）实测端到端打通：status 发现 / send delivered / 消息落入 transcript
+- CI ubuntu 矩阵（B3）：check job 加 windows-latest + ubuntu-latest 双操作系统，posix 门控用例（pipe-transport / deliver 的 `!win32` 用例）进 CI；README / SKILL.md 双平台措辞修正（platform badge、安装节 Linux/WSL 小节、`%LOCALAPPDATA%` → 平台化路径）
+- **WSL/Linux 是独立部署**：unix 状态目录 `~/crosschat`（Windows 侧 `%LOCALAPPDATA%\crosschat`，两侧互不相通），命名管道/socket 不过系统边界，agent 必须与 crosschat 同侧运行；Mac 无实机——unix 实现共享，理论可达、未实测
+
 ### 变更（B23：conversations 视图裸身份键译名）
 
 - `status --conversations` 渲染层补翻译：无名字证据的 pair 槽位（裸身份键 `claude:<id>` / `codex:<id>` 或 id8 缩写 `claude/<id8>` / `codex/<id8>`）按 claude 注册表与 codex 线程清单译成显示名；已有显示名（to/fromName 证据）一律不动，证据优先。claude 侧同源可证：身份键本就由注册表 `sessionId` 构成（identity.ts `claudeIdentity` → `identityKey`），join 精确。codex 清单失败按主视图同款降级（空表不报错）。文本与 JSON 两路径同表，JSON `pair` 值随之变好、八字段形状不变；`lastFrom`（机器字段）与 `endpoints` 不译。数据层与发送路径零改动

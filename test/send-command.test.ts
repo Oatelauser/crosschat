@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import process from 'node:process';
 import { afterAll, describe, expect, it } from 'vitest';
 import { MAX_BODY_BYTES, runSend, type SendArgs, type SendDeps } from '../src/commands/send.js';
 import { decodeRef, encodeRef, newConversationRef, nextTurnRef } from '../src/ref.js';
@@ -182,7 +183,9 @@ describe('runSend identity rules', () => {
     expect(err.message).toContain(
       'env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID',
     );
-    expect(err.message).toContain('Remove-Item Env:CLAUDE_CODE_*');
+    expect(err.message).toContain(
+      process.platform === 'win32' ? 'Remove-Item Env:CLAUDE_CODE_*' : 'unset CLAUDE_CODE_*',
+    );
     expect(err.message).toContain('daemon stop');
   });
 
