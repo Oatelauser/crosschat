@@ -483,3 +483,18 @@ describe('runSend --conversation stale-ref guard (B22)', () => {
     expect(out).toContain('(turn 3)'); // passed c=2 -> 3, no state consulted
   });
 });
+
+describe('runSend with codex entirely absent (B2 unix deploy)', () => {
+  it('delivers --to <claude name> when listCodexThreads rejects', async () => {
+    const deps = {
+      ...makeDeps({}),
+      listCodexThreads: async () => {
+        throw new MultichatError('CODEX_PROXY_SPAWN_FAILED', 'simulated codex absence');
+      },
+    };
+    const before = claudeDeliveries.length;
+    const out = await runSend({ to: 'alpha', bodyArg: 'hello from unix' }, deps);
+    expect(out).toContain('alpha');
+    expect(claudeDeliveries.length).toBe(before + 1);
+  });
+});

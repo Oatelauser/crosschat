@@ -103,7 +103,17 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     newRef = continued.ref;
     turn = continued.turn;
   } else {
-    const threads = await deps.listCodexThreads();
+    // Codex may be entirely absent (unix deploy); --to resolution still has
+    // to work claude-side, so an unreachable codex degrades to an empty
+    // thread list. A codex-side name then fails resolution with its own
+    // error instead of a transport spawn failure, and the codex-target
+    // delivery path still hits the real proxy below.
+    let threads: CodexThreadSummary[] = [];
+    try {
+      threads = await deps.listCodexThreads();
+    } catch {
+      // claude-side --to names still resolvable; otherwise let resolveTargetByName report it
+    }
     // Guard above ensures exactly one of --to/--conversation; here it is --to.
     const resolved = resolveTargetByName(args.to ?? '', scan.sessions, threads);
     target =
