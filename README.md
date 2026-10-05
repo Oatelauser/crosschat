@@ -125,7 +125,7 @@ D:\workspace\demo> codex
 ## 📋 命令列表
 
 ```
-crosschat send --to <名字> --body "<正文>"          # 新消息（名字含空格加引号）
+crosschat send --to <名字> --body "<正文>"          # 新消息（名字含空格加引号；未命名 codex 线程可用 id8 或完整 id 寻址，status 可见）
 crosschat send --conversation <ref> --body "<正文>" # 回复（ref 照抄收到的信封）
 echo … | crosschat send --to <名字>                 # 正文走 stdin
 crosschat status [--json] [--conversations]        # 双侧总览（名字/目录/时间/状态）

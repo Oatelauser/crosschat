@@ -94,3 +94,55 @@ describe('resolveTargetByName', () => {
     expect(err.message).toContain('no named threads');
   });
 });
+
+describe('resolveTargetByName — codex id addressing (unnamed threads)', () => {
+  const uuidA = '12345678-1111-7abc-89ab-000000000001';
+  const uuidB = '01a10735-2222-7def-89ab-000000000002';
+  const uuidThreads: CodexThreadSummary[] = [
+    { id: uuidA, name: null, status: 'idle' },
+    { id: uuidB, name: null, status: 'busy' },
+  ];
+
+  it('resolves an unnamed codex thread by unique id8 prefix', () => {
+    const resolved = resolveTargetByName('12345678', sessions, uuidThreads);
+    expect(resolved.side).toBe('codex');
+    if (resolved.side === 'codex') expect(resolved.thread.id).toBe(uuidA);
+  });
+
+  it('accepts the codex/ prefix form', () => {
+    const resolved = resolveTargetByName('codex/01a10735', sessions, uuidThreads);
+    expect(resolved.side).toBe('codex');
+    if (resolved.side === 'codex') expect(resolved.thread.id).toBe(uuidB);
+  });
+
+  it('resolves by full uuid', () => {
+    const resolved = resolveTargetByName(uuidA, sessions, uuidThreads);
+    expect(resolved.side).toBe('codex');
+    if (resolved.side === 'codex') expect(resolved.thread.id).toBe(uuidA);
+  });
+
+  it('throws NAME_COLLISION listing full ids when id8 matches several threads', () => {
+    const twins: CodexThreadSummary[] = [
+      { id: '01a10735-2222-7def-89ab-000000000002', name: null, status: 'idle' },
+      { id: '01a10735-3333-7def-89ab-000000000003', name: null, status: 'busy' },
+    ];
+    const err = expectCode(() => resolveTargetByName('01a10735', sessions, twins), 'NAME_COLLISION');
+    expect(err.message).toContain('01a10735-2222-7def-89ab-000000000002');
+    expect(err.message).toContain('01a10735-3333-7def-89ab-000000000003');
+    expect(err.message).toContain('full id');
+  });
+
+  it('falls to NAME_NOT_FOUND on zero hits, invalid id forms included', () => {
+    const err = expectCode(() => resolveTargetByName('deadbeef', sessions, uuidThreads), 'NAME_NOT_FOUND');
+    expect(err.message).toContain('id8'); // hint appears because unnamed threads exist
+    expectCode(() => resolveTargetByName('deadbee', sessions, uuidThreads), 'NAME_NOT_FOUND'); // wrong length
+    expectCode(() => resolveTargetByName('codex/ABCDEFGH', sessions, uuidThreads), 'NAME_NOT_FOUND'); // not lowercase hex
+  });
+
+  it('prefers an exact name over a same-shaped id', () => {
+    const namedLikeId: ClaudeSessionEntry[] = [{ ...sessions[0], name: '12345678' }];
+    const resolved = resolveTargetByName('12345678', namedLikeId, uuidThreads);
+    expect(resolved.side).toBe('claude');
+    if (resolved.side === 'claude') expect(resolved.session.pid).toBe(101);
+  });
+});

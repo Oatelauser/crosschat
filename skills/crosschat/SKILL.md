@@ -41,7 +41,7 @@ crosschat status
 crosschat send --to <名字> --body "正文"
 ```
 
-- 名字 = claude 会话名或 codex 线程名（status 列出全部可路由对象）。
+- 名字 = claude 会话名或 codex 线程名（status 列出全部可路由对象）；未命名 codex 线程可用 id8 或完整 id 寻址（`crosschat status` 里可见）。
 - 查会话往来（双方、最近活跃、轮次、最近投递状态、滞留条数）：`crosschat status --conversations`；`queued` / `parked` 的终态也在这里确认。
 - 长正文可省略 `--body`，改为管道：`<正文文件路径的内容> | crosschat send --to <名字>`。
 - 投给 codex 的消息：**开窗、关窗、忙时均可投**（daemon 0.160+）。对方正在跑 turn 也不阻塞——消息直接**入队**（输出 `queued`），当前轮结束即进入对话被处理；TUI 窗口会实时刷出。输出 `delivered`（已送达）/ `queued`（已入队，轮末处理）/ `parked`（仅旧 daemon 异常态，已暂存），三者都**无需重发**。
