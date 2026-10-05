@@ -40,3 +40,12 @@
 ## 现场清理
 
 全部演练会话已终止；已删 `/root/xc-drill3-5`、`/root/xc-cx1-2`、`/root/crosschat`（演练状态）、演练专用 transcript（`-root-xc-drill*` 项目目录）。保留：两个演练 codex rollout（`~/.codex/sessions/2026/10/04/rollout-*7623*` / `*bc85*`，惰性 jsonl 可随手删）；用户自己的会话与数据全程未触碰（`crosschat claude` 包装的 cc-worker10 在运行中，未受影响）。
+
+## 附：真实使用验证（2026-10-05，用户日常环境反馈）
+
+用户在 WSL 用自己的会话对（cc-worker10 / cc-master10）实际互聊后，双侧 agent 的体验自述：
+
+- **codex 侧**：working 状态中消息直接进当前对话（工具返回 `Sleep interrupted by new input` 后消息入上下文），随即回复 delivered，全程不结束当前轮；并主动自省"反复查状态是我的等待方式多余，并非 crosschat 要求"——skill"发送即完成本轮"纪律已被 agent 内化引用。
+- **claude 侧**：完整还原排队时间线——消息在对方队列等待至对方轮末注入，到达即被唤醒处理；正确归因等待 = 对方任务剩余时间 + 对方模型生成时间（协议设计内延迟），与 API 无关；唯一服务异常是权限分类器超时（harness 侧，重试自愈）。
+
+结论：忙时排队、轮末注入、异步唤醒、skill 教学四项设计在真实日常使用中全部按预期工作，零新问题。
