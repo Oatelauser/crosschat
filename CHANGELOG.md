@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-05
+
+### 变更（B4 + skill 教学修正）
+
+- skill 会话纪律新增**"发送成功即完成本轮"**：`send` 返回 `delivered`/`queued` 即结束当前轮次、禁止轮询 `status` 等回复（异步原生唤醒：对方回复会作为新消息注入本会话）——实测暴露的教学缺口，agent 曾以 20s 间隔轮询等回复白耗整轮；发布后真实使用中 agent 已主动引用该纪律并自省
+- `--to` 支持 **codex 线程 id 寻址**（`codex exec` 线程天生无名，此前无法被主动发起对话）：解析顺序 = 精确名（原样）→ 可选 `codex/` 前缀 + id8 前缀或完整 uuid；id8 多命中抛 `NAME_COLLISION` 列全量 id（UUIDv7 同分钟创建的线程 id8 天然同头）；`NAME_NOT_FOUND` 提示补 id 寻址句；名字永远优先。WSL 活体验收：碰撞对正确报错、完整 id delivered 到无名线程
+- 文档：unix 联调报告补全（codex 三腿打通、全六向闭环、真实使用验证附录）
+
 ## [1.3.0] - 2026-10-04
 
 ### 变更（B1/B2/B3：跨平台 Linux/WSL experimental）
