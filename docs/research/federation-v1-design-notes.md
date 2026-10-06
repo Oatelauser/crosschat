@@ -95,3 +95,12 @@
 2. **id 编码逃生门**：UUID（32-hex）走定长 16B；非 UUID id 走"长度前缀+原始串"，flags 位区分——claude 会话 id 格式漂移不翻车；human 端点零 id 字节
 3. **mc1_ 永久兼容解码**，新旧共存零迁移；旧 CLI 读 mc2_ → INVALID_CONVERSATION_REF 错误文案加"对端版本较新，升级本机 crosschat 后回复"（版本偏斜落地细节）
 4. **信封回复命令跨机形态不带 `--to`**（第六轮纠错：ref 已含双方端点，--to 冗余且与单机形态不一致）：`crosschat send --via ssh:<m> --conversation mc2_xxx --body "<你的回复>"`——比最初演示更短
+
+## 7. 第七轮俯瞰补录（2026-10-06，B1 派单前）
+
+- **F1 · --origin 编码（规格漏洞修复）**：origin 值含会话显示名（可含空格/unicode），与 D2 旗标值白名单矛盾——定案 origin 整串 base64url 编码传输，远端解码记账（~4 行，免疫引号）。
+- **F2 · ssh 固定参数**：补 `-o BatchMode=yes`（交互提示变快速失败，防 agent 首连卡满 120s 超时）；known_hosts 由部署探活步骤预先播种；ConnectTimeout=10s 已有。
+- **F3 · 测试捷径**：`--via ssh:localhost` 可零第二台机测联邦全语义，B1 首验与单测复用。
+- **F4 · 丢线头**：票 008 决策点 16（CI mac 观察位）至今未落——并入 B3 或独立微批，勿烂尾。
+- **F5 · 脚本可用性**：本地 `--json` × `--via` = 远端 JSON 透传 + `via` 字段增补。
+- 附注：启用本机 sshd 即开监听端口，防火墙规则按需收窄（用户权衡）。
