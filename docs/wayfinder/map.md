@@ -55,7 +55,7 @@ label: wayfinder:map
 - agent 侧 skill 文案（embassy-peer 等价物）——形式已定（003：skill+信封双保险），具体文案实施时写
 - 工具命名
 - codex TUI 占用标注：**已关闭（[006](tickets/006-codex-tui-occupancy-observable.md)，2026-10-06，见 Decisions）**；实施批次 ~40 行纯增量待用户触发
-- 专用信箱线程机制化：**已关票不做（[007](tickets/007-dedicated-mailbox-thread.md) wontfix，2026-10-06）**——命名由双侧原生 `/rename` 承接，无名用 id8 寻址（B4）；注册表否决（场景空心 + 无生死钩子必膨胀）。休眠场景"headless 脚本化建命名线程"待真实需求触发再议（如跨机联邦批量预置接收端）
+- 专用信箱线程机制化：**已关票不做（[007](tickets/007-dedicated-mailbox-thread.md) wontfix，2026-10-06）**——命名由双侧原生 `/rename` 承接，无名用 id8 寻址（B4）；注册表否决（场景空心 + 无生死钩子必膨胀）。原休眠场景"headless 脚本化建线程"**用户确认重要，已开 [009](tickets/009-codex-new-command.md)**：`crosschat codex new` 建线程打印 id，脚本直接拿 id 寻址，无命名无注册表
 
 ## Out of scope
 
