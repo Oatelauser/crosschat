@@ -16,7 +16,7 @@ import { runWatchdog, spawnWatchdog as ensureWatchdog } from './watchdog.js';
 import { appendSendLog, confirmInRollout, defaultSendLogFile } from './send-log.js';
 import { defaultConversationsFile } from './conversations.js';
 import { conversationSummaries } from './conversation-summary.js';
-import { codexHomeDir } from './codex/rollout-meta.js';
+import { codexHomeDir, listWriterLocks } from './codex/rollout-meta.js';
 import { listClaudeSessions } from './claude/registry.js';
 import { deliverToClaudeSession } from './claude/deliver.js';
 import { listCodexThreads } from './codex/discovery.js';
@@ -142,6 +142,8 @@ function realStatusDeps(): StatusDeps {
   return {
     listClaudeSessions: () => listClaudeSessions(),
     listCodexThreads: () => listCodexThreads(),
+    // 006: TUI occupancy markers come straight from the filesystem.
+    listWriterLocks: () => listWriterLocks(codexHomeDir()),
     listConversations: () => conversationSummaries(),
     // B22: bounded recheck budget (2 polls × 200ms per unconfirmed row) so the
     // conversations view stays snappy while catching slow rollout flushes.

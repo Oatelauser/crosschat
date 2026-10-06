@@ -138,3 +138,27 @@ export function findRolloutFile(codexHome: string, threadId: string): string | u
   if (threadId.length === 0) return undefined;
   return findRolloutFiles(join(codexHome, 'sessions'), new Set([threadId])).get(threadId);
 }
+
+/**
+ * Thread ids whose writer is currently held by a live TUI (006): the zero-byte
+ * `<codexHome>/thread-writer-locks/<threadId>.lock` markers. Created on TUI
+ * attach, removed on release; a plain readdir, never throws. `.coordination`
+ * is a directory-level coordination lock, not a per-thread one, so it is
+ * excluded. A lock without a thread/list entry is a real state (a fresh TUI
+ * tab with no rollout yet) — callers decide how to show it.
+ */
+export function listWriterLocks(codexHome: string): Set<string> {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(join(codexHome, 'thread-writer-locks'), { withFileTypes: true });
+  } catch {
+    return new Set();
+  }
+  const ids = new Set<string>();
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.lock')) continue;
+    const id = entry.name.slice(0, -'.lock'.length);
+    if (id.length > 0 && id !== '.coordination') ids.add(id);
+  }
+  return ids;
+}

@@ -24,6 +24,11 @@ export interface StatusDeps {
   confirmReceipt?(threadId: string, marker: string): Promise<'confirmed' | 'unconfirmed'>;
   /** Clock for the conversations view's relative times; omitted → Date.now(). */
   now?(): number;
+  /**
+   * Thread ids whose writer is held by a live TUI (006, thread-writer-locks).
+   * Omitted → nothing is marked; output stays byte-identical to before.
+   */
+  listWriterLocks?(): Set<string>;
 }
 
 /** Last two segments of a session cwd (`D:\workspace\CC\foo` -> `CC\foo`). */
@@ -60,6 +65,7 @@ export async function runStatus(
         ? `${err.code}: ${err.message}`
         : `INTERNAL: ${err instanceof Error ? err.message : String(err)}`;
   }
+  const held = deps.listWriterLocks?.() ?? new Set<string>();
 
   if (json) {
     return JSON.stringify({
@@ -73,14 +79,29 @@ export async function runStatus(
       codex:
         threads === undefined
           ? { error: codexError }
-          : threads.map((thread) => ({
-              name: thread.name,
-              status: thread.status,
-              id: thread.id.slice(0, 8),
-              cwd: thread.meta?.cwd ?? null,
-              createdAt: thread.meta?.createdAt ?? null,
-              originator: thread.meta?.originator ?? null,
-            })),
+          : [
+              ...threads.map((thread) => ({
+                name: thread.name,
+                status: thread.status,
+                id: thread.id.slice(0, 8),
+                cwd: thread.meta?.cwd ?? null,
+                createdAt: thread.meta?.createdAt ?? null,
+                originator: thread.meta?.originator ?? null,
+                // 006: only present when the writer is held — no locks, no field.
+                ...(held.has(thread.id) ? { held: true as const } : {}),
+              })),
+              // Locked threads that never made it into thread/list (fresh TUI
+              // tab, no rollout yet) still deserve a row.
+              ...unlistedLocks(held, threads).map((id) => ({
+                name: null,
+                status: 'not_listed',
+                id: id.slice(0, 8),
+                cwd: null,
+                createdAt: null,
+                originator: null,
+                held: true as const,
+              })),
+            ],
     });
   }
 
@@ -93,17 +114,31 @@ export async function runStatus(
   }
   lines.push('codex:');
   if (codexError !== undefined) lines.push(`  unavailable (${codexError})`);
-  else if ((threads ?? []).length === 0) lines.push('  (none)');
+  else if ((threads ?? []).length === 0 && held.size === 0) lines.push('  (none)');
   else {
     for (const thread of threads ?? []) {
       const name = (thread.name ?? '(unnamed)').padEnd(24);
       const dir = formatCwdShort(thread.meta?.cwd).padEnd(20);
       const created = formatCreatedAt(thread.meta?.createdAt).padEnd(11);
       const originator = (thread.meta?.originator ?? '-').padEnd(16);
-      lines.push(`  ${name} ${dir} ${created} ${originator} ${thread.id.slice(0, 8)}  ${thread.status}`);
+      const marker = held.has(thread.id) ? '  TUI占用' : '';
+      lines.push(`  ${name} ${dir} ${created} ${originator} ${thread.id.slice(0, 8)}  ${thread.status}${marker}`);
+    }
+    // 006: locked but absent from thread/list (fresh TUI tab, no rollout).
+    for (const id of unlistedLocks(held, threads)) {
+      lines.push(
+        `  ${'-'.padEnd(24)} ${'-'.padEnd(20)} ${'-'.padEnd(11)} ${'-'.padEnd(16)} ${id.slice(0, 8)}  未列入  TUI占用`,
+      );
     }
   }
   return lines.join('\n');
+}
+
+/** Locks whose thread id is not in the thread/list result (empty when listing failed). */
+function unlistedLocks(held: ReadonlySet<string>, threads: CodexThreadWithMeta[] | undefined): string[] {
+  if (threads === undefined) return [];
+  const listed = new Set(threads.map((thread) => thread.id));
+  return [...held].filter((id) => !listed.has(id));
 }
 
 /** `status --conversations`: per-pair rows (direction, freshness, turn, last status, receipt, parked). */

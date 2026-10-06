@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   codexHomeDir,
+  listWriterLocks,
   lookupRolloutMeta,
   lookupRolloutMetas,
 } from '../src/codex/rollout-meta.js';
@@ -105,6 +106,29 @@ describe('lookupRolloutMeta', () => {
   });
 });
 
+describe('listWriterLocks', () => {
+  const writeLock = (home: string, fileName: string): void => {
+    mkdirSync(join(home, 'thread-writer-locks'), { recursive: true });
+    writeFileSync(join(home, 'thread-writer-locks', fileName), '');
+  };
+
+  it('collects per-thread locks and skips the coordination lock / non-lock files / subdirs', () => {
+    const home = makeCodexHome();
+    writeLock(home, `${THREAD_ID}.lock`);
+    writeLock(home, '11111111-2222-3333-4444-555555555555.lock');
+    writeLock(home, '.coordination.lock');
+    writeLock(home, 'not-a-lock.txt');
+    mkdirSync(join(home, 'thread-writer-locks', 'subdir.lock'));
+    expect(listWriterLocks(home)).toEqual(
+      new Set([THREAD_ID, '11111111-2222-3333-4444-555555555555']),
+    );
+  });
+
+  it('returns an empty set when the directory is missing', () => {
+    expect(listWriterLocks(makeCodexHome())).toEqual(new Set());
+  });
+});
+
 describe('status formatting', () => {
   it('formatCwdShort keeps the last two path segments', () => {
     expect(formatCwdShort('D:\\workspace\\CC\\ai-front-spec')).toBe('CC\\ai-front-spec');
@@ -171,6 +195,46 @@ describe('status formatting', () => {
       originator: 'codex-tui',
     });
     expect(json.codex[1]).toEqual({ name: 'named', status: 'not_loaded', id: 'deadbeef', cwd: null, createdAt: null, originator: null });
+  });
+
+  it('runStatus marks TUI-held threads and appends unlisted locks (006)', async () => {
+    const home = makeCodexHome();
+    const unlisted = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    for (const id of [THREAD_ID, unlisted]) {
+      mkdirSync(join(home, 'thread-writer-locks'), { recursive: true });
+      writeFileSync(join(home, 'thread-writer-locks', `${id}.lock`), '');
+    }
+    const threads: CodexThreadWithMeta[] = [
+      { id: THREAD_ID, name: 'held-one', status: 'idle' },
+      { id: 'deadbeef-0000-0000-0000-000000000000', name: 'free-one', status: 'not_loaded' },
+    ];
+    const baseDeps = {
+      listClaudeSessions: () => ({ sessions: [], malformed: 0 }),
+      listCodexThreads: () => Promise.resolve(threads),
+    };
+    const text = await runStatus({ ...baseDeps, listWriterLocks: () => listWriterLocks(home) }, false);
+    const heldLine = text.split('\n').find((line) => line.includes('held-one')) as string;
+    expect(heldLine).toContain('TUI占用');
+    const freeLine = text.split('\n').find((line) => line.includes('free-one')) as string;
+    expect(freeLine).not.toContain('TUI占用');
+    const unlistedLine = text.split('\n').find((line) => line.includes('aaaaaaaa')) as string;
+    expect(unlistedLine).toContain('未列入');
+    expect(unlistedLine).toContain('TUI占用');
+
+    const json = JSON.parse(
+      await runStatus({ ...baseDeps, listWriterLocks: () => listWriterLocks(home) }, true),
+    ) as { codex: Array<Record<string, unknown>> };
+    expect(json.codex[0]).toMatchObject({ id: '01a05bb8', held: true });
+    expect(json.codex[1]).not.toHaveProperty('held');
+    expect(json.codex[2]).toEqual({
+      name: null, status: 'not_listed', id: 'aaaaaaaa', cwd: null, createdAt: null, originator: null, held: true,
+    });
+
+    // Zero regression: without the dep, neither marker nor JSON field appears.
+    const bareText = await runStatus(baseDeps, false);
+    expect(bareText).not.toContain('TUI占用');
+    const bareJson = JSON.parse(await runStatus(baseDeps, true)) as { codex: Array<Record<string, unknown>> };
+    for (const row of bareJson.codex) expect(row).not.toHaveProperty('held');
   });
 
   it('codexHomeDir prefers CODEX_HOME', () => {
