@@ -1,27 +1,25 @@
-# crosschat 专用信箱线程机制化设计
+# crosschat 启动即命名（-n）设计
 
-label: wayfinder:grilling
+label: wayfinder:research
 status: open
 blocked-by: （无）
-claimed-by: （待领）
+claimed-by: 研究子代理（2026-10-06，主会话派单）
+
+## 设计转向记录（2026-10-06）
+
+本票原案"专用信箱线程机制化（operator 别名 + name set 注册表）"经用户质询后**作废**：双侧 `/rename` 原生命名已覆盖"给会话起名"，`--to <名字>` 今天即可投递。用户提案取代：**启动即命名**——`crosschat claude -n <name>` / `crosschat codex -n <name>`，且 `-n` 必须是 claude/codex **自己的原生会话名**，不是 crosschat 侧别名；一步到位，不引入注册表文件。原案的研究产物（F1-F7）中关于线程生命周期的事实仍然有效，见 docs/research/mailbox-thread-design.md。
 
 ## Question
 
-要不要、以及如何机制化"每机一个常闭 operator 线程作默认收件地址"？零实现代码，产出设计决策。
+`-n` 启动命名两侧能否落地为**原生子名**？两个实验定音：
 
-须定的决策点：
+1. **claude 腿**：`crosschat claude -n worker2` 启动后由 wrapper 把名字写入会话注册表条目（`~/.claude/sessions/<pid>.json`，crosschat 本就读取的数据源）。验证点：claude 是否回写覆盖；名字对 `/rename`、status 发现、`--to` 解析是否等效。
+2. **codex 腿**：TUI `/rename` 的写入路径是什么（state db 直写？未公开 daemon 方法？），`crosschat codex -n worker2`（新薄包装命令，纯透传+命名）能否复用该路径实现出生即命名。查不到可复用路径 → codex 侧结论记"维持 TUI /rename 一步"，不硬做。
 
-1. **创建时机与方式**：install-skills 附带自举？首次 send 懒创建？还是仅文档指导由用户手动建？（候选路径需查证：daemon 侧新建线程的正规入口——headless 首轮即产生 rollout，还是有 thread/start 类 API；创建动作本身有副作用，须明确何时可接受）
-2. **命名与寻址**：线程名叫什么、`--to` 怎么指到它（固定别名如 `mailbox`/`operator`？别名解析加在哪层，与 id8/完整 id 寻址及 B15 自动接续如何共存不冲突）
-3. **默认收件语义**（⚠️ 默认行为变更点，拍板须用户确认）：未指明 `--to` 时发到信箱？还是信箱只是显式可选项？
-4. **与忙时机制的关系**：工作线程全开窗时信箱是保底可达地址（与 outbox/watchdog 互补）；信箱自身被 TUI 打开（用户好奇点开看）时降级语义是什么
-5. **skill 文案增量**：发送方 agent 怎么被教会"投信箱"（信封自带命令照抄原则不变）
-6. **零回归验收标准**：不碰既有 send 默认路径的判据
+附带记档（不展开设计）：
+- 轮换：claude 侧重开同 `-n` 即可（旧会话死名字释放）；codex 侧旧线程占名，未来可用 `thread/archive` 做平滑轮换
+- 2026-10-06 全局复审的安全/防乒乓要点（skill 文案层面）不随本转向丢失，归 008 票决策点 5/11/12 承接
 
-背景与约束：
+## Resolution
 
-- 一期现状：靠 README 文档指导，工作线程兼任收件地址；忙时投递已由 outbox+watchdog 覆盖（B12/13）。信箱线程的增量价值 = ①全部工作线程开窗时仍有稳定可达地址 ②收发分流，信件不混入工作上下文
-- [006](006-codex-tui-occupancy-observable.md) 已证 TUI 占用可观测（thread-writer-locks）——"常闭"承诺的运行时验证手段现成
-- 站定性约束（2026-10-06）：纯增量；改默认行为必须先经用户确认；无新守护进程、无必填配置文件；跨机联邦在后续（信箱寻址设计不得与未来 `--via ssh:` 组合冲突）
-
-优先级上下文（2026-10-06 用户拍板）：小项提前批 006 → 007，先于联邦 v1 / broker。
+（待研究代理回报后由主会话补）
