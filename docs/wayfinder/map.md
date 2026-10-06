@@ -52,8 +52,8 @@ label: wayfinder:map
 - Mac 实机验证（无环境；unix 实现共享 + embassy 实证外推，跨平台批次 B3 后如有实机再补）
 - agent 侧 skill 文案（embassy-peer 等价物）——形式已定（003：skill+信封双保险），具体文案实施时写
 - 工具命名
-- codex TUI 占用标注：status 显示哪个线程被 live TUI 持有；需查写者锁存储位置（状态库 lease vs daemon 内存表）；禁止用 resume 探测（会抢写者）
-- 专用信箱线程机制化：每机一个 multichat 自有的常闭 operator 线程作默认收件地址，避免工作线程混用（一期靠 README 文档指导）
+- codex TUI 占用标注：status 显示哪个线程被 live TUI 持有；需查写者锁存储位置（状态库 lease vs daemon 内存表）；禁止用 resume 探测（会抢写者）——**已开票 [006](tickets/006-codex-tui-occupancy-observable.md)**（2026-10-06 用户拍板：与专用信箱线程一起提前于联邦 v1/broker 执行，顺序 006 → 007）
+- 专用信箱线程机制化：每机一个 multichat 自有的常闭 operator 线程作默认收件地址，避免工作线程混用（一期靠 README 文档指导）——排队为 007，006 关闭后开票
 
 ## Out of scope
 
