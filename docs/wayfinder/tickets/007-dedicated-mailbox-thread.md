@@ -26,7 +26,9 @@ claimed-by: 研究子代理（2026-10-06，主会话派单）
 - **codex 注册表**（crosschat 自有 name→threadId 表，不耦合 codex 内部，升级免疫）；claude **不进注册表**（活进程 pid 绑定，注册表对 claude 是死数据/重启即失效的摩擦）。
 - **`name set` 降为事后补名逃生门（罕见路径）**：`crosschat name set <名> --id <id8|完整>`，id 从 status 的 id8 列抄。正常路径零 id 接触。
 - **status 双名显示**：有注册名的 codex 线程 name 列显示注册名，原生名存在且不同则追加（如 `worker2 ·原名xxx`，原生名 null 只显注册名）；`--json` 分立 `name`/`alias` 两字段。
-- **解析顺序定死**：`--to` = 注册表名 → 原生线程名 → id8/完整 id；撞车报 `NAME_COLLISION` 列出两个 id。
+- **解析顺序定死**：`--to` = 注册表名 → 原生线程名 → id8/完整 id；**跨线程撞名**（A 的别名 = B 的原生名）报 `NAME_COLLISION` 列出两个 id 拒绝猜测；**同线程双名**（别名+原生名并存）合法，都指向该线程。
+- **别名与 `/rename` 互不覆盖**（语义定案）：别名管寻址（crosschat 的），`/rename` 管显示（codex/claude 自己的）。用户事后 `/rename`：codex 侧 status 变 `别名 ·原名新名`，双把手共存；claude 侧旧名消失，`--to 旧名` NAME_NOT_FOUND 附可用名清单自纠，进行中对话走 `--conversation ref` 不受影响。
+- **悬空别名自愈**（实施必须带）：别名指向的线程被删 → 投递错误映射为"worker2 指向的线程已不存在，重跑 `crosschat codex -n worker2` 重建"。
 - **claude `-n` 重名**：wrapper spawn 前查重——同名**活**会话 → 拒建（`NAME_COLLISION` + pid + 指引）；已死同名 → 放行（= 免费轮换）。文档写明 `-n` 是"命名新建"非"进入"（活会话单终端不可接入）；并发竞态由 send 侧 `NAME_COLLISION` 兜底；裸 `claude` + `/rename` 仍是逃生门。
 - 实验遗留问题（claude `-n` 参数确切拼写）实施时 `claude --help` 一句确认，不占票。
 
