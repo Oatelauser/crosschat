@@ -14,7 +14,7 @@ claimed-by: 研究子代理（2026-10-06，主会话派单）
 `-n` 启动命名两侧能否落地为**原生子名**？两个实验定音：
 
 1. **claude 腿**：`crosschat claude -n worker2` 启动后由 wrapper 把名字写入会话注册表条目（`~/.claude/sessions/<pid>.json`，crosschat 本就读取的数据源）。验证点：claude 是否回写覆盖；名字对 `/rename`、status 发现、`--to` 解析是否等效。
-2. **codex 腿**：TUI `/rename` 的写入路径是什么（state db 直写？未公开 daemon 方法？），`crosschat codex -n worker2`（新薄包装命令，纯透传+命名）能否复用该路径实现出生即命名。查不到可复用路径 → codex 侧结论记"维持 TUI /rename 一步"，不硬做。
+2. **codex 腿**（2026-10-06 用户约束：**不走逆向**——不以 sqlite 直写或未公开 daemon 方法为实现基础，版本耦合 codex 升级即断）：只查文档化面（generate-ts schema + 官方 changelog / 更新版本）有无线程命名 API 或 CLI 参数。无 → 结论 c) 维持"TUI 里 /rename 一步"，升级路径 = 向上游提 rename API/flag 需求，官方出了就接入。
 
 附带记档（不展开设计）：
 - 轮换：claude 侧重开同 `-n` 即可（旧会话死名字释放）；codex 侧旧线程占名，未来可用 `thread/archive` 做平滑轮换
