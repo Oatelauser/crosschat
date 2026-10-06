@@ -27,6 +27,7 @@ label: wayfinder:map
   - Q9 不承诺与 embassy 联邦协议互通，留雾区评估
   - 最终支持 win/mac/linux，异构互聊
 - 站定性产品约束（2026-10-01 用户反馈）：**使用形式必须低入侵** —— 不得依赖题词被逐字执行；协议教学与收发机制尽量内建（skill / 信封自带），题词只承担角色设定。
+- 站定性架构约束（2026-10-06 提炼，007/009 全程教训）：**crosschat 只拥有"会话间寻址与投递"，一切生命周期归原生**——创建=`codex` TUI / `codex exec`、命名=双侧 `/rename`、销毁/轮换=codex 原生；crosschat 可观测原生状态（如 thread-writer-locks）但不得复制或代理生命周期（自有状态无生死钩子，必悬空膨胀——mailbox init/name set/codex new/--spawn 四案同因否决）。
 - 站定性产品约束（2026-10-06 用户反馈，同日二次修订）：**既有功能零回归 + 跨机场景轻量部署** —— 任何新功能纯增量，改默认行为必须先经用户确认（铁律在案）。**v1 准入门槛不变**：无 broker、无新监听端口、无新守护进程、无必填配置文件、不发明新鉴权（信任边界=ssh 同用户），部署以"两端 npm i -g + ssh 免密"为上限（免密=机器通道密钥，每台 ssh-keygen 一次 + 对每个对端 ssh-copy-id 输一次现有密码，密码登录共存，不做 sshpass 类塞入）。**终点传输面（用户 2026-10-06 拍板）：ssh → tcp → broker 三形态**——tcp 为局域网直连（可选监听 + 极简预共享鉴权）、broker 为独立组件、堡垒机形态（全节点出站连接、worker 免开入站端口、密钥拓扑星型）、最后实现；tcp/broker 属可选分层组件，核心 CLI 的无守护形态不变。目标矩阵：linux/win/mac 三类两两互通（含自身），win 收件腿需 OpenSSH Server、mac 需开远程登录、win 侧 npm 全局 bin 须在 sshd 默认 shell PATH——**mac 实机验证因此从"如有再补"升级为联邦 M 腿依赖**。
 - 技能：按票型调用 research / grilling(+domain-modeling) / prototype。
 - Tracker 约定（本地 markdown）：claim = 把票的 `claimed-by` 改成自己；blocking 用 `blocked-by` 字段；解决 = 在票文件末尾追加 `## Resolution` 一节并把 `status` 改为 `closed`，然后在下方 Decisions so far 加一行。
