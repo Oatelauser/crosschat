@@ -27,7 +27,7 @@ label: wayfinder:map
   - Q9 不承诺与 embassy 联邦协议互通，留雾区评估
   - 最终支持 win/mac/linux，异构互聊
 - 站定性产品约束（2026-10-01 用户反馈）：**使用形式必须低入侵** —— 不得依赖题词被逐字执行；协议教学与收发机制尽量内建（skill / 信封自带），题词只承担角色设定。
-- 站定性产品约束（2026-10-06 用户反馈）：**既有功能零回归 + 跨机场景轻量部署** —— 任何新功能纯增量，改默认行为必须先经用户确认（铁律在案）；跨机联邦的准入门槛：无 broker、无新监听端口、无新守护进程、无必填配置文件、不发明新鉴权（信任边界=ssh 同用户），部署以"两端 npm i -g + ssh 免密"为上限。**免密 = 机器通道密钥**（每台 ssh-keygen 一次 + 对每个对端 ssh-copy-id 输一次现有密码；密码登录原样共存；不做 sshpass 类密码塞入）。目标矩阵：linux/win/mac 三类两两互通（含自身），win 收件腿需 OpenSSH Server、mac 需开远程登录、win 侧 npm 全局 bin 须在 sshd 默认 shell PATH——**mac 实机验证因此从"如有再补"升级为联邦 M 腿依赖**。
+- 站定性产品约束（2026-10-06 用户反馈，同日二次修订）：**既有功能零回归 + 跨机场景轻量部署** —— 任何新功能纯增量，改默认行为必须先经用户确认（铁律在案）。**v1 准入门槛不变**：无 broker、无新监听端口、无新守护进程、无必填配置文件、不发明新鉴权（信任边界=ssh 同用户），部署以"两端 npm i -g + ssh 免密"为上限（免密=机器通道密钥，每台 ssh-keygen 一次 + 对每个对端 ssh-copy-id 输一次现有密码，密码登录共存，不做 sshpass 类塞入）。**终点传输面（用户 2026-10-06 拍板）：ssh → tcp → broker 三形态**——tcp 为局域网直连（可选监听 + 极简预共享鉴权）、broker 为独立组件、堡垒机形态（全节点出站连接、worker 免开入站端口、密钥拓扑星型）、最后实现；tcp/broker 属可选分层组件，核心 CLI 的无守护形态不变。目标矩阵：linux/win/mac 三类两两互通（含自身），win 收件腿需 OpenSSH Server、mac 需开远程登录、win 侧 npm 全局 bin 须在 sshd 默认 shell PATH——**mac 实机验证因此从"如有再补"升级为联邦 M 腿依赖**。
 - 技能：按票型调用 research / grilling(+domain-modeling) / prototype。
 - Tracker 约定（本地 markdown）：claim = 把票的 `claimed-by` 改成自己；blocking 用 `blocked-by` 字段；解决 = 在票文件末尾追加 `## Resolution` 一节并把 `status` 改为 `closed`，然后在下方 Decisions so far 加一行。
 
@@ -48,7 +48,7 @@ label: wayfinder:map
 ## Not yet specified
 
 - 联邦协议与异构互聊设计（win↔linux 跨机）——**v1 已开票 [008](tickets/008-federation-v1-ssh-design.md)**（2026-10-06，ssh+远端 CLI 形态，三平台全矩阵硬需求）；与 embassy 生态的互通性评估（Q9）仍留雾区后续票
-- 完整集的范围与节奏：持久账本、回执、投递状态机、TUI、服务安装 + 看门狗（launchd `KeepAlive{Crashed}` 语义等价物）、Windows 安全见证模型（named pipe ACL 哲学）；broker 回归条件已定（003），联邦 v1 可先 ssh+远端 CLI
+- 完整集的范围与节奏：持久账本、回执、投递状态机、TUI、服务安装 + 看门狗（launchd `KeepAlive{Crashed}` 语义等价物）、Windows 安全见证模型（named pipe ACL 哲学）；broker 回归条件已定（003），联邦 v1 可先 ssh+远端 CLI——**broker 形态用户已拍板（2026-10-06）：独立组件、堡垒机模式（全节点出站连接、免开入站端口、星型密钥拓扑）、三形态（ssh/tcp/broker）中最后实现**
 - 二期长对话机制（004 遗留）：换轨续传模式 = 自动档案（broker 回归后邮差全程落盘）+ 摘要服务 + 新会话读档接续；不做"原地压缩"（transcript 归 provider 所有，外部工具做不到）
 - 二期上限可配置化（2026-10-01 用户追问）：单条上限从 16KiB 常量改为按端点的 `maxBodyBytes`，各传输协议封顶（claude peer 帧 64KiB / codex ws 1MiB / 新适配器各自定）；004 轮次预算按两端模型窗口的最小值定；Claude Code 挂 GLM 等大窗口模型时传输层无感；GLM 自家 agent CLI 属二期新适配器问题（有无原生唤醒通道决定原生 or 降级，同 codex 评估流程）
 - Mac 实机验证（无环境；unix 实现共享 + embassy 实证外推，跨平台批次 B3 后如有实机再补）
