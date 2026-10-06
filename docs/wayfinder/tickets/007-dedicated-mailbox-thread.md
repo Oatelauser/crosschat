@@ -20,14 +20,15 @@ claimed-by: 研究子代理（2026-10-06，主会话派单）
 - 轮换：claude 侧重开同 `-n` 即可（旧会话死名字释放）；codex 侧旧线程占名，未来可用 `thread/archive` 做平滑轮换
 - 2026-10-06 全局复审的安全/防乒乓要点（skill 文案层面）不随本转向丢失，归 008 票决策点 5/11/12 承接
 
-## 用户拍板（2026-10-06，实验回报前定案）
+## 用户拍板（2026-10-06 终局，实验代理已终止）
 
-- **codex 侧走注册表**（crosschat 自有 name→threadId 表，不耦合 codex 内部，升级免疫）；**claude 侧维持原生 `-n` 透传，不进注册表**（两侧机制不对称但各自最薄）
-- **status 必须双名显示**：有注册名的 codex 线程 name 列显示注册名，原生名存在且不同则追加（如 `worker2 ·原名xxx`，原生名 null 只显注册名）；`--json` 分立 `name`（原生）/`alias`（注册）两字段
-- **解析顺序定死**：`--to` = 注册表名 → 原生线程名 → id8/完整 id；注册名与别线程原生名撞车报 `NAME_COLLISION` 并列两个 id
-- **注册命令一步**：`crosschat name set <名字>`（headless 建线程+注册）；`--id <id8|完整>` 绑已有线程为可选路径
-- **claude `-n` 重名处理（2026-10-06 补拍板）**：wrapper spawn 前用发现层查重——同名**活**会话存在 → 拒绝创建（`NAME_COLLISION` + pid + 指引）；同名会话已死 → 放行（= 免费轮换：关旧重跑同名命令）。语义边界写进文档：`-n` 是"命名新建"不是"进入"（活会话单终端，物理不可接入）；并发竞态由 send 侧既有 `NAME_COLLISION` 兜底；裸 `claude`+手动 `/rename` 仍是逃生门（只守 wrapper 的门）
-- 实验代理仍在跑：claude 腿结论用于确认 `-n` 参数拼写与兼容性；codex 腿若确认文档化面无命名 API（预期如此），本拍板即为终局方案，无需再议
+- **统一入口 `-n`（用户界面对称）**：`crosschat claude -n <名>` 与 `crosschat codex -n <名>` 同构——一条命令，会话出生即命名，id 全程不露面。内部机制各用最薄：claude = 原生命名参数透传 + 出生查重；codex = headless 建线程（thread/start）+ 注册表记名 + `codex resume <id>` 直接落进 TUI（bootstrap turn 可选：用户首条真正消息也会硬化线程，投递早到属罕见边角）。
+- **codex 注册表**（crosschat 自有 name→threadId 表，不耦合 codex 内部，升级免疫）；claude **不进注册表**（活进程 pid 绑定，注册表对 claude 是死数据/重启即失效的摩擦）。
+- **`name set` 降为事后补名逃生门（罕见路径）**：`crosschat name set <名> --id <id8|完整>`，id 从 status 的 id8 列抄。正常路径零 id 接触。
+- **status 双名显示**：有注册名的 codex 线程 name 列显示注册名，原生名存在且不同则追加（如 `worker2 ·原名xxx`，原生名 null 只显注册名）；`--json` 分立 `name`/`alias` 两字段。
+- **解析顺序定死**：`--to` = 注册表名 → 原生线程名 → id8/完整 id；撞车报 `NAME_COLLISION` 列出两个 id。
+- **claude `-n` 重名**：wrapper spawn 前查重——同名**活**会话 → 拒建（`NAME_COLLISION` + pid + 指引）；已死同名 → 放行（= 免费轮换）。文档写明 `-n` 是"命名新建"非"进入"（活会话单终端不可接入）；并发竞态由 send 侧 `NAME_COLLISION` 兜底；裸 `claude` + `/rename` 仍是逃生门。
+- 实验遗留问题（claude `-n` 参数确切拼写）实施时 `claude --help` 一句确认，不占票。
 
 ## Resolution
 
