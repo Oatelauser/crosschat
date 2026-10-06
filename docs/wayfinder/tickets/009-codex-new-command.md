@@ -13,4 +13,4 @@ claimed-by: （待领）
 
 ## Resolution
 
-**关闭（终案零机制，2026-10-06 用户连续质询后定稿）**：headless 建线程 = **`codex exec "<内容>"` 原生承接**——codex 原生命令建线程 + 跑一轮（自动硬化）+ 退出，角色题词原生随行；之后 `crosschat status` 见 id8、`--to` 寻址，跨机预置 = `ssh <host> codex exec "<题词>"`。crosschat 零新命令、零新旗标、零状态文件。技术事实一并归档：线程 id 即 `thread/start` 返回值（瞬间可得）；fresh 线程零轮次不可投递，须过一轮 turn 硬化（exec 天然满足）；claude 侧无对应物是平台事实（无 daemon、`-p` 一次性不注册消息管道）。mailbox init / name set / codex new / --spawn 四案同因否决——crosschat 不拥有会话生命周期，已提炼为地图站定性架构约束（2026-10-06）。
+**关闭（终案零机制，2026-10-06 用户连续质询后定稿）**：headless 建线程 = **`codex exec "<内容>"` 原生承接**——codex 原生命令建线程 + 跑一轮（自动硬化）+ 退出，角色题词原生随行；之后 `crosschat status` 见 id8、`--to` 寻址，跨机预置 = `ssh <host> codex exec "<题词>"`。crosschat 零新命令、零新旗标、零状态文件。**并发识别已实证（同日实测）**：exec 输出头自带 `session id:` 行——脚本从自己 stdout 抓取即得，N 路并发各拿各的零歧义；status 行还带 `originator: codex_exec` 来源标记 + cwd 列可区分；极端无 stdout 场景用前后 status 差集 + cwd 过滤。技术事实一并归档：线程 id 即 `thread/start` 返回值（瞬间可得）；fresh 线程零轮次不可投递，须过一轮 turn 硬化（exec 天然满足）；claude 侧无对应物是平台事实（无 daemon、`-p` 一次性不注册消息管道）。mailbox init / name set / codex new / --spawn 四案同因否决——crosschat 不拥有会话生命周期，已提炼为地图站定性架构约束（2026-10-06）。
