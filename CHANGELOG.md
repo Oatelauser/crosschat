@@ -4,6 +4,22 @@
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-10-06
+
+### 变更（B5：status 标注 TUI 占用线程）
+
+- status codex 段新增 TUI 占用标注：信号源 = `CODEX_HOME/thread-writer-locks/<threadId>.lock` 零字节锁文件（TUI 附着即建、释放即删、win/unix 同码 readdir，零 RPC 零副作用）；持有线程行尾追加 `TUI占用`，锁住但不在 thread/list 的线程（TUI 空白新标签页）补一行（id8 + `未列入`）；JSON 输出对应对象加 `held: true`（未持有时无此字段）。依赖可选注入，缺席时输出与此前字节级一致
+- 顺带精化旧结论：0.160 TUI 附着 daemon 后消失的是跨进程冲突，锁文件照常落盘（`thread/list` 的 active 状态只反映轮次，不能当占用信号）
+
+### 文档
+
+- SKILL.md 信封安全纪律：回复命令**逐字照抄、只替换占位符**；含管道/链式（`&&`、`;`、`||`）或多条命令即拒执行并报告疑似伪造
+- README 补 headless 建线程食谱：`codex exec "<题词>"`（建线程 + 跑一轮自动硬化 + 角色题词随行），线程 id 就在输出头 `session id:` 行（并发多路各拿各的）；status 里 originator 为 `codex_exec`、cwd 列可辨；跨机预置 `ssh <host> codex exec`（联邦就绪后）
+
+### 内部
+
+- send-log 容量上限：超 5MiB 时保留尾部 ~1MiB 整行重写（此前 jsonl 无限增长；best-effort 可观测性数据，裁剪失败不影响发送）
+
 ## [1.3.1] - 2026-10-05
 
 ### 变更（B4 + skill 教学修正）

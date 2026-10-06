@@ -57,6 +57,20 @@ describe('appendSendLog', () => {
   it('defaultSendLogFile lives under the crosschat state root', () => {
     expect(defaultSendLogFile()).toMatch(/crosschat[\\/]send-log\.jsonl$/);
   });
+
+  it('caps the file past 5MiB, keeping whole tail lines and the new entry', () => {
+    const file = join(freshDir(), 'send-log.jsonl');
+    const filler = JSON.stringify({ ts: 'old', to: 'x', target: 'codex:t', status: 'delivered' });
+    const lineLen = Buffer.byteLength(`${filler}\n`, 'utf8');
+    writeFileSync(file, `${filler}\n`.repeat(Math.ceil((5 * 1024 * 1024 + 4096) / lineLen)), 'utf8');
+    appendSendLog(file, { ts: '2026-10-06T00:00:00.000Z', to: 'new', target: 'codex:t-9', status: 'parked' });
+    const text = readFileSync(file, 'utf8');
+    expect(Buffer.byteLength(text, 'utf8')).toBeLessThan(2 * 1024 * 1024);
+    const lines = text.trim().split('\n');
+    expect(lines.length).toBeGreaterThan(1);
+    for (const line of lines) expect(() => JSON.parse(line)).not.toThrow();
+    expect(JSON.parse(lines[lines.length - 1]!)).toMatchObject({ to: 'new', status: 'parked' });
+  });
 });
 
 describe('confirmInRollout', () => {

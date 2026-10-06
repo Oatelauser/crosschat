@@ -196,13 +196,16 @@ crosschat -v | --version | help                     # 版本 / 帮助
 **已完成（v1.3.0）**
 - [x] 🐧 Linux/WSL 平台支持（experimental）：PosixPipeTransport + claude unix 投递（免 auth 行，同 uid 内核凭证）+ CI ubuntu 矩阵；mac 外推未实测
 
+**已完成（v1.3.2）**
+- [x] 👀 status 标注 TUI 占用线程（`thread-writer-locks` 锁文件信号源：行尾 `TUI占用` 标记、JSON `held` 字段、锁住未列入线程补行）
+- 专用信箱线程机制化 → **评估后不做**：命名由双侧原生 `/rename` 与 id8 寻址承接，crosschat 不拥有会话生命周期（决策记录见 [map 007](docs/wayfinder/map.md)）；headless 建线程用 `codex exec`（见对话生命周期表）
+
 **计划中**
 - [ ] 🌐 跨机联邦（SSH，异构 win ↔ linux 互聊）
 - [ ] 🐧 mac 平台适配（unix 代码路径已共享，待实机验证；平台接缝：PipeTransport / ProcessInspector / PathLayout）
-- [ ] 📦 常驻 broker（忙时持久队列、异步回执、投递状态机——embassy 完整集对齐）
+- [ ] 📦 常驻 broker（忙时持久队列、异步回执、投递状态机——embassy 完整集对齐；堡垒机形态）
 - [ ] 🖼️ TUI 看板与服务安装（开机自启）
 - [ ] 🤖 新 agent 适配器（GLM 等；有原生唤醒通道则原生，否则论证降级）
-- [ ] 👀 status 标注 TUI 占用线程；专用信箱线程机制化
 
 ## 🧯 错误码排障
 
