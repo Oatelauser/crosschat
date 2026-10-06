@@ -43,6 +43,7 @@ label: wayfinder:map
 - [codex 开窗注入调研票（2026-10-02，结论两度修正）](../research/codex-open-window-injection.md): 研究票发现 `codex queue`（底层 `thread/queue/add`）并 E2E"验证"开窗秒达 → B6 接入 → **实地联调证伪**：本地普通 TUI 下 queue 是黑洞（exit 0 但消息既不进开窗现场也不进历史，2 条静默丢失；疑似 remote 架构专用，`--remote` 参数佐证；研究代理的成功 E2E 推测用了自建 remote 形态）。B7 修复 = 删 queue 路径，active-writer 改为等待释放循环（开窗时 multichat 侧轮询等待、关窗即 headless 送达、默认 120s 超时报错指引）。**教训已记**：子代理研究报告的 E2E 结论必须标注其环境形态（本地/remote），集成批次不得以此替代己方 live 验证。
 - [B8 开窗投递终局（2026-10-02，daemon 升 0.160 后）](../research/codex-0160-inject-items.md): **开窗投递 ✅ 落地，零代码改动**——根因链闭合：`codex app-server proxy` 是 daemon 桥接（同进程多连接），0.160 TUI 自动附着 daemon，写者锁仅跨进程形态出现（旧 daemon ≤0.157 / `--no-daemon`）。实测：TUI 附着开窗 6s delivered、模型答 OPEN-OK 并经 reply-ref 回投；关窗无回归；`codex queue` 在 0.160+附着下复活为可见投递通道（12s 消费）。等待循环保留为旧环境兜底。daemon 升级实录：update 的 error 5（疑似安全软件拦句柄）→ 干净 home 官方安装器置备 0.160 成品移植 + junction 重建；旧 0.157.1 保留于 app-server-daemon.bak-0157 可回滚。
 - [跨平台（Linux/WSL）可行性研究](tickets/005-cross-platform-linux-wsl-feasibility.md): **可行（a）**——unix 消息插座原生存在且更简单：WSL 实测 socket `/run/user/<uid>/cc-socks/<pid>.sock`、无 auth 行（内核同 uid 凭证）、帧与 Windows 逐字节同格式，注册表/key 文件/env 语义跨平台一致（embassy 源码 + 2.1.288 bundle + WSL 实装三层证据）；差异仅"unix 不发 auth 行/不读 key 文件"与"socket 目录以注册表为准不硬编码"。分批 B1 平台层 → B2 claude unix 投递联调 → B3 codex/CI ubuntu/文档/发版 1.3.0-experimental；零回归铁律 + subagent 编排模式执行。详见 `../research/claude-unix-socket.md`。
+- [codex 线程 TUI 占用可观测性](tickets/006-codex-tui-occupancy-observable.md): **结论 a——信号源零成本**：`CODEX_HOME/thread-writer-locks/<threadId>.lock` 零字节锁文件，TUI 附着即建、释放即删，readdir 枚举即得持有清单（win/unix 同码、零 RPC 零副作用）。**精化 B8**：0.160 附着后消失的是跨进程冲突，锁文件照常落盘。thread/list 反证：active 只反映轮次、TUI 空标签页线程不在列表——不能当占用信号；进程 argv 弃用。实施草案 ~40 行单批次（status 行尾标记 + JSON `held` 字段），不动投递路径。详见 `../research/codex-tui-occupancy-signals.md`。
 
 ## Not yet specified
 
@@ -53,8 +54,8 @@ label: wayfinder:map
 - Mac 实机验证（无环境；unix 实现共享 + embassy 实证外推，跨平台批次 B3 后如有实机再补）
 - agent 侧 skill 文案（embassy-peer 等价物）——形式已定（003：skill+信封双保险），具体文案实施时写
 - 工具命名
-- codex TUI 占用标注：status 显示哪个线程被 live TUI 持有；需查写者锁存储位置（状态库 lease vs daemon 内存表）；禁止用 resume 探测（会抢写者）——**已开票 [006](tickets/006-codex-tui-occupancy-observable.md)**（2026-10-06 用户拍板：与专用信箱线程一起提前于联邦 v1/broker 执行，顺序 006 → 007）
-- 专用信箱线程机制化：每机一个 multichat 自有的常闭 operator 线程作默认收件地址，避免工作线程混用（一期靠 README 文档指导）——排队为 007，006 关闭后开票
+- codex TUI 占用标注：**已关闭（[006](tickets/006-codex-tui-occupancy-observable.md)，2026-10-06，见 Decisions）**；实施批次 ~40 行纯增量待用户触发
+- 专用信箱线程机制化：每机一个 multichat 自有的常闭 operator 线程作默认收件地址，避免工作线程混用（一期靠 README 文档指导）——**已开票 [007](tickets/007-dedicated-mailbox-thread.md)**（设计票，2026-10-06）
 
 ## Out of scope
 
