@@ -1,9 +1,9 @@
 # crosschat 跨机联邦 v1（ssh + 远端 CLI）设计
 
 label: wayfinder:grilling
-status: open
+status: closed
 blocked-by: （无）
-claimed-by: （待领）
+claimed-by: 设计子代理（2026-10-06，主会话派单/验收）+ 用户六问拍板（Q1-Q6 全 A）
 
 ## Question
 
@@ -35,3 +35,20 @@ claimed-by: （待领）
 17-2. **会话引用向后兼容**：conversation ref 需扩展携带源端机器标识；**无机器字段 = 本地**（单机旧 ref 不受影响，不设破坏性版本切换）；跨机 ref 由联邦批次首次生成，无存量兼容包袱。
 17-3. **部署清单补一条**：接收侧的 claude 会话必须以 `crosschat claude` 启动（与单机同规则）——联邦只解决传输，接收许可仍是本机包装器注入的，别在联调时漏掉。
 17. **传输面三形态路线（用户 2026-10-06 拍板）**：ssh（本票，v1，零基建）→ tcp（二期，局域网直连：可选监听 + 极简预共享鉴权）→ broker（终局：独立组件、堡垒机模式、全节点出站连接免开入站端口、最后实现）。**本票设计约束升级**：`--via` 命名空间从第一天按传输通用设计（`ssh:`/`tcp:`/`broker:`），信封回程命令只写传输中立的对端标识，避免后续迁移时已发出信封里的教学命令作废。
+
+## Resolution
+
+**全套拍板通过（2026-10-06，六问全 A），设计定稿。** 完整决策与证据链见 `docs/research/federation-v1-design-notes.md`（含六轮俯瞰补录）。要点：
+
+- **D1 寻址**：`--via ssh:<host>` 单 token，连接信息全靠 `~/.ssh/config`，零自有配置层；`ssh:`/`tcp:`/`broker:` 命名空间第一天建立
+- **D2 远端构造**：命令面固定 `crosschat send`；body 永远 stdin；旗标值白名单——危险字符不进远端 argv
+- **D3/D4 错误与同步**：三层错误码（远端业务错同码重抛 `[via host]` / REMOTE_FAILED / SSH_TRANSPORT_FAILED 附探活指引）；远端 parked 即返；本地超时 120s（env 可覆写）；不自动重试（UNCERTAIN 纪律）
+- **D5 回复路径（核心）**：ref 端点加 `m` 机器字段（hostname，无 m=本地）+ `--origin` 自动注入源身份（修复 sshd 空壳环境身份塌缩）+ 信封回程自动带 `--via` + 手敲漏自动补全；**信封回复命令不带 `--to`**（ref 已含端点，与单机形态一致）
+- **mc2_ 紧凑 ref 格式（用户拍板新增，并入 B2）**：二进制打包 296→79 字符（3.7×）；规格四要点——轮次 LEB128 varint、非 UUID id 长度前缀逃生门、mc1_ 永久兼容 + 版本偏斜错误文案、回程命令最短形态
+- **D6 上限**：v1 不需要 maxBodyBytes（本地 16K 先于 via 分支，远端同码再查）
+- **D7/D8 文档**：skill 三行增量；README 折叠部署节——三平台矩阵、密钥两步、接收侧要求（claude 须 wrapper/codex 须 daemon）、**首行明示 ssh v1 双向可达前提（单向/NAT 等 broker）**
+- **补丁 B 发起侧审计**：远端回执流回后本地 send-log 补记一行（含 failed 也记），conversations 视图自然显示己方跨机端对
+- **D9 零回归**：新逻辑全在 via 分支后，--via 缺席字节级不变；mock ssh 断言 + 三层错误码单测
+- **D10 分批**：B1 寻址+远端执行+回执透传+错误映射+审计补记账（~160 行，含三项 sshd 首验——本机 sshd 未启用为已知前提）→ B2 回复路径+mc2_ 格式（~160 行）→ B3 文档+抽样联调 2-3 向（组合子论证放行其余向）
+
+实施待用户触发；B1 首验三项需先启用本机 OpenSSH Server。
