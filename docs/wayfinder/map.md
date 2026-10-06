@@ -27,6 +27,7 @@ label: wayfinder:map
   - Q9 不承诺与 embassy 联邦协议互通，留雾区评估
   - 最终支持 win/mac/linux，异构互聊
 - 站定性产品约束（2026-10-01 用户反馈）：**使用形式必须低入侵** —— 不得依赖题词被逐字执行；协议教学与收发机制尽量内建（skill / 信封自带），题词只承担角色设定。
+- 站定性产品约束（2026-10-06 用户反馈）：**既有功能零回归 + 跨机场景轻量部署** —— 任何新功能纯增量，改默认行为必须先经用户确认（铁律在案）；跨机联邦的准入门槛：无 broker、无新监听端口、无新守护进程、无必填配置文件、不发明新鉴权（信任边界=ssh 同用户），部署以"两端 npm i -g + ssh 免密"为上限。
 - 技能：按票型调用 research / grilling(+domain-modeling) / prototype。
 - Tracker 约定（本地 markdown）：claim = 把票的 `claimed-by` 改成自己；blocking 用 `blocked-by` 字段；解决 = 在票文件末尾追加 `## Resolution` 一节并把 `status` 改为 `closed`，然后在下方 Decisions so far 加一行。
 
