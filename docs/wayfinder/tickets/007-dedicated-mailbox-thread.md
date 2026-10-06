@@ -26,6 +26,7 @@ claimed-by: 研究子代理（2026-10-06，主会话派单）
 - **status 必须双名显示**：有注册名的 codex 线程 name 列显示注册名，原生名存在且不同则追加（如 `worker2 ·原名xxx`，原生名 null 只显注册名）；`--json` 分立 `name`（原生）/`alias`（注册）两字段
 - **解析顺序定死**：`--to` = 注册表名 → 原生线程名 → id8/完整 id；注册名与别线程原生名撞车报 `NAME_COLLISION` 并列两个 id
 - **注册命令一步**：`crosschat name set <名字>`（headless 建线程+注册）；`--id <id8|完整>` 绑已有线程为可选路径
+- **claude `-n` 重名处理（2026-10-06 补拍板）**：wrapper spawn 前用发现层查重——同名**活**会话存在 → 拒绝创建（`NAME_COLLISION` + pid + 指引）；同名会话已死 → 放行（= 免费轮换：关旧重跑同名命令）。语义边界写进文档：`-n` 是"命名新建"不是"进入"（活会话单终端，物理不可接入）；并发竞态由 send 侧既有 `NAME_COLLISION` 兜底；裸 `claude`+手动 `/rename` 仍是逃生门（只守 wrapper 的门）
 - 实验代理仍在跑：claude 腿结论用于确认 `-n` 参数拼写与兼容性；codex 腿若确认文档化面无命名 API（预期如此），本拍板即为终局方案，无需再议
 
 ## Resolution
