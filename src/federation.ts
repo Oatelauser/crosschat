@@ -78,12 +78,14 @@ export function validateRemoteFlagValues(args: SendArgs): void {
 }
 
 /**
- * `<p>/<full id>[/<display name>]@<hostname>`, base64url-whole. The FULL id is
- * what makes the origin endpoint routable in refs (B2.1: display names/ id8s
- * made cross-machine reply-hints unroutable); the display name is optional and
- * may contain spaces/unicode/@/'/' (F1 — never parsed beyond its slot).
+ * `<p>/<full id>[/<display name>]@<hostname>[:<mid-b64u>]`, base64url-whole.
+ * The FULL id is what makes the origin endpoint routable in refs (B2.1);
+ * the display name is optional and may contain spaces/unicode/@/'/' (F1 —
+ * never parsed beyond its slot). The optional mid (B10 machine-id) rides
+ * along so the receiving side can tell same-hostname machines apart —
+ * hostnames never contain ':' so the tail split is unambiguous.
  */
-export function encodeOrigin(identity: CallerIdentity, host: string): string {
+export function encodeOrigin(identity: CallerIdentity, host: string, mid?: string): string {
   const who =
     identity.p === 'claude'
       ? identity.name === undefined
@@ -92,11 +94,23 @@ export function encodeOrigin(identity: CallerIdentity, host: string): string {
       : identity.p === 'codex'
         ? `codex/${identity.id}`
         : 'human';
-  return Buffer.from(`${who}@${host}`, 'utf8').toString('base64url');
+  const tail = mid === undefined ? host : `${host}:${Buffer.from(mid, 'utf8').toString('base64url')}`;
+  return Buffer.from(`${who}@${tail}`, 'utf8').toString('base64url');
 }
 
 /** Decoded --origin: identity plus the machine it came from (008 B2 refs stamp both). */
-export type OriginIdentity = CallerIdentity & { host: string };
+export type OriginIdentity = CallerIdentity & { host: string; mid?: string };
+
+/**
+ * B10 same-machine rule: when both machine-ids are known they decide (unique
+ * per install — hostname collisions cannot fake a match); otherwise fall back
+ * to hostname equality (the pre-B10 semantics, still correct when mids are
+ * unreadable on either side).
+ */
+export function isSameMachine(epMid: string | undefined, epHost: string | undefined, localMid: string | undefined, localHost: string): boolean {
+  if (epMid !== undefined && localMid !== undefined) return epMid === localMid;
+  return epHost === localHost;
+}
 
 /** Remote-side identity fallback for ssh shells without agent env (design D5). */
 export function decodeOriginIdentity(encoded: string): OriginIdentity {
@@ -109,11 +123,14 @@ export function decodeOriginIdentity(encoded: string): OriginIdentity {
   const at = text.lastIndexOf('@');
   if (at <= 0) throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
   const head = text.slice(0, at);
-  const host = text.slice(at + 1);
-  if (host === '') throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
+  const tail = text.slice(at + 1);
+  const colon = tail.lastIndexOf(':');
+  const host = colon === -1 ? tail : tail.slice(0, colon);
+  const mid = colon === -1 ? undefined : Buffer.from(tail.slice(colon + 1), 'base64url').toString('utf8');
+  if (host === '' || mid === '') throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
   const slash = head.indexOf('/');
   if (slash <= 0) {
-    if (head === 'human') return { p: 'human', host };
+    if (head === 'human') return mid === undefined ? { p: 'human', host } : { p: 'human', host, mid };
     throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
   }
   const p = head.slice(0, slash);
@@ -125,8 +142,9 @@ export function decodeOriginIdentity(encoded: string): OriginIdentity {
   const id = nameSlash === -1 ? rest : rest.slice(0, nameSlash);
   const name = nameSlash === -1 ? undefined : rest.slice(nameSlash + 1);
   if (id === '' || name === '') throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
-  if (p === 'claude') return name === undefined ? { p: 'claude', id, host } : { p: 'claude', id, name, host };
-  if (p === 'codex') return { p: 'codex', id, host };
+  const midField = mid === undefined ? {} : { mid };
+  if (p === 'claude') return name === undefined ? { p: 'claude', id, host, ...midField } : { p: 'claude', id, name, host, ...midField };
+  if (p === 'codex') return { p: 'codex', id, host, ...midField };
   throw new MultichatError('USAGE', `--origin 端点类型非法: ${p}`);
 }
 
@@ -195,7 +213,7 @@ export async function runViaSend(args: SendArgs, body: string, deps: SendDeps): 
 
   const scan: ClaudeRegistryScan = deps.listClaudeSessions();
   const caller = resolveCallerIdentity(deps.env, scan);
-  const origin = encodeOrigin(caller, deps.hostname?.() ?? osHostname());
+  const origin = encodeOrigin(caller, deps.hostname?.() ?? osHostname(), deps.machineId?.());
   const argv = buildSshArgv(host, args, origin);
   const envTimeout = Number(deps.env.CROSSCHAT_SSH_TIMEOUT_MS);
   const timeoutMs = Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : 120_000;

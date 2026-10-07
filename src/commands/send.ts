@@ -15,7 +15,7 @@ import {
 } from '../identity.js';
 import { resolveTargetByName } from '../resolve.js';
 import { composeEnvelope } from '../envelope.js';
-import { decodeOriginIdentity, runViaSend } from '../federation.js';
+import { decodeOriginIdentity, isSameMachine, runViaSend } from '../federation.js';
 import type { SendLogEntry } from '../send-log.js';
 import { continueConversation, continueFromRef, recordConversation } from '../conversations.js';
 import {
@@ -66,6 +66,8 @@ export interface SendDeps {
   sshExec?(argv: readonly string[], input: string, timeoutMs: number): Promise<import('../federation.js').SshResult>;
   /** Machine name stamped into --origin; default os.hostname(). */
   hostname?(): string;
+  /** Stable per-install machine id (B10) for same-machine decisions; default platform read. */
+  machineId?(): string | undefined;
 }
 
 export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
@@ -86,11 +88,12 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   // through to the normal path's error.
   if (args.via === undefined && args.conversation !== undefined) {
     const here = deps.hostname?.() ?? osHostname();
+    const localMid = deps.machineId?.();
     try {
       const ref = decodeRef(args.conversation);
       const remote = [ref.f, ref.t].find(
         (ep): ep is { p: 'claude' | 'codex'; id: string; m: string } =>
-          ep.p !== 'human' && ep.m !== undefined && ep.m !== here,
+          ep.p !== 'human' && ep.m !== undefined && !isSameMachine(ep.mid, ep.m, localMid, here),
       );
       if (remote !== undefined) args = { ...args, via: `ssh:${remote.m}` };
     } catch {
@@ -174,24 +177,51 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     turn = continued.turn;
   }
 
-  // Federation (008 B2): a remote-origin send (ssh shell + --origin) stamps
-  // both endpoints with their machines so every later envelope can derive the
-  // return --via from the ref alone. Local sends stamp nothing (no m = local).
+  // Federation (008 B2 + B10): a remote-origin send (ssh shell + --origin)
+  // stamps both endpoints with their machines — m (hostname) routes the return
+  // --via, mid (machine-id) decides "same machine" so hostname collisions
+  // cannot fake a local conversation. Local sends stamp nothing (no m = local).
   const here = deps.hostname?.() ?? osHostname();
+  const localMid = deps.machineId?.();
   if (origin !== undefined) {
-    const stamp = (ep: RefEndpoint, m: string): RefEndpoint =>
-      ep.p === 'human' ? ep : { ...ep, m };
+    const fIsCaller = identityMatchesEndpoint(caller, newRef.f);
+    const stamp = (ep: RefEndpoint, m: string, mid: string | undefined): RefEndpoint =>
+      ep.p === 'human' ? ep : { ...ep, m, ...(mid === undefined ? {} : { mid }) };
     newRef = {
       ...newRef,
-      f: stamp(newRef.f, identityMatchesEndpoint(caller, newRef.f) ? origin.host : here),
-      t: stamp(newRef.t, identityMatchesEndpoint(caller, newRef.t) ? origin.host : here),
+      f: stamp(newRef.f, fIsCaller ? origin.host : here, fIsCaller ? origin.mid : localMid),
+      t: stamp(newRef.t, fIsCaller ? here : origin.host, fIsCaller ? localMid : origin.mid),
     };
   }
   // The reply-hint's --via points at the machine of the endpoint reading this
   // envelope would reply to — the sender's own endpoint (D5: no --to needed).
   const senderEp = identityMatchesEndpoint(caller, newRef.f) ? newRef.f : newRef.t;
   const viaHost =
-    senderEp.p !== 'human' && senderEp.m !== undefined && senderEp.m !== here ? senderEp.m : undefined;
+    senderEp.p !== 'human' && senderEp.m !== undefined && !isSameMachine(senderEp.mid, senderEp.m, localMid, here)
+      ? senderEp.m
+      : undefined;
+  // B10 collision warning: the ssh peer's hostname equals ours but its
+  // machine-id differs — routing is still correct (per-machine ssh alias
+  // namespaces resolve it), the name ambiguity is worth telling the human.
+  const collision =
+    origin !== undefined &&
+    origin.host === here &&
+    origin.mid !== undefined &&
+    localMid !== undefined &&
+    origin.mid !== localMid
+      ? `⚠ 两台机器同名 (${here})：已按跨机路由（machine-id 不同）。建议改名避免混淆。`
+      : undefined;
+  const finish = (out: string): string => {
+    if (collision === undefined) return out;
+    if (args.json === true) {
+      try {
+        return JSON.stringify({ ...JSON.parse(out) as Record<string, unknown>, warning: collision });
+      } catch {
+        return out;
+      }
+    }
+    return `${out}\n${collision}`;
+  };
 
   const replyRef = encodeRef(newRef);
   const fromName = displayName(caller);
@@ -224,7 +254,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     }
     logNow({ to: toName, target: `claude:${target.id}`, status: 'delivered', turn, replyRef });
     if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now());
-    return formatDelivery(args.json === true, toName, turn, replyRef, false);
+    return finish(formatDelivery(args.json === true, toName, turn, replyRef, false));
   }
 
   // Codex delivers by threadId; a missing thread surfaces as a codex adapter error.
@@ -250,7 +280,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   const queuedBefore = outboxCount(deps.outboxDir, target.id);
   if (queuedBefore > 0) {
     const queue = parkNow();
-    return formatParked(args.json === true, toName, turn, replyRef, queue, mailboxPath);
+    return finish(formatParked(args.json === true, toName, turn, replyRef, queue, mailboxPath));
   }
   try {
     const delivered = await deps.deliverCodex(target.id, content);
@@ -262,12 +292,12 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     const out = formatDelivery(args.json === true, toName, turn, replyRef, queued);
     if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now());
     if (queued) {
-      return `${out}\n已入对方服务端队列，本轮结束即处理；终态可查 crosschat status --conversations`;
+      return finish(`${out}\n已入对方服务端队列，本轮结束即处理；终态可查 crosschat status --conversations`);
     }
     if (receipt === 'unconfirmed') {
-      return `${out}\n回执: 暂未在对方会话记录中确认（可能仍在落盘）；稍后查 send-log.jsonl 或重跑 status`;
+      return finish(`${out}\n回执: 暂未在对方会话记录中确认（可能仍在落盘）；稍后查 send-log.jsonl 或重跑 status`);
     }
-    return out;
+    return finish(out);
   } catch (err) {
     // Busy/locked = definitively not delivered (deliver.ts polls before giving
     // up): park the composed envelope verbatim; the watchdog retries it.
@@ -278,7 +308,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
       const queue = parkNow();
       logNow({ to: toName, target: `codex:${target.id}`, status: 'parked', turn, replyRef });
       if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now());
-      return formatParked(args.json === true, toName, turn, replyRef, queue, mailboxPath);
+      return finish(formatParked(args.json === true, toName, turn, replyRef, queue, mailboxPath));
     }
     logNow({ to: toName, target: `codex:${target.id}`, status: 'failed', code: errorCode(err), turn, replyRef });
     throw err;

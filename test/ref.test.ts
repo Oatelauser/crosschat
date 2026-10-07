@@ -185,3 +185,25 @@ describe('mc2 compact codec (008 B2)', () => {
     expect(() => decodeRef('mc3_abc')).toThrow(/prefix/);
   });
 });
+
+describe('mc2 mid field (B10 machine-id)', () => {
+  it('round-trips mid on none/one/both endpoints alongside m', () => {
+    const shapes = [
+      { f: { p: 'claude' as const, id: 'a3f9c2e1-5b7d-4f8a-9c21-8e4d2b6a0f33' }, t: { p: 'codex' as const, id: '01a1115b-1a3c-7e71-addc-fee969078e1b' } },
+      { f: { p: 'claude' as const, id: 'a3f9c2e1-5b7d-4f8a-9c21-8e4d2b6a0f33', m: 'win-dev', mid: 'M-WIN' }, t: { p: 'codex' as const, id: '01a1115b-1a3c-7e71-addc-fee969078e1b', m: 'build01' } },
+      { f: { p: 'claude' as const, id: 'a3f9c2e1-5b7d-4f8a-9c21-8e4d2b6a0f33', m: 'yang', mid: 'M-WIN' }, t: { p: 'codex' as const, id: '01a1115b-1a3c-7e71-addc-fee969078e1b', m: 'yang', mid: 'M-WSL' } },
+    ];
+    for (const { f, t } of shapes) {
+      const ref = { v: 1 as const, f, t, n: '9d4f2ab1c3e85760', c: 2 };
+      expect(decodeRef(encodeRef(ref))).toEqual(ref);
+    }
+  });
+
+  it('flags varint: mid presence bits live above bit 7 without disturbing legacy layouts', () => {
+    const withMid = encodeRef({ v: 1, f: { p: 'claude', id: 'boss', m: 'h', mid: 'M1' }, t: { p: 'codex', id: '01a1115b-1a3c-7e71-addc-fee969078e1b' }, n: '9d4f2ab1c3e85760', c: 1 });
+    const withoutMid = encodeRef({ v: 1, f: { p: 'claude', id: 'boss', m: 'h' }, t: { p: 'codex', id: '01a1115b-1a3c-7e71-addc-fee969078e1b' }, n: '9d4f2ab1c3e85760', c: 1 });
+    expect(withMid).not.toEqual(withoutMid);
+    expect(decodeRef(withoutMid).f).toEqual({ p: 'claude', id: 'boss', m: 'h' });
+    expect(decodeRef(withMid).f).toEqual({ p: 'claude', id: 'boss', m: 'h', mid: 'M1' });
+  });
+});

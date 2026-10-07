@@ -293,11 +293,12 @@ describe('cli parsing and zero regression', () => {
 });
 
 describe('B2 reply path (m stamping, envelope via, auto-complete)', () => {
-  function makeRemoteDeps(opts: { hostname: string; deliverClaude?: (content: string) => void }) {
+  function makeRemoteDeps(opts: { hostname: string; mid?: string; deliverClaude?: (content: string) => void }) {
     const deps = makeDeps();
     return {
       ...deps,
       hostname: () => opts.hostname,
+      ...(opts.mid === undefined ? {} : { machineId: () => opts.mid }),
       deliverClaude: async (_t: unknown, content: string) => {
         opts.deliverClaude?.(content);
         return { status: 'delivered' as const };
@@ -371,5 +372,98 @@ describe('B2 reply path (m stamping, envelope via, auto-complete)', () => {
     const ref = decodeRef(envelope.match(/mc2_[A-Za-z0-9_-]+/)![0]!);
     expect(ref.f.m).toBe('win-dev');
     expect(ref.t.m).toBe('win-dev');
+  });
+});
+
+describe('B10 machine-id dual identity (m routes, mid decides same-machine)', () => {
+  const fullId = 'a3f9c2e1-5b7d-4f8a-9c21-8e4d2b6a0f33';
+  function remoteDeps(opts: { hostname: string; mid?: string; deliverClaude?: (content: string) => void }): SendDeps {
+    const deps = makeDeps();
+    return {
+      ...deps,
+      hostname: () => opts.hostname,
+      ...(opts.mid === undefined ? {} : { machineId: () => opts.mid }),
+      deliverClaude: async (_t: unknown, content: string) => {
+        opts.deliverClaude?.(content);
+        return { status: 'delivered' as const };
+      },
+    };
+  }
+
+  it('loopback: same host AND same mid stays single-machine (no --via, no warning)', async () => {
+    const origin = encodeOrigin({ p: 'claude', id: fullId, name: 'alpha' }, 'yang', 'M1');
+    let envelope = '';
+    let out = '';
+    const deps = remoteDeps({
+      hostname: 'yang',
+      mid: 'M1',
+      deliverClaude: (content) => { envelope = content; },
+    });
+    out = await runSend({ to: 'boss', bodyArg: 'x', origin }, deps);
+    expect(out).not.toContain('⚠');
+    expect(envelope).toContain('crosschat send --conversation mc2_');
+    expect(envelope).not.toContain('--via ssh:');
+    const ref = decodeRef(envelope.match(/mc2_[A-Za-z0-9_-]+/)![0]!);
+    expect(ref.f).toEqual({ p: 'claude', id: fullId, m: 'yang', mid: 'M1' });
+    expect(ref.t).toEqual({ p: 'claude', id: 'cs-boss', m: 'yang', mid: 'M1' });
+  });
+
+  it('hostname collision: equal host, different mid routes cross-machine with a warning', async () => {
+    const origin = encodeOrigin({ p: 'claude', id: fullId, name: 'alpha' }, 'yang', 'M-WIN');
+    let envelope = '';
+    const deps = remoteDeps({
+      hostname: 'yang',
+      mid: 'M-WSL',
+      deliverClaude: (content) => { envelope = content; },
+    });
+    const out = await runSend({ to: 'boss', bodyArg: 'x', origin }, deps);
+    expect(out).toContain('⚠ 两台机器同名 (yang)');
+    // The per-machine ssh alias namespace resolves "yang" to the peer here.
+    expect(envelope).toContain('--via ssh:yang --conversation mc2_');
+    const ref = decodeRef(envelope.match(/mc2_[A-Za-z0-9_-]+/)![0]!);
+    expect(ref.f).toEqual({ p: 'claude', id: fullId, m: 'yang', mid: 'M-WIN' });
+    expect(ref.t).toEqual({ p: 'claude', id: 'cs-boss', m: 'yang', mid: 'M-WSL' });
+  });
+
+  it('json receipt carries the collision warning as a field', async () => {
+    const origin = encodeOrigin({ p: 'claude', id: fullId }, 'yang', 'M-WIN');
+    const deps = remoteDeps({ hostname: 'yang', mid: 'M-WSL' });
+    const out = await runSend({ to: 'boss', bodyArg: 'x', origin, json: true }, deps);
+    expect((JSON.parse(out) as { warning?: string }).warning).toContain('两台机器同名');
+  });
+
+  it('mid missing on either side falls back to hostname equality (pre-B10 semantics)', async () => {
+    // Origin without mid, local machineId undefined: same hostname = same machine.
+    const origin = encodeOrigin({ p: 'claude', id: fullId, name: 'alpha' }, 'yang');
+    let envelope = '';
+    const deps = remoteDeps({ hostname: 'yang', deliverClaude: (c) => { envelope = c; } });
+    const out = await runSend({ to: 'boss', bodyArg: 'x', origin }, deps);
+    expect(out).not.toContain('⚠');
+    expect(envelope).not.toContain('--via ssh:');
+  });
+
+  it('auto-complete fills --via for a same-hostname ref whose mid differs', async () => {
+    sshCalls.length = 0;
+    const ref = encodeRef({
+      v: 1,
+      f: { p: 'claude', id: 'boss', m: 'yang', mid: 'M-OTHER' },
+      t: { p: 'codex', id: '01a1115b-1a3c-7e71-addc-fee969078e1b', m: 'yang', mid: 'M-HERE' },
+      n: '9d4f2ab1c3e85760',
+      c: 1,
+    });
+    const deps = makeDeps();
+    (deps as { machineId?: () => string | undefined }).machineId = () => 'M-HERE';
+    sshResult = { code: 0, stdout: '', stderr: '' };
+    await runSend({ conversation: ref, bodyArg: 'x' }, deps).catch(() => undefined);
+    expect(sshCalls).toHaveLength(1);
+    expect(sshCalls[0]!.argv).toContain('yang');
+  });
+
+  it('origin payload round-trips the mid; legacy payloads decode without one', () => {
+    const enc = encodeOrigin({ p: 'claude', id: fullId, name: '领 导' }, 'win-dev', 'M-GUID-1');
+    const dec = decodeOriginIdentity(enc);
+    expect(dec).toEqual({ p: 'claude', id: fullId, name: '领 导', host: 'win-dev', mid: 'M-GUID-1' });
+    const legacy = decodeOriginIdentity(encodeOrigin({ p: 'codex', id: '01a1115b-1a3c-7e71-addc-fee969078e1b' }, 'build01'));
+    expect(legacy).toEqual({ p: 'codex', id: '01a1115b-1a3c-7e71-addc-fee969078e1b', host: 'build01' });
   });
 });

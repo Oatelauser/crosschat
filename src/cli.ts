@@ -16,6 +16,7 @@ import { runWatchdog, spawnWatchdog as ensureWatchdog } from './watchdog.js';
 import { appendSendLog, confirmInRollout, defaultSendLogFile } from './send-log.js';
 import { defaultConversationsFile } from './conversations.js';
 import { defaultSshExec } from './federation.js';
+import { machineId } from './platform/machine-id.js';
 import { conversationSummaries } from './conversation-summary.js';
 import { codexHomeDir, listWriterLocks } from './codex/rollout-meta.js';
 import { listClaudeSessions } from './claude/registry.js';
@@ -142,6 +143,8 @@ function realSendDeps(stdinText: string | undefined): SendDeps {
     conversationStateFile: defaultConversationsFile(),
     // Federation (008/B1): real transport + machine name for --origin.
     sshExec: (argv, input, timeoutMs) => defaultSshExec(argv, input, timeoutMs),
+    // B10: stable per-install id — same-machine decisions survive hostname collisions.
+    machineId: () => machineId(),
   };
 }
 

@@ -15,7 +15,7 @@ import { MultichatError } from './errors.js';
 /** human has no routable native id; claude/codex always carry one. */
 export type RefEndpoint =
   | { p: 'human' }
-  | { p: 'claude' | 'codex'; id: string; m?: string };
+  | { p: 'claude' | 'codex'; id: string; m?: string; mid?: string };
 
 export interface ConversationRef {
   v: 1;
@@ -46,15 +46,18 @@ export function nextTurnRef(ref: ConversationRef): ConversationRef {
   return { ...ref, c: ref.c + 1 };
 }
 
-// ---- mc2 binary layout (008 B2, design §6) --------------------------------
-// byte 0  flags: bits 0-1 f type | bits 2-3 t type | bit 4 f id raw | bit 5 t
-//         id raw | bit 6 f.m present | bit 7 t.m present  (claude=0 codex=1 human=2)
+// ---- mc2 binary layout (008 B2 design §6 + B10 mid) ------------------------
+// flags   LEB128 varint: bits 0-1 f type | bits 2-3 t type | bit 4 f id raw |
+//         bit 5 t id raw | bit 6 f.m present | bit 7 t.m present | bit 8
+//         f.mid present | bit 9 t.mid present  (claude=0 codex=1 human=2)
 // then    f.id (16B UUID | varint-len utf8) · t.id (same)
 //         f.m (varint-len utf8)? · t.m (varint-len utf8)?
+//         f.mid (varint-len utf8)? · t.mid (varint-len utf8)?
 //         n (varint-len hex bytes) · c (varint)
 // Lengths are LEB128 varints so nothing has a hidden ceiling; a dashed
 // lowercase uuid packs to 16 raw bytes (the overwhelmingly common case),
 // anything else falls back to the string path and round-trips verbatim.
+// Layout changes are free until mc2 ships in a npm release (v1.3.3 window).
 
 const TYPE_CODES = { claude: 0, codex: 1, human: 2 } as const;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -105,20 +108,29 @@ function packHex(value: string): Buffer {
 
 export function encodeRef(ref: ConversationRef): string {
   const mOf = (ep: RefEndpoint): string | undefined => (ep.p === 'human' ? undefined : ep.m);
+  const midOf = (ep: RefEndpoint): string | undefined => (ep.p === 'human' ? undefined : ep.mid);
   const fId = packId(ref.f);
   const tId = packId(ref.t);
   const fm = mOf(ref.f);
   const tm = mOf(ref.t);
+  const fmid = midOf(ref.f);
+  const tmid = midOf(ref.t);
   const flags =
     TYPE_CODES[ref.f.p] |
     (TYPE_CODES[ref.t.p] << 2) |
     (fId.raw ? 0x10 : 0) |
     (tId.raw ? 0x20 : 0) |
     (fm !== undefined ? 0x40 : 0) |
-    (tm !== undefined ? 0x80 : 0);
-  const parts: Buffer[] = [Buffer.from([flags]), fId.bytes, tId.bytes];
+    (tm !== undefined ? 0x80 : 0) |
+    (fmid !== undefined ? 0x100 : 0) |
+    (tmid !== undefined ? 0x200 : 0);
+  const flagBytes: number[] = [];
+  writeVarint(flags, flagBytes);
+  const parts: Buffer[] = [Buffer.from(flagBytes), fId.bytes, tId.bytes];
   if (fm !== undefined) parts.push(packStr(fm));
   if (tm !== undefined) parts.push(packStr(tm));
+  if (fmid !== undefined) parts.push(packStr(fmid));
+  if (tmid !== undefined) parts.push(packStr(tmid));
   parts.push(packHex(ref.n)); // raw bytes; a mc1-era nonce round-trips byte-exact
   const turn: number[] = [];
   writeVarint(ref.c, turn);
@@ -179,8 +191,8 @@ function decodeV2(payload: string): ConversationRef {
   }
   if (buf.length === 0) throw invalid('empty payload', true);
   const cur = new Cursor(buf);
-  const flags = cur.byte();
-  // Field order must mirror encodeRef exactly: f.id, t.id, f.m, t.m, n, c.
+  const flags = cur.varint();
+  // Field order must mirror encodeRef exactly: f.id, t.id, f.m, t.m, f.mid, t.mid, n, c.
   const readId = (typeBits: number, rawBit: number): { p: 'claude' | 'codex'; id: string } | { p: 'human' } => {
     if (typeBits === TYPE_CODES.human) return { p: 'human' };
     if (typeBits !== TYPE_CODES.claude && typeBits !== TYPE_CODES.codex) {
@@ -195,8 +207,10 @@ function decodeV2(payload: string): ConversationRef {
   const t0 = readId((flags >> 2) & 0x03, 0x20);
   const fm = (flags & 0x40) === 0 ? undefined : cur.field().toString('utf8');
   const tm = (flags & 0x80) === 0 ? undefined : cur.field().toString('utf8');
-  const f: RefEndpoint = fm === undefined ? f0 : { ...f0, m: fm } as RefEndpoint;
-  const t: RefEndpoint = tm === undefined ? t0 : { ...t0, m: tm } as RefEndpoint;
+  const fmid = (flags & 0x100) === 0 ? undefined : cur.field().toString('utf8');
+  const tmid = (flags & 0x200) === 0 ? undefined : cur.field().toString('utf8');
+  const f: RefEndpoint = fm === undefined && fmid === undefined ? f0 : { ...f0, ...(fm === undefined ? {} : { m: fm }), ...(fmid === undefined ? {} : { mid: fmid }) } as RefEndpoint;
+  const t: RefEndpoint = tm === undefined && tmid === undefined ? t0 : { ...t0, ...(tm === undefined ? {} : { m: tm }), ...(tmid === undefined ? {} : { mid: tmid }) } as RefEndpoint;
   const nBytes = cur.field();
   const n = nBytes.toString('hex');
   if (n === '') throw invalid('missing nonce', true);
