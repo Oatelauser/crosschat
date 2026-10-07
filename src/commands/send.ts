@@ -75,9 +75,17 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   const body = resolveBody(args, deps);
   const size = Buffer.byteLength(body, 'utf8');
   if (size > MAX_BODY_BYTES) {
+    // Teaching branches with the transport (scp is an ssh-only side-channel;
+    // tcp/broker file paths get designed when those transports do).
+    const tail =
+      args.via === undefined
+        ? 'Write the content to a file and send the path instead.'
+        : args.via.startsWith('ssh:')
+          ? `跨机大内容（ssh 形态）：先 scp <文件> ${args.via.slice(4)}:/tmp/<文件名>，再 crosschat send --via ${args.via} … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）`
+          : '该传输形态的大内容通道未定义——ssh 形态支持 scp 旁路（见文档），或压缩/分段后重试。';
     throw new MultichatError(
       'MESSAGE_TOO_LARGE',
-      `Body is ${size} bytes; the limit is ${MAX_BODY_BYTES}. Write the content to a file and send the path instead.`,
+      `Body is ${size} bytes; the limit is ${MAX_BODY_BYTES}. ${tail}`,
     );
   }
 

@@ -52,7 +52,7 @@ crosschat send --to <名字> --body "正文"
 
 ## 报错自纠（读错误码，不要即兴发明命令）
 
-- `MESSAGE_TOO_LARGE`：正文超过 16KiB。把完整内容**写入一个文件，只发文件路径**（接收方会按需读取，这也是长内容的标准做法）。
+- `MESSAGE_TOO_LARGE`：正文超过 16KiB。单机：把完整内容**写入一个文件，只发文件路径**（接收方会按需读取，这也是长内容的标准做法）。跨机（`--via ssh:<别名>`）：**先 `scp <文件> <别名>:/tmp/` 落到对端**，再 send 发**对端本地**的路径（scp 与 `--via` 共用同一份 ssh 配置；其他传输形态的大内容方式见文档）。
 - `RATE_LIMITED`：发送过快（每对端点 60 秒最多 30 条）。**等待后重试**，或直接总结收尾；系统不会静默丢弃或自动重试。
 - `CODEX_THREAD_LOCKED` / `CODEX_THREAD_BUSY_TIMEOUT`：旧 daemon（≤0.157 / 未附着 TUI）下线程被窗口占用或长 turn 在跑。消息**已暂存（parked，exit 0），无需重发**——**看门狗每 0.5–5 分钟自动重投，不需要手动跑 status**；每线程最多暂存 200 条，滞留内容随时可读 mailbox 镜像（Windows `%LOCALAPPDATA%\crosschat\mailbox\<线程ID>.md`；unix `~/crosschat/mailbox/<线程ID>.md`）。0.160+ 正常不会再遇到：忙时直接入队（`queued`）。
 - `CALLER_IDENTITY_CONFLICT`：环境里同时残留 `CLAUDE_CODE_*` 与 `CODEX_*` 身份变量（常见于从 Claude 终端启动的 codex daemon 派生的 shell）。临时自纠 = 给命令加前缀，照抄：
