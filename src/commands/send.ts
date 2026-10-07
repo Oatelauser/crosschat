@@ -86,13 +86,26 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   // hand-typed reply without the flag still routes (the envelope's copy
   // already carries it; this is typo insurance). Undecodable refs fall
   // through to the normal path's error.
+  // B11 fix: only the CALLER'S COUNTERPART may become the via target. The
+  // previous form scanned both endpoints and picked the first non-local one —
+  // on a cross-machine reply the sender's own endpoint lives on the OTHER
+  // machine, so the remote leg auto-filled a via back to the sender's machine
+  // and the two machines bounced the send at each other over ssh until the
+  // 120s timeout, with zero output at either end.
   if (args.via === undefined && args.conversation !== undefined) {
     const here = deps.hostname?.() ?? osHostname();
     const localMid = deps.machineId?.();
     try {
       const ref = decodeRef(args.conversation);
+      const envScan = deps.listClaudeSessions();
+      const envCaller = resolveCallerIdentity(deps.env, envScan);
+      const caller =
+        envCaller.p === 'human' && args.origin !== undefined
+          ? decodeOriginIdentity(args.origin)
+          : envCaller;
       const remote = [ref.f, ref.t].find(
         (ep): ep is { p: 'claude' | 'codex'; id: string; m: string } =>
+          !identityMatchesEndpoint(caller, ep) &&
           ep.p !== 'human' && ep.m !== undefined && !isSameMachine(ep.mid, ep.m, localMid, here),
       );
       if (remote !== undefined) args = { ...args, via: `ssh:${remote.m}` };
