@@ -111,3 +111,13 @@
 - **R2 · 零代码性能**：部署文档提示 `~/.ssh/config` 可加 `ControlMaster auto` 复用连接（ssh 原生，摊薄每次握手 100-300ms）。
 - **R3 · 微 UX**：未知传输前缀（tcp:/broker:）报错文案带"二期支持"注记。
 - 结构性结论：七轮+本轮后设计可施工，余项均为注记级。B1 派单即开工。
+
+## 9. B3 收尾批输入清单（2026-10-07 固化，含用户实测沉淀）
+
+- **README ssh 示例题词用用户原句**："使用 crosschat 发送消息给 beta2 问好，消息要求经过 ssh 管道送到（send 时加 --via ssh:<对端系统hostname>）。需要对方回复并停止。"（占位符承载"别名=对端 hostname"最佳实践）
+- **部署节**：双向可达前提（单向/NAT 等 broker）；win 收件腿 codex 不可用（AF_UNIX 跨登录会话隔离，claude 腿实测可用）；WSL 镜像网络 22 冲突→别名带非标端口；别名推荐=对端真实 hostname（别名≠hostname 会断回程路条）；WSL 反向须显式用户名（默认 root）；ControlMaster 提速可选；`ssh-keyscan -p <port>` 播种非标端口 host key；`wsl -u root` 直写 authorized_keys 解鸡生蛋
+- **skill 三行**：--via 教学（用户实测证明：不给提示 agent 不会跨机）+ 对端名单获取方式 + 跨机轮次纪律
+- **错误文案**：TARGET_NOT_FOUND 补"对端可能已重启，改用 --to 自动接续"自愈指引
+- **FAQ**：status 只显示本机会话——跨机看对端用 `ssh <对端> crosschat status`；常重启会话用 /rename 固定稳定名字
+- **CI mac 观察位**（008 决策点 16，continue-on-error 起步）
+- **反馈归档**：aio-cube 两份 + 用户亲手实测报告（B2.2 修复复测后归档修订版，纠正"跨机 ref 回投不可用属预期"的错误定性）
