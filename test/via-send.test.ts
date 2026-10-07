@@ -7,7 +7,6 @@ import {
   decodeOriginIdentity,
   encodeOrigin,
   parseViaValue,
-  runViaSend,
   validateRemoteFlagValues,
   type SshResult,
 } from '../src/federation.js';
