@@ -372,6 +372,43 @@ describe('B2 reply path (m stamping, envelope via, auto-complete)', () => {
     expect(ref.f.m).toBe('win-dev');
     expect(ref.t.m).toBe('win-dev');
   });
+
+  // B11 缺陷回归：远端 CLI（ssh shell，无 agent env）以 --origin 身份回复 --conversation，
+  // 调用者自己是 f 侧、对端 t 在本机 → 不得把 f（发起方机器）误当 via 目标弹 ssh 乒乓。
+  it('B11 跨机回复不乒乓：--origin 是 f 侧、对端 t 在本机（异机名）→ 不补 --via，本地投递', async () => {
+    sshCalls.length = 0;
+    const ref = encodeRef({ v: 1, f: { p: 'claude', id: 'boss', m: 'win-dev' }, t: { p: 'claude', id: 'cs-boss', m: 'build01' }, n: '0011223344556677', c: 1 });
+    let envelope = '';
+    const deps = makeRemoteDeps({
+      hostname: 'build01', // 本机即 t 侧机器，ref.f 的 win-dev 才是远端
+      deliverClaude: (content) => { envelope = content; },
+    });
+    const out = await runSend({ conversation: ref, bodyArg: 'pong-check', origin: encodeOrigin({ p: 'claude', id: 'boss' }, 'win-dev') }, deps);
+    expect(sshCalls).toHaveLength(0);
+    expect(envelope).toContain('pong-check'); // 真的走了本地 deliverClaude
+    expect(out).toContain('delivered');
+  });
+
+  it('B11 同名异 mid 实形（win↔WSL 双机同名 yang）：对端 t 在本机 → 不补 --via，本地投递', async () => {
+    sshCalls.length = 0;
+    const ref = encodeRef({
+      v: 1,
+      f: { p: 'claude', id: 'boss', m: 'yang', mid: 'M-WIN' },
+      t: { p: 'claude', id: 'cs-boss', m: 'yang', mid: 'M-WSL' },
+      n: '0011223344556677',
+      c: 1,
+    });
+    let envelope = '';
+    const deps = makeRemoteDeps({
+      hostname: 'yang',
+      mid: 'M-WSL', // mid 判同机，同名 hostname 不再骗到路由
+      deliverClaude: (content) => { envelope = content; },
+    });
+    const out = await runSend({ conversation: ref, bodyArg: 'pong-check', origin: encodeOrigin({ p: 'claude', id: 'boss' }, 'yang', 'M-WIN') }, deps);
+    expect(sshCalls).toHaveLength(0);
+    expect(envelope).toContain('pong-check');
+    expect(out).toContain('delivered');
+  });
 });
 
 describe('B10 machine-id dual identity (m routes, mid decides same-machine)', () => {
