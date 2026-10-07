@@ -77,13 +77,13 @@ crosschat send --to alice --body "你好 alice！"
 
 ### 完整剧本：codex 当领导派活给 claude（多任务循环的经典形态）
 
-**任务目标**：codex（领导）命令 claude（工人）在 `D:\workspace\demo` 创建 `notes.txt` 写三行待办，并验收。
+**任务目标**：codex（领导）命 claude（工人）统计当前目录的 `.md` 文件数并报回数字，领导自行复核后验收——**全程信息只经 crosschat 消息流动，不走文件**。
 
 **第 1 步 · 左窗启动 claude（接收方先开机；先启动 ≠ 先说话）**
 ```
 D:\workspace\demo> crosschat claude
 ```
-进入后输入 `/rename worker`，待命。
+进入后输入 `/rename worker`，再随便发一条消息（如"收到"）激活一轮——**改名要过一轮才进 `crosschat status`**。待命。
 
 **第 2 步 · 右窗启动 codex（领导）并贴题词**
 ```
@@ -91,15 +91,15 @@ D:\workspace\demo> codex
 ```
 ```
 你是领导。用 crosschat（先 status 确认名字）给 claude 会话「worker」下发任务：
-在当前目录创建 notes.txt，内容三行：买牛奶、交电费、给妈妈打电话。
-收到完成报告后，亲自打开文件验证内容；通过则回复"验收通过，任务结束"并停止；
-不通过则下发返工任务。
+统计当前目录下有多少个 .md 文件，把数字报回来。
+收到报告后，你自己也数一遍复核；数字一致则回复"验收通过，任务结束"并停止；
+不一致则把你的数字发回去要求返工。
 ```
 
 **第 3 步 · 右窗屏幕——任务由 codex 发出**
 ```
 ● exec: crosschat status
-● exec: crosschat send --to worker --body "任务1：在当前目录创建 notes.txt…"
+● exec: crosschat send --to worker --body "任务1：统计当前目录的 .md 文件数，报回数字"
 ● delivered to worker (turn 1)          ← 任务飞进左窗，发起方是 codex
 ```
 
@@ -109,18 +109,18 @@ D:\workspace\demo> codex
 ```
 📨 来自另一会话的消息:
 <cross-session-message from-name="codex/01a…" turn="1">
-任务1：在当前目录创建 notes.txt，内容三行…
-回复请运行: crosschat send --conversation mc1_xxx --body "<你的回复>"
+任务1：统计当前目录的 .md 文件数，报回数字
+回复请运行: crosschat send --conversation mc2_xxx --body "<你的回复>"
 </cross-session-message>
 
-⏺ Write: notes.txt（三行待办）
-⏺ Bash: crosschat send --conversation mc1_xxx --body "已完成：notes.txt 已创建…"
+⏺ Bash: ls *.md | wc -l → 7
+⏺ Bash: crosschat send --conversation mc2_xxx --body "报告：当前目录共 7 个 .md 文件"
 ⏺ delivered (turn 2)                     ← 报告发回给 codex
 ```
 
-**第 6 步 · 自动发生**：报告落进 codex 线程 → codex 验证 → 下发下一个/验收结论 → 又出现在左窗。
+**第 6 步 · 自动发生**：报告落进 codex 线程 → codex 自己数一遍（7 个，一致）→ 验收结论又出现在左窗。
 
-**第 7 步 · 左窗收到"验收通过，任务结束"——收工**。全程在左窗直播；想看领导的验收细节：开右窗 `codex resume` 翻历史。
+**第 7 步 · 左窗收到"验收通过，任务结束"——收工**。任务的下达、汇报、复核、验收全部是 crosschat 消息；想看领导的复核细节：开右窗 `codex resume` 翻历史。
 
 ## 📋 命令列表
 
@@ -149,45 +149,122 @@ crosschat send --via ssh:build01 --to worker2 --body "跑一次构建，产物�
 # → delivered to worker2@build01 (turn 1)
 ```
 
-给 agent 的题词示例（角色只写任务，协议靠 skill 与信封自带）：
+### 使用：题词与命令形态（按场景）
+
+**场景 A · 让本机 agent 发起跨机对话**——给 agent 的题词（角色只写任务，协议靠 skill 与信封自带）：
 
 > 使用 crosschat 发送消息给 beta2 问好，消息要求经过 ssh 管道送到（send 时加 --via ssh:<对端系统hostname>）。需要对方回复并停止。
+
+agent 据此跑出的命令形态：
+
+```bash
+crosschat send --via ssh:build01 --to beta2 --body "你好 beta2…"
+# → delivered to beta2@build01 (turn 1)
+```
+
+**场景 B · 对端接收**——**无需任何题词**。对端会话里自动出现信封：
+
+```
+📨 来自另一会话的消息:
+<cross-session-message from-name="claude/boss@win-dev" turn="1">
+你好 beta2…
+回复请运行: crosschat send --via ssh:win-dev --conversation mc2_… --body "<你的回复>"
+</cross-session-message>
+```
+
+**场景 C · 对端回复**——对 agent 说"照抄来信里的回复命令，替换占位符后执行"即可；命令形态（回程 `--via` 由信封自动携带）：
+
+```bash
+crosschat send --via ssh:win-dev --conversation mc2_… --body "收到，任务完成"
+# → delivered to claude/boss@win-dev (turn 2)   ← 回到发起机
+```
+
+**场景 D · 同机自环测试**（不跨机也要走一遍 ssh 管道时）：
+
+```bash
+# win 上（sshd 已跑在 22）：
+crosschat send --via ssh:localhost --to <本机会话名> --body "自环测试"
+# WSL 上（先给 ~/.ssh/config 加自指别名，一次性）：
+cat >> ~/.ssh/config << 'EOF'
+Host self
+  HostName localhost
+  Port 2222
+EOF
+ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts   # 播种 host key
+crosschat send --via ssh:self --to <本机会话名> --body "自环测试"
+```
 
 要点：
 
 - 名字在**目标机**上解析（本机同名会话不干扰）；跨机对端不在本机 `status` 里，看对端：`ssh <对端> crosschat status`
 - 对端忙 → 远端 `queued` / `parked` 语义与单机一致（parked 的 mailbox 路径标注"位于 `<host>`"）；远端业务错误**同码透传**（前缀 `[via <host>]`，自纠指引照常有效）
 - ssh 不通/超时报 `SSH_TRANSPORT_FAILED` / `SSH_TRANSPORT_TIMEOUT`——先 `ssh <对端> crosschat --version` 探活（顺带验版本），超时后**勿盲目重发**
-- 会话引用（`mc2_`）自带双方机器名，信封回复命令自动带 `--via` 回程；手敲漏了 CLI 也会按引用自动补全
+- 会话引用（`mc2_`）自带双方机器名+机器指纹（machine-id，同名机器也不混），信封回复命令自动带 `--via` 回程；手敲漏了 CLI 也会按引用自动补全
 - 单条上限 16KiB 对跨机同样生效（内容过长落盘发路径）
 
-<details><summary>部署（一次性，每台机器）</summary>
+### 部署：对端 ssh 信息怎么配（win ↔ WSL 完整实例）
 
-**前提：双向可达**（同一 LAN/VPN）。对端在 NAT 后、只能单向发起的环境，等 broker 堡垒机形态（路线图）。
+前提：**双向可达**（同一 LAN/VPN；对端在 NAT 后、只能单向发起的环境等 broker 堡垒机形态）。以下以 win（hostname `yang`）↔ WSL（hostname `yangwsl`）为例，逐台照抄。
+
+**第 1 步 · 每台机装 crosschat + 生成密钥**：
 
 ```bash
-npm i -g @oatelauser/crosschat && crosschat install-skills   # 每台机
-ssh-keygen -t ed25519                                        # 每台一次（无口令，机器通道）
-ssh-copy-id <对端>                                            # 推公钥，输一次现有密码（密码登录共存）
-ssh <对端> crosschat --version                                # 自证：通 + 版本一致
+npm i -g @oatelauser/crosschat && crosschat install-skills
+ssh-keygen -t ed25519          # 无口令（机器通道）；已有密钥则跳过
 ```
 
-三平台收件腿一次性准备：
+**第 2 步 · 写两端的 ~/.ssh/config（核心）**——每台机写"怎么连对端"：
 
-| 腿 | 准备 |
+```bash
+# win 侧（%USERPROFILE%\.ssh\config）——认得 WSL：
+Host yangwsl wsl               # 一行多名：真实 hostname + 顺手短名，都指向同一配置
+  HostName 127.0.0.1
+  Port 2222                    # WSL sshd 用非 22 端口（镜像网络下 22 被 win 占）
+  User root
+
+# WSL 侧（~/.ssh/config）——认得 win：
+Host yang
+  HostName localhost
+  Port 22
+  User yangsheng               # WSL 默认 root，反向连 win 必须显式写 win 用户名
+```
+
+规则：**别名推荐直接用"对端系统 hostname"**（信封回程路条自动取它，`--via ssh:yang` / `--via ssh:yangwsl` 天然成立）；别名≠hostname 也能用，但两个名字都要能解析（一行多名 `Host yang wsl` 即可）。hostname 用 `hostname` 命令查（两端各查一次、互抄）。
+
+**第 3 步 · 互推公钥**：
+
+```bash
+# 常规（Linux/Mac 对端）：推公钥，输一次现有密码（密码登录共存不受影响）
+ssh-copy-id yangwsl            # 或手动追加到对端 ~/.ssh/authorized_keys
+
+# win 对端 + 你是管理员组用户：公钥必须进专用文件并修 ACL（管理员 PowerShell）
+$kf = "$env:ProgramData\ssh\administrators_authorized_keys"
+Add-Content $kf -Value (Get-Content "$env:USERPROFILE\.ssh\id_ed25519.pub" -Raw)
+icacls $kf /inheritance:r /grant "SYSTEM:(F)" /grant "BUILTIN\Administrators:(F)"
+
+# WSL 对端：不走 ssh 推（鸡生蛋），从 win 直写其文件系统
+wsl -u root sh -c 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys' < $env:USERPROFILE\.ssh\id_ed25519.pub
+```
+
+**第 4 步 · 收件侧 sshd 与端口**：
+
+| 收件腿 | 一次性准备 |
 |---|---|
-| 任意 → Linux | sshd 开箱即有 |
-| 任意 → Windows | 装 OpenSSH Server（管理员可选功能）；管理员组用户公钥进 `C:\ProgramData\ssh\administrators_authorized_keys`（icacls 限 SYSTEM/Administrators）；npm 全局 bin 须在**系统** PATH（sshd 默认 shell 只见 Machine PATH）。**收件腿限制：codex 侧不可用（AF_UNIX 跨登录会话隔离，实测定论），claude 侧实测可用** |
-| 任意 → Mac | 系统设置开"远程登录" |
+| Linux | sshd 开箱即有 |
+| win | 管理员装 OpenSSH Server（`Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0` + `Start-Service sshd`）；npm 全局 bin 须在**系统** PATH（sshd 默认 shell 只见 Machine PATH）。**收件腿限制：codex 侧不可用（AF_UNIX 跨登录会话隔离，实测定论），claude 侧实测可用** |
+| WSL（镜像网络） | sshd 换非标端口：`sed -i 's/^#*Port .*/Port 2222/' /etc/ssh/sshd_config`，`systemctl enable --now ssh`；host key 播种 `ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts`（win 侧同款命令一次） |
+| Mac | 系统设置开"远程登录" |
 
-坑与最佳实践（实测沉淀）：
+**第 5 步 · 自证（双向各跑一次）**：
 
-- **别名 = 对端真实 hostname**：信封回程路条取自对话引用里的 hostname，ssh config 别名与 hostname 不一致会断回程（报 `SSH_TRANSPORT_FAILED`）。一台机器要多别名可写 `Host yang wsl`（一行多名同配置）
-- **WSL 镜像网络**：与 Windows 共享 22 端口 → WSL 的 sshd 换非标端口（如 2222），ssh config 别名带 `Port 2222`；host key 播种 `ssh-keyscan -p 2222 <host> >> ~/.ssh/known_hosts`；给 WSL 推公钥不走 ssh（鸡生蛋），用 `wsl -u root sh -c 'mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys' < ~/.ssh/id_ed25519.pub`
-- **WSL 反向连 Windows**：WSL 默认用户常是 root，config 里须显式 `User <win用户名>`；对端 hostname 大小写照抄
-- 可选提速：`~/.ssh/config` 加 `ControlMaster auto`（复用连接，摊薄每次握手）
-- 版本偏斜：旧版对端收到新旗标报 `USAGE [via <host>] unknown option …`——对端升级即愈
-</details>
+```bash
+ssh -o BatchMode=yes yangwsl crosschat --version    # win → WSL
+ssh -o BatchMode=yes yang crosschat --version       # WSL → win；出版本号 = 通 + 版本一致
+```
+
+失败对照：`Host key verification failed` → 第 4 步的 keyscan 没做；`Permission denied (publickey)` → 第 3 步公钥没进对（win 管理员组走专用文件）；`Connection refused` → 对端 sshd 没跑/端口不对。
+
+可选提速：`~/.ssh/config` 加 `ControlMaster auto`（复用连接，摊薄每次握手 100-300ms）。版本偏斜：旧版对端收到新旗标报 `USAGE [via <host>] unknown option …`——对端升级即愈。
 
 ## 📖 对话生命周期（规则总纲）
 
@@ -291,6 +368,8 @@ ssh <对端> crosschat --version                                # 自证：通 +
 **Q：跨机怎么看不到对端的会话？** `status` 只列**本机**会话；跨机看对端用 `ssh <对端> crosschat status`。
 
 **Q：会话经常重启，名字对不上？** claude 重启后自动编号会漂移；常重启的会话进去先 `/rename` 固定一个稳定名字——名字稳定，`--to` 自动接续就不会断。
+
+**Q：`/rename` 改名后 status 里还是旧名/没有它？** 改名（claude 与 codex TUI 同理）要**再发送一条消息激活一轮**，crosschat 才看得到新名——codex 新建线程同理（零轮次不入列表）。操作顺序：`/rename 名字` → 随便发一条 → 再 `crosschat status`。
 
 ## 🔧 故障恢复
 
