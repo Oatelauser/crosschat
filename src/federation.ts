@@ -88,8 +88,11 @@ export function encodeOrigin(identity: CallerIdentity, host: string): string {
   return Buffer.from(`${who}@${host}`, 'utf8').toString('base64url');
 }
 
+/** Decoded --origin: identity plus the machine it came from (008 B2 refs stamp both). */
+export type OriginIdentity = CallerIdentity & { host: string };
+
 /** Remote-side identity fallback for ssh shells without agent env (design D5). */
-export function decodeOriginIdentity(encoded: string): CallerIdentity {
+export function decodeOriginIdentity(encoded: string): OriginIdentity {
   let text: string;
   try {
     text = Buffer.from(encoded, 'base64url').toString('utf8');
@@ -99,16 +102,18 @@ export function decodeOriginIdentity(encoded: string): CallerIdentity {
   const at = text.lastIndexOf('@');
   if (at <= 0) throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
   const head = text.slice(0, at);
+  const host = text.slice(at + 1);
+  if (host === '') throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
   const slash = head.indexOf('/');
   if (slash <= 0) {
-    if (head === 'human') return { p: 'human' };
+    if (head === 'human') return { p: 'human', host };
     throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
   }
   const p = head.slice(0, slash);
   const nameOrId = head.slice(slash + 1);
   if (nameOrId === '') throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
-  if (p === 'claude') return { p: 'claude', id: nameOrId, name: nameOrId };
-  if (p === 'codex') return { p: 'codex', id: nameOrId };
+  if (p === 'claude') return { p: 'claude', id: nameOrId, name: nameOrId, host };
+  if (p === 'codex') return { p: 'codex', id: nameOrId, host };
   throw new MultichatError('USAGE', `--origin 端点类型非法: ${p}`);
 }
 

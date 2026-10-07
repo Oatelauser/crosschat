@@ -76,3 +76,18 @@ describe('composeEnvelope', () => {
     expect(out).toContain('reply-as="&lt;e>&amp;&quot;"');
   });
 });
+
+describe('composeEnvelope viaHost (008 B2)', () => {
+  it('injects --via before --conversation and never adds --to for cross-machine replies', () => {
+    const out = composeEnvelope({ fromName: 'claude/boss@win-dev', toName: 'codex/worker2', turn: 1, ref: 'mc2_R', body: 'x', viaHost: 'win-dev' });
+    const hint = out.match(/<crosschat-reply-hint[^>]*>([\s\S]*?)<\/crosschat-reply-hint>/)![1]!;
+    expect(hint).toBe('回复请运行: crosschat send --via ssh:win-dev --conversation mc2_R --body "<你的回复>"');
+  });
+
+  it('stays byte-identical to the single-machine form when viaHost is absent', () => {
+    const plain = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc2_R', body: 'x' });
+    const explicit = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc2_R', body: 'x', viaHost: undefined });
+    expect(plain).toBe(explicit);
+    expect(plain).not.toContain('--via');
+  });
+});

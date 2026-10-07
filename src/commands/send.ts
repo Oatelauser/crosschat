@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { hostname as osHostname } from 'node:os';
 import { MultichatError } from '../errors.js';
 import type { ClaudeRegistryScan } from '../claude/registry.js';
 import type { CodexThreadSummary } from '../codex/client.js';
@@ -78,6 +79,25 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     );
   }
 
+  // Federation (008 B2, design §5 C): a cross-machine --conversation ref names
+  // the remote machine in its endpoints — fill a missing --via from it so a
+  // hand-typed reply without the flag still routes (the envelope's copy
+  // already carries it; this is typo insurance). Undecodable refs fall
+  // through to the normal path's error.
+  if (args.via === undefined && args.conversation !== undefined) {
+    const here = deps.hostname?.() ?? osHostname();
+    try {
+      const ref = decodeRef(args.conversation);
+      const remote = [ref.f, ref.t].find(
+        (ep): ep is { p: 'claude' | 'codex'; id: string; m: string } =>
+          ep.p !== 'human' && ep.m !== undefined && ep.m !== here,
+      );
+      if (remote !== undefined) args = { ...args, via: `ssh:${remote.m}` };
+    } catch {
+      // invalid ref: the main path reports it
+    }
+  }
+
   // Federation (008/B1): everything via lives behind this early branch — the
   // 16K check above applies to cross-machine sends too (D6), and the local
   // path below stays byte-identical when --via is absent (D9).
@@ -90,8 +110,8 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   // Federation (008 D5): an ssh shell has no agent env, so the remote caller
   // would collapse to human (unreplyable). --origin — injected by the sending
   // machine's CLI — is the identity fallback; a real env identity always wins.
-  const caller =
-    envCaller.p === 'human' && args.origin !== undefined ? decodeOriginIdentity(args.origin) : envCaller;
+  const origin = envCaller.p === 'human' && args.origin !== undefined ? decodeOriginIdentity(args.origin) : undefined;
+  const caller: CallerIdentity = origin ?? envCaller;
 
   let target: RefEndpoint;
   let newRef: ConversationRef;
@@ -153,6 +173,25 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     turn = continued.turn;
   }
 
+  // Federation (008 B2): a remote-origin send (ssh shell + --origin) stamps
+  // both endpoints with their machines so every later envelope can derive the
+  // return --via from the ref alone. Local sends stamp nothing (no m = local).
+  const here = deps.hostname?.() ?? osHostname();
+  if (origin !== undefined) {
+    const stamp = (ep: RefEndpoint, m: string): RefEndpoint =>
+      ep.p === 'human' ? ep : { ...ep, m };
+    newRef = {
+      ...newRef,
+      f: stamp(newRef.f, identityMatchesEndpoint(caller, newRef.f) ? origin.host : here),
+      t: stamp(newRef.t, identityMatchesEndpoint(caller, newRef.t) ? origin.host : here),
+    };
+  }
+  // The reply-hint's --via points at the machine of the endpoint reading this
+  // envelope would reply to — the sender's own endpoint (D5: no --to needed).
+  const senderEp = identityMatchesEndpoint(caller, newRef.f) ? newRef.f : newRef.t;
+  const viaHost =
+    senderEp.p !== 'human' && senderEp.m !== undefined && senderEp.m !== here ? senderEp.m : undefined;
+
   const replyRef = encodeRef(newRef);
   const fromName = displayName(caller);
   /** Every exit path logs who sent what to whom (B14, +from in B16, +fromName in B21). */
@@ -171,7 +210,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     }
     checkAndRecord(deps.rateDir, rateKey(identityKey(caller), `claude:${target.id}`), deps.now());
     const toName = claudeSession.name ?? shortId('claude', claudeSession.sessionId);
-    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body });
+    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body, viaHost });
     try {
       await deps.deliverClaude(
         { pid: claudeSession.pid, messagingSocketPath: claudeSession.messagingSocketPath },
@@ -191,7 +230,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   const threads = await deps.listCodexThreads();
   const threadName = threads.find((thread) => thread.id === target.id)?.name;
   const toName = threadName ?? shortId('codex', target.id);
-  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body });
+  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body, viaHost });
   const parkNow = (): number => {
     park(
       deps.outboxDir,

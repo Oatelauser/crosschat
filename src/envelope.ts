@@ -25,6 +25,13 @@ export interface EnvelopeInput {
   /** Encoded conversation ref the recipient uses to reply. */
   ref: string;
   body: string;
+  /**
+   * Federation (008 B2): machine the reply must travel to — the sender
+   * endpoint's `m` when it differs from this machine's hostname. Absent =
+   * same machine, and the reply-hint stays byte-identical to the
+   * single-machine form (no --to, D5: the ref already names both ends).
+   */
+  viaHost?: string;
 }
 
 function escapeAttr(value: string): string {
@@ -41,10 +48,11 @@ export function composeEnvelope(input: EnvelopeInput): string {
   const fromName = shortened ? codepoints.slice(0, FROM_NAME_MAX_CODEPOINTS).join('') : input.fromName;
   const aliasAttr = shortened ? ` from-alias="${escapeAttr(input.fromName)}"` : '';
   const body = neutralizeReservedTags(input.body);
+  const via = input.viaHost === undefined ? '' : ` --via ssh:${input.viaHost}`;
   return (
     `<cross-session-message from-name="${escapeAttr(fromName)}" turn="${input.turn}"${aliasAttr}>\n` +
     `<crosschat-reply-hint conversation="${input.ref}" reply-as="${escapeAttr(input.toName)}">` +
-    `回复请运行: crosschat send --conversation ${input.ref} --body "<你的回复>"</crosschat-reply-hint>\n` +
+    `回复请运行: crosschat send${via} --conversation ${input.ref} --body "<你的回复>"</crosschat-reply-hint>\n` +
     `新话题或对话已推进时: crosschat send --to <名字> --body "..."（--to 自动接续该端对最近对话）；超 16KiB 请写文件后只发路径\n` +
     `${body}\n` +
     `</cross-session-message>`

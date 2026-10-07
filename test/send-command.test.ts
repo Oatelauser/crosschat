@@ -82,7 +82,7 @@ async function expectCode(promise: Promise<unknown>, code: string): Promise<Mult
   }
 }
 
-const REF_RE = /mc1_[A-Za-z0-9_-]+/;
+const REF_RE = /mc[12]_[A-Za-z0-9_-]+/;
 
 describe('runSend happy paths', () => {
   it('delivers to a claude session by name and returns a usable reply ref', async () => {
@@ -95,9 +95,9 @@ describe('runSend happy paths', () => {
     expect(claudeDeliveries.at(-1)?.pid).toBe(101);
     const content = claudeDeliveries.at(-1)!.content;
     expect(content.startsWith('<cross-session-message from-name="human" turn="1">')).toBe(true);
-    expect(content).toContain('<crosschat-reply-hint conversation="mc1_');
+    expect(content).toContain('<crosschat-reply-hint conversation="mc2_');
     expect(content).toContain('reply-as="alpha"');
-    expect(content).toContain('crosschat send --conversation mc1_');
+    expect(content).toContain('crosschat send --conversation mc2_');
     expect(content).toContain('hello world');
     expect(content.endsWith('</cross-session-message>')).toBe(true);
   });
@@ -127,7 +127,7 @@ describe('runSend happy paths', () => {
     const parsed = JSON.parse(out) as { status: string; to: string; turn: number; replyRef: string };
     expect(parsed).toMatchObject({ status: 'delivered', to: 'alpha', turn: 1 });
     expect(out).not.toContain('\n');
-    expect(parsed.replyRef.startsWith('mc1_')).toBe(true);
+    expect(parsed.replyRef.startsWith('mc2_')).toBe(true);
   });
 
   it('accepts a body of exactly 16KiB', async () => {
@@ -345,7 +345,7 @@ describe('runSend outbox parking (B10)', () => {
     );
     expect(out).toContain('已寄存给 workteam（对方忙，未送达）');
     expect(out).toContain('看门狗每 0.5–5 分钟自动重试');
-    expect(out).toContain('reply-ref: mc1_');
+    expect(out).toContain('reply-ref: mc2_');
   });
 
   it('parks on CODEX_THREAD_LOCKED as well', async () => {
@@ -449,7 +449,7 @@ describe('runSend receipt probing (B19: queued never probes)', () => {
     const out = await runSend({ to: 'workteam', bodyArg: 'straight through' }, probingDeps(false, probes));
     expect(probes).toHaveLength(1);
     expect(probes[0]![0]).toBe('team1111-aaaa');
-    expect(probes[0]![1]).toMatch(/^mc1_/);
+    expect(probes[0]![1]).toMatch(/^mc2_/);
     expect(out).toContain('delivered to workteam (turn 1)');
     expect(out).not.toContain('回执'); // confirmed → no caveat line
   });

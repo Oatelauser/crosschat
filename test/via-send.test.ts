@@ -12,6 +12,7 @@ import {
   type SshResult,
 } from '../src/federation.js';
 import { runSend, type SendArgs, type SendDeps } from '../src/commands/send.js';
+import { decodeRef, encodeRef } from '../src/ref.js';
 import { parseSendArgs } from '../src/cli.js';
 import { MultichatError } from '../src/errors.js';
 import type { SendLogEntry } from '../src/send-log.js';
@@ -100,12 +101,13 @@ describe('origin encode/decode', () => {
     const enc1 = encodeOrigin({ p: 'claude', id: 'cs-1', name: '我 boss' }, 'win-dev');
     expect(enc1).toMatch(/^[A-Za-z0-9_-]+$/); // base64url only — never an argv hazard (F1)
     const dec1 = decodeOriginIdentity(enc1);
-    expect(dec1).toEqual({ p: 'claude', id: '我 boss', name: '我 boss' });
+    expect(dec1).toEqual({ p: 'claude', id: '我 boss', name: '我 boss', host: 'win-dev' }); // B2: host rides along for m-stamping
     expect(decodeOriginIdentity(encodeOrigin({ p: 'codex', id: '01a1115b-aaaa' }, 'win-dev'))).toEqual({
       p: 'codex',
       id: '01a1115b',
+      host: 'win-dev',
     });
-    expect(decodeOriginIdentity(encodeOrigin({ p: 'human' }, 'win-dev'))).toEqual({ p: 'human' });
+    expect(decodeOriginIdentity(encodeOrigin({ p: 'human' }, 'win-dev'))).toEqual({ p: 'human', host: 'win-dev' });
     expect(() => decodeOriginIdentity('!!not-b64!!')).toThrow(/格式非法/);
   });
 });
@@ -212,7 +214,10 @@ describe('runViaSend mapping', () => {
     // B20 shard layout: one file per pair under <dir>/conversations/.
     const shards = readdirSync(join(stateFile, '..', 'conversations'));
     expect(shards).toHaveLength(1);
-    expect(readFileSync(join(stateFile, '..', 'conversations', shards[0]!), 'utf8')).toContain(ref);
+    // B2: the shard stores the mc2 re-encoding — same decoded ref, compact form.
+    const stored = JSON.parse(readFileSync(join(stateFile, '..', 'conversations', shards[0]!), 'utf8')) as { ref: string };
+    expect(decodeRef(stored.ref)).toEqual(decodeRef(ref));
+    expect(stored.ref.startsWith('mc2_')).toBe(true);
   });
 });
 
@@ -268,5 +273,69 @@ describe('cli parsing and zero regression', () => {
     sshCalls.length = 0;
     await expectCode(viaSend({ to: 'worker2', bodyArg: 'x'.repeat(16_385) }), 'MESSAGE_TOO_LARGE');
     expect(sshCalls).toHaveLength(0);
+  });
+});
+
+describe('B2 reply path (m stamping, envelope via, auto-complete)', () => {
+  function makeRemoteDeps(opts: { hostname: string; deliverClaude?: (content: string) => void }) {
+    const deps = makeDeps();
+    return {
+      ...deps,
+      hostname: () => opts.hostname,
+      deliverClaude: async (_t: unknown, content: string) => {
+        opts.deliverClaude?.(content);
+        return { status: 'delivered' as const };
+      },
+    };
+  }
+
+  it('fills a missing --via from the ref endpoint whose machine is not here', async () => {
+    sshCalls.length = 0;
+    const ref = encodeRef({ v: 1, f: { p: 'claude', id: 'boss', m: 'win-dev' }, t: { p: 'codex', id: '01a1115b-1a3c-7e71-addc-fee969078e1b', m: 'build01' }, n: '9d4f2ab1c3e85760', c: 1 });
+    sshResult = { code: 0, stdout: '', stderr: '' }; // force a deterministic receipt shape
+    await runSend({ conversation: ref, bodyArg: 'x' }, makeRemoteDeps({ hostname: 'build01' })).catch(() => undefined);
+    expect(sshCalls).toHaveLength(1);
+    expect(sshCalls[0]!.argv).toContain('win-dev');
+    expect(sshCalls[0]!.argv).toContain(ref);
+  });
+
+  it('does not add --via when no endpoint names a foreign machine', async () => {
+    sshCalls.length = 0;
+    const ref = encodeRef({ v: 1, f: { p: 'claude', id: 'cs-boss' }, t: { p: 'claude', id: 'cs-2' }, n: '0011223344556677', c: 1 });
+    // single-machine ref, caller is t (cs-2) via env: target cs-boss resolves locally
+    const deps = makeRemoteDeps({ hostname: 'win-dev' });
+    await runSend({ conversation: ref, bodyArg: 'x' }, { ...deps, env: { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-2' } }).catch(() => undefined);
+    expect(sshCalls).toHaveLength(0);
+  });
+
+  it('remote-origin send stamps both endpoints and the envelope carries the return --via', async () => {
+    const origin = encodeOrigin({ p: 'claude', id: 'boss', name: 'boss' }, 'win-dev');
+    let envelope = '';
+    const deps = makeRemoteDeps({
+      hostname: 'build01',
+      deliverClaude: (content) => { envelope = content; },
+    });
+    // ssh shell: no agent env, --origin speaks; target boss resolves via the registry scan
+    const out = await runSend({ to: 'boss', bodyArg: 'task', origin }, deps);
+    expect(out).toContain('delivered to boss');
+    const embedded = envelope.match(/mc2_[A-Za-z0-9_-]+/)![0]!;
+    const ref = decodeRef(embedded);
+    expect(ref.f).toEqual({ p: 'claude', id: 'boss', m: 'win-dev' });
+    expect(ref.t).toEqual({ p: 'claude', id: 'cs-boss', m: 'build01' });
+    expect(envelope).toContain('crosschat send --via ssh:win-dev --conversation mc2_');
+  });
+
+  it('origin host equal to the local hostname leaves the envelope single-machine shaped', async () => {
+    const origin = encodeOrigin({ p: 'claude', id: 'boss', name: 'boss' }, 'win-dev');
+    let envelope = '';
+    const deps = makeRemoteDeps({
+      hostname: 'win-dev',
+      deliverClaude: (content) => { envelope = content; },
+    });
+    await runSend({ to: 'boss', bodyArg: 'task', origin }, deps);
+    expect(envelope).not.toContain('--via');
+    const ref = decodeRef(envelope.match(/mc2_[A-Za-z0-9_-]+/)![0]!);
+    expect(ref.f.m).toBe('win-dev');
+    expect(ref.t.m).toBe('win-dev');
   });
 });
