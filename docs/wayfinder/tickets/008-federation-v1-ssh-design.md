@@ -54,3 +54,5 @@ claimed-by: 设计子代理（2026-10-06，主会话派单/验收）+ 用户六�
 实施待用户触发；B1 首验三项需先启用本机 OpenSSH Server。
 
 **2026-10-07 localhost 真机验证附录**：三首验全 PASS；全链路 PASS（B15 接续经 ssh、同码透传 `[via localhost]`、快速失败 1.6s、mc2=83 字符、同机信封无 --via）。**真机发现：Windows AF_UNIX 跨登录会话隔离——sshd 会话内 codex 投递 10061，win 收件腿 codex 侧为 v1 已知约束（linux/mac 接收端无此问题），B3 部署文档必写**；`--json` 真机用例待跨机联调补。详见 `../drill-reports/federation-localhost-verify-20261007.md`。
+
+**2026-10-07 win↔WSL 联通附录**：两腿 PASS（全链探针 0.51s；WSL→win 镜像回环可达）。真机实证三件事：①D1 设计正确（镜像网络 22 冲突由 ssh config 别名带 Port 解决，零自有配置）②版本偏斜场景真发生且错误透传有效（WSL 1.3.0 拒 --origin，USAGE 0.47s 透传回）③WSL 默认 root，反向须显式用户名。详见 `../drill-reports/federation-wsl-connectivity-20261007.md`。
