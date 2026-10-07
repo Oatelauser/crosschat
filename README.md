@@ -266,6 +266,19 @@ ssh -o BatchMode=yes yang crosschat --version       # WSL → win；出版本号
 
 可选提速：`~/.ssh/config` 加 `ControlMaster auto`（复用连接，摊薄每次握手 100-300ms）。版本偏斜：旧版对端收到新旗标报 `USAGE [via <host>] unknown option …`——对端升级即愈。
 
+**大内容怎么办（>16KiB）**：消息照旧走 crosschat、块数据走 ssh 自己的文件通道——scp 与 `--via` **共用同一份 ssh config/别名/密钥**，配一次全通：
+
+```bash
+# 发去对端（引用的是对端本地路径）：
+scp big-analysis.txt wsl:/tmp/big-analysis.txt
+crosschat send --via ssh:wsl --to beta2 --body "分析 /tmp/big-analysis.txt，结论报回来"
+
+# 对端回传大结果（题词形态）：
+#   把结果写入 result.txt，用 scp result.txt yang:/tmp/ 发回，然后用 crosschat 告诉我路径
+```
+
+win ↔ WSL 这对还有更省的捷径——文件根本不用过网络：`cp result.txt /mnt/c/Users/<你>/AppData/Local/Temp/`（WSL 直写 win 盘）。大文件用完即删（`/tmp` 卫生，agent 侧纪律）。
+
 ## 📖 对话生命周期（规则总纲）
 
 ### 三种发起方式
