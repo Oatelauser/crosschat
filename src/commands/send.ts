@@ -14,6 +14,7 @@ import {
 } from '../identity.js';
 import { resolveTargetByName } from '../resolve.js';
 import { composeEnvelope } from '../envelope.js';
+import { decodeOriginIdentity, runViaSend } from '../federation.js';
 import type { SendLogEntry } from '../send-log.js';
 import { continueConversation, continueFromRef, recordConversation } from '../conversations.js';
 import {
@@ -34,6 +35,10 @@ export interface SendArgs {
   /** Body from --body; the alternative is deps.stdinText. */
   bodyArg?: string;
   json?: boolean;
+  /** Federation (008/B1): `ssh:<host>` — remote CLI gets full authority. */
+  via?: string;
+  /** Machine-injected sender identity for ssh shells without agent env (008 D5); hidden flag. */
+  origin?: string;
 }
 
 export interface SendDeps {
@@ -56,6 +61,10 @@ export interface SendDeps {
   confirmReceipt?(threadId: string, marker: string): Promise<'confirmed' | 'unconfirmed'>;
   /** Pair-conversation continuity state (B15); absent = always fresh threads. */
   conversationStateFile?: string;
+  /** Federation transport executor (008/B1); injectable for tests. */
+  sshExec?(argv: readonly string[], input: string, timeoutMs: number): Promise<import('../federation.js').SshResult>;
+  /** Machine name stamped into --origin; default os.hostname(). */
+  hostname?(): string;
 }
 
 export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
@@ -69,8 +78,20 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     );
   }
 
+  // Federation (008/B1): everything via lives behind this early branch — the
+  // 16K check above applies to cross-machine sends too (D6), and the local
+  // path below stays byte-identical when --via is absent (D9).
+  if (args.via !== undefined) {
+    return runViaSend(args, body, deps);
+  }
+
   const scan = deps.listClaudeSessions();
-  const caller = resolveCallerIdentity(deps.env, scan);
+  const envCaller = resolveCallerIdentity(deps.env, scan);
+  // Federation (008 D5): an ssh shell has no agent env, so the remote caller
+  // would collapse to human (unreplyable). --origin — injected by the sending
+  // machine's CLI — is the identity fallback; a real env identity always wins.
+  const caller =
+    envCaller.p === 'human' && args.origin !== undefined ? decodeOriginIdentity(args.origin) : envCaller;
 
   let target: RefEndpoint;
   let newRef: ConversationRef;

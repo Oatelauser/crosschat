@@ -15,6 +15,7 @@ import { defaultOutboxDir, drain } from './outbox.js';
 import { runWatchdog, spawnWatchdog as ensureWatchdog } from './watchdog.js';
 import { appendSendLog, confirmInRollout, defaultSendLogFile } from './send-log.js';
 import { defaultConversationsFile } from './conversations.js';
+import { defaultSshExec } from './federation.js';
 import { conversationSummaries } from './conversation-summary.js';
 import { codexHomeDir, listWriterLocks } from './codex/rollout-meta.js';
 import { listClaudeSessions } from './claude/registry.js';
@@ -31,9 +32,11 @@ const version: string = (
 const usage = `usage: crosschat <command> [options]
 
 commands:
-  send --to <name> | --conversation <ref>
+  send [--via ssh:<host>] --to <name> | --conversation <ref>
                             send a message (--body <text> or stdin);
-                            quote <name> if it contains spaces
+                            quote <name> if it contains spaces;
+                            --via sends to a peer machine (host = ~/.ssh/config
+                            alias, peer resolves names on its side)
   status [--conversations]   show claude/codex session status, or per-pair
                             conversation overview with --conversations
   doctor                    environment health check (exits 1 on any ❌)
@@ -49,10 +52,10 @@ options:
   --help | help             show this help and exit
 `;
 
-/** Hand-rolled send arg parsing (no dependency): --to/--conversation/--body take values, --json is a flag. */
+/** Hand-rolled send arg parsing (no dependency): --to/--conversation/--body/--via/--origin take values, --json is a flag. --origin is machine-injected (008) and stays out of usage. */
 export function parseSendArgs(argv: readonly string[]): SendArgs {
   const args: SendArgs = {};
-  const valueOpts = new Set(['--to', '--conversation', '--body']);
+  const valueOpts = new Set(['--to', '--conversation', '--body', '--via', '--origin']);
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === undefined || !token.startsWith('--')) {
@@ -71,6 +74,8 @@ export function parseSendArgs(argv: readonly string[]): SendArgs {
     if (value === undefined) throw new MultichatError('USAGE', `send: ${name} requires a value`);
     if (name === '--to') args.to = value;
     else if (name === '--conversation') args.conversation = value;
+    else if (name === '--via') args.via = value;
+    else if (name === '--origin') args.origin = value;
     else args.bodyArg = value;
   }
   return args;
@@ -135,6 +140,8 @@ function realSendDeps(stdinText: string | undefined): SendDeps {
     appendLog: (entry) => appendSendLog(defaultSendLogFile(), entry),
     confirmReceipt: (threadId, marker) => confirmInRollout(codexHomeDir(), threadId, marker),
     conversationStateFile: defaultConversationsFile(),
+    // Federation (008/B1): real transport + machine name for --origin.
+    sshExec: (argv, input, timeoutMs) => defaultSshExec(argv, input, timeoutMs),
   };
 }
 
