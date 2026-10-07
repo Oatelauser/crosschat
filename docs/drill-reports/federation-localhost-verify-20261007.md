@@ -34,3 +34,9 @@
 ## 清理勾对
 
 验证线程已删（status 零残留）✅ · 全局还原 1.3.2 ✅ · cc-elevate 脚本/日志、cc-fedverify 目录已删 ✅ · `git status` 空 ✅ · 系统侧（sshd/密钥/Machine PATH）未动，待用户定夺保留或还原
+
+## 用户亲手验证附录（2026-10-07）
+
+- **win claude 收件腿经 sshd 会话实测可达** ✅——此前唯一未测的腿闭环；AF_UNIX 约束确认仅限 codex 侧
+- human 发起 → CANNOT_REPLY_TO_HUMAN 按设计生效（人手敲=单向）；skill 兜底（--to 寻址）实地再次自愈
+- 遗留：agent 发起的双向闭环由用户续测中
