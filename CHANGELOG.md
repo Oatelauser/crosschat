@@ -3,6 +3,27 @@
 本项目的全部显著变更记录于此。格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
 ## [Unreleased]
+## [1.3.3] - 2026-10-07
+
+### 跨机联邦 v1（ssh + 远端 CLI，全矩阵实测）
+
+- `--via ssh:<别名>` 跨机发送：远端 CLI 全权（名字/id8 解析、投递、发件箱都在对端），body 走 stdin 免三方 shell 引号地狱，回执三态透传（delivered/queued/parked 带 `@对端` 后缀）
+- 三层错误码：远端业务错**同码重抛**（`[via 对端]` 前缀，自纠指引原样有效）/ REMOTE_FAILED / SSH_TRANSPORT_FAILED（附 `ssh 对端 crosschat --version` 探活指引）；BatchMode 防首连交互卡死（实测 1.6s 快速失败）
+- **回复闭环**：信封回复命令自动带 `--via`（取自 ref 机器字段），照抄即回；`--conversation` 缺 `--via` 时按 ref 自动补全
+- **mc2_ 紧凑会话引用**：296→83 字符（3.6×），每轮双方上下文直省；mc1_ 永久兼容
+- **machine-id 双身份**：m(hostname) 管路由别名、mid(机器指纹) 管同机判定——**两台同名机器照常互通**（别名命名空间自解 + ⚠ 同名警告），自环模式（ssh localhost 测自己）与跨机两全
+- 发起侧审计：跨机发送本机 send-log 补记（含失败），`--conversations` 自然显示己方跨机端对
+- 修复：跨机回复无限 ssh 乒乓（自动补全只认呼叫方对端，B11）；origin 全 id 过线（ref 可路由，B8）
+- 部署：README 联邦节手册化——两端 ssh config 逐行样例、密钥五步（管理员组/`wsl -u root` 解鸡生蛋/keyscan 非标端口）、别名=对端 hostname 规则、自环测试步骤、win 收件腿 codex 不可用（AF_UNIX 会话隔离）注记
+- 完整剧本重写：任务下达/汇报/复核/验收全程消息往返，零文件载体
+- 实测档案：localhost 全链路 + win↔WSL 双腿 + 用户亲测三轮（drill-reports 三份）
+
+### 其他
+
+- `TARGET_NOT_FOUND` / `CALLER_NOT_IN_CONVERSATION` 错误文案补 `--to` 自动接续自愈指引（实地反馈响应）
+- send-log 容量上限（超 5MiB 保尾 1MiB 整行重写，此前无限增长）
+- CI 挂 macos-latest 观察位（continue-on-error）；FAQ 补"改名后需发一条消息激活才可见于 status"
+
 
 ## [1.3.2] - 2026-10-06
 
