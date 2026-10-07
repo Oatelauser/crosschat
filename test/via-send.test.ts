@@ -97,18 +97,34 @@ describe('validateRemoteFlagValues', () => {
 });
 
 describe('origin encode/decode', () => {
-  it('round-trips claude/codex/human, immune to spaces and unicode', () => {
-    const enc1 = encodeOrigin({ p: 'claude', id: 'cs-1', name: '我 boss' }, 'win-dev');
+  it('round-trips the FULL id (B2.1) with an optional display name; spaces/unicode immune', () => {
+    const enc1 = encodeOrigin({ p: 'claude', id: 'cs-full-1', name: '我 boss' }, 'win-dev');
     expect(enc1).toMatch(/^[A-Za-z0-9_-]+$/); // base64url only — never an argv hazard (F1)
-    const dec1 = decodeOriginIdentity(enc1);
-    expect(dec1).toEqual({ p: 'claude', id: '我 boss', name: '我 boss', host: 'win-dev' }); // B2: host rides along for m-stamping
-    expect(decodeOriginIdentity(encodeOrigin({ p: 'codex', id: '01a1115b-aaaa' }, 'win-dev'))).toEqual({
+    expect(decodeOriginIdentity(enc1)).toEqual({ p: 'claude', id: 'cs-full-1', name: '我 boss', host: 'win-dev' });
+    // nameless claude: id only, no name key
+    expect(decodeOriginIdentity(encodeOrigin({ p: 'claude', id: 'cs-2' }, 'win-dev'))).toEqual({
+      p: 'claude',
+      id: 'cs-2',
+      host: 'win-dev',
+    });
+    expect(decodeOriginIdentity(encodeOrigin({ p: 'codex', id: '01a1115b-1a3c-7e71-addc-fee969078e1b' }, 'win-dev'))).toEqual({
       p: 'codex',
-      id: '01a1115b',
+      id: '01a1115b-1a3c-7e71-addc-fee969078e1b',
       host: 'win-dev',
     });
     expect(decodeOriginIdentity(encodeOrigin({ p: 'human' }, 'win-dev'))).toEqual({ p: 'human', host: 'win-dev' });
     expect(() => decodeOriginIdentity('!!not-b64!!')).toThrow(/格式非法/);
+  });
+
+  it('names may contain @ and / — lastIndexOf(@) keeps the host, first rest-/ bounds the id (B2.1)', () => {
+    expect(decodeOriginIdentity(encodeOrigin({ p: 'claude', id: 'cs-x', name: 'a@b/c d' }, 'win-dev'))).toEqual({
+      p: 'claude',
+      id: 'cs-x',
+      name: 'a@b/c d',
+      host: 'win-dev',
+    });
+    expect(() => decodeOriginIdentity(Buffer.from('claude//name@h', 'utf8').toString('base64url'))).toThrow(/格式非法/);
+    expect(() => decodeOriginIdentity(Buffer.from('claude/cs-1/@h', 'utf8').toString('base64url'))).toThrow(/格式非法/);
   });
 });
 
@@ -323,6 +339,24 @@ describe('B2 reply path (m stamping, envelope via, auto-complete)', () => {
     expect(ref.f).toEqual({ p: 'claude', id: 'boss', m: 'win-dev' });
     expect(ref.t).toEqual({ p: 'claude', id: 'cs-boss', m: 'build01' });
     expect(envelope).toContain('crosschat send --via ssh:win-dev --conversation mc2_');
+  });
+
+  it('B2.1 regression: the origin FULL id rides the ref (routable), the name only displays', async () => {
+    // Defect (user drill 2026-10-07): origin used to carry the display name/id8,
+    // so cross-machine reply-hint refs pointed at "alpha" — unroutable, only the
+    // --to fallback survived. The ref must carry the full session id.
+    const origin = encodeOrigin({ p: 'claude', id: 'a3f9c2e1-5b7d-4f8a-9c21-8e4d2b6a0f33', name: 'alpha' }, 'win-dev');
+    let envelope = '';
+    const deps = makeRemoteDeps({
+      hostname: 'build01',
+      deliverClaude: (content) => { envelope = content; },
+    });
+    await runSend({ to: 'boss', bodyArg: 'task', origin }, deps);
+    const ref = decodeRef(envelope.match(/mc2_[A-Za-z0-9_-]+/)![0]!);
+    expect(ref.f).toEqual({ p: 'claude', id: 'a3f9c2e1-5b7d-4f8a-9c21-8e4d2b6a0f33', m: 'win-dev' });
+    expect(ref.f.id).not.toBe('alpha'); // name must never leak into the routable id
+    expect(envelope).toContain('from-name="alpha"'); // display name survives for humans
+    expect(envelope).toContain('--via ssh:win-dev --conversation mc2_'); // return route rides the ref
   });
 
   it('origin host equal to the local hostname leaves the envelope single-machine shaped', async () => {

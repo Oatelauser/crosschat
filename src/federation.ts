@@ -77,13 +77,20 @@ export function validateRemoteFlagValues(args: SendArgs): void {
   }
 }
 
-/** `<p>/<名或id8>@<hostname>`, base64url-whole — display names may contain spaces/unicode (F1). */
+/**
+ * `<p>/<full id>[/<display name>]@<hostname>`, base64url-whole. The FULL id is
+ * what makes the origin endpoint routable in refs (B2.1: display names/ id8s
+ * made cross-machine reply-hints unroutable); the display name is optional and
+ * may contain spaces/unicode/@/'/' (F1 — never parsed beyond its slot).
+ */
 export function encodeOrigin(identity: CallerIdentity, host: string): string {
   const who =
     identity.p === 'claude'
-      ? `claude/${identity.name ?? identity.id.slice(0, 8)}`
+      ? identity.name === undefined
+        ? `claude/${identity.id}`
+        : `claude/${identity.id}/${identity.name}`
       : identity.p === 'codex'
-        ? `codex/${identity.id.slice(0, 8)}`
+        ? `codex/${identity.id}`
         : 'human';
   return Buffer.from(`${who}@${host}`, 'utf8').toString('base64url');
 }
@@ -110,10 +117,16 @@ export function decodeOriginIdentity(encoded: string): OriginIdentity {
     throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
   }
   const p = head.slice(0, slash);
-  const nameOrId = head.slice(slash + 1);
-  if (nameOrId === '') throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
-  if (p === 'claude') return { p: 'claude', id: nameOrId, name: nameOrId, host };
-  if (p === 'codex') return { p: 'codex', id: nameOrId, host };
+  const rest = head.slice(slash + 1);
+  // First '/' after the endpoint type separates the full id from the optional
+  // display name; a name may itself contain '/' (B2.1 spec). Ids are
+  // hex/uuid-ish and never contain '/'.
+  const nameSlash = rest.indexOf('/');
+  const id = nameSlash === -1 ? rest : rest.slice(0, nameSlash);
+  const name = nameSlash === -1 ? undefined : rest.slice(nameSlash + 1);
+  if (id === '' || name === '') throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
+  if (p === 'claude') return name === undefined ? { p: 'claude', id, host } : { p: 'claude', id, name, host };
+  if (p === 'codex') return { p: 'codex', id, host };
   throw new MultichatError('USAGE', `--origin 端点类型非法: ${p}`);
 }
 
