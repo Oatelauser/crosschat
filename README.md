@@ -127,6 +127,7 @@ D:\workspace\demo> codex
 ```
 crosschat send --to <名字> --body "<正文>"          # 新消息（名字含空格加引号；未命名 codex 线程可用 id8 或完整 id 寻址，status 可见）
 crosschat send --conversation <ref> --body "<正文>" # 回复（ref 照抄收到的信封）
+crosschat send --via ssh:<对端hostname> --to <名/id8> --body "…"  # 跨机发送（联邦，见 🌐 节）
 echo … | crosschat send --to <名字>                 # 正文走 stdin
 crosschat status [--json] [--conversations]        # 双侧总览（名字/目录/时间/状态）
 crosschat doctor                                    # 一键环境体检（有 ❌ 时退出码 1）
@@ -139,6 +140,55 @@ crosschat -v | --version | help                     # 版本 / 帮助
 
 `status --conversations` 另看对话总览：每对端点的最近方向、相对时间、轮次、末条状态与滞留数（与 `--json` 组合输出同结构数组）。
 
+## 🌐 跨机联邦（ssh v1）
+
+一句话：**跨机 = 单机的一切 + 一个 `--via ssh:<对端系统hostname>` 旗标**。消息经 ssh 到对端机器上执行同一条 crosschat——远端 CLI 全权（名字解析、投递、发件箱、它自己的 send-log），回执带 `@<host>` 后缀，**信封自动携带回程路条，接收方照抄即可回复**，无需知道网络结构。
+
+```bash
+crosschat send --via ssh:build01 --to worker2 --body "跑一次构建，产物清单发回来"
+# → delivered to worker2@build01 (turn 1)
+```
+
+给 agent 的题词示例（角色只写任务，协议靠 skill 与信封自带）：
+
+> 使用 crosschat 发送消息给 beta2 问好，消息要求经过 ssh 管道送到（send 时加 --via ssh:<对端系统hostname>）。需要对方回复并停止。
+
+要点：
+
+- 名字在**目标机**上解析（本机同名会话不干扰）；跨机对端不在本机 `status` 里，看对端：`ssh <对端> crosschat status`
+- 对端忙 → 远端 `queued` / `parked` 语义与单机一致（parked 的 mailbox 路径标注"位于 `<host>`"）；远端业务错误**同码透传**（前缀 `[via <host>]`，自纠指引照常有效）
+- ssh 不通/超时报 `SSH_TRANSPORT_FAILED` / `SSH_TRANSPORT_TIMEOUT`——先 `ssh <对端> crosschat --version` 探活（顺带验版本），超时后**勿盲目重发**
+- 会话引用（`mc2_`）自带双方机器名，信封回复命令自动带 `--via` 回程；手敲漏了 CLI 也会按引用自动补全
+- 单条上限 16KiB 对跨机同样生效（内容过长落盘发路径）
+
+<details><summary>部署（一次性，每台机器）</summary>
+
+**前提：双向可达**（同一 LAN/VPN）。对端在 NAT 后、只能单向发起的环境，等 broker 堡垒机形态（路线图）。
+
+```bash
+npm i -g @oatelauser/crosschat && crosschat install-skills   # 每台机
+ssh-keygen -t ed25519                                        # 每台一次（无口令，机器通道）
+ssh-copy-id <对端>                                            # 推公钥，输一次现有密码（密码登录共存）
+ssh <对端> crosschat --version                                # 自证：通 + 版本一致
+```
+
+三平台收件腿一次性准备：
+
+| 腿 | 准备 |
+|---|---|
+| 任意 → Linux | sshd 开箱即有 |
+| 任意 → Windows | 装 OpenSSH Server（管理员可选功能）；管理员组用户公钥进 `C:\ProgramData\ssh\administrators_authorized_keys`（icacls 限 SYSTEM/Administrators）；npm 全局 bin 须在**系统** PATH（sshd 默认 shell 只见 Machine PATH）。**收件腿限制：codex 侧不可用（AF_UNIX 跨登录会话隔离，实测定论），claude 侧实测可用** |
+| 任意 → Mac | 系统设置开"远程登录" |
+
+坑与最佳实践（实测沉淀）：
+
+- **别名 = 对端真实 hostname**：信封回程路条取自对话引用里的 hostname，ssh config 别名与 hostname 不一致会断回程（报 `SSH_TRANSPORT_FAILED`）。一台机器要多别名可写 `Host yang wsl`（一行多名同配置）
+- **WSL 镜像网络**：与 Windows 共享 22 端口 → WSL 的 sshd 换非标端口（如 2222），ssh config 别名带 `Port 2222`；host key 播种 `ssh-keyscan -p 2222 <host> >> ~/.ssh/known_hosts`；给 WSL 推公钥不走 ssh（鸡生蛋），用 `wsl -u root sh -c 'mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys' < ~/.ssh/id_ed25519.pub`
+- **WSL 反向连 Windows**：WSL 默认用户常是 root，config 里须显式 `User <win用户名>`；对端 hostname 大小写照抄
+- 可选提速：`~/.ssh/config` 加 `ControlMaster auto`（复用连接，摊薄每次握手）
+- 版本偏斜：旧版对端收到新旗标报 `USAGE [via <host>] unknown option …`——对端升级即愈
+</details>
+
 ## 📖 对话生命周期（规则总纲）
 
 ### 三种发起方式
@@ -149,6 +199,7 @@ crosschat -v | --version | help                     # 版本 / 帮助
 | **codex** | 会话内 agent 跑 `crosschat send --to <claude 会话名> --body "…"` | 发送随意；回信开窗关窗都能收（daemon 0.160+） |
 | **人** | 任意终端直接 `crosschat send --to <名字> --body "…"` | 身份是 human：**能发、不能被回复**（单向指令） |
 | **脚本（headless）** | `codex exec "<题词>"` 建线程，然后 `crosschat send --to <id8> --body "…"` | codex 原生命令：建线程 + 跑一轮自动硬化 + 退出，角色题词随行；**线程 id 就在输出头 `session id:` 行**（并发多路各拿各的，零歧义）；`crosschat status` 里 originator 为 `codex_exec`、cwd 列可辨。跨机预置（联邦就绪后）：`ssh <host> codex exec "<题词>"` |
+| **跨机（联邦）** | `crosschat send --via ssh:<对端hostname> --to <名/id8> --body "…"` | 远端 CLI 全权（名字在对端解析）；回执带 `@<host>`；信封自动携带回程路条，接收方照抄即回 |
 
 第一条消息永远用 `--to`（此刻生成对话引用 reply-ref）；对方名字用 `status` 查。`--to` 不必只用于第一条：对同一端对的重复 `--to` 发送会**自动接续你们最近的对话**（turn 递增，本地记账，无需手带引用）；要另起线程时用 `--conversation` 显式切换即可。
 
@@ -200,10 +251,12 @@ crosschat -v | --version | help                     # 版本 / 帮助
 - [x] 👀 status 标注 TUI 占用线程（`thread-writer-locks` 锁文件信号源：行尾 `TUI占用` 标记、JSON `held` 字段、锁住未列入线程补行）
 - 专用信箱线程机制化 → **评估后不做**：命名由双侧原生 `/rename` 与 id8 寻址承接，crosschat 不拥有会话生命周期（决策记录见 [map 007](docs/wayfinder/map.md)）；headless 建线程用 `codex exec`（见对话生命周期表）
 
+**已完成（v1.3.3）**
+- [x] 🌐 跨机联邦 ssh v1：`--via ssh:<对端hostname>`、mc2_ 紧凑会话引用（296→83 字符）、信封自动回程路条、三层错误码同码透传、发起侧审计补记账；localhost 与 win↔WSL 真机验证（win 收件腿 codex 侧受 AF_UNIX 限制，见联邦节）；tcp/broker 传输见路线图
+
 **计划中**
-- [ ] 🌐 跨机联邦（SSH，异构 win ↔ linux 互聊）
-- [ ] 🐧 mac 平台适配（unix 代码路径已共享，待实机验证；平台接缝：PipeTransport / ProcessInspector / PathLayout）
-- [ ] 📦 常驻 broker（忙时持久队列、异步回执、投递状态机——embassy 完整集对齐；堡垒机形态）
+- [ ] 🐧 mac 平台适配（unix 代码路径已共享，待实机验证；CI mac 观察位已挂）
+- [ ] 📦 常驻 broker（忙时持久队列、异步回执、投递状态机——embassy 完整集对齐；堡垒机形态）；tcp 直连传输（局域网 + 极简预共享鉴权）
 - [ ] 🖼️ TUI 看板与服务安装（开机自启）
 - [ ] 🤖 新 agent 适配器（GLM 等；有原生唤醒通道则原生，否则论证降级）
 
@@ -234,6 +287,10 @@ crosschat -v | --version | help                     # 版本 / 帮助
 **Q：人能发消息吗？** 能（`--to`），身份 human，单向不能被回复。
 
 **Q：消息历史在哪看？** claude 侧=会话 transcript；codex 侧=开窗 resume 线程。
+
+**Q：跨机怎么看不到对端的会话？** `status` 只列**本机**会话；跨机看对端用 `ssh <对端> crosschat status`。
+
+**Q：会话经常重启，名字对不上？** claude 重启后自动编号会漂移；常重启的会话进去先 `/rename` 固定一个稳定名字——名字稳定，`--to` 自动接续就不会断。
 
 ## 🔧 故障恢复
 

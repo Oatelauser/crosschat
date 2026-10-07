@@ -46,6 +46,9 @@ crosschat send --to <名字> --body "正文"
 - 查会话往来（双方、最近活跃、轮次、最近投递状态、滞留条数）：`crosschat status --conversations`；`queued` / `parked` 的终态也在这里确认。
 - 长正文可省略 `--body`，改为管道：`<正文文件路径的内容> | crosschat send --to <名字>`。
 - 投给 codex 的消息：**开窗、关窗、忙时均可投**（daemon 0.160+）。对方正在跑 turn 也不阻塞——消息直接**入队**（输出 `queued`），当前轮结束即进入对话被处理；TUI 窗口会实时刷出。输出 `delivered`（已送达）/ `queued`（已入队，轮末处理）/ `parked`（仅旧 daemon 异常态，已暂存），三者都**无需重发**。
+- **跨机发送**：`crosschat send --via ssh:<对端hostname> --to <名/id8> --body "…"`——对端是另一台机器上安装了 crosschat 的会话（hostname = `~/.ssh/config` 里的 Host 别名，推荐直接用对端系统 hostname）；名字在目标机上解析，回执带 `@<host>` 后缀，错误同码透传（前缀 `[via <host>]`）。
+- 跨机的对端**不在本机 status 里**——`ssh <对端> crosschat status` 查它机器上的会话，或由题词直接告知对端名字。
+- 跨机对话的轮次纪律更要遵守：防乒乓限流器是单机记账的，**turn 计数是跨机唯一防线**——接近预算即总结收尾。
 
 ## 报错自纠（读错误码，不要即兴发明命令）
 

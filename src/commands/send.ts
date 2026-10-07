@@ -123,7 +123,8 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     if (!asFrom && !asTo) {
       throw new MultichatError(
         'CALLER_NOT_IN_CONVERSATION',
-        `Caller (${identityKey(caller)}) is not an endpoint of this conversation.`,
+        `Caller (${identityKey(caller)}) is not an endpoint of this conversation. ` +
+          '手里的 ref 可能抄漏或已过期——改用 --to <名字> 自动接续该端对最新对话。',
       );
     }
     target = asFrom ? ref.t : ref.f;
@@ -205,7 +206,8 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
       throw new MultichatError(
         'TARGET_NOT_FOUND',
         `Claude session ${target.id} is not currently routable (process exited or unregistered). ` +
-          '对端会话可能已退出：跑 crosschat status 查在线会话，用 --to <新名字> 重新寻址。',
+          '对端会话可能已重启——改用 --to <名字> 自动接续该端对最新对话（--to 同名即续，无需换名）。' +
+          'status 只列本机会话；跨机对端用 ssh <对端> crosschat status 查。',
       );
     }
     checkAndRecord(deps.rateDir, rateKey(identityKey(caller), `claude:${target.id}`), deps.now());
