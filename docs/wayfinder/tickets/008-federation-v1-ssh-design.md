@@ -52,3 +52,5 @@ claimed-by: 设计子代理（2026-10-06，主会话派单/验收）+ 用户六�
 - **D10 分批**：B1 寻址+远端执行+回执透传+错误映射+审计补记账（~160 行，含三项 sshd 首验——本机 sshd 未启用为已知前提）→ B2 回复路径+mc2_ 格式（~160 行）→ B3 文档+抽样联调 2-3 向（组合子论证放行其余向）
 
 实施待用户触发；B1 首验三项需先启用本机 OpenSSH Server。
+
+**2026-10-07 localhost 真机验证附录**：三首验全 PASS；全链路 PASS（B15 接续经 ssh、同码透传 `[via localhost]`、快速失败 1.6s、mc2=83 字符、同机信封无 --via）。**真机发现：Windows AF_UNIX 跨登录会话隔离——sshd 会话内 codex 投递 10061，win 收件腿 codex 侧为 v1 已知约束（linux/mac 接收端无此问题），B3 部署文档必写**；`--json` 真机用例待跨机联调补。详见 `../drill-reports/federation-localhost-verify-20261007.md`。
