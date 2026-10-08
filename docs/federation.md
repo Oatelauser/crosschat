@@ -75,6 +75,7 @@ Host <对端hostname> peer
 > ssh-keyscan -p <对端端口> <对端地址> >> $env:USERPROFILE\.ssh\known_hosts
 <对端地址> ssh-ed25519 AAAA...
 <对端地址> ecdsa-sha2-nistp256 AAAA...
+# 记录的是对端服务器的主机指纹，不是你的密钥——服务器每种算法各有一把，一型一行，两三行都正常
 ```
 
 **W7 · 探活（输密码能进对端 shell = 网络与账号都通；进去敲 exit 退回）**
@@ -236,16 +237,24 @@ EOF
 LISTEN 0 128 127.0.0.1:2222 0.0.0.0:*
 ```
 
-**N2 · Linux 章的 L5 在此换成回程别名（⚠️ `User` 行必写）**
+**N2 · Linux 章的 L5 在此换成回程别名（⚠️ `User` 行必写、`Port` 必须是 2222）**
 ```
 > ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts
+# 输出必须含不带 # 的 ssh-ed25519 行才算抓到；全是 # 行 = 没抓到，改跑：
+#   ssh-keyscan -p 2222 -t ed25519 localhost >> ~/.ssh/known_hosts
 > cat >> ~/.ssh/config << 'EOF'
 Host <对端hostname>
   HostName localhost
   Port 2222
   User <对端用户>
 EOF
+> cat ~/.ssh/config
+Host <对端hostname>
+  HostName localhost
+  Port 2222
+  User <对端用户>
 # ⚠️ 缺 User 行 = ssh 默认拿本机当前用户去连对端 → 报 root@localhost: Permission denied
+# ⚠️ Port 写成 22 = 连到 Linux 自己的 sshd（绕过隧道）→ 报 Host key verification failed
 ```
 
 **N3 · 回程自证（Linux 上跑；走的就是隧道，穿回对端本机）**
@@ -274,6 +283,7 @@ delivered to 云端beta@host-b (turn 1)
 | 探活 `Connection timed out` | 网络不通/端口错/对端防火墙 | 核对地址端口；云端安全组放行 |
 | 探活 `Permission denied` | 用户名或密码错 | 核对用户名；密码登录被禁则走控制台 |
 | `root@localhost: Permission denied`（回程自证） | N2 漏了 `User` 行 | 补 `User <对端用户>` |
+| `Host key verification failed`（回程自证） | N2 的 Port 写成 22（连到 Linux 自己的 sshd），或 keyscan 全 `#` 行没抓到钥匙 | 核对 `cat ~/.ssh/config` 四行；`ssh-keyscan -p 2222 -t ed25519 localhost` 重跑 |
 | `Connection refused`（连 `localhost:2222`） | 隧道没连/断了 | 重连 Xshell 会话 / 重跑 N1 的 ssh 命令 |
 | `REMOTE_FAILED ... (127): command not found` | 云端 Node 在 nvm/自定义前缀 | Linux 章 L6 软链 |
 | 回信突然全断、出腿正常 | 隧道会话断了 | 重连隧道即恢复 |
