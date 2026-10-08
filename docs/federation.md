@@ -73,77 +73,268 @@ ssh -o BatchMode=yes yang crosschat --version       # WSL → win；出版本号
 
 可选提速：`~/.ssh/config` 加 `ControlMaster auto`（复用连接，摊薄每次握手 100-300ms）。版本偏斜：旧版对端收到新旗标报 `USAGE [via <host>] unknown option …`——对端升级即愈。
 
-#### NAT 单向（你能连它、它连不回你）——反向隧道打通回程
+#### NAT 单向（按操作系统分步实录）——你能连它、它连不回你
 
-ssh v1 以双向为前提；单向网络下由**能出站的一侧**把"回程门"背过去，crosschat 零改动（2026-10-08 win↔云端真机闭环实测，实录见 `../drill-reports/federation-nat-tunnel-20261008.md`）。以下记出站侧 = **A**（win，hostname `A`、用户 `a`、sshd 跑在 22），对端 = **B**（公网/云端 Linux）。前提：B 已按第 1 步装好 crosschat 并 `ssh-keygen`，A 也已有自己的密钥。
+适用：本机（win 或 macOS）在 NAT 后，能出站 ssh 到云端 Linux；云端连不回本机。回程由本机常驻的**反向隧道**背过去，crosschat 零改动。双向可达的环境直接用上方五步，不必进本节。（2026-10-08 win↔云端真机闭环实测：`../drill-reports/federation-nat-tunnel-20261008.md`）
 
-**N1 · A 的公钥推到 B**（出腿认证，输一次密码）：
+**先填替换表**（全文用示例值书写；"在哪查"告诉你去哪节取真值）：
 
+| 值 | 示例 | 你的值 | 在哪查 |
+|---|---|---|---|
+| 云端地址 | `203.0.113.10` | ＿＿ | 服务商控制台的公网 IP |
+| 云端 ssh 端口 | `22` | ＿＿ | Linux 节 L1 |
+| 云端用户 | `deploy` | ＿＿ | 你登录云端用的用户名 |
+| 云端 hostname | `host-b` | ＿＿ | Linux 节 L1 |
+| 本机用户（win） | `yangsheng` | ＿＿ | 你登录 Windows 的账户 |
+| 本机 hostname（win） | `yang` | ＿＿ | Windows 节 W1 |
+| 本机用户/hostname（mac） | `me` / `mac` | ＿＿ | macOS 节 M1 |
+
+---
+
+##### Windows 节（本机是 win 时，从上往下做）
+
+**W1 · 查本机 hostname**（此值 Linux 节 L5 要用）：
 ```powershell
-type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh -p <B端口> <B用户>@<B地址> "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+hostname
+```
+```
+yang
 ```
 
-**N2 · A 的 ssh config 认得 B**（追加到 `%USERPROFILE%\.ssh\config`；别名首选 B 的系统 hostname——信封回程路条天然成立）：
-
-```
-Host <B的hostname> b
-  HostName <B地址>
-  Port <B端口>
-  User <B用户>
-```
-
+**W2 · 确认本机 sshd 在跑（回程终点，必须 Running）**：
 ```powershell
-ssh-keyscan -p <B端口> <B地址> >> $env:USERPROFILE\.ssh\known_hosts
+Get-Service sshd
+```
+```
+Status   Name
+Running  sshd
+```
+`Stopped` → 管理员 PowerShell 跑 `Start-Service sshd`；提示服务不存在 → 管理员 PowerShell 跑 `Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0` 再 `Start-Service sshd`。
+
+**W3 · 本机密钥（有则跳过）**：
+```powershell
+Test-Path $env:USERPROFILE\.ssh\id_ed25519.pub
+```
+```
+True
+```
+`False` → `ssh-keygen -t ed25519` 一路回车（无口令）。
+
+**W4 · 打印本机公钥**（复制输出整行，Linux 节 L4 要粘贴它）：
+```powershell
+Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub
+```
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA...本机标识 yang
 ```
 
-**N3 · A 常驻反向隧道**（Xshell 或命令行二选一，**隧道随会话活**）：
+**W5 · 认得云端（写 ssh config）**：
+```powershell
+notepad $env:USERPROFILE\.ssh\config
+```
+文件末尾追加（四个值来自替换表）后保存：
+```
+Host host-b b
+  HostName 203.0.113.10
+  Port 22
+  User deploy
+```
 
-- Xshell：该会话右键属性 → 连接 → SSH → **隧道** → 添加 → 类型 **远程（传入）**、源 `localhost:2222`、目标 `localhost:22`；属性 → 连接 → **保持活动** 间隔 30 秒；**连接并保持会话开着**
-- 命令行等价：`ssh -N -R 2222:localhost:22 -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes b`
+**W6 · 播种云端 host key**：
+```powershell
+ssh-keyscan -p 22 203.0.113.10 >> $env:USERPROFILE\.ssh\known_hosts
+```
+```
+203.0.113.10 ssh-ed25519 AAAA...
+203.0.113.10 ecdsa-sha2-nistp256 AAAA...
+```
 
-**N4 · B 侧回程别名 + 播种 host key**（⚠️ **`User` 行必写**——缺了 ssh 默认拿 B 的当前用户名去连 A，报 `<B用户>@localhost: Permission denied`）：
+**W7 · 探活（输密码，能进云端 shell = 网络与账号都通；进去就 exit）**：
+```powershell
+ssh host-b
+```
 
+**W8 · Xshell 开反向隧道（隧道随这个会话活，别关）**：
+Xshell 选中该会话 → 右键属性 → 连接 → SSH → **隧道** → 添加：
+类型 **远程（传入）**｜源 主机 `localhost` 端口 `2222`｜目标 主机 `localhost` 端口 `22`
+属性 → 连接 → **保持活动** 间隔 30 秒 → **连接此会话**。
+验证（贴到云端的 Xshell 标签页里跑）：
 ```bash
-ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts   # 扫到的其实是隧道对面 A 的 sshd
-cat >> ~/.ssh/config << 'EOF'
-Host <A的hostname>
-  HostName localhost
-  Port 2222
-  User <A用户名>
-EOF
+ss -tln | grep 2222
+```
+```
+LISTEN 0  128  127.0.0.1:2222  0.0.0.0:*
 ```
 
-**N5 · B 的公钥进 A**（回程认证）——A 是 win 管理员组用户时必须走专用文件（管理员 PowerShell）：
-
+**W9 · 收云端公钥（用 Linux 节 L4 打印的云端公钥整行）**——右键开始菜单 → **终端(管理员)**：
 ```powershell
 $kf = "$env:ProgramData\ssh\administrators_authorized_keys"
-Add-Content $kf -Value '<B的id_ed25519.pub整行>'
+Add-Content $kf -Value 'ssh-ed25519 AAAA...host-b 的公钥整行'
 icacls $kf /inheritance:r /grant "SYSTEM:(F)" /grant "BUILTIN\Administrators:(F)"
 ```
+（无输出 = 成功。管理员组用户必须走这个专用文件，普通 `authorized_keys` 无效。）
 
-A 为普通用户/非 win 时同主手册第 3 步（`~/.ssh/authorized_keys`）。
-
-**N6 · 验证阶梯**（由浅入深三条，全出 `1.3.x` 版本号 = 通）：
-
+**W10 · 出腿自证（需 Linux 节 L1–L4 已完成）**：
 ```powershell
-# 出腿（A→B，不依赖隧道）：
-ssh -o BatchMode=yes b crosschat --version
-# 全环（A→B→隧道→A，一条命令穿完整圈）：
-ssh -o BatchMode=yes b "ssh -o BatchMode=yes <A的hostname> crosschat --version"
-# 正式（真投递+回信闭环）：
-crosschat send --via ssh:<B的hostname> --to <B上的会话名> --body "回信请照信封里的回复命令执行"
+ssh -o BatchMode=yes host-b crosschat --version
+```
+```
+1.3.3
 ```
 
-**N7 · NAT 形态失败对照**：
+**W11 · 全环自证（需 Linux 节全部完成；一条命令穿完 win→云端→隧道→win 整圈）**：
+```powershell
+ssh -o BatchMode=yes host-b "ssh -o BatchMode=yes yang crosschat --version"
+```
+```
+1.3.3
+```
+
+---
+
+##### Linux 节（云端服务器；Xshell 或任意终端里从上往下做）
+
+**L1 · 查本机 hostname 与 ssh 端口**（两个值填进替换表，win/mac 侧要用）：
+```bash
+hostname; ss -tlnp | grep sshd
+```
+```
+host-b
+LISTEN 0 128 0.0.0.0:22 0.0.0.0:* users:(("sshd",...))
+```
+
+**L2 · 装 crosschat（Node ≥22；无 Node 先跑下面两行再回来）**：
+```bash
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs
+npm i -g @oatelauser/crosschat@1.3.3 && crosschat --version
+```
+```
+1.3.3
+```
+
+**L3 · 生成密钥（一路回车，无口令）**：
+```bash
+ssh-keygen -t ed25519
+```
+
+**L4 · 公钥交换**——打印云端公钥（复制整行，发给 win 侧 W9 / mac 侧 M7）；再收对方公钥（粘贴 W4 / M4 打印的那行）：
+```bash
+cat ~/.ssh/id_ed25519.pub
+echo 'ssh-ed25519 AAAA...win 或 mac 的公钥整行' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && cat ~/.ssh/authorized_keys
+```
+
+**L5 · 回程别名（⚠️ `User` 行必写；前提：对端 W8/M6 隧道已连）**：
+```bash
+ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts
+cat >> ~/.ssh/config << 'EOF'
+Host yang
+  HostName localhost
+  Port 2222
+  User yangsheng
+EOF
+```
+（`yang`/`yangsheng` 换成替换表里对端本机 hostname/用户；别名必须=对端 hostname——信封回程路条自动成立。）
+
+**L6 · PATH 软链（条件步）**——`npm prefix -g` 输出以 `/usr` 开头（发行版/NodeSource 装的）→ 跳过；输出是 `~/.nvm/...` 或 `/opt/...`（nvm/自定义前缀）→ 必须跑：
+```bash
+npm prefix -g
+ln -s "$(npm prefix -g)/bin/crosschat" /usr/local/bin/crosschat
+```
+不跑的后果：出腿自证报 `REMOTE_FAILED ... 远端异常退出(127): command not found`（sshd 的 shell 看不到 npm 的 bin）。
+
+**L7 · 回程自证（走的就是对端背来的隧道）**：
+```bash
+ssh -o BatchMode=yes yang crosschat --version
+```
+```
+1.3.3
+```
+
+---
+
+<details>
+<summary><b>macOS 节（本机是 mac 时，从上往下做；全程 Terminal，无 Xshell）</b></summary>
+
+**M1 · 查本机 hostname 与用户名**（填替换表；Linux 节 L5 要用）：
+```bash
+hostname; whoami
+```
+```
+mac.local
+me
+```
+
+**M2 · 开远程登录（= mac 的 sshd）**：系统设置 → 通用 → 共享 → **远程登录** 打开。验证：
+```bash
+lsof -iTCP:22 -sTCP:LISTEN
+```
+```
+sshd  123  me  3u  IPv6  ...  TCP *:ssh (LISTEN)
+```
+
+**M3 · 密钥（有则跳过）+ 打印公钥**（整行发给 Linux 节 L4）：
+```bash
+ssh-keygen -t ed25519        # 一路回车
+cat ~/.ssh/id_ed25519.pub
+```
+
+**M4 · 认得云端（写 config + 播种 host key，值来自替换表）**：
+```bash
+cat >> ~/.ssh/config << 'EOF'
+Host host-b b
+  HostName 203.0.113.10
+  Port 22
+  User deploy
+EOF
+ssh-keyscan -p 22 203.0.113.10 >> ~/.ssh/known_hosts
+```
+
+**M5 · 探活（输密码，能进云端 shell = 通，exit 退出）**：
+```bash
+ssh host-b
+```
+
+**M6 · 反向隧道（开一个专用 Terminal 标签跑这条，挂着别关；断线重跑同一条）**：
+```bash
+ssh -N -R 2222:localhost:22 -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes host-b
+```
+验证（另开标签，贴进云端会话里）：`ss -tln | grep 2222` → 出现 LISTEN 行 = 活。
+
+**M7 · 收云端公钥（用 Linux 节 L4 打印的整行；mac 无专用文件，走普通 authorized_keys）**：
+```bash
+echo 'ssh-ed25519 AAAA...host-b 的公钥整行' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
+```
+
+**M8 · 出腿自证**：`ssh -o BatchMode=yes host-b crosschat --version` → `1.3.3`
+**M9 · 全环自证（需 Linux 节全部完成）**：`ssh -o BatchMode=yes host-b "ssh -o BatchMode=yes mac crosschat --version"` → `1.3.3`（`mac` 换成 M1 的 hostname）
+
+（Linux 桌面当本机时同理：M2 换成 `sudo systemctl enable --now ssh`，其余步骤相同。）
+
+</details>
+
+---
+
+##### 两侧自证全绿后的正式闭环
+
+云端需有一个命名会话（claude 里 `/rename 云端beta`）。本机发起：
+```powershell
+crosschat send --via ssh:host-b --to 云端beta --body "收到请照信封里的回复命令回一句：闭环成立"
+```
+```
+delivered to 云端beta@host-b (turn 1)
+```
+对端回信将穿过隧道落回本机发起会话（`turn 2`）——回程全靠那条隧道，**隧道窗口/Xshell 会话关了回信就断**（发起腿不受影响）；持续保活已是"半 broker"形态，堡垒机形态（broker）仍是长期正解。
+
+##### NAT 形态失败对照
 
 | 症状 | 根因 | 解法 |
 |---|---|---|
-| `<B用户>@localhost: Permission denied`（回程） | N4 漏了 `User` 行 | 补 `User <A用户名>` |
-| `Connection refused`（连 `localhost:2222`） | 隧道没连上/断了 | 重连 N3 的 Xshell 会话 |
-| `远端异常退出(127): command not found` | B 的 Node 在 nvm/自定义前缀 | 见第 4 步 Linux PATH 注记 |
-| 回信突然全断、出腿正常 | Xshell 会话断了（隧道死） | 重连该会话即恢复 |
-
-边界：隧道随会话活——会话断 = 回信断（发起腿不受影响）；持续保活已是"半 broker"运维形态，堡垒机形态（broker）仍是长期正解。
+| 探活 `Connection timed out` | 网络不通/端口错/云端防火墙 | 核对替换表地址端口；云端安全组放行该端口 |
+| 探活 `Permission denied` | 用户名或密码错 | 核对云端用户；密码登录被禁则改用控制台 |
+| `root@localhost: Permission denied`（回程自证） | L5 漏了 `User` 行 | 补 `User <对端本机用户名>` |
+| `Connection refused`（连 `localhost:2222`） | 对端隧道没连/断了 | 重连 W8 的 Xshell 会话 / M6 重跑 |
+| `REMOTE_FAILED ... (127): command not found`（出腿自证） | 云端 Node 在 nvm/自定义前缀 | L6 软链 |
+| 回信突然全断、出腿正常 | 隧道会话断了 | 重连隧道即恢复 |
 
 ### 使用：题词与命令形态（按场景）
 
