@@ -15,7 +15,7 @@ crosschat send --via ssh:build01 --to worker2 --body "跑一次构建，产物�
 - 双向可达（同 LAN/VPN）：本机章（[Win](#win-配置-ssh本机是-windows-时做本章) 或 [MacOS](#macos-配置-ssh本机是-macos-时做本章)）+ [Linux 章](#linux-配置-ssh)各从头做到尾，两个方向自证都出版本号 = 部署完成
 - 单向（本机在 NAT 后，能连出去、对端连不回你）：上面两章做完，再做[单向 SSH 章](#单向-sshnat你能连它它连不回你)的两处差量
 - 每步一个代码块：`>` 开头的行 = 你要敲的命令，其余行 = 期望输出，`#` 开头 = 条件/备注
-- 标 **⚠️ 前置** 的步骤 = 依赖另一个系统的某步必须先完成：先切到引用的那章把那步做完再回来。跨系统硬依赖只有两类——公钥交接（对端打印、你装入）与自证前提，漏掉必卡在认证
+- 标 **⚠️ 前置** 的步骤 = 依赖另一个系统的某步必须先完成：先切到引用的那章把那步做完再回来。跨系统硬依赖集中在各章的**公钥交换**步（W4/L4/M3，内含三小步）与**自证**步，漏掉必卡在认证
 - `<XX>` = 占位符，每章开头的小表标了去哪一步查到真值
 
 ### Win 配置 SSH（本机是 Windows 时做本章）
@@ -51,10 +51,24 @@ True
 # False → ssh-keygen -t ed25519 一路回车（无口令，机器通道）
 ```
 
-**W4 · 打印本机公钥（⚠️ 必做——对端 L4b 靠它装入你的钥匙；整行复制交给对端）**
+**W4 · 公钥交换（三小步，⚠️ 全必做——两台机器要互相装钥匙，漏任何一步必卡认证）**
+
+**第一步 · 打印本机公钥**（输出整行交给对端，它做第二步要用）：
 ```
 > Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub
 ssh-ed25519 AAAA...yang
+```
+
+**第二步 · 到对端机器上装入这把公钥**（⚠️ 切到对端系统执行，不在本机）：
+- 对端是 Linux → **Linux 章 L4 第三步**
+- 对端是 MacOS → **MacOS 章 M3 第三步**
+- 对端是 Win → **本章第三步**（同款操作）
+
+**第三步 · 收对端公钥**（先让对端打印它的公钥——对端是 Linux → **L4 第一步**｜MacOS → **M3 第一步**｜Win → **W4 第一步**；拿到整行后在**本机**跑下面三条。管理员组用户必须走专用文件，三条在**终端(管理员)**里跑，无输出 = 成功）：
+```
+> $kf = "$env:ProgramData\ssh\administrators_authorized_keys"
+> Add-Content $kf -Value '<对端公钥整行>'
+> icacls $kf /inheritance:r /grant "SYSTEM:(F)" /grant "BUILTIN\Administrators:(F)"
 ```
 
 **W5 · 认得对端（写 ssh config）**
@@ -85,15 +99,7 @@ Warning: Permanently added '<对端地址>' (ED25519) to the list of known hosts
 > ssh peer
 ```
 
-**W8 · 收对端公钥（⚠️ 前置：对端已执行 Linux 章 L4a 打印公钥并交给你；管理员组用户必须走专用文件）**
-```
-> $kf = "$env:ProgramData\ssh\administrators_authorized_keys"
-> Add-Content $kf -Value '<对端公钥整行>'
-> icacls $kf /inheritance:r /grant "SYSTEM:(F)" /grant "BUILTIN\Administrators:(F)"
-```
-- 管理员组用户**必须**走这个专用文件（普通 `authorized_keys` 无效）；三条命令在**终端(管理员)**里跑（右键开始菜单）；无输出 = 成功
-
-**W9 · 出腿自证（⚠️ 前置：对端 Linux 章 L1–L4 已完成，含 L4b 装入你的公钥）**
+**W8 · 出腿自证（⚠️ 前置：对端公钥交换已完成——Linux→L4 / MacOS→M3，其第三步已装入你的公钥）**
 ```
 > ssh -o BatchMode=yes peer crosschat --version
 1.3.3
@@ -130,13 +136,20 @@ ls: cannot access '/root/.ssh/id_ed25519.pub': No such file or directory
 > ssh-keygen -t ed25519
 ```
 
-**L4a · 打印本机公钥，交给对端（⚠️ 必做——对端的 W8/M6 步靠它装入你的钥匙，不做对端连不回你）**
+**L4 · 公钥交换（三小步，⚠️ 全必做——两台机器要互相装钥匙，漏任何一步必卡认证）**
+
+**第一步 · 打印本机公钥**（输出整行交给对端，它做第二步要用）：
 ```
 > cat ~/.ssh/id_ed25519.pub
 ssh-ed25519 AAAA...host-b
 ```
 
-**L4b · 收对端公钥（⚠️ 前置：对端已执行 Win 章 W4 / MacOS 章 M3 打印公钥——拿到那一整行再回来做本步）**
+**第二步 · 到对端机器上装入这把公钥**（⚠️ 切到对端系统执行，不在本机）：
+- 对端是 Win → **Win 章 W4 第三步**
+- 对端是 MacOS → **MacOS 章 M3 第三步**
+- 对端是 Linux → **本章第三步**（同款操作）
+
+**第三步 · 收对端公钥**（先让对端打印它的公钥——对端是 Win → **W4 第一步**｜MacOS → **M3 第一步**；拿到整行后在**本机**跑）：
 ```
 > echo '<对端公钥整行>' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
 > cat ~/.ssh/authorized_keys
@@ -168,7 +181,7 @@ EOF
 # 不跑的后果：对端自证报 REMOTE_FAILED [via ...] 远端异常退出(127): command not found
 ```
 
-**L7 · 出腿自证（⚠️ 前置：对端已执行 W8/M6 装入你的公钥；反方向在对端 W9/M7——两边都出版本号 = 部署完成）**
+**L7 · 出腿自证（⚠️ 前置：对端公钥交换已完成——Win→W4 / MacOS→M3；反方向在对端 W8/M6——两边都出版本号 = 部署完成）**
 ```
 > ssh -o BatchMode=yes peer crosschat --version
 1.3.3
@@ -194,11 +207,23 @@ me
 sshd  123  me  3u  IPv6  ...  TCP *:ssh (LISTEN)
 ```
 
-**M3 · 密钥（有则跳过）+ 打印公钥（⚠️ 必做——Linux 章 L4b 靠它装入你的钥匙；打印结果交给对端）**
+**M3 · 密钥（有则跳过）+ 公钥交换（三小步，⚠️ 交换全必做——两台机器要互相装钥匙，漏任何一步必卡认证）**
+
+**第一步 · 打印本机公钥**（输出整行交给对端，它做第二步要用）：
 ```
 > ls ~/.ssh/id_ed25519.pub || ssh-keygen -t ed25519
 > cat ~/.ssh/id_ed25519.pub
 ssh-ed25519 AAAA...mac
+```
+
+**第二步 · 到对端机器上装入这把公钥**（⚠️ 切到对端系统执行，不在本机）：
+- 对端是 Linux → **Linux 章 L4 第三步**
+- 对端是 Win → **Win 章 W4 第三步**
+- 对端是 MacOS → **本章第三步**（同款操作）
+
+**第三步 · 收对端公钥**（先让对端打印它的公钥——对端是 Linux → **L4 第一步**｜Win → **W4 第一步**；拿到整行后在**本机**跑。mac 无专用文件，普通 authorized_keys 即可）：
+```
+> echo '<对端公钥整行>' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
 ```
 
 **M4 · 认得对端（写 config + 播种 host key）**
@@ -219,12 +244,7 @@ EOF
 > ssh peer
 ```
 
-**M6 · 收对端公钥（⚠️ 前置：Linux 章已执行 L4a 打印公钥；mac 无专用文件，普通 authorized_keys 即可）**
-```
-> echo '<对端公钥整行>' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
-```
-
-**M7 · 出腿自证（⚠️ 前置：Linux 章 L1–L4 已完成，含 L4b 装入你的公钥）**
+**M6 · 出腿自证（⚠️ 前置：对端公钥交换已完成——Linux→L4 / Win→W4，其第三步已装入你的公钥）**
 ```
 > ssh -o BatchMode=yes peer crosschat --version
 1.3.3
@@ -253,7 +273,7 @@ LISTEN 0 128 127.0.0.1:2222 0.0.0.0:*
 Warning: Permanently added '[localhost]:2222' (ED25519) to the list of known hosts.
 ok
 # 这一条同时完成播种 + 回程自证（BatchMode=只走密钥不问密码）
-# 若报 Permission denied = 对端还没做 W8 收公钥——指纹也已存好，做完 W8 重跑本条即出 ok
+# 若报 Permission denied = 对端的公钥交换还没做完（它须按其系统章的第二步装入你的公钥：Win→W4 / Linux→L4 / MacOS→M3）——指纹也已存好，对端做完重跑本条即出 ok
 # keyscan 在此场景抓不到指纹（输出全是 # 行），勿用
 > cat >> ~/.ssh/config << 'EOF'
 Host <对端hostname>
