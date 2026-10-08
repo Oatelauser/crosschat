@@ -14,16 +14,15 @@
 
 ## ✨ 为什么用 crosschat
 
-- **🔌 原生投递，零轮询** —— 消息直接注入运行中的会话，像收到一条用户消息
-- **🌐 跨机器对话** —— `--via ssh:对端` 一个参数，消息发到另一台机器（win ↔ linux 互聊），回复自动回来；不装任何服务，密钥即全部配置
-- **🪶 无守护进程** —— 整个工具是一条无状态 CLI，没有后台进程和端口要看护
-- **🤖 教学内建，低入侵** —— skill + 每条消息的信封自带回复命令，题词只写角色
-- **📮 忙时不丢** —— 对方忙就进发件箱，看门狗自动重投，你不用重发
-- **🔐 同用户信任边界** —— 通道按系统用户隔离，只授予你启动的会话
+装完即用：让 agent 会话像同事一样互发消息——同机直连、跨机走 ssh，全程无守护进程。
+
+- **原生消息投递** —— 消息直注运行中的会话，像收到一条用户消息；零轮询，对方忙则入发件箱、看门狗自动补投
+- **跨机聊天** —— `--via ssh:对端` 直发另一台机器（win ↔ linux 互聊），回复自动回来；不装服务，密钥即全部配置
+- **无感式回复** —— 每条消息信封自带回复命令，对方 agent 照抄即回；协议教学随 skill 内建，题词只写任务
 
 > 灵感与部分模块实现来自 [embassy](https://github.com/YuanpingSong/embassy)（macOS-only，MIT）——crosschat 是它的 Windows 原生、无守护进程重实现（1.3.0 起亦支持 Linux/WSL，experimental）。
 
-## 🧰 环境搭建
+## 🧰 安装
 
 | 依赖 | 版本要求 | 说明 |
 |---|---|---|
@@ -32,12 +31,10 @@
 | Codex CLI | ≥ 0.160 推荐 | 0.160 daemon 支持开窗投递；接收需 app-server daemon |
 | OS | Windows（稳定）· Linux/WSL（experimental，1.3.0） | mac 未实测（unix 实现共享，理论可达） |
 
-**单机**（三条命令）：
-
 ```bash
 npm i -g @oatelauser/crosschat    # 一行安装（提供 crosschat / multichat 双命令）
 crosschat install-skills          # 协议教学装到两侧 agent
-codex app-server daemon start     # codex 接收方向必需（从干净终端启动，勿在 Claude 会话内）
+codex app-server daemon start     # 仅 codex 会话参与时需要，纯 claude 互聊可跳过（干净终端启动，勿在 Claude 会话内）
 ```
 
 <details><summary>从源码安装（开发者）</summary>
@@ -51,123 +48,87 @@ crosschat install-skills
 开发期反复重装本地目录：`npm run build && npm i -g . --force`——**build 不可省**（包没有 prepare 脚本，npm 不会自动构建，`files` 只打包 dist/ 现状，漏 build 会把旧 dist 装回去）；`--force`（或先 bump 版本）是因为版本号未变时 npm 会报 "up to date" 而**跳过文件更新**。若首次用的是 `npm link`（符号链接直连仓库），则每次只需 `npm run build`，无需重装。
 </details>
 
-<details><summary>Linux / WSL 部署注记（experimental）</summary>
+<details><summary>Linux / WSL（experimental）</summary>
 
-**Linux / WSL（experimental，1.3.0）**——**独立部署**：unix 侧自成一套（状态目录 `~/crosschat`、发件箱、投递），与 Windows 侧互不相通，管道/socket 不过系统边界，**agent 必须与 crosschat 同侧运行**：
+三条安装命令照常执行——装在 WSL 里、agent 也装在 WSL 里（同一侧）即可，源码安装同样适用。例外只有两条：
 
-- 前置：Node ≥ 22、claude / codex CLI 装在**同一侧**（WSL 内用 unix 版）
-- claude 安装（受限网络）：claude.ai/install.sh 可能被区域屏蔽（302），改用 npm 直装 `npm i -g @anthropic-ai/claude-code`；仍不可达时按架构直装平台包 tarball（如 `@anthropic-ai/claude-code-linux-x64`，镜像源可拉，解包即含原生 `claude` 二进制）
-- 状态目录：unix `~/crosschat`（Windows 侧为 `%LOCALAPPDATA%\crosschat`，两侧各自独立）
-- mac：unix 实现共享，理论可达、未实测
+- **两侧独立**：unix 状态目录 `~/crosschat`（Windows 侧为 `%LOCALAPPDATA%\crosschat`），互不相通，管道/socket 不过系统边界
+- **agent 同侧**：WSL 内用 unix 版 claude / codex CLI（Node ≥ 22 同侧装）
+
+<details><summary>claude 安装受阻时（受限网络）</summary>
+
+claude.ai/install.sh 可能被区域屏蔽（302），改用 npm 直装 `npm i -g @anthropic-ai/claude-code`；仍不可达时按架构直装平台包 tarball（如 `@anthropic-ai/claude-code-linux-x64`，镜像源可拉，解包即含原生 `claude` 二进制）。
 </details>
 
-## 💬 对话演示
+mac：unix 实现共享，理论可达、未实测。
+</details>
 
-命令行一问一答实录——两条看完就会用。
+## 🚀 快速入门
 
-### 30 秒版：两终端互发一句问候
+只看两边的对话流——命令一条不用敲，题词说到就到。全部命令见[📋 命令列表](#-命令列表)。
 
-```bash
-# 终端 A（claude，能收）
-crosschat claude          # 进入后 /rename alice
+### 单机：boss 给 worker 派一句活
 
-# 终端 B（任意终端，人手发）
-crosschat status          # 看到 alice
-crosschat send --to alice --body "你好 alice！"
-# → 终端 A 里几秒后出现这条消息
-```
+准备：终端 A `crosschat claude` 启动、进去 `/rename worker`；终端 B 开一个 codex 窗口当 boss。
 
-### 单机：codex 派活，claude 干活，全程只靠对话
+👔 **boss**（codex，题词只写任务）：
 
-👔 **boss**（codex 窗口，题词只写角色和任务）：
+> 用 crosschat（先 status 确认名字）给 claude 会话「worker」下发任务：给我回复你好的消息。
 
-```text
-你是领导。用 crosschat（先 status 确认名字）给 claude 会话「worker」下发任务：
-统计当前目录下有多少个 .md 文件，把数字报回来。收到报告后自己数一遍复核，
-一致则回复"验收通过，任务结束"；不一致则把你的数字发回去要求返工。
-```
+**boss → worker**：「给我回复你好的消息」
 
-🤖 **boss 执行**：
-
-```
-$ crosschat status
-  claude:  worker   D:\workspace\demo  …
-$ crosschat send --to worker --body "统计当前目录的 .md 文件数，把数字报回来"
-  delivered to worker (turn 1)
-```
-
-🔧 **worker**（claude 窗口，事先零配置——信封自带回复命令）：
+🔧 **worker**（claude，事先零配置，几秒后收到信封）：
 
 ```
 📨 来自另一会话的消息:
 <cross-session-message from-name="codex/01a…" turn="1">
-统计当前目录的 .md 文件数，把数字报回来
+给我回复你好的消息
 回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"
-
-$ ls *.md | wc -l
-  7
-$ crosschat send --conversation mc2_… --body "报告：共 7 个 .md 文件"
-  delivered (turn 2)
 ```
 
-👔 **boss 复核并收尾**：
+**worker → boss**：「你好」
 
-```
-$ ls *.md | wc -l
-  7
-$ crosschat send --to worker --body "验收通过，任务结束"
-  delivered (turn 3)
-```
+👔 **boss 收到**：「你好」（turn 2）——worker 没被教过任何协议，信封说怎么回就怎么回。
 
-### 跨机：和单机只差一个参数
+### 跨机：和单机一样，只是对端在另一台机器上
 
-一次性准备：对端（本例 WSL）装好 crosschat、与 win 互配密钥（见 [🌐 跨机联邦](#-跨机联邦ssh-v1)）。
+一次性准备：对端（本例 WSL）装好 crosschat、双机互配 ssh 密钥（怎么做 → [📡 通信方式](#-通信方式) 表里的 ssh 手册，五步配完）。
 
 👔 **boss**（win 上的 codex，题词）：
 
-```text
-使用 crosschat 发送消息给 beta2 问好，消息要求经过 ssh 管道送到（send 时加 --via ssh:yangwsl）。需要对方回复并停止。
-```
+> 使用 crosschat 发送消息给 beta2 问好，消息要求经过 ssh 管道送到（send 时加 --via ssh:yangwsl）。需要对方回复并停止。
 
-🤖 **boss 执行**（win）：
+**boss → beta2**（消息经 ssh 落到对端机器投递）：「你好 beta2，这是跨机问候」
 
-```
-$ crosschat send --via ssh:yangwsl --to beta2 --body "你好 beta2，这是跨机问候"
-  delivered to beta2@yangwsl (turn 1)      ← 消息经 ssh 到对端机器上投递
-```
-
-🔧 **beta2**（WSL 上的 claude，零配置收到信封，照抄回复命令）：
+🔧 **beta2**（WSL 上的 claude，零配置收到信封）：
 
 ```
 📨 <cross-session-message from-name="codex/boss@win" turn="1">
 你好 beta2，这是跨机问候
 回复请运行: crosschat send --via ssh:win --conversation mc2_… --body "<你的回复>"
-
-$ crosschat send --via ssh:win --conversation mc2_… --body "收到！跨机闭环成立"
-  delivered to codex/boss@win (turn 2)     ← 回程路条信封自带，照抄即回
 ```
 
-——和单机只差一个参数。
+**beta2 → boss**：「收到！跨机闭环成立」（回程路由信封自带，自动经 ssh 回到 win）
 
-## 🌐 跨机联邦（ssh v1）
+👔 **boss 收到**：「收到！跨机闭环成立」（turn 2）——双方谁都没敲过一次完整命令。
 
-跨机 = **[单机全部用法](#-对话演示)** + 一个 `--via` 参数——对端装好 crosschat、配好密钥，就开始：
+## 📡 通信方式
 
-```bash
-# 对端机器（一次性）：npm i -g @oatelauser/crosschat && crosschat install-skills
-# 双方互配密钥：ssh-keygen + ssh-copy-id（别名=对端 hostname）
-crosschat send --via ssh:build01 --to worker2 --body "跑一次构建，产物清单发回来"
-# → delivered to worker2@build01 (turn 1)
-```
+| 方式 | 一句话 | 状态 | 深入 |
+|---|---|---|---|
+| **单机会话** | 同机 agent 互发，`--to <名字>` 即起对话，忙时自动入队/发件箱 | ✅ v1.0 | [docs/usage.md](docs/usage.md)：发起方式 / 投递语义 / 底层命令 / 边界 |
+| **跨机联邦 · ssh** | 加 `--via ssh:<对端hostname>`，消息经 ssh 落到对端机器，回复自动回来 | ✅ v1.3.3 | [docs/federation.md](docs/federation.md)：ssh 从零配置五步 / 底层命令形态 / 大内容 / 自环测试 |
+| 跨机联邦 · tcp | 局域网直连 + 极简预共享鉴权 | 🚧 规划中 | — |
+| 跨机联邦 · broker | 常驻 broker：忙时持久队列、异步回执、投递状态机、堡垒机形态 | 🚧 规划中 | — |
 
-完整手册（两端 ssh config 样例 / win 管理员密钥 / sshd 端口 / 失败对照 / 大内容 scp / 自环测试）→ **[docs/federation.md](docs/federation.md)**；单机深度细则（发起方式 / 投递语义 / 边界）→ [docs/usage.md](docs/usage.md)
+ssh 配置方向一句话：**每台机写自己的 `~/.ssh/config`，内容是"怎么连对端"**（别名推荐=对端 hostname）——完整五步与命令样例见上表手册。
 
 ## 📋 命令列表
 
 ```
 crosschat send --to <名字> --body "<正文>"          # 新消息（名字含空格加引号；未命名 codex 线程可用 id8 或完整 id 寻址，status 可见）
 crosschat send --conversation <ref> --body "<正文>" # 回复（ref 照抄收到的信封）
-crosschat send --via ssh:<对端hostname> --to <名/id8> --body "…"  # 跨机发送（联邦，见 🌐 节）
+crosschat send --via ssh:<对端hostname> --to <名/id8> --body "…"  # 跨机发送（见 📡 通信方式）
 echo … | crosschat send --to <名字>                 # 正文走 stdin
 crosschat status [--json] [--conversations]        # 双侧总览（名字/目录/时间/状态）
 crosschat doctor                                    # 一键环境体检（有 ❌ 时退出码 1）
@@ -182,11 +143,21 @@ crosschat -v | --version | help                     # 版本 / 帮助
 
 ## 🧯 错误码排障
 
-**使用类**：`NAME_NOT_FOUND`（错误信息列出全部可用名）· `NAME_COLLISION`（重名，`status --json` 看 id）· `MESSAGE_TOO_LARGE`（>16KiB → 落盘发路径）· `RATE_LIMITED`（等待或收尾）· `TARGET_*`/`BODY_*`/`USAGE`（参数错误）
-
-**身份类**：`CALLER_IDENTITY_CONFLICT`（环境双身份残留。临时：命令前缀 `env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID`；根治：干净终端重启 daemon）· `CALLER_NOT_IN_CONVERSATION` · `CANNOT_REPLY_TO_HUMAN`（对话由人发起）
-
-**通道类**：`CODEX_PROXY_SPAWN_FAILED`（看 stderr 摘录；通常 daemon 未跑）· `CODEX_THREAD_LOCKED`/`CODEX_THREAD_BUSY_TIMEOUT`（已自动转 `parked` 入发件箱，无需重发）· `OUTBOX_FULL`（每线程 200 条积压上限，读 mailbox 镜像取回内容）· `CODEX_APPROVAL_REQUIRED`（**工具永不代答审批**）· `CLAUDE_PIPE_*`/`CODEX_*UNCERTAIN`（写入中途失败状态不明——**勿盲目重发**，先 `status` 核实）
+| 类别 | 错误码 | 怎么办 |
+|---|---|---|
+| 使用 | `NAME_NOT_FOUND` | 错误信息已列出全部可用名，换一个 |
+| 使用 | `NAME_COLLISION` | 重名；`status --json` 看 id，改用 id8 寻址 |
+| 使用 | `MESSAGE_TOO_LARGE` | 单条 >16KiB；按提示走落盘发送路径（跨机 scp 配方见 ssh 手册） |
+| 使用 | `RATE_LIMITED` | 30 条/60s 防乒乓限流；等待或收尾 |
+| 使用 | `TARGET_*` / `BODY_*` / `USAGE` | 参数错误，看提示改命令 |
+| 身份 | `CALLER_IDENTITY_CONFLICT` | 环境双身份残留。临时：命令前缀 `env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID`；根治：干净终端重启 daemon |
+| 身份 | `CALLER_NOT_IN_CONVERSATION` | 不在对话内；照抄信封里的引用回复 |
+| 身份 | `CANNOT_REPLY_TO_HUMAN` | 对话由人发起，单向不能被回复 |
+| 通道 | `CODEX_PROXY_SPAWN_FAILED` | 通常 daemon 未跑；看 stderr 摘录，干净终端 `codex app-server daemon start` |
+| 通道 | `CODEX_THREAD_LOCKED` / `CODEX_THREAD_BUSY_TIMEOUT` | 已自动转 `parked` 入发件箱，无需重发 |
+| 通道 | `OUTBOX_FULL` | 每线程 200 条积压上限；读 mailbox 镜像取回内容 |
+| 通道 | `CODEX_APPROVAL_REQUIRED` | 对方在等审批——**工具永不代答**，去对方窗口处理 |
+| 通道 | `CLAUDE_PIPE_*` / `CODEX_*UNCERTAIN` | 写入中途失败状态不明——**勿盲目重发**，先 `status` 核实 |
 
 **发送审计**：每次发送的最终结果（delivered/queued/parked/failed、时间、对端、发送方显示名 fromName、回执）追加记录在状态目录的 `send-log.jsonl`（Windows `%LOCALAPPDATA%\crosschat\`；unix `~/crosschat/`）；codex 投递附 rollout 回执（消息已确认落入对方会话历史 = `receipt: confirmed`）。命令超时转后台后结果同样在案，事后可查。
 
@@ -243,7 +214,15 @@ crosschat -v | --version | help                     # 版本 / 帮助
 
 ## 🗺️ 路线图
 
-**已完成（v1.0.0）**
+**计划中**
+- [ ] 🐧 mac 平台适配（unix 代码路径已共享，待实机验证；CI mac 观察位已挂）
+- [ ] 📦 常驻 broker（忙时持久队列、异步回执、投递状态机——embassy 完整集对齐；堡垒机形态）；tcp 直连传输（局域网 + 极简预共享鉴权）
+- [ ] 🖼️ TUI 看板与服务安装（开机自启）
+- [ ] 🤖 新 agent 适配器（GLM 等；有原生唤醒通道则原生，否则论证降级）
+
+<details><summary>已完成（v1.0.0 – v1.3.3）</summary>
+
+**v1.0.0**
 - [x] Claude ↔ Codex / Claude ↔ Claude / Codex ↔ Codex 双向消息（真机联调验证）
 - [x] 无状态 CLI 四命令 + 自包含会话引用 + 轮次计数
 - [x] 双侧自动发现（含目录/时间标注）、信封自带教学 skill
@@ -251,21 +230,16 @@ crosschat -v | --version | help                     # 版本 / 帮助
 - [x] 忙/锁超时 → 本地发件箱 + 看门狗自动重投（outbox，FIFO 不插队，mailbox 镜像可读）
 - [x] daemon 0.160 开窗投递（实证：同 daemon 多连接绕过写者锁）
 
-**已完成（v1.3.0）**
+**v1.3.0**
 - [x] 🐧 Linux/WSL 平台支持（experimental）：PosixPipeTransport + claude unix 投递（免 auth 行，同 uid 内核凭证）+ CI ubuntu 矩阵；mac 外推未实测
 
-**已完成（v1.3.2）**
+**v1.3.2**
 - [x] 👀 status 标注 TUI 占用线程（`thread-writer-locks` 锁文件信号源：行尾 `TUI占用` 标记、JSON `held` 字段、锁住未列入线程补行）
 - 专用信箱线程机制化 → **评估后不做**：命名由双侧原生 `/rename` 与 id8 寻址承接，crosschat 不拥有会话生命周期（决策记录见 [map 007](docs/wayfinder/map.md)）；headless 建线程用 `codex exec`（见对话生命周期表）
 
-**已完成（v1.3.3）**
-- [x] 🌐 跨机联邦 ssh v1：`--via ssh:<对端hostname>`、mc2_ 紧凑会话引用（296→83 字符）、信封自动回程路条、三层错误码同码透传、发起侧审计补记账；localhost 与 win↔WSL 真机验证（win 收件腿 codex 侧受 AF_UNIX 限制，见联邦节）；tcp/broker 传输见路线图
-
-**计划中**
-- [ ] 🐧 mac 平台适配（unix 代码路径已共享，待实机验证；CI mac 观察位已挂）
-- [ ] 📦 常驻 broker（忙时持久队列、异步回执、投递状态机——embassy 完整集对齐；堡垒机形态）；tcp 直连传输（局域网 + 极简预共享鉴权）
-- [ ] 🖼️ TUI 看板与服务安装（开机自启）
-- [ ] 🤖 新 agent 适配器（GLM 等；有原生唤醒通道则原生，否则论证降级）
+**v1.3.3**
+- [x] 🌐 跨机联邦 ssh v1：`--via ssh:<对端hostname>`、mc2_ 紧凑会话引用（296→83 字符）、信封自动回程路条、三层错误码同码透传、发起侧审计补记账；localhost 与 win↔WSL 真机验证（win 收件腿 codex 侧受 AF_UNIX 限制，见联邦手册）；tcp/broker 传输见路线图
+</details>
 
 ## 🛠️ 开发说明
 
