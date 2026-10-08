@@ -68,52 +68,31 @@ mac：unix 实现共享，理论可达、未实测。
 
 ## 🚀 快速入门
 
-只看两边的对话流——命令一条不用敲，题词说到就到。全部命令见[📋 命令列表](#-命令列表)。
+两段对话实录：你只说一句话（题词），两个 agent 自动对话到闭环。全部命令见[📋 命令列表](#-命令列表)。
 
 ### 单机：boss 给 worker 派一句活
 
-准备：终端 A `crosschat claude` 启动、进去 `/rename worker`；终端 B 开一个 codex 窗口当 boss。
+准备：终端 A 跑 `crosschat claude`，进去后 `/rename worker`；终端 B 开一个 codex 窗口当 boss。然后只说一句话，两个窗口自动完成整个对话：
 
-👔 **boss**（codex，题词只写任务）：
+| 👔 boss 的窗口（codex） | 🔧 worker 的窗口（claude） |
+|---|---|
+| **你说**（题词）：用 crosschat（先 status 确认名字）给 claude 会话「worker」下发任务：给我回复你好的消息 | *（等着来信）* |
+| 消息发出 →「给我回复你好的消息」 | 📨 收到信封（turn 1）：<br>`<cross-session-message from-name="codex/01a…">`<br>「给我回复你好的消息」<br>`回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"` |
+| 📨 收到「你好」（turn 2） | 照信封回复 →「你好」 |
 
-> 用 crosschat（先 status 确认名字）给 claude 会话「worker」下发任务：给我回复你好的消息。
-
-**boss → worker**：「给我回复你好的消息」
-
-🔧 **worker**（claude，事先零配置，几秒后收到信封）：
-
-```
-📨 来自另一会话的消息:
-<cross-session-message from-name="codex/01a…" turn="1">
-给我回复你好的消息
-回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"
-```
-
-**worker → boss**：「你好」
-
-👔 **boss 收到**：「你好」（turn 2）——worker 没被教过任何协议，信封说怎么回就怎么回。
+worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 
 ### 跨机：和单机一样，只是对端在另一台机器上
 
-一次性准备：对端（本例 WSL）装好 crosschat、双机互配 ssh 密钥（怎么做 → [📡 通信方式](#-通信方式) 表里的 ssh 手册，五步配完）。
+准备（一次性）：对端（本例 WSL）装好 crosschat、双机互配 ssh 密钥（→ [📡 通信方式](#-通信方式) 表的 ssh 手册，五步配完）。然后同样只说一句话：
 
-👔 **boss**（win 上的 codex，题词）：
+| 👔 boss 的窗口（win 上的 codex） | 🔧 beta2 的窗口（WSL 上的 claude） |
+|---|---|
+| **你说**（题词）：使用 crosschat 发送消息给 beta2 问好，消息要求经过 ssh 管道送到（send 时加 --via ssh:yangwsl）。需要对方回复并停止。 | *（另一台机器上等着来信）* |
+| 消息发出（经 ssh 到对端机器）→「你好 beta2，这是跨机问候」 | 📨 收到信封（turn 1）：<br>`<cross-session-message from-name="codex/boss@win">`<br>「你好 beta2，这是跨机问候」<br>`回复请运行: crosschat send --via ssh:win --conversation mc2_… --body "<你的回复>"` |
+| 📨 收到「收到！跨机闭环成立」（turn 2） | 照信封回复 →「收到！跨机闭环成立」（回程路由信封自带，自动走 ssh 回 win） |
 
-> 使用 crosschat 发送消息给 beta2 问好，消息要求经过 ssh 管道送到（send 时加 --via ssh:yangwsl）。需要对方回复并停止。
-
-**boss → beta2**（消息经 ssh 落到对端机器投递）：「你好 beta2，这是跨机问候」
-
-🔧 **beta2**（WSL 上的 claude，零配置收到信封）：
-
-```
-📨 <cross-session-message from-name="codex/boss@win" turn="1">
-你好 beta2，这是跨机问候
-回复请运行: crosschat send --via ssh:win --conversation mc2_… --body "<你的回复>"
-```
-
-**beta2 → boss**：「收到！跨机闭环成立」（回程路由信封自带，自动经 ssh 回到 win）
-
-👔 **boss 收到**：「收到！跨机闭环成立」（turn 2）——双方谁都没敲过一次完整命令。
+与单机的全部差别：题词里多了 `--via ssh:yangwsl`——消息与回复自动走 ssh 往返，双方谁都没敲过一次完整命令。
 
 ## 📡 通信方式
 
