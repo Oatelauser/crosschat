@@ -135,21 +135,22 @@ crosschat -v | --version | help                     # 版本 / 帮助
 
 ## 🧯 错误码排障
 
-| 类别 | 错误码 | 怎么办 |
-|---|---|---|
-| 使用 | `NAME_NOT_FOUND` | 错误信息已列出全部可用名，换一个 |
-| 使用 | `NAME_COLLISION` | 重名；`status --json` 看 id，改用 id8 寻址 |
-| 使用 | `MESSAGE_TOO_LARGE` | 单条 >16KiB；按提示走落盘发送路径（跨机 scp 配方见 ssh 手册） |
-| 使用 | `RATE_LIMITED` | 30 条/60s 防乒乓限流；等待或收尾 |
-| 使用 | `TARGET_*` / `BODY_*` / `USAGE` | 参数错误，看提示改命令 |
-| 身份 | `CALLER_IDENTITY_CONFLICT` | 环境双身份残留。临时：命令前缀 `env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID`；根治：干净终端重启 daemon |
-| 身份 | `CALLER_NOT_IN_CONVERSATION` | 不在对话内；照抄信封里的引用回复 |
-| 身份 | `CANNOT_REPLY_TO_HUMAN` | 对话由人发起，单向不能被回复 |
-| 通道 | `CODEX_PROXY_SPAWN_FAILED` | 通常 daemon 未跑；看 stderr 摘录，干净终端 `codex app-server daemon start` |
-| 通道 | `CODEX_THREAD_LOCKED` / `CODEX_THREAD_BUSY_TIMEOUT` | 已自动转 `parked` 入发件箱，无需重发 |
-| 通道 | `OUTBOX_FULL` | 每线程 200 条积压上限；读 mailbox 镜像取回内容 |
-| 通道 | `CODEX_APPROVAL_REQUIRED` | 对方在等审批——**工具永不代答**，去对方窗口处理 |
-| 通道 | `CLAUDE_PIPE_*` / `CODEX_*UNCERTAIN` | 写入中途失败状态不明——**勿盲目重发**，先 `status` 核实 |
+报错输出自带完整自纠指引，这张表只当速查索引：
+
+| 错误码 | 含义与动作 |
+|---|---|
+| `NAME_NOT_FOUND` / `NAME_COLLISION` | 名字不对/重名——错误信息已列可用名；重名改用 id8 寻址 |
+| `MESSAGE_TOO_LARGE` | 单条 >16KiB——按提示走落盘路径（跨机 scp 见 ssh 手册） |
+| `RATE_LIMITED` | 30 条/60s 限流——等待或收尾 |
+| `TARGET_*` / `BODY_*` / `USAGE` | 参数错误——按提示改 |
+| `CALLER_IDENTITY_CONFLICT` | 环境双身份残留——临时解法在报错里（`env -u` 前缀）；根治：干净终端重启 daemon |
+| `CALLER_NOT_IN_CONVERSATION` | 不在对话内——照抄信封里的引用回复 |
+| `CANNOT_REPLY_TO_HUMAN` | 人发起的对话，单向不可回 |
+| `CODEX_PROXY_SPAWN_FAILED` | daemon 未跑——干净终端 `codex app-server daemon start` |
+| `CODEX_THREAD_LOCKED` / `CODEX_THREAD_BUSY_TIMEOUT` | 已自动转 `parked` 入发件箱，无需重发 |
+| `OUTBOX_FULL` | 发件箱满（每线程 200 条）——读 mailbox 镜像取回 |
+| `CODEX_APPROVAL_REQUIRED` | 对方在等审批——工具永不代答，去对方窗口处理 |
+| `CLAUDE_PIPE_*` / `CODEX_*UNCERTAIN` | 状态不明——**勿盲目重发**，先 `status` 核实 |
 
 **发送审计**：每次发送的最终结果（delivered/queued/parked/failed、时间、对端、发送方显示名 fromName、回执）追加记录在状态目录的 `send-log.jsonl`（Windows `%LOCALAPPDATA%\crosschat\`；unix `~/crosschat/`）；codex 投递附 rollout 回执（消息已确认落入对方会话历史 = `receipt: confirmed`）。命令超时转后台后结果同样在案，事后可查。
 
