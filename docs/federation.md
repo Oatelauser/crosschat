@@ -58,7 +58,7 @@ wsl -u root sh -c 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authoriz
 
 | 收件腿 | 一次性准备 |
 |---|---|
-| Linux | sshd 开箱即有。**WSL 注记**：镜像网络下 22 端口被 win 占用——sshd 换非标端口（`sed -i 's/^#*Port .*/Port 2222/' /etc/ssh/sshd_config`，`systemctl enable --now ssh`）+ host key 播种 `ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts`（win 侧同款命令一次） |
+| Linux | sshd 开箱即有。**PATH 注记（Node 装在 nvm/自定义前缀，如 /opt/node）**：npm 全局 bin 不在 sshd 非交互 shell 的默认 PATH——本地能跑、收件腿却报 `REMOTE_FAILED [via <host>] 远端异常退出(127): command not found`；修复一行（发行版包管理器装的 Node 无此坑）：`sudo ln -s "$(npm prefix -g)/bin/crosschat" /usr/local/bin/crosschat`。**WSL 注记**：镜像网络下 22 端口被 win 占用——sshd 换非标端口（`sed -i 's/^#*Port .*/Port 2222/' /etc/ssh/sshd_config`，`systemctl enable --now ssh`）+ host key 播种 `ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts`（win 侧同款命令一次） |
 | win | 管理员装 OpenSSH Server（`Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0` + `Start-Service sshd`）；npm 全局 bin 须在**系统** PATH（sshd 默认 shell 只见 Machine PATH）。**收件腿限制：codex 侧不可用（AF_UNIX 跨登录会话隔离，实测定论），claude 侧实测可用** |
 | Mac | 系统设置开"远程登录" |
 
@@ -69,7 +69,7 @@ ssh -o BatchMode=yes yangwsl crosschat --version    # win → WSL
 ssh -o BatchMode=yes yang crosschat --version       # WSL → win；出版本号 = 通 + 版本一致
 ```
 
-失败对照：`Host key verification failed` → 第 4 步的 keyscan 没做；`Permission denied (publickey)` → 第 3 步公钥没进对（win 管理员组走专用文件）；`Connection refused` → 对端 sshd 没跑/端口不对。
+失败对照：`Host key verification failed` → 第 4 步的 keyscan 没做；`Permission denied (publickey)` → 第 3 步公钥没进对（win 管理员组走专用文件）；`Connection refused` → 对端 sshd 没跑/端口不对；`远端异常退出(127): command not found` → 第 4 步 Linux PATH 注记（npm 前缀软链一刀）。
 
 可选提速：`~/.ssh/config` 加 `ControlMaster auto`（复用连接，摊薄每次握手 100-300ms）。版本偏斜：旧版对端收到新旗标报 `USAGE [via <host>] unknown option …`——对端升级即愈。
 

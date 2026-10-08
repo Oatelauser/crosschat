@@ -13,7 +13,7 @@
 
 ## 发现（两条实锤）
 
-1. **PATH 坑（真机部署首障，预判 #2 实证）**：Node 装在非标准前缀（/opt/node、nvm 同理）时，npm 全局 bin 不在 sshd 非交互 shell 默认 PATH（实测 `/usr/local/sbin:/usr/local/bin:…:/snap/bin`）→ 收件腿 command not found。此前 win↔WSL 演练通，是 `/usr/local/bin` 手工软链**恰好**落在 sshd PATH 里掩盖了它。修复（已验证）：`ln -s $(npm bin -g)/crosschat /usr/local/bin/crosschat`。**建议 docs/federation.md 部署手册补此条**（待拍板是否随 1.3.4）。
+1. **PATH 坑（真机部署首障，预判 #2 实证）**：Node 装在非标准前缀（/opt/node、nvm 同理）时，npm 全局 bin 不在 sshd 非交互 shell 默认 PATH（实测 `/usr/local/sbin:/usr/local/bin:…:/snap/bin`）→ 收件腿 command not found。此前 win↔WSL 演练通，是 `/usr/local/bin` 手工软链**恰好**落在 sshd PATH 里掩盖了它。修复（已验证）：`ln -s "$(npm prefix -g)/bin/crosschat" /usr/local/bin/crosschat`（npm 10 已删 `npm bin -g`，用 `npm prefix -g`）。**建议 docs/federation.md 部署手册补此条**（待拍板是否随 1.3.4）。
 2. **WSL 互操作掩盖本地 which**：删除软链后本地 `which crosschat` 命中 Windows 侧 `/mnt/c/.../npm/crosschat` interop shim（仍报 1.3.3，具欺骗性）；纯 Linux 服务器无此层，直接 command not found，反而更诚实。
 
 ## 未覆盖（留真机腿 1A/1C）
