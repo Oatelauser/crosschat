@@ -15,6 +15,7 @@ crosschat send --via ssh:build01 --to worker2 --body "跑一次构建，产物�
 - 双向可达（同 LAN/VPN）：本机章（[Win](#win-配置-ssh本机是-windows-时做本章) 或 [MacOS](#macos-配置-ssh本机是-macos-时做本章)）+ [Linux 章](#linux-配置-ssh)各从头做到尾，两个方向自证都出版本号 = 部署完成
 - 单向（本机在 NAT 后，能连出去、对端连不回你）：上面两章做完，再做[单向 SSH 章](#单向-sshnat你能连它它连不回你)的两处差量
 - 每步一个代码块：`>` 开头的行 = 你要敲的命令，其余行 = 期望输出，`#` 开头 = 条件/备注
+- 标 **⚠️ 前置** 的步骤 = 依赖另一个系统的某步必须先完成：先切到引用的那章把那步做完再回来。跨系统硬依赖只有两类——公钥交接（对端打印、你装入）与自证前提，漏掉必卡在认证
 - `<XX>` = 占位符，每章开头的小表标了去哪一步查到真值
 
 ### Win 配置 SSH（本机是 Windows 时做本章）
@@ -50,7 +51,7 @@ True
 # False → ssh-keygen -t ed25519 一路回车（无口令，机器通道）
 ```
 
-**W4 · 打印本机公钥（整行复制，发给对端 L4）**
+**W4 · 打印本机公钥（⚠️ 必做——对端 L4b 靠它装入你的钥匙；整行复制交给对端）**
 ```
 > Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub
 ssh-ed25519 AAAA...yang
@@ -84,7 +85,7 @@ Warning: Permanently added '<对端地址>' (ED25519) to the list of known hosts
 > ssh peer
 ```
 
-**W8 · 收对端公钥（粘贴对端 L4 打印的整行）**
+**W8 · 收对端公钥（⚠️ 前置：对端已执行 Linux 章 L4a 打印公钥并交给你；管理员组用户必须走专用文件）**
 ```
 > $kf = "$env:ProgramData\ssh\administrators_authorized_keys"
 > Add-Content $kf -Value '<对端公钥整行>'
@@ -92,7 +93,7 @@ Warning: Permanently added '<对端地址>' (ED25519) to the list of known hosts
 ```
 - 管理员组用户**必须**走这个专用文件（普通 `authorized_keys` 无效）；三条命令在**终端(管理员)**里跑（右键开始菜单）；无输出 = 成功
 
-**W9 · 出腿自证（需对端章 L1–L4 已完成）**
+**W9 · 出腿自证（⚠️ 前置：对端 Linux 章 L1–L4 已完成，含 L4b 装入你的公钥）**
 ```
 > ssh -o BatchMode=yes peer crosschat --version
 1.3.3
@@ -129,10 +130,14 @@ ls: cannot access '/root/.ssh/id_ed25519.pub': No such file or directory
 > ssh-keygen -t ed25519
 ```
 
-**L4 · 公钥交换：打印本机公钥发给对端 W8/M6；收对端公钥（粘贴对端 W4/M3 的整行）**
+**L4a · 打印本机公钥，交给对端（⚠️ 必做——对端的 W8/M6 步靠它装入你的钥匙，不做对端连不回你）**
 ```
 > cat ~/.ssh/id_ed25519.pub
 ssh-ed25519 AAAA...host-b
+```
+
+**L4b · 收对端公钥（⚠️ 前置：对端已执行 Win 章 W4 / MacOS 章 M3 打印公钥——拿到那一整行再回来做本步）**
+```
 > echo '<对端公钥整行>' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
 > cat ~/.ssh/authorized_keys
 ssh-ed25519 AAAA...(对端)
@@ -163,7 +168,7 @@ EOF
 # 不跑的后果：对端自证报 REMOTE_FAILED [via ...] 远端异常退出(127): command not found
 ```
 
-**L7 · 出腿自证（反方向那条在对端章 W9/M7；两边都出版本号 = 部署完成）**
+**L7 · 出腿自证（⚠️ 前置：对端已执行 W8/M6 装入你的公钥；反方向在对端 W9/M7——两边都出版本号 = 部署完成）**
 ```
 > ssh -o BatchMode=yes peer crosschat --version
 1.3.3
@@ -189,7 +194,7 @@ me
 sshd  123  me  3u  IPv6  ...  TCP *:ssh (LISTEN)
 ```
 
-**M3 · 密钥（有则跳过）+ 打印公钥（发给对端 L4）**
+**M3 · 密钥（有则跳过）+ 打印公钥（⚠️ 必做——Linux 章 L4b 靠它装入你的钥匙；打印结果交给对端）**
 ```
 > ls ~/.ssh/id_ed25519.pub || ssh-keygen -t ed25519
 > cat ~/.ssh/id_ed25519.pub
@@ -214,12 +219,12 @@ EOF
 > ssh peer
 ```
 
-**M6 · 收对端公钥（粘贴对端 L4 的整行；mac 无专用文件，普通 authorized_keys 即可）**
+**M6 · 收对端公钥（⚠️ 前置：Linux 章已执行 L4a 打印公钥；mac 无专用文件，普通 authorized_keys 即可）**
 ```
 > echo '<对端公钥整行>' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
 ```
 
-**M7 · 出腿自证**
+**M7 · 出腿自证（⚠️ 前置：Linux 章 L1–L4 已完成，含 L4b 装入你的公钥）**
 ```
 > ssh -o BatchMode=yes peer crosschat --version
 1.3.3
@@ -271,7 +276,7 @@ Host <对端hostname>
 1.3.3
 ```
 
-**N4 · 全环一条命令（本机上跑；本机→云端→隧道→本机 整圈）**
+**N4 · 全环一条命令（⚠️ 前置：三章全部完成；本机上跑，本机→云端→隧道→本机 整圈）**
 ```
 > ssh -o BatchMode=yes peer "ssh -o BatchMode=yes <本机hostname> crosschat --version"
 1.3.3
