@@ -1,6 +1,6 @@
 # 跨机联邦手册（ssh v1）
 
-> 本文是 [README · 通信方式](../README.md#-通信方式) 表中"跨机联邦 · ssh"的完整手册：搭建五步、使用细则、大内容 scp、自环测试。
+> 本文是 [README · 通信方式](../README.md#-通信方式) 表中"跨机联邦 · ssh"的完整手册。
 
 
 一句话：跨机 = **[单机全部用法](../README.md#-快速入门)** + 一个 `--via` 参数——[快速入门](../README.md#-快速入门)里的一切照旧，只是消息发到另一台机器。对端装好 crosschat、配好密钥，就开始。
@@ -10,331 +10,274 @@ crosschat send --via ssh:build01 --to worker2 --body "跑一次构建，产物�
 # → delivered to worker2@build01 (turn 1)
 ```
 
-### 部署：对端 ssh 信息怎么配（win ↔ linux，以 WSL 为例）
+### 怎么用这篇手册
 
-前提：**双向可达**（同一 LAN/VPN；对端在 NAT 后、只能单向发起的环境等 broker 堡垒机形态）。以下以 win（hostname `yang`）↔ WSL（hostname `yangwsl`）为例，逐台照抄。
+- 双向可达（同 LAN/VPN）：本机章（[Win](#win-配置-ssh本机是-windows-时做本章) 或 [MacOS](#macos-配置-ssh本机是-macos-时做本章)）+ [Linux 章](#linux-配置-ssh)各从头做到尾，两个方向自证都出版本号 = 部署完成
+- 单向（本机在 NAT 后，能连出去、对端连不回你）：上面两章做完，再做[单向 SSH 章](#单向-sshnat你能连它它连不回你)的两处差量
+- 每步一个代码块：`>` 开头的行 = 你要敲的命令，其余行 = 期望输出，`#` 开头 = 条件/备注
+- `<XX>` = 占位符，每章开头的小表标了去哪一步查到真值
 
-**第 1 步 · 每台机装 crosschat + 生成密钥**：
+### Win 配置 SSH（本机是 Windows 时做本章）
 
-```bash
-npm i -g @oatelauser/crosschat && crosschat install-skills
-ssh-keygen -t ed25519          # 无口令（机器通道）；已有密钥则跳过
-```
-
-**第 2 步 · 写两端的 ~/.ssh/config（核心）**——每台机写"怎么连对端"：
-
-```bash
-# win 侧（%USERPROFILE%\.ssh\config）——认得 WSL：
-Host yangwsl wsl               # 一行多名：真实 hostname + 顺手短名，都指向同一配置
-  HostName 127.0.0.1
-  Port 2222                    # WSL sshd 用非 22 端口（镜像网络下 22 被 win 占）
-  User root
-
-# WSL 侧（~/.ssh/config）——认得 win：
-Host yang
-  HostName localhost
-  Port 22
-  User yangsheng               # WSL 默认 root，反向连 win 必须显式写 win 用户名
-```
-
-规则：**别名推荐直接用"对端系统 hostname"**（信封回程路条自动取它，`--via ssh:yang` / `--via ssh:yangwsl` 天然成立）；别名≠hostname 也能用，但两个名字都要能解析（一行多名 `Host yang wsl` 即可）。hostname 用 `hostname` 命令查（两端各查一次、互抄）。
-
-**第 3 步 · 互推公钥**：
-
-```bash
-# 常规（Linux/Mac 对端）：推公钥，输一次现有密码（密码登录共存不受影响）
-ssh-copy-id yangwsl            # 或手动追加到对端 ~/.ssh/authorized_keys
-
-# win 对端 + 你是管理员组用户：公钥必须进专用文件并修 ACL（管理员 PowerShell）
-$kf = "$env:ProgramData\ssh\administrators_authorized_keys"
-Add-Content $kf -Value (Get-Content "$env:USERPROFILE\.ssh\id_ed25519.pub" -Raw)
-icacls $kf /inheritance:r /grant "SYSTEM:(F)" /grant "BUILTIN\Administrators:(F)"
-
-# WSL 对端：不走 ssh 推（鸡生蛋），从 win 直写其文件系统
-wsl -u root sh -c 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys' < $env:USERPROFILE\.ssh\id_ed25519.pub
-```
-
-**第 4 步 · 收件侧 sshd 与端口**：
-
-| 收件腿 | 一次性准备 |
+| 占位符 | 在哪查 |
 |---|---|
-| Linux | sshd 开箱即有。**PATH 注记（Node 装在 nvm/自定义前缀，如 /opt/node）**：npm 全局 bin 不在 sshd 非交互 shell 的默认 PATH——本地能跑、收件腿却报 `REMOTE_FAILED [via <host>] 远端异常退出(127): command not found`；修复一行（发行版包管理器装的 Node 无此坑）：`sudo ln -s "$(npm prefix -g)/bin/crosschat" /usr/local/bin/crosschat`。**WSL 注记**：镜像网络下 22 端口被 win 占用——sshd 换非标端口（`sed -i 's/^#*Port .*/Port 2222/' /etc/ssh/sshd_config`，`systemctl enable --now ssh`）+ host key 播种 `ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts`（win 侧同款命令一次） |
-| win | 管理员装 OpenSSH Server（`Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0` + `Start-Service sshd`）；npm 全局 bin 须在**系统** PATH（sshd 默认 shell 只见 Machine PATH）。**收件腿限制：codex 侧不可用（AF_UNIX 跨登录会话隔离，实测定论），claude 侧实测可用** |
-| Mac | 系统设置开"远程登录" |
+| `<本机hostname>` / `<本机用户>` | W1 |
+| `<对端地址>` / `<对端端口>` / `<对端用户>` / `<对端hostname>` | Linux 章 L1（MacOS 对端见 M1） |
 
-**第 5 步 · 自证（双向各跑一次）**：
-
-```bash
-ssh -o BatchMode=yes yangwsl crosschat --version    # win → WSL
-ssh -o BatchMode=yes yang crosschat --version       # WSL → win；出版本号 = 通 + 版本一致
+**W1 · 查本机 hostname 与用户（登记进上表，对端 L5 要用）**
 ```
-
-失败对照：`Host key verification failed` → 第 4 步的 keyscan 没做；`Permission denied (publickey)` → 第 3 步公钥没进对（win 管理员组走专用文件）；`Connection refused` → 对端 sshd 没跑/端口不对；`远端异常退出(127): command not found` → 第 4 步 Linux PATH 注记（npm 前缀软链一刀）。
-
-可选提速：`~/.ssh/config` 加 `ControlMaster auto`（复用连接，摊薄每次握手 100-300ms）。版本偏斜：旧版对端收到新旗标报 `USAGE [via <host>] unknown option …`——对端升级即愈。
-
-#### NAT 单向（按操作系统分步实录）——你能连它、它连不回你
-
-适用：本机（win 或 macOS）在 NAT 后，能出站 ssh 到云端 Linux；云端连不回本机。回程由本机常驻的**反向隧道**背过去，crosschat 零改动。双向可达的环境直接用上方五步，不必进本节。（2026-10-08 win↔云端真机闭环实测：`../drill-reports/federation-nat-tunnel-20261008.md`）
-
-**先填替换表**（全文用示例值书写；"在哪查"告诉你去哪节取真值）：
-
-| 值 | 示例 | 你的值 | 在哪查 |
-|---|---|---|---|
-| 云端地址 | `203.0.113.10` | ＿＿ | 服务商控制台的公网 IP |
-| 云端 ssh 端口 | `22` | ＿＿ | Linux 节 L1 |
-| 云端用户 | `deploy` | ＿＿ | 你登录云端用的用户名 |
-| 云端 hostname | `host-b` | ＿＿ | Linux 节 L1 |
-| 本机用户（win） | `yangsheng` | ＿＿ | 你登录 Windows 的账户 |
-| 本机 hostname（win） | `yang` | ＿＿ | Windows 节 W1 |
-| 本机用户/hostname（mac） | `me` / `mac` | ＿＿ | macOS 节 M1 |
-
----
-
-##### Windows 节（本机是 win 时，从上往下做）
-
-**W1 · 查本机 hostname**（此值 Linux 节 L5 要用）：
-```powershell
-hostname
-```
-```
+> hostname
 yang
+> whoami
+yangsheng
 ```
 
-**W2 · 确认本机 sshd 在跑（回程终点，必须 Running）**：
-```powershell
-Get-Service sshd
+**W2 · 确认本机 sshd 在跑（收件腿终点）**
 ```
+> Get-Service sshd
+Status  Name
+Running sshd
+# Stopped → 管理员 PowerShell 跑 Start-Service sshd
+# 服务不存在 → 管理员 PowerShell 跑 Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 然后 Start-Service sshd
 ```
-Status   Name
-Running  sshd
-```
-`Stopped` → 管理员 PowerShell 跑 `Start-Service sshd`；提示服务不存在 → 管理员 PowerShell 跑 `Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0` 再 `Start-Service sshd`。
+- 收件腿限制（实测定论）：win 侧 codex 不可达（AF_UNIX 跨登录会话隔离），claude 腿可用
+- sshd 默认 shell 只见系统 PATH——npm 全局 bin 必须在系统 PATH 里
 
-**W3 · 本机密钥（有则跳过）**：
-```powershell
-Test-Path $env:USERPROFILE\.ssh\id_ed25519.pub
+**W3 · 本机密钥（有则跳过）**
 ```
-```
+> Test-Path $env:USERPROFILE\.ssh\id_ed25519.pub
 True
-```
-`False` → `ssh-keygen -t ed25519` 一路回车（无口令）。
-
-**W4 · 打印本机公钥**（复制输出整行，Linux 节 L4 要粘贴它）：
-```powershell
-Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub
-```
-```
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA...本机标识 yang
+# False → ssh-keygen -t ed25519 一路回车（无口令，机器通道）
 ```
 
-**W5 · 认得云端（写 ssh config）**：
-```powershell
-notepad $env:USERPROFILE\.ssh\config
+**W4 · 打印本机公钥（整行复制，发给对端 L4）**
 ```
-文件末尾追加（四个值来自替换表）后保存：
-```
-Host host-b b
-  HostName 203.0.113.10
-  Port 22
-  User deploy
+> Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub
+ssh-ed25519 AAAA...yang
 ```
 
-**W6 · 播种云端 host key**：
-```powershell
-ssh-keyscan -p 22 203.0.113.10 >> $env:USERPROFILE\.ssh\known_hosts
+**W5 · 认得对端（写 ssh config）**
 ```
+> notepad $env:USERPROFILE\.ssh\config
 ```
-203.0.113.10 ssh-ed25519 AAAA...
-203.0.113.10 ecdsa-sha2-nistp256 AAAA...
+文件末尾追加后保存（占位符来自章首表）：
+```
+Host <对端hostname> peer
+  HostName <对端地址>
+  Port <对端端口>
+  User <对端用户>
+```
+- 别名必须 = 对端系统 hostname——信封回程路条 `--via ssh:<对端hostname>` 自动成立；`peer` 是顺手短名
+- 可选提速：同文件同 Host 块下加 `ControlMaster auto` + `ControlPath ~/.ssh/cm-%r@%h-%p` + `ControlPersist 10m`（复用连接，摊薄每次握手 100-300ms）
+
+**W6 · 播种对端 host key**
+```
+> ssh-keyscan -p <对端端口> <对端地址> >> $env:USERPROFILE\.ssh\known_hosts
+<对端地址> ssh-ed25519 AAAA...
+<对端地址> ecdsa-sha2-nistp256 AAAA...
 ```
 
-**W7 · 探活（输密码，能进云端 shell = 网络与账号都通；进去就 exit）**：
-```powershell
-ssh host-b
+**W7 · 探活（输密码能进对端 shell = 网络与账号都通；进去敲 exit 退回）**
+```
+> ssh peer
 ```
 
-**W8 · Xshell 开反向隧道（隧道随这个会话活，别关）**：
-Xshell 选中该会话 → 右键属性 → 连接 → SSH → **隧道** → 添加：
-类型 **远程（传入）**｜源 主机 `localhost` 端口 `2222`｜目标 主机 `localhost` 端口 `22`
-属性 → 连接 → **保持活动** 间隔 30 秒 → **连接此会话**。
-验证（贴到云端的 Xshell 标签页里跑）：
-```bash
-ss -tln | grep 2222
+**W8 · 收对端公钥（粘贴对端 L4 打印的整行）**
 ```
+> $kf = "$env:ProgramData\ssh\administrators_authorized_keys"
+> Add-Content $kf -Value '<对端公钥整行>'
+> icacls $kf /inheritance:r /grant "SYSTEM:(F)" /grant "BUILTIN\Administrators:(F)"
 ```
-LISTEN 0  128  127.0.0.1:2222  0.0.0.0:*
-```
+- 管理员组用户**必须**走这个专用文件（普通 `authorized_keys` 无效）；三条命令在**终端(管理员)**里跑（右键开始菜单）；无输出 = 成功
 
-**W9 · 收云端公钥（用 Linux 节 L4 打印的云端公钥整行）**——右键开始菜单 → **终端(管理员)**：
-```powershell
-$kf = "$env:ProgramData\ssh\administrators_authorized_keys"
-Add-Content $kf -Value 'ssh-ed25519 AAAA...host-b 的公钥整行'
-icacls $kf /inheritance:r /grant "SYSTEM:(F)" /grant "BUILTIN\Administrators:(F)"
+**W9 · 出腿自证（需对端章 L1–L4 已完成）**
 ```
-（无输出 = 成功。管理员组用户必须走这个专用文件，普通 `authorized_keys` 无效。）
-
-**W10 · 出腿自证（需 Linux 节 L1–L4 已完成）**：
-```powershell
-ssh -o BatchMode=yes host-b crosschat --version
-```
-```
+> ssh -o BatchMode=yes peer crosschat --version
 1.3.3
 ```
 
-**W11 · 全环自证（需 Linux 节全部完成；一条命令穿完 win→云端→隧道→win 整圈）**：
-```powershell
-ssh -o BatchMode=yes host-b "ssh -o BatchMode=yes yang crosschat --version"
-```
-```
-1.3.3
-```
+### Linux 配置 SSH
 
----
+| 占位符 | 在哪查 |
+|---|---|
+| `<本机hostname>` / `<本机端口>` | L1 现查 |
+| `<对端hostname>` / `<对端用户>` / `<对端地址>` | Win 章 W1（MacOS 本机见 M1；地址=本机在内网的 IP） |
 
-##### Linux 节（云端服务器；Xshell 或任意终端里从上往下做）
-
-**L1 · 查本机 hostname 与 ssh 端口**（两个值填进替换表，win/mac 侧要用）：
-```bash
-hostname; ss -tlnp | grep sshd
+**L1 · 查本机 hostname 与 ssh 端口（登记进上表，对端 W5 要用）**
 ```
-```
+> hostname; ss -tlnp | grep sshd
 host-b
-LISTEN 0 128 0.0.0.0:22 0.0.0.0:* users:(("sshd",...))
+LISTEN 0 128 0.0.0.0:22 ...sshd...
+# WSL 注记：镜像网络下 22 被 win 占——换非标端口：
+#   sed -i 's/^#*Port .*/Port 2222/' /etc/ssh/sshd_config && systemctl enable --now ssh
+#   并在对端加播种：ssh-keyscan -p 2222 <本机地址> >> 对端 known_hosts
 ```
 
-**L2 · 装 crosschat（Node ≥22；无 Node 先跑下面两行再回来）**：
-```bash
-curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs
-npm i -g @oatelauser/crosschat@1.3.3 && crosschat --version
+**L2 · 装 crosschat（Node ≥22）**
 ```
-```
+> npm i -g @oatelauser/crosschat && crosschat install-skills && crosschat --version
 1.3.3
+# 没有 Node → 先跑：curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs
 ```
 
-**L3 · 生成密钥（一路回车，无口令）**：
-```bash
-ssh-keygen -t ed25519
+**L3 · 密钥（有则跳过；生成时一路回车，无口令）**
+```
+> ls ~/.ssh/id_ed25519.pub
+ls: cannot access '/root/.ssh/id_ed25519.pub': No such file or directory
+> ssh-keygen -t ed25519
 ```
 
-**L4 · 公钥交换**——打印云端公钥（复制整行，发给 win 侧 W9 / mac 侧 M7）；再收对方公钥（粘贴 W4 / M4 打印的那行）：
-```bash
-cat ~/.ssh/id_ed25519.pub
-echo 'ssh-ed25519 AAAA...win 或 mac 的公钥整行' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && cat ~/.ssh/authorized_keys
+**L4 · 公钥交换：打印本机公钥发给对端 W8/M6；收对端公钥（粘贴对端 W4/M3 的整行）**
+```
+> cat ~/.ssh/id_ed25519.pub
+ssh-ed25519 AAAA...host-b
+> echo '<对端公钥整行>' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
+> cat ~/.ssh/authorized_keys
+ssh-ed25519 AAAA...(对端)
+# 对端是本机 WSL 时可从 win 直写（鸡生蛋不走 ssh）：
+#   wsl -u root sh -c 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys' < $env:USERPROFILE\.ssh\id_ed25519.pub
 ```
 
-**L5 · 回程别名（⚠️ `User` 行必写；前提：对端 W8/M6 隧道已连）**：
-```bash
-ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts
-cat >> ~/.ssh/config << 'EOF'
-Host yang
-  HostName localhost
-  Port 2222
-  User yangsheng
+**L5 · 认得对端（双向场景；单向 NAT 场景跳过本步，由[单向 SSH 章](#单向-sshnat你能连它它连不回你)接管）**
+```
+> cat >> ~/.ssh/config << 'EOF'
+Host <对端hostname> peer
+  HostName <对端地址>
+  Port 22
+  User <对端用户>
 EOF
+> ssh-keyscan <对端地址> >> ~/.ssh/known_hosts
 ```
-（`yang`/`yangsheng` 换成替换表里对端本机 hostname/用户；别名必须=对端 hostname——信封回程路条自动成立。）
 
-**L6 · PATH 软链（条件步）**——`npm prefix -g` 输出以 `/usr` 开头（发行版/NodeSource 装的）→ 跳过；输出是 `~/.nvm/...` 或 `/opt/...`（nvm/自定义前缀）→ 必须跑：
-```bash
-npm prefix -g
-ln -s "$(npm prefix -g)/bin/crosschat" /usr/local/bin/crosschat
+**L6 · PATH 软链（条件步：决定 sshd 的 shell 找不找得到 crosschat）**
 ```
-不跑的后果：出腿自证报 `REMOTE_FAILED ... 远端异常退出(127): command not found`（sshd 的 shell 看不到 npm 的 bin）。
+> npm prefix -g
+/usr
+# 输出以 /usr 开头（发行版/NodeSource 装的 Node）→ 本步跳过
+# 输出是 ~/.nvm/... 或 /opt/...（nvm/自定义前缀）→ 必须跑：
+> ln -s "$(npm prefix -g)/bin/crosschat" /usr/local/bin/crosschat
+# 不跑的后果：对端自证报 REMOTE_FAILED [via ...] 远端异常退出(127): command not found
+```
 
-**L7 · 回程自证（走的就是对端背来的隧道）**：
-```bash
-ssh -o BatchMode=yes yang crosschat --version
+**L7 · 出腿自证（反方向那条在对端章 W9/M7；两边都出版本号 = 部署完成）**
 ```
-```
+> ssh -o BatchMode=yes peer crosschat --version
 1.3.3
 ```
 
----
+### MacOS 配置 SSH（本机是 MacOS 时做本章）
 
-<details>
-<summary><b>macOS 节（本机是 mac 时，从上往下做；全程 Terminal，无 Xshell）</b></summary>
+| 占位符 | 在哪查 |
+|---|---|
+| `<本机hostname>` / `<本机用户>` | M1 |
+| `<对端地址>` / `<对端端口>` / `<对端用户>` / `<对端hostname>` | Linux 章 L1 |
 
-**M1 · 查本机 hostname 与用户名**（填替换表；Linux 节 L5 要用）：
-```bash
-hostname; whoami
+**M1 · 查本机 hostname 与用户（登记进上表，对端 L5 要用）**
 ```
-```
+> hostname; whoami
 mac.local
 me
 ```
 
-**M2 · 开远程登录（= mac 的 sshd）**：系统设置 → 通用 → 共享 → **远程登录** 打开。验证：
-```bash
-lsof -iTCP:22 -sTCP:LISTEN
+**M2 · 开远程登录（= mac 的 sshd）**：系统设置 → 通用 → 共享 → **远程登录** 打开
 ```
-```
+> lsof -iTCP:22 -sTCP:LISTEN
 sshd  123  me  3u  IPv6  ...  TCP *:ssh (LISTEN)
 ```
 
-**M3 · 密钥（有则跳过）+ 打印公钥**（整行发给 Linux 节 L4）：
-```bash
-ssh-keygen -t ed25519        # 一路回车
-cat ~/.ssh/id_ed25519.pub
+**M3 · 密钥（有则跳过）+ 打印公钥（发给对端 L4）**
+```
+> ls ~/.ssh/id_ed25519.pub || ssh-keygen -t ed25519
+> cat ~/.ssh/id_ed25519.pub
+ssh-ed25519 AAAA...mac
 ```
 
-**M4 · 认得云端（写 config + 播种 host key，值来自替换表）**：
-```bash
-cat >> ~/.ssh/config << 'EOF'
-Host host-b b
-  HostName 203.0.113.10
-  Port 22
-  User deploy
+**M4 · 认得对端（写 config + 播种 host key）**
+```
+> cat >> ~/.ssh/config << 'EOF'
+Host <对端hostname> peer
+  HostName <对端地址>
+  Port <对端端口>
+  User <对端用户>
 EOF
-ssh-keyscan -p 22 203.0.113.10 >> ~/.ssh/known_hosts
+> ssh-keyscan -p <对端端口> <对端地址> >> ~/.ssh/known_hosts
 ```
 
-**M5 · 探活（输密码，能进云端 shell = 通，exit 退出）**：
-```bash
-ssh host-b
+**M5 · 探活（输密码能进 = 通；exit 退回）**
+```
+> ssh peer
 ```
 
-**M6 · 反向隧道（开一个专用 Terminal 标签跑这条，挂着别关；断线重跑同一条）**：
-```bash
-ssh -N -R 2222:localhost:22 -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes host-b
+**M6 · 收对端公钥（粘贴对端 L4 的整行；mac 无专用文件，普通 authorized_keys 即可）**
 ```
-验证（另开标签，贴进云端会话里）：`ss -tln | grep 2222` → 出现 LISTEN 行 = 活。
-
-**M7 · 收云端公钥（用 Linux 节 L4 打印的整行；mac 无专用文件，走普通 authorized_keys）**：
-```bash
-echo 'ssh-ed25519 AAAA...host-b 的公钥整行' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
+> echo '<对端公钥整行>' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
 ```
 
-**M8 · 出腿自证**：`ssh -o BatchMode=yes host-b crosschat --version` → `1.3.3`
-**M9 · 全环自证（需 Linux 节全部完成）**：`ssh -o BatchMode=yes host-b "ssh -o BatchMode=yes mac crosschat --version"` → `1.3.3`（`mac` 换成 M1 的 hostname）
-
-（Linux 桌面当本机时同理：M2 换成 `sudo systemctl enable --now ssh`，其余步骤相同。）
-
-</details>
-
----
-
-##### 两侧自证全绿后的正式闭环
-
-云端需有一个命名会话（claude 里 `/rename 云端beta`）。本机发起：
-```powershell
-crosschat send --via ssh:host-b --to 云端beta --body "收到请照信封里的回复命令回一句：闭环成立"
+**M7 · 出腿自证**
 ```
+> ssh -o BatchMode=yes peer crosschat --version
+1.3.3
 ```
+（Linux 桌面当本机：M2 换成 `systemctl enable --now ssh`，其余步骤全部相同。）
+
+### 单向 SSH（NAT：你能连它、它连不回你）
+
+适用：本机（win/mac）在 NAT 后能出站 ssh 到云端 Linux，云端连不回本机。回程由本机常驻**反向隧道**背过去，crosschat 零改动（2026-10-08 win↔云端真机闭环实测：`../drill-reports/federation-nat-tunnel-20261008.md`）。前提：本机章 + Linux 章已全部做完，本章只改两处。
+
+**N1 · 出站侧开反向隧道（win 用 Xshell / mac 用 Terminal；隧道随这个会话活，别关）**
+```
+# Xshell：会话属性 → 连接 → SSH → 隧道 → 添加：类型"远程(传入)"，源 localhost:2222，目标 localhost:22；属性里保持活动间隔 30s；连接并保持会话开着
+# Terminal（mac/Linux 桌面）：开一个专用标签跑下面这条，挂着；断线重跑同一条：
+> ssh -N -R 2222:localhost:22 -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes peer
+```
+验证（贴到云端会话里跑）：
+```
+> ss -tln | grep 2222
+LISTEN 0 128 127.0.0.1:2222 0.0.0.0:*
+```
+
+**N2 · Linux 章的 L5 在此换成回程别名（⚠️ `User` 行必写）**
+```
+> ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts
+> cat >> ~/.ssh/config << 'EOF'
+Host <对端hostname>
+  HostName localhost
+  Port 2222
+  User <对端用户>
+EOF
+# ⚠️ 缺 User 行 = ssh 默认拿本机当前用户去连对端 → 报 root@localhost: Permission denied
+```
+
+**N3 · 回程自证（Linux 上跑；走的就是隧道，穿回对端本机）**
+```
+> ssh -o BatchMode=yes <对端hostname> crosschat --version
+1.3.3
+```
+
+**N4 · 全环一条命令（本机上跑；本机→云端→隧道→本机 整圈）**
+```
+> ssh -o BatchMode=yes peer "ssh -o BatchMode=yes <本机hostname> crosschat --version"
+1.3.3
+```
+
+**N5 · 正式闭环（本机发起；云端先备一个命名会话——claude 里 `/rename 云端beta`）**
+```
+> crosschat send --via ssh:<对端hostname> --to 云端beta --body "收到请照信封里的回复命令回一句：闭环成立"
 delivered to 云端beta@host-b (turn 1)
 ```
-对端回信将穿过隧道落回本机发起会话（`turn 2`）——回程全靠那条隧道，**隧道窗口/Xshell 会话关了回信就断**（发起腿不受影响）；持续保活已是"半 broker"形态，堡垒机形态（broker）仍是长期正解。
+对端回信穿隧道落回本机发起会话（`turn 2`）。回程全靠这条隧道：**会话关了回信就断**（发起腿不受影响）；持续保活已是"半 broker"形态，堡垒机形态（broker）仍是长期正解。
 
-##### NAT 形态失败对照
+**失败对照**
 
 | 症状 | 根因 | 解法 |
 |---|---|---|
-| 探活 `Connection timed out` | 网络不通/端口错/云端防火墙 | 核对替换表地址端口；云端安全组放行该端口 |
-| 探活 `Permission denied` | 用户名或密码错 | 核对云端用户；密码登录被禁则改用控制台 |
-| `root@localhost: Permission denied`（回程自证） | L5 漏了 `User` 行 | 补 `User <对端本机用户名>` |
-| `Connection refused`（连 `localhost:2222`） | 对端隧道没连/断了 | 重连 W8 的 Xshell 会话 / M6 重跑 |
-| `REMOTE_FAILED ... (127): command not found`（出腿自证） | 云端 Node 在 nvm/自定义前缀 | L6 软链 |
+| 探活 `Connection timed out` | 网络不通/端口错/对端防火墙 | 核对地址端口；云端安全组放行 |
+| 探活 `Permission denied` | 用户名或密码错 | 核对用户名；密码登录被禁则走控制台 |
+| `root@localhost: Permission denied`（回程自证） | N2 漏了 `User` 行 | 补 `User <对端用户>` |
+| `Connection refused`（连 `localhost:2222`） | 隧道没连/断了 | 重连 Xshell 会话 / 重跑 N1 的 ssh 命令 |
+| `REMOTE_FAILED ... (127): command not found` | 云端 Node 在 nvm/自定义前缀 | Linux 章 L6 软链 |
 | 回信突然全断、出腿正常 | 隧道会话断了 | 重连隧道即恢复 |
+| 出腿 `USAGE [via ...] unknown option` | 对端 crosschat 版本过旧 | 对端升级 `npm i -g @oatelauser/crosschat` |
 
 ### 使用：题词与命令形态（按场景）
 

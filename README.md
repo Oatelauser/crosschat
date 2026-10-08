@@ -109,7 +109,7 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 | 方式 | 一句话 | 状态 | 深入 |
 |---|---|---|---|
 | **单机会话** | 同机 agent 互发，`--to <名字>` 即起对话，忙时自动入队/发件箱 | ✅ v1.0 | [docs/usage.md](docs/usage.md)：发起方式 / 投递语义 / 底层命令 / 边界 |
-| **跨机联邦 · ssh** | 加 `--via ssh:<对端hostname>`，消息经 ssh 落到对端机器，回复自动回来 | ✅ v1.3.3 | [docs/federation.md](docs/federation.md)：ssh 从零配置五步 / 底层命令形态 / 大内容 / 自环测试 |
+| **跨机联邦 · ssh** | 加 `--via ssh:<对端hostname>`，消息经 ssh 落到对端机器，回复自动回来 | ✅ v1.3.3 | [docs/federation.md](docs/federation.md)：按操作系统配置（Win/Linux/macOS）/ 单向 NAT / 命令形态 / 大内容 / 自环测试 |
 | 跨机联邦 · tcp | 局域网直连 + 极简预共享鉴权 | 🚧 规划中 | — |
 | 跨机联邦 · broker | 常驻 broker：忙时持久队列、异步回执、投递状态机、堡垒机形态 | 🚧 规划中 | — |
 
@@ -191,7 +191,7 @@ crosschat -v | --version | help                     # 版本 / 帮助
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | **底层原理**：注册表/命名管道/daemon 通道、写者锁本质、信封与自包含引用、完整投递流程图 |
 | [docs/usage.md](docs/usage.md) | **单机深度细则**：发起方式 / 往复规则 / 投递语义矩阵 / 边界与限制 |
-| [docs/federation.md](docs/federation.md) | **跨机联邦手册**：ssh 搭建五步 / 使用细则 / 大内容 scp / 自环测试 |
+| [docs/federation.md](docs/federation.md) | **跨机联邦手册**：按操作系统配置 / 单向 NAT / 使用细则 / 大内容 scp / 自环测试 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 |
 | [docs/wayfinder/map.md](docs/wayfinder/map.md) | 设计决策地图（全部拍板过程与依据） |
 | [docs/research/](docs/research/) | 实测研究报告（embassy 源码分析、两侧通道验证、0.160 inject_items 实验） |
