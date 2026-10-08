@@ -70,12 +70,13 @@ Host <对端hostname> peer
 - 别名必须 = 对端系统 hostname——信封回程路条 `--via ssh:<对端hostname>` 自动成立；`peer` 是顺手短名
 - 可选提速：同文件同 Host 块下加 `ControlMaster auto` + `ControlPath ~/.ssh/cm-%r@%h-%p` + `ControlPersist 10m`（复用连接，摊薄每次握手 100-300ms）
 
-**W6 · 播种对端 host key**
+**W6 · 播种对端 host key（首连自动记指纹）**
 ```
-> ssh-keyscan -p <对端端口> <对端地址> >> $env:USERPROFILE\.ssh\known_hosts
-<对端地址> ssh-ed25519 AAAA...
-<对端地址> ecdsa-sha2-nistp256 AAAA...
-# 记录的是对端服务器的主机指纹，不是你的密钥——服务器每种算法各有一把，一型一行，两三行都正常
+> ssh -o StrictHostKeyChecking=accept-new -p <对端端口> <对端用户>@<对端地址> exit
+Warning: Permanently added '<对端地址>' (ED25519) to the list of known hosts.
+<对端用户>@<对端地址>'s password:   ← 输一次密码，进去即退
+# 别用 ssh-keyscan 播种：它有算法协商缺陷（choose_kex: unsupported KEX method sntrup761...），
+# 输出永远只有 # 开头的横幅行，抓不到指纹
 ```
 
 **W7 · 探活（输密码能进对端 shell = 网络与账号都通；进去敲 exit 退回）**
@@ -148,6 +149,8 @@ Host <对端hostname> peer
   User <对端用户>
 EOF
 > ssh-keyscan <对端地址> >> ~/.ssh/known_hosts
+# 推荐改用（首连自动记指纹，输对端登录密码后即退；keyscan 对部分服务端抓不到指纹）：
+#   ssh -o StrictHostKeyChecking=accept-new peer exit
 ```
 
 **L6 · PATH 软链（条件步：决定 sshd 的 shell 找不找得到 crosschat）**
@@ -202,6 +205,8 @@ Host <对端hostname> peer
   User <对端用户>
 EOF
 > ssh-keyscan -p <对端端口> <对端地址> >> ~/.ssh/known_hosts
+# 推荐改用（首连自动记指纹；keyscan 对部分服务端抓不到指纹）：
+#   ssh -o StrictHostKeyChecking=accept-new peer exit
 ```
 
 **M5 · 探活（输密码能进 = 通；exit 退回）**
@@ -239,9 +244,12 @@ LISTEN 0 128 127.0.0.1:2222 0.0.0.0:*
 
 **N2 · Linux 章的 L5 在此换成回程别名（⚠️ `User` 行必写、`Port` 必须是 2222）**
 ```
-> ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts
-# 输出必须含不带 # 的 ssh-ed25519 行才算抓到；全是 # 行 = 没抓到，改跑：
-#   ssh-keyscan -p 2222 -t ed25519 localhost >> ~/.ssh/known_hosts
+> ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes yang echo ok
+Warning: Permanently added '[localhost]:2222' (ED25519) to the list of known hosts.
+ok
+# 这一条同时完成播种 + 回程自证（BatchMode=只走密钥不问密码）
+# 若报 Permission denied = 对端还没做 W8 收公钥——指纹也已存好，做完 W8 重跑本条即出 ok
+# keyscan 在此场景抓不到指纹（输出全是 # 行），勿用
 > cat >> ~/.ssh/config << 'EOF'
 Host <对端hostname>
   HostName localhost
@@ -283,7 +291,8 @@ delivered to 云端beta@host-b (turn 1)
 | 探活 `Connection timed out` | 网络不通/端口错/对端防火墙 | 核对地址端口；云端安全组放行 |
 | 探活 `Permission denied` | 用户名或密码错 | 核对用户名；密码登录被禁则走控制台 |
 | `root@localhost: Permission denied`（回程自证） | N2 漏了 `User` 行 | 补 `User <对端用户>` |
-| `Host key verification failed`（回程自证） | N2 的 Port 写成 22（连到 Linux 自己的 sshd），或 keyscan 全 `#` 行没抓到钥匙 | 核对 `cat ~/.ssh/config` 四行；`ssh-keyscan -p 2222 -t ed25519 localhost` 重跑 |
+| `Host key verification failed`（回程自证） | N2 的 Port 写成 22（连到 Linux 自己的 sshd），或指纹没播上 | 核对 `cat ~/.ssh/config` 四行；播种改用 `ssh -o StrictHostKeyChecking=accept-new ...`（keyscan 有缺陷抓不到） |
+| keyscan 输出只有 `#` 行 / `choose_kex: unsupported KEX method` | ssh-keyscan 自身的算法协商缺陷 | 弃用 keyscan，用上面 accept-new 的方式首连记指纹 |
 | `Connection refused`（连 `localhost:2222`） | 隧道没连/断了 | 重连 Xshell 会话 / 重跑 N1 的 ssh 命令 |
 | `REMOTE_FAILED ... (127): command not found` | 云端 Node 在 nvm/自定义前缀 | Linux 章 L6 软链 |
 | 回信突然全断、出腿正常 | 隧道会话断了 | 重连隧道即恢复 |
