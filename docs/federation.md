@@ -119,7 +119,7 @@ host-b
 LISTEN 0 128 0.0.0.0:22 ...sshd...
 # WSL 注记：镜像网络下 22 被 win 占——换非标端口：
 #   sed -i 's/^#*Port .*/Port 2222/' /etc/ssh/sshd_config && systemctl enable --now ssh
-#   并在对端加播种：ssh-keyscan -p 2222 <本机地址> >> 对端 known_hosts
+#   并在对端播种（首连记指纹，keyscan 有缺陷勿用）：ssh -o StrictHostKeyChecking=accept-new -p 2222 <本机地址> exit
 ```
 
 **L2 · 装 crosschat（Node ≥22）**
@@ -166,9 +166,10 @@ Host <对端hostname> peer
   Port 22
   User <对端用户>
 EOF
-> ssh-keyscan <对端地址> >> ~/.ssh/known_hosts
-# 推荐改用（首连自动记指纹，输对端登录密码后即退；keyscan 对部分服务端抓不到指纹）：
-#   ssh -o StrictHostKeyChecking=accept-new peer exit
+> ssh -o StrictHostKeyChecking=accept-new peer exit
+Warning: Permanently added '<对端地址>' (ED25519) to the list of known hosts.
+<对端用户>@<对端地址>'s password:   ← 输一次密码，进去即退
+# 别用 ssh-keyscan 播种：对部分服务端抓不到指纹（详见失败对照表）
 ```
 
 **L6 · PATH 软链（条件步：决定 sshd 的 shell 找不找得到 crosschat）**
@@ -234,9 +235,10 @@ Host <对端hostname> peer
   Port <对端端口>
   User <对端用户>
 EOF
-> ssh-keyscan -p <对端端口> <对端地址> >> ~/.ssh/known_hosts
-# 推荐改用（首连自动记指纹；keyscan 对部分服务端抓不到指纹）：
-#   ssh -o StrictHostKeyChecking=accept-new peer exit
+> ssh -o StrictHostKeyChecking=accept-new peer exit
+Warning: Permanently added '[<对端地址>]:<对端端口>' (ED25519) to the list of known hosts.
+<对端用户>@<对端地址>'s password:   ← 输一次密码，进去即退
+# 别用 ssh-keyscan 播种：对部分服务端抓不到指纹（详见失败对照表）
 ```
 
 **M5 · 探活（输密码能进 = 通；exit 退回）**
@@ -269,12 +271,6 @@ LISTEN 0 128 127.0.0.1:2222 0.0.0.0:*
 
 **N2 · Linux 章的 L5 在此换成回程别名（⚠️ `User` 行必写、`Port` 必须是 2222）**
 ```
-> ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes yang echo ok
-Warning: Permanently added '[localhost]:2222' (ED25519) to the list of known hosts.
-ok
-# 这一条同时完成播种 + 回程自证（BatchMode=只走密钥不问密码）
-# 若报 Permission denied = 对端的公钥交换还没做完（它须按其系统章的第二步装入你的公钥：Win→W4 / Linux→L4 / MacOS→M3）——指纹也已存好，对端做完重跑本条即出 ok
-# keyscan 在此场景抓不到指纹（输出全是 # 行），勿用
 > cat >> ~/.ssh/config << 'EOF'
 Host <对端hostname>
   HostName localhost
@@ -288,6 +284,12 @@ Host <对端hostname>
   User <对端用户>
 # ⚠️ 缺 User 行 = ssh 默认拿本机当前用户去连对端 → 报 root@localhost: Permission denied
 # ⚠️ Port 写成 22 = 连到 Linux 自己的 sshd（绕过隧道）→ 报 Host key verification failed
+> ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes <对端hostname> echo ok
+Warning: Permanently added '[localhost]:2222' (ED25519) to the list of known hosts.
+ok
+# 这一条同时完成播种 + 回程自证（BatchMode=只走密钥不问密码）
+# 若报 Permission denied = 对端的公钥交换还没做完（它须按其系统章的第三步装入你的公钥：Win→W4 / Linux→L4 / MacOS→M3）——指纹也已存好，对端做完重跑本条即出 ok
+# keyscan 在此场景抓不到指纹（输出全是 # 行），勿用
 ```
 
 **N3 · 回程自证（Linux 上跑；走的就是隧道，穿回对端本机）**
@@ -364,7 +366,7 @@ Host self
   HostName localhost
   Port 2222
 EOF
-ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts   # 播种 host key
+ssh -o StrictHostKeyChecking=accept-new -p 2222 localhost exit   # 首连记指纹（keyscan 有缺陷勿用）
 crosschat send --via ssh:self --to <本机会话名> --body "自环测试"
 ```
 
