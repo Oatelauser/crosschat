@@ -73,6 +73,25 @@ ssh -o BatchMode=yes yang crosschat --version       # WSL → win；出版本号
 
 可选提速：`~/.ssh/config` 加 `ControlMaster auto`（复用连接，摊薄每次握手 100-300ms）。版本偏斜：旧版对端收到新旗标报 `USAGE [via <host>] unknown option …`——对端升级即愈。
 
+**NAT 单向（你能连它、它连不回你）**：ssh v1 以双向为前提，但反向隧道可零 crosschat 改动打通回程——由能出站的一侧把"回程门"背过去（2026-10-08 真机实测，见 drill 报告 `federation-nat-tunnel-20261008.md`）：
+
+1. **出站侧常驻隧道**——Xshell：会话属性 → 连接 → SSH → 隧道 → 添加 → 类型**远程（传入）**、源 `localhost:2222`、目标 `localhost:22`，保持会话连开（keep-alive 30s；等价命令行 `ssh -N -R 2222:localhost:22 <对端>`）
+2. **对端回程别名 + 播种 host key**（⚠️ `User` 行必写——缺了 ssh 默认拿对端当前用户，报 `Permission denied`）：
+
+```bash
+ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts
+cat >> ~/.ssh/config << 'EOF'
+Host <出站侧hostname>
+  HostName localhost
+  Port 2222
+  User <出站侧用户名>
+EOF
+```
+
+3. **回程自证**：`ssh -o BatchMode=yes <出站侧hostname> crosschat --version`
+
+边界：隧道随会话活——会话断 = 回信断（发起腿不受影响）；持续保活已是"半 broker"运维形态，堡垒机形态（broker）仍是长期正解。
+
 ### 使用：题词与命令形态（按场景）
 
 **场景 A · 让本机 agent 发起跨机对话**——给 agent 的题词（角色只写任务，协议靠 skill 与信封自带）：
