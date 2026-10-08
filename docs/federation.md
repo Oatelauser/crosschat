@@ -73,22 +73,75 @@ ssh -o BatchMode=yes yang crosschat --version       # WSL → win；出版本号
 
 可选提速：`~/.ssh/config` 加 `ControlMaster auto`（复用连接，摊薄每次握手 100-300ms）。版本偏斜：旧版对端收到新旗标报 `USAGE [via <host>] unknown option …`——对端升级即愈。
 
-**NAT 单向（你能连它、它连不回你）**：ssh v1 以双向为前提，但反向隧道可零 crosschat 改动打通回程——由能出站的一侧把"回程门"背过去（2026-10-08 真机实测，见 drill 报告 `federation-nat-tunnel-20261008.md`）：
+#### NAT 单向（你能连它、它连不回你）——反向隧道打通回程
 
-1. **出站侧常驻隧道**——Xshell：会话属性 → 连接 → SSH → 隧道 → 添加 → 类型**远程（传入）**、源 `localhost:2222`、目标 `localhost:22`，保持会话连开（keep-alive 30s；等价命令行 `ssh -N -R 2222:localhost:22 <对端>`）
-2. **对端回程别名 + 播种 host key**（⚠️ `User` 行必写——缺了 ssh 默认拿对端当前用户，报 `Permission denied`）：
+ssh v1 以双向为前提；单向网络下由**能出站的一侧**把"回程门"背过去，crosschat 零改动（2026-10-08 win↔云端真机闭环实测，实录见 `../drill-reports/federation-nat-tunnel-20261008.md`）。以下记出站侧 = **A**（win，hostname `A`、用户 `a`、sshd 跑在 22），对端 = **B**（公网/云端 Linux）。前提：B 已按第 1 步装好 crosschat 并 `ssh-keygen`，A 也已有自己的密钥。
+
+**N1 · A 的公钥推到 B**（出腿认证，输一次密码）：
+
+```powershell
+type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh -p <B端口> <B用户>@<B地址> "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+```
+
+**N2 · A 的 ssh config 认得 B**（追加到 `%USERPROFILE%\.ssh\config`；别名首选 B 的系统 hostname——信封回程路条天然成立）：
+
+```
+Host <B的hostname> b
+  HostName <B地址>
+  Port <B端口>
+  User <B用户>
+```
+
+```powershell
+ssh-keyscan -p <B端口> <B地址> >> $env:USERPROFILE\.ssh\known_hosts
+```
+
+**N3 · A 常驻反向隧道**（Xshell 或命令行二选一，**隧道随会话活**）：
+
+- Xshell：该会话右键属性 → 连接 → SSH → **隧道** → 添加 → 类型 **远程（传入）**、源 `localhost:2222`、目标 `localhost:22`；属性 → 连接 → **保持活动** 间隔 30 秒；**连接并保持会话开着**
+- 命令行等价：`ssh -N -R 2222:localhost:22 -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes b`
+
+**N4 · B 侧回程别名 + 播种 host key**（⚠️ **`User` 行必写**——缺了 ssh 默认拿 B 的当前用户名去连 A，报 `<B用户>@localhost: Permission denied`）：
 
 ```bash
-ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts
+ssh-keyscan -p 2222 localhost >> ~/.ssh/known_hosts   # 扫到的其实是隧道对面 A 的 sshd
 cat >> ~/.ssh/config << 'EOF'
-Host <出站侧hostname>
+Host <A的hostname>
   HostName localhost
   Port 2222
-  User <出站侧用户名>
+  User <A用户名>
 EOF
 ```
 
-3. **回程自证**：`ssh -o BatchMode=yes <出站侧hostname> crosschat --version`
+**N5 · B 的公钥进 A**（回程认证）——A 是 win 管理员组用户时必须走专用文件（管理员 PowerShell）：
+
+```powershell
+$kf = "$env:ProgramData\ssh\administrators_authorized_keys"
+Add-Content $kf -Value '<B的id_ed25519.pub整行>'
+icacls $kf /inheritance:r /grant "SYSTEM:(F)" /grant "BUILTIN\Administrators:(F)"
+```
+
+A 为普通用户/非 win 时同主手册第 3 步（`~/.ssh/authorized_keys`）。
+
+**N6 · 验证阶梯**（由浅入深三条，全出 `1.3.x` 版本号 = 通）：
+
+```powershell
+# 出腿（A→B，不依赖隧道）：
+ssh -o BatchMode=yes b crosschat --version
+# 全环（A→B→隧道→A，一条命令穿完整圈）：
+ssh -o BatchMode=yes b "ssh -o BatchMode=yes <A的hostname> crosschat --version"
+# 正式（真投递+回信闭环）：
+crosschat send --via ssh:<B的hostname> --to <B上的会话名> --body "回信请照信封里的回复命令执行"
+```
+
+**N7 · NAT 形态失败对照**：
+
+| 症状 | 根因 | 解法 |
+|---|---|---|
+| `<B用户>@localhost: Permission denied`（回程） | N4 漏了 `User` 行 | 补 `User <A用户名>` |
+| `Connection refused`（连 `localhost:2222`） | 隧道没连上/断了 | 重连 N3 的 Xshell 会话 |
+| `远端异常退出(127): command not found` | B 的 Node 在 nvm/自定义前缀 | 见第 4 步 Linux PATH 注记 |
+| 回信突然全断、出腿正常 | Xshell 会话断了（隧道死） | 重连该会话即恢复 |
 
 边界：隧道随会话活——会话断 = 回信断（发起腿不受影响）；持续保活已是"半 broker"运维形态，堡垒机形态（broker）仍是长期正解。
 
