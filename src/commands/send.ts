@@ -15,6 +15,14 @@ import {
 } from '../identity.js';
 import { resolveTargetByName } from '../resolve.js';
 import { composeEnvelope } from '../envelope.js';
+import {
+  bodyTooLargeMessage,
+  CLAUDE_ENDPOINT_MAX_BODY_BYTES,
+  CODEX_ENDPOINT_MAX_BODY_BYTES,
+  MAX_BODY_KIB_CEILING,
+  resolveConfiguredMaxBodyBytes,
+  resolveMaxTurn,
+} from '../limits.js';
 import { decodeOriginIdentity, isSameMachine, runViaSend } from '../federation.js';
 import type { SendLogEntry } from '../send-log.js';
 import { continueConversation, continueFromRef, recordConversation } from '../conversations.js';
@@ -27,8 +35,8 @@ import {
   type RefEndpoint,
 } from '../ref.js';
 
-/** Hard body limit (ticket 004): 16KiB, enforced synchronously, never truncated. */
-export const MAX_BODY_BYTES = 16_384;
+/** 票A：上限解析移入 limits.ts；此名保留（004 时代的外部引用面，= 默认 16384）。 */
+export { DEFAULT_MAX_BODY_BYTES as MAX_BODY_BYTES } from '../limits.js';
 
 export interface SendArgs {
   to?: string;
@@ -40,6 +48,10 @@ export interface SendArgs {
   via?: string;
   /** Machine-injected sender identity for ssh shells without agent env (008 D5); hidden flag. */
   origin?: string;
+  /** 票A：--max-body-kb 原始值（正整数 KiB）；解析与容错在 limits.ts（非法静默降级）。 */
+  maxBodyKb?: string;
+  /** 票A：--max-turn 原始值（正整数轮数）；解析与容错在 limits.ts。 */
+  maxTurn?: string;
 }
 
 export interface SendDeps {
@@ -74,18 +86,21 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   resolveTargetArgs(args);
   const body = resolveBody(args, deps);
   const size = Buffer.byteLength(body, 'utf8');
-  if (size > MAX_BODY_BYTES) {
-    // Teaching branches with the transport (scp is an ssh-only side-channel;
-    // tcp/broker file paths get designed when those transports do).
-    const tail =
-      args.via === undefined
-        ? 'Write the content to a file and send the path instead.'
-        : args.via.startsWith('ssh:')
-          ? `跨机大内容（ssh 形态）：先 scp <文件> ${args.via.slice(4)}:/tmp/<文件名>，再 crosschat send --via ${args.via} … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）`
-          : '该传输形态的大内容通道未定义——ssh 形态支持 scp 旁路（见文档），或压缩/分段后重试。';
+  // 票A：上限三层来源（--max-body-kb > CROSSCHAT_MAX_BODY_KIB > 16384 兜底）。
+  // 这里只做配置值的早期快速失败（默认 16384 时与 004 现状逐字节同序同码）；
+  // 端点封顶（claude 64KiB / codex 1MiB）要等目标解析出来才能补检——生效值
+  // = min(配置值, 目标端点封顶)。来源值自身有 16MiB 绝对上界，到顶时教学
+  // 直接说"提额无效"，不再指一条走不通的路。
+  const configuredMax = resolveConfiguredMaxBodyBytes(args.maxBodyKb, deps.env);
+  const turnBudget = resolveMaxTurn(args.maxTurn, deps.env);
+  if (size > configuredMax) {
+    const atCeiling = configuredMax === MAX_BODY_KIB_CEILING * 1_024;
+    // 远端来件（008 D5：--origin 只在 --via 的接收腿出现）拒绝大正文时，读
+    // 报错的是发送方——单机教学（本机提额/落盘路径）对它全是误导，换远端
+    // 变体（scp 旁路 + 上限属接收方操作者）。
     throw new MultichatError(
       'MESSAGE_TOO_LARGE',
-      `Body is ${size} bytes; the limit is ${MAX_BODY_BYTES}. ${tail}`,
+      bodyTooLargeMessage(size, configuredMax, args.via, atCeiling ? 'absolute' : undefined, args.origin !== undefined),
     );
   }
 
@@ -123,9 +138,16 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   }
 
   // Federation (008/B1): everything via lives behind this early branch — the
-  // 16K check above applies to cross-machine sends too (D6), and the local
-  // path below stays byte-identical when --via is absent (D9).
+  // configured-cap check above applies to cross-machine sends too (D6), and the
+  // local path below stays byte-identical when --via is absent (D9).
   if (args.via !== undefined) {
+    // 票A：--via 本地无法解析远端目标——按最宽端点（codex 1MiB）预检，远端
+    // 自行复检（现状语义）。--max-body-kb 不透传远端：远程命令面保持固定
+    // 白名单（buildSshArgv），远端用自己的两层来源决定上限。
+    const viaLimit = Math.min(configuredMax, CODEX_ENDPOINT_MAX_BODY_BYTES);
+    if (size > viaLimit) {
+      throw new MultichatError('MESSAGE_TOO_LARGE', bodyTooLargeMessage(size, viaLimit, args.via, 'ssh-precheck'));
+    }
     return runViaSend(args, body, deps);
   }
 
@@ -198,6 +220,20 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     turn = continued.turn;
   }
 
+  // 票A：端点封顶——早期检查只查了配置值，claude 端点 64KiB 更严，解析出
+  // 目标后必须补检（配置再大也送不进端点）。到端点硬顶 = 提额无效，教学
+  // 直接指向落盘。（信封教学行永远静态 16KiB——第六单政策，见 envelope.ts。）
+  const endpointCap = target.p === 'claude' ? CLAUDE_ENDPOINT_MAX_BODY_BYTES : CODEX_ENDPOINT_MAX_BODY_BYTES;
+  const effectiveMax = Math.min(configuredMax, endpointCap);
+  if (size > effectiveMax) {
+    // 远端来件同样换远端教学（第八单）：硬顶事实保留（提额无效），尾巴换
+    // scp 旁路——接收方提额也过不了端点硬顶，scp 是唯一出路。
+    throw new MultichatError(
+      'MESSAGE_TOO_LARGE',
+      bodyTooLargeMessage(size, effectiveMax, args.via, target.p, args.origin !== undefined),
+    );
+  }
+
   // Federation (008 B2 + B10): a remote-origin send (ssh shell + --origin)
   // stamps both endpoints with their machines — m (hostname) routes the return
   // --via, mid (machine-id) decides "same machine" so hostname collisions
@@ -263,7 +299,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     }
     checkAndRecord(deps.rateDir, rateKey(identityKey(caller), `claude:${target.id}`), deps.now());
     const toName = claudeSession.name ?? shortId('claude', claudeSession.sessionId);
-    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body, viaHost });
+    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body, viaHost, turnBudget });
     try {
       await deps.deliverClaude(
         { pid: claudeSession.pid, messagingSocketPath: claudeSession.messagingSocketPath },
@@ -283,7 +319,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   const threads = await deps.listCodexThreads();
   const threadName = threads.find((thread) => thread.id === target.id)?.name;
   const toName = threadName ?? shortId('codex', target.id);
-  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body, viaHost });
+  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body, viaHost, turnBudget });
   const parkNow = (): number => {
     park(
       deps.outboxDir,

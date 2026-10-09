@@ -7,6 +7,7 @@ import { MAX_BODY_BYTES, runSend, type SendArgs, type SendDeps } from '../src/co
 import { decodeRef, encodeRef, newConversationRef, nextTurnRef } from '../src/ref.js';
 import { MultichatError } from '../src/errors.js';
 import { drain, park } from '../src/outbox.js';
+import { encodeOrigin } from '../src/federation.js';
 import type { SendLogEntry } from '../src/send-log.js';
 import type { ClaudeRegistryScan, ClaudeSessionEntry } from '../src/claude/registry.js';
 import type { CodexThreadSummary } from '../src/codex/client.js';
@@ -499,5 +500,107 @@ describe('runSend with codex entirely absent (B2 unix deploy)', () => {
     const out = await runSend({ to: 'alpha', bodyArg: 'hello from unix' }, deps);
     expect(out).toContain('alpha');
     expect(claudeDeliveries.length).toBe(before + 1);
+  });
+});
+
+describe('runSend configurable body cap (票A)', () => {
+  it('--max-body-kb 32 lets a 32KiB body through to codex', async () => {
+    const out = await send(
+      { to: 'workteam', bodyArg: 'x'.repeat(32 * 1_024), maxBodyKb: '32' },
+      { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' },
+    );
+    expect(out).toContain('delivered to workteam');
+  });
+
+  it('env CROSSCHAT_MAX_BODY_KIB raises the cap when the flag is absent', async () => {
+    const out = await send({ to: 'alpha', bodyArg: 'x'.repeat(20_000) }, { CROSSCHAT_MAX_BODY_KIB: '64' });
+    expect(out).toContain('delivered to alpha');
+  });
+
+  it('an invalid flag value silently falls to env, then to the default', async () => {
+    const out = await send({ to: 'alpha', bodyArg: 'x'.repeat(20_000), maxBodyKb: 'wat' }, { CROSSCHAT_MAX_BODY_KIB: '64' });
+    expect(out).toContain('delivered to alpha');
+    await expectCode(send({ to: 'alpha', bodyArg: 'x'.repeat(20_000), maxBodyKb: 'wat' }, {}), 'MESSAGE_TOO_LARGE');
+  });
+
+  it('--max-body-kb 1024 still hits the claude 64KiB endpoint cap with hard-cap teaching', async () => {
+    const before = claudeDeliveries.length;
+    const err = await expectCode(
+      send({ to: 'alpha', bodyArg: 'x'.repeat(100 * 1_024), maxBodyKb: '1024' }),
+      'MESSAGE_TOO_LARGE',
+    );
+    expect(err.message).toContain('claude 端点硬顶 64KiB——提额无效');
+    expect(claudeDeliveries.length).toBe(before); // rejected before delivery
+  });
+
+  it('oversized via-ssh bodies hit the local 1MiB pre-check, never the transport', async () => {
+    let sshCalls = 0;
+    const deps = {
+      ...makeDeps({}),
+      sshExec: async (): Promise<{ code: number; stdout: string; stderr: string; timedOut: boolean }> => {
+        sshCalls++;
+        return { code: 0, stdout: '', stderr: '', timedOut: false };
+      },
+    };
+    const err = await expectCode(
+      runSend({ to: 'worker2', via: 'ssh:peer', bodyArg: 'x'.repeat(1_100_000), maxBodyKb: '2048' }, deps),
+      'MESSAGE_TOO_LARGE',
+    );
+    expect(err.message).toContain('1MiB');
+    expect(err.message).toContain('远端自行复检');
+    expect(sshCalls).toBe(0);
+  });
+
+  it('envelope teaching line stays static 16KiB even when the cap was raised (第六单政策)', async () => {
+    await send(
+      { to: 'workteam', bodyArg: 'y'.repeat(40 * 1_024), maxBodyKb: '64' },
+      { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' },
+    );
+    // 信封读者是收方、数字是发方的——动态值教错人；准确数字只住各侧报错里。
+    expect(codexDeliveries.at(-1)!.content).toContain('超 16KiB 请写文件后只发路径');
+    expect(codexDeliveries.at(-1)!.content).not.toContain('超 64KiB');
+  });
+
+  it('remote-origin rejections teach scp + receiver-side operator, never --max-body-kb (第六单)', async () => {
+    const before = claudeDeliveries.length;
+    const err = await expectCode(
+      send({ to: 'alpha', bodyArg: 'x'.repeat(20_000), origin: 'ZmFrZUBvc3Q' }),
+      'MESSAGE_TOO_LARGE',
+    );
+    expect(err.message).toContain('scp');
+    expect(err.message).toContain('接收方');
+    expect(err.message).toContain('CROSSCHAT_MAX_BODY_KIB');
+    expect(err.message).not.toContain('--max-body-kb'); // 发送方本机提额管不到接收方，不得指这条路
+    expect(claudeDeliveries.length).toBe(before);
+  });
+
+  it('remote-origin endpoint-cap rejections keep the hard-cap fact and teach scp only (第八单)', async () => {
+    const before = claudeDeliveries.length;
+    // 远端来件过了发送方的 1MiB 提额，但 claude 端点 64KiB 硬顶挡下：硬顶
+    // 事实保留，尾巴换 scp 三步；接收方提额也过不了端点硬顶，绝不指那条路。
+    const err = await expectCode(
+      send({
+        to: 'alpha',
+        bodyArg: 'x'.repeat(100 * 1_024),
+        maxBodyKb: '1024',
+        origin: encodeOrigin({ p: 'human' }, 'hostA'),
+      }),
+      'MESSAGE_TOO_LARGE',
+    );
+    expect(err.message).toContain('claude 端点硬顶 64KiB');
+    expect(err.message).toContain('scp');
+    expect(err.message).not.toContain('--max-body-kb');
+    expect(err.message).not.toContain('CROSSCHAT_MAX_BODY_KIB'); // hardCap 场景：调了也过不了端点硬顶
+    expect(claudeDeliveries.length).toBe(before);
+  });
+
+  it('max-turn: --max-turn beats CROSSCHAT_MAX_TURN; unset keeps a bare turn number', async () => {
+    await send({ to: 'alpha', bodyArg: 'flag wins', maxTurn: '40' }, { CROSSCHAT_MAX_TURN: '60' });
+    expect(claudeDeliveries.at(-1)!.content).toContain('turn="1/40"');
+    await send({ to: 'alpha', bodyArg: 'env only' }, { CROSSCHAT_MAX_TURN: '60' });
+    expect(claudeDeliveries.at(-1)!.content).toContain('turn="1/60"');
+    await send({ to: 'alpha', bodyArg: 'no budget' });
+    expect(claudeDeliveries.at(-1)!.content).toContain('turn="1">');
+    expect(claudeDeliveries.at(-1)!.content).not.toContain('budget=');
   });
 });

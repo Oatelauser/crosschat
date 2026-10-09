@@ -2,6 +2,11 @@
  * Broker-owned message envelope (tickets 003/004): structural provenance
  * framing plus an inline reply tutorial, so the protocol teaches itself
  * without depending on prompt wording (low-invasion constraint).
+ *
+ * 票A 第六单政策：上限教学行永远静态"超 16KiB"——信封的读者是收方，数字
+ * 是发方的，动态值教错人（收方会误当自己的上限）；宁可少报不会错（提额
+ * 世界里大内容要么直接发成功、要么报错报出本机准确值）。准确数字只住各侧
+ * 自己的报错里，信封只教方向不教数字。
  */
 
 /** Claude trims very long from-names; keep ours within 64 codepoints. */
@@ -32,6 +37,8 @@ export interface EnvelopeInput {
    * single-machine form (no --to, D5: the ref already names both ends).
    */
   viaHost?: string;
+  /** 票A：轮次预算（--max-turn / CROSSCHAT_MAX_TURN），合并进 turn 属性显示为 turn="N/M"。缺省不出现 → 信封字节稳定。 */
+  turnBudget?: number;
 }
 
 function escapeAttr(value: string): string {
@@ -49,8 +56,11 @@ export function composeEnvelope(input: EnvelopeInput): string {
   const aliasAttr = shortened ? ` from-alias="${escapeAttr(input.fromName)}"` : '';
   const body = neutralizeReservedTags(input.body);
   const via = input.viaHost === undefined ? '' : ` --via ssh:${input.viaHost}`;
+  // 轮次预算合并进 turn 属性（turn="13/40"，斜杠后为预算轮数）——软提醒不
+  // 硬拦（41/40 照发照显），未设预算时 turn 保持纯数字（字节零回归锚点）。
+  const turnAttr = input.turnBudget === undefined ? `${input.turn}` : `${input.turn}/${input.turnBudget}`;
   return (
-    `<cross-session-message from-name="${escapeAttr(fromName)}" turn="${input.turn}"${aliasAttr}>\n` +
+    `<cross-session-message from-name="${escapeAttr(fromName)}" turn="${turnAttr}"${aliasAttr}>\n` +
     `<crosschat-reply-hint conversation="${input.ref}" reply-as="${escapeAttr(input.toName)}">` +
     `回复请运行: crosschat send${via} --conversation ${input.ref} --body "<你的回复>"</crosschat-reply-hint>\n` +
     `新话题或对话已推进时: crosschat send --to <名字> --body "..."（--to 自动接续该端对最近对话）；超 16KiB 请写文件后只发路径\n` +

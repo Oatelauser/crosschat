@@ -125,9 +125,12 @@ echo … | crosschat send --to <名字>                 # 正文走 stdin
 crosschat status [--json] [--conversations]        # 双侧总览（名字/目录/时间/状态）
 crosschat doctor                                    # 一键环境体检（有 ❌ 时退出码 1）
 crosschat install-skills [--dir <根>]               # 安装/更新 agent skill（幂等）
-crosschat claude [任意 claude 参数…]                 # 带接收许可启动 claude（透传）
+crosschat claude [任意 claude 参数…]                 # 带接收许可启动 claude（透传；--max-body-kb/--max-turn N 可预置本会话发送上限/轮次预算，并剥离 codex 侧身份变量）
+crosschat codex [任意 codex 参数…]                  # crosschat 增强启动 codex（透传；同上旋钮预置，并剥离 claude 侧身份变量）
 crosschat -v | --version | help                     # 版本 / 帮助
 ```
+
+完整参数、启动器与环境变量说明见 [docs/commands.md](docs/commands.md)。
 
 发送输出三种状态：`delivered`（已投递）/ `parked`（对方忙，已入发件箱，看门狗自动重投；输出含队列深度与 mailbox 镜像路径）/ 错误码（见排障）。
 
@@ -140,7 +143,7 @@ crosschat -v | --version | help                     # 版本 / 帮助
 | 错误码 | 含义与动作 |
 |---|---|
 | `NAME_NOT_FOUND` / `NAME_COLLISION` | 名字不对/重名——错误信息已列可用名；重名改用 id8 寻址 |
-| `MESSAGE_TOO_LARGE` | 单条 >16KiB——按提示走落盘路径（跨机 scp 见 ssh 手册） |
+| `MESSAGE_TOO_LARGE` | 单条超上限（默认 16KiB；`--max-body-kb` / `CROSSCHAT_MAX_BODY_KIB` 可提额，claude 端点封顶 64KiB、codex 1MiB，到顶只能落盘）——按提示走落盘路径（跨机 scp 见 ssh 手册） |
 | `RATE_LIMITED` | 30 条/60s 限流——等待或收尾 |
 | `TARGET_*` / `BODY_*` / `USAGE` | 参数错误——按提示改 |
 | `CALLER_IDENTITY_CONFLICT` | 环境双身份残留——临时解法在报错里（`env -u` 前缀）；根治：干净终端重启 daemon |

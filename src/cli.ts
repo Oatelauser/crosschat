@@ -10,6 +10,7 @@ import { runStatus, type StatusDeps } from './commands/status.js';
 import { runInstallSkills, type InstallSkillsArgs } from './commands/install-skills.js';
 import { runDoctor } from './commands/doctor.js';
 import { runClaudeWrapper } from './commands/claude-wrapper.js';
+import { runCodexWrapper } from './commands/codex-wrapper.js';
 import { defaultRateDir } from './rate-limit.js';
 import { defaultOutboxDir, drain } from './outbox.js';
 import { runWatchdog, spawnWatchdog as ensureWatchdog } from './watchdog.js';
@@ -37,7 +38,11 @@ commands:
                             send a message (--body <text> or stdin);
                             quote <name> if it contains spaces;
                             --via sends to a peer machine (host = ~/.ssh/config
-                            alias, peer resolves names on its side)
+                            alias, peer resolves names on its side);
+                            --max-body-kb <KiB> raises the body cap for this
+                            send (default 16; env CROSSCHAT_MAX_BODY_KIB);
+                            --max-turn <N> stamps a soft turn budget into
+                            the envelope (env CROSSCHAT_MAX_TURN)
   status [--conversations]   show claude/codex session status, or per-pair
                             conversation overview with --conversations
   doctor                    environment health check (exits 1 on any ❌)
@@ -45,7 +50,12 @@ commands:
                             install the agent skill into <root>/.claude and
                             <root>/.codex (default root: home directory)
   claude [args...]          run the real claude CLI with inbound peer
-                            messaging enabled; other args pass through
+                            messaging enabled; --max-body-kb/--max-turn <N>
+                            preset the session's send caps via env;
+                            other args pass through
+  codex [args...]           run the real codex CLI with the same crosschat
+                            knobs via env (no codex settings injected);
+                            other args pass through
 
 options:
   --json                    single-line JSON output (send/status)
@@ -53,10 +63,10 @@ options:
   --help | help             show this help and exit
 `;
 
-/** Hand-rolled send arg parsing (no dependency): --to/--conversation/--body/--via/--origin take values, --json is a flag. --origin is machine-injected (008) and stays out of usage. */
+/** Hand-rolled send arg parsing (no dependency): --to/--conversation/--body/--via/--origin/--max-body-kb/--max-turn take values, --json is a flag. --origin is machine-injected (008) and stays out of usage. Raw values only — numeric validation lives in limits.ts (invalid silently degrades, ticket A). */
 export function parseSendArgs(argv: readonly string[]): SendArgs {
   const args: SendArgs = {};
-  const valueOpts = new Set(['--to', '--conversation', '--body', '--via', '--origin']);
+  const valueOpts = new Set(['--to', '--conversation', '--body', '--via', '--origin', '--max-body-kb', '--max-turn']);
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === undefined || !token.startsWith('--')) {
@@ -77,6 +87,8 @@ export function parseSendArgs(argv: readonly string[]): SendArgs {
     else if (name === '--conversation') args.conversation = value;
     else if (name === '--via') args.via = value;
     else if (name === '--origin') args.origin = value;
+    else if (name === '--max-body-kb') args.maxBodyKb = value;
+    else if (name === '--max-turn') args.maxTurn = value;
     else args.bodyArg = value;
   }
   return args;
@@ -307,6 +319,14 @@ async function main(argv: string[]): Promise<number> {
     // Everything passes through to the real claude CLI (including --help).
     try {
       return await runClaudeWrapper(rest);
+    } catch (err) {
+      return printFailure(err);
+    }
+  }
+  if (command === 'codex') {
+    // Everything passes through to the real codex CLI (including --help).
+    try {
+      return await runCodexWrapper(rest);
     } catch (err) {
       return printFailure(err);
     }

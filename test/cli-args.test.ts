@@ -54,6 +54,21 @@ describe('parseSendArgs', () => {
     expectUsage(() => parseSendArgs(['--json=true']), 'takes no value');
     expectUsage(() => parseSendArgs(['--conversation']), 'requires a value');
   });
+
+  it('parses --max-body-kb / --max-turn as raw strings (space and = forms)', () => {
+    // 数值校验在 limits.ts（非法静默降级），解析层只留原文。
+    expect(parseSendArgs(['--to', 'a', '--max-body-kb', '32', '--max-turn', '40'])).toEqual({
+      to: 'a',
+      maxBodyKb: '32',
+      maxTurn: '40',
+    });
+    expect(parseSendArgs(['--max-body-kb=64', '--max-turn=60'])).toEqual({
+      maxBodyKb: '64',
+      maxTurn: '60',
+    });
+    expectUsage(() => parseSendArgs(['--max-body-kb']), 'requires a value');
+    expectUsage(() => parseSendArgs(['--max-turn']), 'requires a value');
+  });
 });
 
 describe('parseStatusArgs', () => {

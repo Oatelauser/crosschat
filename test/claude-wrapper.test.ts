@@ -52,6 +52,83 @@ describe('runClaudeWrapper', () => {
   });
 });
 
+describe('runClaudeWrapper knob passthrough (票A)', () => {
+  const knobSpawns: { exe: string; args: readonly string[]; env: NodeJS.ProcessEnv | undefined }[] = [];
+  const knobDeps = (env: NodeJS.ProcessEnv = {}) => ({
+    resolveExe: () => 'C:/fake/claude.exe',
+    env,
+    spawnInherit: async (
+      exe: string,
+      args: readonly string[],
+      env?: NodeJS.ProcessEnv,
+    ): Promise<number> => {
+      knobSpawns.push({ exe, args, env });
+      return 0;
+    },
+  });
+
+  it('strips both knobs, injects them as child env, forwards the rest verbatim', async () => {
+    await runClaudeWrapper(['--max-body-kb', '64', '--max-turn', '40', '--version'], knobDeps());
+    const spawn = knobSpawns.at(-1)!;
+    expect(spawn.args).toEqual(['--settings', '{"crossSessionInbound":"accept"}', '--version']);
+    expect(spawn.env?.CROSSCHAT_MAX_BODY_KIB).toBe('64');
+    expect(spawn.env?.CROSSCHAT_MAX_TURN).toBe('40');
+  });
+
+  it('accepts --opt=N forms and takes the last occurrence (same as parseSendArgs)', async () => {
+    await runClaudeWrapper(['--max-body-kb=32', '--max-body-kb', '64', '-p', 'hi'], knobDeps());
+    const spawn = knobSpawns.at(-1)!;
+    expect(spawn.args).toEqual(['--settings', '{"crossSessionInbound":"accept"}', '-p', 'hi']);
+    expect(spawn.env?.CROSSCHAT_MAX_BODY_KIB).toBe('64');
+  });
+
+  it('no knobs and no foreign identity vars → env stays undefined, argv byte-identical to the legacy spawn', async () => {
+    await runClaudeWrapper(['--version'], knobDeps());
+    const spawn = knobSpawns.at(-1)!;
+    expect(spawn.args).toEqual(['--settings', '{"crossSessionInbound":"accept"}', '--version']);
+    expect(spawn.env).toBeUndefined();
+  });
+
+  it('fails fast on non-positive-integer values with legal-form guidance, without spawning', async () => {
+    const before = knobSpawns.length;
+    const err = await expectCode(runClaudeWrapper(['--max-body-kb', 'wat'], knobDeps()), 'USAGE');
+    expect(err.message).toContain('--max-body-kb 64');
+    await expectCode(runClaudeWrapper(['--max-turn', '0'], knobDeps()), 'USAGE');
+    await expectCode(runClaudeWrapper(['--max-turn', '-3'], knobDeps()), 'USAGE');
+    await expectCode(runClaudeWrapper(['--max-body-kb'], knobDeps()), 'USAGE');
+    expect(knobSpawns.length).toBe(before);
+  });
+
+  it('--settings conflict detection is unaffected by the knobs', async () => {
+    const before = knobSpawns.length;
+    await expectCode(
+      runClaudeWrapper(['--max-body-kb', '64', '--settings', '{"x":1}'], knobDeps()),
+      'SETTINGS_CONFLICT',
+    );
+    await expectCode(
+      runClaudeWrapper(['--settings={"x":1}', '--max-turn', '40'], knobDeps()),
+      'SETTINGS_CONFLICT',
+    );
+    expect(knobSpawns.length).toBe(before);
+  });
+
+  it('identity cleaning: strips codex identity vars from the child env (票A 第五单)', async () => {
+    // 从 codex 会话里启动 claude 的场景：父环境带着 codex 身份变量。
+    await runClaudeWrapper(
+      ['--version'],
+      knobDeps({ CODEX_THREAD_ID: 't1', CODEX_SESSION_ID: 's1', CODEX_HOME: 'C:/codex-home', PATH: 'x' }),
+    );
+    const env = knobSpawns.at(-1)!.env!;
+    expect(env.CODEX_THREAD_ID).toBeUndefined();
+    expect(env.CODEX_SESSION_ID).toBeUndefined();
+    expect(env.CODEX_HOME).toBe('C:/codex-home'); // 配置变量绝不动
+    expect(env.PATH).toBe('x');
+    // 无旋钮但有对族身份变量时，env 仍然是清洗副本（非 undefined）。
+    await runClaudeWrapper(['--version'], knobDeps({}));
+    expect(knobSpawns.at(-1)!.env).toBeUndefined();
+  });
+});
+
 describe('resolveClaudeExe', () => {
   const npmExe = (appdata: string) =>
     join(

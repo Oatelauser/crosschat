@@ -15,6 +15,48 @@ export type CallerIdentity =
   | { p: 'codex'; id: string }
   | { p: 'human' };
 
+/**
+ * 身份环境变量家族注册表（票A 第五单引入、第七单重组为注册表）：清单以
+ * resolveCallerIdentity 双身份检测实际读取的变量为准——CLAUDE_CODE_TOKEN/
+ * SESSION_ID 与 SOCKET 同族（同 CALLER_IDENTITY_CONFLICT 报错的自纠 env -u
+ * 清单）。启动器据此剥"另一家族"，把报错里的人工自纠机构化做掉；配置变量
+ * （CODEX_HOME 等）绝不在此列。
+ *
+ * 扩展路径：将来不止 claude/codex 两家（如 opencode）——注册表加一行 + 写
+ * 其启动器，其余启动器零改动自动剥它。resolveCallerIdentity 的第三家族
+ * 识别分支不在本票：那是未来新适配器票的事（先走原生通道可行性调研，同
+ * codex/claude 先例）。
+ */
+export type IdentityFamily = 'claude' | 'codex';
+
+export const IDENTITY_ENV_FAMILIES: Record<IdentityFamily, readonly string[]> = {
+  claude: [
+    'CLAUDE_CODE_MESSAGING_SOCKET',
+    'CLAUDE_CODE_MESSAGING_TOKEN',
+    'CLAUDE_CODE_SESSION_ID',
+  ],
+  codex: ['CODEX_THREAD_ID', 'CODEX_SESSION_ID'],
+};
+
+/** 复制 env 并删除给定键（不改动原对象）。 */
+export function stripEnvKeys(env: NodeJS.ProcessEnv, keys: readonly string[]): NodeJS.ProcessEnv {
+  const clean: NodeJS.ProcessEnv = { ...env };
+  for (const key of keys) delete clean[key];
+  return clean;
+}
+
+/** 除自家外所有家族的身份键合集（启动器检测"对族在场"与剥离共用）。 */
+export function otherIdentityKeys(own: IdentityFamily): readonly string[] {
+  return (Object.keys(IDENTITY_ENV_FAMILIES) as IdentityFamily[])
+    .filter((family) => family !== own)
+    .flatMap((family) => IDENTITY_ENV_FAMILIES[family]);
+}
+
+/** 启动器身份清洗：复制 env 并删除"除自家外所有家族"的身份键（不改动原对象）。 */
+export function stripOtherFamilies(env: NodeJS.ProcessEnv, own: IdentityFamily): NodeJS.ProcessEnv {
+  return stripEnvKeys(env, otherIdentityKeys(own));
+}
+
 /** Canonical key used for rate-limit buckets ("claude:<id>" / "codex:<id>" / "human"). */
 export function identityKey(identity: { p: string; id?: string }): string {
   return identity.p === 'human' || identity.id === undefined ? identity.p : `${identity.p}:${identity.id}`;

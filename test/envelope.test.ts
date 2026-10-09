@@ -91,3 +91,28 @@ describe('composeEnvelope viaHost (008 B2)', () => {
     expect(plain).not.toContain('--via');
   });
 });
+
+describe('composeEnvelope limit teaching + turn budget (票A)', () => {
+  it('keeps the teaching line static at 16KiB even in a raised-cap world (第六单政策)', () => {
+    // 信封读者是收方、数字是发方的——动态值教错人；准确数字只住各侧报错里。
+    const out = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc1_R', body: 'x' });
+    expect(out).toContain('超 16KiB 请写文件后只发路径');
+  });
+
+  it('never leaks --max-body-kb or CROSSCHAT_ into the envelope', () => {
+    const out = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc1_R', body: 'x' });
+    expect(out).not.toContain('--max-body-kb');
+    expect(out).not.toContain('CROSSCHAT_');
+  });
+
+  it('merges the budget into turn (13/40) when set; bare number when not', () => {
+    const withBudget = composeEnvelope({ fromName: 'a', toName: 'b', turn: 13, ref: 'mc1_R', body: 'x', turnBudget: 40 });
+    expect(withBudget).toContain('from-name="a" turn="13/40">');
+    expect(withBudget).not.toContain('budget='); // 独立属性形态已废弃（修订三）
+    const without = composeEnvelope({ fromName: 'a', toName: 'b', turn: 13, ref: 'mc1_R', body: 'x' });
+    expect(without).toContain('from-name="a" turn="13">');
+    expect(without).not.toContain('budget');
+    const over = composeEnvelope({ fromName: 'a', toName: 'b', turn: 41, ref: 'mc1_R', body: 'x', turnBudget: 40 });
+    expect(over).toContain('turn="41/40">'); // 软提醒不硬拦：超预算照发照显
+  });
+});

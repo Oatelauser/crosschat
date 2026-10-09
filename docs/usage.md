@@ -41,7 +41,7 @@
 
 ## ⚠️ 边界与限制
 
-单条 ≤16KiB；每对端点 30 条/60s；发件箱每线程 200 条（满时读状态目录 `mailbox\<线程ID>.md` 镜像取回内容：Windows `%LOCALAPPDATA%\crosschat\mailbox\`、unix `~/crosschat/mailbox/`）；信任边界=同一系统用户（Windows 用户 / unix uid）；接收许可仅 `crosschat claude` 启动的会话。
+单条 ≤16KiB（`--max-body-kb` / `CROSSCHAT_MAX_BODY_KIB` 可提额；端点封顶 claude 64KiB、codex 1MiB，到顶只能落盘）；轮次预算可设（`--max-turn` / `CROSSCHAT_MAX_TURN`，信封显示 turn="N/M"，软提醒不硬拦）；每对端点 30 条/60s；发件箱每线程 200 条（满时读状态目录 `mailbox\<线程ID>.md` 镜像取回内容：Windows `%LOCALAPPDATA%\crosschat\mailbox\`、unix `~/crosschat/mailbox/`）；信任边界=同一系统用户（Windows 用户 / unix uid）；接收许可仅 `crosschat claude` 启动的会话。
 
 **daemon 依赖（重要）**：向 codex 会话投递走 `codex app-server proxy`，它连接**运行中的 app-server daemon** control socket。要获得完整能力（TUI 开窗可投、忙时入队），需要 `codex app-server daemon start` 且 daemon ≥0.160，TUI 用同版本 CLI 打开（0.160 起 TUI 自动附着 daemon）。daemon 未运行时投递会报 `CODEX_PROXY_SPAWN_FAILED` 并提示启动命令；旧版本 daemon 下开窗投递与忙时入队退化为「关窗投递 + 发件箱」。重启电脑后需重新 `codex app-server daemon start`。
 
