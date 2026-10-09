@@ -90,7 +90,7 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 
 ### 跨机：和单机一样，只是对端在另一台机器上
 
-准备（一次性）：对端（本例 WSL）装好 crosschat、双机互配 ssh 密钥（→ [📡 通信方式](#-通信方式) 表的 ssh 手册，五步配完）。然后整个过程：
+准备（一次性）：对端（本例 WSL）装好 crosschat、双机互配 ssh 密钥（→ [📡 通信方式](#-通信方式) 表的联邦手册，五步配完）。然后整个过程：
 
 ```
 👤 用户[boss -> beta2]    使用 crosschat 发送消息给 beta2 问好，消息要求经过 ssh 管道送到（send 时加 --via ssh:yangwsl）。需要对方回复并停止。
@@ -108,14 +108,16 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 
 | 方式 | 一句话 | 状态 | 深入 |
 |---|---|---|---|
-| **单机会话** | 同机 agent 互发，`--to <名字>` 即起对话，忙时自动入队/发件箱 | ✅ v1.0 | [docs/usage.md](docs/usage.md)：发起方式 / 投递语义 / 底层命令 / 边界 |
-| **跨机联邦 · ssh** | 加 `--via ssh:<对端hostname>`，消息经 ssh 落到对端机器，回复自动回来 | ✅ v1.3.3 | [docs/federation.md](docs/federation.md)：按操作系统配置（Win/Linux/macOS）/ 单向 NAT / 命令形态 / 大内容 / 自环测试 |
+| **单机会话** | 同机 agent 互发，`--to <名字>` 即起对话，忙时自动入队/发件箱 | ✅ v1.0 | [使用手册](docs/usage.md)：发起方式 / 投递语义 / 底层命令 / 边界 |
+| **跨机联邦 · ssh** | 加 `--via ssh:<对端hostname>`，消息经 ssh 落到对端机器，回复自动回来 | ✅ v1.3.3 | [联邦手册](docs/federation.md)：按操作系统配置（Win/Linux/macOS）/ 单向 NAT / 命令形态 / 大内容 / 自环测试 |
 | 跨机联邦 · tcp | 局域网直连 + 极简预共享鉴权 | 🚧 规划中 | — |
 | 跨机联邦 · broker | 常驻 broker：忙时持久队列、异步回执、投递状态机、堡垒机形态 | 🚧 规划中 | — |
 
 ssh 配置方向一句话：**每台机写自己的 `~/.ssh/config`，内容是"怎么连对端"**（别名推荐=对端 hostname）——完整五步与命令样例见上表手册。
 
 ## 📋 命令列表
+
+完整参数、启动器与环境变量说明见 [命令手册](docs/commands.md)。
 
 ```
 crosschat send --to <名字> --body "<正文>"          # 新消息（名字含空格加引号；未命名 codex 线程可用 id8 或完整 id 寻址，status 可见）
@@ -130,8 +132,6 @@ crosschat codex [任意 codex 参数…]                  # crosschat 增强启�
 crosschat -v | --version | help                     # 版本 / 帮助
 ```
 
-完整参数、启动器与环境变量说明见 [docs/commands.md](docs/commands.md)。
-
 发送输出三种状态：`delivered`（已投递）/ `parked`（对方忙，已入发件箱，看门狗自动重投；输出含队列深度与 mailbox 镜像路径）/ 错误码（见排障）。
 
 `status --conversations` 另看对话总览：每对端点的最近方向、相对时间、轮次、末条状态与滞留数（与 `--json` 组合输出同结构数组）。
@@ -143,7 +143,7 @@ crosschat -v | --version | help                     # 版本 / 帮助
 | 错误码 | 含义与动作 |
 |---|---|
 | `NAME_NOT_FOUND` / `NAME_COLLISION` | 名字不对/重名——错误信息已列可用名；重名改用 id8 寻址 |
-| `MESSAGE_TOO_LARGE` | 单条超上限（默认 16KiB；`--max-body-kb` / `CROSSCHAT_MAX_BODY_KIB` 可提额，claude 端点封顶 64KiB、codex 1MiB，到顶只能落盘）——按提示走落盘路径（跨机 scp 见 ssh 手册） |
+| `MESSAGE_TOO_LARGE` | 单条超上限（默认 16KiB；`--max-body-kb` / `CROSSCHAT_MAX_BODY_KIB` 可提额，claude 端点封顶 64KiB、codex 1MiB，到顶只能落盘）——按提示走落盘路径（跨机 scp 见联邦手册） |
 | `RATE_LIMITED` | 30 条/60s 限流——等待或收尾 |
 | `TARGET_*` / `BODY_*` / `USAGE` | 参数错误——按提示改 |
 | `CALLER_IDENTITY_CONFLICT` | 环境双身份残留——临时解法在报错里（`env -u` 前缀）；根治：干净终端重启 daemon |
@@ -157,7 +157,7 @@ crosschat -v | --version | help                     # 版本 / 帮助
 
 **发送审计**：每次发送的最终结果（delivered/queued/parked/failed、时间、对端、发送方显示名 fromName、回执）追加记录在状态目录的 `send-log.jsonl`（Windows `%LOCALAPPDATA%\crosschat\`；unix `~/crosschat/`）；codex 投递附 rollout 回执（消息已确认落入对方会话历史 = `receipt: confirmed`）。命令超时转后台后结果同样在案，事后可查。
 
-边界与限制（16KiB / 限流 / 发件箱 / 信任边界 / daemon 依赖）→ [docs/usage.md](docs/usage.md)
+边界与限制（16KiB / 限流 / 发件箱 / 信任边界 / daemon 依赖）→ [使用手册](docs/usage.md)
 
 ## ❓ FAQ
 
@@ -192,13 +192,14 @@ crosschat -v | --version | help                     # 版本 / 帮助
 
 | 文档 | 内容 |
 |---|---|
-| [docs/architecture.md](docs/architecture.md) | **底层原理**：注册表/命名管道/daemon 通道、写者锁本质、信封与自包含引用、完整投递流程图 |
-| [docs/usage.md](docs/usage.md) | **单机深度细则**：发起方式 / 往复规则 / 投递语义矩阵 / 边界与限制 |
-| [docs/federation.md](docs/federation.md) | **跨机联邦手册**：按操作系统配置 / 单向 NAT / 使用细则 / 大内容 scp / 自环测试 |
+| [架构手册](docs/architecture.md) | **底层原理**：注册表/命名管道/daemon 通道、写者锁本质、信封与自包含引用、完整投递流程图 |
+| [使用手册](docs/usage.md) | **单机深度细则**：发起方式 / 往复规则 / 投递语义矩阵 / 边界与限制 |
+| [命令手册](docs/commands.md) | **全量命令**：完整参数 / 启动器 / 环境变量 |
+| [联邦手册](docs/federation.md) | **跨机 ssh 联邦**：按操作系统配置 / 单向 NAT / 使用细则 / 大内容 scp / 自环测试 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 |
-| [docs/wayfinder/map.md](docs/wayfinder/map.md) | 设计决策地图（全部拍板过程与依据） |
-| [docs/research/](docs/research/) | 实测研究报告（embassy 源码分析、两侧通道验证、0.160 inject_items 实验） |
-| [docs/drill-reports/](docs/drill-reports/) | 联调实证记录 |
+| [设计决策地图](docs/wayfinder/map.md) | 全部拍板过程与依据 |
+| [实测研究报告](docs/research/) | embassy 源码分析、两侧通道验证、0.160 inject_items 实验 |
+| [联调实证记录](docs/drill-reports/) | 历次联调与验收实测报告（联邦连通性 / 现场反馈 / 手册冷走） |
 
 ## 🤝 Agent 兼容性
 
@@ -231,7 +232,7 @@ crosschat -v | --version | help                     # 版本 / 帮助
 
 **v1.3.2**
 - [x] 👀 status 标注 TUI 占用线程（`thread-writer-locks` 锁文件信号源：行尾 `TUI占用` 标记、JSON `held` 字段、锁住未列入线程补行）
-- 专用信箱线程机制化 → **评估后不做**：命名由双侧原生 `/rename` 与 id8 寻址承接，crosschat 不拥有会话生命周期（决策记录见 [map 007](docs/wayfinder/map.md)）；headless 建线程用 `codex exec`（见对话生命周期表）
+- 专用信箱线程机制化 → **评估后不做**：命名由双侧原生 `/rename` 与 id8 寻址承接，crosschat 不拥有会话生命周期（决策记录见 [决策地图 007](docs/wayfinder/map.md)）；headless 建线程用 `codex exec`（见对话生命周期表）
 
 **v1.3.3**
 - [x] 🌐 跨机联邦 ssh v1：`--via ssh:<对端hostname>`、mc2_ 紧凑会话引用（296→83 字符）、信封自动回程路条、三层错误码同码透传、发起侧审计补记账；localhost 与 win↔WSL 真机验证（win 收件腿 codex 侧受 AF_UNIX 限制，见联邦手册）；tcp/broker 传输见路线图
