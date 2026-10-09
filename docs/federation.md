@@ -89,7 +89,8 @@ Host <对端hostname> peer
 ```
 > ssh -o StrictHostKeyChecking=accept-new -p <对端端口> <对端用户>@<对端地址> exit
 Warning: Permanently added '<对端地址>' (ED25519) to the list of known hosts.
-<对端用户>@<对端地址>'s password:   ← 输一次密码，进去即退
+# W4 已做完 → 密钥直接认证，无提示直接退出 = 正常
+# 若 W4 还没做 → 提示输一次对端密码，输完即退，也算通过
 # 别用 ssh-keyscan 播种：它有算法协商缺陷（choose_kex: unsupported KEX method sntrup761...），
 # 输出永远只有 # 开头的横幅行，抓不到指纹
 ```
@@ -168,7 +169,8 @@ Host <对端hostname> peer
 EOF
 > ssh -o StrictHostKeyChecking=accept-new peer exit
 Warning: Permanently added '<对端地址>' (ED25519) to the list of known hosts.
-<对端用户>@<对端地址>'s password:   ← 输一次密码，进去即退
+# 前面公钥交换步已做完 → 密钥直接认证，无提示直接退出 = 正常
+# 若还没做 → 提示输一次对端密码，输完即退，也算通过
 # 别用 ssh-keyscan 播种：对部分服务端抓不到指纹（详见失败对照表）
 ```
 
@@ -182,7 +184,7 @@ Warning: Permanently added '<对端地址>' (ED25519) to the list of known hosts
 # 不跑的后果：对端自证报 REMOTE_FAILED [via ...] 远端异常退出(127): command not found
 ```
 
-**L7 · 出腿自证（⚠️ 前置：对端公钥交换已完成——Win→W4 / MacOS→M3；反方向在对端 W8/M6——两边都出版本号 = 部署完成）**
+**L7 · 出腿自证（双向场景；单向 NAT 场景跳过本步，回程自证由[单向 SSH 章](#单向-sshnat你能连它它连不回你)N3 接管。⚠️ 前置：对端公钥交换已完成——Win→W4 / MacOS→M3；反方向在对端 W8/M6——两边都出版本号 = 部署完成）**
 ```
 > ssh -o BatchMode=yes peer crosschat --version
 1.3.3
@@ -237,7 +239,8 @@ Host <对端hostname> peer
 EOF
 > ssh -o StrictHostKeyChecking=accept-new peer exit
 Warning: Permanently added '[<对端地址>]:<对端端口>' (ED25519) to the list of known hosts.
-<对端用户>@<对端地址>'s password:   ← 输一次密码，进去即退
+# 前面公钥交换步已做完 → 密钥直接认证，无提示直接退出 = 正常
+# 若还没做 → 提示输一次对端密码，输完即退，也算通过
 # 别用 ssh-keyscan 播种：对部分服务端抓不到指纹（详见失败对照表）
 ```
 
@@ -255,7 +258,7 @@ Warning: Permanently added '[<对端地址>]:<对端端口>' (ED25519) to the li
 
 ### 单向 SSH（NAT：你能连它、它连不回你）
 
-适用：本机（win/mac）在 NAT 后能出站 ssh 到云端 Linux，云端连不回本机。回程由本机常驻**反向隧道**背过去，crosschat 零改动（2026-10-08 win↔云端真机闭环实测：`../drill-reports/federation-nat-tunnel-20261008.md`）。前提：本机章 + Linux 章已全部做完，本章只改两处。
+适用：本机（win/mac）在 NAT 后能出站 ssh 到云端 Linux，云端连不回本机。回程由本机常驻**反向隧道**背过去，crosschat 零改动（2026-10-08 win↔云端真机闭环实测：`../drill-reports/federation-nat-tunnel-20261008.md`）。前提：本机章 + Linux 章已做完（单向场景 L5/L7 按注跳过，即本章接管的两处）。
 
 **N1 · 出站侧开反向隧道（win 用 Xshell / mac 用 Terminal；隧道随这个会话活，别关）**
 ```
