@@ -3,6 +3,31 @@
 本项目的全部显著变更记录于此。格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
 ## [Unreleased]
+
+## [1.4.0] - 2026-10-09
+
+### 上限可配置化与轮次预算（票A）
+
+- 单条正文上限三层来源：`--max-body-kb` > `CROSSCHAT_MAX_BODY_KIB` > 16KiB 默认（默认行为零变化）；按目标端点封顶——claude 64KiB / codex 1MiB / `--via` 本地预检 1MiB（远端自检）、来源值 16MiB 绝对上界
+- 轮次预算：`--max-turn` / `CROSSCHAT_MAX_TURN`，信封显示 `turn="N/M"`（合并进既有 turn 属性，零新增 token 负担）——软提醒不硬拦，调大下一条消息即生效；预算由操作者按两端模型窗口设定、两端建议对齐
+- **新命令 `crosschat codex`**：与 `crosschat claude` 成对的增强启动器——旋钮透传（校验后写会话环境变量，本会话全部 send 继承；send 显式参数仍最高优先）+ **身份清洗**（启动时剥"别家"身份环境变量、留自家——CALLER_IDENTITY_CONFLICT 的机构化预防；家族注册表结构，新 agent 家族加一行即扩展；`CODEX_HOME` 等配置变量不动）
+- 信封教学行保持静态 16KiB（读者是收方、数字是发方的，准确数字只住各侧自己的报错里）；远端来件被拒改教 scp 优先（撞端点硬顶时 scp 是唯一出路，不教提额死路）
+- 新增 docs/commands.md 命令全量说明（send 全参数/优先级链/端点封顶表/启动器对/环境变量总表），README 速查挂钩
+- 升级提醒：已装用户重跑 `crosschat install-skills`（旧 skill 不认识 `turn="N/M"`）
+
+### 联邦操作手册定版（docs/federation.md）
+
+- 手册按操作系统重构：Win/Linux/MacOS 三配置章 + 单向 SSH（NAT 反向隧道）独立章；全文 transcript 单代码块格式（`>` 标命令 / `#` 备注 / `<XX>` 占位符）
+- NAT 反向隧道扩为完整实施手册（N1–N7 步骤/验证阶梯/失败对照表），win↔云端真机闭环实录（User 行必写/隧道即会话生命）
+- 公钥交换改三小步结构（打印→对端装入→收对端公钥）；跨系统依赖显式化（⚠️前置/⚠️必做 全篇引用）；keyscan 全部换 `accept-new` 首连记指纹（实测部分服务端 keyscan 算法协商缺陷）
+- 白纸冷走验收一次通过定版（drill 报告在案）；配套 `scripts/fed-ssh-clean.sh` Linux 侧联邦 ssh 信息幂等清理
+- B11 跨机回复乒乓回归单测补录
+
+### 文档
+
+- README 多轮重构：主页（亮点/部署在前/双问答实录，细则外迁 docs/usage.md 与 federation.md）、快速入门单框流程记法（👤/🤖/📨 三图例）、错误码表瘦身
+- docs/usage.md 边界行同步提额与预算；docs/wayfinder/map.md 状态同步
+
 ## [1.3.3] - 2026-10-07
 
 ### 跨机联邦 v1（ssh + 远端 CLI，全矩阵实测）
