@@ -34,28 +34,45 @@ const version: string = (
 const usage = `usage: crosschat <command> [options]
 
 commands:
-  send [--via ssh:<host>] --to <name> | --conversation <ref>
-                            send a message (--body <text> or stdin);
-                            quote <name> if it contains spaces;
-                            --via sends to a peer machine (host = ~/.ssh/config
-                            alias, peer resolves names on its side);
-                            --max-body-kb <KiB> raises the body cap for this
-                            send (default 16; env CROSSCHAT_MAX_BODY_KIB);
-                            --max-turn <N> stamps a soft turn budget into
-                            the envelope (env CROSSCHAT_MAX_TURN)
-  status [--conversations]   show claude/codex session status, or per-pair
+  send --to <name> | --conversation <ref>
+                            send a message to a claude/codex session
+                            (quote <name> if it contains spaces);
+                            options:
+                              --body <text>        message text
+                                (default: read stdin)
+                              --via ssh:<host>     send to a peer machine
+                                (host = ~/.ssh/config alias, peer
+                                resolves names on its side)
+                              --max-body-kb <KiB>  raise the body cap for
+                                this send (default 16;
+                                env CROSSCHAT_MAX_BODY_KIB)
+                              --max-turn <N>       stamp a soft turn budget
+                                into the envelope
+                                (env CROSSCHAT_MAX_TURN)
+  status [--conversations]  show claude/codex session status, or per-pair
                             conversation overview with --conversations
   doctor                    environment health check (exits 1 on any ❌)
   install-skills [--dir <root>]
                             install the agent skill into <root>/.claude and
                             <root>/.codex (default root: home directory)
-  claude [args...]          run the real claude CLI with inbound peer
-                            messaging enabled; --max-body-kb/--max-turn <N>
-                            preset the session's send caps via env;
-                            other args pass through
-  codex [args...]           run the real codex CLI with the same crosschat
-                            knobs via env (no codex settings injected);
-                            other args pass through
+  claude [any native args]  start the real claude CLI with inbound peer
+                            messaging enabled; any native claude args
+                            (e.g. -c, --model <m>, --help) pass through
+                            unchanged, plus two crosschat-only knobs:
+                              --max-body-kb <KiB>  body cap for sends
+                                from this session
+                                (env CROSSCHAT_MAX_BODY_KIB)
+                              --max-turn <N>       turn budget stamped
+                                into envelopes
+                                (env CROSSCHAT_MAX_TURN)
+  codex [any native args]   start the real codex CLI (no codex settings
+                            injected); any native codex args (e.g.
+                            resume, --profile, --help) pass through
+                            unchanged, plus the same two knobs:
+                              --max-body-kb <KiB>  body cap for sends
+                                from this session
+                              --max-turn <N>       turn budget stamped
+                                into envelopes
 
 options:
   --json                    single-line JSON output (send/status)
