@@ -24,6 +24,8 @@ import { listClaudeSessions } from './claude/registry.js';
 import { deliverToClaudeSession } from './claude/deliver.js';
 import { listCodexThreads } from './codex/discovery.js';
 import { deliverToCodexThread } from './codex/deliver.js';
+import { runServe, realServeDeps, type ServeArgs } from './commands/serve.js';
+import { DEFAULT_PORT } from './serve/broker.js';
 
 const version: string = (
   JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
@@ -52,6 +54,18 @@ commands:
   status [--conversations]  show claude/codex session status, or per-pair
                             conversation overview with --conversations
   doctor                    environment health check (exits 1 on any ❌)
+  serve [options]           run/manage the tcp broker (star topology,
+                            default port ${DEFAULT_PORT}; the first --port
+                            given is remembered and reused on bare runs)
+                              --port <N>           listen port 1-65535
+                              --gen-key [N]        print N node keys (default 1)
+                                and register them
+                              --list               list registered nodes
+                              --remove <label>     remove a node key
+                              --detach             run the broker in the
+                                background (log: ~/.crosschat/tcp/broker.log)
+                              --stop [broker|node] stop a running broker/node
+                                (default: both)
   install-skills [--dir <root>]
                             install the agent skill into <root>/.claude and
                             <root>/.codex (default root: home directory)
@@ -140,6 +154,56 @@ export function parseInstallSkillsArgs(argv: readonly string[]): InstallSkillsAr
     const value = inline !== undefined ? inline : argv[++i];
     if (value === undefined) throw new MultichatError('USAGE', 'install-skills: --dir requires a value');
     args.dir = value;
+  }
+  return args;
+}
+
+/**
+ * Hand-rolled serve arg parsing: --port/--remove take values (space or =),
+ * --gen-key/--stop take optional values (a following non-flag token),
+ * --list/--detach are flags. --connect is reserved for B2 (rejected here).
+ * Raw values only — numeric validation lives in commands/serve.ts.
+ */
+export function parseServeArgs(argv: readonly string[]): ServeArgs {
+  const args: ServeArgs = {};
+  for (let i = 0; i < argv.length; i++) {
+    const token = argv[i];
+    if (token === undefined || !token.startsWith('--')) {
+      throw new MultichatError('USAGE', `serve: unexpected argument: ${token ?? ''}`);
+    }
+    const eq = token.indexOf('=');
+    const name = eq > 0 ? token.slice(0, eq) : token;
+    const inline = eq > 0 ? token.slice(eq + 1) : undefined;
+    const nextValue = (): string | undefined => {
+      if (inline !== undefined) return inline;
+      const next = argv[i + 1];
+      if (next !== undefined && !next.startsWith('--')) {
+        i++;
+        return next;
+      }
+      return undefined;
+    };
+    if (name === '--list') {
+      args.list = true;
+    } else if (name === '--detach') {
+      args.detach = true;
+    } else if (name === '--connect') {
+      throw new MultichatError('USAGE', '节点模式在 B2 批提供');
+    } else if (name === '--port' || name === '--remove') {
+      const value = nextValue();
+      if (value === undefined) throw new MultichatError('USAGE', `serve: ${name} requires a value`);
+      if (name === '--port') args.portArg = value;
+      else args.remove = value;
+    } else if (name === '--gen-key') {
+      args.genKeyArg = nextValue() ?? '1';
+    } else if (name === '--stop') {
+      const value = nextValue();
+      if (value === undefined) args.stopTarget = 'both';
+      else if (value === 'broker' || value === 'node') args.stopTarget = value;
+      else throw new MultichatError('USAGE', `serve: --stop 只接受 broker|node，收到：${value}`);
+    } else {
+      throw new MultichatError('USAGE', `serve: unknown option: ${name}`);
+    }
   }
   return args;
 }
@@ -328,6 +392,17 @@ async function main(argv: string[]): Promise<number> {
       const args = parseInstallSkillsArgs(rest);
       for (const path of runInstallSkills(args)) process.stdout.write(`installed: ${path}\n`);
       return 0;
+    } catch (err) {
+      return printFailure(err);
+    }
+  }
+  if (command === 'serve') {
+    if (rest.includes('--help')) {
+      process.stdout.write(usage);
+      return 0;
+    }
+    try {
+      return await runServe(parseServeArgs(rest), realServeDeps());
     } catch (err) {
       return printFailure(err);
     }

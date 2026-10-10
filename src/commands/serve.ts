@@ -1,0 +1,289 @@
+/**
+ * `crosschat serve` 命令面（票B B1）：broker 服务端入口 + 注册表管理旗标。
+ * --connect（节点模式）B2 批提供，cli 解析层直接拒。
+ */
+import { execSync, spawn } from 'node:child_process';
+import { appendFileSync, mkdirSync, openSync, readFileSync, realpathSync } from 'node:fs';
+import { homedir, hostname, networkInterfaces, type NetworkInterfaceInfo } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import process from 'node:process';
+import { MultichatError } from '../errors.js';
+import { machineId } from '../platform/machine-id.js';
+import { Broker, DEFAULT_PORT, defaultDeliverLocal } from '../serve/broker.js';
+import { genKeys, listNodes, readRegistry, registryFileOf, removeNode, setPort, tcpDir } from '../serve/registry.js';
+
+export interface ServeArgs {
+  portArg?: string;
+  /** 数字字符串，缺省 '1'；上限校验在 registry.genKeys。 */
+  genKeyArg?: string;
+  list?: boolean;
+  remove?: string;
+  detach?: boolean;
+  stopTarget?: 'broker' | 'node' | 'both';
+}
+
+export interface ServeDeps {
+  /** 注册表/状态/日志的根目录；真跑 ~/.crosschat，测试注入临时目录。 */
+  baseDir: string;
+  stdout(line: string): void;
+  env: NodeJS.ProcessEnv;
+  version: string;
+  machineId: () => string | undefined;
+  hostname: () => string;
+  networkInterfaces: () => NodeJS.Dict<NetworkInterfaceInfo[]>;
+  now(): number;
+  onSignal(sig: 'SIGINT' | 'SIGTERM', cb: () => void): void;
+}
+
+export function realServeDeps(): ServeDeps {
+  return {
+    baseDir: join(homedir(), '.crosschat'),
+    stdout: (line) => process.stdout.write(`${line}\n`),
+    env: process.env,
+    version: (
+      JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string }
+    ).version,
+    machineId: () => machineId(),
+    hostname: () => hostname(),
+    networkInterfaces: () => networkInterfaces(),
+    now: () => Date.now(),
+    onSignal: (sig, cb) => process.on(sig, cb),
+  };
+}
+
+export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number> {
+  const registryFile = registryFileOf(deps.baseDir);
+  let port: number | undefined;
+  if (args.portArg !== undefined) {
+    const n = Number.parseInt(args.portArg, 10);
+    if (!Number.isInteger(n) || n < 1 || n > 65535) {
+      throw new MultichatError('USAGE', `--port 须为 1-65535 的整数，收到：${args.portArg}`);
+    }
+    port = n;
+    setPort(registryFile, n); // 显式 --port 即持久化指令（首次记住，再给即更新）
+  }
+  if (args.genKeyArg !== undefined) return runGenKey(args.genKeyArg, deps, registryFile, port);
+  if (args.list) return runList(deps, registryFile);
+  if (args.remove !== undefined) return runRemove(args.remove, deps, registryFile);
+  if (args.stopTarget !== undefined) return runStop(args.stopTarget, deps, registryFile);
+  if (args.detach && deps.env.CROSSCHAT_SERVE_DETACHED !== '1') return runDetach(deps);
+  return runForegroundBroker(deps, port);
+}
+
+function runGenKey(genKeyArg: string, deps: ServeDeps, registryFile: string, port: number | undefined): number {
+  const n = Number.parseInt(genKeyArg, 10);
+  if (!Number.isInteger(n) || n < 1) {
+    throw new MultichatError('USAGE', `--gen-key 数量须为 1-10 的整数，收到：${genKeyArg}`);
+  }
+  const host = firstNonInternalIPv4(deps.networkInterfaces());
+  const portNum = port ?? readRegistry(registryFile).port ?? DEFAULT_PORT;
+  const results = genKeys(registryFile, n, { host, port: portNum });
+  deps.stdout(`自动探测 broker 地址：${host}（只取第一个网卡，可能不对——请人工核对，不保证正确）`);
+  for (const result of results) {
+    deps.stdout('--------------------------------');
+    deps.stdout(result.nodeJsonContent.trimEnd());
+  }
+  deps.stdout('钥匙已进入终端回滚缓冲，分发完建议清屏');
+  return 0;
+}
+
+function firstNonInternalIPv4(ifaces: NodeJS.Dict<NetworkInterfaceInfo[]>): string {
+  for (const list of Object.values(ifaces)) {
+    for (const ni of list ?? []) {
+      if (!ni.internal && ni.family === 'IPv4') return ni.address;
+    }
+  }
+  return '127.0.0.1';
+}
+
+function runList(deps: ServeDeps, registryFile: string): number {
+  const nodes = listNodes(registryFile);
+  deps.stdout(`${'label'.padEnd(10)}${'machine'.padEnd(18)}${'mid'.padEnd(10)}added-at`);
+  for (const node of nodes) {
+    deps.stdout(
+      `${node.label.padEnd(10)}${(node.machineName ?? '-').padEnd(18)}${(node.machineId?.slice(0, 8) ?? '-').padEnd(10)}${node.addedAt}`,
+    );
+  }
+  if (nodes.length === 0) deps.stdout('（注册表为空）');
+  return 0;
+}
+
+function runRemove(label: string, deps: ServeDeps, registryFile: string): number {
+  const removed = removeNode(registryFile, label);
+  deps.stdout(removed ? `已移除 ${label}` : `未找到 ${label}`);
+  return removed ? 0 : 1;
+}
+
+/** 后台化：spawn 自身 detached + env 标记防循环；日志改写 broker.log。 */
+function runDetach(deps: ServeDeps): number {
+  const logFile = join(tcpDir(deps.baseDir), 'broker.log');
+  mkdirSync(tcpDir(deps.baseDir), { recursive: true });
+  const fd = openSync(logFile, 'a');
+  const entry = process.argv[1] ?? fileURLToPath(new URL('../cli.js', import.meta.url));
+  const child = spawn(process.execPath, [realpathSync(entry), 'serve'], {
+    detached: true,
+    stdio: ['ignore', fd, fd],
+    env: { ...deps.env, CROSSCHAT_SERVE_DETACHED: '1' },
+  });
+  child.unref();
+  deps.stdout(`broker 后台运行中 pid=${child.pid}（日志：${logFile}）`);
+  return 0;
+}
+
+async function runForegroundBroker(deps: ServeDeps, port: number | undefined): Promise<number> {
+  const detached = deps.env.CROSSCHAT_SERVE_DETACHED === '1';
+  const logFile = join(tcpDir(deps.baseDir), 'broker.log');
+  const logLine = detached
+    ? (line: string) => {
+        try {
+          appendFileSync(logFile, `${line}\n`);
+        } catch {
+          // 日志写失败不倒服务
+        }
+      }
+    : (line: string) => deps.stdout(line);
+  const broker = new Broker({
+    registryFile: registryFileOf(deps.baseDir),
+    statusFile: join(tcpDir(deps.baseDir), 'status-broker.json'),
+    version: deps.version,
+    machineId: deps.machineId,
+    hostname: deps.hostname,
+    now: deps.now,
+    log: logLine,
+    deliverLocal: defaultDeliverLocal,
+    port,
+    resultTimeoutMs: readResultTimeoutMs(deps.env),
+  });
+  const actual = await broker.start();
+  deps.stdout(`broker listening on 0.0.0.0:${actual}（Ctrl+C 退出）`);
+  await new Promise<void>((resolve) => {
+    const stop = () => {
+      void broker.stop().then(() => resolve());
+    };
+    deps.onSignal('SIGINT', stop);
+    deps.onSignal('SIGTERM', stop);
+  });
+  return 0;
+}
+
+function readResultTimeoutMs(env: NodeJS.ProcessEnv): number {
+  const raw = env.CROSSCHAT_TCP_TIMEOUT_MS;
+  if (raw === undefined || raw === '') return 120_000;
+  const n = Number.parseInt(raw, 10);
+  return Number.isInteger(n) && n >= 1_000 ? n : 120_000;
+}
+
+interface ProcInfo {
+  pid: number;
+  cmdline: string;
+}
+
+/** 扫描本机 `crosschat serve` 特征进程（排除自身）。 */
+function listServeProcesses(): ProcInfo[] {
+  let out: string;
+  if (process.platform === 'win32') {
+    out = execSync(
+      'powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object CommandLine | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress"',
+      { encoding: 'utf8' },
+    );
+  } else {
+    out = execSync('ps -eo pid=,args=', { encoding: 'utf8' });
+  }
+  const procs: ProcInfo[] = [];
+  if (process.platform === 'win32') {
+    const parsed = JSON.parse(out || '[]') as { ProcessId: number; CommandLine: string } | { ProcessId: number; CommandLine: string }[];
+    for (const p of Array.isArray(parsed) ? parsed : [parsed]) {
+      procs.push({ pid: p.ProcessId, cmdline: p.CommandLine });
+    }
+  } else {
+    for (const line of out.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed === '') continue;
+      const pid = Number.parseInt(trimmed.split(/\s+/)[0] ?? '', 10);
+      if (Number.isInteger(pid)) procs.push({ pid, cmdline: trimmed.slice(trimmed.indexOf(' ') + 1) });
+    }
+  }
+  return procs.filter(
+    (p) =>
+      p.pid !== process.pid &&
+      /\bserve\b/.test(p.cmdline) &&
+      (p.cmdline.includes('crosschat') || /cli\.js\b/.test(p.cmdline)),
+  );
+}
+
+/** 注册表端口反查 pid（broker 双重确认用）。 */
+function pidsOnPort(port: number): Set<number> {
+  const pids = new Set<number>();
+  try {
+    if (process.platform === 'win32') {
+      const out = execSync('netstat -ano -p tcp', { encoding: 'utf8' });
+      for (const line of out.split('\n')) {
+        if (!line.includes('LISTENING')) continue;
+        const cols = line.trim().split(/\s+/);
+        if ((cols[1] ?? '').endsWith(`:${port}`)) {
+          const pid = Number.parseInt(cols[cols.length - 1] ?? '', 10);
+          if (Number.isInteger(pid)) pids.add(pid);
+        }
+      }
+    } else {
+      const out = execSync(`ss -tlnp 2>/dev/null || lsof -t -i :${port} -sTCP:LISTEN 2>/dev/null`, {
+        encoding: 'utf8',
+        shell: '/bin/sh',
+      });
+      for (const m of out.matchAll(/pid=(\d+)/g)) pids.add(Number.parseInt(m[1] ?? '', 10));
+      if (pids.size === 0) {
+        for (const line of out.split('\n')) {
+          const pid = Number.parseInt(line.trim(), 10);
+          if (Number.isInteger(pid)) pids.add(pid);
+        }
+      }
+    }
+  } catch {
+    // 工具缺失：返回空集，调用方按"未确认"处理
+  }
+  return pids;
+}
+
+function runStop(target: 'broker' | 'node' | 'both', deps: ServeDeps, registryFile: string): number {
+  const procs = listServeProcesses();
+  const brokers = procs.filter((p) => !p.cmdline.includes('--connect'));
+  const nodes = procs.filter((p) => p.cmdline.includes('--connect'));
+  let rc = 0;
+  if (target === 'broker' || target === 'both') {
+    if (brokers.length === 0) deps.stdout('stop broker: 未发现运行中的 broker');
+    const port = readRegistry(registryFile).port ?? DEFAULT_PORT;
+    const confirmed = pidsOnPort(port);
+    for (const b of brokers) {
+      if (!confirmed.has(b.pid)) {
+        deps.stdout(`stop broker: pid ${b.pid} 命令行匹配但未持有端口 ${port}，未确认跳过`);
+        continue;
+      }
+      if (killPid(b.pid)) deps.stdout(`stop broker: pid ${b.pid} 已终止（端口 ${port} 双重确认）`);
+      else {
+        deps.stdout(`stop broker: pid ${b.pid} 终止失败`);
+        rc = 1;
+      }
+    }
+  }
+  if (target === 'node' || target === 'both') {
+    if (nodes.length === 0) deps.stdout('stop node: 未发现运行中的节点');
+    for (const n of nodes) {
+      if (killPid(n.pid)) deps.stdout(`stop node: pid ${n.pid} 已终止`);
+      else {
+        deps.stdout(`stop node: pid ${n.pid} 终止失败`);
+        rc = 1;
+      }
+    }
+  }
+  return rc;
+}
+
+function killPid(pid: number): boolean {
+  try {
+    process.kill(pid, 'SIGTERM');
+    return true;
+  } catch {
+    return false;
+  }
+}
