@@ -294,7 +294,8 @@ export async function runViaSend(args: SendArgs, body: string, deps: SendDeps): 
   return `delivered to ${displayTo} (turn ${receipt.turn})\nreply-ref: ${receipt.replyRef}`;
 }
 
-function originDisplayName(identity: CallerIdentity): string {
+/** 发起方展示名（B2 起与 via-tcp 共用——tcp/ssh 记账同源）。 */
+export function originDisplayName(identity: CallerIdentity): string {
   if (identity.p === 'claude') return identity.name ?? `claude/${identity.id.slice(0, 8)}`;
   if (identity.p === 'codex') return `codex/${identity.id.slice(0, 8)}`;
   return 'human';

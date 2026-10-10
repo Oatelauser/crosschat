@@ -13,6 +13,8 @@ export const ERR = {
   PEER_OFFLINE: 'PEER_OFFLINE',
   MACHINE_NAME_COLLISION: 'MACHINE_NAME_COLLISION',
   NOT_READY: 'NOT_READY',
+  /** B2 修订：file-begin 尺寸预拒（>64MiB）。 */
+  FILE_TOO_LARGE: 'FILE_TOO_LARGE',
 } as const;
 
 export interface InfoFrame {
@@ -53,23 +55,36 @@ export interface ReceiptFrame {
   status: 'delivered' | 'queued' | 'parked';
   turn?: string;
   replyRef?: string;
+  /** B2 修订：成功时携带远端 runSend 完整输出（发送方按 ssh 语义展示）。 */
+  output?: string;
 }
 export interface DeliverFrame {
   op: 'deliver';
   id: string;
   fromMachine: string;
   payload: string;
+  /** B2 修订：投递目标三件套随帧透传（B1 只转发 body，节点无从得知路由）。 */
+  to?: string;
+  conversation?: string;
+  origin?: string;
 }
 export interface ResultFrame {
   op: 'result';
   id: string;
-  status: 'delivered' | 'queued' | 'parked';
+  status: 'delivered' | 'queued' | 'parked' | 'error';
   turn?: string;
   replyRef?: string;
+  /** B2 修订：status='error' 时的结构化错误（比 ssh 文本重抛更准）。 */
+  code?: string;
+  message?: string;
+  /** B2 修订：成功时携带完整 runSend 输出（发送方逐字对齐 ssh 展示）。 */
+  output?: string;
 }
 export interface FileBeginFrame {
   op: 'file-begin';
   id: string;
+  /** B2 修订：broker 按 targetMachine 路由（B1 定义帧型时未含，运行时从未使用）。 */
+  targetMachine: string;
   sha256: string;
   name: string;
   size: number;
@@ -90,6 +105,10 @@ export interface FileResultFrame {
   ok: boolean;
   path?: string;
   error?: string;
+  /** B2 修订：begin 应答携带断点续传锚（0 = 从头传）。 */
+  resumeFrom?: number;
+  /** B2 修订：秒回去重标记（对端 inbox 已有同 sha 完整文件）。 */
+  dedup?: boolean;
 }
 
 export type Frame =

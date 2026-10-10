@@ -24,6 +24,7 @@ import {
   resolveMaxTurn,
 } from '../limits.js';
 import { decodeOriginIdentity, isSameMachine, runViaSend } from '../federation.js';
+import { runViaTcpSend } from '../serve/via-tcp.js';
 import type { SendLogEntry } from '../send-log.js';
 import { continueConversation, continueFromRef, recordConversation } from '../conversations.js';
 import {
@@ -44,8 +45,10 @@ export interface SendArgs {
   /** Body from --body; the alternative is deps.stdinText. */
   bodyArg?: string;
   json?: boolean;
-  /** Federation (008/B1): `ssh:<host>` — remote CLI gets full authority. */
+  /** Federation (008/B1): `ssh:<host>` — remote CLI gets full authority; B2 adds `tcp:<机器>`. */
   via?: string;
+  /** 票B B2：--file <路径> 文件通道（仅配合 --via tcp:，64MiB 上限分块传输）。 */
+  fileArg?: string;
   /** Machine-injected sender identity for ssh shells without agent env (008 D5); hidden flag. */
   origin?: string;
   /** 票A：--max-body-kb 原始值（正整数 KiB）；解析与容错在 limits.ts（非法静默降级）。 */
@@ -80,12 +83,15 @@ export interface SendDeps {
   hostname?(): string;
   /** Stable per-install machine id (B10) for same-machine decisions; default platform read. */
   machineId?(): string | undefined;
+  /** 票B B2：tcp 通道根目录（node.json/status/收件箱所在 .crosschat）；缺省真 home。 */
+  tcpBaseDir?: string;
 }
 
 export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   resolveTargetArgs(args);
-  const body = resolveBody(args, deps);
-  const size = Buffer.byteLength(body, 'utf8');
+  // B2：--file 模式正文可缺省（传输完成后自动生成"已送达：<路径>"）
+  const body = args.fileArg !== undefined ? resolveFileBody(args, deps) : resolveBody(args, deps);
+  const size = body === undefined ? 0 : Buffer.byteLength(body, 'utf8');
   // 票A：上限三层来源（--max-body-kb > CROSSCHAT_MAX_BODY_KIB > 16384 兜底）。
   // 这里只做配置值的早期快速失败（默认 16384 时与 004 现状逐字节同序同码）；
   // 端点封顶（claude 64KiB / codex 1MiB）要等目标解析出来才能补检——生效值
@@ -141,15 +147,26 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   // configured-cap check above applies to cross-machine sends too (D6), and the
   // local path below stays byte-identical when --via is absent (D9).
   if (args.via !== undefined) {
+    // 票B B2：tcp: 前缀分流到 via-tcp（瞬态 ws + 文件通道），ssh: 逻辑不动一行。
+    const tcp = args.via.startsWith('tcp:');
+    if (args.fileArg !== undefined && !tcp) {
+      throw new MultichatError('USAGE', '--file 目前仅配合 --via tcp:<机器> 使用（ssh 形态走 scp 旁路，见 MESSAGE_TOO_LARGE 教学）');
+    }
     // 票A：--via 本地无法解析远端目标——按最宽端点（codex 1MiB）预检，远端
     // 自行复检（现状语义）。--max-body-kb 不透传远端：远程命令面保持固定
     // 白名单（buildSshArgv），远端用自己的两层来源决定上限。
     const viaLimit = Math.min(configuredMax, CODEX_ENDPOINT_MAX_BODY_BYTES);
-    if (size > viaLimit) {
-      throw new MultichatError('MESSAGE_TOO_LARGE', bodyTooLargeMessage(size, viaLimit, args.via, 'ssh-precheck'));
+    if (body !== undefined && size > viaLimit) {
+      throw new MultichatError('MESSAGE_TOO_LARGE', bodyTooLargeMessage(size, viaLimit, args.via, tcp ? 'tcp-precheck' : 'ssh-precheck'));
     }
-    return runViaSend(args, body, deps);
+    if (tcp) return runViaTcpSend(args, body, deps);
+    return runViaSend(args, body as string, deps);
   }
+  if (args.fileArg !== undefined) {
+    throw new MultichatError('USAGE', '--file 目前仅配合 --via tcp:<机器> 使用；本机发文件路径直接 --body "<路径>" 即可');
+  }
+  // 到这里 fileArg 必在 via tcp 分支里消费掉了，body 收窄回 string。
+  const messageText = body as string;
 
   const scan = deps.listClaudeSessions();
   const envCaller = resolveCallerIdentity(deps.env, scan);
@@ -299,7 +316,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     }
     checkAndRecord(deps.rateDir, rateKey(identityKey(caller), `claude:${target.id}`), deps.now());
     const toName = claudeSession.name ?? shortId('claude', claudeSession.sessionId);
-    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body, viaHost, turnBudget });
+    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, viaHost, turnBudget });
     try {
       await deps.deliverClaude(
         { pid: claudeSession.pid, messagingSocketPath: claudeSession.messagingSocketPath },
@@ -319,7 +336,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   const threads = await deps.listCodexThreads();
   const threadName = threads.find((thread) => thread.id === target.id)?.name;
   const toName = threadName ?? shortId('codex', target.id);
-  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body, viaHost, turnBudget });
+  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, viaHost, turnBudget });
   const parkNow = (): number => {
     park(
       deps.outboxDir,
@@ -404,6 +421,14 @@ function resolveBody(args: SendArgs, deps: SendDeps): string {
     );
   }
   return body;
+}
+
+/** B2：--file 模式的附言（可缺省——传输完成后自动生成"已送达：<路径>"）。 */
+function resolveFileBody(args: SendArgs, deps: SendDeps): string | undefined {
+  if (args.bodyArg !== undefined && deps.stdinText !== undefined) {
+    throw new MultichatError('BODY_CONFLICT', 'Message body was given both via --body and stdin; pick one.');
+  }
+  return args.bodyArg ?? deps.stdinText;
 }
 
 function displayName(identity: CallerIdentity): string {

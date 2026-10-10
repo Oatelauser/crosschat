@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { ClaudeRegistryScan } from '../claude/registry.js';
 import type { CodexThreadWithMeta } from '../codex/discovery.js';
 import type { ConversationSummary } from '../conversation-summary.js';
 import { MultichatError } from '../errors.js';
+import type { NodeStatusFile } from '../serve/node.js';
 
 /**
  * Read-only `status`: claude registry sessions (name/kind/status/pid/dir) plus
@@ -29,6 +32,63 @@ export interface StatusDeps {
    * Omitted → nothing is marked; output stays byte-identical to before.
    */
   listWriterLocks?(): Set<string>;
+  /**
+   * 票B B2：tcp 转发器状态目录（status-node.json/status-broker.json 所在）。
+   * Omitted → the 转发器 section is skipped entirely (byte-identical to B1);
+   * cli wires the real ~/.crosschat/tcp.
+   */
+  tcpDir?: string;
+}
+
+/** B2 freshness bound: a status file older than this reads as "没在跑". */
+const TCP_STATUS_FRESH_MS = 90_000;
+
+interface BrokerStatusFile {
+  state: string;
+  port?: number;
+  lastUpdated: string;
+  onlineNodes?: string[];
+}
+
+function readStatusJson<T>(file: string): T | undefined {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8')) as T;
+  } catch {
+    return undefined;
+  }
+}
+
+/** 转发器区块（节点行 + broker 行 + 在线机器表）；dir=undefined → 空数组。 */
+function tcpForwarderLines(tcpDir: string | undefined, nowMs: number): string[] {
+  if (tcpDir === undefined) return [];
+  const lines: string[] = [];
+  const node = readStatusJson<NodeStatusFile>(join(tcpDir, 'status-node.json'));
+  const nodeFresh = node !== undefined && nowMs - Date.parse(node.lastUpdated) < TCP_STATUS_FRESH_MS;
+  if (!nodeFresh) {
+    lines.push('转发器: 未运行');
+  } else if (node!.state === 'online') {
+    lines.push(`转发器: online tcp:${node!.brokerAlias} (since ${formatCreatedAt(node!.since)})`);
+  } else if (node!.state === 'reconnect-wait') {
+    const next = node!.nextAttemptAt === undefined ? '-' : formatHms(node!.nextAttemptAt);
+    lines.push(`转发器: 重连等待中，下次尝试 ${next}`);
+  } else {
+    lines.push(`转发器: 连接中 tcp:${node!.brokerAlias}`);
+  }
+  const broker = readStatusJson<BrokerStatusFile>(join(tcpDir, 'status-broker.json'));
+  if (broker !== undefined && broker.state === 'running' && nowMs - Date.parse(broker.lastUpdated) < TCP_STATUS_FRESH_MS) {
+    const nodes = broker.onlineNodes ?? [];
+    lines.push(`转发器: 服务端端口 ${broker.port ?? '?'}，${nodes.length} 节点在线`);
+    if (nodes.length > 0) lines.push(`在线机器: ${nodes.join('、')}`);
+  }
+  return lines;
+}
+
+/** `hh:mm:ss` (local time); `-` when unknown/invalid. */
+function formatHms(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '-';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 /** Last two segments of a session cwd (`D:\workspace\CC\foo` -> `CC\foo`). */
@@ -68,7 +128,11 @@ export async function runStatus(
   const held = deps.listWriterLocks?.() ?? new Set<string>();
 
   if (json) {
+    // B2：tcp 小节仅在 tcpDir 接线时出现——嵌入方（无该 dep）的 json 键集
+    // 保持 {claude, codex} 冻结契约不变。
+    const tcp = deps.tcpDir === undefined ? {} : { tcp: tcpJson(deps.tcpDir, deps.now?.() ?? Date.now()) };
     return JSON.stringify({
+      ...tcp,
       claude: scan.sessions.map((session) => ({
         name: session.name ?? null,
         kind: session.kind,
@@ -131,7 +195,22 @@ export async function runStatus(
       );
     }
   }
+  lines.push(...tcpForwarderLines(deps.tcpDir, deps.now?.() ?? Date.now()));
   return lines.join('\n');
+}
+
+/** B2：json 模式的转发器小节（dir 缺省 → null 占位，保持键集稳定）。 */
+function tcpJson(tcpDir: string | undefined, nowMs: number): { node: unknown; broker: unknown } {
+  if (tcpDir === undefined) return { node: null, broker: null };
+  const node = readStatusJson<NodeStatusFile>(join(tcpDir, 'status-node.json'));
+  const nodeFresh = node !== undefined && nowMs - Date.parse(node.lastUpdated) < TCP_STATUS_FRESH_MS;
+  const broker = readStatusJson<BrokerStatusFile>(join(tcpDir, 'status-broker.json'));
+  const brokerFresh =
+    broker !== undefined && broker.state === 'running' && nowMs - Date.parse(broker.lastUpdated) < TCP_STATUS_FRESH_MS;
+  return {
+    node: nodeFresh ? node : null,
+    broker: brokerFresh ? { port: broker!.port ?? null, onlineNodes: broker!.onlineNodes ?? [] } : null,
+  };
 }
 
 /** Locks whose thread id is not in the thread/list result (empty when listing failed). */

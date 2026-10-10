@@ -15,8 +15,19 @@ import {
   encodeFrame,
   parseFrame,
 } from './protocol.js';
-import type { ConnectFrame, ErrorFrame, Frame, ResultFrame, SendFrame } from './protocol.js';
+import type {
+  ConnectFrame,
+  ErrorFrame,
+  FileBeginFrame,
+  FileChunkFrame,
+  FileEndFrame,
+  FileResultFrame,
+  Frame,
+  ResultFrame,
+  SendFrame,
+} from './protocol.js';
 import { readRegistry, writeRegistry } from './registry.js';
+import { FILE_MAX_BYTES, FileInbox } from './file-channel.js';
 
 /**
  * 默认端口 7260。IANA service-names-port-numbers 核对（2026-10-10 实查）：
@@ -35,6 +46,8 @@ export interface BrokerDeps {
   log: (line: string) => void;
   /** B2 接 runSend；B1 默认实现回 NOT_READY。 */
   deliverLocal: (frame: SendFrame) => Promise<ResultFrame | ErrorFrame>;
+  /** B2：本机文件接收器（file-* 帧目标为 broker 机时落盘）；缺省 NOT_READY。 */
+  fileInbox?: FileInbox;
   /** 显式端口（0 = 随机，测试用）；缺省读注册表再缺省 DEFAULT_PORT。 */
   port?: number;
   heartbeatMs?: number;
@@ -65,13 +78,19 @@ interface Session {
 }
 
 type RouteOutcome =
-  | { kind: 'result'; frame: ResultFrame }
+  | { kind: 'result'; frame: ResultFrame & { status: 'delivered' | 'queued' | 'parked' } }
   | { kind: 'error'; code: string; message: string };
 
 interface PendingResult {
   targetWs: WebSocket;
   timer: ReturnType<typeof setTimeout>;
   resolve: (outcome: RouteOutcome) => void;
+}
+
+/** B2：一笔文件传输的路由（id → 发送方与目标连接；targetWs=undefined 即本机）。 */
+interface FileRoute {
+  senderWs: WebSocket;
+  targetWs: WebSocket | undefined;
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -82,7 +101,7 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 export class Broker {
-  private readonly d: Required<Omit<BrokerDeps, 'port'>> & { port?: number };
+  private readonly d: Required<Omit<BrokerDeps, 'port' | 'fileInbox'>> & { port?: number; fileInbox?: FileInbox };
   private wss?: WebSocketServer;
   private port?: number;
   private startedAt?: number;
@@ -90,6 +109,7 @@ export class Broker {
   private readonly sessions = new Set<Session>();
   private readonly online = new Map<string, Session>();
   private readonly pending = new Map<string, PendingResult>();
+  private readonly fileRoutes = new Map<string, FileRoute>();
   private hbTimer?: ReturnType<typeof setInterval>;
 
   constructor(deps: BrokerDeps) {
@@ -196,6 +216,10 @@ export class Broker {
         entry.resolve({ kind: 'error', code: ERR.PEER_OFFLINE, message: '节点连接断开' });
       }
     }
+    // B2：清掉该连接参与的一切文件路由（对端等待者会随断线失败）
+    for (const [id, route] of this.fileRoutes) {
+      if (route.senderWs === session.ws || route.targetWs === session.ws) this.fileRoutes.delete(id);
+    }
   }
 
   private async onMessage(session: Session, text: string): Promise<void> {
@@ -215,10 +239,29 @@ export class Broker {
       if (entry !== undefined && entry.targetWs === session.ws) {
         clearTimeout(entry.timer);
         this.pending.delete(frame.id);
-        entry.resolve({ kind: 'result', frame });
+        // B2：节点结构化错误（status='error'）映射为发送方 error 帧
+        if (frame.status === 'error') {
+          entry.resolve({ kind: 'error', code: frame.code ?? 'REMOTE_FAILED', message: frame.message ?? '节点投递失败' });
+        } else {
+          // 上面排除了 'error'，收窄回三态（TS 不会对整个对象做属性收窄）
+          entry.resolve({ kind: 'result', frame: { ...frame, status: frame.status as 'delivered' | 'queued' | 'parked' } });
+        }
       }
+      return;
     }
-    // 其余帧型（info/receipt/deliver/file-*）B1 服务端无行为
+    if (frame.op === 'file-begin') {
+      await this.routeFileBegin(session, frame);
+      return;
+    }
+    if (frame.op === 'file-chunk' || frame.op === 'file-end') {
+      this.routeFileCont(session, frame);
+      return;
+    }
+    if (frame.op === 'file-result') {
+      this.routeFileResult(session, frame);
+      return;
+    }
+    // 其余帧型（info/receipt/deliver）服务端无行为
   }
 
   private async onConnect(session: Session, frame: ConnectFrame): Promise<void> {
@@ -269,6 +312,10 @@ export class Broker {
       this.online.set(mid, session);
       this.log(`node-up ${entry.machineName}(${mid.slice(0, 8)})`);
     }
+    // B2：sender 角色也带出注册表里的 machineName（send 路由的 fromMachine 展示）
+    if (frame.role !== 'node' && entry.machineName !== undefined) {
+      session.machineName = entry.machineName;
+    }
     if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
     session.authed = true;
     this.send(session.ws, { op: 'connected', machineName: session.machineName });
@@ -290,14 +337,10 @@ export class Broker {
       this.send(sender.ws, { op: 'error', code, message, id: frame.id });
       this.log(`route ${from}→${target} ${code}`);
     };
-    const registry = readRegistry(this.d.registryFile);
-    const candidates = registry.nodes.filter((node) => node.machineName === target);
-    if (candidates.length === 0) {
-      return fail(ERR.UNKNOWN_MACHINE, `注册表没有机器名 ${target}`);
-    }
-    const ownMid = this.d.machineId();
-    if (candidates.length === 1 && ownMid !== undefined && candidates[0].machineId === ownMid) {
-      // 目标是 broker 本机：本机投递处理器（B1 默认 NOT_READY）
+    const resolved = this.resolveTarget(target);
+    if (resolved.kind === 'error') return fail(resolved.code, resolved.message);
+    if (resolved.kind === 'local') {
+      // 目标是 broker 本机：本机投递处理器（B2 起 serve 接线真实现）
       let outcome: ResultFrame | ErrorFrame;
       try {
         outcome = await this.d.deliverLocal(frame);
@@ -305,37 +348,38 @@ export class Broker {
         outcome = { op: 'error', code: ERR.NOT_READY, message: err instanceof Error ? err.message : String(err) };
       }
       if (outcome.op === 'error') return fail(outcome.code, outcome.message);
+      // B2：deliverLocal 可能回 error 态 ResultFrame（结构化失败）——同按失败路由
+      if (outcome.status === 'error') {
+        return fail(outcome.code ?? 'REMOTE_FAILED', outcome.message ?? '本机投递失败');
+      }
       this.send(sender.ws, {
         op: 'receipt',
         id: frame.id,
         status: outcome.status,
         turn: outcome.turn,
         replyRef: outcome.replyRef,
+        ...(outcome.output === undefined ? {} : { output: outcome.output }),
       });
       this.log(`route ${from}→${target}(local) ${outcome.status}`);
       return;
     }
-    const onlineCandidates = candidates.filter((node) => node.machineId !== undefined && this.online.has(node.machineId));
-    if (onlineCandidates.length > 1) {
-      const ids = onlineCandidates.map((node) => node.machineId?.slice(0, 8)).join(', ');
-      return fail(ERR.MACHINE_NAME_COLLISION, `多台机器同名 ${target} 且都在线（machine-id 短码：${ids}）——请消歧后重试`);
-    }
-    if (onlineCandidates.length === 0) {
-      return fail(ERR.PEER_OFFLINE, `机器 ${target} 已注册但当前不在线`);
-    }
-    const node = onlineCandidates[0];
-    const targetSession = this.online.get(node.machineId as string);
-    if (targetSession === undefined) {
-      return fail(ERR.PEER_OFFLINE, `机器 ${target} 已注册但当前不在线`);
-    }
-    // 转发 deliver，等对应 id 的 result 再映射 receipt 回发送方
-    this.send(targetSession.ws, { op: 'deliver', id: frame.id, fromMachine: from, payload: frame.body });
+    const targetSession = resolved.ws;
+    // 转发 deliver（B2：to/conversation/origin 随帧透传），等对应 id 的 result 再映射 receipt 回发送方
+    this.send(targetSession, {
+      op: 'deliver',
+      id: frame.id,
+      fromMachine: from,
+      payload: frame.body,
+      to: frame.to,
+      conversation: frame.conversation,
+      origin: frame.origin,
+    });
     const outcome = await new Promise<RouteOutcome>((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(frame.id);
         resolve({ kind: 'error', code: ERR.PEER_OFFLINE, message: `节点 ${target} 未在 ${this.d.resultTimeoutMs}ms 内回应 result` });
       }, this.d.resultTimeoutMs);
-      this.pending.set(frame.id, { targetWs: targetSession.ws, timer, resolve });
+      this.pending.set(frame.id, { targetWs: targetSession, timer, resolve });
     });
     if (outcome.kind === 'error') return fail(outcome.code, outcome.message);
     const result = outcome.frame;
@@ -345,8 +389,88 @@ export class Broker {
       status: result.status,
       turn: result.turn,
       replyRef: result.replyRef,
+      ...(result.output === undefined ? {} : { output: result.output }),
     });
     this.log(`route ${from}→${target} ${result.status}`);
+  }
+
+  /** B2：file-begin 尺寸预拒 + 按 targetMachine 路由（本机则 fileInbox 落盘）。 */
+  private async routeFileBegin(sender: Session, frame: FileBeginFrame): Promise<void> {
+    const fail = (code: string, message: string): void => {
+      this.send(sender.ws, { op: 'error', code, message, id: frame.id });
+      this.log(`file-route ${sender.machineName ?? '?'}→${frame.targetMachine} ${code}`);
+    };
+    if (frame.size > FILE_MAX_BYTES) {
+      return fail(ERR.FILE_TOO_LARGE, `文件 ${frame.name} 超过 64MiB 上限（${frame.size} 字节）`);
+    }
+    const resolved = this.resolveTarget(frame.targetMachine);
+    if (resolved.kind === 'error') return fail(resolved.code, resolved.message);
+    const targetWs = resolved.kind === 'node' ? resolved.ws : undefined;
+    this.fileRoutes.set(frame.id, { senderWs: sender.ws, targetWs });
+    if (targetWs !== undefined) {
+      this.send(targetWs, frame);
+      this.log(`file-route ${sender.machineName ?? '?'}→${frame.targetMachine} begin ${frame.size}B`);
+      return;
+    }
+    // 目标是 broker 本机
+    if (this.d.fileInbox === undefined) {
+      this.fileRoutes.delete(frame.id);
+      return fail(ERR.NOT_READY, '本机文件接收器未接线');
+    }
+    this.send(sender.ws, this.d.fileInbox.begin(frame));
+    this.log(`file-route ${sender.machineName ?? '?'}→local begin ${frame.size}B`);
+  }
+
+  /** B2：chunk/end 按 id 路由到既有传输（本机传输直接驱动 fileInbox）。 */
+  private routeFileCont(sender: Session, frame: FileChunkFrame | FileEndFrame): void {
+    const route = this.fileRoutes.get(frame.id);
+    if (route === undefined || route.senderWs !== sender.ws) return;
+    if (route.targetWs !== undefined) {
+      this.send(route.targetWs, frame);
+      return;
+    }
+    if (this.d.fileInbox === undefined) return;
+    if (frame.op === 'file-chunk') {
+      if (!this.d.fileInbox.chunk(frame)) {
+        this.send(sender.ws, { op: 'file-result', id: frame.id, ok: false, error: '分块失序或未知 id——请重新 begin 续传' });
+      }
+      return;
+    }
+    this.send(sender.ws, this.d.fileInbox.end(frame.id));
+  }
+
+  /** B2：节点的 file-result 回送发起方；带 resumeFrom 的是 begin 应答（保留路由）。 */
+  private routeFileResult(session: Session, frame: FileResultFrame): void {
+    const route = this.fileRoutes.get(frame.id);
+    if (route === undefined || route.targetWs !== session.ws) return;
+    this.send(route.senderWs, frame);
+    if (frame.resumeFrom === undefined) {
+      this.fileRoutes.delete(frame.id);
+      this.log(`file-result ${frame.id} ${frame.ok ? 'ok' : `失败: ${frame.error ?? '?'}`}`);
+    }
+  }
+
+  /** send/file 共用的目标解析：local=broker 本机；node=在线连接；error=拒因。 */
+  private resolveTarget(target: string): { kind: 'local' } | { kind: 'node'; ws: WebSocket } | { kind: 'error'; code: string; message: string } {
+    const registry = readRegistry(this.d.registryFile);
+    const candidates = registry.nodes.filter((node) => node.machineName === target);
+    if (candidates.length === 0) {
+      return { kind: 'error', code: ERR.UNKNOWN_MACHINE, message: `注册表没有机器名 ${target}` };
+    }
+    const ownMid = this.d.machineId();
+    if (candidates.length === 1 && ownMid !== undefined && candidates[0].machineId === ownMid) {
+      return { kind: 'local' };
+    }
+    const onlineCandidates = candidates.filter((node) => node.machineId !== undefined && this.online.has(node.machineId));
+    if (onlineCandidates.length > 1) {
+      const ids = onlineCandidates.map((node) => node.machineId?.slice(0, 8)).join(', ');
+      return { kind: 'error', code: ERR.MACHINE_NAME_COLLISION, message: `多台机器同名 ${target} 且都在线（machine-id 短码：${ids}）——请消歧后重试` };
+    }
+    if (onlineCandidates.length === 0) {
+      return { kind: 'error', code: ERR.PEER_OFFLINE, message: `机器 ${target} 已注册但当前不在线` };
+    }
+    const ws = this.online.get(onlineCandidates[0]!.machineId as string)!.ws;
+    return { kind: 'node', ws };
   }
 
   private heartbeat(): void {

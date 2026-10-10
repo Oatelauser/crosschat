@@ -1,6 +1,7 @@
 /**
- * `crosschat serve` 命令面（票B B1）：broker 服务端入口 + 注册表管理旗标。
- * --connect（节点模式）B2 批提供，cli 解析层直接拒。
+ * `crosschat serve` 命令面（票B B1+B2）：broker 服务端入口 + 注册表管理旗标
+ * + --connect 节点客户端。broker 裸跑自身也是全权节点（deliverLocal 接
+ * runSend，fileInbox 落盘本机收件）。
  */
 import { execSync, spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync, openSync, readFileSync, realpathSync } from 'node:fs';
@@ -12,6 +13,10 @@ import { MultichatError } from '../errors.js';
 import { machineId } from '../platform/machine-id.js';
 import { Broker, DEFAULT_PORT, defaultDeliverLocal } from '../serve/broker.js';
 import { genKeys, listNodes, readRegistry, registryFileOf, removeNode, setPort, tcpDir } from '../serve/registry.js';
+import { deliverViaRunSend, NodeClient, readNodeConfig, type NodeConfig } from '../serve/node.js';
+import { FileInbox } from '../serve/file-channel.js';
+import type { SendDeps } from './send.js';
+import type { DeliverFrame, ErrorFrame, ResultFrame, SendFrame } from '../serve/protocol.js';
 
 export interface ServeArgs {
   portArg?: string;
@@ -21,6 +26,8 @@ export interface ServeArgs {
   remove?: string;
   detach?: boolean;
   stopTarget?: 'broker' | 'node' | 'both';
+  /** B2：节点模式（可选带 broker 别名校验 node.json）；'' = 未给值。 */
+  connect?: string;
 }
 
 export interface ServeDeps {
@@ -34,6 +41,8 @@ export interface ServeDeps {
   networkInterfaces: () => NodeJS.Dict<NetworkInterfaceInfo[]>;
   now(): number;
   onSignal(sig: 'SIGINT' | 'SIGTERM', cb: () => void): void;
+  /** B2：真 SendDeps 工厂（deliverLocal 接 runSend 用）；缺省回 NOT_READY（B1 行为，测试用）。 */
+  makeSendDeps?(stdinText?: string): SendDeps;
 }
 
 export function realServeDeps(): ServeDeps {
@@ -67,7 +76,12 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
   if (args.list) return runList(deps, registryFile);
   if (args.remove !== undefined) return runRemove(args.remove, deps, registryFile);
   if (args.stopTarget !== undefined) return runStop(args.stopTarget, deps, registryFile);
-  if (args.detach && deps.env.CROSSCHAT_SERVE_DETACHED !== '1') return runDetach(deps);
+  const detachedChild = deps.env.CROSSCHAT_SERVE_DETACHED === '1';
+  if (args.connect !== undefined) {
+    if (args.detach && !detachedChild) return runDetach(deps, ['--connect', ...(args.connect === '' ? [] : [args.connect])], 'node.log');
+    return runForegroundNode(args.connect, deps);
+  }
+  if (args.detach && !detachedChild) return runDetach(deps, [], 'broker.log');
   return runForegroundBroker(deps, port);
 }
 
@@ -78,7 +92,7 @@ function runGenKey(genKeyArg: string, deps: ServeDeps, registryFile: string, por
   }
   const host = firstNonInternalIPv4(deps.networkInterfaces());
   const portNum = port ?? readRegistry(registryFile).port ?? DEFAULT_PORT;
-  const results = genKeys(registryFile, n, { host, port: portNum });
+  const results = genKeys(registryFile, n, { host, port: portNum, alias: deps.hostname() });
   deps.stdout(`自动探测 broker 地址：${host}（只取第一个网卡，可能不对——请人工核对，不保证正确）`);
   for (const result of results) {
     deps.stdout('--------------------------------');
@@ -115,19 +129,19 @@ function runRemove(label: string, deps: ServeDeps, registryFile: string): number
   return removed ? 0 : 1;
 }
 
-/** 后台化：spawn 自身 detached + env 标记防循环；日志改写 broker.log。 */
-function runDetach(deps: ServeDeps): number {
-  const logFile = join(tcpDir(deps.baseDir), 'broker.log');
+/** 后台化：spawn 自身 detached + env 标记防循环；日志写 tcp/<name>。 */
+function runDetach(deps: ServeDeps, extraArgs: string[], logName: 'broker.log' | 'node.log'): number {
+  const logFile = join(tcpDir(deps.baseDir), logName);
   mkdirSync(tcpDir(deps.baseDir), { recursive: true });
   const fd = openSync(logFile, 'a');
   const entry = process.argv[1] ?? fileURLToPath(new URL('../cli.js', import.meta.url));
-  const child = spawn(process.execPath, [realpathSync(entry), 'serve'], {
+  const child = spawn(process.execPath, [realpathSync(entry), 'serve', ...extraArgs], {
     detached: true,
     stdio: ['ignore', fd, fd],
     env: { ...deps.env, CROSSCHAT_SERVE_DETACHED: '1' },
   });
   child.unref();
-  deps.stdout(`broker 后台运行中 pid=${child.pid}（日志：${logFile}）`);
+  deps.stdout(`${logName === 'node.log' ? '节点客户端' : 'broker'} 后台运行中 pid=${child.pid}（日志：${logFile}）`);
   return 0;
 }
 
@@ -143,6 +157,26 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
         }
       }
     : (line: string) => deps.stdout(line);
+  // B2：broker 机自己也是全权节点——deliverLocal 接 runSend、file 落本机收件。
+  const deliverLocal = deps.makeSendDeps === undefined
+    ? defaultDeliverLocal
+    : async (frame: SendFrame): Promise<ResultFrame | ErrorFrame> => {
+        const deliver: DeliverFrame = {
+          op: 'deliver',
+          id: frame.id,
+          fromMachine: 'local',
+          payload: frame.body,
+          to: frame.to,
+          conversation: frame.conversation,
+          origin: frame.origin,
+        };
+        const r = await deliverViaRunSend(deliver, deps.makeSendDeps!());
+        // deliverViaRunSend 的失败即 ResultFrame{status:'error'}——规整为
+        // ErrorFrame，broker 本地分支的失败语义（op:'error'）保持 B1 不变。
+        return r.status === 'error'
+          ? { op: 'error', code: r.code ?? 'REMOTE_FAILED', message: r.message ?? '本机投递失败' }
+          : r;
+      };
   const broker = new Broker({
     registryFile: registryFileOf(deps.baseDir),
     statusFile: join(tcpDir(deps.baseDir), 'status-broker.json'),
@@ -151,7 +185,11 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
     hostname: deps.hostname,
     now: deps.now,
     log: logLine,
-    deliverLocal: defaultDeliverLocal,
+    deliverLocal,
+    fileInbox: new FileInbox({
+      inboxDir: join(tcpDir(deps.baseDir), 'inbox'),
+      partsDir: join(tcpDir(deps.baseDir), 'parts'),
+    }),
     port,
     resultTimeoutMs: readResultTimeoutMs(deps.env),
   });
@@ -165,6 +203,55 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
     deps.onSignal('SIGTERM', stop);
   });
   return 0;
+}
+
+/** B2：--connect 节点客户端前台跑（Ctrl+C 退出）。 */
+async function runForegroundNode(aliasArg: string, deps: ServeDeps): Promise<number> {
+  const config = loadNodeConfigChecked(aliasArg, deps);
+  const detached = deps.env.CROSSCHAT_SERVE_DETACHED === '1';
+  const logFile = join(tcpDir(deps.baseDir), 'node.log');
+  const logLine = detached
+    ? (line: string) => {
+        try {
+          appendFileSync(logFile, `${line}\n`);
+        } catch {
+          // 日志写失败不倒客户端
+        }
+      }
+    : (line: string) => deps.stdout(line);
+  const client = new NodeClient({
+    config,
+    machineId: deps.machineId,
+    statusFile: join(tcpDir(deps.baseDir), 'status-node.json'),
+    fileInbox: new FileInbox({
+      inboxDir: join(tcpDir(deps.baseDir), 'inbox'),
+      partsDir: join(tcpDir(deps.baseDir), 'parts'),
+    }),
+    makeSendDeps: () => {
+      if (deps.makeSendDeps === undefined) {
+        throw new MultichatError('INTERNAL', 'makeSendDeps 未接线（测试环境不支持节点投递）');
+      }
+      return deps.makeSendDeps();
+    },
+    now: deps.now,
+    log: logLine,
+    onSignal: deps.onSignal,
+  });
+  logLine(`节点客户端启动：目标 broker ${config.broker.alias ?? `${config.broker.host}:${config.broker.port}`}（Ctrl+C 退出）`);
+  await client.run();
+  return 0;
+}
+
+/** 读 node.json（教学报错）；--connect 显式给的别名与凭证不符时拒绝。 */
+function loadNodeConfigChecked(aliasArg: string, deps: ServeDeps): NodeConfig {
+  const config = readNodeConfig(join(tcpDir(deps.baseDir), 'node.json'));
+  if (aliasArg !== '' && config.broker.alias !== undefined && aliasArg !== config.broker.alias) {
+    throw new MultichatError(
+      'USAGE',
+      `--connect ${aliasArg} 与 node.json 的 broker 别名 ${config.broker.alias} 不符——省略别名直连，或向管理员核对 node.json`,
+    );
+  }
+  return config;
 }
 
 function readResultTimeoutMs(env: NodeJS.ProcessEnv): number {

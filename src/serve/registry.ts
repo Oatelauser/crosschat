@@ -101,9 +101,10 @@ export interface GenKeyResult {
 
 /**
  * 生成 n 份钥匙并登记进注册表。label 从现有最大 node-N 编号顺延；上限 10
- * （超限 USAGE）。nodeJsonContent 为 2 空格缩进完整 node.json。
+ * （超限 USAGE）。nodeJsonContent 为 2 空格缩进完整 node.json（B2 起带
+ * broker.alias，节点 status 展示"tcp:<别名>"用）。
  */
-export function genKeys(file: string, n: number, opts: { host: string; port: number }): GenKeyResult[] {
+export function genKeys(file: string, n: number, opts: { host: string; port: number; alias: string }): GenKeyResult[] {
   if (!Number.isInteger(n) || n < 1 || n > 10) {
     throw new MultichatError('USAGE', `--gen-key 数量须为 1-10 的整数，收到：${n}`);
   }
@@ -119,7 +120,7 @@ export function genKeys(file: string, n: number, opts: { host: string; port: num
     results.push({
       label,
       key,
-      nodeJsonContent: `${JSON.stringify({ broker: { host: opts.host, port: opts.port }, key }, null, 2)}\n`,
+      nodeJsonContent: `${JSON.stringify({ broker: { host: opts.host, port: opts.port, alias: opts.alias }, key }, null, 2)}\n`,
     });
     registry.nodes.push({ label, key, addedAt: new Date().toISOString() });
   }

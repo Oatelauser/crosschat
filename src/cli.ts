@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { readFileSync, realpathSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Buffer } from 'node:buffer';
 import process from 'node:process';
@@ -45,6 +47,14 @@ commands:
                               --via ssh:<host>     send to a peer machine
                                 (host = ~/.ssh/config alias, peer
                                 resolves names on its side)
+                              --via tcp:<机器>     send via the tcp broker
+                                (机器 = machine name from
+                                "crosschat serve --list"; requires
+                                ~/.crosschat/tcp/node.json)
+                              --file <路径>        send a file through the
+                                tcp channel (with --via tcp: only,
+                                chunked, 64MiB cap; body defaults to
+                                "文件 <名> 已送达：<对端路径>")
                               --max-body-kb <KiB>  raise the body cap for
                                 this send (default 16;
                                 env CROSSCHAT_MAX_BODY_KIB)
@@ -62,8 +72,12 @@ commands:
                                 and register them
                               --list               list registered nodes
                               --remove <label>     remove a node key
-                              --detach             run the broker in the
-                                background (log: ~/.crosschat/tcp/broker.log)
+                              --connect [别名]     run this machine as a node
+                                client (needs ~/.crosschat/tcp/node.json;
+                                reconnects forever; log with --detach:
+                                ~/.crosschat/tcp/node.log)
+                              --detach             run the broker or node
+                                (with --connect) in the background
                               --stop [broker|node] stop a running broker/node
                                 (default: both)
   install-skills [--dir <root>]
@@ -94,10 +108,10 @@ options:
   --help | help             show this help and exit
 `;
 
-/** Hand-rolled send arg parsing (no dependency): --to/--conversation/--body/--via/--origin/--max-body-kb/--max-turn take values, --json is a flag. --origin is machine-injected (008) and stays out of usage. Raw values only — numeric validation lives in limits.ts (invalid silently degrades, ticket A). */
+/** Hand-rolled send arg parsing (no dependency): --to/--conversation/--body/--via/--file/--origin/--max-body-kb/--max-turn take values, --json is a flag. --origin is machine-injected (008) and stays out of usage. Raw values only — numeric validation lives in limits.ts (invalid silently degrades, ticket A). */
 export function parseSendArgs(argv: readonly string[]): SendArgs {
   const args: SendArgs = {};
-  const valueOpts = new Set(['--to', '--conversation', '--body', '--via', '--origin', '--max-body-kb', '--max-turn']);
+  const valueOpts = new Set(['--to', '--conversation', '--body', '--via', '--file', '--origin', '--max-body-kb', '--max-turn']);
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === undefined || !token.startsWith('--')) {
@@ -117,6 +131,7 @@ export function parseSendArgs(argv: readonly string[]): SendArgs {
     if (name === '--to') args.to = value;
     else if (name === '--conversation') args.conversation = value;
     else if (name === '--via') args.via = value;
+    else if (name === '--file') args.fileArg = value;
     else if (name === '--origin') args.origin = value;
     else if (name === '--max-body-kb') args.maxBodyKb = value;
     else if (name === '--max-turn') args.maxTurn = value;
@@ -160,9 +175,9 @@ export function parseInstallSkillsArgs(argv: readonly string[]): InstallSkillsAr
 
 /**
  * Hand-rolled serve arg parsing: --port/--remove take values (space or =),
- * --gen-key/--stop take optional values (a following non-flag token),
- * --list/--detach are flags. --connect is reserved for B2 (rejected here).
- * Raw values only — numeric validation lives in commands/serve.ts.
+ * --gen-key/--stop/--connect take optional values (a following non-flag
+ * token), --list/--detach are flags. Raw values only — numeric validation
+ * lives in commands/serve.ts.
  */
 export function parseServeArgs(argv: readonly string[]): ServeArgs {
   const args: ServeArgs = {};
@@ -188,7 +203,7 @@ export function parseServeArgs(argv: readonly string[]): ServeArgs {
     } else if (name === '--detach') {
       args.detach = true;
     } else if (name === '--connect') {
-      throw new MultichatError('USAGE', '节点模式在 B2 批提供');
+      args.connect = nextValue() ?? '';
     } else if (name === '--port' || name === '--remove') {
       const value = nextValue();
       if (value === undefined) throw new MultichatError('USAGE', `serve: ${name} requires a value`);
@@ -252,6 +267,8 @@ function realStatusDeps(): StatusDeps {
     // conversations view stays snappy while catching slow rollout flushes.
     confirmReceipt: (threadId, marker) =>
       confirmInRollout(codexHomeDir(), threadId, marker, { tries: 2, delayMs: 200 }),
+    // B2: tcp forwarder status files live under ~/.crosschat/tcp.
+    tcpDir: join(homedir(), '.crosschat', 'tcp'),
   };
 }
 
@@ -402,7 +419,8 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     }
     try {
-      return await runServe(parseServeArgs(rest), realServeDeps());
+      // B2：broker/节点的本机投递与 send 命令共用同一份真 SendDeps。
+      return await runServe(parseServeArgs(rest), { ...realServeDeps(), makeSendDeps: (stdinText?: string) => realSendDeps(stdinText) });
     } catch (err) {
       return printFailure(err);
     }

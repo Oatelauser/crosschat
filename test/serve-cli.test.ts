@@ -48,8 +48,10 @@ describe('parseServeArgs', () => {
     expect(parseServeArgs(['--gen-key', '--list'])).toEqual({ genKeyArg: '1', list: true });
   });
 
-  it('rejects --connect as B2-reserved and unknown options', () => {
-    expectUsage(() => parseServeArgs(['--connect']), '节点模式在 B2 批提供');
+  it('parses --connect with an optional alias and rejects unknown options', () => {
+    expect(parseServeArgs(['--connect'])).toEqual({ connect: '' });
+    expect(parseServeArgs(['--connect', 'box'])).toEqual({ connect: 'box' });
+    expect(parseServeArgs(['--connect=box'])).toEqual({ connect: 'box' });
     expectUsage(() => parseServeArgs(['--wat']), 'unknown option');
   });
 
@@ -94,8 +96,8 @@ describe('runServe --gen-key / --list / --remove', () => {
     expect(lines.at(-1)).toBe('钥匙已进入终端回滚缓冲，分发完建议清屏');
     const jsonBlocks = lines.filter((l) => l.startsWith('{'));
     expect(jsonBlocks).toHaveLength(2);
-    const parsed = JSON.parse(jsonBlocks[0]!) as { broker: { host: string; port: number }; key: string };
-    expect(parsed.broker).toEqual({ host: '192.168.1.7', port: 7260 });
+    const parsed = JSON.parse(jsonBlocks[0]!) as { broker: { host: string; port: number; alias: string }; key: string };
+    expect(parsed.broker).toEqual({ host: '192.168.1.7', port: 7260, alias: 'h' });
     expect(parsed.key).toMatch(/^[0-9a-f]{64}$/);
     expect(listNodes(registryFileOf(dir)).map((n) => n.label)).toEqual(['node-1', 'node-2']);
   });

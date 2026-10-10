@@ -36,6 +36,14 @@ export interface DoctorDeps {
   now?(): number;
   /** Repo's skills/crosschat/SKILL.md content; undefined = not locatable (skip compare). */
   repoSkillContent(): string | undefined;
+  /**
+   * 票B B2：tcp 配置目录（node.json/broker.json 所在）。Omitted → tcp checks
+   * are skipped entirely (byte-identical to before); defaultDoctorDeps wires
+   * the real ~/.crosschat/tcp.
+   */
+  tcpDir?: string;
+  /** 纯 socket connect 探活（2s 预算）；缺省 spawnSync 子进程探。 */
+  probeTcp?(host: string, port: number): boolean;
 }
 
 export interface DoctorReport {
@@ -65,6 +73,18 @@ export function defaultDoctorDeps(): DoctorDeps {
     },
     homeDir: () => homedir(),
     listOutbox: () => outboxSummary(defaultOutboxDir()),
+    tcpDir: join(homedir(), '.crosschat', 'tcp'),
+    probeTcp: (host, port) => {
+      // 纯 socket connect 探活：子进程跑一段 net.connect，2s 预算内连上即达。
+      const script =
+        "const n=require('node:net');const s=n.connect({host:process.argv[1],port:Number(process.argv[2])},()=>{s.destroy();process.exit(0)});"
+        + "s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),1500);";
+      try {
+        return spawnSync(process.execPath, ['-e', script, host, String(port)], { timeout: 2_000 }).status === 0;
+      } catch {
+        return false;
+      }
+    },
     repoSkillContent: () => {
       try {
         // dist/commands/ is two levels below the package root (same as install-skills).
@@ -170,6 +190,46 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
         '临时自纠: env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID <命令>',
     );
   } else ok('✅ 无双身份残留');
+
+  // 6.5 票B B2：tcp 转发器配置——node.json/broker.json 可解析、钥字段齐、
+  // broker TCP 可达（探活超时 2s）。目录未接线或无任何配置文件 → 整段跳过。
+  if (deps.tcpDir !== undefined) {
+    const nodeRaw = deps.readFile(join(deps.tcpDir, 'node.json'));
+    const brokerRaw = deps.readFile(join(deps.tcpDir, 'broker.json'));
+    if (nodeRaw !== undefined || brokerRaw !== undefined) {
+      let nodeOk: { host: string; port: number; alias?: string } | undefined;
+      if (nodeRaw !== undefined) {
+        try {
+          const cfg = JSON.parse(nodeRaw) as { broker?: { host?: string; port?: number; alias?: string }; key?: string };
+          if (typeof cfg.key !== 'string' || cfg.key === '' || typeof cfg.broker?.host !== 'string' || !Number.isInteger(cfg.broker.port)) {
+            throw new Error('bad shape');
+          }
+          nodeOk = { host: cfg.broker.host, port: cfg.broker.port as number, alias: cfg.broker.alias };
+          ok(`✅ tcp 节点配置可解析（broker ${nodeOk.alias ?? `${nodeOk.host}:${nodeOk.port}`}）`);
+        } catch {
+          fail(`❌ tcp 节点配置 node.json 损坏或缺钥字段（${join(deps.tcpDir, 'node.json')}）——向管理员重新索取 node.json 覆盖`);
+        }
+      }
+      if (brokerRaw !== undefined) {
+        try {
+          const reg = JSON.parse(brokerRaw) as { nodes?: { label?: string; key?: string }[] };
+          if (!Array.isArray(reg.nodes) || reg.nodes.some((n) => typeof n.label !== 'string' || typeof n.key !== 'string')) {
+            throw new Error('bad shape');
+          }
+          ok(`✅ tcp broker 注册表可解析（${reg.nodes.length} 节点）`);
+        } catch {
+          fail('❌ tcp broker 注册表 broker.json 损坏或字段缺失——crosschat serve --list 核对，必要时重发钥匙');
+        }
+      }
+      if (nodeOk !== undefined) {
+        const probe = deps.probeTcp ?? (() => true);
+        if (probe(nodeOk.host, nodeOk.port)) ok(`✅ broker TCP 可达（${nodeOk.host}:${nodeOk.port}）`);
+        else {
+          fail(`❌ broker TCP 不可达（${nodeOk.host}:${nodeOk.port}）——确认 broker 机 crosschat serve 在跑、网络/防火墙放行端口`);
+        }
+      }
+    }
+  }
 
   // 7. outbox state + watchdog + mailbox (informational)
   const parked = deps.listOutbox();
