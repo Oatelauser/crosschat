@@ -110,8 +110,8 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 |---|---|---|---|
 | **单机会话** | 同机 agent 互发，`--to <名字>` 即起对话，忙时自动入队/发件箱 | ✅ v1.0 | [使用手册](docs/usage.md)：发起方式 / 投递语义 / 底层命令 / 边界 |
 | **跨机联邦 · ssh** | 加 `--via ssh:<对端hostname>`，消息经 ssh 落到对端机器，回复自动回来 | ✅ v1.3.3 | [联邦手册](docs/federation.md)：按操作系统配置（Win/Linux/macOS）/ 单向 NAT / 命令形态 / 大内容 / 自环测试 |
-| 跨机联邦 · tcp | 局域网直连 + 极简预共享鉴权 | 🚧 规划中 | — |
-| 跨机联邦 · broker | 常驻 broker：忙时持久队列、异步回执、投递状态机、堡垒机形态 | 🚧 规划中 | — |
+| **跨机联邦 · tcp** | `crosschat serve` 起常驻转发器（星型+预共享钥匙），`--via tcp:<机器/mid8>` 直发、`--file` 文件通道 | ✅ v1.4.0 | [转发器手册](docs/broker.md)：三种形态 / 双轨寻址 / 文件通道 / proto:1 协议 / 排障 |
+| 跨机联邦 · broker 增强 | 忙时持久队列、异步回执、投递状态机（tcp 形态之上的 store-and-forward） | 🚧 规划中 | — |
 
 ssh 配置方向一句话：**每台机写自己的 `~/.ssh/config`，内容是"怎么连对端"**（别名推荐=对端 hostname）——完整五步与命令样例见上表手册。
 
@@ -123,9 +123,13 @@ ssh 配置方向一句话：**每台机写自己的 `~/.ssh/config`，内容是"
 crosschat send --to <名字> --body "<正文>"          # 新消息（名字含空格加引号；未命名 codex 线程可用 id8 或完整 id 寻址，status 可见）
 crosschat send --conversation <ref> --body "<正文>" # 回复（ref 照抄收到的信封）
 crosschat send --via ssh:<对端hostname> --to <名/id8> --body "…"  # 跨机发送（见 📡 通信方式）
+crosschat send --via tcp:<机器名/mid8> --to <名> --body "…" [--file <路径>]  # 跨机 tcp 直发 + 文件通道（见转发器手册）
 echo … | crosschat send --to <名字>                 # 正文走 stdin
 crosschat status [--json] [--conversations]        # 双侧总览（名字/目录/时间/状态）
 crosschat doctor                                    # 一键环境体检（有 ❌ 时退出码 1）
+crosschat serve [--port/--gen-key/--list/--remove/--connect/--detach/--stop]  # tcp 转发器：broker/节点/钥匙管理（见转发器手册）
+crosschat clean [--force]                           # 清 tcp 收件/断点残留（默认懒删除规则；--force 全清）
+crosschat uninstall [--yes]                         # 卸载数据面（serve 在跑拒删；结尾 npm uninstall 收尾）
 crosschat install-skills [--dir <根>]               # 安装/更新 agent skill（幂等）
 crosschat claude [任意 claude 参数…]                 # 带接收许可启动 claude（透传；--max-body-kb/--max-turn N 可预置本会话发送上限/轮次预算，并剥离 codex 侧身份变量）
 crosschat codex [任意 codex 参数…]                  # crosschat 增强启动 codex（透传；同上旋钮预置，并剥离 claude 侧身份变量）
@@ -196,6 +200,7 @@ crosschat -v | --version | help                     # 版本 / 帮助
 | [使用手册](docs/usage.md) | **单机深度细则**：发起方式 / 往复规则 / 投递语义矩阵 / 边界与限制 |
 | [命令手册](docs/commands.md) | **全量命令**：完整参数 / 启动器 / 环境变量 |
 | [联邦手册](docs/federation.md) | **跨机 ssh 联邦**：按操作系统配置 / 单向 NAT / 使用细则 / 大内容 scp / 自环测试 |
+| [转发器手册](docs/broker.md) | **跨机 tcp 转发器**：三种部署形态 / 双轨寻址（mid8+名字）/ 文件通道 / proto:1 协议规范 / 排障 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 |
 | [设计决策地图](docs/wayfinder/map.md) | 全部拍板过程与依据 |
 | [实测研究报告](docs/research/) | embassy 源码分析、两侧通道验证、0.160 inject_items 实验 |
@@ -213,7 +218,7 @@ crosschat -v | --version | help                     # 版本 / 帮助
 
 **计划中**
 - [ ] 🐧 mac 平台适配（unix 代码路径已共享，待实机验证；CI mac 观察位已挂）
-- [ ] 📦 常驻 broker（忙时持久队列、异步回执、投递状态机——embassy 完整集对齐；堡垒机形态）；tcp 直连传输（局域网 + 极简预共享鉴权）
+- [ ] 📦 常驻 broker 增强（忙时持久队列、异步回执、投递状态机——embassy 完整集对齐；tcp 星型直连传输已落地，见转发器手册）
 - [ ] 🖼️ TUI 看板与服务安装（开机自启）
 - [ ] 🤖 新 agent 适配器（GLM 等；有原生唤醒通道则原生，否则论证降级）
 
@@ -236,6 +241,9 @@ crosschat -v | --version | help                     # 版本 / 帮助
 
 **v1.3.3**
 - [x] 🌐 跨机联邦 ssh v1：`--via ssh:<对端hostname>`、mc2_ 紧凑会话引用（296→83 字符）、信封自动回程路条、三层错误码同码透传、发起侧审计补记账；localhost 与 win↔WSL 真机验证（win 收件腿 codex 侧受 AF_UNIX 限制，见联邦手册）；tcp/broker 传输见路线图
+
+**v1.4.0**
+- [x] 📡 跨机联邦 tcp（proto:1）：`crosschat serve` 星型转发器（预共享钥匙/心跳/自登记）+ `--via tcp:<机器/mid8>` 瞬态直发（双轨寻址：mid8 权威、名字显示用，改名免疫）+ tcp 回信闭环（reply-hint 自动带 `--via tcp:`）+ `--file` 文件通道（sha256 锚/断点续传/去重/5 天+512MiB 懒删除/64MiB 上限）+ roster 在线表 + `clean`/`uninstall`；win 真机自环验证，见[转发器手册](docs/broker.md)
 </details>
 
 ## 🛠️ 开发说明

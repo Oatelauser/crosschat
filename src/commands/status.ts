@@ -47,7 +47,7 @@ export interface StatusDeps {
 }
 
 /** B2 freshness bound: a status file older than this reads as "没在跑". */
-const TCP_STATUS_FRESH_MS = 90_000;
+export const TCP_STATUS_FRESH_MS = 90_000;
 
 interface BrokerStatusFile {
   state: string;

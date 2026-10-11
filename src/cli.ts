@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Buffer } from 'node:buffer';
 import process from 'node:process';
+import { createInterface } from 'node:readline';
 import { MultichatError } from './errors.js';
 import { runSend, type SendArgs, type SendDeps } from './commands/send.js';
 import { runStatus, type StatusDeps } from './commands/status.js';
@@ -27,6 +28,8 @@ import { deliverToClaudeSession } from './claude/deliver.js';
 import { listCodexThreads } from './codex/discovery.js';
 import { deliverToCodexThread } from './codex/deliver.js';
 import { runServe, realServeDeps, type ServeArgs } from './commands/serve.js';
+import { runClean, type CleanArgs } from './commands/clean.js';
+import { runUninstall, type UninstallArgs } from './commands/uninstall.js';
 import { fetchRoster } from './serve/via-tcp.js';
 import { DEFAULT_PORT } from './serve/broker.js';
 
@@ -84,6 +87,13 @@ commands:
   install-skills [--dir <root>]
                             install the agent skill into <root>/.claude and
                             <root>/.codex (default root: home directory)
+  clean [--force]           clean tcp file-channel leftovers (inbox/parts):
+                            default = lazy rules (items older than 5 days,
+                            or inbox over 512MiB oldest-first); --force
+                            deletes everything without confirmation
+  uninstall [--yes]         remove crosschat data: ~/.crosschat, the state
+                            dir, and both agent skills (refuses while
+                            "crosschat serve" runs; asks y/n unless --yes)
   claude [any native args]  start the real claude CLI with inbound peer
                             messaging enabled; any native claude args
                             (e.g. -c, --model <m>, --help) pass through
@@ -224,8 +234,26 @@ export function parseServeArgs(argv: readonly string[]): ServeArgs {
   return args;
 }
 
-function readStdinText(): Promise<string | undefined> {
-  const stdin = process.stdin;
+/** clean takes only the --force flag; uninstall only --yes. */
+export function parseCleanArgs(argv: readonly string[]): CleanArgs {
+  const args: CleanArgs = {};
+  for (const token of argv) {
+    if (token === '--force') args.force = true;
+    else throw new MultichatError('USAGE', `clean: unknown option: ${token}`);
+  }
+  return args;
+}
+
+export function parseUninstallArgs(argv: readonly string[]): UninstallArgs {
+  const args: UninstallArgs = {};
+  for (const token of argv) {
+    if (token === '--yes') args.yes = true;
+    else throw new MultichatError('USAGE', `uninstall: unknown option: ${token}`);
+  }
+  return args;
+}
+
+function readStdinText(): Promise<string | undefined> {  const stdin = process.stdin;
   if (stdin.isTTY) return Promise.resolve(undefined);
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -435,6 +463,47 @@ async function main(argv: string[]): Promise<number> {
     try {
       // B2：broker/节点的本机投递与 send 命令共用同一份真 SendDeps。
       return await runServe(parseServeArgs(rest), { ...realServeDeps(), makeSendDeps: (stdinText?: string) => realSendDeps(stdinText) });
+    } catch (err) {
+      return printFailure(err);
+    }
+  }
+  if (command === 'clean') {
+    if (rest.includes('--help')) {
+      process.stdout.write(usage);
+      return 0;
+    }
+    try {
+      return runClean(parseCleanArgs(rest), {
+        tcpDir: join(homedir(), '.crosschat', 'tcp'),
+        now: () => Date.now(),
+        stdout: (line) => process.stdout.write(`${line}\n`),
+      });
+    } catch (err) {
+      return printFailure(err);
+    }
+  }
+  if (command === 'uninstall') {
+    if (rest.includes('--help')) {
+      process.stdout.write(usage);
+      return 0;
+    }
+    try {
+      const home = homedir();
+      return await runUninstall(parseUninstallArgs(rest), {
+        crosschatHome: join(home, '.crosschat'),
+        stateRoot: join(process.env.LOCALAPPDATA ?? home, 'crosschat'),
+        skillDirs: [join(home, '.claude', 'skills', 'crosschat'), join(home, '.codex', 'skills', 'crosschat')],
+        now: () => Date.now(),
+        stdout: (line) => process.stdout.write(`${line}\n`),
+        confirm: () =>
+          new Promise<boolean>((resolve) => {
+            const rl = createInterface({ input: process.stdin, output: process.stdout });
+            rl.question('确认删除？(y/n) ', (answer) => {
+              rl.close();
+              resolve(answer.trim().toLowerCase() === 'y');
+            });
+          }),
+      });
     } catch (err) {
       return printFailure(err);
     }

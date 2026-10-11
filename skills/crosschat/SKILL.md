@@ -48,12 +48,16 @@ crosschat send --to <名字> --body "正文"
 - 长正文或正文含 `$`、反引号、引号等 shell 敏感字符时，省略 `--body` 改用管道（stdin 整段读入，免引号转义）：`cat <文件> | crosschat send --to <名字>`。
 - 投给 codex 的消息：**开窗、关窗、忙时均可投**（daemon 0.160+）。对方正在跑 turn 也不阻塞——消息直接**入队**（输出 `queued`），当前轮结束即进入对话被处理；TUI 窗口会实时刷出。输出 `delivered`（已送达）/ `queued`（已入队，轮末处理）/ `parked`（仅旧 daemon 异常态，已暂存），三者都**无需重发**。`queued` 的消费确认免费搭载在业务流量上——对端的下一条来信带更高 turn 号即证明已消费，无需轮询、无显式回执。
 - **跨机发送**：`crosschat send --via ssh:<对端hostname> --to <名/id8> --body "…"`——对端是另一台机器上安装了 crosschat 的会话（hostname = `~/.ssh/config` 里的 Host 别名，推荐直接用对端系统 hostname）；名字在目标机上解析，回执带 `@<host>` 后缀，错误同码透传（前缀 `[via <host>]`）。
+- **tcp 形态同构**：`crosschat send --via tcp:<机器名或mid8> …` 与 ssh 形态用法相同（tcp 网络需该机 `~/.crosschat/tcp/node.json` 在场）——**照抄来信 reply-hint 即回**：tcp 来信的回复命令自带 `--via tcp:<发送方mid8>`，与 `--conversation` 引用一样逐字照抄、只换回复占位符，不截断不改写。
 - 跨机的对端**不在本机 status 里**——`ssh <对端> crosschat status` 查它机器上的会话，或由题词直接告知对端名字。
 - 跨机对话的轮次纪律更要遵守：防乒乓限流器是单机记账的，**turn 计数是跨机唯一防线**——接近预算即总结收尾。
 
 ## 报错自纠（读错误码，不要即兴发明命令）
 
-- `MESSAGE_TOO_LARGE`：正文超过当前上限（默认 16KiB）。或用 `--max-body-kb <KiB>` / 环境变量 `CROSSCHAT_MAX_BODY_KIB` 提额（claude 端点硬顶 64KiB、codex 端点 1MiB，到顶只能落盘）。单机：把完整内容**写入一个文件，只发文件路径**（接收方会按需读取，这也是长内容的标准做法）。跨机（`--via ssh:<别名>`）：**先 `scp <文件> <别名>:/tmp/` 落到对端**，再 send 发**对端本地**的路径（scp 与 `--via` 共用同一份 ssh 配置；其他传输形态的大内容方式见文档）。
+- `MESSAGE_TOO_LARGE`：正文超过当前上限（默认 16KiB）。或用 `--max-body-kb <KiB>` / 环境变量 `CROSSCHAT_MAX_BODY_KIB` 提额（claude 端点硬顶 64KiB、codex 端点 1MiB，到顶只能落盘）。单机：把完整内容**写入一个文件，只发文件路径**（接收方会按需读取，这也是长内容的标准做法）。跨机（`--via ssh:<别名>`）：**先 `scp <文件> <别名>:/tmp/` 落到对端**，再 send 发**对端本地**的路径（scp 与 `--via` 共用同一份 ssh 配置）；tcp 形态（`--via tcp:`）改用 `--file <路径>` 走文件通道（上限 64MiB，正文只发说明——对端收到的正文自动带文件在对端的落地路径）。
+- `TCP_TRANSPORT_FAILED`（tcp 形态）：连不上 broker 或等回执超时——**远端状态不明，勿盲目重发**（可能与首次投递叠加）。先在对端查 send-log 或 `status --conversations` 核实后再决定。
+- `PEER_OFFLINE`（tcp 形态）：对端机器当前不在线——稍后重试；若两端另配了 ssh 也可走 ssh 形态。
+- 收到"文件 … 已送达"但那个路径不存在：附件超过 5 天被回收——回对端"**附件已过期，请重发 --file**"。
 - `RATE_LIMITED`：发送过快（每对端点 60 秒最多 30 条）。**等待后重试**，或直接总结收尾；系统不会静默丢弃或自动重试。
 - `CODEX_THREAD_LOCKED` / `CODEX_THREAD_BUSY_TIMEOUT`：旧 daemon（≤0.157 / 未附着 TUI）下线程被窗口占用或长 turn 在跑。消息**已暂存（parked，exit 0），无需重发**——**看门狗每 0.5–5 分钟自动重投，不需要手动跑 status**；每线程最多暂存 200 条，滞留内容随时可读 mailbox 镜像（Windows `%LOCALAPPDATA%\crosschat\mailbox\<线程ID>.md`；unix `~/crosschat/mailbox/<线程ID>.md`）。0.160+ 正常不会再遇到：忙时直接入队（`queued`）。
 - `CALLER_IDENTITY_CONFLICT`：环境里同时残留 `CLAUDE_CODE_*` 与 `CODEX_*` 身份变量（常见于从 Claude 终端启动的 codex daemon 派生的 shell）。临时自纠 = 给命令加前缀，照抄：
@@ -63,7 +67,7 @@ crosschat send --to <名字> --body "正文"
   ```
 
   （上面的 `env -u …` 前缀是 bash/zsh 写法；PowerShell 先 `Remove-Item Env:CLAUDE_CODE_*` 再发送。）根治 = 让用户从干净终端重启 daemon：`codex app-server daemon stop && codex app-server daemon start`。
-- 其他错误码：错误信息已写明原因与出路，按信息处理即可。crosschat 只有 `send` / `status` / `doctor` / `install-skills` / `claude` / `codex` 六个命令，不要猜测不存在的子命令或参数。
+- 其他错误码：错误信息已写明原因与出路，按信息处理即可。crosschat 只有 `send` / `status` / `doctor` / `install-skills` / `claude` / `codex` / `serve` / `clean` / `uninstall` 九个命令，不要猜测不存在的子命令或参数。
 
 ## 会话纪律
 
