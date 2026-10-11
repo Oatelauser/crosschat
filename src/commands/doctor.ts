@@ -24,7 +24,8 @@ export interface DoctorDeps {
   listClaudeSessions(): ClaudeRegistryScan;
   /** Throws when the codex executable cannot be resolved. */
   codexBin(): string;
-  run(bin: string, args: readonly string[]): { status: number | null; stdout: string };
+  /** stdout is undefined when spawn itself fails (ENOENT/EACCES) — spawnSync's real shape. */
+  run(bin: string, args: readonly string[]): { status: number | null; stdout: string | undefined; error?: unknown };
   exists(path: string): boolean;
   /** Undefined = missing/unreadable. */
   readFile(path: string): string | undefined;
@@ -148,19 +149,26 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
     fail('❌ codex daemon 无法检查（codex CLI 缺失）；安装后运行: codex app-server daemon start');
   } else {
     const v = deps.run(codexBin, ['--version']);
-    const ver = v.status === 0 ? parseSemver(v.stdout) : undefined;
-    if (ver === undefined) attention(`⚠️ codex CLI 存在，但版本无法解析：${firstLine(v.stdout) || `(exit ${v.status ?? 'null'})`}`);
-    else if (cmpVersion(ver, CODEX_MIN_VERSION) < 0) {
-      attention(`⚠️ codex CLI ${ver.join('.')}（<${CODEX_MIN_VERSION.join('.')}：开窗投递需升级）`);
-    } else ok(`✅ codex CLI ${ver.join('.')}`);
+    // 非 win32 下 resolveCodexExecutable() 不验存在性直接返回 'codex'：未安装时 spawn ENOENT、
+    // stdout 为 undefined（v1.5.0 云端 doctor 崩溃根因），并入"未找到"而非当作版本解析失败。
+    if (v.error !== undefined) {
+      fail('❌ codex CLI 未找到；安装 codex 后重试');
+      fail('❌ codex daemon 无法检查（codex CLI 缺失）；安装后运行: codex app-server daemon start');
+    } else {
+      const ver = v.status === 0 ? parseSemver(v.stdout ?? '') : undefined;
+      if (ver === undefined) attention(`⚠️ codex CLI 存在，但版本无法解析：${firstLine(v.stdout) || `(exit ${v.status ?? 'null'})`}`);
+      else if (cmpVersion(ver, CODEX_MIN_VERSION) < 0) {
+        attention(`⚠️ codex CLI ${ver.join('.')}（<${CODEX_MIN_VERSION.join('.')}：开窗投递需升级）`);
+      } else ok(`✅ codex CLI ${ver.join('.')}`);
 
-    const d = deps.run(codexBin, ['app-server', 'daemon', 'version']);
-    const daemonVer = d.status === 0 ? parseSemver(d.stdout) : undefined;
-    if (daemonVer === undefined) {
-      fail('❌ codex daemon 未运行；先执行: codex app-server daemon start');
-    } else if (cmpVersion(daemonVer, CODEX_MIN_VERSION) < 0) {
-      attention(`⚠️ codex daemon ${daemonVer.join('.')}（<${CODEX_MIN_VERSION.join('.')}：开窗投递需升级后重启 daemon）`);
-    } else ok(`✅ codex daemon ${daemonVer.join('.')}`);
+      const d = deps.run(codexBin, ['app-server', 'daemon', 'version']);
+      const daemonVer = d.status === 0 ? parseSemver(d.stdout ?? '') : undefined;
+      if (daemonVer === undefined) {
+        fail('❌ codex daemon 未运行；先执行: codex app-server daemon start');
+      } else if (cmpVersion(daemonVer, CODEX_MIN_VERSION) < 0) {
+        attention(`⚠️ codex daemon ${daemonVer.join('.')}（<${CODEX_MIN_VERSION.join('.')}：开窗投递需升级后重启 daemon）`);
+      } else ok(`✅ codex daemon ${daemonVer.join('.')}`);
+    }
   }
 
   // 5. skill installation (and repo comparison when locatable)
@@ -262,6 +270,6 @@ function cmpVersion(a: readonly [number, number, number], b: readonly [number, n
   return 0;
 }
 
-function firstLine(text: string): string {
-  return text.split(/\r?\n/, 1)[0] ?? '';
+function firstLine(text: string | undefined): string {
+  return (text ?? '').split(/\r?\n/, 1)[0] ?? '';
 }

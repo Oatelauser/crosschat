@@ -95,6 +95,38 @@ describe('runDoctor', () => {
     expect(gone.output).toContain('❌ codex daemon 无法检查');
   });
 
+  // 回归：v1.5.0 云端（无 codex）崩溃——linux 解析器返回 'codex' 不验存在性，
+  // spawnSync ENOENT 时 stdout 为 undefined，旧代码 firstLine(undefined).split 崩。
+  it('fails (not crashes) when the codex spawn errors with ENOENT and undefined stdout', () => {
+    const report = runDoctor(
+      makeDeps({
+        run: (_bin, args) =>
+          args[0] === '--version'
+            ? { status: null, stdout: undefined, error: { code: 'ENOENT' } }
+            : { status: null, stdout: undefined, error: { code: 'ENOENT' } },
+      }),
+    );
+    expect(report.failed).toBe(true);
+    expect(report.output).toContain('❌ codex CLI 未找到');
+    expect(report.output).toContain('❌ codex daemon 无法检查');
+  });
+
+  // 回归：v1.5.0 云端（无 codex）崩溃——linux 解析器返回 'codex' 不验存在性，
+  // spawnSync ENOENT 时 stdout 为 undefined，旧代码 firstLine(undefined).split 崩。
+  it('fails (not crashes) when the codex spawn errors with ENOENT and undefined stdout', () => {
+    const report = runDoctor(
+      makeDeps({
+        run: (_bin, args) =>
+          args[0] === '--version'
+            ? { status: null, stdout: undefined, error: { code: 'ENOENT' } }
+            : { status: null, stdout: undefined, error: { code: 'ENOENT' } },
+      }),
+    );
+    expect(report.failed).toBe(true);
+    expect(report.output).toContain('❌ codex CLI 未找到');
+    expect(report.output).toContain('❌ codex daemon 无法检查');
+  });
+
   it('fails with the daemon-start guidance when the daemon is not running', () => {
     const report = runDoctor(
       makeDeps({
