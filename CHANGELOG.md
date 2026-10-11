@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-10-11
+
+### 修复
+
+- `crosschat doctor` 在无 codex CLI 的 Linux 机器上崩溃（v1.5.0 云端现场）：非 win32 下 codex 解析器不验存在性直接返回 `codex` → spawn ENOENT 时 `stdout` 为 undefined → 版本探测行 `firstLine(undefined).split` 崩。spawn error 现并入「codex CLI 未找到」❌ 分支，全探测对 undefined 容错；含回归测试（ENOENT + undefined stdout 形状）。serve/send/connect 不受影响，仅 doctor 探测路径。
+
 ## [1.5.0] - 2026-10-11
 
 ### tcp 转发器组件（票B：tcp/broker 合并为单一组件，全网唯一监听端口）
