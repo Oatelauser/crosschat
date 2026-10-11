@@ -4,6 +4,31 @@
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-11
+
+### tcp 转发器组件（票B：tcp/broker 合并为单一组件，全网唯一监听端口）
+
+- 三角色：`crosschat serve`（服务端 broker，默认端口 7260 经 IANA 实查未分配）/ `crosschat serve --connect <别名>`（常驻节点，断线退避 1s→60s 永不放弃、≥5 分钟静音、broker 重启实测 2 秒自愈）/ `crosschat send --via tcp:<机器>`（瞬态发送，零进程）
+- 三部署形态：两机 colocated（主打）/ 跨网堡垒+ssh 隧道包裹（公网明文风险的官方姿势，TLS 挂账待定）/ CI 零进程直发
+- **mid8 双轨寻址**：协议寻址权威=machine-id 前缀（git 短哈希式最短无歧义，改名/同名免疫），名字=人读显示用；信封 reply-hint 盖 `--via tcp:<发送方 mid8>`，回信照抄即回
+- 星型密钥：`--gen-key [N≤10]` 打印完整 node.json 分发（自动探测 IP 带"人工核对"声明——drill 当场应验）；`--list`/`--remove` 注册表管理；`--stop` 三重身份校验安全停止
+- **文件通道**：`send --file`（sha256 锚/256KiB 分块/断点续传/去重秒回/懒删除 5 天+512MiB/单文件 64MiB）
+- 协议 proto:1 草案公开（`docs/broker.md` 协议规范章：MQTT/NATS/STOMP/JSON-RPC 取材，第三方可实现兼容 broker；多实例集群注意事项已注明）
+- `crosschat clean [--force]` 收件/断点清理；`crosschat uninstall [--yes]` 全量卸载（serve 在跑拒删）
+- status/doctor 转发器区块+实时在线机器表（roster）
+- 手册 `docs/broker.md`：三形态实录（形态二 drill 占位待补）+协议规范+排障对照
+- drill a（win broker+WSL 节点）真机十腿全过，含**跨机 agent 自主对话闭环**（报告 `docs/drill-reports/broker-wsl-drill-20261011.md`）
+
+### 修复
+
+- `--json` 模式 codex queued/unconfirmed 回执被中文注记污染（tcp 桥必炸，人类可读输出不变）
+- 远端来件（--origin）署名被环境残留身份压制——origin 在场即权威，ssh/tcp 接收腿同享修正
+- skill 实地反馈三条不变式入教学（旧 ref 照抄安全/queued 消费确认=对端下一条 turn 号/管道敏感字符场景）
+
+### 升级提醒
+
+- 已装用户**重跑 `crosschat install-skills`**（skill 新增 tcp 段与错误自纠）
+
 ## [1.4.0] - 2026-10-09
 
 ### 上限可配置化与轮次预算（票A）
