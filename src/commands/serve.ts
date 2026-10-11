@@ -103,7 +103,7 @@ function runGenKey(genKeyArg: string, deps: ServeDeps, registryFile: string, por
   deps.stdout('  · broker 机自身 → 无需分发（首次 serve 已自动写好 127.0.0.1 的自用 node.json）');
   deps.stdout('  · broker 是云主机/NAT 内网机 → host 填对外公网 IP（探测常拿内网 IP，必核对）');
   deps.stdout('  · 普通局域网 → broker 机的局域网 IP；broker 用非默认端口时 port 一并改');
-  deps.stdout('分发前把每份 node.json 的 name 改成目标机器名（人读用，回信不依赖它——寻址走 machine-id 前缀）');
+  deps.stdout('分发前把每份 node.json 的 name 改成「贴这份配置的机器」的自报名字（建议=其 hostname；纯显示用——roster 怎么称呼它，寻址/回信不依赖，走 machine-id 前缀）');
   for (const result of results) {
     deps.stdout('--------------------------------');
     deps.stdout(result.nodeJsonContent.trimEnd());

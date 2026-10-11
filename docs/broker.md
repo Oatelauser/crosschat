@@ -60,7 +60,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
   · broker 机自身 → 无需分发（首次 serve 已自动写好 127.0.0.1 的自用 node.json）
   · broker 是云主机/NAT 内网机 → host 填对外公网 IP（探测常拿内网 IP，必核对）
   · 普通局域网 → broker 机的局域网 IP；broker 用非默认端口时 port 一并改
-分发前把每份 node.json 的 name 改成目标机器名（人读用，回信不依赖它——寻址走 machine-id 前缀）
+分发前把每份 node.json 的 name 改成「贴这份配置的机器」的自报名字（建议=其 hostname；纯显示用——roster 怎么称呼它，寻址/回信不依赖，走 machine-id 前缀）
 --------------------------------
 {
   "broker": {
@@ -69,7 +69,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
     "alias": "yang"
   },
   "key": "a3f0…64位hex…",
-  "name": "改成目标机器名"
+  "name": "改成「贴这份配置的机器」的名字"
 }
 --------------------------------
 { …第二份同构… }
@@ -85,7 +85,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 ### 1.3 node 机：贴钥匙 + 上线
 
-**贴钥匙**。把 gen-key 打印的一份 JSON 整段存成 `~/.crosschat/tcp/node.json`，改两处：host 按上节规则核对改写、name 改成本机名（人读用）。这台机器也要装好 crosschat（`npm i -g @oatelauser/crosschat && crosschat install-skills`）：
+**贴钥匙**。把 gen-key 打印的一份 JSON 整段存成 `~/.crosschat/tcp/node.json`，改两处：host 按上节规则核对改写、name 改成**这台机器自己**的名字（自报显示名，建议=hostname）。这台机器也要装好 crosschat（`npm i -g @oatelauser/crosschat && crosschat install-skills`）：
 
 ```
 > mkdir -p ~/.crosschat/tcp && nano ~/.crosschat/tcp/node.json
@@ -97,6 +97,12 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
   "name": "host-b"
 }
 ```
+
+node.json 三个字段一句话分清（前两个**不用**你改）：
+
+- `key`：这台机的入网钥匙（broker 发的，鉴权唯一依据）
+- `broker.alias`：**broker 机的显示名**（gen-key 时自动带出 broker 的 hostname）——各节点不一致不影响功能（鉴权只认 key），只用于本机 status 的 `online tcp:<别名>` 显示与 `--connect <别名>` 一致性校验；broker 后来改了 hostname 显示旧了，手改这里即可
+- `name`：**这台机自己的显示名**（连上时自报，roster/在线表里怎么称呼它；寻址权威是 mid8，改名不断线）
 
 **上线**。启动节点客户端连上 broker，之后断线自动重连（1s→60s 退避，永不放弃）：
 

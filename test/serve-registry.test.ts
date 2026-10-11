@@ -33,7 +33,7 @@ describe('genKeys', () => {
     const file = freshFile();
     const [{ key, nodeJsonContent }] = genKeys(file, 1, { host: '10.0.0.2', port: 9000 });
     expect(nodeJsonContent).toBe(
-      `{\n  "broker": {\n    "host": "10.0.0.2",\n    "port": 9000\n  },\n  "key": "${key}",\n  "name": "改成目标机器名"\n}\n`,
+      `{\n  "broker": {\n    "host": "10.0.0.2",\n    "port": 9000\n  },\n  "key": "${key}",\n  "name": "改成「贴这份配置的机器」的名字"\n}\n`,
     );
     expect(key).toMatch(/^[0-9a-f]{64}$/);
   });

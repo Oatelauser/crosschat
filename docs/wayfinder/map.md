@@ -48,6 +48,8 @@ label: wayfinder:map
 
 ## Not yet specified
 
+- **tcp TLS（公网加密）**——[010](tickets/010-tcp-tls-transport.md)（2026-10-11 挂票，用户需求 ③）：明文公网两层风险（内容可看 + **钥匙可截走可伪造**——"PSK 挡伪造"仅在无窃听时成立）；方案倾向自签+钉指纹 TOFU（零域名零 CA），M 票，随 v1.6.0
+- **多星成员档案化（proto:2）**——[011](tickets/011-multi-star-profiles.md)（2026-10-11 挂票，用户需求 ①b/②）：`nodes/<别名>.json` 多档案 + 两级寻址 `--via tcp:<档案>:<mid8>` + 回程路条携带档案限定词；wire 不变、单档案机旧语法永续（加法升级）；同时解掉"一台机既当 broker 又当外连 node"的 node.json 冲突；L 票
 - 联邦协议与异构互聊设计（win↔linux 跨机）——**v1 设计已关闭（[008](tickets/008-federation-v1-ssh-design.md)，2026-10-06，六问全 A 拍板）**：ssh+远端 CLI、`--via` 传输通用命名空间、`--origin` 身份牌 + ref `m` 字段 + mc2_ 紧凑格式（79 字符，mc1_ 兼容）、三层错误码、发起侧审计补记账。**实施已完成并发布（2026-10-07）**：原计划 B1→B3，实际以 B6–B11 落地（--via ssh 寻址/回执透传/三层错误码/回复闭环/mc2 紧凑 ref/machine-id 双身份/B11 乒乓修复），v1.3.3 上 npm，win↔WSL 真机闭环验证（drill 报告 `../drill-reports/federation-wsl-connectivity-20261007.md`，B11/B2.1 现场修复另见 `../drill-reports/field-feedback-20261007.md`）。详见 `../research/federation-v1-design-notes.md`；与 embassy 生态的互通性评估（Q9）仍留雾区后续票
 - 完整集的范围与节奏：持久账本、回执、投递状态机、TUI、服务安装 + 看门狗（launchd `KeepAlive{Crashed}` 语义等价物）、Windows 安全见证模型（named pipe ACL 哲学）；联邦 v1 可先 ssh+远端 CLI——**broker（tcp 转发器）已实施（票B，2026-10-11）：独立进程组件、堡垒机模式（全节点出站连接、免开入站端口、星型密钥拓扑）、与 tcp 合并为单一组件（用户 2026-10-10 拍板，修订"三形态中最后实现"的排序）**
 - 二期长对话机制（004 遗留）：换轨续传模式 = 自动档案 + 摘要服务 + 新会话读档接续；不做"原地压缩"（transcript 归 provider 所有，外部工具做不到）——**"邮差全程落盘"假设已修订（票B 拍板转发器无状态，2026-10-10）：档案落点改节点侧或未来转发器可选持久层，E 票开时定；broker 已落地，原阻塞解除**
