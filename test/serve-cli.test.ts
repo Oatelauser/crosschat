@@ -91,8 +91,11 @@ describe('runServe --gen-key / --list / --remove', () => {
     const { deps, lines, dir } = makeDeps();
     const rc = await runServe({ genKeyArg: '2' }, deps);
     expect(rc).toBe(0);
-    expect(lines[0]).toContain('自动探测 broker 地址：192.168.1.7');
-    expect(lines[0]).toContain('请人工核对，不保证正确');
+    expect(lines[0]).toContain('自动探测 broker 地址：192.168.1.7:7260');
+    expect(lines[0]).toContain('人工核对改写 node.json 的 host 与 port');
+    expect(lines.some((l) => l.includes('· broker 是云主机/NAT 内网机 → host 填对外公网 IP'))).toBe(true);
+    expect(lines.some((l) => l.includes('放置路径（目标机器）：~/.crosschat/tcp/node.json'))).toBe(true);
+    expect(lines.some((l) => l.includes('本命令须在 broker 机上执行'))).toBe(true);
     expect(lines.at(-1)).toBe('钥匙已进入终端回滚缓冲，分发完建议清屏');
     const jsonBlocks = lines.filter((l) => l.startsWith('{'));
     expect(jsonBlocks).toHaveLength(2);

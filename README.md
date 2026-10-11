@@ -104,6 +104,23 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 
 与单机的全部差别：题词里多了 `--via ssh:yangwsl`——消息与回复自动走 ssh 往返，双方谁都没敲过一次完整命令。
 
+### 跨机 tcp：常驻转发器（broker 星型）
+
+准备（一次性，管理员动作）：选一台机器跑 `crosschat serve` 当 broker，`--gen-key` 发钥匙、其余机器贴好 node.json 后 `crosschat serve --connect` 常驻在线（→ [转发器手册](docs/broker.md)：三种部署形态 / 文件通道 / 排障）。然后整个过程：
+
+```
+👤 用户[boss -> worker2]  用 crosschat 给 host-b 机器的 claude 会话「worker2」发消息，要求走 tcp 转发器
+                          （send 时加 --via tcp:host-b），让它跑一次构建并回报结果。
+🤖 worker2 收到            📨 来自另一会话的消息:
+                          <cross-session-message from-name="boss" turn="1">
+                          …跑一次构建并回报结果…
+                          回复请运行: crosschat send --via tcp:ec542c2c --conversation mc2_… --body "<你的回复>"
+🤖 worker2[worker2 -> boss] 构建完成，产物清单见下一条
+🤖 boss 收到               📨 构建完成，产物清单见下一条（turn 2，自动经 broker 跨机回来）
+```
+
+与 ssh 跨机同构：题词里多了 `--via tcp:host-b`，回程路条由信封自动携带（`--via tcp:<A-mid8>`），worker2 零配置照抄即回；另支持 `--file` 文件通道与 CI 零进程直发（见转发器手册）。
+
 ## 📡 通信方式
 
 | 方式 | 一句话 | 状态 | 深入 |

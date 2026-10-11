@@ -320,7 +320,7 @@ describe('B2.1 reply loop closure', () => {
 });
 
 describe('B2.1 serve self-init', () => {
-  it('registers a self entry and writes the local node.json (127.0.0.1); idempotent', () => {
+  it('registers a self entry and writes the local node.json (127.0.0.1); idempotent, status written→ok', () => {
     const dir = mkdtempSync(join(root, 'self-'));
     const deps: ServeDeps = {
       ...realServeDeps(),
@@ -329,20 +329,39 @@ describe('B2.1 serve self-init', () => {
       hostname: () => 'hub',
     };
     const registryFile = registryFileOf(dir);
-    ensureSelfEntry(deps, registryFile, 7260);
+    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'written' });
     const reg = JSON.parse(readFileSync(registryFile, 'utf8')) as { nodes: NodeEntry[] };
     expect(reg.nodes).toHaveLength(1);
     expect(reg.nodes[0]).toMatchObject({ label: 'self', machineId: 'a1b2c3d40000', machineName: 'hub' });
     const nodeJson = JSON.parse(readFileSync(join(tcpDir(dir), 'node.json'), 'utf8')) as { broker: { host: string; port: number }; name: string };
     expect(nodeJson.broker).toEqual({ host: '127.0.0.1', port: 7260, alias: 'hub' });
     expect(nodeJson.name).toBe('hub');
-    // 幂等：再来一次不重复登记、不覆盖既有 node.json
-    writeFileSync(join(tcpDir(dir), 'node.json'), '{"keep":true}');
-    ensureSelfEntry(deps, registryFile, 7260);
+    // 幂等：再来一次不重复登记、不覆盖既有 node.json，状态 ok（静默分支）
+    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
     const reg2 = JSON.parse(readFileSync(registryFile, 'utf8')) as { nodes: NodeEntry[] };
     expect(reg2.nodes).toHaveLength(1);
-    expect(JSON.parse(readFileSync(join(tcpDir(dir), 'node.json'), 'utf8'))).toEqual({ keep: true });
     expect(existsSync(join(tcpDir(dir), 'node.json'))).toBe(true);
+  });
+
+  // 三态体检：指向别家的 node.json 不覆盖只报 foreign；指向本机但钥匙/端口不符报 stale
+  it('classifies an existing node.json as foreign or stale without touching it', () => {
+    const dir = mkdtempSync(join(root, 'self-'));
+    const deps: ServeDeps = {
+      ...realServeDeps(),
+      baseDir: dir,
+      machineId: () => 'a1b2c3d40000',
+      hostname: () => 'hub',
+    };
+    const registryFile = registryFileOf(dir);
+    const nodeJson = join(tcpDir(dir), 'node.json');
+    mkdirSync(tcpDir(dir), { recursive: true });
+    writeFileSync(nodeJson, JSON.stringify({ broker: { host: '192.168.1.5', port: 7260, alias: 'other' }, key: 'k', name: 'n' }));
+    expect(ensureSelfEntry(deps, registryFile, 7260)).toMatchObject({ status: 'foreign', host: '192.168.1.5' });
+    writeFileSync(nodeJson, JSON.stringify({ broker: { host: '127.0.0.1', port: 7260, alias: 'hub' }, key: 'stale-key', name: 'hub' }));
+    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'stale' });
+    writeFileSync(nodeJson, 'not json at all');
+    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'stale' });
+    expect(readFileSync(nodeJson, 'utf8')).toBe('not json at all');
   });
 });
 

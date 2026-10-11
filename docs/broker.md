@@ -18,6 +18,24 @@ crosschat send --via tcp:host-b --to worker2 --body "跑一次构建，产物清
 - 每步一个代码块：`>` 开头的行 = 你要敲的命令，其余行 = 期望输出，`#` 开头 = 条件/备注
 - `<XX>` = 占位符，各章开头的小表标了去哪一步查到真值
 - 端口统一默认 **7260**；钥匙 = 一份 `node.json`，是唯一的入网凭证
+- **单星边界**：一台机一份 node.json = 一个星形成员身份；换 broker = 换钥匙。同时入两个星是 proto:2 挂账议题（路线已核：客户端档案化、wire 协议不变、旧语法单档案机永续可用——升级不破坏）
+
+### 会话实录（tcp 形态）
+
+部署完成后（形态一 S1–S4 做完），日常用法与 [README 快速入门](../README.md#-快速入门)同款——你只说一句话，两个 agent 跨机对话到闭环。图例同 README：**👤 用户** 你说的指令 · **🤖 agent** 回复/收件 📨。
+
+```
+👤 用户[boss -> worker2]  用 crosschat（先 status 确认）给 host-b 机器的 claude 会话「worker2」发消息：
+                          要求走 tcp 转发器（send 时加 --via tcp:host-b），让它跑一次构建并回报结果。
+🤖 worker2 收到            📨 来自另一会话的消息:
+                          <cross-session-message from-name="boss" turn="1">
+                          …跑一次构建并回报结果…
+                          回复请运行: crosschat send --via tcp:ec542c2c --conversation mc2_… --body "<你的回复>"
+🤖 worker2[worker2 -> boss] 构建完成，产物清单见下一条
+🤖 boss 收到               📨 构建完成，产物清单见下一条（turn 2，自动经 broker 跨机回到 A 机）
+```
+
+与 ssh 跨机的差别只有题词里的 `--via tcp:host-b`——回程路条由信封自动携带（`--via tcp:<A-mid8>`），worker2 零配置照抄即回。
 
 ### 形态一 · 两台机器（服务端放其中一台）
 
@@ -32,17 +50,21 @@ crosschat send --via tcp:host-b --to worker2 --body "跑一次构建，产物清
 
 ```
 > crosschat serve
+已自动生成本机 node.json（C:\Users\yang\.crosschat\tcp\node.json，host=127.0.0.1——本机 send --via tcp: 凭证）
 broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 # win 首启弹防火墙允许提示：勾选专用网络并允许——只给同网段用就不勾公用
-# 首次 serve 自动登记本机（self 条目）并写好本机 node.json——broker 机与其他
-#   节点完全同构，零管理员动作；Ctrl+C 前台跑，--detach 可后台
+# 首行自登记声明只在首次出现（已存在且一致时静默）；node.json 已存在但指向别家/钥匙陈旧时
+#   会改为打印相应警告——broker 机与其他节点完全同构，零管理员动作；Ctrl+C 前台跑，--detach 可后台
 ```
 
 **S2 · A 机生成钥匙（两把：B 机一把、留一把备用）**
 
 ```
 > crosschat serve --gen-key 2
-自动探测 broker 地址：192.168.1.10（只取第一个网卡，可能不对——请人工核对，不保证正确）
+自动探测 broker 地址：192.168.1.10:7260（多网卡/NAT 常探错——按下述规则人工核对改写 node.json 的 host 与 port）：
+  · broker 机自身 → 无需分发（首次 serve 已自动写好 127.0.0.1 的自用 node.json）
+  · broker 是云主机/NAT 内网机 → host 填对外公网 IP（探测常拿内网 IP，必核对）
+  · 普通局域网 → broker 机的局域网 IP；broker 用非默认端口时 port 一并改
 分发前把每份 node.json 的 name 改成目标机器名（人读用，回信不依赖它——寻址走 machine-id 前缀）
 --------------------------------
 {
@@ -56,9 +78,11 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 }
 --------------------------------
 { …第二份同构… }
+放置路径（目标机器）：~/.crosschat/tcp/node.json（win 写法 C:\Users\<用户>\.crosschat\tcp\node.json）
+本命令须在 broker 机上执行（钥匙登记进本机 broker.json）；broker 机自己的 node.json 已由首次 serve 自动写好，勿用上面的钥匙覆盖
 钥匙已进入终端回滚缓冲，分发完建议清屏
 ```
-- 首行 IP 核对声明解读：探测**只取第一个非内网网卡**——多网卡/VPN/WSL 场景常探错；`ipconfig`/`ip a` 人工核对后，把正确 IP 写进要分发的 node.json（或 `--port` 换网段前先想清楚）。探测错不致命：node.json 在 B 机改 host 即可
+- 规则解读：探测**只取第一个非 internal 网卡**（内网段照返回）——多网卡/VPN/WSL/云主机 NAT 场景常探错，云主机公网 IP 是 NAT 映射**根本不绑网卡**，探测永远找不到，必须人工核对填入。探测错不致命：node.json 在 B 机改 host/port 即可
 - 钥匙回滚缓冲安全提示：node.json 含钥匙=入网凭证，贴进过终端/聊天工具的缓冲都可能泄露——分发完 `clear`（win：`cls`），废弃的钥匙在 A 机 `serve --remove <label>` 注销
 
 **S3 · B 机装钥匙（粘贴整段 node.json）**
@@ -166,7 +190,8 @@ stop node: pid 8412 已终止
 **C1 · 云端装好 crosschat 后起服务端**（与 S1 同；`--detach` 后台，日志 `~/.crosschat/tcp/broker.log`）
 ```
 > crosschat serve --detach
-broker 后台运行中 pid=24680（日志：/root/.crosschat/tcp/broker.log）
+已自动生成本机 node.json（/root/.crosschat/tcp/node.json，host=127.0.0.1——本机 send --via tcp: 凭证）
+broker 后台运行中 pid=24680 端口 7260（日志：/root/.crosschat/tcp/broker.log）
 ```
 **C2 · 云端放行端口**：云服务商安全组/防火墙放行 7260 入站（TCP）——只给需要的来源 IP 更好
 **C3 · 云端发钥匙**（同 S2）：`crosschat serve --gen-key 1`，**核对打印的自动探测地址**——云端多网卡时探测值可能取内网 IP，家里机要用的是**公网 IP**，以人工核对为准
