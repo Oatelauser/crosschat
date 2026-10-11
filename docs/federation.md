@@ -2,7 +2,6 @@
 
 > 本文是 [README · 通信方式](../README.md#-通信方式) 表中"跨机联邦 · ssh"的完整手册。
 
-
 一句话：跨机 = **[单机全部用法](../README.md#-快速入门)** + 一个 `--via` 参数——[快速入门](../README.md#-快速入门)里的一切照旧，只是消息发到另一台机器。对端装好 crosschat、配好密钥，就开始。
 
 ```bash
@@ -12,13 +11,28 @@ crosschat send --via ssh:build01 --to worker2 --body "跑一次构建，产物�
 
 ### 怎么用这篇手册
 
-- 双向可达（同 LAN/VPN）：本机章（[Win](#win-配置-ssh本机是-windows-时做本章) 或 [MacOS](#macos-配置-ssh本机是-macos-时做本章)）+ [Linux 章](#linux-配置-ssh)各从头做到尾，两个方向自证都出版本号 = 部署完成
-- 单向（本机在 NAT 后，能连出去、对端连不回你）：上面两章做完，再做[单向 SSH 章](#单向-sshnat你能连它它连不回你)的两处差量
-- 每步一个代码块：`>` 开头的行 = 你要敲的命令，其余行 = 期望输出，`#` 开头 = 条件/备注
-- 标 **⚠️ 前置** 的步骤 = 依赖另一个系统的某步必须先完成：先切到引用的那章把那步做完再回来。跨系统硬依赖集中在各章的**公钥交换**步（W4/L4/M3，内含三小步）与**自证**步，漏掉必卡在认证
+- **第一次部署**：第一章——按你的操作系统做对应小节（每台机器做自己的章），两个方向自证都出版本号 = 部署完成
+- **部署完想聊天/传大文件**：第二章——一句话题词实录，不需要记任何命令
+- **想懂原理 / 排障要深挖**：第三章（默认折叠）
+- **要写脚本/第三方工具对接**：第四章 CLI 契约（默认折叠）
+- 命令块约定：`>` 开头 = 你要敲的命令，其余行 = 期望输出，`#` 开头 = 条件/备注
+- 标 **⚠️ 前置** 的步骤 = 依赖另一台机器的某步必须先完成：先切过去做完再回来。跨机硬依赖集中在各章的**公钥交换**步（W4/L4/M3，内含三小步）与**自证**步，漏掉必卡认证
 - `<XX>` = 占位符，每章开头的小表标了去哪一步查到真值
 
-### Win 配置 SSH（本机是 Windows 时做本章）
+---
+
+## 一、环境搭建
+
+这一章做完，你得到：两台机器互相认得对方的 ssh 密钥、彼此可免密登录、crosschat 出腿自证通过。本质就是**配一次双向免密 ssh**——crosschat 复用它，自己零额外配置。按每台机器的操作系统做对应小节（Win 做 1.2、Linux 做 1.3、macOS 做 1.4；两台同系统就把同一章在两台机各做一遍）。
+
+| 场景 | 要做的小节 |
+|---|---|
+| 双向可达（同 LAN/VPN） | 两台机各做完自己的 OS 章（含自证步）即部署完成 |
+| 单向（本机在 NAT 后，能连出去、对端连不回你） | 两章做完（自证步按注跳过），再补 1.5 差量 |
+
+### 1.2 Win 配置 SSH（本机是 Windows 时做本章）
+
+这一节让这台 win：能被 ssh 登录（收件腿的终点）、有自己的密钥、认得对端。
 
 | 占位符 | 在哪查 |
 |---|---|
@@ -64,7 +78,7 @@ ssh-ed25519 AAAA...yang
 - 对端是 MacOS → **MacOS 章 M3 第三步**
 - 对端是 Win → **本章第三步**（同款操作）
 
-**第三步 · 收对端公钥**（先让对端打印它的公钥——对端是 Linux → **L4 第一步**｜MacOS → **M3 第一步**｜Win → **W4 第一步**；拿到整行后在**本机**跑下面三条。管理员组用户必须走专用文件，三条在**终端(管理员)**里跑，无输出 = 成功）：
+**第三步 · 收对端公钥**（先让对端打印它的公钥——对端是 Linux → **L4 第一步**｜MacOS → **M1 第一步**｜Win → **W4 第一步**；拿到整行后在**本机**跑下面三条。管理员组用户必须走专用文件，三条在**终端(管理员)**里跑，无输出 = 成功）：
 ```
 > $kf = "$env:ProgramData\ssh\administrators_authorized_keys"
 > Add-Content $kf -Value '<对端公钥整行>'
@@ -106,7 +120,9 @@ Warning: Permanently added '<对端地址>' (ED25519) to the list of known hosts
 1.3.3
 ```
 
-### Linux 配置 SSH
+### 1.3 Linux 配置 SSH
+
+这一节让这台 Linux：sshd 在跑、有自己的密钥、认得对端、crosschat 在系统 PATH（sshd 的 shell 找得到）。
 
 | 占位符 | 在哪查 |
 |---|---|
@@ -159,7 +175,7 @@ ssh-ed25519 AAAA...(对端)
 #   wsl -u root sh -c 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys' < $env:USERPROFILE\.ssh\id_ed25519.pub
 ```
 
-**L5 · 认得对端（双向场景；单向 NAT 场景跳过本步，由[单向 SSH 章](#单向-sshnat你能连它它连不回你)接管）**
+**L5 · 认得对端（双向场景；单向 NAT 场景跳过本步，由 1.5 接管）**
 ```
 > cat >> ~/.ssh/config << 'EOF'
 Host <对端hostname> peer
@@ -184,13 +200,15 @@ Warning: Permanently added '<对端地址>' (ED25519) to the list of known hosts
 # 不跑的后果：对端自证报 REMOTE_FAILED [via ...] 远端异常退出(127): command not found
 ```
 
-**L7 · 出腿自证（双向场景；单向 NAT 场景跳过本步，回程自证由[单向 SSH 章](#单向-sshnat你能连它它连不回你)N3 接管。⚠️ 前置：对端公钥交换已完成——Win→W4 / MacOS→M3；反方向在对端 W8/M6——两边都出版本号 = 部署完成）**
+**L7 · 出腿自证（双向场景；单向 NAT 场景跳过本步，回程自证由 1.5 的 N3 接管。⚠️ 前置：对端公钥交换已完成——Win→W4 / MacOS→M3；反方向在对端 W8/M6——两边都出版本号 = 部署完成）**
 ```
 > ssh -o BatchMode=yes peer crosschat --version
 1.3.3
 ```
 
-### MacOS 配置 SSH（本机是 MacOS 时做本章）
+### 1.4 MacOS 配置 SSH（本机是 MacOS 时做本章）
+
+这一节与 Win/Linux 章同构：开 sshd、密钥、认对端、自证。
 
 | 占位符 | 在哪查 |
 |---|---|
@@ -256,9 +274,9 @@ Warning: Permanently added '[<对端地址>]:<对端端口>' (ED25519) to the li
 ```
 （Linux 桌面当本机：M2 换成 `systemctl enable --now ssh`，其余步骤全部相同。）
 
-### 单向 SSH（NAT：你能连它、它连不回你）
+### 1.5 单向 SSH（NAT：你能连它、它连不回你）
 
-适用：本机（win/mac）在 NAT 后能出站 ssh 到云端 Linux，云端连不回本机。回程由本机常驻**反向隧道**背过去，crosschat 零改动（2026-10-08 win↔云端真机闭环实测：`../drill-reports/federation-nat-tunnel-20261008.md`）。前提：本机章 + Linux 章已做完（单向场景 L5/L7 按注跳过，即本章接管的两处）。
+适用：本机（win/mac）在 NAT 后能出站 ssh 到云端 Linux，云端连不回本机。办法：回程由本机常驻**反向隧道**背过去，crosschat 零改动（2026-10-08 win↔云端真机闭环实测：`../drill-reports/federation-nat-tunnel-20261008.md`）。前提：1.2–1.4 已做完（单向场景 L5/L7 按注跳过，即本节接管的两处）。
 
 **N1 · 出站侧开反向隧道（win 用 Xshell / mac 用 Terminal；隧道随这个会话活，别关）**
 ```
@@ -301,7 +319,7 @@ ok
 1.3.3
 ```
 
-**N4 · 全环一条命令（⚠️ 前置：三章全部完成；本机上跑，本机→云端→隧道→本机 整圈）**
+**N4 · 全环一条命令（⚠️ 前置：本章全部完成；本机上跑，本机→云端→隧道→本机 整圈）**
 ```
 > ssh -o BatchMode=yes peer "ssh -o BatchMode=yes <本机hostname> crosschat --version"
 1.3.3
@@ -312,55 +330,33 @@ ok
 > crosschat send --via ssh:<对端hostname> --to 云端beta --body "收到请照信封里的回复命令回一句：闭环成立"
 delivered to 云端beta@host-b (turn 1)
 ```
-对端回信穿隧道落回本机发起会话（`turn 2`）。回程全靠这条隧道：**会话关了回信就断**（发起腿不受影响）；持续保活已是"半 broker"形态，堡垒机形态（broker）仍是长期正解。
+对端回信穿隧道落回本机发起会话（`turn 2`）。回程全靠这条隧道：**会话关了回信就断**（发起腿不受影响）；持续保活已是"半 broker"形态，堡垒机形态（broker）仍是长期正解——见 [转发器手册](broker.md)。
 
-**失败对照**
+---
 
-| 症状 | 根因 | 解法 |
-|---|---|---|
-| 探活 `Connection timed out` | 网络不通/端口错/对端防火墙 | 核对地址端口；云端安全组放行 |
-| 探活 `Permission denied` | 用户名或密码错 | 核对用户名；密码登录被禁则走控制台 |
-| `root@localhost: Permission denied`（回程自证） | N2 漏了 `User` 行 | 补 `User <对端用户>` |
-| `Host key verification failed`（回程自证） | N2 的 Port 写成 22（连到 Linux 自己的 sshd），或指纹没播上 | 核对 `cat ~/.ssh/config` 四行；播种改用 `ssh -o StrictHostKeyChecking=accept-new ...`（keyscan 有缺陷抓不到） |
-| keyscan 输出只有 `#` 行 / `choose_kex: unsupported KEX method` | ssh-keyscan 自身的算法协商缺陷 | 弃用 keyscan，用上面 accept-new 的方式首连记指纹 |
-| `Connection refused`（连 `localhost:2222`） | 隧道没连/断了 | 重连 Xshell 会话 / 重跑 N1 的 ssh 命令 |
-| `REMOTE_FAILED ... (127): command not found` | 云端 Node 在 nvm/自定义前缀 | Linux 章 L6 软链 |
-| 回信突然全断、出腿正常 | 隧道会话断了 | 重连隧道即恢复 |
-| 出腿 `USAGE [via ...] unknown option` | 对端 crosschat 版本过旧 | 对端升级 `npm i -g @oatelauser/crosschat` |
+## 二、跨机 ssh 聊天
 
-### 使用：题词与命令形态（按场景）
+部署完（第一章），日常就剩一件事：像单机一样给 agent 一句话。命令、协议、回程路由全部由信封自带——**你不需要记任何命令**。
 
-**场景 A · 让本机 agent 发起跨机对话**——给 agent 的题词（角色只写任务，协议靠 skill 与信封自带）：
+### 2.1 会话实录（一句话触发）
 
-> 使用 crosschat 发送消息给 beta2 问好，消息要求经过 ssh 管道送到（send 时加 --via ssh:<对端系统hostname>）。需要对方回复并停止。
-
-agent 据此跑出的命令形态：
-
-```bash
-crosschat send --via ssh:build01 --to beta2 --body "你好 beta2…"
-# → delivered to beta2@build01 (turn 1)
-```
-
-**场景 B · 对端接收**——**无需任何题词**。对端会话里自动出现信封：
+准备：对端（本例 WSL）有已命名的 agent 会话（`/rename beta2` 后随便发一条激活）。然后整个过程（图例：**👤 用户** 你说的指令 · **🤖 agent** 回复/收件 📨）：
 
 ```
-📨 来自另一会话的消息:
-<cross-session-message from-name="claude/boss@win-dev" turn="1">
-你好 beta2…
-回复请运行: crosschat send --via ssh:win-dev --conversation mc2_… --body "<你的回复>"
-</cross-session-message>
+👤 用户[boss -> beta2]    使用 crosschat 发送消息给 beta2 问好，消息要求经过 ssh 管道送到（send 时加 --via ssh:yangwsl）。需要对方回复并停止。
+🤖 beta2 收到             📨 来自另一会话的消息:
+                          <cross-session-message from-name="codex/boss@win" turn="1">
+                          你好 beta2，这是跨机问候
+                          回复请运行: crosschat send --via ssh:win --conversation mc2_… --body "<你的回复>"
+🤖 beta2[beta2 -> boss]   收到！跨机闭环成立
+🤖 boss 收到              📨 收到！跨机闭环成立（turn 2，自动经 ssh 回到 win）
 ```
 
-**场景 C · 对端回复**——对 agent 说"照抄来信里的回复命令，替换占位符后执行"即可；命令形态（回程 `--via` 由信封自动携带）：
+与单机的全部差别：题词里多了 `--via ssh:yangwsl`——消息与回复自动走 ssh 往返，双方谁都没敲过一次完整命令。
 
-```bash
-crosschat send --via ssh:win-dev --conversation mc2_… --body "收到，任务完成"
-# → delivered to claude/boss@win-dev (turn 2)   ← 回到发起机
+### 2.2 同机自环测试（不跨机也要走一遍 ssh 管道时）
+
 ```
-
-**场景 D · 同机自环测试**（不跨机也要走一遍 ssh 管道时）：
-
-```bash
 # win 上（sshd 已跑在 22）：
 crosschat send --via ssh:localhost --to <本机会话名> --body "自环测试"
 # WSL 上（先给 ~/.ssh/config 加自指别名，一次性）：
@@ -373,15 +369,9 @@ ssh -o StrictHostKeyChecking=accept-new -p 2222 localhost exit   # 首连记指�
 crosschat send --via ssh:self --to <本机会话名> --body "自环测试"
 ```
 
-要点：
+### 2.3 大内容怎么办（>16KiB）
 
-- 名字在**目标机**上解析（本机同名会话不干扰）；跨机对端不在本机 `status` 里，看对端：`ssh <对端> crosschat status`
-- 对端忙 → 远端 `queued` / `parked` 语义与单机一致（parked 的 mailbox 路径标注"位于 `<host>`"）；远端业务错误**同码透传**（前缀 `[via <host>]`，自纠指引照常有效）
-- ssh 不通/超时报 `SSH_TRANSPORT_FAILED` / `SSH_TRANSPORT_TIMEOUT`——先 `ssh <对端> crosschat --version` 探活（顺带验版本），超时后**勿盲目重发**
-- 会话引用（`mc2_`）自带双方机器名+机器指纹（machine-id，同名机器也不混），信封回复命令自动带 `--via` 回程；手敲漏了 CLI 也会按引用自动补全
-- 单条上限 16KiB 对跨机同样生效（内容过长落盘发路径）
-
-**大内容怎么办（>16KiB）**：消息照旧走 crosschat、块数据走 ssh 自己的文件通道——scp 与 `--via` **共用同一份 ssh config/别名/密钥**，配一次全通：
+消息照旧走 crosschat、块数据走 ssh 自己的文件通道——scp 与 `--via` **共用同一份 ssh config/别名/密钥**，配一次全通：
 
 ```bash
 # 发去对端（引用的是对端本地路径）：
@@ -393,3 +383,94 @@ crosschat send --via ssh:wsl --to beta2 --body "分析 /tmp/big-analysis.txt，�
 ```
 
 win ↔ WSL 这对还有更省的捷径——文件根本不用过网络：`cp result.txt /mnt/c/Users/<你>/AppData/Local/Temp/`（WSL 直写 win 盘）。大文件用完即删（`/tmp` 卫生，agent 侧纪律）。
+
+### 2.4 日常要点
+
+- 名字在**目标机**上解析（本机同名会话不干扰）；跨机对端不在本机 `status` 里，看对端：`ssh <对端> crosschat status`
+- 对端忙 → 远端 `queued` / `parked` 语义与单机一致（parked 的 mailbox 路径标注"位于 `<host>`"）；远端业务错误**同码透传**（前缀 `[via <host>]`，自纠指引照常有效）
+- ssh 不通/超时报 `SSH_TRANSPORT_FAILED` / `SSH_TRANSPORT_TIMEOUT`——先 `ssh <对端> crosschat --version` 探活（顺带验版本），超时后**勿盲目重发**
+- 单条上限 16KiB 对跨机同样生效（内容过长走 2.3 落盘路径）
+
+---
+
+## 三、底层实现
+
+<details><summary>展开：内部调用链 / mc2_ 引用 / 回程路条 / 错误透传（点击）</summary>
+
+这一章回答"ssh 形态到底怎么跑通的"。排障深挖、或想理解设计取舍时读。
+
+### 3.1 一条消息的内部调用链
+
+```
+crosschat send --via ssh:build01 --to beta2 --body "…"
+  → 解析 --via：transport=ssh、host=build01（必须是 ~/.ssh/config 里的 Host 别名；
+    字符集仅限字母/数字/./_/-——防命令行注入）
+  → 组装远端命令：ssh build01 crosschat send --to beta2 --body -（正文走 stdin，不过命令行）
+  → 远端 CLI 以完整权限执行：与对端本机敲 crosschat send 完全等价
+  → 读回 stdout：delivered/queued/parked + turn + replyRef 原样透传给发起方
+```
+
+### 3.2 mc2_ 紧凑会话引用
+
+`mc2_<base62 串>` 把"双方机器名 + 机器指纹（machine-id）+ 会话 id + 轮次"压进一个可照抄的短串（296→83 字符）。同名机器也不混——指纹兜底。信封回复命令自动带 `--via` 回程；手敲漏了 CLI 也会按引用自动补全。
+
+### 3.3 回程路条（回复为什么自动回来）
+
+每条消息的信封里，`crosschat-reply-hint` 携带**回程 `--via` 的自动选择**（三分支，零回归规则）：本机 ssh config 里有对端 Host 别名 → `--via ssh:<对端>`；无别名且本机有 node.json（tcp 成员机）→ `--via tcp:<对端 mid8>`；其余照旧 ssh。对端 agent 照抄整条命令即回，不需要知道网络拓扑。
+
+### 3.4 错误同码透传
+
+远端 crosschat 的报错（stdout 里的 `CODE: message` 结构）被发起方解析后**同码重抛**，消息加前缀：`[via build01] <原指引>`——错误码的自纠指引在跨机场景照常有效。远端异常退出（非 crosschat 报错）→ `REMOTE_FAILED [via <host>] 远端异常退出(<exit code>): <stderr 尾部 400 字>`。ssh 层不通/超时 → `SSH_TRANSPORT_FAILED` / `SSH_TRANSPORT_TIMEOUT`。
+
+</details>
+
+---
+
+## 四、协议层 = CLI 契约
+
+<details><summary>展开：via 传参 / 远端命令形态 / mc2_ 规则 / 错误格式 / PATH 约束（点击）</summary>
+
+ssh 形态没有 wire 协议——"协议"就是**发起方组装、远端 CLI 接受的命令行契约**。写脚本或第三方工具对接时照此办理。
+
+### 4.1 via 传参格式
+
+- `--via ssh:<host>`：host 为发起方 `~/.ssh/config` 的 Host 别名（非任意 shell 串）；字符集 `[A-Za-z0-9._-]`，越界报 USAGE（防注入）
+- `--via tcp:<机器>` 见[转发器手册](broker.md)第四章
+
+### 4.2 远端命令形态（发起方实际组装的命令）
+
+```
+ssh <host> crosschat send --to <名字> --body - [其余参数透传]
+# 正文经 stdin 传入（16KiB 上限同单机）；--conversation 回复同理
+# 远端以登录 shell 执行——sshd 的默认 shell 必须能在 PATH 里找到 crosschat
+```
+
+### 4.3 输出契约
+
+- 成功：stdout 一行 `delivered|queued|parked to <名>@<host> (turn N)` + `reply-ref: mc2_…`，发起方原样透传
+- 失败：stdout `CODE: message` 结构 → 发起方重抛 `MultichatError(CODE, "[via <host>] message")`；非 crosschat 输出 → `REMOTE_FAILED [via <host>] 远端异常退出(code): stderr尾400`
+- exit code：0=成功；非 0 且无 CODE 结构 = REMOTE_FAILED
+
+### 4.4 部署侧约束（sshd 环境）
+
+- sshd 默认 shell 只见**系统** PATH——npm 全局 bin（`npm prefix -g`）不在系统 PATH 时，Linux 软链 `ln -s …/crosschat /usr/local/bin/crosschat`（L6），win 把 npm 全局目录加进系统 PATH
+- win 收件腿限制：codex 不可达（AF_UNIX 跨登录会话隔离），claude 腿可用
+- 别名必须 = 对端系统 hostname（回程路条按此生成）；host key 播种用 `ssh -o StrictHostKeyChecking=accept-new`（keyscan 有算法协商缺陷，抓不到指纹）
+
+</details>
+
+---
+
+## 排障对照（失败速查）
+
+| 症状 | 根因 | 解法 |
+|---|---|---|
+| 探活 `Connection timed out` | 网络不通/端口错/对端防火墙 | 核对地址端口；云端安全组放行 |
+| 探活 `Permission denied` | 用户名或密码错 | 核对用户名；密码登录被禁则走控制台 |
+| `root@localhost: Permission denied`（回程自证） | N2 漏了 `User` 行 | 补 `User <对端用户>` |
+| `Host key verification failed`（回程自证） | N2 的 Port 写成 22（连到 Linux 自己的 sshd），或指纹没播上 | 核对 `cat ~/.ssh/config` 四行；播种改用 `ssh -o StrictHostKeyChecking=accept-new ...`（keyscan 有缺陷抓不到） |
+| keyscan 输出只有 `#` 行 / `choose_kex: unsupported KEX method` | ssh-keyscan 自身的算法协商缺陷 | 弃用 keyscan，用 accept-new 首连记指纹 |
+| `Connection refused`（连 `localhost:2222`） | 隧道没连/断了 | 重连 Xshell 会话 / 重跑 N1 的 ssh 命令 |
+| `REMOTE_FAILED ... (127): command not found` | 云端 Node 在 nvm/自定义前缀 | Linux 章 L6 软链 |
+| 回信突然全断、出腿正常 | 隧道会话断了 | 重连隧道即恢复 |
+| 出腿 `USAGE [via ...] unknown option` | 对端 crosschat 版本过旧 | 对端升级 `npm i -g @oatelauser/crosschat` |

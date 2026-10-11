@@ -106,7 +106,7 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 
 ### 跨机 tcp：常驻转发器（broker 星型）
 
-准备（一次性，管理员动作）：选一台机器跑 `crosschat serve` 当 broker，`--gen-key` 发钥匙、其余机器贴好 node.json 后 `crosschat serve --connect` 常驻在线（→ [转发器手册](docs/broker.md)：三种部署形态 / 文件通道 / 排障）。然后整个过程：
+准备（一次性，管理员动作）：选一台机器跑 `crosschat serve` 当 broker，`--gen-key` 发钥匙、其余机器贴好 node.json 后 `crosschat serve --connect` 常驻在线（→ [转发器手册](docs/broker.md)：环境搭建 / 跨机聊天 / 底层实现 / 协议对接）。然后整个过程：
 
 ```
 👤 用户[boss -> worker2]  用 crosschat 给 host-b 机器的 claude 会话「worker2」发消息，要求走 tcp 转发器
@@ -126,8 +126,8 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 | 方式 | 一句话 | 状态 | 深入 |
 |---|---|---|---|
 | **单机会话** | 同机 agent 互发，`--to <名字>` 即起对话，忙时自动入队/发件箱 | ✅ v1.0 | [使用手册](docs/usage.md)：发起方式 / 投递语义 / 底层命令 / 边界 |
-| **跨机联邦 · ssh** | 加 `--via ssh:<对端hostname>`，消息经 ssh 落到对端机器，回复自动回来 | ✅ v1.3.3 | [联邦手册](docs/federation.md)：按操作系统配置（Win/Linux/macOS）/ 单向 NAT / 命令形态 / 大内容 / 自环测试 |
-| **跨机联邦 · tcp** | `crosschat serve` 起常驻转发器（星型+预共享钥匙），`--via tcp:<机器/mid8>` 直发、`--file` 文件通道 | ✅ v1.4.0 | [转发器手册](docs/broker.md)：三种形态 / 双轨寻址 / 文件通道 / proto:1 协议 / 排障 |
+| **跨机联邦 · ssh** | 加 `--via ssh:<对端hostname>`，消息经 ssh 落到对端机器，回复自动回来 | ✅ v1.3.3 | [联邦手册](docs/federation.md)：环境搭建（按 OS）/ 跨机聊天 / 底层实现 / CLI 契约 |
+| **跨机联邦 · tcp** | `crosschat serve` 起常驻转发器（星型+预共享钥匙），`--via tcp:<机器/mid8>` 直发、`--file` 文件通道 | ✅ v1.4.0 | [转发器手册](docs/broker.md)：环境搭建 / 跨机聊天 / 底层实现 / proto:1 对接 / 排障 |
 | 跨机联邦 · broker 增强 | 忙时持久队列、异步回执、投递状态机（tcp 形态之上的 store-and-forward） | 🚧 规划中 | — |
 
 ssh 配置方向一句话：**每台机写自己的 `~/.ssh/config`，内容是"怎么连对端"**（别名推荐=对端 hostname）——完整五步与命令样例见上表手册。
@@ -216,8 +216,8 @@ crosschat -v | --version | help                     # 版本 / 帮助
 | [架构手册](docs/architecture.md) | **底层原理**：注册表/命名管道/daemon 通道、写者锁本质、信封与自包含引用、完整投递流程图 |
 | [使用手册](docs/usage.md) | **单机深度细则**：发起方式 / 往复规则 / 投递语义矩阵 / 边界与限制 |
 | [命令手册](docs/commands.md) | **全量命令**：完整参数 / 启动器 / 环境变量 |
-| [联邦手册](docs/federation.md) | **跨机 ssh 联邦**：按操作系统配置 / 单向 NAT / 使用细则 / 大内容 scp / 自环测试 |
-| [转发器手册](docs/broker.md) | **跨机 tcp 转发器**：三种部署形态 / 双轨寻址（mid8+名字）/ 文件通道 / proto:1 协议规范 / 排障 |
+| [联邦手册](docs/federation.md) | **跨机 ssh 联邦**：四章——环境搭建（按 OS）/ 跨机聊天 / 底层实现 / CLI 契约 |
+| [转发器手册](docs/broker.md) | **跨机 tcp 转发器**：四章——环境搭建 / 跨机聊天 / 底层实现 / proto:1 协议对接 / 排障 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本变更记录 |
 | [设计决策地图](docs/wayfinder/map.md) | 全部拍板过程与依据 |
 | [实测研究报告](docs/research/) | embassy 源码分析、两侧通道验证、0.160 inject_items 实验 |
