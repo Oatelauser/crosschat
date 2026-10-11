@@ -252,7 +252,7 @@ describe('remote-side --origin consumption', () => {
     expect(delivered[0]).toContain('from-name="boss"');
   });
 
-  it('env identity wins over --origin when both are present', async () => {
+  it('B3.1 bug2: --origin wins over ambient env identity on receive legs (env residue must not relabel the sender)', async () => {
     const origin = encodeOrigin({ p: 'codex', id: 'zzzz9999' }, 'other-host');
     const delivered: string[] = [];
     const deps = makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-boss' });
@@ -261,7 +261,9 @@ describe('remote-side --origin consumption', () => {
       return { status: 'delivered' };
     };
     await runSend({ to: 'boss', bodyArg: 'hi', origin }, deps);
-    expect(delivered[0]).toContain('from-name="boss"'); // env-resolved session name, not the origin codex id8
+    // 远端来件署名=origin 显示名（codex id8），绝不能落成本机环境残留的会话名
+    expect(delivered[0]).toContain('from-name="codex/zzzz9999"');
+    expect(delivered[0]).not.toContain('from-name="boss"');
   });
 });
 

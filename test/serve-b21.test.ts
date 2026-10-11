@@ -10,7 +10,9 @@ import { WebSocket } from 'ws';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
 import { registryFileOf, tcpDir, writeRegistry, type NodeEntry } from '../src/serve/registry.js';
 import { encodeFrame, parseFrame, type Frame } from '../src/serve/protocol.js';
-import { fetchRoster } from '../src/serve/via-tcp.js';
+import { fetchRoster, runViaTcpSend } from '../src/serve/via-tcp.js';
+import { deliverViaRunSend } from '../src/serve/node.js';
+import { FileInbox } from '../src/serve/file-channel.js';
 import { composeEnvelope } from '../src/envelope.js';
 import { encodeOrigin, decodeOriginIdentity } from '../src/federation.js';
 import { pickAutoVia, runSend, type SendDeps } from '../src/commands/send.js';
@@ -341,5 +343,87 @@ describe('B2.1 serve self-init', () => {
     expect(reg2.nodes).toHaveLength(1);
     expect(JSON.parse(readFileSync(join(tcpDir(dir), 'node.json'), 'utf8'))).toEqual({ keep: true });
     expect(existsSync(join(tcpDir(dir), 'node.json'))).toBe(true);
+  });
+});
+
+describe('B3.1 drill fixes', () => {
+  function codexSendDeps(over: { queued?: boolean; receipt?: 'confirmed' | 'unconfirmed' }): SendDeps {
+    return {
+      env: {},
+      listClaudeSessions: () => ({ sessions: [], malformed: 0 }),
+      listCodexThreads: async () => [{ id: 'b0ss0000-aaaa', name: 'boss', status: 'idle' }],
+      deliverClaude: async () => ({ status: 'delivered' }),
+      deliverCodex: async () => ({ status: 'accepted', turnId: 't', ...(over.queued === true ? { queued: true } : {}) }),
+      ...(over.receipt === undefined ? {} : { confirmReceipt: async () => over.receipt }),
+      rateDir: mkdtempSync(join(root, 'rate-')),
+      outboxDir: mkdtempSync(join(root, 'outbox-')),
+      now: () => Date.now(),
+    };
+  }
+
+  it('bug1: json output stays pure JSON when codex queues (node bridge can parse it)', async () => {
+    const out = await runSend({ to: 'boss', bodyArg: 'x', json: true }, codexSendDeps({ queued: true }));
+    const parsed = JSON.parse(out) as { status: string; queued?: boolean };
+    expect(parsed.status).toBe('delivered');
+    expect(parsed.queued).toBe(true);
+    expect(out).not.toContain('已入对方服务端队列');
+  });
+
+  it('bug1: json output stays pure JSON when the rollout receipt is unconfirmed', async () => {
+    const out = await runSend({ to: 'boss', bodyArg: 'x', json: true }, codexSendDeps({ receipt: 'unconfirmed' }));
+    expect(() => JSON.parse(out)).not.toThrow();
+    expect(out).not.toContain('回执:');
+  });
+
+  it('bug1 end-to-end: --file via tcp against a queued node returns delivered output, not INTERNAL', async () => {
+    const inboxDir = mkdtempSync(join(root, 'b31-inbox-'));
+    const partsDir = mkdtempSync(join(root, 'b31-parts-'));
+    const nodeDeps = codexSendDeps({ queued: true });
+    const h = await startHarness([{ machineId: 'a1b2c3d40000', machineName: 'hub' }], {
+      deliverLocal: (frame) =>
+        deliverViaRunSend(
+          { op: 'deliver', id: frame.id, fromMachine: 'local', payload: frame.body, to: frame.to, conversation: frame.conversation, origin: frame.origin },
+          nodeDeps,
+        ),
+      fileInbox: new FileInbox({ inboxDir, partsDir }),
+    });
+    const home = mkdtempSync(join(root, 'b31-home-'));
+    mkdirSync(join(home, 'tcp'), { recursive: true });
+    writeFileSync(join(home, 'tcp', 'node.json'), JSON.stringify({ broker: { host: '127.0.0.1', port: Number(new URL(h.url).port) }, key: key('s') }));
+    const file = join(home, 'drill-a.txt');
+    writeFileSync(file, 'payload');
+    const out = await runViaTcpSend(
+      { via: 'tcp:hub', to: 'boss', fileArg: file, bodyArg: 'drill-a 附件测试' },
+      'drill-a 附件测试',
+      { ...nodeDeps, tcpBaseDir: home, hostname: () => 'ci-machine', machineId: () => 'cccc00001111' },
+    );
+    expect(out).toContain('delivered to boss@hub');
+    expect(out).not.toContain('INTERNAL');
+    expect(out).toMatch(/turn \d/);
+  }, 10_000);
+
+  it('bug2: a remote-origin send running inside an agent-env process keeps the origin display name', async () => {
+    const envelopes: string[] = [];
+    const deps: SendDeps = {
+      env: { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-1' }, // 接收进程（broker/节点）残留的 agent 环境
+      listClaudeSessions: () => ({
+        sessions: [{ pid: 1, sessionId: 's1', kind: 'interactive', name: 'target-name', status: 'idle', messagingSocketPath: 'sock-1' }],
+        malformed: 0,
+      }),
+      listCodexThreads: async () => [],
+      deliverClaude: async (_t, content) => {
+        envelopes.push(content);
+        return { status: 'delivered' };
+      },
+      deliverCodex: async () => ({ status: 'accepted', turnId: 't' }),
+      rateDir: mkdtempSync(join(root, 'rate-')),
+      outboxDir: mkdtempSync(join(root, 'outbox-')),
+      now: () => Date.now(),
+    };
+    const origin = encodeOrigin({ p: 'claude', id: 'sender-s9', name: 'wsl-boss' }, 'aaaa0000', 'aaaa0000ef', 'tcp');
+    const out = await runSend({ to: 'target-name', bodyArg: 'hi', origin }, deps);
+    expect(out).toContain('delivered to target-name');
+    expect(envelopes[0]).toContain('from-name="wsl-boss"');
+    expect(envelopes[0]).not.toContain('from-name="target-name"');
   });
 });

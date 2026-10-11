@@ -159,10 +159,8 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
       const ref = decodeRef(args.conversation);
       const envScan = deps.listClaudeSessions();
       const envCaller = resolveCallerIdentity(deps.env, envScan);
-      const caller =
-        envCaller.p === 'human' && args.origin !== undefined
-          ? decodeOriginIdentity(args.origin)
-          : envCaller;
+      // B3.1 bug2：origin 在场即权威——远端来件的发送方身份不走本进程环境残留。
+      const caller = args.origin !== undefined ? decodeOriginIdentity(args.origin) : envCaller;
       const remote = [ref.f, ref.t].find(
         (ep): ep is { p: 'claude' | 'codex'; id: string; m: string } =>
           !identityMatchesEndpoint(caller, ep) &&
@@ -201,10 +199,13 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
 
   const scan = deps.listClaudeSessions();
   const envCaller = resolveCallerIdentity(deps.env, scan);
-  // Federation (008 D5): an ssh shell has no agent env, so the remote caller
-  // would collapse to human (unreplyable). --origin — injected by the sending
-  // machine's CLI — is the identity fallback; a real env identity always wins.
-  const origin = envCaller.p === 'human' && args.origin !== undefined ? decodeOriginIdentity(args.origin) : undefined;
+  // Federation (008 D5): an incoming remote send carries --origin — injected by
+  // the sending machine's CLI — and that identity is authoritative. B3.1 bug2:
+  // it must win over ANY ambient env identity, not just human shells — the
+  // receiving process (tcp broker/node) may long-run inside an agent env, and
+  // letting that residue win mislabels the envelope as if sent by the local
+  // session.
+  const origin = args.origin !== undefined ? decodeOriginIdentity(args.origin) : undefined;
   const caller: CallerIdentity = origin ?? envCaller;
 
   let target: RefEndpoint;
@@ -400,10 +401,12 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     const out = formatDelivery(args.json === true, toName, turn, replyRef, queued);
     if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now());
     if (queued) {
-      return finish(`${out}\n已入对方服务端队列，本轮结束即处理；终态可查 crosschat status --conversations`);
+      // B3.1：注记只进人类可读输出——json 模式必须保持纯 JSON（tcp/ssh 接收腿
+      // 的 node 桥要 JSON.parse 这段输出，拼尾注会让远端拿到 INTERNAL）。
+      return finish(args.json === true ? out : `${out}\n已入对方服务端队列，本轮结束即处理；终态可查 crosschat status --conversations`);
     }
     if (receipt === 'unconfirmed') {
-      return finish(`${out}\n回执: 暂未在对方会话记录中确认（可能仍在落盘）；稍后查 send-log.jsonl 或重跑 status`);
+      return finish(args.json === true ? out : `${out}\n回执: 暂未在对方会话记录中确认（可能仍在落盘）；稍后查 send-log.jsonl 或重跑 status`);
     }
     return finish(out);
   } catch (err) {
