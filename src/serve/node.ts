@@ -24,6 +24,8 @@ import { FileInbox } from './file-channel.js';
 export interface NodeConfig {
   broker: { host: string; port: number; alias?: string };
   key: string;
+  /** B2.1：人读显示名（显示用；寻址权威是 machine-id 前缀）。 */
+  name?: string;
 }
 
 /** 会员凭证缺失/损坏的教学报错（send --via tcp: 与 --connect 同用）。 */
@@ -250,6 +252,7 @@ export class NodeClient {
         role: 'node',
         machineId: this.d.machineId() ?? '',
         auth: cfg.key,
+        ...(cfg.name === undefined ? {} : { name: cfg.name }),
       }));
       const verdict = await this.nextFrame((f) => f.op === 'connected' || f.op === 'error', 10_000);
       if (verdict.op === 'error') {

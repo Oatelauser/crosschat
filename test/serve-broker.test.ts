@@ -126,7 +126,7 @@ class TestClient {
   }
 }
 
-async function handshake(url: string, auth: string, machineId?: string, proto = 1): Promise<TestClient> {
+async function handshake(url: string, auth: string, machineId?: string, proto = 1, name?: string): Promise<TestClient> {
   const client = new TestClient(url);
   await client.opened();
   const info = await client.waitFor((f) => f.op === 'info');
@@ -137,23 +137,34 @@ async function handshake(url: string, auth: string, machineId?: string, proto = 
     role: machineId === undefined ? 'sender' : 'node',
     machineId,
     auth,
+    ...(name === undefined ? {} : { name }),
   });
   return client;
 }
 
 describe('broker handshake and auth', () => {
-  it('completes info→connect→connected and backfills machineId/machineName to registry', async () => {
+  it('completes info→connect→connected and backfills machineId + self-reported name to registry', async () => {
     const { url, registryFile, statusFile } = await startBroker();
     seed(registryFile, [{ key: key('a') }]);
-    const client = await handshake(url, key('a'), 'm-1111');
+    const client = await handshake(url, key('a'), 'm-1111', 1, 'node-host');
     const connected = await client.waitFor((f) => f.op === 'connected');
-    expect(connected.op === 'connected' && connected.machineName).toBe('broker-host');
+    expect(connected.op === 'connected' && connected.machineName).toBe('node-host');
     const entry = JSON.parse(readFileSync(registryFile, 'utf8')) as { nodes: NodeEntry[] };
     expect(entry.nodes[0]?.machineId).toBe('m-1111');
-    expect(entry.nodes[0]?.machineName).toBe('broker-host');
+    expect(entry.nodes[0]?.machineName).toBe('node-host');
     const status = JSON.parse(readFileSync(statusFile, 'utf8')) as { state: string; onlineNodes: string[] };
     expect(status.state).toBe('running');
-    expect(status.onlineNodes).toEqual(['broker-host']);
+    expect(status.onlineNodes).toEqual(['node-host']);
+  });
+
+  it('B2.1: connect without a name leaves machineName undefined (broker-hostname backfill deleted)', async () => {
+    const { url, registryFile } = await startBroker();
+    seed(registryFile, [{ key: key('a') }]);
+    const client = await handshake(url, key('a'), 'm-2222');
+    await client.waitFor((f) => f.op === 'connected');
+    const entry = JSON.parse(readFileSync(registryFile, 'utf8')) as { nodes: NodeEntry[] };
+    expect(entry.nodes[0]?.machineId).toBe('m-2222');
+    expect(entry.nodes[0]?.machineName).toBeUndefined();
   });
 
   it('rejects a wrong key with BAD_AUTH after a constant delay', async () => {

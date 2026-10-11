@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
 import { registryFileOf, writeRegistry } from '../src/serve/registry.js';
+import { FileInbox } from '../src/serve/file-channel.js';
 import { runViaTcpSend, tcpTimeoutMs } from '../src/serve/via-tcp.js';
 import { runSend, type SendDeps } from '../src/commands/send.js';
 import { MultichatError } from '../src/errors.js';
@@ -31,7 +32,7 @@ interface Harness {
   deliverLocal: BrokerDeps['deliverLocal'];
 }
 
-async function startBroker(deliverLocal: BrokerDeps['deliverLocal']): Promise<Harness> {
+async function startBroker(deliverLocal: BrokerDeps['deliverLocal'], inboxDirs?: { inboxDir: string; partsDir: string }): Promise<Harness> {
   const dir = mkdtempSync(join(root, 'case-'));
   const registryFile = registryFileOf(dir);
   // sender 用 key('k')；broker 自己是 'broker-host'（BROKER-MID）→ 本机路由
@@ -50,6 +51,7 @@ async function startBroker(deliverLocal: BrokerDeps['deliverLocal']): Promise<Ha
     now: () => Date.now(),
     log: () => {},
     deliverLocal,
+    ...(inboxDirs === undefined ? {} : { fileInbox: new FileInbox(inboxDirs) }),
     port: 0,
     heartbeatMs: 10_000,
     pongTimeoutMs: 20_000,
@@ -147,7 +149,7 @@ describe('runViaTcpSend against a real broker', () => {
       'PEER_OFFLINE',
     );
     expect(err.message).toContain('对端离线');
-    expect(err.message).toContain('--via ssh:ghost-host');
+    expect(err.message).toContain('若两端另配了 ssh 也可走 ssh 形态');
   }, 10_000);
 
   it('teaches UNKNOWN_MACHINE with the serve --list hint', async () => {
@@ -232,27 +234,27 @@ describe('send --via tcp: branch in runSend', () => {
     await expectCode(runSend({ via: 'ssh:peer', to: 'boss', fileArg: 'C:/tmp/a.txt' }, fx.deps), 'USAGE');
   });
 
-  it('same-machine special: local file path becomes the body without any transfer', async () => {
-    const h = await startBroker(async () => deliveredReceipt);
-    const fx = makeFixture(h);
-    const delivered: string[] = [];
-    const deps: SendDeps = {
-      ...fx.deps,
-      hostname: () => 'broker-host', // 目标=本机
-      listClaudeSessions: () => ({
-        sessions: [{ pid: 1, sessionId: 's1', kind: 'interactive', name: 'boss', status: 'idle', messagingSocketPath: 'p' }],
-        malformed: 0,
-      }),
-      deliverClaude: async (_t, content) => {
-        delivered.push(content);
-        return { status: 'delivered' };
+  it('B2.1: same-machine target rides the broker and resolves local by machineId (hostname shortcut deleted)', async () => {
+    const inboxDir = mkdtempSync(join(root, 'inbox-'));
+    const partsDir = mkdtempSync(join(root, 'parts-'));
+    const bodies: string[] = [];
+    const h = await startBroker(
+      async (frame) => {
+        bodies.push(frame.body);
+        return deliveredReceipt;
       },
-    };
+      { inboxDir, partsDir },
+    );
+    const fx = makeFixture(h);
     const file = join(fx.baseDir, 'report.txt');
     writeFileSync(file, 'data');
-    const out = await runSend({ via: 'tcp:broker-host', to: 'boss', fileArg: file }, deps);
+    // 发送方与 broker 不同名不同 mid——旧 hostname 同机特例不再触发，
+    // 消息上 broker，resolveTarget 按注册表 machineId===broker 本机判定走 deliverLocal。
+    const out = await runSend({ via: 'tcp:broker-host', to: 'boss', fileArg: file }, fx.deps);
     expect(out).toContain('delivered to boss');
-    expect(delivered[0]).toContain(file); // 本机路径直接进正文
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toContain('文件 report.txt 已送达');
+    expect(bodies[0]).toContain(join(inboxDir)); // 落的是 broker 本机收件路径
   }, 10_000);
 });
 

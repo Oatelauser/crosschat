@@ -6,7 +6,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { hostname as osHostname } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { WebSocket } from 'ws';
 import { MultichatError } from '../errors.js';
 import { encodeOrigin, originDisplayName } from '../federation.js';
@@ -14,9 +14,9 @@ import { identityKey, resolveCallerIdentity, type CallerIdentity } from '../iden
 import { recordConversation } from '../conversations.js';
 import { decodeRef } from '../ref.js';
 import type { SendLogEntry } from '../send-log.js';
-import { runSend, type SendArgs, type SendDeps } from '../commands/send.js';
+import type { SendArgs, SendDeps } from '../commands/send.js';
 import { encodeFrame, ERR, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
-import type { ErrorFrame, FileResultFrame, Frame, ReceiptFrame } from './protocol.js';
+import type { ErrorFrame, FileResultFrame, Frame, ReceiptFrame, RosterMachine } from './protocol.js';
 import { defaultBaseDir, tcpDir } from './registry.js';
 import { readNodeConfig } from './node.js';
 import { FILE_CHUNK_BYTES, FILE_MAX_BYTES, readFileForSend } from './file-channel.js';
@@ -167,7 +167,15 @@ export async function runViaTcpSend(args: SendArgs, body: string | undefined, de
 
   const scan = deps.listClaudeSessions();
   const caller = resolveCallerIdentity(deps.env, scan);
-  const origin = encodeOrigin(caller, deps.hostname?.() ?? osHostname(), deps.machineId?.());
+  // B2.1：origin host 槽盖 mid8 并带 tcp 标记——对端 ref 端点 m=mid8，机器改名免疫；
+  // 无 machine-id 时退回 hostname（降级：回信按 ssh 语义拼接）。
+  const localMid = deps.machineId?.();
+  const origin = encodeOrigin(
+    caller,
+    localMid?.slice(0, 8) ?? deps.hostname?.() ?? osHostname(),
+    localMid,
+    localMid === undefined ? undefined : 'tcp',
+  );
   const logNow = makeViaLogger(deps, caller);
   const logTo = `${args.to ?? args.conversation ?? ''}@${target}`;
 
@@ -177,12 +185,8 @@ export async function runViaTcpSend(args: SendArgs, body: string | undefined, de
       `${detail}，远端状态不明——勿盲目重发（可能与首次投递叠加）。先在对端查 send-log 或 status --conversations 核实后再决定。${hint}`,
     );
 
-  // 同机特例：目标就是本机——不拷贝，本机路径直接当正文走本地投递。
-  const here = deps.hostname?.() ?? osHostname();
-  if (target === here) {
-    const local = fileOrBodyLocal(args, body);
-    return runSend({ ...args, via: undefined, fileArg: undefined, bodyArg: local }, deps);
-  }
+  // B2.1：删同机 hostname 特例——本机目标照常上 broker，resolveTarget 按
+  // machineId 判定本机后走 deliverLocal（同机判定不再比对 hostname 字符串）。
 
   const url = `ws://${config.broker.host}:${config.broker.port}`;
   const conn = await SenderConn.open(url, config.key, deps.machineId?.(), Math.min(timeoutMs, 15_000));
@@ -201,17 +205,9 @@ export async function runViaTcpSend(args: SendArgs, body: string | undefined, de
   }
 }
 
-// 同机特例走 runSend 本地路径（send.ts ↔ via-tcp.ts 的 ESM 循环在运行时
-// 调用点解耦，两侧导出均为函数声明，无初始化顺序问题）。
-
+// 同机投递统一走 broker 的 deliverLocal（B2.1 判据=machineId，不再比对 hostname）。
 function fileNameOf(path: string): string {
   return path.split(/[\\/]/).pop() ?? 'file';
-}
-
-/** --file 同机特例的正文：有附言照发，缺省自动生成"已送达：<本机路径>"。 */
-function fileOrBodyLocal(args: SendArgs, body: string | undefined): string {
-  if (args.fileArg === undefined) return body ?? '';
-  return body ?? `文件 ${fileNameOf(args.fileArg)} 已送达：${resolve(args.fileArg)}`;
 }
 
 interface TransportFail {
@@ -300,7 +296,7 @@ async function sendBody(
       logNow({ to: logTo, target: `via:tcp:${target}`, status: 'failed', code });
       throw new MultichatError(
         code,
-        `[via tcp:${target}] ${message}——对端离线，稍后重试或换 ssh 形态（--via ssh:${target}）`,
+        `[via tcp:${target}] ${message}——对端离线，稍后重试；若两端另配了 ssh 也可走 ssh 形态`,
       );
     }
     if (code === ERR.UNKNOWN_MACHINE) {
@@ -355,4 +351,27 @@ async function sendBody(
 
 function formatMiB(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1);
+}
+
+/**
+ * B2.1：status 拉在线机器表——瞬态 sender 连接发 roster 帧；任何失败返回
+ * undefined（调用方静默降级为"转发器: 不可达"）。
+ */
+export async function fetchRoster(tcpBaseDir: string, timeoutMs = 2_000): Promise<RosterMachine[] | undefined> {
+  let conn: SenderConn;
+  try {
+    const config = readNodeConfig(join(tcpDir(tcpBaseDir), 'node.json'));
+    conn = await SenderConn.open(`ws://${config.broker.host}:${config.broker.port}`, config.key, undefined, timeoutMs);
+  } catch {
+    return undefined;
+  }
+  try {
+    await conn.send({ op: 'roster' });
+    const frame = await conn.waitFor((f) => f.op === 'roster-result', timeoutMs);
+    return frame.op === 'roster-result' ? frame.machines : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    conn.close();
+  }
 }

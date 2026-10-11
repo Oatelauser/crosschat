@@ -29,6 +29,8 @@ export interface ConnectFrame {
   role: 'node' | 'sender';
   machineId?: string;
   auth: string;
+  /** B2.1 修订：节点自报的人读显示名（≤32 字符、无控制符）。寻址权威是 machine-id 前缀，名字不参与回信路由。 */
+  name?: string;
 }
 export interface ConnectedFrame {
   op: 'connected';
@@ -111,6 +113,20 @@ export interface FileResultFrame {
   dedup?: boolean;
 }
 
+/** B2.1 修订：成员机向 broker 拉在线机器表（瞬态连接，status 用）。 */
+export interface RosterFrame {
+  op: 'roster';
+}
+export interface RosterMachine {
+  name?: string;
+  mid8: string;
+  online: boolean;
+}
+export interface RosterResultFrame {
+  op: 'roster-result';
+  machines: RosterMachine[];
+}
+
 export type Frame =
   | InfoFrame
   | ConnectFrame
@@ -123,7 +139,9 @@ export type Frame =
   | FileBeginFrame
   | FileChunkFrame
   | FileEndFrame
-  | FileResultFrame;
+  | FileResultFrame
+  | RosterFrame
+  | RosterResultFrame;
 
 const OPS = new Set([
   'info',
@@ -138,6 +156,8 @@ const OPS = new Set([
   'file-chunk',
   'file-end',
   'file-result',
+  'roster',
+  'roster-result',
 ]);
 
 /** 解析一帧 ws 文本消息；JSON 损坏或 op 未知返回 undefined（调用方丢弃）。 */

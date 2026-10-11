@@ -1,3 +1,4 @@
+import type { RosterMachine } from '../serve/protocol.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ClaudeRegistryScan } from '../claude/registry.js';
@@ -38,6 +39,11 @@ export interface StatusDeps {
    * cli wires the real ~/.crosschat/tcp.
    */
   tcpDir?: string;
+  /**
+   * B2.1：成员机在线表拉取（瞬态连 broker 发 roster 帧，2s 超时）。缺省 →
+   * 不拉（本机是 broker 或未入网，输出与 B2 字节一致）。undefined 返回=不可达。
+   */
+  roster?: () => Promise<RosterMachine[] | undefined>;
 }
 
 /** B2 freshness bound: a status file older than this reads as "没在跑". */
@@ -59,7 +65,7 @@ function readStatusJson<T>(file: string): T | undefined {
 }
 
 /** 转发器区块（节点行 + broker 行 + 在线机器表）；dir=undefined → 空数组。 */
-function tcpForwarderLines(tcpDir: string | undefined, nowMs: number): string[] {
+async function tcpForwarderLines(tcpDir: string | undefined, nowMs: number, roster?: () => Promise<RosterMachine[] | undefined>): Promise<string[]> {
   if (tcpDir === undefined) return [];
   const lines: string[] = [];
   const node = readStatusJson<NodeStatusFile>(join(tcpDir, 'status-node.json'));
@@ -79,6 +85,22 @@ function tcpForwarderLines(tcpDir: string | undefined, nowMs: number): string[] 
     const nodes = broker.onlineNodes ?? [];
     lines.push(`转发器: 服务端端口 ${broker.port ?? '?'}，${nodes.length} 节点在线`);
     if (nodes.length > 0) lines.push(`在线机器: ${nodes.join('、')}`);
+    return lines;
+  }
+  // B2.1：非 broker 机（本机 status-broker.json 不新鲜）且有 roster 接线 → 瞬态拉在线表；
+  // 失败静默降级为一行"不可达"。
+  if (roster !== undefined) {
+    const machines = await roster();
+    if (machines === undefined) {
+      lines.push('转发器: 不可达');
+    } else {
+      const disp = (m: RosterMachine): string => `${m.name ?? '?'} (${m.mid8})`;
+      const online = machines.filter((m) => m.online);
+      const offline = machines.filter((m) => !m.online);
+      lines.push(`转发器: broker 可达，${online.length} 机器在线`);
+      if (online.length > 0) lines.push(`在线机器: ${online.map(disp).join('、')}`);
+      if (offline.length > 0) lines.push(`离线机器: ${offline.map(disp).join('、')}`);
+    }
   }
   return lines;
 }
@@ -195,7 +217,7 @@ export async function runStatus(
       );
     }
   }
-  lines.push(...tcpForwarderLines(deps.tcpDir, deps.now?.() ?? Date.now()));
+  lines.push(...(await tcpForwarderLines(deps.tcpDir, deps.now?.() ?? Date.now(), deps.roster)));
   return lines.join('\n');
 }
 

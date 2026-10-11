@@ -85,7 +85,7 @@ export function validateRemoteFlagValues(args: SendArgs): void {
  * along so the receiving side can tell same-hostname machines apart —
  * hostnames never contain ':' so the tail split is unambiguous.
  */
-export function encodeOrigin(identity: CallerIdentity, host: string, mid?: string): string {
+export function encodeOrigin(identity: CallerIdentity, host: string, mid?: string, via?: 'ssh' | 'tcp'): string {
   const who =
     identity.p === 'claude'
       ? identity.name === undefined
@@ -94,12 +94,14 @@ export function encodeOrigin(identity: CallerIdentity, host: string, mid?: strin
       : identity.p === 'codex'
         ? `codex/${identity.id}`
         : 'human';
-  const tail = mid === undefined ? host : `${host}:${Buffer.from(mid, 'utf8').toString('base64url')}`;
+  // B2.1：tcp 形态给 tail 加 'tcp:' 前缀（host 槽=发送方 mid8）；ssh/单机路径字节不变（零回归锚点）。
+  const head = via === 'tcp' ? `tcp:${host}` : host;
+  const tail = mid === undefined ? head : `${head}:${Buffer.from(mid, 'utf8').toString('base64url')}`;
   return Buffer.from(`${who}@${tail}`, 'utf8').toString('base64url');
 }
 
 /** Decoded --origin: identity plus the machine it came from (008 B2 refs stamp both). */
-export type OriginIdentity = CallerIdentity & { host: string; mid?: string };
+export type OriginIdentity = CallerIdentity & { host: string; mid?: string; via?: 'ssh' | 'tcp' };
 
 /**
  * B10 same-machine rule: when both machine-ids are known they decide (unique
@@ -123,14 +125,18 @@ export function decodeOriginIdentity(encoded: string): OriginIdentity {
   const at = text.lastIndexOf('@');
   if (at <= 0) throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
   const head = text.slice(0, at);
-  const tail = text.slice(at + 1);
+  const rawTail = text.slice(at + 1);
+  // B2.1：'tcp:' 前缀标记传输形态（host 槽=发送方 mid8）；无前缀=ssh/单机，解码字节路径不变。
+  const via: 'tcp' | undefined = rawTail.startsWith('tcp:') ? 'tcp' : undefined;
+  const tail = via === 'tcp' ? rawTail.slice(4) : rawTail;
   const colon = tail.lastIndexOf(':');
   const host = colon === -1 ? tail : tail.slice(0, colon);
   const mid = colon === -1 ? undefined : Buffer.from(tail.slice(colon + 1), 'base64url').toString('utf8');
   if (host === '' || mid === '') throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
+  const viaField = via === undefined ? {} : { via };
   const slash = head.indexOf('/');
   if (slash <= 0) {
-    if (head === 'human') return mid === undefined ? { p: 'human', host } : { p: 'human', host, mid };
+    if (head === 'human') return mid === undefined ? { p: 'human', host, ...viaField } : { p: 'human', host, mid, ...viaField };
     throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
   }
   const p = head.slice(0, slash);
@@ -143,8 +149,8 @@ export function decodeOriginIdentity(encoded: string): OriginIdentity {
   const name = nameSlash === -1 ? undefined : rest.slice(nameSlash + 1);
   if (id === '' || name === '') throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
   const midField = mid === undefined ? {} : { mid };
-  if (p === 'claude') return name === undefined ? { p: 'claude', id, host, ...midField } : { p: 'claude', id, name, host, ...midField };
-  if (p === 'codex') return { p: 'codex', id, host, ...midField };
+  if (p === 'claude') return name === undefined ? { p: 'claude', id, host, ...midField, ...viaField } : { p: 'claude', id, name, host, ...midField, ...viaField };
+  if (p === 'codex') return { p: 'codex', id, host, ...midField, ...viaField };
   throw new MultichatError('USAGE', `--origin 端点类型非法: ${p}`);
 }
 

@@ -24,9 +24,11 @@ import type {
   FileResultFrame,
   Frame,
   ResultFrame,
+  RosterMachine,
+  RosterResultFrame,
   SendFrame,
 } from './protocol.js';
-import { readRegistry, writeRegistry } from './registry.js';
+import { readRegistry, sanitizeName, writeRegistry, type NodeEntry } from './registry.js';
 import { FILE_MAX_BYTES, FileInbox } from './file-channel.js';
 
 /**
@@ -261,6 +263,10 @@ export class Broker {
       this.routeFileResult(session, frame);
       return;
     }
+    if (frame.op === 'roster') {
+      this.send(session.ws, this.buildRoster());
+      return;
+    }
     // 其余帧型（info/receipt/deliver）服务端无行为
   }
 
@@ -290,13 +296,19 @@ export class Broker {
       }
       if (entry.machineId === undefined || entry.machineId === '') {
         entry.machineId = mid;
+        // B2.1：注册时 mid 前 8 位碰撞检测——前缀寻址在此长度歧义，记日志警告
+        const clash = registry.nodes.find((n) => n !== entry && n.machineId !== undefined && n.machineId.slice(0, 8) === mid.slice(0, 8));
+        if (clash !== undefined) {
+          this.log(`warn mid8 碰撞：${mid.slice(0, 8)} 同时登记于 ${clash.label} 与 ${entry.label}——前缀寻址需 ≥9 位消歧`);
+        }
       } else if (entry.machineId !== mid) {
         await this.authFail(session, 'machineId 与该钥匙登记的不一致');
         return;
       }
-      if (entry.machineName === undefined || entry.machineName === '') {
-        entry.machineName = this.d.hostname();
-      }
+      // B2.1：名字=connect 自报（重连改名即覆盖）；显示用，寻址权威是 mid 前缀。
+      // （旧版用 broker 自己的 hostname() 回填——双机部署时把节点全标成 broker 机名，已删。）
+      const selfName = sanitizeName(frame.name);
+      if (selfName !== undefined) entry.machineName = selfName;
       writeRegistry(this.d.registryFile, registry);
       session.machineId = mid;
       session.machineName = entry.machineName;
@@ -450,27 +462,60 @@ export class Broker {
     }
   }
 
-  /** send/file 共用的目标解析：local=broker 本机；node=在线连接；error=拒因。 */
-  private resolveTarget(target: string): { kind: 'local' } | { kind: 'node'; ws: WebSocket } | { kind: 'error'; code: string; message: string } {
+  /** B2.1：roster 应答——注册表全部已激活机器（mid 去重）+ 在线态；broker 自身恒在线。 */
+  private buildRoster(): RosterResultFrame {
     const registry = readRegistry(this.d.registryFile);
-    const candidates = registry.nodes.filter((node) => node.machineName === target);
-    if (candidates.length === 0) {
-      return { kind: 'error', code: ERR.UNKNOWN_MACHINE, message: `注册表没有机器名 ${target}` };
-    }
     const ownMid = this.d.machineId();
-    if (candidates.length === 1 && ownMid !== undefined && candidates[0].machineId === ownMid) {
-      return { kind: 'local' };
+    const machines = new Map<string, RosterMachine>();
+    for (const node of registry.nodes) {
+      if (node.machineId === undefined || node.machineId === '') continue;
+      machines.set(node.machineId, {
+        ...(node.machineName === undefined ? {} : { name: node.machineName }),
+        mid8: node.machineId.slice(0, 8),
+        online: node.machineId === ownMid || this.online.has(node.machineId),
+      });
     }
-    const onlineCandidates = candidates.filter((node) => node.machineId !== undefined && this.online.has(node.machineId));
-    if (onlineCandidates.length > 1) {
-      const ids = onlineCandidates.map((node) => node.machineId?.slice(0, 8)).join(', ');
-      return { kind: 'error', code: ERR.MACHINE_NAME_COLLISION, message: `多台机器同名 ${target} 且都在线（machine-id 短码：${ids}）——请消歧后重试` };
+    return { op: 'roster-result', machines: [...machines.values()] };
+  }
+
+  /**
+   * send/file 共用的目标解析（B2.1 双轨）：hex spec = machine-id 前缀（git
+   * 短哈希式最短无歧义解析，寻址权威）；非 hex = name/label（人读显示用）。
+   * local=broker 本机（按 machineId 判定，不再比对 hostname 字符串）。
+   */
+  private resolveTarget(spec: string): { kind: 'local' } | { kind: 'node'; ws: WebSocket } | { kind: 'error'; code: string; message: string } {
+    const registry = readRegistry(this.d.registryFile);
+    const ownMid = this.d.machineId();
+    const pick = (resolved: NodeEntry): { kind: 'local' } | { kind: 'node'; ws: WebSocket } | { kind: 'error'; code: string; message: string } => {
+      if (ownMid !== undefined && resolved.machineId === ownMid) return { kind: 'local' };
+      if (resolved.machineId === undefined || !this.online.has(resolved.machineId)) {
+        return { kind: 'error', code: ERR.PEER_OFFLINE, message: `机器 ${spec} 已注册但当前不在线` };
+      }
+      return { kind: 'node', ws: this.online.get(resolved.machineId)!.ws };
+    };
+    // 轨一：hex spec = mid 前缀（最短无歧义；多命中教加长）
+    if (/^[0-9a-fA-F]+$/.test(spec)) {
+      const lower = spec.toLowerCase();
+      const hits = registry.nodes.filter((node) => node.machineId !== undefined && node.machineId.toLowerCase().startsWith(lower));
+      if (hits.length === 0) {
+        return { kind: 'error', code: ERR.UNKNOWN_MACHINE, message: `注册表没有 machine-id 前缀 ${spec} 的机器（crosschat serve --list 可查 mid8）` };
+      }
+      if (hits.length > 1) {
+        const ids = hits.map((node) => node.machineId?.slice(0, 12)).join(', ');
+        return { kind: 'error', code: ERR.MACHINE_NAME_COLLISION, message: `前缀 ${spec} 命中多台机器（machine-id：${ids}）——加长前缀后重试` };
+      }
+      return pick(hits[0]!);
     }
-    if (onlineCandidates.length === 0) {
-      return { kind: 'error', code: ERR.PEER_OFFLINE, message: `机器 ${target} 已注册但当前不在线` };
+    // 轨二：name/label（人读；冲突列 mid 教消歧）
+    const candidates = registry.nodes.filter((node) => node.machineName === spec || node.label === spec);
+    if (candidates.length === 0) {
+      return { kind: 'error', code: ERR.UNKNOWN_MACHINE, message: `注册表没有机器名 ${spec}（crosschat serve --list 可查名字与 mid8）` };
     }
-    const ws = this.online.get(onlineCandidates[0]!.machineId as string)!.ws;
-    return { kind: 'node', ws };
+    if (candidates.length > 1) {
+      const ids = candidates.map((node) => node.machineId?.slice(0, 12) ?? `${node.label}(未激活)`).join(', ');
+      return { kind: 'error', code: ERR.MACHINE_NAME_COLLISION, message: `多台机器同名 ${spec}（machine-id：${ids}）——改用 mid 前缀寻址` };
+    }
+    return pick(candidates[0]!);
   }
 
   private heartbeat(): void {

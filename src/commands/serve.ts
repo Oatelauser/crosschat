@@ -4,7 +4,8 @@
  * runSend，fileInbox 落盘本机收件）。
  */
 import { execSync, spawn } from 'node:child_process';
-import { appendFileSync, mkdirSync, openSync, readFileSync, realpathSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { homedir, hostname, networkInterfaces, type NetworkInterfaceInfo } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
@@ -12,7 +13,7 @@ import process from 'node:process';
 import { MultichatError } from '../errors.js';
 import { machineId } from '../platform/machine-id.js';
 import { Broker, DEFAULT_PORT, defaultDeliverLocal } from '../serve/broker.js';
-import { genKeys, listNodes, readRegistry, registryFileOf, removeNode, setPort, tcpDir } from '../serve/registry.js';
+import { genKeys, listNodes, readRegistry, registryFileOf, removeNode, setPort, tcpDir, writeRegistry } from '../serve/registry.js';
 import { deliverViaRunSend, NodeClient, readNodeConfig, type NodeConfig } from '../serve/node.js';
 import { FileInbox } from '../serve/file-channel.js';
 import type { SendDeps } from './send.js';
@@ -94,6 +95,7 @@ function runGenKey(genKeyArg: string, deps: ServeDeps, registryFile: string, por
   const portNum = port ?? readRegistry(registryFile).port ?? DEFAULT_PORT;
   const results = genKeys(registryFile, n, { host, port: portNum, alias: deps.hostname() });
   deps.stdout(`自动探测 broker 地址：${host}（只取第一个网卡，可能不对——请人工核对，不保证正确）`);
+  deps.stdout('分发前把每份 node.json 的 name 改成目标机器名（人读用，回信不依赖它——寻址走 machine-id 前缀）');
   for (const result of results) {
     deps.stdout('--------------------------------');
     deps.stdout(result.nodeJsonContent.trimEnd());
@@ -113,7 +115,7 @@ function firstNonInternalIPv4(ifaces: NodeJS.Dict<NetworkInterfaceInfo[]>): stri
 
 function runList(deps: ServeDeps, registryFile: string): number {
   const nodes = listNodes(registryFile);
-  deps.stdout(`${'label'.padEnd(10)}${'machine'.padEnd(18)}${'mid'.padEnd(10)}added-at`);
+  deps.stdout(`${'label'.padEnd(10)}${'name'.padEnd(18)}${'mid8'.padEnd(10)}added-at`);
   for (const node of nodes) {
     deps.stdout(
       `${node.label.padEnd(10)}${(node.machineName ?? '-').padEnd(18)}${(node.machineId?.slice(0, 8) ?? '-').padEnd(10)}${node.addedAt}`,
@@ -143,6 +145,32 @@ function runDetach(deps: ServeDeps, extraArgs: string[], logName: 'broker.log' |
   child.unref();
   deps.stdout(`${logName === 'node.log' ? '节点客户端' : 'broker'} 后台运行中 pid=${child.pid}（日志：${logFile}）`);
   return 0;
+}
+
+/**
+ * B2.1：broker 首启自登记——本机条目直接落注册表（machineId=本机、name=hostname），
+ * 并自动写本机 node.json（host=127.0.0.1）。broker 机与其他节点完全同构：
+ * 其他机器可立即用 mid8/名字寻址本机，本机 send --via tcp: 也有凭证，零管理员动作。
+ */
+export function ensureSelfEntry(deps: ServeDeps, registryFile: string, port: number): void {
+  const mid = deps.machineId();
+  if (mid === undefined || mid === '') return;
+  const registry = readRegistry(registryFile);
+  let self = registry.nodes.find((node) => node.machineId === mid);
+  if (self === undefined) {
+    self = { label: 'self', key: randomBytes(32).toString('hex'), machineId: mid, machineName: deps.hostname(), addedAt: new Date(deps.now()).toISOString() };
+    registry.nodes.push(self);
+    writeRegistry(registryFile, registry);
+  }
+  const nodeJson = join(tcpDir(deps.baseDir), 'node.json');
+  if (!existsSync(nodeJson)) {
+    mkdirSync(tcpDir(deps.baseDir), { recursive: true });
+    writeFileSync(
+      nodeJson,
+      `${JSON.stringify({ broker: { host: '127.0.0.1', port, alias: deps.hostname() }, key: self.key, name: deps.hostname() }, null, 2)}\n`,
+      'utf8',
+    );
+  }
 }
 
 async function runForegroundBroker(deps: ServeDeps, port: number | undefined): Promise<number> {
@@ -177,6 +205,8 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
           ? { op: 'error', code: r.code ?? 'REMOTE_FAILED', message: r.message ?? '本机投递失败' }
           : r;
       };
+  // B2.1：起服务前自登记（本机=全权成员，mid8/名字可寻址 + 本机 node.json）。
+  ensureSelfEntry(deps, registryFileOf(deps.baseDir), port ?? readRegistry(registryFileOf(deps.baseDir)).port ?? DEFAULT_PORT);
   const broker = new Broker({
     registryFile: registryFileOf(deps.baseDir),
     statusFile: join(tcpDir(deps.baseDir), 'status-broker.json'),

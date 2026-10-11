@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,6 +27,7 @@ import { deliverToClaudeSession } from './claude/deliver.js';
 import { listCodexThreads } from './codex/discovery.js';
 import { deliverToCodexThread } from './codex/deliver.js';
 import { runServe, realServeDeps, type ServeArgs } from './commands/serve.js';
+import { fetchRoster } from './serve/via-tcp.js';
 import { DEFAULT_PORT } from './serve/broker.js';
 
 const version: string = (
@@ -251,6 +252,15 @@ function realSendDeps(stdinText: string | undefined): SendDeps {
     conversationStateFile: defaultConversationsFile(),
     // Federation (008/B1): real transport + machine name for --origin.
     sshExec: (argv, input, timeoutMs) => defaultSshExec(argv, input, timeoutMs),
+    // B2.1：回信自动补全判据（ssh 别名表 + 本机 node.json 在场）。
+    sshConfigText: () => {
+      try {
+        return readFileSync(join(homedir(), '.ssh', 'config'), 'utf8');
+      } catch {
+        return undefined;
+      }
+    },
+    tcpBaseDir: join(homedir(), '.crosschat'),
     // B10: stable per-install id — same-machine decisions survive hostname collisions.
     machineId: () => machineId(),
   };
@@ -269,6 +279,10 @@ function realStatusDeps(): StatusDeps {
       confirmInRollout(codexHomeDir(), threadId, marker, { tries: 2, delayMs: 200 }),
     // B2: tcp forwarder status files live under ~/.crosschat/tcp.
     tcpDir: join(homedir(), '.crosschat', 'tcp'),
+    // B2.1：成员机在线表——有 node.json 才拉（broker 机 status-broker.json 新鲜时不会走到）。
+    roster: existsSync(join(homedir(), '.crosschat', 'tcp', 'node.json'))
+      ? () => fetchRoster(join(homedir(), '.crosschat'))
+      : undefined,
   };
 }
 

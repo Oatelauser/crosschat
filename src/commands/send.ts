@@ -1,5 +1,7 @@
 import { Buffer } from 'node:buffer';
+import { existsSync } from 'node:fs';
 import { hostname as osHostname } from 'node:os';
+import { join } from 'node:path';
 import { MultichatError } from '../errors.js';
 import type { ClaudeRegistryScan } from '../claude/registry.js';
 import type { CodexThreadSummary } from '../codex/client.js';
@@ -85,6 +87,35 @@ export interface SendDeps {
   machineId?(): string | undefined;
   /** 票B B2：tcp 通道根目录（node.json/status/收件箱所在 .crosschat）；缺省真 home。 */
   tcpBaseDir?: string;
+  /** B2.1：ssh config 全文（回信自动补全判"对端有无 ssh 别名"用）；缺省=无别名可查。 */
+  sshConfigText?: () => string | undefined;
+}
+
+/**
+ * B2.1 回信自动补全三分支（零回归规则）：ssh config 有对端 Host 别名 → 照旧
+ * ssh（既有对话字节不变）；无别名且本机有 node.json → tcp（tcp 对话的 m=mid8，
+ * 必然不是 ssh 别名，落到本分支）；其余照旧 ssh。纯函数便于直测。
+ */
+export function pickAutoVia(remoteM: string, ctx: { sshConfigText?: () => string | undefined; tcpBaseDir?: string }): string {
+  if (!sshConfigHasAlias(ctx.sshConfigText?.(), remoteM)) {
+    if (ctx.tcpBaseDir !== undefined && existsSync(join(ctx.tcpBaseDir, 'tcp', 'node.json'))) {
+      return `tcp:${remoteM}`;
+    }
+  }
+  return `ssh:${remoteM}`;
+}
+
+/** ~/.ssh/config 的 Host 行别名匹配（通配 Host 不算确定性别名，跳过）。 */
+function sshConfigHasAlias(text: string | undefined, alias: string): boolean {
+  if (text === undefined) return false;
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^Host\s+(.+?)\s*$/i.exec(line);
+    if (m === null) continue;
+    for (const token of m[1]!.split(/\s+/)) {
+      if (token === alias) return true;
+    }
+  }
+  return false;
 }
 
 export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
@@ -137,7 +168,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
           !identityMatchesEndpoint(caller, ep) &&
           ep.p !== 'human' && ep.m !== undefined && !isSameMachine(ep.mid, ep.m, localMid, here),
       );
-      if (remote !== undefined) args = { ...args, via: `ssh:${remote.m}` };
+      if (remote !== undefined) args = { ...args, via: pickAutoVia(remote.m, deps) };
     } catch {
       // invalid ref: the main path reports it
     }
@@ -274,6 +305,9 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     senderEp.p !== 'human' && senderEp.m !== undefined && !isSameMachine(senderEp.mid, senderEp.m, localMid, here)
       ? senderEp.m
       : undefined;
+  // B2.1：tcp 来件的 origin 带 via='tcp'——reply-hint 盖 --via tcp:<发送方 mid8>；
+  // ssh/本地路径不带该字段，envelope 输出字节不变（零回归锚点）。
+  const viaTransport = origin?.via;
   // B10 collision warning: the ssh peer's hostname equals ours but its
   // machine-id differs — routing is still correct (per-machine ssh alias
   // namespaces resolve it), the name ambiguity is worth telling the human.
@@ -316,7 +350,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     }
     checkAndRecord(deps.rateDir, rateKey(identityKey(caller), `claude:${target.id}`), deps.now());
     const toName = claudeSession.name ?? shortId('claude', claudeSession.sessionId);
-    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, viaHost, turnBudget });
+    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, viaHost, ...(viaTransport === undefined ? {} : { viaTransport }), turnBudget });
     try {
       await deps.deliverClaude(
         { pid: claudeSession.pid, messagingSocketPath: claudeSession.messagingSocketPath },
@@ -336,7 +370,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   const threads = await deps.listCodexThreads();
   const threadName = threads.find((thread) => thread.id === target.id)?.name;
   const toName = threadName ?? shortId('codex', target.id);
-  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, viaHost, turnBudget });
+  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, viaHost, ...(viaTransport === undefined ? {} : { viaTransport }), turnBudget });
   const parkNow = (): number => {
     park(
       deps.outboxDir,

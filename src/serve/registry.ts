@@ -23,6 +23,17 @@ export interface BrokerRegistry {
   nodes: NodeEntry[];
 }
 
+/**
+ * B2.1：节点自报名的净化（显示用）——剥控制符、截 32 字符；空则 undefined。
+ * 寻址权威是 machine-id 前缀，名字脏了也不影响路由。
+ */
+export function sanitizeName(name: string | undefined): string | undefined {
+  if (typeof name !== 'string') return undefined;
+  // eslint-disable-next-line no-control-regex -- 协议字段必须剥控制符
+  const cleaned = name.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 32);
+  return cleaned === '' ? undefined : cleaned;
+}
+
 /** 新组件新约定：注册表/状态/日志统一住 ~/.crosschat/tcp/ 下。 */
 export function tcpDir(baseDir: string): string {
   return join(baseDir, 'tcp');
@@ -120,7 +131,7 @@ export function genKeys(file: string, n: number, opts: { host: string; port: num
     results.push({
       label,
       key,
-      nodeJsonContent: `${JSON.stringify({ broker: { host: opts.host, port: opts.port, alias: opts.alias }, key }, null, 2)}\n`,
+      nodeJsonContent: `${JSON.stringify({ broker: { host: opts.host, port: opts.port, alias: opts.alias }, key, name: '改成目标机器名' }, null, 2)}\n`,
     });
     registry.nodes.push({ label, key, addedAt: new Date().toISOString() });
   }
