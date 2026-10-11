@@ -13,7 +13,7 @@ crosschat send --via tcp:host-b --to worker2 --body "跑一次构建，产物清
 ### 怎么用这篇手册
 
 - 形态一（两台机器，服务端放其中一台）：从头做到尾，双向各一轮 + 文件一轮 = 部署完成
-- 形态二（跨网络堡垒，ssh 隧道包裹）：结构已立好，**drill 待用户确认后补实录**
+- 形态二（跨网络堡垒，公网直连·用户拍板裸奔）：结构已立好，**drill 冷走待补实录**
 - 形态三（CI/脚本机单向下达）：零进程直发
 - 每步一个代码块：`>` 开头的行 = 你要敲的命令，其余行 = 期望输出，`#` 开头 = 条件/备注
 - `<XX>` = 占位符，各章开头的小表标了去哪一步查到真值
@@ -157,32 +157,29 @@ stop broker: pid 12732 已终止（端口 7260 双重确认）
 stop node: pid 8412 已终止
 ```
 
-### 形态二 · 跨网络堡垒（云端 broker + ssh 隧道包裹）
+### 形态二 · 跨网络堡垒（云端 broker，直连）
 
-> **本章 drill 待用户确认后补实录**——命令与输出按现行代码推写，未经双机实测。
+> **本章 drill 待补实录**——命令与输出按现行代码推写，未经双机实测（用户将裸奔直连冷走）。
 
-适用：家里机与云端腿（跨公网）。**公网明文风险声明：proto:1 无 TLS——broker 裸暴露公网 = 任何人可截听流量、重放帧；必须 ssh 隧道包裹（或只限可信内网/WireGuard）**。云端安全组只放行 ssh 端口，**不放行 7260**。
+适用：家里机与云端腿（跨公网）。**明文风险声明（用户 2026-10-11 拍板接受）：proto:1 无 TLS——公网直连 = 传输明文，路径环节理论上可截看对话内容；伪造/未授权投递被 PSK 挡死。介意明文可等 TLS 内建（挂账中）。**
 
-**C1 · 云端起服务端**（与 S1 同；`--detach` 后台，日志 `~/.crosschat/tcp/broker.log`）
+**C1 · 云端装好 crosschat 后起服务端**（与 S1 同；`--detach` 后台，日志 `~/.crosschat/tcp/broker.log`）
 ```
 > crosschat serve --detach
 broker 后台运行中 pid=24680（日志：/root/.crosschat/tcp/broker.log）
 ```
-**C2 · 家里机开本地端口转发（隧道随这个终端活）**
-```
-> ssh -N -L 7260:localhost:7260 <云端别名>
-# 建议配 ServerAliveInterval=30 保活；Xshell 等可配会话级"本地(传出)"隧道同义
-```
-**C3 · 家里机的 node.json：host 写 127.0.0.1（走隧道，不写公网 IP）**
+**C2 · 云端放行端口**：云服务商安全组/防火墙放行 7260 入站（TCP）——只给需要的来源 IP 更好
+**C3 · 云端发钥匙**（同 S2）：`crosschat serve --gen-key 1`，**核对打印的自动探测地址**——云端多网卡时探测值可能取内网 IP，家里机要用的是**公网 IP**，以人工核对为准
+**C4 · 家里机的 node.json：host 写云端公网 IP**
 ```
 > cat ~/.crosschat/tcp/node.json
 {
-  "broker": { "host": "127.0.0.1", "port": 7260, "alias": "cloud" },
+  "broker": { "host": "<云端公网IP>", "port": 7260, "alias": "cloud" },
   "key": "…",
   "name": "home-win"
 }
 ```
-**C4 · 连接与验证**：`crosschat serve --connect` → `online（broker cloud）`；`crosschat status` 出现"转发器: broker 可达…"即全链通。云端发到家里机照 S5 反向操作（家里机的 mid8 从 `--list` 或 roster 查）。
+**C5 · 连接与验证**：`crosschat serve --connect cloud` → `online（broker cloud）`；`crosschat status` 出现"转发器: broker 可达…"即全链通。云端发到家里机照 S5 反向操作（家里机的 mid8 从 `--list` 或 roster 查）。
 
 ### 形态三 · 单向下达（CI/脚本机零进程直发）
 
