@@ -296,37 +296,53 @@ interface ProcInfo {
   cmdline: string;
 }
 
-/** 扫描本机 `crosschat serve` 特征进程（排除自身）。 */
+interface RawProc {
+  pid: number;
+  /** 可执行名（win=ExecutablePath 基名；unix=comm）——宿主/shell 过滤的关键。 */
+  exe: string;
+  cmdline: string;
+}
+
+/**
+ * B3.1 bug3：命中命令行特征后还须 (a) 可执行名确为 node/crosschat（排除
+ * wsl.exe/conhost/powershell/bash 等宿主与 shell——它们命令行里嵌着整条
+ * 子命令文本，按串匹配就会误杀宿主、连带杀掉 WSL 会话），且 (b) 命令行含
+ * 完整脚本路径特征 dist/cli.js 与 serve 旗标。纯函数可注入测试。
+ */
+export function matchServeProcesses(procs: RawProc[], selfPid: number): ProcInfo[] {
+  return procs.filter((p) => {
+    if (p.pid === selfPid || p.pid === 0) return false;
+    if (!/\bserve\b/.test(p.cmdline)) return false;
+    const base = p.exe.split(/[\\/]/).pop()?.toLowerCase() ?? '';
+    if (base !== 'node' && base !== 'node.exe' && base !== 'crosschat' && base !== 'crosschat.exe') return false;
+    return /dist[\\/]cli\.js/.test(p.cmdline);
+  });
+}
+
+/** 扫描本机进程清单（win=CIM；unix=ps），过 matchServeProcesses 身份校验。 */
 function listServeProcesses(): ProcInfo[] {
   let out: string;
+  const procs: RawProc[] = [];
   if (process.platform === 'win32') {
     out = execSync(
-      'powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object CommandLine | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress"',
+      'powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object CommandLine | Select-Object ProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Compress"',
       { encoding: 'utf8' },
     );
-  } else {
-    out = execSync('ps -eo pid=,args=', { encoding: 'utf8' });
-  }
-  const procs: ProcInfo[] = [];
-  if (process.platform === 'win32') {
-    const parsed = JSON.parse(out || '[]') as { ProcessId: number; CommandLine: string } | { ProcessId: number; CommandLine: string }[];
+    const parsed = JSON.parse(out || '[]') as { ProcessId: number; ExecutablePath?: string | null; CommandLine: string } | { ProcessId: number; ExecutablePath?: string | null; CommandLine: string }[];
     for (const p of Array.isArray(parsed) ? parsed : [parsed]) {
-      procs.push({ pid: p.ProcessId, cmdline: p.CommandLine });
+      procs.push({ pid: p.ProcessId, exe: p.ExecutablePath ?? '', cmdline: p.CommandLine });
     }
   } else {
+    out = execSync('ps -eo pid=,comm=,args=', { encoding: 'utf8' });
     for (const line of out.split('\n')) {
       const trimmed = line.trim();
       if (trimmed === '') continue;
-      const pid = Number.parseInt(trimmed.split(/\s+/)[0] ?? '', 10);
-      if (Number.isInteger(pid)) procs.push({ pid, cmdline: trimmed.slice(trimmed.indexOf(' ') + 1) });
+      const [pidTok, comm, ...rest] = trimmed.split(/\s+/);
+      const pid = Number.parseInt(pidTok ?? '', 10);
+      if (Number.isInteger(pid)) procs.push({ pid, exe: comm ?? '', cmdline: rest.join(' ') });
     }
   }
-  return procs.filter(
-    (p) =>
-      p.pid !== process.pid &&
-      /\bserve\b/.test(p.cmdline) &&
-      (p.cmdline.includes('crosschat') || /cli\.js\b/.test(p.cmdline)),
-  );
+  return matchServeProcesses(procs, process.pid);
 }
 
 /** 注册表端口反查 pid（broker 双重确认用）。 */

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { parseServeArgs } from '../src/cli.js';
-import { runServe, type ServeDeps } from '../src/commands/serve.js';
+import { matchServeProcesses, runServe, type ServeDeps } from '../src/commands/serve.js';
 import { listNodes, registryFileOf } from '../src/serve/registry.js';
 import { MultichatError } from '../src/errors.js';
 import type { NetworkInterfaceInfo } from 'node:os';
@@ -136,5 +136,33 @@ describe('runServe --gen-key / --list / --remove', () => {
     expect(lines.at(-1)).toBe('已移除 node-1');
     expect(await runServe({ remove: 'node-1' }, deps)).toBe(1);
     expect(lines.at(-1)).toBe('未找到 node-1');
+  });
+});
+
+describe('B3.1 bug3: matchServeProcesses identity gate (no host/shell kills)', () => {
+  const raw = (pid: number, exe: string, cmdline: string) => ({ pid, exe, cmdline });
+
+  it('skips wsl.exe/bash/powershell hosts whose cmdline embeds the nested serve text', () => {
+    const procs = [
+      raw(111, 'C:\\Windows\\System32\\wsl.exe', 'wsl -e bash -c exec node /mnt/d/ws/CC/multichat/dist/cli.js serve --connect yang'),
+      raw(112, 'C:\\Windows\\System32\\bash.exe', 'bash -c node /mnt/d/ws/dist/cli.js serve --connect yang'),
+      raw(113, 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', 'powershell node dist/cli.js serve'),
+      raw(114, 'C:\\Windows\\System32\\conhost.exe', 'conhost --connect serve'),
+    ];
+    expect(matchServeProcesses(procs, 1)).toEqual([]);
+  });
+
+  it('kills only real node/crosschat processes carrying the dist/cli.js + serve signature', () => {
+    const procs = [
+      raw(211, 'C:\\Program Files\\nodejs\\node.exe', 'node D:\\workspace\\CC\\multichat\\dist\\cli.js serve --detach'),
+      raw(212, 'node', 'node /usr/lib/node_modules/@oatelauser/crosschat/dist/cli.js serve --connect'),
+      raw(213, 'crosschat', '/usr/local/bin/crosschat serve'),
+      raw(214, 'node.exe', 'node D:\\other\\server.js serve --port 7260'),
+      raw(1, 'node', 'node dist/cli.js serve'),
+    ];
+    const hits = matchServeProcesses(procs, 1);
+    // 213 = crosschat 直跑但命令行无 dist/cli.js 脚本特征（包管理器改名场景）→ 跳过；
+    // 214 = 无脚本特征；pid 1 = 自身。win 下 npm 实装经 node dist/cli.js（211 形态）。
+    expect(hits.map((p) => p.pid)).toEqual([211, 212]);
   });
 });
