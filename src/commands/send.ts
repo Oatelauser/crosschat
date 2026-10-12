@@ -27,6 +27,7 @@ import {
 } from '../limits.js';
 import { decodeOriginIdentity, isSameMachine, runViaSend } from '../federation.js';
 import { runViaTcpSend } from '../serve/via-tcp.js';
+import { normalizeMid } from '../platform/machine-id.js';
 import type { SendLogEntry } from '../send-log.js';
 import { continueConversation, continueFromRef, recordConversation } from '../conversations.js';
 import {
@@ -153,7 +154,10 @@ async function autoViaFromRef(
     const tLocal = isLocal(ref.t);
     const peer = tLocal && !fLocal ? ref.f : ref.t;
     if (peer.p === 'human') return args; // 人发起的对话交给主路径的 CANNOT_REPLY_TO_HUMAN
-    return { ...args, via: `tcp:${peer.mid ?? peer.m ?? ''}` };
+    // F0：对端 mid 归一后再当 targetMachine（Windows 带杠 MachineGuid → broker
+    // 归一前缀轨）；mid 缺失才退机器名槽（名字绝不归一）。
+    const peerTarget = peer.mid !== undefined ? normalizeMid(peer.mid) : (peer.m ?? '');
+    return { ...args, via: `tcp:${peerTarget}` };
   }
   let staleRef = false;
   const envScan = deps.listClaudeSessions();
