@@ -150,7 +150,7 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
     }
     if (scan.malformed > 0) attention(`⚠️ claude 注册表 ${scan.malformed} 个损坏条目（已忽略）`);
   } catch {
-    fail('❌ claude CLI 不可解析（CLAUDE_EXE_NOT_FOUND）；确认 claude 已安装');
+    attention('⚠️ claude CLI 未安装——纯 codex 互聊可忽略；需要 claude 会话时安装后重跑 doctor');
   }
 
   // 3+4. codex CLI and daemon versions (daemon needs the binary resolved first)
@@ -161,15 +161,14 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
     // reported below
   }
   if (codexBin === undefined) {
-    fail('❌ codex CLI 未找到；安装 codex 后重试');
-    fail('❌ codex daemon 无法检查（codex CLI 缺失）；安装后运行: codex app-server daemon start');
+    // 未安装是合法机器状态（纯 claude 机）——提示不判错（用户 2026-10-12 拍板）
+    attention('⚠️ codex CLI 未安装——纯 claude 互聊可忽略；需要 codex 会话时安装并运行: codex app-server daemon start');
   } else {
     const v = deps.run(codexBin, ['--version']);
     // 非 win32 下 resolveCodexExecutable() 不验存在性直接返回 'codex'：未安装时 spawn ENOENT、
     // stdout 为 undefined（v1.5.0 云端 doctor 崩溃根因），并入"未找到"而非当作版本解析失败。
     if (v.error !== undefined) {
-      fail('❌ codex CLI 未找到；安装 codex 后重试');
-      fail('❌ codex daemon 无法检查（codex CLI 缺失）；安装后运行: codex app-server daemon start');
+      attention('⚠️ codex CLI 未安装——纯 claude 互聊可忽略；需要 codex 会话时安装并运行: codex app-server daemon start');
     } else {
       const ver = v.status === 0 ? parseSemver(v.stdout ?? '') : undefined;
       if (ver === undefined) attention(`⚠️ codex CLI 存在，但版本无法解析：${firstLine(v.stdout) || `(exit ${v.status ?? 'null'})`}`);

@@ -62,8 +62,8 @@ describe('runDoctor', () => {
         },
       }),
     );
-    expect(missing.failed).toBe(true);
-    expect(missing.output).toContain('❌ claude CLI 不可解析');
+    expect(missing.failed).toBe(false);
+    expect(missing.output).toContain('⚠️ claude CLI 未安装');
     const empty = runDoctor(
       makeDeps({ listClaudeSessions: () => ({ sessions: [], malformed: 0 }) }),
     );
@@ -90,9 +90,8 @@ describe('runDoctor', () => {
         },
       }),
     );
-    expect(gone.failed).toBe(true);
-    expect(gone.output).toContain('❌ codex CLI 未找到');
-    expect(gone.output).toContain('❌ codex daemon 无法检查');
+    expect(gone.failed).toBe(false);
+    expect(gone.output).toContain('⚠️ codex CLI 未安装');
   });
 
   // 回归：v1.5.0 云端（无 codex）崩溃——linux 解析器返回 'codex' 不验存在性，
@@ -106,14 +105,13 @@ describe('runDoctor', () => {
             : { status: null, stdout: undefined, error: { code: 'ENOENT' } },
       }),
     );
-    expect(report.failed).toBe(true);
-    expect(report.output).toContain('❌ codex CLI 未找到');
-    expect(report.output).toContain('❌ codex daemon 无法检查');
+    expect(report.failed).toBe(false);
+    expect(report.output).toContain('⚠️ codex CLI 未安装');
   });
 
   // 回归：v1.5.0 云端（无 codex）崩溃——linux 解析器返回 'codex' 不验存在性，
   // spawnSync ENOENT 时 stdout 为 undefined，旧代码 firstLine(undefined).split 崩。
-  it('fails (not crashes) when the codex spawn errors with ENOENT and undefined stdout', () => {
+  it('warns (not crashes, not fails) when the codex spawn errors with ENOENT and undefined stdout', () => {
     const report = runDoctor(
       makeDeps({
         run: (_bin, args) =>
@@ -122,9 +120,8 @@ describe('runDoctor', () => {
             : { status: null, stdout: undefined, error: { code: 'ENOENT' } },
       }),
     );
-    expect(report.failed).toBe(true);
-    expect(report.output).toContain('❌ codex CLI 未找到');
-    expect(report.output).toContain('❌ codex daemon 无法检查');
+    expect(report.failed).toBe(false);
+    expect(report.output).toContain('⚠️ codex CLI 未安装');
   });
 
   it('fails with the daemon-start guidance when the daemon is not running', () => {
