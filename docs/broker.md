@@ -11,48 +11,42 @@ crosschat send --via tcp:host-b --to worker2 --body "跑一次构建，产物清
 
 ### 怎么用这篇手册
 
-- **第一次部署**：第一章从头到尾（选机器 → broker 机两条命令 → node 机贴钥匙上线 → 验证全链通）
-- **部署完想聊天/传文件**：第二章——一句话题词实录，不需要记任何命令
-- **想懂原理 / 排障要深挖**：第三章（默认折叠）
-- **要写第三方客户端对接协议**：第四章（默认折叠）
-- 命令块约定：`>` 开头 = 你要敲的命令，其余行 = 期望输出，`#` 开头 = 条件/备注。统一 **Linux** 写法，win 等价替换（`nano`→`notepad`、`~`→`%USERPROFILE%`）
-- 端口统一默认 **7260**；钥匙 = 一份 `node.json`，是唯一的入网凭证
-- **单星边界**：一台机一份 node.json = 一个星形成员身份；换 broker = 换钥匙。同时入两个星是 proto:2 挂账议题（路线已核：客户端档案化、wire 协议不变、旧语法单档案机永续可用——升级不破坏）
+| 你这台机是… | 做哪节 |
+|---|---|
+| broker 机（选出来的中心） | 只做 **1.2**。**跳过 1.3——serve 启动即已可收可发，不需要 --connect** |
+| node 机（其余机器） | 1.3 |
+| CI 机（只发不收） | 1.3 只贴钥匙，不跑 --connect |
+
+- 部署（1.1–1.4）→ 日常聊天（第二章，一句话题词）→ 原理（第三章，折叠）→ 协议对接（第四章，折叠）
+- 命令块：`>` = 敲的，其余 = 期望输出，`#` = 备注；Linux 写法，win 等价（`nano`→`notepad`）
+- 端口默认 **7260**；钥匙 = 一份 `node.json`，唯一入网凭证
 
 ---
 
 ## 一、环境搭建
 
-这一章做完，你得到：一个在跑的 broker、若干贴好钥匙在线的节点、一条验证过的全链路。总共四步——选机器（1.1）、broker 机两条命令（1.2）、node 机贴钥匙上线（1.3）、验证（1.4）。一次性工程，之后日常只在第二章。
+### 1.1 选谁当 broker
 
-### 1.1 选谁当 broker（五种情况）
+选**最常开机、最可达**的一台——它挂了跨机就瘫：
 
-broker 是全网消息的中转站：它挂了跨机通信就瘫，所以选**最常开机、最可达**的那台。按你的拓扑对号入座：
+- 局域网 → 最常开机的那台
+- 跨公网 → 云端/堡垒机（唯一公网入口；安全组放行端口入站。明文风险已拍板接受，TLS 挂账中）
+- win + WSL 同物理机 → 算两台机，选常开侧
+- 已有 ssh 联邦 → 机器 ≥3 台或要文件通道时才值得切 tcp
 
-1. **都在同一局域网**（两台/多台）：选最常开机的一台当 broker——它关机别人就互发不了
-2. **跨公网多机**（家里 + 云端）：选云端/堡垒机当 broker——唯一有公网入口的机器，其余机器都能主动连它。注意两件事：
-   - 云服务商安全组/防火墙放行端口（TCP 7260 或自选）入站；只给需要的来源 IP 更好
-   - **明文风险（拍板接受）**：proto:1 无 TLS——公网直连 = 传输明文，路径环节理论上可截看内容；伪造/未授权投递被钥匙（PSK）挡死。介意明文可等 TLS 内建（挂账中）
-3. **CI/脚本单向下达**：CI 机不连、零进程——放一份 node.json 就能 `send` 瞬态直发（见 1.3 的 CI 注）；目标机（broker 机或任一在线节点）有会话即可收
-4. **win + WSL 同一物理机**：算两台机器。选常开侧当 broker：WSL 当 broker 则 win 重启后要手动拉起；win 当 broker 则 WSL 随开随连
-5. **已有 ssh 联邦，何时值得切 tcp**：机器 ≥3 台（ssh 要两两互配，tcp 只配一次中心）、或需要 `--file` 文件通道、或不想维护 ssh 密钥矩阵时
+### 1.2 broker 机（两条命令，完）
 
-> 云端场景（情况 2）drill 实录待补——命令与输出按现行代码推写。
-
-### 1.2 broker 机：起服务 + 发钥匙
-
-**起服务**。一条命令，broker 就监听在 0.0.0.0:7260，同时自动把自己登记为首个成员（机器自己也能收能发，零额外动作）：
+起服务——本机自动登记为首个成员，**即刻可收可发**：
 
 ```
 > crosschat serve
 已自动生成本机 node.json（/root/.crosschat/tcp/node.json，host=127.0.0.1——本机 send --via tcp: 凭证）
 broker listening on 0.0.0.0:7260（Ctrl+C 退出）
-# 首行声明只在首次出现；node.json 已存在但指向别家/钥匙陈旧时改为相应警告
-# 要后台常驻：crosschat serve --detach（输出 pid 与端口，日志 ~/.crosschat/tcp/broker.log）
-# 换端口：crosschat serve --port 7777（显式给一次即持久记住，重启不带参数也是它）
+# 后台常驻：crosschat serve --detach（输出 pid 与端口，日志 ~/.crosschat/tcp/broker.log）
+# 换端口：crosschat serve --port 7777（给一次即记住）
 ```
 
-**发钥匙**。每台要加入的机器需要一份 `node.json`（broker 的地址 + 一把专属钥匙）。生成几份就登记几把：
+发钥匙——打印的 JSON 交给对应机器（打印自带核对规则与提示，照做即可）：
 
 ```
 > crosschat serve --gen-key 2
@@ -78,14 +72,9 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 钥匙已进入终端回滚缓冲，分发完建议清屏
 ```
 
-两个要紧的核对点：
+### 1.3 node 机（贴钥匙 + 上线）
 
-- **host 为什么不能信探测值**：探测只取第一个非 internal 网卡（内网段照返回）——多网卡/VPN/WSL 常探错；云主机的公网 IP 是 NAT 映射，**根本不绑在网卡上**，探测永远找不到，必须人工核对填入。探测错不致命：node.json 在目标机器上改 host/port 即可
-- **钥匙即入网凭证**：贴进过终端/聊天工具的缓冲都可能泄露——分发完 `clear`，废弃的钥匙在 broker 机 `crosschat serve --remove <label>` 注销
-
-### 1.3 node 机：贴钥匙 + 上线
-
-**贴钥匙**。把 gen-key 打印的一份 JSON 整段存成 `~/.crosschat/tcp/node.json`，改两处：host 按上节规则核对改写、name 改成**这台机器自己**的名字（自报显示名，建议=hostname）。这台机器也要装好 crosschat（`npm i -g @oatelauser/crosschat && crosschat install-skills`）：
+把一份钥匙存成 `~/.crosschat/tcp/node.json`，改 host（按打印的规则）和 name（本机名）。本机也要装 crosschat：
 
 ```
 > mkdir -p ~/.crosschat/tcp && nano ~/.crosschat/tcp/node.json
@@ -98,52 +87,32 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 }
 ```
 
-node.json 三个字段一句话分清（前两个**不用**你改）：
+字段一句话：`key`=钥匙（不用改）；`broker.alias`=broker 机显示名（不用改）；`name`=本机自报名（roster 里怎么称呼你，寻址走 mid8 与它无关）。
 
-- `key`：这台机的入网钥匙（broker 发的，鉴权唯一依据）
-- `broker.alias`：**broker 机的显示名**（gen-key 时自动带出 broker 的 hostname）——各节点不一致不影响功能（鉴权只认 key），只用于本机 status 的 `online tcp:<别名>` 显示与 `--connect <别名>` 一致性校验；broker 后来改了 hostname 显示旧了，手改这里即可
-- `name`：**这台机自己的显示名**（连上时自报，roster/在线表里怎么称呼它；寻址权威是 mid8，改名不断线）
-
-**上线**。启动节点客户端连上 broker，之后断线自动重连（1s→60s 退避，永不放弃）：
+上线（断线自动重连永不放弃）：
 
 ```
 > crosschat serve --connect --detach
 节点客户端后台运行中 pid=8412（日志：/home/me/.crosschat/tcp/node.log）
 ```
 
-> **为什么必须保持它在线**：broker 是纯转发不存件——把消息送到这台机器的唯一通道就是这条常驻连接；它断了，别人发给这台机器的消息立刻 `PEER_OFFLINE`（不丢不排队，发件方马上知道）。**发送**则不需要任何常驻进程——`send` 是瞬态连接发完即走。纯下发的 CI 机（1.1 情况 3）连这一步都省了。
+> 记住一条：**收件靠这条常驻连接，断了=别人发你 PEER_OFFLINE；发送零进程**。broker 机两端都不需要——它的收发在 serve 进程里。
 
-### 1.4 验证全链通
-
-三眼看完，任何一眼不对回 1.2/1.3 排：
-
-**第一眼：节点机上 `crosschat status`**——末尾两行"转发器"各测一件事，别混：
+### 1.4 验证（三眼，不对回 1.2/1.3 排）
 
 ```
-> crosschat status
-…
-转发器: online tcp:yang (since 10-11 10:30)     ← 本机节点客户端进程状态（online=连着）
-转发器: broker 可达，2 机器在线                  ← 瞬态探测 broker + 在线机器表
+> crosschat status                      # 节点机上跑：第一行=本机客户端，第二行=broker 可达
+转发器: online tcp:yang (since 10-11 10:30)
+转发器: broker 可达，2 机器在线
 在线机器: yang (ec542c2c)、host-b (9f8e7d6c)
-```
 
-第一行显示 `未运行` = 节点客户端没起（能收不到消息的那个原因）；第二行不通 = node.json 地址/端口错或防火墙拦。
-
-**第二眼：broker 机 `crosschat serve --list`**——注册表全貌，顺带拿到每台机器的 **mid8**（寻址权威，见第三章）：
-
-```
-> crosschat serve --list
+> crosschat serve --list                # broker 机上跑：注册表全貌，mid8 是寻址权威
 label     name              mid8      added-at
 self      yang              ec542c2c  2026-10-11T02:12:00.059Z
 node-1    host-b            9f8e7d6c  2026-10-11T02:31:10.402Z
-```
 
-**第三眼：真发一条**（部署的最终裁决，双向各一条）：
-
-```
-> crosschat send --via tcp:host-b --to worker2 --body "联调测试"
+> crosschat send --via tcp:host-b --to worker2 --body "联调测试"   # 真发一条，最终裁决
 delivered to worker2@9f8e7d6c (turn 1)
-# 对端机器上需有已命名会话（crosschat status 可见）；PEER_OFFLINE → 回 1.3 把 --connect 拉起
 ```
 
 ---
