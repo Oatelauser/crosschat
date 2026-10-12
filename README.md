@@ -97,7 +97,7 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 🤖 beta2 收到             📨 来自另一会话的消息:
                           <cross-session-message from-name="codex/boss@win" turn="1">
                           你好 beta2，这是跨机问候
-                          回复请运行: crosschat send --via ssh:win --conversation mc2_… --body "<你的回复>"
+                          回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"
 🤖 beta2[beta2 -> boss]   收到！跨机闭环成立
 🤖 boss 收到              📨 收到！跨机闭环成立（turn 2，自动经 ssh 回到 win）
 ```
@@ -114,12 +114,12 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 🤖 worker2 收到            📨 来自另一会话的消息:
                           <cross-session-message from-name="boss" turn="1">
                           …跑一次构建并回报结果…
-                          回复请运行: crosschat send --via tcp:ec542c2c --conversation mc2_… --body "<你的回复>"
+                          回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"
 🤖 worker2[worker2 -> boss] 构建完成，产物清单见下一条
 🤖 boss 收到               📨 构建完成，产物清单见下一条（turn 2，自动经 broker 跨机回来）
 ```
 
-与 ssh 跨机同构：题词里多了 `--via tcp:host-b`，回程路条由信封自动携带（`--via tcp:<A-mid8>`），worker2 零配置照抄即回；另支持 `--file` 文件通道与 CI 零进程直发（见转发器手册）。
+与 ssh 跨机同构：题词里多了 `--via tcp:host-b`；回信命令由引用自动路由（不带 `--via`），worker2 零配置照抄即回；另支持 `--file` 文件通道与 CI 零进程直发（见转发器手册）。
 
 ## 📡 通信方式
 
@@ -142,7 +142,7 @@ crosschat send --conversation <ref> --body "<正文>" # 回复（ref 照抄收�
 crosschat send --via ssh:<对端hostname> --to <名/id8> --body "…"  # 跨机发送（见 📡 通信方式）
 crosschat send --via tcp:<机器名/mid8> --to <名> --body "…" [--file <路径>]  # 跨机 tcp 直发 + 文件通道（见转发器手册）
 echo … | crosschat send --to <名字>                 # 正文走 stdin
-crosschat status [--json] [--conversations]        # 双侧总览（名字/目录/时间/状态）
+crosschat status [--json] [--conversations] [--claude|--codex] [--name <子串>] [--all]   # 双侧总览（可按段/名字过滤；--via tcp|ssh 配 --conversations 按传输滤）
 crosschat doctor                                    # 一键环境体检（有 ❌ 时退出码 1）
 crosschat serve [--port/--gen-key/--list/--remove/--connect/--detach/--stop]  # tcp 转发器：broker/节点/钥匙管理（见转发器手册）
 crosschat clean [--force]                           # 清 tcp 收件/断点残留（默认懒删除规则；--force 全清）

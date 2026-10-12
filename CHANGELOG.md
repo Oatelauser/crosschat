@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### 信封瘦身 A+（token 优化，现场反馈驱动）
+
+- 回信命令去 `--via`、reply-hint 去重复 `conversation` 属性——ref 全信封唯一，固定开销 **-36%**（~420→~270 字符/条）；tcp/ssh/单机三态归一式 `crosschat send --conversation <ref> --body`
+- 执行侧自动选路（autoViaFromRef）：ref 星标识→本机条目走 tcp（target=对端完整 mid）；无星走既有 ssh 补全；超旧无指纹引用→教学加显式 --via；接收腿（--origin 在场）不选路防对弹
+- 旧信封照抄照 work，交叉兼容；架构手册/README/两手册例句全量换新句式
+
+### status 套件
+
+- "转发器"两行拆名：`节点客户端:`（多守护带 [选择器] 标签）/`broker:`；alias 展示 >16 字符截短
+- 过滤参数：`--claude`/`--codex` 选段、`--name <子串>`（主视图+conversations）、`--via tcp|ssh`（配 --conversations 按传输族）、`--json` 组合结构不变
+- `(unnamed)` 默认隐藏（默认行为变更经用户拍板），`--all` 带出；skill 同步 --all 注记与"跨机正文别堆本机细节"教学（权限分类器现场拦截教训）
+- 形态二（云端直连）drill 实录归档销账：10 问 10 答/21 轮零丢失（`docs/drill-reports/broker-cloud-drill-20261012.md`）；挂票 012 远程会话枚举 `status --via tcp:<机器>`
+
+
 ## [1.5.3] - 2026-10-12
 
 ### 修复与打磨

@@ -127,9 +127,9 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 ### 1.4 验证（三眼，不对回 1.2/1.3 排）
 
 ```
-> crosschat status                      # 节点机上跑：第一行=本机客户端，第二行=broker 可达
-转发器: online tcp:yang (since 10-11 10:30)
-转发器: broker 可达，2 机器在线
+> crosschat status                      # 节点机上跑：节点客户端行=本机守护，broker 行=可达性
+节点客户端: online tcp:yang (since 10-11 10:30)
+broker: 可达，2 机器在线
 在线机器: yang (ec542c2c)、host-b (9f8e7d6c)
 
 > crosschat serve --list                # broker 机上跑：注册表全貌，mid8 是寻址权威
@@ -157,7 +157,7 @@ delivered to worker2@9f8e7d6c (turn 1)
 🤖 worker2 收到            📨 来自另一会话的消息:
                           <cross-session-message from-name="boss" turn="1">
                           …跑一次构建并回报结果…
-                          回复请运行: crosschat send --via tcp:ec542c2c --conversation mc2_… --body "<你的回复>"
+                          回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"
 🤖 worker2[worker2 -> boss] 构建完成，产物清单见下一条
 🤖 boss 收到               📨 构建完成，产物清单见下一条（turn 2，自动经 broker 跨机回到 A 机）
 ```
@@ -226,7 +226,7 @@ B 机会话里自动出现信封（无需任何题词）：
 ```
 📨 来自另一会话的消息:
 <cross-session-message from-name="boss" turn="1">
-<crosschat-reply-hint conversation="mc2_…" reply-as="worker2">回复请运行: crosschat send --via tcp:ec542c2c --conversation mc2_… --body "<你的回复>"</crosschat-reply-hint>
+<crosschat-reply-hint reply-as="worker2">回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"</crosschat-reply-hint>
 …
 跑一次构建，产物清单发回来
 </cross-session-message>
@@ -382,7 +382,7 @@ C → file-end{id}
 | `PEER_OFFLINE 机器 X 已注册但当前不在线` | 对端节点没连 | 对端 `crosschat serve --connect`；稍后重试；若两端另配了 ssh 也可走 ssh 形态 |
 | `UNKNOWN_MACHINE 注册表没有…` | 目标名/mid 没登记或抄错 | broker 机 `crosschat serve --list` 查 mid8 与名字 |
 | `MACHINE_NAME_COLLISION` | 同名机器或 mid 前缀太短 | 报错里列了 mid——改用（更长的）mid 前缀寻址 |
-| status 第一行 `转发器: 未运行` | 本机节点客户端没起（收不到消息的原因） | `crosschat serve --connect --detach` |
+| status `节点客户端: 未运行` | 本机节点客户端没起（收不到消息的原因） | `crosschat serve --connect --detach` |
 | `STAR_ID_MISMATCH 星标识不符已停机` | node.json 条目与 broker 现星标识不符（贴错星/配置陈旧） | 向管理员重新索取 node.json，重启 --connect |
 | 多星机裸写 `--via tcp:<机器>` 报"列条目"教学 | 多条目且无会话引用可循 | 加限定词 `--via tcp:<别名>:<机器>`；回信不受影响（引用自动带星） |
 | status 第二行 broker 不可达 | node.json host/port 错 / 防火墙 / broker 没跑 | 按 1.2/1.3 核对；云机安全组 |

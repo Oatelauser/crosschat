@@ -48,12 +48,12 @@
 
 ```
 <cross-session-message from-name="发送方" turn="N">
-<crosschat-reply-hint conversation="mc1_<base64url>" reply-as="接收方">
-回复请运行: crosschat send --conversation mc1_… --body "<你的回复>"</crosschat-reply-hint>
-新话题或对话已推进时: crosschat send --to <名字> …（--to 自动接续该端对最近对话）；超 16KiB 请写文件后只发路径
+<crosschat-reply-hint reply-as="接收方">回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"</crosschat-reply-hint>
 <正文（保留字标签已中性化，防伪造信封）>
 </cross-session-message>
 ```
+
+回信命令**不带 `--via`**：`--conversation` 引用自含路由（tcp 对话的 ref 尾部带星标识、端点带机器指纹，CLI 自动选路；ssh 对话按机器别名走既有补全）——跨机/单机一种句式，agent 照抄即可。
 
 **自包含引用**是"无状态却可对话"的关键：`mc1_` 后是 base64url 的 `{两端身份(native UUID), nonce, 轮次}`。回复时 CLI 解码引用、校验调用方必是两端之一、目标取另一端、轮次 +1——**不查任何持久状态**。native UUID 稳定（跨会话重启），所以引用在会话存活期内一直有效。
 
