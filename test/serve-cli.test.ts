@@ -50,7 +50,10 @@ describe('parseServeArgs', () => {
     expect(parseServeArgs(['--gen-key', '--list'])).toEqual({ genKeyArg: '1', list: true });
   });
 
-  it('parses --connect with an optional alias and rejects unknown options', () => {
+  it('parses --connect with an optional star name, --name with a value, and rejects unknown options', () => {
+    expect(parseServeArgs(['--name', 'cloud'])).toEqual({ nameArg: 'cloud' });
+    expect(parseServeArgs(['--name=cloud'])).toEqual({ nameArg: 'cloud' });
+    expectUsage(() => parseServeArgs(['--name']), 'requires a value');
     expect(parseServeArgs(['--connect'])).toEqual({ connect: '' });
     expect(parseServeArgs(['--connect', 'box'])).toEqual({ connect: 'box' });
     expect(parseServeArgs(['--connect=box'])).toEqual({ connect: 'box' });
@@ -101,10 +104,12 @@ describe('runServe --gen-key / --list / --remove', () => {
     expect(lines.at(-1)).toBe('钥匙已进入终端回滚缓冲，分发完建议清屏');
     const jsonBlocks = lines.filter((l) => l.startsWith('{'));
     expect(jsonBlocks).toHaveLength(2);
-    const parsed = JSON.parse(jsonBlocks[0]!) as { brokers: { host: string; port: number; alias: string; starId: string; key: string }[] };
-    // B0：gen-key 输出带 starId（与注册表同值）；B-fix：只产出数组形状（单星=一项）
+    const parsed = JSON.parse(jsonBlocks[0]!) as { brokers: { host: string; port: number; name: string; starId: string; key: string }[]; showName: string };
+    // B0：gen-key 输出带 starId（与注册表同值）；B-fix：只产出数组形状（单星=一项）；
+    // E0：条目 name=星名（缺省轨道=hostname）、顶层 showName=占位提示
     expect(parsed.brokers).toHaveLength(1);
-    expect(parsed.brokers[0]).toEqual({ host: '192.168.1.7', port: 7260, alias: 'h', starId: expect.any(String), key: expect.any(String) });
+    expect(parsed.brokers[0]).toEqual({ host: '192.168.1.7', port: 7260, name: 'h', starId: expect.any(String), key: expect.any(String) });
+    expect(parsed.showName).toBe('改成「贴这份配置的机器」的名字');
     expect(parsed.brokers[0]!.starId).toMatch(/^[0-9a-f]{12}$/);
     expect(parsed.brokers[0]!.key).toMatch(/^[0-9a-f]{64}$/);
     expect((JSON.parse(readFileSync(registryFileOf(dir), 'utf8')) as { starId?: string }).starId).toBe(parsed.brokers[0]!.starId);
@@ -176,12 +181,12 @@ describe('B3.1 bug3: matchServeProcesses identity gate (no host/shell kills)', (
 });
 
 describe('B2 --connect 选择器解析（selectConnectEntry）', () => {
-  const cfg = (entries: Array<{ host: string; port: number; alias?: string; starId?: string; key: string }>) => ({ entries });
+  const cfg = (entries: Array<{ host: string; port: number; name?: string; starId?: string; key: string }>) => ({ entries });
 
-  it('alias exact match wins; empty selector falls back to entries[0]', () => {
+  it('star-name exact match wins; empty selector falls back to entries[0]', () => {
     const config = cfg([
-      { host: 'h1', port: 1, alias: 'br1', starId: 'aaaabbbbcccc', key: 'k1' },
-      { host: 'h2', port: 2, alias: 'br2', starId: 'dddd00001111', key: 'k2' },
+      { host: 'h1', port: 1, name: 'br1', starId: 'aaaabbbbcccc', key: 'k1' },
+      { host: 'h2', port: 2, name: 'br2', starId: 'dddd00001111', key: 'k2' },
     ]);
     expect(selectConnectEntry('br2', config).entry.host).toBe('h2');
     expect(selectConnectEntry('br1', config).entry.host).toBe('h1');
@@ -192,8 +197,8 @@ describe('B2 --connect 选择器解析（selectConnectEntry）', () => {
 
   it('unique starId prefix selects that entry and carries the raw selector', () => {
     const config = cfg([
-      { host: 'h1', port: 1, alias: 'br1', starId: 'aaaabbbbcccc', key: 'k1' },
-      { host: 'h2', port: 2, alias: 'br2', starId: 'dddd00001111', key: 'k2' },
+      { host: 'h1', port: 1, name: 'br1', starId: 'aaaabbbbcccc', key: 'k1' },
+      { host: 'h2', port: 2, name: 'br2', starId: 'dddd00001111', key: 'k2' },
     ]);
     const hit = selectConnectEntry('dddd', config);
     expect(hit.entry.host).toBe('h2');
@@ -202,15 +207,15 @@ describe('B2 --connect 选择器解析（selectConnectEntry）', () => {
 
   it('ambiguous starId prefix teaches lengthening', () => {
     const config = cfg([
-      { host: 'h1', port: 1, alias: 'br1', starId: 'aaaabbbbcccc', key: 'k1' },
-      { host: 'h2', port: 2, alias: 'br2', starId: 'aaaabbbbdddd', key: 'k2' },
+      { host: 'h1', port: 1, name: 'br1', starId: 'aaaabbbbcccc', key: 'k1' },
+      { host: 'h2', port: 2, name: 'br2', starId: 'aaaabbbbdddd', key: 'k2' },
     ]);
     expectUsage(() => selectConnectEntry('aaaa', config), '加长前缀使其唯一');
   });
 
-  it('no hit with multiple entries lists them and gives an example', () => {
+  it('no hit with multiple entries lists them in cloud(6b76e1) form and gives an example', () => {
     const config = cfg([
-      { host: 'h1', port: 1, alias: 'br1', starId: 'aaaabbbbcccc', key: 'k1' },
+      { host: 'h1', port: 1, name: 'br1', starId: 'aaaabbbbcccc', key: 'k1' },
       { host: 'h2', port: 2, key: 'k2' },
     ]);
     expectUsage(() => selectConnectEntry('nope', config), '不匹配任何条目');
@@ -218,15 +223,15 @@ describe('B2 --connect 选择器解析（selectConnectEntry）', () => {
       selectConnectEntry('nope', config);
     } catch (err) {
       const msg = (err as MultichatError).message;
-      expect(msg).toContain('br1(starId aaaabbbbcccc)');
-      expect(msg).toContain('(无别名)(starId 未登记)');
+      expect(msg).toContain('br1(aaaabb)');
+      expect(msg).toContain('(无名)(starId 未登记)');
       expect(msg).toContain('示例：--connect br1');
     }
   });
 
-  it('no hit on a single aliased entry keeps the legacy mismatch error; alias-less single entry tolerates', () => {
-    const aliased = cfg([{ host: 'h', port: 1, alias: 'real-alias', key: 'k' }]);
-    expectUsage(() => selectConnectEntry('other', aliased), '与 node.json 的 broker 别名 real-alias 不符');
+  it('no hit on a single named entry keeps the legacy mismatch error; name-less single entry tolerates', () => {
+    const aliased = cfg([{ host: 'h', port: 1, name: 'real-alias', key: 'k' }]);
+    expectUsage(() => selectConnectEntry('other', aliased), '与 node.json 条目的星名 real-alias 不符');
     const bare = cfg([{ host: 'h', port: 1, key: 'k' }]);
     expect(selectConnectEntry('anything', bare).entry.host).toBe('h');
   });
@@ -293,4 +298,72 @@ describe('B2 --stop 选择器与停机顺序（注入进程扫描/杀进程）',
     expect(kills).toEqual([10, 11, 5]); // 节点在前，broker 最后
   });
 });
+});
+
+describe('E0 serve --name（星名持久化与互斥）', () => {
+  // makeDeps 在本 describe 外不可见——等价构造（hostname 'h' → 缺省星名 'h'）
+  const ifaces = (): NodeJS.Dict<NetworkInterfaceInfo[]> => ({});
+  function nameDeps(): { deps: ServeDeps; dir: string } {
+    const dir = mkdtempSync(join(root, 'e0name-'));
+    return {
+      dir,
+      deps: {
+        baseDir: dir,
+        stdout: () => {},
+        env: {},
+        version: 'test',
+        machineId: () => 'MID',
+        hostname: () => 'h',
+        networkInterfaces: ifaces,
+        now: () => Date.now(),
+        onSignal: () => {},
+      },
+    };
+  }
+
+  it('persists an explicit --name (with --port semantics: given once, remembered)', async () => {
+    const { deps, dir } = nameDeps();
+    await runServe({ nameArg: 'cloud', genKeyArg: '1' }, deps);
+    expect(JSON.parse(readFileSync(registryFileOf(dir), 'utf8'))).toMatchObject({ name: 'cloud' });
+    // 再给即更新
+    await runServe({ nameArg: 'home', genKeyArg: '1' }, deps);
+    expect(JSON.parse(readFileSync(registryFileOf(dir), 'utf8'))).toMatchObject({ name: 'home' });
+  });
+
+  it('rejects a colon / overlong / empty name with USAGE naming the rule', async () => {
+    for (const bad of ['cl:oud', 'a'.repeat(33), '']) {
+      const { deps } = nameDeps();
+      const err: unknown = await runServe({ nameArg: bad, genKeyArg: '1' }, deps).then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+      expect(err).toBeInstanceOf(MultichatError);
+      expect((err as MultichatError).code).toBe('USAGE');
+      expect((err as MultichatError).message).toContain('禁冒号');
+    }
+  });
+
+  it('rejects --name together with --connect (node mode has no star name)', async () => {
+    const { deps } = nameDeps();
+    for (const connect of ['cloud', '']) {
+      const err: unknown = await runServe({ nameArg: 'cloud', connect }, deps).then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+      expect(err).toBeInstanceOf(MultichatError);
+      expect((err as MultichatError).code).toBe('USAGE');
+      expect((err as MultichatError).message).toContain('--name 是 broker 星名设置，节点模式不支持');
+    }
+  });
+
+  it('gen-key stamps the star name into every entry and keeps showName as the placeholder', async () => {
+    const lines: string[] = [];
+    const base = nameDeps();
+    const deps = { ...base.deps, stdout: (l: string) => lines.push(l) };
+    await runServe({ nameArg: 'cloud', genKeyArg: '1' }, deps);
+    const block = lines.find((l) => l.startsWith('{'))!;
+    const parsed = JSON.parse(block) as { brokers: { name: string }[]; showName: string };
+    expect(parsed.brokers[0]!.name).toBe('cloud');
+    expect(parsed.showName).toBe('改成「贴这份配置的机器」的名字');
+  });
 });

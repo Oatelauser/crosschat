@@ -106,6 +106,8 @@ export class Broker {
   private readonly d: Required<Omit<BrokerDeps, 'port' | 'fileInbox'>> & { port?: number; fileInbox?: FileInbox };
   private wss?: WebSocketServer;
   private port?: number;
+  /** E0 星名（start 时定格；status-broker.json 化妆用）。 */
+  private starName?: string;
   private startedAt?: number;
   private stopped = false;
   private readonly sessions = new Set<Session>();
@@ -130,6 +132,7 @@ export class Broker {
   /** 监听并返回实际端口（deps.port=0 时为随机端口）。 */
   async start(): Promise<number> {
     const registry = readRegistry(this.d.registryFile);
+    this.starName = registry.name;
     const wantPort = this.d.port ?? registry.port ?? DEFAULT_PORT;
     const wss = new WebSocketServer({ host: '0.0.0.0', port: wantPort, maxPayload: MAX_PAYLOAD_BYTES });
     try {
@@ -192,14 +195,15 @@ export class Broker {
     ws.on('message', (data) => {
       void this.onMessage(session, data.toString());
     });
-    // B0：注册表带 starId 则随 info 下发（缺省不发——additive，旧节点无感）
-    const starId = readRegistry(this.d.registryFile).starId;
+    // B0：注册表带 starId / E0：带星名 则随 info 下发（缺省不发——additive，旧节点无感）
+    const { starId, name } = readRegistry(this.d.registryFile);
     this.send(ws, {
       op: 'info',
       proto: PROTOCOL_VERSION,
       server: `crosschat/${this.d.version}`,
       caps: [],
       ...(starId === undefined ? {} : { starId }),
+      ...(name === undefined ? {} : { name }),
     });
     session.connectTimer = setTimeout(() => {
       this.log('connect-timeout 关闭未握手连接');
@@ -550,6 +554,7 @@ export class Broker {
           {
             state,
             port: this.port,
+            ...(this.starName === undefined ? {} : { name: this.starName }),
             startedAt: this.startedAt !== undefined ? new Date(this.startedAt).toISOString() : undefined,
             lastUpdated: new Date(this.d.now()).toISOString(),
             onlineNodes,

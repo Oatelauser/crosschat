@@ -215,7 +215,7 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
           fail(`❌ tcp 节点配置 node.json 损坏或缺钥字段（${join(deps.tcpDir, 'node.json')}）——向管理员重新索取 node.json 覆盖`);
         }
         if (entries !== undefined) {
-          const label = (e: BrokerEntry): string => e.alias ?? `${e.host}:${e.port}`;
+          const label = (e: BrokerEntry): string => e.name ?? `${e.host}:${e.port}`;
           const multi = entries.length > 1;
           entries.forEach((e, i) => {
             ok(multi
@@ -255,7 +255,7 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
         const multi = entries.length > 1;
         entries.forEach((e, i) => {
           if (probe(e.host, e.port)) {
-            ok(multi ? `✅ 条目 ${i + 1} broker TCP 可达（${e.alias ?? ''} ${e.host}:${e.port}）` : `✅ broker TCP 可达（${e.host}:${e.port}）`);
+            ok(multi ? `✅ 条目 ${i + 1} broker TCP 可达（${e.name ?? ''} ${e.host}:${e.port}）` : `✅ broker TCP 可达（${e.host}:${e.port}）`);
           } else {
             fail(multi
               ? `❌ 条目 ${i + 1} broker TCP 不可达（${e.host}:${e.port}）——确认 broker 机 crosschat serve 在跑、网络/防火墙放行端口`

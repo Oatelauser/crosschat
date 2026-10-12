@@ -22,8 +22,13 @@ export interface BrokerRegistry {
   port?: number;
   /** B0 多星地基：本 broker 的全局唯一星标识（12 hex，ensureStarId 生成）。 */
   starId?: string;
+  /** E0 星名：broker 权威的星名（--name 显式给；缺省首次 serve 取清洗后的 hostname）。 */
+  name?: string;
   nodes: NodeEntry[];
 }
+
+/** E0：星名字符集（禁冒号——`tcp:<选择器>:` 限定词语法保留字）。 */
+const STAR_NAME_RE = /^[A-Za-z0-9._-]{1,32}$/;
 
 /**
  * B2.1：节点自报名的净化（显示用）——剥控制符、截 32 字符；空则 undefined。
@@ -68,6 +73,7 @@ export function readRegistry(file: string): BrokerRegistry {
     return {
       port: typeof parsed.port === 'number' ? parsed.port : undefined,
       starId: typeof parsed.starId === 'string' ? parsed.starId : undefined,
+      name: typeof parsed.name === 'string' ? parsed.name : undefined,
       nodes: parsed.nodes,
     };
   } catch {
@@ -118,6 +124,39 @@ export function ensureStarId(file: string): string {
   return registry.starId;
 }
 
+/**
+ * E0 星名（显式）：校验并持久化（与 --port 同语义——给一次记住）。
+ * 坏值 USAGE 带规则说明（禁冒号是限定词语法保留字）。
+ */
+export function setName(file: string, name: string): void {
+  if (!STAR_NAME_RE.test(name)) {
+    throw new MultichatError('USAGE', `--name 星名须为 1-32 个字母/数字/./_/-（禁冒号——tcp 限定词语法保留字），收到：${name}`);
+  }
+  const registry = readRegistry(file);
+  registry.name = name;
+  writeRegistry(file, registry);
+}
+
+/** E0 星名（缺省清洗）：hostname 剥出星名字符集内的字符、截 32；全剥空 → undefined。 */
+export function sanitizeStarName(raw: string): string | undefined {
+  const cleaned = raw.replace(/[^A-Za-z0-9._-]/g, '').slice(0, 32);
+  return cleaned === '' ? undefined : cleaned;
+}
+
+/**
+ * E0 星名（缺省轨道）：注册表已有星名直接用；否则取清洗后的 hostname 持久化
+ * （首次 serve 落定，与 starId 同款幂等 ensure）。清洗后为空 → 不设名。
+ */
+export function ensureStarName(file: string, fallbackHostname: string): string | undefined {
+  const registry = readRegistry(file);
+  if (registry.name !== undefined) return registry.name;
+  const name = sanitizeStarName(fallbackHostname);
+  if (name === undefined) return undefined;
+  registry.name = name;
+  writeRegistry(file, registry);
+  return name;
+}
+
 export interface GenKeyResult {
   label: string;
   key: string;
@@ -127,10 +166,10 @@ export interface GenKeyResult {
 
 /**
  * 生成 n 份钥匙并登记进注册表。label 从现有最大 node-N 编号顺延；上限 10
- * （超限 USAGE）。nodeJsonContent 为 2 空格缩进完整 node.json（B2 起带
- * broker.alias，节点 status 展示"tcp:<别名>"用）。
+ * （超限 USAGE）。nodeJsonContent 为 2 空格缩进完整 node.json（E0 词表：
+ * 条目 name=星名 broker 权威、顶层 showName=贴配置机器的自报名）。
  */
-export function genKeys(file: string, n: number, opts: { host: string; port: number; alias: string; starId: string }): GenKeyResult[] {
+export function genKeys(file: string, n: number, opts: { host: string; port: number; name?: string; starId?: string }): GenKeyResult[] {
   if (!Number.isInteger(n) || n < 1 || n > 10) {
     throw new MultichatError('USAGE', `--gen-key 数量须为 1-10 的整数，收到：${n}`);
   }
@@ -146,7 +185,14 @@ export function genKeys(file: string, n: number, opts: { host: string; port: num
     results.push({
       label,
       key,
-      nodeJsonContent: `${JSON.stringify({ brokers: [{ host: opts.host, port: opts.port, alias: opts.alias, starId: opts.starId, key }], name: '改成「贴这份配置的机器」的名字' }, null, 2)}\n`,
+      nodeJsonContent: `${JSON.stringify(
+        {
+          brokers: [{ host: opts.host, port: opts.port, ...(opts.name === undefined ? {} : { name: opts.name }), ...(opts.starId === undefined ? {} : { starId: opts.starId }), key }],
+          showName: '改成「贴这份配置的机器」的名字',
+        },
+        null,
+        2,
+      )}\n`,
     });
     registry.nodes.push({ label, key, addedAt: new Date().toISOString() });
   }

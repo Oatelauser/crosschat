@@ -26,7 +26,8 @@ import { FileInbox } from './file-channel.js';
 export interface BrokerEntry {
   host: string;
   port: number;
-  alias?: string;
+  /** E0 星名（broker 权威，info 帧自动同步；读层把旧 alias 值映射进来）。 */
+  name?: string;
   starId?: string;
   key: string;
 }
@@ -34,8 +35,14 @@ export interface BrokerEntry {
 /** 归一化后的 node.json：旧/新双形状都收进 entries（多条目路由选择是 B1）。 */
 export interface NodeConfig {
   entries: BrokerEntry[];
-  /** B2.1：人读显示名（显示用；寻址权威是 machine-id 前缀）。 */
-  name?: string;
+  /** E0 词表换轨：本机显示名（旧文件的顶层 name 读入映射；显示用，寻址权威是 machine-id 前缀）。 */
+  showName?: string;
+}
+
+/** E0 选择器报错里的条目行：星名与 starId 前 6 位并排（cloud(6b76e1)），拷了就能用。 */
+export function formatBrokerEntry(e: BrokerEntry): string {
+  const id = e.starId === undefined ? 'starId 未登记' : e.starId.slice(0, 6);
+  return `${e.name ?? '(无名)'}(${id})`;
 }
 
 /** 会员凭证缺失/损坏的教学报错（send --via tcp: 与 --connect 同用）。 */
@@ -45,17 +52,19 @@ export const NOT_JOINED_MESSAGE =
 /** 单条目净化校验：缺 key/host 或 port 非整数即坏形状。 */
 function parseBrokerEntry(raw: unknown): BrokerEntry {
   if (raw === null || typeof raw !== 'object') throw new Error('bad shape');
-  const e = raw as { host?: unknown; port?: unknown; alias?: unknown; starId?: unknown; key?: unknown };
+  const e = raw as { host?: unknown; port?: unknown; name?: unknown; alias?: unknown; starId?: unknown; key?: unknown };
   if (
     typeof e.key !== 'string' || e.key === '' ||
     typeof e.host !== 'string' || typeof e.port !== 'number' || !Number.isInteger(e.port)
   ) {
     throw new Error('bad shape');
   }
+  // E0 读层兼容：旧 alias 值映射为星名（新 name 优先）
+  const name = typeof e.name === 'string' ? e.name : typeof e.alias === 'string' ? e.alias : undefined;
   return {
     host: e.host,
     port: e.port,
-    ...(typeof e.alias === 'string' ? { alias: e.alias } : {}),
+    ...(name === undefined ? {} : { name }),
     ...(typeof e.starId === 'string' ? { starId: e.starId } : {}),
     key: e.key,
   };
@@ -74,15 +83,18 @@ export function readNodeConfig(configFile: string): NodeConfig {
       brokers?: unknown;
       key?: unknown;
       name?: unknown;
+      showName?: unknown;
     } | null;
     if (parsed === null || typeof parsed !== 'object') throw new Error('bad shape');
-    const name = typeof parsed.name === 'string' ? parsed.name : undefined;
-    // 新形状 {brokers: [...], name}：条目数组原样收进 entries（空数组=坏形状；
+    // E0 读层兼容：旧顶层 name 映射为 showName（新 showName 优先）
+    const showName =
+      typeof parsed.showName === 'string' ? parsed.showName : typeof parsed.name === 'string' ? parsed.name : undefined;
+    // 新形状 {brokers: [...], showName}：条目数组原样收进 entries（空数组=坏形状；
     // 顶层多余 starId 忽略——星标识只认条目/starId 槽）
     if (Array.isArray(parsed.brokers)) {
       const entries = parsed.brokers.map(parseBrokerEntry);
       if (entries.length === 0) throw new Error('bad shape');
-      return { ...(name === undefined ? {} : { name }), entries };
+      return { ...(showName === undefined ? {} : { showName }), entries };
     }
     // 旧形状 {broker: {...}, key, name} → 单元素（行为与 B0 前逐字节等价）
     if (typeof parsed.key !== 'string' || parsed.key === '') throw new Error('bad shape');
@@ -91,7 +103,7 @@ export function readNodeConfig(configFile: string): NodeConfig {
       throw new Error('bad shape');
     }
     return {
-      ...(name === undefined ? {} : { name }),
+      ...(showName === undefined ? {} : { showName }),
       entries: [parseBrokerEntry({ ...broker, key: parsed.key })],
     };
   } catch {
@@ -100,41 +112,59 @@ export function readNodeConfig(configFile: string): NodeConfig {
 }
 
 /**
- * B0：info.starId 回填——按 key+host+port 定位 node.json 对应条目，仅缺失时
- * 原子写回（tmp+rename）；旧形状写进 broker 对象内。写失败不倒连接。
+ * E0：info 同步写回——按 key+host+port 定位 node.json 对应条目，starId 仅缺失
+ * 补、name 不一致覆盖（broker 权威），一致不写；重写时顺带清旧键（条目 alias
+ * 值并轨进 name、顶层 name 改 showName）。tmp+rename 原子写；失败不倒连接。
  */
-function backfillStarId(configFile: string, entry: BrokerEntry, starId: string): void {
+export function syncNodeJsonEntry(
+  configFile: string,
+  match: { host: string; port: number; key: string },
+  patch: { starId?: string; name?: string },
+): void {
   try {
     const parsed = JSON.parse(readFileSync(configFile, 'utf8')) as {
-      broker?: { host?: unknown; port?: unknown; starId?: unknown };
-      brokers?: Array<Record<string, unknown>>;
+      broker?: Record<string, unknown> | null;
+      brokers?: Array<Record<string, unknown> | null>;
       key?: unknown;
+      name?: unknown;
+      showName?: unknown;
     } | null;
     if (parsed === null || typeof parsed !== 'object') return;
-    const sameTarget = (host: unknown, port: unknown, key: unknown): boolean =>
-      host === entry.host && port === entry.port && key === entry.key;
+    const sameTarget = (e: unknown): e is Record<string, unknown> => {
+      if (e === null || typeof e !== 'object') return false;
+      const rec = e as Record<string, unknown>;
+      return rec.host === match.host && rec.port === match.port && rec.key === match.key;
+    };
+    let hit: Record<string, unknown> | undefined;
     if (Array.isArray(parsed.brokers)) {
-      const hit = parsed.brokers.find(
-        (e) => e !== null && typeof e === 'object' && sameTarget(e.host, e.port, e.key) && e.starId === undefined,
-      );
-      if (hit === undefined) return;
-      hit.starId = starId;
-    } else {
-      const broker = parsed.broker;
-      if (
-        broker === null || typeof broker !== 'object' ||
-        !sameTarget(broker.host, broker.port, parsed.key) || broker.starId !== undefined
-      ) {
-        return;
-      }
-      broker.starId = starId;
+      hit = parsed.brokers.find(sameTarget);
+    } else if (parsed.broker !== null && typeof parsed.broker === 'object') {
+      hit = sameTarget({ ...parsed.broker, key: parsed.key }) ? parsed.broker : undefined;
+    }
+    if (hit === undefined) return;
+    let changed = false;
+    if (patch.starId !== undefined && hit.starId === undefined) {
+      hit.starId = patch.starId;
+      changed = true;
+    }
+    if (patch.name !== undefined && hit.name !== patch.name) {
+      hit.name = patch.name;
+      changed = true;
+    }
+    if (!changed) return;
+    // 词表换轨：重写时旧 alias 值并轨进 name（未覆盖时）并删旧键
+    if (hit.name === undefined && typeof hit.alias === 'string') hit.name = hit.alias;
+    delete hit.alias;
+    if (parsed.showName === undefined && typeof parsed.name === 'string') {
+      parsed.showName = parsed.name;
+      delete parsed.name;
     }
     const tmp = `${configFile}.tmp`;
     mkdirSync(dirname(configFile), { recursive: true });
     writeFileSync(tmp, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
     renameSync(tmp, configFile);
   } catch {
-    // 回填写失败不倒连接（下次握手再试）
+    // 同步写失败不倒连接（下次握手再试）
   }
 }
 
@@ -186,6 +216,7 @@ export async function deliverViaRunSend(frame: DeliverFrame, deps: SendDeps): Pr
 
 export interface NodeStatusFile {
   state: 'connecting' | 'online' | 'reconnect-wait';
+  /** E0 起记录解析后的星名（无星名退回 host:port）；字段名沿用旧版兼容。 */
   brokerAlias: string;
   since: string;
   lastUpdated: string;
@@ -344,14 +375,14 @@ export class NodeClient {
       if (info.op !== 'info' || info.proto !== PROTOCOL_VERSION) {
         throw new Error(`协议不匹配：服务端 ${info.op === 'info' ? info.proto : '?'}`);
       }
-      this.checkStarId(info as InfoFrame);
+      this.syncBrokerInfo(info as InfoFrame);
       ws.send(encodeFrame({
         op: 'connect',
         proto: PROTOCOL_VERSION,
         role: 'node',
         machineId: this.d.machineId() ?? '',
         auth: cfg.key,
-        ...(this.d.config.name === undefined ? {} : { name: this.d.config.name }),
+        ...(this.d.config.showName === undefined ? {} : { name: this.d.config.showName }),
       }));
       const verdict = await this.nextFrame((f) => f.op === 'connected' || f.op === 'error', 10_000);
       if (verdict.op === 'error') {
@@ -359,7 +390,7 @@ export class NodeClient {
       }
       everOnline = true;
       this.setState('online');
-      this.log(`online（broker ${cfg.alias ?? url}）`);
+      this.log(`online（broker ${cfg.name ?? url}）`);
       this.minuteTimer = setInterval(() => {
         if (this.state === 'online') this.writeStatus(undefined);
       }, 60_000);
@@ -379,20 +410,22 @@ export class NodeClient {
   }
 
   /**
-   * B0 星标识哨兵（info 后、发 connect 含 key 之前）：两侧都有且不等 → 拒发
-   * key 中止连接；本机缺 → 回填 node.json；任一侧缺省 → 放行。
+   * B0 星标识哨兵 + E0 星名同步（info 后、发 connect 含 key 之前）：两侧
+   * starId 都有且不等 → 拒发 key 中止连接；本机缺 → 回填；info.name（星名，
+   * broker 权威）与条目不一致 → 原子覆盖写回（顺带清旧 alias 键）。
    */
-  private checkStarId(info: InfoFrame): void {
+  private syncBrokerInfo(info: InfoFrame): void {
     const entry = this.d.config.entries[0]!;
-    if (info.starId === undefined) return;
-    if (entry.starId === undefined) {
-      backfillStarId(this.d.configFile, entry, info.starId);
-      entry.starId = info.starId;
-      return;
-    }
-    if (entry.starId !== info.starId) {
+    if (info.starId !== undefined && entry.starId !== undefined && entry.starId !== info.starId) {
       throw new MultichatError('STAR_ID_MISMATCH', '本 broker 星标识与本机配置不符——向管理员重新索取 node.json');
     }
+    const patch: { starId?: string; name?: string } = {};
+    if (info.starId !== undefined && entry.starId === undefined) patch.starId = info.starId;
+    if (info.name !== undefined) patch.name = info.name;
+    if (patch.starId === undefined && patch.name === undefined) return;
+    syncNodeJsonEntry(this.d.configFile, entry, patch);
+    if (patch.starId !== undefined) entry.starId = patch.starId;
+    if (patch.name !== undefined) entry.name = patch.name;
   }
 
   private async onFrame(text: string): Promise<void> {
@@ -491,7 +524,7 @@ export class NodeClient {
     const entry = this.d.config.entries[0]!;
     const status: NodeStatusFile = {
       state: this.state,
-      brokerAlias: entry.alias ?? `${entry.host}:${entry.port}`,
+      brokerAlias: entry.name ?? `${entry.host}:${entry.port}`,
       since: new Date(this.stateSince).toISOString(),
       lastUpdated: new Date(this.d.now()).toISOString(),
       ...(nextAttemptAt === undefined ? {} : { nextAttemptAt: new Date(nextAttemptAt).toISOString() }),

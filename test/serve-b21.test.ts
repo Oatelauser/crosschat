@@ -339,10 +339,11 @@ describe('B1 self node.json starId backfill (ensureSelfEntry)', () => {
     });
     writeFileSync(nodeJson, JSON.stringify({ broker: { host: '127.0.0.1', port: 7260, alias: 'hub' }, key: 'k', name: 'hub' }, null, 2));
     expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
-    const parsed = JSON.parse(readFileSync(nodeJson, 'utf8')) as { broker: { host: string; port: number; alias: string; starId?: string }; key: string; name: string };
+    const parsed = JSON.parse(readFileSync(nodeJson, 'utf8')) as { broker: { host: string; port: number; name?: string; alias?: string; starId?: string }; key: string; showName?: string };
     expect(parsed.broker.starId).toBe('aaaabbbbcccc');
     expect(parsed.key).toBe('k');
-    expect(parsed.name).toBe('hub');
+    expect(parsed.showName).toBe('hub'); // E0：重写时顶层旧 name 并轨为 showName
+    expect(parsed.broker.name).toBe('hub'); // 旧 alias 值并轨进 name（=星名，注册表缺省轨道同取 hostname）
     // 注册表 starId 原样未被改写
     expect((JSON.parse(readFileSync(registryFile, 'utf8')) as { starId?: string }).starId).toBe('aaaabbbbcccc');
   });
@@ -382,11 +383,11 @@ describe('B2.1 serve self-init', () => {
     const reg = JSON.parse(readFileSync(registryFile, 'utf8')) as { nodes: NodeEntry[] };
     expect(reg.nodes).toHaveLength(1);
     expect(reg.nodes[0]).toMatchObject({ label: 'self', machineId: 'a1b2c3d40000', machineName: 'hub' });
-    const nodeJson = JSON.parse(readFileSync(join(tcpDir(dir), 'node.json'), 'utf8')) as { brokers: { host: string; port: number; alias: string; starId: string; key: string }[]; name: string };
-    // B-fix：自用 node.json 新写一律数组形状（单星=一项）
+    const nodeJson = JSON.parse(readFileSync(join(tcpDir(dir), 'node.json'), 'utf8')) as { brokers: { host: string; port: number; name: string; starId: string; key: string }[]; showName: string };
+    // B-fix：自用 node.json 新写一律数组形状（单星=一项）；E0 词表：name=星名、showName=本机显示名
     expect(nodeJson.brokers).toHaveLength(1);
-    expect(nodeJson.brokers[0]).toEqual({ host: '127.0.0.1', port: 7260, alias: 'hub', starId: expect.any(String), key: expect.any(String) });
-    expect(nodeJson.name).toBe('hub');
+    expect(nodeJson.brokers[0]).toEqual({ host: '127.0.0.1', port: 7260, name: 'hub', starId: expect.any(String), key: expect.any(String) });
+    expect(nodeJson.showName).toBe('hub');
     // B0：自用条目的 starId 与注册表一致（12 hex）
     expect(nodeJson.brokers[0]!.starId).toMatch(/^[0-9a-f]{12}$/);
     expect((JSON.parse(readFileSync(registryFile, 'utf8')) as { starId?: string }).starId).toBe(nodeJson.brokers[0]!.starId);
@@ -505,5 +506,28 @@ describe('B3.1 drill fixes', () => {
     expect(out).toContain('delivered to target-name');
     expect(envelopes[0]).toContain('from-name="wsl-boss"');
     expect(envelopes[0]).not.toContain('from-name="target-name"');
+  });
+});
+
+describe('E0 ensureSelfEntry 星名同步（broker 自用条目不走节点客户端，在此对齐）', () => {
+  it('overwrites a legacy alias with the registry star name (and keeps starId untouched)', () => {
+    const dir = mkdtempSync(join(root, 'e0self-'));
+    const deps = { ...realServeDeps(), baseDir: dir, machineId: () => 'a1b2c3d40000', hostname: () => 'hub' } as ServeDeps;
+    const registryFile = registryFileOf(dir);
+    mkdirSync(tcpDir(dir), { recursive: true });
+    const nodeJson = join(tcpDir(dir), 'node.json');
+    writeRegistry(registryFile, {
+      starId: 'aaaabbbbcccc',
+      name: 'cloud',
+      nodes: [{ label: 'self', key: 'k', machineId: 'a1b2c3d40000', machineName: 'hub', addedAt: '2026-01-01T00:00:00.000Z' }],
+    });
+    writeFileSync(nodeJson, JSON.stringify({ broker: { host: '127.0.0.1', port: 7260, alias: 'hub', starId: 'aaaabbbbcccc' }, key: 'k', name: 'hub' }, null, 2));
+    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
+    const parsed = JSON.parse(readFileSync(nodeJson, 'utf8')) as { broker: { name?: string; alias?: string; starId?: string }; showName?: string; name?: string };
+    expect(parsed.broker.name).toBe('cloud'); // 星名以注册表为准（显式 --name cloud）
+    expect(parsed.broker.alias).toBeUndefined();
+    expect(parsed.broker.starId).toBe('aaaabbbbcccc'); // 既有 starId 不碰
+    expect(parsed.showName).toBe('hub');
+    expect(parsed.name).toBeUndefined();
   });
 });

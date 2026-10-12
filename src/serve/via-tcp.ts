@@ -21,7 +21,7 @@ import type { SendArgs, SendDeps } from '../commands/send.js';
 import { encodeFrame, ERR, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
 import type { ErrorFrame, FileResultFrame, Frame, ReceiptFrame, RosterMachine } from './protocol.js';
 import { defaultBaseDir, tcpDir } from './registry.js';
-import { readNodeConfig, type BrokerEntry } from './node.js';
+import { formatBrokerEntry, readNodeConfig, type BrokerEntry } from './node.js';
 import { FILE_CHUNK_BYTES, FILE_MAX_BYTES, readFileForSend } from './file-channel.js';
 
 /** 发起侧记账：与 runViaSend（ssh 腿）同款字段——tcp/ssh 两形态共用此 helper。 */
@@ -161,24 +161,24 @@ class SenderConn {
 
 /**
  * B1 多星条目选择（纯函数，send 与 --file 共用一条 conn，在此一次选定）：
- * a. `tcp:<选择器>:<目标>`：选择器先按条目 alias 精确匹配，无命中再按
- *    starId 前缀唯一匹配（多命中教加长，零命中列全部条目）；
+ * a. `tcp:<选择器>:<目标>`：选择器先按条目星名（name）精确匹配，无命中再按
+ *    starId 前缀唯一匹配（多命中教加长，零命中列全部条目 cloud(6b76e1) 式）；
  * b. 裸 `tcp:<目标>` 且带 --conversation：按 ref.starId 精确匹配（无匹配教
  *    核对配置/索取）；ref 无 starId 或解不开则落到 c/d（单条目行为不变）；
  * c. 裸且仅 1 条 → 用它（B0 前的今日行为）；
- * d. 裸且多条 → 教学报错：列出 alias+starId，示例 `--via tcp:<alias>:<目标>`。
+ * d. 裸且多条 → 教学报错：列出 星名(starId前缀)，示例 `--via tcp:<星名>:<目标>`。
  */
 export function selectBrokerEntry(entries: BrokerEntry[], selector: string | undefined, conversation: string | undefined): BrokerEntry {
-  const listEntries = (): string => entries.map((e) => `${e.alias ?? '(无别名)'}(starId ${e.starId ?? '未登记'})`).join('、');
+  const listEntries = (): string => entries.map(formatBrokerEntry).join('、');
   if (selector !== undefined) {
-    const byAlias = entries.find((e) => e.alias === selector);
-    if (byAlias !== undefined) return byAlias;
+    const byName = entries.find((e) => e.name === selector);
+    if (byName !== undefined) return byName;
     const byPrefix = entries.filter((e) => e.starId !== undefined && e.starId.startsWith(selector));
     if (byPrefix.length === 1) return byPrefix[0]!;
     if (byPrefix.length > 1) {
       throw new MultichatError(
         'USAGE',
-        `--via 选择器 ${selector} 的 starId 前缀命中多个星（${byPrefix.map((e) => e.alias ?? e.starId).join('、')}）——加长前缀使其唯一`,
+        `--via 选择器 ${selector} 的 starId 前缀命中多个星（${byPrefix.map(formatBrokerEntry).join('、')}）——加长前缀使其唯一`,
       );
     }
     throw new MultichatError('USAGE', `--via 选择器 ${selector} 不匹配任何条目——本机 node.json 现有：${listEntries()}`);
@@ -201,19 +201,19 @@ export function selectBrokerEntry(entries: BrokerEntry[], selector: string | und
   if (entries.length === 1) return entries[0]!;
   throw new MultichatError(
     'USAGE',
-    `本机 node.json 有 ${entries.length} 个 broker 条目，裸 tcp:<目标> 无法选择——现有：${listEntries()}；示例：--via tcp:${entries[0]!.alias ?? entries[0]!.starId}:<目标>`,
+    `本机 node.json 有 ${entries.length} 个 broker 条目，裸 tcp:<目标> 无法选择——现有：${listEntries()}；示例：--via tcp:${entries[0]!.name ?? entries[0]!.starId}:<目标>`,
   );
 }
 
 /** via 分支入口（send.ts 在 ssh 分流前调用）。body 在 --file 无 --body 时可为 undefined。 */
 export async function runViaTcpSend(args: SendArgs, body: string | undefined, deps: SendDeps): Promise<string> {
-  // B1：`tcp:<选择器>:<目标>`——第一个':'前是选择器（alias/starId 前缀），其余是目标
+  // B1：`tcp:<选择器>:<目标>`——第一个':'前是选择器（星名/starId 前缀），其余是目标
   const viaRest = args.via!.slice(4);
   const sep = viaRest.indexOf(':');
   const selector = sep > 0 ? viaRest.slice(0, sep) : undefined;
   const target = sep > 0 ? viaRest.slice(sep + 1) : viaRest;
   if (target === '') {
-    throw new MultichatError('USAGE', '--via tcp:<机器名>：机器名不能为空（broker 机上 crosschat serve --list 可查；多星机可 --via tcp:<别名>:<机器名> 指定）');
+    throw new MultichatError('USAGE', '--via tcp:<机器名>：机器名不能为空（broker 机上 crosschat serve --list 可查；多星机可 --via tcp:<星名>:<机器名> 指定）');
   }
   const config = readNodeConfig(join(tcpDir(deps.tcpBaseDir ?? defaultBaseDir()), 'node.json'));
   const timeoutMs = tcpTimeoutMs(deps.env);

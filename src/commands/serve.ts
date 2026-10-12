@@ -4,7 +4,7 @@
  * runSend，fileInbox 落盘本机收件）。
  */
 import { execSync, spawn } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir, hostname, networkInterfaces, type NetworkInterfaceInfo } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -13,14 +13,16 @@ import process from 'node:process';
 import { MultichatError } from '../errors.js';
 import { machineId } from '../platform/machine-id.js';
 import { Broker, DEFAULT_PORT, defaultDeliverLocal } from '../serve/broker.js';
-import { ensureStarId, genKeys, listNodes, readRegistry, registryFileOf, removeNode, setPort, tcpDir, writeRegistry } from '../serve/registry.js';
-import { deliverViaRunSend, NodeClient, readNodeConfig, type BrokerEntry, type NodeConfig } from '../serve/node.js';
+import { ensureStarId, ensureStarName, genKeys, listNodes, readRegistry, registryFileOf, removeNode, setName, setPort, tcpDir, writeRegistry } from '../serve/registry.js';
+import { deliverViaRunSend, formatBrokerEntry, NodeClient, readNodeConfig, syncNodeJsonEntry, type BrokerEntry, type NodeConfig } from '../serve/node.js';
 import { FileInbox } from '../serve/file-channel.js';
 import type { SendDeps } from './send.js';
 import type { DeliverFrame, ErrorFrame, ResultFrame, SendFrame } from '../serve/protocol.js';
 
 export interface ServeArgs {
   portArg?: string;
+  /** E0 星名（broker 专用；校验/持久化在 registry.setName）。 */
+  nameArg?: string;
   /** 数字字符串，缺省 '1'；上限校验在 registry.genKeys。 */
   genKeyArg?: string;
   list?: boolean;
@@ -79,6 +81,13 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
     port = n;
     setPort(registryFile, n); // 显式 --port 即持久化指令（首次记住，再给即更新）
   }
+  if (args.nameArg !== undefined) {
+    // E0 星名：与 --port 同语义（显式给即持久化）；节点模式无星名概念
+    if (args.connect !== undefined) {
+      throw new MultichatError('USAGE', '--name 是 broker 星名设置，节点模式不支持——去 broker 机上跑 crosschat serve --name <星名>');
+    }
+    setName(registryFile, args.nameArg);
+  }
   if (args.genKeyArg !== undefined) return runGenKey(args.genKeyArg, deps, registryFile, port);
   if (args.list) return runList(deps, registryFile);
   if (args.remove !== undefined) return runRemove(args.remove, deps, registryFile);
@@ -87,7 +96,20 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
   const detachedChild = deps.env.CROSSCHAT_SERVE_DETACHED === '1';
   if (args.connect !== undefined) {
     if (args.detach && !detachedChild) {
-      const logName = args.connect === '' ? 'node.log' : `node-${args.connect}.log`;
+      // E0：日志文件名取解析后的星名（用户用 starId 前缀起停也落到星名日志）；
+      // 解析失败（无 node.json 等）退回原选择器——子进程会给出教学报错
+      let logName: string;
+      if (args.connect === '') {
+        logName = 'node.log';
+      } else {
+        let label = args.connect;
+        try {
+          label = selectConnectEntry(args.connect, readNodeConfig(join(tcpDir(deps.baseDir), 'node.json'))).entry.name ?? args.connect;
+        } catch {
+          // 交子进程报教学错误
+        }
+        logName = `node-${label}.log`;
+      }
       return runDetach(deps, ['--connect', ...(args.connect === '' ? [] : [args.connect])], logName);
     }
     return runForegroundNode(args.connect, deps);
@@ -108,12 +130,13 @@ function runGenKey(genKeyArg: string, deps: ServeDeps, registryFile: string, por
   }
   const host = firstNonInternalIPv4(deps.networkInterfaces());
   const portNum = port ?? readRegistry(registryFile).port ?? DEFAULT_PORT;
-  const results = genKeys(registryFile, n, { host, port: portNum, alias: deps.hostname(), starId: ensureStarId(registryFile) });
+  const starName = ensureStarName(registryFile, deps.hostname());
+  const results = genKeys(registryFile, n, { host, port: portNum, ...(starName === undefined ? {} : { name: starName }), starId: ensureStarId(registryFile) });
   deps.stdout(`自动探测 broker 地址：${host}:${portNum}（多网卡/NAT 常探错——按下述规则人工核对改写 node.json 的 host 与 port）：`);
   deps.stdout('  · broker 机自身 → 无需分发（首次 serve 已自动写好 127.0.0.1 的自用 node.json）');
   deps.stdout('  · broker 是云主机/NAT 内网机 → host 填对外公网 IP（探测常拿内网 IP，必核对）');
   deps.stdout('  · 普通局域网 → broker 机的局域网 IP；broker 用非默认端口时 port 一并改');
-  deps.stdout('分发前把每份 node.json 的 name 改成「贴这份配置的机器」的自报名字（建议=其 hostname；纯显示用——roster 怎么称呼它，寻址/回信不依赖，走 machine-id 前缀）');
+  deps.stdout(`分发前把每份 node.json 的 showName 改成「贴这份配置的机器」的自报名字（建议=其 hostname；纯显示用——roster 怎么称呼它，寻址/回信不依赖，走 machine-id 前缀）；条目 name=${starName === undefined ? '（本机未定星名，可留空）' : starName} 是星名（broker 权威，连接自动同步，不用改）`);
   for (const result of results) {
     deps.stdout('--------------------------------');
     deps.stdout(result.nodeJsonContent.trimEnd());
@@ -186,6 +209,8 @@ export interface SelfEntryResult {
 export function ensureSelfEntry(deps: ServeDeps, registryFile: string, port: number): SelfEntryResult | undefined {
   const mid = deps.machineId();
   if (mid === undefined || mid === '') return undefined;
+  // E0：星名缺省轨道在此落定（首次 serve 取清洗后的 hostname 持久化）
+  const starName = ensureStarName(registryFile, deps.hostname());
   const registry = readRegistry(registryFile);
   let self = registry.nodes.find((node) => node.machineId === mid);
   if (self === undefined) {
@@ -197,11 +222,19 @@ export function ensureSelfEntry(deps: ServeDeps, registryFile: string, port: num
   if (!existsSync(nodeJson)) {
     mkdirSync(tcpDir(deps.baseDir), { recursive: true });
     // B0：自用 node.json 同带 starId（与 gen-key 分发的钥匙同构）；
-    // 新写一律数组形状（单星=一项，多星=多项——只产出一种形状）
+    // 新写一律数组形状（单星=一项，多星=多项——只产出一种形状）。
+    // E0 词表：条目 name=星名（broker 权威）、顶层 showName=本机显示名
     const starId = ensureStarId(registryFile);
     writeFileSync(
       nodeJson,
-      `${JSON.stringify({ brokers: [{ host: '127.0.0.1', port, alias: deps.hostname(), starId, key: self.key }], name: deps.hostname() }, null, 2)}\n`,
+      `${JSON.stringify(
+        {
+          brokers: [{ host: '127.0.0.1', port, ...(starName === undefined ? {} : { name: starName }), starId, key: self.key }],
+          showName: deps.hostname(),
+        },
+        null,
+        2,
+      )}\n`,
       'utf8',
     );
     return { status: 'written' };
@@ -220,36 +253,15 @@ export function ensureSelfEntry(deps: ServeDeps, registryFile: string, port: num
     return { status: 'foreign', host: first?.host, port: first?.port };
   }
   if (mine.host !== '127.0.0.1' || mine.port !== port) return { status: 'stale' };
-  // B1：钥匙/host/port 匹配但条目缺 starId（B0 之前写下的自用 node.json）→
-  // 原子补写注册表 starId，其余字段不碰
-  if (mine.starId === undefined) backfillSelfStarId(nodeJson, self.key, ensureStarId(registryFile));
-  return { status: 'ok' };
-}
-
-/** B1：自用条目补 starId（双形状：数组元素/旧 broker 对象；tmp+rename 原子写）；失败不倒 serve。 */
-function backfillSelfStarId(nodeJson: string, selfKey: string, starId: string): void {
-  try {
-    const raw = JSON.parse(readFileSync(nodeJson, 'utf8')) as {
-      brokers?: (Record<string, unknown> | null)[];
-      broker?: Record<string, unknown> | null;
-      key?: unknown;
-    } | null;
-    if (raw === null || typeof raw !== 'object') return;
-    if (Array.isArray(raw.brokers)) {
-      const mine = raw.brokers.find((e): e is Record<string, unknown> => e !== null && typeof e === 'object' && e.key === selfKey && e.starId === undefined);
-      if (mine === undefined) return;
-      mine.starId = starId;
-    } else if (raw.broker !== null && typeof raw.broker === 'object' && raw.broker.starId === undefined && raw.key === selfKey) {
-      raw.broker.starId = starId;
-    } else {
-      return;
-    }
-    const tmp = `${nodeJson}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
-    renameSync(tmp, nodeJson);
-  } catch {
-    // 补写失败不倒 serve（下次启动再试）
+  // B1 补 starId / E0 星名同步：broker 自用条目不走节点客户端的 info 同步，
+  // 在此对齐（星名不一致覆盖 + 清旧 alias 键；一致不写）。失败不倒 serve。
+  const patch: { starId?: string; name?: string } = {};
+  if (mine.starId === undefined) patch.starId = ensureStarId(registryFile);
+  if (starName !== undefined && mine.name !== starName) patch.name = starName;
+  if (patch.starId !== undefined || patch.name !== undefined) {
+    syncNodeJsonEntry(nodeJson, { host: '127.0.0.1', port, key: self.key }, patch);
   }
+  return { status: 'ok' };
 }
 
 /** 自登记结局出声（written/foreign/stale 三种；ok 静默——状态没变不刷屏）。 */
@@ -333,38 +345,38 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
 }
 
 /**
- * B2：--connect 选择器解析（限定器风格对齐 via-tcp 的 selectBrokerEntry）：
- * 别名精确匹配 → starId 前缀唯一匹配（歧义教加长）；无命中时单条目走旧
- * "别名不符拒绝"校验路径（旧形状兼容），多条目列条目并给示例。'' = entries[0]。
+ * B2：--connect 选择器解析（E0 起与 via-tcp 的 selectBrokerEntry 同判定序）：
+ * 星名精确匹配 → starId 前缀唯一匹配（歧义教加长）；无命中时单条目走旧
+ * "星名不符拒绝"校验路径（旧形状兼容），多条目列条目并给示例。'' = entries[0]。
  */
 export function selectConnectEntry(selector: string, config: NodeConfig): { entry: BrokerEntry; selector: string } {
   const entries = config.entries;
   if (selector === '') return { entry: entries[0]!, selector };
-  const byAlias = entries.find((e) => e.alias === selector);
-  if (byAlias !== undefined) return { entry: byAlias, selector };
+  const byName = entries.find((e) => e.name === selector);
+  if (byName !== undefined) return { entry: byName, selector };
   const byPrefix = entries.filter((e) => e.starId !== undefined && e.starId.startsWith(selector));
   if (byPrefix.length === 1) return { entry: byPrefix[0]!, selector };
   if (byPrefix.length > 1) {
     throw new MultichatError(
       'USAGE',
-      `--connect 选择器 ${selector} 的 starId 前缀命中多个星（${byPrefix.map((e) => e.alias ?? e.starId).join('、')}）——加长前缀使其唯一`,
+      `--connect 选择器 ${selector} 的 starId 前缀命中多个星（${byPrefix.map(formatBrokerEntry).join('、')}）——加长前缀使其唯一`,
     );
   }
   if (entries.length === 1) {
-    // 旧校验路径：单条目（旧形状）别名不符拒绝；无别名则容忍直连（B2 前行为）
-    const alias = entries[0]!.alias;
-    if (alias !== undefined) {
+    // 旧校验路径：单条目（旧形状）星名不符拒绝；无星名则容忍直连（B2 前行为）
+    const name = entries[0]!.name;
+    if (name !== undefined) {
       throw new MultichatError(
         'USAGE',
-        `--connect ${selector} 与 node.json 的 broker 别名 ${alias} 不符——省略别名直连，或向管理员核对 node.json`,
+        `--connect ${selector} 与 node.json 条目的星名 ${name} 不符——省略星名直连，或向管理员核对 node.json`,
       );
     }
     return { entry: entries[0]!, selector };
   }
-  const list = entries.map((e) => `${e.alias ?? '(无别名)'}(starId ${e.starId ?? '未登记'})`).join('、');
+  const list = entries.map(formatBrokerEntry).join('、');
   throw new MultichatError(
     'USAGE',
-    `--connect 选择器 ${selector} 不匹配任何条目——本机 node.json 现有：${list}；示例：--connect ${entries[0]!.alias ?? entries[0]!.starId}`,
+    `--connect 选择器 ${selector} 不匹配任何条目——本机 node.json 现有：${list}；示例：--connect ${entries[0]!.name ?? entries[0]!.starId ?? ''}`,
   );
 }
 
@@ -372,7 +384,9 @@ export function selectConnectEntry(selector: string, config: NodeConfig): { entr
 async function runForegroundNode(aliasArg: string, deps: ServeDeps): Promise<number> {
   const config = readNodeConfig(join(tcpDir(deps.baseDir), 'node.json'));
   const { entry, selector } = selectConnectEntry(aliasArg, config);
-  const suffix = selector === '' ? '' : `-${selector}`;
+  // E0：日志/状态文件后缀取解析后的星名——用户用 starId 前缀起停，标签/文件名也显示星名
+  const label = selector === '' ? '' : entry.name ?? selector;
+  const suffix = label === '' ? '' : `-${label}`;
   const detached = deps.env.CROSSCHAT_SERVE_DETACHED === '1';
   const logFile = join(tcpDir(deps.baseDir), `node${suffix}.log`);
   const logLine = detached
@@ -403,7 +417,7 @@ async function runForegroundNode(aliasArg: string, deps: ServeDeps): Promise<num
     log: logLine,
     onSignal: deps.onSignal,
   });
-  logLine(`节点客户端启动：目标 broker ${entry.alias ?? `${entry.host}:${entry.port}`}（Ctrl+C 退出）`);
+  logLine(`节点客户端启动：目标 broker ${entry.name ?? `${entry.host}:${entry.port}`}（Ctrl+C 退出）`);
   await client.run();
   return 0;
 }

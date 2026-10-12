@@ -24,6 +24,8 @@ export interface InfoFrame {
   caps: string[];
   /** B0 多星地基：broker 星标识（注册表缺省则不发该字段——additive）。 */
   starId?: string;
+  /** E0 星名：broker 权威星名（注册表缺省则不发——additive，节点据此同步条目 name）。 */
+  name?: string;
 }
 export interface ConnectFrame {
   op: 'connect';

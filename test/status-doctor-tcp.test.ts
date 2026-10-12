@@ -181,15 +181,15 @@ describe('status 节点客户端/broker 区块', () => {
     mkdirSync(join(dir, 'tcp'), { recursive: true });
     writeFileSync(join(dir, 'tcp', 'node.json'), JSON.stringify({
       brokers: [
-        { host: 'h1', port: 1, alias: 'br1', starId: 'aaaabbbbcccc', key: 'k1' },
-        { host: 'h2', port: 2, alias: 'br2', starId: 'dddd00001111', key: 'k2' },
+        { host: 'h1', port: 1, name: 'br1', starId: 'aaaabbbbcccc', key: 'k1' },
+        { host: 'h2', port: 2, name: 'br2', starId: 'dddd00001111', key: 'k2' },
       ],
     }));
     const seen: Array<string | undefined> = [];
     const deps = baseStatusDeps(join(dir, 'tcp'));
     deps.roster = async (entry) => {
-      seen.push(entry?.alias);
-      if (entry?.alias === 'br1') {
+      seen.push(entry?.name);
+      if (entry?.name === 'br1') {
         return [
           { name: 'hub', mid8: 'a1b2c3d4', online: true },
           { name: 'beta', mid8: 'bbbb0000', online: false },
@@ -319,5 +319,27 @@ describe('doctor tcp 三项检查', () => {
     expect(report.output).toContain('❌ 条目 2 broker TCP 不可达（10.0.0.2:7260）——确认 broker 机 crosschat serve 在跑、网络/防火墙放行端口');
     expect(probes).toEqual(['10.0.0.1', '10.0.0.2', '10.0.0.3']); // 各自探活
     expect(report.failed).toBe(true);
+  });
+});
+
+describe('E0 broker status 行化妆（星名）', () => {
+  it('shows the star name between 服务端 and 端口 when the broker status carries one', async () => {
+    const dir = mkdtempSync(join(root, 't-'));
+    writeBrokerStatus(join(dir, 'tcp'), {
+      state: 'running',
+      port: 7260,
+      name: 'cloud',
+      lastUpdated: iso(-3_000),
+      onlineNodes: ['box-a'],
+    });
+    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
+    expect(out).toContain('broker: 服务端 cloud 端口 7260，1 节点在线');
+  });
+
+  it('keeps the pre-E0 line shape when the status file has no name', async () => {
+    const dir = mkdtempSync(join(root, 't-'));
+    writeBrokerStatus(join(dir, 'tcp'), { state: 'running', port: 7260, lastUpdated: iso(-3_000) });
+    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
+    expect(out).toContain('broker: 服务端端口 7260，0 节点在线');
   });
 });

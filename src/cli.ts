@@ -80,17 +80,21 @@ commands:
                             default port ${DEFAULT_PORT}; the first --port
                             given is remembered and reused on bare runs)
                               --port <N>           listen port 1-65535
+                              --name <星名>        broker star name
+                                (1-32 chars of A-Za-z0-9._-,
+                                no colon; the first --name given
+                                is remembered; default: hostname)
                               --gen-key [N]        print N node keys (default 1)
                                 and register them
                               --list               list registered nodes
                               --remove <label>     remove a node key
-                              --connect [别名|星前缀]
+                              --connect [星名|星前缀]
                                 run this machine as a node client
                                 (needs ~/.crosschat/tcp/node.json;
                                 selector picks the broker entry;
                                 reconnects forever; log with --detach:
                                 ~/.crosschat/tcp/node.log or
-                                node-<选择器>.log)
+                                node-<星名>.log)
                               --detach             run the broker or node
                                 (with --connect) in the background
                               --stop [broker|node|选择器]
@@ -250,10 +254,10 @@ export function parseInstallSkillsArgs(argv: readonly string[]): InstallSkillsAr
 }
 
 /**
- * Hand-rolled serve arg parsing: --port/--remove take values (space or =),
- * --gen-key/--stop/--connect take optional values (a following non-flag
- * token), --list/--detach are flags. Raw values only — numeric validation
- * lives in commands/serve.ts.
+ * Hand-rolled serve arg parsing: --port/--remove/--name take values (space or
+ * =), --gen-key/--stop/--connect take optional values (a following non-flag
+ * token), --list/--detach are flags. Raw values only — numeric/star-name
+ * validation lives in commands/serve.ts.
  */
 export function parseServeArgs(argv: readonly string[]): ServeArgs {
   const args: ServeArgs = {};
@@ -280,10 +284,11 @@ export function parseServeArgs(argv: readonly string[]): ServeArgs {
       args.detach = true;
     } else if (name === '--connect') {
       args.connect = nextValue() ?? '';
-    } else if (name === '--port' || name === '--remove') {
+    } else if (name === '--port' || name === '--remove' || name === '--name') {
       const value = nextValue();
       if (value === undefined) throw new MultichatError('USAGE', `serve: ${name} requires a value`);
       if (name === '--port') args.portArg = value;
+      else if (name === '--name') args.nameArg = value;
       else args.remove = value;
     } else if (name === '--gen-key') {
       args.genKeyArg = nextValue() ?? '1';

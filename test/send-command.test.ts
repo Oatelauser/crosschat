@@ -672,8 +672,8 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
         join(baseDir, 'tcp', 'node.json'),
         JSON.stringify({
           brokers: [
-            { host: '127.0.0.1', port: 1, alias: 'dead', starId: 'ffff00000000', key: key('d') },
-            { host: '127.0.0.1', port, alias: 'star-a', starId: 'abcd00001111', key: key('k') },
+            { host: '127.0.0.1', port: 1, name: 'dead', starId: 'ffff00000000', key: key('d') },
+            { host: '127.0.0.1', port, name: 'star-a', starId: 'abcd00001111', key: key('k') },
           ],
         }),
       );
@@ -694,7 +694,7 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
     mkdirSync(join(baseDir, 'tcp'), { recursive: true });
     writeFileSync(
       join(baseDir, 'tcp', 'node.json'),
-      JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 1, alias: 'dead', starId: 'ffff00000000', key: 'k' }] }),
+      JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 1, name: 'dead', starId: 'ffff00000000', key: 'k' }] }),
     );
     const err = await expectCode(
       runSend({ conversation: starRef('abcd00001111'), bodyArg: 'hi' }, tcpDeps(baseDir, { CODEX_THREAD_ID: 'team1111-aaaa' })),

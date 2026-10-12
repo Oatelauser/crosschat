@@ -170,9 +170,9 @@ function makeNodeClient(harness: Harness, dir: string, overrides: Partial<Constr
   const inbox = mkdtempSync(join(root, 'node-'));
   const port = Number(new URL(harness.url).port);
   const configFile = join(dir, 'node.json');
-  writeFileSync(configFile, JSON.stringify({ broker: { host: '127.0.0.1', port, alias: 'broker-alias' }, key: key('n') }, null, 2));
+  writeFileSync(configFile, JSON.stringify({ broker: { host: '127.0.0.1', port, name: 'broker-alias' }, key: key('n') }, null, 2));
   return new NodeClient({
-    config: { entries: [{ host: '127.0.0.1', port, alias: 'broker-alias', key: key('n') }] },
+    config: { entries: [{ host: '127.0.0.1', port, name: 'broker-alias', key: key('n') }] },
     configFile,
     machineId: () => 'NODE-MID',
     statusFile: join(dir, 'status-node.json'),
@@ -263,7 +263,7 @@ describe('node client lifecycle', () => {
     const port = Number(new URL(harness.url).port);
     const dir = mkdtempSync(join(root, 'st-'));
     const client = makeNodeClient(harness, dir, {
-      config: { entries: [{ host: '127.0.0.1', port, alias: 'broker-alias', key: key('n') }] },
+      config: { entries: [{ host: '127.0.0.1', port, name: 'broker-alias', key: key('n') }] },
       backoffBaseMs: 60,
     });
     void client.run();
@@ -324,10 +324,10 @@ describe('readNodeConfig and runServe --connect', () => {
     expect((err as MultichatError).message).toContain('本机未入网');
   });
 
-  it('rejects a --connect alias that contradicts node.json', async () => {
+  it('rejects a --connect star name that contradicts node.json', async () => {
     const dir = mkdtempSync(join(root, 'case-'));
     mkdirSync(join(dir, 'tcp'), { recursive: true });
-    writeFileSync(join(dir, 'tcp', 'node.json'), JSON.stringify({ broker: { host: 'h', port: 1, alias: 'real-alias' }, key: 'k' }));
+    writeFileSync(join(dir, 'tcp', 'node.json'), JSON.stringify({ broker: { host: 'h', port: 1, name: 'real-alias' }, key: 'k' }));
     const deps: ServeDeps = {
       baseDir: dir,
       stdout: () => {},
@@ -347,24 +347,24 @@ describe('readNodeConfig and runServe --connect', () => {
     expect((err as MultichatError).message).toContain('real-alias');
   });
 
-  // B0：node.json 双形状归一化
-  it('normalizes the legacy shape into a single entry (top-level starId ignored)', () => {
+  // B0：node.json 双形状归一化；E0：旧词表读入映射（条目 alias→name、顶层 name→showName）
+  it('normalizes the legacy shape into a single entry (alias→name, top-level name→showName, top starId ignored)', () => {
     const dir = mkdtempSync(join(root, 'case-'));
     const file = join(dir, 'node.json');
     writeFileSync(file, JSON.stringify({ broker: { host: 'h1', port: 1, alias: 'a', starId: 'in-broker' }, key: 'k', name: 'n', starId: 'top-level' }));
     expect(readNodeConfig(file)).toEqual({
-      name: 'n',
-      entries: [{ host: 'h1', port: 1, alias: 'a', starId: 'in-broker', key: 'k' }],
+      showName: 'n',
+      entries: [{ host: 'h1', port: 1, name: 'a', starId: 'in-broker', key: 'k' }],
     });
   });
 
-  it('normalizes the brokers-array shape as-is with name carried', () => {
+  it('normalizes the brokers-array shape natively (showName carried; entry name is the star name)', () => {
     const dir = mkdtempSync(join(root, 'case-'));
     const file = join(dir, 'node.json');
-    writeFileSync(file, JSON.stringify({ brokers: [{ host: 'h1', port: 1, key: 'k1' }, { host: 'h2', port: 2, alias: 'b', starId: 's2', key: 'k2' }], name: 'm' }));
+    writeFileSync(file, JSON.stringify({ brokers: [{ host: 'h1', port: 1, key: 'k1' }, { host: 'h2', port: 2, name: 'b', starId: 's2', key: 'k2' }], showName: 'm' }));
     expect(readNodeConfig(file)).toEqual({
-      name: 'm',
-      entries: [{ host: 'h1', port: 1, key: 'k1' }, { host: 'h2', port: 2, alias: 'b', starId: 's2', key: 'k2' }],
+      showName: 'm',
+      entries: [{ host: 'h1', port: 1, key: 'k1' }, { host: 'h2', port: 2, name: 'b', starId: 's2', key: 'k2' }],
     });
   });
 
@@ -440,7 +440,7 @@ describe('B0 starId handshake', () => {
     await client.stop();
   }, 10_000);
 
-  it('backfills starId into the legacy node.json broker object when locally missing', async () => {
+  it('backfills starId into the legacy node.json broker object when locally missing (E0: rewrites in new vocabulary)', async () => {
     const harness = await startBroker();
     seedWithStar(harness);
     const dir = mkdtempSync(join(root, 'st-'));
@@ -449,10 +449,13 @@ describe('B0 starId handshake', () => {
     const client = starClient(harness, dir, {}, () => {});
     void client.run();
     await client.waitForState('online');
-    const backfilled = JSON.parse(readFileSync(configFile, 'utf8')) as { broker: { host: string; port: number; alias: string; starId?: string }; key: string; name: string };
+    const backfilled = JSON.parse(readFileSync(configFile, 'utf8')) as { broker: { host: string; port: number; name?: string; alias?: string; starId?: string }; key: string; showName?: string; name?: string };
     expect(backfilled.broker.starId).toBe(STAR);
     expect(backfilled.key).toBe(key('n'));
-    expect(backfilled.name).toBe('node-host');
+    expect(backfilled.showName).toBe('node-host'); // 顶层旧 name → showName
+    expect(backfilled.name).toBeUndefined();
+    expect(backfilled.broker.name).toBe('broker-alias'); // 旧 alias 值并轨进 name
+    expect(backfilled.broker.alias).toBeUndefined(); // 旧键已清
     await client.stop();
   }, 10_000);
 
@@ -477,7 +480,7 @@ describe('B0 starId handshake', () => {
     seedWithStar(harness);
     const dir = mkdtempSync(join(root, 'st-'));
     const configFile = join(dir, 'node.json');
-    const original = `${JSON.stringify({ broker: { host: '127.0.0.1', port: Number(new URL(harness.url).port), alias: 'broker-alias', starId: STAR }, key: key('n'), name: 'node-host' }, null, 2)}\n`;
+    const original = `${JSON.stringify({ broker: { host: '127.0.0.1', port: Number(new URL(harness.url).port), name: 'broker-alias', starId: STAR }, key: key('n'), showName: 'node-host' }, null, 2)}\n`;
     writeFileSync(configFile, original);
     const client = starClient(harness, dir, { starId: STAR }, () => {});
     void client.run();
@@ -620,10 +623,10 @@ describe('B2 --connect 选择器与独立 status/log 文件', () => {
       join(dir, 'tcp', 'node.json'),
       JSON.stringify({
         brokers: [
-          { host: '127.0.0.1', port, alias: 'br1', key: key('n') },
-          { host: '10.255.255.1', port: 9, alias: 'br2', key: 'other-key' }, // 不可达——守护只连选中条目则永不碰它
+          { host: '127.0.0.1', port, name: 'br1', key: key('n') },
+          { host: '10.255.255.1', port: 9, name: 'br2', key: 'other-key' }, // 不可达——守护只连选中条目则永不碰它
         ],
-        name: 'node-host',
+        showName: 'node-host',
       }),
     );
     const { deps, stop } = nodeDeps(dir);
@@ -640,11 +643,135 @@ describe('B2 --connect 选择器与独立 status/log 文件', () => {
     const port = Number(new URL(harness.url).port);
     const dir = mkdtempSync(join(root, 'default-'));
     mkdirSync(join(dir, 'tcp'), { recursive: true });
-    writeFileSync(join(dir, 'tcp', 'node.json'), JSON.stringify({ broker: { host: '127.0.0.1', port, alias: 'br1' }, key: key('n') }));
+    writeFileSync(join(dir, 'tcp', 'node.json'), JSON.stringify({ broker: { host: '127.0.0.1', port, name: 'br1' }, key: key('n') }));
     const { deps, stop } = nodeDeps(dir);
     const servePromise = runServe({ connect: '' }, deps);
     await waitStatusOnline(join(dir, 'tcp', 'status-node.json'));
     expect(existsSync(join(dir, 'tcp', 'status-node-br1.json'))).toBe(false);
+    stop();
+    expect(await servePromise).toBe(0);
+  }, 15_000);
+});
+
+describe('E0 星名同步（info.name 帧权威覆盖）', () => {
+  const STAR = 'aaaabbbbcccc';
+
+  function seedStarNamed(harness: Harness, name?: string): void {
+    writeRegistry(harness.registryFile, {
+      starId: STAR,
+      ...(name === undefined ? {} : { name }),
+      nodes: [{ label: 'node-1', key: key('n'), addedAt: '2026-01-01T00:00:00.000Z' }],
+    });
+  }
+
+  it('overwrites a differing entry name, cleans the legacy alias key and renames top-level name to showName', async () => {
+    const harness = await startBroker();
+    seedStarNamed(harness, 'cloud');
+    const dir = mkdtempSync(join(root, 'e0-'));
+    const configFile = join(dir, 'node.json');
+    const port = Number(new URL(harness.url).port);
+    writeFileSync(configFile, JSON.stringify({ broker: { host: '127.0.0.1', port, alias: 'old-name' }, key: key('n'), name: 'node-host' }, null, 2));
+    const client = new NodeClient({
+      config: { entries: [{ host: '127.0.0.1', port, key: key('n') }] },
+      configFile,
+      machineId: () => 'NODE-MID',
+      statusFile: join(dir, 'status-node.json'),
+      fileInbox: new FileInbox({ inboxDir: join(dir, 'inbox'), partsDir: join(dir, 'parts') }),
+      makeSendDeps: () => fakeSendDeps().deps,
+      now: () => Date.now(),
+      log: () => {},
+      backoffBaseMs: 50,
+    });
+    void client.run();
+    await client.waitForState('online');
+    const parsed = JSON.parse(readFileSync(configFile, 'utf8')) as { broker: { name?: string; alias?: string; starId?: string }; showName?: string; name?: string };
+    expect(parsed.broker.name).toBe('cloud'); // 星名被 broker 权威覆盖
+    expect(parsed.broker.alias).toBeUndefined(); // 旧键已清
+    expect(parsed.broker.starId).toBe(STAR); // 同一次握手顺带回填
+    expect(parsed.showName).toBe('node-host');
+    expect(parsed.name).toBeUndefined();
+    // status 文件的 brokerAlias 也跟着星名走
+    const status = JSON.parse(readFileSync(join(dir, 'status-node.json'), 'utf8')) as { brokerAlias: string };
+    expect(status.brokerAlias).toBe('cloud');
+    await client.stop();
+  }, 10_000);
+
+  it('does not rewrite node.json when the star name already matches', async () => {
+    const harness = await startBroker();
+    seedStarNamed(harness, 'cloud');
+    const dir = mkdtempSync(join(root, 'e0-'));
+    const configFile = join(dir, 'node.json');
+    const port = Number(new URL(harness.url).port);
+    const original = `${JSON.stringify({ brokers: [{ host: '127.0.0.1', port, name: 'cloud', starId: STAR, key: key('n') }], showName: 'node-host' }, null, 2)}\n`;
+    writeFileSync(configFile, original);
+    const client = new NodeClient({
+      config: { entries: [{ host: '127.0.0.1', port, name: 'cloud', starId: STAR, key: key('n') }] },
+      configFile,
+      machineId: () => 'NODE-MID',
+      statusFile: join(dir, 'status-node.json'),
+      fileInbox: new FileInbox({ inboxDir: join(dir, 'inbox'), partsDir: join(dir, 'parts') }),
+      makeSendDeps: () => fakeSendDeps().deps,
+      now: () => Date.now(),
+      log: () => {},
+      backoffBaseMs: 50,
+    });
+    void client.run();
+    await client.waitForState('online');
+    expect(readFileSync(configFile, 'utf8')).toBe(original);
+    await client.stop();
+  }, 10_000);
+
+  it('a starId-prefix --connect daemon labels its status file with the resolved star name', async () => {
+    const harness = await startBroker();
+    seedStarNamed(harness, 'cloud');
+    const port = Number(new URL(harness.url).port);
+    const dir = mkdtempSync(join(root, 'e0label-'));
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    writeFileSync(
+      join(dir, 'tcp', 'node.json'),
+      JSON.stringify({
+        brokers: [
+          { host: '127.0.0.1', port, name: 'cloud', starId: STAR, key: key('n') },
+          { host: '10.255.255.1', port: 9, name: 'other', starId: 'dddd00000000', key: 'other-key' },
+        ],
+        showName: 'node-host',
+      }),
+    );
+    let stop: () => void = () => {};
+    const deps: ServeDeps = {
+      baseDir: dir,
+      stdout: () => {},
+      env: {},
+      version: 'test',
+      machineId: () => 'NODE-MID',
+      hostname: () => 'node-host',
+      networkInterfaces: () => ({}),
+      now: () => Date.now(),
+      onSignal: (_sig, cb) => {
+        stop = cb;
+      },
+    };
+    // 用户用 starId 前缀起停——标签/文件名仍落星名
+    const servePromise = runServe({ connect: 'aaaa' }, deps);
+    await new Promise<void>((resolve, reject) => {
+      const file = join(dir, 'tcp', 'status-node-cloud.json');
+      const timer = setTimeout(() => reject(new Error('status-node-cloud.json never appeared')), 10_000);
+      const poll = (): void => {
+        try {
+          if ((JSON.parse(readFileSync(file, 'utf8')) as { state: string }).state === 'online') {
+            clearTimeout(timer);
+            resolve();
+            return;
+          }
+        } catch {
+          // 未出现继续轮询
+        }
+        setTimeout(poll, 100);
+      };
+      poll();
+    });
+    expect(existsSync(join(dir, 'tcp', 'status-node-aaaa.json'))).toBe(false);
+    expect(existsSync(join(dir, 'tcp', 'status-node.json'))).toBe(false);
     stop();
     expect(await servePromise).toBe(0);
   }, 15_000);

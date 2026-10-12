@@ -83,7 +83,7 @@ function makeFixture(harness: Harness, env: Record<string, string | undefined> =
   mkdirSync(join(baseDir, 'tcp'), { recursive: true });
   writeFileSync(
     join(baseDir, 'tcp', 'node.json'),
-    JSON.stringify({ broker: { host: '127.0.0.1', port: harness.port, alias: 'broker-alias' }, key: key('k') }),
+    JSON.stringify({ broker: { host: '127.0.0.1', port: harness.port, name: 'broker-alias' }, key: key('k') }),
   );
   const logs: SendLogEntry[] = [];
   return {
@@ -190,7 +190,7 @@ describe('runViaTcpSend against a real broker', () => {
     // 指向一个无人监听的端口
     writeFileSync(
       join(fx.baseDir, 'tcp', 'node.json'),
-      JSON.stringify({ broker: { host: '127.0.0.1', port: 1, alias: 'x' }, key: key('k') }),
+      JSON.stringify({ broker: { host: '127.0.0.1', port: 1, name: 'x' }, key: key('k') }),
     );
     await expectCode(
       runViaTcpSend({ via: 'tcp:broker-host', to: 'boss' } as never, 'x', { ...fx.deps, env: { CROSSCHAT_TCP_TIMEOUT_MS: '600' } }),
@@ -346,8 +346,8 @@ describe('tcpTimeoutMs', () => {
 
 describe('B1 multi-star entry selection (selectBrokerEntry)', () => {
   const entries: BrokerEntry[] = [
-    { host: '10.0.0.1', port: 1, alias: 'alpha', starId: 'aaaa11110000', key: 'a' },
-    { host: '10.0.0.2', port: 2, alias: 'beta', starId: 'bbbb22220000', key: 'b' },
+    { host: '10.0.0.1', port: 1, name: 'alpha', starId: 'aaaa11110000', key: 'a' },
+    { host: '10.0.0.2', port: 2, name: 'beta', starId: 'bbbb22220000', key: 'b' },
   ];
   const convWith = (starId?: string): string =>
     encodeRef({
@@ -370,29 +370,28 @@ describe('B1 multi-star entry selection (selectBrokerEntry)', () => {
     }
   }
 
-  it('a: selector matches alias exactly first, then a unique starId prefix', () => {
+  it('a: selector matches the star name exactly first, then a unique starId prefix', () => {
     expect(selectBrokerEntry(entries, 'beta', undefined)).toBe(entries[1]);
     expect(selectBrokerEntry(entries, 'aaaa11', undefined)).toBe(entries[0]);
     expect(selectBrokerEntry(entries, 'bbbb', undefined)).toBe(entries[1]);
-    // 别名优先于前缀：选择器恰为别名时不看 starId
-    expect(selectBrokerEntry([...entries, { host: 'h', port: 3, alias: 'be', starId: 'beta0000', key: 'x' }], 'beta', undefined)).toBe(entries[1]);
+    // 星名优先于前缀：选择器恰为星名时不看 starId
+    expect(selectBrokerEntry([...entries, { host: 'h', port: 3, name: 'be', starId: 'beta0000', key: 'x' }], 'beta', undefined)).toBe(entries[1]);
   });
 
   it('a: an ambiguous starId prefix teaches lengthening', () => {
     const twins: BrokerEntry[] = [
-      { host: 'h1', port: 1, alias: 'one', starId: 'aaaa11110000', key: 'k' },
-      { host: 'h2', port: 2, alias: 'two', starId: 'aaaa22220000', key: 'k' },
+      { host: 'h1', port: 1, name: 'one', starId: 'aaaa11110000', key: 'k' },
+      { host: 'h2', port: 2, name: 'two', starId: 'aaaa22220000', key: 'k' },
     ];
     const err = expectUsage(() => selectBrokerEntry(twins, 'aaaa', undefined));
     expect(err.message).toContain('命中多个星');
     expect(err.message).toContain('加长');
   });
 
-  it('a: a selector with no hit lists every entry', () => {
+  it('a: a selector with no hit lists every entry in cloud(6b76e1) form', () => {
     const err = expectUsage(() => selectBrokerEntry(entries, 'zzz', undefined));
-    expect(err.message).toContain('alpha');
-    expect(err.message).toContain('beta');
-    expect(err.message).toContain('aaaa11110000');
+    expect(err.message).toContain('alpha(aaaa11)');
+    expect(err.message).toContain('beta(bbbb22)');
   });
 
   it('b: a bare via with --conversation routes by ref.starId exact match', () => {
@@ -417,7 +416,7 @@ describe('B1 multi-star entry selection (selectBrokerEntry)', () => {
     expect(err.message).toContain('不在本机 node.json');
   });
 
-  it('d: multiple entries with no starId to go on list aliases and show the selector example', () => {
+  it('d: multiple entries with no selector to go on list star names and show the selector example', () => {
     const err = expectUsage(() => selectBrokerEntry(entries, undefined, undefined));
     expect(err.message).toContain('alpha');
     expect(err.message).toContain('beta');
@@ -428,17 +427,17 @@ describe('B1 multi-star entry selection (selectBrokerEntry)', () => {
 });
 
 describe('B1 multi-entry node.json through the real send path', () => {
-  it('bare tcp with two entries refuses with the entry list; tcp:<alias>:<target> and ref.starId both route', async () => {
+  it('bare tcp with two entries refuses with the entry list; tcp:<星名>:<target> and ref.starId both route', async () => {
     const h = await startBroker(async (frame) => ({ ...deliveredReceipt, id: frame.id }));
     const fx = makeFixture(h);
     writeFileSync(
       join(fx.baseDir, 'tcp', 'node.json'),
       JSON.stringify({
         brokers: [
-          { host: '127.0.0.1', port: 1, alias: 'dead', starId: 'dddd00000000', key: key('d') },
-          { host: '127.0.0.1', port: h.port, alias: 'live', starId: 'aaaa11112222', key: key('k') },
+          { host: '127.0.0.1', port: 1, name: 'dead', starId: 'dddd00000000', key: key('d') },
+          { host: '127.0.0.1', port: h.port, name: 'live', starId: 'aaaa11112222', key: key('k') },
         ],
-        name: 'multi-star sender',
+        showName: 'multi-star sender',
       }),
     );
     // 裸 tcp：多条目教选择器（示例取第一条的别名）

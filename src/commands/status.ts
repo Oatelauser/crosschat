@@ -61,6 +61,8 @@ export const TCP_STATUS_FRESH_MS = 90_000;
 interface BrokerStatusFile {
   state: string;
   port?: number;
+  /** E0 星名（broker 起服务时落定；status 行化妆用）。 */
+  name?: string;
   lastUpdated: string;
   onlineNodes?: string[];
 }
@@ -135,7 +137,8 @@ async function tcpForwarderLines(tcpDir: string | undefined, nowMs: number, rost
   const broker = readStatusJson<BrokerStatusFile>(join(tcpDir, 'status-broker.json'));
   if (broker !== undefined && broker.state === 'running' && nowMs - Date.parse(broker.lastUpdated) < TCP_STATUS_FRESH_MS) {
     const nodes = broker.onlineNodes ?? [];
-    lines.push(`broker: 服务端端口 ${broker.port ?? '?'}，${nodes.length} 节点在线`);
+    const head = broker.name === undefined ? '服务端' : `服务端 ${broker.name} `;
+    lines.push(`broker: ${head}端口 ${broker.port ?? '?'}，${nodes.length} 节点在线`);
     if (nodes.length > 0) lines.push(`在线机器: ${nodes.join('、')}`);
     return lines;
   }
@@ -153,7 +156,7 @@ async function tcpForwarderLines(tcpDir: string | undefined, nowMs: number, rost
       pushRosterLines(lines, '', machines);
     } else {
       for (const entry of entries) {
-        const label = shortDisplay(entry.alias ?? `${entry.host}:${entry.port}`);
+        const label = shortDisplay(entry.name ?? `${entry.host}:${entry.port}`);
         const machines = await roster(entry);
         pushRosterLines(lines, label, machines);
       }

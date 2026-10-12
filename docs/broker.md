@@ -44,6 +44,7 @@ crosschat send --via tcp:host-b --to worker2 --body "跑一次构建，产物清
 broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 # 后台常驻：crosschat serve --detach（输出 pid 与端口，日志 ~/.crosschat/tcp/broker.log）
 # 换端口：crosschat serve --port 7777（给一次即记住）
+# 起星名：crosschat serve --name cloud（给一次即记住；缺省取本机 hostname）
 ```
 
 发钥匙——打印的 JSON 交给对应机器（打印自带核对规则与提示，照做即可）：
@@ -54,19 +55,19 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
   · broker 机自身 → 无需分发（首次 serve 已自动写好 127.0.0.1 的自用 node.json）
   · broker 是云主机/NAT 内网机 → host 填对外公网 IP（探测常拿内网 IP，必核对）
   · 普通局域网 → broker 机的局域网 IP；broker 用非默认端口时 port 一并改
-分发前把每份 node.json 的 name 改成「贴这份配置的机器」的自报名字（建议=其 hostname；纯显示用——roster 怎么称呼它，寻址/回信不依赖，走 machine-id 前缀）
+分发前把每份 node.json 的 showName 改成「贴这份配置的机器」的自报名字（建议=其 hostname；纯显示用——roster 怎么称呼它，寻址/回信不依赖，走 machine-id 前缀）；条目 name=yang 是星名（broker 权威，连接后自动同步，不用改）
 --------------------------------
 {
   "brokers": [
     {
       "host": "192.168.1.10",
       "port": 7260,
-      "alias": "yang",
+      "name": "yang",
       "starId": "a1b2c3d4e5f6",
       "key": "a3f0…64位hex…"
     }
   ],
-  "name": "改成「贴这份配置的机器」的名字"
+  "showName": "改成「贴这份配置的机器」的名字"
 }
 --------------------------------
 { …第二份同构… }
@@ -78,21 +79,21 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 ### 1.3 node 机（贴钥匙 + 上线）
 
-把一份钥匙存成 `~/.crosschat/tcp/node.json`，改 host（按打印的规则）和 name（本机名）。本机也要装 crosschat：
+把一份钥匙存成 `~/.crosschat/tcp/node.json`，改 host（按打印的规则）和 showName（本机名）。本机也要装 crosschat：
 
 ```
 > mkdir -p ~/.crosschat/tcp && nano ~/.crosschat/tcp/node.json
-# 粘贴整段 JSON，改 host 与 name，保存
+# 粘贴整段 JSON，改 host 与 showName，保存
 > cat ~/.crosschat/tcp/node.json
 {
   "brokers": [
-    { "host": "192.168.1.10", "port": 7260, "alias": "yang", "starId": "a1b2…", "key": "a3f0…" }
+    { "host": "192.168.1.10", "port": 7260, "name": "yang", "starId": "a1b2…", "key": "a3f0…" }
   ],
-  "name": "host-b"
+  "showName": "host-b"
 }
 ```
 
-字段一句话：条目里的 `key`=钥匙（不用改）、`alias`=broker 机显示名（不用改）；`name`=本机自报名（roster 里怎么称呼你，寻址走 mid8 与它无关）。
+字段一句话：条目里的 `key`=钥匙（不用改）、`name`=星名（broker 权威，连接自动同步，不用改）、`starId`=星标识（不用改）；`showName`=本机自报名（roster 里怎么称呼你，寻址走 mid8 与它无关）。
 
 上线（断线自动重连永不放弃）：
 
@@ -109,14 +110,14 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 > cat ~/.crosschat/tcp/node.json
 {
   "brokers": [
-    { "host": "118.196.47.9", "port": 7777, "alias": "cloud", "starId": "a1b2c3d4e5f6", "key": "…" },
-    { "host": "192.168.1.10", "port": 7260,  "alias": "home",  "starId": "9f8e7d6c0123", "key": "…" }
+    { "host": "118.196.47.9", "port": 7777, "name": "cloud", "starId": "a1b2c3d4e5f6", "key": "…" },
+    { "host": "192.168.1.10", "port": 7260,  "name": "home",  "starId": "9f8e7d6c0123", "key": "…" }
   ],
-  "name": "yang"
+  "showName": "yang"
 }
 ```
 
-收几颗星跑几个守护（按别名选，starId 前缀消歧）；发送多星机发起新会话加限定词 `--via tcp:cloud:<机器>`——**回信/续发零感知**，会话引用自带星标识、CLI 自动选星，agent 照抄命令不变：
+收几颗星跑几个守护（按星名选，starId 前缀消歧）；发送多星机发起新会话加限定词 `--via tcp:cloud:<机器>`——**回信/续发零感知**，会话引用自带星标识、CLI 自动选星，agent 照抄命令不变：
 
 ```
 > crosschat serve --connect cloud --detach     # 挂 cloud 星收件
