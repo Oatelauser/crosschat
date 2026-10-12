@@ -1,7 +1,7 @@
 # 远程会话枚举 status --via tcp:<机器>（012）
 
 label: wayfinder:design
-status: open
+status: closed（2026-10-12 真机闭环关票：枚举+直发一气呵成，见 ../drill-reports/multi-star-drill-20261012.md）
 blocked-by: （无）
 claimed-by: （待领）
 

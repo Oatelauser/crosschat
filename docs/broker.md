@@ -31,7 +31,7 @@ crosschat send --via tcp:host-b --to worker2 --body "跑一次构建，产物清
 
 - 局域网 → 最常开机的那台
 - 跨公网 → 云端/堡垒机（唯一公网入口；安全组放行端口入站。明文风险已拍板接受，TLS 挂账中）
-- win + WSL 同物理机 → 算两台机，选常开侧
+- win + WSL 同物理机 → 算两台机，选常开侧；**win 连 WSL broker 的 host 用 127.0.0.1**（WSL 镜像网络下它报的 LAN IP 从 win 不可达，实测）
 - 已有 ssh 联邦 → 机器 ≥3 台或要文件通道时才值得切 tcp
 
 ### 1.2 broker 机（两条命令，完）

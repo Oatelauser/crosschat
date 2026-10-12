@@ -1,7 +1,7 @@
 # 多星成员（v6 终版：无状态路由——配置带星、引用带路）
 
 label: wayfinder:design
-status: implemented（B0–B3 落地 2026-10-12，门禁 489 过；**待双星真机闭环 drill 后关票**）
+status: closed（2026-10-12 双星真机 drill 闭环关票，见 ../drill-reports/multi-star-drill-20261012.md）
 blocked-by: （无——与 010 无耦合可并行）
 claimed-by: （主会话编排执行中）
 
