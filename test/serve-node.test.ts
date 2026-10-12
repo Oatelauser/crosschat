@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -11,6 +12,7 @@ import { FileInbox } from '../src/serve/file-channel.js';
 import type { SendDeps } from '../src/commands/send.js';
 import { MultichatError } from '../src/errors.js';
 import { runServe, type ServeDeps } from '../src/commands/serve.js';
+import { decodeRef } from '../src/ref.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-serve-node-'));
 afterEach(() => {
@@ -214,6 +216,8 @@ describe('node client lifecycle', () => {
     expect(receipt).toMatchObject({ op: 'receipt', id: 's1', status: 'delivered' });
     if (receipt.op === 'receipt') {
       expect(receipt.replyRef).toMatch(/^mc[12]_/);
+      // B1 零回归锚点：无星连接（注册表无 starId）签发的 ref 不带 starId
+      expect(decodeRef(receipt.replyRef ?? '').starId).toBeUndefined();
       const output = JSON.parse(receipt.output ?? '') as { status: string; to: string };
       expect(output).toMatchObject({ status: 'delivered', to: 'boss' });
     }
@@ -489,4 +493,85 @@ describe('B0 starId handshake', () => {
     await client.waitForState('online');
     await client.stop();
   }, 10_000);
+});
+
+describe('B1 multi-star: delivery pipeline stamps starId into issued refs', () => {
+  const STAR = 'aaaabbbbcccc';
+
+  it('node daemon deliver: the receipt ref carries the connected entry starId', async () => {
+    const harness = await startBroker();
+    writeRegistry(harness.registryFile, {
+      starId: STAR,
+      nodes: [{ label: 'node-1', key: key('n'), machineId: 'NODE-MID', machineName: 'node-host', addedAt: '2026-01-01T00:00:00.000Z' }],
+    });
+    const dir = mkdtempSync(join(root, 'b1-'));
+    const inbox = mkdtempSync(join(root, 'node-'));
+    const client = new NodeClient({
+      config: { entries: [{ host: '127.0.0.1', port: Number(new URL(harness.url).port), key: key('n'), starId: STAR }] },
+      configFile: join(dir, 'node.json'),
+      machineId: () => 'NODE-MID',
+      statusFile: join(dir, 'status-node.json'),
+      fileInbox: new FileInbox({ inboxDir: join(inbox, 'inbox'), partsDir: join(inbox, 'parts') }),
+      makeSendDeps: () => fakeSendDeps(true).deps,
+      now: () => Date.now(),
+      log: () => {},
+      backoffBaseMs: 50,
+    });
+    void client.run();
+    await client.waitForState('online');
+    const sender = await senderOn(harness.url, key('n'));
+    sender.send({ op: 'send', id: 'b1', targetMachine: 'node-host', to: 'boss', body: 'star hello' });
+    const receipt = await sender.waitFor((f) => f.op === 'receipt' && f.id === 'b1');
+    if (receipt.op !== 'receipt') throw new Error('expected receipt');
+    expect(decodeRef(receipt.replyRef ?? '').starId).toBe(STAR);
+    await client.stop();
+  }, 10_000);
+
+  it('broker self-delivery: the receipt ref carries the registry starId', async () => {
+    const dir = mkdtempSync(join(root, 'b1self-'));
+    const registryFile = registryFileOf(dir);
+    // 预留一个空闲端口写进注册表（runServe 裸跑读注册表端口）
+    const reserve = createServer();
+    await new Promise<void>((resolve) => reserve.listen(0, '127.0.0.1', () => resolve()));
+    const port = (reserve.address() as { port: number }).port;
+    await new Promise<void>((resolve) => reserve.close(() => resolve()));
+    writeRegistry(registryFile, {
+      starId: STAR,
+      port,
+      nodes: [{ label: 'self', key: key('s'), machineId: 'BROKER-MID', machineName: 'broker-host', addedAt: '2026-01-01T00:00:00.000Z' }],
+    });
+    let stop: (() => void) | undefined;
+    const deps: ServeDeps = {
+      baseDir: dir,
+      stdout: () => {},
+      env: {},
+      version: 'test',
+      machineId: () => 'BROKER-MID',
+      hostname: () => 'broker-host',
+      networkInterfaces: () => ({}),
+      now: () => Date.now(),
+      onSignal: (_sig, cb) => {
+        stop = cb;
+      },
+      makeSendDeps: () => fakeSendDeps(true).deps,
+    };
+    const servePromise = runServe({}, deps);
+    // broker 起监听前 sender 可能被拒——小步重试握手
+    let sender: TestClient | undefined;
+    for (let i = 0; i < 50 && sender === undefined; i++) {
+      try {
+        sender = await senderOn(`ws://127.0.0.1:${port}`, key('s'));
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+    expect(sender).toBeDefined();
+    sender!.send({ op: 'send', id: 's1', targetMachine: 'broker-host', to: 'boss', body: 'self hello' });
+    const receipt = await sender!.waitFor((f) => f.op === 'receipt' && f.id === 's1');
+    if (receipt.op !== 'receipt') throw new Error('expected receipt');
+    expect(decodeRef(receipt.replyRef ?? '').starId).toBe(STAR);
+    expect(stop).toBeDefined();
+    stop!();
+    expect(await servePromise).toBe(0);
+  }, 15_000);
 });

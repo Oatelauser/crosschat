@@ -27,6 +27,8 @@ export interface ConversationRef {
   n: string;
   /** Turn number of the message this ref was issued with (>= 1). */
   c: number;
+  /** B1 多星：会话经 tcp 投递时路过的 broker 星标识（12 hex）；单机/ssh 签发的 ref 恒缺省。 */
+  starId?: string;
 }
 
 export const REF_PREFIX = 'mc1_';
@@ -49,11 +51,14 @@ export function nextTurnRef(ref: ConversationRef): ConversationRef {
 // ---- mc2 binary layout (008 B2 design §6 + B10 mid) ------------------------
 // flags   LEB128 varint: bits 0-1 f type | bits 2-3 t type | bit 4 f id raw |
 //         bit 5 t id raw | bit 6 f.m present | bit 7 t.m present | bit 8
-//         f.mid present | bit 9 t.mid present  (claude=0 codex=1 human=2)
+//         f.mid present | bit 9 t.mid present | bit 10 starId present
+//         (claude=0 codex=1 human=2)
 // then    f.id (16B UUID | varint-len utf8) · t.id (same)
 //         f.m (varint-len utf8)? · t.m (varint-len utf8)?
 //         f.mid (varint-len utf8)? · t.mid (varint-len utf8)?
-//         n (varint-len hex bytes) · c (varint)
+//         n (varint-len hex bytes) · c (varint) · starId (varint-len utf8)?
+// B1: starId 追加在 c 之后——旧版解析器读完 c 即校验 done()，见到这段字节
+// 走 'trailing bytes'+升级教学。这是设计好的版本偏差路径，不是 bug。
 // Lengths are LEB128 varints so nothing has a hidden ceiling; a dashed
 // lowercase uuid packs to 16 raw bytes (the overwhelmingly common case),
 // anything else falls back to the string path and round-trips verbatim.
@@ -115,6 +120,7 @@ export function encodeRef(ref: ConversationRef): string {
   const tm = mOf(ref.t);
   const fmid = midOf(ref.f);
   const tmid = midOf(ref.t);
+  const star = ref.starId;
   const flags =
     TYPE_CODES[ref.f.p] |
     (TYPE_CODES[ref.t.p] << 2) |
@@ -123,7 +129,8 @@ export function encodeRef(ref: ConversationRef): string {
     (fm !== undefined ? 0x40 : 0) |
     (tm !== undefined ? 0x80 : 0) |
     (fmid !== undefined ? 0x100 : 0) |
-    (tmid !== undefined ? 0x200 : 0);
+    (tmid !== undefined ? 0x200 : 0) |
+    (star !== undefined ? 0x400 : 0);
   const flagBytes: number[] = [];
   writeVarint(flags, flagBytes);
   const parts: Buffer[] = [Buffer.from(flagBytes), fId.bytes, tId.bytes];
@@ -135,6 +142,7 @@ export function encodeRef(ref: ConversationRef): string {
   const turn: number[] = [];
   writeVarint(ref.c, turn);
   parts.push(Buffer.from(turn));
+  if (star !== undefined) parts.push(packStr(star)); // B1：starId 段在 c 之后（见上方布局注释）
   return REF_PREFIX_V2 + Buffer.concat(parts).toString('base64url');
 }
 
@@ -216,8 +224,10 @@ function decodeV2(payload: string): ConversationRef {
   if (n === '') throw invalid('missing nonce', true);
   const c = cur.varint();
   if (!Number.isInteger(c) || c < 1) throw invalid('bad turn counter', true);
+  // B1：bit 10 置位 → c 之后读 starId（varint-len utf8）；未置位则旧载荷行为不变
+  const starId = (flags & 0x400) === 0 ? undefined : cur.field().toString('utf8');
   if (!cur.done()) throw invalid('trailing bytes', true);
-  return { v: 1, f, t, n, c };
+  return { v: 1, f, t, n, c, ...(starId === undefined ? {} : { starId }) };
 }
 
 function decodeV1(payload: string): ConversationRef {

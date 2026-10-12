@@ -207,3 +207,44 @@ describe('mc2 mid field (B10 machine-id)', () => {
     expect(decodeRef(withMid).f).toEqual({ p: 'claude', id: 'boss', m: 'h', mid: 'M1' });
   });
 });
+
+describe('mc2 starId field (B1 multi-star)', () => {
+  const base: ConversationRef = {
+    v: 1,
+    f: { p: 'claude', id: 'a3f9c2e1-5b7d-4f8a-9c21-8e4d2b6a0f33' },
+    t: { p: 'codex', id: '01a1115b-1a3c-7e71-addc-fee969078e1b' },
+    n: '9d4f2ab1c3e85760',
+    c: 1,
+  };
+
+  it('round-trips starId and keeps it through nextTurnRef', () => {
+    const ref = { ...base, starId: 'aaaabbbbcccc' };
+    expect(decodeRef(encodeRef(ref))).toEqual(ref);
+    const next = nextTurnRef(ref);
+    expect(next.starId).toBe('aaaabbbbcccc');
+    expect(next.c).toBe(2);
+    expect(decodeRef(encodeRef(next))).toEqual(next);
+  });
+
+  it('a payload without bit 10 (old bytes) decodes with starId undefined', () => {
+    const legacy = encodeRef(base); // 无 starId → bit 10 未置位，与 B1 前字节相同
+    const decoded = decodeRef(legacy);
+    expect(decoded).toEqual(base);
+    expect(decoded.starId).toBeUndefined();
+    expect('starId' in decoded).toBe(false);
+  });
+
+  it('an old parser meeting a starId payload gets trailing bytes + upgrade teaching (designed skew path)', () => {
+    // 模拟旧版视角：无 bit 10 的载荷后跟着 starId 段（packStr 同款 varint-len utf8）
+    const field = Buffer.concat([Buffer.from([12]), Buffer.from('aaaabbbbcccc', 'utf8')]);
+    const withField = 'mc2_' + Buffer.concat([Buffer.from(encodeRef(base).slice(4), 'base64url'), field]).toString('base64url');
+    expect(() => decodeRef(withField)).toThrow(/trailing bytes/);
+    expect(() => decodeRef(withField)).toThrow(/版本较新/);
+  });
+
+  it('extra bytes after the starId field still report trailing bytes', () => {
+    const buf = Buffer.from(encodeRef({ ...base, starId: 'aaaabbbbcccc' }).slice(4), 'base64url');
+    const tampered = 'mc2_' + Buffer.concat([buf, Buffer.from([0x00])]).toString('base64url');
+    expect(() => decodeRef(tampered)).toThrow(/trailing bytes/);
+  });
+});

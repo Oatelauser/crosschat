@@ -1,8 +1,8 @@
 import { Buffer } from 'node:buffer';
-import { existsSync } from 'node:fs';
 import { hostname as osHostname } from 'node:os';
 import { join } from 'node:path';
 import { MultichatError } from '../errors.js';
+import { readNodeConfig } from '../serve/node.js';
 import type { ClaudeRegistryScan } from '../claude/registry.js';
 import type { CodexThreadSummary } from '../codex/client.js';
 import type { ClaudeDeliveryTarget } from '../claude/deliver.js';
@@ -89,17 +89,26 @@ export interface SendDeps {
   tcpBaseDir?: string;
   /** B2.1：ssh config 全文（回信自动补全判"对端有无 ssh 别名"用）；缺省=无别名可查。 */
   sshConfigText?: () => string | undefined;
+  /** B1 多星：tcp 投递管线传入的本腿 broker 星标识——签发的 ref 盖 starId；单机/ssh 恒缺省。 */
+  refStarId?: string;
 }
 
 /**
  * B2.1 回信自动补全三分支（零回归规则）：ssh config 有对端 Host 别名 → 照旧
- * ssh（既有对话字节不变）；无别名且本机有 node.json → tcp（tcp 对话的 m=mid8，
- * 必然不是 ssh 别名，落到本分支）；其余照旧 ssh。纯函数便于直测。
+ * ssh（既有对话字节不变）；无别名且本机有可用 tcp 条目 → tcp（tcp 对话的
+ * m=mid8，必然不是 ssh 别名，落到本分支）；其余照旧 ssh。纯函数便于直测。
+ * B1：判据从"node.json 文件存在"收紧为"readNodeConfig 成功"（成功即条目
+ * 非空）——坏文件/空形状不再把回信引上必死的 tcp 腿。
  */
 export function pickAutoVia(remoteM: string, ctx: { sshConfigText?: () => string | undefined; tcpBaseDir?: string }): string {
   if (!sshConfigHasAlias(ctx.sshConfigText?.(), remoteM)) {
-    if (ctx.tcpBaseDir !== undefined && existsSync(join(ctx.tcpBaseDir, 'tcp', 'node.json'))) {
-      return `tcp:${remoteM}`;
+    if (ctx.tcpBaseDir !== undefined) {
+      try {
+        readNodeConfig(join(ctx.tcpBaseDir, 'tcp', 'node.json'));
+        return `tcp:${remoteM}`;
+      } catch {
+        // 未入网/node.json 不可用 → 照旧 ssh
+      }
     }
   }
   return `ssh:${remoteM}`;
@@ -320,6 +329,12 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     origin.mid !== localMid
       ? `⚠ 两台机器同名 (${here})：已按跨机路由（machine-id 不同）。建议改名避免混淆。`
       : undefined;
+  // B1 多星：tcp 投递管线（节点守护/broker 自投递）经 refStarId 传入本腿星
+  // 标识，签发/续期的 ref 盖上它——发送侧路由成为纯函数 f(ref, node.json)。
+  // 单机与 ssh 路径恒 undefined：ref 字节不变（零回归锚点）。
+  if (deps.refStarId !== undefined && newRef.starId === undefined) {
+    newRef = { ...newRef, starId: deps.refStarId };
+  }
   const finish = (out: string): string => {
     if (collision === undefined) return out;
     if (args.json === true) {

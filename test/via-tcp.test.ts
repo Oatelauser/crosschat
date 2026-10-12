@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
 import { registryFileOf, writeRegistry } from '../src/serve/registry.js';
 import { FileInbox } from '../src/serve/file-channel.js';
-import { runViaTcpSend, tcpTimeoutMs } from '../src/serve/via-tcp.js';
+import { runViaTcpSend, selectBrokerEntry, tcpTimeoutMs } from '../src/serve/via-tcp.js';
+import type { BrokerEntry } from '../src/serve/node.js';
+import { encodeRef } from '../src/ref.js';
 import { runSend, type SendDeps } from '../src/commands/send.js';
 import { MultichatError } from '../src/errors.js';
 import type { SendLogEntry } from '../src/send-log.js';
@@ -264,4 +266,122 @@ describe('tcpTimeoutMs', () => {
     expect(tcpTimeoutMs({ CROSSCHAT_TCP_TIMEOUT_MS: '3000' })).toBe(3_000);
     expect(tcpTimeoutMs({ CROSSCHAT_TCP_TIMEOUT_MS: 'wat' })).toBe(120_000);
   });
+});
+
+describe('B1 multi-star entry selection (selectBrokerEntry)', () => {
+  const entries: BrokerEntry[] = [
+    { host: '10.0.0.1', port: 1, alias: 'alpha', starId: 'aaaa11110000', key: 'a' },
+    { host: '10.0.0.2', port: 2, alias: 'beta', starId: 'bbbb22220000', key: 'b' },
+  ];
+  const convWith = (starId?: string): string =>
+    encodeRef({
+      v: 1,
+      f: { p: 'human' },
+      t: { p: 'claude', id: 'a3f9c2e1-5b7d-4f8a-9c21-8e4d2b6a0f33' },
+      n: 'ab',
+      c: 1,
+      ...(starId === undefined ? {} : { starId }),
+    });
+
+  function expectUsage(fn: () => unknown): MultichatError {
+    try {
+      fn();
+      expect.unreachable('should have thrown USAGE');
+    } catch (err) {
+      expect(err).toBeInstanceOf(MultichatError);
+      expect((err as MultichatError).code).toBe('USAGE');
+      return err as MultichatError;
+    }
+  }
+
+  it('a: selector matches alias exactly first, then a unique starId prefix', () => {
+    expect(selectBrokerEntry(entries, 'beta', undefined)).toBe(entries[1]);
+    expect(selectBrokerEntry(entries, 'aaaa11', undefined)).toBe(entries[0]);
+    expect(selectBrokerEntry(entries, 'bbbb', undefined)).toBe(entries[1]);
+    // 别名优先于前缀：选择器恰为别名时不看 starId
+    expect(selectBrokerEntry([...entries, { host: 'h', port: 3, alias: 'be', starId: 'beta0000', key: 'x' }], 'beta', undefined)).toBe(entries[1]);
+  });
+
+  it('a: an ambiguous starId prefix teaches lengthening', () => {
+    const twins: BrokerEntry[] = [
+      { host: 'h1', port: 1, alias: 'one', starId: 'aaaa11110000', key: 'k' },
+      { host: 'h2', port: 2, alias: 'two', starId: 'aaaa22220000', key: 'k' },
+    ];
+    const err = expectUsage(() => selectBrokerEntry(twins, 'aaaa', undefined));
+    expect(err.message).toContain('命中多个星');
+    expect(err.message).toContain('加长');
+  });
+
+  it('a: a selector with no hit lists every entry', () => {
+    const err = expectUsage(() => selectBrokerEntry(entries, 'zzz', undefined));
+    expect(err.message).toContain('alpha');
+    expect(err.message).toContain('beta');
+    expect(err.message).toContain('aaaa11110000');
+  });
+
+  it('b: a bare via with --conversation routes by ref.starId exact match', () => {
+    expect(selectBrokerEntry(entries, undefined, convWith('bbbb22220000'))).toBe(entries[1]);
+    expect(selectBrokerEntry(entries, undefined, convWith('aaaa11110000'))).toBe(entries[0]);
+  });
+
+  it('b: ref.starId absent from node.json teaches config check', () => {
+    const err = expectUsage(() => selectBrokerEntry(entries, undefined, convWith('cccc33330000')));
+    expect(err.message).toContain('cccc33330000');
+    expect(err.message).toContain('不在本机 node.json');
+    expect(err.message).toContain('向管理员索取');
+  });
+
+  it('c: a single entry is used bare; a conversation starId still routes or teaches (b precedes c)', () => {
+    const solo: BrokerEntry[] = [{ host: 'h', port: 9, starId: 'aaaa11110000', key: 'k' }];
+    expect(selectBrokerEntry(solo, undefined, undefined)).toBe(solo[0]);
+    expect(selectBrokerEntry(solo, undefined, convWith(undefined))).toBe(solo[0]);
+    expect(selectBrokerEntry(solo, undefined, convWith('aaaa11110000'))).toBe(solo[0]);
+    // ref 指向别的星：即使本机只有一条也教学（会话不经过本机的星）
+    const err = expectUsage(() => selectBrokerEntry(solo, undefined, convWith('cccc33330000')));
+    expect(err.message).toContain('不在本机 node.json');
+  });
+
+  it('d: multiple entries with no starId to go on list aliases and show the selector example', () => {
+    const err = expectUsage(() => selectBrokerEntry(entries, undefined, undefined));
+    expect(err.message).toContain('alpha');
+    expect(err.message).toContain('beta');
+    expect(err.message).toContain('--via tcp:alpha:');
+    const viaConversation = expectUsage(() => selectBrokerEntry(entries, undefined, convWith(undefined)));
+    expect(viaConversation.message).toContain('tcp:alpha:');
+  });
+});
+
+describe('B1 multi-entry node.json through the real send path', () => {
+  it('bare tcp with two entries refuses with the entry list; tcp:<alias>:<target> and ref.starId both route', async () => {
+    const h = await startBroker(async (frame) => ({ ...deliveredReceipt, id: frame.id }));
+    const fx = makeFixture(h);
+    writeFileSync(
+      join(fx.baseDir, 'tcp', 'node.json'),
+      JSON.stringify({
+        brokers: [
+          { host: '127.0.0.1', port: 1, alias: 'dead', starId: 'dddd00000000', key: key('d') },
+          { host: '127.0.0.1', port: h.port, alias: 'live', starId: 'aaaa11112222', key: key('k') },
+        ],
+        name: 'multi-star sender',
+      }),
+    );
+    // 裸 tcp：多条目教选择器（示例取第一条的别名）
+    const bare = await expectCode(runViaTcpSend({ via: 'tcp:broker-host', to: 'boss' } as never, 'x', fx.deps), 'USAGE');
+    expect(bare.message).toContain('dead');
+    expect(bare.message).toContain('--via tcp:dead:');
+    // 选择器走别名 → 连上 live 条目
+    const out = await runViaTcpSend({ via: 'tcp:live:broker-host', to: 'boss' } as never, 'hello', fx.deps);
+    expect(out).toContain('delivered to boss@broker-host');
+    // 裸 tcp + --conversation（ref.starId=live 的星）→ 同样连上
+    const conv = encodeRef({
+      v: 1,
+      f: { p: 'human' },
+      t: { p: 'claude', id: 'a3f9c2e1-5b7d-4f8a-9c21-8e4d2b6a0f33' },
+      n: 'ab',
+      c: 1,
+      starId: 'aaaa11112222',
+    });
+    const out2 = await runViaTcpSend({ via: 'tcp:broker-host', conversation: conv } as never, 'hi', fx.deps);
+    expect(out2).toContain('delivered to boss@broker-host');
+  }, 10_000);
 });

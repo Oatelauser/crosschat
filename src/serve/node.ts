@@ -404,7 +404,11 @@ export class NodeClient {
   }
 
   private async onDeliver(frame: DeliverFrame): Promise<void> {
-    const result = await deliverViaRunSend(frame, this.d.makeSendDeps());
+    // B1：经此腿投递签发的 ref 盖上本连接条目的星标识（握手时已校验/回填的
+    // entries[0]）——回信方按它选本机条目，路由成为纯函数 f(ref, node.json)。
+    const starId = this.d.config.entries[0]!.starId;
+    const deps = this.d.makeSendDeps();
+    const result = await deliverViaRunSend(frame, starId === undefined ? deps : { ...deps, refStarId: starId });
     this.send(result);
     this.log(`deliver ${frame.id} → ${result.status}${result.status === 'error' ? ` (${result.code})` : ''}`);
   }

@@ -18,7 +18,7 @@ import type { SendArgs, SendDeps } from '../commands/send.js';
 import { encodeFrame, ERR, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
 import type { ErrorFrame, FileResultFrame, Frame, ReceiptFrame, RosterMachine } from './protocol.js';
 import { defaultBaseDir, tcpDir } from './registry.js';
-import { readNodeConfig } from './node.js';
+import { readNodeConfig, type BrokerEntry } from './node.js';
 import { FILE_CHUNK_BYTES, FILE_MAX_BYTES, readFileForSend } from './file-channel.js';
 
 /** 发起侧记账：与 runViaSend（ssh 腿）同款字段——tcp/ssh 两形态共用此 helper。 */
@@ -156,11 +156,61 @@ class SenderConn {
   }
 }
 
+/**
+ * B1 多星条目选择（纯函数，send 与 --file 共用一条 conn，在此一次选定）：
+ * a. `tcp:<选择器>:<目标>`：选择器先按条目 alias 精确匹配，无命中再按
+ *    starId 前缀唯一匹配（多命中教加长，零命中列全部条目）；
+ * b. 裸 `tcp:<目标>` 且带 --conversation：按 ref.starId 精确匹配（无匹配教
+ *    核对配置/索取）；ref 无 starId 或解不开则落到 c/d（单条目行为不变）；
+ * c. 裸且仅 1 条 → 用它（B0 前的今日行为）；
+ * d. 裸且多条 → 教学报错：列出 alias+starId，示例 `--via tcp:<alias>:<目标>`。
+ */
+export function selectBrokerEntry(entries: BrokerEntry[], selector: string | undefined, conversation: string | undefined): BrokerEntry {
+  const listEntries = (): string => entries.map((e) => `${e.alias ?? '(无别名)'}(starId ${e.starId ?? '未登记'})`).join('、');
+  if (selector !== undefined) {
+    const byAlias = entries.find((e) => e.alias === selector);
+    if (byAlias !== undefined) return byAlias;
+    const byPrefix = entries.filter((e) => e.starId !== undefined && e.starId.startsWith(selector));
+    if (byPrefix.length === 1) return byPrefix[0]!;
+    if (byPrefix.length > 1) {
+      throw new MultichatError(
+        'USAGE',
+        `--via 选择器 ${selector} 的 starId 前缀命中多个星（${byPrefix.map((e) => e.alias ?? e.starId).join('、')}）——加长前缀使其唯一`,
+      );
+    }
+    throw new MultichatError('USAGE', `--via 选择器 ${selector} 不匹配任何条目——本机 node.json 现有：${listEntries()}`);
+  }
+  if (conversation !== undefined) {
+    let refStarId: string | undefined;
+    try {
+      refStarId = decodeRef(conversation).starId;
+    } catch {
+      // 选路解不开的 ref 不在这里抢报错——交给后续投递路径的教学
+    }
+    if (refStarId !== undefined) {
+      const hit = entries.find((e) => e.starId === refStarId);
+      if (hit === undefined) {
+        throw new MultichatError('USAGE', `会话经由的星（starId ${refStarId}）不在本机 node.json——核对配置或向管理员索取`);
+      }
+      return hit;
+    }
+  }
+  if (entries.length === 1) return entries[0]!;
+  throw new MultichatError(
+    'USAGE',
+    `本机 node.json 有 ${entries.length} 个 broker 条目，裸 tcp:<目标> 无法选择——现有：${listEntries()}；示例：--via tcp:${entries[0]!.alias ?? entries[0]!.starId}:<目标>`,
+  );
+}
+
 /** via 分支入口（send.ts 在 ssh 分流前调用）。body 在 --file 无 --body 时可为 undefined。 */
 export async function runViaTcpSend(args: SendArgs, body: string | undefined, deps: SendDeps): Promise<string> {
-  const target = args.via!.slice(4);
+  // B1：`tcp:<选择器>:<目标>`——第一个':'前是选择器（alias/starId 前缀），其余是目标
+  const viaRest = args.via!.slice(4);
+  const sep = viaRest.indexOf(':');
+  const selector = sep > 0 ? viaRest.slice(0, sep) : undefined;
+  const target = sep > 0 ? viaRest.slice(sep + 1) : viaRest;
   if (target === '') {
-    throw new MultichatError('USAGE', '--via tcp:<机器名>：机器名不能为空（broker 机上 crosschat serve --list 可查）');
+    throw new MultichatError('USAGE', '--via tcp:<机器名>：机器名不能为空（broker 机上 crosschat serve --list 可查；多星机可 --via tcp:<别名>:<机器名> 指定）');
   }
   const config = readNodeConfig(join(tcpDir(deps.tcpBaseDir ?? defaultBaseDir()), 'node.json'));
   const timeoutMs = tcpTimeoutMs(deps.env);
@@ -188,8 +238,8 @@ export async function runViaTcpSend(args: SendArgs, body: string | undefined, de
   // B2.1：删同机 hostname 特例——本机目标照常上 broker，resolveTarget 按
   // machineId 判定本机后走 deliverLocal（同机判定不再比对 hostname 字符串）。
 
-  // B0：多条目暂取第一条（路由选择是 B1 批次）
-  const entry = config.entries[0]!;
+  // B1：按 选择器/--conversation.starId/条目数 选本机条目（见 selectBrokerEntry）
+  const entry = selectBrokerEntry(config.entries, selector, args.conversation);
   const url = `ws://${entry.host}:${entry.port}`;
   const conn = await SenderConn.open(url, entry.key, deps.machineId?.(), Math.min(timeoutMs, 15_000));
   try {

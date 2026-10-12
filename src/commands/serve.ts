@@ -4,7 +4,7 @@
  * runSend，fileInbox 落盘本机收件）。
  */
 import { execSync, spawn } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir, hostname, networkInterfaces, type NetworkInterfaceInfo } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -195,7 +195,7 @@ export function ensureSelfEntry(deps: ServeDeps, registryFile: string, port: num
     return { status: 'written' };
   }
   // 已存在：宽松解析判状态（不抛——这里只是体检，坏文件交给上层教学报错）
-  let parsed: { broker?: { host?: string; port?: number }; key?: string } | undefined;
+  let parsed: { broker?: { host?: string; port?: number; starId?: unknown }; key?: string } | undefined;
   try {
     parsed = JSON.parse(readFileSync(nodeJson, 'utf8')) as typeof parsed;
   } catch {
@@ -205,7 +205,26 @@ export function ensureSelfEntry(deps: ServeDeps, registryFile: string, port: num
   if (typeof broker?.host !== 'string' || typeof parsed?.key !== 'string') return { status: 'stale' };
   if (broker.host !== '127.0.0.1') return { status: 'foreign', host: broker.host, port: broker.port };
   if (parsed.key !== self.key || broker.port !== port) return { status: 'stale' };
+  // B1：钥匙/host/port 匹配但条目缺 starId（B0 之前写下的自用 node.json）→
+  // 原子补写注册表 starId，其余字段不碰
+  if (broker.starId === undefined) backfillSelfStarId(nodeJson, ensureStarId(registryFile));
   return { status: 'ok' };
+}
+
+/** B1：自用 node.json 的 broker 条目补 starId（tmp+rename 原子写，风格同 B0 backfillStarId）；失败不倒 serve。 */
+function backfillSelfStarId(nodeJson: string, starId: string): void {
+  try {
+    const raw = JSON.parse(readFileSync(nodeJson, 'utf8')) as { broker?: Record<string, unknown> } | null;
+    if (raw === null || typeof raw !== 'object' || raw.broker === null || typeof raw.broker !== 'object' || raw.broker.starId !== undefined) {
+      return;
+    }
+    raw.broker.starId = starId;
+    const tmp = `${nodeJson}.tmp`;
+    writeFileSync(tmp, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
+    renameSync(tmp, nodeJson);
+  } catch {
+    // 补写失败不倒 serve（下次启动再试）
+  }
 }
 
 /** 自登记结局出声（written/foreign/stale 三种；ok 静默——状态没变不刷屏）。 */
@@ -233,6 +252,9 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
         }
       }
     : (line: string) => deps.stdout(line);
+  // B1 多星：broker 自投递签发的 ref 盖注册表星标识（与 gen-key 分发的钥匙同源）
+  const registryFile = registryFileOf(deps.baseDir);
+  const registryStarId = ensureStarId(registryFile);
   // B2：broker 机自己也是全权节点——deliverLocal 接 runSend、file 落本机收件。
   const deliverLocal = deps.makeSendDeps === undefined
     ? defaultDeliverLocal
@@ -246,7 +268,7 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
           conversation: frame.conversation,
           origin: frame.origin,
         };
-        const r = await deliverViaRunSend(deliver, deps.makeSendDeps!());
+        const r = await deliverViaRunSend(deliver, { ...deps.makeSendDeps!(), refStarId: registryStarId });
         // deliverViaRunSend 的失败即 ResultFrame{status:'error'}——规整为
         // ErrorFrame，broker 本地分支的失败语义（op:'error'）保持 B1 不变。
         return r.status === 'error'
@@ -255,7 +277,7 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
       };
   // B2.1：起服务前自登记（本机=全权成员，mid8/名字可寻址 + 本机 node.json）。
   // 后台子进程不重复出声——父进程 spawn 前已向控制台播报过。
-  const self = ensureSelfEntry(deps, registryFileOf(deps.baseDir), port ?? readRegistry(registryFileOf(deps.baseDir)).port ?? DEFAULT_PORT);
+  const self = ensureSelfEntry(deps, registryFile, port ?? readRegistry(registryFile).port ?? DEFAULT_PORT);
   if (!detached) announceSelfEntry(deps, self);
   const broker = new Broker({
     registryFile: registryFileOf(deps.baseDir),

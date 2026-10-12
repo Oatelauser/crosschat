@@ -304,18 +304,67 @@ describe('B2.1 reply loop closure', () => {
     expect(envelopes[0]).not.toContain('--via ssh:');
   });
 
-  it('pickAutoVia three branches: ssh alias wins byte-identically, tcp when node.json, else ssh', () => {
+  it('pickAutoVia three branches: ssh alias wins byte-identically, tcp when a usable entry exists, else ssh', () => {
     const sshConfig = 'Host build01 peer\n  HostName 10.0.0.2\n';
     // 1) ssh config 有别名 → 照旧 ssh（字节不变）
     expect(pickAutoVia('build01', { sshConfigText: () => sshConfig, tcpBaseDir: 'x' })).toBe('ssh:build01');
-    // 2) 无别名 + 本机有 node.json → tcp（tcp 对话的 m=mid8）
+    // 2) 无别名 + 本机有可用 tcp 条目（readNodeConfig 成功）→ tcp（tcp 对话的 m=mid8）
     const home = mkdtempSync(join(root, 'via-'));
     mkdirSync(join(home, 'tcp'), { recursive: true });
-    writeFileSync(join(home, 'tcp', 'node.json'), '{}');
+    writeFileSync(join(home, 'tcp', 'node.json'), JSON.stringify({ broker: { host: '10.0.0.9', port: 7260 }, key: 'k' }));
     expect(pickAutoVia('abcd1234', { sshConfigText: () => sshConfig, tcpBaseDir: home })).toBe('tcp:abcd1234');
+    // B1：node.json 存在但不可用（坏形状/空条目）→ 不再引上必死的 tcp 腿，照旧 ssh
+    writeFileSync(join(home, 'tcp', 'node.json'), '{}');
+    expect(pickAutoVia('abcd1234', { sshConfigText: () => sshConfig, tcpBaseDir: home })).toBe('ssh:abcd1234');
     // 3) 无别名 + 无 node.json → 照旧 ssh
     expect(pickAutoVia('abcd1234', { sshConfigText: () => sshConfig, tcpBaseDir: join(root, 'nope') })).toBe('ssh:abcd1234');
     expect(pickAutoVia('build01', {})).toBe('ssh:build01');
+  });
+});
+
+describe('B1 self node.json starId backfill (ensureSelfEntry)', () => {
+  function selfDeps(dir: string): ServeDeps {
+    return { ...realServeDeps(), baseDir: dir, machineId: () => 'a1b2c3d40000', hostname: () => 'hub' };
+  }
+
+  it('backfills the registry starId into a matching entry that lacks it, touching nothing else', () => {
+    const dir = mkdtempSync(join(root, 'b1self-'));
+    const deps = selfDeps(dir);
+    const registryFile = registryFileOf(dir);
+    mkdirSync(tcpDir(dir), { recursive: true });
+    const nodeJson = join(tcpDir(dir), 'node.json');
+    writeRegistry(registryFile, {
+      starId: 'aaaabbbbcccc',
+      nodes: [{ label: 'self', key: 'k', machineId: 'a1b2c3d40000', machineName: 'hub', addedAt: '2026-01-01T00:00:00.000Z' }],
+    });
+    writeFileSync(nodeJson, JSON.stringify({ broker: { host: '127.0.0.1', port: 7260, alias: 'hub' }, key: 'k', name: 'hub' }, null, 2));
+    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
+    const parsed = JSON.parse(readFileSync(nodeJson, 'utf8')) as { broker: { host: string; port: number; alias: string; starId?: string }; key: string; name: string };
+    expect(parsed.broker.starId).toBe('aaaabbbbcccc');
+    expect(parsed.key).toBe('k');
+    expect(parsed.name).toBe('hub');
+    // 注册表 starId 原样未被改写
+    expect((JSON.parse(readFileSync(registryFile, 'utf8')) as { starId?: string }).starId).toBe('aaaabbbbcccc');
+  });
+
+  it('generates a starId when the registry lacks one; never rewrites an entry that already has one', () => {
+    const dir = mkdtempSync(join(root, 'b1self-'));
+    const deps = selfDeps(dir);
+    const registryFile = registryFileOf(dir);
+    mkdirSync(tcpDir(dir), { recursive: true });
+    const nodeJson = join(tcpDir(dir), 'node.json');
+    writeRegistry(registryFile, {
+      nodes: [{ label: 'self', key: 'k', machineId: 'a1b2c3d40000', machineName: 'hub', addedAt: '2026-01-01T00:00:00.000Z' }],
+    });
+    writeFileSync(nodeJson, JSON.stringify({ broker: { host: '127.0.0.1', port: 7260, alias: 'hub' }, key: 'k', name: 'hub' }, null, 2));
+    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
+    const starId = (JSON.parse(readFileSync(nodeJson, 'utf8')) as { broker: { starId?: string } }).broker.starId;
+    expect(starId).toMatch(/^[0-9a-f]{12}$/);
+    expect((JSON.parse(readFileSync(registryFile, 'utf8')) as { starId?: string }).starId).toBe(starId);
+    // 已有 starId（即便与注册表不同）→ 不重写
+    writeFileSync(nodeJson, JSON.stringify({ broker: { host: '127.0.0.1', port: 7260, alias: 'hub', starId: 'deadbeef0000' }, key: 'k', name: 'hub' }, null, 2));
+    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
+    expect((JSON.parse(readFileSync(nodeJson, 'utf8')) as { broker: { starId?: string } }).broker.starId).toBe('deadbeef0000');
   });
 });
 
