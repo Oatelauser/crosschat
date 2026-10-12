@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.5.4] - 2026-10-12
+
 ### E0：星名字段换轨（词表自解释）
 
 - node.json 词表：条目 `name`=星名（**broker 权威**：`serve --name` 设置/hostname 缺省，info 帧下发、守护连接自动同步覆盖，改名重启 broker 全网 2s 收敛）、顶层 `showName`=本机显示名（自报 roster 称呼用）；旧字段 alias/顶层 name 读取层自动映射、同步时清旧键无缝换轨
