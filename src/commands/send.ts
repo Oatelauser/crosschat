@@ -197,22 +197,11 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   const body = args.fileArg !== undefined ? resolveFileBody(args, deps) : resolveBody(args, deps);
   const size = body === undefined ? 0 : Buffer.byteLength(body, 'utf8');
   // 票A：上限三层来源（--max-body-kb > CROSSCHAT_MAX_BODY_KIB > 16384 兜底）。
-  // 这里只做配置值的早期快速失败（默认 16384 时与 004 现状逐字节同序同码）；
   // 端点封顶（claude 64KiB / codex 1MiB）要等目标解析出来才能补检——生效值
   // = min(配置值, 目标端点封顶)。来源值自身有 16MiB 绝对上界，到顶时教学
   // 直接说"提额无效"，不再指一条走不通的路。
   const configuredMax = resolveConfiguredMaxBodyBytes(args.maxBodyKb, deps.env);
   const turnBudget = resolveMaxTurn(args.maxTurn, deps.env);
-  if (size > configuredMax) {
-    const atCeiling = configuredMax === MAX_BODY_KIB_CEILING * 1_024;
-    // 远端来件（008 D5：--origin 只在 --via 的接收腿出现）拒绝大正文时，读
-    // 报错的是发送方——单机教学（本机提额/落盘路径）对它全是误导，换远端
-    // 变体（scp 旁路 + 上限属接收方操作者）。
-    throw new MultichatError(
-      'MESSAGE_TOO_LARGE',
-      bodyTooLargeMessage(size, configuredMax, args.via, atCeiling ? 'absolute' : undefined, args.origin !== undefined),
-    );
-  }
 
   // 信封瘦身 A+：回信命令不再携带 --via，执行侧在此按 ref 补齐路由（显式
   // --via 一字不动；解不开的 ref 照旧交给主路径报错）。历史注记：B11 乒乓
@@ -229,6 +218,22 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     if (ref !== undefined) args = await autoViaFromRef(args, deps, ref, here, localMid);
   }
 
+  // D0：配置值检查在路由定型后执行（autoVia 可能补挂 via）。tcp 形态的尺寸
+  // 治理整体移交 via-tcp——1MiB 预检线变为自动降级文件通道、64MiB
+  // FILE_TOO_LARGE 封顶，配置值与 16MiB 绝对上界不再前置拦截 tcp（替代原
+  // tcp 分支的绝对上界）；单机/ssh 路径字节不变。
+  const viaTcp = args.via !== undefined && args.via.startsWith('tcp:');
+  if (size > configuredMax && !viaTcp) {
+    const atCeiling = configuredMax === MAX_BODY_KIB_CEILING * 1_024;
+    // 远端来件（008 D5：--origin 只在 --via 的接收腿出现）拒绝大正文时，读
+    // 报错的是发送方——单机教学（本机提额/落盘路径）对它全是误导，换远端
+    // 变体（scp 旁路 + 上限属接收方操作者）。
+    throw new MultichatError(
+      'MESSAGE_TOO_LARGE',
+      bodyTooLargeMessage(size, configuredMax, args.via, atCeiling ? 'absolute' : undefined, args.origin !== undefined),
+    );
+  }
+
   // Federation (008/B1): everything via lives behind this early branch — the
   // configured-cap check above applies to cross-machine sends too (D6), and the
   // local path below stays byte-identical when --via is absent (D9).
@@ -240,10 +245,11 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     }
     // 票A：--via 本地无法解析远端目标——按最宽端点（codex 1MiB）预检，远端
     // 自行复检（现状语义）。--max-body-kb 不透传远端：远程命令面保持固定
-    // 白名单（buildSshArgv），远端用自己的两层来源决定上限。
+    // 白名单（buildSshArgv），远端用自己的两层来源决定上限。D0：tcp 不再
+    // 预检——超 1MiB 由 via-tcp 自动降级文件通道。
     const viaLimit = Math.min(configuredMax, CODEX_ENDPOINT_MAX_BODY_BYTES);
-    if (body !== undefined && size > viaLimit) {
-      throw new MultichatError('MESSAGE_TOO_LARGE', bodyTooLargeMessage(size, viaLimit, args.via, tcp ? 'tcp-precheck' : 'ssh-precheck'));
+    if (!tcp && body !== undefined && size > viaLimit) {
+      throw new MultichatError('MESSAGE_TOO_LARGE', bodyTooLargeMessage(size, viaLimit, args.via, 'ssh-precheck'));
     }
     if (tcp) return runViaTcpSend(args, body, deps);
     return runViaSend(args, body as string, deps);

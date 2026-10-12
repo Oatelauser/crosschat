@@ -3,10 +3,8 @@
  * framing plus an inline reply tutorial, so the protocol teaches itself
  * without depending on prompt wording (low-invasion constraint).
  *
- * 票A 第六单政策：上限教学行永远静态"超 16KiB"——信封的读者是收方，数字
- * 是发方的，动态值教错人（收方会误当自己的上限）；宁可少报不会错（提额
- * 世界里大内容要么直接发成功、要么报错报出本机准确值）。准确数字只住各侧
- * 自己的报错里，信封只教方向不教数字。
+ * D0：静态教学行（--to 接续 + 超 16KiB 落盘）已删——协议教学只住 hint
+ * 命令与各侧报错；大小数字是发方的事，收方读了会误当自己的上限。
  */
 
 /** Claude trims very long from-names; keep ours within 64 codepoints. */
@@ -58,7 +56,6 @@ export function composeEnvelope(input: EnvelopeInput): string {
     `<cross-session-message from-name="${escapeAttr(fromName)}" turn="${turnAttr}"${aliasAttr}>\n` +
     `<crosschat-reply-hint reply-as="${escapeAttr(input.toName)}">` +
     `回复请运行: crosschat send --conversation ${input.ref} --body "<你的回复>"</crosschat-reply-hint>\n` +
-    `新话题或对话已推进时: crosschat send --to <名字> --body "..."（--to 自动接续该端对最近对话）；超 16KiB 请写文件后只发路径\n` +
     `${body}\n` +
     `</cross-session-message>`
   );

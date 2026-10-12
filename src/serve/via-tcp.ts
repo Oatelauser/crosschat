@@ -5,14 +5,17 @@
  * 分支同款。文件走 file-begin/chunk/end 分块流（256KiB/块，64MiB 上限）。
  */
 import { randomUUID } from 'node:crypto';
-import { hostname as osHostname } from 'node:os';
+import { hostname as osHostname, tmpdir as osTmpdir } from 'node:os';
 import { join } from 'node:path';
+import { rmSync, writeFileSync } from 'node:fs';
+import { Buffer } from 'node:buffer';
 import { WebSocket } from 'ws';
 import { MultichatError } from '../errors.js';
 import { encodeOrigin, originDisplayName } from '../federation.js';
 import { identityKey, resolveCallerIdentity, type CallerIdentity } from '../identity.js';
 import { recordConversation } from '../conversations.js';
 import { decodeRef } from '../ref.js';
+import { CODEX_ENDPOINT_MAX_BODY_BYTES } from '../limits.js';
 import type { SendLogEntry } from '../send-log.js';
 import type { SendArgs, SendDeps } from '../commands/send.js';
 import { encodeFrame, ERR, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
@@ -242,16 +245,46 @@ export async function runViaTcpSend(args: SendArgs, body: string | undefined, de
   const entry = selectBrokerEntry(config.entries, selector, args.conversation);
   const url = `ws://${entry.host}:${entry.port}`;
   const conn = await SenderConn.open(url, entry.key, deps.machineId?.(), Math.min(timeoutMs, 15_000));
+  // D0 自动降级：正文超 1MiB tcp 预检线不再报 MESSAGE_TOO_LARGE，改落
+  // os.tmpdir 唯一临时文件走既有 --file 分块流（≤64MiB 一次成功）。成功删
+  // 临时文件并注明对端落地路径；任何失败保留原文、本机路径进教学。显式
+  // --file 的行为一个字节不变（降级只在无 --file 时发生）。
+  let tmpFile: string | undefined;
   try {
+    if (args.fileArg === undefined && body !== undefined && Buffer.byteLength(body, 'utf8') > CODEX_ENDPOINT_MAX_BODY_BYTES) {
+      tmpFile = join(osTmpdir(), `crosschat-msg-${randomUUID().slice(0, 8)}.txt`);
+      writeFileSync(tmpFile, body, 'utf8');
+    }
     let finalBody = body;
-    if (args.fileArg !== undefined) {
-      const path = await sendFile(conn, args.fileArg, target, timeoutMs, transportFailure);
-      finalBody = body ?? `文件 ${fileNameOf(args.fileArg)} 已送达：${path}`;
+    let landedPath: string | undefined;
+    const filePath = args.fileArg ?? tmpFile;
+    if (filePath !== undefined) {
+      const path = await sendFile(conn, filePath, target, timeoutMs, transportFailure);
+      landedPath = path;
+      finalBody =
+        tmpFile !== undefined
+          ? `文件 ${fileNameOf(tmpFile)} 已送达：${path}`
+          : body ?? `文件 ${fileNameOf(filePath)} 已送达：${path}`;
     }
     if (finalBody === undefined || finalBody === '') {
       throw new MultichatError('BODY_REQUIRED', 'Message body is required: pass --body "<text>" or pipe the message on stdin.');
     }
-    return await sendBody(conn, args, finalBody, origin, target, timeoutMs, deps, caller, logNow, logTo, transportFailure);
+    const out = await sendBody(conn, args, finalBody, origin, target, timeoutMs, deps, caller, logNow, logTo, transportFailure);
+    if (tmpFile === undefined) return out;
+    rmSync(tmpFile, { force: true });
+    if (args.json === true) {
+      try {
+        return JSON.stringify({ ...JSON.parse(out) as Record<string, unknown>, file: landedPath });
+      } catch {
+        return out;
+      }
+    }
+    return `${out}\n正文超限已自动转文件通道：${landedPath}`;
+  } catch (err) {
+    if (tmpFile !== undefined && err instanceof Error) {
+      err.message += `\n正文原文已保留: ${tmpFile}`;
+    }
+    throw err;
   } finally {
     conn.close();
   }

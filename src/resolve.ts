@@ -11,6 +11,10 @@ import type { CodexThreadSummary } from './codex/client.js';
  * Names always win over ids: only when exact-name matching misses on both
  * sides do we try codex thread id addressing (optional `codex/` prefix + id8
  * or full lowercase uuid) so unnamed `codex exec` threads stay reachable.
+ *
+ * D0 判定序：全名精确（字节不变）→ 前缀匹配（大小写不敏感、只前缀不包含，
+ * 跨两侧已命名对象）→ 唯一命中投递 / 多命中列候选教完整名 / 零命中照旧走
+ * id 寻址与 NAME_NOT_FOUND。
  */
 
 export type ResolvedTarget =
@@ -46,6 +50,30 @@ export function resolveTargetByName(
   }
   if (claudeMatches.length === 1) return { side: 'claude', session: claudeMatches[0] };
   if (codexMatches.length === 1) return { side: 'codex', thread: codexMatches[0] };
+  // D0 前缀解析：精确未中才进场（空串前缀会命中一切，跳过）。命中对象跨
+  // 两侧合并计数——唯一才投递，多候选按 NAME_COLLISION 列名单式报错。
+  const lower = name.toLowerCase();
+  if (lower !== '') {
+    const claudePrefix = sessions.filter(
+      (session) => session.name !== undefined && session.sessionId !== '' && session.name.toLowerCase().startsWith(lower),
+    );
+    const codexPrefix = threads.filter((thread) => thread.name !== null && thread.name.toLowerCase().startsWith(lower));
+    const hits = claudePrefix.length + codexPrefix.length;
+    if (hits === 1) {
+      return claudePrefix.length === 1
+        ? { side: 'claude', session: claudePrefix[0] }
+        : { side: 'codex', thread: codexPrefix[0] };
+    }
+    if (hits > 1) {
+      const candidates = [...claudePrefix.map((s) => s.name!), ...codexPrefix.map((t) => t.name!)]
+        .map((n) => JSON.stringify(n))
+        .join(', ');
+      throw new MultichatError(
+        'NAME_COLLISION',
+        `Multiple agents match prefix ${JSON.stringify(name)}: ${candidates}. 用完整名重试。`,
+      );
+    }
+  }
   const idMatch = /^(?:codex\/)?([0-9a-f]{8}(?:-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?)$/.exec(name);
   if (idMatch !== null) {
     const id = idMatch[1];

@@ -146,3 +146,64 @@ describe('resolveTargetByName — codex id addressing (unnamed threads)', () => 
     if (resolved.side === 'claude') expect(resolved.session.pid).toBe(101);
   });
 });
+
+describe('resolveTargetByName — 前缀解析 (D0)', () => {
+  const prefixed: ClaudeSessionEntry[] = [
+    ...sessions,
+    { ...sessions[0], pid: 103, sessionId: 'cs-alpha-2', name: 'alphabet' },
+  ];
+
+  it('精确全名优先：存在同前缀名字时精确命中仍指它（字节不变路径）', () => {
+    const resolved = resolveTargetByName('alpha', prefixed, threads);
+    expect(resolved.side).toBe('claude');
+    if (resolved.side === 'claude') expect(resolved.session.pid).toBe(101);
+  });
+
+  it('唯一前缀命中即投递（claude 侧与 codex 侧）', () => {
+    const c = resolveTargetByName('bet', sessions, threads);
+    expect(c.side).toBe('claude');
+    if (c.side === 'claude') expect(c.session.pid).toBe(102);
+    const x = resolveTargetByName('work', sessions, threads);
+    expect(x.side).toBe('codex');
+    if (x.side === 'codex') expect(x.thread.id).toBe('team1111-aaaa');
+  });
+
+  it('大小写不敏感（两侧各自验证）', () => {
+    const bet = resolveTargetByName('BET', sessions, threads);
+    expect(bet.side).toBe('claude');
+    if (bet.side === 'claude') expect(bet.session.pid).toBe(102);
+    const work = resolveTargetByName('WORK', sessions, threads);
+    expect(work.side).toBe('codex');
+    if (work.side === 'codex') expect(work.thread.id).toBe('team1111-aaaa');
+  });
+
+  it('多前缀命中列候选并教完整名重试（跨两侧合并计数）', () => {
+    const err = expectCode(() => resolveTargetByName('al', prefixed, threads), 'NAME_COLLISION');
+    expect(err.message).toContain('"alpha"');
+    expect(err.message).toContain('"alphabet"');
+    expect(err.message).toContain('完整名');
+    // 一侧一个也算多命中：claude 'al+' 与 codex 'alpine'
+    const cross: CodexThreadSummary[] = [...threads, { id: 'alp33333-eeee', name: 'alpine', status: 'idle' }];
+    const crossErr = expectCode(() => resolveTargetByName('al', sessions, cross), 'NAME_COLLISION');
+    expect(crossErr.message).toContain('"alpha"');
+    expect(crossErr.message).toContain('"alpine"');
+  });
+
+  it('0 命中沿用 NAME_NOT_FOUND 列可用名；空串不当前缀', () => {
+    const err = expectCode(() => resolveTargetByName('zzz', sessions, threads), 'NAME_NOT_FOUND');
+    expect(err.message).toContain('"alpha"');
+    expect(err.message).toContain('"workteam"');
+    expectCode(() => resolveTargetByName('', sessions, threads), 'NAME_NOT_FOUND');
+  });
+
+  it('id8 / 完整 id 寻址不受前缀层影响（前缀 0 命中才落到 id 层）', () => {
+    const uuidA = '12345678-1111-7abc-89ab-000000000001';
+    const uuidThreads: CodexThreadSummary[] = [{ id: uuidA, name: null, status: 'idle' }];
+    const byId8 = resolveTargetByName('12345678', sessions, uuidThreads);
+    expect(byId8.side).toBe('codex');
+    if (byId8.side === 'codex') expect(byId8.thread.id).toBe(uuidA);
+    const byFull = resolveTargetByName(uuidA, sessions, uuidThreads);
+    expect(byFull.side).toBe('codex');
+    if (byFull.side === 'codex') expect(byFull.thread.id).toBe(uuidA);
+  });
+});

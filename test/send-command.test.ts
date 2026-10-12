@@ -554,14 +554,16 @@ describe('runSend configurable body cap (票A)', () => {
     expect(sshCalls).toBe(0);
   });
 
-  it('envelope teaching line stays static 16KiB even when the cap was raised (第六单政策)', async () => {
+  it('envelope carries no size teaching line even when the cap was raised (D0 删行)', async () => {
     await send(
       { to: 'workteam', bodyArg: 'y'.repeat(40 * 1_024), maxBodyKb: '64' },
       { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' },
     );
-    // 信封读者是收方、数字是发方的——动态值教错人；准确数字只住各侧报错里。
-    expect(codexDeliveries.at(-1)!.content).toContain('超 16KiB 请写文件后只发路径');
-    expect(codexDeliveries.at(-1)!.content).not.toContain('超 64KiB');
+    // 大小数字是发方的事——信封不教，教学只住 hint 命令与各侧报错。
+    const content = codexDeliveries.at(-1)!.content;
+    expect(content).not.toContain('新话题');
+    expect(content).not.toContain('16KiB');
+    expect(content).not.toContain('超 64KiB');
   });
 
   it('remote-origin rejections teach scp + receiver-side operator, never --max-body-kb (第六单)', async () => {

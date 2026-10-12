@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -19,6 +19,14 @@ afterEach(async () => {
 });
 const brokers: Broker[] = [];
 const key = (c: string) => c.repeat(64);
+
+/** D0 降级临时文件探针：os.tmpdir 里的 crosschat-msg-*（与跑前快照做差，历史残迹不干扰）。 */
+const msgTemps = (before?: Set<string>): string[] => {
+  const all = readdirSync(tmpdir())
+    .filter((f) => f.startsWith('crosschat-msg-'))
+    .map((f) => join(tmpdir(), f));
+  return before === undefined ? all : all.filter((f) => !before.has(f));
+};
 
 const deliveredReceipt: ResultFrame = {
   op: 'result',
@@ -210,16 +218,84 @@ describe('runViaTcpSend against a real broker', () => {
 });
 
 describe('send --via tcp: branch in runSend', () => {
-  it('prechecks the body with the tcp tail (teaches --file, never scp)', async () => {
+  it('D0: body over the 1MiB line auto-downgrades to the file channel (一次成功, temp deleted)', async () => {
+    const inboxDir = mkdtempSync(join(root, 'inbox-'));
+    const partsDir = mkdtempSync(join(root, 'parts-'));
+    const bodies: string[] = [];
+    const h = await startBroker(
+      async (frame) => {
+        bodies.push(frame.body);
+        return { ...deliveredReceipt, id: frame.id };
+      },
+      { inboxDir, partsDir },
+    );
+    const fx = makeFixture(h);
+    const before = new Set(msgTemps());
+    const big = 'x'.repeat(1_048_577);
+    const out = await runSend({ via: 'tcp:broker-host', to: 'boss', bodyArg: big }, fx.deps);
+    expect(out).toContain('delivered to boss@broker-host');
+    expect(out).toContain('正文超限已自动转文件通道：');
+    // 投递的正文是文件通道的自动通知（带对端落地路径），不是超长原文
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toContain('已送达');
+    expect(bodies[0]).toContain(join(inboxDir));
+    expect(bodies[0]).not.toContain(big.slice(0, 64));
+    // 对端落地文件内容 = 原文
+    const landed = out.split('正文超限已自动转文件通道：')[1]!.trim();
+    expect(readFileSync(landed, 'utf8')).toBe(big);
+    // 成功后临时文件已删（tmpdir 无新增 crosschat-msg-*）
+    expect(msgTemps(before)).toHaveLength(0);
+  }, 20_000);
+
+  it('D0: body over 64MiB still fails FILE_TOO_LARGE, keeping the原文 temp file with its path', async () => {
     const h = await startBroker(async () => deliveredReceipt);
     const fx = makeFixture(h);
-    const big = 'x'.repeat(1_048_577);
+    const before = new Set(msgTemps());
+    const huge = 'x'.repeat(64 * 1024 * 1024 + 1);
     const err = await expectCode(
-      runSend({ via: 'tcp:broker-host', to: 'boss', bodyArg: big }, fx.deps),
-      'MESSAGE_TOO_LARGE',
+      runSend({ via: 'tcp:broker-host', to: 'boss', bodyArg: huge }, fx.deps),
+      'FILE_TOO_LARGE',
     );
-    expect(err.message).toContain('--file <路径>');
-    expect(err.message).not.toContain('scp');
+    expect(err.message).toContain('64MiB');
+    expect(err.message).toContain('正文原文已保留');
+    const kept = msgTemps(before);
+    expect(kept).toHaveLength(1);
+    expect(err.message).toContain(kept[0]!);
+    rmSync(kept[0]!, { force: true });
+  }, 30_000);
+
+  it('D0: a failed downgraded send keeps the temp file and teaches its local path', async () => {
+    const inboxDir = mkdtempSync(join(root, 'inbox-'));
+    const partsDir = mkdtempSync(join(root, 'parts-'));
+    const h = await startBroker(
+      async () => ({ op: 'error' as const, code: 'NAME_NOT_FOUND', message: 'no session named nobody' }),
+      { inboxDir, partsDir },
+    );
+    const fx = makeFixture(h);
+    const before = new Set(msgTemps());
+    const err = await expectCode(
+      runSend({ via: 'tcp:broker-host', to: 'nobody', bodyArg: 'x'.repeat(1_048_577) }, fx.deps),
+      'NAME_NOT_FOUND',
+    );
+    expect(err.message).toContain('[via tcp:broker-host]');
+    expect(err.message).toContain('正文原文已保留');
+    const kept = msgTemps(before);
+    expect(kept).toHaveLength(1);
+    rmSync(kept[0]!, { force: true });
+  }, 20_000);
+
+  it('D0: explicit --file output stays free of the downgrade note', async () => {
+    const inboxDir = mkdtempSync(join(root, 'inbox-'));
+    const partsDir = mkdtempSync(join(root, 'parts-'));
+    const h = await startBroker(async (frame) => ({ ...deliveredReceipt, id: frame.id }), { inboxDir, partsDir });
+    const fx = makeFixture(h);
+    const before = new Set(msgTemps());
+    const file = join(fx.baseDir, 'note.txt');
+    writeFileSync(file, 'small');
+    const out = await runSend({ via: 'tcp:broker-host', to: 'boss', fileArg: file, bodyArg: '见附件' }, fx.deps);
+    expect(out).toContain('delivered to boss@broker-host');
+    expect(out).not.toContain('正文超限已自动转文件通道');
+    expect(msgTemps(before)).toHaveLength(0);
   }, 10_000);
 
   it('routes tcp: through runViaTcpSend from the via branch', async () => {

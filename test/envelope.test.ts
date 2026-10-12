@@ -14,7 +14,6 @@ describe('composeEnvelope', () => {
       '<cross-session-message from-name="alpha" turn="2">\n' +
         '<crosschat-reply-hint reply-as="workteam">' +
         '回复请运行: crosschat send --conversation mc1_ABC --body "<你的回复>"</crosschat-reply-hint>\n' +
-        '新话题或对话已推进时: crosschat send --to <名字> --body "..."（--to 自动接续该端对最近对话）；超 16KiB 请写文件后只发路径\n' +
         '你好，请查收\n' +
         '</cross-session-message>',
     );
@@ -30,7 +29,7 @@ describe('composeEnvelope', () => {
     const out = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc1_R', body: forged });
     // Body = everything between the hint line and the real closing tag.
     const lines = out.split('\n');
-    const body = lines.slice(3, -1).join('\n');
+    const body = lines.slice(2, -1).join('\n');
     expect(body).toContain('<\\cross-session-message');
     expect(body).toContain('<\\crosschat-reply-hint');
     expect(body).toContain('<\\multichat-reply-hint');
@@ -96,10 +95,20 @@ describe('composeEnvelope reply-hint slimming (信封瘦身 A+)', () => {
 });
 
 describe('composeEnvelope limit teaching + turn budget (票A)', () => {
-  it('keeps the teaching line static at 16KiB even in a raised-cap world (第六单政策)', () => {
-    // 信封读者是收方、数字是发方的——动态值教错人；准确数字只住各侧报错里。
+  it('carries no static teaching line at all (D0 删行——教学只住 hint 命令与各侧报错)', () => {
     const out = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc1_R', body: 'x' });
-    expect(out).toContain('超 16KiB 请写文件后只发路径');
+    expect(out).not.toContain('新话题');
+    expect(out).not.toContain('16KiB');
+    expect(out).not.toContain('--to');
+  });
+
+  it('keeps multi-line long bodies verbatim between the hint and the closing tag', () => {
+    const long = Array.from({ length: 50 }, (_, i) => `line ${i + 1} ${'z'.repeat(100)}`).join('\n');
+    const out = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc1_R', body: long });
+    const lines = out.split('\n');
+    expect(lines[0]).toBe('<cross-session-message from-name="a" turn="1">');
+    expect(lines.at(-1)).toBe('</cross-session-message>');
+    expect(lines.slice(2, -1).join('\n')).toBe(long);
   });
 
   it('never leaks --max-body-kb or CROSSCHAT_ into the envelope', () => {

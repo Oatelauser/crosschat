@@ -36,11 +36,16 @@ crosschat send --conversation mc1_XXXX --body "正文"
 
 ## 主动发起新消息
 
-先用 status 查名字，再发送：
+名字或关键词在手就直接发——`--to` 由 CLI 自己解析（全名精确命中；或大小写不敏感的唯一前缀；多候选会在报错里列名单，挑完整名重发一次即可）：
+
+```
+crosschat send --to <名字或前缀> --body "正文"
+```
+
+实在不知道对端叫什么，才用 status 查名单（可加 `--claude` / `--codex` / `--name <关键词>` 过滤）：
 
 ```
 crosschat status
-crosschat send --to <名字> --body "正文"
 ```
 
 - 名字 = claude 会话名或 codex 线程名（status 列出全部可路由对象）；未命名 codex 线程可用 id8 或完整 id 寻址（`crosschat status --all` 里可见——默认视图藏未命名，加 `--all` 带出）。
@@ -55,7 +60,8 @@ crosschat send --to <名字> --body "正文"
 
 ## 报错自纠（读错误码，不要即兴发明命令）
 
-- `MESSAGE_TOO_LARGE`：正文超过当前上限（默认 16KiB）。或用 `--max-body-kb <KiB>` / 环境变量 `CROSSCHAT_MAX_BODY_KIB` 提额（claude 端点硬顶 64KiB、codex 端点 1MiB，到顶只能落盘）。单机：把完整内容**写入一个文件，只发文件路径**（接收方会按需读取，这也是长内容的标准做法）。跨机（`--via ssh:<别名>`）：**先 `scp <文件> <别名>:/tmp/` 落到对端**，再 send 发**对端本地**的路径（scp 与 `--via` 共用同一份 ssh 配置）；tcp 形态（`--via tcp:`）改用 `--file <路径>` 走文件通道（上限 64MiB，正文只发说明——对端收到的正文自动带文件在对端的落地路径）。
+- `MESSAGE_TOO_LARGE`：大小地图——单机默认 16KiB（`--max-body-kb <KiB>` / 环境变量 `CROSSCHAT_MAX_BODY_KIB` 可提额，端点另有封顶）；ssh/tcp 跨机正文 1MiB；tcp 超限**自动转文件通道**（≤64MiB 一次成功，无需改命令）；ssh 大内容走 scp 旁路（先 `scp <文件> <别名>:/tmp/`，再发对端本地路径）。
+- 超长处理的场景指引听报错的：报错按你当前通道只给那一条，照做即可——**准确数字以报错为准**（报错才是权威，本文件只给地图）。
 - `TCP_TRANSPORT_FAILED`（tcp 形态）：连不上 broker 或等回执超时——**远端状态不明，勿盲目重发**（可能与首次投递叠加）。先在对端查 send-log 或 `status --conversations` 核实后再决定。
 - `PEER_OFFLINE`（tcp 形态）：对端机器当前不在线——稍后重试；若两端另配了 ssh 也可走 ssh 形态。
 - 收到"文件 … 已送达"但那个路径不存在：附件超过 5 天被回收——回对端"**附件已过期，请重发 --file**"。
