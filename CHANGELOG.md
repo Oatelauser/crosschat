@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+### 多星成员（011 票：一台机器同时入多个 broker 星，无状态路由）
+
+- **node.json 双形状**：旧单星形状永兼容（连一次自动回填 starId）/ 多星 `{brokers:[…],name}` 数组——唯一落盘配置，零缓存文件
+- **starId 星标识**：broker 首次 serve 生成（broker.json 顶层 12 hex，与 machine-id 解耦）；gen-key 打印进 node.json；info 帧携带；节点**在发钥匙之前**比对（不符即断 `STAR_ID_MISMATCH`，守护永久停机不退避——钥匙不出手）
+- **mc2_ 尾部扩展**（flags bit 10 携带星标识）：回信/续发自动选星，信封与 skill 教学零改动；旧版解析器遇新引用走既有"升级后重试"版本偏差教学
+- **发送路由四序**（纯本地，无探测）：限定器 `tcp:<别名|starId前缀>:<目标>` → 会话引用星 → 单条目 → 报错教学；`--file` 同路
+- **命令面**：`--connect <选择器>` / `--stop <选择器>`（无参=先全部守护后 broker）；uninstall 拒删扩为扫全部守护；doctor 逐条目+缺 starId/双条目同星 ⚠️；status 多守护逐行+`--json` 新键 `tcpProfiles`（旧键不动）
+- 单星机全路径行为字节不变（快照测试锚定）；设计经六轮俯瞰（探测路由/会话缓存文件/mc3_ 均否决，票面存档）
+
 ### serve / gen-key 输出增强（消除黑盒）
 
 - `serve --detach`（broker）输出补端口：`broker 后台运行中 pid=X 端口 N（日志：…）`

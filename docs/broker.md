@@ -98,6 +98,27 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 > 记住一条：**收件靠这条常驻连接，断了=别人发你 PEER_OFFLINE；发送零进程**。broker 机两端都不需要——它的收发在 serve 进程里。
 
+**入第二颗星（可选）**。node.json 换数组形状，一颗星一条目（gen-key 输出自带 starId，整段照贴；旧单星形状永远兼容，连一次自动补 starId）：
+
+```
+> cat ~/.crosschat/tcp/node.json
+{
+  "brokers": [
+    { "host": "118.196.47.9", "port": 7777, "alias": "cloud", "starId": "a1b2c3d4e5f6", "key": "…" },
+    { "host": "192.168.1.10", "port": 7260,  "alias": "home",  "starId": "9f8e7d6c0123", "key": "…" }
+  ],
+  "name": "yang"
+}
+```
+
+收几颗星跑几个守护（按别名选，starId 前缀消歧）；发送多星机发起新会话加限定词 `--via tcp:cloud:<机器>`——**回信/续发零感知**，会话引用自带星标识、CLI 自动选星，agent 照抄命令不变：
+
+```
+> crosschat serve --connect cloud --detach     # 挂 cloud 星收件
+> crosschat serve --connect home --detach      # 挂 home 星收件
+> crosschat serve --stop cloud                 # 只停 cloud；无参=全停（先守护后 broker）
+```
+
 ### 1.4 验证（三眼，不对回 1.2/1.3 排）
 
 ```
@@ -211,9 +232,9 @@ B 机照抄整条命令、只换 `<你的回复>`（不截断不改写），回�
 delivered to boss@ec542c2c (turn 2)
 ```
 
-### 3.5 单星边界（proto:1 的取舍）
+### 3.5 多星成员（原单星边界，已解除）
 
-一台机一份 node.json = 一个星形成员身份；换 broker = 换钥匙。想"同时入两个星"（公司 broker + 家里 broker）是 proto:2 挂账议题——路线已核：**客户端档案化**（`nodes/<别名>.json` 多份凭证 + `--connect <别名>` 选择）、**wire 协议不变**（broker 对多星成员无感知）、**旧语法单档案机永续可用**（档案数=1 时 `--via tcp:<mid8>` 语义不变）——升级是加法不破坏。今天星外机器用 [ssh 联邦](federation.md)（两通道正交，可并存）。
+早期"一台机一份 node.json = 一个星"的边界已解除：node.json 数组形状多条目、会话引用尾部携带星标识（mc2_ flags bit 10）、发送按**限定器 → 引用星 → 单条目 → 教学**四序本地选星——无缓存文件、无网络探测，O(1)。信封格式与 skill 教学零改动（回信照抄即路由）；旧版解析器遇新引用走"升级后重试"教学（ref 模块设计好的偏差路径）。收件守护仍按星常驻（一星一条）——会话级懒接收需 broker 存储转发，仍挂账。星外机器也仍可走 [ssh 联邦](federation.md)（两通道正交并存）。
 
 </details>
 
@@ -233,11 +254,12 @@ delivered to boss@ec542c2c (turn 2)
 - **握手三帧**（连接建立即开始，10s 未完成握手服务端关闭，close code 4000）：
 
 ```
-S → C   {"op":"info","proto":1,"server":"crosschat/1.5.1","caps":[]}
+S → C   {"op":"info","proto":1,"server":"crosschat/1.5.1","caps":[],"starId":"a1b2c3d4e5f6"}
 C → S   {"op":"connect","proto":1,"role":"node","machineId":"<全 mid，64位hex>","auth":"<64位hex钥匙>","name":"host-b"}
 S → C   {"op":"connected","machineName":"yang"}
 ```
 
+- `starId`：broker 的星标识（broker.json 顶层 12 hex，首次 serve 生成）——节点客户端在**发 connect（钥匙）之前**比对：与本机条目不符即断连（`STAR_ID_MISMATCH`，钥匙不出手）；条目缺 starId 则放行并自动回填
 - `role`：`node`（常驻收件，必须带 machineId，首次连接时把 mid 绑定到该钥匙；重连改名即覆盖显示名）或 `sender`（瞬态发送，只要 auth）
 - 钥匙不在注册表 / node 的 machineId 与登记不符 → 恒定延迟 500ms 后 `BAD_AUTH`（close 4001）——延迟是防钥匙枚举计时
 - 协议版本不符 → `BAD_PROTO`（close 4000）
@@ -249,7 +271,7 @@ S → C   {"op":"connected","machineName":"yang"}
 
 | 帧 | 方向 | 字段 |
 |---|---|---|
-| `info` | S→C | proto, server, caps |
+| `info` | S→C | proto, server, caps, starId? |
 | `connect` | C→S | proto, role(node/sender), machineId?, auth, name?（≤32 字符显示名） |
 | `connected` | S→C | machineName? |
 | `error` | 双向 | code, message, id? |
@@ -301,6 +323,7 @@ C → result{id:"a1b2c3", status:"delivered", turn:"1", replyRef:"mc2_…"}
 | 错误码 | 何时发生 | 客户端应对 |
 |---|---|---|
 | `BAD_AUTH` | 钥匙不在注册表 / node 的 mid 与登记不符 | 核对 node.json 的 key；别重试（恒定延迟防枚举，重试无意义） |
+| `STAR_ID_MISMATCH` | info 的 starId 与本机条目不符（配置陈旧/贴错星） | 向管理员重新索取 node.json；守护遇此错永久停机不重试 |
 | `BAD_PROTO` | connect 的 proto ≠ 1 | 对齐协议版本再连 |
 | `UNKNOWN_MACHINE` | targetMachine 解析 0 命中 | 名字/mid 抄错或没登记——broker 机 `--list` 核对 |
 | `MACHINE_NAME_COLLISION` | 同名机器或 mid 前缀多命中 | 报错里带了双方 mid——改用更长的 mid 前缀 |
@@ -339,7 +362,7 @@ C → file-end{id}
 
 ### 4.7 第三方实现者注意
 
-参考实现是**单 broker 星型**——多实例集群需自行解决实例间路由（哪台节点连在哪个实例）与注册表共享，本实现不含。注册表格式见 broker 机 `~/.crosschat/tcp/broker.json`（nodes[] 内 label/key/machineId/machineName/addedAt，port 持久化在顶层）。
+参考实现是**单 broker 星型**——多实例集群需自行解决实例间路由（哪台节点连在哪个实例）与注册表共享，本实现不含（一台机器入多颗星由节点侧承担，见 3.5）。注册表格式见 broker 机 `~/.crosschat/tcp/broker.json`（顶层 starId/port；nodes[] 内 label/key/machineId/machineName/addedAt）。节点侧 node.json 双形状：`{broker:{host,port,alias,starId?},key,name}`（单星）或 `{brokers:[{host,port,alias,starId?,key}…],name}`（多星）。会话引用 mc2_ 可在尾部携带 starId（flags bit 10）——旧版解析器遇此扩展走 `INVALID_CONVERSATION_REF`+升级指引，属设计好的版本偏差路径。
 
 </details>
 
@@ -355,6 +378,8 @@ C → file-end{id}
 | `UNKNOWN_MACHINE 注册表没有…` | 目标名/mid 没登记或抄错 | broker 机 `crosschat serve --list` 查 mid8 与名字 |
 | `MACHINE_NAME_COLLISION` | 同名机器或 mid 前缀太短 | 报错里列了 mid——改用（更长的）mid 前缀寻址 |
 | status 第一行 `转发器: 未运行` | 本机节点客户端没起（收不到消息的原因） | `crosschat serve --connect --detach` |
+| `STAR_ID_MISMATCH 星标识不符已停机` | node.json 条目与 broker 现星标识不符（贴错星/配置陈旧） | 向管理员重新索取 node.json，重启 --connect |
+| 多星机裸写 `--via tcp:<机器>` 报"列条目"教学 | 多条目且无会话引用可循 | 加限定词 `--via tcp:<别名>:<机器>`；回信不受影响（引用自动带星） |
 | status 第二行 broker 不可达 | node.json host/port 错 / 防火墙 / broker 没跑 | 按 1.2/1.3 核对；云机安全组 |
 | 收到"文件…已送达"但路径不存在 | 附件 >5 天被懒删除回收 | 回对端"附件已过期，请重发 --file" |
 | serve 启动即退、报错含 `EADDRINUSE` | 端口被占（多半是旧实例） | `crosschat serve --stop` 再起；或 `--port` 换端口（会记住） |
