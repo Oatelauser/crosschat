@@ -13,7 +13,7 @@ import process from 'node:process';
 import { MultichatError } from '../errors.js';
 import { machineId } from '../platform/machine-id.js';
 import { Broker, DEFAULT_PORT, defaultDeliverLocal } from '../serve/broker.js';
-import { genKeys, listNodes, readRegistry, registryFileOf, removeNode, setPort, tcpDir, writeRegistry } from '../serve/registry.js';
+import { ensureStarId, genKeys, listNodes, readRegistry, registryFileOf, removeNode, setPort, tcpDir, writeRegistry } from '../serve/registry.js';
 import { deliverViaRunSend, NodeClient, readNodeConfig, type NodeConfig } from '../serve/node.js';
 import { FileInbox } from '../serve/file-channel.js';
 import type { SendDeps } from './send.js';
@@ -98,7 +98,7 @@ function runGenKey(genKeyArg: string, deps: ServeDeps, registryFile: string, por
   }
   const host = firstNonInternalIPv4(deps.networkInterfaces());
   const portNum = port ?? readRegistry(registryFile).port ?? DEFAULT_PORT;
-  const results = genKeys(registryFile, n, { host, port: portNum, alias: deps.hostname() });
+  const results = genKeys(registryFile, n, { host, port: portNum, alias: deps.hostname(), starId: ensureStarId(registryFile) });
   deps.stdout(`自动探测 broker 地址：${host}:${portNum}（多网卡/NAT 常探错——按下述规则人工核对改写 node.json 的 host 与 port）：`);
   deps.stdout('  · broker 机自身 → 无需分发（首次 serve 已自动写好 127.0.0.1 的自用 node.json）');
   deps.stdout('  · broker 是云主机/NAT 内网机 → host 填对外公网 IP（探测常拿内网 IP，必核对）');
@@ -185,9 +185,11 @@ export function ensureSelfEntry(deps: ServeDeps, registryFile: string, port: num
   const nodeJson = join(tcpDir(deps.baseDir), 'node.json');
   if (!existsSync(nodeJson)) {
     mkdirSync(tcpDir(deps.baseDir), { recursive: true });
+    // B0：自用 node.json 同带 starId（与 gen-key 分发的钥匙同构）
+    const starId = ensureStarId(registryFile);
     writeFileSync(
       nodeJson,
-      `${JSON.stringify({ broker: { host: '127.0.0.1', port, alias: deps.hostname() }, key: self.key, name: deps.hostname() }, null, 2)}\n`,
+      `${JSON.stringify({ broker: { host: '127.0.0.1', port, alias: deps.hostname(), starId }, key: self.key, name: deps.hostname() }, null, 2)}\n`,
       'utf8',
     );
     return { status: 'written' };
@@ -299,6 +301,7 @@ async function runForegroundNode(aliasArg: string, deps: ServeDeps): Promise<num
     : (line: string) => deps.stdout(line);
   const client = new NodeClient({
     config,
+    configFile: join(tcpDir(deps.baseDir), 'node.json'),
     machineId: deps.machineId,
     statusFile: join(tcpDir(deps.baseDir), 'status-node.json'),
     fileInbox: new FileInbox({
@@ -315,7 +318,8 @@ async function runForegroundNode(aliasArg: string, deps: ServeDeps): Promise<num
     log: logLine,
     onSignal: deps.onSignal,
   });
-  logLine(`节点客户端启动：目标 broker ${config.broker.alias ?? `${config.broker.host}:${config.broker.port}`}（Ctrl+C 退出）`);
+  const entry = config.entries[0]!;
+  logLine(`节点客户端启动：目标 broker ${entry.alias ?? `${entry.host}:${entry.port}`}（Ctrl+C 退出）`);
   await client.run();
   return 0;
 }
@@ -323,10 +327,11 @@ async function runForegroundNode(aliasArg: string, deps: ServeDeps): Promise<num
 /** 读 node.json（教学报错）；--connect 显式给的别名与凭证不符时拒绝。 */
 function loadNodeConfigChecked(aliasArg: string, deps: ServeDeps): NodeConfig {
   const config = readNodeConfig(join(tcpDir(deps.baseDir), 'node.json'));
-  if (aliasArg !== '' && config.broker.alias !== undefined && aliasArg !== config.broker.alias) {
+  const alias = config.entries[0]!.alias;
+  if (aliasArg !== '' && alias !== undefined && aliasArg !== alias) {
     throw new MultichatError(
       'USAGE',
-      `--connect ${aliasArg} 与 node.json 的 broker 别名 ${config.broker.alias} 不符——省略别名直连，或向管理员核对 node.json`,
+      `--connect ${aliasArg} 与 node.json 的 broker 别名 ${alias} 不符——省略别名直连，或向管理员核对 node.json`,
     );
   }
   return config;

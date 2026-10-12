@@ -205,6 +205,26 @@ describe('broker handshake and auth', () => {
     await second.waitFor((f) => f.op === 'connected');
     expect(await first.closed()).toBe(1000);
   });
+
+  // B0：info 帧按注册表现发 starId（缺省不发——additive）
+  it('carries the registry starId in the info frame, and omits the field without one', async () => {
+    const withStar = await startBroker();
+    writeRegistry(withStar.registryFile, {
+      starId: 'a1b2c3d4e5f6',
+      nodes: [{ label: 'node-1', key: key('a'), addedAt: '2026-01-01T00:00:00.000Z' }],
+    });
+    const c1 = new TestClient(withStar.url);
+    await c1.opened();
+    const info1 = await c1.waitFor((f) => f.op === 'info');
+    expect(info1.op === 'info' && info1.starId).toBe('a1b2c3d4e5f6');
+
+    const withoutStar = await startBroker();
+    seed(withoutStar.registryFile, [{ key: key('a') }]);
+    const c2 = new TestClient(withoutStar.url);
+    await c2.opened();
+    const info2 = await c2.waitFor((f) => f.op === 'info');
+    expect(info2.op === 'info' && 'starId' in info2).toBe(false);
+  });
 });
 
 describe('broker send routing', () => {

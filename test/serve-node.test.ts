@@ -166,8 +166,12 @@ function fakeSendDeps(withSession = true): FakeSendCapture {
 
 function makeNodeClient(harness: Harness, dir: string, overrides: Partial<ConstructorParameters<typeof NodeClient>[0]> = {}): NodeClient {
   const inbox = mkdtempSync(join(root, 'node-'));
+  const port = Number(new URL(harness.url).port);
+  const configFile = join(dir, 'node.json');
+  writeFileSync(configFile, JSON.stringify({ broker: { host: '127.0.0.1', port, alias: 'broker-alias' }, key: key('n') }, null, 2));
   return new NodeClient({
-    config: { broker: { host: '127.0.0.1', port: Number(new URL(harness.url).port), alias: 'broker-alias' }, key: key('n') },
+    config: { entries: [{ host: '127.0.0.1', port, alias: 'broker-alias', key: key('n') }] },
+    configFile,
     machineId: () => 'NODE-MID',
     statusFile: join(dir, 'status-node.json'),
     fileInbox: new FileInbox({ inboxDir: join(inbox, 'inbox'), partsDir: join(inbox, 'parts') }),
@@ -255,7 +259,7 @@ describe('node client lifecycle', () => {
     const port = Number(new URL(harness.url).port);
     const dir = mkdtempSync(join(root, 'st-'));
     const client = makeNodeClient(harness, dir, {
-      config: { broker: { host: '127.0.0.1', port, alias: 'broker-alias' }, key: key('n') },
+      config: { entries: [{ host: '127.0.0.1', port, alias: 'broker-alias', key: key('n') }] },
       backoffBaseMs: 60,
     });
     void client.run();
@@ -338,4 +342,151 @@ describe('readNodeConfig and runServe --connect', () => {
     expect(err).toBeInstanceOf(MultichatError);
     expect((err as MultichatError).message).toContain('real-alias');
   });
+
+  // B0：node.json 双形状归一化
+  it('normalizes the legacy shape into a single entry (top-level starId ignored)', () => {
+    const dir = mkdtempSync(join(root, 'case-'));
+    const file = join(dir, 'node.json');
+    writeFileSync(file, JSON.stringify({ broker: { host: 'h1', port: 1, alias: 'a', starId: 'in-broker' }, key: 'k', name: 'n', starId: 'top-level' }));
+    expect(readNodeConfig(file)).toEqual({
+      name: 'n',
+      entries: [{ host: 'h1', port: 1, alias: 'a', starId: 'in-broker', key: 'k' }],
+    });
+  });
+
+  it('normalizes the brokers-array shape as-is with name carried', () => {
+    const dir = mkdtempSync(join(root, 'case-'));
+    const file = join(dir, 'node.json');
+    writeFileSync(file, JSON.stringify({ brokers: [{ host: 'h1', port: 1, key: 'k1' }, { host: 'h2', port: 2, alias: 'b', starId: 's2', key: 'k2' }], name: 'm' }));
+    expect(readNodeConfig(file)).toEqual({
+      name: 'm',
+      entries: [{ host: 'h1', port: 1, key: 'k1' }, { host: 'h2', port: 2, alias: 'b', starId: 's2', key: 'k2' }],
+    });
+  });
+
+  it('rejects an empty brokers array and entries missing key/host/integer port', () => {
+    const dir = mkdtempSync(join(root, 'case-'));
+    const tryRead = (content: string): unknown => {
+      const file = join(dir, 'node.json');
+      writeFileSync(file, content);
+      try {
+        readNodeConfig(file);
+        return undefined;
+      } catch (e: unknown) {
+        return e;
+      }
+    };
+    for (const bad of ['{"brokers": []}', '{"brokers": [{"host": "h", "port": 1}]}', '{"brokers": [{"port": 1, "key": "k"}]}', '{"brokers": [{"host": "h", "key": "k", "port": 1.5}]}']) {
+      const err = tryRead(bad);
+      expect(err).toBeInstanceOf(MultichatError);
+      expect((err as MultichatError).message).toContain('损坏');
+    }
+  });
+});
+
+describe('B0 starId handshake', () => {
+  const STAR = 'aaaabbbbcccc';
+
+  function seedWithStar(harness: Harness): void {
+    writeRegistry(harness.registryFile, {
+      starId: STAR,
+      nodes: [{ label: 'node-1', key: key('n'), addedAt: '2026-01-01T00:00:00.000Z' }],
+    });
+  }
+
+  function starClient(harness: Harness, dir: string, entry: { starId?: string }, log: (l: string) => void): NodeClient {
+    const inbox = mkdtempSync(join(root, 'node-'));
+    return new NodeClient({
+      config: { entries: [{ host: '127.0.0.1', port: Number(new URL(harness.url).port), key: key('n'), ...entry }] },
+      configFile: join(dir, 'node.json'),
+      machineId: () => 'NODE-MID',
+      statusFile: join(dir, 'status-node.json'),
+      fileInbox: new FileInbox({ inboxDir: join(inbox, 'inbox'), partsDir: join(inbox, 'parts') }),
+      makeSendDeps: () => fakeSendDeps().deps,
+      now: () => Date.now(),
+      log,
+      backoffBaseMs: 50,
+    });
+  }
+
+  it('aborts before sending connect on mismatch: STAR_ID_MISMATCH, never online, no node-up', async () => {
+    const harness = await startBroker();
+    seedWithStar(harness);
+    const dir = mkdtempSync(join(root, 'st-'));
+    const logs: string[] = [];
+    const client = starClient(harness, dir, { starId: 'dddd00001111' }, (l) => logs.push(l));
+    void client.run();
+    await client.waitForState('reconnect-wait');
+    expect(logs.some((l) => l.includes('STAR_ID_MISMATCH') && l.includes('向管理员重新索取 node.json'))).toBe(true);
+    // 钥匙本是匹配的——若 connect 已发，客户端会上线且 broker 记 node-up
+    expect(logs.some((l) => l.includes('online（'))).toBe(false);
+    expect(harness.logs.some((l) => l.includes('node-up'))).toBe(false);
+    await client.stop();
+  }, 10_000);
+
+  it('goes online when both sides carry the same starId', async () => {
+    const harness = await startBroker();
+    seedWithStar(harness);
+    const dir = mkdtempSync(join(root, 'st-'));
+    const client = starClient(harness, dir, { starId: STAR }, () => {});
+    void client.run();
+    await client.waitForState('online');
+    await client.stop();
+  }, 10_000);
+
+  it('backfills starId into the legacy node.json broker object when locally missing', async () => {
+    const harness = await startBroker();
+    seedWithStar(harness);
+    const dir = mkdtempSync(join(root, 'st-'));
+    const configFile = join(dir, 'node.json');
+    writeFileSync(configFile, JSON.stringify({ broker: { host: '127.0.0.1', port: Number(new URL(harness.url).port), alias: 'broker-alias' }, key: key('n'), name: 'node-host' }, null, 2));
+    const client = starClient(harness, dir, {}, () => {});
+    void client.run();
+    await client.waitForState('online');
+    const backfilled = JSON.parse(readFileSync(configFile, 'utf8')) as { broker: { host: string; port: number; alias: string; starId?: string }; key: string; name: string };
+    expect(backfilled.broker.starId).toBe(STAR);
+    expect(backfilled.key).toBe(key('n'));
+    expect(backfilled.name).toBe('node-host');
+    await client.stop();
+  }, 10_000);
+
+  it('backfills starId into a matching brokers[] entry (new shape)', async () => {
+    const harness = await startBroker();
+    seedWithStar(harness);
+    const dir = mkdtempSync(join(root, 'st-'));
+    const configFile = join(dir, 'node.json');
+    const port = Number(new URL(harness.url).port);
+    writeFileSync(configFile, JSON.stringify({ brokers: [{ host: '127.0.0.1', port, key: key('n') }, { host: 'other', port: 9, key: 'other-key' }], name: 'node-host' }, null, 2));
+    const client = starClient(harness, dir, {}, () => {});
+    void client.run();
+    await client.waitForState('online');
+    const backfilled = JSON.parse(readFileSync(configFile, 'utf8')) as { brokers: Array<{ host: string; port: number; key: string; starId?: string }> };
+    expect(backfilled.brokers[0]?.starId).toBe(STAR);
+    expect(backfilled.brokers[1]?.starId).toBeUndefined();
+    await client.stop();
+  }, 10_000);
+
+  it('does not rewrite node.json when starId already present and matching', async () => {
+    const harness = await startBroker();
+    seedWithStar(harness);
+    const dir = mkdtempSync(join(root, 'st-'));
+    const configFile = join(dir, 'node.json');
+    const original = `${JSON.stringify({ broker: { host: '127.0.0.1', port: Number(new URL(harness.url).port), alias: 'broker-alias', starId: STAR }, key: key('n'), name: 'node-host' }, null, 2)}\n`;
+    writeFileSync(configFile, original);
+    const client = starClient(harness, dir, { starId: STAR }, () => {});
+    void client.run();
+    await client.waitForState('online');
+    expect(readFileSync(configFile, 'utf8')).toBe(original);
+    await client.stop();
+  }, 10_000);
+
+  it('passes when the local entry has starId but the broker info omits it', async () => {
+    const harness = await startBroker();
+    seed(harness.registryFile, [{ key: key('n'), machineName: 'node-host' }]); // 注册表无 starId → info 不带
+    const dir = mkdtempSync(join(root, 'st-'));
+    const client = starClient(harness, dir, { starId: STAR }, () => {});
+    void client.run();
+    await client.waitForState('online');
+    await client.stop();
+  }, 10_000);
 });

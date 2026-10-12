@@ -192,7 +192,15 @@ export class Broker {
     ws.on('message', (data) => {
       void this.onMessage(session, data.toString());
     });
-    this.send(ws, { op: 'info', proto: PROTOCOL_VERSION, server: `crosschat/${this.d.version}`, caps: [] });
+    // B0：注册表带 starId 则随 info 下发（缺省不发——additive，旧节点无感）
+    const starId = readRegistry(this.d.registryFile).starId;
+    this.send(ws, {
+      op: 'info',
+      proto: PROTOCOL_VERSION,
+      server: `crosschat/${this.d.version}`,
+      caps: [],
+      ...(starId === undefined ? {} : { starId }),
+    });
     session.connectTimer = setTimeout(() => {
       this.log('connect-timeout 关闭未握手连接');
       try {

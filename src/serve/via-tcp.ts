@@ -188,8 +188,10 @@ export async function runViaTcpSend(args: SendArgs, body: string | undefined, de
   // B2.1：删同机 hostname 特例——本机目标照常上 broker，resolveTarget 按
   // machineId 判定本机后走 deliverLocal（同机判定不再比对 hostname 字符串）。
 
-  const url = `ws://${config.broker.host}:${config.broker.port}`;
-  const conn = await SenderConn.open(url, config.key, deps.machineId?.(), Math.min(timeoutMs, 15_000));
+  // B0：多条目暂取第一条（路由选择是 B1 批次）
+  const entry = config.entries[0]!;
+  const url = `ws://${entry.host}:${entry.port}`;
+  const conn = await SenderConn.open(url, entry.key, deps.machineId?.(), Math.min(timeoutMs, 15_000));
   try {
     let finalBody = body;
     if (args.fileArg !== undefined) {
@@ -361,7 +363,8 @@ export async function fetchRoster(tcpBaseDir: string, timeoutMs = 2_000): Promis
   let conn: SenderConn;
   try {
     const config = readNodeConfig(join(tcpDir(tcpBaseDir), 'node.json'));
-    conn = await SenderConn.open(`ws://${config.broker.host}:${config.broker.port}`, config.key, undefined, timeoutMs);
+    const entry = config.entries[0]!; // B0：多条目暂取第一条
+    conn = await SenderConn.open(`ws://${entry.host}:${entry.port}`, entry.key, undefined, timeoutMs);
   } catch {
     return undefined;
   }

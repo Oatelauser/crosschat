@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
+  ensureStarId,
   genKeys,
   listNodes,
   readRegistry,
@@ -47,6 +48,29 @@ describe('genKeys', () => {
     } catch (err) {
       expect((err as MultichatError).code).toBe('USAGE');
     }
+  });
+
+  it('B0: embeds starId inside the broker object of nodeJsonContent', () => {
+    const file = freshFile();
+    const [{ nodeJsonContent }] = genKeys(file, 1, { host: '10.0.0.2', port: 9000, alias: 'hub', starId: 'a1b2c3d4e5f6' });
+    const parsed = JSON.parse(nodeJsonContent) as { broker: { host: string; port: number; alias: string; starId: string }; key: string };
+    expect(parsed.broker).toEqual({ host: '10.0.0.2', port: 9000, alias: 'hub', starId: 'a1b2c3d4e5f6' });
+  });
+});
+
+describe('ensureStarId', () => {
+  it('B0: generates a 12-hex starId, persists it, and is idempotent on re-read', () => {
+    const file = freshFile();
+    const first = ensureStarId(file);
+    expect(first).toMatch(/^[0-9a-f]{12}$/);
+    expect(readRegistry(file).starId).toBe(first);
+    // 幂等：复读直接返回既有值，不重新生成
+    expect(ensureStarId(file)).toBe(first);
+    expect(readRegistry(file).starId).toBe(first);
+    // 既有节点在 starId 落盘时保留
+    genKeys(file, 1, { host: 'h', port: 1, alias: 'a', starId: ensureStarId(file) });
+    expect(ensureStarId(file)).toBe(first);
+    expect(listNodes(file)).toHaveLength(1);
   });
 });
 

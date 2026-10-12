@@ -20,6 +20,8 @@ export interface NodeEntry {
 
 export interface BrokerRegistry {
   port?: number;
+  /** B0 多星地基：本 broker 的全局唯一星标识（12 hex，ensureStarId 生成）。 */
+  starId?: string;
   nodes: NodeEntry[];
 }
 
@@ -65,6 +67,7 @@ export function readRegistry(file: string): BrokerRegistry {
     }
     return {
       port: typeof parsed.port === 'number' ? parsed.port : undefined,
+      starId: typeof parsed.starId === 'string' ? parsed.starId : undefined,
       nodes: parsed.nodes,
     };
   } catch {
@@ -103,6 +106,18 @@ export function setPort(file: string, port: number): void {
   writeRegistry(file, registry);
 }
 
+/**
+ * B0 多星地基：确保注册表带 starId（无则 randomBytes(6) 生成 12 hex 写回）。
+ * 幂等：已有直接返回，gen-key/自登记前调一次即可。
+ */
+export function ensureStarId(file: string): string {
+  const registry = readRegistry(file);
+  if (registry.starId !== undefined) return registry.starId;
+  registry.starId = randomBytes(6).toString('hex');
+  writeRegistry(file, registry);
+  return registry.starId;
+}
+
 export interface GenKeyResult {
   label: string;
   key: string;
@@ -115,7 +130,7 @@ export interface GenKeyResult {
  * （超限 USAGE）。nodeJsonContent 为 2 空格缩进完整 node.json（B2 起带
  * broker.alias，节点 status 展示"tcp:<别名>"用）。
  */
-export function genKeys(file: string, n: number, opts: { host: string; port: number; alias: string }): GenKeyResult[] {
+export function genKeys(file: string, n: number, opts: { host: string; port: number; alias: string; starId: string }): GenKeyResult[] {
   if (!Number.isInteger(n) || n < 1 || n > 10) {
     throw new MultichatError('USAGE', `--gen-key 数量须为 1-10 的整数，收到：${n}`);
   }
@@ -131,7 +146,7 @@ export function genKeys(file: string, n: number, opts: { host: string; port: num
     results.push({
       label,
       key,
-      nodeJsonContent: `${JSON.stringify({ broker: { host: opts.host, port: opts.port, alias: opts.alias }, key, name: '改成「贴这份配置的机器」的名字' }, null, 2)}\n`,
+      nodeJsonContent: `${JSON.stringify({ broker: { host: opts.host, port: opts.port, alias: opts.alias, starId: opts.starId }, key, name: '改成「贴这份配置的机器」的名字' }, null, 2)}\n`,
     });
     registry.nodes.push({ label, key, addedAt: new Date().toISOString() });
   }

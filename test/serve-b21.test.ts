@@ -333,9 +333,12 @@ describe('B2.1 serve self-init', () => {
     const reg = JSON.parse(readFileSync(registryFile, 'utf8')) as { nodes: NodeEntry[] };
     expect(reg.nodes).toHaveLength(1);
     expect(reg.nodes[0]).toMatchObject({ label: 'self', machineId: 'a1b2c3d40000', machineName: 'hub' });
-    const nodeJson = JSON.parse(readFileSync(join(tcpDir(dir), 'node.json'), 'utf8')) as { broker: { host: string; port: number }; name: string };
-    expect(nodeJson.broker).toEqual({ host: '127.0.0.1', port: 7260, alias: 'hub' });
+    const nodeJson = JSON.parse(readFileSync(join(tcpDir(dir), 'node.json'), 'utf8')) as { broker: { host: string; port: number; starId?: string }; name: string };
+    expect(nodeJson.broker).toEqual({ host: '127.0.0.1', port: 7260, alias: 'hub', starId: expect.any(String) });
     expect(nodeJson.name).toBe('hub');
+    // B0：自用 node.json 的 starId 与注册表一致（12 hex）
+    expect(nodeJson.broker.starId).toMatch(/^[0-9a-f]{12}$/);
+    expect((JSON.parse(readFileSync(registryFile, 'utf8')) as { starId?: string }).starId).toBe(nodeJson.broker.starId);
     // 幂等：再来一次不重复登记、不覆盖既有 node.json，状态 ok（静默分支）
     expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
     const reg2 = JSON.parse(readFileSync(registryFile, 'utf8')) as { nodes: NodeEntry[] };

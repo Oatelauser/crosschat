@@ -22,6 +22,8 @@ export interface InfoFrame {
   proto: number;
   server: string;
   caps: string[];
+  /** B0 多星地基：broker 星标识（注册表缺省则不发该字段——additive）。 */
+  starId?: string;
 }
 export interface ConnectFrame {
   op: 'connect';

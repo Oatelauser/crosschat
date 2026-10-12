@@ -4,7 +4,7 @@
  * 全是本机既有行为）、收 file-* 帧落盘 inbox。断线指数退避 1s→2s→…封顶
  * 60s 永不放弃；连续失败 ≥5 分钟进静音模式（日志每 10 次一条）。
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { WebSocket } from 'ws';
 import { MultichatError } from '../errors.js';
@@ -16,14 +16,24 @@ import type {
   FileChunkFrame,
   FileEndFrame,
   Frame,
+  InfoFrame,
   ResultFrame,
 } from './protocol.js';
 import { runSend, type SendDeps } from '../commands/send.js';
 import { FileInbox } from './file-channel.js';
 
-export interface NodeConfig {
-  broker: { host: string; port: number; alias?: string };
+/** B0 多星地基：一个 broker 条目（旧形状读进 broker 对象、新形状 brokers[] 元素）。 */
+export interface BrokerEntry {
+  host: string;
+  port: number;
+  alias?: string;
+  starId?: string;
   key: string;
+}
+
+/** 归一化后的 node.json：旧/新双形状都收进 entries（多条目路由选择是 B1）。 */
+export interface NodeConfig {
+  entries: BrokerEntry[];
   /** B2.1：人读显示名（显示用；寻址权威是 machine-id 前缀）。 */
   name?: string;
 }
@@ -31,6 +41,25 @@ export interface NodeConfig {
 /** 会员凭证缺失/损坏的教学报错（send --via tcp: 与 --connect 同用）。 */
 export const NOT_JOINED_MESSAGE =
   '本机未入网——向管理员索取 node.json 放到 ~/.crosschat/tcp/（broker 机上 crosschat serve --gen-key 生成）';
+
+/** 单条目净化校验：缺 key/host 或 port 非整数即坏形状。 */
+function parseBrokerEntry(raw: unknown): BrokerEntry {
+  if (raw === null || typeof raw !== 'object') throw new Error('bad shape');
+  const e = raw as { host?: unknown; port?: unknown; alias?: unknown; starId?: unknown; key?: unknown };
+  if (
+    typeof e.key !== 'string' || e.key === '' ||
+    typeof e.host !== 'string' || typeof e.port !== 'number' || !Number.isInteger(e.port)
+  ) {
+    throw new Error('bad shape');
+  }
+  return {
+    host: e.host,
+    port: e.port,
+    ...(typeof e.alias === 'string' ? { alias: e.alias } : {}),
+    ...(typeof e.starId === 'string' ? { starId: e.starId } : {}),
+    key: e.key,
+  };
+}
 
 export function readNodeConfig(configFile: string): NodeConfig {
   let raw: string;
@@ -40,17 +69,72 @@ export function readNodeConfig(configFile: string): NodeConfig {
     throw new MultichatError('USAGE', NOT_JOINED_MESSAGE);
   }
   try {
-    const parsed = JSON.parse(raw) as Partial<NodeConfig> | null;
-    if (
-      parsed === null || typeof parsed !== 'object' ||
-      typeof parsed.key !== 'string' || parsed.key === '' ||
-      typeof parsed.broker?.host !== 'string' || !Number.isInteger(parsed.broker.port)
-    ) {
+    const parsed = JSON.parse(raw) as {
+      broker?: { host?: unknown; port?: unknown; alias?: unknown; starId?: unknown };
+      brokers?: unknown;
+      key?: unknown;
+      name?: unknown;
+    } | null;
+    if (parsed === null || typeof parsed !== 'object') throw new Error('bad shape');
+    const name = typeof parsed.name === 'string' ? parsed.name : undefined;
+    // 新形状 {brokers: [...], name}：条目数组原样收进 entries（空数组=坏形状；
+    // 顶层多余 starId 忽略——星标识只认条目/starId 槽）
+    if (Array.isArray(parsed.brokers)) {
+      const entries = parsed.brokers.map(parseBrokerEntry);
+      if (entries.length === 0) throw new Error('bad shape');
+      return { ...(name === undefined ? {} : { name }), entries };
+    }
+    // 旧形状 {broker: {...}, key, name} → 单元素（行为与 B0 前逐字节等价）
+    if (typeof parsed.key !== 'string' || parsed.key === '') throw new Error('bad shape');
+    const broker = parsed.broker;
+    if (broker === null || typeof broker !== 'object' || typeof broker.host !== 'string' || !Number.isInteger(broker.port)) {
       throw new Error('bad shape');
     }
-    return parsed as NodeConfig;
+    return {
+      ...(name === undefined ? {} : { name }),
+      entries: [parseBrokerEntry({ ...broker, key: parsed.key })],
+    };
   } catch {
     throw new MultichatError('USAGE', `node.json 损坏（${configFile}）——向管理员重新索取覆盖；${NOT_JOINED_MESSAGE}`);
+  }
+}
+
+/**
+ * B0：info.starId 回填——按 key+host+port 定位 node.json 对应条目，仅缺失时
+ * 原子写回（tmp+rename）；旧形状写进 broker 对象内。写失败不倒连接。
+ */
+function backfillStarId(configFile: string, entry: BrokerEntry, starId: string): void {
+  try {
+    const parsed = JSON.parse(readFileSync(configFile, 'utf8')) as {
+      broker?: { host?: unknown; port?: unknown; starId?: unknown };
+      brokers?: Array<Record<string, unknown>>;
+      key?: unknown;
+    } | null;
+    if (parsed === null || typeof parsed !== 'object') return;
+    const sameTarget = (host: unknown, port: unknown, key: unknown): boolean =>
+      host === entry.host && port === entry.port && key === entry.key;
+    if (Array.isArray(parsed.brokers)) {
+      const hit = parsed.brokers.find(
+        (e) => e !== null && typeof e === 'object' && sameTarget(e.host, e.port, e.key) && e.starId === undefined,
+      );
+      if (hit === undefined) return;
+      hit.starId = starId;
+    } else {
+      const broker = parsed.broker;
+      if (
+        broker === null || typeof broker !== 'object' ||
+        !sameTarget(broker.host, broker.port, parsed.key) || broker.starId !== undefined
+      ) {
+        return;
+      }
+      broker.starId = starId;
+    }
+    const tmp = `${configFile}.tmp`;
+    mkdirSync(dirname(configFile), { recursive: true });
+    writeFileSync(tmp, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
+    renameSync(tmp, configFile);
+  } catch {
+    // 回填写失败不倒连接（下次握手再试）
   }
 }
 
@@ -110,6 +194,8 @@ export interface NodeStatusFile {
 
 export interface NodeClientDeps {
   config: NodeConfig;
+  /** B0：node.json 路径——starId 回填写回原文件用。 */
+  configFile: string;
   machineId: () => string | undefined;
   statusFile: string;
   fileInbox: FileInbox;
@@ -221,8 +307,8 @@ export class NodeClient {
 
   /** 一次连接生命周期；resolve(false)=从未上线即断，resolve(true)=上线后断开。 */
   private async connectOnce(): Promise<boolean> {
-    const cfg = this.d.config;
-    const url = `ws://${cfg.broker.host}:${cfg.broker.port}`;
+    const cfg = this.d.config.entries[0]!;
+    const url = `ws://${cfg.host}:${cfg.port}`;
     this.frameLog = [];
     const ws = new WebSocket(url, { maxPayload: MAX_PAYLOAD_BYTES });
     this.ws = ws;
@@ -246,13 +332,14 @@ export class NodeClient {
       if (info.op !== 'info' || info.proto !== PROTOCOL_VERSION) {
         throw new Error(`协议不匹配：服务端 ${info.op === 'info' ? info.proto : '?'}`);
       }
+      this.checkStarId(info as InfoFrame);
       ws.send(encodeFrame({
         op: 'connect',
         proto: PROTOCOL_VERSION,
         role: 'node',
         machineId: this.d.machineId() ?? '',
         auth: cfg.key,
-        ...(cfg.name === undefined ? {} : { name: cfg.name }),
+        ...(this.d.config.name === undefined ? {} : { name: this.d.config.name }),
       }));
       const verdict = await this.nextFrame((f) => f.op === 'connected' || f.op === 'error', 10_000);
       if (verdict.op === 'error') {
@@ -260,14 +347,14 @@ export class NodeClient {
       }
       everOnline = true;
       this.setState('online');
-      this.log(`online（broker ${cfg.broker.alias ?? url}）`);
+      this.log(`online（broker ${cfg.alias ?? url}）`);
       this.minuteTimer = setInterval(() => {
         if (this.state === 'online') this.writeStatus(undefined);
       }, 60_000);
       await closedPromise;
       this.log('offline（连接断开）');
     } catch (err) {
-      this.log(`connect 失败: ${err instanceof Error ? err.message : String(err)}`);
+      this.log(`connect 失败: ${err instanceof MultichatError ? `${err.code} ${err.message}` : err instanceof Error ? err.message : String(err)}`);
     } finally {
       clearInterval(this.minuteTimer);
       this.clearFrameWaiters(new Error('connection closed'));
@@ -275,6 +362,23 @@ export class NodeClient {
       if (this.ws === ws) this.ws = undefined;
     }
     return everOnline;
+  }
+
+  /**
+   * B0 星标识哨兵（info 后、发 connect 含 key 之前）：两侧都有且不等 → 拒发
+   * key 中止连接；本机缺 → 回填 node.json；任一侧缺省 → 放行。
+   */
+  private checkStarId(info: InfoFrame): void {
+    const entry = this.d.config.entries[0]!;
+    if (info.starId === undefined) return;
+    if (entry.starId === undefined) {
+      backfillStarId(this.d.configFile, entry, info.starId);
+      entry.starId = info.starId;
+      return;
+    }
+    if (entry.starId !== info.starId) {
+      throw new MultichatError('STAR_ID_MISMATCH', '本 broker 星标识与本机配置不符——向管理员重新索取 node.json');
+    }
   }
 
   private async onFrame(text: string): Promise<void> {
@@ -366,9 +470,10 @@ export class NodeClient {
   }
 
   private writeStatus(nextAttemptAt: number | undefined): void {
+    const entry = this.d.config.entries[0]!;
     const status: NodeStatusFile = {
       state: this.state,
-      brokerAlias: this.d.config.broker.alias ?? `${this.d.config.broker.host}:${this.d.config.broker.port}`,
+      brokerAlias: entry.alias ?? `${entry.host}:${entry.port}`,
       since: new Date(this.stateSince).toISOString(),
       lastUpdated: new Date(this.d.now()).toISOString(),
       ...(nextAttemptAt === undefined ? {} : { nextAttemptAt: new Date(nextAttemptAt).toISOString() }),
