@@ -336,6 +336,7 @@ async function conversationsView(deps: StatusDeps, json: boolean): Promise<strin
     lines.push(
       `  ${pairArrow(row).padEnd(30)}${formatRelativeTime(row.updatedAt, now).padEnd(12)}` +
         `turn ${String(row.turn ?? '?').padEnd(4)}${row.lastStatus ?? '未知'}` +
+          `${row.lastStatus === 'queued' ? '（已交对端队列待消费——对方回信即证明已处理）' : ''}` +
         `${row.parked > 0 ? `  滞留 ${row.parked}` : ''}${receipt}`,
     );
   }

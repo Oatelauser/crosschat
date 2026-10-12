@@ -153,7 +153,7 @@ crosschat codex [任意 codex 参数…]                  # crosschat 增强启�
 crosschat -v | --version | help                     # 版本 / 帮助
 ```
 
-发送输出三种状态：`delivered`（已投递）/ `parked`（对方忙，已入发件箱，看门狗自动重投；输出含队列深度与 mailbox 镜像路径）/ 错误码（见排障）。
+发送输出三种状态：`delivered`（已投递）/ `queued`（已交对端 codex 队列待消费，轮末处理——**对方回信到来即证明已处理**，勿发消息追问）/ `parked`（对方忙，已入发件箱，看门狗自动重投；输出含队列深度与 mailbox 镜像路径）/ 错误码（见排障）。`status --conversations` 的末条状态是**本机发送账本视角**（对端回信不产生本机账目），`queued` 为终态。
 
 `status --conversations` 另看对话总览：每对端点的最近方向、相对时间、轮次、末条状态与滞留数（与 `--json` 组合输出同结构数组）。
 
