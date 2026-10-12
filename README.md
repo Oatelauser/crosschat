@@ -144,7 +144,7 @@ crosschat send --via tcp:<机器名/mid8> --to <名> --body "…" [--file <路�
 echo … | crosschat send --to <名字>                 # 正文走 stdin
 crosschat status [--json] [--conversations] [--claude|--codex] [--name <子串>] [--all]   # 双侧总览（可按段/名字过滤；--via tcp|ssh 配 --conversations 按传输滤）
 crosschat doctor                                    # 一键环境体检（有 ❌ 时退出码 1）
-crosschat serve [--port/--gen-key/--list/--remove/--connect/--detach/--stop]  # tcp 转发器：broker/节点/钥匙管理（见转发器手册）
+crosschat serve [--name/--port/--gen-key/--list/--remove/--connect/--detach/--stop]  # tcp 转发器：broker(--name 星名)/节点/钥匙管理（见转发器手册）
 crosschat clean [--force]                           # 清 tcp 收件/断点残留（默认懒删除规则；--force 全清）
 crosschat uninstall [--yes]                         # 卸载数据面（serve 在跑拒删；结尾 npm uninstall 收尾）
 crosschat install-skills [--dir <根>]               # 安装/更新 agent skill（幂等）

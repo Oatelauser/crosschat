@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### E0：星名字段换轨（词表自解释）
+
+- node.json 词表：条目 `name`=星名（**broker 权威**：`serve --name` 设置/hostname 缺省，info 帧下发、守护连接自动同步覆盖，改名重启 broker 全网 2s 收敛）、顶层 `showName`=本机显示名（自报 roster 称呼用）；旧字段 alias/顶层 name 读取层自动映射、同步时清旧键无缝换轨
+- 星名字符集 `[A-Za-z0-9._-]{1,32}` 禁冒号（限定词语法保留字）；`--name` 与 `--connect` 互斥
+- 选择器全线统一"星名精确→starId 前缀唯一"（via/--connect/--stop 同规则），报错列 `cloud(6b76e1)` 式条目拷了即用；守护标签/日志取解析后星名；broker status 行带星名
+
+### E1：远程会话枚举（012 票）
+
+- `crosschat status --via tcp:<机器名|mid8>`——查远机会话清单，语法镜像 send --via（多星 `tcp:<星名>:<机器>`）；帧表新增 status-query/status-result（additive，14→16 型），broker 按 send 同款 pending 路由、ownMid 本机直答
+- payload 分段镜像本地 status 语义（codex 挂掉=unavailable 段部分应答）；过滤参数/--json 请求方本地套用；超时教学"对端未应答——节点客户端在跑吗/两端需升级"（覆盖旧 broker 偏差）
+- skill：查远机用它替代"赌名字发送"；ssh 形态对端仍走 ssh
+
+
 ### D0：超长引导与寻址（现场反馈批二）
 
 - **tcp 超长自动降级文件通道**：正文 >1MiB 自动落临时文件走 `--file`（≤64MiB 一次成功，输出注明对端落地路径，成功即删临时文件；失败保留原文并给本机路径）；tcp 腿尺寸线统一为 1MiB 直发/64MiB 文件（替代原 16KiB 默认前置+16MiB 绝对上界的 tcp 分支）；ssh/单机报错路径字节不变，**报错三分支文案逐字快照锁死**（超长引导的权威教学）
