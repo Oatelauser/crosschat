@@ -14,7 +14,7 @@ import { MultichatError } from '../errors.js';
 import { machineId } from '../platform/machine-id.js';
 import { Broker, DEFAULT_PORT, defaultDeliverLocal } from '../serve/broker.js';
 import { ensureStarId, genKeys, listNodes, readRegistry, registryFileOf, removeNode, setPort, tcpDir, writeRegistry } from '../serve/registry.js';
-import { deliverViaRunSend, NodeClient, readNodeConfig, type NodeConfig } from '../serve/node.js';
+import { deliverViaRunSend, NodeClient, readNodeConfig, type BrokerEntry, type NodeConfig } from '../serve/node.js';
 import { FileInbox } from '../serve/file-channel.js';
 import type { SendDeps } from './send.js';
 import type { DeliverFrame, ErrorFrame, ResultFrame, SendFrame } from '../serve/protocol.js';
@@ -27,6 +27,8 @@ export interface ServeArgs {
   remove?: string;
   detach?: boolean;
   stopTarget?: 'broker' | 'node' | 'both';
+  /** B2：--stop <选择器>——只停该选择器的节点守护（与 stopTarget 互斥）。 */
+  stopSelector?: string;
   /** B2：节点模式（可选带 broker 别名校验 node.json）；'' = 未给值。 */
   connect?: string;
 }
@@ -44,6 +46,10 @@ export interface ServeDeps {
   onSignal(sig: 'SIGINT' | 'SIGTERM', cb: () => void): void;
   /** B2：真 SendDeps 工厂（deliverLocal 接 runSend 用）；缺省回 NOT_READY（B1 行为，测试用）。 */
   makeSendDeps?(stdinText?: string): SendDeps;
+  /** B2：--stop 的进程扫描/杀进程/端口反查注入（测试用）；缺省真扫真杀。 */
+  listServeProcesses?: () => ProcInfo[];
+  killPid?: (pid: number) => boolean;
+  pidsOnPort?: (port: number) => Set<number>;
 }
 
 export function realServeDeps(): ServeDeps {
@@ -76,10 +82,14 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
   if (args.genKeyArg !== undefined) return runGenKey(args.genKeyArg, deps, registryFile, port);
   if (args.list) return runList(deps, registryFile);
   if (args.remove !== undefined) return runRemove(args.remove, deps, registryFile);
+  if (args.stopSelector !== undefined) return runStopSelector(args.stopSelector, deps);
   if (args.stopTarget !== undefined) return runStop(args.stopTarget, deps, registryFile);
   const detachedChild = deps.env.CROSSCHAT_SERVE_DETACHED === '1';
   if (args.connect !== undefined) {
-    if (args.detach && !detachedChild) return runDetach(deps, ['--connect', ...(args.connect === '' ? [] : [args.connect])], 'node.log');
+    if (args.detach && !detachedChild) {
+      const logName = args.connect === '' ? 'node.log' : `node-${args.connect}.log`;
+      return runDetach(deps, ['--connect', ...(args.connect === '' ? [] : [args.connect])], logName);
+    }
     return runForegroundNode(args.connect, deps);
   }
   if (args.detach && !detachedChild) {
@@ -141,8 +151,8 @@ function runRemove(label: string, deps: ServeDeps, registryFile: string): number
   return removed ? 0 : 1;
 }
 
-/** 后台化：spawn 自身 detached + env 标记防循环；日志写 tcp/<name>。broker 传端口（节点客户端外连无监听口）。 */
-function runDetach(deps: ServeDeps, extraArgs: string[], logName: 'broker.log' | 'node.log', portNum?: number): number {
+/** 后台化：spawn 自身 detached + env 标记防循环；日志写 tcp/<name>（B2 节点命名条目=node-<选择器>.log）。broker 传端口（节点客户端外连无监听口）。 */
+function runDetach(deps: ServeDeps, extraArgs: string[], logName: string, portNum?: number): number {
   const logFile = join(tcpDir(deps.baseDir), logName);
   mkdirSync(tcpDir(deps.baseDir), { recursive: true });
   const fd = openSync(logFile, 'a');
@@ -153,7 +163,7 @@ function runDetach(deps: ServeDeps, extraArgs: string[], logName: 'broker.log' |
     env: { ...deps.env, CROSSCHAT_SERVE_DETACHED: '1' },
   });
   child.unref();
-  deps.stdout(`${logName === 'node.log' ? '节点客户端' : 'broker'} 后台运行中 pid=${child.pid}${portNum !== undefined ? ` 端口 ${portNum}` : ''}（日志：${logFile}）`);
+  deps.stdout(`${logName.startsWith('node') ? '节点客户端' : 'broker'} 后台运行中 pid=${child.pid}${portNum !== undefined ? ` 端口 ${portNum}` : ''}（日志：${logFile}）`);
   return 0;
 }
 
@@ -307,11 +317,49 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
   return 0;
 }
 
-/** B2：--connect 节点客户端前台跑（Ctrl+C 退出）。 */
+/**
+ * B2：--connect 选择器解析（限定器风格对齐 via-tcp 的 selectBrokerEntry）：
+ * 别名精确匹配 → starId 前缀唯一匹配（歧义教加长）；无命中时单条目走旧
+ * "别名不符拒绝"校验路径（旧形状兼容），多条目列条目并给示例。'' = entries[0]。
+ */
+export function selectConnectEntry(selector: string, config: NodeConfig): { entry: BrokerEntry; selector: string } {
+  const entries = config.entries;
+  if (selector === '') return { entry: entries[0]!, selector };
+  const byAlias = entries.find((e) => e.alias === selector);
+  if (byAlias !== undefined) return { entry: byAlias, selector };
+  const byPrefix = entries.filter((e) => e.starId !== undefined && e.starId.startsWith(selector));
+  if (byPrefix.length === 1) return { entry: byPrefix[0]!, selector };
+  if (byPrefix.length > 1) {
+    throw new MultichatError(
+      'USAGE',
+      `--connect 选择器 ${selector} 的 starId 前缀命中多个星（${byPrefix.map((e) => e.alias ?? e.starId).join('、')}）——加长前缀使其唯一`,
+    );
+  }
+  if (entries.length === 1) {
+    // 旧校验路径：单条目（旧形状）别名不符拒绝；无别名则容忍直连（B2 前行为）
+    const alias = entries[0]!.alias;
+    if (alias !== undefined) {
+      throw new MultichatError(
+        'USAGE',
+        `--connect ${selector} 与 node.json 的 broker 别名 ${alias} 不符——省略别名直连，或向管理员核对 node.json`,
+      );
+    }
+    return { entry: entries[0]!, selector };
+  }
+  const list = entries.map((e) => `${e.alias ?? '(无别名)'}(starId ${e.starId ?? '未登记'})`).join('、');
+  throw new MultichatError(
+    'USAGE',
+    `--connect 选择器 ${selector} 不匹配任何条目——本机 node.json 现有：${list}；示例：--connect ${entries[0]!.alias ?? entries[0]!.starId}`,
+  );
+}
+
+/** B2：--connect 节点客户端前台跑（Ctrl+C 退出）。守护只连选中条目（config.entries 收窄为单元素）。 */
 async function runForegroundNode(aliasArg: string, deps: ServeDeps): Promise<number> {
-  const config = loadNodeConfigChecked(aliasArg, deps);
+  const config = readNodeConfig(join(tcpDir(deps.baseDir), 'node.json'));
+  const { entry, selector } = selectConnectEntry(aliasArg, config);
+  const suffix = selector === '' ? '' : `-${selector}`;
   const detached = deps.env.CROSSCHAT_SERVE_DETACHED === '1';
-  const logFile = join(tcpDir(deps.baseDir), 'node.log');
+  const logFile = join(tcpDir(deps.baseDir), `node${suffix}.log`);
   const logLine = detached
     ? (line: string) => {
         try {
@@ -322,10 +370,10 @@ async function runForegroundNode(aliasArg: string, deps: ServeDeps): Promise<num
       }
     : (line: string) => deps.stdout(line);
   const client = new NodeClient({
-    config,
+    config: { ...config, entries: [entry] },
     configFile: join(tcpDir(deps.baseDir), 'node.json'),
     machineId: deps.machineId,
-    statusFile: join(tcpDir(deps.baseDir), 'status-node.json'),
+    statusFile: join(tcpDir(deps.baseDir), `status-node${suffix}.json`),
     fileInbox: new FileInbox({
       inboxDir: join(tcpDir(deps.baseDir), 'inbox'),
       partsDir: join(tcpDir(deps.baseDir), 'parts'),
@@ -340,23 +388,9 @@ async function runForegroundNode(aliasArg: string, deps: ServeDeps): Promise<num
     log: logLine,
     onSignal: deps.onSignal,
   });
-  const entry = config.entries[0]!;
   logLine(`节点客户端启动：目标 broker ${entry.alias ?? `${entry.host}:${entry.port}`}（Ctrl+C 退出）`);
   await client.run();
   return 0;
-}
-
-/** 读 node.json（教学报错）；--connect 显式给的别名与凭证不符时拒绝。 */
-function loadNodeConfigChecked(aliasArg: string, deps: ServeDeps): NodeConfig {
-  const config = readNodeConfig(join(tcpDir(deps.baseDir), 'node.json'));
-  const alias = config.entries[0]!.alias;
-  if (aliasArg !== '' && alias !== undefined && aliasArg !== alias) {
-    throw new MultichatError(
-      'USAGE',
-      `--connect ${aliasArg} 与 node.json 的 broker 别名 ${alias} 不符——省略别名直连，或向管理员核对 node.json`,
-    );
-  }
-  return config;
 }
 
 function readResultTimeoutMs(env: NodeJS.ProcessEnv): number {
@@ -366,7 +400,7 @@ function readResultTimeoutMs(env: NodeJS.ProcessEnv): number {
   return Number.isInteger(n) && n >= 1_000 ? n : 120_000;
 }
 
-interface ProcInfo {
+export interface ProcInfo {
   pid: number;
   cmdline: string;
 }
@@ -453,33 +487,64 @@ function pidsOnPort(port: number): Set<number> {
   return pids;
 }
 
+/** 命令行里 --connect 的取值（空串=裸 --connect 默认守护；undefined=非节点进程）。 */
+export function connectValueOf(cmdline: string): string | undefined {
+  const m = cmdline.match(/--connect(?:=|\s+)([^\s]*)/);
+  return m === null ? undefined : m[1] ?? '';
+}
+
+/**
+ * B2：--stop <选择器>——只停该选择器的节点守护（精确匹配 --connect 的取值，
+ * 身份校验沿用 matchServeProcesses 的 exe/脚本特征闸门）。
+ */
+function runStopSelector(selector: string, deps: ServeDeps): number {
+  const procs = (deps.listServeProcesses ?? listServeProcesses)();
+  const kill = deps.killPid ?? killPid;
+  const targets = procs.filter((p) => p.cmdline.includes('--connect') && connectValueOf(p.cmdline) === selector);
+  if (targets.length === 0) {
+    deps.stdout(`stop node: 未找到 ${selector}`);
+    return 1;
+  }
+  let rc = 0;
+  for (const n of targets) {
+    if (kill(n.pid)) deps.stdout(`stop node: pid ${n.pid} 已终止（--connect ${selector}）`);
+    else {
+      deps.stdout(`stop node: pid ${n.pid} 终止失败`);
+      rc = 1;
+    }
+  }
+  return rc;
+}
+
 function runStop(target: 'broker' | 'node' | 'both', deps: ServeDeps, registryFile: string): number {
-  const procs = listServeProcesses();
+  const procs = (deps.listServeProcesses ?? listServeProcesses)();
+  const kill = deps.killPid ?? killPid;
   const brokers = procs.filter((p) => !p.cmdline.includes('--connect'));
   const nodes = procs.filter((p) => p.cmdline.includes('--connect'));
   let rc = 0;
+  // B2：both 时先停全部节点守护再停 broker——节点腿断流在前，broker 关闭在后
+  if (target === 'node' || target === 'both') {
+    if (nodes.length === 0) deps.stdout('stop node: 未发现运行中的节点');
+    for (const n of nodes) {
+      if (kill(n.pid)) deps.stdout(`stop node: pid ${n.pid} 已终止`);
+      else {
+        deps.stdout(`stop node: pid ${n.pid} 终止失败`);
+        rc = 1;
+      }
+    }
+  }
   if (target === 'broker' || target === 'both') {
     if (brokers.length === 0) deps.stdout('stop broker: 未发现运行中的 broker');
     const port = readRegistry(registryFile).port ?? DEFAULT_PORT;
-    const confirmed = pidsOnPort(port);
+    const confirmed = (deps.pidsOnPort ?? pidsOnPort)(port);
     for (const b of brokers) {
       if (!confirmed.has(b.pid)) {
         deps.stdout(`stop broker: pid ${b.pid} 命令行匹配但未持有端口 ${port}，未确认跳过`);
         continue;
       }
-      if (killPid(b.pid)) deps.stdout(`stop broker: pid ${b.pid} 已终止（端口 ${port} 双重确认）`);
+      if (kill(b.pid)) deps.stdout(`stop broker: pid ${b.pid} 已终止（端口 ${port} 双重确认）`);
       else {
         deps.stdout(`stop broker: pid ${b.pid} 终止失败`);
-        rc = 1;
-      }
-    }
-  }
-  if (target === 'node' || target === 'both') {
-    if (nodes.length === 0) deps.stdout('stop node: 未发现运行中的节点');
-    for (const n of nodes) {
-      if (killPid(n.pid)) deps.stdout(`stop node: pid ${n.pid} 已终止`);
-      else {
-        deps.stdout(`stop node: pid ${n.pid} 终止失败`);
         rc = 1;
       }
     }

@@ -408,13 +408,18 @@ function formatMiB(bytes: number): string {
 /**
  * B2.1：status 拉在线机器表——瞬态 sender 连接发 roster 帧；任何失败返回
  * undefined（调用方静默降级为"转发器: 不可达"）。
+ * B2：entry 可指定探哪颗星（status 多条目逐星探）；缺省 entries[0]（B2.1 行为）。
  */
-export async function fetchRoster(tcpBaseDir: string, timeoutMs = 2_000): Promise<RosterMachine[] | undefined> {
+export async function fetchRosterFor(
+  tcpBaseDir: string,
+  entry: BrokerEntry | undefined,
+  timeoutMs = 2_000,
+): Promise<RosterMachine[] | undefined> {
   let conn: SenderConn;
   try {
     const config = readNodeConfig(join(tcpDir(tcpBaseDir), 'node.json'));
-    const entry = config.entries[0]!; // B0：多条目暂取第一条
-    conn = await SenderConn.open(`ws://${entry.host}:${entry.port}`, entry.key, undefined, timeoutMs);
+    const target = entry ?? config.entries[0]!; // B0：多条目暂取第一条
+    conn = await SenderConn.open(`ws://${target.host}:${target.port}`, target.key, undefined, timeoutMs);
   } catch {
     return undefined;
   }
@@ -427,4 +432,9 @@ export async function fetchRoster(tcpBaseDir: string, timeoutMs = 2_000): Promis
   } finally {
     conn.close();
   }
+}
+
+/** B2.1 原签名（探 entries[0]）——单条目路径与既有调用方沿用。 */
+export function fetchRoster(tcpBaseDir: string, timeoutMs = 2_000): Promise<RosterMachine[] | undefined> {
+  return fetchRosterFor(tcpBaseDir, undefined, timeoutMs);
 }

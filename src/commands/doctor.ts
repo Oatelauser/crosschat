@@ -9,6 +9,7 @@ import { resolveClaudeExe } from '../claude/resolve-exe.js';
 import { resolveCodexExecutable } from '../codex/transport.js';
 import { defaultOutboxDir, mailboxFileFor, outboxSummary } from '../outbox.js';
 import { watchdogStatus } from '../watchdog.js';
+import { readNodeConfig, type BrokerEntry } from '../serve/node.js';
 
 /**
  * `crosschat doctor` (B11): one-shot environment health check. Every probe is
@@ -200,22 +201,42 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
   } else ok('✅ 无双身份残留');
 
   // 6.5 票B B2：tcp 转发器配置——node.json/broker.json 可解析、钥字段齐、
-  // broker TCP 可达（探活超时 2s）。目录未接线或无任何配置文件 → 整段跳过。
+  // broker TCP 可达（探活超时 2s）。B2 多星：node.json 逐条目检查/探活；
+  // 单条目输出与 B2 之前逐字节同形。目录未接线或无任何配置文件 → 整段跳过。
   if (deps.tcpDir !== undefined) {
     const nodeRaw = deps.readFile(join(deps.tcpDir, 'node.json'));
     const brokerRaw = deps.readFile(join(deps.tcpDir, 'broker.json'));
     if (nodeRaw !== undefined || brokerRaw !== undefined) {
-      let nodeOk: { host: string; port: number; alias?: string } | undefined;
+      let entries: BrokerEntry[] | undefined;
       if (nodeRaw !== undefined) {
         try {
-          const cfg = JSON.parse(nodeRaw) as { broker?: { host?: string; port?: number; alias?: string }; key?: string };
-          if (typeof cfg.key !== 'string' || cfg.key === '' || typeof cfg.broker?.host !== 'string' || !Number.isInteger(cfg.broker.port)) {
-            throw new Error('bad shape');
-          }
-          nodeOk = { host: cfg.broker.host, port: cfg.broker.port as number, alias: cfg.broker.alias };
-          ok(`✅ tcp 节点配置可解析（broker ${nodeOk.alias ?? `${nodeOk.host}:${nodeOk.port}`}）`);
+          entries = readNodeConfig(join(deps.tcpDir, 'node.json')).entries;
         } catch {
           fail(`❌ tcp 节点配置 node.json 损坏或缺钥字段（${join(deps.tcpDir, 'node.json')}）——向管理员重新索取 node.json 覆盖`);
+        }
+        if (entries !== undefined) {
+          const label = (e: BrokerEntry): string => e.alias ?? `${e.host}:${e.port}`;
+          const multi = entries.length > 1;
+          entries.forEach((e, i) => {
+            ok(multi
+              ? `✅ tcp 节点条目 ${i + 1}/${entries!.length} 可解析（broker ${label(e)}）`
+              : `✅ tcp 节点配置可解析（broker ${label(e)}）`);
+          });
+          if (multi) {
+            // 多条目专属体检：旧条目缺 starId / 两条目疑似同一星
+            for (const e of entries) {
+              if (e.starId === undefined) {
+                attention(`⚠️ 条目 ${label(e)} 缺 starId（旧配置——连一次自动回填或重新索取 node.json）`);
+              }
+            }
+            const firstOfStar = new Map<string, string>();
+            for (const e of entries) {
+              if (e.starId === undefined) continue;
+              const prev = firstOfStar.get(e.starId);
+              if (prev === undefined) firstOfStar.set(e.starId, label(e));
+              else attention(`⚠️ 条目 ${prev} 与 ${label(e)} 的 starId 相同（${e.starId}）——疑似同一星配了两次`);
+            }
+          }
         }
       }
       if (brokerRaw !== undefined) {
@@ -229,12 +250,18 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
           fail('❌ tcp broker 注册表 broker.json 损坏或字段缺失——crosschat serve --list 核对，必要时重发钥匙');
         }
       }
-      if (nodeOk !== undefined) {
+      if (entries !== undefined) {
         const probe = deps.probeTcp ?? (() => true);
-        if (probe(nodeOk.host, nodeOk.port)) ok(`✅ broker TCP 可达（${nodeOk.host}:${nodeOk.port}）`);
-        else {
-          fail(`❌ broker TCP 不可达（${nodeOk.host}:${nodeOk.port}）——确认 broker 机 crosschat serve 在跑、网络/防火墙放行端口`);
-        }
+        const multi = entries.length > 1;
+        entries.forEach((e, i) => {
+          if (probe(e.host, e.port)) {
+            ok(multi ? `✅ 条目 ${i + 1} broker TCP 可达（${e.alias ?? ''} ${e.host}:${e.port}）` : `✅ broker TCP 可达（${e.host}:${e.port}）`);
+          } else {
+            fail(multi
+              ? `❌ 条目 ${i + 1} broker TCP 不可达（${e.host}:${e.port}）——确认 broker 机 crosschat serve 在跑、网络/防火墙放行端口`
+              : `❌ broker TCP 不可达（${e.host}:${e.port}）——确认 broker 机 crosschat serve 在跑、网络/防火墙放行端口`);
+          }
+        });
       }
     }
   }

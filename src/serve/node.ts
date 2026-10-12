@@ -289,7 +289,19 @@ export class NodeClient {
     let firstFailAt: number | undefined;
     while (!this.stopped) {
       this.setState('connecting');
-      const everOnline = await this.connectOnce();
+      let everOnline: boolean;
+      try {
+        everOnline = await this.connectOnce();
+      } catch (err) {
+        // B2：STAR_ID_MISMATCH 是配置错，退避重试无意义——永久停机等人工修配置。
+        if (err instanceof MultichatError && err.code === 'STAR_ID_MISMATCH') {
+          this.log('星标识不符已停机，修正配置后重启 crosschat serve --connect');
+          this.stopped = true;
+          this.stopResolve?.();
+          break;
+        }
+        throw err;
+      }
       if (this.stopped) break;
       attempt = everOnline ? 0 : attempt + 1;
       if (attempt === 1) firstFailAt = this.d.now();
@@ -355,6 +367,8 @@ export class NodeClient {
       this.log('offline（连接断开）');
     } catch (err) {
       this.log(`connect 失败: ${err instanceof MultichatError ? `${err.code} ${err.message}` : err instanceof Error ? err.message : String(err)}`);
+      // B2：星标识不符是永久性配置错——上抛给主循环停机（其余错误照旧退避重试）
+      if (err instanceof MultichatError && err.code === 'STAR_ID_MISMATCH') throw err;
     } finally {
       clearInterval(this.minuteTimer);
       this.clearFrameWaiters(new Error('connection closed'));

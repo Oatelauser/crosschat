@@ -1,11 +1,11 @@
 import type { RosterMachine } from '../serve/protocol.js';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ClaudeRegistryScan } from '../claude/registry.js';
 import type { CodexThreadWithMeta } from '../codex/discovery.js';
 import type { ConversationSummary } from '../conversation-summary.js';
 import { MultichatError } from '../errors.js';
-import type { NodeStatusFile } from '../serve/node.js';
+import { readNodeConfig, type BrokerEntry, type NodeStatusFile } from '../serve/node.js';
 
 /**
  * Read-only `status`: claude registry sessions (name/kind/status/pid/dir) plus
@@ -42,8 +42,9 @@ export interface StatusDeps {
   /**
    * B2.1：成员机在线表拉取（瞬态连 broker 发 roster 帧，2s 超时）。缺省 →
    * 不拉（本机是 broker 或未入网，输出与 B2 字节一致）。undefined 返回=不可达。
+   * B2：可传条目逐星探（多条目时逐条目拉表）；不传=entries[0]（单条目行为不变）。
    */
-  roster?: () => Promise<RosterMachine[] | undefined>;
+  roster?(entry?: BrokerEntry): Promise<RosterMachine[] | undefined>;
 }
 
 /** B2 freshness bound: a status file older than this reads as "没在跑". */
@@ -64,22 +65,60 @@ function readStatusJson<T>(file: string): T | undefined {
   }
 }
 
-/** 转发器区块（节点行 + broker 行 + 在线机器表）；dir=undefined → 空数组。 */
-async function tcpForwarderLines(tcpDir: string | undefined, nowMs: number, roster?: () => Promise<RosterMachine[] | undefined>): Promise<string[]> {
+/** B2：tcp 目录下的节点守护状态文件（默认在前，其余按选择器名排序）。 */
+function listNodeStatusFiles(tcpDir: string): string[] {
+  try {
+    return readdirSync(tcpDir)
+      .filter((f) => /^status-node(-.*)?\.json$/.test(f))
+      .sort((a, b) => (a === 'status-node.json' ? -1 : b === 'status-node.json' ? 1 : a.localeCompare(b)));
+  } catch {
+    return [];
+  }
+}
+
+/** 文件名 → 选择器（status-node.json=''；status-node-work.json='work'）。 */
+function nodeStatusSelector(file: string): string {
+  return file === 'status-node.json' ? '' : file.replace(/^status-node-/, '').replace(/\.json$/, '');
+}
+
+/** 单守护状态行（prefix='转发器:' 单条目 / '转发器[<选择器>]:' 多条目）。 */
+function nodeStateLine(prefix: string, st: NodeStatusFile): string {
+  if (st.state === 'online') return `${prefix} online tcp:${st.brokerAlias} (since ${formatCreatedAt(st.since)})`;
+  if (st.state === 'reconnect-wait') {
+    const next = st.nextAttemptAt === undefined ? '-' : formatHms(st.nextAttemptAt);
+    return `${prefix} 重连等待中，下次尝试 ${next}`;
+  }
+  return `${prefix} 连接中 tcp:${st.brokerAlias}`;
+}
+
+/**
+ * 转发器区块（节点行 + broker 行 + 在线机器表）；dir=undefined → 空数组。
+ * B2 多守护：逐个 status-node*.json 出行（多条目时带 [选择器] 标签）；
+ * 单条目（仅默认文件/无文件）输出与 B2 之前逐字节同形。
+ */
+async function tcpForwarderLines(tcpDir: string | undefined, nowMs: number, roster?: (entry?: BrokerEntry) => Promise<RosterMachine[] | undefined>): Promise<string[]> {
   if (tcpDir === undefined) return [];
   const lines: string[] = [];
-  const node = readStatusJson<NodeStatusFile>(join(tcpDir, 'status-node.json'));
-  const nodeFresh = node !== undefined && nowMs - Date.parse(node.lastUpdated) < TCP_STATUS_FRESH_MS;
-  if (!nodeFresh) {
-    lines.push('转发器: 未运行');
-  } else if (node!.state === 'online') {
-    lines.push(`转发器: online tcp:${node!.brokerAlias} (since ${formatCreatedAt(node!.since)})`);
-  } else if (node!.state === 'reconnect-wait') {
-    const next = node!.nextAttemptAt === undefined ? '-' : formatHms(node!.nextAttemptAt);
-    lines.push(`转发器: 重连等待中，下次尝试 ${next}`);
-  } else {
-    lines.push(`转发器: 连接中 tcp:${node!.brokerAlias}`);
+  const files = listNodeStatusFiles(tcpDir);
+  const multi = files.length > 1;
+  let anyFresh = false;
+  for (const file of files) {
+    const node = readStatusJson<NodeStatusFile>(join(tcpDir, file));
+    const fresh = node !== undefined && nowMs - Date.parse(node.lastUpdated) < TCP_STATUS_FRESH_MS;
+    if (multi) {
+      const tag = nodeStatusSelector(file) || '默认';
+      if (!fresh) {
+        lines.push(`转发器[${tag}]: 未运行`);
+        continue;
+      }
+      anyFresh = true;
+      lines.push(nodeStateLine(`转发器[${tag}]:`, node!));
+    } else if (fresh) {
+      anyFresh = true;
+      lines.push(nodeStateLine('转发器:', node!));
+    }
   }
+  if (!multi && !anyFresh) lines.push('转发器: 未运行');
   const broker = readStatusJson<BrokerStatusFile>(join(tcpDir, 'status-broker.json'));
   if (broker !== undefined && broker.state === 'running' && nowMs - Date.parse(broker.lastUpdated) < TCP_STATUS_FRESH_MS) {
     const nodes = broker.onlineNodes ?? [];
@@ -88,21 +127,40 @@ async function tcpForwarderLines(tcpDir: string | undefined, nowMs: number, rost
     return lines;
   }
   // B2.1：非 broker 机（本机 status-broker.json 不新鲜）且有 roster 接线 → 瞬态拉在线表；
-  // 失败静默降级为一行"不可达"。
+  // 失败静默降级为一行"不可达"。B2：node.json 多条目时逐条目探各自 broker。
   if (roster !== undefined) {
-    const machines = await roster();
-    if (machines === undefined) {
-      lines.push('转发器: 不可达');
+    let entries: BrokerEntry[] | undefined;
+    try {
+      entries = readNodeConfig(join(tcpDir, 'node.json')).entries;
+    } catch {
+      // 无 node.json/损坏 → 走单条目路径（roster 自行降级）
+    }
+    if (entries === undefined || entries.length <= 1) {
+      const machines = await roster();
+      pushRosterLines(lines, '', machines);
     } else {
-      const disp = (m: RosterMachine): string => `${m.name ?? '?'} (${m.mid8})`;
-      const online = machines.filter((m) => m.online);
-      const offline = machines.filter((m) => !m.online);
-      lines.push(`转发器: broker 可达，${online.length} 机器在线`);
-      if (online.length > 0) lines.push(`在线机器: ${online.map(disp).join('、')}`);
-      if (offline.length > 0) lines.push(`离线机器: ${offline.map(disp).join('、')}`);
+      for (const entry of entries) {
+        const label = entry.alias ?? `${entry.host}:${entry.port}`;
+        const machines = await roster(entry);
+        pushRosterLines(lines, label, machines);
+      }
     }
   }
   return lines;
+}
+
+/** 在线表行（label='' 时与 B2.1 单条目格式逐字节一致）。 */
+function pushRosterLines(lines: string[], label: string, machines: RosterMachine[] | undefined): void {
+  if (machines === undefined) {
+    lines.push(label === '' ? '转发器: 不可达' : `转发器: broker ${label} 不可达`);
+    return;
+  }
+  const disp = (m: RosterMachine): string => `${m.name ?? '?'} (${m.mid8})`;
+  const online = machines.filter((m) => m.online);
+  const offline = machines.filter((m) => !m.online);
+  lines.push(label === '' ? `转发器: broker 可达，${online.length} 机器在线` : `转发器: broker ${label} 可达，${online.length} 机器在线`);
+  if (online.length > 0) lines.push(label === '' ? `在线机器: ${online.map(disp).join('、')}` : `在线机器[${label}]: ${online.map(disp).join('、')}`);
+  if (offline.length > 0) lines.push(label === '' ? `离线机器: ${offline.map(disp).join('、')}` : `离线机器[${label}]: ${offline.map(disp).join('、')}`);
 }
 
 /** `hh:mm:ss` (local time); `-` when unknown/invalid. */
@@ -151,10 +209,14 @@ export async function runStatus(
 
   if (json) {
     // B2：tcp 小节仅在 tcpDir 接线时出现——嵌入方（无该 dep）的 json 键集
-    // 保持 {claude, codex} 冻结契约不变。
-    const tcp = deps.tcpDir === undefined ? {} : { tcp: tcpJson(deps.tcpDir, deps.now?.() ?? Date.now()) };
+    // 保持 {claude, codex} 冻结契约不变。B2 多星新增 tcpProfiles（逐守护
+    // status-node*.json）；tcp.node/tcp.broker 既有形状不动。
+    const nowMs = deps.now?.() ?? Date.now();
+    const tcp = deps.tcpDir === undefined ? {} : { tcp: tcpJson(deps.tcpDir, nowMs) };
+    const tcpProfiles = deps.tcpDir === undefined ? {} : { tcpProfiles: nodeProfilesJson(deps.tcpDir, nowMs) };
     return JSON.stringify({
       ...tcp,
+      ...tcpProfiles,
       claude: scan.sessions.map((session) => ({
         name: session.name ?? null,
         kind: session.kind,
@@ -235,8 +297,16 @@ function tcpJson(tcpDir: string | undefined, nowMs: number): { node: unknown; br
   };
 }
 
-/** Locks whose thread id is not in the thread/list result (empty when listing failed). */
-function unlistedLocks(held: ReadonlySet<string>, threads: CodexThreadWithMeta[] | undefined): string[] {
+/** B2：--json 的多守护小节——逐 status-node*.json（选择器 + 新鲜状态，陈旧为 null）。 */
+function nodeProfilesJson(tcpDir: string, nowMs: number): Array<{ selector: string; status: NodeStatusFile | null }> {
+  return listNodeStatusFiles(tcpDir).map((file) => {
+    const st = readStatusJson<NodeStatusFile>(join(tcpDir, file));
+    const fresh = st !== undefined && nowMs - Date.parse(st.lastUpdated) < TCP_STATUS_FRESH_MS;
+    return { selector: nodeStatusSelector(file), status: fresh ? st! : null };
+  });
+}
+
+/** Locks whose thread id is not in the thread/list result (empty when listing failed). */function unlistedLocks(held: ReadonlySet<string>, threads: CodexThreadWithMeta[] | undefined): string[] {
   if (threads === undefined) return [];
   const listed = new Set(threads.map((thread) => thread.id));
   return [...held].filter((id) => !listed.has(id));

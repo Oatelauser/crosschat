@@ -30,7 +30,7 @@ import { deliverToCodexThread } from './codex/deliver.js';
 import { runServe, realServeDeps, type ServeArgs } from './commands/serve.js';
 import { runClean, type CleanArgs } from './commands/clean.js';
 import { runUninstall, type UninstallArgs } from './commands/uninstall.js';
-import { fetchRoster } from './serve/via-tcp.js';
+import { fetchRosterFor } from './serve/via-tcp.js';
 import { DEFAULT_PORT } from './serve/broker.js';
 
 const version: string = (
@@ -76,14 +76,20 @@ commands:
                                 and register them
                               --list               list registered nodes
                               --remove <label>     remove a node key
-                              --connect [别名]     run this machine as a node
-                                client (needs ~/.crosschat/tcp/node.json;
+                              --connect [别名|星前缀]
+                                run this machine as a node client
+                                (needs ~/.crosschat/tcp/node.json;
+                                selector picks the broker entry;
                                 reconnects forever; log with --detach:
-                                ~/.crosschat/tcp/node.log)
+                                ~/.crosschat/tcp/node.log or
+                                node-<选择器>.log)
                               --detach             run the broker or node
                                 (with --connect) in the background
-                              --stop [broker|node] stop a running broker/node
-                                (default: both)
+                              --stop [broker|node|选择器]
+                                stop a running broker/node; a
+                                selector stops only that node
+                                daemon (default: all nodes, then
+                                the broker)
   install-skills [--dir <root>]
                             install the agent skill into <root>/.claude and
                             <root>/.codex (default root: home directory)
@@ -226,7 +232,7 @@ export function parseServeArgs(argv: readonly string[]): ServeArgs {
       const value = nextValue();
       if (value === undefined) args.stopTarget = 'both';
       else if (value === 'broker' || value === 'node') args.stopTarget = value;
-      else throw new MultichatError('USAGE', `serve: --stop 只接受 broker|node，收到：${value}`);
+      else args.stopSelector = value; // B2：其他取值=节点守护选择器
     } else {
       throw new MultichatError('USAGE', `serve: unknown option: ${name}`);
     }
@@ -308,8 +314,9 @@ function realStatusDeps(): StatusDeps {
     // B2: tcp forwarder status files live under ~/.crosschat/tcp.
     tcpDir: join(homedir(), '.crosschat', 'tcp'),
     // B2.1：成员机在线表——有 node.json 才拉（broker 机 status-broker.json 新鲜时不会走到）。
+    // B2：可传条目逐星探（缺省=entries[0]，单条目行为与 B2.1 一致）。
     roster: existsSync(join(homedir(), '.crosschat', 'tcp', 'node.json'))
-      ? () => fetchRoster(join(homedir(), '.crosschat'))
+      ? (entry) => fetchRosterFor(join(homedir(), '.crosschat'), entry)
       : undefined,
   };
 }

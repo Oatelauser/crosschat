@@ -4,7 +4,7 @@
  * conversations/mailbox）+ 双侧 skill。serve 在跑时拒删（教 --stop）；
  * 无 --yes 先打将删清单请求 stdin y/n；结尾提示 npm uninstall 收尾。
  */
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { TCP_STATUS_FRESH_MS } from './status.js';
 
@@ -33,15 +33,23 @@ function readStatusState(file: string): { state: string; lastUpdated: string } |
   }
 }
 
-/** serve 在跑检测：status-broker/status-node 任一新鲜即算（与 status 展示同款口径）。 */
+/** serve 在跑检测：status-broker 或任一 status-node*.json（B2 多守护）新鲜即算（与 status 展示同款口径）。 */
 function serveRunning(deps: UninstallDeps): boolean {
   const tcp = join(deps.crosschatHome, 'tcp');
   const broker = readStatusState(join(tcp, 'status-broker.json'));
   if (broker !== undefined && broker.state === 'running' && deps.now() - Date.parse(broker.lastUpdated) < TCP_STATUS_FRESH_MS) {
     return true;
   }
-  const node = readStatusState(join(tcp, 'status-node.json'));
-  return node !== undefined && deps.now() - Date.parse(node.lastUpdated) < TCP_STATUS_FRESH_MS;
+  let nodeFiles: string[] = [];
+  try {
+    nodeFiles = readdirSync(tcp).filter((f) => /^status-node.*\.json$/.test(f));
+  } catch {
+    return false;
+  }
+  return nodeFiles.some((f) => {
+    const node = readStatusState(join(tcp, f));
+    return node !== undefined && deps.now() - Date.parse(node.lastUpdated) < TCP_STATUS_FRESH_MS;
+  });
 }
 
 export async function runUninstall(args: UninstallArgs, deps: UninstallDeps): Promise<number> {

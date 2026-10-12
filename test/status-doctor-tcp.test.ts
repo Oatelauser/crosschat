@@ -106,6 +106,103 @@ describe('status 转发器区块', () => {
     expect(parsed.tcp.node).toBeNull();
     expect(parsed.tcp.broker).toEqual({ port: 7260, onlineNodes: ['box-a'] });
   });
+
+  it('B2: multiple node daemons each get a tagged 转发器 line', async () => {
+    const dir = mkdtempSync(join(root, 't-'));
+    writeNodeStatus(join(dir, 'tcp'), {
+      state: 'online',
+      brokerAlias: 'br1',
+      since: '2026-10-10T08:00:00.000Z',
+      lastUpdated: iso(-5_000),
+    });
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    writeFileSync(join(dir, 'tcp', 'status-node-work.json'), JSON.stringify({
+      state: 'reconnect-wait',
+      brokerAlias: 'br2',
+      since: iso(-10_000),
+      lastUpdated: iso(-1_000),
+      nextAttemptAt: iso(30_000),
+    }));
+    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
+    const lines = out.split('\n');
+    expect(lines.some((l) => l.startsWith('转发器[默认]: online tcp:br1 (since '))).toBe(true);
+    expect(lines.some((l) => l.startsWith('转发器[work]: 重连等待中，下次尝试 '))).toBe(true);
+  });
+
+  it('B2: a stale daemon among several shows its own 未运行 tag line', async () => {
+    const dir = mkdtempSync(join(root, 't-'));
+    writeNodeStatus(join(dir, 'tcp'), {
+      state: 'online',
+      brokerAlias: 'br1',
+      since: '2026-10-10T08:00:00.000Z',
+      lastUpdated: iso(-5_000),
+    });
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    writeFileSync(join(dir, 'tcp', 'status-node-work.json'), JSON.stringify({
+      state: 'online',
+      brokerAlias: 'br2',
+      since: iso(-600_000),
+      lastUpdated: iso(-600_000),
+    }));
+    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
+    expect(out).toContain('转发器[work]: 未运行');
+    expect(out).not.toContain('转发器: 未运行');
+  });
+
+  it('B2: --json adds tcpProfiles per daemon while tcp.node/tcp.broker keep their shape', async () => {
+    const dir = mkdtempSync(join(root, 't-'));
+    writeNodeStatus(join(dir, 'tcp'), {
+      state: 'online',
+      brokerAlias: 'br1',
+      since: '2026-10-10T08:00:00.000Z',
+      lastUpdated: iso(-5_000),
+    });
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    writeFileSync(join(dir, 'tcp', 'status-node-work.json'), JSON.stringify({
+      state: 'online',
+      brokerAlias: 'br2',
+      since: iso(-5_000),
+      lastUpdated: iso(-600_000), // 陈旧 → null
+    }));
+    const parsed = JSON.parse(await runStatus(baseStatusDeps(join(dir, 'tcp')), true)) as {
+      tcp: { node: { state: string; brokerAlias: string }; broker: unknown };
+      tcpProfiles: Array<{ selector: string; status: { state: string; brokerAlias: string } | null }>;
+    };
+    expect(Object.keys(parsed.tcp).sort()).toEqual(['broker', 'node']); // tcp 既有键形状不动
+    expect(parsed.tcp.node).toMatchObject({ state: 'online', brokerAlias: 'br1' });
+    expect(parsed.tcpProfiles).toHaveLength(2);
+    expect(parsed.tcpProfiles[0]).toMatchObject({ selector: '', status: { state: 'online', brokerAlias: 'br1' } });
+    expect(parsed.tcpProfiles[1]).toEqual({ selector: 'work', status: null });
+  });
+
+  it('B2: multi-entry node.json probes each broker for its own roster table', async () => {
+    const dir = mkdtempSync(join(root, 't-'));
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    writeFileSync(join(dir, 'tcp', 'node.json'), JSON.stringify({
+      brokers: [
+        { host: 'h1', port: 1, alias: 'br1', starId: 'aaaabbbbcccc', key: 'k1' },
+        { host: 'h2', port: 2, alias: 'br2', starId: 'dddd00001111', key: 'k2' },
+      ],
+    }));
+    const seen: Array<string | undefined> = [];
+    const deps = baseStatusDeps(join(dir, 'tcp'));
+    deps.roster = async (entry) => {
+      seen.push(entry?.alias);
+      if (entry?.alias === 'br1') {
+        return [
+          { name: 'hub', mid8: 'a1b2c3d4', online: true },
+          { name: 'beta', mid8: 'bbbb0000', online: false },
+        ];
+      }
+      return undefined; // br2 不可达
+    };
+    const out = await runStatus(deps, false);
+    expect(seen).toEqual(['br1', 'br2']); // 逐条目探
+    expect(out).toContain('转发器: broker br1 可达，1 机器在线');
+    expect(out).toContain('在线机器[br1]: hub (a1b2c3d4)');
+    expect(out).toContain('离线机器[br1]: beta (bbbb0000)');
+    expect(out).toContain('转发器: broker br2 不可达');
+  });
 });
 
 function baseDoctorDeps(overrides: Partial<DoctorDeps> = {}): DoctorDeps {
@@ -171,6 +268,55 @@ describe('doctor tcp 三项检查', () => {
     const report = runDoctor(deps);
     expect(report.output).toContain('❌ broker TCP 不可达');
     expect(report.output).toContain('crosschat serve');
+    expect(report.failed).toBe(true);
+  });
+
+  it('B2 zero regression: a single legacy entry keeps the exact tcp lines (no starId warning)', () => {
+    const dir = mkdtempSync(join(root, 't-'));
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    writeFileSync(join(dir, 'tcp', 'node.json'), JSON.stringify({ broker: { host: '127.0.0.1', port: 7260, alias: 'br' }, key: 'k' }));
+    writeFileSync(join(dir, 'tcp', 'broker.json'), JSON.stringify({ nodes: [{ label: 'node-1', key: 'k', addedAt: 'x' }] }));
+    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp') }));
+    const tcpLines = report.output.split('\n').filter((l) => l.includes('tcp') || l.includes('broker TCP'));
+    expect(tcpLines).toEqual([
+      '✅ tcp 节点配置可解析（broker br）',
+      '✅ tcp broker 注册表可解析（1 节点）',
+      '✅ broker TCP 可达（127.0.0.1:7260）',
+    ]);
+    expect(report.output).not.toContain('starId');
+    expect(report.failed).toBe(false);
+  });
+
+  it('B2: multi-entry node.json gets per-entry lines, missing-starId and duplicate-star warnings', () => {
+    const dir = mkdtempSync(join(root, 't-'));
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    writeFileSync(
+      join(dir, 'tcp', 'node.json'),
+      JSON.stringify({
+        brokers: [
+          { host: '10.0.0.1', port: 7260, alias: 'br1', starId: 'aaaabbbbcccc', key: 'k1' },
+          { host: '10.0.0.2', port: 7260, alias: 'br2', starId: 'aaaabbbbcccc', key: 'k2' },
+          { host: '10.0.0.3', port: 7260, alias: 'br3', key: 'k3' },
+        ],
+      }),
+    );
+    const probes: string[] = [];
+    const deps = baseDoctorDeps({
+      tcpDir: join(dir, 'tcp'),
+      probeTcp: (host) => {
+        probes.push(host);
+        return host === '10.0.0.1';
+      },
+    });
+    const report = runDoctor(deps);
+    expect(report.output).toContain('✅ tcp 节点条目 1/3 可解析（broker br1）');
+    expect(report.output).toContain('✅ tcp 节点条目 2/3 可解析（broker br2）');
+    expect(report.output).toContain('✅ tcp 节点条目 3/3 可解析（broker br3）');
+    expect(report.output).toContain('⚠️ 条目 br3 缺 starId（旧配置——连一次自动回填或重新索取 node.json）');
+    expect(report.output).toContain('⚠️ 条目 br1 与 br2 的 starId 相同（aaaabbbbcccc）——疑似同一星配了两次');
+    expect(report.output).toContain('✅ 条目 1 broker TCP 可达（br1 10.0.0.1:7260）');
+    expect(report.output).toContain('❌ 条目 2 broker TCP 不可达（10.0.0.2:7260）——确认 broker 机 crosschat serve 在跑、网络/防火墙放行端口');
+    expect(probes).toEqual(['10.0.0.1', '10.0.0.2', '10.0.0.3']); // 各自探活
     expect(report.failed).toBe(true);
   });
 });

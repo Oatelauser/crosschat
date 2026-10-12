@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -413,19 +413,21 @@ describe('B0 starId handshake', () => {
     });
   }
 
-  it('aborts before sending connect on mismatch: STAR_ID_MISMATCH, never online, no node-up', async () => {
+  it('STAR_ID_MISMATCH aborts before connect and permanently stops (B2: no retry)', async () => {
     const harness = await startBroker();
     seedWithStar(harness);
     const dir = mkdtempSync(join(root, 'st-'));
     const logs: string[] = [];
     const client = starClient(harness, dir, { starId: 'dddd00001111' }, (l) => logs.push(l));
-    void client.run();
-    await client.waitForState('reconnect-wait');
+    // B2：星标识不符是配置错——客户端不再退避重试，run() 自行结束
+    const done = client.run().then(() => 'done');
+    expect(await done).toBe('done');
     expect(logs.some((l) => l.includes('STAR_ID_MISMATCH') && l.includes('向管理员重新索取 node.json'))).toBe(true);
+    expect(logs.some((l) => l.includes('星标识不符已停机') && l.includes('重启 crosschat serve --connect'))).toBe(true);
+    expect(logs.some((l) => l.includes('reconnect-wait'))).toBe(false); // 停机不重试
     // 钥匙本是匹配的——若 connect 已发，客户端会上线且 broker 记 node-up
     expect(logs.some((l) => l.includes('online（'))).toBe(false);
     expect(harness.logs.some((l) => l.includes('node-up'))).toBe(false);
-    await client.stop();
   }, 10_000);
 
   it('goes online when both sides carry the same starId', async () => {
@@ -572,6 +574,78 @@ describe('B1 multi-star: delivery pipeline stamps starId into issued refs', () =
     expect(decodeRef(receipt.replyRef ?? '').starId).toBe(STAR);
     expect(stop).toBeDefined();
     stop!();
+    expect(await servePromise).toBe(0);
+  }, 15_000);
+});
+
+describe('B2 --connect 选择器与独立 status/log 文件', () => {
+  function nodeDeps(dir: string): { deps: ServeDeps; stop(): void } {
+    let stop: () => void = () => {};
+    const deps: ServeDeps = {
+      baseDir: dir,
+      stdout: () => {},
+      env: {},
+      version: 'test',
+      machineId: () => 'NODE-MID',
+      hostname: () => 'node-host',
+      networkInterfaces: () => ({}),
+      now: () => Date.now(),
+      onSignal: (_sig, cb) => {
+        stop = cb;
+      },
+    };
+    return { deps, stop: () => stop() };
+  }
+
+  async function waitStatusOnline(file: string): Promise<void> {
+    for (let i = 0; i < 100; i++) {
+      try {
+        const st = JSON.parse(readFileSync(file, 'utf8')) as { state: string };
+        if (st.state === 'online') return;
+      } catch {
+        // 文件未出现/未上线——继续轮询
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error(`status file never went online: ${file}`);
+  }
+
+  it('named selector daemon connects only that entry and writes status-node-<选择器>.json', async () => {
+    const harness = await startBroker();
+    seed(harness.registryFile, [{ key: key('n'), machineName: 'node-host' }]);
+    const port = Number(new URL(harness.url).port);
+    const dir = mkdtempSync(join(root, 'named-'));
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    writeFileSync(
+      join(dir, 'tcp', 'node.json'),
+      JSON.stringify({
+        brokers: [
+          { host: '127.0.0.1', port, alias: 'br1', key: key('n') },
+          { host: '10.255.255.1', port: 9, alias: 'br2', key: 'other-key' }, // 不可达——守护只连选中条目则永不碰它
+        ],
+        name: 'node-host',
+      }),
+    );
+    const { deps, stop } = nodeDeps(dir);
+    const servePromise = runServe({ connect: 'br1' }, deps);
+    await waitStatusOnline(join(dir, 'tcp', 'status-node-br1.json'));
+    expect(existsSync(join(dir, 'tcp', 'status-node.json'))).toBe(false);
+    stop();
+    expect(await servePromise).toBe(0);
+  }, 15_000);
+
+  it('default daemon (no selector) keeps writing status-node.json unchanged', async () => {
+    const harness = await startBroker();
+    seed(harness.registryFile, [{ key: key('n'), machineName: 'node-host' }]);
+    const port = Number(new URL(harness.url).port);
+    const dir = mkdtempSync(join(root, 'default-'));
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    writeFileSync(join(dir, 'tcp', 'node.json'), JSON.stringify({ broker: { host: '127.0.0.1', port, alias: 'br1' }, key: key('n') }));
+    const { deps, stop } = nodeDeps(dir);
+    const servePromise = runServe({ connect: '' }, deps);
+    await waitStatusOnline(join(dir, 'tcp', 'status-node.json'));
+    expect(existsSync(join(dir, 'tcp', 'status-node-br1.json'))).toBe(false);
+    stop();
     expect(await servePromise).toBe(0);
   }, 15_000);
 });

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { parseServeArgs } from '../src/cli.js';
-import { matchServeProcesses, runServe, type ServeDeps } from '../src/commands/serve.js';
+import { matchServeProcesses, runServe, selectConnectEntry, type ServeDeps } from '../src/commands/serve.js';
 import { listNodes, registryFileOf } from '../src/serve/registry.js';
 import { MultichatError } from '../src/errors.js';
 import type { NetworkInterfaceInfo } from 'node:os';
@@ -37,11 +37,13 @@ describe('parseServeArgs', () => {
     expect(parseServeArgs(['--port=7000', '--list'])).toEqual({ portArg: '7000', list: true });
   });
 
-  it('parses --stop with optional broker|node value', () => {
+  it('parses --stop with optional broker|node value; other values become B2 selectors', () => {
     expect(parseServeArgs(['--stop'])).toEqual({ stopTarget: 'both' });
     expect(parseServeArgs(['--stop', 'broker'])).toEqual({ stopTarget: 'broker' });
     expect(parseServeArgs(['--stop', 'node'])).toEqual({ stopTarget: 'node' });
-    expectUsage(() => parseServeArgs(['--stop', 'wat']), '--stop 只接受 broker|node');
+    // B2：--stop <选择器>——只停该选择器的节点守护
+    expect(parseServeArgs(['--stop', 'wat'])).toEqual({ stopSelector: 'wat' });
+    expect(parseServeArgs(['--stop=work'])).toEqual({ stopSelector: 'work' });
   });
 
   it('does not swallow a following flag as --gen-key value', () => {
@@ -170,5 +172,124 @@ describe('B3.1 bug3: matchServeProcesses identity gate (no host/shell kills)', (
     // 213 = crosschat 直跑但命令行无 dist/cli.js 脚本特征（包管理器改名场景）→ 跳过；
     // 214 = 无脚本特征；pid 1 = 自身。win 下 npm 实装经 node dist/cli.js（211 形态）。
     expect(hits.map((p) => p.pid)).toEqual([211, 212]);
+});
+
+describe('B2 --connect 选择器解析（selectConnectEntry）', () => {
+  const cfg = (entries: Array<{ host: string; port: number; alias?: string; starId?: string; key: string }>) => ({ entries });
+
+  it('alias exact match wins; empty selector falls back to entries[0]', () => {
+    const config = cfg([
+      { host: 'h1', port: 1, alias: 'br1', starId: 'aaaabbbbcccc', key: 'k1' },
+      { host: 'h2', port: 2, alias: 'br2', starId: 'dddd00001111', key: 'k2' },
+    ]);
+    expect(selectConnectEntry('br2', config).entry.host).toBe('h2');
+    expect(selectConnectEntry('br1', config).entry.host).toBe('h1');
+    const bare = selectConnectEntry('', config);
+    expect(bare.entry.host).toBe('h1');
+    expect(bare.selector).toBe('');
   });
+
+  it('unique starId prefix selects that entry and carries the raw selector', () => {
+    const config = cfg([
+      { host: 'h1', port: 1, alias: 'br1', starId: 'aaaabbbbcccc', key: 'k1' },
+      { host: 'h2', port: 2, alias: 'br2', starId: 'dddd00001111', key: 'k2' },
+    ]);
+    const hit = selectConnectEntry('dddd', config);
+    expect(hit.entry.host).toBe('h2');
+    expect(hit.selector).toBe('dddd');
+  });
+
+  it('ambiguous starId prefix teaches lengthening', () => {
+    const config = cfg([
+      { host: 'h1', port: 1, alias: 'br1', starId: 'aaaabbbbcccc', key: 'k1' },
+      { host: 'h2', port: 2, alias: 'br2', starId: 'aaaabbbbdddd', key: 'k2' },
+    ]);
+    expectUsage(() => selectConnectEntry('aaaa', config), '加长前缀使其唯一');
+  });
+
+  it('no hit with multiple entries lists them and gives an example', () => {
+    const config = cfg([
+      { host: 'h1', port: 1, alias: 'br1', starId: 'aaaabbbbcccc', key: 'k1' },
+      { host: 'h2', port: 2, key: 'k2' },
+    ]);
+    expectUsage(() => selectConnectEntry('nope', config), '不匹配任何条目');
+    try {
+      selectConnectEntry('nope', config);
+    } catch (err) {
+      const msg = (err as MultichatError).message;
+      expect(msg).toContain('br1(starId aaaabbbbcccc)');
+      expect(msg).toContain('(无别名)(starId 未登记)');
+      expect(msg).toContain('示例：--connect br1');
+    }
+  });
+
+  it('no hit on a single aliased entry keeps the legacy mismatch error; alias-less single entry tolerates', () => {
+    const aliased = cfg([{ host: 'h', port: 1, alias: 'real-alias', key: 'k' }]);
+    expectUsage(() => selectConnectEntry('other', aliased), '与 node.json 的 broker 别名 real-alias 不符');
+    const bare = cfg([{ host: 'h', port: 1, key: 'k' }]);
+    expect(selectConnectEntry('anything', bare).entry.host).toBe('h');
+  });
+});
+
+describe('B2 --stop 选择器与停机顺序（注入进程扫描/杀进程）', () => {
+  const raw = (pid: number, cmdline: string) => ({ pid, exe: 'node.exe', cmdline });
+
+  function stopDeps(procs: ReturnType<typeof raw>[], kills: number[], portPids?: number[]): { deps: ServeDeps; lines: string[] } {
+    const lines: string[] = [];
+    return {
+      lines,
+      deps: {
+        baseDir: mkdtempSync(join(root, 'stop-')),
+        stdout: (line) => lines.push(line),
+        env: {},
+        version: 'test',
+        machineId: () => 'MID',
+        hostname: () => 'h',
+        networkInterfaces: () => ({}),
+        now: () => Date.now(),
+        onSignal: () => {},
+        listServeProcesses: () => procs,
+        killPid: (pid) => {
+          kills.push(pid);
+          return true;
+        },
+        ...(portPids === undefined ? {} : { pidsOnPort: () => new Set(portPids) }),
+      },
+    };
+  }
+
+  it('--stop <选择器> kills only the daemon whose --connect value matches', async () => {
+    const kills: number[] = [];
+    const { deps, lines } = stopDeps([
+      raw(10, 'node dist/cli.js serve --connect work'),
+      raw(11, 'node dist/cli.js serve --connect home'),
+      raw(12, 'node dist/cli.js serve --connect'),
+    ], kills);
+    expect(await runServe({ stopSelector: 'work' }, deps)).toBe(0);
+    expect(kills).toEqual([10]);
+    expect(lines.some((l) => l.includes('pid 10 已终止') && l.includes('--connect work'))).toBe(true);
+  });
+
+  it('--stop <选择器> with no matching daemon reports 未找到 and exits 1', async () => {
+    const kills: number[] = [];
+    const { deps, lines } = stopDeps([
+      raw(12, 'node dist/cli.js serve --connect'),
+      raw(13, 'node dist/cli.js serve'),
+    ], kills);
+    expect(await runServe({ stopSelector: 'work' }, deps)).toBe(1);
+    expect(lines.at(-1)).toBe('stop node: 未找到 work');
+    expect(kills).toEqual([]);
+  });
+
+  it('bare --stop stops every node daemon before the broker', async () => {
+    const kills: number[] = [];
+    const { deps } = stopDeps([
+      raw(5, 'node dist/cli.js serve --detach'),
+      raw(10, 'node dist/cli.js serve --connect work'),
+      raw(11, 'node dist/cli.js serve --connect=home'),
+    ], kills, [5]);
+    expect(await runServe({ stopTarget: 'both' }, deps)).toBe(0);
+    expect(kills).toEqual([10, 11, 5]); // 节点在前，broker 最后
+  });
+});
 });

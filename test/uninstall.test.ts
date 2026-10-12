@@ -102,6 +102,17 @@ describe('runUninstall', () => {
     expect(f.lines[0]).toContain('拒绝删除');
   });
 
+  it('B2: refuses while any named daemon (status-node-<选择器>.json) is fresh', async () => {
+    const f = fixture();
+    const tcp = join(f.home, 'tcp');
+    mkdirSync(tcp, { recursive: true });
+    // 默认守护已死（无文件），命名守护活着
+    writeFileSync(join(tcp, 'status-node-work.json'), JSON.stringify({ state: 'online', lastUpdated: new Date().toISOString() }));
+    expect(await runUninstall({ yes: true }, f.deps)).toBe(1);
+    expect(f.lines[0]).toContain('拒绝删除');
+    expect(existsSync(f.home)).toBe(true);
+  });
+
   it('stale status files do not block the uninstall', async () => {
     const f = fixture();
     const tcp = join(f.home, 'tcp');
