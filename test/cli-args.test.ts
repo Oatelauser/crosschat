@@ -113,7 +113,7 @@ describe('parseStatusArgs', () => {
     expectUsage(() => parseStatusArgs(['--claude', '--claude']), 'only --json');
     expectUsage(() => parseStatusArgs(['--claude', '--conversations']), '不与 --conversations 组合');
     expectUsage(() => parseStatusArgs(['--via', 'tcp']), '仅与 --conversations');
-    expectUsage(() => parseStatusArgs(['--via', 'ftp', '--conversations']), 'tcp 或 ssh');
+    expectUsage(() => parseStatusArgs(['--via', 'ftp', '--conversations']), 'tcp、ssh 或 tcp:<机器>');
     expectUsage(() => parseStatusArgs(['--via']), 'requires a value');
     expectUsage(() => parseStatusArgs(['--name']), 'requires a value');
   });

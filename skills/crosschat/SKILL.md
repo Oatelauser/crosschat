@@ -54,7 +54,7 @@ crosschat status
 - 投给 codex 的消息：**开窗、关窗、忙时均可投**（daemon 0.160+）。对方正在跑 turn 也不阻塞——消息直接**入队**（输出 `queued`），当前轮结束即进入对话被处理；TUI 窗口会实时刷出。输出 `delivered`（已送达）/ `queued`（已入队，轮末处理）/ `parked`（仅旧 daemon 异常态，已暂存），三者都**无需重发**。`queued` 的消费确认免费搭载在业务流量上——对端的下一条来信带更高 turn 号即证明已消费，无需轮询、无显式回执。
 - **跨机发送**：`crosschat send --via ssh:<对端hostname> --to <名/id8> --body "…"`——对端是另一台机器上安装了 crosschat 的会话（hostname = `~/.ssh/config` 里的 Host 别名，推荐直接用对端系统 hostname）；名字在目标机上解析，回执带 `@<host>` 后缀，错误同码透传（前缀 `[via <host>]`）。
 - **tcp 形态同构**：`crosschat send --via tcp:<机器名或mid8> …` 与 ssh 形态用法相同（tcp 网络需该机 `~/.crosschat/tcp/node.json` 在场）。**回复永远不用管形态**：信封的回复命令不带 `--via`，照抄执行即自动选路——单机/ssh/tcp 两式合一，引用里已带两端机器指纹（tcp 会话另带星标识，按它选本机 node.json 条目）。仅主动发起跨机新消息（`--to`）时才需要手写 `--via`。
-- 跨机的对端**不在本机 status 里**——`ssh <对端> crosschat status` 查它机器上的会话，或由题词直接告知对端名字。
+- 跨机的对端**不在本机 status 里**——tcp 星查远机会话用 `crosschat status --via tcp:<机器>`（过滤参数 `--claude`/`--codex`/`--name` 同本地），ssh 形态对端仍用 `ssh <对端> crosschat status`；查到名字再发，**别赌名字发送**。
 - 跨机对话的轮次纪律更要遵守：防乒乓限流器是单机记账的，**turn 计数是跨机唯一防线**——接近预算即总结收尾。
 - **跨机正文别堆本机细节**（hostname/端口/注册表/配置摘要）——对端会话的数据外发防护可能拦截；被拦就精简为"双方已知信息"重发，别换通道硬闯。
 

@@ -1,4 +1,4 @@
-import type { RosterMachine } from '../serve/protocol.js';
+import type { RosterMachine, StatusCodexRow, StatusPayload } from '../serve/protocol.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ClaudeRegistryScan } from '../claude/registry.js';
@@ -53,6 +53,11 @@ export interface StatusDeps {
    * 无跨机痕迹可判，--via 过滤下不显示任何对。cli wires the default log tail.
    */
   sendLogTail?(): SendLogEntry[];
+  /**
+   * E1 远程枚举传输腿（status --via tcp:<机器>，票012）：瞬态连 broker 发
+   * status-query 等回程。Omitted → 远程视图报教学错；cli wires runViaTcpStatus。
+   */
+  fetchRemoteStatus?(via: string): Promise<{ target: string; payload: StatusPayload }>;
 }
 
 /** B2 freshness bound: a status file older than this reads as "没在跑". */
@@ -228,7 +233,9 @@ export async function runStatus(
   json: boolean,
   conversations = false,
   filters: StatusFilters = {},
+  viaTarget?: string,
 ): Promise<string> {
+  if (viaTarget !== undefined) return remoteStatusView(deps, json, filters, viaTarget);
   if (conversations) return conversationsView(deps, json, filters);
   const scan = deps.listClaudeSessions();
   let threads: CodexThreadWithMeta[] | undefined;
@@ -331,6 +338,63 @@ export async function runStatus(
     }
   }
   lines.push(...(await tcpForwarderLines(deps.tcpDir, deps.now?.() ?? Date.now(), deps.roster)));
+  return lines.join('\n');
+}
+
+/**
+ * E1 远程视图（票012）：`status --via tcp:<机器>`——经 broker 拉对端扫描载荷，
+ * 过滤参数在请求方本地套用，分段渲染与本地主视图同构（无 TUI 占用标记——
+ * 载荷不含写者锁；无转发器小节——那是本机概念）。codex 不可用降级为
+ * unavailable 段（部分应答），与本地语义一致。
+ */
+async function remoteStatusView(deps: StatusDeps, json: boolean, filters: StatusFilters, via: string): Promise<string> {
+  if (deps.fetchRemoteStatus === undefined) {
+    throw new MultichatError('USAGE', '远程会话枚举未接线（需要 ~/.crosschat/tcp/node.json，向管理员索取）');
+  }
+  const { target, payload } = await deps.fetchRemoteStatus(via);
+  const matches = nameMatcher(filters.name);
+  const codexRows: StatusCodexRow[] | undefined = Array.isArray(payload.codex) ? payload.codex : undefined;
+  const codexUnavailable = codexRows === undefined ? (payload.codex as { unavailable: string }).unavailable : undefined;
+
+  if (json) {
+    // 契约同本地 json：--name 滤行、选段省键；未命名行始终在场（--all 不影响 json）
+    const out: Record<string, unknown> = { via: `tcp:${target}`, machine: target };
+    if (filters.section !== 'codex') {
+      out.claude = payload.claude.filter((row) => matches(row.name));
+    }
+    if (filters.section !== 'claude') {
+      out.codex = codexRows === undefined ? payload.codex : codexRows.filter((row) => matches(row.name));
+    }
+    return JSON.stringify(out);
+  }
+
+  const lines: string[] = [`${target} 机会话:`];
+  if (filters.section !== 'codex') {
+    lines.push('claude:');
+    const rows = payload.claude.filter((row) => (filters.all || row.name !== null) && matches(row.name));
+    if (rows.length === 0) lines.push('  (none)');
+    for (const row of rows) {
+      lines.push(
+        `  ${(row.name ?? '(unnamed)').padEnd(24)} ${row.kind.padEnd(12)} ${row.status.padEnd(16)} pid ${String(row.pid).padEnd(6)} ${formatCwdShort(row.cwd ?? undefined)}`,
+      );
+    }
+  }
+  if (filters.section !== 'claude') {
+    lines.push('codex:');
+    if (codexUnavailable !== undefined) {
+      lines.push(`  unavailable (${codexUnavailable})`);
+    } else {
+      const rows = codexRows!.filter((row) => (filters.all || row.name !== null) && matches(row.name));
+      if (rows.length === 0) lines.push('  (none)');
+      for (const row of rows) {
+        const name = (row.name ?? '(unnamed)').padEnd(24);
+        const dir = formatCwdShort(row.cwd ?? undefined).padEnd(20);
+        const created = formatCreatedAt(row.createdAt ?? undefined).padEnd(11);
+        const originator = (row.originator ?? '-').padEnd(16);
+        lines.push(`  ${name} ${dir} ${created} ${originator} ${row.id}  ${row.status}`);
+      }
+    }
+  }
   return lines.join('\n');
 }
 

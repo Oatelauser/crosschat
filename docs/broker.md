@@ -165,6 +165,8 @@ delivered to worker2@9f8e7d6c (turn 1)
 
 与 ssh 跨机的全部差别：题词里的 `--via tcp:host-b`。回程路条由信封自动携带（`--via tcp:<发送方 mid8>`），worker2 零配置照抄即回。
 
+查对端机器上的会话名单（发起跨机新消息前先点名）：`crosschat status --via tcp:<机器>`——过滤参数（`--claude`/`--codex`/`--name`）与本地同构；ssh 形态对端仍用 `ssh <对端> crosschat status`。
+
 ### 2.2 文件通道（--file）
 
 消息里塞大内容不如直接送文件。`--file` 只能与 `--via tcp:` 同用，一句话题词形态：
@@ -273,7 +275,7 @@ S → C   {"op":"connected","machineName":"yang"}
 
 - **心跳**：服务端每 30s 发 ws ping，60s 无 pong 判死断开——客户端用标准 ws 库回 pong 即可，无需应用层帧
 
-### 4.2 帧表（14 型；`?`=可缺省）
+### 4.2 帧表（16 型；`?`=可缺省）
 
 | 帧 | 方向 | 字段 |
 |---|---|---|
@@ -291,6 +293,8 @@ S → C   {"op":"connected","machineName":"yang"}
 | `file-result` | S→C | id, ok, path?, error?, resumeFrom?, dedup? |
 | `roster` | C→S | （空） |
 | `roster-result` | S→C | machines:[{name?, mid8, online}] |
+| `status-query` | 双向 | id, targetMachine（请求方→broker→目标节点原帧转发） |
+| `status-result` | 双向 | id, ok, payload?({claude:[…], codex:[…]｜{unavailable}}), error? |
 
 每帧示例（占位值）：
 
@@ -368,7 +372,7 @@ C → file-end{id}
 
 ### 4.7 第三方实现者注意
 
-参考实现是**单 broker 星型**——多实例集群需自行解决实例间路由（哪台节点连在哪个实例）与注册表共享，本实现不含（一台机器入多颗星由节点侧承担，见 3.5）。注册表格式见 broker 机 `~/.crosschat/tcp/broker.json`（顶层 starId/port；nodes[] 内 label/key/machineId/machineName/addedAt）。节点侧 node.json 双形状：`{broker:{host,port,alias,starId?},key,name}`（单星）或 `{brokers:[{host,port,alias,starId?,key}…],name}`（多星）。会话引用 mc2_ 可在尾部携带 starId（flags bit 10）——旧版解析器遇此扩展走 `INVALID_CONVERSATION_REF`+升级指引，属设计好的版本偏差路径。
+参考实现是**单 broker 星型**——多实例集群需自行解决实例间路由（哪台节点连在哪个实例）与注册表共享，本实现不含（一台机器入多颗星由节点侧承担，见 3.5）。注册表格式见 broker 机 `~/.crosschat/tcp/broker.json`（顶层 starId/name(星名)/port；nodes[] 内 label/key/machineId/machineName/addedAt）。节点侧 node.json：`{brokers:[{host,port,name(星名),starId,key}…], showName(本机显示名)}`——旧字段 alias/顶层 name 读取时自动映射。会话引用 mc2_ 可在尾部携带 starId（flags bit 10）——旧版解析器遇此扩展走 `INVALID_CONVERSATION_REF`+升级指引，属设计好的版本偏差路径。
 
 </details>
 
@@ -383,6 +387,7 @@ C → file-end{id}
 | `PEER_OFFLINE 机器 X 已注册但当前不在线` | 对端节点没连 | 对端 `crosschat serve --connect`；稍后重试；若两端另配了 ssh 也可走 ssh 形态 |
 | `UNKNOWN_MACHINE 注册表没有…` | 目标名/mid 没登记或抄错 | broker 机 `crosschat serve --list` 查 mid8 与名字 |
 | `MACHINE_NAME_COLLISION` | 同名机器或 mid 前缀太短 | 报错里列了 mid——改用（更长的）mid 前缀寻址 |
+| 想看远机上有啥会话 | 本机 status 不跨机 | `crosschat status --via tcp:<机器>`（tcp 星；过滤参数同本地）；ssh 形态对端仍用 `ssh <对端> crosschat status` |
 | status `节点客户端: 未运行` | 本机节点客户端没起（收不到消息的原因） | `crosschat serve --connect --detach` |
 | `STAR_ID_MISMATCH 星标识不符已停机` | node.json 条目与 broker 现星标识不符（贴错星/配置陈旧） | 向管理员重新索取 node.json，重启 --connect |
 | 多星机裸写 `--via tcp:<机器>` 报"列条目"教学 | 多条目且无会话引用可循 | 加限定词 `--via tcp:<别名>:<机器>`；回信不受影响（引用自动带星） |

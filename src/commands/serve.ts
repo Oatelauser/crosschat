@@ -14,10 +14,10 @@ import { MultichatError } from '../errors.js';
 import { machineId } from '../platform/machine-id.js';
 import { Broker, DEFAULT_PORT, defaultDeliverLocal } from '../serve/broker.js';
 import { ensureStarId, ensureStarName, genKeys, listNodes, readRegistry, registryFileOf, removeNode, setName, setPort, tcpDir, writeRegistry } from '../serve/registry.js';
-import { deliverViaRunSend, formatBrokerEntry, NodeClient, readNodeConfig, syncNodeJsonEntry, type BrokerEntry, type NodeConfig } from '../serve/node.js';
+import { buildStatusPayload, deliverViaRunSend, formatBrokerEntry, NodeClient, readNodeConfig, syncNodeJsonEntry, type BrokerEntry, type NodeConfig } from '../serve/node.js';
 import { FileInbox } from '../serve/file-channel.js';
 import type { SendDeps } from './send.js';
-import type { DeliverFrame, ErrorFrame, ResultFrame, SendFrame } from '../serve/protocol.js';
+import type { DeliverFrame, ErrorFrame, ResultFrame, SendFrame, StatusPayload } from '../serve/protocol.js';
 
 export interface ServeArgs {
   portArg?: string;
@@ -312,6 +312,10 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
           ? { op: 'error', code: r.code ?? 'REMOTE_FAILED', message: r.message ?? '本机投递失败' }
           : r;
       };
+  // E1：status-query 目标是本机时的扫描应答（与节点守护同一 buildStatusPayload）。
+  const scanStatus = deps.makeSendDeps === undefined
+    ? undefined
+    : async (): Promise<StatusPayload> => buildStatusPayload(deps.makeSendDeps!());
   // B2.1：起服务前自登记（本机=全权成员，mid8/名字可寻址 + 本机 node.json）。
   // 后台子进程不重复出声——父进程 spawn 前已向控制台播报过。
   const self = ensureSelfEntry(deps, registryFile, port ?? readRegistry(registryFile).port ?? DEFAULT_PORT);
@@ -325,6 +329,7 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
     now: deps.now,
     log: logLine,
     deliverLocal,
+    scanStatus,
     fileInbox: new FileInbox({
       inboxDir: join(tcpDir(deps.baseDir), 'inbox'),
       partsDir: join(tcpDir(deps.baseDir), 'parts'),

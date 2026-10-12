@@ -30,7 +30,7 @@ import { deliverToCodexThread } from './codex/deliver.js';
 import { runServe, realServeDeps, type ServeArgs } from './commands/serve.js';
 import { runClean, type CleanArgs } from './commands/clean.js';
 import { runUninstall, type UninstallArgs } from './commands/uninstall.js';
-import { fetchRosterFor } from './serve/via-tcp.js';
+import { fetchRosterFor, runViaTcpStatus } from './serve/via-tcp.js';
 import { DEFAULT_PORT } from './serve/broker.js';
 
 const version: string = (
@@ -73,6 +73,10 @@ commands:
                                 (case-insensitive)
                               --via tcp|ssh         with --conversations only:
                                 filter pairs by cross-machine transport
+                              --via tcp:<机器>      main view only: enumerate
+                                sessions on a remote machine (same
+                                filters; ssh peers: ssh <host>
+                                crosschat status)
                               --all                 also list unnamed sessions
                                 (hidden by default in the main view)
   doctor                    environment health check (exits 1 on any ❌)
@@ -172,19 +176,23 @@ export function parseSendArgs(argv: readonly string[]): SendArgs {
 /**
  * status accepts --json/--conversations/--claude/--codex/--name <v>/--via <v>/--all
  * (flags at most once). Validation: --claude/--codex are mutually exclusive and
- * main-view only; --via only combines with --conversations and only takes
- * tcp|ssh. `filters` is absent when no filter flag was given.
+ * main-view only; bare --via (tcp|ssh) only combines with --conversations;
+ * --via tcp:<机器> (E1) only combines with the main view (remote enumeration).
+ * `filters` is absent when no filter flag was given.
  */
 export function parseStatusArgs(argv: readonly string[]): {
   json: boolean;
   conversations: boolean;
   filters?: StatusFilters;
+  /** E1：`--via tcp:<机器>` 远程枚举目标（原样透传，多星限定器在内）。 */
+  viaTarget?: string;
 } {
   let json = false;
   let conversations = false;
   let section: 'claude' | 'codex' | undefined;
   let name: string | undefined;
   let via: 'tcp' | 'ssh' | undefined;
+  let viaTarget: string | undefined;
   let all = false;
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i]!;
@@ -201,9 +209,12 @@ export function parseStatusArgs(argv: readonly string[]): {
       name = value;
     } else if (token === '--via' || token.startsWith('--via=')) {
       const value = inline ?? argv[++i];
-      if (value === undefined || value === '') throw new MultichatError('USAGE', 'status: --via requires a value (tcp or ssh)');
-      if (value !== 'tcp' && value !== 'ssh') throw new MultichatError('USAGE', 'status: --via 只接受 tcp 或 ssh');
-      via = value;
+      if (value === undefined || value === '') throw new MultichatError('USAGE', 'status: --via requires a value (tcp, ssh, or tcp:<machine>)');
+      if (value.startsWith('tcp:')) viaTarget = value;
+      else if (value === 'tcp' || value === 'ssh') via = value;
+      else if (value.startsWith('ssh:')) {
+        throw new MultichatError('USAGE', 'status: 远程查会话只支持 tcp 形态（--via tcp:<机器>）；ssh 形态对端仍用 ssh <对端> crosschat status');
+      } else throw new MultichatError('USAGE', 'status: --via 只接受 tcp、ssh 或 tcp:<机器>');
     } else {
       throw new MultichatError(
         'USAGE',
@@ -216,6 +227,12 @@ export function parseStatusArgs(argv: readonly string[]): {
   }
   if (via !== undefined && !conversations) {
     throw new MultichatError('USAGE', 'status: --via 仅与 --conversations 组合');
+  }
+  if (viaTarget !== undefined && via !== undefined) {
+    throw new MultichatError('USAGE', 'status: --via 只能给一次（tcp|ssh 过滤或 tcp:<机器> 枚举二选一）');
+  }
+  if (viaTarget !== undefined && conversations) {
+    throw new MultichatError('USAGE', 'status: --via tcp:<机器> 是主视图远程枚举，不与 --conversations 组合');
   }
   const any = section !== undefined || name !== undefined || via !== undefined || all;
   return {
@@ -231,6 +248,7 @@ export function parseStatusArgs(argv: readonly string[]): {
           },
         }
       : {}),
+    ...(viaTarget !== undefined ? { viaTarget } : {}),
   };
 }
 
@@ -384,6 +402,9 @@ function realStatusDeps(): StatusDeps {
       : undefined,
     // --conversations --via 的传输族判定源（本机 send-log 尾窗）。
     sendLogTail: () => readSendLogTail(defaultSendLogFile()),
+    // E1：status --via tcp:<机器> 的远程枚举腿（未入网时 runViaTcpStatus 自带教学）。
+    fetchRemoteStatus: (via) =>
+      runViaTcpStatus(via, { env: process.env, tcpBaseDir: join(homedir(), '.crosschat'), machineId: () => machineId() }),
   };
 }
 
@@ -492,9 +513,9 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     }
     try {
-      const { json, conversations, filters } = parseStatusArgs(rest);
+      const { json, conversations, filters, viaTarget } = parseStatusArgs(rest);
       await drainAtEntry();
-      const output = await runStatus(realStatusDeps(), json, conversations, filters);
+      const output = await runStatus(realStatusDeps(), json, conversations, filters, viaTarget);
       process.stdout.write(`${output}\n`);
       return 0;
     } catch (err) {

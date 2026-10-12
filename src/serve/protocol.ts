@@ -131,6 +131,44 @@ export interface RosterResultFrame {
   machines: RosterMachine[];
 }
 
+/** E1 远程枚举：claude 段行（字段镜像本地 status --json 的 claude 行）。 */
+export interface StatusClaudeRow {
+  name: string | null;
+  kind: string;
+  status: string;
+  pid: number;
+  cwd: string | null;
+}
+/** E1 远程枚举：codex 段行（字段镜像本地 status --json 的 codex 行；id 已截 8 位）。 */
+export interface StatusCodexRow {
+  name: string | null;
+  status: string;
+  id: string;
+  cwd: string | null;
+  createdAt: string | null;
+  originator: string | null;
+}
+/** E1 远程枚举载荷：分段镜像本地语义——codex daemon 没跑时给 unavailable 段而非整体失败。 */
+export interface StatusPayload {
+  claude: StatusClaudeRow[];
+  codex: StatusCodexRow[] | { unavailable: string };
+}
+
+/** E1 远程会话枚举（票012）：请求方→broker；目标是节点时 broker 原帧转发。 */
+export interface StatusQueryFrame {
+  op: 'status-query';
+  id: string;
+  targetMachine: string;
+}
+/** E1：目标侧扫描回程（节点→broker，broker 原帧转发回请求方）。 */
+export interface StatusResultFrame {
+  op: 'status-result';
+  id: string;
+  ok: boolean;
+  payload?: StatusPayload;
+  error?: string;
+}
+
 export type Frame =
   | InfoFrame
   | ConnectFrame
@@ -145,7 +183,9 @@ export type Frame =
   | FileEndFrame
   | FileResultFrame
   | RosterFrame
-  | RosterResultFrame;
+  | RosterResultFrame
+  | StatusQueryFrame
+  | StatusResultFrame;
 
 const OPS = new Set([
   'info',
@@ -162,6 +202,8 @@ const OPS = new Set([
   'file-result',
   'roster',
   'roster-result',
+  'status-query',
+  'status-result',
 ]);
 
 /** 解析一帧 ws 文本消息；JSON 损坏或 op 未知返回 undefined（调用方丢弃）。 */

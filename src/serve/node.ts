@@ -20,7 +20,9 @@ import type {
   ResultFrame,
 } from './protocol.js';
 import { runSend, type SendDeps } from '../commands/send.js';
+import type { CodexThreadWithMeta } from '../codex/discovery.js';
 import { FileInbox } from './file-channel.js';
+import type { StatusPayload, StatusQueryFrame } from './protocol.js';
 
 /** B0 多星地基：一个 broker 条目（旧形状读进 broker 对象、新形状 brokers[] 元素）。 */
 export interface BrokerEntry {
@@ -212,6 +214,48 @@ export async function deliverViaRunSend(frame: DeliverFrame, deps: SendDeps): Pr
   } catch {
     return { op: 'result', id: frame.id, status: 'error', code: 'INTERNAL', message: `本机回执不是 JSON: ${output.slice(0, 200)}` };
   }
+}
+
+/**
+ * E1 远程枚举载荷（票012）：本机扫描 = claude 注册表 + codex 线程表，分段
+ * 镜像本地 status 语义——codex 不可用降级为 unavailable 段（部分应答），
+ * 不让整次查询失败。节点守护应答与 broker 本机应答（serve 注线）共用。
+ */
+export async function buildStatusPayload(
+  deps: Pick<SendDeps, 'listClaudeSessions' | 'listCodexThreads'>,
+): Promise<StatusPayload> {
+  const scan = deps.listClaudeSessions();
+  let codex: StatusPayload['codex'];
+  try {
+    codex = (await deps.listCodexThreads()).map((thread) => {
+      // SendDeps 类型只承诺 summary；真接线（realSendDeps）返回带 meta 的完整行
+      const meta = (thread as CodexThreadWithMeta).meta;
+      return {
+        name: thread.name,
+        status: thread.status,
+        id: thread.id.slice(0, 8),
+        cwd: meta?.cwd ?? null,
+        createdAt: meta?.createdAt ?? null,
+        originator: meta?.originator ?? null,
+      };
+    });
+  } catch (err) {
+    // codex down is a valid status answer——同本地 status 的 unavailable 语义
+    const message = err instanceof MultichatError
+      ? `${err.code}: ${err.message}`
+      : `INTERNAL: ${err instanceof Error ? err.message : String(err)}`;
+    codex = { unavailable: message };
+  }
+  return {
+    claude: scan.sessions.map((session) => ({
+      name: session.name ?? null,
+      kind: session.kind,
+      status: session.status,
+      pid: session.pid,
+      cwd: session.cwd ?? null,
+    })),
+    codex,
+  };
 }
 
 export interface NodeStatusFile {
@@ -445,8 +489,25 @@ export class NodeClient {
       void this.onDeliver(frame);
       return;
     }
+    if (frame.op === 'status-query') {
+      void this.onStatusQuery(frame);
+      return;
+    }
     if (frame.op === 'file-begin' || frame.op === 'file-chunk' || frame.op === 'file-end') {
       this.onFile(frame);
+    }
+  }
+
+  /** E1：status-query → 本机扫描 → status-result（载荷分段见 buildStatusPayload）。 */
+  private async onStatusQuery(frame: StatusQueryFrame): Promise<void> {
+    try {
+      const payload = await buildStatusPayload(this.d.makeSendDeps());
+      this.send({ op: 'status-result', id: frame.id, ok: true, payload });
+      this.log(`status-query ${frame.id} 已应答`);
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      this.send({ op: 'status-result', id: frame.id, ok: false, error });
+      this.log(`status-query ${frame.id} 失败: ${error}`);
     }
   }
 

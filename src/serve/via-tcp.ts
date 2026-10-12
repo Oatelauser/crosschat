@@ -19,7 +19,7 @@ import { CODEX_ENDPOINT_MAX_BODY_BYTES } from '../limits.js';
 import type { SendLogEntry } from '../send-log.js';
 import type { SendArgs, SendDeps } from '../commands/send.js';
 import { encodeFrame, ERR, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
-import type { ErrorFrame, FileResultFrame, Frame, ReceiptFrame, RosterMachine } from './protocol.js';
+import type { ErrorFrame, FileResultFrame, Frame, ReceiptFrame, RosterMachine, StatusPayload, StatusResultFrame } from './protocol.js';
 import { defaultBaseDir, tcpDir } from './registry.js';
 import { formatBrokerEntry, readNodeConfig, type BrokerEntry } from './node.js';
 import { FILE_CHUNK_BYTES, FILE_MAX_BYTES, readFileForSend } from './file-channel.js';
@@ -205,13 +205,20 @@ export function selectBrokerEntry(entries: BrokerEntry[], selector: string | und
   );
 }
 
+/** B1 `tcp:<选择器>:<目标>` 拆解（send 与 status --via tcp: 同一函数族共用）。 */
+export function parseTcpViaSpec(via: string): { selector: string | undefined; target: string } {
+  const viaRest = via.slice(4);
+  const sep = viaRest.indexOf(':');
+  return {
+    selector: sep > 0 ? viaRest.slice(0, sep) : undefined,
+    target: sep > 0 ? viaRest.slice(sep + 1) : viaRest,
+  };
+}
+
 /** via 分支入口（send.ts 在 ssh 分流前调用）。body 在 --file 无 --body 时可为 undefined。 */
 export async function runViaTcpSend(args: SendArgs, body: string | undefined, deps: SendDeps): Promise<string> {
   // B1：`tcp:<选择器>:<目标>`——第一个':'前是选择器（星名/starId 前缀），其余是目标
-  const viaRest = args.via!.slice(4);
-  const sep = viaRest.indexOf(':');
-  const selector = sep > 0 ? viaRest.slice(0, sep) : undefined;
-  const target = sep > 0 ? viaRest.slice(sep + 1) : viaRest;
+  const { selector, target } = parseTcpViaSpec(args.via!);
   if (target === '') {
     throw new MultichatError('USAGE', '--via tcp:<机器名>：机器名不能为空（broker 机上 crosschat serve --list 可查；多星机可 --via tcp:<星名>:<机器名> 指定）');
   }
@@ -470,4 +477,58 @@ export async function fetchRosterFor(
 /** B2.1 原签名（探 entries[0]）——单条目路径与既有调用方沿用。 */
 export function fetchRoster(tcpBaseDir: string, timeoutMs = 2_000): Promise<RosterMachine[] | undefined> {
   return fetchRosterFor(tcpBaseDir, undefined, timeoutMs);
+}
+
+/** E1 status --via tcp:<机器> 的传输腿依赖（cli 注真值，测试注临时目录）。 */
+export interface TcpStatusDeps {
+  env: Record<string, string | undefined>;
+  tcpBaseDir?: string;
+  machineId?(): string | undefined;
+}
+
+/**
+ * E1 远程会话枚举发送腿（票012）：与 send 同款瞬态 sender 连接——握手 →
+ * status-query → 等 status-result/error → 关。超时教学覆盖版本偏差（旧
+ * broker 对未知 op 静默无行为 → 请求方在此超时）。
+ */
+export async function runViaTcpStatus(
+  via: string,
+  deps: TcpStatusDeps,
+): Promise<{ target: string; payload: StatusPayload }> {
+  const { selector, target } = parseTcpViaSpec(via);
+  if (target === '') {
+    throw new MultichatError('USAGE', '--via tcp:<机器名>：机器名不能为空（broker 机上 crosschat serve --list 可查；多星机可 --via tcp:<星名>:<机器名> 指定）');
+  }
+  const config = readNodeConfig(join(tcpDir(deps.tcpBaseDir ?? defaultBaseDir()), 'node.json'));
+  const timeoutMs = tcpTimeoutMs(deps.env);
+  const entry = selectBrokerEntry(config.entries, selector, undefined);
+  const conn = await SenderConn.open(`ws://${entry.host}:${entry.port}`, entry.key, deps.machineId?.(), Math.min(timeoutMs, 15_000));
+  try {
+    const id = randomUUID();
+    await conn.send({ op: 'status-query', id, targetMachine: target });
+    const frame = await conn.waitFor((f) => (f.op === 'status-result' || f.op === 'error') && f.id === id, timeoutMs);
+    if (frame.op === 'error') {
+      const { code, message } = frame as ErrorFrame;
+      if (code === ERR.PEER_OFFLINE) {
+        throw new MultichatError(code, `[via tcp:${target}] ${message}——对端离线，稍后重试；ssh 形态可 ssh <对端> crosschat status`);
+      }
+      if (code === ERR.UNKNOWN_MACHINE) {
+        throw new MultichatError(code, `[via tcp:${target}] ${message}——核对机器名：在 broker 机跑 crosschat serve --list 查看`);
+      }
+      throw new MultichatError(code, `[via tcp:${target}] ${message}`);
+    }
+    const result = frame as StatusResultFrame;
+    if (!result.ok || result.payload === undefined) {
+      throw new MultichatError('REMOTE_FAILED', `[via tcp:${target}] 对端扫描失败：${result.error ?? '无详情'}`);
+    }
+    return { target, payload: result.payload };
+  } catch (err) {
+    if (err instanceof MultichatError) throw err;
+    throw new MultichatError(
+      'TCP_TRANSPORT_FAILED',
+      `对端未应答（${err instanceof Error ? err.message : String(err)}）——目标机的节点客户端在跑吗（crosschat serve --connect）？两端 crosschat 都需升级到支持 status --via 的版本`,
+    );
+  } finally {
+    conn.close();
+  }
 }

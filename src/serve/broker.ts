@@ -27,6 +27,9 @@ import type {
   RosterMachine,
   RosterResultFrame,
   SendFrame,
+  StatusPayload,
+  StatusQueryFrame,
+  StatusResultFrame,
 } from './protocol.js';
 import { readRegistry, sanitizeName, writeRegistry, type NodeEntry } from './registry.js';
 import { FILE_MAX_BYTES, FileInbox } from './file-channel.js';
@@ -50,6 +53,8 @@ export interface BrokerDeps {
   deliverLocal: (frame: SendFrame) => Promise<ResultFrame | ErrorFrame>;
   /** B2：本机文件接收器（file-* 帧目标为 broker 机时落盘）；缺省 NOT_READY。 */
   fileInbox?: FileInbox;
+  /** E1：本机会话扫描（status-query 目标是 ownMid 时应答）；缺省 NOT_READY。 */
+  scanStatus?: () => Promise<StatusPayload>;
   /** 显式端口（0 = 随机，测试用）；缺省读注册表再缺省 DEFAULT_PORT。 */
   port?: number;
   heartbeatMs?: number;
@@ -81,6 +86,7 @@ interface Session {
 
 type RouteOutcome =
   | { kind: 'result'; frame: ResultFrame & { status: 'delivered' | 'queued' | 'parked' } }
+  | { kind: 'status'; frame: StatusResultFrame }
   | { kind: 'error'; code: string; message: string };
 
 interface PendingResult {
@@ -103,7 +109,11 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 export class Broker {
-  private readonly d: Required<Omit<BrokerDeps, 'port' | 'fileInbox'>> & { port?: number; fileInbox?: FileInbox };
+  private readonly d: Required<Omit<BrokerDeps, 'port' | 'fileInbox' | 'scanStatus'>> & {
+    port?: number;
+    fileInbox?: FileInbox;
+    scanStatus?: () => Promise<StatusPayload>;
+  };
   private wss?: WebSocketServer;
   private port?: number;
   /** E0 星名（start 时定格；status-broker.json 化妆用）。 */
@@ -279,6 +289,19 @@ export class Broker {
       this.send(session.ws, this.buildRoster());
       return;
     }
+    if (frame.op === 'status-query') {
+      await this.routeStatusQuery(session, frame);
+      return;
+    }
+    if (frame.op === 'status-result') {
+      const entry = this.pending.get(frame.id);
+      if (entry !== undefined && entry.targetWs === session.ws) {
+        clearTimeout(entry.timer);
+        this.pending.delete(frame.id);
+        entry.resolve({ kind: 'status', frame });
+      }
+      return;
+    }
     // 其余帧型（info/receipt/deliver）服务端无行为
   }
 
@@ -406,6 +429,7 @@ export class Broker {
       this.pending.set(frame.id, { targetWs: targetSession, timer, resolve });
     });
     if (outcome.kind === 'error') return fail(outcome.code, outcome.message);
+    if (outcome.kind === 'status') return fail('INTERNAL', 'send 路由收到 status 回程（id 串扰）'); // 防御：send/status 的 id 各自随机，不应互串
     const result = outcome.frame;
     this.send(sender.ws, {
       op: 'receipt',
@@ -416,6 +440,42 @@ export class Broker {
       ...(result.output === undefined ? {} : { output: result.output }),
     });
     this.log(`route ${from}→${target} ${result.status}`);
+  }
+
+  /**
+   * E1 远程会话枚举（票012）：resolveTarget 同款路由——目标是节点则转发
+   * status-query 并复用 send/result 的 pending 机制等 status-result 回程
+   * （超时/断线同款回 error）；目标是本机则直接扫描应答。
+   */
+  private async routeStatusQuery(sender: Session, frame: StatusQueryFrame): Promise<void> {
+    const target = frame.targetMachine;
+    const from = sender.machineName ?? 'unknown';
+    const fail = (code: string, message: string): void => {
+      this.send(sender.ws, { op: 'error', code, message, id: frame.id });
+      this.log(`status-route ${from}→${target} ${code}`);
+    };
+    const resolved = this.resolveTarget(target);
+    if (resolved.kind === 'error') return fail(resolved.code, resolved.message);
+    if (resolved.kind === 'local') {
+      if (this.d.scanStatus === undefined) {
+        return fail(ERR.NOT_READY, '本机会话扫描器未接线（升级 broker 机 crosschat）');
+      }
+      const payload = await this.d.scanStatus();
+      this.send(sender.ws, { op: 'status-result', id: frame.id, ok: true, payload });
+      this.log(`status-route ${from}→${target}(local) ok`);
+      return;
+    }
+    this.send(resolved.ws, frame);
+    const outcome = await new Promise<RouteOutcome>((resolve) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(frame.id);
+        resolve({ kind: 'error', code: ERR.PEER_OFFLINE, message: `节点 ${target} 未在 ${this.d.resultTimeoutMs}ms 内回应 status-result` });
+      }, this.d.resultTimeoutMs);
+      this.pending.set(frame.id, { targetWs: resolved.ws, timer, resolve });
+    });
+    if (outcome.kind === 'error') return fail(outcome.code, outcome.message);
+    this.send(sender.ws, outcome.frame);
+    this.log(`status-route ${from}→${target} ok`);
   }
 
   /** B2：file-begin 尺寸预拒 + 按 targetMachine 路由（本机则 fileInbox 落盘）。 */
