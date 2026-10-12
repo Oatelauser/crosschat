@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+## [1.5.5] - 2026-10-12
+
+### 修复
+
+- **回信 Windows 机器经 conversation ref 全断（P1，v1.5.4 现场）**：Windows machineId 是带杠 UUID（MachineGuid）、Linux 是纯 hex——ref 推导的 targetMachine 带杠过不了 broker 的 hex 判定 → UNKNOWN_MACHINE。修复：`normalizeMid`（小写+去非 hex）做在**五个比对边界**（resolveTarget 双侧/autoViaFromRef/onConnect 绑定/roster 与碰撞预警/did-you-mean），存储与线上帧保持历史形态（零迁移、混合版本安全）；UNKNOWN_MACHINE 报错自动列注册表候选（did-you-mean）。回归夹具含平台真实形态值（流程教训入档：身份类测试必须用平台真实形态夹具）
+- 文档：README/broker.md/federation.md 题词例句去 CLI 黑话注解（"send 时加 --via …"→"走 ssh/tcp 跨机"自然语，旗标映射归还 skill）
+
+
 ## [1.5.4] - 2026-10-12
 
 ### E0：星名字段换轨（词表自解释）
