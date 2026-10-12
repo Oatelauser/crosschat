@@ -7,6 +7,7 @@ import { conversationSummaries } from '../src/conversation-summary.js';
 import { pairKeyOf } from '../src/conversations.js';
 import { encodeRef, newConversationRef } from '../src/ref.js';
 import { appendSendLog, type SendLogEntry } from '../src/send-log.js';
+import { MultichatError } from '../src/errors.js';
 import type { ClaudeSessionEntry } from '../src/claude/registry.js';
 import type { CodexThreadWithMeta } from '../src/codex/discovery.js';
 
@@ -149,12 +150,13 @@ describe('status --name 过滤', () => {
   it('main view filters rows by case-insensitive display-name substring', async () => {
     const out = await runStatus(mainDeps(), false, false, { name: 'map' });
     expect(out).toContain('claude:');
-    expect(out).toContain('codex:');
     expect(out).toContain('Mapper');
     expect(out).not.toContain('Drill');
+    // F1 过滤抑制：--name 后零行的 codex 段整段沉默（段头与 (none) 占位都不出）
+    expect(out).not.toContain('codex:');
+    expect(out).not.toContain('(none)');
     const rows = out.split('\n').filter((l) => l.startsWith('  '));
-    expect(rows).toHaveLength(2); // the Mapper row + codex's (none)
-    expect(out).toContain('(none)');
+    expect(rows).toHaveLength(1); // only the Mapper row
   });
 
   it('conversations keeps a pair when either side matches', async () => {
@@ -224,6 +226,67 @@ describe('status --conversations --via 传输族', () => {
       'turn',
       'updatedAt',
     ]);
+  });
+});
+
+describe('status F1 过滤抑制：零行段整段沉默', () => {
+  it('--name 只命中 codex 时 claude 段整段沉默（段头也不出）', async () => {
+    const out = await runStatus(mainDeps(), false, false, { name: 'drill' });
+    expect(out).toContain('codex:');
+    expect(out).toContain('Drill');
+    expect(out).not.toContain('claude:');
+  });
+
+  it('--name 过滤下 codex 段零行时 unavailable 横幅（CODEX_PROXY_SPAWN_FAILED）一并静音', async () => {
+    const deps = mainDeps();
+    deps.listCodexThreads = async () => {
+      throw new MultichatError('CODEX_PROXY_SPAWN_FAILED', 'spawn 失败');
+    };
+    // 无过滤：横幅照旧（零回归锚点）
+    const bare = await runStatus(deps, false);
+    expect(bare).toContain('codex:');
+    expect(bare).toContain('unavailable (CODEX_PROXY_SPAWN_FAILED: spawn 失败)');
+    // --name 只命中 claude → codex 段（含横幅）整段沉默
+    const filtered = await runStatus(deps, false, false, { name: 'map' });
+    expect(filtered).toContain('claude:');
+    expect(filtered).toContain('Mapper');
+    expect(filtered).not.toContain('codex:');
+    expect(filtered).not.toContain('unavailable');
+  });
+
+  it('--claude 时 codex 段整段沉默（含 unavailable 横幅）', async () => {
+    const deps = mainDeps();
+    deps.listCodexThreads = async () => {
+      throw new MultichatError('CODEX_PROXY_SPAWN_FAILED', 'spawn 失败');
+    };
+    const out = await runStatus(deps, false, false, { section: 'claude' });
+    expect(out).toContain('claude:');
+    expect(out).toContain('Mapper');
+    expect(out).not.toContain('codex:');
+    expect(out).not.toContain('unavailable');
+  });
+
+  it('--json 不受过滤抑制影响：零行的段仍以空数组/错误对象在场', async () => {
+    const deps = mainDeps();
+    deps.listCodexThreads = async () => {
+      throw new MultichatError('CODEX_PROXY_SPAWN_FAILED', 'spawn 失败');
+    };
+    const parsed = JSON.parse(await runStatus(deps, true, false, { name: 'map' })) as {
+      claude: unknown[];
+      codex: unknown;
+    };
+    expect(parsed.claude).toHaveLength(1); // Mapper 命中
+    expect(parsed.codex).toEqual({ error: 'CODEX_PROXY_SPAWN_FAILED: spawn 失败' });
+  });
+
+  it('裸输出零行段保持 (none) 占位（无过滤不沉默）', async () => {
+    const deps: StatusDeps = {
+      listClaudeSessions: () => ({ sessions: [], malformed: 0 }),
+      listCodexThreads: async () => [],
+    };
+    const out = await runStatus(deps, false);
+    expect(out).toContain('claude:\n  (none)');
+    expect(out).toContain('codex:\n  (none)');
   });
 });
 

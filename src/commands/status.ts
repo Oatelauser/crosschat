@@ -80,19 +80,21 @@ function readStatusJson<T>(file: string): T | undefined {
   }
 }
 
-/** B2：tcp 目录下的节点守护状态文件（默认在前，其余按选择器名排序）。 */
-function listNodeStatusFiles(tcpDir: string): string[] {
+/** B2：tcp 目录下的节点守护状态文件（默认在前，其余按选择器名排序）。F1 起 doctor 版本对账同用（readdir 可注入）。 */
+export function listNodeStatusFiles(tcpDir: string, readdir: (dir: string) => string[] = readdirSync): string[] {
+  let names: string[];
   try {
-    return readdirSync(tcpDir)
-      .filter((f) => /^status-node(-.*)?\.json$/.test(f))
-      .sort((a, b) => (a === 'status-node.json' ? -1 : b === 'status-node.json' ? 1 : a.localeCompare(b)));
+    names = readdir(tcpDir);
   } catch {
     return [];
   }
+  return names
+    .filter((f) => /^status-node(-.*)?\.json$/.test(f))
+    .sort((a, b) => (a === 'status-node.json' ? -1 : b === 'status-node.json' ? 1 : a.localeCompare(b)));
 }
 
 /** 文件名 → 选择器（status-node.json=''；status-node-work.json='work'）。 */
-function nodeStatusSelector(file: string): string {
+export function nodeStatusSelector(file: string): string {
   return file === 'status-node.json' ? '' : file.replace(/^status-node-/, '').replace(/\.json$/, '');
 }
 
@@ -228,6 +230,11 @@ function nameMatcher(needle: string | undefined): (name: string | null | undefin
   return (name) => (name ?? '(unnamed)').toLowerCase().includes(lower);
 }
 
+/** F1 过滤抑制：任一过滤参数在场时，零行的段整段沉默（段头/占位/unavailable 横幅）——过滤语境下空段是噪音；裸输出保持原形（零回归锚点）。 */
+function anyFilter(filters: StatusFilters): boolean {
+  return filters.name !== undefined || filters.section !== undefined || filters.all === true;
+}
+
 export async function runStatus(
   deps: StatusDeps,
   json: boolean,
@@ -307,33 +314,39 @@ export async function runStatus(
   const unlisted = filters.all ? unlistedLocks(held, threads) : [];
 
   const lines: string[] = [];
+  const filtered = anyFilter(filters);
   if (filters.section !== 'codex') {
-    lines.push('claude:');
-    if (claudeRows.length === 0) lines.push('  (none)');
-    for (const session of claudeRows) {
-      lines.push(
-        `  ${(session.name ?? '(unnamed)').padEnd(24)} ${session.kind.padEnd(12)} ${session.status.padEnd(16)} pid ${String(session.pid).padEnd(6)} ${formatCwdShort(session.cwd)}`,
-      );
+    if (!(filtered && claudeRows.length === 0)) {
+      lines.push('claude:');
+      if (claudeRows.length === 0) lines.push('  (none)');
+      for (const session of claudeRows) {
+        lines.push(
+          `  ${(session.name ?? '(unnamed)').padEnd(24)} ${session.kind.padEnd(12)} ${session.status.padEnd(16)} pid ${String(session.pid).padEnd(6)} ${formatCwdShort(session.cwd)}`,
+        );
+      }
     }
   }
   if (filters.section !== 'claude') {
-    lines.push('codex:');
-    if (codexError !== undefined) lines.push(`  unavailable (${codexError})`);
-    else if (codexRows.length === 0 && unlisted.length === 0) lines.push('  (none)');
-    else {
-      for (const thread of codexRows) {
-        const name = (thread.name ?? '(unnamed)').padEnd(24);
-        const dir = formatCwdShort(thread.meta?.cwd).padEnd(20);
-        const created = formatCreatedAt(thread.meta?.createdAt).padEnd(11);
-        const originator = (thread.meta?.originator ?? '-').padEnd(16);
-        const marker = held.has(thread.id) ? '  TUI占用' : '';
-        lines.push(`  ${name} ${dir} ${created} ${originator} ${thread.id.slice(0, 8)}  ${thread.status}${marker}`);
-      }
-      // 006: locked but absent from thread/list (fresh TUI tab, no rollout).
-      for (const id of unlisted) {
-        lines.push(
-          `  ${'-'.padEnd(24)} ${'-'.padEnd(20)} ${'-'.padEnd(11)} ${'-'.padEnd(16)} ${id.slice(0, 8)}  未列入  TUI占用`,
-        );
+    const codexVisible = codexError === undefined && (codexRows.length > 0 || unlisted.length > 0);
+    if (!(filtered && !codexVisible)) {
+      lines.push('codex:');
+      if (codexError !== undefined) lines.push(`  unavailable (${codexError})`);
+      else if (!codexVisible) lines.push('  (none)');
+      else {
+        for (const thread of codexRows) {
+          const name = (thread.name ?? '(unnamed)').padEnd(24);
+          const dir = formatCwdShort(thread.meta?.cwd).padEnd(20);
+          const created = formatCreatedAt(thread.meta?.createdAt).padEnd(11);
+          const originator = (thread.meta?.originator ?? '-').padEnd(16);
+          const marker = held.has(thread.id) ? '  TUI占用' : '';
+          lines.push(`  ${name} ${dir} ${created} ${originator} ${thread.id.slice(0, 8)}  ${thread.status}${marker}`);
+        }
+        // 006: locked but absent from thread/list (fresh TUI tab, no rollout).
+        for (const id of unlisted) {
+          lines.push(
+            `  ${'-'.padEnd(24)} ${'-'.padEnd(20)} ${'-'.padEnd(11)} ${'-'.padEnd(16)} ${id.slice(0, 8)}  未列入  TUI占用`,
+          );
+        }
       }
     }
   }
@@ -369,29 +382,35 @@ async function remoteStatusView(deps: StatusDeps, json: boolean, filters: Status
   }
 
   const lines: string[] = [`${target} 机会话:`];
+  // F1 过滤抑制同本地：过滤后零行的段（含 unavailable 横幅）整段沉默。
+  const filtered = anyFilter(filters);
   if (filters.section !== 'codex') {
-    lines.push('claude:');
     const rows = payload.claude.filter((row) => (filters.all || row.name !== null) && matches(row.name));
-    if (rows.length === 0) lines.push('  (none)');
-    for (const row of rows) {
-      lines.push(
-        `  ${(row.name ?? '(unnamed)').padEnd(24)} ${row.kind.padEnd(12)} ${row.status.padEnd(16)} pid ${String(row.pid).padEnd(6)} ${formatCwdShort(row.cwd ?? undefined)}`,
-      );
+    if (!(filtered && rows.length === 0)) {
+      lines.push('claude:');
+      if (rows.length === 0) lines.push('  (none)');
+      for (const row of rows) {
+        lines.push(
+          `  ${(row.name ?? '(unnamed)').padEnd(24)} ${row.kind.padEnd(12)} ${row.status.padEnd(16)} pid ${String(row.pid).padEnd(6)} ${formatCwdShort(row.cwd ?? undefined)}`,
+        );
+      }
     }
   }
   if (filters.section !== 'claude') {
-    lines.push('codex:');
-    if (codexUnavailable !== undefined) {
-      lines.push(`  unavailable (${codexUnavailable})`);
-    } else {
-      const rows = codexRows!.filter((row) => (filters.all || row.name !== null) && matches(row.name));
-      if (rows.length === 0) lines.push('  (none)');
-      for (const row of rows) {
-        const name = (row.name ?? '(unnamed)').padEnd(24);
-        const dir = formatCwdShort(row.cwd ?? undefined).padEnd(20);
-        const created = formatCreatedAt(row.createdAt ?? undefined).padEnd(11);
-        const originator = (row.originator ?? '-').padEnd(16);
-        lines.push(`  ${name} ${dir} ${created} ${originator} ${row.id}  ${row.status}`);
+    const rows = codexRows === undefined ? undefined : codexRows.filter((row) => (filters.all || row.name !== null) && matches(row.name));
+    if (!(filtered && (rows === undefined || rows.length === 0))) {
+      lines.push('codex:');
+      if (codexUnavailable !== undefined) {
+        lines.push(`  unavailable (${codexUnavailable})`);
+      } else {
+        if (rows!.length === 0) lines.push('  (none)');
+        for (const row of rows!) {
+          const name = (row.name ?? '(unnamed)').padEnd(24);
+          const dir = formatCwdShort(row.cwd ?? undefined).padEnd(20);
+          const created = formatCreatedAt(row.createdAt ?? undefined).padEnd(11);
+          const originator = (row.originator ?? '-').padEnd(16);
+          lines.push(`  ${name} ${dir} ${created} ${originator} ${row.id}  ${row.status}`);
+        }
       }
     }
   }

@@ -35,7 +35,11 @@ export const REF_PREFIX = 'mc1_';
 export const REF_PREFIX_V2 = 'mc2_';
 
 function invalid(why: string, skewHint = false): MultichatError {
-  const hint = skewHint ? ' 若本条来自对端机器，可能是对端 crosschat 版本较新——升级本机 crosschat 后重试回复。' : '';
+  // F1 文案改序：手误（抄写截断/改坏）前置——绝大多数 skew 是抄错一个字符；
+  // 版本偏差后置为反复失败时的次要解释。
+  const hint = skewHint
+    ? ' 多为抄写截断或改坏——请与信封逐字比对后重抄；若此条来自对端且反复失败，可能是对端 crosschat 版本较新，升级本机后重试。'
+    : '';
   return new MultichatError('INVALID_CONVERSATION_REF', `Malformed conversation reference (${why}).${hint}`);
 }
 

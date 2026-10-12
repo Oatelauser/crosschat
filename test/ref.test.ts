@@ -184,6 +184,21 @@ describe('mc2 compact codec (008 B2)', () => {
     expect(() => decodeRef('mc2_!!!!')).toThrow();
     expect(() => decodeRef('mc3_abc')).toThrow(/prefix/);
   });
+
+  it('F1 文案改序：手误前置、版本偏差后置（旧文案不再出现）', () => {
+    const truncated = 'mc2_' + Buffer.from([0b00000000]).toString('base64url');
+    let message = '';
+    try {
+      decodeRef(truncated);
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    expect(message).toContain('多为抄写截断或改坏——请与信封逐字比对后重抄');
+    expect(message).toContain('若此条来自对端且反复失败，可能是对端 crosschat 版本较新，升级本机后重试');
+    // 旧文案（版本偏差前置、措辞不同）必须退场
+    expect(message).not.toContain('若本条来自对端机器');
+    expect(message).not.toContain('升级本机 crosschat 后重试回复');
+  });
 });
 
 describe('mc2 mid field (B10 machine-id)', () => {

@@ -7,12 +7,13 @@ import WebSocket, { type RawData } from 'ws';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
 import { encodeFrame, parseFrame, type Frame } from '../src/serve/protocol.js';
 import { registryFileOf, writeRegistry, type NodeEntry } from '../src/serve/registry.js';
-import { NodeClient, readNodeConfig, NOT_JOINED_MESSAGE } from '../src/serve/node.js';
+import { NodeClient, deliverViaRunSend, readNodeConfig, NOT_JOINED_MESSAGE } from '../src/serve/node.js';
 import { FileInbox } from '../src/serve/file-channel.js';
 import type { SendDeps } from '../src/commands/send.js';
 import { MultichatError } from '../src/errors.js';
 import { runServe, type ServeDeps } from '../src/commands/serve.js';
 import { decodeRef } from '../src/ref.js';
+import { encodeOrigin } from '../src/federation.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-serve-node-'));
 afterEach(() => {
@@ -775,4 +776,87 @@ describe('E0 星名同步（info.name 帧权威覆盖）', () => {
     stop();
     expect(await servePromise).toBe(0);
   }, 15_000);
+});
+
+describe('F1 跨机信封 from-machine（投递管线真值链）', () => {
+  it('节点投递腿：broker 透传的 roster 真名落进对端信封', async () => {
+    const harness = await startBroker();
+    seed(harness.registryFile, [{ key: key('n'), machineId: 'NODE-MID', machineName: 'node-host' }]);
+    const dir = mkdtempSync(join(root, 'f1-'));
+    const capture = fakeSendDeps(true);
+    const client = makeNodeClient(harness, dir, { makeSendDeps: () => capture.deps });
+    void client.run();
+    await client.waitForState('online');
+    // sender 用节点同款钥匙（注册表 machineName=node-host）→ deliver.fromMachine=node-host
+    const sender = await senderOn(harness.url, key('n'));
+    sender.send({ op: 'send', id: 'f1a', targetMachine: 'node-host', to: 'boss', body: 'hello', origin: encodeOrigin({ p: 'claude', id: 'sender-s9', name: 'wsl-boss' }, 'nodemid', 'NODE-MID', 'tcp') });
+    await sender.waitFor((f) => f.op === 'receipt' && f.id === 'f1a');
+    expect(capture.delivered).toHaveLength(1);
+    expect(capture.delivered[0]).toContain('from-name="wsl-boss"');
+    expect(capture.delivered[0]).toContain('from-machine="node-host"');
+    await client.stop();
+  }, 10_000);
+
+  it('无名瞬态发送方（注册表无名）：deliver 帧缺省 → 信封整个省略 from-machine', async () => {
+    const harness = await startBroker();
+    seed(harness.registryFile, [
+      { key: key('anon') }, // 无名 sender 钥匙（从未以 node 角色激活）
+      { key: key('n'), machineId: 'NODE-MID', machineName: 'node-host' },
+    ]);
+    const dir = mkdtempSync(join(root, 'f1-'));
+    const capture = fakeSendDeps(true);
+    const client = makeNodeClient(harness, dir, { makeSendDeps: () => capture.deps });
+    void client.run();
+    await client.waitForState('online');
+    const sender = await senderOn(harness.url, key('anon'));
+    sender.send({ op: 'send', id: 'f1b', targetMachine: 'node-host', to: 'boss', body: 'hello', origin: encodeOrigin({ p: 'claude', id: 'sender-s9', name: 'wsl-boss' }, 'nodemid', 'NODE-MID', 'tcp') });
+    await sender.waitFor((f) => f.op === 'receipt' && f.id === 'f1b');
+    expect(capture.delivered).toHaveLength(1);
+    expect(capture.delivered[0]).not.toContain('from-machine');
+    await client.stop();
+  }, 10_000);
+
+  it('broker 机 deliverLocal：远端来件在本机投递也带发送方 roster 真名（local 占位已灭）', async () => {
+    const capture = fakeSendDeps(true);
+    const harness = await startBroker({
+      // 与 serve.ts 的 deliverLocal 接线同款：broker 传入的 fromMachine 进 DeliverFrame
+      deliverLocal: (frame, fromMachine) =>
+        deliverViaRunSend(
+          {
+            op: 'deliver',
+            id: frame.id,
+            ...(fromMachine === undefined ? {} : { fromMachine }),
+            payload: frame.body,
+            to: frame.to,
+            conversation: frame.conversation,
+            origin: frame.origin,
+          },
+          capture.deps,
+        ),
+    });
+    seed(harness.registryFile, [
+      { key: key('s'), machineName: 'sender-win' },
+      { key: key('b'), machineId: 'BROKER-MID', machineName: 'self-host' },
+    ]);
+    const sender = await senderOn(harness.url, key('s'));
+    sender.send({ op: 'send', id: 'f1c', targetMachine: 'self-host', to: 'boss', body: 'to broker machine', origin: encodeOrigin({ p: 'claude', id: 'sender-s9', name: 'wsl-boss' }, 'sendermi', 'SENDER-MID', 'tcp') });
+    const receipt = await sender.waitFor((f) => f.op === 'receipt' && f.id === 'f1c');
+    expect(receipt).toMatchObject({ op: 'receipt', id: 'f1c', status: 'delivered' });
+    expect(capture.delivered).toHaveLength(1);
+    expect(capture.delivered[0]).toContain('from-machine="sender-win"');
+    expect(capture.delivered[0]).not.toContain('from-machine="local"');
+  }, 10_000);
+
+  it('NodeClient 写 status 文件带 version（doctor 对账数据源）', async () => {
+    const harness = await startBroker();
+    seed(harness.registryFile, [{ key: key('n'), machineName: 'node-host' }]);
+    const dir = mkdtempSync(join(root, 'f1-'));
+    const client = makeNodeClient(harness, dir, { version: '9.9.9' });
+    void client.run();
+    await client.waitForState('online');
+    const status = JSON.parse(readFileSync(join(dir, 'status-node.json'), 'utf8')) as { state: string; version?: string };
+    expect(status.state).toBe('online');
+    expect(status.version).toBe('9.9.9');
+    await client.stop();
+  }, 10_000);
 });

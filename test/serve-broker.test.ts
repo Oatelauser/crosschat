@@ -152,9 +152,10 @@ describe('broker handshake and auth', () => {
     const entry = JSON.parse(readFileSync(registryFile, 'utf8')) as { nodes: NodeEntry[] };
     expect(entry.nodes[0]?.machineId).toBe('m-1111');
     expect(entry.nodes[0]?.machineName).toBe('node-host');
-    const status = JSON.parse(readFileSync(statusFile, 'utf8')) as { state: string; onlineNodes: string[] };
+    const status = JSON.parse(readFileSync(statusFile, 'utf8')) as { state: string; onlineNodes: string[]; version?: string };
     expect(status.state).toBe('running');
     expect(status.onlineNodes).toEqual(['node-host']);
+    expect(status.version).toBe('1.4.0-test'); // F1：doctor 版本对账的数据源
   });
 
   it('B2.1: connect without a name leaves machineName undefined (broker-hostname backfill deleted)', async () => {
@@ -229,7 +230,7 @@ describe('broker handshake and auth', () => {
 
 describe('broker send routing', () => {
   async function senderOn(url: string, registryFile: string): Promise<TestClient> {
-    seed(registryFile, [{ key: key('s'), label: 'sender-key' }]);
+    seed(registryFile, [{ key: key('s'), label: 'sender-key', machineName: 'sender-host' }]);
     const sender = new TestClient(url);
     await sender.opened();
     await sender.waitFor((f) => f.op === 'info');
@@ -283,7 +284,8 @@ describe('broker send routing', () => {
     await node.waitFor((f) => f.op === 'connected');
     sender.send({ op: 'send', id: 's4', targetMachine: 'node-host', body: 'hello', origin: 'origin-host' });
     const deliver = await node.waitFor((f) => f.op === 'deliver');
-    expect(deliver).toMatchObject({ op: 'deliver', id: 's4', fromMachine: 'origin-host', payload: 'hello' });
+    // F1：fromMachine 只取 roster 真名（sender 注册条目 machineName），不落 origin 编码/占位
+    expect(deliver).toMatchObject({ op: 'deliver', id: 's4', fromMachine: 'sender-host', payload: 'hello' });
     node.send({ op: 'result', id: 's4', status: 'delivered', turn: '1/3' });
     const receipt = await sender.waitFor((f) => f.op === 'receipt');
     expect(receipt).toMatchObject({ op: 'receipt', id: 's4', status: 'delivered', turn: '1/3' });

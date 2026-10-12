@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -10,6 +10,7 @@ import { resolveCodexExecutable } from '../codex/transport.js';
 import { defaultOutboxDir, mailboxFileFor, outboxSummary } from '../outbox.js';
 import { watchdogStatus } from '../watchdog.js';
 import { readNodeConfig, type BrokerEntry } from '../serve/node.js';
+import { listNodeStatusFiles, nodeStatusSelector } from './status.js';
 
 /**
  * `crosschat doctor` (B11): one-shot environment health check. Every probe is
@@ -46,6 +47,10 @@ export interface DoctorDeps {
   tcpDir?: string;
   /** 纯 socket connect 探活（2s 预算）；缺省 spawnSync 子进程探。 */
   probeTcp?(host: string, port: number): boolean;
+  /** F1：本机 crosschat CLI 版本（package.json）；缺省跳过版本对账。 */
+  cliVersion?: string;
+  /** F1：tcp 目录列文件（status-node*.json 对账用）；缺省 readdirSync。 */
+  readDir?(dir: string): string[];
 }
 
 export interface DoctorReport {
@@ -74,6 +79,16 @@ export function defaultDoctorDeps(): DoctorDeps {
       }
     },
     homeDir: () => homedir(),
+    cliVersion: (
+      JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string }
+    ).version,
+    readDir: (dir) => {
+      try {
+        return readdirSync(dir);
+      } catch {
+        return [];
+      }
+    },
     listOutbox: () => outboxSummary(defaultOutboxDir()),
     tcpDir: join(homedir(), '.crosschat', 'tcp'),
     probeTcp: (host, port) => {
@@ -263,6 +278,39 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
           }
         });
       }
+    }
+  }
+
+  // 6.6 F1 版本对账：常驻（broker/节点守护）status 文件自带的 version 与本机
+  // CLI 版本比对——不一致 = 升级了 npm 包但常驻进程没重启（新 CLI + 旧常驻）。
+  // 旧守护 status 文件无 version 字段 → 跳过不误报；⚠️ 级不 ❌（行为怪异不是故障）。
+  if (deps.tcpDir !== undefined && deps.cliVersion !== undefined) {
+    const reconcile = (file: string, label: string): void => {
+      const raw = deps.readFile(join(deps.tcpDir!, file));
+      if (raw === undefined) return;
+      let version: unknown;
+      try {
+        version = (JSON.parse(raw) as { version?: unknown }).version;
+      } catch {
+        return; // 坏文件不在此项的职责内（tcp 配置项已覆盖可查的坏形状）
+      }
+      if (typeof version === 'string' && version !== '' && version !== deps.cliVersion) {
+        attention(
+          `⚠️ 常驻进程（${label}）为 v${version}，本机 v${deps.cliVersion}——升级后未重启：serve --stop && serve --detach`,
+        );
+      }
+    };
+    reconcile('status-broker.json', 'broker');
+    const list = deps.readDir ?? ((dir: string) => {
+      try {
+        return readdirSync(dir);
+      } catch {
+        return [];
+      }
+    });
+    for (const file of listNodeStatusFiles(deps.tcpDir, list)) {
+      const selector = nodeStatusSelector(file);
+      reconcile(file, selector === '' ? '节点守护' : `节点守护 ${selector}`);
     }
   }
 

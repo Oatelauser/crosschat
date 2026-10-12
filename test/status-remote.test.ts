@@ -398,6 +398,26 @@ describe('CLI：parseStatusArgs 与远程视图渲染', () => {
     expect(withAll.match(/\(unnamed\)/g)).toHaveLength(2);
   });
 
+  it('F1 过滤抑制同本地：--name 零行段整段沉默（含 unavailable 横幅）；--json 不受影响', async () => {
+    // 名字全不命中 → 两段皆零行，只剩标题行
+    const none = await runStatus(remoteDeps(), false, false, { name: 'no-such-name' }, 'tcp:cloud');
+    expect(none.split('\n')).toHaveLength(1);
+    expect(none).not.toContain('claude:');
+    expect(none).not.toContain('codex:');
+    // codex 不可达 + --name 只命中 claude → unavailable 横幅静音
+    const down: StatusPayload = {
+      claude: [{ name: 'worker', kind: 'interactive', status: 'idle', pid: 123, cwd: null }],
+      codex: { unavailable: 'CODEX_PROXY_SPAWN_FAILED: x' },
+    };
+    const out = await runStatus(remoteDeps(down), false, false, { name: 'work' }, 'tcp:cloud');
+    expect(out).toContain('worker');
+    expect(out).not.toContain('codex:');
+    expect(out).not.toContain('unavailable');
+    // --json 结构不动：codex 键仍是错误对象
+    const parsed = JSON.parse(await runStatus(remoteDeps(down), true, false, { name: 'work' }, 'tcp:cloud')) as Record<string, unknown>;
+    expect(parsed.codex).toEqual({ unavailable: 'CODEX_PROXY_SPAWN_FAILED: x' });
+  });
+
   it('--json：{via, machine, claude, codex} 结构，选段省键、--name 滤行', async () => {
     const parsed = JSON.parse(await runStatus(remoteDeps(), true, false, {}, 'tcp:cloud')) as Record<string, unknown>;
     expect(parsed).toMatchObject({ via: 'tcp:cloud', machine: 'cloud' });

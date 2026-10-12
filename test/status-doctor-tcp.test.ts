@@ -322,6 +322,45 @@ describe('doctor tcp 三项检查', () => {
   });
 });
 
+describe('F1 doctor 版本对账（常驻 vs 本机 CLI）', () => {
+  it('版本一致 → 无警告行', () => {
+    const dir = mkdtempSync(join(root, 't-'));
+    writeBrokerStatus(join(dir, 'tcp'), { state: 'running', port: 7260, lastUpdated: iso(-3_000), version: '1.5.5' });
+    writeNodeStatus(join(dir, 'tcp'), { state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000), version: '1.5.5' });
+    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.5.5' }));
+    expect(report.output).not.toContain('升级后未重启');
+    expect(report.failed).toBe(false);
+  });
+
+  it('broker 版本不一致 → ⚠️ 点名两版本与重启口诀（不 ❌）', () => {
+    const dir = mkdtempSync(join(root, 't-'));
+    writeBrokerStatus(join(dir, 'tcp'), { state: 'running', port: 7260, lastUpdated: iso(-3_000), version: '1.5.4' });
+    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.5.5' }));
+    expect(report.output).toContain('⚠️ 常驻进程（broker）为 v1.5.4，本机 v1.5.5——升级后未重启：serve --stop && serve --detach');
+    expect(report.failed).toBe(false); // ⚠️ 级不 ❌
+  });
+
+  it('节点守护（带选择器）版本不一致单独点名；旧守护无 version 字段跳过不误报', () => {
+    const dir = mkdtempSync(join(root, 't-'));
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    writeFileSync(join(dir, 'tcp', 'status-node-work.json'), JSON.stringify({ state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000), version: '1.4.0' }));
+    // 旧守护：status-node.json 无 version 字段 → 不误报
+    writeNodeStatus(join(dir, 'tcp'), { state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000) });
+    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.5.5' }));
+    expect(report.output).toContain('⚠️ 常驻进程（节点守护 work）为 v1.4.0，本机 v1.5.5');
+    expect(report.output).not.toContain('节点守护）为 vundefined');
+    const warns = report.output.match(/升级后未重启/g) ?? [];
+    expect(warns).toHaveLength(1); // 只有 work 一条
+  });
+
+  it('cliVersion 未接线 → 整项跳过（零回归）', () => {
+    const dir = mkdtempSync(join(root, 't-'));
+    writeBrokerStatus(join(dir, 'tcp'), { state: 'running', port: 7260, lastUpdated: iso(-3_000), version: '0.0.1' });
+    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp') }));
+    expect(report.output).not.toContain('升级后未重启');
+  });
+});
+
 describe('E0 broker status 行化妆（星名）', () => {
   it('shows the star name between 服务端 and 端口 when the broker status carries one', async () => {
     const dir = mkdtempSync(join(root, 't-'));

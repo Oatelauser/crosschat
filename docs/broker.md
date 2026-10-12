@@ -284,7 +284,7 @@ S → C   {"op":"connected","machineName":"yang"}
 | `error` | 双向 | code, message, id? |
 | `send` | C→S | id, targetMachine, to?, conversation?, body, origin? |
 | `receipt` | S→C | id, status(delivered/queued/parked), turn?, replyRef?, output? |
-| `deliver` | S→C | id, fromMachine, payload, to?, conversation?, origin? |
+| `deliver` | S→C | id, fromMachine?, payload, to?, conversation?, origin? |
 | `result` | C→S | id, status(delivered/queued/parked/error), turn?, replyRef?, code?, message?, output? |
 | `file-begin` | C→S | id, targetMachine, sha256, name, size |
 | `file-chunk` | C→S | id, seq, bytes(base64) |
@@ -393,6 +393,7 @@ C → file-end{id}
 | status 第二行 broker 不可达 | node.json host/port 错 / 防火墙 / broker 没跑 | 按 1.2/1.3 核对；云机安全组 |
 | 收到"文件…已送达"但路径不存在 | 附件 >5 天被懒删除回收 | 回对端"附件已过期，请重发 --file" |
 | serve 启动即退、报错含 `EADDRINUSE` | 端口被占（多半是旧实例） | `crosschat serve --stop` 再起；或 `--port` 换端口（会记住） |
+| 升级 npm 包后跨机行为怪异（新 CLI + 旧常驻） | npm 升级只换了 CLI，`serve` 常驻进程仍跑旧版本 | `crosschat serve --stop && crosschat serve --detach` 重启常驻（broker 机与节点机都做）；`crosschat doctor` 的版本对账行会点名 |
 
 ## 清理与卸载
 

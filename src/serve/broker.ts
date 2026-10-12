@@ -50,8 +50,8 @@ export interface BrokerDeps {
   hostname: () => string;
   now: () => number;
   log: (line: string) => void;
-  /** B2 接 runSend；B1 默认实现回 NOT_READY。 */
-  deliverLocal: (frame: SendFrame) => Promise<ResultFrame | ErrorFrame>;
+  /** B2 接 runSend；B1 默认实现回 NOT_READY。F1：第二参=发送方机器名（roster 真名，无名缺省）。 */
+  deliverLocal: (frame: SendFrame, fromMachine?: string) => Promise<ResultFrame | ErrorFrame>;
   /** B2：本机文件接收器（file-* 帧目标为 broker 机时落盘）；缺省 NOT_READY。 */
   fileInbox?: FileInbox;
   /** E1：本机会话扫描（status-query 目标是 ownMid 时应答）；缺省 NOT_READY。 */
@@ -398,10 +398,12 @@ export class Broker {
     const resolved = this.resolveTarget(target);
     if (resolved.kind === 'error') return fail(resolved.code, resolved.message);
     if (resolved.kind === 'local') {
-      // 目标是 broker 本机：本机投递处理器（B2 起 serve 接线真实现）
+      // 目标是 broker 本机：本机投递处理器（B2 起 serve 接线真实现）。
+      // F1：本机投递同带发送方 roster 真名——远端来件在 broker 机上的信封
+      // 也要有真 from-machine（消灭旧 'local' 占位）。
       let outcome: ResultFrame | ErrorFrame;
       try {
-        outcome = await this.d.deliverLocal(frame);
+        outcome = await this.d.deliverLocal(frame, sender.machineName);
       } catch (err) {
         outcome = { op: 'error', code: ERR.NOT_READY, message: err instanceof Error ? err.message : String(err) };
       }
@@ -422,11 +424,12 @@ export class Broker {
       return;
     }
     const targetSession = resolved.ws;
-    // 转发 deliver（B2：to/conversation/origin 随帧透传），等对应 id 的 result 再映射 receipt 回发送方
+    // 转发 deliver（B2：to/conversation/origin 随帧透传），等对应 id 的 result 再映射 receipt 回发送方。
+    // F1：fromMachine 只写真 roster 名（无名瞬态发送方缺省——投递侧省略信封属性，不填 origin 编码/unknown 占位）。
     this.send(targetSession, {
       op: 'deliver',
       id: frame.id,
-      fromMachine: from,
+      ...(sender.machineName === undefined ? {} : { fromMachine: sender.machineName }),
       payload: frame.body,
       to: frame.to,
       conversation: frame.conversation,
@@ -654,6 +657,7 @@ export class Broker {
           {
             state,
             port: this.port,
+            version: this.d.version, // F1：doctor 版本对账（常驻版本 vs 本机 CLI）
             ...(this.starName === undefined ? {} : { name: this.starName }),
             startedAt: this.startedAt !== undefined ? new Date(this.startedAt).toISOString() : undefined,
             lastUpdated: new Date(this.d.now()).toISOString(),

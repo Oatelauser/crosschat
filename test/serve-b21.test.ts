@@ -461,9 +461,9 @@ describe('B3.1 drill fixes', () => {
     const partsDir = mkdtempSync(join(root, 'b31-parts-'));
     const nodeDeps = codexSendDeps({ queued: true });
     const h = await startHarness([{ machineId: 'a1b2c3d40000', machineName: 'hub' }], {
-      deliverLocal: (frame) =>
+      deliverLocal: (frame, fromMachine) =>
         deliverViaRunSend(
-          { op: 'deliver', id: frame.id, fromMachine: 'local', payload: frame.body, to: frame.to, conversation: frame.conversation, origin: frame.origin },
+          { op: 'deliver', id: frame.id, ...(fromMachine === undefined ? {} : { fromMachine }), payload: frame.body, to: frame.to, conversation: frame.conversation, origin: frame.origin },
           nodeDeps,
         ),
       fileInbox: new FileInbox({ inboxDir, partsDir }),

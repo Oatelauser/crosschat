@@ -92,6 +92,11 @@ export interface SendDeps {
   sshConfigText?: () => string | undefined;
   /** B1 多星：tcp 投递管线传入的本腿 broker 星标识——签发的 ref 盖 starId；单机/ssh 恒缺省。 */
   refStarId?: string;
+  /**
+   * F1：tcp 投递管线（broker/节点守护 deliverViaRunSend）透传的发送方机器名
+   * （星内 roster 真名）——跨机信封 from-machine 属性来源；无名瞬态发送方缺省。
+   */
+  fromMachine?: string;
 }
 
 /**
@@ -274,6 +279,10 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   // session.
   const origin = args.origin !== undefined ? decodeOriginIdentity(args.origin) : undefined;
   const caller: CallerIdentity = origin ?? envCaller;
+  // F1 跨机会话信封坐标：发送方机器名——tcp 腿取管线透传的 roster 真名，
+  // ssh 腿取 origin 机器段（origin.via='tcp' 时 host 槽是 mid8，不是名字，
+  // 不用）；单机与无名瞬态发送方均 undefined → 信封整个省略属性。
+  const fromMachine = deps.fromMachine ?? (origin !== undefined && origin.via === undefined ? origin.host : undefined);
 
   let target: RefEndpoint;
   let newRef: ConversationRef;
@@ -414,7 +423,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     }
     checkAndRecord(deps.rateDir, rateKey(identityKey(caller), `claude:${target.id}`), deps.now());
     const toName = claudeSession.name ?? shortId('claude', claudeSession.sessionId);
-    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget });
+    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }) });
     try {
       await deps.deliverClaude(
         { pid: claudeSession.pid, messagingSocketPath: claudeSession.messagingSocketPath },
@@ -434,7 +443,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   const threads = await deps.listCodexThreads();
   const threadName = threads.find((thread) => thread.id === target.id)?.name;
   const toName = threadName ?? shortId('codex', target.id);
-  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget });
+  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }) });
   const parkNow = (): number => {
     park(
       deps.outboxDir,

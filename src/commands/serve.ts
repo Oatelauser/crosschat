@@ -295,11 +295,13 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
   // B2：broker 机自己也是全权节点——deliverLocal 接 runSend、file 落本机收件。
   const deliverLocal = deps.makeSendDeps === undefined
     ? defaultDeliverLocal
-    : async (frame: SendFrame): Promise<ResultFrame | ErrorFrame> => {
+    : async (frame: SendFrame, fromMachine?: string): Promise<ResultFrame | ErrorFrame> => {
+        // F1：fromMachine=broker 传入的发送方 roster 真名（远端来件在 broker 机
+        // 投递也带真名）；无名瞬态发送方缺省——信封整个省略 from-machine。
         const deliver: DeliverFrame = {
           op: 'deliver',
           id: frame.id,
-          fromMachine: 'local',
+          ...(fromMachine === undefined ? {} : { fromMachine }),
           payload: frame.body,
           to: frame.to,
           conversation: frame.conversation,
@@ -408,6 +410,7 @@ async function runForegroundNode(aliasArg: string, deps: ServeDeps): Promise<num
     configFile: join(tcpDir(deps.baseDir), 'node.json'),
     machineId: deps.machineId,
     statusFile: join(tcpDir(deps.baseDir), `status-node${suffix}.json`),
+    version: deps.version, // F1：doctor 版本对账
     fileInbox: new FileInbox({
       inboxDir: join(tcpDir(deps.baseDir), 'inbox'),
       partsDir: join(tcpDir(deps.baseDir), 'parts'),

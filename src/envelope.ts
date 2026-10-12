@@ -30,6 +30,11 @@ export interface EnvelopeInput {
   body: string;
   /** 票A：轮次预算（--max-turn / CROSSCHAT_MAX_TURN），合并进 turn 属性显示为 turn="N/M"。缺省不出现 → 信封字节稳定。 */
   turnBudget?: number;
+  /**
+   * F1：跨机会话信封的发送方机器名（tcp=星内 roster 名，ssh=origin 机器段）。
+   * 单机发送与无名瞬态发送方缺省——属性整个不出现，不填占位。
+   */
+  fromMachine?: string;
 }
 
 function escapeAttr(value: string): string {
@@ -49,11 +54,13 @@ export function composeEnvelope(input: EnvelopeInput): string {
   // 轮次预算合并进 turn 属性（turn="13/40"，斜杠后为预算轮数）——软提醒不
   // 硬拦（41/40 照发照显），未设预算时 turn 保持纯数字（字节零回归锚点）。
   const turnAttr = input.turnBudget === undefined ? `${input.turn}` : `${input.turn}/${input.turnBudget}`;
+  // F1：from-machine 只在跨机投递且有真名时出现（无名瞬态发送方整体省略）。
+  const machineAttr = input.fromMachine === undefined ? '' : ` from-machine="${escapeAttr(input.fromMachine)}"`;
   // 信封瘦身 A+：ref 自包含路由（端点带 m/mid，tcp 会话尾部带 starId），回信
   // 命令不再搬 --via，也不在属性里重复 conversation——ref 全信封只出现这一
   // 次；缺 --via 的回路由执行侧按 ref 自动选路（send.ts autoViaFromRef）。
   return (
-    `<cross-session-message from-name="${escapeAttr(fromName)}" turn="${turnAttr}"${aliasAttr}>\n` +
+    `<cross-session-message from-name="${escapeAttr(fromName)}" turn="${turnAttr}"${machineAttr}${aliasAttr}>\n` +
     `<crosschat-reply-hint reply-as="${escapeAttr(input.toName)}">` +
     `回复请运行: crosschat send --conversation ${input.ref} --body "<你的回复>"</crosschat-reply-hint>\n` +
     `${body}\n` +

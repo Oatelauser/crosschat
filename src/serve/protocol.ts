@@ -67,7 +67,8 @@ export interface ReceiptFrame {
 export interface DeliverFrame {
   op: 'deliver';
   id: string;
-  fromMachine: string;
+  /** F1：发送方机器名（broker 注册表 roster 名）；无名瞬态发送方缺省——投递侧据它落信封 from-machine。 */
+  fromMachine?: string;
   payload: string;
   /** B2 修订：投递目标三件套随帧透传（B1 只转发 body，节点无从得知路由）。 */
   to?: string;

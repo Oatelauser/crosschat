@@ -178,6 +178,8 @@ export function syncNodeJsonEntry(
 export async function deliverViaRunSend(frame: DeliverFrame, deps: SendDeps): Promise<ResultFrame> {
   let output: string;
   try {
+    // F1：broker 透传的发送方 roster 真名随 deps 进 runSend——跨机信封的
+    // from-machine 属性来源；无名瞬态发送方（frame 缺省）不注入。
     output = await runSend(
       {
         to: frame.to,
@@ -186,7 +188,7 @@ export async function deliverViaRunSend(frame: DeliverFrame, deps: SendDeps): Pr
         origin: frame.origin,
         json: true,
       },
-      deps,
+      frame.fromMachine === undefined ? deps : { ...deps, fromMachine: frame.fromMachine },
     );
   } catch (err) {
     if (err instanceof MultichatError) {
@@ -265,6 +267,8 @@ export interface NodeStatusFile {
   since: string;
   lastUpdated: string;
   nextAttemptAt?: string;
+  /** F1：本守护的 crosschat 版本（doctor 版本对账）；旧守护缺省。 */
+  version?: string;
 }
 
 export interface NodeClientDeps {
@@ -273,6 +277,8 @@ export interface NodeClientDeps {
   configFile: string;
   machineId: () => string | undefined;
   statusFile: string;
+  /** F1：本守护的 crosschat 版本，落 status 文件供 doctor 对账；缺省不写该字段。 */
+  version?: string;
   fileInbox: FileInbox;
   makeSendDeps(): SendDeps;
   now(): number;
@@ -588,6 +594,7 @@ export class NodeClient {
       brokerAlias: entry.name ?? `${entry.host}:${entry.port}`,
       since: new Date(this.stateSince).toISOString(),
       lastUpdated: new Date(this.d.now()).toISOString(),
+      ...(this.d.version === undefined ? {} : { version: this.d.version }),
       ...(nextAttemptAt === undefined ? {} : { nextAttemptAt: new Date(nextAttemptAt).toISOString() }),
     };
     try {

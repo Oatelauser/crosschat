@@ -265,6 +265,47 @@ describe('remote-side --origin consumption', () => {
     expect(delivered[0]).toContain('from-name="codex/zzzz9999"');
     expect(delivered[0]).not.toContain('from-name="boss"');
   });
+
+  // F1：跨机会话信封 from-machine 取值链（send.ts 侧）
+  it('F1: ssh 接收腿信封带 from-machine=origin 机器段', async () => {
+    const origin = encodeOrigin({ p: 'claude', id: 'cs-boss', name: 'boss' }, 'win-dev');
+    const delivered: string[] = [];
+    const deps = makeDeps();
+    deps.deliverClaude = async (_t, content) => {
+      delivered.push(content);
+      return { status: 'delivered' };
+    };
+    await runSend({ to: 'boss', bodyArg: 'hi', origin }, deps);
+    expect(delivered[0]).toContain('from-name="boss" turn="1" from-machine="win-dev">');
+  });
+
+  it('F1: tcp 接收腿 from-machine 取投递管线透传的 roster 真名（不落 origin 的 mid8 槽）', async () => {
+    const origin = encodeOrigin({ p: 'claude', id: 'cs-boss', name: 'boss' }, 'aaaa0000', 'aaaa0000ef', 'tcp');
+    const delivered: string[] = [];
+    const deps = makeDeps();
+    deps.deliverClaude = async (_t, content) => {
+      delivered.push(content);
+      return { status: 'delivered' };
+    };
+    await runSend({ to: 'boss', bodyArg: 'hi', origin }, { ...deps, fromMachine: 'star-hub' });
+    expect(delivered[0]).toContain('from-machine="star-hub"');
+  });
+
+  it('F1: 无名瞬态发送方（tcp origin 无管线真名）与单机发送都整个省略 from-machine', async () => {
+    const delivered: string[] = [];
+    const deps = makeDeps();
+    deps.deliverClaude = async (_t, content) => {
+      delivered.push(content);
+      return { status: 'delivered' };
+    };
+    // tcp origin 但 deps.fromMachine 缺省（broker 注册表无名）→ 省略，不填 mid8/占位
+    const tcpOrigin = encodeOrigin({ p: 'claude', id: 'cs-boss', name: 'boss' }, 'aaaa0000', 'aaaa0000ef', 'tcp');
+    await runSend({ to: 'boss', bodyArg: 'hi', origin: tcpOrigin }, deps);
+    // 单机发送（无 origin）→ 省略
+    await runSend({ to: 'boss', bodyArg: 'hi' }, deps);
+    expect(delivered).toHaveLength(2);
+    for (const envelope of delivered) expect(envelope).not.toContain('from-machine');
+  });
 });
 
 describe('cli parsing and zero regression', () => {

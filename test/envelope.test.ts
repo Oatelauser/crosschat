@@ -128,3 +128,28 @@ describe('composeEnvelope limit teaching + turn budget (票A)', () => {
     expect(over).toContain('turn="41/40">'); // 软提醒不硬拦：超预算照发照显
   });
 });
+
+describe('composeEnvelope from-machine（F1 跨机坐标，三态精确串）', () => {
+  it('renders from-machine after turn when a true machine name is given', () => {
+    const out = composeEnvelope({ fromName: 'alpha', toName: 'workteam', turn: 2, ref: 'mc1_ABC', body: 'hi', fromMachine: 'win-dev' });
+    expect(out).toBe(
+      '<cross-session-message from-name="alpha" turn="2" from-machine="win-dev">\n' +
+        '<crosschat-reply-hint reply-as="workteam">' +
+        '回复请运行: crosschat send --conversation mc1_ABC --body "<你的回复>"</crosschat-reply-hint>\n' +
+        'hi\n' +
+        '</cross-session-message>',
+    );
+  });
+
+  it('omits the attribute entirely for single-machine sends (undefined)', () => {
+    const out = composeEnvelope({ fromName: 'alpha', toName: 'b', turn: 1, ref: 'mc1_R', body: 'x' });
+    expect(out).toContain('from-name="alpha" turn="1">\n');
+    expect(out).not.toContain('from-machine');
+  });
+
+  it('coexists with turn budget and alias, and escapes attribute metacharacters', () => {
+    const longName = 'm'.repeat(70);
+    const out = composeEnvelope({ fromName: longName, toName: 'b', turn: 3, ref: 'mc1_R', body: 'x', turnBudget: 40, fromMachine: 'win"dev&1' });
+    expect(out).toContain(`turn="3/40" from-machine="win&quot;dev&amp;1" from-alias="${longName}">`);
+  });
+});
