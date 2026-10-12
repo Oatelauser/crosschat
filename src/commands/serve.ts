@@ -119,6 +119,7 @@ function runGenKey(genKeyArg: string, deps: ServeDeps, registryFile: string, por
     deps.stdout(result.nodeJsonContent.trimEnd());
   }
   deps.stdout('放置路径（目标机器）：~/.crosschat/tcp/node.json（win 写法 C:\\Users\\<用户>\\.crosschat\\tcp\\node.json）');
+  deps.stdout('多星：一台机入多个 broker 时，把各星钥匙的条目合并进同一份 brokers 数组即可；本配置为数组形状，目标机 crosschat 需 ≥1.5.2');
   deps.stdout('本命令须在 broker 机上执行（钥匙登记进本机 broker.json）；broker 机自己的 node.json 已由首次 serve 自动写好，勿用上面的钥匙覆盖');
   deps.stdout('钥匙已进入终端回滚缓冲，分发完建议清屏');
   return 0;
@@ -195,40 +196,54 @@ export function ensureSelfEntry(deps: ServeDeps, registryFile: string, port: num
   const nodeJson = join(tcpDir(deps.baseDir), 'node.json');
   if (!existsSync(nodeJson)) {
     mkdirSync(tcpDir(deps.baseDir), { recursive: true });
-    // B0：自用 node.json 同带 starId（与 gen-key 分发的钥匙同构）
+    // B0：自用 node.json 同带 starId（与 gen-key 分发的钥匙同构）；
+    // 新写一律数组形状（单星=一项，多星=多项——只产出一种形状）
     const starId = ensureStarId(registryFile);
     writeFileSync(
       nodeJson,
-      `${JSON.stringify({ broker: { host: '127.0.0.1', port, alias: deps.hostname(), starId }, key: self.key, name: deps.hostname() }, null, 2)}\n`,
+      `${JSON.stringify({ brokers: [{ host: '127.0.0.1', port, alias: deps.hostname(), starId, key: self.key }], name: deps.hostname() }, null, 2)}\n`,
       'utf8',
     );
     return { status: 'written' };
   }
-  // 已存在：宽松解析判状态（不抛——这里只是体检，坏文件交给上层教学报错）
-  let parsed: { broker?: { host?: string; port?: number; starId?: unknown }; key?: string } | undefined;
+  // 已存在：宽松解析判状态（双形状；坏文件交给上层教学报错）
+  let entries: BrokerEntry[];
   try {
-    parsed = JSON.parse(readFileSync(nodeJson, 'utf8')) as typeof parsed;
+    entries = readNodeConfig(nodeJson).entries;
   } catch {
-    parsed = undefined;
+    return { status: 'stale' };
   }
-  const broker = parsed?.broker;
-  if (typeof broker?.host !== 'string' || typeof parsed?.key !== 'string') return { status: 'stale' };
-  if (broker.host !== '127.0.0.1') return { status: 'foreign', host: broker.host, port: broker.port };
-  if (parsed.key !== self.key || broker.port !== port) return { status: 'stale' };
+  // 找本 broker 的钥匙条目（多星机上自用条目可与外星条目共存于同一数组）
+  const mine = entries.find((e) => e.key === self.key);
+  if (mine === undefined) {
+    const first = entries[0];
+    return { status: 'foreign', host: first?.host, port: first?.port };
+  }
+  if (mine.host !== '127.0.0.1' || mine.port !== port) return { status: 'stale' };
   // B1：钥匙/host/port 匹配但条目缺 starId（B0 之前写下的自用 node.json）→
   // 原子补写注册表 starId，其余字段不碰
-  if (broker.starId === undefined) backfillSelfStarId(nodeJson, ensureStarId(registryFile));
+  if (mine.starId === undefined) backfillSelfStarId(nodeJson, self.key, ensureStarId(registryFile));
   return { status: 'ok' };
 }
 
-/** B1：自用 node.json 的 broker 条目补 starId（tmp+rename 原子写，风格同 B0 backfillStarId）；失败不倒 serve。 */
-function backfillSelfStarId(nodeJson: string, starId: string): void {
+/** B1：自用条目补 starId（双形状：数组元素/旧 broker 对象；tmp+rename 原子写）；失败不倒 serve。 */
+function backfillSelfStarId(nodeJson: string, selfKey: string, starId: string): void {
   try {
-    const raw = JSON.parse(readFileSync(nodeJson, 'utf8')) as { broker?: Record<string, unknown> } | null;
-    if (raw === null || typeof raw !== 'object' || raw.broker === null || typeof raw.broker !== 'object' || raw.broker.starId !== undefined) {
+    const raw = JSON.parse(readFileSync(nodeJson, 'utf8')) as {
+      brokers?: (Record<string, unknown> | null)[];
+      broker?: Record<string, unknown> | null;
+      key?: unknown;
+    } | null;
+    if (raw === null || typeof raw !== 'object') return;
+    if (Array.isArray(raw.brokers)) {
+      const mine = raw.brokers.find((e): e is Record<string, unknown> => e !== null && typeof e === 'object' && e.key === selfKey && e.starId === undefined);
+      if (mine === undefined) return;
+      mine.starId = starId;
+    } else if (raw.broker !== null && typeof raw.broker === 'object' && raw.broker.starId === undefined && raw.key === selfKey) {
+      raw.broker.starId = starId;
+    } else {
       return;
     }
-    raw.broker.starId = starId;
     const tmp = `${nodeJson}.tmp`;
     writeFileSync(tmp, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
     renameSync(tmp, nodeJson);

@@ -382,12 +382,14 @@ describe('B2.1 serve self-init', () => {
     const reg = JSON.parse(readFileSync(registryFile, 'utf8')) as { nodes: NodeEntry[] };
     expect(reg.nodes).toHaveLength(1);
     expect(reg.nodes[0]).toMatchObject({ label: 'self', machineId: 'a1b2c3d40000', machineName: 'hub' });
-    const nodeJson = JSON.parse(readFileSync(join(tcpDir(dir), 'node.json'), 'utf8')) as { broker: { host: string; port: number; starId?: string }; name: string };
-    expect(nodeJson.broker).toEqual({ host: '127.0.0.1', port: 7260, alias: 'hub', starId: expect.any(String) });
+    const nodeJson = JSON.parse(readFileSync(join(tcpDir(dir), 'node.json'), 'utf8')) as { brokers: { host: string; port: number; alias: string; starId: string; key: string }[]; name: string };
+    // B-fix：自用 node.json 新写一律数组形状（单星=一项）
+    expect(nodeJson.brokers).toHaveLength(1);
+    expect(nodeJson.brokers[0]).toEqual({ host: '127.0.0.1', port: 7260, alias: 'hub', starId: expect.any(String), key: expect.any(String) });
     expect(nodeJson.name).toBe('hub');
-    // B0：自用 node.json 的 starId 与注册表一致（12 hex）
-    expect(nodeJson.broker.starId).toMatch(/^[0-9a-f]{12}$/);
-    expect((JSON.parse(readFileSync(registryFile, 'utf8')) as { starId?: string }).starId).toBe(nodeJson.broker.starId);
+    // B0：自用条目的 starId 与注册表一致（12 hex）
+    expect(nodeJson.brokers[0]!.starId).toMatch(/^[0-9a-f]{12}$/);
+    expect((JSON.parse(readFileSync(registryFile, 'utf8')) as { starId?: string }).starId).toBe(nodeJson.brokers[0]!.starId);
     // 幂等：再来一次不重复登记、不覆盖既有 node.json，状态 ok（静默分支）
     expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
     const reg2 = JSON.parse(readFileSync(registryFile, 'utf8')) as { nodes: NodeEntry[] };
@@ -395,7 +397,8 @@ describe('B2.1 serve self-init', () => {
     expect(existsSync(join(tcpDir(dir), 'node.json'))).toBe(true);
   });
 
-  // 三态体检：指向别家的 node.json 不覆盖只报 foreign；指向本机但钥匙/端口不符报 stale
+  // 三态体检（B-fix 语义：按"本 broker 钥匙条目"定位——多星机上自用条目与外星条目共存）：
+  // 无本 broker 钥匙 → foreign（文件指向谁就报谁）；有钥匙条目但 host/port 不符 → stale；坏文件 → stale
   it('classifies an existing node.json as foreign or stale without touching it', () => {
     const dir = mkdtempSync(join(root, 'self-'));
     const deps: ServeDeps = {
@@ -407,9 +410,15 @@ describe('B2.1 serve self-init', () => {
     const registryFile = registryFileOf(dir);
     const nodeJson = join(tcpDir(dir), 'node.json');
     mkdirSync(tcpDir(dir), { recursive: true });
+    // 旧形状他星配置：钥匙不是本 broker 的 → foreign
     writeFileSync(nodeJson, JSON.stringify({ broker: { host: '192.168.1.5', port: 7260, alias: 'other' }, key: 'k', name: 'n' }));
     expect(ensureSelfEntry(deps, registryFile, 7260)).toMatchObject({ status: 'foreign', host: '192.168.1.5' });
-    writeFileSync(nodeJson, JSON.stringify({ broker: { host: '127.0.0.1', port: 7260, alias: 'hub' }, key: 'stale-key', name: 'hub' }));
+    // 数组形状含外星条目：同样 foreign（报首条指向）
+    writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '10.9.9.9', port: 7260, alias: 'w', key: 'wk' }], name: 'n' }));
+    expect(ensureSelfEntry(deps, registryFile, 7260)).toMatchObject({ status: 'foreign', host: '10.9.9.9' });
+    // 本 broker 钥匙条目在、但端口不符（数组形状）→ stale
+    const selfKey = (JSON.parse(readFileSync(registryFile, 'utf8')) as { nodes: NodeEntry[] }).nodes[0]!.key!;
+    writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 8123, alias: 'hub', key: selfKey }], name: 'hub' }));
     expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'stale' });
     writeFileSync(nodeJson, 'not json at all');
     expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'stale' });

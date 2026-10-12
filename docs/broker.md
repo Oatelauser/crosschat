@@ -57,17 +57,21 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 分发前把每份 node.json 的 name 改成「贴这份配置的机器」的自报名字（建议=其 hostname；纯显示用——roster 怎么称呼它，寻址/回信不依赖，走 machine-id 前缀）
 --------------------------------
 {
-  "broker": {
-    "host": "192.168.1.10",
-    "port": 7260,
-    "alias": "yang"
-  },
-  "key": "a3f0…64位hex…",
+  "brokers": [
+    {
+      "host": "192.168.1.10",
+      "port": 7260,
+      "alias": "yang",
+      "starId": "a1b2c3d4e5f6",
+      "key": "a3f0…64位hex…"
+    }
+  ],
   "name": "改成「贴这份配置的机器」的名字"
 }
 --------------------------------
 { …第二份同构… }
 放置路径（目标机器）：~/.crosschat/tcp/node.json（win 写法 C:\Users\<用户>\.crosschat\tcp\node.json）
+多星：一台机入多个 broker 时，把各星钥匙的条目合并进同一份 brokers 数组即可；本配置为数组形状，目标机 crosschat 需 ≥1.5.2
 本命令须在 broker 机上执行（钥匙登记进本机 broker.json）；broker 机自己的 node.json 已由首次 serve 自动写好，勿用上面的钥匙覆盖
 钥匙已进入终端回滚缓冲，分发完建议清屏
 ```
@@ -81,13 +85,14 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 # 粘贴整段 JSON，改 host 与 name，保存
 > cat ~/.crosschat/tcp/node.json
 {
-  "broker": { "host": "192.168.1.10", "port": 7260, "alias": "yang" },
-  "key": "a3f0…",
+  "brokers": [
+    { "host": "192.168.1.10", "port": 7260, "alias": "yang", "starId": "a1b2…", "key": "a3f0…" }
+  ],
   "name": "host-b"
 }
 ```
 
-字段一句话：`key`=钥匙（不用改）；`broker.alias`=broker 机显示名（不用改）；`name`=本机自报名（roster 里怎么称呼你，寻址走 mid8 与它无关）。
+字段一句话：条目里的 `key`=钥匙（不用改）、`alias`=broker 机显示名（不用改）；`name`=本机自报名（roster 里怎么称呼你，寻址走 mid8 与它无关）。
 
 上线（断线自动重连永不放弃）：
 
@@ -98,7 +103,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 > 记住一条：**收件靠这条常驻连接，断了=别人发你 PEER_OFFLINE；发送零进程**。broker 机两端都不需要——它的收发在 serve 进程里。
 
-**入第二颗星（可选）**。node.json 换数组形状，一颗星一条目（gen-key 输出自带 starId，整段照贴；旧单星形状永远兼容，连一次自动补 starId）：
+**入第二颗星（可选）**。gen-key 打印的就是数组形状——把新星的条目**追加进同一份 `brokers` 数组**即可（旧单星形状文件永远兼容，连一次自动补 starId）：
 
 ```
 > cat ~/.crosschat/tcp/node.json

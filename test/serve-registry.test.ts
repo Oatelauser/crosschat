@@ -34,7 +34,7 @@ describe('genKeys', () => {
     const file = freshFile();
     const [{ key, nodeJsonContent }] = genKeys(file, 1, { host: '10.0.0.2', port: 9000 });
     expect(nodeJsonContent).toBe(
-      `{\n  "broker": {\n    "host": "10.0.0.2",\n    "port": 9000\n  },\n  "key": "${key}",\n  "name": "改成「贴这份配置的机器」的名字"\n}\n`,
+      `{\n  "brokers": [\n    {\n      "host": "10.0.0.2",\n      "port": 9000,\n      "key": "${key}"\n    }\n  ],\n  "name": "改成「贴这份配置的机器」的名字"\n}\n`,
     );
     expect(key).toMatch(/^[0-9a-f]{64}$/);
   });
@@ -50,11 +50,13 @@ describe('genKeys', () => {
     }
   });
 
-  it('B0: embeds starId inside the broker object of nodeJsonContent', () => {
+  it('emits array-shape node.json (brokers[0] carries starId and key)', () => {
     const file = freshFile();
-    const [{ nodeJsonContent }] = genKeys(file, 1, { host: '10.0.0.2', port: 9000, alias: 'hub', starId: 'a1b2c3d4e5f6' });
-    const parsed = JSON.parse(nodeJsonContent) as { broker: { host: string; port: number; alias: string; starId: string }; key: string };
-    expect(parsed.broker).toEqual({ host: '10.0.0.2', port: 9000, alias: 'hub', starId: 'a1b2c3d4e5f6' });
+    const [{ key, nodeJsonContent }] = genKeys(file, 1, { host: '10.0.0.2', port: 9000, alias: 'hub', starId: 'a1b2c3d4e5f6' });
+    const parsed = JSON.parse(nodeJsonContent) as { brokers: { host: string; port: number; alias: string; starId: string; key: string }[]; name: string };
+    expect(parsed.brokers).toHaveLength(1);
+    expect(parsed.brokers[0]).toEqual({ host: '10.0.0.2', port: 9000, alias: 'hub', starId: 'a1b2c3d4e5f6', key });
+    expect(parsed.name).toBe('改成「贴这份配置的机器」的名字');
   });
 });
 

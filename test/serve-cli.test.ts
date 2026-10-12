@@ -101,12 +101,13 @@ describe('runServe --gen-key / --list / --remove', () => {
     expect(lines.at(-1)).toBe('钥匙已进入终端回滚缓冲，分发完建议清屏');
     const jsonBlocks = lines.filter((l) => l.startsWith('{'));
     expect(jsonBlocks).toHaveLength(2);
-    const parsed = JSON.parse(jsonBlocks[0]!) as { broker: { host: string; port: number; alias: string; starId?: string }; key: string };
-    // B0：gen-key 输出带 starId（与注册表同值）
-    expect(parsed.broker).toEqual({ host: '192.168.1.7', port: 7260, alias: 'h', starId: expect.any(String) });
-    expect(parsed.broker.starId).toMatch(/^[0-9a-f]{12}$/);
-    expect((JSON.parse(readFileSync(registryFileOf(dir), 'utf8')) as { starId?: string }).starId).toBe(parsed.broker.starId);
-    expect(parsed.key).toMatch(/^[0-9a-f]{64}$/);
+    const parsed = JSON.parse(jsonBlocks[0]!) as { brokers: { host: string; port: number; alias: string; starId: string; key: string }[] };
+    // B0：gen-key 输出带 starId（与注册表同值）；B-fix：只产出数组形状（单星=一项）
+    expect(parsed.brokers).toHaveLength(1);
+    expect(parsed.brokers[0]).toEqual({ host: '192.168.1.7', port: 7260, alias: 'h', starId: expect.any(String), key: expect.any(String) });
+    expect(parsed.brokers[0]!.starId).toMatch(/^[0-9a-f]{12}$/);
+    expect(parsed.brokers[0]!.key).toMatch(/^[0-9a-f]{64}$/);
+    expect((JSON.parse(readFileSync(registryFileOf(dir), 'utf8')) as { starId?: string }).starId).toBe(parsed.brokers[0]!.starId);
     expect(listNodes(registryFileOf(dir)).map((n) => n.label)).toEqual(['node-1', 'node-2']);
   });
 

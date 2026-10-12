@@ -146,7 +146,7 @@ export function genKeys(file: string, n: number, opts: { host: string; port: num
     results.push({
       label,
       key,
-      nodeJsonContent: `${JSON.stringify({ broker: { host: opts.host, port: opts.port, alias: opts.alias, starId: opts.starId }, key, name: '改成「贴这份配置的机器」的名字' }, null, 2)}\n`,
+      nodeJsonContent: `${JSON.stringify({ brokers: [{ host: opts.host, port: opts.port, alias: opts.alias, starId: opts.starId, key }], name: '改成「贴这份配置的机器」的名字' }, null, 2)}\n`,
     });
     registry.nodes.push({ label, key, addedAt: new Date().toISOString() });
   }
