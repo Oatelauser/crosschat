@@ -345,7 +345,7 @@ delivered to 云端beta@host-b (turn 1)
 准备：对端（本例 WSL）有已命名的 agent 会话（`/rename beta2` 后随便发一条激活）。然后整个过程（图例：**👤 用户** 你说的指令 · **🤖 agent** 回复/收件 📨）：
 
 ```
-👤 用户[boss -> beta2]    使用 crosschat 发送消息给 beta2 问好，消息要求经过 ssh 管道送到（send 时加 --via ssh:yangwsl）。需要对方回复并停止。
+👤 用户[boss -> beta2]    用 crosschat 走 ssh 跨机给 yangwsl 机器的会话「beta2」问好，要求对方回复。
 🤖 beta2 收到             📨 来自另一会话的消息:
                           <cross-session-message from-name="codex/boss@win" turn="1">
                           你好 beta2，这是跨机问候
@@ -354,7 +354,7 @@ delivered to 云端beta@host-b (turn 1)
 🤖 boss 收到              📨 收到！跨机闭环成立（turn 2，自动经 ssh 回到 win）
 ```
 
-与单机的全部差别：题词里多了 `--via ssh:yangwsl`——消息与回复自动走 ssh 往返，双方谁都没敲过一次完整命令。
+与单机的全部差别：题词里多了「走 ssh 跨机」四个字——命令由 agent 自己组装，消息与回复自动走 ssh 往返，双方谁都没敲过一次完整命令。
 
 ### 2.2 同机自环测试（不跨机也要走一遍 ssh 管道时）
 

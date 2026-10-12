@@ -93,7 +93,7 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 准备（一次性）：对端（本例 WSL）装好 crosschat、双机互配 ssh 密钥（→ [📡 通信方式](#-通信方式) 表的联邦手册，五步配完）。然后整个过程：
 
 ```
-👤 用户[boss -> beta2]    使用 crosschat 发送消息给 beta2 问好，消息要求经过 ssh 管道送到（send 时加 --via ssh:yangwsl）。需要对方回复并停止。
+👤 用户[boss -> beta2]    用 crosschat 走 ssh 跨机给 yangwsl 机器的会话「beta2」问好，要求对方回复。
 🤖 beta2 收到             📨 来自另一会话的消息:
                           <cross-session-message from-name="codex/boss@win" turn="1">
                           你好 beta2，这是跨机问候
@@ -102,15 +102,14 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 🤖 boss 收到              📨 收到！跨机闭环成立（turn 2，自动经 ssh 回到 win）
 ```
 
-与单机的全部差别：题词里多了 `--via ssh:yangwsl`——消息与回复自动走 ssh 往返，双方谁都没敲过一次完整命令。
+与单机的全部差别：题词里多了「走 ssh 跨机」四个字——命令由 agent 自己组装，消息与回复自动走 ssh 往返，双方谁都没敲过一次完整命令。
 
 ### 跨机 tcp：常驻转发器（broker 星型）
 
 准备（一次性，管理员动作）：选一台机器跑 `crosschat serve` 当 broker，`--gen-key` 发钥匙、其余机器贴好 node.json 后 `crosschat serve --connect` 常驻在线（→ [转发器手册](docs/broker.md)：环境搭建 / 跨机聊天 / 底层实现 / 协议对接）。然后整个过程：
 
 ```
-👤 用户[boss -> worker2]  用 crosschat 给 host-b 机器的 claude 会话「worker2」发消息，要求走 tcp 转发器
-                          （send 时加 --via tcp:host-b），让它跑一次构建并回报结果。
+👤 用户[boss -> worker2]  用 crosschat 走 tcp 跨机给 host-b 机器的 claude 会话「worker2」发任务，要求它跑一次构建并回报结果。
 🤖 worker2 收到            📨 来自另一会话的消息:
                           <cross-session-message from-name="boss" turn="1">
                           …跑一次构建并回报结果…
@@ -119,7 +118,7 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 🤖 boss 收到               📨 构建完成，产物清单见下一条（turn 2，自动经 broker 跨机回来）
 ```
 
-与 ssh 跨机同构：题词里多了 `--via tcp:host-b`；回信命令由引用自动路由（不带 `--via`），worker2 零配置照抄即回；另支持 `--file` 文件通道与 CI 零进程直发（见转发器手册）。
+与 ssh 跨机同构：题词里多了「走 tcp 跨机」四个字；回信命令由引用自动路由（不带 `--via`），worker2 零配置照抄即回；另支持 `--file` 文件通道与 CI 零进程直发（见转发器手册）。
 
 ## 📡 通信方式
 

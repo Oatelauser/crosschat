@@ -153,8 +153,7 @@ delivered to worker2@9f8e7d6c (turn 1)
 准备：两端各有已命名的 agent 会话（终端跑 `crosschat claude`，进去 `/rename <名字>`，随便发一条激活；codex 会话同理）。然后整个过程（图例：**👤 用户** 你说的指令 · **🤖 agent** 回复/收件 📨）：
 
 ```
-👤 用户[boss -> worker2]  用 crosschat（先 status 确认名字）给 host-b 机器的 claude 会话「worker2」发消息：
-                          要求走 tcp 转发器（send 时加 --via tcp:host-b），让它跑一次构建并回报结果。
+👤 用户[boss -> worker2]  用 crosschat 走 tcp 跨机给 host-b 机器的 claude 会话「worker2」发任务：要求它跑一次构建并回报结果。
 🤖 worker2 收到            📨 来自另一会话的消息:
                           <cross-session-message from-name="boss" turn="1">
                           …跑一次构建并回报结果…
@@ -171,7 +170,7 @@ delivered to worker2@9f8e7d6c (turn 1)
 
 消息里塞大内容不如直接送文件。`--file` 只能与 `--via tcp:` 同用，一句话题词形态：
 
-> 用 crosschat 把 ./report.md 用文件通道发给 host-b 的 worker2（send 时加 --via tcp:host-b --file ./report.md），正文让它分析这个文件。
+> 用 crosschat 走 tcp 跨机把 ./report.md 文件发给 host-b 的 worker2，正文让它分析这个文件。
 
 对端收到的正文是自动生成的：`文件 report.md 已送达：/home/<B用户>/.crosschat/tcp/inbox/3f2a1b9c-report.md`——路径在**对端机器上**，agent 直接可读。语义五条：
 
