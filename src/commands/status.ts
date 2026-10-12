@@ -3,8 +3,11 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ClaudeRegistryScan } from '../claude/registry.js';
 import type { CodexThreadWithMeta } from '../codex/discovery.js';
+import { pairKeyOf } from '../conversations.js';
 import type { ConversationSummary } from '../conversation-summary.js';
 import { MultichatError } from '../errors.js';
+import { decodeRef } from '../ref.js';
+import type { SendLogEntry } from '../send-log.js';
 import { readNodeConfig, type BrokerEntry, type NodeStatusFile } from '../serve/node.js';
 
 /**
@@ -45,6 +48,11 @@ export interface StatusDeps {
    * B2：可传条目逐星探（多条目时逐条目拉表）；不传=entries[0]（单条目行为不变）。
    */
   roster?(entry?: BrokerEntry): Promise<RosterMachine[] | undefined>;
+  /**
+   * `--conversations --via` 的传输族判定源（本机 send-log 尾窗）。Omitted →
+   * 无跨机痕迹可判，--via 过滤下不显示任何对。cli wires the default log tail.
+   */
+  sendLogTail?(): SendLogEntry[];
 }
 
 /** B2 freshness bound: a status file older than this reads as "没在跑". */
@@ -81,14 +89,19 @@ function nodeStatusSelector(file: string): string {
   return file === 'status-node.json' ? '' : file.replace(/^status-node-/, '').replace(/\.json$/, '');
 }
 
-/** 单守护状态行（prefix='转发器:' 单条目 / '转发器[<选择器>]:' 多条目）。 */
+/** status 展示层截短：超过 16 字符的展示串显示 <前14>…（node.json 与 CLI 参数不受影响）。 */
+function shortDisplay(s: string): string {
+  return s.length > 16 ? `${s.slice(0, 14)}…` : s;
+}
+
+/** 单守护状态行（prefix='节点客户端:' 单条目 / '节点客户端[<选择器>]:' 多条目）。 */
 function nodeStateLine(prefix: string, st: NodeStatusFile): string {
-  if (st.state === 'online') return `${prefix} online tcp:${st.brokerAlias} (since ${formatCreatedAt(st.since)})`;
+  if (st.state === 'online') return `${prefix} online ${shortDisplay(`tcp:${st.brokerAlias}`)} (since ${formatCreatedAt(st.since)})`;
   if (st.state === 'reconnect-wait') {
     const next = st.nextAttemptAt === undefined ? '-' : formatHms(st.nextAttemptAt);
     return `${prefix} 重连等待中，下次尝试 ${next}`;
   }
-  return `${prefix} 连接中 tcp:${st.brokerAlias}`;
+  return `${prefix} 连接中 ${shortDisplay(`tcp:${st.brokerAlias}`)}`;
 }
 
 /**
@@ -108,21 +121,21 @@ async function tcpForwarderLines(tcpDir: string | undefined, nowMs: number, rost
     if (multi) {
       const tag = nodeStatusSelector(file) || '默认';
       if (!fresh) {
-        lines.push(`转发器[${tag}]: 未运行`);
+        lines.push(`节点客户端[${tag}]: 未运行`);
         continue;
       }
       anyFresh = true;
-      lines.push(nodeStateLine(`转发器[${tag}]:`, node!));
+      lines.push(nodeStateLine(`节点客户端[${tag}]:`, node!));
     } else if (fresh) {
       anyFresh = true;
-      lines.push(nodeStateLine('转发器:', node!));
+      lines.push(nodeStateLine('节点客户端:', node!));
     }
   }
-  if (!multi && !anyFresh) lines.push('转发器: 未运行');
+  if (!multi && !anyFresh) lines.push('节点客户端: 未运行');
   const broker = readStatusJson<BrokerStatusFile>(join(tcpDir, 'status-broker.json'));
   if (broker !== undefined && broker.state === 'running' && nowMs - Date.parse(broker.lastUpdated) < TCP_STATUS_FRESH_MS) {
     const nodes = broker.onlineNodes ?? [];
-    lines.push(`转发器: 服务端端口 ${broker.port ?? '?'}，${nodes.length} 节点在线`);
+    lines.push(`broker: 服务端端口 ${broker.port ?? '?'}，${nodes.length} 节点在线`);
     if (nodes.length > 0) lines.push(`在线机器: ${nodes.join('、')}`);
     return lines;
   }
@@ -140,7 +153,7 @@ async function tcpForwarderLines(tcpDir: string | undefined, nowMs: number, rost
       pushRosterLines(lines, '', machines);
     } else {
       for (const entry of entries) {
-        const label = entry.alias ?? `${entry.host}:${entry.port}`;
+        const label = shortDisplay(entry.alias ?? `${entry.host}:${entry.port}`);
         const machines = await roster(entry);
         pushRosterLines(lines, label, machines);
       }
@@ -152,13 +165,13 @@ async function tcpForwarderLines(tcpDir: string | undefined, nowMs: number, rost
 /** 在线表行（label='' 时与 B2.1 单条目格式逐字节一致）。 */
 function pushRosterLines(lines: string[], label: string, machines: RosterMachine[] | undefined): void {
   if (machines === undefined) {
-    lines.push(label === '' ? '转发器: 不可达' : `转发器: broker ${label} 不可达`);
+    lines.push(label === '' ? 'broker: 不可达' : `broker: ${label} 不可达`);
     return;
   }
   const disp = (m: RosterMachine): string => `${m.name ?? '?'} (${m.mid8})`;
   const online = machines.filter((m) => m.online);
   const offline = machines.filter((m) => !m.online);
-  lines.push(label === '' ? `转发器: broker 可达，${online.length} 机器在线` : `转发器: broker ${label} 可达，${online.length} 机器在线`);
+  lines.push(label === '' ? `broker: 可达，${online.length} 机器在线` : `broker: ${label} 可达，${online.length} 机器在线`);
   if (online.length > 0) lines.push(label === '' ? `在线机器: ${online.map(disp).join('、')}` : `在线机器[${label}]: ${online.map(disp).join('、')}`);
   if (offline.length > 0) lines.push(label === '' ? `离线机器: ${offline.map(disp).join('、')}` : `离线机器[${label}]: ${offline.map(disp).join('、')}`);
 }
@@ -188,12 +201,32 @@ export function formatCreatedAt(iso: string | undefined): string {
   return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+/** status 过滤参数（cli 层已做互斥/组合校验，这里只消费）。 */
+export interface StatusFilters {
+  /** --claude/--codex：主视图选段。 */
+  section?: 'claude' | 'codex';
+  /** --name <子串>：按显示名大小写不敏感子串过滤（conversations 侧任一端命中即保留）。 */
+  name?: string;
+  /** --via tcp|ssh：--conversations 传输族过滤（本机 send-log 无跨机痕迹的对不显示）。 */
+  via?: 'tcp' | 'ssh';
+  /** --all：主视图带出未命名会话（默认隐藏）。 */
+  all?: boolean;
+}
+
+/** 显示名子串匹配（大小写不敏感）；未命名行的显示名是 '(unnamed)'。 */
+function nameMatcher(needle: string | undefined): (name: string | null | undefined) => boolean {
+  if (needle === undefined) return () => true;
+  const lower = needle.toLowerCase();
+  return (name) => (name ?? '(unnamed)').toLowerCase().includes(lower);
+}
+
 export async function runStatus(
   deps: StatusDeps,
   json: boolean,
   conversations = false,
+  filters: StatusFilters = {},
 ): Promise<string> {
-  if (conversations) return conversationsView(deps, json);
+  if (conversations) return conversationsView(deps, json, filters);
   const scan = deps.listClaudeSessions();
   let threads: CodexThreadWithMeta[] | undefined;
   let codexError: string | undefined;
@@ -206,29 +239,33 @@ export async function runStatus(
         : `INTERNAL: ${err instanceof Error ? err.message : String(err)}`;
   }
   const held = deps.listWriterLocks?.() ?? new Set<string>();
+  const matches = nameMatcher(filters.name);
 
   if (json) {
     // B2：tcp 小节仅在 tcpDir 接线时出现——嵌入方（无该 dep）的 json 键集
     // 保持 {claude, codex} 冻结契约不变。B2 多星新增 tcpProfiles（逐守护
     // status-node*.json）；tcp.node/tcp.broker 既有形状不动。
+    // 过滤参数组合 --json：选段省掉另一键、--name 滤行（--all 不影响 json，
+    // 未命名行始终在场，契约不变）。
     const nowMs = deps.now?.() ?? Date.now();
     const tcp = deps.tcpDir === undefined ? {} : { tcp: tcpJson(deps.tcpDir, nowMs) };
     const tcpProfiles = deps.tcpDir === undefined ? {} : { tcpProfiles: nodeProfilesJson(deps.tcpDir, nowMs) };
-    return JSON.stringify({
-      ...tcp,
-      ...tcpProfiles,
-      claude: scan.sessions.map((session) => ({
+    const out: Record<string, unknown> = { ...tcp, ...tcpProfiles };
+    if (filters.section !== 'codex') {
+      out.claude = scan.sessions.filter((session) => matches(session.name)).map((session) => ({
         name: session.name ?? null,
         kind: session.kind,
         status: session.status,
         pid: session.pid,
         cwd: session.cwd ?? null,
-      })),
-      codex:
+      }));
+    }
+    if (filters.section !== 'claude') {
+      out.codex =
         threads === undefined
           ? { error: codexError }
           : [
-              ...threads.map((thread) => ({
+              ...threads.filter((thread) => matches(thread.name)).map((thread) => ({
                 name: thread.name,
                 status: thread.status,
                 id: thread.id.slice(0, 8),
@@ -249,34 +286,45 @@ export async function runStatus(
                 originator: null,
                 held: true as const,
               })),
-            ],
-    });
+            ];
+    }
+    return JSON.stringify(out);
   }
 
-  const lines: string[] = ['claude:'];
-  if (scan.sessions.length === 0) lines.push('  (none)');
-  for (const session of scan.sessions) {
-    lines.push(
-      `  ${(session.name ?? '(unnamed)').padEnd(24)} ${session.kind.padEnd(12)} ${session.status.padEnd(16)} pid ${String(session.pid).padEnd(6)} ${formatCwdShort(session.cwd)}`,
-    );
-  }
-  lines.push('codex:');
-  if (codexError !== undefined) lines.push(`  unavailable (${codexError})`);
-  else if ((threads ?? []).length === 0 && held.size === 0) lines.push('  (none)');
-  else {
-    for (const thread of threads ?? []) {
-      const name = (thread.name ?? '(unnamed)').padEnd(24);
-      const dir = formatCwdShort(thread.meta?.cwd).padEnd(20);
-      const created = formatCreatedAt(thread.meta?.createdAt).padEnd(11);
-      const originator = (thread.meta?.originator ?? '-').padEnd(16);
-      const marker = held.has(thread.id) ? '  TUI占用' : '';
-      lines.push(`  ${name} ${dir} ${created} ${originator} ${thread.id.slice(0, 8)}  ${thread.status}${marker}`);
-    }
-    // 006: locked but absent from thread/list (fresh TUI tab, no rollout).
-    for (const id of unlistedLocks(held, threads)) {
+  // (unnamed) 默认隐藏（--all 带出）；未列入的 TUI 锁行同属未命名，随 --all。
+  const claudeRows = scan.sessions.filter((session) => (filters.all || !!session.name) && matches(session.name));
+  const codexRows = (threads ?? []).filter((thread) => (filters.all || !!thread.name) && matches(thread.name));
+  const unlisted = filters.all ? unlistedLocks(held, threads) : [];
+
+  const lines: string[] = [];
+  if (filters.section !== 'codex') {
+    lines.push('claude:');
+    if (claudeRows.length === 0) lines.push('  (none)');
+    for (const session of claudeRows) {
       lines.push(
-        `  ${'-'.padEnd(24)} ${'-'.padEnd(20)} ${'-'.padEnd(11)} ${'-'.padEnd(16)} ${id.slice(0, 8)}  未列入  TUI占用`,
+        `  ${(session.name ?? '(unnamed)').padEnd(24)} ${session.kind.padEnd(12)} ${session.status.padEnd(16)} pid ${String(session.pid).padEnd(6)} ${formatCwdShort(session.cwd)}`,
       );
+    }
+  }
+  if (filters.section !== 'claude') {
+    lines.push('codex:');
+    if (codexError !== undefined) lines.push(`  unavailable (${codexError})`);
+    else if (codexRows.length === 0 && unlisted.length === 0) lines.push('  (none)');
+    else {
+      for (const thread of codexRows) {
+        const name = (thread.name ?? '(unnamed)').padEnd(24);
+        const dir = formatCwdShort(thread.meta?.cwd).padEnd(20);
+        const created = formatCreatedAt(thread.meta?.createdAt).padEnd(11);
+        const originator = (thread.meta?.originator ?? '-').padEnd(16);
+        const marker = held.has(thread.id) ? '  TUI占用' : '';
+        lines.push(`  ${name} ${dir} ${created} ${originator} ${thread.id.slice(0, 8)}  ${thread.status}${marker}`);
+      }
+      // 006: locked but absent from thread/list (fresh TUI tab, no rollout).
+      for (const id of unlisted) {
+        lines.push(
+          `  ${'-'.padEnd(24)} ${'-'.padEnd(20)} ${'-'.padEnd(11)} ${'-'.padEnd(16)} ${id.slice(0, 8)}  未列入  TUI占用`,
+        );
+      }
     }
   }
   lines.push(...(await tcpForwarderLines(deps.tcpDir, deps.now?.() ?? Date.now(), deps.roster)));
@@ -312,9 +360,33 @@ function nodeProfilesJson(tcpDir: string, nowMs: number): Array<{ selector: stri
   return [...held].filter((id) => !listed.has(id));
 }
 
+/**
+ * 传输族判定（--via）：跨机记账的 send-log 条目 target 是 `via:` 痕迹——ssh 腿
+ * 写 `via:<host>`（federation.ts）、tcp 腿写 `via:tcp:<machine>`（via-tcp.ts）。
+ * 这类条目的 from/target 不是双身份键，归对靠解码其 replyRef（ref 两端即对键）。
+ * 返回 pairKey → 出现过的族；无痕迹的对不在表里（--via 下不显示）。
+ */
+function viaFamiliesByPair(tail: SendLogEntry[]): Map<string, Set<'tcp' | 'ssh'>> {
+  const byPair = new Map<string, Set<'tcp' | 'ssh'>>();
+  for (const entry of tail) {
+    const family = entry.target.startsWith('via:tcp:') ? 'tcp' : entry.target.startsWith('via:') ? 'ssh' : undefined;
+    if (family === undefined || entry.replyRef === undefined || entry.replyRef === '') continue;
+    try {
+      const ref = decodeRef(entry.replyRef);
+      const key = pairKeyOf(ref.f, ref.t);
+      const set = byPair.get(key) ?? new Set<'tcp' | 'ssh'>();
+      set.add(family);
+      byPair.set(key, set);
+    } catch {
+      // undecodable ref: no attribution
+    }
+  }
+  return byPair;
+}
+
 /** `status --conversations`: per-pair rows (direction, freshness, turn, last status, receipt, parked). */
-async function conversationsView(deps: StatusDeps, json: boolean): Promise<string> {
-  const rows = deps.listConversations?.() ?? [];
+async function conversationsView(deps: StatusDeps, json: boolean, filters: StatusFilters = {}): Promise<string> {
+  let rows = deps.listConversations?.() ?? [];
   await recheckReceipts(rows, deps);
   // B23: bare identity-key / id8 pair slots become display names (render-only).
   // Slots already carrying evidence names (to/fromName) never match a table
@@ -322,6 +394,15 @@ async function conversationsView(deps: StatusDeps, json: boolean): Promise<strin
   const names = rows.length === 0 ? new Map<string, string>() : await endpointDisplayNames(deps);
   for (const row of rows) {
     row.pair = [names.get(row.pair[0]) ?? row.pair[0], names.get(row.pair[1]) ?? row.pair[1]];
+  }
+  // 过滤（名字翻译后再滤，命中的是显示名；--via 按该对本机 send-log 的跨机痕迹分族）。
+  if (filters.via !== undefined) {
+    const families = viaFamiliesByPair(deps.sendLogTail?.() ?? []);
+    rows = rows.filter((row) => families.get(row.endpoints.join('\n'))?.has(filters.via!));
+  }
+  if (filters.name !== undefined) {
+    const lower = filters.name.toLowerCase();
+    rows = rows.filter((row) => row.pair.some((n) => n.toLowerCase().includes(lower)));
   }
   if (json) {
     // Frozen JSON contract: exactly the eight summary fields (B22 added `receipt`);

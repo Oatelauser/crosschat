@@ -171,7 +171,7 @@ describe('status formatting', () => {
       }),
       listCodexThreads: () => Promise.resolve(threads),
     };
-    const text = await runStatus(deps, false);
+    const text = await runStatus(deps, false, false, { all: true });
     const lines = text.split('\n');
     const claudeLine = lines.find((line) => line.includes('mapper')) as string;
     expect(claudeLine).toContain('pid 4242');
@@ -212,7 +212,7 @@ describe('status formatting', () => {
       listClaudeSessions: () => ({ sessions: [], malformed: 0 }),
       listCodexThreads: () => Promise.resolve(threads),
     };
-    const text = await runStatus({ ...baseDeps, listWriterLocks: () => listWriterLocks(home) }, false);
+    const text = await runStatus({ ...baseDeps, listWriterLocks: () => listWriterLocks(home) }, false, false, { all: true });
     const heldLine = text.split('\n').find((line) => line.includes('held-one')) as string;
     expect(heldLine).toContain('TUI占用');
     const freeLine = text.split('\n').find((line) => line.includes('free-one')) as string;

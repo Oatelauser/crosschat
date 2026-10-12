@@ -9,7 +9,7 @@ import process from 'node:process';
 import { createInterface } from 'node:readline';
 import { MultichatError } from './errors.js';
 import { runSend, type SendArgs, type SendDeps } from './commands/send.js';
-import { runStatus, type StatusDeps } from './commands/status.js';
+import { runStatus, type StatusDeps, type StatusFilters } from './commands/status.js';
 import { runInstallSkills, type InstallSkillsArgs } from './commands/install-skills.js';
 import { runDoctor } from './commands/doctor.js';
 import { runClaudeWrapper } from './commands/claude-wrapper.js';
@@ -17,7 +17,7 @@ import { runCodexWrapper } from './commands/codex-wrapper.js';
 import { defaultRateDir } from './rate-limit.js';
 import { defaultOutboxDir, drain } from './outbox.js';
 import { runWatchdog, spawnWatchdog as ensureWatchdog } from './watchdog.js';
-import { appendSendLog, confirmInRollout, defaultSendLogFile } from './send-log.js';
+import { appendSendLog, confirmInRollout, defaultSendLogFile, readSendLogTail } from './send-log.js';
 import { defaultConversationsFile } from './conversations.js';
 import { defaultSshExec } from './federation.js';
 import { machineId } from './platform/machine-id.js';
@@ -67,6 +67,14 @@ commands:
                                 (env CROSSCHAT_MAX_TURN)
   status [--conversations]  show claude/codex session status, or per-pair
                             conversation overview with --conversations
+                              --claude | --codex    pick one main-view section
+                                (mutually exclusive, not with --conversations)
+                              --name <substr>       filter rows by display name
+                                (case-insensitive)
+                              --via tcp|ssh         with --conversations only:
+                                filter pairs by cross-machine transport
+                              --all                 also list unnamed sessions
+                                (hidden by default in the main view)
   doctor                    environment health check (exits 1 on any ❌)
   serve [options]           run/manage the tcp broker (star topology,
                             default port ${DEFAULT_PORT}; the first --port
@@ -157,18 +165,69 @@ export function parseSendArgs(argv: readonly string[]): SendArgs {
   return args;
 }
 
-/** status accepts only --json and --conversations (each at most once). */
-export function parseStatusArgs(argv: readonly string[]): { json: boolean; conversations: boolean } {
+/**
+ * status accepts --json/--conversations/--claude/--codex/--name <v>/--via <v>/--all
+ * (flags at most once). Validation: --claude/--codex are mutually exclusive and
+ * main-view only; --via only combines with --conversations and only takes
+ * tcp|ssh. `filters` is absent when no filter flag was given.
+ */
+export function parseStatusArgs(argv: readonly string[]): {
+  json: boolean;
+  conversations: boolean;
+  filters?: StatusFilters;
+} {
   let json = false;
   let conversations = false;
-  for (const token of argv) {
+  let section: 'claude' | 'codex' | undefined;
+  let name: string | undefined;
+  let via: 'tcp' | 'ssh' | undefined;
+  let all = false;
+  for (let i = 0; i < argv.length; i++) {
+    const token = argv[i]!;
+    const eq = token.indexOf('=');
+    const inline = eq > 0 ? token.slice(eq + 1) : undefined;
     if (token === '--json' && !json) json = true;
     else if (token === '--conversations' && !conversations) conversations = true;
-    else {
-      throw new MultichatError('USAGE', `status takes only --json/--conversations; got: ${argv.join(' ')}`);
+    else if (token === '--claude' && section === undefined) section = 'claude';
+    else if (token === '--codex' && section === undefined) section = 'codex';
+    else if (token === '--all' && !all) all = true;
+    else if (token === '--name' || token.startsWith('--name=')) {
+      const value = inline ?? argv[++i];
+      if (value === undefined || value === '') throw new MultichatError('USAGE', 'status: --name requires a value');
+      name = value;
+    } else if (token === '--via' || token.startsWith('--via=')) {
+      const value = inline ?? argv[++i];
+      if (value === undefined || value === '') throw new MultichatError('USAGE', 'status: --via requires a value (tcp or ssh)');
+      if (value !== 'tcp' && value !== 'ssh') throw new MultichatError('USAGE', 'status: --via 只接受 tcp 或 ssh');
+      via = value;
+    } else {
+      throw new MultichatError(
+        'USAGE',
+        `status takes only --json/--conversations/--claude/--codex/--name/--via/--all; got: ${argv.join(' ')}`,
+      );
     }
   }
-  return { json, conversations };
+  if (section !== undefined && conversations) {
+    throw new MultichatError('USAGE', 'status: --claude/--codex 选段不与 --conversations 组合');
+  }
+  if (via !== undefined && !conversations) {
+    throw new MultichatError('USAGE', 'status: --via 仅与 --conversations 组合');
+  }
+  const any = section !== undefined || name !== undefined || via !== undefined || all;
+  return {
+    json,
+    conversations,
+    ...(any
+      ? {
+          filters: {
+            ...(section !== undefined ? { section } : {}),
+            ...(name !== undefined ? { name } : {}),
+            ...(via !== undefined ? { via } : {}),
+            ...(all ? { all: true } : {}),
+          },
+        }
+      : {}),
+  };
 }
 
 /** install-skills accepts only --dir <root> (space or = separated). */
@@ -318,6 +377,8 @@ function realStatusDeps(): StatusDeps {
     roster: existsSync(join(homedir(), '.crosschat', 'tcp', 'node.json'))
       ? (entry) => fetchRosterFor(join(homedir(), '.crosschat'), entry)
       : undefined,
+    // --conversations --via 的传输族判定源（本机 send-log 尾窗）。
+    sendLogTail: () => readSendLogTail(defaultSendLogFile()),
   };
 }
 
@@ -426,9 +487,9 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     }
     try {
-      const { json, conversations } = parseStatusArgs(rest);
+      const { json, conversations, filters } = parseStatusArgs(rest);
       await drainAtEntry();
-      const output = await runStatus(realStatusDeps(), json, conversations);
+      const output = await runStatus(realStatusDeps(), json, conversations, filters);
       process.stdout.write(`${output}\n`);
       return 0;
     } catch (err) {

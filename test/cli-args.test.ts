@@ -85,6 +85,38 @@ describe('parseStatusArgs', () => {
     expectUsage(() => parseStatusArgs(['--conversations', '--conversations']), 'only --json');
     expectUsage(() => parseStatusArgs(['--wat']), 'only --json');
   });
+
+  it('parses the filter flags (--claude/--codex/--name/--via/--all)', () => {
+    expect(parseStatusArgs(['--claude'])).toEqual({ json: false, conversations: false, filters: { section: 'claude' } });
+    expect(parseStatusArgs(['--codex', '--json'])).toEqual({
+      json: true,
+      conversations: false,
+      filters: { section: 'codex' },
+    });
+    expect(parseStatusArgs(['--name', 'worker'])).toEqual({ json: false, conversations: false, filters: { name: 'worker' } });
+    expect(parseStatusArgs(['--name=架构'])).toEqual({ json: false, conversations: false, filters: { name: '架构' } });
+    expect(parseStatusArgs(['--all'])).toEqual({ json: false, conversations: false, filters: { all: true } });
+    expect(parseStatusArgs(['--conversations', '--via', 'tcp'])).toEqual({
+      json: false,
+      conversations: true,
+      filters: { via: 'tcp' },
+    });
+    expect(parseStatusArgs(['--conversations', '--name', 'x', '--json'])).toEqual({
+      json: true,
+      conversations: true,
+      filters: { name: 'x' },
+    });
+  });
+
+  it('rejects conflicting or incomplete filter usage', () => {
+    expectUsage(() => parseStatusArgs(['--claude', '--codex']), 'only --json'); // second section flag matches nothing
+    expectUsage(() => parseStatusArgs(['--claude', '--claude']), 'only --json');
+    expectUsage(() => parseStatusArgs(['--claude', '--conversations']), '不与 --conversations 组合');
+    expectUsage(() => parseStatusArgs(['--via', 'tcp']), '仅与 --conversations');
+    expectUsage(() => parseStatusArgs(['--via', 'ftp', '--conversations']), 'tcp 或 ssh');
+    expectUsage(() => parseStatusArgs(['--via']), 'requires a value');
+    expectUsage(() => parseStatusArgs(['--name']), 'requires a value');
+  });
 });
 
 describe('drainOutboxAtEntry', () => {

@@ -43,7 +43,7 @@ crosschat status
 crosschat send --to <名字> --body "正文"
 ```
 
-- 名字 = claude 会话名或 codex 线程名（status 列出全部可路由对象）；未命名 codex 线程可用 id8 或完整 id 寻址（`crosschat status` 里可见）。
+- 名字 = claude 会话名或 codex 线程名（status 列出全部可路由对象）；未命名 codex 线程可用 id8 或完整 id 寻址（`crosschat status --all` 里可见——默认视图藏未命名，加 `--all` 带出）。
 - 查会话往来（双方、最近活跃、轮次、最近投递状态、滞留条数）：`crosschat status --conversations`；`queued` / `parked` 的终态也在这里确认。
 - 长正文或正文含 `$`、反引号、引号等 shell 敏感字符时，省略 `--body` 改用管道（stdin 整段读入，免引号转义）：`cat <文件> | crosschat send --to <名字>`。
 - 投给 codex 的消息：**开窗、关窗、忙时均可投**（daemon 0.160+）。对方正在跑 turn 也不阻塞——消息直接**入队**（输出 `queued`），当前轮结束即进入对话被处理；TUI 窗口会实时刷出。输出 `delivered`（已送达）/ `queued`（已入队，轮末处理）/ `parked`（仅旧 daemon 异常态，已暂存），三者都**无需重发**。`queued` 的消费确认免费搭载在业务流量上——对端的下一条来信带更高 turn 号即证明已消费，无需轮询、无显式回执。

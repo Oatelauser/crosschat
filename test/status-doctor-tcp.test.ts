@@ -27,11 +27,11 @@ function writeBrokerStatus(dir: string, status: Record<string, unknown>): void {
   writeFileSync(join(dir, 'status-broker.json'), JSON.stringify(status));
 }
 
-describe('status 转发器区块', () => {
+describe('status 节点客户端/broker 区块', () => {
   it('shows 未运行 when no status files exist', async () => {
     const dir = mkdtempSync(join(root, 't-'));
     const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
-    expect(out.split('\n').at(-1)).toBe('转发器: 未运行');
+    expect(out.split('\n').at(-1)).toBe('节点客户端: 未运行');
   });
 
   it('shows online with alias and since for a fresh node status', async () => {
@@ -43,7 +43,7 @@ describe('status 转发器区块', () => {
       lastUpdated: iso(-5_000),
     });
     const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
-    expect(out).toContain('转发器: online tcp:br (since ');
+    expect(out).toContain('节点客户端: online tcp:br (since ');
   });
 
   it('shows the reconnect-wait line with the next attempt for a fresh waiting node', async () => {
@@ -56,7 +56,7 @@ describe('status 转发器区块', () => {
       nextAttemptAt: iso(30_000),
     });
     const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
-    expect(out).toMatch(/转发器: 重连等待中，下次尝试 \d{2}:\d{2}:\d{2}/);
+    expect(out).toMatch(/节点客户端: 重连等待中，下次尝试 \d{2}:\d{2}:\d{2}/);
   });
 
   it('treats a stale (>90s) node status as 未运行', async () => {
@@ -68,7 +68,7 @@ describe('status 转发器区块', () => {
       lastUpdated: iso(-120_000),
     });
     const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
-    expect(out).toContain('转发器: 未运行');
+    expect(out).toContain('节点客户端: 未运行');
   });
 
   it('shows the broker line plus online machines from a fresh running broker status', async () => {
@@ -80,14 +80,15 @@ describe('status 转发器区块', () => {
       onlineNodes: ['box-a', 'box-b'],
     });
     const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
-    expect(out).toContain('转发器: 未运行'); // 节点腿没有
-    expect(out).toContain('转发器: 服务端端口 7260，2 节点在线');
+    expect(out).toContain('节点客户端: 未运行'); // 节点腿没有
+    expect(out).toContain('broker: 服务端端口 7260，2 节点在线');
     expect(out).toContain('在线机器: box-a、box-b');
   });
 
-  it('skips the whole 转发器 section when tcpDir is not wired (zero regression)', async () => {
+  it('skips the whole forwarder section when tcpDir is not wired (zero regression)', async () => {
     const out = await runStatus(baseStatusDeps(), false);
-    expect(out).not.toContain('转发器');
+    expect(out).not.toContain('节点客户端');
+    expect(out).not.toContain('broker');
     const parsed = JSON.parse(await runStatus(baseStatusDeps(), true)) as Record<string, unknown>;
     expect(Object.keys(parsed).sort()).toEqual(['claude', 'codex']);
   });
@@ -107,7 +108,7 @@ describe('status 转发器区块', () => {
     expect(parsed.tcp.broker).toEqual({ port: 7260, onlineNodes: ['box-a'] });
   });
 
-  it('B2: multiple node daemons each get a tagged 转发器 line', async () => {
+  it('B2: multiple node daemons each get a tagged line', async () => {
     const dir = mkdtempSync(join(root, 't-'));
     writeNodeStatus(join(dir, 'tcp'), {
       state: 'online',
@@ -125,8 +126,8 @@ describe('status 转发器区块', () => {
     }));
     const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
     const lines = out.split('\n');
-    expect(lines.some((l) => l.startsWith('转发器[默认]: online tcp:br1 (since '))).toBe(true);
-    expect(lines.some((l) => l.startsWith('转发器[work]: 重连等待中，下次尝试 '))).toBe(true);
+    expect(lines.some((l) => l.startsWith('节点客户端[默认]: online tcp:br1 (since '))).toBe(true);
+    expect(lines.some((l) => l.startsWith('节点客户端[work]: 重连等待中，下次尝试 '))).toBe(true);
   });
 
   it('B2: a stale daemon among several shows its own 未运行 tag line', async () => {
@@ -145,8 +146,8 @@ describe('status 转发器区块', () => {
       lastUpdated: iso(-600_000),
     }));
     const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
-    expect(out).toContain('转发器[work]: 未运行');
-    expect(out).not.toContain('转发器: 未运行');
+    expect(out).toContain('节点客户端[work]: 未运行');
+    expect(out).not.toContain('节点客户端: 未运行');
   });
 
   it('B2: --json adds tcpProfiles per daemon while tcp.node/tcp.broker keep their shape', async () => {
@@ -198,10 +199,10 @@ describe('status 转发器区块', () => {
     };
     const out = await runStatus(deps, false);
     expect(seen).toEqual(['br1', 'br2']); // 逐条目探
-    expect(out).toContain('转发器: broker br1 可达，1 机器在线');
+    expect(out).toContain('broker: br1 可达，1 机器在线');
     expect(out).toContain('在线机器[br1]: hub (a1b2c3d4)');
     expect(out).toContain('离线机器[br1]: beta (bbbb0000)');
-    expect(out).toContain('转发器: broker br2 不可达');
+    expect(out).toContain('broker: br2 不可达');
   });
 });
 
