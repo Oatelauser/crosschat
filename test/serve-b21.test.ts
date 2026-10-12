@@ -267,17 +267,16 @@ describe('B2.1 reply loop closure', () => {
     expect(ssh.host).toBe('build01');
   });
 
-  it('envelope: tcp stamps --via tcp:<mid8>; default ssh bytes unchanged', () => {
+  it('envelope: one unified reply command for every transport (A+ 瘦身)', () => {
     const base = { fromName: 'boss', toName: 'beta', turn: 2, ref: 'mc2_x', body: 'hi' };
-    const tcp = composeEnvelope({ ...base, viaHost: 'abcd1234', viaTransport: 'tcp' });
-    expect(tcp).toContain('--via tcp:abcd1234');
-    expect(tcp).not.toContain('--via ssh:');
-    const ssh = composeEnvelope({ ...base, viaHost: 'build01' });
-    expect(ssh).toContain('--via ssh:build01');
-    expect(ssh).not.toContain('tcp:');
+    const out = composeEnvelope(base);
+    expect(out).toContain('crosschat send --conversation mc2_x --body "<你的回复>"');
+    expect(out).not.toContain('--via');
+    expect(out).not.toContain('tcp:');
+    expect(out).not.toContain('ssh:');
   });
 
-  it('runSend stamps the tcp reply-hint from a tcp origin (envelope carries --via tcp:<sender mid8>)', async () => {
+  it('runSend renders the same hint for tcp origins (auto-routing replaces --via)', async () => {
     const envelopes: string[] = [];
     const deps: SendDeps = {
       env: {},
@@ -300,8 +299,9 @@ describe('B2.1 reply loop closure', () => {
     const origin = encodeOrigin({ p: 'codex', id: '01a1115b-1a3c-7e71-addc-fee969078e1b' }, 'aaaa0000', 'aaaa0000ef12', 'tcp');
     const out = await runSend({ to: 'boss', bodyArg: 'hello', origin }, deps);
     expect(out).toContain('delivered to boss');
-    expect(envelopes[0]).toContain('--via tcp:aaaa0000');
-    expect(envelopes[0]).not.toContain('--via ssh:');
+    // A+：回信命令不带 --via——路由由执行侧按 ref 自动补（send.ts autoViaFromRef）
+    expect(envelopes[0]).not.toContain('--via');
+    expect(envelopes[0]).toContain('crosschat send --conversation mc2_');
   });
 
   it('pickAutoVia three branches: ssh alias wins byte-identically, tcp when a usable entry exists, else ssh', () => {

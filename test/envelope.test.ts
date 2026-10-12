@@ -12,7 +12,7 @@ describe('composeEnvelope', () => {
     });
     expect(out).toBe(
       '<cross-session-message from-name="alpha" turn="2">\n' +
-        '<crosschat-reply-hint conversation="mc1_ABC" reply-as="workteam">' +
+        '<crosschat-reply-hint reply-as="workteam">' +
         '回复请运行: crosschat send --conversation mc1_ABC --body "<你的回复>"</crosschat-reply-hint>\n' +
         '新话题或对话已推进时: crosschat send --to <名字> --body "..."（--to 自动接续该端对最近对话）；超 16KiB 请写文件后只发路径\n' +
         '你好，请查收\n' +
@@ -77,18 +77,21 @@ describe('composeEnvelope', () => {
   });
 });
 
-describe('composeEnvelope viaHost (008 B2)', () => {
-  it('injects --via before --conversation and never adds --to for cross-machine replies', () => {
-    const out = composeEnvelope({ fromName: 'claude/boss@win-dev', toName: 'codex/worker2', turn: 1, ref: 'mc2_R', body: 'x', viaHost: 'win-dev' });
+describe('composeEnvelope reply-hint slimming (信封瘦身 A+)', () => {
+  it('carries the ref exactly once (inside the command), never as an attribute', () => {
+    const out = composeEnvelope({ fromName: 'claude/boss@win-dev', toName: 'codex/worker2', turn: 3, ref: 'mc2_R', body: 'x' });
+    expect(out.match(/mc2_R/g)).toHaveLength(1);
+    expect(out).not.toContain('conversation=');
     const hint = out.match(/<crosschat-reply-hint[^>]*>([\s\S]*?)<\/crosschat-reply-hint>/)![1]!;
-    expect(hint).toBe('回复请运行: crosschat send --via ssh:win-dev --conversation mc2_R --body "<你的回复>"');
+    expect(hint).toBe('回复请运行: crosschat send --conversation mc2_R --body "<你的回复>"');
   });
 
-  it('stays byte-identical to the single-machine form when viaHost is absent', () => {
-    const plain = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc2_R', body: 'x' });
-    const explicit = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc2_R', body: 'x', viaHost: undefined });
-    expect(plain).toBe(explicit);
-    expect(plain).not.toContain('--via');
+  it('never renders --via: single-machine, ssh-origin and tcp-origin sends share one command', () => {
+    for (const fromName of ['a', 'claude/boss@build01', 'claude/boss@abcd1234']) {
+      const out = composeEnvelope({ fromName, toName: 'b', turn: 1, ref: 'mc2_R', body: 'x' });
+      expect(out).not.toContain('--via');
+      expect(out).toContain('crosschat send --conversation mc2_R --body "<你的回复>"');
+    }
   });
 });
 

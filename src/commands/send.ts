@@ -127,6 +127,70 @@ function sshConfigHasAlias(text: string | undefined, alias: string): boolean {
   return false;
 }
 
+/**
+ * 信封瘦身 A+ 的执行侧自动选路（--conversation 且无 --via）：
+ * a. ref 带 starId（tcp 会话）→ 固定走 tcp，targetMachine=对端端点的 mid
+ *    （本机端点之外的另一端；两端都不在本机取 t 端点）。星条目选择与
+ *    "星不在本机 node.json"教学复用 via-tcp 的 selectBrokerEntry（连接前
+ *    失败）。--origin 在场=接收腿（消息已在目标机上），不选路——再上 broker
+ *    会被对端以同判据弹回来，两机对弹。
+ * b. 无 starId 但对端带 m/mid → 照旧 pickAutoVia（B2.1 三分支：ssh 别名
+ *    优先，其次本机 tcp 条目）；对端在本机=不补 --via，落单机投递。
+ * c. 对端无任何机器指纹、且本机会话注册表里查无两端（超旧引用被带到别
+ *    机器）→ 教学显式 --via。本机认识的会话绝不误判（否则本地回复全灭）。
+ */
+async function autoViaFromRef(
+  args: SendArgs,
+  deps: SendDeps,
+  ref: ConversationRef,
+  here: string,
+  localMid: string | undefined,
+): Promise<SendArgs> {
+  const isLocal = (ep: RefEndpoint): boolean =>
+    ep.p !== 'human' && isSameMachine(ep.mid, ep.m, localMid, here);
+  if (ref.starId !== undefined && args.origin === undefined) {
+    const fLocal = isLocal(ref.f);
+    const tLocal = isLocal(ref.t);
+    const peer = tLocal && !fLocal ? ref.f : ref.t;
+    if (peer.p === 'human') return args; // 人发起的对话交给主路径的 CANNOT_REPLY_TO_HUMAN
+    return { ...args, via: `tcp:${peer.mid ?? peer.m ?? ''}` };
+  }
+  let staleRef = false;
+  const envScan = deps.listClaudeSessions();
+  try {
+    const envCaller = resolveCallerIdentity(deps.env, envScan);
+    // B3.1 bug2：origin 在场即权威——远端来件的发送方身份不走本进程环境残留。
+    const caller = args.origin !== undefined ? decodeOriginIdentity(args.origin) : envCaller;
+    // B11：只认"调用者身份之外且非本机"的端点为 via 目标——跨机回复时调用者
+    // 自己的端点住在对端机上，误选会两机互弹 ssh 到 120s 超时。
+    const remote = [ref.f, ref.t].find(
+      (ep): ep is { p: 'claude' | 'codex'; id: string; m: string } =>
+        !identityMatchesEndpoint(caller, ep) &&
+        ep.p !== 'human' && ep.m !== undefined && !isSameMachine(ep.mid, ep.m, localMid, here),
+    );
+    if (remote !== undefined) return { ...args, via: pickAutoVia(remote.m, deps) };
+    staleRef =
+      !identityMatchesEndpoint(caller, ref.f) &&
+      !identityMatchesEndpoint(caller, ref.t) &&
+      ![ref.f, ref.t].some((ep) => ep.p !== 'human' && (ep.m !== undefined || ep.mid !== undefined));
+  } catch {
+    // 身份解析失败在主路径还会原样炸出（此处不抢答）
+  }
+  if (!staleRef) return args;
+  let codexIds: string[] = [];
+  try {
+    codexIds = (await deps.listCodexThreads()).map((thread) => thread.id);
+  } catch {
+    // codex 不可达时按 claude 侧 + 调用者侧判定
+  }
+  const known = new Set([...envScan.sessions.map((session) => session.sessionId), ...codexIds]);
+  if ([ref.f, ref.t].some((ep) => ep.p !== 'human' && known.has(ep.id))) return args;
+  throw new MultichatError(
+    'USAGE',
+    '此对话引用过旧（无机器指纹），请显式加 --via tcp:<机器> 或 --via ssh:<别名> 后重发',
+  );
+}
+
 export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   resolveTargetArgs(args);
   // B2：--file 模式正文可缺省（传输完成后自动生成"已送达：<路径>"）
@@ -150,35 +214,19 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     );
   }
 
-  // Federation (008 B2, design §5 C): a cross-machine --conversation ref names
-  // the remote machine in its endpoints — fill a missing --via from it so a
-  // hand-typed reply without the flag still routes (the envelope's copy
-  // already carries it; this is typo insurance). Undecodable refs fall
-  // through to the normal path's error.
-  // B11 fix: only the CALLER'S COUNTERPART may become the via target. The
-  // previous form scanned both endpoints and picked the first non-local one —
-  // on a cross-machine reply the sender's own endpoint lives on the OTHER
-  // machine, so the remote leg auto-filled a via back to the sender's machine
-  // and the two machines bounced the send at each other over ssh until the
-  // 120s timeout, with zero output at either end.
+  // 信封瘦身 A+：回信命令不再携带 --via，执行侧在此按 ref 补齐路由（显式
+  // --via 一字不动；解不开的 ref 照旧交给主路径报错）。历史注记：B11 乒乓
+  // 修复的"只认调用者对端"判据仍活在 autoViaFromRef 的 b 分支里。
   if (args.via === undefined && args.conversation !== undefined) {
     const here = deps.hostname?.() ?? osHostname();
     const localMid = deps.machineId?.();
+    let ref: ConversationRef | undefined;
     try {
-      const ref = decodeRef(args.conversation);
-      const envScan = deps.listClaudeSessions();
-      const envCaller = resolveCallerIdentity(deps.env, envScan);
-      // B3.1 bug2：origin 在场即权威——远端来件的发送方身份不走本进程环境残留。
-      const caller = args.origin !== undefined ? decodeOriginIdentity(args.origin) : envCaller;
-      const remote = [ref.f, ref.t].find(
-        (ep): ep is { p: 'claude' | 'codex'; id: string; m: string } =>
-          !identityMatchesEndpoint(caller, ep) &&
-          ep.p !== 'human' && ep.m !== undefined && !isSameMachine(ep.mid, ep.m, localMid, here),
-      );
-      if (remote !== undefined) args = { ...args, via: pickAutoVia(remote.m, deps) };
+      ref = decodeRef(args.conversation);
     } catch {
       // invalid ref: the main path reports it
     }
+    if (ref !== undefined) args = await autoViaFromRef(args, deps, ref, here, localMid);
   }
 
   // Federation (008/B1): everything via lives behind this early branch — the
@@ -308,16 +356,6 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
       t: stamp(newRef.t, fIsCaller ? here : origin.host, fIsCaller ? localMid : origin.mid),
     };
   }
-  // The reply-hint's --via points at the machine of the endpoint reading this
-  // envelope would reply to — the sender's own endpoint (D5: no --to needed).
-  const senderEp = identityMatchesEndpoint(caller, newRef.f) ? newRef.f : newRef.t;
-  const viaHost =
-    senderEp.p !== 'human' && senderEp.m !== undefined && !isSameMachine(senderEp.mid, senderEp.m, localMid, here)
-      ? senderEp.m
-      : undefined;
-  // B2.1：tcp 来件的 origin 带 via='tcp'——reply-hint 盖 --via tcp:<发送方 mid8>；
-  // ssh/本地路径不带该字段，envelope 输出字节不变（零回归锚点）。
-  const viaTransport = origin?.via;
   // B10 collision warning: the ssh peer's hostname equals ours but its
   // machine-id differs — routing is still correct (per-machine ssh alias
   // namespaces resolve it), the name ambiguity is worth telling the human.
@@ -366,7 +404,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     }
     checkAndRecord(deps.rateDir, rateKey(identityKey(caller), `claude:${target.id}`), deps.now());
     const toName = claudeSession.name ?? shortId('claude', claudeSession.sessionId);
-    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, viaHost, ...(viaTransport === undefined ? {} : { viaTransport }), turnBudget });
+    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget });
     try {
       await deps.deliverClaude(
         { pid: claudeSession.pid, messagingSocketPath: claudeSession.messagingSocketPath },
@@ -386,7 +424,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   const threads = await deps.listCodexThreads();
   const threadName = threads.find((thread) => thread.id === target.id)?.name;
   const toName = threadName ?? shortId('codex', target.id);
-  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, viaHost, ...(viaTransport === undefined ? {} : { viaTransport }), turnBudget });
+  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget });
   const parkNow = (): number => {
     park(
       deps.outboxDir,

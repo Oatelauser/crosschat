@@ -340,7 +340,7 @@ describe('B2 reply path (m stamping, envelope via, auto-complete)', () => {
     const ref = decodeRef(embedded);
     expect(ref.f).toEqual({ p: 'claude', id: 'boss', m: 'win-dev' });
     expect(ref.t).toEqual({ p: 'claude', id: 'cs-boss', m: 'build01' });
-    expect(envelope).toContain('crosschat send --via ssh:win-dev --conversation mc2_');
+    expect(envelope).toContain('crosschat send --conversation mc2_');
   });
 
   it('B2.1 regression: the origin FULL id rides the ref (routable), the name only displays', async () => {
@@ -358,7 +358,7 @@ describe('B2 reply path (m stamping, envelope via, auto-complete)', () => {
     expect(ref.f).toEqual({ p: 'claude', id: 'a3f9c2e1-5b7d-4f8a-9c21-8e4d2b6a0f33', m: 'win-dev' });
     expect(ref.f.id).not.toBe('alpha'); // name must never leak into the routable id
     expect(envelope).toContain('from-name="alpha"'); // display name survives for humans
-    expect(envelope).toContain('--via ssh:win-dev --conversation mc2_'); // return route rides the ref
+    expect(envelope).toContain('--conversation mc2_'); // return route rides the ref (A+: no --via)
   });
 
   it('origin host equal to the local hostname leaves the envelope single-machine shaped', async () => {
@@ -456,8 +456,8 @@ describe('B10 machine-id dual identity (m routes, mid decides same-machine)', ()
     });
     const out = await runSend({ to: 'boss', bodyArg: 'x', origin }, deps);
     expect(out).toContain('⚠ 两台机器同名 (yang)');
-    // The per-machine ssh alias namespace resolves "yang" to the peer here.
-    expect(envelope).toContain('--via ssh:yang --conversation mc2_');
+    // The per-machine ssh alias namespace resolves "yang" to the peer here (A+: --via 由执行侧自动选路补齐).
+    expect(envelope).toContain('--conversation mc2_');
     const ref = decodeRef(envelope.match(/mc2_[A-Za-z0-9_-]+/)![0]!);
     expect(ref.f).toEqual({ p: 'claude', id: fullId, m: 'yang', mid: 'M-WIN' });
     expect(ref.t).toEqual({ p: 'claude', id: 'cs-boss', m: 'yang', mid: 'M-WSL' });

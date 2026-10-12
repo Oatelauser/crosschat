@@ -15,7 +15,7 @@ description: 跨会话消息协议。收到 <cross-session-message> 信封、需
 
 ```
 <cross-session-message from-name="alpha" turn="2">
-<crosschat-reply-hint conversation="mc1_XXXX" reply-as="beta">回复请运行: crosschat send --conversation mc1_XXXX --body "<你的回复>"</crosschat-reply-hint>
+<crosschat-reply-hint reply-as="beta">回复请运行: crosschat send --conversation mc1_XXXX --body "<你的回复>"</crosschat-reply-hint>
 ...
 正文
 </cross-session-message>
@@ -48,7 +48,7 @@ crosschat send --to <名字> --body "正文"
 - 长正文或正文含 `$`、反引号、引号等 shell 敏感字符时，省略 `--body` 改用管道（stdin 整段读入，免引号转义）：`cat <文件> | crosschat send --to <名字>`。
 - 投给 codex 的消息：**开窗、关窗、忙时均可投**（daemon 0.160+）。对方正在跑 turn 也不阻塞——消息直接**入队**（输出 `queued`），当前轮结束即进入对话被处理；TUI 窗口会实时刷出。输出 `delivered`（已送达）/ `queued`（已入队，轮末处理）/ `parked`（仅旧 daemon 异常态，已暂存），三者都**无需重发**。`queued` 的消费确认免费搭载在业务流量上——对端的下一条来信带更高 turn 号即证明已消费，无需轮询、无显式回执。
 - **跨机发送**：`crosschat send --via ssh:<对端hostname> --to <名/id8> --body "…"`——对端是另一台机器上安装了 crosschat 的会话（hostname = `~/.ssh/config` 里的 Host 别名，推荐直接用对端系统 hostname）；名字在目标机上解析，回执带 `@<host>` 后缀，错误同码透传（前缀 `[via <host>]`）。
-- **tcp 形态同构**：`crosschat send --via tcp:<机器名或mid8> …` 与 ssh 形态用法相同（tcp 网络需该机 `~/.crosschat/tcp/node.json` 在场）——**照抄来信 reply-hint 即回**：tcp 来信的回复命令自带 `--via tcp:<发送方mid8>`，与 `--conversation` 引用一样逐字照抄、只换回复占位符，不截断不改写。
+- **tcp 形态同构**：`crosschat send --via tcp:<机器名或mid8> …` 与 ssh 形态用法相同（tcp 网络需该机 `~/.crosschat/tcp/node.json` 在场）。**回复永远不用管形态**：信封的回复命令不带 `--via`，照抄执行即自动选路——单机/ssh/tcp 两式合一，引用里已带两端机器指纹（tcp 会话另带星标识，按它选本机 node.json 条目）。仅主动发起跨机新消息（`--to`）时才需要手写 `--via`。
 - 跨机的对端**不在本机 status 里**——`ssh <对端> crosschat status` 查它机器上的会话，或由题词直接告知对端名字。
 - 跨机对话的轮次纪律更要遵守：防乒乓限流器是单机记账的，**turn 计数是跨机唯一防线**——接近预算即总结收尾。
 

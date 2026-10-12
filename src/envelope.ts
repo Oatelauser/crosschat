@@ -30,17 +30,6 @@ export interface EnvelopeInput {
   /** Encoded conversation ref the recipient uses to reply. */
   ref: string;
   body: string;
-  /**
-   * Federation (008 B2): machine the reply must travel to — the sender
-   * endpoint's `m` when it differs from this machine's hostname. Absent =
-   * same machine, and the reply-hint stays byte-identical to the
-   * single-machine form (no --to, D5: the ref already names both ends).
-   * B2.1: viaTransport='tcp' renders `--via tcp:<mid8>`; default/ssh keeps
-   * the historical `--via ssh:<host>` bytes (zero-regression anchor).
-   */
-  viaHost?: string;
-  /** B2.1：回程传输形态（tcp 对话的 m=发送方 mid8）；缺省 ssh——ssh 路径输出字节不变。 */
-  viaTransport?: 'ssh' | 'tcp';
   /** 票A：轮次预算（--max-turn / CROSSCHAT_MAX_TURN），合并进 turn 属性显示为 turn="N/M"。缺省不出现 → 信封字节稳定。 */
   turnBudget?: number;
 }
@@ -59,14 +48,16 @@ export function composeEnvelope(input: EnvelopeInput): string {
   const fromName = shortened ? codepoints.slice(0, FROM_NAME_MAX_CODEPOINTS).join('') : input.fromName;
   const aliasAttr = shortened ? ` from-alias="${escapeAttr(input.fromName)}"` : '';
   const body = neutralizeReservedTags(input.body);
-  const via = input.viaHost === undefined ? '' : ` --via ${input.viaTransport === 'tcp' ? 'tcp' : 'ssh'}:${input.viaHost}`;
   // 轮次预算合并进 turn 属性（turn="13/40"，斜杠后为预算轮数）——软提醒不
   // 硬拦（41/40 照发照显），未设预算时 turn 保持纯数字（字节零回归锚点）。
   const turnAttr = input.turnBudget === undefined ? `${input.turn}` : `${input.turn}/${input.turnBudget}`;
+  // 信封瘦身 A+：ref 自包含路由（端点带 m/mid，tcp 会话尾部带 starId），回信
+  // 命令不再搬 --via，也不在属性里重复 conversation——ref 全信封只出现这一
+  // 次；缺 --via 的回路由执行侧按 ref 自动选路（send.ts autoViaFromRef）。
   return (
     `<cross-session-message from-name="${escapeAttr(fromName)}" turn="${turnAttr}"${aliasAttr}>\n` +
-    `<crosschat-reply-hint conversation="${input.ref}" reply-as="${escapeAttr(input.toName)}">` +
-    `回复请运行: crosschat send${via} --conversation ${input.ref} --body "<你的回复>"</crosschat-reply-hint>\n` +
+    `<crosschat-reply-hint reply-as="${escapeAttr(input.toName)}">` +
+    `回复请运行: crosschat send --conversation ${input.ref} --body "<你的回复>"</crosschat-reply-hint>\n` +
     `新话题或对话已推进时: crosschat send --to <名字> --body "..."（--to 自动接续该端对最近对话）；超 16KiB 请写文件后只发路径\n` +
     `${body}\n` +
     `</cross-session-message>`

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -8,6 +8,9 @@ import { decodeRef, encodeRef, newConversationRef, nextTurnRef } from '../src/re
 import { MultichatError } from '../src/errors.js';
 import { drain, park } from '../src/outbox.js';
 import { encodeOrigin } from '../src/federation.js';
+import { Broker } from '../src/serve/broker.js';
+import { registryFileOf, writeRegistry } from '../src/serve/registry.js';
+import type { SendFrame } from '../src/serve/protocol.js';
 import type { SendLogEntry } from '../src/send-log.js';
 import type { ClaudeRegistryScan, ClaudeSessionEntry } from '../src/claude/registry.js';
 import type { CodexThreadSummary } from '../src/codex/client.js';
@@ -96,7 +99,7 @@ describe('runSend happy paths', () => {
     expect(claudeDeliveries.at(-1)?.pid).toBe(101);
     const content = claudeDeliveries.at(-1)!.content;
     expect(content.startsWith('<cross-session-message from-name="human" turn="1">')).toBe(true);
-    expect(content).toContain('<crosschat-reply-hint conversation="mc2_');
+    expect(content).toContain('<crosschat-reply-hint reply-as="alpha">');
     expect(content).toContain('reply-as="alpha"');
     expect(content).toContain('crosschat send --conversation mc2_');
     expect(content).toContain('hello world');
@@ -602,5 +605,167 @@ describe('runSend configurable body cap (票A)', () => {
     await send({ to: 'alpha', bodyArg: 'no budget' });
     expect(claudeDeliveries.at(-1)!.content).toContain('turn="1">');
     expect(claudeDeliveries.at(-1)!.content).not.toContain('budget=');
+  });
+});
+
+describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
+  const key = (c: string) => c.repeat(64);
+  /** tcp 会话 ref：f 在对端机（mid aaaa0000ef12），t 在本机（mid cccc3333aaaa），盖 starId。 */
+  const starRef = (starId: string): string =>
+    encodeRef({
+      v: 1,
+      f: { p: 'claude', id: 'cs-remote', m: 'aaaa0000', mid: 'aaaa0000ef12' },
+      t: { p: 'codex', id: 'team1111-aaaa', m: 'cccc3333', mid: 'cccc3333aaaa' },
+      n: '0011223344556677',
+      c: 1,
+      starId,
+    });
+
+  function tcpDeps(baseDir: string, env: Record<string, string | undefined> = {}): SendDeps {
+    return {
+      ...makeDeps(env),
+      hostname: () => 'node-c',
+      machineId: () => 'cccc3333aaaa',
+      tcpBaseDir: baseDir,
+    };
+  }
+
+  it('a: starId 回信固定走 tcp，targetMachine=对端端点的完整 mid（星条目精确匹配）', async () => {
+    const seen: SendFrame[] = [];
+    const dir = mkdtempSync(join(tmpdir(), 'crosschat-autovia-'));
+    // broker 本机即对端机（machineId=对端 mid）→ send 帧走 deliverLocal，可断言帧内容
+    writeRegistry(registryFileOf(dir), {
+      nodes: [{ label: 'self', key: key('k'), machineId: 'aaaa0000ef12', machineName: 'peer-host', addedAt: 'x' }],
+    });
+    const broker = new Broker({
+      registryFile: registryFileOf(dir),
+      statusFile: join(dir, 'status-broker.json'),
+      version: 'test',
+      machineId: () => 'aaaa0000ef12',
+      hostname: () => 'peer-host',
+      now: () => Date.now(),
+      log: () => {},
+      deliverLocal: async (frame) => {
+        seen.push(frame);
+        return {
+          op: 'result',
+          id: frame.id,
+          status: 'delivered',
+          turn: '2',
+          replyRef: 'mc1_x',
+          output: JSON.stringify({ status: 'delivered', to: 'workteam', turn: 2, replyRef: 'mc1_x' }),
+        };
+      },
+      port: 0,
+      heartbeatMs: 10_000,
+      pongTimeoutMs: 20_000,
+      connectTimeoutMs: 5_000,
+    });
+    const port = await broker.start();
+    try {
+      const baseDir = mkdtempSync(join(dir, 'home-'));
+      mkdirSync(join(baseDir, 'tcp'), { recursive: true });
+      // 两条目：死星在前——只有按 ref.starId 选星才连得上（否则多条目裸 tcp 直接 USAGE）
+      writeFileSync(
+        join(baseDir, 'tcp', 'node.json'),
+        JSON.stringify({
+          brokers: [
+            { host: '127.0.0.1', port: 1, alias: 'dead', starId: 'ffff00000000', key: key('d') },
+            { host: '127.0.0.1', port, alias: 'star-a', starId: 'abcd00001111', key: key('k') },
+          ],
+        }),
+      );
+      const ref = starRef('abcd00001111');
+      const out = await runSend(
+        { conversation: ref, bodyArg: 'hi' },
+        tcpDeps(baseDir, { CODEX_THREAD_ID: 'team1111-aaaa' }),
+      );
+      expect(out).toContain('delivered to workteam@aaaa0000ef12');
+      expect(seen[0]).toMatchObject({ op: 'send', targetMachine: 'aaaa0000ef12', conversation: ref, body: 'hi' });
+    } finally {
+      await broker.stop();
+    }
+  }, 10_000);
+
+  it('a: starId 不在本机 node.json → 教学核对配置/索取（不发起任何连接）', async () => {
+    const baseDir = mkdtempSync(join(tmpdir(), 'crosschat-autovia-miss-'));
+    mkdirSync(join(baseDir, 'tcp'), { recursive: true });
+    writeFileSync(
+      join(baseDir, 'tcp', 'node.json'),
+      JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 1, alias: 'dead', starId: 'ffff00000000', key: 'k' }] }),
+    );
+    const err = await expectCode(
+      runSend({ conversation: starRef('abcd00001111'), bodyArg: 'hi' }, tcpDeps(baseDir, { CODEX_THREAD_ID: 'team1111-aaaa' })),
+      'USAGE',
+    );
+    expect(err.message).toContain('starId abcd00001111');
+    expect(err.message).toContain('不在本机 node.json');
+    expect(err.message).toContain('向管理员索取');
+  });
+
+  it('a 接收腿护栏：--origin 在场的 starId ref 本地投递，不再上 broker（防两机对弹）', async () => {
+    // 若误上 tcp：tcpBaseDir 指向空目录 → "本机未入网" 报错，测试即刻红
+    const emptyDir = mkdtempSync(join(tmpdir(), 'crosschat-autovia-empty-'));
+    const origin = encodeOrigin({ p: 'claude', id: 'cs-remote' }, 'aaaa0000', 'aaaa0000ef12', 'tcp');
+    const out = await runSend({ conversation: starRef('abcd00001111'), bodyArg: 'pong', origin }, tcpDeps(emptyDir));
+    expect(out).toContain('delivered to workteam (turn 2)');
+    expect(codexDeliveries.at(-1)!.threadId).toBe('team1111-aaaa');
+    expect(codexDeliveries.at(-1)!.content).toContain('pong');
+  });
+
+  it('c: 对端无机器指纹、本机查无两端点的超旧引用 → 教学显式 --via', async () => {
+    const ancient = encodeRef({
+      v: 1,
+      f: { p: 'claude', id: 'cs-elsewhere' },
+      t: { p: 'codex', id: 'cd-elsewhere' },
+      n: '0011223344556677',
+      c: 1,
+    });
+    const err = await expectCode(runSend({ conversation: ancient, bodyArg: 'hi' }, makeDeps()), 'USAGE');
+    expect(err.message).toContain('此对话引用过旧（无机器指纹）');
+    expect(err.message).toContain('--via tcp:<机器>');
+    expect(err.message).toContain('--via ssh:<别名>');
+  });
+
+  it('c 护栏：同一形状但端点在本机注册表里 → 仍走既有 CALLER_NOT_IN_CONVERSATION（不误判过旧）', async () => {
+    const localAncient = encodeRef({
+      v: 1,
+      f: { p: 'claude', id: 'cs-alpha' },
+      t: { p: 'codex', id: 'team1111-aaaa' },
+      n: '0099887766554433',
+      c: 1,
+    });
+    await expectCode(
+      runSend({ conversation: localAncient, bodyArg: 'h' }, makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-beta' })),
+      'CALLER_NOT_IN_CONVERSATION',
+    );
+  });
+
+  it('显式 --via 一字不动：starId ref + --via ssh: 走 ssh 腿，不碰 tcp', async () => {
+    const sshArgv: string[][] = [];
+    const deps: SendDeps = {
+      ...tcpDeps(mkdtempSync(join(tmpdir(), 'crosschat-autovia-x-'))),
+      sshExec: async (argv) => {
+        sshArgv.push([...argv]);
+        return { code: 0, stdout: JSON.stringify({ status: 'delivered', to: 'workteam', turn: 2, replyRef: 'mc1_x' }), stderr: '' };
+      },
+    };
+    const out = await runSend({ conversation: starRef('abcd00001111'), via: 'ssh:peer-host', bodyArg: 'hi' }, deps);
+    expect(sshArgv).toHaveLength(1);
+    expect(sshArgv[0]!.slice(0, 2)).toEqual(['ssh', 'peer-host']);
+    expect(out).toContain('delivered to workteam@peer-host');
+  });
+
+  it('端到端：信封命令即完整回信指令——从投递内容提取命令里的 ref 直接回信', async () => {
+    // 信封瘦身后 hint 只剩一条 crosschat send --conversation <ref>——照抄即路由
+    await send({ to: 'workteam', bodyArg: 'round one' }, { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' });
+    const envelope = codexDeliveries.at(-1)!.content;
+    const command = envelope.match(/回复请运行: (crosschat send[^\n<]+)</)![1]!;
+    expect(command.startsWith('crosschat send --conversation mc2_')).toBe(true);
+    expect(command).not.toContain('--via');
+    const ref = command.match(/--conversation (\S+)/)![1]!;
+    const reply = await send({ conversation: ref, bodyArg: 'round two' }, { CODEX_THREAD_ID: 'team1111-aaaa' });
+    expect(reply).toContain('(turn 2)');
+    expect(claudeDeliveries.at(-1)!.content).toContain('round two');
   });
 });
