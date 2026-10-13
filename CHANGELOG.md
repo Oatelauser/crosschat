@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### G0：status 三段式与长引用退场
+
+- **裸跑 status = 三段式摘要**：本机会话（计数 + 滞留子句（仅有滞留时）+ 最近 5 会话混排带侧标）/ tcp（每星一行：可达·机器数·客户端态 + 机器封顶 5）/ ssh（对话计数 + 最近 5 段或"无"）；任何旗标在场 = 明细视图逐字节不变
+- **新旗标 `--stars`**：tcp 星内明细分组（可达 + 守护态 + 全量机器表，含离线星）；--json 加 stars 分组新键、旧键全保
+- **`--conversations` ref 列换柄列（cN）**；send 输出 reply-ref 行退役，delivered 行尾 `· 续话 cN`（--json 的 replyRef 完整保留）——**人眼可见处零 30+ 字符 base64**
+- 传输分类器统一：存档 ref 解码为权威（ssh/tcp/单机），send-log 痕迹仅兜底
+- F1 抑制语义修正：**显式选段永不沉默**（--codex 遇 daemon 挂从整屏空串改为显示 unavailable 横幅）
+- 顺手修正：会话行侧标空格分隔；单次发送成本实测累计 -60%（输出侧 -28 token）
+
+
 ### 014：状态目录统一与生命周期（全平台一个院子）
 
 - **状态目录全平台统一 `~/.crosschat`**（与 tcp 组件同根，不再看 LOCALAPPDATA）——旧院（win `%LOCALAPPDATA%\crosschat`、unix `~/crosschat` 无点）废弃，仅 uninstall 清扫；**升级即换新家，旧数据不迁移**（升级前 `status` 确认发件箱无滞留）
