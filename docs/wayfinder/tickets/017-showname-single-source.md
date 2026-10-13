@@ -1,9 +1,9 @@
 # 机器自报名单一事实源：showName 通吃 broker 机（017）
 
 label: wayfinder:design
-status: open
+status: open（2026-10-13 实施完成 2e7df0b，check 666 全绿；待真机验收——云端改 showName 重启 serve 后 win 侧 roster 应见新名——后关票。云端跑 npm 1.5.10，须待下版发布升级后才可验收）
 blocked-by: （无）
-claimed-by: （待领）
+claimed-by: （二期6 主会话编排 subagent 实施）
 
 ## Question
 
