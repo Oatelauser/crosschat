@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { type RawData } from 'ws';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
 import { encodeFrame, parseFrame, type Frame } from '../src/serve/protocol.js';
@@ -16,6 +16,7 @@ import { decodeRef } from '../src/ref.js';
 import { encodeOrigin } from '../src/federation.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-serve-node-'));
+afterAll(() => rmSync(root, { recursive: true, force: true }));
 afterEach(() => {
   for (const c of clients) c.close();
   clients.length = 0;

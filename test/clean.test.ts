@@ -1,13 +1,14 @@
 /** `crosschat clean`（票B B3 + 014 分片回收）：懒删除规则 / 总量超额 / --force / 空目录 / 参数解析。 */
-import { mkdirSync, mkdtempSync, readdirSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { runClean, type CleanDeps } from '../src/commands/clean.js';
 import { parseCleanArgs } from '../src/cli.js';
 import { MultichatError } from '../src/errors.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-clean-'));
+afterAll(() => rmSync(root, { recursive: true, force: true }));
 const DAY = 24 * 3_600_000;
 
 function fixture(opts: { staleMs?: number; maxInboxBytes?: number; shardStaleMs?: number } = {}): {

@@ -1,13 +1,14 @@
 /** `crosschat uninstall`（票B B3）：清单组装 / --yes / serve 在跑拒删 / 不存在跳过 / 确认交互。 */
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { runUninstall, type UninstallDeps } from '../src/commands/uninstall.js';
 import { parseUninstallArgs } from '../src/cli.js';
 import { MultichatError } from '../src/errors.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-uninstall-'));
+afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 interface Fixture {
   deps: UninstallDeps;

@@ -1,11 +1,14 @@
 /** 014 限流蒸发：计数改读 send-log 尾窗（纯函数 checkRateLimit + 文件腿 checkSendLogRate）。 */
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { checkRateLimit, checkSendLogRate, RATE_LIMIT_MAX, RATE_WINDOW_MS } from '../src/rate-limit.js';
 import { appendSendLog, type SendLogEntry } from '../src/send-log.js';
 import { MultichatError } from '../src/errors.js';
+
+const root = mkdtempSync(join(tmpdir(), 'crosschat-rate-'));
+afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 const NOW = 1_800_000_000_000;
 
@@ -75,7 +78,7 @@ describe('checkRateLimit tail-window counting', () => {
 
 describe('checkSendLogRate file leg', () => {
   it('reads the pair window from a real send-log file; missing file = empty window', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'crosschat-rate-'));
+    const dir = mkdtempSync(join(root, 'case-'));
     const file = join(dir, 'send-log.jsonl');
     for (let i = 0; i < RATE_LIMIT_MAX; i++) {
       appendSendLog(file, entry('claude:s1', 'codex:t1', NOW - i * 100));

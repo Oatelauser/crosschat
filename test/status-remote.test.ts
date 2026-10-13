@@ -5,10 +5,10 @@
  * - CLI：目标解析（名字/mid8/多星限定器）、空目标 USAGE、渲染分段、过滤套用、--json 结构
  * - 版本偏差：旧 broker 对未知 op 静默无行为 → 请求方超时教学
  */
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { type RawData, WebSocketServer } from 'ws';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
 import { registryFileOf, writeRegistry, type NodeEntry } from '../src/serve/registry.js';
@@ -23,6 +23,7 @@ import type { SendDeps } from '../src/commands/send.js';
 import type { CodexThreadWithMeta } from '../src/codex/discovery.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-status-remote-'));
+afterAll(() => rmSync(root, { recursive: true, force: true }));
 const key = (c: string) => c.repeat(64);
 const NODE_MID = `a1b2c3d4${'f'.repeat(56)}`;
 const GHOST_MID = `deadbeef${'0'.repeat(56)}`;

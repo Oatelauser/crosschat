@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
 import { registryFileOf, writeRegistry } from '../src/serve/registry.js';
 import { FileInbox } from '../src/serve/file-channel.js';
@@ -14,6 +14,7 @@ import type { SendLogEntry } from '../src/send-log.js';
 import type { ResultFrame, SendFrame } from '../src/serve/protocol.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-via-tcp-'));
+afterAll(() => rmSync(root, { recursive: true, force: true }));
 afterEach(async () => {
   for (const b of brokers.splice(0)) await b.stop();
 });

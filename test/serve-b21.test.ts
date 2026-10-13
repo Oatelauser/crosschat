@@ -2,10 +2,10 @@
  * 票B B2.1（a″ mid8 双轨寻址）行为测试：双轨路由/同机 deliverLocal/冲突列码/
  * 改名免疫/信封 tcp 盖章+ssh 字节锚点/自动补全三分支/roster/自报名净化/自登记。
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
 import { registryFileOf, tcpDir, writeRegistry, type NodeEntry } from '../src/serve/registry.js';
@@ -19,6 +19,7 @@ import { pickAutoVia, runSend, type SendDeps } from '../src/commands/send.js';
 import { ensureSelfEntry, realServeDeps, type ServeDeps } from '../src/commands/serve.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-b21-'));
+afterAll(() => rmSync(root, { recursive: true, force: true }));
 const key = (c: string) => c.repeat(64);
 const brokers: Broker[] = [];
 afterEach(async () => {

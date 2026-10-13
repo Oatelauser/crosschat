@@ -1,11 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { runStatus, type StatusDeps } from '../src/commands/status.js';
 import { runDoctor, type DoctorDeps } from '../src/commands/doctor.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-status-doctor-tcp-'));
+afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 function baseStatusDeps(tcpDir?: string): StatusDeps {
   return {
