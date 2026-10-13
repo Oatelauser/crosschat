@@ -335,6 +335,19 @@ describe('broker heartbeat and lifecycle', () => {
     expect(status.onlineNodes).toEqual([]);
   });
 
+  it('017: onlineNodes includes the broker itself with （本机） marker（注册表有本机条目才算，名字取注册表）', async () => {
+    const { url, registryFile, statusFile } = await startBroker({ machineId: () => 'a1b2c3d40000' });
+    seed(registryFile, [
+      { label: 'self', key: key('s'), machineId: 'a1b2c3d40000', machineName: 'cloud' },
+      { key: key('a'), machineId: 'aaaa00001111', machineName: 'alpha' },
+    ]);
+    const node = await handshake(url, key('a'), 'aaaa00001111');
+    await node.waitFor((f) => f.op === 'connected');
+    const status = JSON.parse(readFileSync(statusFile, 'utf8')) as { onlineNodes: string[] };
+    // broker 自身恒在线且居首；改 showName 重启 serve 后本机 status 即见新名（不再自排除）
+    expect(status.onlineNodes).toEqual(['cloud（本机）', 'alpha']);
+  });
+
   it('refreshes lastUpdated on every heartbeat cycle', async () => {
     const { broker, statusFile } = await startBroker({ heartbeatMs: 15, ping: () => {} });
     const read = () =>

@@ -293,6 +293,16 @@ describe('016① machines 字段（跨机回执机器标识持久化，additive�
     expect(machineNameOfPair(file, ref, peerMid8)).toBe('cloudleg');
   });
 
+  it('017 改名自愈：机器改名后同 mid8 新信封经 machines merge 覆盖旧名（{...existing, ...machines}）', () => {
+    const file = freshFile();
+    const ref = newConversationRef(claudeA, codexB);
+    recordConversation(file, ref, 1_000, { [peerMid8]: 'old-name' });
+    expect(machineNameOfPair(file, ref, peerMid8)).toBe('old-name');
+    // 对端改名（showName/自报名）后新信封到达：同 mid8、新 from-machine 名——merge 后者胜
+    recordConversation(file, nextTurnRef(ref), 2_000, { [peerMid8]: 'new-name' });
+    expect(machineNameOfPair(file, ref, peerMid8)).toBe('new-name');
+  });
+
   it('新版读旧状态（无 machines 字段）：查询 undefined，接续行为不变', () => {
     const file = freshFile();
     const ref = newConversationRef(claudeA, codexB);

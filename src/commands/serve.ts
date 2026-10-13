@@ -14,7 +14,7 @@ import { MultichatError } from '../errors.js';
 import { appendWithRotate } from '../log-rotate.js';
 import { machineId } from '../platform/machine-id.js';
 import { Broker, DEFAULT_PORT, defaultDeliverLocal } from '../serve/broker.js';
-import { ensureStarId, ensureStarName, genKeys, listNodes, readRegistry, registryFileOf, removeNode, setName, setPort, tcpDir, writeRegistry } from '../serve/registry.js';
+import { ensureStarId, ensureStarName, genKeys, listNodes, readRegistry, registryFileOf, removeNode, sanitizeName, setName, setPort, tcpDir, writeRegistry } from '../serve/registry.js';
 import { buildStatusPayload, deliverViaRunSend, formatBrokerEntry, NodeClient, readNodeConfig, syncNodeJsonEntry, type BrokerEntry, type NodeConfig } from '../serve/node.js';
 import { FileInbox } from '../serve/file-channel.js';
 import type { SendDeps } from './send.js';
@@ -137,7 +137,7 @@ function runGenKey(genKeyArg: string, deps: ServeDeps, registryFile: string, por
   deps.stdout('  · broker 机自身 → 无需分发（首次 serve 已自动写好 127.0.0.1 的自用 node.json）');
   deps.stdout('  · broker 是云主机/NAT 内网机 → host 填对外公网 IP（探测常拿内网 IP，必核对）');
   deps.stdout('  · 普通局域网 → broker 机的局域网 IP；broker 用非默认端口时 port 一并改');
-  deps.stdout(`分发前把每份 node.json 的 showName 改成「贴这份配置的机器」的自报名字（建议=其 hostname；纯显示用——roster 怎么称呼它，寻址/回信不依赖，走 machine-id 前缀）；条目 name=${starName === undefined ? '（本机未定星名，可留空）' : starName} 是星名（broker 权威，连接自动同步，不用改）`);
+  deps.stdout(`分发前把每份 node.json 的 showName 改成「贴这份配置的机器」的自报名字（建议=其 hostname；纯显示用——roster 怎么称呼它，寻址/回信不依赖，走 machine-id 前缀；改名=改 showName 后重启常驻——节点机重启节点客户端、broker 机重启 serve）；条目 name=${starName === undefined ? '（本机未定星名，可留空）' : starName} 是星名（broker 权威，连接自动同步，不用改）`);
   for (const result of results) {
     deps.stdout('--------------------------------');
     deps.stdout(result.nodeJsonContent.trimEnd());
@@ -196,6 +196,8 @@ function runDetach(deps: ServeDeps, extraArgs: string[], logName: string, portNu
  * B2.1：broker 首启自登记——本机条目直接落注册表（machineId=本机、name=hostname），
  * 并自动写本机 node.json（host=127.0.0.1）。broker 机与其他节点完全同构：
  * 其他机器可立即用 mid8/名字寻址本机，本机 send --via tcp: 也有凭证，零管理员动作。
+ * 017：此后每次启动读回 node.json 顶层 showName 刷新 machineName（单一事实源），
+ * broker 机改名与纯 node 机同一规则（后者经连接帧上报，物理等价）。
  *
  * 三态结局（'ok' = 已存在且与当前 broker 一致，静默不打扰）；undefined = 无 machineId。
  */
@@ -242,10 +244,23 @@ export function ensureSelfEntry(deps: ServeDeps, registryFile: string, port: num
   }
   // 已存在：宽松解析判状态（双形状；坏文件交给上层教学报错）
   let entries: BrokerEntry[];
+  let showName: string | undefined;
   try {
-    entries = readNodeConfig(nodeJson).entries;
+    const config = readNodeConfig(nodeJson);
+    entries = config.entries;
+    showName = config.showName;
   } catch {
+    // 017：node.json 整体读不了/损坏——machineName 维持注册表现值（不因解析失败误删）
     return { status: 'stale' };
+  }
+  // 017 机器自报名单一事实源：启动读回本机 node.json 顶层 showName 刷新注册表
+  // machineName（顶层字段，读取不依赖自用条目归属——foreign 形态照读）。语义对称：
+  // showName 显式缺失/空 → 清除（roster 回退纯 mid8）；无变化不写（与下方星名
+  // 同步"一致不写"同款）。改名重启 serve 生效——与升级口诀同节奏。
+  const wantName = sanitizeName(showName);
+  if (self.machineName !== wantName) {
+    self.machineName = wantName;
+    writeRegistry(registryFile, registry);
   }
   // 找本 broker 的钥匙条目（多星机上自用条目可与外星条目共存于同一数组）
   const mine = entries.find((e) => e.key === self.key);

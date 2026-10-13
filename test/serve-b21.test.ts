@@ -428,6 +428,95 @@ describe('B2.1 serve self-init', () => {
   });
 });
 
+describe('017 showName 单一事实源（ensureSelfEntry 启动刷新 machineName）', () => {
+  const selfEntry = (machineName?: string): NodeEntry => ({
+    label: 'self',
+    key: 'k',
+    machineId: 'a1b2c3d40000',
+    ...(machineName === undefined ? {} : { machineName }),
+    addedAt: '2026-01-01T00:00:00.000Z',
+  });
+  // name 预落定：ensureStarName 不再写注册表（无变化不写用例要字节级安静）
+  function setup(machineName?: string): { deps: ServeDeps; registryFile: string; nodeJson: string } {
+    const dir = mkdtempSync(join(root, 't017-'));
+    mkdirSync(tcpDir(dir), { recursive: true });
+    const registryFile = registryFileOf(dir);
+    writeRegistry(registryFile, { starId: 'aaaabbbbcccc', name: 'hub', nodes: [selfEntry(machineName)] });
+    return {
+      deps: { ...realServeDeps(), baseDir: dir, machineId: () => 'a1b2c3d40000', hostname: () => 'hub' },
+      registryFile,
+      nodeJson: join(tcpDir(dir), 'node.json'),
+    };
+  }
+  const readSelf = (file: string): NodeEntry =>
+    (JSON.parse(readFileSync(file, 'utf8')) as { nodes: NodeEntry[] }).nodes[0]!;
+
+  it('重启（再跑 ensureSelfEntry）读回 showName 刷新注册表 machineName——改名主链', () => {
+    const { deps, registryFile, nodeJson } = setup('hub');
+    writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 7260, key: 'k' }], showName: 'cloud' }));
+    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
+    expect(readSelf(registryFile).machineName).toBe('cloud');
+  });
+
+  it('foreign 形态（自用条目不在 node.json）照样读顶层 showName 刷新', () => {
+    const { deps, registryFile, nodeJson } = setup('hub');
+    writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '10.9.9.9', port: 7260, key: 'wk', name: 'other' }], showName: 'cloud' }));
+    expect(ensureSelfEntry(deps, registryFile, 7260)).toMatchObject({ status: 'foreign' });
+    expect(readSelf(registryFile).machineName).toBe('cloud');
+  });
+
+  it('语义对称：showName 显式缺失/空白 → 清除 machineName（roster 回退纯 mid8）', () => {
+    const { deps, registryFile, nodeJson } = setup('hub');
+    writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 7260, key: 'k' }] }));
+    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
+    expect(readSelf(registryFile).machineName).toBeUndefined();
+    expect('machineName' in readSelf(registryFile)).toBe(false); // 键整个消失，非 null 残留
+    // 空白串同清（sanitizeName 剥空）
+    writeRegistry(registryFile, { name: 'hub', nodes: [selfEntry('cloud')] });
+    writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 7260, key: 'k' }], showName: '   ' }));
+    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
+    expect(readSelf(registryFile).machineName).toBeUndefined();
+  });
+
+  it('node.json 读不了/损坏 → 维持注册表现值（不因解析失败误删）', () => {
+    const { deps, registryFile, nodeJson } = setup('cloud');
+    writeFileSync(nodeJson, 'not json at all');
+    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'stale' });
+    expect(readSelf(registryFile).machineName).toBe('cloud');
+  });
+
+  it('无变化不写：showName 与现值一致时注册表字节不变（与 E0 星名同步同款）', () => {
+    const { deps, registryFile, nodeJson } = setup('cloud');
+    writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 7260, key: 'k', name: 'hub' }], showName: 'cloud' }, null, 2));
+    const before = readFileSync(registryFile, 'utf8');
+    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
+    expect(readFileSync(registryFile, 'utf8')).toBe(before);
+  });
+
+  it('端到端：改 showName 重启后，非 hex 名字寻址命中 broker 本机（deliverLocal）', async () => {
+    const local: string[] = [];
+    const h = await startHarness([{ machineId: 'a1b2c3d40000', machineName: 'hub' }], {
+      deliverLocal: async (frame) => {
+        local.push(frame.body);
+        return { op: 'result', id: frame.id, status: 'delivered', turn: '1' };
+      },
+    });
+    const port = Number(new URL(h.url).port);
+    writeFileSync(
+      join(tcpDir(h.dir), 'node.json'),
+      JSON.stringify({ brokers: [{ host: '127.0.0.1', port, key: key('k0'), name: 'hub' }], showName: 'cloud' }),
+    );
+    const deps: ServeDeps = { ...realServeDeps(), baseDir: h.dir, machineId: () => 'a1b2c3d40000', hostname: () => 'hub' };
+    expect(ensureSelfEntry(deps, h.registryFile, port)).toEqual({ status: 'ok' });
+    expect(readSelf(h.registryFile).machineName).toBe('cloud');
+    const sender = await senderOn(h);
+    sender.send({ op: 'send', id: 'n1', targetMachine: 'cloud', body: 'by-new-name' });
+    const receipt = await sender.waitFor((f) => f.op === 'receipt' && f.id === 'n1');
+    expect(receipt.op === 'receipt' && receipt.status).toBe('delivered');
+    expect(local).toEqual(['by-new-name']);
+  }, 10_000);
+});
+
 describe('B3.1 drill fixes', () => {
   function codexSendDeps(over: { queued?: boolean; receipt?: 'confirmed' | 'unconfirmed' }): SendDeps {
     return {

@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### 017：机器自报名单一事实源（showName 通吃 broker 机）
+
+- **改名只剩一条规则**：任何机器的自报名 = 本机 `node.json` 顶层 `showName`（缺省 hostname 兜底），改完**重启常驻**生效——节点机重启节点客户端、broker 机重启 serve。serve 启动读回本机 node.json 刷新注册表 machineName（此前仅首次登记、node.json 永不被读回，broker 机改名只能手改注册表或另跑节点客户端，两套心智）
+- **语义对称**：showName 显式缺失/空 → 清除注册表 machineName（roster 回退纯 mid8）；node.json 读不了/损坏 → 维持现值（不因解析失败误删）；无变化不写；读取不依赖自用条目归属（node.json 呈 foreign 形态照读顶层 showName）
+- **本机 status 的"在线机器"含本机**（带"（本机）"标记）——broker 机改名后本机 status 即见新名，不再自排除误导"没生效"
+- 重名寻址护栏加用例锁死：多台同名 `--via tcp:<名>` 维持"报错+列 mid8 教消歧"；机器改名后同 mid8 新信封经会话分片 machines merge 覆盖旧名（回执显示自愈）
+- **升级迁移**：此前手改过 broker.json 注册表 `machineName` 的，017 起重启 serve 会被 showName 覆盖——**把名字写进本机 node.json 的 showName**
+
 ### 016：跨机回执统一与现场反馈打磨
 
 - **跨机回执机器标识统一 `name(mid8)`**（无名回退 mid8）：修复同一对端回执时而 `@yang`（名）时而 `@ec542c2c…`（裸指纹）的显示发散——到达侧把信封 from-machine 名持久化进会话分片（additive `machines` 字段，旧版读写双向兼容），显示层据此还原；**寻址面零改动**（信封 from-machine、`--via` 解析、`[via X]` 错误前缀照旧纯名/纯 mid8，不并记——并记会弄坏寻址）

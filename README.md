@@ -275,7 +275,7 @@ ssh: 共 2 段对话
 - [x] 🌐 跨机联邦 ssh v1：`--via ssh:<对端hostname>`、mc2_ 紧凑会话引用（296→83 字符）、信封自动回程路条、三层错误码同码透传、发起侧审计补记账；localhost 与 win↔WSL 真机验证（win 收件腿 codex 侧受 AF_UNIX 限制，见联邦手册）；tcp/broker 传输见路线图
 
 **v1.4.0**
-- [x] 📡 跨机联邦 tcp（proto:1）：`crosschat serve` 星型转发器（预共享钥匙/心跳/自登记）+ `--via tcp:<机器/mid8>` 瞬态直发（双轨寻址：mid8 权威、名字显示用，改名免疫）+ tcp 回信闭环（reply-hint 自动带 `--via tcp:`）+ `--file` 文件通道（sha256 锚/断点续传/去重/5 天+512MiB 懒删除/64MiB 上限）+ roster 在线表 + `clean`/`uninstall`；win 真机自环验证，见[转发器手册](docs/broker.md)
+- [x] 📡 跨机联邦 tcp（proto:1）：`crosschat serve` 星型转发器（预共享钥匙/心跳/自登记）+ `--via tcp:<机器/mid8>` 瞬态直发（双轨寻址：mid8 权威、名字显示用，改名免疫）+ tcp 回信闭环（reply-hint 自动带 `--via tcp:`）+ `--file` 文件通道（sha256 锚/断点续传/去重/5 天+512MiB 懒删除/64MiB 上限）+ roster 在线表 + `clean`/`uninstall`；机器改名=改本机 node.json `showName` + 重启常驻（节点机重启节点客户端 / broker 机重启 serve——全机种唯一名字来源）；win 真机自环验证，见[转发器手册](docs/broker.md)
 </details>
 
 ## 🛠️ 开发说明

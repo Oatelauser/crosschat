@@ -651,6 +651,19 @@ export class Broker {
       const onlineNodes = [...this.online.values()].map(
         (session) => session.machineName ?? session.machineId?.slice(0, 8) ?? '?',
       );
+      // 017：broker 自身恒在线——本机 status 的"在线机器"含本机（带（本机）标），
+      // 改 showName 重启 serve 后本机 status 即见新名（此前自排除让用户误以为没生效）。
+      // 与 buildRoster ownNorm 同判：注册表有本机条目才算（名字取注册表——017 后与
+      // showName 同源），未注册不虚列。
+      const ownNorm = normalizeMid(this.d.machineId() ?? '');
+      if (ownNorm !== '') {
+        const selfEntry = readRegistry(this.d.registryFile).nodes.find(
+          (n) => normalizeMid(n.machineId ?? '') === ownNorm,
+        );
+        if (selfEntry !== undefined) {
+          onlineNodes.unshift(`${selfEntry.machineName ?? ownNorm.slice(0, 8)}（本机）`);
+        }
+      }
       writeFileSync(
         this.d.statusFile,
         `${JSON.stringify(

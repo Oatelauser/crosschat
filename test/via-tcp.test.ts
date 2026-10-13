@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
-import { registryFileOf, writeRegistry } from '../src/serve/registry.js';
+import { registryFileOf, writeRegistry, type NodeEntry } from '../src/serve/registry.js';
 import { FileInbox } from '../src/serve/file-channel.js';
 import { runViaTcpSend, selectBrokerEntry, tcpTimeoutMs } from '../src/serve/via-tcp.js';
 import type { BrokerEntry } from '../src/serve/node.js';
@@ -44,12 +44,12 @@ interface Harness {
   deliverLocal: BrokerDeps['deliverLocal'];
 }
 
-async function startBroker(deliverLocal: BrokerDeps['deliverLocal'], inboxDirs?: { inboxDir: string; partsDir: string }): Promise<Harness> {
+async function startBroker(deliverLocal: BrokerDeps['deliverLocal'], inboxDirs?: { inboxDir: string; partsDir: string }, nodes?: NodeEntry[]): Promise<Harness> {
   const dir = mkdtempSync(join(root, 'case-'));
   const registryFile = registryFileOf(dir);
   // sender 用 key('k')；broker 自己是 'broker-host'（BROKER-MID）→ 本机路由
   writeRegistry(registryFile, {
-    nodes: [
+    nodes: nodes ?? [
       { label: 'self', key: key('k'), machineId: 'BROKER-MID', machineName: 'broker-host', addedAt: 'x' },
       { label: 'ghost', key: key('g'), machineId: 'm-ghost', machineName: 'ghost-host', addedAt: 'x' },
     ],
@@ -172,6 +172,24 @@ describe('runViaTcpSend against a real broker', () => {
       'UNKNOWN_MACHINE',
     );
     expect(err.message).toContain('serve --list');
+  }, 10_000);
+
+  it('017 重名锁死：两台同名 machineName，--via tcp:<名> 得 MACHINE_NAME_COLLISION 且报错列 mid8 教消歧', async () => {
+    // 改名自由化会抬高重名概率——name 轨多命中必须维持"报错+列 mid"（broker.ts 现行为回归锁）
+    const h = await startBroker(async () => deliveredReceipt, undefined, [
+      { label: 'self', key: key('k'), machineId: 'BROKER-MID', machineName: 'broker-host', addedAt: 'x' },
+      { label: 'dup-a', key: key('a'), machineId: 'aaaa00001111', machineName: 'dup-name', addedAt: 'x' },
+      { label: 'dup-b', key: key('b'), machineId: 'bbbb00002222', machineName: 'dup-name', addedAt: 'x' },
+    ]);
+    const fx = makeFixture(h);
+    const err = await expectCode(
+      runViaTcpSend({ via: 'tcp:dup-name', to: 'boss' } as never, 'x', fx.deps),
+      'MACHINE_NAME_COLLISION',
+    );
+    expect(err.message).toContain('[via tcp:dup-name]');
+    expect(err.message).toContain('aaaa0000'); // mid8 在列（12 位形态含前 8）
+    expect(err.message).toContain('bbbb0000');
+    expect(err.message).toContain('mid');
   }, 10_000);
 
   it('times out with TCP_TRANSPORT_FAILED and the 勿盲目重发 wording', async () => {

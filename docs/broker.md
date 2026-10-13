@@ -55,7 +55,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
   · broker 机自身 → 无需分发（首次 serve 已自动写好 127.0.0.1 的自用 node.json）
   · broker 是云主机/NAT 内网机 → host 填对外公网 IP（探测常拿内网 IP，必核对）
   · 普通局域网 → broker 机的局域网 IP；broker 用非默认端口时 port 一并改
-分发前把每份 node.json 的 showName 改成「贴这份配置的机器」的自报名字（建议=其 hostname；纯显示用——roster 怎么称呼它，寻址/回信不依赖，走 machine-id 前缀）；条目 name=yang 是星名（broker 权威，连接后自动同步，不用改）
+分发前把每份 node.json 的 showName 改成「贴这份配置的机器」的自报名字（建议=其 hostname；纯显示用——roster 怎么称呼它，寻址/回信不依赖，走 machine-id 前缀；改名=改 showName 后重启常驻——节点机重启节点客户端、broker 机重启 serve）；条目 name=yang 是星名（broker 权威，连接后自动同步，不用改）
 --------------------------------
 {
   "brokers": [
@@ -93,7 +93,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 }
 ```
 
-字段一句话：条目里的 `key`=钥匙（不用改）、`name`=星名（broker 权威，连接自动同步，不用改）、`starId`=星标识（不用改）；`showName`=本机自报名（roster 里怎么称呼你，寻址走 mid8 与它无关）。
+字段一句话：条目里的 `key`=钥匙（不用改）、`name`=星名（broker 权威，连接自动同步，不用改）、`starId`=星标识（不用改）；`showName`=本机自报名（roster 里怎么称呼你，寻址走 mid8 与它无关）。**机器改名 = 改本机 node.json 的 showName + 重启常驻**（节点机重启节点客户端、broker 机重启 serve——serve 启动会读回它刷新注册表，这是全机种唯一的名字来源，别再手改 broker.json）。
 
 上线（断线自动重连永不放弃）：
 
@@ -376,7 +376,7 @@ C → file-end{id}
 
 ### 4.7 第三方实现者注意
 
-参考实现是**单 broker 星型**——多实例集群需自行解决实例间路由（哪台节点连在哪个实例）与注册表共享，本实现不含（一台机器入多颗星由节点侧承担，见 3.5）。注册表格式见 broker 机 `~/.crosschat/tcp/broker.json`（顶层 starId/name(星名)/port；nodes[] 内 label/key/machineId/machineName/addedAt）。节点侧 node.json：`{brokers:[{host,port,name(星名),starId,key}…], showName(本机显示名)}`——旧字段 alias/顶层 name 读取时自动映射。会话引用 mc2_ 可在尾部携带 starId（flags bit 10）——旧版解析器遇此扩展走 `INVALID_CONVERSATION_REF`+升级指引，属设计好的版本偏差路径。
+参考实现是**单 broker 星型**——多实例集群需自行解决实例间路由（哪台节点连在哪个实例）与注册表共享，本实现不含（一台机器入多颗星由节点侧承担，见 3.5）。注册表格式见 broker 机 `~/.crosschat/tcp/broker.json`（顶层 starId/name(星名)/port；nodes[] 内 label/key/machineId/machineName/addedAt）。节点侧 node.json：`{brokers:[{host,port,name(星名),starId,key}…], showName(本机显示名)}`——旧字段 alias/顶层 name 读取时自动映射。`nodes[].machineName` 不是权威——单一事实源是各机自己的 node.json `showName`（节点机经连接帧上报、broker 机经 serve 启动读回刷新；显式缺失/空则清除，roster 回退 mid8）。会话引用 mc2_ 可在尾部携带 starId（flags bit 10）——旧版解析器遇此扩展走 `INVALID_CONVERSATION_REF`+升级指引，属设计好的版本偏差路径。
 
 </details>
 
