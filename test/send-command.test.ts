@@ -42,10 +42,19 @@ const threads: CodexThreadSummary[] = [
 const sendLogDir = mkdtempSync(join(tmpdir(), 'crosschat-send-'));
 const sendLogFile = join(sendLogDir, 'send-log.jsonl');
 const outboxDir = mkdtempSync(join(tmpdir(), 'crosschat-send-outbox-'));
+const scratchDirs: string[] = [];
 afterAll(() => {
   rmSync(sendLogDir, { recursive: true, force: true });
   rmSync(outboxDir, { recursive: true, force: true });
+  for (const dir of scratchDirs) rmSync(dir, { recursive: true, force: true });
 });
+
+/** Per-test scratch root under %TEMP% (label keeps the historical dir prefix); swept in afterAll. */
+function scratch(label: string): string {
+  const dir = mkdtempSync(join(tmpdir(), `crosschat-autovia-${label}`));
+  scratchDirs.push(dir);
+  return dir;
+}
 
 const claudeDeliveries: { pid: number; content: string }[] = [];
 const codexDeliveries: { threadId: string; content: string }[] = [];
@@ -643,7 +652,7 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
 
   it('a: starId 回信固定走 tcp，targetMachine=对端端点的完整 mid（星条目精确匹配）', async () => {
     const seen: SendFrame[] = [];
-    const dir = mkdtempSync(join(tmpdir(), 'crosschat-autovia-'));
+    const dir = scratch('');
     // broker 本机即对端机（machineId=对端 mid）→ send 帧走 deliverLocal，可断言帧内容
     writeRegistry(registryFileOf(dir), {
       nodes: [{ label: 'self', key: key('k'), machineId: 'aaaa0000ef12', machineName: 'peer-host', addedAt: 'x' }],
@@ -699,7 +708,7 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
   }, 10_000);
 
   it('a: starId 不在本机 node.json → 教学核对配置/索取（不发起任何连接）', async () => {
-    const baseDir = mkdtempSync(join(tmpdir(), 'crosschat-autovia-miss-'));
+    const baseDir = scratch('miss-');
     mkdirSync(join(baseDir, 'tcp'), { recursive: true });
     writeFileSync(
       join(baseDir, 'tcp', 'node.json'),
@@ -716,7 +725,7 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
 
   it('a 接收腿护栏：--origin 在场的 starId ref 本地投递，不再上 broker（防两机对弹）', async () => {
     // 若误上 tcp：tcpBaseDir 指向空目录 → "本机未入网" 报错，测试即刻红
-    const emptyDir = mkdtempSync(join(tmpdir(), 'crosschat-autovia-empty-'));
+    const emptyDir = scratch('empty-');
     const origin = encodeOrigin({ p: 'claude', id: 'cs-remote' }, 'aaaa0000', 'aaaa0000ef12', 'tcp');
     const out = await runSend({ conversation: starRef('abcd00001111'), bodyArg: 'pong', origin }, tcpDeps(emptyDir));
     expect(out).toContain('delivered to workteam (turn 2)');
@@ -755,7 +764,7 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
   it('显式 --via 一字不动：starId ref + --via ssh: 走 ssh 腿，不碰 tcp', async () => {
     const sshArgv: string[][] = [];
     const deps: SendDeps = {
-      ...tcpDeps(mkdtempSync(join(tmpdir(), 'crosschat-autovia-x-'))),
+      ...tcpDeps(scratch('x-')),
       sshExec: async (argv) => {
         sshArgv.push([...argv]);
         return { code: 0, stdout: JSON.stringify({ status: 'delivered', to: 'workteam', turn: 2, replyRef: 'mc1_x' }), stderr: '' };
@@ -767,8 +776,8 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
     expect(out).toContain('delivered to workteam@peer-host');
   });
 
-  it('端到端：信封命令即完整回信指令——从投递内容提取命令里的 ref 直接回信', async () => {
-    // 信封瘦身后 hint 只剩一条 crosschat send --conversation <ref>——照抄即路由
+  it('端到端：信封命令即完整回信指令——从投递内容提取命令里的标识直接回信（无状态=完整 ref 回退）', async () => {
+    // 无 conversationStateFile：hint 回退完整 mc2_ ref——照抄即路由（F2 保底腿）
     await send({ to: 'workteam', bodyArg: 'round one' }, { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' });
     const envelope = codexDeliveries.at(-1)!.content;
     const command = envelope.match(/回复请运行: (crosschat send[^\n<]+)</)![1]!;
@@ -778,5 +787,76 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
     const reply = await send({ conversation: ref, bodyArg: 'round two' }, { CODEX_THREAD_ID: 'team1111-aaaa' });
     expect(reply).toContain('(turn 2)');
     expect(claudeDeliveries.at(-1)!.content).toContain('round two');
+  });
+});
+
+describe('runSend conversation short handles (F2)', () => {
+  const freshState = (): string =>
+    join(mkdtempSync(join(outboxDir, 'state-')), 'conversations.json');
+
+  it('照抄端到端：落信 hint 带 c1 → 按 c1 回信 → delivered；柄跨轮复用', async () => {
+    const state = freshState();
+    const deps = { ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }), conversationStateFile: state };
+    const first = await runSend({ to: 'workteam', bodyArg: 'one' }, deps);
+    expect(first).toContain('delivered to workteam (turn 1)');
+    // 落信的 hint 只带两字符短柄，完整 ref 一个字节不出现
+    const envelope = codexDeliveries.at(-1)!.content;
+    const command = envelope.match(/回复请运行: (crosschat send[^\n<]+)</)![1]!;
+    expect(command).toContain('--conversation c1 ');
+    expect(envelope).not.toMatch(REF_RE);
+    // 对端照抄命令里的 c1 回信
+    const reply = await runSend(
+      { conversation: command.match(/--conversation (\S+)/)![1]!, bodyArg: 'two' },
+      { ...deps, env: { CODEX_THREAD_ID: 'team1111-aaaa' } },
+    );
+    expect(reply).toContain('delivered to alpha (turn 2)');
+    expect(claudeDeliveries.at(-1)!.content).toContain('two');
+    // 同 nonce 复用同柄：回信的 hint 仍是 c1
+    expect(claudeDeliveries.at(-1)!.content).toContain('--conversation c1 ');
+  });
+
+  it('an unknown handle teaches the --to continuation with the exact wording', async () => {
+    const deps = { ...makeDeps({ CODEX_THREAD_ID: 'team1111-aaaa' }), conversationStateFile: freshState() };
+    const err = await expectCode(runSend({ conversation: 'c7', bodyArg: 'h' }, deps), 'INVALID_CONVERSATION_REF');
+    expect(err.message).toContain('c7 已过期或未知');
+    expect(err.message).toContain('--to <名> 接续或开新对话');
+  });
+
+  it('a handle without wired state resolves to the same teaching error (no crash)', async () => {
+    const err = await expectCode(
+      send({ conversation: 'c1', bodyArg: 'h' }, { CODEX_THREAD_ID: 'team1111-aaaa' }),
+      'INVALID_CONVERSATION_REF',
+    );
+    expect(err.message).toContain('c1 已过期或未知');
+  });
+
+  it('a full mc2_ ref still routes directly (双形态永续)', async () => {
+    const deps = { ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }), conversationStateFile: freshState() };
+    const first = await runSend({ to: 'workteam', bodyArg: 'one' }, deps);
+    const reply = await runSend(
+      { conversation: first.match(REF_RE)![0]!, bodyArg: 'two' },
+      { ...deps, env: { CODEX_THREAD_ID: 'team1111-aaaa' } },
+    );
+    expect(reply).toContain('(turn 2)');
+  });
+
+  it('an ambiguous handle (forged same number in two shards) lists the candidate refs', async () => {
+    const state = freshState();
+    const deps = { ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }), conversationStateFile: state };
+    await runSend({ to: 'workteam', bodyArg: 'one' }, deps); // c1 -> pair alpha/workteam
+    // Hand-forge a second shard holding c1 for another conversation (CAS lost twice).
+    // Filename is irrelevant to enumeration: loadAllPairs keys shards by their `pair` field.
+    const imposter = encodeRef(newConversationRef({ p: 'claude', id: 'cs-beta' }, { p: 'codex', id: 'other222-bbbb' }));
+    writeFileSync(
+      join(state, '..', 'conversations', 'foreign.json'),
+      JSON.stringify({ pair: 'claude:cs-beta\ncodex:other222-bbbb', ref: imposter, updatedAt: 1, handles: { c1: imposter } }),
+      'utf8',
+    );
+    const err = await expectCode(
+      runSend({ conversation: 'c1', bodyArg: 'h' }, { ...deps, env: { CODEX_THREAD_ID: 'team1111-aaaa' } }),
+      'INVALID_CONVERSATION_REF',
+    );
+    expect(err.message).toContain('c1 撞号指向多个对话');
+    expect(err.message).toContain(imposter);
   });
 });

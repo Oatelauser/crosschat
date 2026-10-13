@@ -29,7 +29,14 @@ import { decodeOriginIdentity, isSameMachine, runViaSend } from '../federation.j
 import { runViaTcpSend } from '../serve/via-tcp.js';
 import { normalizeMid } from '../platform/machine-id.js';
 import type { SendLogEntry } from '../send-log.js';
-import { continueConversation, continueFromRef, recordConversation } from '../conversations.js';
+import {
+  CONVERSATION_HANDLE_RE,
+  continueConversation,
+  continueFromRef,
+  handleForRef,
+  recordConversation,
+  resolveHandle,
+} from '../conversations.js';
 import {
   decodeRef,
   encodeRef,
@@ -203,6 +210,12 @@ async function autoViaFromRef(
 
 export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   resolveTargetArgs(args);
+  // F2：--conversation 双形态——c<数字> 本地短柄先解析成唯一完整 ref（扫全部
+  // 分片；过期/撞号在此教学自纠），mc1_/mc2_ 前缀直用永续。柄不过网：跨机腿
+  // 到这里时 conversation 已是完整 ref。
+  if (args.conversation !== undefined && CONVERSATION_HANDLE_RE.test(args.conversation)) {
+    args = { ...args, conversation: resolveHandle(deps.conversationStateFile, args.conversation) };
+  }
   // B2：--file 模式正文可缺省（传输完成后自动生成"已送达：<路径>"）
   const body = args.fileArg !== undefined ? resolveFileBody(args, deps) : resolveBody(args, deps);
   const size = body === undefined ? 0 : Buffer.byteLength(body, 'utf8');
@@ -405,6 +418,10 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     return `${out}\n${collision}`;
   };
 
+  // F2：短柄寄生于会话分片（零新文件），在最终 ref（含 origin 盖章与 starId）
+  // 定型后分配；状态未接线（异常路径）不分配，信封回退完整 ref。
+  const handle =
+    deps.conversationStateFile === undefined ? undefined : handleForRef(deps.conversationStateFile, newRef);
   const replyRef = encodeRef(newRef);
   const fromName = displayName(caller);
   /** Every exit path logs who sent what to whom (B14, +from in B16, +fromName in B21). */
@@ -424,7 +441,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     }
     checkSendLogRate(deps.sendLogFile, identityKey(caller), `claude:${target.id}`, deps.now());
     const toName = claudeSession.name ?? shortId('claude', claudeSession.sessionId);
-    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }) });
+    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(handle === undefined ? {} : { handle }) });
     try {
       await deps.deliverClaude(
         { pid: claudeSession.pid, messagingSocketPath: claudeSession.messagingSocketPath },
@@ -444,7 +461,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   const threads = await deps.listCodexThreads();
   const threadName = threads.find((thread) => thread.id === target.id)?.name;
   const toName = threadName ?? shortId('codex', target.id);
-  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }) });
+  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(handle === undefined ? {} : { handle }) });
   const parkNow = (): number => {
     park(
       deps.outboxDir,

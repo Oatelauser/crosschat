@@ -35,6 +35,11 @@ export interface EnvelopeInput {
    * 单机发送与无名瞬态发送方缺省——属性整个不出现，不填占位。
    */
   fromMachine?: string;
+  /**
+   * F2：本地会话短柄（c<数字>）——hint 用两字符柄替代完整 ref（生成与消费
+   * 同机同版本）。缺省（状态未接线等异常路径）回退完整 ref，保底不断。
+   */
+  handle?: string;
 }
 
 function escapeAttr(value: string): string {
@@ -57,12 +62,15 @@ export function composeEnvelope(input: EnvelopeInput): string {
   // F1：from-machine 只在跨机投递且有真名时出现（无名瞬态发送方整体省略）。
   const machineAttr = input.fromMachine === undefined ? '' : ` from-machine="${escapeAttr(input.fromMachine)}"`;
   // 信封瘦身 A+：ref 自包含路由（端点带 m/mid，tcp 会话尾部带 starId），回信
-  // 命令不再搬 --via，也不在属性里重复 conversation——ref 全信封只出现这一
-  // 次；缺 --via 的回路由执行侧按 ref 自动选路（send.ts autoViaFromRef）。
+  // 命令不再搬 --via，也不在属性里重复 conversation——conversation 标识全信
+  // 封只出现这一次；缺 --via 的回路由执行侧按 ref 自动选路（send.ts autoViaFromRef）。
+  // F2：标识优先用两字符短柄（消灭 LLM 手抄百字符 ref 这一最脆弱环节），
+  // 柄缺席回退完整 ref。
+  const conversationArg = input.handle ?? input.ref;
   return (
     `<cross-session-message from-name="${escapeAttr(fromName)}" turn="${turnAttr}"${machineAttr}${aliasAttr}>\n` +
     `<crosschat-reply-hint reply-as="${escapeAttr(input.toName)}">` +
-    `回复请运行: crosschat send --conversation ${input.ref} --body "<你的回复>"</crosschat-reply-hint>\n` +
+    `回复请运行: crosschat send --conversation ${conversationArg} --body "<你的回复>"</crosschat-reply-hint>\n` +
     `${body}\n` +
     `</cross-session-message>`
   );

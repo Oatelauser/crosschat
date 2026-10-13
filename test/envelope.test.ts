@@ -129,6 +129,25 @@ describe('composeEnvelope limit teaching + turn budget (票A)', () => {
   });
 });
 
+describe('composeEnvelope short handle (F2 会话短柄)', () => {
+  it('carries the two-char handle in the hint and drops the full ref entirely', () => {
+    const out = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc2_VERYLONGREF', body: 'x', handle: 'c3' });
+    expect(out).toBe(
+      '<cross-session-message from-name="a" turn="1">\n' +
+        '<crosschat-reply-hint reply-as="b">' +
+        '回复请运行: crosschat send --conversation c3 --body "<你的回复>"</crosschat-reply-hint>\n' +
+        'x\n' +
+        '</cross-session-message>',
+    );
+    expect(out).not.toContain('mc2_VERYLONGREF'); // 短柄在场时完整 ref 一个字节都不出现
+  });
+
+  it('falls back to the full ref when no handle is given (异常路径保底不断)', () => {
+    const out = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc1_ABC', body: 'x' });
+    expect(out).toContain('回复请运行: crosschat send --conversation mc1_ABC --body "<你的回复>"');
+  });
+});
+
 describe('composeEnvelope from-machine（F1 跨机坐标，三态精确串）', () => {
   it('renders from-machine after turn when a true machine name is given', () => {
     const out = composeEnvelope({ fromName: 'alpha', toName: 'workteam', turn: 2, ref: 'mc1_ABC', body: 'hi', fromMachine: 'win-dev' });

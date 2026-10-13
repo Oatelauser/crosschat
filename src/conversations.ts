@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 
 import { dirname, join } from 'node:path';
 import process from 'node:process';
 import { stateRoot } from './state-root.js';
+import { MultichatError } from './errors.js';
 import {
   decodeRef,
   encodeRef,
@@ -36,6 +37,12 @@ export function defaultConversationsFile(): string {
 interface PairRecord {
   ref: string;
   updatedAt: number;
+  /**
+   * F2 会话短柄表（c<数字> -> 完整 mc1_/mc2_ ref），寄生本分片零新文件。
+   * 键的插入序即 LRU 序（同 nonce 刷新会重插到尾）；生成与消费同机同版本，
+   * 短柄永不过网。
+   */
+  handles?: Record<string, string>;
 }
 
 /** Shard content: the pair key rides along so enumeration can rebuild the map. */
@@ -53,6 +60,16 @@ function shardFileOf(file: string, pairKey: string): string {
   return join(shardDirOf(file), `${name}.json`);
 }
 
+/** F2：handles 形状防守——只收留字符串值的条目，其余丢弃。 */
+function sanitizeHandles(value: unknown): Record<string, string> | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const out: Record<string, string> = {};
+  for (const [handle, ref] of Object.entries(value)) {
+    if (typeof ref === 'string') out[handle] = ref;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function parseShard(text: string): ShardRecord | undefined {
   try {
     const parsed = JSON.parse(text) as Partial<ShardRecord>;
@@ -63,7 +80,13 @@ function parseShard(text: string): ShardRecord | undefined {
       typeof parsed.ref === 'string' &&
       typeof parsed.updatedAt === 'number'
     ) {
-      return { pair: parsed.pair, ref: parsed.ref, updatedAt: parsed.updatedAt };
+      const handles = sanitizeHandles(parsed.handles);
+      return {
+        pair: parsed.pair,
+        ref: parsed.ref,
+        updatedAt: parsed.updatedAt,
+        ...(handles === undefined ? {} : { handles }),
+      };
     }
   } catch {
     // corrupt shard: self-heal as absent (isolated to this pair)
@@ -230,5 +253,149 @@ export function continueFromRef(
 
 /** Record the pair's latest ref (issued with a message that got out: delivered, queued, or parked). */
 export function recordConversation(file: string, ref: ConversationRef, nowMs: number = Date.now()): void {
-  savePair(file, pairKeyOf(ref.f, ref.t), { ref: encodeRef(ref), updatedAt: nowMs });
+  const pairKey = pairKeyOf(ref.f, ref.t);
+  const existing = readShard(shardFileOf(file, pairKey));
+  // F2 柄随轮次自新：骑本次原有写顺带把同 nonce 柄刷新到最新 ref（不新增写时刻）。
+  const handles = refreshHandles(existing?.handles, ref);
+  savePair(file, pairKey, {
+    ref: encodeRef(ref),
+    updatedAt: nowMs,
+    ...(Object.keys(handles).length === 0 ? {} : { handles }),
+  });
+}
+
+// ---- F2 会话短柄（c<数字>）：reply-hint 的两字符本地柄 ------------------------
+// 寄生会话分片零新文件；柄号本机全分片唯一分配（max+1，CAS 撞号重试一次）；
+// 每分片 LRU 封顶 HANDLE_MAX（键插入序即 LRU 序，JSON 往返保序）。
+
+export const CONVERSATION_HANDLE_RE = /^c\d+$/;
+export const HANDLE_MAX = 8;
+
+/** One live handle entry anywhere on this machine. */
+interface HandleEntry {
+  handle: string;
+  nonce: string;
+  ref: string;
+  turn: number;
+}
+
+/** Every handle across every shard (broken entries skipped). */
+function scanHandles(file: string): HandleEntry[] {
+  const out: HandleEntry[] = [];
+  for (const record of Object.values(loadAllPairs(file))) {
+    for (const [handle, ref] of Object.entries(record.handles ?? {})) {
+      if (!CONVERSATION_HANDLE_RE.test(handle)) continue;
+      try {
+        const decoded = decodeRef(ref);
+        out.push({ handle, nonce: decoded.n, ref, turn: decoded.c });
+      } catch {
+        // undecodable leftover: ignored
+      }
+    }
+  }
+  return out;
+}
+
+function maxHandleNumber(entries: readonly HandleEntry[]): number {
+  let max = 0;
+  for (const entry of entries) {
+    const n = Number(entry.handle.slice(1));
+    if (Number.isInteger(n) && n > max) max = n;
+  }
+  return max;
+}
+
+/**
+ * 柄表维护：newHandle 缺省（recordConversation 刷新腿）= 同 nonce 条目原地换
+ * 最新 ref 并 LRU 触碰（重插到尾）；newHandle 在场（分配/CAS 改写腿）= 同
+ * nonce 旧柄被新柄顶替（丢弃）。超 HANDLE_MAX 淘汰首键（最久未触碰）；
+ * undecodable 条目丢弃。
+ */
+function refreshHandles(
+  handles: Record<string, string> | undefined,
+  ref: ConversationRef,
+  newHandle?: string,
+): Record<string, string> {
+  const encoded = encodeRef(ref);
+  const next: Record<string, string> = {};
+  let touched: string | undefined;
+  for (const [handle, value] of Object.entries(handles ?? {})) {
+    if (handle === newHandle) continue;
+    try {
+      if (decodeRef(value).n === ref.n) {
+        if (newHandle === undefined) touched = handle; // refreshed in place below
+        // else: superseded by newHandle — dropped
+        continue;
+      }
+    } catch {
+      continue;
+    }
+    next[handle] = value;
+  }
+  if (touched !== undefined) next[touched] = encoded;
+  if (newHandle !== undefined) next[newHandle] = encoded;
+  const keys = Object.keys(next);
+  if (keys.length > HANDLE_MAX) delete next[keys[0]!];
+  return next;
+}
+
+/**
+ * Allocation write: merges the handle into the pair's shard WITHOUT advancing
+ * its conversation line (ref/updatedAt kept verbatim) — a send that later fails
+ * delivery leaves --to continuation untouched.
+ */
+function attachHandle(file: string, pairKey: string, ref: ConversationRef, handle: string): void {
+  const existing = readShard(shardFileOf(file, pairKey));
+  savePair(file, pairKey, {
+    ref: existing?.ref ?? encodeRef(ref),
+    updatedAt: existing?.updatedAt ?? 0,
+    handles: refreshHandles(existing?.handles, ref, handle),
+  });
+}
+
+/**
+ * The conversation's short handle: reuse the machine-wide handle already bound
+ * to this nonce, else claim max+1 with CAS collision protection.
+ */
+export function handleForRef(file: string, ref: ConversationRef): string {
+  const entries = scanHandles(file);
+  const reused = entries.find((entry) => entry.nonce === ref.n);
+  if (reused !== undefined) return reused.handle;
+  return claimHandle(file, ref, maxHandleNumber(entries) + 1);
+}
+
+/**
+ * Claim + CAS verify + one rewrite at max+2. candidate is injectable so tests
+ * can simulate a scan that raced a concurrent allocator. After the single
+ * retry a still-colliding number is returned as-is — resolveHandle's ambiguity
+ * error (列候选) is the safety net on consumption.
+ */
+export function claimHandle(file: string, ref: ConversationRef, candidate: number): string {
+  const pairKey = pairKeyOf(ref.f, ref.t);
+  let handle = `c${candidate}`;
+  attachHandle(file, pairKey, ref, handle);
+  const after = scanHandles(file);
+  if (after.some((entry) => entry.handle === handle && entry.nonce !== ref.n)) {
+    handle = `c${maxHandleNumber(after) + 2}`;
+    attachHandle(file, pairKey, ref, handle);
+  }
+  return handle;
+}
+
+/**
+ * Resolve a short handle to its full ref by scanning every shard: exactly one
+ * nonce may hold the number. Zero hits = expired/unknown; multiple = 撞号 —
+ * both teach the --to continuation (过期柄的消费侧自纠).
+ */
+export function resolveHandle(file: string | undefined, handle: string): string {
+  const hits = (file === undefined ? [] : scanHandles(file))
+    .filter((entry) => entry.handle === handle)
+    .sort((a, b) => b.turn - a.turn); // same nonce twice: newest ref wins
+  if (hits.length > 0 && hits.every((entry) => entry.nonce === hits[0]!.nonce)) return hits[0]!.ref;
+  const teach = '——用 --to <名> 接续或开新对话';
+  if (hits.length === 0) {
+    throw new MultichatError('INVALID_CONVERSATION_REF', `${handle} 已过期或未知${teach}`);
+  }
+  const candidates = [...new Set(hits.map((entry) => entry.ref))].join(' ');
+  throw new MultichatError('INVALID_CONVERSATION_REF', `${handle} 撞号指向多个对话：${candidates}${teach}`);
 }

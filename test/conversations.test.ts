@@ -3,7 +3,15 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { continueConversation, continueFromRef, pairKeyOf, recordConversation } from '../src/conversations.js';
+import {
+  claimHandle,
+  continueConversation,
+  continueFromRef,
+  handleForRef,
+  pairKeyOf,
+  recordConversation,
+  resolveHandle,
+} from '../src/conversations.js';
 import { encodeRef, newConversationRef, nextTurnRef } from '../src/ref.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-conv-'));
@@ -181,5 +189,82 @@ describe('continueFromRef (B22: stale --conversation refs cannot roll back)', ()
     const y = continueFromRef(file, base);
     expect(y.turn).toBe(3);
     expect(y.ref.n).toBe(base.n);
+  });
+});
+
+describe('conversation short handles (F2)', () => {
+  it('reuses one handle per nonce and allocates machine-wide max+1 for a new nonce', () => {
+    const file = freshFile();
+    const base = newConversationRef(claudeA, codexB);
+    expect(handleForRef(file, base)).toBe('c1');
+    expect(handleForRef(file, nextTurnRef(base))).toBe('c1'); // same conversation, next turn: same handle
+    expect(handleForRef(file, newConversationRef(claudeC, codexD))).toBe('c2'); // new nonce anywhere: max+1
+    expect(handleForRef(file, newConversationRef(claudeA, codexB))).toBe('c3'); // same shard, new nonce
+  });
+
+  it('refreshes the handle ref as the conversation advances (rides recordConversation)', () => {
+    const file = freshFile();
+    const base = newConversationRef(claudeA, codexB);
+    const handle = handleForRef(file, base);
+    const advanced = nextTurnRef(nextTurnRef(base));
+    recordConversation(file, advanced, 2_000);
+    const shard = JSON.parse(readFileSync(shardPath(file, pairKeyOf(claudeA, codexB)), 'utf8')) as { ref: string; handles: Record<string, string> };
+    expect(shard.ref).toBe(encodeRef(advanced));
+    expect(shard.handles[handle]).toBe(encodeRef(advanced)); // 柄指向最新轮的 ref
+    expect(resolveHandle(file, handle)).toBe(encodeRef(advanced));
+  });
+
+  it('CAS: a raced max+1 claim rewrites once and both conversations stay uniquely resolvable', () => {
+    const file = freshFile();
+    const a = newConversationRef(claudeA, codexB);
+    const b = newConversationRef(claudeC, codexD);
+    const winner = handleForRef(file, a); // c1
+    // The loser scanned max=0 before the winner's write landed -> claims c1 too.
+    const loser = claimHandle(file, b, 1);
+    expect(loser).not.toBe(winner);
+    expect(loser).toBe('c3'); // rewrite at rescan-max(1) + 2
+    expect(resolveHandle(file, winner)).toBe(encodeRef(a));
+    expect(resolveHandle(file, loser)).toBe(encodeRef(b));
+  });
+
+  it('caps a shard at 8 handles, evicting the least recently touched', () => {
+    const file = freshFile();
+    const handles: string[] = [];
+    for (let i = 0; i < 9; i++) {
+      const ref = newConversationRef(claudeA, codexB);
+      handles.push(handleForRef(file, ref));
+      recordConversation(file, ref, 1_000 + i); // touch: pushes the handle to the LRU tail
+    }
+    expect(handles).toEqual(['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9']);
+    expect(() => resolveHandle(file, 'c1')).toThrow(/c1 已过期或未知/); // evicted with the 9th
+    for (const handle of handles.slice(1)) expect(resolveHandle(file, handle)).toMatch(/^mc2_/);
+    const shard = JSON.parse(readFileSync(shardPath(file, pairKeyOf(claudeA, codexB)), 'utf8')) as { handles: Record<string, string> };
+    expect(Object.keys(shard.handles)).toEqual(['c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9']);
+  });
+
+  it('resolveHandle: unknown handle teaches --to; a forged collision lists candidates', () => {
+    expect(() => resolveHandle(freshFile(), 'c7')).toThrow(/c7 已过期或未知——用 --to <名> 接续或开新对话/);
+    expect(() => resolveHandle(undefined, 'c7')).toThrow(/已过期或未知/);
+    const file = freshFile();
+    handleForRef(file, newConversationRef(claudeA, codexB)); // c1 lives in pair A/B's shard
+    const imposter = encodeRef(newConversationRef(claudeC, codexD));
+    writeFileSync(
+      shardPath(file, pairKeyOf(claudeC, codexD)),
+      JSON.stringify({ pair: pairKeyOf(claudeC, codexD), ref: imposter, updatedAt: 1, handles: { c1: imposter } }),
+      'utf8',
+    );
+    expect(() => resolveHandle(file, 'c1')).toThrow(/c1 撞号指向多个对话：mc2_.*mc2_.*--to <名>/);
+  });
+
+  it('an allocation write never advances the shard conversation line (failed sends leave --to untouched)', () => {
+    const file = freshFile();
+    const line = newConversationRef(claudeA, codexB);
+    recordConversation(file, line, 5_000);
+    // A later send to the same pair allocates a handle for a NEW conversation, then fails delivery.
+    handleForRef(file, newConversationRef(claudeA, codexB));
+    const shard = JSON.parse(readFileSync(shardPath(file, pairKeyOf(claudeA, codexB)), 'utf8')) as { ref: string; updatedAt: number };
+    expect(shard.ref).toBe(encodeRef(line)); // pair line verbatim
+    expect(shard.updatedAt).toBe(5_000);
+    expect(continueConversation(file, claudeA, codexB).turn).toBe(2); // continues the recorded line, not the failed one
   });
 });
