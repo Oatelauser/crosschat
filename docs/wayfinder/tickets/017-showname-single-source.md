@@ -16,7 +16,7 @@ claimed-by: （待领）
 - 附带：`非 hex --via tcp:<名>` 按 machineName/label 解析（broker.ts:569-571），名字冻死 = 永远要敲 hostname 或 mid8
 
 **方案（用户方向，一套心智）**：规则只有一条——**任何机器的自报名 = 本机 node.json showName（缺省 hostname 兜底），改完重启常驻生效**（与升级口诀同节奏）：
-1. serve 启动时，find 到 self 条目后不再跳过——读本机 node.json showName 刷新 `machineName`（node.json 缺失/坏/无 showName → 维持现值或 hostname 兜底，不倒 serve）
+1. serve 启动时，find 到 self 条目后不再跳过——读本机 node.json showName 刷新 `machineName`；**语义对称**：showName 显式缺失/空 → 清除注册表 machineName（roster 回退纯 mid8），只有 node.json 读不了/损坏才维持现值（不因解析失败误删）；**无变化不写**（与 E0 星名同步"一致不写"先例一致）
 2. 纯 node 机不变（连接帧上报即传播）——剩余差异是物理性的（远机文件读不到），不产生第二套心智
 3. 核对项（俯瞰补）：
    - 云机（broker 机）本机发消息的信封 from-machine 取名来源须与 showName 一致（017 后注册表 machineName 与 showName 同源，不得再用 hostname()）
@@ -24,6 +24,8 @@ claimed-by: （待领）
    - **本机 status 自排除陷阱**：broker 机自身 status 的"在线机器"行排除自己（用户现场实测），改名后用户在本机看不到新名会以为没生效——要么 status 含本机（带"本机"标记，小改），要么验收文档写明"从对端 roster 看"；实施会话定，倾向前者
    - **gen-key 占位 showName 传播**：分发模板的占位串（"改成…"）懒惰用户会原样带进 roster——保留（可见的整改信号）并文档说明，不另加机制
    - 多星一致性免虑：showName 顶层单值，broker 自同步与节点连接帧同源同文件，跨星同名传播，无第二心智
+   - **升级迁移提示（随版必带）**：此前手改过 broker.json machineName 的用户，017 落地后重启 serve 会被 showName 覆盖回旧名——CHANGELOG/Release notes 明示"把名字写进 node.json showName"
+   - **016 分片自愈用例**：机器改名后同 mid8 新信封经 machines merge 覆盖旧名（{...existing, ...machines} 语义），回执显示自愈
    - 教学文案：gen-key 分发提示与 broker.md/README 的改名口径统一为"改 showName + 重启常驻"
 4. 备选（不推荐）：roster 构建时现读本机 showName 零重启生效——读路径带副作用语义，且与"重启常驻"系统节奏不一致
 
