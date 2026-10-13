@@ -6,7 +6,7 @@
 
 ```bash
 crosschat send --via tcp:host-b --to worker2 --body "跑一次构建，产物清单发回来"
-# → delivered to worker2@host-b (turn 1) · 续话 c1
+# → delivered to worker2@host-b(9f8e7d6c) (turn 1) · 续话 c1
 ```
 
 ### 怎么用这篇手册
@@ -145,7 +145,7 @@ self      yang              ec542c2c  2026-10-11T02:12:00.059Z
 node-1    host-b            9f8e7d6c  2026-10-11T02:31:10.402Z
 
 > crosschat send --via tcp:host-b --to worker2 --body "联调测试"   # 真发一条，最终裁决
-delivered to worker2@9f8e7d6c (turn 1) · 续话 c3
+delivered to worker2@host-b(9f8e7d6c) (turn 1) · 续话 c3
 ```
 
 ---
@@ -241,7 +241,7 @@ B 机会话里自动出现信封（无需任何题词）：
 B 机照抄整条命令、只换 `<你的回复>`（不截断不改写），回信自动经 broker 回到 A 机：
 ```
 > crosschat send --via tcp:ec542c2c --conversation c5 --body "构建完成，清单见下一条"
-delivered to boss@ec542c2c (turn 2) · 续话 c2
+delivered to boss@yang(ec542c2c) (turn 2) · 续话 c2
 ```
 
 ### 3.5 多星成员（原单星边界，已解除）

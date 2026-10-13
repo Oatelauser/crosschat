@@ -2,8 +2,9 @@ import { spawn } from 'node:child_process';
 import { hostname as osHostname } from 'node:os';
 import { Buffer } from 'node:buffer';
 import { MultichatError } from './errors.js';
-import { handleForRef, recordConversation } from './conversations.js';
-import { decodeRef } from './ref.js';
+import { handleForRef, machineNameOfPair, recordConversation } from './conversations.js';
+import { decodeRef, type ConversationRef } from './ref.js';
+import { normalizeMid } from './platform/machine-id.js';
 import type { SendLogEntry } from './send-log.js';
 import {
   identityKey,
@@ -265,7 +266,15 @@ export async function runViaSend(args: SendArgs, body: string, deps: SendDeps): 
     throw new MultichatError('REMOTE_FAILED', `[via ${host}] 远端回执不是 JSON: ${res.stdout.slice(0, 200)}`);
   }
 
-  const displayTo = `${receipt.to}@${host}`;
+  // 016① 显示型机器段统一 name(mid8)（寻址面不变：via/错误前缀照旧）。
+  const machine = machineDisplay(
+    host,
+    receipt.replyRef,
+    deps.machineId?.(),
+    deps.hostname?.() ?? osHostname(),
+    deps.conversationStateFile,
+  );
+  const displayTo = `${receipt.to}@${machine}`;
   logNow({
     from: identityKey(caller),
     fromName,
@@ -294,7 +303,7 @@ export async function runViaSend(args: SendArgs, body: string, deps: SendDeps): 
   if (receipt.status === 'parked') {
     return [
       `已寄存给 ${displayTo}（对方忙，未送达）。队列共 ${receipt.queue ?? 1} 条，看门狗每 0.5–5 分钟自动重试，无需手动 status。`,
-      `人工随时可读滞留内容: ${receipt.mailbox ?? ''}（位于 ${host}）`,
+      `人工随时可读滞留内容: ${receipt.mailbox ?? ''}（位于 ${machine}）`,
       handle === undefined ? `reply-ref: ${receipt.replyRef}` : `续话: ${handle}`,
     ].join('\n');
   }
@@ -310,4 +319,46 @@ export function originDisplayName(identity: CallerIdentity): string {
   if (identity.p === 'claude') return identity.name ?? `claude/${identity.id.slice(0, 8)}`;
   if (identity.p === 'codex') return `codex/${identity.id.slice(0, 8)}`;
   return 'human';
+}
+
+/**
+ * 016① 跨机回执机器段统一：显示型一律 `name(mid8)`，无名（旧状态/无名注册）
+ * 回退 mid8，指纹也拿不到（回执 ref 不可解码且目标非 mid 形态）回退目标原样
+ * 输入。寻址面零改动——--via 输入、信封 from-machine、错误前缀 `[via X]` 照旧
+ * （并记 name(mid8) 会弄坏机器解析，属断回信路的回归）。
+ * mid8 权威源 = 回执 ref 对端端点的 mid；name 优先级 = 会话分片持久化的信封
+ * from-machine 名（跨机信封到达时写入）> 目标原样输入（名字形态时）。
+ */
+export function machineDisplay(
+  target: string,
+  replyRef: string,
+  localMid: string | undefined,
+  localHost: string,
+  stateFile?: string,
+): string {
+  // broker resolveTarget 轨一同款判别：纯 hex（含带杠 UUID）= mid 形态输入。
+  const midShaped = /^[0-9a-fA-F-]+$/.test(target);
+  const mid8Of = (mid: string | undefined): string | undefined => {
+    const norm = normalizeMid(mid ?? '');
+    return norm.length >= 8 ? norm.slice(0, 8) : undefined;
+  };
+  let ref: ConversationRef | undefined;
+  try {
+    ref = decodeRef(replyRef);
+  } catch {
+    ref = undefined; // 旧版远端回执 ref 不可解码：mid8 只能来自目标输入
+  }
+  const peer =
+    ref === undefined
+      ? undefined
+      : [ref.f, ref.t].find(
+          (ep): ep is { p: 'claude' | 'codex'; id: string; m?: string; mid?: string } =>
+            ep.p !== 'human' && !isSameMachine(ep.mid, ep.m, localMid, localHost),
+        );
+  const mid8 = (peer !== undefined ? mid8Of(peer.mid) : undefined) ?? (midShaped ? mid8Of(target) : undefined);
+  if (mid8 === undefined) return target;
+  const name =
+    (ref !== undefined ? machineNameOfPair(stateFile, ref, mid8) : undefined) ??
+    (midShaped ? undefined : target);
+  return name === undefined ? mid8 : `${name}(${mid8})`;
 }

@@ -7,7 +7,8 @@ import { registryFileOf, writeRegistry } from '../src/serve/registry.js';
 import { FileInbox } from '../src/serve/file-channel.js';
 import { runViaTcpSend, selectBrokerEntry, tcpTimeoutMs } from '../src/serve/via-tcp.js';
 import type { BrokerEntry } from '../src/serve/node.js';
-import { encodeRef } from '../src/ref.js';
+import { decodeRef, encodeRef } from '../src/ref.js';
+import { recordConversation } from '../src/conversations.js';
 import { runSend, type SendDeps } from '../src/commands/send.js';
 import { MultichatError } from '../src/errors.js';
 import type { SendLogEntry } from '../src/send-log.js';
@@ -459,5 +460,97 @@ describe('B1 multi-entry node.json through the real send path', () => {
     });
     const out2 = await runViaTcpSend({ via: 'tcp:broker-host', conversation: conv } as never, 'hi', fx.deps);
     expect(out2).toContain('delivered to boss@broker-host');
+  }, 10_000);
+});
+
+describe('016① 跨机回执机器段统一 name(mid8)', () => {
+  // 真实平台形状：本地=linux 32 hex，对端=win 带杠 MachineGuid
+  const localMid = '1111a2b3c4d5e6f7a8b9c0d1e2f30011';
+  const peerMid = 'ec542c2c-9d2a-4bbb-9ccc-222233334444';
+  const peerMid8 = 'ec542c2c';
+  /** 回执 ref（对端接收腿签发）：f=本机端点（tcp origin m=mid8），t=对端端点（m=对端 hostname）。 */
+  const peerRef = () =>
+    encodeRef({
+      v: 1,
+      f: { p: 'claude', id: '1111a2b3-aaaa', m: localMid.slice(0, 8), mid: localMid },
+      t: { p: 'codex', id: 'ec542c2c-9999', m: 'peer-host', mid: peerMid },
+      n: '0011223344556677',
+      c: 1,
+      starId: 'aaaa00001111',
+    });
+
+  /** broker 即对端机（machineId=对端 mid）→ mid/名两种寻址都落 deliverLocal。 */
+  async function startPeerBroker(deliverLocal: BrokerDeps['deliverLocal']): Promise<Harness> {
+    const dir = mkdtempSync(join(root, 'case-'));
+    const registryFile = registryFileOf(dir);
+    writeRegistry(registryFile, {
+      nodes: [{ label: 'self', key: key('k'), machineId: peerMid, machineName: 'peer-host', addedAt: 'x' }],
+    });
+    const broker = new Broker({
+      registryFile,
+      statusFile: join(dir, 'status-broker.json'),
+      version: 'test',
+      machineId: () => peerMid,
+      hostname: () => 'peer-host',
+      now: () => Date.now(),
+      log: () => {},
+      deliverLocal,
+      port: 0,
+      heartbeatMs: 10_000,
+      pongTimeoutMs: 20_000,
+      connectTimeoutMs: 5_000,
+    });
+    brokers.push(broker);
+    const port = await broker.start();
+    return { port, deliverLocal };
+  }
+
+  const realReceipt: BrokerDeps['deliverLocal'] = async (frame) => ({
+    op: 'result',
+    id: frame.id,
+    status: 'delivered',
+    turn: '2',
+    replyRef: peerRef(),
+    output: JSON.stringify({ status: 'delivered', to: 'boss', turn: 2, replyRef: peerRef() }),
+  });
+
+  function realFixture(h: Harness): Fixture {
+    const fx = makeFixture(h);
+    fx.deps.machineId = () => localMid;
+    fx.deps.hostname = () => 'sender-host';
+    fx.deps.conversationStateFile = join(fx.baseDir, 'conversations.json');
+    return fx;
+  }
+
+  it('mid 寻址回信 + 会话分片有名（信封到达时持久化）→ name(mid8)', async () => {
+    const h = await startPeerBroker(realReceipt);
+    const fx = realFixture(h);
+    // 模拟此前跨机信封到达：from-machine 名随分片持久化（016 新字段）
+    recordConversation(fx.deps.conversationStateFile!, decodeRef(peerRef()), 1_000, { [peerMid8]: 'cloudleg' });
+    const out = await runViaTcpSend({ via: `tcp:${peerMid}`, to: 'boss' } as never, 'hello', fx.deps);
+    expect(out).toContain('delivered to boss@cloudleg(ec542c2c) (turn 2)');
+    // 记账 to 同格式（status --conversations 的对端名来源）
+    expect(fx.logs.at(-1)).toMatchObject({ to: 'boss@cloudleg(ec542c2c)', target: `via:tcp:${peerMid}` });
+  }, 10_000);
+
+  it('mid 寻址回信 + 旧状态（无名）→ 回退纯 mid8（不再裸奔完整指纹）', async () => {
+    const h = await startPeerBroker(realReceipt);
+    const fx = realFixture(h);
+    const out = await runViaTcpSend({ via: `tcp:${peerMid}`, to: 'boss' } as never, 'hello', fx.deps);
+    expect(out).toContain('delivered to boss@ec542c2c (turn 2)');
+  }, 10_000);
+
+  it('按名发送（无状态）→ 名字取自输入，指纹取自回执 ref', async () => {
+    const h = await startPeerBroker(realReceipt);
+    const fx = realFixture(h);
+    const out = await runViaTcpSend({ via: 'tcp:peer-host', to: 'boss' } as never, 'hello', fx.deps);
+    expect(out).toContain('delivered to boss@peer-host(ec542c2c) (turn 2)');
+  }, 10_000);
+
+  it('旧版远端回执（ref 不可解码）+ mid 寻址 → 仍收敛到 mid8', async () => {
+    const h = await startPeerBroker(async (frame) => ({ ...deliveredReceipt, id: frame.id }));
+    const fx = realFixture(h);
+    const out = await runViaTcpSend({ via: `tcp:${peerMid}`, to: 'boss' } as never, 'hello', fx.deps);
+    expect(out).toContain('delivered to boss@ec542c2c (turn 1)');
   }, 10_000);
 });

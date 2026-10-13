@@ -7,6 +7,7 @@ import { pairKeyOf } from '../conversations.js';
 import type { ConversationSummary } from '../conversation-summary.js';
 import { MultichatError } from '../errors.js';
 import { decodeRef } from '../ref.js';
+import { normalizeMid } from '../platform/machine-id.js';
 import type { SendLogEntry } from '../send-log.js';
 import { readNodeConfig, type BrokerEntry, type NodeStatusFile } from '../serve/node.js';
 
@@ -549,7 +550,7 @@ async function summaryView(deps: StatusDeps, nowMs: number): Promise<string> {
   return lines.join('\n');
 }
 
-/** ssh 段行标：远端端点（ref 里带 m 的一侧）的显示名@机器；ref 不可解码退 ?。 */
+/** ssh 段行标：远端端点（ref 里带 m 的一侧）的显示名@机器；ref 不可解码退 ?。016① 机器段补 (mid8)。 */
 function sshPeerLabel(row: ConversationSummary): string {
   try {
     const ref = decodeRef(row.ref);
@@ -558,7 +559,10 @@ function sshPeerLabel(row: ConversationSummary): string {
     );
     if (remote === undefined) return `${row.pair[1]}@?`;
     const idx = row.endpoints.indexOf(`${remote.p}:${remote.id}`);
-    return `${idx === -1 ? (row.pair[1] ?? '?') : row.pair[idx]}@${remote.m}`;
+    // 016① 显示型机器标识：name(mid8)；旧 ref 无 mid 只显名字。
+    const mid8 = remote.mid !== undefined ? normalizeMid(remote.mid).slice(0, 8) : '';
+    const machine = `${remote.m}${mid8.length < 8 ? '' : `(${mid8})`}`;
+    return `${idx === -1 ? (row.pair[1] ?? '?') : row.pair[idx]}@${machine}`;
   } catch {
     return `${row.pair[1] ?? '?'}@?`;
   }

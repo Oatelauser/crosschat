@@ -712,7 +712,7 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
         { conversation: ref, bodyArg: 'hi' },
         tcpDeps(baseDir, { CODEX_THREAD_ID: 'team1111-aaaa' }),
       );
-      expect(out).toContain('delivered to workteam@aaaa0000ef12');
+      expect(out).toContain('delivered to workteam@aaaa0000 (turn 2)'); // 016①：mid 寻址回执机器段=mid8
       expect(seen[0]).toMatchObject({ op: 'send', targetMachine: 'aaaa0000ef12', conversation: ref, body: 'hi' });
     } finally {
       await broker.stop();
@@ -743,6 +743,34 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
     expect(out).toContain('delivered to workteam (turn 2)');
     expect(codexDeliveries.at(-1)!.threadId).toBe('team1111-aaaa');
     expect(codexDeliveries.at(-1)!.content).toContain('pong');
+  });
+
+  it('016① 跨机信封到达：from-machine 名按 mid8 持久化进会话分片（additive，旧字段不动）', async () => {
+    const emptyDir = scratch('persist-');
+    const stateFile = join(emptyDir, 'conversations.json');
+    // 真实形状：win 带杠 MachineGuid（归一后 mid8=ec542c2c）
+    const origin = encodeOrigin(
+      { p: 'claude', id: 'cs-remote' },
+      'ec542c2c',
+      'ec542c2c-9d2a-4bbb-9ccc-222233334444',
+      'tcp',
+    );
+    const deps: SendDeps = {
+      ...tcpDeps(emptyDir),
+      conversationStateFile: stateFile,
+      fromMachine: 'cloudleg',
+    };
+    const out = await runSend({ conversation: starRef('abcd00001111'), bodyArg: 'pong', origin }, deps);
+    expect(out).toContain('delivered to workteam (turn 2)');
+    const shardDir = join(emptyDir, 'conversations');
+    const shard = JSON.parse(
+      readFileSync(join(shardDir, readdirSync(shardDir)[0]!), 'utf8'),
+    ) as Record<string, unknown>;
+    expect(shard.machines).toEqual({ ec542c2c: 'cloudleg' });
+    // 旧契约字段健全（旧版安全忽略新字段的前置：读写面不认识 machines 也不炸）
+    expect(typeof shard.pair).toBe('string');
+    expect(typeof shard.ref).toBe('string');
+    expect(typeof shard.updatedAt).toBe('number');
   });
 
   it('c: 对端无机器指纹、本机查无两端点的超旧引用 → 教学显式 --via', async () => {

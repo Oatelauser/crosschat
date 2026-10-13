@@ -43,6 +43,13 @@ interface PairRecord {
    * 短柄永不过网。
    */
   handles?: Record<string, string>;
+  /**
+   * 016① 机器名表（mid8 -> 信封 from-machine 名）：跨机信封到达时随
+   * recordConversation 写入，回执显示层据它把裸指纹还原成 name(mid8)。
+   * additive 新字段——旧版读写忽略（旧版重写分片会丢弃它，显示回退
+   * mid8，无害）；键恒 8 hex，值恒字符串。
+   */
+  machines?: Record<string, string>;
 }
 
 /** Shard content: the pair key rides along so enumeration can rebuild the map. */
@@ -70,6 +77,11 @@ function sanitizeHandles(value: unknown): Record<string, string> | undefined {
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/** 016①：machines 形状防守——同 handles，只收字符串值条目。 */
+function sanitizeMachines(value: unknown): Record<string, string> | undefined {
+  return sanitizeHandles(value);
+}
+
 function parseShard(text: string): ShardRecord | undefined {
   try {
     const parsed = JSON.parse(text) as Partial<ShardRecord>;
@@ -81,11 +93,13 @@ function parseShard(text: string): ShardRecord | undefined {
       typeof parsed.updatedAt === 'number'
     ) {
       const handles = sanitizeHandles(parsed.handles);
+      const machines = sanitizeMachines(parsed.machines);
       return {
         pair: parsed.pair,
         ref: parsed.ref,
         updatedAt: parsed.updatedAt,
         ...(handles === undefined ? {} : { handles }),
+        ...(machines === undefined ? {} : { machines }),
       };
     }
   } catch {
@@ -251,17 +265,41 @@ export function continueFromRef(
   return { ref: nextTurnRef(ref), turn: ref.c + 1 };
 }
 
-/** Record the pair's latest ref (issued with a message that got out: delivered, queued, or parked). */
-export function recordConversation(file: string, ref: ConversationRef, nowMs: number = Date.now()): void {
+/**
+ * Record the pair's latest ref (issued with a message that got out: delivered,
+ * queued, or parked). `machines`（016①）= 本次跨机信封到达携带的 mid8→名
+ * 条目，随本次写合并进分片（既有条目不覆盖语义外的丢失）。
+ */
+export function recordConversation(
+  file: string,
+  ref: ConversationRef,
+  nowMs: number = Date.now(),
+  machines?: Record<string, string>,
+): void {
   const pairKey = pairKeyOf(ref.f, ref.t);
   const existing = readShard(shardFileOf(file, pairKey));
   // F2 柄随轮次自新：骑本次原有写顺带把同 nonce 柄刷新到最新 ref（不新增写时刻）。
   const handles = refreshHandles(existing?.handles, ref);
+  const mergedMachines = machines === undefined ? existing?.machines : { ...existing?.machines, ...machines };
   savePair(file, pairKey, {
     ref: encodeRef(ref),
     updatedAt: nowMs,
     ...(Object.keys(handles).length === 0 ? {} : { handles }),
+    ...(mergedMachines === undefined || Object.keys(mergedMachines).length === 0 ? {} : { machines: mergedMachines }),
   });
+}
+
+/**
+ * 016①：该对话分片持久化的机器名（信封 from-machine，键=mid8）；无字段/
+ * 无该键（旧状态）返回 undefined——显示层回退 mid8。
+ */
+export function machineNameOfPair(
+  file: string | undefined,
+  ref: ConversationRef,
+  mid8: string,
+): string | undefined {
+  if (file === undefined) return undefined;
+  return loadPair(file, pairKeyOf(ref.f, ref.t))?.machines?.[mid8];
 }
 
 // ---- F2 会话短柄（c<数字>）：reply-hint 的两字符本地柄 ------------------------

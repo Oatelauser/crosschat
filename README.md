@@ -164,7 +164,7 @@ tcp: 共 1 星
     hub(a1b2c3d4)、host-b(9f8e7d6c)
 （星内明细: --stars）
 ssh: 共 2 段对话
-  worker2@host-b turn 5  3 分钟前
+  worker2@host-b(9f8e7d6c) turn 5  3 分钟前
 （明细: --conversations --via ssh）
 ```
 

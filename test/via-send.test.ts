@@ -6,12 +6,14 @@ import {
   buildSshArgv,
   decodeOriginIdentity,
   encodeOrigin,
+  machineDisplay,
   parseViaValue,
   validateRemoteFlagValues,
   type SshResult,
 } from '../src/federation.js';
 import { runSend, type SendArgs, type SendDeps } from '../src/commands/send.js';
 import { decodeRef, encodeRef } from '../src/ref.js';
+import { recordConversation } from '../src/conversations.js';
 import { parseSendArgs } from '../src/cli.js';
 import { MultichatError } from '../src/errors.js';
 import type { SendLogEntry } from '../src/send-log.js';
@@ -544,5 +546,57 @@ describe('B10 machine-id dual identity (m routes, mid decides same-machine)', ()
     expect(dec).toEqual({ p: 'claude', id: fullId, name: '领 导', host: 'win-dev', mid: 'M-GUID-1' });
     const legacy = decodeOriginIdentity(encodeOrigin({ p: 'codex', id: '01a1115b-1a3c-7e71-addc-fee969078e1b' }, 'build01'));
     expect(legacy).toEqual({ p: 'codex', id: '01a1115b-1a3c-7e71-addc-fee969078e1b', host: 'build01' });
+  });
+});
+
+describe('016① machineDisplay（显示型机器标识统一 name(mid8)）', () => {
+  const localMid = '1111a2b3c4d5e6f7a8b9c0d1e2f30011';
+  const peerMid = 'ec542c2c-9d2a-4bbb-9ccc-222233334444'; // win 带杠 MachineGuid 真实形状
+  const ref = encodeRef({
+    v: 1,
+    f: { p: 'claude', id: 'cs-boss', m: 'win-dev', mid: localMid },
+    t: { p: 'codex', id: 'thread-1', m: 'peer-host', mid: peerMid },
+    n: '0011223344556677',
+    c: 1,
+  });
+
+  it('mid 寻址 + 会话分片有名（信封到达时持久化）→ name(mid8)', () => {
+    const file = join(tempDir(), 'conversations.json');
+    recordConversation(file, decodeRef(ref), 1_000, { ec542c2c: 'cloudleg' });
+    expect(machineDisplay(peerMid, ref, localMid, 'win-dev', file)).toBe('cloudleg(ec542c2c)');
+  });
+
+  it('mid 寻址 + 旧状态（无该字段/无状态文件）→ 回退纯 mid8', () => {
+    expect(machineDisplay(peerMid, ref, localMid, 'win-dev', join(tempDir(), 'conversations.json'))).toBe('ec542c2c');
+    expect(machineDisplay(peerMid, ref, localMid, 'win-dev', undefined)).toBe('ec542c2c');
+  });
+
+  it('名字形态输入 → 名字取自输入，指纹取自回执 ref 对端端点', () => {
+    expect(machineDisplay('build01', ref, localMid, 'win-dev', undefined)).toBe('build01(ec542c2c)');
+  });
+
+  it('旧版远端（ref 不可解码）：名字输入原样回显；mid 输入收敛到 mid8', () => {
+    expect(machineDisplay('build01', 'mc1_x', localMid, 'win-dev', undefined)).toBe('build01');
+    expect(machineDisplay(peerMid, 'mc1_x', localMid, 'win-dev', undefined)).toBe('ec542c2c');
+  });
+});
+
+describe('016① runViaSend 回执机器段 name(mid8)', () => {
+  it('ssh 腿：真 ref 回执显示 别名(mid8)，记账 to 同格式', async () => {
+    logs.length = 0;
+    sshResult = {
+      code: 0,
+      stdout: `{"status":"delivered","to":"worker2","turn":3,"replyRef":"${encodeRef({
+        v: 1,
+        f: { p: 'claude', id: 'cs-boss', m: 'win-dev' },
+        t: { p: 'codex', id: 'thread-1', m: 'build01-real', mid: 'ec542c2c-9d2a-4bbb-9ccc-222233334444' },
+        n: '0011223344556677',
+        c: 3,
+      })}"}\n`,
+      stderr: '',
+    };
+    const out = await viaSend({ to: 'worker2', bodyArg: '干活' }, { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-boss' });
+    expect(out).toContain('delivered to worker2@build01(ec542c2c) (turn 3)');
+    expect(logs[0]).toMatchObject({ to: 'worker2@build01(ec542c2c)', status: 'delivered' });
   });
 });

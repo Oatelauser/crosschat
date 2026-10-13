@@ -6,7 +6,7 @@
 
 ```bash
 crosschat send --via ssh:build01 --to worker2 --body "跑一次构建，产物清单发回来"
-# → delivered to worker2@build01 (turn 1)
+# → delivered to worker2@build01(9f8e7d6c) (turn 1)
 ```
 
 ### 怎么用这篇手册
@@ -330,7 +330,7 @@ ok
 **N5 · 正式闭环（本机发起；云端先备一个命名会话——claude 里 `/rename 云端beta`）**
 ```
 > crosschat send --via ssh:<对端hostname> --to 云端beta --body "收到请照信封里的回复命令回一句：闭环成立"
-delivered to 云端beta@host-b (turn 1)
+delivered to 云端beta@host-b(9f8e7d6c) (turn 1)
 ```
 对端回信穿隧道落回本机发起会话（`turn 2`）。回程全靠这条隧道：**会话关了回信就断**（发起腿不受影响）；持续保活已是"半 broker"形态，堡垒机形态（broker）仍是长期正解——见 [转发器手册](broker.md)。
 
@@ -449,7 +449,7 @@ ssh <host> crosschat send --to <名字> --body - [其余参数透传]
 
 ### 4.3 输出契约
 
-- 成功：stdout 一行 `delivered|queued|parked to <名>@<host> (turn N) · 续话 cN`（cN = 发起方本机会话短柄；会话状态未接线的异常路径退回 `reply-ref: mc2_…` 行），发起方原样透传
+- 成功：stdout 一行 `delivered|queued|parked to <名>@<机器名>(<mid8>) (turn N) · 续话 cN`（机器段 = 对端名+指纹短码，无名时退 `<mid8>`；cN = 发起方本机会话短柄；会话状态未接线的异常路径退回 `reply-ref: mc2_…` 行），发起方原样透传
 - 失败：stdout `CODE: message` 结构 → 发起方重抛 `MultichatError(CODE, "[via <host>] message")`；非 crosschat 输出 → `REMOTE_FAILED [via <host>] 远端异常退出(code): stderr尾400`
 - exit code：0=成功；非 0 且无 CODE 结构 = REMOTE_FAILED
 

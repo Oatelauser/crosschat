@@ -297,6 +297,13 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   // ssh 腿取 origin 机器段（origin.via='tcp' 时 host 槽是 mid8，不是名字，
   // 不用）；单机与无名瞬态发送方均 undefined → 信封整个省略属性。
   const fromMachine = deps.fromMachine ?? (origin !== undefined && origin.via === undefined ? origin.host : undefined);
+  // 016① 跨机信封到达：把信封携带的发送方机器名（from-machine）与其 mid8 绑定
+  // 持久化进会话分片（additive machines 字段）——本机后续按 mid 回信时，回执
+  // 显示层据它还原 name(mid8)。单机/无名/无 mid 信封不写。
+  const arrivalMachines =
+    origin !== undefined && fromMachine !== undefined && origin.mid !== undefined
+      ? { [normalizeMid(origin.mid).slice(0, 8)]: fromMachine }
+      : undefined;
 
   let target: RefEndpoint;
   let newRef: ConversationRef;
@@ -452,7 +459,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
       throw err;
     }
     logNow({ to: toName, target: `claude:${target.id}`, status: 'delivered', turn, replyRef });
-    if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now());
+    if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
     return finish(formatDelivery(args.json === true, toName, turn, replyRef, false, handle));
   }
 
@@ -489,7 +496,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     const receipt = queued ? undefined : await deps.confirmReceipt?.(target.id, replyRef);
     logNow({ to: toName, target: `codex:${target.id}`, status: queued ? 'queued' : 'delivered', turn, replyRef, receipt });
     const out = formatDelivery(args.json === true, toName, turn, replyRef, queued, handle);
-    if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now());
+    if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
     if (queued) {
       // B3.1：注记只进人类可读输出——json 模式必须保持纯 JSON（tcp/ssh 接收腿
       // 的 node 桥要 JSON.parse 这段输出，拼尾注会让远端拿到 INTERNAL）。
@@ -508,7 +515,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     ) {
       const queue = parkNow();
       logNow({ to: toName, target: `codex:${target.id}`, status: 'parked', turn, replyRef });
-      if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now());
+      if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
       return finish(formatParked(args.json === true, toName, turn, replyRef, queue, mailboxPath, handle));
     }
     logNow({ to: toName, target: `codex:${target.id}`, status: 'failed', code: errorCode(err), turn, replyRef });

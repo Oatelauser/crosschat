@@ -8,6 +8,7 @@ import {
   continueConversation,
   continueFromRef,
   handleForRef,
+  machineNameOfPair,
   pairKeyOf,
   recordConversation,
   resolveHandle,
@@ -266,5 +267,63 @@ describe('conversation short handles (F2)', () => {
     expect(shard.ref).toBe(encodeRef(line)); // pair line verbatim
     expect(shard.updatedAt).toBe(5_000);
     expect(continueConversation(file, claudeA, codexB).turn).toBe(2); // continues the recorded line, not the failed one
+  });
+});
+
+describe('016① machines 字段（跨机回执机器标识持久化，additive）', () => {
+  const peerMid8 = 'ec542c2c'; // win 带杠 MachineGuid 'ec542c2c-…' 归一后的 8 hex 前缀
+
+  it('recordConversation 写入 mid8→名 并按对话查询命中', () => {
+    const file = freshFile();
+    const ref = newConversationRef(claudeA, codexB);
+    recordConversation(file, ref, 1_000, { [peerMid8]: 'cloudleg' });
+    expect(machineNameOfPair(file, ref, peerMid8)).toBe('cloudleg');
+    expect(machineNameOfPair(file, ref, 'deadbeef')).toBeUndefined();
+    expect(machineNameOfPair(undefined, ref, peerMid8)).toBeUndefined();
+  });
+
+  it('后续写合并不丢既有机器条目；不含 machines 的写保留旧表', () => {
+    const file = freshFile();
+    const ref = newConversationRef(claudeA, codexB);
+    recordConversation(file, ref, 1_000, { [peerMid8]: 'cloudleg' });
+    recordConversation(file, nextTurnRef(ref), 2_000, { '9999dead': 'wsl-leg' });
+    expect(machineNameOfPair(file, ref, peerMid8)).toBe('cloudleg');
+    expect(machineNameOfPair(file, ref, '9999dead')).toBe('wsl-leg');
+    recordConversation(file, nextTurnRef(nextTurnRef(ref)), 3_000); // 本地轮次不带新条目
+    expect(machineNameOfPair(file, ref, peerMid8)).toBe('cloudleg');
+  });
+
+  it('新版读旧状态（无 machines 字段）：查询 undefined，接续行为不变', () => {
+    const file = freshFile();
+    const ref = newConversationRef(claudeA, codexB);
+    recordConversation(file, ref, 1_000); // 旧版写法：无 machines
+    expect(machineNameOfPair(file, ref, peerMid8)).toBeUndefined();
+    expect(continueConversation(file, claudeA, codexB).turn).toBe(2);
+  });
+
+  it('旧版安全忽略新字段：新写分片仍满足旧版解析契约（四字段健全，machines 为额外键）', () => {
+    const file = freshFile();
+    const ref = newConversationRef(claudeA, codexB);
+    recordConversation(file, ref, 1_000, { [peerMid8]: 'cloudleg' });
+    const raw = JSON.parse(readFileSync(shardPath(file, pairKeyOf(ref.f, ref.t)), 'utf8')) as Record<string, unknown>;
+    // 旧版 parseShard 只认 pair/ref/updatedAt(/handles)；machines 对它是未知键——四字段健全即安全忽略
+    expect(typeof raw.pair).toBe('string');
+    expect(typeof raw.ref).toBe('string');
+    expect(typeof raw.updatedAt).toBe('number');
+    expect(raw.machines).toEqual({ [peerMid8]: 'cloudleg' });
+  });
+
+  it('形状防守：machines 里非字符串值被丢弃', () => {
+    const file = freshFile();
+    const ref = newConversationRef(claudeA, codexB);
+    const shard = shardPath(file, pairKeyOf(ref.f, ref.t));
+    mkdirSync(dirname(shard), { recursive: true });
+    writeFileSync(
+      shard,
+      JSON.stringify({ pair: pairKeyOf(ref.f, ref.t), ref: encodeRef(ref), updatedAt: 1, machines: { ok: 'x', bad: 3 } }),
+      'utf8',
+    );
+    expect(machineNameOfPair(file, ref, 'ok')).toBe('x');
+    expect(machineNameOfPair(file, ref, 'bad')).toBeUndefined();
   });
 });
