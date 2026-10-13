@@ -11,7 +11,8 @@ import {
   type OutboxItem,
 } from '../src/outbox.js';
 import { MultichatError } from '../src/errors.js';
-import { checkAndRecord, rateKey, RATE_LIMIT_MAX } from '../src/rate-limit.js';
+import { RATE_LIMIT_MAX } from '../src/rate-limit.js';
+import { appendSendLog, type SendLogEntry } from '../src/send-log.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-outbox-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -19,6 +20,11 @@ afterAll(() => rmSync(root, { recursive: true, force: true }));
 // Fresh dir per test: drain() sweeps the whole directory, so shared files
 // would leak between tests.
 const freshDir = (): string => mkdtempSync(join(root, 'case-'));
+
+/** One send-log line for the rate limiter to count (ts inside the window of now≈6_000). */
+function logEntry(from: string, target: string, tsMs: number): SendLogEntry {
+  return { ts: new Date(tsMs).toISOString(), from, to: 'peer', target, status: 'delivered' };
+}
 
 const busy = (code = 'CODEX_THREAD_BUSY_TIMEOUT') => new MultichatError(code, 'still busy');
 const ok: DrainDeliverFn = async () => undefined;
@@ -212,17 +218,18 @@ describe('drain rate limiting, budget, dead letters (B11)', () => {
 
   it('skips an item whose rate window is full, keeping it verbatim for the next round', async () => {
     const dir = freshDir();
-    const rateDir = freshDir();
+    const sendLogFile = join(freshDir(), 'send-log.jsonl');
     park(dir, 't-rate', { envelope: 'r-1', toName: 'alpha', callerKey: 'claude:s-1' }, 1_000);
-    const key = rateKey('claude:s-1', 'codex:t-rate');
-    for (let i = 0; i < RATE_LIMIT_MAX; i++) checkAndRecord(rateDir, key, 5_000);
+    for (let i = 0; i < RATE_LIMIT_MAX; i++) {
+      appendSendLog(sendLogFile, logEntry('claude:s-1', 'codex:t-rate', 5_000));
+    }
     const attempted: string[] = [];
     const results = await drain(
       dir,
       async (_t, content) => {
         attempted.push(content);
       },
-      { rateDir, now: () => 6_000 },
+      { sendLogFile, now: () => 6_000 },
     );
     expect(attempted).toEqual([]);
     expect(results).toEqual([
@@ -233,24 +240,25 @@ describe('drain rate limiting, budget, dead letters (B11)', () => {
     ]);
   });
 
-  it('consumes the shared rate window: deliveries beyond the cap wait for the next round', async () => {
+  it('delivers when the window has room (014: read-only check — redeliveries do not consume the window)', async () => {
     const dir = freshDir();
-    const rateDir = freshDir();
+    const sendLogFile = join(freshDir(), 'send-log.jsonl');
     park(dir, 't-shared', { envelope: 'a', toName: 'alpha', callerKey: 'claude:s-1' }, 1_000);
     park(dir, 't-shared', { envelope: 'b', toName: 'alpha', callerKey: 'claude:s-1' }, 2_000);
-    const key = rateKey('claude:s-1', 'codex:t-shared');
-    for (let i = 0; i < RATE_LIMIT_MAX - 1; i++) checkAndRecord(rateDir, key, 5_000);
+    for (let i = 0; i < RATE_LIMIT_MAX - 1; i++) {
+      appendSendLog(sendLogFile, logEntry('claude:s-1', 'codex:t-shared', 5_000));
+    }
     const attempted: string[] = [];
     const results = await drain(
       dir,
       async (_t, content) => {
         attempted.push(content);
       },
-      { rateDir, now: () => 6_000 },
+      { sendLogFile, now: () => 6_000 },
     );
-    expect(attempted).toEqual(['a']); // the 30th send goes through, the 31st is skipped
+    expect(attempted).toEqual(['a', 'b']); // 29 in window: room exists, drain rounds do not write entries
     expect(results).toEqual([
-      { threadId: 't-shared', toName: 'alpha', delivered: 1, remaining: 1, dropped: 0 },
+      { threadId: 't-shared', toName: 'alpha', delivered: 2, remaining: 0, dropped: 0 },
     ]);
   });
 

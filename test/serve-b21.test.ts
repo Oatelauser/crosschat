@@ -290,7 +290,7 @@ describe('B2.1 reply loop closure', () => {
         return { status: 'delivered' };
       },
       deliverCodex: async () => ({ status: 'delivered' }),
-      rateDir: mkdtempSync(join(root, 'rate-')),
+      sendLogFile: join(mkdtempSync(join(root, 'ratelog-')), 'send-log.jsonl'),
       outboxDir: mkdtempSync(join(root, 'outbox-')),
       now: () => Date.now(),
       hostname: () => 'node-b',
@@ -436,7 +436,7 @@ describe('B3.1 drill fixes', () => {
       deliverClaude: async () => ({ status: 'delivered' }),
       deliverCodex: async () => ({ status: 'accepted', turnId: 't', ...(over.queued === true ? { queued: true } : {}) }),
       ...(over.receipt === undefined ? {} : { confirmReceipt: async () => over.receipt }),
-      rateDir: mkdtempSync(join(root, 'rate-')),
+      sendLogFile: join(mkdtempSync(join(root, 'ratelog-')), 'send-log.jsonl'),
       outboxDir: mkdtempSync(join(root, 'outbox-')),
       now: () => Date.now(),
     };
@@ -497,7 +497,7 @@ describe('B3.1 drill fixes', () => {
         return { status: 'delivered' };
       },
       deliverCodex: async () => ({ status: 'accepted', turnId: 't' }),
-      rateDir: mkdtempSync(join(root, 'rate-')),
+      sendLogFile: join(mkdtempSync(join(root, 'ratelog-')), 'send-log.jsonl'),
       outboxDir: mkdtempSync(join(root, 'outbox-')),
       now: () => Date.now(),
     };

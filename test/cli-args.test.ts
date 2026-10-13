@@ -121,10 +121,11 @@ describe('parseStatusArgs', () => {
 
 describe('drainOutboxAtEntry', () => {
   const outboxDir = mkdtempSync(join(tmpdir(), 'crosschat-cli-drain-'));
-  const rateDir = mkdtempSync(join(tmpdir(), 'crosschat-cli-rate-'));
+  const sendLogDir = mkdtempSync(join(tmpdir(), 'crosschat-cli-rate-'));
+  const sendLogFile = join(sendLogDir, 'send-log.jsonl');
   afterAll(() => {
     rmSync(outboxDir, { recursive: true, force: true });
-    rmSync(rateDir, { recursive: true, force: true });
+    rmSync(sendLogDir, { recursive: true, force: true });
   });
 
   function run(
@@ -133,7 +134,7 @@ describe('drainOutboxAtEntry', () => {
     const lines: string[] = [];
     return drainOutboxAtEntry({
       outboxDir,
-      rateDir,
+      sendLogFile,
       deliverCodex,
       err: (line) => lines.push(line),
     }).then(() => lines);

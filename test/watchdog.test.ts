@@ -39,14 +39,14 @@ describe('watchdogStatus', () => {
 describe('runWatchdog', () => {
   it('drains until empty with backoff sleeps, then removes its lock', async () => {
     const dir = freshDir();
-    const rateDir = freshDir();
+    const sendLogFile = join(freshDir(), 'send-log.jsonl');
     park(dir, 't-wd', { envelope: 'w-1', toName: 'alpha', callerKey: 'claude:x' }, 1_000);
     park(dir, 't-wd', { envelope: 'w-2', toName: 'alpha', callerKey: 'claude:x' }, 2_000);
     const sleeps: number[] = [];
     const lines: string[] = [];
     // First round: busy → nothing delivered; second round: all delivered.
     let round = 0;
-    await runWatchdog(dir, rateDir, {
+    await runWatchdog(dir, sendLogFile, {
       deliverCodex: async (_t, content) => {
         round++;
         if (round === 1) throw new MultichatError('CODEX_THREAD_BUSY_TIMEOUT', 'busy');
@@ -65,9 +65,9 @@ describe('runWatchdog', () => {
   it('survives transient unknown errors and still finishes', async () => {
     const dir = freshDir();
     park(dir, 't-boom', { envelope: 'x', toName: 'alpha' }, 1_000);
-    const rateDir = freshDir();
+    const sendLogFile = join(freshDir(), 'send-log.jsonl');
     let calls = 0;
-    await runWatchdog(dir, rateDir, {
+    await runWatchdog(dir, sendLogFile, {
       deliverCodex: async () => {
         calls++;
         if (calls <= 2) throw new Error('boom'); // unknown error: skipped this round

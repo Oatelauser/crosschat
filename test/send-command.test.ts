@@ -11,7 +11,7 @@ import { encodeOrigin } from '../src/federation.js';
 import { Broker } from '../src/serve/broker.js';
 import { registryFileOf, writeRegistry } from '../src/serve/registry.js';
 import type { SendFrame } from '../src/serve/protocol.js';
-import type { SendLogEntry } from '../src/send-log.js';
+import { appendSendLog, type SendLogEntry } from '../src/send-log.js';
 import type { ClaudeRegistryScan, ClaudeSessionEntry } from '../src/claude/registry.js';
 import type { CodexThreadSummary } from '../src/codex/client.js';
 
@@ -39,18 +39,20 @@ const threads: CodexThreadSummary[] = [
   { id: 'other222-bbbb', name: null, status: 'idle' },
 ];
 
-const rateDir = mkdtempSync(join(tmpdir(), 'crosschat-send-'));
+const sendLogDir = mkdtempSync(join(tmpdir(), 'crosschat-send-'));
+const sendLogFile = join(sendLogDir, 'send-log.jsonl');
 const outboxDir = mkdtempSync(join(tmpdir(), 'crosschat-send-outbox-'));
 afterAll(() => {
-  rmSync(rateDir, { recursive: true, force: true });
+  rmSync(sendLogDir, { recursive: true, force: true });
   rmSync(outboxDir, { recursive: true, force: true });
 });
 
 const claudeDeliveries: { pid: number; content: string }[] = [];
 const codexDeliveries: { threadId: string; content: string }[] = [];
 
-// All tests share one rateDir and a frozen clock: buckets persist across calls
-// exactly like real consecutive CLI invocations would.
+// All tests share one sendLogFile and a frozen clock: nothing appends to it
+// (appendLog stays unwired), so the rate window is always empty here — the
+// dedicated rate test below wires a real file.
 function makeDeps(env: Record<string, string | undefined> = {}, stdinText?: string): SendDeps {
   return {
     env,
@@ -65,7 +67,7 @@ function makeDeps(env: Record<string, string | undefined> = {}, stdinText?: stri
       codexDeliveries.push({ threadId, content });
       return { status: 'accepted', turnId: 'turn-1' };
     },
-    rateDir,
+    sendLogFile,
     outboxDir,
     now: () => 9_000_000,
   };
@@ -266,16 +268,23 @@ describe('runSend reply routing via --conversation', () => {
 });
 
 describe('runSend rate limiting', () => {
-  it('throws RATE_LIMITED on the 31st message within 60s for a pair', async () => {
-    // Fresh pair: claude cs-beta <-> codex workteam.
+  it('throws RATE_LIMITED when the send-log window holds 30 entries for the pair', async () => {
+    // 014 evaporation: the limiter counts real send-log entries of the pair.
+    // Fresh file + appendLog wired: 30 deliveries fill the window, the 31st throws.
+    const file = join(mkdtempSync(join(outboxDir, 'rate-')), 'send-log.jsonl');
     const env = { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-beta' };
+    const deps = {
+      ...makeDeps(env),
+      sendLogFile: file,
+      appendLog: (entry: SendLogEntry) => appendSendLog(file, entry),
+    };
     for (let i = 0; i < 30; i++) {
-      await send({ to: 'workteam', bodyArg: `spam ${i}` }, env);
+      await runSend({ to: 'workteam', bodyArg: `spam ${i}` }, deps);
     }
-    const err = await expectCode(send({ to: 'workteam', bodyArg: 'one too many' }, env), 'RATE_LIMITED');
+    const err = await expectCode(runSend({ to: 'workteam', bodyArg: 'one too many' }, deps), 'RATE_LIMITED');
     expect(err.message).toContain('Retry');
-    // Other pairs are unaffected.
-    const ok = await send({ to: 'alpha', bodyArg: 'fine' });
+    // Other pairs are unaffected (alpha is a different pair in the same file).
+    const ok = await runSend({ to: 'alpha', bodyArg: 'fine' }, deps);
     expect(ok).toContain('delivered to alpha');
   });
 });

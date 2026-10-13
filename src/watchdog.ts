@@ -79,7 +79,7 @@ export interface WatchdogDeps {
 }
 
 /** The watchdog loop itself; returns when the outbox is empty. Never throws. */
-export async function runWatchdog(outboxDir: string, rateDir: string, deps: WatchdogDeps): Promise<void> {
+export async function runWatchdog(outboxDir: string, sendLogFile: string, deps: WatchdogDeps): Promise<void> {
   const sleep = deps.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
   try {
     mkdirSync(outboxDir, { recursive: true });
@@ -87,7 +87,7 @@ export async function runWatchdog(outboxDir: string, rateDir: string, deps: Watc
     let emptyRounds = 0;
     for (;;) {
       const results = await drain(outboxDir, (threadId, content, busyTimeoutMs) =>
-        deps.deliverCodex(threadId, content, busyTimeoutMs), { rateDir });
+        deps.deliverCodex(threadId, content, busyTimeoutMs), { sendLogFile });
       const delivered = results.reduce((total, result) => total + result.delivered, 0);
       const dropped = results.reduce((total, result) => total + result.dropped, 0);
       if (delivered > 0) deps.err(`watchdog: 补投 ${delivered} 条`);

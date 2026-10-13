@@ -44,7 +44,7 @@ function makeDeps(env: Record<string, string | undefined> = {}): SendDeps {
     listCodexThreads: async () => [],
     deliverClaude: async () => ({ status: 'delivered' }),
     deliverCodex: async () => ({ status: 'accepted', turnId: 't1' }),
-    rateDir: tempDir(),
+    sendLogFile: join(tempDir(), 'send-log.jsonl'),
     outboxDir: tempDir(),
     now: () => 9_000_000,
     appendLog: (entry) => logs.push(entry),

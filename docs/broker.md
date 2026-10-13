@@ -399,7 +399,7 @@ C → file-end{id}
 
 ```
 > crosschat serve --stop            # 停本机常驻（broker 或节点客户端，三重身份校验安全停止）
-> crosschat clean [--force]         # 清 inbox/parts：默认懒删除规则；--force 全清（跳过确认，含未读）
-> crosschat uninstall [--yes]       # 删 ~/.crosschat + 状态目录 + 双侧 skill；serve 在跑会拒删（先 --stop）
+> crosschat clean [--force]         # 清 inbox/parts + 30 天未更新的 conversations 分片：默认懒删除规则；--force 全清（跳过确认，含未读）
+> crosschat uninstall [--yes]       # 删 ~/.crosschat（含状态目录）+ 旧版散装状态目录 + 双侧 skill；serve 在跑会拒删（先 --stop）
                                      # 结尾 npm uninstall -g @oatelauser/crosschat 收尾
 ```

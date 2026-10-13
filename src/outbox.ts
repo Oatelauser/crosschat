@@ -10,18 +10,18 @@ import {
   writeFileSync,
   writeSync,
 } from 'node:fs';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
 import { randomBytes } from 'node:crypto';
 import { MultichatError } from './errors.js';
-import { checkAndRecord, rateKey } from './rate-limit.js';
+import { checkSendLogRate } from './rate-limit.js';
+import { stateRoot } from './state-root.js';
 
 /**
  * Opportunistic outbox (B10/B11, reworked B12): when a codex delivery fails
  * with CODEX_THREAD_BUSY_TIMEOUT / CODEX_THREAD_LOCKED, the fully composed
  * envelope is parked on disk (one JSON file per thread under
- * %LOCALAPPDATA%/crosschat/outbox/) and re-delivered verbatim by the next
+ * ~/.crosschat/outbox/) and re-delivered verbatim by the next
  * send/status invocation or by the detached watchdog loop (src/watchdog.ts).
  *
  * B12 invariants, learned from the 2026-10-02 incident:
@@ -79,7 +79,7 @@ const DEFAULT_DRAIN_BUDGET_MS = 15_000;
 const LOCK_STALE_MS = 60_000;
 
 export function defaultOutboxDir(): string {
-  return join(process.env.LOCALAPPDATA ?? homedir(), 'crosschat', 'outbox');
+  return join(stateRoot(), 'outbox');
 }
 
 /** Mailbox mirror lives next to the outbox root (sibling "mailbox" directory). */
@@ -144,11 +144,11 @@ export interface DrainOpts {
   /** Injected clock (tests); also feeds the rate limiter. */
   now?(): number;
   /**
-   * B11: rate-limit dir. When given, every re-delivery passes checkAndRecord
-   * against the parked caller key (same limiter state as send) and a full
-   * window skips the item for this round.
+   * B11→014: send-log file. When given, every re-delivery passes the same
+   * send-log tail-window limiter as send (against the parked caller key) and
+   * a full window skips the item for this round.
    */
-  rateDir?: string;
+  sendLogFile?: string;
   /** Mailbox mirror dir (defaults to the sibling of the outbox dir). */
   mailboxDir?: string;
 }
@@ -200,9 +200,9 @@ export async function drain(
       });
       if (head === undefined) break;
       toName = head.item.toName;
-      if (opts.rateDir !== undefined) {
+      if (opts.sendLogFile !== undefined) {
         try {
-          checkAndRecord(opts.rateDir, rateKey(head.item.callerKey ?? 'human', `codex:${threadId}`), now());
+          checkSendLogRate(opts.sendLogFile, head.item.callerKey ?? 'human', `codex:${threadId}`, now());
         } catch (err) {
           if (err instanceof MultichatError && err.code === 'RATE_LIMITED') {
             skipIds.add(head.item.id); // window full: skip this round, retry next drain

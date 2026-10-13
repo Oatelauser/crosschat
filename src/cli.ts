@@ -14,8 +14,8 @@ import { runInstallSkills, type InstallSkillsArgs } from './commands/install-ski
 import { runDoctor } from './commands/doctor.js';
 import { runClaudeWrapper } from './commands/claude-wrapper.js';
 import { runCodexWrapper } from './commands/codex-wrapper.js';
-import { defaultRateDir } from './rate-limit.js';
 import { defaultOutboxDir, drain } from './outbox.js';
+import { legacyStateRoots, stateRoot } from './state-root.js';
 import { runWatchdog, spawnWatchdog as ensureWatchdog } from './watchdog.js';
 import { appendSendLog, confirmInRollout, defaultSendLogFile, readSendLogTail } from './send-log.js';
 import { defaultConversationsFile } from './conversations.js';
@@ -109,13 +109,16 @@ commands:
   install-skills [--dir <root>]
                             install the agent skill into <root>/.claude and
                             <root>/.codex (default root: home directory)
-  clean [--force]           clean tcp file-channel leftovers (inbox/parts):
-                            default = lazy rules (items older than 5 days,
-                            or inbox over 512MiB oldest-first); --force
-                            deletes everything without confirmation
-  uninstall [--yes]         remove crosschat data: ~/.crosschat, the state
-                            dir, and both agent skills (refuses while
-                            "crosschat serve" runs; asks y/n unless --yes)
+  clean [--force]           clean tcp file-channel leftovers (inbox/parts)
+                            and 30-day-stale conversation shards: default =
+                            lazy rules (items older than 5 days, or inbox
+                            over 512MiB oldest-first; shards untouched for
+                            30 days); --force deletes everything without
+                            confirmation
+  uninstall [--yes]         remove crosschat data: ~/.crosschat (state
+                            included), pre-014 legacy state dirs, and both
+                            agent skills (refuses while "crosschat serve"
+                            runs; asks y/n unless --yes)
   claude [any native args]  start the real claude CLI with inbound peer
                             messaging enabled; any native claude args
                             (e.g. -c, --model <m>, --help) pass through
@@ -359,7 +362,7 @@ function realSendDeps(stdinText: string | undefined): SendDeps {
     listCodexThreads: () => listCodexThreads(),
     deliverClaude: (target, content) => deliverToClaudeSession(target, content),
     deliverCodex: (threadId, content) => deliverToCodexThread(threadId, content),
-    rateDir: defaultRateDir(),
+    sendLogFile: defaultSendLogFile(),
     outboxDir: defaultOutboxDir(),
     now: () => Date.now(),
     spawnWatchdog: () => ensureWatchdog(defaultOutboxDir()),
@@ -411,7 +414,7 @@ function realStatusDeps(): StatusDeps {
 function drainAtEntry(): Promise<void> {
   return drainOutboxAtEntry({
     outboxDir: defaultOutboxDir(),
-    rateDir: defaultRateDir(),
+    sendLogFile: defaultSendLogFile(),
     deliverCodex: (threadId, content, busyTimeoutMs) =>
       deliverToCodexThread(threadId, content, { busyTimeoutMs }),
     err: (line) => process.stderr.write(`${line}\n`),
@@ -429,8 +432,8 @@ function printFailure(err: unknown): number {
 
 export interface DrainEntryDeps {
   outboxDir: string;
-  /** Rate-limit dir shared with send: drained re-deliveries consume the same per-pair window. */
-  rateDir: string;
+  /** Send-log file shared with send: drained re-deliveries pass the same tail-window limiter. */
+  sendLogFile: string;
   deliverCodex(threadId: string, content: string, busyTimeoutMs: number): Promise<unknown>;
   err(line: string): void;
 }
@@ -448,7 +451,7 @@ export async function drainOutboxAtEntry(deps: DrainEntryDeps): Promise<void> {
     results = await drain(
       deps.outboxDir,
       (threadId, content, busyTimeoutMs) => deps.deliverCodex(threadId, content, busyTimeoutMs),
-      { rateDir: deps.rateDir },
+      { sendLogFile: deps.sendLogFile },
     );
   } catch {
     return; // opportunistic: the real command still runs
@@ -479,7 +482,7 @@ async function main(argv: string[]): Promise<number> {
   // loop when spawned with --watch. Not in usage on purpose.
   if (command === '__drain') {
     if (rest.includes('--watch')) {
-      await runWatchdog(defaultOutboxDir(), defaultRateDir(), {
+      await runWatchdog(defaultOutboxDir(), defaultSendLogFile(), {
         deliverCodex: (threadId, content, busyTimeoutMs) =>
           deliverToCodexThread(threadId, content, { busyTimeoutMs }),
         err: (line) => process.stderr.write(`${line}\n`),
@@ -569,6 +572,7 @@ async function main(argv: string[]): Promise<number> {
     try {
       return runClean(parseCleanArgs(rest), {
         tcpDir: join(homedir(), '.crosschat', 'tcp'),
+        conversationsDir: join(stateRoot(), 'conversations'),
         now: () => Date.now(),
         stdout: (line) => process.stdout.write(`${line}\n`),
       });
@@ -585,7 +589,8 @@ async function main(argv: string[]): Promise<number> {
       const home = homedir();
       return await runUninstall(parseUninstallArgs(rest), {
         crosschatHome: join(home, '.crosschat'),
-        stateRoot: join(process.env.LOCALAPPDATA ?? home, 'crosschat'),
+        stateRoot: stateRoot(),
+        legacyStateRoots: legacyStateRoots(),
         skillDirs: [join(home, '.claude', 'skills', 'crosschat'), join(home, '.codex', 'skills', 'crosschat')],
         now: () => Date.now(),
         stdout: (line) => process.stdout.write(`${line}\n`),

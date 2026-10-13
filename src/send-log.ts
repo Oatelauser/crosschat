@@ -1,7 +1,7 @@
-import { appendFileSync, closeSync, fstatSync, mkdirSync, openSync, readSync, statSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { closeSync, fstatSync, mkdirSync, openSync, readSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import process from 'node:process';
+import { appendWithRotate } from './log-rotate.js';
+import { stateRoot } from './state-root.js';
 import { findRolloutFile } from './codex/rollout-meta.js';
 
 /**
@@ -15,7 +15,7 @@ import { findRolloutFile } from './codex/rollout-meta.js';
  */
 
 export function defaultSendLogFile(): string {
-  return join(process.env.LOCALAPPDATA ?? homedir(), 'crosschat', 'send-log.jsonl');
+  return join(stateRoot(), 'send-log.jsonl');
 }
 
 export interface SendLogEntry {
@@ -46,43 +46,8 @@ export interface SendLogEntry {
 export function appendSendLog(file: string, entry: SendLogEntry): void {
   try {
     mkdirSync(dirname(file), { recursive: true });
-    appendFileSync(file, `${JSON.stringify(entry)}\n`, 'utf8');
-    capSendLog(file);
-  } catch {
-    // ponytail: observability must never break the send itself.
-  }
-}
-
-/**
- * Cap the log so it cannot grow forever (2026-10-06 audit): once it passes
- * MAX bytes, rewrite it as the last ~KEEP bytes of whole lines. Best-effort
- * like everything here — a torn rewrite at worst costs corrupt lines the
- * tail reader already skips. Only fires past the cap: the under-cap append
- * path is byte-identical to before.
- */
-const SEND_LOG_MAX_BYTES = 5 * 1024 * 1024;
-const SEND_LOG_KEEP_BYTES = 1024 * 1024;
-
-function capSendLog(file: string): void {
-  let size: number;
-  try {
-    size = statSync(file).size;
-  } catch {
-    return;
-  }
-  if (size <= SEND_LOG_MAX_BYTES) return;
-  try {
-    const keep = Math.min(SEND_LOG_KEEP_BYTES, size);
-    let tail: Buffer;
-    const fd = openSync(file, 'r');
-    try {
-      const buf = Buffer.alloc(keep);
-      readSync(fd, buf, 0, keep, size - keep);
-      tail = buf.subarray(buf.indexOf(0x0a) + 1); // drop the leading partial line
-    } finally {
-      closeSync(fd);
-    }
-    writeFileSync(file, tail);
+    // 014: 封顶改为轮转（超 5MB 挪 .old）——不再原地截断，历史整份留在 .old。
+    appendWithRotate(file, `${JSON.stringify(entry)}\n`);
   } catch {
     // ponytail: observability must never break the send itself.
   }

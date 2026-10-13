@@ -67,9 +67,9 @@
 
 ## 6. 发件箱（outbox）与看门狗（B12–B14）
 
-daemon ≥0.160 上**忙线程不再等待**：turn/start 被接受并按线程串行排队，当前轮结束即落历史（`queued`，实测收件箱语义）。发件箱只服务旧 daemon 异常态：消息完整落 `%LOCALAPPDATA%\crosschat\outbox\<threadId>.json`（返回 `parked`），**看门狗子进程每 0.5–5 分钟自动重投**（30s→60s→120s→300s 退避，箱空即退，非常驻）；busy 属线程级状态，排涝首败即止轮；队列非空时新消息入队不插队；每线程 200 条封顶，每条寄存/送达/丢弃都镜像到 `%LOCALAPPDATA%\crosschat\mailbox\<threadId>.md` 供人随时读。park/drain 按线程加锁，看门狗单实例。
+daemon ≥0.160 上**忙线程不再等待**：turn/start 被接受并按线程串行排队，当前轮结束即落历史（`queued`，实测收件箱语义）。发件箱只服务旧 daemon 异常态：消息完整落 `~/.crosschat/outbox/<threadId>.json`（返回 `parked`），**看门狗子进程每 0.5–5 分钟自动重投**（30s→60s→120s→300s 退避，箱空即退，非常驻）；busy 属线程级状态，排涝首败即止轮；队列非空时新消息入队不插队；每线程 200 条封顶，每条寄存/送达/丢弃都镜像到 `~/.crosschat/mailbox/<threadId>.md` 供人随时读。park/drain 按线程加锁，看门狗单实例。
 
-**发送审计（B14）**：每次 send 的最终结果（delivered/queued/parked/failed + 时间/对端/轮次/错误码）追加 `%LOCALAPPDATA%\crosschat\send-log.jsonl`（仅元数据）；codex 投递后按唯一 reply-ref 轮询对方 rollout 文件出回执（`receipt: confirmed` = 消息已确认落入对方会话历史）。
+**发送审计（B14）**：每次 send 的最终结果（delivered/queued/parked/failed + 时间/对端/轮次/错误码）追加 `~/.crosschat/send-log.jsonl`（仅元数据，超 5MB 轮转 `.old`）；codex 投递后按唯一 reply-ref 轮询对方 rollout 文件出回执（`receipt: confirmed` = 消息已确认落入对方会话历史）。
 
 ## 7. 一次 `send` 的完整流程
 
@@ -102,6 +102,6 @@ crosschat send --to X --body "…"
 |---|---|---|
 | `PipeTransport` | named pipe + peerToken auth 行 | Unix domain socket（`/tmp/cc-socks/<pid>.sock`，embassy 原路径） |
 | `ProcessInspector` | `process.kill(pid,0)` / CIM | `ps` |
-| `PathLayout` | `%LOCALAPPDATA%\crosschat`、`~/.claude`、`~/.codex` | XDG 布局 |
+| `PathLayout` | `~/.crosschat`（全平台统一）、`~/.claude`、`~/.codex` | 同左（无 XDG 分叉） |
 
 命令面（`send`/`status`）形状稳定承诺：内部架构演进（无状态 → 常驻 broker）不改变 agent 侧用法。

@@ -1,12 +1,17 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+/** 014 限流蒸发：计数改读 send-log 尾窗（纯函数 checkRateLimit + 文件腿 checkSendLogRate）。 */
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
-import { checkAndRecord, rateKey, RATE_LIMIT_MAX } from '../src/rate-limit.js';
+import { describe, expect, it } from 'vitest';
+import { checkRateLimit, checkSendLogRate, RATE_LIMIT_MAX, RATE_WINDOW_MS } from '../src/rate-limit.js';
+import { appendSendLog, type SendLogEntry } from '../src/send-log.js';
 import { MultichatError } from '../src/errors.js';
 
-const dir = mkdtempSync(join(tmpdir(), 'crosschat-rate-'));
-afterAll(() => rmSync(dir, { recursive: true, force: true }));
+const NOW = 1_800_000_000_000;
+
+function entry(from: string, target: string, tsMs: number): SendLogEntry {
+  return { ts: new Date(tsMs).toISOString(), from, to: 'peer', target, status: 'delivered' };
+}
 
 function expectCode(fn: () => unknown, code: string): void {
   try {
@@ -18,52 +23,65 @@ function expectCode(fn: () => unknown, code: string): void {
   }
 }
 
-describe('rateKey', () => {
-  it('is order-independent and stable', () => {
-    expect(rateKey('claude:a', 'codex:b')).toBe(rateKey('codex:b', 'claude:a'));
-    expect(rateKey('claude:a', 'codex:b')).not.toBe(rateKey('claude:a', 'codex:c'));
+describe('checkRateLimit tail-window counting', () => {
+  it('throws RATE_LIMITED when the window holds the cap, passes one short of it', () => {
+    const from = 'claude:s1';
+    const target = 'codex:t1';
+    expect(() => checkRateLimit([], from, target, NOW)).not.toThrow();
+    const short = Array.from({ length: RATE_LIMIT_MAX - 1 }, (_, i) => entry(from, target, NOW - i * 100));
+    expect(() => checkRateLimit(short, from, target, NOW)).not.toThrow(); // 29: still room
+    const full = Array.from({ length: RATE_LIMIT_MAX }, (_, i) => entry(from, target, NOW - i * 100));
+    expectCode(() => checkRateLimit(full, from, target, NOW), 'RATE_LIMITED');
+  });
+
+  it('counts entries of this pair only — other pairs never accumulate', () => {
+    const from = 'claude:s1';
+    const tail: SendLogEntry[] = [];
+    for (let i = 0; i < RATE_LIMIT_MAX + 10; i++) tail.push(entry('claude:other', 'codex:t1', NOW));
+    for (let i = 0; i < RATE_LIMIT_MAX; i++) tail.push(entry(from, 'codex:unrelated', NOW));
+    expect(() => checkRateLimit(tail, from, 'codex:t1', NOW)).not.toThrow();
+  });
+
+  it('expires entries past the 60s window boundary', () => {
+    const from = 'claude:s1';
+    const target = 'codex:t1';
+    const stale = Array.from({ length: RATE_LIMIT_MAX }, (_, i) => entry(from, target, NOW - RATE_WINDOW_MS - i * 100));
+    expect(() => checkRateLimit(stale, from, target, NOW)).not.toThrow();
+    // one fresh entry on top of the stale pile: the old ones do not count
+    expect(() => checkRateLimit([...stale, entry(from, target, NOW)], from, target, NOW)).not.toThrow();
+    const fresh = Array.from({ length: RATE_LIMIT_MAX }, (_, i) => entry(from, target, NOW - i * 100));
+    expectCode(() => checkRateLimit(fresh, from, target, NOW), 'RATE_LIMITED');
+  });
+
+  it('pair key is order-independent: (A→B) counts for (B→A) attribution', () => {
+    const tail = Array.from({ length: RATE_LIMIT_MAX }, (_, i) => entry('claude:s1', 'codex:t1', NOW - i * 100));
+    expectCode(() => checkRateLimit(tail, 'codex:t1', 'claude:s1', NOW), 'RATE_LIMITED');
+  });
+
+  it('RATE_LIMITED teaching text is byte-stable (regression anchor)', () => {
+    // all entries at ts=NOW → oldest sits exactly one full window away → Retry in ~60s
+    const tail = Array.from({ length: RATE_LIMIT_MAX }, () => entry('human', 'claude:s9', NOW));
+    try {
+      checkRateLimit(tail, 'human', 'claude:s9', NOW);
+      expect.unreachable('should have thrown');
+    } catch (err) {
+      expect(err).toBeInstanceOf(MultichatError);
+      expect((err as MultichatError).message).toBe(
+        `Rate limit hit: ${RATE_LIMIT_MAX} messages per ${RATE_WINDOW_MS / 1000}s are allowed per endpoint pair. Retry in ~60s.`,
+      );
+    }
   });
 });
 
-describe('checkAndRecord sliding window', () => {
-  it('fills the window, throws RATE_LIMITED, then frees up as time passes', () => {
-    const key = rateKey('claude:s1', 'codex:t1');
-    const file = join(dir, `${key}.json`);
-    let now = 1_000_000;
-
-    for (let i = 0; i < RATE_LIMIT_MAX; i++) checkAndRecord(dir, key, now);
-    expect(JSON.parse(readFileSync(file, 'utf8')) as number[]).toHaveLength(RATE_LIMIT_MAX);
-
-    expectCode(() => checkAndRecord(dir, key, now), 'RATE_LIMITED');
-    expectCode(() => checkAndRecord(dir, key, now + 10_000), 'RATE_LIMITED');
-    // Rejected sends must not extend the window.
-    expect(JSON.parse(readFileSync(file, 'utf8')) as number[]).toHaveLength(RATE_LIMIT_MAX);
-
-    now += 61_000; // entire window expired
-    checkAndRecord(dir, key, now);
-    expect(JSON.parse(readFileSync(file, 'utf8')) as number[]).toHaveLength(1);
-  });
-
-  it('keeps separate buckets per endpoint pair', () => {
-    const now = 5_000_000;
-    for (let i = 0; i < RATE_LIMIT_MAX; i++) checkAndRecord(dir, rateKey('claude:s1', 'codex:t1'), now);
-    expectCode(() => checkAndRecord(dir, rateKey('claude:s1', 'codex:t1'), now), 'RATE_LIMITED');
-    checkAndRecord(dir, rateKey('claude:s1', 'codex:t2'), now); // different pair: unaffected
-  });
-
-  it('prunes only expired entries within the 60s window', () => {
-    const key = rateKey('human', 'claude:s9');
-    checkAndRecord(dir, key, 100_000);
-    checkAndRecord(dir, key, 140_000);
-    checkAndRecord(dir, key, 170_000); // 100_000 is now 70s old, the others are not
-    const sends = JSON.parse(readFileSync(join(dir, `${key}.json`), 'utf8')) as number[];
-    expect(sends).toEqual([140_000, 170_000]);
-  });
-
-  it('self-heals a corrupt rate file', () => {
-    const key = rateKey('claude:corrupt', 'codex:t');
-    writeFileSync(join(dir, `${key}.json`), 'not json at all', 'utf8');
-    checkAndRecord(dir, key, 200_000);
-    expect(JSON.parse(readFileSync(join(dir, `${key}.json`), 'utf8')) as number[]).toEqual([200_000]);
+describe('checkSendLogRate file leg', () => {
+  it('reads the pair window from a real send-log file; missing file = empty window', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'crosschat-rate-'));
+    const file = join(dir, 'send-log.jsonl');
+    for (let i = 0; i < RATE_LIMIT_MAX; i++) {
+      appendSendLog(file, entry('claude:s1', 'codex:t1', NOW - i * 100));
+    }
+    expectCode(() => checkSendLogRate(file, 'claude:s1', 'codex:t1', NOW), 'RATE_LIMITED');
+    expect(() => checkSendLogRate(file, 'claude:s1', 'codex:t2', NOW)).not.toThrow();
+    expect(() => checkSendLogRate(join(dir, 'missing.jsonl'), 'claude:s1', 'codex:t1', NOW)).not.toThrow();
   });
 });

@@ -4,13 +4,14 @@
  * runSend，fileInbox 落盘本机收件）。
  */
 import { execSync, spawn } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir, hostname, networkInterfaces, type NetworkInterfaceInfo } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import process from 'node:process';
 import { MultichatError } from '../errors.js';
+import { appendWithRotate } from '../log-rotate.js';
 import { machineId } from '../platform/machine-id.js';
 import { Broker, DEFAULT_PORT, defaultDeliverLocal } from '../serve/broker.js';
 import { ensureStarId, ensureStarName, genKeys, listNodes, readRegistry, registryFileOf, removeNode, setName, setPort, tcpDir, writeRegistry } from '../serve/registry.js';
@@ -283,7 +284,7 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
   const logLine = detached
     ? (line: string) => {
         try {
-          appendFileSync(logFile, `${line}\n`);
+          appendWithRotate(logFile, `${line}\n`);
         } catch {
           // 日志写失败不倒服务
         }
@@ -399,7 +400,7 @@ async function runForegroundNode(aliasArg: string, deps: ServeDeps): Promise<num
   const logLine = detached
     ? (line: string) => {
         try {
-          appendFileSync(logFile, `${line}\n`);
+          appendWithRotate(logFile, `${line}\n`);
         } catch {
           // 日志写失败不倒客户端
         }

@@ -1,7 +1,7 @@
 /**
  * broker.json 注册表（票B B1）：纯函数+文件 IO，可独立测试。路径约定
- * ~/.crosschat/tcp/broker.json（homedir 起、全平台统一）——新组件新约定，
- * 不沿用仓内 LOCALAPPDATA 模式。注册表每笔连接由服务端现读，不缓存，
+ * ~/.crosschat/tcp/broker.json（homedir 起、全平台统一）——014 起状态目录
+ * 也统一到此根（stateRoot）。注册表每笔连接由服务端现读，不缓存，
  * gen/remove 即时生效。
  */
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';

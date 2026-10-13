@@ -53,7 +53,7 @@ function scanDeps(fake: ScanFake): SendDeps {
     },
     deliverClaude: async () => ({ status: 'delivered' }),
     deliverCodex: async () => ({ status: 'accepted', turnId: 't' }),
-    rateDir: mkdtempSync(join(root, 'rate-')),
+    sendLogFile: join(mkdtempSync(join(root, 'ratelog-')), 'send-log.jsonl'),
     outboxDir: mkdtempSync(join(root, 'outbox-')),
     now: () => Date.now(),
   };

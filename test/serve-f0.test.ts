@@ -346,7 +346,7 @@ describe('F0 conversation ref 回信带杠机器（drill 场景，真 broker 集
       listCodexThreads: async () => threads,
       deliverClaude: async () => ({ status: 'delivered' }),
       deliverCodex: async () => ({ status: 'accepted', turnId: 't' }),
-      rateDir: mkdtempSync(join(root, 'rate-')),
+      sendLogFile: join(mkdtempSync(join(root, 'ratelog-')), 'send-log.jsonl'),
       outboxDir: mkdtempSync(join(root, 'outbox-')),
       now: () => Date.now(),
       hostname: () => 'linux-host',

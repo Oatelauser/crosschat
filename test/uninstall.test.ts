@@ -33,6 +33,7 @@ function fixture(confirmResult = true): Fixture {
     deps: {
       crosschatHome: home,
       stateRoot: state,
+      legacyStateRoots: [],
       skillDirs: skills,
       now: () => Date.now(),
       stdout: (line) => lines.push(line),
@@ -131,6 +132,37 @@ describe('runUninstall', () => {
     expect(await runUninstall({}, yes.deps)).toBe(0);
     expect(yes.confirmed.value).toBe(true);
     expect(existsSync(yes.home)).toBe(false);
+  });
+
+  it('014: sweeps both courts — legacy state roots go too, deduped paths listed once', async () => {
+    const f = fixture();
+    const legacy = [mkdtempSync(join(root, 'legacy-')), join(root, 'legacy-absent')];
+    writeFileSync(join(legacy[0]!, 'conversations.json'), '{}');
+    mkdirSync(join(f.home, 'tcp'), { recursive: true });
+    writeFileSync(join(f.home, 'tcp', 'node.json'), '{}'); // serve not running: no status files
+    const lines: string[] = [];
+    const rc = await runUninstall({ yes: true }, {
+      ...f.deps,
+      legacyStateRoots: legacy,
+      stdout: (line) => lines.push(line),
+    });
+    expect(rc).toBe(0);
+    expect(lines).toContain(`已删除：${legacy[0]!}`);
+    expect(lines).toContain(`跳过（不存在）：${legacy[1]!}`);
+    expect(existsSync(legacy[0]!)).toBe(false);
+    // same path twice (014: stateRoot === crosschatHome) → listed and deleted once
+    const same = fixture();
+    mkdirSync(join(same.home, 'tcp'), { recursive: true });
+    const dedupLines: string[] = [];
+    expect(
+      await runUninstall({ yes: true }, {
+        ...same.deps,
+        stateRoot: same.home,
+        stdout: (line) => dedupLines.push(line),
+      }),
+    ).toBe(0);
+    expect(dedupLines.filter((l) => l.includes(same.home)).length).toBe(2); // one listing + one deletion
+    expect(existsSync(same.home)).toBe(false);
   });
 });
 

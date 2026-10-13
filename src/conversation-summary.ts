@@ -1,7 +1,6 @@
-import { defaultConversationsFile, loadAllPairs, pairKeyOf } from './conversations.js';
+import { defaultConversationsFile, loadAllPairs, pairKeyOfEntry } from './conversations.js';
 import { defaultOutboxDir, outboxPairCounts } from './outbox.js';
 import { type SendLogEntry, defaultSendLogFile, readSendLogTail } from './send-log.js';
-import { decodeRef } from './ref.js';
 
 /**
  * Per-pair conversation overview rows for a future `status --conversations`
@@ -99,22 +98,6 @@ export function aggregateSummaries(
         receipt: latest?.status === 'delivered' ? (latest.receipt ?? null) : null,
       };
     });
-}
-
-/** Pair key of one log entry; undefined when it cannot be attributed. */
-function pairKeyOfEntry(entry: SendLogEntry): string | undefined {
-  if (entry.from !== undefined && entry.target !== '') {
-    return [entry.from, entry.target].sort().join('\n');
-  }
-  if (entry.replyRef !== undefined) {
-    try {
-      const ref = decodeRef(entry.replyRef);
-      return pairKeyOf(ref.f, ref.t);
-    } catch {
-      // undecodable ref: no attribution
-    }
-  }
-  return undefined;
 }
 
 /** ts-newest entry (not the physical last line); a tie keeps the later line. */

@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import process from 'node:process';
+import { stateRoot } from './state-root.js';
 import {
   decodeRef,
   encodeRef,
@@ -30,7 +30,7 @@ import {
  */
 
 export function defaultConversationsFile(): string {
-  return join(process.env.LOCALAPPDATA ?? homedir(), 'crosschat', 'conversations.json');
+  return join(stateRoot(), 'conversations.json');
 }
 
 interface PairRecord {
@@ -137,6 +137,34 @@ function endpointKey(endpoint: RefEndpoint): string {
 /** Unordered pair key: (A→B) and (B→A) map to the same conversation. */
 export function pairKeyOf(a: RefEndpoint, b: RefEndpoint): string {
   return [endpointKey(a), endpointKey(b)].sort().join('\n');
+}
+
+/** Attribution fields of a send-log entry (structural: SendLogEntry satisfies this). */
+export interface PairAttribution {
+  from?: string;
+  target: string;
+  replyRef?: string;
+}
+
+/**
+ * Pair key of one send-log entry (014 moved here from conversation-summary so
+ * the rate limiter shares the exact attribution logic); undefined when it
+ * cannot be attributed: `from`+`target` directly, else decode the entry's own
+ * embedded replyRef (that ref belongs to the message itself).
+ */
+export function pairKeyOfEntry(entry: PairAttribution): string | undefined {
+  if (entry.from !== undefined && entry.target !== '') {
+    return [entry.from, entry.target].sort().join('\n');
+  }
+  if (entry.replyRef !== undefined) {
+    try {
+      const ref = decodeRef(entry.replyRef);
+      return pairKeyOf(ref.f, ref.t);
+    } catch {
+      // undecodable ref: no attribution
+    }
+  }
+  return undefined;
 }
 
 /**

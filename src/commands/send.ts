@@ -6,7 +6,7 @@ import { readNodeConfig } from '../serve/node.js';
 import type { ClaudeRegistryScan } from '../claude/registry.js';
 import type { CodexThreadSummary } from '../codex/client.js';
 import type { ClaudeDeliveryTarget } from '../claude/deliver.js';
-import { checkAndRecord, rateKey } from '../rate-limit.js';
+import { checkSendLogRate } from '../rate-limit.js';
 import { mailboxFileFor, outboxCount, park } from '../outbox.js';
 import {
   endpointOfIdentity,
@@ -68,8 +68,9 @@ export interface SendDeps {
   listCodexThreads(): Promise<CodexThreadSummary[]>;
   deliverClaude(target: ClaudeDeliveryTarget, content: string): Promise<{ status: 'delivered' }>;
   deliverCodex(threadId: string, content: string): Promise<{ status: 'accepted'; turnId: string; queued?: boolean }>;
-  rateDir: string;
-  /** Outbox root for parking busy/locked codex deliveries (%LOCALAPPDATA%/crosschat/outbox). */
+  /** Send-log file: the rate limiter counts this pair's tail-window entries (014 evaporation). */
+  sendLogFile: string;
+  /** Outbox root for parking busy/locked codex deliveries (~/.crosschat/outbox). */
   outboxDir: string;
   now(): number;
   /** Detached retry loop spawner (B12); optional so tests stay process-free. */
@@ -421,7 +422,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
           'status 只列本机会话；跨机对端用 ssh <对端> crosschat status 查。',
       );
     }
-    checkAndRecord(deps.rateDir, rateKey(identityKey(caller), `claude:${target.id}`), deps.now());
+    checkSendLogRate(deps.sendLogFile, identityKey(caller), `claude:${target.id}`, deps.now());
     const toName = claudeSession.name ?? shortId('claude', claudeSession.sessionId);
     const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }) });
     try {
@@ -439,7 +440,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   }
 
   // Codex delivers by threadId; a missing thread surfaces as a codex adapter error.
-  checkAndRecord(deps.rateDir, rateKey(identityKey(caller), `codex:${target.id}`), deps.now());
+  checkSendLogRate(deps.sendLogFile, identityKey(caller), `codex:${target.id}`, deps.now());
   const threads = await deps.listCodexThreads();
   const threadName = threads.find((thread) => thread.id === target.id)?.name;
   const toName = threadName ?? shortId('codex', target.id);

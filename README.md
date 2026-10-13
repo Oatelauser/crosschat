@@ -55,7 +55,7 @@ crosschat install-skills
 
 三条安装命令照常执行——装在 WSL 里、agent 也装在 WSL 里（同一侧）即可，源码安装同样适用。例外只有两条：
 
-- **两侧独立**：unix 状态目录 `~/crosschat`（Windows 侧为 `%LOCALAPPDATA%\crosschat`），互不相通，管道/socket 不过系统边界
+- **两侧独立**：状态目录全平台统一 `~/.crosschat`（Windows 侧同名点目录），两侧互不相通，管道/socket 不过系统边界
 - **agent 同侧**：WSL 内用 unix 版 claude / codex CLI（Node ≥ 22 同侧装）
 
 <details><summary>claude 安装受阻时（受限网络）</summary>
@@ -175,7 +175,7 @@ crosschat -v | --version | help                     # 版本 / 帮助
 | `CODEX_APPROVAL_REQUIRED` | 对方在等审批——工具永不代答，去对方窗口处理 |
 | `CLAUDE_PIPE_*` / `CODEX_*UNCERTAIN` | 状态不明——**勿盲目重发**，先 `status` 核实 |
 
-**发送审计**：每次发送的最终结果（delivered/queued/parked/failed、时间、对端、发送方显示名 fromName、回执）追加记录在状态目录的 `send-log.jsonl`（Windows `%LOCALAPPDATA%\crosschat\`；unix `~/crosschat/`）；codex 投递附 rollout 回执（消息已确认落入对方会话历史 = `receipt: confirmed`）。命令超时转后台后结果同样在案，事后可查。
+**发送审计**：每次发送的最终结果（delivered/queued/parked/failed、时间、对端、发送方显示名 fromName、回执）追加记录在 `~/.crosschat/send-log.jsonl`（全平台同路径；超 5MB 轮转成 `.old`）；codex 投递附 rollout 回执（消息已确认落入对方会话历史 = `receipt: confirmed`）。命令超时转后台后结果同样在案，事后可查。
 
 边界与限制（16KiB / 限流 / 发件箱 / 信任边界 / daemon 依赖）→ [使用手册](docs/usage.md)
 
