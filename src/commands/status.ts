@@ -58,6 +58,11 @@ export interface StatusDeps {
    * status-query 等回程。Omitted → 远程视图报教学错；cli wires runViaTcpStatus。
    */
   fetchRemoteStatus?(via: string): Promise<{ target: string; payload: StatusPayload }>;
+  /**
+   * G0 三段式摘要的滞留子句：发件箱看门狗是否在跑（outbox lockfile 心跳）。
+   * Omitted → 滞留子句不带看门狗括注。
+   */
+  watchdogRunning?(): boolean;
 }
 
 /** B2 freshness bound: a status file older than this reads as "没在跑". */
@@ -186,6 +191,118 @@ function pushRosterLines(lines: string[], label: string, machines: RosterMachine
   if (offline.length > 0) lines.push(label === '' ? `离线机器: ${offline.map(disp).join('、')}` : `离线机器[${label}]: ${offline.map(disp).join('、')}`);
 }
 
+// ---- G0 星分组（裸跑三段式摘要的 tcp 段 + --stars 星内明细共用） --------------
+
+/** 一颗星的本机守护条目（陈旧/缺文件按 未运行 计）。 */
+interface StarDaemon {
+  selector: string;
+  state: 'online' | 'connecting' | 'reconnect-wait' | '未运行';
+}
+
+/** 一颗星的分组视图数据：可达性 + 全量机器表 + 连它的守护态。 */
+interface StarGroup {
+  name: string;
+  reachable: boolean;
+  online: number;
+  machines: Array<{ name?: string; mid8: string; online: boolean }>;
+  daemons: StarDaemon[];
+}
+
+/**
+ * 星清单：本机 broker（status-broker.json 新鲜且 running，机器表只有名字无
+ * mid8）+ node.json 逐条目 roster 探测（可达性权威）。守护态按 status-node*.json
+ * 的 brokerAlias 归星。tcpDir 未接线 → 空表。
+ */
+async function collectStars(deps: StatusDeps, nowMs: number): Promise<StarGroup[]> {
+  if (deps.tcpDir === undefined) return [];
+  const daemonsByStar = new Map<string, StarDaemon[]>();
+  for (const file of listNodeStatusFiles(deps.tcpDir)) {
+    const st = readStatusJson<NodeStatusFile>(join(deps.tcpDir, file));
+    const fresh = st !== undefined && nowMs - Date.parse(st.lastUpdated) < TCP_STATUS_FRESH_MS;
+    const state: StarDaemon['state'] = fresh ? st!.state : '未运行';
+    const entry: StarDaemon = { selector: nodeStatusSelector(file) || '默认', state };
+    const list = daemonsByStar.get(st?.brokerAlias ?? '');
+    if (list === undefined) daemonsByStar.set(st?.brokerAlias ?? '', [entry]);
+    else list.push(entry);
+  }
+  const groups: StarGroup[] = [];
+  const seen = new Set<string>();
+  const push = (name: string, reachable: boolean, machines: StarGroup['machines']): void => {
+    if (name === '' || seen.has(name)) return;
+    seen.add(name);
+    groups.push({ name, reachable, online: machines.filter((m) => m.online).length, machines, daemons: daemonsByStar.get(name) ?? [] });
+  };
+  const broker = readStatusJson<BrokerStatusFile>(join(deps.tcpDir, 'status-broker.json'));
+  if (broker !== undefined && broker.state === 'running' && nowMs - Date.parse(broker.lastUpdated) < TCP_STATUS_FRESH_MS) {
+    push(broker.name ?? '本机服务端', true, (broker.onlineNodes ?? []).map((n) => ({ name: n, mid8: '', online: true })));
+  }
+  let entries: BrokerEntry[] = [];
+  try {
+    entries = readNodeConfig(join(deps.tcpDir, 'node.json')).entries;
+  } catch {
+    // 未入网：只剩上面的本机 broker 星（若有）
+  }
+  for (const entry of entries) {
+    const name = entry.name ?? `${entry.host}:${entry.port}`;
+    if (deps.roster === undefined) {
+      push(name, false, []);
+      continue;
+    }
+    const machines = await deps.roster(entry);
+    push(name, machines !== undefined, machines ?? []);
+  }
+  return groups;
+}
+
+const machineDisp = (m: { name?: string; mid8: string }): string => (m.mid8 === '' ? (m.name ?? '?') : `${m.name ?? '?'}(${m.mid8})`);
+
+/** 摘要 tcp 段的星行/机器行（在线优先，封顶 5）。 */
+function starSummaryLines(groups: StarGroup[]): string[] {
+  const lines: string[] = [];
+  for (const g of groups) {
+    const client = g.daemons.some((d) => d.state === 'online') ? 'online' : '未运行';
+    const head = g.reachable ? `${g.name} ✓ 可达，${g.online} 机器在线` : `${g.name} ✗ 不可达`;
+    lines.push(`  ${head} · 客户端 ${client}`);
+    const machines = [...g.machines].sort((a, b) => Number(b.online) - Number(a.online)).slice(0, 5);
+    if (machines.length > 0) lines.push(`    ${machines.map(machineDisp).join('、')}`);
+  }
+  return lines;
+}
+
+/** `--stars` 星内明细：每星可达行 + 守护态行 + 全量机器表（含离线星与未跑守护）。 */
+function starsText(deps: StatusDeps, nowMs: number, groups: StarGroup[]): string {
+  if (deps.tcpDir === undefined) return 'tcp: 未入网（本机无 ~/.crosschat/tcp）';
+  const lines = [groups.length === 0 ? 'tcp: 无' : `tcp: 共 ${groups.length} 星`];
+  for (const g of groups) {
+    lines.push(g.reachable ? `${g.name} ✓ 可达，${g.online} 机器在线` : `${g.name} ✗ 不可达`);
+    const daemons = g.daemons.map((d) => `${d.selector}: ${d.state}`).join('、');
+    lines.push(`  守护: ${daemons === '' ? '未运行' : daemons}`);
+    const machines = [...g.machines].sort((a, b) => Number(b.online) - Number(a.online));
+    for (const m of machines) lines.push(`  ${machineDisp(m)} ${m.online ? '在线' : '离线'}`);
+  }
+  return lines.join('\n');
+}
+
+/**
+ * G0 传输分类器（status 段落归对与 --conversations --via 共用）：存档 ref 解码
+ * 为权威——端点带 m 且无 starId=ssh；带 starId=tcp；无 m=单机。ref 不可解码
+ * 回退 send-log via: 痕迹（跨机记账条目的 target 前缀）。
+ */
+export type ConversationFamily = 'ssh' | 'tcp' | 'local';
+
+export function conversationFamily(ref: string, traces?: ReadonlySet<'tcp' | 'ssh'>): ConversationFamily {
+  try {
+    const decoded = decodeRef(ref);
+    if (decoded.starId !== undefined) return 'tcp';
+    const hasM = (ep: typeof decoded.f): boolean => ep.p !== 'human' && ep.m !== undefined;
+    return hasM(decoded.f) || hasM(decoded.t) ? 'ssh' : 'local';
+  } catch {
+    if (traces?.has('tcp')) return 'tcp';
+    if (traces?.has('ssh')) return 'ssh';
+    return 'local';
+  }
+}
+
 /** `hh:mm:ss` (local time); `-` when unknown/invalid. */
 function formatHms(iso: string): string {
   const date = new Date(iso);
@@ -241,9 +358,24 @@ export async function runStatus(
   conversations = false,
   filters: StatusFilters = {},
   viaTarget?: string,
+  stars = false,
 ): Promise<string> {
   if (viaTarget !== undefined) return remoteStatusView(deps, json, filters, viaTarget);
   if (conversations) return conversationsView(deps, json, filters);
+  const nowMs = deps.now?.() ?? Date.now();
+  // G0 --stars：tcp 星内明细视图——text 整视图替换；--json 走下方旧键全保留 + stars 新键
+  const starGroups = stars ? await collectStars(deps, nowMs) : undefined;
+  if (stars && !json) return starsText(deps, nowMs, starGroups!);
+  // G0 裸跑三段式摘要：任何旗标/json 在场 = 现行明细视图逐字节不变（零回归锚）
+  if (
+    !json &&
+    filters.section === undefined &&
+    filters.name === undefined &&
+    filters.all !== true &&
+    filters.via === undefined
+  ) {
+    return summaryView(deps, nowMs);
+  }
   const scan = deps.listClaudeSessions();
   let threads: CodexThreadWithMeta[] | undefined;
   let codexError: string | undefined;
@@ -263,11 +395,19 @@ export async function runStatus(
     // 保持 {claude, codex} 冻结契约不变。B2 多星新增 tcpProfiles（逐守护
     // status-node*.json）；tcp.node/tcp.broker 既有形状不动。
     // 过滤参数组合 --json：选段省掉另一键、--name 滤行（--all 不影响 json，
-    // 未命名行始终在场，契约不变）。
-    const nowMs = deps.now?.() ?? Date.now();
+    // 未命名行始终在场，契约不变）。G0 --stars --json 加 stars 分组键（旧键不动）。
     const tcp = deps.tcpDir === undefined ? {} : { tcp: tcpJson(deps.tcpDir, nowMs) };
     const tcpProfiles = deps.tcpDir === undefined ? {} : { tcpProfiles: nodeProfilesJson(deps.tcpDir, nowMs) };
     const out: Record<string, unknown> = { ...tcp, ...tcpProfiles };
+    if (starGroups !== undefined) {
+      out.stars = starGroups.map((g) => ({
+        name: g.name,
+        reachable: g.reachable,
+        machinesOnline: g.online,
+        machines: g.machines,
+        daemons: g.daemons,
+      }));
+    }
     if (filters.section !== 'codex') {
       out.claude = scan.sessions.filter((session) => matches(session.name)).map((session) => ({
         name: session.name ?? null,
@@ -316,7 +456,7 @@ export async function runStatus(
   const lines: string[] = [];
   const filtered = anyFilter(filters);
   if (filters.section !== 'codex') {
-    if (!(filtered && claudeRows.length === 0)) {
+    if (!(filtered && filters.section === undefined && claudeRows.length === 0)) {
       lines.push('claude:');
       if (claudeRows.length === 0) lines.push('  (none)');
       for (const session of claudeRows) {
@@ -328,7 +468,7 @@ export async function runStatus(
   }
   if (filters.section !== 'claude') {
     const codexVisible = codexError === undefined && (codexRows.length > 0 || unlisted.length > 0);
-    if (!(filtered && !codexVisible)) {
+    if (!(filtered && filters.section === undefined && !codexVisible)) {
       lines.push('codex:');
       if (codexError !== undefined) lines.push(`  unavailable (${codexError})`);
       else if (!codexVisible) lines.push('  (none)');
@@ -350,8 +490,78 @@ export async function runStatus(
       }
     }
   }
-  lines.push(...(await tcpForwarderLines(deps.tcpDir, deps.now?.() ?? Date.now(), deps.roster)));
+  lines.push(...(await tcpForwarderLines(deps.tcpDir, nowMs, deps.roster)));
   return lines.join('\n');
+}
+
+/**
+ * G0 裸跑三段式摘要：本机会话（计数 + 滞留 + 最近 5 会话跨侧混排）/ tcp 星
+ * （每星一行 + 机器行）/ ssh 对话（最近 5 段）。数据源全是现成注册表、roster
+ * 探测与会话分片；明细视图的代码路径一字不动（旗标在场即回退明细）。
+ */
+async function summaryView(deps: StatusDeps, nowMs: number): Promise<string> {
+  const scan = deps.listClaudeSessions();
+  let threads: CodexThreadWithMeta[] | undefined;
+  try {
+    threads = await deps.listCodexThreads();
+  } catch {
+    threads = undefined; // codex down is a valid status answer
+  }
+  const rows = deps.listConversations?.() ?? [];
+  const lines: string[] = [];
+  const parked = rows.reduce((total, row) => total + row.parked, 0);
+  const head =
+    `本机会话: claude ${scan.sessions.length} · ` +
+    (threads === undefined ? 'codex unavailable' : `codex ${threads.length}`) +
+    (parked > 0
+      ? ` · 滞留 ${parked}${deps.watchdogRunning === undefined ? '' : `（看门狗${deps.watchdogRunning() ? '运行中' : '未运行'}）`}`
+      : '');
+  lines.push(head);
+  const recent = [
+    ...scan.sessions.map((session) => ({ side: 'claude', name: session.name, at: session.updatedAt ?? session.startedAt })),
+    ...(threads ?? []).map((thread) => ({
+      side: 'codex',
+      name: thread.name ?? undefined,
+      at: thread.meta?.createdAt ? Date.parse(thread.meta.createdAt) : undefined,
+    })),
+  ]
+    .filter((row) => row.name !== undefined) // 未命名默认隐藏，与明细视图同规
+    .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))
+    .slice(0, 5);
+  for (const row of recent) {
+    const time = row.at === undefined || Number.isNaN(row.at) ? '-' : formatRelativeTime(row.at, nowMs);
+    lines.push(`  ${row.side} ${row.name}  ${time}`);
+  }
+  lines.push('（全量: --claude|--codex|--name）');
+  if (deps.tcpDir !== undefined) {
+    const groups = await collectStars(deps, nowMs);
+    lines.push(groups.length === 0 ? 'tcp: 无' : `tcp: 共 ${groups.length} 星`);
+    lines.push(...starSummaryLines(groups));
+    if (groups.length > 0) lines.push('（星内明细: --stars）');
+  }
+  const traces = viaFamiliesByPair(deps.sendLogTail?.() ?? []);
+  const sshRows = rows.filter((row) => conversationFamily(row.ref, traces.get(row.endpoints.join('\n'))) === 'ssh');
+  lines.push(sshRows.length === 0 ? 'ssh: 无' : `ssh: 共 ${sshRows.length} 段对话`);
+  for (const row of sshRows.slice(0, 5)) {
+    lines.push(`  ${sshPeerLabel(row)} turn ${row.turn ?? '?'}  ${formatRelativeTime(row.updatedAt, nowMs)}`);
+  }
+  lines.push('（明细: --conversations --via ssh）');
+  return lines.join('\n');
+}
+
+/** ssh 段行标：远端端点（ref 里带 m 的一侧）的显示名@机器；ref 不可解码退 ?。 */
+function sshPeerLabel(row: ConversationSummary): string {
+  try {
+    const ref = decodeRef(row.ref);
+    const remote = [ref.f, ref.t].find(
+      (ep): ep is { p: 'claude' | 'codex'; id: string; m?: string; mid?: string } => ep.p !== 'human' && ep.m !== undefined,
+    );
+    if (remote === undefined) return `${row.pair[1]}@?`;
+    const idx = row.endpoints.indexOf(`${remote.p}:${remote.id}`);
+    return `${idx === -1 ? (row.pair[1] ?? '?') : row.pair[idx]}@${remote.m}`;
+  } catch {
+    return `${row.pair[1] ?? '?'}@?`;
+  }
 }
 
 /**
@@ -447,10 +657,10 @@ function nodeProfilesJson(tcpDir: string, nowMs: number): Array<{ selector: stri
 }
 
 /**
- * 传输族判定（--via）：跨机记账的 send-log 条目 target 是 `via:` 痕迹——ssh 腿
- * 写 `via:<host>`（federation.ts）、tcp 腿写 `via:tcp:<machine>`（via-tcp.ts）。
+ * 传输族判定的回退源（G0）：跨机记账的 send-log 条目 target 是 `via:` 痕迹——
+ * ssh 腿写 `via:<host>`（federation.ts）、tcp 腿写 `via:tcp:<machine>`（via-tcp.ts）。
  * 这类条目的 from/target 不是双身份键，归对靠解码其 replyRef（ref 两端即对键）。
- * 返回 pairKey → 出现过的族；无痕迹的对不在表里（--via 下不显示）。
+ * 返回 pairKey → 出现过的族；仅当该对存档 ref 不可解码时被 conversationFamily 采用。
  */
 function viaFamiliesByPair(tail: SendLogEntry[]): Map<string, Set<'tcp' | 'ssh'>> {
   const byPair = new Map<string, Set<'tcp' | 'ssh'>>();
@@ -481,10 +691,11 @@ async function conversationsView(deps: StatusDeps, json: boolean, filters: Statu
   for (const row of rows) {
     row.pair = [names.get(row.pair[0]) ?? row.pair[0], names.get(row.pair[1]) ?? row.pair[1]];
   }
-  // 过滤（名字翻译后再滤，命中的是显示名；--via 按该对本机 send-log 的跨机痕迹分族）。
+  // 过滤（名字翻译后再滤，命中的是显示名；G0 --via 按统一分类器：存档 ref 解码
+  // 为权威，不可解码回退 send-log via: 痕迹）。
   if (filters.via !== undefined) {
     const families = viaFamiliesByPair(deps.sendLogTail?.() ?? []);
-    rows = rows.filter((row) => families.get(row.endpoints.join('\n'))?.has(filters.via!));
+    rows = rows.filter((row) => conversationFamily(row.ref, families.get(row.endpoints.join('\n'))) === filters.via);
   }
   if (filters.name !== undefined) {
     const lower = filters.name.toLowerCase();
@@ -492,8 +703,8 @@ async function conversationsView(deps: StatusDeps, json: boolean, filters: Statu
   }
   if (json) {
     // Frozen JSON contract: exactly the eight summary fields (B22 added `receipt`);
-    // `endpoints` is render-only.
-    return JSON.stringify(rows, (key, value) => (key === 'endpoints' ? undefined : value));
+    // `endpoints`/`handle` are render-only (G0 柄列不进 json，完整 ref 字段不动).
+    return JSON.stringify(rows, (key, value) => (key === 'endpoints' || key === 'handle' ? undefined : value));
   }
   const now = deps.now?.() ?? Date.now();
   const lines = ['会话:'];
@@ -504,7 +715,8 @@ async function conversationsView(deps: StatusDeps, json: boolean, filters: Statu
       `  ${pairArrow(row).padEnd(30)}${formatRelativeTime(row.updatedAt, now).padEnd(12)}` +
         `turn ${String(row.turn ?? '?').padEnd(4)}${row.lastStatus ?? '未知'}` +
           `${row.lastStatus === 'queued' ? '（已交对端队列待消费——对方回信即证明已处理）' : ''}` +
-        `${row.parked > 0 ? `  滞留 ${row.parked}` : ''}${receipt}`,
+        `${row.parked > 0 ? `  滞留 ${row.parked}` : ''}${receipt}` +
+        `${row.handle === null ? '  -' : `  ${row.handle}`}`,
     );
   }
   return lines.join('\n');

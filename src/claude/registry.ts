@@ -15,6 +15,10 @@ export interface ClaudeSessionEntry {
   status: string;
   cwd?: string;
   messagingSocketPath: string;
+  /** Epoch ms of the last status report (registry file field; absent on old writers). */
+  updatedAt?: number;
+  /** Epoch ms of session start (registry file field; absent on old writers). */
+  startedAt?: number;
 }
 
 export interface ClaudeRegistryScan {
@@ -46,6 +50,9 @@ function parseEntry(text: string): ClaudeSessionEntry | undefined {
     status: typeof value.status === 'string' ? value.status : 'unknown',
     cwd: typeof value.cwd === 'string' ? value.cwd : undefined,
     messagingSocketPath: value.messagingSocketPath,
+    // G0 三段式摘要的最近会话排序源；旧文件缺字段 → undefined（排序退回 0）。
+    ...(typeof value.updatedAt === 'number' && Number.isFinite(value.updatedAt) ? { updatedAt: value.updatedAt } : {}),
+    ...(typeof value.startedAt === 'number' && Number.isFinite(value.startedAt) ? { startedAt: value.startedAt } : {}),
   };
 }
 

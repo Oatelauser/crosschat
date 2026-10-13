@@ -349,7 +349,7 @@ delivered to 云端beta@host-b (turn 1)
 🤖 beta2 收到             📨 来自另一会话的消息:
                           <cross-session-message from-name="codex/boss@win" turn="1">
                           你好 beta2，这是跨机问候
-                          回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"
+                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"
 🤖 beta2[beta2 -> boss]   收到！跨机闭环成立
 🤖 boss 收到              📨 收到！跨机闭环成立（turn 2，自动经 ssh 回到 win）
 ```
@@ -449,7 +449,7 @@ ssh <host> crosschat send --to <名字> --body - [其余参数透传]
 
 ### 4.3 输出契约
 
-- 成功：stdout 一行 `delivered|queued|parked to <名>@<host> (turn N)` + `reply-ref: mc2_…`，发起方原样透传
+- 成功：stdout 一行 `delivered|queued|parked to <名>@<host> (turn N) · 续话 cN`（cN = 发起方本机会话短柄；会话状态未接线的异常路径退回 `reply-ref: mc2_…` 行），发起方原样透传
 - 失败：stdout `CODE: message` 结构 → 发起方重抛 `MultichatError(CODE, "[via <host>] message")`；非 crosschat 输出 → `REMOTE_FAILED [via <host>] 远端异常退出(code): stderr尾400`
 - exit code：0=成功；非 0 且无 CODE 结构 = REMOTE_FAILED
 

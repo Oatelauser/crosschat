@@ -81,7 +81,7 @@ mac：unix 实现共享，理论可达、未实测。
 🤖 worker 收到            📨 来自另一会话的消息:
                           <cross-session-message from-name="codex/01a…" turn="1">
                           给我回复你好的消息
-                          回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"
+                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"
 🤖 worker[worker -> boss] 你好
 🤖 boss 收到              📨 你好（turn 2）
 ```
@@ -97,7 +97,7 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 🤖 beta2 收到             📨 来自另一会话的消息:
                           <cross-session-message from-name="codex/boss@win" turn="1">
                           你好 beta2，这是跨机问候
-                          回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"
+                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"
 🤖 beta2[beta2 -> boss]   收到！跨机闭环成立
 🤖 boss 收到              📨 收到！跨机闭环成立（turn 2，自动经 ssh 回到 win）
 ```
@@ -113,7 +113,7 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 🤖 worker2 收到            📨 来自另一会话的消息:
                           <cross-session-message from-name="boss" turn="1">
                           …跑一次构建并回报结果…
-                          回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"
+                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"
 🤖 worker2[worker2 -> boss] 构建完成，产物清单见下一条
 🤖 boss 收到               📨 构建完成，产物清单见下一条（turn 2，自动经 broker 跨机回来）
 ```
@@ -137,11 +137,11 @@ ssh 配置方向一句话：**每台机写自己的 `~/.ssh/config`，内容是"
 
 ```
 crosschat send --to <名字> --body "<正文>"          # 新消息（名字含空格加引号；未命名 codex 线程可用 id8 或完整 id 寻址，status 可见）
-crosschat send --conversation <ref> --body "<正文>" # 回复（ref 照抄收到的信封）
+crosschat send --conversation <ref|c柄> --body "<正文>" # 回复（照抄信封里的命令或 delivered 行尾的 cN）
 crosschat send --via ssh:<对端hostname> --to <名/id8> --body "…"  # 跨机发送（见 📡 通信方式）
 crosschat send --via tcp:<机器名/mid8> --to <名> --body "…" [--file <路径>]  # 跨机 tcp 直发 + 文件通道（见转发器手册）
 echo … | crosschat send --to <名字>                 # 正文走 stdin
-crosschat status [--json] [--conversations] [--claude|--codex] [--name <子串>] [--all]   # 双侧总览（可按段/名字过滤；--via tcp|ssh 配 --conversations 按传输滤）
+crosschat status [--json] [--conversations] [--stars] [--claude|--codex] [--name <子串>] [--all]   # 裸跑三段式摘要；旗标在场=明细视图（--via tcp|ssh 配 --conversations 按传输滤）
 crosschat doctor                                    # 一键环境体检（有 ❌ 时退出码 1）
 crosschat serve [--name/--port/--gen-key/--list/--remove/--connect/--detach/--stop]  # tcp 转发器：broker(--name 星名)/节点/钥匙管理（见转发器手册）
 crosschat clean [--force]                           # 清 tcp 收件/断点残留（默认懒删除规则；--force 全清）
@@ -152,9 +152,25 @@ crosschat codex [任意 codex 参数…]                  # crosschat 增强启�
 crosschat -v | --version | help                     # 版本 / 帮助
 ```
 
-发送输出三种状态：`delivered`（已投递）/ `queued`（已交对端 codex 队列待消费，轮末处理——**对方回信到来即证明已处理**，勿发消息追问）/ `parked`（对方忙，已入发件箱，看门狗自动重投；输出含队列深度与 mailbox 镜像路径）/ 错误码（见排障）。`status --conversations` 的末条状态是**本机发送账本视角**（对端回信不产生本机账目），`queued` 为终态。
+`status` 裸跑为三段式摘要（任何过滤旗标/json 在场则回到明细视图）：
 
-`status --conversations` 另看对话总览：每对端点的最近方向、相对时间、轮次、末条状态与滞留数（与 `--json` 组合输出同结构数组）。
+```
+本机会话: claude 2 · codex 3 · 滞留 1（看门狗运行中）
+  claude worker      3 分钟前
+  codex 调试线程     2 小时前
+（全量: --claude|--codex|--name）
+tcp: 共 1 星
+  cloud ✓ 可达，3 机器在线 · 客户端 online
+    hub(a1b2c3d4)、host-b(9f8e7d6c)
+（星内明细: --stars）
+ssh: 共 2 段对话
+  worker2@host-b turn 5  3 分钟前
+（明细: --conversations --via ssh）
+```
+
+发送输出三种状态：`delivered`（已投递）/ `queued`（已交对端 codex 队列待消费，轮末处理——**对方回信到来即证明已处理**，勿发消息追问）/ `parked`（对方忙，已入发件箱，看门狗自动重投；输出含队列深度与 mailbox 镜像路径）/ 错误码（见排障）。人眼输出行尾附 `· 续话 cN`——本地会话短柄，`crosschat send --conversation cN` 即接续。`status --conversations` 的末条状态是**本机发送账本视角**（对端回信不产生本机账目），`queued` 为终态。
+
+`status --conversations` 另看对话总览：每对端点的最近方向、相对时间、轮次、末条状态、滞留数与行尾续话柄（与 `--json` 组合输出同结构数组）。
 
 ## 🧯 错误码排障
 

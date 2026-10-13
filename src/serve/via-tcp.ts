@@ -13,7 +13,7 @@ import { WebSocket } from 'ws';
 import { MultichatError } from '../errors.js';
 import { encodeOrigin, originDisplayName } from '../federation.js';
 import { identityKey, resolveCallerIdentity, type CallerIdentity } from '../identity.js';
-import { recordConversation } from '../conversations.js';
+import { handleForRef, recordConversation } from '../conversations.js';
 import { decodeRef } from '../ref.js';
 import { CODEX_ENDPOINT_MAX_BODY_BYTES } from '../limits.js';
 import type { SendLogEntry } from '../send-log.js';
@@ -417,9 +417,13 @@ async function sendBody(
   const turn = remote?.turn;
   const replyRef = receipt.replyRef ?? remote?.replyRef ?? '';
   logNow({ to: remote !== undefined ? `${remote.to}@${target}` : logTo, target: `via:tcp:${target}`, status, turn, replyRef });
+  // G0 长引用退场：落定后顺带给我方分片配短柄，人眼输出行尾 `· 续话 cN`。
+  let handle: string | undefined;
   if (deps.conversationStateFile !== undefined && replyRef !== '') {
     try {
-      recordConversation(deps.conversationStateFile, decodeRef(replyRef), deps.now());
+      const ref = decodeRef(replyRef);
+      recordConversation(deps.conversationStateFile, ref, deps.now());
+      handle = handleForRef(deps.conversationStateFile, ref);
     } catch {
       // 不可解码的 ref 不能让已送达的发送失败
     }
@@ -432,13 +436,14 @@ async function sendBody(
     return [
       `已寄存给 ${displayTo}（对方忙，未送达）。队列共 ${remote?.queue ?? 1} 条，看门狗每 0.5–5 分钟自动重试，无需手动 status。`,
       `人工随时可读滞留内容: ${remote?.mailbox ?? ''}（位于 ${target}）`,
-      `reply-ref: ${replyRef}`,
+      handle === undefined ? `reply-ref: ${replyRef}` : `续话: ${handle}`,
     ].join('\n');
   }
+  const tail = handle === undefined ? `\nreply-ref: ${replyRef}` : ` · 续话 ${handle}`;
   if (status === 'queued') {
-    return `queued to ${displayTo} (turn ${turn ?? '?'}; 对方正忙，已入队，本轮结束即处理)\nreply-ref: ${replyRef}`;
+    return `queued to ${displayTo} (turn ${turn ?? '?'}; 对方正忙，已入队，本轮结束即处理)${tail}`;
   }
-  return `delivered to ${displayTo} (turn ${turn ?? '?'})\nreply-ref: ${replyRef}`;
+  return `delivered to ${displayTo} (turn ${turn ?? '?'})${tail}`;
 }
 
 function formatMiB(bytes: number): string {

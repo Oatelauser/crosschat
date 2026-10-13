@@ -6,7 +6,7 @@
 
 ```bash
 crosschat send --via tcp:host-b --to worker2 --body "跑一次构建，产物清单发回来"
-# → delivered to worker2@host-b (turn 1)
+# → delivered to worker2@host-b (turn 1) · 续话 c1
 ```
 
 ### 怎么用这篇手册
@@ -128,10 +128,16 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 ### 1.4 验证（三眼，不对回 1.2/1.3 排）
 
 ```
-> crosschat status                      # 节点机上跑：节点客户端行=本机守护，broker 行=可达性
-节点客户端: online tcp:yang (since 10-11 10:30)
-broker: 可达，2 机器在线
-在线机器: yang (ec542c2c)、host-b (9f8e7d6c)
+> crosschat status                      # 节点机上跑：三段式摘要——tcp 段看星可达与守护态
+本机会话: claude 1 · codex 0
+  claude worker      3 分钟前
+（全量: --claude|--codex|--name）
+tcp: 共 1 星
+  cloud ✓ 可达，2 机器在线 · 客户端 online
+    yang(ec542c2c)、host-b(9f8e7d6c)
+（星内明细: --stars）
+ssh: 无
+（明细: --conversations --via ssh）
 
 > crosschat serve --list                # broker 机上跑：注册表全貌，mid8 是寻址权威
 label     name              mid8      added-at
@@ -139,7 +145,7 @@ self      yang              ec542c2c  2026-10-11T02:12:00.059Z
 node-1    host-b            9f8e7d6c  2026-10-11T02:31:10.402Z
 
 > crosschat send --via tcp:host-b --to worker2 --body "联调测试"   # 真发一条，最终裁决
-delivered to worker2@9f8e7d6c (turn 1)
+delivered to worker2@9f8e7d6c (turn 1) · 续话 c3
 ```
 
 ---
@@ -157,7 +163,7 @@ delivered to worker2@9f8e7d6c (turn 1)
 🤖 worker2 收到            📨 来自另一会话的消息:
                           <cross-session-message from-name="boss" turn="1">
                           …跑一次构建并回报结果…
-                          回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"
+                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"
 🤖 worker2[worker2 -> boss] 构建完成，产物清单见下一条
 🤖 boss 收到               📨 构建完成，产物清单见下一条（turn 2，自动经 broker 跨机回到 A 机）
 ```
@@ -221,22 +227,21 @@ crosschat send --via tcp:host-b --to worker2 --body "…"
 A 机发起：
 ```
 > crosschat send --via tcp:9f8e7d6c --to worker2 --body "跑一次构建，产物清单发回来"
-delivered to worker2@9f8e7d6c (turn 1)
-reply-ref: mc2_BPXvvaoBZUeagLVplzA4leUBoRbla6N3A48OwoC8hZFdCKgNWGngDu5eCA
+delivered to worker2@9f8e7d6c (turn 1) · 续话 c3
 ```
 B 机会话里自动出现信封（无需任何题词）：
 ```
 📨 来自另一会话的消息:
 <cross-session-message from-name="boss" turn="1">
-<crosschat-reply-hint reply-as="worker2">回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"</crosschat-reply-hint>
+<crosschat-reply-hint reply-as="worker2">回复请运行: crosschat send --conversation c5 --body "<你的回复>"</crosschat-reply-hint>
 …
 跑一次构建，产物清单发回来
 </cross-session-message>
 ```
 B 机照抄整条命令、只换 `<你的回复>`（不截断不改写），回信自动经 broker 回到 A 机：
 ```
-> crosschat send --via tcp:ec542c2c --conversation mc2_… --body "构建完成，清单见下一条"
-delivered to boss@ec542c2c (turn 2)
+> crosschat send --via tcp:ec542c2c --conversation c5 --body "构建完成，清单见下一条"
+delivered to boss@ec542c2c (turn 2) · 续话 c2
 ```
 
 ### 3.5 多星成员（原单星边界，已解除）

@@ -68,13 +68,14 @@ function convDeps(
 }
 
 describe('status 两行改名 + 别名截短', () => {
+  // G0：裸跑已是三段式摘要——tcp 明细行用任一过滤旗标回到明细视图来测。
   it('node line prefixes 节点客户端 and truncates a >16 char alias to <first14>…', async () => {
     const dir = mkdtempSync(join(root, 't-'));
     writeFileSync(
       join(dir, 'status-node.json'),
       JSON.stringify({ state: 'online', brokerAlias: 'iv-yefd46fldsvr6olkju4j', since: '2026-10-10T08:00:00.000Z', lastUpdated: iso(-5_000) }),
     );
-    const out = await runStatus(mainDeps(dir), false);
+    const out = await runStatus(mainDeps(dir), false, false, { section: 'claude' });
     expect(out).toContain('节点客户端: online tcp:iv-yefd46f… (since ');
     expect(out).not.toContain('转发器');
   });
@@ -85,7 +86,7 @@ describe('status 两行改名 + 别名截短', () => {
       join(dir, 'status-node.json'),
       JSON.stringify({ state: 'online', brokerAlias: 'short-alias', since: '2026-10-10T08:00:00.000Z', lastUpdated: iso(-5_000) }),
     );
-    const out = await runStatus(mainDeps(dir), false);
+    const out = await runStatus(mainDeps(dir), false, false, { section: 'claude' });
     expect(out).toContain('节点客户端: online tcp:short-alias (since ');
   });
 
@@ -98,7 +99,7 @@ describe('status 两行改名 + 别名截短', () => {
     ] as const) {
       writeFileSync(join(dir, file), JSON.stringify({ state: 'online', brokerAlias: alias, since: '2026-10-10T08:00:00.000Z', lastUpdated: iso(-5_000) }));
     }
-    const out = await runStatus(mainDeps(dir), false);
+    const out = await runStatus(mainDeps(dir), false, false, { section: 'claude' });
     expect(out).toContain('节点客户端[默认]: online tcp:br1 (since ');
     expect(out).toContain('节点客户端[cloud]: online tcp:br-cloud (since ');
   });
@@ -110,11 +111,11 @@ describe('status 两行改名 + 别名截短', () => {
       { name: 'hub', mid8: 'a1b2c3d4', online: true },
       { name: 'beta', mid8: 'bbbb0000', online: false },
     ];
-    const out = await runStatus(deps, false);
+    const out = await runStatus(deps, false, false, { section: 'claude' });
     expect(out).toContain('broker: 可达，1 机器在线');
     expect(out).toContain('在线机器: hub (a1b2c3d4)');
     deps.roster = async () => undefined;
-    expect(await runStatus(deps, false)).toContain('broker: 不可达');
+    expect(await runStatus(deps, false, false, { section: 'claude' })).toContain('broker: 不可达');
   });
 });
 
@@ -176,11 +177,13 @@ describe('status --name 过滤', () => {
 
 describe('status --conversations --via 传输族', () => {
   const claudeA = { p: 'claude', id: 'sc-1' } as const;
-  const codexB = { p: 'codex', id: 't-9' } as const;
+  const codexB = { p: 'codex', id: 't-9', m: 'cloud-host' } as const;
   const localC = { p: 'codex', id: 't-2' } as const;
   const keyRemote = pairKeyOf(claudeA, codexB);
   const keyLocal = pairKeyOf(claudeA, localC);
+  // G0：分类器以存档 ref 解码为权威——远端端点带 m（ssh）/带 starId（tcp）。
   const remoteRef = encodeRef(newConversationRef(claudeA, codexB));
+  const tcpRef = encodeRef({ ...newConversationRef(claudeA, { p: 'codex', id: 't-9' }), starId: 'aaaabbbbcccc' });
   const localRef = encodeRef(newConversationRef(claudeA, localC));
   const deps = () =>
     convDeps(
@@ -189,7 +192,7 @@ describe('status --conversations --via 传输族', () => {
         [keyLocal]: { ref: localRef, updatedAt: NOW - 120_000 },
       },
       [
-        // ssh 痕迹：target via:<host>（from+target 非双身份键，靠 replyRef 归对）
+        // ssh 痕迹（G0 前的判定源，现在只作 ref 不可解码时的回退）
         entry({ from: 'claude:sc-1', to: 'peer@cloud', target: 'via:cloud', turn: 2, replyRef: remoteRef }),
         // 本机对话：身份键 target，无跨机痕迹
         entry({ ts: '2026-10-12T09:30:00.000Z', from: 'claude:sc-1', to: 'local-peer', target: 'codex:t-2', turn: 3, replyRef: localRef }),
@@ -203,10 +206,10 @@ describe('status --conversations --via 传输族', () => {
     expect(out.split('\n')).toHaveLength(2);
   });
 
-  it('--via tcp families from via:tcp: targets', async () => {
+  it('--via tcp families from the ref starId (ref 解码权威)', async () => {
     const tcpDeps = convDeps(
-      { [keyRemote]: { ref: remoteRef, updatedAt: NOW - 60_000 } },
-      [entry({ from: 'claude:sc-1', to: 'peer@star', target: 'via:tcp:star-host', turn: 1, replyRef: remoteRef })],
+      { [keyRemote]: { ref: tcpRef, updatedAt: NOW - 60_000 } },
+      [entry({ from: 'claude:sc-1', to: 'peer@star', target: 'via:tcp:star-host', turn: 1, replyRef: tcpRef })],
     );
     const out = await runStatus(tcpDeps, false, true, { via: 'tcp' });
     expect(out).toContain('codex/t-9');
@@ -242,10 +245,12 @@ describe('status F1 过滤抑制：零行段整段沉默', () => {
     deps.listCodexThreads = async () => {
       throw new MultichatError('CODEX_PROXY_SPAWN_FAILED', 'spawn 失败');
     };
-    // 无过滤：横幅照旧（零回归锚点）
+    // G0 裸跑=三段式摘要：codex 不可用落进首行计数位；明细横幅在旗标视图逐字节照旧
     const bare = await runStatus(deps, false);
-    expect(bare).toContain('codex:');
-    expect(bare).toContain('unavailable (CODEX_PROXY_SPAWN_FAILED: spawn 失败)');
+    expect(bare).toContain('claude 2 · codex unavailable');
+    const detailed = await runStatus(deps, false, false, { section: 'codex' });
+    expect(detailed).toContain('codex:');
+    expect(detailed).toContain('unavailable (CODEX_PROXY_SPAWN_FAILED: spawn 失败)');
     // --name 只命中 claude → codex 段（含横幅）整段沉默
     const filtered = await runStatus(deps, false, false, { name: 'map' });
     expect(filtered).toContain('claude:');
@@ -279,14 +284,17 @@ describe('status F1 过滤抑制：零行段整段沉默', () => {
     expect(parsed.codex).toEqual({ error: 'CODEX_PROXY_SPAWN_FAILED: spawn 失败' });
   });
 
-  it('裸输出零行段保持 (none) 占位（无过滤不沉默）', async () => {
+  it('G0 裸跑=三段式摘要：零会话时计数为 0，明细 (none) 占位在旗标视图保持', async () => {
     const deps: StatusDeps = {
       listClaudeSessions: () => ({ sessions: [], malformed: 0 }),
       listCodexThreads: async () => [],
     };
     const out = await runStatus(deps, false);
-    expect(out).toContain('claude:\n  (none)');
-    expect(out).toContain('codex:\n  (none)');
+    expect(out).toContain('本机会话: claude 0 · codex 0');
+    expect(out).toContain('（全量: --claude|--codex|--name）');
+    expect(out).toContain('ssh: 无');
+    const detailed = await runStatus(deps, false, false, { section: 'claude' });
+    expect(detailed).toContain('claude:\n  (none)');
   });
 });
 

@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { hostname as osHostname } from 'node:os';
 import { Buffer } from 'node:buffer';
 import { MultichatError } from './errors.js';
-import { recordConversation } from './conversations.js';
+import { handleForRef, recordConversation } from './conversations.js';
 import { decodeRef } from './ref.js';
 import type { SendLogEntry } from './send-log.js';
 import {
@@ -277,9 +277,13 @@ export async function runViaSend(args: SendArgs, body: string, deps: SendDeps): 
   });
   // Own-side pair continuity: the remote issued the ref, recording it locally
   // makes the cross-machine pair show up in `status --conversations` (patch B).
+  // G0 长引用退场：落定后顺带给我方分片配短柄，人眼输出行尾 `· 续话 cN`。
+  let handle: string | undefined;
   if (deps.conversationStateFile !== undefined) {
     try {
-      recordConversation(deps.conversationStateFile, decodeRef(receipt.replyRef), deps.now());
+      const ref = decodeRef(receipt.replyRef);
+      recordConversation(deps.conversationStateFile, ref, deps.now());
+      handle = handleForRef(deps.conversationStateFile, ref);
     } catch {
       // a non-decodable ref must never fail the already-delivered send
     }
@@ -291,13 +295,14 @@ export async function runViaSend(args: SendArgs, body: string, deps: SendDeps): 
     return [
       `已寄存给 ${displayTo}（对方忙，未送达）。队列共 ${receipt.queue ?? 1} 条，看门狗每 0.5–5 分钟自动重试，无需手动 status。`,
       `人工随时可读滞留内容: ${receipt.mailbox ?? ''}（位于 ${host}）`,
-      `reply-ref: ${receipt.replyRef}`,
+      handle === undefined ? `reply-ref: ${receipt.replyRef}` : `续话: ${handle}`,
     ].join('\n');
   }
+  const tail = handle === undefined ? `\nreply-ref: ${receipt.replyRef}` : ` · 续话 ${handle}`;
   if (receipt.status === 'queued') {
-    return `queued to ${displayTo} (turn ${receipt.turn}; 对方正忙，已入队，本轮结束即处理)\nreply-ref: ${receipt.replyRef}`;
+    return `queued to ${displayTo} (turn ${receipt.turn}; 对方正忙，已入队，本轮结束即处理)${tail}`;
   }
-  return `delivered to ${displayTo} (turn ${receipt.turn})\nreply-ref: ${receipt.replyRef}`;
+  return `delivered to ${displayTo} (turn ${receipt.turn})${tail}`;
 }
 
 /** 发起方展示名（B2 起与 via-tcp 共用——tcp/ssh 记账同源）。 */

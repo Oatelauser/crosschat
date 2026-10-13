@@ -16,7 +16,7 @@ import { runClaudeWrapper } from './commands/claude-wrapper.js';
 import { runCodexWrapper } from './commands/codex-wrapper.js';
 import { defaultOutboxDir, drain } from './outbox.js';
 import { legacyStateRoots, stateRoot } from './state-root.js';
-import { runWatchdog, spawnWatchdog as ensureWatchdog } from './watchdog.js';
+import { runWatchdog, spawnWatchdog as ensureWatchdog, watchdogStatus } from './watchdog.js';
 import { appendSendLog, confirmInRollout, defaultSendLogFile, readSendLogTail } from './send-log.js';
 import { defaultConversationsFile } from './conversations.js';
 import { defaultSshExec } from './federation.js';
@@ -77,6 +77,11 @@ commands:
                                 sessions on a remote machine (same
                                 filters; ssh peers: ssh <host>
                                 crosschat status)
+                              --stars               tcp star detail: per-star
+                                reachability, daemon state, full machine
+                                table (bare run shows the three-section
+                                summary; any filter flag falls back to
+                                the detail view)
                               --all                 also list unnamed sessions
                                 (hidden by default in the main view)
   doctor                    environment health check (exits 1 on any ❌)
@@ -177,21 +182,25 @@ export function parseSendArgs(argv: readonly string[]): SendArgs {
 }
 
 /**
- * status accepts --json/--conversations/--claude/--codex/--name <v>/--via <v>/--all
+ * status accepts --json/--conversations/--stars/--claude/--codex/--name <v>/--via <v>/--all
  * (flags at most once). Validation: --claude/--codex are mutually exclusive and
  * main-view only; bare --via (tcp|ssh) only combines with --conversations;
- * --via tcp:<机器> (E1) only combines with the main view (remote enumeration).
+ * --via tcp:<机器> (E1) only combines with the main view (remote enumeration);
+ * --stars (G0) only combines with --json (its own grouped view).
  * `filters` is absent when no filter flag was given.
  */
 export function parseStatusArgs(argv: readonly string[]): {
   json: boolean;
   conversations: boolean;
+  /** G0：--stars tcp 星内明细视图（可与 --json 组合；未给时键缺席）。 */
+  stars?: true;
   filters?: StatusFilters;
   /** E1：`--via tcp:<机器>` 远程枚举目标（原样透传，多星限定器在内）。 */
   viaTarget?: string;
 } {
   let json = false;
   let conversations = false;
+  let stars = false;
   let section: 'claude' | 'codex' | undefined;
   let name: string | undefined;
   let via: 'tcp' | 'ssh' | undefined;
@@ -203,6 +212,7 @@ export function parseStatusArgs(argv: readonly string[]): {
     const inline = eq > 0 ? token.slice(eq + 1) : undefined;
     if (token === '--json' && !json) json = true;
     else if (token === '--conversations' && !conversations) conversations = true;
+    else if (token === '--stars' && !stars) stars = true;
     else if (token === '--claude' && section === undefined) section = 'claude';
     else if (token === '--codex' && section === undefined) section = 'codex';
     else if (token === '--all' && !all) all = true;
@@ -221,7 +231,7 @@ export function parseStatusArgs(argv: readonly string[]): {
     } else {
       throw new MultichatError(
         'USAGE',
-        `status takes only --json/--conversations/--claude/--codex/--name/--via/--all; got: ${argv.join(' ')}`,
+        `status takes only --json/--conversations/--stars/--claude/--codex/--name/--via/--all; got: ${argv.join(' ')}`,
       );
     }
   }
@@ -237,10 +247,14 @@ export function parseStatusArgs(argv: readonly string[]): {
   if (viaTarget !== undefined && conversations) {
     throw new MultichatError('USAGE', 'status: --via tcp:<机器> 是主视图远程枚举，不与 --conversations 组合');
   }
+  if (stars && (conversations || section !== undefined || name !== undefined || via !== undefined || viaTarget !== undefined || all)) {
+    throw new MultichatError('USAGE', 'status: --stars 是独立视图，仅可与 --json 组合');
+  }
   const any = section !== undefined || name !== undefined || via !== undefined || all;
   return {
     json,
     conversations,
+    ...(stars ? { stars: true } : {}),
     ...(any
       ? {
           filters: {
@@ -408,6 +422,8 @@ function realStatusDeps(): StatusDeps {
     // E1：status --via tcp:<机器> 的远程枚举腿（未入网时 runViaTcpStatus 自带教学）。
     fetchRemoteStatus: (via) =>
       runViaTcpStatus(via, { env: process.env, tcpBaseDir: join(homedir(), '.crosschat'), machineId: () => machineId() }),
+    // G0 三段式摘要的滞留子句：发件箱看门狗心跳。
+    watchdogRunning: () => watchdogStatus(defaultOutboxDir()).running,
   };
 }
 
@@ -516,9 +532,9 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     }
     try {
-      const { json, conversations, filters, viaTarget } = parseStatusArgs(rest);
+      const { json, conversations, stars, filters, viaTarget } = parseStatusArgs(rest);
       await drainAtEntry();
-      const output = await runStatus(realStatusDeps(), json, conversations, filters, viaTarget);
+      const output = await runStatus(realStatusDeps(), json, conversations, filters, viaTarget, stars);
       process.stdout.write(`${output}\n`);
       return 0;
     } catch (err) {

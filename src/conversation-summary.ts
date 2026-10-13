@@ -1,5 +1,6 @@
 import { defaultConversationsFile, loadAllPairs, pairKeyOfEntry } from './conversations.js';
 import { defaultOutboxDir, outboxPairCounts } from './outbox.js';
+import { decodeRef } from './ref.js';
 import { type SendLogEntry, defaultSendLogFile, readSendLogTail } from './send-log.js';
 
 /**
@@ -40,6 +41,11 @@ export interface ConversationSummary {
    * the latest entry is not a delivered codex delivery (claude has no rollout).
    */
   receipt: SendLogEntry['receipt'] | null;
+  /**
+   * G0 柄列：该对分片最新柄（绑定当前 ref 同 nonce 的 c<数字>）；null = 无柄
+   * （显示 -）。Render support like `endpoints` — not part of the JSON contract.
+   */
+  handle: string | null;
 }
 
 export interface ConversationSummaryDeps {
@@ -68,7 +74,7 @@ export function conversationSummaries(
 
 /** Pure three-source merge; rows ordered by updatedAt (newest first). */
 export function aggregateSummaries(
-  pairs: Record<string, { ref: string; updatedAt: number }>,
+  pairs: Record<string, { ref: string; updatedAt: number; handles?: Record<string, string> }>,
   tail: SendLogEntry[],
   parked: Map<string, number>,
 ): ConversationSummary[] {
@@ -82,7 +88,7 @@ export function aggregateSummaries(
   }
   return Object.entries(pairs)
     .sort((a, b) => b[1].updatedAt - a[1].updatedAt)
-    .map(([key, { ref, updatedAt }]) => {
+    .map(([key, { ref, updatedAt, handles }]) => {
       const entries = byPair.get(key) ?? [];
       const latest = latestByTs(entries);
       const [a = '', b = ''] = key.split('\n');
@@ -96,8 +102,28 @@ export function aggregateSummaries(
         lastFrom: latest?.from ?? null,
         parked: parked.get(key) ?? 0,
         receipt: latest?.status === 'delivered' ? (latest.receipt ?? null) : null,
+        handle: handleForRecord(ref, handles),
       };
     });
+}
+
+/** 该对分片最新柄：handles 里绑定当前 ref 同 nonce 的 c<数字>；ref 不可解码/无匹配 → null。 */
+function handleForRecord(ref: string, handles: Record<string, string> | undefined): string | null {
+  if (handles === undefined) return null;
+  let nonce: string;
+  try {
+    nonce = decodeRef(ref).n;
+  } catch {
+    return null;
+  }
+  for (const [handle, value] of Object.entries(handles)) {
+    try {
+      if (decodeRef(value).n === nonce) return handle;
+    } catch {
+      // undecodable leftover: ignored
+    }
+  }
+  return null;
 }
 
 /** ts-newest entry (not the physical last line); a tie keeps the later line. */

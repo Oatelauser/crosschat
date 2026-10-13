@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import process from 'node:process';
 import { afterAll, describe, expect, it } from 'vitest';
 import { MAX_BODY_BYTES, runSend, type SendArgs, type SendDeps } from '../src/commands/send.js';
@@ -98,6 +98,18 @@ async function expectCode(promise: Promise<unknown>, code: string): Promise<Mult
 }
 
 const REF_RE = /mc[12]_[A-Za-z0-9_-]+/;
+
+// G0：send 输出只带柄，完整 ref 从会话分片取（单键对形状）
+const shardRef = (state: string): string => {
+  // 分片住 <state 同级>/conversations/ 目录（B20 布局），取最新分片的 ref
+  const dir = join(dirname(state), 'conversations');
+  const newest = readdirSync(dir)
+    .filter((n) => n.endsWith('.json'))
+    .map((n) => [n, statSync(join(dir, n)).mtimeMs] as const)
+    .sort((a, b) => b[1] - a[1])[0]![0];
+  return (JSON.parse(readFileSync(join(dir, newest), 'utf8')) as { ref: string }).ref;
+};
+
 
 describe('runSend happy paths', () => {
   it('delivers to a claude session by name and returns a usable reply ref', async () => {
@@ -487,7 +499,7 @@ describe('runSend --conversation stale-ref guard (B22)', () => {
     // claude alpha opens: turn 1, shard line c=1, envelope carries that ref.
     const first = await runSend({ to: 'workteam', bodyArg: 'one' }, base);
     expect(first).toContain('(turn 1)');
-    const baseRef = first.match(REF_RE)![0];
+    const baseRef = shardRef(state);
     // codex replies via the copied ref: turn 2, shard advances to c=2.
     const reply = await runSend(
       { conversation: baseRef, bodyArg: 'two' },
@@ -497,7 +509,7 @@ describe('runSend --conversation stale-ref guard (B22)', () => {
     // claude alpha answers from the SAME stale baseRef: turn 3 (was 2 before B22 — collision).
     const late = await runSend({ conversation: baseRef, bodyArg: 'three' }, base);
     expect(late).toContain('(turn 3)');
-    const lateRef = decodeRef(late.match(REF_RE)![0]);
+    const lateRef = decodeRef(shardRef(state));
     expect(lateRef.c).toBe(3);
   });
 
@@ -832,9 +844,9 @@ describe('runSend conversation short handles (F2)', () => {
 
   it('a full mc2_ ref still routes directly (双形态永续)', async () => {
     const deps = { ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }), conversationStateFile: freshState() };
-    const first = await runSend({ to: 'workteam', bodyArg: 'one' }, deps);
+    await runSend({ to: 'workteam', bodyArg: 'one' }, deps);
     const reply = await runSend(
-      { conversation: first.match(REF_RE)![0]!, bodyArg: 'two' },
+      { conversation: shardRef(deps.conversationStateFile!), bodyArg: 'two' },
       { ...deps, env: { CODEX_THREAD_ID: 'team1111-aaaa' } },
     );
     expect(reply).toContain('(turn 2)');

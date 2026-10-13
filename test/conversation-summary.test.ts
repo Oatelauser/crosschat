@@ -126,6 +126,7 @@ describe('aggregateSummaries', () => {
         lastFrom: null,
         parked: 0,
         receipt: null,
+        handle: null,
       },
     ]);
   });
@@ -242,6 +243,7 @@ describe('conversationSummaries', () => {
         lastFrom: 'claude:cs-1',
         parked: 2,
         receipt: null, // delivered but never probed (no receipt on the entry)
+        handle: null,
       },
     ]);
   });

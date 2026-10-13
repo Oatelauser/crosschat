@@ -117,6 +117,15 @@ describe('parseStatusArgs', () => {
     expectUsage(() => parseStatusArgs(['--via']), 'requires a value');
     expectUsage(() => parseStatusArgs(['--name']), 'requires a value');
   });
+
+  it('G0 --stars：独立视图，仅可与 --json 组合', () => {
+    expect(parseStatusArgs(['--stars'])).toEqual({ json: false, conversations: false, stars: true });
+    expect(parseStatusArgs(['--stars', '--json'])).toEqual({ json: true, conversations: false, stars: true });
+    expectUsage(() => parseStatusArgs(['--stars', '--conversations']), '--stars 是独立视图');
+    expectUsage(() => parseStatusArgs(['--stars', '--claude']), '--stars 是独立视图');
+    expectUsage(() => parseStatusArgs(['--stars', '--all']), '--stars 是独立视图');
+    expectUsage(() => parseStatusArgs(['--stars', '--stars']), 'only --json');
+  });
 });
 
 describe('drainOutboxAtEntry', () => {

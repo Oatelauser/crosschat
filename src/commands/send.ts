@@ -453,7 +453,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     }
     logNow({ to: toName, target: `claude:${target.id}`, status: 'delivered', turn, replyRef });
     if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now());
-    return finish(formatDelivery(args.json === true, toName, turn, replyRef, false));
+    return finish(formatDelivery(args.json === true, toName, turn, replyRef, false, handle));
   }
 
   // Codex delivers by threadId; a missing thread surfaces as a codex adapter error.
@@ -479,7 +479,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   const queuedBefore = outboxCount(deps.outboxDir, target.id);
   if (queuedBefore > 0) {
     const queue = parkNow();
-    return finish(formatParked(args.json === true, toName, turn, replyRef, queue, mailboxPath));
+    return finish(formatParked(args.json === true, toName, turn, replyRef, queue, mailboxPath, handle));
   }
   try {
     const delivered = await deps.deliverCodex(target.id, content);
@@ -488,7 +488,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     // structurally impossible within the probe budget, so do not even look.
     const receipt = queued ? undefined : await deps.confirmReceipt?.(target.id, replyRef);
     logNow({ to: toName, target: `codex:${target.id}`, status: queued ? 'queued' : 'delivered', turn, replyRef, receipt });
-    const out = formatDelivery(args.json === true, toName, turn, replyRef, queued);
+    const out = formatDelivery(args.json === true, toName, turn, replyRef, queued, handle);
     if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now());
     if (queued) {
       // B3.1：注记只进人类可读输出——json 模式必须保持纯 JSON（tcp/ssh 接收腿
@@ -509,7 +509,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
       const queue = parkNow();
       logNow({ to: toName, target: `codex:${target.id}`, status: 'parked', turn, replyRef });
       if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now());
-      return finish(formatParked(args.json === true, toName, turn, replyRef, queue, mailboxPath));
+      return finish(formatParked(args.json === true, toName, turn, replyRef, queue, mailboxPath, handle));
     }
     logNow({ to: toName, target: `codex:${target.id}`, status: 'failed', code: errorCode(err), turn, replyRef });
     throw err;
@@ -568,14 +568,19 @@ function shortId(prefix: string, id: string): string {
   return `${prefix}/${id.slice(0, 8)}`;
 }
 
-function formatDelivery(json: boolean, toName: string, turn: number, replyRef: string, queued: boolean): string {
+/**
+ * G0 长引用退场：人眼输出行尾附 ` · 续话 cN`（本地短柄）；柄缺席（会话状态未
+ * 接线的异常路径）回退完整 reply-ref 行，保底续话不断。--json 的 replyRef 恒完整 ref。
+ */
+function formatDelivery(json: boolean, toName: string, turn: number, replyRef: string, queued: boolean, handle?: string): string {
   if (json) {
     return JSON.stringify({ status: 'delivered', to: toName, turn, replyRef, queued });
   }
+  const tail = handle === undefined ? `\nreply-ref: ${replyRef}` : ` · 续话 ${handle}`;
   if (queued) {
-    return `queued to ${toName} (turn ${turn}; 对方正忙，已入队，本轮结束即处理)\nreply-ref: ${replyRef}`;
+    return `queued to ${toName} (turn ${turn}; 对方正忙，已入队，本轮结束即处理)${tail}`;
   }
-  return `delivered to ${toName} (turn ${turn})\nreply-ref: ${replyRef}`;
+  return `delivered to ${toName} (turn ${turn})${tail}`;
 }
 
 function formatParked(
@@ -585,6 +590,7 @@ function formatParked(
   replyRef: string,
   queue: number,
   mailboxPath: string,
+  handle?: string,
 ): string {
   if (json) {
     return JSON.stringify({ status: 'parked', to: toName, turn, replyRef, queue, mailbox: mailboxPath });
@@ -592,6 +598,6 @@ function formatParked(
   return [
     `已寄存给 ${toName}（对方忙，未送达）。队列共 ${queue} 条，看门狗每 0.5–5 分钟自动重试，无需手动 status。`,
     `人工随时可读滞留内容: ${mailboxPath}`,
-    `reply-ref: ${replyRef}`,
+    handle === undefined ? `reply-ref: ${replyRef}` : `续话: ${handle}`,
   ].join('\n');
 }

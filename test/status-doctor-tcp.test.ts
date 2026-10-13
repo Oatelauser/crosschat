@@ -31,7 +31,7 @@ function writeBrokerStatus(dir: string, status: Record<string, unknown>): void {
 describe('status 节点客户端/broker 区块', () => {
   it('shows 未运行 when no status files exist', async () => {
     const dir = mkdtempSync(join(root, 't-'));
-    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
+    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false, false, { section: 'claude' });
     expect(out.split('\n').at(-1)).toBe('节点客户端: 未运行');
   });
 
@@ -43,7 +43,7 @@ describe('status 节点客户端/broker 区块', () => {
       since: '2026-10-10T08:00:00.000Z',
       lastUpdated: iso(-5_000),
     });
-    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
+    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false, false, { section: 'claude' });
     expect(out).toContain('节点客户端: online tcp:br (since ');
   });
 
@@ -56,7 +56,7 @@ describe('status 节点客户端/broker 区块', () => {
       lastUpdated: iso(-1_000),
       nextAttemptAt: iso(30_000),
     });
-    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
+    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false, false, { section: 'claude' });
     expect(out).toMatch(/节点客户端: 重连等待中，下次尝试 \d{2}:\d{2}:\d{2}/);
   });
 
@@ -68,7 +68,7 @@ describe('status 节点客户端/broker 区块', () => {
       since: iso(-600_000),
       lastUpdated: iso(-120_000),
     });
-    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
+    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false, false, { section: 'claude' });
     expect(out).toContain('节点客户端: 未运行');
   });
 
@@ -80,7 +80,7 @@ describe('status 节点客户端/broker 区块', () => {
       lastUpdated: iso(-3_000),
       onlineNodes: ['box-a', 'box-b'],
     });
-    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
+    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false, false, { section: 'claude' });
     expect(out).toContain('节点客户端: 未运行'); // 节点腿没有
     expect(out).toContain('broker: 服务端端口 7260，2 节点在线');
     expect(out).toContain('在线机器: box-a、box-b');
@@ -125,7 +125,7 @@ describe('status 节点客户端/broker 区块', () => {
       lastUpdated: iso(-1_000),
       nextAttemptAt: iso(30_000),
     }));
-    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
+    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false, false, { section: 'claude' });
     const lines = out.split('\n');
     expect(lines.some((l) => l.startsWith('节点客户端[默认]: online tcp:br1 (since '))).toBe(true);
     expect(lines.some((l) => l.startsWith('节点客户端[work]: 重连等待中，下次尝试 '))).toBe(true);
@@ -146,7 +146,7 @@ describe('status 节点客户端/broker 区块', () => {
       since: iso(-600_000),
       lastUpdated: iso(-600_000),
     }));
-    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
+    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false, false, { section: 'claude' });
     expect(out).toContain('节点客户端[work]: 未运行');
     expect(out).not.toContain('节点客户端: 未运行');
   });
@@ -198,7 +198,7 @@ describe('status 节点客户端/broker 区块', () => {
       }
       return undefined; // br2 不可达
     };
-    const out = await runStatus(deps, false);
+    const out = await runStatus(deps, false, false, { section: 'claude' });
     expect(seen).toEqual(['br1', 'br2']); // 逐条目探
     expect(out).toContain('broker: br1 可达，1 机器在线');
     expect(out).toContain('在线机器[br1]: hub (a1b2c3d4)');
@@ -372,14 +372,14 @@ describe('E0 broker status 行化妆（星名）', () => {
       lastUpdated: iso(-3_000),
       onlineNodes: ['box-a'],
     });
-    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
+    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false, false, { section: 'claude' });
     expect(out).toContain('broker: 服务端 cloud 端口 7260，1 节点在线');
   });
 
   it('keeps the pre-E0 line shape when the status file has no name', async () => {
     const dir = mkdtempSync(join(root, 't-'));
     writeBrokerStatus(join(dir, 'tcp'), { state: 'running', port: 7260, lastUpdated: iso(-3_000) });
-    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false);
+    const out = await runStatus(baseStatusDeps(join(dir, 'tcp')), false, false, { section: 'claude' });
     expect(out).toContain('broker: 服务端端口 7260，0 节点在线');
   });
 });
