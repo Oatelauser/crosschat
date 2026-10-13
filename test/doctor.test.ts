@@ -41,8 +41,8 @@ describe('runDoctor', () => {
     expect(report.output).toContain('可路由会话 1 个');
     expect(report.output).toContain('✅ codex CLI 0.160.0');
     expect(report.output).toContain('✅ codex daemon 0.160.0');
-    expect(report.output).toContain('claude 侧 skill 与仓库版本一致');
-    expect(report.output).toContain('codex 侧 skill 与仓库版本一致');
+    expect(report.output).toContain('claude 侧 skill 与安装源一致');
+    expect(report.output).toContain('codex 侧 skill 与安装源一致');
     expect(report.output).toContain('✅ 无双身份残留');
     expect(report.output).toContain('发件箱空');
     expect(report.output).toContain('结论:');
@@ -124,7 +124,8 @@ describe('runDoctor', () => {
     expect(report.output).toContain('⚠️ codex CLI 未安装');
   });
 
-  it('fails with the daemon-start guidance when the daemon is not running', () => {
+  // 015 刀三：装了 codex 但 daemon 没跑是"要用再启"的教学提示（⚠️），不是故障（❌）
+  it('warns (not fails) with the daemon-start guidance when the daemon is not running', () => {
     const report = runDoctor(
       makeDeps({
         run: (_bin, args) =>
@@ -133,8 +134,8 @@ describe('runDoctor', () => {
             : { status: 1, stdout: 'daemon not running\n' },
       }),
     );
-    expect(report.failed).toBe(true);
-    expect(report.output).toContain('❌ codex daemon 未运行；先执行: codex app-server daemon start');
+    expect(report.failed).toBe(false);
+    expect(report.output).toContain('⚠️ codex daemon 未运行；要用 codex 通道时先执行: codex app-server daemon start');
   });
 
   it('warns on missing / mismatched skills and passes on repo-identical ones', () => {
@@ -143,10 +144,10 @@ describe('runDoctor', () => {
     expect(missing.output.match(/⚠️ .* skill 未安装/g)).toHaveLength(2);
     expect(missing.output).toContain('crosschat install-skills');
     const stale = runDoctor(makeDeps({ readFile: () => 'old skill body' }));
-    expect(stale.output).toContain('claude 侧 skill 与仓库版本不一致');
-    expect(stale.output).toContain('codex 侧 skill 与仓库版本不一致');
+    expect(stale.output).toContain('claude 侧 skill 与安装源不一致');
+    expect(stale.output).toContain('codex 侧 skill 与安装源不一致');
     const noRepo = runDoctor(makeDeps({ repoSkillContent: () => undefined }));
-    expect(noRepo.output).toContain('claude 侧 skill 已安装（仓库 SKILL.md 未定位到，跳过版本比对）');
+    expect(noRepo.output).toContain('claude 侧 skill 已安装（安装源 SKILL.md 未定位到，跳过版本比对）');
   });
 
   it('warns on dual caller-identity residue with the env -u remedy', () => {

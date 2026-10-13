@@ -10,7 +10,7 @@ import { resolveCodexExecutable } from '../codex/transport.js';
 import { defaultOutboxDir, mailboxFileFor, outboxSummary } from '../outbox.js';
 import { watchdogStatus } from '../watchdog.js';
 import { readNodeConfig, type BrokerEntry } from '../serve/node.js';
-import { listNodeStatusFiles, nodeStatusSelector } from './status.js';
+import { listNodeStatusFiles, nodeStatusSelector, TCP_STATUS_FRESH_MS } from './status.js';
 
 /**
  * `crosschat doctor` (B11): one-shot environment health check. Every probe is
@@ -37,7 +37,7 @@ export interface DoctorDeps {
   watchdogRunning?(): { running: boolean; pid?: number };
   /** Clock for parked-age display; defaults to Date.now. */
   now?(): number;
-  /** Repo's skills/crosschat/SKILL.md content; undefined = not locatable (skip compare). */
+  /** 安装源（npm 包内 skills/crosschat/SKILL.md 副本）内容；undefined = not locatable (skip compare). */
   repoSkillContent(): string | undefined;
   /**
    * 票B B2：tcp 配置目录（node.json/broker.json 所在）。Omitted → tcp checks
@@ -105,6 +105,7 @@ export function defaultDoctorDeps(): DoctorDeps {
     repoSkillContent: () => {
       try {
         // dist/commands/ is two levels below the package root (same as install-skills).
+        // 基准是包内 skills 副本而非仓库工作树（015："安装源"正名）。
         return readFileSync(
           fileURLToPath(new URL('../../skills/crosschat/SKILL.md', import.meta.url)),
           'utf8',
@@ -179,14 +180,17 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
       const d = deps.run(codexBin, ['app-server', 'daemon', 'version']);
       const daemonVer = d.status === 0 ? parseSemver(d.stdout ?? '') : undefined;
       if (daemonVer === undefined) {
-        fail('❌ codex daemon 未运行；先执行: codex app-server daemon start');
+        // 015：装了但没跑不是本机故障（要用 codex 通道才需要）——⚠️ 教学提示，不 ❌（用户拍板）
+        attention('⚠️ codex daemon 未运行；要用 codex 通道时先执行: codex app-server daemon start');
       } else if (cmpVersion(daemonVer, CODEX_MIN_VERSION) < 0) {
         attention(`⚠️ codex daemon ${daemonVer.join('.')}（<${CODEX_MIN_VERSION.join('.')}：开窗投递需升级后重启 daemon）`);
       } else ok(`✅ codex daemon ${daemonVer.join('.')}`);
     }
   }
 
-  // 5. skill installation (and repo comparison when locatable)
+  // 5. skill installation (compared against the install source when locatable)
+  // 015：基准是 deps.repoSkillContent() —— npm 包内 skills 副本（见 defaultDoctorDeps），
+  // 不是仓库工作树，故文案叫"安装源"而非"仓库"。
   const repo = deps.repoSkillContent();
   for (const root of ['.claude', '.codex'] as const) {
     const side = root === '.claude' ? 'claude' : 'codex';
@@ -196,11 +200,11 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
       continue;
     }
     if (repo === undefined) {
-      ok(`✅ ${side} 侧 skill 已安装（仓库 SKILL.md 未定位到，跳过版本比对）`);
+      ok(`✅ ${side} 侧 skill 已安装（安装源 SKILL.md 未定位到，跳过版本比对）`);
       continue;
     }
-    if (deps.readFile(path) === repo) ok(`✅ ${side} 侧 skill 与仓库版本一致`);
-    else attention(`⚠️ ${side} 侧 skill 与仓库版本不一致；重跑 crosschat install-skills`);
+    if (deps.readFile(path) === repo) ok(`✅ ${side} 侧 skill 与安装源一致`);
+    else attention(`⚠️ ${side} 侧 skill 与安装源不一致；重跑 crosschat install-skills`);
   }
 
   // 6. dual caller-identity residue in this shell
@@ -283,23 +287,32 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
   // 6.6 F1 版本对账：常驻（broker/节点守护）status 文件自带的 version 与本机
   // CLI 版本比对——不一致 = 升级了 npm 包但常驻进程没重启（新 CLI + 旧常驻）。
   // 旧守护 status 文件无 version 字段 → 跳过不误报；⚠️ 级不 ❌（行为怪异不是故障）。
+  // 015：lastUpdated 超 TCP_STATUS_FRESH_MS = 守护已停止（心跳每周期刷新）——
+  // 跳过对账不误报"升级后未重启"，文末一行点名可删；重启口诀按守护类型给。
   if (deps.tcpDir !== undefined && deps.cliVersion !== undefined) {
-    const reconcile = (file: string, label: string): void => {
+    const nowMs = deps.now?.() ?? Date.now();
+    const skipped: string[] = [];
+    const reconcile = (file: string, label: string, restartCmd: string): void => {
       const raw = deps.readFile(join(deps.tcpDir!, file));
       if (raw === undefined) return;
-      let version: unknown;
+      let parsed: { version?: unknown; lastUpdated?: unknown };
       try {
-        version = (JSON.parse(raw) as { version?: unknown }).version;
+        parsed = JSON.parse(raw) as { version?: unknown; lastUpdated?: unknown };
       } catch {
         return; // 坏文件不在此项的职责内（tcp 配置项已覆盖可查的坏形状）
       }
+      if (!(nowMs - Date.parse(String(parsed.lastUpdated)) < TCP_STATUS_FRESH_MS)) {
+        skipped.push(file);
+        return;
+      }
+      const version = parsed.version;
       if (typeof version === 'string' && version !== '' && version !== deps.cliVersion) {
         attention(
-          `⚠️ 常驻进程（${label}）为 v${version}，本机 v${deps.cliVersion}——升级后未重启：serve --stop && serve --detach`,
+          `⚠️ 常驻进程（${label}）为 v${version}，本机 v${deps.cliVersion}——升级后未重启：${restartCmd}`,
         );
       }
     };
-    reconcile('status-broker.json', 'broker');
+    reconcile('status-broker.json', 'broker', 'serve --stop && serve --detach');
     const list = deps.readDir ?? ((dir: string) => {
       try {
         return readdirSync(dir);
@@ -309,7 +322,16 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
     });
     for (const file of listNodeStatusFiles(deps.tcpDir, list)) {
       const selector = nodeStatusSelector(file);
-      reconcile(file, selector === '' ? '节点守护' : `节点守护 ${selector}`);
+      // 节点守护重启不带 --stop（broker 口诀）——--connect <星名> 选对腿；默认守护=裸 --connect
+      reconcile(
+        file,
+        selector === '' ? '节点守护' : `节点守护 ${selector}`,
+        selector === '' ? 'crosschat serve --connect --detach' : `crosschat serve --connect ${selector} --detach`,
+      );
+    }
+    if (skipped.length > 0) {
+      // 行动提示非故障：不计入通过/警告/错误计数
+      lines.push(`ℹ️ 跳过 ${skipped.length} 个陈旧状态文件（守护已停止）的版本对账：${skipped.join(' ')}——确认无用后可删除`);
     }
   }
 

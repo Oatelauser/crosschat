@@ -354,6 +354,33 @@ describe('F1 doctor 版本对账（常驻 vs 本机 CLI）', () => {
     expect(warns).toHaveLength(1); // 只有 work 一条
   });
 
+  // 015 刀二：节点守护的重启口诀是 --connect <星名>（星名取自文件名），不是 broker 的 --stop && --detach
+  it('节点守护版本不一致 → 建议按星名给 --connect 重启命令（默认守护=裸 --connect）', () => {
+    const dir = mkdtempSync(join(root, 't-'));
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    writeFileSync(join(dir, 'tcp', 'status-node-work.json'), JSON.stringify({ state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000), version: '1.4.0' }));
+    writeNodeStatus(join(dir, 'tcp'), { state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000), version: '1.4.0' });
+    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.5.5' }));
+    expect(report.output).toContain('（节点守护 work）为 v1.4.0，本机 v1.5.5——升级后未重启：crosschat serve --connect work --detach');
+    expect(report.output).toContain('（节点守护）为 v1.4.0，本机 v1.5.5——升级后未重启：crosschat serve --connect --detach');
+    expect(report.output).not.toContain('serve --stop && serve --detach'); // 节点腿不给 broker 口诀
+  });
+
+  // 015 刀一：lastUpdated 过期 = 守护已停止——跳过对账不误报，一行点名可删
+  it('陈旧状态文件（>90s）跳过版本对账：不误报升级后未重启，ℹ️ 一行点名可删', () => {
+    const dir = mkdtempSync(join(root, 't-'));
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    writeBrokerStatus(join(dir, 'tcp'), { state: 'running', port: 7260, lastUpdated: iso(-600_000), version: '1.4.0' });
+    writeFileSync(join(dir, 'tcp', 'status-node-work.json'), JSON.stringify({ state: 'online', brokerAlias: 'br', since: iso(-600_000), lastUpdated: iso(-600_000), version: '1.4.0' }));
+    // 新鲜且版本一致 → 无警告
+    writeNodeStatus(join(dir, 'tcp'), { state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000), version: '1.5.5' });
+    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.5.5' }));
+    expect(report.output).not.toContain('升级后未重启');
+    expect(report.output).toContain('ℹ️ 跳过 2 个陈旧状态文件（守护已停止）的版本对账：status-broker.json status-node-work.json——确认无用后可删除');
+    expect(report.output.match(/ℹ️ 跳过/g)).toHaveLength(1); // 一行，不逐文件刷屏
+    expect(report.failed).toBe(false);
+  });
+
   it('cliVersion 未接线 → 整项跳过（零回归）', () => {
     const dir = mkdtempSync(join(root, 't-'));
     writeBrokerStatus(join(dir, 'tcp'), { state: 'running', port: 7260, lastUpdated: iso(-3_000), version: '0.0.1' });
