@@ -16,7 +16,7 @@ claimed-by: （待领）
 - 附带：`非 hex --via tcp:<名>` 按 machineName/label 解析（broker.ts:569-571），名字冻死 = 永远要敲 hostname 或 mid8
 
 **方案（用户方向，一套心智）**：规则只有一条——**任何机器的自报名 = 本机 node.json showName（缺省 hostname 兜底），改完重启常驻生效**（与升级口诀同节奏）：
-1. serve 启动时，find 到 self 条目后不再跳过——读本机 node.json showName 刷新 `machineName`；**语义对称**：showName 显式缺失/空 → 清除注册表 machineName（roster 回退纯 mid8），只有 node.json 读不了/损坏才维持现值（不因解析失败误删）；**无变化不写**（与 E0 星名同步"一致不写"先例一致）
+1. serve 启动时，find 到 self 条目后不再跳过——读本机 node.json showName 刷新 `machineName`；showName 是顶层字段，**读取不依赖自用条目归属**（node.json 呈 foreign 形态也读）；**语义对称**：showName 显式缺失/空 → 清除注册表 machineName（roster 回退纯 mid8），只有 node.json 读不了/损坏才维持现值（不因解析失败误删）；**无变化不写**（与 E0 星名同步"一致不写"先例一致）
 2. 纯 node 机不变（连接帧上报即传播）——剩余差异是物理性的（远机文件读不到），不产生第二套心智
 3. 核对项（俯瞰补）：
    - 云机（broker 机）本机发消息的信封 from-machine 取名来源须与 showName 一致（017 后注册表 machineName 与 showName 同源，不得再用 hostname()）
