@@ -1,9 +1,9 @@
 # doctor 降噪三刀（015）
 
 label: wayfinder:design
-status: open
+status: closed（2026-10-13 实施关票，f1bc54d，随 1.5.10 发布）
 blocked-by: （无）
-claimed-by: （待领）
+claimed-by: （二期6 主会话编排 subagent 实施）
 
 ## Question
 
@@ -18,3 +18,7 @@ claimed-by: （待领）
 
 - 规模 S 票：四处 doctor.ts 内改动 + doctor.test.ts 用例
 - 停止条件：npm run check 全绿；本机实测——陈旧 status 文件不再误报（可复用 wsl-star 案例做夹具）、codex daemon 未跑时 ⚠️、node/broker 建议命令各对
+
+## Resolution
+
+2026-10-13 关票（f1bc54d）。四刀全落地：①新鲜度闸复用 status.ts 导出的 TCP_STATUS_FRESH_MS，过期（含缺/坏 lastUpdated）跳过对账，文末 ℹ️ 一行点名+可删提示（不入结论计数）；②重启口诀按守护类型（节点守护 `crosschat serve --connect <星名> --detach`，默认腿裸 `--connect`，broker 口诀不变）；③daemon 未跑 ❌→⚠️ 带教学；④三处输出文案正名"安装源"+注释。测试就近扩展于 status-doctor-tcp.test.ts（F1 对账本住此处）+ doctor.test.ts，净增 2 用例。验收：npm run check 全绿 642/11 跳过（基线 640），仓库 dist 实测新文案生效、本机 12 项全绿。偏差备案：repoSkillContent 函数名未改（改名波及导入方，票面只要求文案）。
