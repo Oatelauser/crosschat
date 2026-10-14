@@ -252,7 +252,7 @@ ssh: 共 2 段对话
 - [ ] 🐧 mac 平台适配（unix 代码路径已共享，待实机验证；CI mac 观察位已挂）
 - [ ] 📦 常驻 broker 增强（忙时持久队列、异步回执、投递状态机——embassy 完整集对齐；tcp 星型直连传输已落地，见转发器手册）
 - [ ] 🖼️ TUI 看板与服务安装（开机自启）
-- [ ] 🤖 新 agent 适配器（GLM 等；有原生唤醒通道则原生，否则论证降级）
+- [ ] 🤖 新 agent 适配器（GLM、opencode、zcode、deepseek-harness；有原生唤醒通道则原生，否则论证降级）
 
 <details><summary>已完成（v1.0.0 – v1.3.3）</summary>
 
