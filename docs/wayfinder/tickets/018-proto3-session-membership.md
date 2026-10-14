@@ -22,6 +22,8 @@ claimed-by: （待领）
    - 聚合器重启恢复三级链：活会话启动器自动重 attach（常态零操作——启动器是第三方记忆，旗标在手原样重声明，含 extends；broker/守护双重启后系统记忆由活声明自动重建）；孤儿→向 broker 拿回成员名单+本地扫描验活→自动找回；孤儿+双失忆（罕见边角）→**收编命令 `crosschat serve --connect <星> --adopt <会话名>`**（收编活进程的 sessionId，不新建进程、保住现场上下文；名错=UNKNOWN+候选、同名=COLLISION 消歧，可与 --extend-session 并用补血统）——且该命令由 status/报错**当场打印**（名字已填），操作者复制即行，零记忆负担、零选择器误挂面
 8. **入星 = 经启动器**（`crosschat claude/codex --connect <星>`，可重复多星）；裸会话不入星（规范即门槛，用户既定立场）
 9. **resume/命名细节**：resume 保号与否待实测（影响文档措辞，不影响设计——保号则资格自动延续，换号则需一次 extends）
+9a. **双活性模型（俯瞰补）**：claude 成员活性=进程存活（死即除名）；codex 成员活性=线程存在（落盘实体，durable 永不自动除名——resume 即复活对 codex 是正确语义；extends 对 codex 几乎不适用）。attach 一律 id 先行、名字从扫描回填（codex 无 -n 是此设计的天然验证）
+9b. **老 broker 降级必须显性（俯瞰补）**：新聚合器连老 broker（proto:1）时成员帧被丢弃（未知 op 静默丢）——握手加 caps 协商，broker 不支持 proto:3 时聚合器显性告警"已降级机器级"，禁止静默装死
 10. **纯代码链路**：attach/roster/extends 解析/投递/恢复全为 IPC+WS+扫描，零模型调用
 11. **status 兼容**：新增星会话视图（机器+会话行，extends 标注），机器视图/E1 原样（additive）
 12. **排期**：proto:3 先于 010（用户裁定）；010 的安全敞口多开数日已知悉备案；caps 机制由本票先定、TLS 沿用
