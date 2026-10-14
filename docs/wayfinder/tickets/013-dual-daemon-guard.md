@@ -1,9 +1,9 @@
 # 双开防护：--connect 同星守护互顶拒绝（013）
 
 label: wayfinder:design
-status: open
+status: closed（2026-10-14 实施关票：check 672 全绿 + win 真机同/异拼写双开拒绝实测，随下版发布）
 blocked-by: （无）
-claimed-by: （待领）
+claimed-by: （二期6 主会话编排 subagent 实施）
 
 ## Question
 

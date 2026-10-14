@@ -96,6 +96,9 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
   if (args.stopTarget !== undefined) return runStop(args.stopTarget, deps, registryFile);
   const detachedChild = deps.env.CROSSCHAT_SERVE_DETACHED === '1';
   if (args.connect !== undefined) {
+    // 013 双开防护：起守护前拒同星（前台在本进程、--detach 在父进程各扫一次；
+    // detached 子进程不扫——父进程 spawn 前已扫，且父进程退场前会被误当活守护）
+    if (!detachedChild) guardSameStarDaemon(args.connect, deps);
     if (args.detach && !detachedChild) {
       // E0：日志文件名取解析后的星名（用户用 starId 前缀起停也落到星名日志）；
       // 解析失败（无 node.json 等）退回原选择器——子进程会给出教学报错
@@ -544,6 +547,51 @@ function pidsOnPort(port: number): Set<number> {
 export function connectValueOf(cmdline: string): string | undefined {
   const m = cmdline.match(/--connect(?:=|\s+)([^\s]*)/);
   return m === null ? undefined : m[1] ?? '';
+}
+
+/**
+ * 013：双开防护——`serve --connect` 起守护前扫本机进程清单（与 --stop 同一
+ * listServeProcesses：同一套身份闸门与自身 pid 排除，看见同一个世界），已有
+ * 同星节点守护活着即拒绝。同星判定与 selectConnectEntry 同解析序：双方的
+ * `--connect` 取值各自对同一份 node.json 归一到条目再比（引用相等=同星），
+ * 名字 / starId 前缀 / 裸默认腿换拼写绕不过。教学报错用活守护 cmdline 里的
+ * 原拼写——stop 是字面匹配选择器，必须教能停掉它的那个拼写。失败方向一律
+ * 放行（node.json 不可读、我的选择器解析不了、扫描抛错、对方 cmdline 解析
+ * 不出星）：探测不到=现状行为，不把用户锁死。
+ */
+export function guardSameStarDaemon(connectArg: string, deps: ServeDeps): void {
+  let config: NodeConfig;
+  let mine: BrokerEntry;
+  try {
+    config = readNodeConfig(join(tcpDir(deps.baseDir), 'node.json'));
+    mine = selectConnectEntry(connectArg, config).entry;
+  } catch {
+    return; // 解析不了交给 runForegroundNode 的既有教学报错
+  }
+  let procs: ProcInfo[];
+  try {
+    procs = (deps.listServeProcesses ?? listServeProcesses)();
+  } catch {
+    return; // 扫描失败=探测不到
+  }
+  for (const p of procs) {
+    if (!p.cmdline.includes('--connect')) continue;
+    const theirRaw = connectValueOf(p.cmdline); // includes 前置过滤后 undefined=尾置裸 --connect
+    let theirs: BrokerEntry;
+    try {
+      theirs = selectConnectEntry(theirRaw ?? '', config).entry;
+    } catch {
+      continue; // 对方 cmdline 解析不出星（异常形状/配置已变）：保守放行不拦
+    }
+    if (theirs !== mine) continue;
+    const star = formatBrokerEntry(mine);
+    throw new MultichatError(
+      'USAGE',
+      theirRaw === undefined || theirRaw === ''
+        ? `本机已有 ${star} 的节点守护在跑（pid ${p.pid}，--connect 裸默认腿）——先执行: crosschat serve --stop node（裸 --connect 无选择器拼写，将停全部节点守护）`
+        : `本机已有 ${star} 的节点守护在跑（pid ${p.pid}，--connect ${theirRaw}）——先执行: crosschat serve --stop ${theirRaw}`,
+    );
+  }
 }
 
 /**

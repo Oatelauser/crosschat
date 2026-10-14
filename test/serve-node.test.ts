@@ -598,6 +598,8 @@ describe('B2 --connect 选择器与独立 status/log 文件', () => {
       onSignal: (_sig, cb) => {
         stop = cb;
       },
+      // 013：双开防护注入空进程清单——不扫真机，测试密闭
+      listServeProcesses: () => [],
     };
     return { deps, stop: () => stop() };
   }
@@ -752,6 +754,8 @@ describe('E0 星名同步（info.name 帧权威覆盖）', () => {
       onSignal: (_sig, cb) => {
         stop = cb;
       },
+      // 013：双开防护注入空进程清单——不扫真机，测试密闭
+      listServeProcesses: () => [],
     };
     // 用户用 starId 前缀起停——标签/文件名仍落星名
     const servePromise = runServe({ connect: 'aaaa' }, deps);

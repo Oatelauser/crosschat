@@ -1,9 +1,9 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { parseServeArgs } from '../src/cli.js';
-import { matchServeProcesses, runServe, selectConnectEntry, type ServeDeps } from '../src/commands/serve.js';
+import { guardSameStarDaemon, matchServeProcesses, runServe, selectConnectEntry, type ServeArgs, type ServeDeps } from '../src/commands/serve.js';
 import { listNodes, registryFileOf } from '../src/serve/registry.js';
 import { MultichatError } from '../src/errors.js';
 import type { NetworkInterfaceInfo } from 'node:os';
@@ -365,5 +365,113 @@ describe('E0 serve --name（星名持久化与互斥）', () => {
     const parsed = JSON.parse(block) as { brokers: { name: string }[]; showName: string };
     expect(parsed.brokers[0]!.name).toBe('cloud');
     expect(parsed.showName).toBe('改成「贴这份配置的机器」的名字');
+  });
+});
+
+describe('013 双开防护：--connect 同星守护互顶拒绝', () => {
+  const raw = (pid: number, cmdline: string) => ({ pid, exe: 'node.exe', cmdline });
+
+  /** 双星 node.json（wsl-star=条目0 默认腿，cloud=条目1）+ 可注入进程清单的 deps。 */
+  function guardDeps(procs: ReturnType<typeof raw>[]): { deps: ServeDeps; lines: string[] } {
+    const dir = mkdtempSync(join(root, 'guard-'));
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    writeFileSync(
+      join(dir, 'tcp', 'node.json'),
+      JSON.stringify({
+        brokers: [
+          { host: 'h1', port: 1, name: 'wsl-star', starId: '5aed24ff9900', key: 'k1' },
+          { host: 'h2', port: 2, name: 'cloud', starId: '6bff0099aa00', key: 'k2' },
+        ],
+        showName: 't',
+      }),
+    );
+    const lines: string[] = [];
+    return {
+      lines,
+      deps: {
+        baseDir: dir,
+        stdout: (line) => lines.push(line),
+        env: {},
+        version: 'test',
+        machineId: () => 'MID',
+        hostname: () => 'h',
+        networkInterfaces: () => ({}),
+        now: () => Date.now(),
+        onSignal: () => {},
+        listServeProcesses: () => procs,
+      },
+    };
+  }
+
+  async function refuse(args: ServeArgs, deps: ServeDeps): Promise<MultichatError> {
+    const err: unknown = await runServe(args, deps).then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(MultichatError);
+    return err as MultichatError;
+  }
+
+  it('refuses a same-spelling daemon (foreground) and teaches the live spelling with pid', async () => {
+    const { deps } = guardDeps([raw(10, 'node dist/cli.js serve --connect wsl-star')]);
+    const err = await refuse({ connect: 'wsl-star' }, deps);
+    expect(err.code).toBe('USAGE');
+    expect(err.message).toContain('本机已有 wsl-star(5aed24) 的节点守护在跑');
+    expect(err.message).toContain('pid 10');
+    expect(err.message).toContain('--connect wsl-star');
+    expect(err.message).toContain('先执行: crosschat serve --stop wsl-star');
+  });
+
+  it('catches cross-spelling collisions and teaches the live daemon spelling, not mine', async () => {
+    // 我用 starId 前缀、活守护用星名——同条目即同星；教学必须用对方的 wsl-star
+    const byName = guardDeps([raw(11, 'node dist/cli.js serve --connect wsl-star')]);
+    const err1 = await refuse({ connect: '5aed24' }, byName.deps);
+    expect(err1.message).toContain('--stop wsl-star');
+    // 反向：我用星名、活守护用 =starId 前缀——教学用对方的 5aed24
+    const byPrefix = guardDeps([raw(12, 'node dist/cli.js serve --connect=5aed24')]);
+    const err2 = await refuse({ connect: 'wsl-star' }, byPrefix.deps);
+    expect(err2.message).toContain('--stop 5aed24');
+  });
+
+  it('bare collides with bare (both default to entries[0]) and teaches --stop node', async () => {
+    const { deps } = guardDeps([raw(13, 'node dist/cli.js serve --connect')]);
+    const err = await refuse({ connect: '' }, deps);
+    expect(err.message).toContain('wsl-star(5aed24)');
+    expect(err.message).toContain('pid 13');
+    expect(err.message).toContain('裸默认腿');
+    expect(err.message).toContain('crosschat serve --stop node');
+  });
+
+  it('a bare live daemon also collides with the explicit name resolving to entries[0]', async () => {
+    const { deps } = guardDeps([raw(14, 'node dist/cli.js serve --connect')]);
+    const err = await refuse({ connect: 'wsl-star' }, deps);
+    expect(err.message).toContain('--stop node'); // 对方是裸守护，只能教停全部节点
+  });
+
+  it('refuses the --detach form before spawning the child', async () => {
+    const { deps, lines } = guardDeps([raw(15, 'node dist/cli.js serve --connect wsl-star')]);
+    const err = await refuse({ connect: 'wsl-star', detach: true }, deps);
+    expect(err.message).toContain('--stop wsl-star');
+    expect(lines).toEqual([]); // 未走到 runDetach 的后台播报
+  });
+
+  it('passes different stars, unrelated procs and unresolvable cmdlines silently', () => {
+    // 不同星：wsl-star 活着，我连 cloud
+    expect(() => guardSameStarDaemon('cloud', guardDeps([raw(20, 'node dist/cli.js serve --connect wsl-star')]).deps)).not.toThrow();
+    // 无节点守护：broker 与无 --connect 的进程不参与判定；--connect=zzzz 解析不出星（异常形状）放行
+    expect(() =>
+      guardSameStarDaemon(
+        'wsl-star',
+        guardDeps([raw(21, 'node dist/cli.js serve --detach'), raw(22, 'node dist/cli.js serve --connect=zzzz')]).deps,
+      ),
+    ).not.toThrow();
+    // 我的选择器本身解析不了：护栏放行（教学报错留给 runForegroundNode）
+    expect(() => guardSameStarDaemon('nope', guardDeps([]).deps)).not.toThrow();
+    // 扫描本身抛错 → 放行（探测不到=现状行为）
+    const broken = guardDeps([]);
+    broken.deps.listServeProcesses = () => {
+      throw new Error('scan failed');
+    };
+    expect(() => guardSameStarDaemon('wsl-star', broken.deps)).not.toThrow();
   });
 });

@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### 013：双开防护
+
+- **`serve --connect <星>` 起守护前拒同星双开**：扫本机进程清单（与 `--stop` 同一扫描与自身排除），已有同星守护在跑即 exit 1——broker 同机双守护会互顶乒乓（在途消息随顶换丢失、status 文件互写抖动），此前唯一防线是记得先 stop
+- 同星判定按解析后星身份：名字 / starId 前缀 / 裸默认腿换拼写绕不过；教学报错带活守护 pid 与其原始拼写（`serve --stop <该拼写>` 直接可达）；裸 `--connect` 腿的教学为 `serve --stop node`
+- 护栏失败方向一律放行（探测不到=现状行为），不把用户锁死
+
 ### 017：机器自报名单一事实源（showName 通吃 broker 机）
 
 - **改名只剩一条规则**：任何机器的自报名 = 本机 `node.json` 顶层 `showName`（缺省 hostname 兜底），改完**重启常驻**生效——节点机重启节点客户端、broker 机重启 serve。serve 启动读回本机 node.json 刷新注册表 machineName（此前仅首次登记、node.json 永不被读回，broker 机改名只能手改注册表或另跑节点客户端，两套心智）
