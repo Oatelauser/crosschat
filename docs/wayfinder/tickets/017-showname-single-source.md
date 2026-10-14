@@ -1,7 +1,7 @@
 # 机器自报名单一事实源：showName 通吃 broker 机（017）
 
 label: wayfinder:design
-status: open（2026-10-13 实施完成 2e7df0b，check 666 全绿；待真机验收——云端改 showName 重启 serve 后 win 侧 roster 应见新名——后关票。云端跑 npm 1.5.10，须待下版发布升级后才可验收）
+status: closed（2026-10-14 真机验收关票：WSL 腿（wsl）+ 云端腿（cloud）双端通过，2e7df0b，随 1.5.11 发布）
 blocked-by: （无）
 claimed-by: （二期6 主会话编排 subagent 实施）
 
@@ -33,3 +33,7 @@ claimed-by: （二期6 主会话编排 subagent 实施）
 
 - 规模 S 票：serve.ts 自登记段小改 + 测试（重启后名字刷新/缺文件兜底/改名后非 hex 寻址命中）+ 教学文案同步
 - 停止条件：npm run check 全绿；真机验收——云端改 showName="cloud" + 重启 serve，win 侧 roster 即见 `cloud (000c6989)`，`--via tcp:cloud` 可寻址；纯 node 机改名回归不受影响
+
+## Resolution
+
+2026-10-14 关票（实施 2e7df0b，随 1.5.11 发布）。check 666/11 全绿（+9 用例：改名主链/foreign 照读/清名对称/损坏维持/无变化不写字节级/端到端名字寻址/重名 MACHINE_NAME_COLLISION/本机行/016 分片自愈）。真机双端验收：WSL 腿改 showName="wsl" 重启 serve → 注册表即时同步、本机 status 见「wsl（本机）」、win roster 见 wsl(4a0277c8)；云端腿 1.5.11 升级后自动激活用户预改的 showName → `--via tcp:cloud-broker:cloud` 名字寻址命中、win roster 见 cloud(000c6989)。信封同源核对项 grep 定案零改码（from-machine 链本就流经注册表 machineName，hostname() 在该路径零使用点）。零回归：broker.json 其余职能（钥匙鉴权/port/starId/星名/他机条目）行为逐字段原样。
