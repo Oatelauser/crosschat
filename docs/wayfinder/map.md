@@ -31,6 +31,7 @@ label: wayfinder:map
 - 站定性产品约束（2026-10-06 用户反馈，同日二次修订）：**既有功能零回归 + 跨机场景轻量部署** —— 任何新功能纯增量，改默认行为必须先经用户确认（铁律在案）。**v1 准入门槛不变**：无 broker、无新监听端口、无新守护进程、无必填配置文件、不发明新鉴权（信任边界=ssh 同用户），部署以"两端 npm i -g + ssh 免密"为上限（免密=机器通道密钥，每台 ssh-keygen 一次 + 对每个对端 ssh-copy-id 输一次现有密码，密码登录共存，不做 sshpass 类塞入）。**终点传输面（2026-10-06 拍板、2026-10-10/11 用户两度修订）：传输前缀 = ssh / tcp 两种，broker 不是第三传输而是 tcp 的部署拓扑**——tcp = 纯转发器组件（用户 2026-10-10 拍板）：全网唯一监听端口、其余机器零入站，三角色 `crosschat serve`（服务端）/ `serve --connect`（常驻客户端）/ `send --via tcp:`（瞬态发送），星型密钥 + gen-key 打印式分发，proto:1 草案协议（MQTT/NATS/STOMP/JSON-RPC 取材，协议规范公开、第三方可实现兼容 broker），文件通道（sha256 锚/断点续传/去重/懒删除 5 天+512MiB/单文件 64MiB），mid8 双轨寻址（协议用 machine-id 前缀、人用名字）；**已实施（票B B1–B3.1，2026-10-11）**，drill a（win+WSL 双机全链含跨机 agent 自主对话闭环）真机通过，形态二（云端堡垒+ssh 隧道包裹）drill 待用户确认后补；tcp 属可选分层组件，核心 CLI 的无守护形态不变。目标矩阵：linux/win/mac 三类两两互通（含自身），win 收件腿需 OpenSSH Server、mac 需开远程登录、win 侧 npm 全局 bin 须在 sshd 默认 shell PATH——**mac 实机验证因此从"如有再补"升级为联邦 M 腿依赖**。
 - 技能：按票型调用 research / grilling(+domain-modeling) / prototype。
 - Tracker 约定（本地 markdown）：claim = 把票的 `claimed-by` 改成自己；blocking 用 `blocked-by` 字段；解决 = 在票文件末尾追加 `## Resolution` 一节并把 `status` 改为 `closed`，然后在下方 Decisions so far 加一行。
+- 另图：`docs/wayfinder/book/`——「crosschat 在线书（mdBook/GitHub Pages）」努力 2026-10-15 立图（含管道落地/真零基础/书为真源/活文档四拍板），独立编号，与本图票流互不相扰。
 
 ## Decisions so far
 
