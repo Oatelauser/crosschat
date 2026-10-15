@@ -119,6 +119,38 @@ async function expectCode(p: Promise<unknown>, code: string): Promise<MultichatE
   }
 }
 
+describe('019 两段式会话投递退役', () => {
+  it('tcp 机器级目标 + --to 会话名 → SESSION_NOT_MEMBER 报错教学（连接前即拒绝，不依赖网络）', async () => {
+    const fx = makeFixture(await startBroker(async () => deliveredReceipt));
+    // tcpBaseDir 指向空目录：若收窄未先于入网检查生效，会得 USAGE 而非 SESSION_NOT_MEMBER
+    const err = await expectCode(
+      runViaTcpSend({ via: 'tcp:broker-host', to: 'boss' } as never, 'x', { ...fx.deps, tcpBaseDir: mkdtempSync(join(root, 'empty-')) }),
+      'SESSION_NOT_MEMBER',
+    );
+    expect(err.message).toContain('两段式会话投递已退役');
+    expect(err.message).toContain('--connect');
+    expect(err.message).toContain('三段寻址');
+    // 带星选择器的两段式同判（tcp:<星>:<机器> + --to）
+    await expectCode(
+      runViaTcpSend({ via: 'tcp:live:broker-host', to: 'boss' } as never, 'x', { ...fx.deps, tcpBaseDir: mkdtempSync(join(root, 'empty-')) }),
+      'SESSION_NOT_MEMBER',
+    );
+  });
+
+  it('机器级零回归：--conversation 腿与 --file 腿照常投递（不受收窄影响）', async () => {
+    const seen: SendFrame[] = [];
+    const h = await startBroker(async (frame) => {
+      seen.push(frame);
+      return { ...deliveredReceipt, id: frame.id };
+    });
+    const fx = makeFixture(h);
+    const out = await runViaTcpSend({ via: 'tcp:broker-host', conversation: 'mc1_x' } as never, 'x', fx.deps);
+    expect(out).toContain('delivered to boss@broker-host');
+    expect(seen[0]).toMatchObject({ op: 'send', targetMachine: 'broker-host', conversation: 'mc1_x' });
+    expect(seen[0]!.to).toBeUndefined();
+  }, 10_000);
+});
+
 describe('runViaTcpSend against a real broker', () => {
   it('delivers and formats output ssh-style, recording send-log', async () => {
     const seen: SendFrame[] = [];
@@ -127,10 +159,10 @@ describe('runViaTcpSend against a real broker', () => {
       return { ...deliveredReceipt, id: frame.id };
     });
     const fx = makeFixture(h);
-    const out = await runViaTcpSend({ via: 'tcp:broker-host', to: 'boss', bodyArg: undefined } as never, 'hello', fx.deps);
+    const out = await runViaTcpSend({ via: 'tcp:broker-host', conversation: 'mc1_x', bodyArg: undefined } as never, 'hello', fx.deps);
     expect(out).toBe('delivered to boss@broker-host (turn 1)\nreply-ref: mc1_x');
     // send 帧携带目标与 origin（本机 m/mid 编码）
-    expect(seen[0]).toMatchObject({ op: 'send', targetMachine: 'broker-host', to: 'boss', body: 'hello' });
+    expect(seen[0]).toMatchObject({ op: 'send', targetMachine: 'broker-host', conversation: 'mc1_x', body: 'hello' });
     expect(seen[0]!.origin).toMatch(/^[A-Za-z0-9_-]+$/);
     // 发起侧记账
     expect(fx.logs).toHaveLength(1);
@@ -145,7 +177,7 @@ describe('runViaTcpSend against a real broker', () => {
     }));
     const fx = makeFixture(h);
     const err = await expectCode(
-      runViaTcpSend({ via: 'tcp:broker-host', to: 'nobody' } as never, 'x', fx.deps),
+      runViaTcpSend({ via: 'tcp:broker-host', conversation: 'mc1_x' } as never, 'x', fx.deps),
       'NAME_NOT_FOUND',
     );
     expect(err.message).toContain('[via tcp:broker-host]');
@@ -157,7 +189,7 @@ describe('runViaTcpSend against a real broker', () => {
     const h = await startBroker(async () => deliveredReceipt);
     const fx = makeFixture(h);
     const err = await expectCode(
-      runViaTcpSend({ via: 'tcp:ghost-host', to: 'boss' } as never, 'x', fx.deps),
+      runViaTcpSend({ via: 'tcp:ghost-host', conversation: 'mc1_x' } as never, 'x', fx.deps),
       'PEER_OFFLINE',
     );
     expect(err.message).toContain('对端离线');
@@ -168,7 +200,7 @@ describe('runViaTcpSend against a real broker', () => {
     const h = await startBroker(async () => deliveredReceipt);
     const fx = makeFixture(h);
     const err = await expectCode(
-      runViaTcpSend({ via: 'tcp:no-such-host', to: 'boss' } as never, 'x', fx.deps),
+      runViaTcpSend({ via: 'tcp:no-such-host', conversation: 'mc1_x' } as never, 'x', fx.deps),
       'UNKNOWN_MACHINE',
     );
     expect(err.message).toContain('serve --list');
@@ -183,7 +215,7 @@ describe('runViaTcpSend against a real broker', () => {
     ]);
     const fx = makeFixture(h);
     const err = await expectCode(
-      runViaTcpSend({ via: 'tcp:dup-name', to: 'boss' } as never, 'x', fx.deps),
+      runViaTcpSend({ via: 'tcp:dup-name', conversation: 'mc1_x' } as never, 'x', fx.deps),
       'MACHINE_NAME_COLLISION',
     );
     expect(err.message).toContain('[via tcp:dup-name]');
@@ -196,7 +228,7 @@ describe('runViaTcpSend against a real broker', () => {
     const h = await startBroker(() => new Promise(() => {})); // 永不回应
     const fx = makeFixture(h, { CROSSCHAT_TCP_TIMEOUT_MS: '400' });
     const err = await expectCode(
-      runViaTcpSend({ via: 'tcp:broker-host', to: 'boss' } as never, 'x', fx.deps),
+      runViaTcpSend({ via: 'tcp:broker-host', conversation: 'mc1_x' } as never, 'x', fx.deps),
       'TCP_TRANSPORT_FAILED',
     );
     expect(err.message).toContain('远端状态不明');
@@ -213,7 +245,7 @@ describe('runViaTcpSend against a real broker', () => {
       JSON.stringify({ broker: { host: '127.0.0.1', port: 1, name: 'x' }, key: key('k') }),
     );
     await expectCode(
-      runViaTcpSend({ via: 'tcp:broker-host', to: 'boss' } as never, 'x', { ...fx.deps, env: { CROSSCHAT_TCP_TIMEOUT_MS: '600' } }),
+      runViaTcpSend({ via: 'tcp:broker-host', conversation: 'mc1_x' } as never, 'x', { ...fx.deps, env: { CROSSCHAT_TCP_TIMEOUT_MS: '600' } }),
       'TCP_TRANSPORT_FAILED',
     );
   }, 10_000);
@@ -222,7 +254,7 @@ describe('runViaTcpSend against a real broker', () => {
     const h = await startBroker(async () => deliveredReceipt);
     const fx = makeFixture(h);
     const err = await expectCode(
-      runViaTcpSend({ via: 'tcp:broker-host', to: 'boss' } as never, 'x', { ...fx.deps, tcpBaseDir: mkdtempSync(join(root, 'empty-')) }),
+      runViaTcpSend({ via: 'tcp:broker-host', conversation: 'mc1_x' } as never, 'x', { ...fx.deps, tcpBaseDir: mkdtempSync(join(root, 'empty-')) }),
       'USAGE',
     );
     expect(err.message).toContain('本机未入网');
@@ -231,7 +263,7 @@ describe('runViaTcpSend against a real broker', () => {
   it('--json mode returns the receipt with via: tcp:<target>', async () => {
     const h = await startBroker(async (frame) => ({ ...deliveredReceipt, id: frame.id }));
     const fx = makeFixture(h);
-    const out = await runViaTcpSend({ via: 'tcp:broker-host', to: 'boss', json: true } as never, 'hello', fx.deps);
+    const out = await runViaTcpSend({ via: 'tcp:broker-host', conversation: 'mc1_x', json: true } as never, 'hello', fx.deps);
     const parsed = JSON.parse(out) as { status: string; to: string; via: string };
     expect(parsed).toMatchObject({ status: 'delivered', to: 'boss@broker-host', via: 'tcp:broker-host' });
   }, 10_000);
@@ -252,7 +284,7 @@ describe('send --via tcp: branch in runSend', () => {
     const fx = makeFixture(h);
     const before = new Set(msgTemps());
     const big = 'x'.repeat(1_048_577);
-    const out = await runSend({ via: 'tcp:broker-host', to: 'boss', bodyArg: big }, fx.deps);
+    const out = await runSend({ via: 'tcp:broker-host', conversation: 'mc1_x', bodyArg: big }, fx.deps);
     expect(out).toContain('delivered to boss@broker-host');
     expect(out).toContain('正文超限已自动转文件通道：');
     // 投递的正文是文件通道的自动通知（带对端落地路径），不是超长原文
@@ -273,7 +305,7 @@ describe('send --via tcp: branch in runSend', () => {
     const before = new Set(msgTemps());
     const huge = 'x'.repeat(64 * 1024 * 1024 + 1);
     const err = await expectCode(
-      runSend({ via: 'tcp:broker-host', to: 'boss', bodyArg: huge }, fx.deps),
+      runSend({ via: 'tcp:broker-host', conversation: 'mc1_x', bodyArg: huge }, fx.deps),
       'FILE_TOO_LARGE',
     );
     expect(err.message).toContain('64MiB');
@@ -294,7 +326,7 @@ describe('send --via tcp: branch in runSend', () => {
     const fx = makeFixture(h);
     const before = new Set(msgTemps());
     const err = await expectCode(
-      runSend({ via: 'tcp:broker-host', to: 'nobody', bodyArg: 'x'.repeat(1_048_577) }, fx.deps),
+      runSend({ via: 'tcp:broker-host', conversation: 'mc1_x', bodyArg: 'x'.repeat(1_048_577) }, fx.deps),
       'NAME_NOT_FOUND',
     );
     expect(err.message).toContain('[via tcp:broker-host]');
@@ -312,7 +344,7 @@ describe('send --via tcp: branch in runSend', () => {
     const before = new Set(msgTemps());
     const file = join(fx.baseDir, 'note.txt');
     writeFileSync(file, 'small');
-    const out = await runSend({ via: 'tcp:broker-host', to: 'boss', fileArg: file, bodyArg: '见附件' }, fx.deps);
+    const out = await runSend({ via: 'tcp:broker-host', conversation: 'mc1_x', fileArg: file, bodyArg: '见附件' }, fx.deps);
     expect(out).toContain('delivered to boss@broker-host');
     expect(out).not.toContain('正文超限已自动转文件通道');
     expect(msgTemps(before)).toHaveLength(0);
@@ -321,7 +353,7 @@ describe('send --via tcp: branch in runSend', () => {
   it('routes tcp: through runViaTcpSend from the via branch', async () => {
     const h = await startBroker(async (frame) => ({ ...deliveredReceipt, id: frame.id }));
     const fx = makeFixture(h);
-    const out = await runSend({ via: 'tcp:broker-host', to: 'boss', bodyArg: 'hi' }, fx.deps);
+    const out = await runSend({ via: 'tcp:broker-host', conversation: 'mc1_x', bodyArg: 'hi' }, fx.deps);
     expect(out).toContain('delivered to boss@broker-host');
   }, 10_000);
 
@@ -348,7 +380,7 @@ describe('send --via tcp: branch in runSend', () => {
     writeFileSync(file, 'data');
     // 发送方与 broker 不同名不同 mid——旧 hostname 同机特例不再触发，
     // 消息上 broker，resolveTarget 按注册表 machineId===broker 本机判定走 deliverLocal。
-    const out = await runSend({ via: 'tcp:broker-host', to: 'boss', fileArg: file }, fx.deps);
+    const out = await runSend({ via: 'tcp:broker-host', conversation: 'mc1_x', fileArg: file }, fx.deps);
     expect(out).toContain('delivered to boss');
     expect(bodies).toHaveLength(1);
     expect(bodies[0]).toContain('文件 report.txt 已送达');
@@ -461,11 +493,11 @@ describe('B1 multi-entry node.json through the real send path', () => {
       }),
     );
     // 裸 tcp：多条目教选择器（示例取第一条的别名）
-    const bare = await expectCode(runViaTcpSend({ via: 'tcp:broker-host', to: 'boss' } as never, 'x', fx.deps), 'USAGE');
+    const bare = await expectCode(runViaTcpSend({ via: 'tcp:broker-host', conversation: 'mc1_x' } as never, 'x', fx.deps), 'USAGE');
     expect(bare.message).toContain('dead');
     expect(bare.message).toContain('--via tcp:dead:');
     // 选择器走别名 → 连上 live 条目
-    const out = await runViaTcpSend({ via: 'tcp:live:broker-host', to: 'boss' } as never, 'hello', fx.deps);
+    const out = await runViaTcpSend({ via: 'tcp:live:broker-host', conversation: 'mc1_x' } as never, 'hello', fx.deps);
     expect(out).toContain('delivered to boss@broker-host');
     // 裸 tcp + --conversation（ref.starId=live 的星）→ 同样连上
     const conv = encodeRef({
@@ -545,7 +577,7 @@ describe('016① 跨机回执机器段统一 name(mid8)', () => {
     const fx = realFixture(h);
     // 模拟此前跨机信封到达：from-machine 名随分片持久化（016 新字段）
     recordConversation(fx.deps.conversationStateFile!, decodeRef(peerRef()), 1_000, { [peerMid8]: 'cloudleg' });
-    const out = await runViaTcpSend({ via: `tcp:${peerMid}`, to: 'boss' } as never, 'hello', fx.deps);
+    const out = await runViaTcpSend({ via: `tcp:${peerMid}`, conversation: 'mc1_x' } as never, 'hello', fx.deps);
     expect(out).toContain('delivered to boss@cloudleg(ec542c2c) (turn 2)');
     // 记账 to 同格式（status --conversations 的对端名来源）
     expect(fx.logs.at(-1)).toMatchObject({ to: 'boss@cloudleg(ec542c2c)', target: `via:tcp:${peerMid}` });
@@ -554,21 +586,21 @@ describe('016① 跨机回执机器段统一 name(mid8)', () => {
   it('mid 寻址回信 + 旧状态（无名）→ 回退纯 mid8（不再裸奔完整指纹）', async () => {
     const h = await startPeerBroker(realReceipt);
     const fx = realFixture(h);
-    const out = await runViaTcpSend({ via: `tcp:${peerMid}`, to: 'boss' } as never, 'hello', fx.deps);
+    const out = await runViaTcpSend({ via: `tcp:${peerMid}`, conversation: 'mc1_x' } as never, 'hello', fx.deps);
     expect(out).toContain('delivered to boss@ec542c2c (turn 2)');
   }, 10_000);
 
   it('按名发送（无状态）→ 名字取自输入，指纹取自回执 ref', async () => {
     const h = await startPeerBroker(realReceipt);
     const fx = realFixture(h);
-    const out = await runViaTcpSend({ via: 'tcp:peer-host', to: 'boss' } as never, 'hello', fx.deps);
+    const out = await runViaTcpSend({ via: 'tcp:peer-host', conversation: 'mc1_x' } as never, 'hello', fx.deps);
     expect(out).toContain('delivered to boss@peer-host(ec542c2c) (turn 2)');
   }, 10_000);
 
   it('旧版远端回执（ref 不可解码）+ mid 寻址 → 仍收敛到 mid8', async () => {
     const h = await startPeerBroker(async (frame) => ({ ...deliveredReceipt, id: frame.id }));
     const fx = realFixture(h);
-    const out = await runViaTcpSend({ via: `tcp:${peerMid}`, to: 'boss' } as never, 'hello', fx.deps);
+    const out = await runViaTcpSend({ via: `tcp:${peerMid}`, conversation: 'mc1_x' } as never, 'hello', fx.deps);
     expect(out).toContain('delivered to boss@ec542c2c (turn 1)');
   }, 10_000);
 });

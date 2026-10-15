@@ -350,6 +350,7 @@ export class StarJoiner {
   /** spawn 前调用：同步解析星目标并打横幅（TUI 接管控制台前落定），快照现存会话（差分基线）。 */
   async begin(): Promise<void> {
     this.resolveTargetsAndBanner();
+    await this.warnCrossToolNameCollision();
     for (const session of this.opts.deps.listClaudeSessions().sessions) this.knownClaude.add(session.sessionId);
     try {
       for (const thread of await this.opts.deps.listCodexThreads()) this.knownCodex.add(thread.id);
@@ -357,6 +358,32 @@ export class StarJoiner {
       // codex daemon 未起：空基线（子进程会拉起 daemon，新线程即差分命中）
     }
     void this.run();
+  }
+
+  /**
+   * 020 启动期同名预警（spawn 前打）：-n 名与星内既有成员异工具同名时打一行
+   * "你的地址将是 工具/名"——把发送期碰撞提前到启动期可见。尽力而为：attach
+   * 管道已在才查（聚合器不在静默跳过不延迟 spawn），status 探针 ~2s 超时上限
+   * （021 纪律：此行属 spawn 前横幅面，走 stdout）。
+   */
+  private async warnCrossToolNameCollision(): Promise<void> {
+    const { deps, side, spawnName } = this.opts;
+    if (spawnName === undefined || this.targets.length === 0) return;
+    for (const target of this.targets) {
+      let pipe: AttachPipeClient | undefined;
+      try {
+        pipe = await connectAttachPipe(attachPipePath(target.entry, tcpDir(deps.tcpBaseDir)));
+        const status = await Promise.race([queryAttachStatus(pipe), sleep(2_000).then(() => undefined)]);
+        const other = status?.members.find((m) => m.name === spawnName && m.tool !== undefined && m.tool !== side);
+        if (other !== undefined) {
+          deps.stdout(`预警: 星内已有 ${other.tool}/${spawnName}，你的地址将是 ${side}/${spawnName}（同名异工具，发送方需带工具限定词）`);
+        }
+      } catch {
+        // 聚合器不在/管道未起——预警尽力而为，跳过
+      } finally {
+        pipe?.close();
+      }
+    }
   }
 
   /** 021：目标解析+横幅 spawn 前同步做（原先在异步 run() 里——attach 确认晚于子进程启动，横幅会落进 TUI）。 */
@@ -458,7 +485,7 @@ export class StarJoiner {
 
   /** 单星监督循环：ensure→（首度）校验+告警→attach→管道断则重连重声明。 */
   private async superviseStar(target: StarTarget, sessionId: string, name?: string): Promise<void> {
-    const { deps, extendSession } = this.opts;
+    const { deps, extendSession, side } = this.opts;
     const attachName = name; // 快照差分时注册表已有名（-n 原生写入）——attach 即时带上；改名后续由聚合器扫描跟随
     let validated = false;
     while (!this.stopped) {
@@ -488,6 +515,7 @@ export class StarJoiner {
         const reply = await pipe.send({
           op: 'attach',
           sessionId,
+          tool: side, // 020：启动器天然知道 side——同机跨工具同名消歧的声明源
           ...(attachName === undefined ? {} : { name: attachName }),
           ...(this.opts.extendSession === undefined ? {} : { extends: this.opts.extendSession }),
         });
@@ -573,6 +601,7 @@ export async function runAdopt(args: AdoptArgs, deps: StarJoinDeps): Promise<num
     const reply = await pipe.send({
       op: 'attach',
       sessionId: hit.sessionId,
+      tool: hit.side, // 020：adopt 收编天然知道 side（resolve 结果）
       ...(hit.name === undefined ? {} : { name: hit.name }),
       ...(args.extendSession === undefined ? {} : { extends: args.extendSession }),
     });

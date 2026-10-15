@@ -305,7 +305,8 @@ async function starsText(deps: StatusDeps, nowMs: number, groups: StarGroup[]): 
           s.extends === undefined
             ? ''
             : ` (extends←${typeof s.extends === 'string' ? s.extends : `${s.extends.machine}:${s.extends.name}`})`;
-        return `${label}:${s.name ?? s.sessionId.slice(0, 8)}${ext}`;
+        // 020：成员行带工具限定词（yang:claude/boss）——跨工具同名时认得出谁是谁；老聚合器无 tool 保持旧格式
+        return `${label}:${s.tool === undefined ? '' : `${s.tool}/`}${s.name ?? s.sessionId.slice(0, 8)}${ext}`;
       });
       lines.push(`  会话: ${members.join('、')}`);
     }

@@ -738,7 +738,8 @@ describe('018 批二：adopt 错误路径', () => {
       sender.send({ op: 'send', id: 'ex1', targetMachine: 'node-host:retired', body: 'x' });
       const superseded = await sender.waitFor((f) => f.op === 'error' && f.id === 'ex1');
       expect(superseded).toMatchObject({ code: 'SESSION_SUPERSEDED' });
-      expect(superseded.op === 'error' && superseded.message).toContain('node-host:alice');
+      // 020：adopt 收编声明带 tool——指路地址带工具限定词
+      expect(superseded.op === 'error' && superseded.message).toContain('node-host:claude/alice');
     },
     15_000,
   );
@@ -906,4 +907,68 @@ describe('018 批二：兼容锁（机器级零回归锚）', () => {
     expect(() => parseStatusArgs(['--stars', '--claude'])).toThrow(MultichatError);
     expect(parseStatusArgs(['--stars', '--json'])).toMatchObject({ stars: true, json: true });
   });
+});
+
+// ---- 020 工具限定词：启动器声明与 spawn 前预警 ----------------------------------------------
+
+describe('020 工具限定词：启动器声明与 spawn 前预警', () => {
+  it(
+    'attach 带 tool；星内已有异工具同名成员→spawn 前打预警行；限定地址直达、裸名报碰撞列两地址',
+    async () => {
+      const sh = await startStarStar('sl-t1');
+      await sh.aggregator(); // 聚合器先在（预警探针的管道面）
+      // 既有成员 codex/boss（attach 管道直声明，带 tool）
+      const pipe = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')));
+      const reply = await pipe.send({ op: 'attach', sessionId: CODEX_THREAD, name: 'boss', tool: 'codex' });
+      expect(reply.ok).toBe(true);
+      sh.state.codex = [{ id: CODEX_THREAD, name: 'boss' }];
+      const out: string[] = [];
+      const err: string[] = [];
+      const joiner = new StarJoiner({
+        deps: starJoinDeps(sh, { stdout: (l) => out.push(l), stderr: (l) => err.push(l) }),
+        side: 'claude',
+        connects: ['sl-t1'],
+        spawnName: 'boss',
+      });
+      await joiner.begin(); // 差分基线=空表（预警后快照）
+      // 021 纪律：横幅 + 预警都在 spawn 前打出（out 定格于 begin 返回时）
+      expect(out[0]).toContain('入星 sl-t1');
+      expect(out.some((l) => l.startsWith('预警:') && l.includes('codex/boss') && l.includes('claude/boss'))).toBe(true);
+      // 模拟 spawn 出新会话（claude/boss）→ attach（带 tool=claude）生效
+      sh.state.claude = [{ sessionId: 'sess-new', name: 'boss', updatedAt: 99 }];
+      const sender = await senderOn(sh.harness.url, key('s'));
+      const deliver = async (id: string, target: string): Promise<Frame> => {
+        sender.send({ op: 'send', id, targetMachine: target, body: 'x' });
+        return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
+      };
+      for (let i = 0; i < 50; i++) {
+        const r = await deliver(`tq${i}`, 'node-host:claude/boss');
+        if (r.op === 'receipt' && r.status === 'delivered') break;
+        if (i === 49) throw new Error('claude/boss 限定直达未生效');
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      // 裸名 boss 现在跨工具撞名 → NAME_COLLISION 列两个限定地址
+      const col = await deliver('tq-col', 'node-host:boss');
+      expect(col).toMatchObject({ op: 'error', code: 'NAME_COLLISION' });
+      expect(col.op === 'error' && col.message).toContain('node-host:claude/boss');
+      expect(col.op === 'error' && col.message).toContain('node-host:codex/boss');
+      await joiner.stop();
+      pipe.close();
+    },
+    20_000,
+  );
+
+  it('聚合器不在→预警静默跳过（begin 不炸不延迟，只有横幅行）', async () => {
+    const sh = await startStarStar('sl-t2'); // 不拉聚合器——管道不存在
+    const out: string[] = [];
+    const joiner = new StarJoiner({
+      deps: starJoinDeps(sh, { stdout: (l) => out.push(l) }),
+      side: 'claude',
+      connects: ['sl-t2'],
+      spawnName: 'boss',
+    });
+    await joiner.begin();
+    expect(out).toEqual(['入星 sl-t2——会话地址 tcp:sl-t2:node-host:boss（attach 自动，异常见日志）']);
+    await joiner.stop();
+  }, 10_000);
 });

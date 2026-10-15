@@ -4,6 +4,25 @@
 
 ## [Unreleased]
 
+### 020：三段寻址工具维度（会话段限定词 工具/名）
+
+- **会话段可选工具限定词**：`--via tcp:<星>:<机器>:<工具>/<会话名>`（如 `tcp:cloud-broker:yang:claude/cloudworker10` 与 `…:codex/cloudworker10` 各达各的）——同机 claude/codex 同名（多适配器常态）消歧；裸名唯一时照旧可用（1.6.1 已发布地址零破坏）。分隔符选 `/`（`@` 已固定表示"谁@哪台机"）
+- **解析收命中集（修静默首中 bug）**：broker `resolveSessionMember` 从"首个名命中即投"改为收集全部命中——1 命中投；>1 报 `NAME_COLLISION`（复用单机 `--to` 同码，教学文案区分场景）：跨工具列全部限定地址照抄即达；**同工具同名**（限定词救不了）与**老聚合器未声明 tool** 改列 `名(id8)` 行并教升级/短前缀
+- **限定词判定防自伤与枚举耦合**：会话段全串先按裸名精确匹配（会话名本身可含 `/`，名为 `codex/notes` 的成员优先于限定词拆解）；未命中才拆 `工具/` 前缀，且**仅当命中该机已声明的 tool 值**才当限定词——broker 永不硬编码工具清单，新适配器声明即寻址
+- **会话段 id8 短前缀寻址**：`tcp:<星>:<机器>:<id 前 8 位>`（与机器段 mid8 同一语法；全量 id 今日已可命中；多命中教加长）
+- **声明面加 tool**：attach/sync/sessions/members 声明加可选 `tool` 字段（值规约：小写字母/数字 ≤16，禁冒号禁斜杠，大小写归一，`sanitizeTool` 一处定义）；启动器与 adopt 天然知道 side 直接填；恢复链验活回填同一来源（claude=进程扫描 / codex=rollout）
+- **extends 血统按工具各归各**：`extendsByOldName` 收列表化——claude"boss"与 codex"boss"的接任互不冲突（同工具同旧名仍先声明先得 `EXTENDS_CONFLICT`）；死名多血统报碰撞列全部接任者地址；`SESSION_SUPERSEDED` 指路地址带工具限定词
+- **启动期同名预警**：launcher spawn 前经 attach status 探针查成员表，`-n <名>` 与星内既有成员异工具同名时打一行"星内已有 codex/<名>，你的地址将是 claude/<名>"（预警行 spawn 前打=021 纪律；聚合器不在静默跳过不延迟 spawn，探针 ~2s 上限）
+- **显示面带 tool**：`status --stars` 成员行 `机器:claude/名`、三段直达回执 `claude/名@机器`、SUPERSEDED 指路地址；roster/members 声明帧随 tool 字段透传（additive，旧读者忽略）
+- **破坏性收紧**：同工具同名从今日"静默首中投递成功"（018 批一首中实现）变为显性碰撞报错——019 同款收紧立场，混版本窗口内行为严格变好（唯一名单路径不变）
+- 文档：[broker.md 2.2/1.3.3/1.3.4/2.7](docs/broker.md)（限定词教学+验证阶梯剧本）、[联邦手册五](docs/federation.md)、SKILL.md、README 同步
+
+### 019：两段式会话投递退役（ambient 退场，代码跟上 proto:3-only 文档）
+
+- **破坏性变更**：`crosschat send --via tcp:<星>:<机器> --to <会话名>` 的两段式会话投递（投给机器上任意同名活会话的 ambient 语义）**已废弃**——发送侧解析一处收窄，改报 `SESSION_NOT_MEMBER` 同款教学（会话须经启动器入星 `crosschat claude/codex --connect <星>`，跨星改用三段寻址 `--via tcp:<星>:<机器>:<会话名>` 直达）；错误在连接 broker 前即抛出。**迁移**：把两段式 + `--to` 的用法换成三段寻址；机器级操作不受影响（见下）
+- **机器级操作零回归**：`status --via tcp:<机器>` 远程枚举、`--file` 文件通道、`--conversation` 引用续话、roster/机器名解析、ssh 形态（`--via ssh:<别名> --to <名>`）全部照旧
+- 测试面：两段式 + `--to` 用例改为断言报错教学；机器级传输/格式化/文件覆盖改走 `--conversation` 合法腿保全
+
 ### 021：启动器控制台输出纪律（横幅不串 TUI）
 
 - **横幅 spawn 前同步打**：入星横幅原先由异步 attach 循环打印——sessionId 靠 spawn 后快照差分获得，确认到达时 claude/codex TUI 已接管控制台，裸 stdout 写落进输入区（1.6.1 实测误认作模型自敲初始化命令）。现改为子进程启动前打印，且文案不预支成功：`入星 <星>——会话地址 tcp:<星>:<机器>:<会话名>（attach 自动，异常见日志）`（-n 场景三要素 spawn 前全知）；名未知（claude 无 -n / codex 无 -n）只打星名行 `入星 <星>（attach 自动，异常见日志）`；多星循环逐星一行

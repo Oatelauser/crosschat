@@ -457,7 +457,11 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
       );
     }
     checkSendLogRate(deps.sendLogFile, identityKey(caller), `claude:${target.id}`, deps.now());
-    const toName = claudeSession.name ?? shortId('claude', claudeSession.sessionId);
+    // 020：三段直达（targetSessionId 在场）的回执显示带工具限定词——跨工具同名时发送面认得出谁收到
+    const toName =
+      args.targetSessionId !== undefined && claudeSession.name !== undefined
+        ? `claude/${claudeSession.name}`
+        : (claudeSession.name ?? shortId('claude', claudeSession.sessionId));
     const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(handle === undefined ? {} : { handle }) });
     try {
       await deps.deliverClaude(
@@ -477,7 +481,10 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   checkSendLogRate(deps.sendLogFile, identityKey(caller), `codex:${target.id}`, deps.now());
   const threads = await deps.listCodexThreads();
   const threadName = threads.find((thread) => thread.id === target.id)?.name;
-  const toName = threadName ?? shortId('codex', target.id);
+  const toName =
+    args.targetSessionId !== undefined && threadName !== undefined
+      ? `codex/${threadName}`
+      : (threadName ?? shortId('codex', target.id));
   const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(handle === undefined ? {} : { handle }) });
   const parkNow = (): number => {
     park(

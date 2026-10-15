@@ -15,6 +15,7 @@ import { deliverViaRunSend } from '../src/serve/node.js';
 import { FileInbox } from '../src/serve/file-channel.js';
 import { composeEnvelope } from '../src/envelope.js';
 import { encodeOrigin, decodeOriginIdentity } from '../src/federation.js';
+import { encodeRef } from '../src/ref.js';
 import { pickAutoVia, runSend, type SendDeps } from '../src/commands/send.js';
 import { ensureSelfEntry, realServeDeps, type ServeDeps } from '../src/commands/serve.js';
 
@@ -563,8 +564,10 @@ describe('B3.1 drill fixes', () => {
     writeFileSync(join(home, 'tcp', 'node.json'), JSON.stringify({ broker: { host: '127.0.0.1', port: Number(new URL(h.url).port) }, key: key('s') }));
     const file = join(home, 'drill-a.txt');
     writeFileSync(file, 'payload');
+    // 019 后机器级消息腿走 --conversation：human→codex 真实 ref（接收腿 runSend 按 ref 续话）
+    const convRef = encodeRef({ v: 1, f: { p: 'human' }, t: { p: 'codex', id: 'b0ss0000-aaaa' }, n: 'a1b2c3d4', c: 1 });
     const out = await runViaTcpSend(
-      { via: 'tcp:hub', to: 'boss', fileArg: file, bodyArg: 'drill-a 附件测试' },
+      { via: 'tcp:hub', conversation: convRef, fileArg: file, bodyArg: 'drill-a 附件测试' },
       'drill-a 附件测试',
       { ...nodeDeps, tcpBaseDir: home, hostname: () => 'ci-machine', machineId: () => 'cccc00001111' },
     );

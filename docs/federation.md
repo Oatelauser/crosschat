@@ -472,8 +472,9 @@ ssh 联邦与 tcp 星是**正交并存**的两条跨机通道：ssh 按机器投
 crosschat claude -n boss --connect cloud
 crosschat codex --connect cloud
 
-# ② 三段直达（免 --to；会话名禁冒号）
+# ② 三段直达（免 --to；会话名禁冒号；同机 claude/codex 同名时带工具限定词 <工具>/<会话名>）
 crosschat send --via tcp:cloud:host-b:boss --body "构建跑了吗"
+crosschat send --via tcp:cloud:host-b:claude/boss --body "给 claude 那位"   # 撞名消歧，各达各的
 
 # ③ 换轨接任（旧会话退休，新会话接它的名字血统——投旧名自动被指路到新会话）
 crosschat claude -n boss2 --connect cloud --extend-session boss
@@ -486,7 +487,7 @@ crosschat serve --connect cloud --adopt limbo
 crosschat status --stars
 ```
 
-错误速读：`SESSION_NOT_MEMBER`=该会话名没入星（走 ④ 收编或 ① 重起）；`SESSION_SUPERSEDED`=旧名已死有接任者（报错给出接任者三段地址，改投）；启动器/聚合器打"已降级机器级"=broker 机 crosschat 过旧（升级重启即恢复，机器级收发不受影响）。ssh 侧不受这些语义影响——ssh 形态永远按机器投递。
+错误速读：`SESSION_NOT_MEMBER`=该会话名没入星（走 ④ 收编或 ① 重起）；`NAME_COLLISION`=同名撞车（报错列出带工具限定词的地址，照抄即达；同工具同名时改列 id8，会话段投 `<id 前 8 位>` 短前缀）；`SESSION_SUPERSEDED`=旧名已死有接任者（报错给出接任者三段地址——带工具限定词，改投）；启动器/聚合器打"已降级机器级"=broker 机 crosschat 过旧（升级重启即恢复，机器级收发不受影响）。ssh 侧不受这些语义影响——ssh 形态永远按机器投递。
 
 ---
 

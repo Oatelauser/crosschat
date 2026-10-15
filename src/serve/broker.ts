@@ -15,6 +15,7 @@ import {
   PROTOCOL_VERSION,
   encodeFrame,
   parseFrame,
+  sanitizeTool,
 } from './protocol.js';
 import type {
   ConnectFrame,
@@ -138,8 +139,12 @@ export class Broker {
   private readonly online = new Map<string, Session>();
   private readonly pending = new Map<string, PendingResult>();
   private readonly fileRoutes = new Map<string, FileRoute>();
-  /** 018 extends 星内映射（内存）：旧名 → 接续声明（归属连接——断连/重播即失效）。同旧名先声明先得。 */
-  private readonly extendsByOldName = new Map<string, { holder: Session; decl: SessionMemberDecl }>();
+  /**
+   * 018 extends 星内映射（内存）：旧名 → 接续声明列表（归属连接——断连/重播即
+   * 失效）。020 限定化：同旧名跨工具各归各血统（claude"boss"与 codex"boss"共存），
+   * 同工具同旧名仍先声明先得（后到收 EXTENDS_CONFLICT）。
+   */
+  private readonly extendsByOldName = new Map<string, { holder: Session; decl: SessionMemberDecl }[]>();
   /**
    * 018 恢复链②（批二）：每机器断连后保留的最后已知成员名单（lastKnownMembers
    * 语义——纯内存、零持久文件）。sessions 帧到达即刷新该机快照；连接断开
@@ -253,8 +258,10 @@ export class Broker {
     this.sessions.delete(session);
     if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
     // 018：该连接声明的 extends 随机器条目消失（成员表挂在 session 上同灭）
-    for (const [oldName, entry] of this.extendsByOldName) {
-      if (entry.holder === session) this.extendsByOldName.delete(oldName);
+    for (const [oldName, list] of this.extendsByOldName) {
+      const rest = list.filter((e) => e.holder !== session);
+      if (rest.length === 0) this.extendsByOldName.delete(oldName);
+      else if (rest.length < list.length) this.extendsByOldName.set(oldName, rest);
     }
     // F0：online 键=归一 mid（onConnect 写入侧同款），下线按同键回收
     if (session.machineId !== undefined) {
@@ -359,31 +366,38 @@ export class Broker {
       if (decl === null || typeof decl !== 'object' || typeof decl.sessionId !== 'string' || decl.sessionId === '') {
         continue; // 单条坏形状跳过，不整帧拒
       }
-      members.set(decl.sessionId, decl);
+      // 020：tool 容错归一（聚合器侧已严校验；坏值剥离降级为无 tool，不拒帧）
+      const { tool: rawTool, ...rest } = decl as SessionMemberDecl & { tool?: unknown };
+      const tool = sanitizeTool(rawTool);
+      members.set(decl.sessionId, { ...rest, ...(tool === undefined ? {} : { tool }) });
     }
     session.members = members;
     // 018 恢复链②：刷新该机最后已知名单（断连保留；连接在场时 members 即权威）
     this.lastKnownMembers.set(normalizeMid(session.machineId), [...members.values()]);
     // 归属重建：先撤本连接旧声明，再逐条登记
-    for (const [oldName, entry] of this.extendsByOldName) {
-      if (entry.holder === session) this.extendsByOldName.delete(oldName);
+    for (const [oldName, list] of this.extendsByOldName) {
+      const rest = list.filter((e) => e.holder !== session);
+      if (rest.length === 0) this.extendsByOldName.delete(oldName);
+      else if (rest.length < list.length) this.extendsByOldName.set(oldName, rest);
     }
     for (const decl of members.values()) {
       if (decl.extends === undefined) continue;
       const oldName = typeof decl.extends === 'string' ? decl.extends : decl.extends.name;
-      const existing = this.extendsByOldName.get(oldName);
-      if (existing !== undefined && existing.holder !== session) {
-        const holder = existing.holder.machineName ?? existing.holder.machineId?.slice(0, 8) ?? '?';
-        const winner = existing.decl.name ?? existing.decl.sessionId.slice(0, 8);
+      const list = this.extendsByOldName.get(oldName) ?? [];
+      // 020：同旧名同工具先声明先得；跨工具血统共存（各归各）
+      const clash = list.find((e) => (e.decl.tool ?? undefined) === (decl.tool ?? undefined));
+      if (clash !== undefined) {
+        const holder = clash.holder.machineName ?? clash.holder.machineId?.slice(0, 8) ?? '?';
+        const winner = clash.decl.name ?? clash.decl.sessionId.slice(0, 8);
         this.send(session.ws, {
           op: 'error',
           code: ERR.EXTENDS_CONFLICT,
-          message: `会话 ${decl.name ?? decl.sessionId.slice(0, 8)} 的 extends 旧名 ${oldName} 已由 ${holder} 的会话 ${winner} 接续（先声明先得）——本条 extends 未生效`,
+          message: `会话 ${decl.name ?? decl.sessionId.slice(0, 8)} 的 extends 旧名 ${oldName}${decl.tool === undefined ? '' : `（${decl.tool} 血统）`} 已由 ${holder} 的会话 ${winner} 接续（先声明先得）——本条 extends 未生效`,
         });
         this.log(`extends-conflict ${oldName}：${session.machineName ?? '?'} 后到，${holder} 先得`);
         continue;
       }
-      this.extendsByOldName.set(oldName, { holder: session, decl });
+      this.extendsByOldName.set(oldName, [...list, { holder: session, decl }]);
     }
     this.log(`sessions ${session.machineName ?? session.machineId.slice(0, 8)}: ${members.size} 成员`);
   }
@@ -741,27 +755,123 @@ export class Broker {
     return this.resolveSessionMember(conn, sessionName);
   }
 
-  /** 会话段在目标机器连接的成员表内解析（名字或 id 命中；alive-wins 优先于 extends）。 */
+  /**
+   * 会话段在目标机器连接的成员表内解析（020 收命中集，替代旧"首个名命中即投"
+   * 的静默首中）：全串裸名精确优先（名字可含 `/`——防"会话起名 tool/x 而机器
+   * 恰有 tool"的自伤边角）→ 1 命中投 / >1 碰撞错误。未命中才拆 `工具/` 前缀，
+   * 且前缀仅当命中该机已声明的 tool 值才当限定词（broker 永不硬编码工具清单，
+   * 新适配器声明即寻址）；再 id8/加长前缀（≥8 位 hex，照机器段 mid8 规则）；
+   * 最后 extends 旧名（alive-wins：活成员在则 extends 休眠）。
+   */
   private resolveSessionMember(target: Session, sessionName: string): ResolvedTarget {
-    for (const decl of target.members?.values() ?? []) {
-      if (decl.name === sessionName || decl.sessionId === sessionName) {
-        return { kind: 'session', ws: target.ws, sessionId: decl.sessionId };
+    const members = [...target.members?.values() ?? []];
+    const declaredTools = new Set(members.flatMap((m) => (m.tool === undefined ? [] : [m.tool])));
+    const machine = target.machineName ?? target.machineId?.slice(0, 8) ?? '?';
+    const hit = (m: SessionMemberDecl): ResolvedTarget => ({ kind: 'session', ws: target.ws, sessionId: m.sessionId });
+    // 1) 全串裸名精确（名字或全量会话 id——今日全量 id 寻址零回归）
+    const exact = members.filter((m) => m.name === sessionName || m.sessionId === sessionName);
+    if (exact.length === 1) return hit(exact[0]!);
+    if (exact.length > 1) return this.sessionCollision(sessionName, exact, machine);
+    // 2) 限定词拆解（仅当命中该机已声明 tool 集；否则整体视为会话名，落到 3/4）
+    const slash = sessionName.indexOf('/');
+    if (slash > 0 && slash < sessionName.length - 1) {
+      const tool = sessionName.slice(0, slash).toLowerCase();
+      const rest = sessionName.slice(slash + 1);
+      if (declaredTools.has(tool)) {
+        const qualified = members.filter((m) => m.tool === tool && (m.name === rest || m.sessionId === rest));
+        if (qualified.length === 1) return hit(qualified[0]!);
+        if (qualified.length > 1) return this.sessionCollision(rest, qualified, machine);
+        const sup = this.extendsHit(tool, rest);
+        if (sup !== undefined) return sup;
+        return {
+          kind: 'error',
+          code: ERR.SESSION_NOT_MEMBER,
+          message: `会话 ${sessionName} 不是星成员——会话须经启动器入星（crosschat claude/codex --connect <星>）才能按名投递`,
+        };
       }
     }
-    const ext = this.extendsByOldName.get(sessionName);
-    if (ext !== undefined) {
-      const succMachine = ext.holder.machineName ?? ext.holder.machineId?.slice(0, 8) ?? '?';
-      const succName = ext.decl.name ?? ext.decl.sessionId.slice(0, 8);
-      return {
-        kind: 'error',
-        code: ERR.SESSION_SUPERSEDED,
-        message: `会话 ${sessionName} 已由 ${succMachine}:${succName} 接续——改投接任者 tcp:<星>:${succMachine}:${succName}`,
-      };
+    // 3) 会话 id 前缀（id8 短前缀寻址；多命中教加长——照机器段 mid8 规则）
+    if (sessionName.length >= 8 && /^[0-9a-fA-F-]+$/.test(sessionName)) {
+      const lower = sessionName.toLowerCase();
+      const byId = members.filter((m) => m.sessionId.toLowerCase().startsWith(lower));
+      if (byId.length === 1) return hit(byId[0]!);
+      if (byId.length > 1) {
+        const ids = byId.map((m) => m.sessionId.slice(0, 12)).join(', ');
+        return { kind: 'error', code: ERR.NAME_COLLISION, message: `会话 id 前缀 ${sessionName} 在 ${machine} 上命中多个成员（${ids}）——加长前缀后重试` };
+      }
     }
+    // 4) extends 旧名（裸名收全部血统；跨工具多血统=碰撞列接任者）
+    const sup = this.extendsHit(undefined, sessionName);
+    if (sup !== undefined) return sup;
     return {
       kind: 'error',
       code: ERR.SESSION_NOT_MEMBER,
       message: `会话 ${sessionName} 不是星成员——会话须经启动器入星（crosschat claude/codex --connect <星>）才能按名投递`,
+    };
+  }
+
+  /**
+   * 020 撞名错误构造：跨工具（全部带 tool 且 ≥2 种）列限定地址、教改投限定；
+   * 同工具同名或混老聚合器（无 tool）限定地址相同——列 id8 行、教 id 前缀照抄，
+   * 后者加"对端聚合器版本旧"升级教学。
+   */
+  private sessionCollision(
+    name: string,
+    hits: SessionMemberDecl[],
+    machine: string,
+  ): ResolvedTarget {
+    const star = this.starName ?? '<星>';
+    const anyToolless = hits.some((h) => h.tool === undefined);
+    const distinctTools = new Set(hits.flatMap((h) => (h.tool === undefined ? [] : [h.tool])));
+    const qualifiedUnique = !anyToolless && distinctTools.size >= 2;
+    const lines = hits
+      .map((h) =>
+        qualifiedUnique
+          ? `  tcp:${star}:${machine}:${h.tool}/${name}`
+          : `  ${h.tool === undefined ? '' : `${h.tool}/`}${name}(${h.sessionId.slice(0, 8)})`,
+      )
+      .join('\n');
+    const teach = qualifiedUnique
+      ? '改投限定地址即可'
+      : `限定地址相同（${anyToolless ? '对端聚合器未声明 tool' : '同工具同名'}）——改投 id 前缀：tcp:${star}:${machine}:<id 前 8 位>（括号内照抄）`;
+    const note = anyToolless ? '；部分成员未声明 tool——对端聚合器版本旧，升级后可用 工具/名 限定词消歧' : '';
+    return {
+      kind: 'error',
+      code: ERR.NAME_COLLISION,
+      message: `会话名 ${name} 在 ${machine} 上有多个同名成员：\n${lines}\n${teach}${note}`,
+    };
+  }
+
+  /** extends 旧名命中（020 限定化同治）：1 血统→SUPERSEDED 指路；多血统→碰撞列接任者地址。 */
+  private extendsHit(tool: string | undefined, oldName: string): ResolvedTarget | undefined {
+    const entries = this.extendsByOldName.get(oldName) ?? [];
+    const hits = tool === undefined ? entries : entries.filter((e) => (e.decl.tool ?? undefined) === tool);
+    if (hits.length === 0) return undefined;
+    if (hits.length === 1) return this.superseded(oldName, hits[0]!);
+    const star = this.starName ?? '<星>';
+    const lines = hits
+      .map((e) => {
+        const m = e.holder.machineName ?? e.holder.machineId?.slice(0, 8) ?? '?';
+        const n = e.decl.name ?? e.decl.sessionId.slice(0, 8);
+        return `  tcp:${star}:${m}:${e.decl.tool === undefined ? '' : `${e.decl.tool}/`}${n}`;
+      })
+      .join('\n');
+    return {
+      kind: 'error',
+      code: ERR.NAME_COLLISION,
+      message: `旧会话名 ${oldName} 有多条接续血统：\n${lines}\n改投接任者地址即可`,
+    };
+  }
+
+  /** SESSION_SUPERSEDED 指路（020：接任者带工具限定词；无 tool 同旧形态）。 */
+  private superseded(oldName: string, entry: { holder: Session; decl: SessionMemberDecl }): ResolvedTarget {
+    const succMachine = entry.holder.machineName ?? entry.holder.machineId?.slice(0, 8) ?? '?';
+    const succName = entry.decl.name ?? entry.decl.sessionId.slice(0, 8);
+    const succTool = entry.decl.tool === undefined ? '' : `${entry.decl.tool}/`;
+    return {
+      kind: 'error',
+      code: ERR.SESSION_SUPERSEDED,
+      message: `会话 ${oldName} 已由 ${succMachine}:${succTool}${succName} 接续——改投接任者 tcp:${this.starName ?? '<星>'}:${succMachine}:${succTool}${succName}`,
     };
   }
 

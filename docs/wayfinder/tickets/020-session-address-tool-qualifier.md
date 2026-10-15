@@ -1,7 +1,7 @@
 # 三段寻址工具维度（会话段限定词 claude/codex）
 
 label: wayfinder:design
-status: open
+status: closed
 blocked-by: （无——独立于 019/010，可先行）
 claimed-by: （待领）
 
@@ -73,3 +73,15 @@ extends 旧名同碰撞域、同规则（限定词可选）；`SESSION_SUPERSEDE
 - 停止条件：npm run check 全绿；真机——同机 claude+codex 同名双成员下裸名报碰撞列两地址、限定地址各达各的；同工具同名列 id8 且 id8 地址可达；裸名唯一与 018 全部既有验收项零回归
 - 发版：随 **1.6.2**（用户 2026-10-15 拍板：019+020 连做合并 1.6.2，一次迁移说明）；实施顺序 019 先行（其删除的两段式路径正是本票限定词解析要改的路径——先删后改省工）
 - 依赖：021 先行合并——本票启动期同名预警必须 spawn 前打印，控制台纪律先立
+
+## Resolution
+
+**2026-10-15 实施关票**（主会话验收：check 亲跑全绿 716 过 + diff 过目；~439 行在预算内）。落地全录：
+
+- `SessionMemberDecl.tool?` + `sanitizeTool`（小写字母数字 ≤16 一处定义）；node 侧严校验拒收坏值、broker 侧容错归一（坏值剥离降级不拒帧）；恢复链 tool 随名单找回、验活来源回填
+- `resolveSessionMember` 收命中集：全串裸名精确优先 → 限定词拆解（仅当命中该机已声明 tool 集）→ id8/加长前缀（≥8 hex）→ extends → NOT_MEMBER；碰撞复用 `NAME_COLLISION`（跨工具列限定地址/同工具或无 tool 列 id8+升级教学）
+- `extendsByOldName` 列表化：跨工具血统共存、同工具先声明先得；SUPERSEDED 指路带限定词与真星名
+- 启动期同名预警 spawn 前打（管道在才查 ~2s 上限、聚合器不在静默跳过——021 纪律）；三段回执 `claude/名` 显示；status --stars 成员行 `机器:claude/名`
+- 7 新测试用例全录票面验收清单（撞名双成员/同工具 id8/斜杠自伤边角/extends 分血统/混版本降级/预警两态）；CLI 侧透传天然满足两端同款规则
+- 取舍：`status --via` 枚举行不加 tool（分段结构已含维度）；限定段 id 组合不做（无主需求）
+- 残留：真机腿（撞名列地址/id8 可达/三段照常）随 1.6.2 drill 补；混版本窗口（老聚合器+新 broker）仅合成帧覆盖

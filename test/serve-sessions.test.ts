@@ -578,6 +578,124 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
   }, 10_000);
 });
 
+describe('020 broker：会话段工具限定词与收命中集', () => {
+  async function star(up: { url: string; registryFile: string }) {
+    seed(up.registryFile, [
+      { key: key('s'), machineName: 'sender-host' },
+      { key: key('n'), machineId: WIN_MID, machineName: 'win-box' },
+    ]);
+    const node = await nodeOn(up.url, key('n'), WIN_MID, { name: 'win-box' });
+    const sender = await senderOn(up.url, key('s'));
+    return { node, sender };
+  }
+  const deliver = async (sender: TestClient, node: TestClient, id: string, target: string): Promise<Frame> => {
+    sender.send({ op: 'send', id, targetMachine: target, body: 'x' });
+    // 成功路径：node 收 deliver 即回 result；返回 node 侧 deliver 帧（断言 sessionId 注入）
+    const nodeSaw = node
+      .waitFor((f) => f.op === 'deliver' && f.id === id, 1_500)
+      .then((f) => {
+        node.send({ op: 'result', id, status: 'delivered', turn: '1' });
+        return f;
+      })
+      .catch(() => undefined);
+    const back = await sender.waitFor((fr) => (fr.op === 'receipt' || fr.op === 'error') && fr.id === id);
+    if (back.op === 'error') return back; // 错误路径：node 不会有 deliver，立即返回（不等探针超时）
+    const nd = await nodeSaw;
+    return nd !== undefined ? nd : back;
+  };
+
+  it('撞名双成员：裸名 NAME_COLLISION 列两个限定地址；限定地址各达各的；裸名唯一照投（全量 id 亦达）', async () => {
+    const up = await startBroker();
+    const { node, sender } = await star(up);
+    node.send(sessionsFrame([
+      { sessionId: 'sess-c-boss', name: 'boss', tool: 'claude' },
+      { sessionId: '01a05bb8-bf35-7980-bf4d-6b48e1380d77', name: 'boss', tool: 'codex' },
+    ]));
+    const col = await deliver(sender, node, 'q1', 'win-box:boss');
+    expect(col).toMatchObject({ op: 'error', code: 'NAME_COLLISION' });
+    expect(col.op === 'error' && col.message).toContain('win-box:claude/boss');
+    expect(col.op === 'error' && col.message).toContain('win-box:codex/boss');
+    expect(col.op === 'error' && col.message).toContain('改投限定地址');
+    const toClaude = await deliver(sender, node, 'q2', 'win-box:claude/boss');
+    expect(toClaude).toMatchObject({ op: 'deliver', sessionId: 'sess-c-boss' });
+    const toCodex = await deliver(sender, node, 'q3', 'win-box:codex/boss');
+    expect(toCodex).toMatchObject({ op: 'deliver', sessionId: '01a05bb8-bf35-7980-bf4d-6b48e1380d77' });
+    // 裸名唯一（退掉一个成员后）照投——1.6.1 已发布地址零破坏
+    node.send(sessionsFrame([{ sessionId: 'sess-c-boss', name: 'boss', tool: 'claude' }]));
+    const bare = await deliver(sender, node, 'q4', 'win-box:boss');
+    expect(bare).toMatchObject({ op: 'deliver', sessionId: 'sess-c-boss' });
+    // 全量 id 寻址照旧
+    const byId = await deliver(sender, node, 'q5', 'win-box:sess-c-boss');
+    expect(byId).toMatchObject({ op: 'deliver', sessionId: 'sess-c-boss' });
+  });
+
+  it('同工具同名：限定地址相同→列 id8 两行教 id 前缀；id8 前缀直达', async () => {
+    const up = await startBroker();
+    const { node, sender } = await star(up);
+    node.send(sessionsFrame([
+      { sessionId: '9f8e7d6c-0000-0000-0000-000000000001', name: 'boss', tool: 'claude' },
+      { sessionId: '1a2b3c4d-0000-0000-0000-000000000002', name: 'boss', tool: 'claude' },
+    ]));
+    const col = await deliver(sender, node, 'q6', 'win-box:boss');
+    expect(col).toMatchObject({ code: 'NAME_COLLISION' });
+    const msg = col.op === 'error' ? col.message : '';
+    expect(msg).toContain('claude/boss(9f8e7d6c)');
+    expect(msg).toContain('claude/boss(1a2b3c4d)');
+    expect(msg).toContain('id 前 8 位');
+    const qualifiedCol = await deliver(sender, node, 'q7', 'win-box:claude/boss');
+    expect(qualifiedCol).toMatchObject({ code: 'NAME_COLLISION' }); // 限定词救不了同工具同名
+    const byId8 = await deliver(sender, node, 'q8', 'win-box:9f8e7d6c');
+    expect(byId8).toMatchObject({ op: 'deliver', sessionId: '9f8e7d6c-0000-0000-0000-000000000001' });
+  });
+
+  it('全串名含斜杠自伤边角：成员真叫 codex/notes 时全串精确优先（不拆限定词）', async () => {
+    const up = await startBroker();
+    const { node, sender } = await star(up);
+    node.send(sessionsFrame([
+      { sessionId: 'sess-slash', name: 'codex/notes', tool: 'claude' },
+      { sessionId: 'sess-notes', name: 'notes', tool: 'codex' },
+    ]));
+    const f = await deliver(sender, node, 'q9', 'win-box:codex/notes');
+    expect(f).toMatchObject({ op: 'deliver', sessionId: 'sess-slash' }); // 名为 codex/notes 的成员本尊
+    // 真限定词照常：codex/notes 拆解仅在无全串命中时生效——这里全串已命中，不拆
+  });
+
+  it('extends 跨工具同名血统：共存登记；死名裸名碰撞列两接任者；限定旧名指路对应血统', async () => {
+    const up = await startBroker();
+    const { node, sender } = await star(up);
+    node.send(sessionsFrame([
+      { sessionId: 'succ-c', name: 'boss-claude2', tool: 'claude', extends: 'boss' },
+      { sessionId: 'succ-x', name: 'boss-codex2', tool: 'codex', extends: 'boss' },
+    ]));
+    // 跨工具血统共存——不再 EXTENDS_CONFLICT（同工具才会）
+    const col = await deliver(sender, node, 'r1', 'win-box:boss');
+    expect(col).toMatchObject({ code: 'NAME_COLLISION' });
+    expect(col.op === 'error' && col.message).toContain('win-box:claude/boss-claude2');
+    expect(col.op === 'error' && col.message).toContain('win-box:codex/boss-codex2');
+    const sup = await deliver(sender, node, 'r2', 'win-box:claude/boss');
+    expect(sup).toMatchObject({ code: 'SESSION_SUPERSEDED' });
+    expect(sup.op === 'error' && sup.message).toContain('win-box:claude/boss-claude2');
+    expect(sup.op === 'error' && sup.message).toContain('tcp:<星>:win-box:claude/boss-claude2');
+  });
+
+  it('老聚合器无 tool 降级：同名双成员无 tool → 碰撞列 id8 + 升级教学（限定词不可用不瞎拆）', async () => {
+    const up = await startBroker();
+    const { node, sender } = await star(up);
+    node.send(sessionsFrame([
+      { sessionId: 'old-aaa-0001', name: 'boss' },
+      { sessionId: 'old-bbb-0002', name: 'boss' },
+    ]));
+    const col = await deliver(sender, node, 's1', 'win-box:boss');
+    expect(col).toMatchObject({ code: 'NAME_COLLISION' });
+    const msg = col.op === 'error' ? col.message : '';
+    expect(msg).toContain('boss(');
+    expect(msg).toContain('未声明 tool');
+    // 无声明 tool 集 → claude/boss 不当限定词（整体按名解析 → 非成员）
+    const q = await deliver(sender, node, 's2', 'win-box:claude/boss');
+    expect(q).toMatchObject({ code: 'SESSION_NOT_MEMBER' });
+  });
+});
+
 describe('018 9b：老 broker（proto:1）降级的协议侧', () => {
   it('connect 携带 caps；info.caps 无 session-members→不发 sessions 帧并留降级日志', async () => {
     // 假老 broker：info 带 caps:[]（老版本恒空数组），connect 一律回 connected

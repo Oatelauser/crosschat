@@ -17,6 +17,7 @@ import {
   MAX_PAYLOAD_BYTES,
   parseFrame,
   PROTOCOL_VERSION,
+  sanitizeTool,
 } from './protocol.js';
 import type {
   DeliverFrame,
@@ -321,6 +322,8 @@ export interface NodeClientDeps {
 interface MemberEntry {
   sessionId: string;
   name?: string;
+  /** 020：工具限定词（claude/codex/未来适配器；启动器/adopt 天然知道 side 直接填）。 */
+  tool?: string;
   /** 机器限定旧名（machine 缺省=同机旧名）。 */
   extends?: { machine?: string; name: string };
 }
@@ -343,13 +346,21 @@ export function attachPipePath(entry: BrokerEntry, dir: string, labelOverride?: 
  */
 function parseMemberDecl(raw: unknown): { ok: true; entry: MemberEntry } | { ok: false; error: string } {
   if (raw === null || typeof raw !== 'object') return { ok: false, error: '成员声明形状错误（须为对象）' };
-  const r = raw as { sessionId?: unknown; name?: unknown; extends?: unknown };
+  const r = raw as { sessionId?: unknown; name?: unknown; tool?: unknown; extends?: unknown };
   if (typeof r.sessionId !== 'string' || r.sessionId === '') {
     return { ok: false, error: '成员声明缺 sessionId（成员键=会话 ID，启动器 spawn 后必持有）' };
   }
   const name = typeof r.name === 'string' ? sanitizeName(r.name) : undefined;
   if (name !== undefined && name.includes(':')) {
     return { ok: false, error: `会话名 ${name} 禁含冒号（tcp:<星>:<机器>:<会话> 三段寻址保留字）` };
+  }
+  // 020：tool 值规约——小写字母数字 ≤16（禁冒号禁斜杠）；非法声明拒收教学（大小写归一）
+  let tool: string | undefined;
+  if (r.tool !== undefined) {
+    tool = sanitizeTool(r.tool);
+    if (tool === undefined) {
+      return { ok: false, error: `工具限定词 ${String(r.tool)} 非法（小写字母/数字，≤16 字符，禁冒号禁斜杠）` };
+    }
   }
   let ext: { machine?: string; name: string } | undefined;
   if (r.extends !== undefined) {
@@ -376,6 +387,7 @@ function parseMemberDecl(raw: unknown): { ok: true; entry: MemberEntry } | { ok:
     entry: {
       sessionId: r.sessionId,
       ...(name === undefined ? {} : { name }),
+      ...(tool === undefined ? {} : { tool }),
       ...(ext === undefined ? {} : { extends: ext }),
     },
   };
@@ -386,6 +398,7 @@ function memberToDecl(m: MemberEntry): SessionMemberDecl {
   return {
     sessionId: m.sessionId,
     ...(m.name === undefined ? {} : { name: m.name }),
+    ...(m.tool === undefined ? {} : { tool: m.tool }),
     ...(m.extends === undefined
       ? {}
       : { extends: m.extends.machine === undefined ? m.extends.name : { machine: m.extends.machine, name: m.extends.name } }),
@@ -905,9 +918,13 @@ export class NodeClient {
             : typeof decl.extends === 'string'
               ? { name: decl.extends }
               : { ...(decl.extends.machine === undefined ? {} : { machine: decl.extends.machine }), name: decl.extends.name };
+        // 020：tool 随名单找回；缺失（老 broker 名单/老声明）由验活来源回填——
+        // claude 注册表命中=claude，codex rollout 命中=codex（重启自愈回填同一来源）。
+        const tool = sanitizeTool(decl.tool) ?? (claudeIds.has(decl.sessionId) ? 'claude' : codexIds.has(decl.sessionId) ? 'codex' : undefined);
         this.members.set(decl.sessionId, {
           sessionId: decl.sessionId,
           ...(decl.name === undefined ? {} : { name: decl.name }),
+          ...(tool === undefined ? {} : { tool }),
           ...(ext === undefined ? {} : { extends: ext }),
         });
         revived++;

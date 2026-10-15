@@ -222,6 +222,15 @@ export async function runViaTcpSend(args: SendArgs, body: string | undefined, de
   if (target === '') {
     throw new MultichatError('USAGE', '--via tcp:<机器名>：机器名不能为空（broker 机上 crosschat serve --list 可查；多星机可 --via tcp:<星名>:<机器名> 指定）');
   }
+  // 019：两段式会话投递退役——tcp 机器级目标（无会话段）+ --to 会话名 = 远端
+  // 任意同名活会话即收的 ambient 语义，与星成员模型冲突（文档已先行 proto:3
+  // 口径）。机器级操作（--file / --conversation / status / roster）与 ssh 形态不受影响。
+  if (args.to !== undefined && !target.includes(':')) {
+    throw new MultichatError(
+      'SESSION_NOT_MEMBER',
+      `两段式会话投递已退役：--via tcp:<机器> --to <会话名> 不再投递机器上的非成员会话——会话须经启动器入星（crosschat claude/codex --connect <星>）才能按名投递，三段寻址 --via tcp:<星>:<机器>:<会话名> 直达星成员`,
+    );
+  }
   const config = readNodeConfig(join(tcpDir(deps.tcpBaseDir ?? defaultBaseDir()), 'node.json'));
   const timeoutMs = tcpTimeoutMs(deps.env);
 

@@ -21,6 +21,8 @@ export const ERR = {
   SESSION_SUPERSEDED: 'SESSION_SUPERSEDED',
   /** 018：extends 同旧名先声明先得，后声明者冲突回执。 */
   EXTENDS_CONFLICT: 'EXTENDS_CONFLICT',
+  /** 020：会话段撞名（多命中）——复用单机 --to 同码（多候选列名单），教学文案区分场景。 */
+  NAME_COLLISION: 'NAME_COLLISION',
 } as const;
 
 /**
@@ -32,6 +34,17 @@ export const CAP_SESSION_MEMBERS = 'session-members';
 /** caps 数组包含判定（缺省数组=老节点，恒 false）。 */
 export function hasCap(caps: string[] | undefined, cap: string): boolean {
   return Array.isArray(caps) && caps.includes(cap);
+}
+
+/**
+ * 020 tool 值规约（broker/node 共用一处定义）：小写字母/数字，禁冒号禁斜杠，
+ * ≤16 字符；大小写归一（大写声明小写化收）。非法返回 undefined（声明侧拒收教学，
+ * broker 容错侧静默降级为无 tool）。
+ */
+export function sanitizeTool(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const tool = raw.toLowerCase();
+  return /^[a-z0-9]{1,16}$/.test(tool) ? tool : undefined;
 }
 
 export interface InfoFrame {
@@ -204,6 +217,12 @@ export type ExtendsRef = string | { machine: string; name: string };
 export interface SessionMemberDecl {
   sessionId: string;
   name?: string;
+  /**
+   * 020：工具限定词（claude/codex/未来适配器；值规约=小写字母数字 ≤16，禁冒号禁斜杠）。
+   * 会话段可选 `工具/名字` 限定词即据此解析——同机跨工具同名时消歧。老聚合器缺省
+   * （undefined）——broker 永不硬编码工具清单，声明即寻址。
+   */
+  tool?: string;
   /** 显式继承的旧会话名（唯一通道 --extend-session；隐式/同名继承已否决）。 */
   extends?: ExtendsRef;
 }

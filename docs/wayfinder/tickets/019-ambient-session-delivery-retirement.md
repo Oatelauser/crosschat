@@ -1,7 +1,7 @@
 # ambient 会话投递退役（两段寻址仅留机器级操作）
 
 label: wayfinder:design
-status: open
+status: closed
 blocked-by: （无——用户 2026-10-15 裁定：云机自管升级，无兼容窗口要求）
 claimed-by: （待领）
 
@@ -22,3 +22,7 @@ proto:3 会话级成员已落地（018），两段式寻址的**会话投递**�
 - 规模 S 票：send 解析路径一处收窄 + 报错教学 + 测试（两段式会话投递用例改为断言报错；机器级操作零回归）+ CHANGELOG 破坏性变更声明（升级注记：两段式会话投递已废弃，改用三段）
 - 停止条件：npm run check 全绿；真机——三段照常 delivered、两段+--to 会话名报错教学、两段机器级操作（status 枚举/文件）原样
 - 发版：随 **1.6.2**（用户 2026-10-15 拍板：019+020 连做合并 1.6.2，一次迁移说明）
+
+## Resolution
+
+**2026-10-15 实施关票**（主会话验收：check 亲跑全绿 + diff 过目）。唯一收窄点 `runViaTcpSend`：两段式 + `--to` → `SESSION_NOT_MEMBER` 教学错误（读 node.json 之前抛出，未入网也先教退役）；文案与 broker 侧同款。21 处两段式测试用例改 `--conversation` 合法腿保机器级覆盖 + 2 新用例（教学×2 形态、机器级零回归）。~87 行在预算内。CHANGELOG 破坏性声明 + README 迁移注记。真机腿随 1.6.2 drill 补。

@@ -216,6 +216,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 ```
 隐式操作：
 - 横幅在 claude 接管屏幕**前**打印（报地址不预支成功）；启动后入星全程静默——attach 确认/断连重连提示落 `~/.crosschat/tcp/launcher.log`，失败才出一行 stderr
+- 星内已有**异工具同名**成员时，横幅后多一行预警（同样 spawn 前打）：`预警: 星内已有 codex/<会话名>，你的地址将是 claude/<会话名>（同名异工具，发送方需带工具限定词）`——把发送期碰撞提前到启动期可见；聚合器不在则静默跳过（尽力而为，不延迟启动）
 - 聚合器没跑会**自动拉起**（几秒内），不用管；**退出 claude 时自动退星**（detach），无需收拾动作
 - 会话死 → 聚合器扫描自动从星除名；会话内 `/rename` 改名 → 聚合器扫描（≤30s）自动跟随改名
 
@@ -258,7 +259,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 **验证**（两步：成员表见它；真发一条是最终裁决——本机对自己发也走全链）：
 ```
-# 期望：星下多出会话成员行——`会话: <本机名>:<会话名>`
+# 期望：星下多出会话成员行——`会话: <本机名>:claude/<会话名>`（带工具前缀；老聚合器未声明 tool 时保持裸名）
 > crosschat status --stars
 # 期望：`delivered to <会话名>@<本机名>(ec542c2c) (turn 1) · 续话 c1`，且该会话里收到消息
 > crosschat send --via tcp:<星>:<本机名>:<会话名> --body "联调测试"
@@ -274,7 +275,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 ```
 > crosschat claude -n <新会话名> --connect <星名> --extend-session <旧会话名>
 # 对端再投 tcp:<星名>:<本机名>:<旧会话名> →
-# ❌ SESSION_SUPERSEDED：旧会话已由 <新会话名> 接任（报错里带 tcp:<星名>:<本机名>:<新会话名> 指路）
+# ❌ SESSION_SUPERSEDED：旧会话已由 <新会话名> 接任（报错里带 tcp:<星名>:<本机名>:claude/<新会话名> 指路——带工具限定词）
 # 对端改投 <新会话名> 即达
 ```
 2.同名接任（新会话沿用旧名）——**不需要** --extend-session
@@ -283,7 +284,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 # 名字是寻址句柄：旧名随新会话复活，对端按原名照投即达
 ```
 隐式操作：
-- **先声明先得**：同一旧名只认第一个 --extend-session 声明，后来的启动时报错拒绝
+- **先声明先得（按血统）**：同工具同旧名只认第一个 --extend-session 声明，后来的启动时报错拒绝；跨工具血统各归各（claude"boss"与 codex"boss"的接任互不冲突）——投旧裸名有多条血统时报 `NAME_COLLISION` 列出全部接任者地址
 - **活着优先**：旧会话还活着时声明接任 → 存为"候任"，旧会话正常收消息，死后接任才生效
 - **校验分级**：本机有该旧名的对话史 → 严格校验防手滑；无记录 → 静默放行（无人会查询的名字，声明无害）
 
@@ -334,7 +335,7 @@ agent 组装的就是三段寻址（[2.2](#22-三段寻址找人)）；回程路
 
 ```
 crosschat send --via tcp:<星>:<机器>:<会话> --body "构建跑了吗"
-                      │     │      │      └ 会话名（星成员名；禁冒号）
+                      │     │      │      └ 会话名（星成员名；禁冒号；同名撞车时可带工具限定词 <工具>/<会话名>）
                       │     │      └──────── 机器名或 mid8（收件机）
                       │     └─────────────── 星名（多星时的选择器）
                       └───────────────────── tcp 通道
@@ -348,10 +349,13 @@ crosschat send --via tcp:<星>:<机器>:<会话> --body "构建跑了吗"
    ──deliver(sessionId=…)─▶ host-b 聚合器 ──▶ 按会话 ID 直投（不经名字解析）
 ```
 
-错误两条：
+**工具限定词**（同机 claude/codex 同名时消歧）：会话段可写 `<工具>/<会话名>`，如 `tcp:cloud:host-a:claude/boss` 与 `tcp:cloud:host-a:codex/boss` 各达各的。裸名唯一时照旧可用（已发布地址零破坏）；撞名时报 `NAME_COLLISION` 列出全部限定地址，照抄即达；**同工具**同名（限定词救不了）报错改列 `会话名(id8)` 两行，会话段投 `<id 前 8 位>` 短前缀直达（与机器段 mid8 同一语法）。解析规则防自伤：会话段全串先按裸名精确匹配（会话名本身可含 `/`），未命中才拆限定词，且前缀仅当命中该机已声明的工具值才生效——新适配器声明即寻址，broker 不内置工具清单。
+
+错误三条：
 
 - 非成员名 → `SESSION_NOT_MEMBER`（教学：会话须经启动器入星——对端重起或 [2.4](#24-adopt-收编会话活着但不在星里) adopt 收编）
-- 死名有人接任 → `SESSION_SUPERSEDED`（报错原文给出接任者的三段地址，改投即可）
+- 死名有人接任 → `SESSION_SUPERSEDED`（报错原文给出接任者的三段地址——带工具限定词，改投即可）
+- 同名撞车 → `NAME_COLLISION`（列限定地址或 id8，见上）
 
 ### 2.3 extends 换轨接任（旧会话退休，新会话接班）
 
@@ -444,26 +448,35 @@ broker 不支持会话成员（proto:3），已降级机器级——本机会话
 5. `crosschat send --via tcp:cloud-broker:cloud:ghost --body x`
    → 期望：`SESSION_NOT_MEMBER` 报错 + "会话须经启动器入星"教学
 
+**云机（工具限定词——同机同名消歧）：**
+
+6. 再入星一个 codex 同名会话：`crosschat codex --connect cloud-broker`，进入后 `/rename cloudworker10`
+   → 本机 `status --stars`：成员行变 `cloud:claude/cloudworker10、cloud:codex/cloudworker10`
+7. 本机裸名投：`crosschat send --via tcp:cloud-broker:cloud:cloudworker10 --body x`
+   → 期望：`NAME_COLLISION`，列出 `tcp:cloud-broker:cloud:claude/cloudworker10` 与 `…:codex/cloudworker10`，改投限定地址即可
+8. 限定直达：`crosschat send --via tcp:cloud-broker:cloud:codex/cloudworker10 --body x`
+   → 期望：delivered，codex 会话收到（回执显示 `codex/cloudworker10@cloud`）
+
 **云机（extends 接任）：**
 
-6. 退出 cloudworker10（Ctrl+C），另起接任：
+9. 退出 claude 那个 cloudworker10（Ctrl+C），另起接任：
    `crosschat claude -n cloudworker11 --connect cloud-broker --extend-session cloudworker10`
-7. 本机：`crosschat send --via tcp:cloud-broker:cloud:cloudworker10 --body x`
-   → 期望：`SESSION_SUPERSEDED` 报错，内含 `tcp:cloud-broker:cloud:cloudworker11` 指路
-   → 改发 cloudworker11 → delivered
+10. 本机投限定旧名：`crosschat send --via tcp:cloud-broker:cloud:claude/cloudworker10 --body x`
+    → 期望：`SESSION_SUPERSEDED` 报错，内含 `tcp:cloud-broker:cloud:claude/cloudworker11` 指路；改发 cloudworker11 → delivered
+    → 顺带验证 alive-wins：投裸名 cloudworker10 仍 delivered（codex 那位活着）
 
 **云机（adopt 收编）：**
 
-8. 裸起一个会话（直接敲 `claude`，不经 crosschat），进去后 `/rename limbo`
-9. 云端另开终端：`crosschat status --stars`
-   → 期望出现诊断行，直接给出完整命令：`crosschat serve --connect cloud-broker --adopt limbo`
-10. 照抄执行
+11. 裸起一个会话（直接敲 `claude`，不经 crosschat），进去后 `/rename limbo`
+12. 云端另开终端：`crosschat status --stars`
+    → 期望出现诊断行，直接给出完整命令：`crosschat serve --connect cloud-broker --adopt limbo`
+13. 照抄执行
     → 期望：`已收编 limbo…入星 cloud-broker`；本机发 `tcp:cloud-broker:cloud:limbo` → delivered
     → 再跑一次 adopt → 期望"已是成员"幂等提示（exit 0）
 
 **重启自愈（云机，保持 cloudworker11 活着）：**
 
-11. `crosschat serve --stop cloud-broker && crosschat serve --connect cloud-broker --detach`
+14. `crosschat serve --stop cloud-broker && crosschat serve --connect cloud-broker --detach`
     → 本机 `status --stars`：cloudworker11 成员行数秒内自动回来（恢复链验活重入册）
 
 ---

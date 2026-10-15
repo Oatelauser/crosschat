@@ -148,14 +148,15 @@ crosschat claude -n <新名> --connect <星> --extend-session <旧名>
 
 ```
 crosschat send --via tcp:<星>:<机器>:<会话> --body "构建跑了吗"
-                      │     │      │      └ 会话名（星成员名，禁冒号）
+                      │     │      │      └ 会话名（星成员名，禁冒号；同名撞车时可带工具限定词 <工具>/<会话名>）
                       │     │      └──────── 机器名或 mid8
                       │     └─────────────── 星名
                       └───────────────────── tcp 通道
 ```
 
 - 三段形态**免 `--to`**（会话段就是收件人）；回信照旧走信封 reply-hint，零配置
-- 非成员名 → `SESSION_NOT_MEMBER`（教学入星）；死名有接任者 → `SESSION_SUPERSEDED`（报错给出接任者的三段地址，改投即可）；旧名还活着 → alive-wins，照投旧会话本尊
+- 同机 claude/codex 同名（多适配器常态）会话段带工具限定词消歧：`tcp:<星>:<机器>:claude/<名>` 与 `…:codex/<名>` 各达各的；裸名唯一照旧可用（撞名报 `NAME_COLLISION` 列全部限定地址，同工具同名改列 id8 投短前缀）
+- 非成员名 → `SESSION_NOT_MEMBER`（教学入星）；死名有接任者 → `SESSION_SUPERSEDED`（报错给出接任者的三段地址——带工具限定词，改投即可）；旧名还活着 → alive-wins，照投旧会话本尊
 
 ### adopt 收编（会话活着但不在星里）
 
@@ -165,7 +166,7 @@ crosschat send --via tcp:<星>:<机器>:<会话> --body "构建跑了吗"
 crosschat status --stars
 #   cloud ✓ 可达，2 机器在线
 #   守护: cloud: online
-#   会话: host-a:boss、host-a:worker2 (extends←boss)
+#   会话: host-a:claude/boss、host-a:worker2 (extends←boss)
 #   建议: crosschat serve --connect cloud --adopt limbo（会话活着但非成员——收编活进程入星）
 
 crosschat serve --connect <星> --adopt <会话名>                       # 收编活进程（按其会话 ID，不新建）
@@ -313,7 +314,8 @@ ssh: 共 2 段对话
 ## 🗺️ 路线图
 
 **计划中**
-- [ ] 📡 两段式会话投递退役（[019](docs/wayfinder/tickets/019-ambient-session-delivery-retirement.md)：`--via tcp:<机器> --to <会话名>` 改报错教学，机器级操作保留——文档已先行 proto:3-only 口径）
+- [x] 📡 两段式会话投递退役（[019](docs/wayfinder/tickets/019-ambient-session-delivery-retirement.md)：`--via tcp:<机器> --to <会话名>` 改报错教学，机器级操作保留——文档已先行 proto:3-only 口径）
+- [x] ⭐ 三段寻址工具限定词（[020](docs/wayfinder/tickets/020-session-address-tool-qualifier.md)：会话段可选 `工具/名`——同机跨工具同名消歧，裸名唯一零破坏；收命中集碰撞报错列限定地址（同工具同名/老聚合器列 id8 教短前缀）；sessionId/id8 短前缀寻址；extends 血统按工具各归各；启动期同名异工具预警（spawn 前）；status --stars/回执/指路显示带 tool）
 - [ ] 🐧 mac 平台适配（unix 代码路径已共享，待实机验证；CI mac 观察位已挂）
 - [ ] 📦 常驻 broker 增强（忙时持久队列、异步回执、投递状态机——embassy 完整集对齐；tcp 星型直连传输已落地，见跨机通信手册）
 - [ ] 🖼️ TUI 看板与服务安装（开机自启）
