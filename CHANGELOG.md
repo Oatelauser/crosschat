@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### 文档重造（proto:3-only 口径，先行于 019 代码收窄）
+
+- **两段式教学退场**：broker.md 重写为「跨机通信：tcp」——三层概念一句话（启动星/机器连星/会话入星）+ 新旧差异表 + 环境搭建按"broker 当选规则 / broker 节点 / node 节点"重组（每操作紧跟编号验证：命令 → 期望输出成对，含全链验证阶梯）；删两段式会话寻址（`--via tcp:<星>:<机器> --to <会话名>`）全部教学，保留机器级操作（`status --via tcp:<机器>` 枚举 / `--file` 文件通道）与协议参考帧表，末尾迁移注记；README 通信方式表/快速入门/会话入星章/命令列表同步 proto:3 口径（占位符 `<星> <机器> <会话>`）；SKILL.md 跨机段删两段式会话投递教学（from-machine 坐标改教三段）；federation.md 五章速查措辞对齐
+
 ### 018：proto:3 会话级星成员（批二：命令面与链路；批一协议核心见下）
 
 - **入星启动**：`crosschat claude -n <名> --connect <星>` / `crosschat codex --connect <星>`（codex 无 -n，`/rename` 后聚合器扫描自动跟随）——`--connect` 可重复（多星并存）；聚合器不在自动 `serve --connect <星> --detach` 拉起（013 双开护栏在位），attach 管道重试连接；启动器存活期间守连接（聚合器重启自动重声明，含 extends），会话退出即退星；任何入星失败只出一行 stderr 不连坐会话本身
