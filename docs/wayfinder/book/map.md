@@ -22,7 +22,7 @@ label: wayfinder:map
 
 ## Decisions so far
 
-（空——制图会话不开票）
+- [mdBook + GitHub Pages 管道调研](tickets/001-mdbook-pipeline-research.md): 装 mdBook 用 peaceiris/actions-mdbook@v2.0.0 钉 0.5.4；部署走官方 artifact 路线（configure-pages v6.0.0 / upload-pages-artifact v5.0.0 / deploy-pages v5.0.1，Settings→Pages→Source 手点选 GitHub Actions）；中文搜索无分词接受整词局限、侧边栏用 0.5.0 内置 header-nav；断链用 mdbook-linkcheck2 v0.13.0 挡在部署前（详见 research/book-mdbook 分支 docs/wayfinder/book/research/mdbook-pipeline.md）
 
 ## Not yet specified
 
