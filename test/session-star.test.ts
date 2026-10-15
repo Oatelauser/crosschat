@@ -218,6 +218,16 @@ async function startStarStar(
     'utf8',
   );
   const state: ScanState = { claude: [], codex: [], delivered: [] };
+  // codex 活性夹具：CODEX_THREAD 的假 rollout（CI 无 ~/.codex，活性核验必须可离线命中——
+  // 否则成员首轮 tick 即被除名，名字回填永不发生；与 serve-sessions.test.ts 9a 同款）
+  const codexHome = mkdtempSync(join(root, `codexhome-${label}-`));
+  const rolloutDir = join(codexHome, 'sessions', '2026', '09', '01');
+  mkdirSync(rolloutDir, { recursive: true });
+  writeFileSync(
+    join(rolloutDir, `rollout-2026-09-01T14-47-09-${CODEX_THREAD}.jsonl`),
+    `${JSON.stringify({ type: 'session_meta', payload: { session_id: CODEX_THREAD, cwd: '/tmp', originator: 'codex-tui', timestamp: '2026-09-01T14:47:09.000Z' } })}\n`,
+    'utf8',
+  );
   const sh: StarHarness = {
     harness,
     starName: label,
@@ -243,6 +253,7 @@ async function startStarStar(
         },
         backoffBaseMs: 50,
         memberCheckMs: opts.memberCheckMs ?? 60_000,
+        codexHome,
       });
       nodeClients.push(client);
       void client.run().catch(() => {});
