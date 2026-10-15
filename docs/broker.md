@@ -17,25 +17,25 @@ crosschat send --via tcp:<星>:<机器>:<会话> --body "跑一次构建，产�
 # → delivered to worker2@host-b(9f8e7d6c) (turn 1) · 续话 c1
 ```
 
-### 新旧差异（1.6.0 起）
+### 三个角色：broker / node / 聚合器
 
-| 场景 | 旧（两段式，已废弃） | 新（proto:3 三段） |
+| 角色 | 是什么 | 一句话职责 |
 |---|---|---|
-| 给对端机器上的会话发消息 | `--via tcp:<机器> --to <名>`——名字由对端机解析，投给任何同名活会话 | `--via tcp:<星>:<机器>:<会话>`——直达入星会话；非成员名报错指路 |
-| 会话怎么可被跨机找到 | 不用做事（裸起的会话照收） | 启动器入星：`crosschat claude -n <名> --connect <星>` |
-| 旧会话退休、名字还要能找到 | 做不到（名字死了投递就断） | 换轨接任：`--extend-session <旧名>`，投旧名自动指路到接任者 |
-| 会话活着但丢了星籍 | 重投碰运气 | 收编：`crosschat serve --connect <星> --adopt <名>` |
-| 机器级操作（查远机会话、发文件） | `status --via tcp:<机器>` / `--file` | **不变**（不受影响） |
+| **broker**（星心） | 星心机器上的常驻服务（`crosschat serve`，1.2 部署） | 星的消息中转站：管机器注册表 + 会话成员表，一切跨机消息经它转发；它挂了跨机就瘫 |
+| **node**（节点机） | 接入星的每台机器，凭一份 [node.json 钥匙](#131-配置连接密钥)入网 | broker 机首次 serve 时把自己登记为星内首个 node（机器级即刻可收可发），其余机器贴钥匙后 `serve --connect` 入网 |
+| **聚合器** | node 机上 `serve --connect` 起的那条常驻连接（[1.3.2](#132-启动聚合器连接星)） | 一份进程两份职责：机器级**收件** + 维护本机会话的**星籍**（N 个会话共用这一条连接，不随会话数增长） |
+
+在此之上才是**会话**：经[启动器入星](#133-启动会话入星)的 claude/codex 会话成为星成员——三段寻址 `tcp:<星>:<机器>:<会话>` 的终点；机器连星了但会话没入星，星内依然找不到它。
 
 ### 怎么用这篇手册
 
 | 你这台机是… | 做哪节 |
 |---|---|
-| broker 机（星心） | 只做 **1.2**。机器级收发 serve 启动即有；要跑入星会话时 1.3 的"启动会话"照用（聚合器自动拉起，无需手动） |
-| node 机（其余机器） | 1.3 全做 |
-| CI 机（只发不收） | 1.3 只贴钥匙，不跑 --connect |
+| broker 机（星心） | 只做 [1.2](#12-broker-节点)。机器级收发 serve 启动即有；要跑入星会话时 1.3 的[启动会话](#133-启动会话入星)照用（聚合器自动拉起，无需手动） |
+| node 机（其余机器） | [1.3](#13-node-节点) 全做 |
+| CI 机（只发不收） | [1.3](#13-node-节点) 只贴钥匙，不跑 --connect |
 
-- 部署（一）→ 日常使用（二，含全链验证阶梯）→ 底层实现（三，折叠）→ 协议参考（四，折叠）→ 排障（永不折叠）
+- 部署（[一](#一环境搭建)）→ 日常使用（[二](#二日常使用)，含全链验证阶梯）→ 底层实现（[三](#三底层实现)，折叠）→ 协议参考（[四](#四协议参考proto13-对接实现指南)，折叠）→ [排障](#排障对照)（永不折叠）
 - **验证一律编号步骤**：每步"命令 → 期望输出"成对，顺序执行、照抄可跑
 - 命令块：`>` = 敲的，其余 = 期望输出，`#` = 备注；Linux 写法，win 等价（`nano`→`notepad`）
 - 端口默认 **7260**；钥匙 = 一份 `node.json`，唯一入网凭证；`<XX>` = 占位符
@@ -51,7 +51,7 @@ crosschat send --via tcp:<星>:<机器>:<会话> --body "跑一次构建，产�
 - 局域网 → 最常开机、能被各机直连的那台
 - 跨公网 → 云端/堡垒机（唯一公网入口；安全组放行端口入站。明文风险已拍板接受，TLS 挂账中）
 - win + WSL 同物理机 → 算两台机，选常开侧；**win 连 WSL broker 的 host 用 127.0.0.1**（WSL 镜像网络下它报的 LAN IP 从 win 不可达，实测）
-- 已有 ssh 联邦 → 机器 ≥3 台或要文件通道时才值得切 tcp
+- 已有 [ssh 联邦](federation.md) → 机器 ≥3 台或要文件通道时才值得切 tcp
 
 ### 1.2 broker 节点
 
@@ -70,24 +70,27 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 ```
 
 首次 broker 启动，自动做三件事：
-- 持久化命令参数(broker节点配置文件 `~/.crosschat/tcp/broker.json`)，后续重启不在需要参数，使用`crosschat serve --detach`或者`crosschat serve`命令
-- 把当前机器作为node节点，登记为星内首个成员（机器级即刻可收可发）
-- 写好本机自用的node节点配置文件 `~/.crosschat/tcp/node.json`（host=127.0.0.1，本机发送的凭证）
+- 持久化命令参数（broker 节点配置文件 `~/.crosschat/tcp/broker.json`），后续重启不再需要参数，使用 `crosschat serve --detach` 或者 `crosschat serve` 命令
+- 把当前机器作为[node节点](#13-node-节点)，登记为星内首个成员（机器级即刻可收可发）
+- 写好本机自用的[node节点配置文件](#131-配置连接密钥)（host=127.0.0.1，本机发送的凭证）
 
 **验证**（两条都过 = 星已就绪）：
 
-1. `crosschat serve --list`
-   → 期望：注册表列出 `self` 行（本机已是星内首成员）：
+1. 验证注册表列出 `self` 行（本机已是星内首成员）：
    ```
+   > crosschat serve --list
    label     name              mid8      added-at
    self      yang              ec542c2c  2026-10-11T02:12:00.059Z
    ```
-2. `ss -tln | grep 7260`
-   → 期望：`LISTEN 0 128 0.0.0.0:7260 …`（端口在听；换了端口 grep 自己的）
+2. 验证 broker 启动的端口是否监听
+   ```
+   > ss -tln | grep <端口，默认是7260>
+   LISTEN 0 128 0.0.0.0:7260 ...
+   ```
 
 #### 1.2.2 生成连接密钥
 
-生成 node 节点的钥匙；`--gen-key N` 一次打 N 份，打印的整段 JSON 交给对应机器，存放在`~/.crosschat/tcp/node.json`：
+生成 node 节点的钥匙；`--gen-key N` 一次打 N 份，打印的整段 JSON 交给对应机器，存放在[node节点配置文件](#131-配置连接密钥)：
 
 ```
 > crosschat serve --gen-key 2
@@ -109,12 +112,12 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 输出怎么读，四条：
 
-1. **探测行**：打印的 host 只是探测值——云主机/NAT 必改**对外公网 IP**，局域网核对 LAN IP（探测常错，人工核对是规则不是建议）
-2. **JSON 体**：`key`（该机钥匙）、`name`（星名）、`starId`（星标识）三个字段**照抄不改**；只有 `host`/`port` 按探测行规则改
-3. **showName**：改成「当前 node 机器」的名字（建议星内唯一）——机器名用于 tcp:<星>:<机器> 的机器段寻址与 roster 显示；这是 star 集群怎么称呼这台机器的唯一来源；改名=改 showName 后重启常驻（node 机重启聚合器、broker 机重启 serve）
+1. **host**：打印的 host 只是探测值——云主机/NAT 必改**对外公网 IP**，局域网核对 LAN IP（探测常错，人工核对是规则不是建议）
+2. **JSON 体**：`key`（该机钥匙）、`name`（星名）、`starId`（星标识）三个字段**照抄不改**；只有 `host`/`port` 按 host 条规则改
+3. **showName**：改成「当前 node 机器」的名字（建议星内唯一）——机器名用于 tcp:<星>:<机器> 的机器段寻址
 4. **安全**：钥匙进过终端回滚缓冲，分发完建议清屏；本命令只在 broker 机上跑
 
-此步的最终验证在 1.3——node 机凭这份钥匙连上星，即钥匙正确。
+此步的最终验证在 [1.3](#13-node-节点)——node 机凭这份钥匙连上星，即钥匙正确。
 
 #### 1.2.3 升级broker节点
 
@@ -127,19 +130,20 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 > 为什么必须重启常驻：npm 升级只换 CLI，`serve` 常驻进程仍跑旧版本——doctor 的版本对账行会点名。
 
 **验证**：
-
-1. `crosschat doctor`
-   → 期望：无 ❌（版本对账行不再点名"升级后未重启"）
+```
+# 期望：无 ❌（版本对账行不再点名"升级后未重启"）
+> crosschat doctor
+```
 
 ### 1.3 node 节点
 
 #### 1.3.1 配置连接密钥
 
-本机先装 crosschat（`npm i -g @oatelauser/crosschat && crosschat install-skills`），再把钥匙存成 `~/.crosschat/tcp/node.json`。一般情况下都不需要怎么修改，具体见`1.2.2 生成连接密钥`的配置即可，占位符对照：
+本机先装 crosschat（`npm i -g @oatelauser/crosschat && crosschat install-skills`），再把钥匙存成 `~/.crosschat/tcp/node.json`。一般情况下都不需要怎么修改，占位符对照：
 
 | 占位符 | 填什么                                                                     |
 |---|----------------------------------------------------------------------------|
-| `<broker公网IP>` | broker 的可达地址——云机/NAT 填**对外公网 IP**（按 1.2.2 探测行三规则核对） |
+| `<broker公网IP>` | broker 的可达地址——云机/NAT 填**对外公网 IP**（按 [1.2.2](#122-生成连接密钥) 的 host 规则核对） |
 | `<端口>` | broker 端口，数字不带引号（默认 7260）                                     |
 | `<星名>` / `<starId>` / `<钥匙>` | 钥匙 JSON 里原样照抄，不改                                                 |
 | `<本机名>` | 本机自报名（建议=hostname；star 集群里怎么称呼你）                         |
@@ -161,11 +165,16 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 **机器改名 = 改本机 node.json 的 showName + 重启常驻**（节点机重启节点客户端、broker 机重启 serve）——全机种唯一的名字来源，别手改 broker.json。
 
 **验证**：
-
-1. `crosschat doctor`
-   → 期望：无 ❌；tcp 条目缺 starId、同星双条目等配置问题会被 ⚠️ 点名
+```
+# 期望：无 ❌；tcp 条目缺 starId、同星双条目等配置问题会被 ⚠️ 点名
+> crosschat doctor
+```
 
 #### 1.3.2 启动聚合器连接星
+
+起这条常驻连接**兼任聚合器**，一份进程两份职责：
+- **收件**（断了=别人发你 `PEER_OFFLINE`；断线自动重连永不放弃）
+- **维护本机会话的星籍**（把入星声明报给星——[2.3](#23-extends-换轨接任旧会话退休新会话接班)/[2.4](#24-adopt-收编会话活着但不在星里)/[2.5](#25-重启自愈与降级告警) 的换轨、收编、自愈全靠它）
 
 ```
 > crosschat serve --connect <星名> --detach
@@ -174,27 +183,26 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 隐式操作：
 - **每（机器×星）永远只有一个聚合器**：重复 `serve --connect <同星>` 会被双开防护直接拒绝（exit 1 + 教你先 `serve --stop`）
 - 它兼任两职：机器级收发（本机出站的星凭证）+ 本机会话的星成员聚合（N 个会话共用这**一条**连接，不随会话数增长）
-- 启动会话时的 `--connect` 会在聚合器没跑时**自动拉起**——本节手动命令是兜底不是必经
+- [启动会话](#133-启动会话入星)时的 `--connect` 会在聚合器没跑时**自动拉起**——本节手动命令是兜底不是必经
 
-1.6.0 起这条常驻连接**兼任聚合器**，一份进程两份职责：**收件**（断了=别人发你 `PEER_OFFLINE`；断线自动重连永不放弃）+ **维护本机会话的星籍**（把入星声明报给星——2.3/2.4/2.5 的换轨、收编、自愈全靠它）。多星机按星名各跑一条：
-
+多星机按星名各跑一条：
+> broker 机跨机聊天不用启动聚合器，使用[会话入星启动](#133-启动会话入星)
 ```
 > crosschat serve --connect cloud --detach     # 挂 cloud 星收件+聚合
 > crosschat serve --connect home --detach      # 挂 home 星
 > crosschat serve --stop cloud                 # 只停 cloud；无参=全停（先守护后 broker）
 ```
 
-（broker 机要跑本机入星会话时同样需要聚合器——但不用手动起：1.3.3 的启动器会自动拉起。）
-
 **验证**：
 
-1. `crosschat status --stars`
-   → 期望：星可达、守护 online、本机在机器表：
+1. 验证星集群的状态
    ```
+   # 期望：星可达、守护 online、本机在机器表：
+   > crosschat status --stars
    tcp: 共 1 星
      <星名> ✓ 可达，2 机器在线
-       守护: <星名>: online
-       <本机名>(ec542c2c) 在线
+     守护: <星名>: online
+     <本机名>(ec542c2c) 在线
    ```
 
 #### 1.3.3 启动会话（入星）
@@ -247,13 +255,14 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 ```
 
 **验证**（两步：成员表见它；真发一条是最终裁决——本机对自己发也走全链）：
+```
+# 期望：星下多出会话成员行——`会话: <本机名>:<会话名>`
+> crosschat status --stars
+# 期望：`delivered to <会话名>@<本机名>(ec542c2c) (turn 1) · 续话 c1`，且该会话里收到消息
+> crosschat send --via tcp:<星>:<本机名>:<会话名> --body "联调测试"
+```
 
-1. `crosschat status --stars`
-   → 期望：星下多出会话成员行——`会话: <本机名>:<会话名>`
-2. `crosschat send --via tcp:<星>:<本机名>:<会话名> --body "联调测试"`
-   → 期望：`delivered to <会话名>@<本机名>(ec542c2c) (turn 1) · 续话 c1`，且该会话里收到消息
-
-双机全链把玩（对端机器的会话、错误教学、extends、adopt、重启自愈）见 **2.7 验证阶梯**。
+双机全链把玩（对端机器的会话、错误教学、extends、adopt、重启自愈）见 [2.7 验证阶梯](#27-验证阶梯全链把玩顺序执行)。
 
 #### 1.3.4 会话继承（换轨接任）
 
@@ -278,7 +287,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 #### 1.3.5 node节点升级
 
-同 broker 节点款，重启换成守护形态：
+同 [1.2.3](#123-升级broker节点) broker 节点款，重启换成守护形态：
 
 ```
 > npm i -g @oatelauser/crosschat@latest
@@ -288,11 +297,12 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 ```
 
 **验证**：
-
-1. `crosschat doctor`
-   → 期望：无 ❌
-2. `crosschat status --stars`
-   → 期望：已入星的活会话数秒内经恢复链自动回成员表（见 2.5；broker 与本机聚合器**都**重启过则走 2.4 adopt）
+```
+# 期望：无 ❌
+> crosschat doctor
+# 期望：已入星的活会话数秒内经恢复链自动回成员表（见 2.5；broker 与本机聚合器**都**重启过则走 2.4 adopt）
+> crosschat status --stars
+```
 
 ---
 
@@ -302,10 +312,10 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 ### 2.1 跨机聊天（一句话触发）
 
-准备：两端各有已入星的 agent 会话（1.3.3 启动器起的）。然后整个过程（图例：**👤 用户** 你说的指令 · **🤖 agent** 回复/收件 📨）：
+准备：两端各有已入星的 agent 会话（[1.3.3](#133-启动会话入星) 启动器起的）。然后整个过程（图例：**👤 用户** 你说的指令 · **🤖 agent** 回复/收件 📨）：
 
 ```
-👤 用户[boss -> worker2]  用 crosschat 走 tcp 跨机给 host-b 机器的 claude 会话「worker2」发任务：要求它跑一次构建并回报结果。
+👤 用户[boss -> worker2]  用 crosschat 走 tcp 跨机给 tcp:<star>:<showName> 机器的 claude 会话「worker2」发任务：要求它跑一次构建并回报结果。
 🤖 worker2 收到            📨 来自另一会话的消息:
                           <cross-session-message from-name="boss" turn="1">
                           …跑一次构建并回报结果…
@@ -314,7 +324,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 🤖 boss 收到               📨 构建完成，产物清单见下一条（turn 2，自动经 broker 跨机回到 A 机）
 ```
 
-agent 组装的就是三段寻址（2.2）；回程路条由信封自动携带，worker2 零配置照抄即回。
+agent 组装的就是三段寻址（[2.2](#22-三段寻址找人)）；回程路条由信封自动携带，worker2 零配置照抄即回。
 
 查对端机器上的会话名单（发起跨机新消息前先点名，机器级操作）：`crosschat status --via tcp:<机器名|mid8>`——过滤参数（`--claude`/`--codex`/`--name`）与本地同构；ssh 形态对端仍用 `ssh <对端> crosschat status`。
 
@@ -338,7 +348,7 @@ crosschat send --via tcp:<星>:<机器>:<会话> --body "构建跑了吗"
 
 错误两条：
 
-- 非成员名 → `SESSION_NOT_MEMBER`（教学：会话须经启动器入星——对端重起或 2.4 adopt 收编）
+- 非成员名 → `SESSION_NOT_MEMBER`（教学：会话须经启动器入星——对端重起或 [2.4](#24-adopt-收编会话活着但不在星里) adopt 收编）
 - 死名有人接任 → `SESSION_SUPERSEDED`（报错原文给出接任者的三段地址，改投即可）
 
 ### 2.3 extends 换轨接任（旧会话退休，新会话接班）
@@ -387,7 +397,7 @@ cloud ✓ 可达，2 机器在线
 
 ### 2.5 重启自愈与降级告警
 
-**恢复链**（重启自愈，一般无需人工）：聚合器重启 → 向 broker 查回本机最后已知名单 → 逐个本地验活 → 活的自动重新入册（孤儿会话自动找回，死名不复活）；broker 也重启过（双失忆）→ 恢复链空 → 走 2.4 的 adopt（status 诊断行会把命令打印好）；启动器还活着时则连查都不用查——旗标在手，原样重声明（含 extends）。
+**恢复链**（重启自愈，一般无需人工）：聚合器重启 → 向 broker 查回本机最后已知名单 → 逐个本地验活 → 活的自动重新入册（孤儿会话自动找回，死名不复活）；broker 也重启过（双失忆）→ 恢复链空 → 走 [2.4](#24-adopt-收编会话活着但不在星里) 的 adopt（status 诊断行会把命令打印好）；启动器还活着时则连查都不用查——旗标在手，原样重声明（含 extends）。
 
 **降级告警**：本机 crosschat 比 broker 机新（broker 还不支持会话成员）时，启动器/聚合器会在**命令行直接打一行**：
 
@@ -395,7 +405,7 @@ cloud ✓ 可达，2 机器在线
 broker 不支持会话成员（proto:3），已降级机器级——本机会话的入星声明不生效（机器级收发不受影响）
 ```
 
-含义：机器级操作（远程枚举、文件通道）照常工作，只是入星/三段寻址/extends 不生效。解法 = 按 1.2.3 升级 broker 机的 crosschat 后重启 serve，零配置自动恢复。
+含义：机器级操作（远程枚举、文件通道）照常工作，只是入星/三段寻址/extends 不生效。解法 = 按 [1.2.3](#123-升级broker节点) 升级 broker 机的 crosschat 后重启 serve，零配置自动恢复。
 
 ### 2.6 文件通道（--file，机器级）
 
@@ -409,11 +419,11 @@ broker 不支持会话成员（proto:3），已降级机器级——本机会话
 - **断点续传**：每 256KiB 一块落盘，中断后重跑同一命令从断点续传（对端保留锚点）
 - **去重秒回**：对端 inbox 已有同 sha 文件时直接回路径，不重传
 - **懒删除回收**：inbox 文件 >5 天删；总量 >512MiB 从最旧删起——**附件过期就没了**：收到"已送达"但路径不存在（>5 天），回对端"附件已过期，请重发 --file"
-- **单文件上限 64MiB**；超限报 `FILE_TOO_LARGE`，请压缩或分段（tcp 正文超 1MiB 会自动转文件通道，见 SKILL.md 大小地图）
+- **单文件上限 64MiB**；超限报 `FILE_TOO_LARGE`，请压缩或分段（tcp 正文超 1MiB 会自动转文件通道，见 [SKILL.md](../skills/crosschat/SKILL.md) 大小地图）
 
 ### 2.7 验证阶梯（全链把玩，顺序执行）
 
-双机剧本：星 `cloud-broker` 跑在云机（第一章搭好，云机与发起端都已贴钥匙），云机上再入星两个会话当对端。每步"命令 → 期望输出"成对，从上往下走完 = 三段寻址、错误教学、换轨接任、收编、重启自愈全部亲手过一遍。
+双机剧本：星 `cloud-broker` 跑在云机（[第一章](#一环境搭建)搭好，云机与发起端都已贴钥匙），云机上再入星两个会话当对端。每步"命令 → 期望输出"成对，从上往下走完 = 三段寻址、错误教学、换轨接任、收编、重启自愈全部亲手过一遍。
 
 **云机：**
 
@@ -522,7 +532,7 @@ delivered to boss@yang(ec542c2c) (turn 2) · 续话 c2
 
 ## 四、协议参考（proto:1/3 对接实现指南）
 
-> 草案期——稳定后对第三方实现承诺兼容。proto:3 不是线上版本号翻页：`proto` 字段仍为 1，新能力经握手 `caps` 数组协商（见 4.8）。
+> 草案期——稳定后对第三方实现承诺兼容。proto:3 不是线上版本号翻页：`proto` 字段仍为 1，新能力经握手 `caps` 数组协商（见 [4.8](#48-proto3-能力协商caps与-attach-管道)）。
 
 <details><summary>展开：握手时序 / 帧表 / 完整帧流 / 错误矩阵 / 文件状态机 / 最小客户端 / caps 协商与 attach 管道（点击）</summary>
 
@@ -657,7 +667,7 @@ C → file-end{id}
 
 - broker 的 `info` 恒带 `caps`，proto:3 起含 `"session-members"`；老 broker（proto:1 期）`caps` 缺省或为空
 - 会话级感知的聚合器在 `connect` 带上 `caps:["session-members"]`；缺省 = 老节点，broker 按机器级对待（零回归）
-- 聚合器发现 broker 无此 cap → **不发** `sessions`/`members-query`（老 broker 对未知 op 静默丢，发了也白发），并在命令面打一行降级告警（见 2.5）
+- 聚合器发现 broker 无此 cap → **不发** `sessions`/`members-query`（老 broker 对未知 op 静默丢，发了也白发），并在命令面打一行降级告警（见 [2.5](#25-重启自愈与降级告警)）
 - 后续能力（如 010 TLS）沿 `caps` 数组追加，不翻 `proto` 字段
 
 **attach 管道**（启动器↔聚合器的本机 IPC；win named pipe `\\.\pipe\crosschat-attach-<星名>` / unix `<tcp目录>/attach-<星名>.sock`）：换行分隔 JSON，逐帧回执一行：
@@ -693,7 +703,7 @@ C → file-end{id}
 | status `节点客户端: 未运行` | 本机聚合器没起（收不到消息的原因） | `crosschat serve --connect <星> --detach` |
 | `STAR_ID_MISMATCH 星标识不符已停机` | node.json 条目与 broker 现星标识不符（贴错星/配置陈旧） | 向管理员重新索取 node.json，重启 --connect |
 | 多星机裸写 `--via tcp:<机器>` 报"列条目"教学 | 多条目且无会话引用可循 | 加限定词 `--via tcp:<星>:<机器>`；回信不受影响（引用自动带星） |
-| status 第二行 broker 不可达 | node.json host/port 错 / 防火墙 / broker 没跑 | 按 1.2/1.3 核对；云机安全组 |
+| status 第二行 broker 不可达 | node.json host/port 错 / 防火墙 / broker 没跑 | 按 [1.2](#12-broker-节点)/[1.3](#13-node-节点) 核对；云机安全组 |
 | 收到"文件…已送达"但路径不存在 | 附件 >5 天被懒删除回收 | 回对端"附件已过期，请重发 --file" |
 | serve 启动即退、报错含 `EADDRINUSE` | 端口被占（多半是旧实例） | `crosschat serve --stop` 再起；或 `--port` 换端口（会记住） |
 | 升级 npm 包后跨机行为怪异（新 CLI + 旧常驻） | npm 升级只换了 CLI，`serve` 常驻进程仍跑旧版本 | `crosschat serve --stop && crosschat serve --detach`（broker 机）或 `serve --stop && serve --connect <星> --detach`（节点机）重启常驻；`crosschat doctor` 的版本对账行会点名 |

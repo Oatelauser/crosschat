@@ -35,7 +35,7 @@
 | OS | Windows（稳定）· Linux/WSL（experimental，1.3.0） | mac 未实测（unix 实现共享，理论可达） |
 
 ```bash
-npm i -g @oatelauser/crosschat    # 一行安装（提供 crosschat / multichat 双命令）
+npm i -g @oatelauser/crosschat --registry=https://registry.npmjs.org    # 一行安装（提供 crosschat / multichat 双命令；显式官方源，防镜像滞后装旧版）
 crosschat install-skills          # 协议教学装到两侧 agent
 codex app-server daemon start     # 仅 codex 会话参与时需要，纯 claude 互聊可跳过（干净终端启动，勿在 Claude 会话内）
 ```

@@ -1,7 +1,7 @@
 # proto:3 会话级星成员（成员=会话、显式继承、聚合器复用现有守护）
 
 label: wayfinder:design
-status: open
+status: closed
 blocked-by: （无——010 TLS 排其后：caps 机制由本票先定，TLS 沿用）
 claimed-by: （待领）
 
@@ -49,3 +49,9 @@ claimed-by: （待领）
 **已真机实证**（聚合器/broker 日志与 win 侧输出）：启动器 --connect 自动拉聚合器+attach+成员广播（member-up ×2）；member-rename 扫描跟随（drillboss→tmp-db）；member-down 活性精确除名；broker 会话 roster 行（win status --stars 见 会话: wsl:tmp-db）；三段寻址解析与非成员 SESSION_NOT_MEMBER 教学（多次）；attach 管道监听协议。
 **未真机实证**（706 测试含集成用例覆盖，环境受阻——网关 502 抖动致 claude 保活会话秒崩 + WSL 后台进程启动不稳）：三段 delivered 成功路径、SESSION_SUPERSEDED 指路、adopt 实收编、members-query 重启恢复、降级告警。遗留：用户手动跑 README/手册实测清单 A–D（WSL 侧聚合器已就绪待用），或网关稳定后复测。
 **旁支发现**：claude -p 模式下 -n 底层改名未生效（注册名走目录自动名，扫描跟随纠正显示）——非阻塞，待后续观察（交互式 -n 正常）。
+
+## Resolution
+
+**2026-10-15 验收关票（用户拍板）**。两批实施（95320fd 协议核心 / 665edc8 命令面）随 1.6.0/1.6.1 发布；win+WSL 真机 7 项 + 集成测试覆盖 5 项，1.6.1 云+本机实测三段直达双向闭环零报错（cloudworker10 往返实录归档）；CI 夹具 codexHome 机器依赖根除后三连绿。
+
+**遗留移交**：同机跨工具同名会话（claude"boss"+codex"boss"）三段解析静默首中无碰撞报错——018 裁定 1/4 只考虑了跨机重名（键=会话 ID），跨工具同名是盲区；用户 2026-10-15 拍板立 [020](020-session-address-tool-qualifier.md) 单独解决，不阻塞本票。
