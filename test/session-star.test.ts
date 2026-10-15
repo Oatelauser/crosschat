@@ -513,6 +513,50 @@ describe('018 批二：启动器入星链路', () => {
     },
     40_000,
   );
+
+  it(
+    '023 stop 落重连窗口：waitClose 与 stop 信号 race，限时返回不挂起',
+    async () => {
+      const sh = await startStarStar('sl-r2');
+      sh.state.claude = [{ sessionId: 'sess-base', name: 'old', updatedAt: 1 }];
+      const agg = await sh.aggregator(); // 预起聚合器：握有可停实例
+      const joiner = new StarJoiner({
+        deps: starJoinDeps(sh),
+        side: 'claude',
+        connects: ['sl-r2'],
+      });
+      await joiner.begin();
+      sh.state.claude = [
+        { sessionId: 'sess-base', name: 'old', updatedAt: 1 },
+        { sessionId: 'sess-kid', name: 'boss', updatedAt: 99 },
+      ];
+      const sender = await senderOn(sh.harness.url, key('s'));
+      const deliver = async (id: string): Promise<Frame> => {
+        sender.send({ op: 'send', id, targetMachine: 'node-host:boss', body: 'x' });
+        return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
+      };
+      let attached = false;
+      for (let i = 0; i < 50; i++) {
+        const r = await deliver(`w${i}`);
+        if (r.op === 'receipt' && r.status === 'delivered') {
+          attached = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      expect(attached).toBe(true);
+      // 杀聚合器 → superviseStar 进重连窗口；工装 spawnServeDetach 会拉回聚合器、
+      // 修复前 stop() 此刻调用会在新健康管道的 waitClose 上永等（启动器退出挂起）
+      await agg.stop();
+      const stopped = joiner.stop();
+      await Promise.race([
+        stopped,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('stop() 在重连窗口挂起')), 5_000)),
+      ]);
+      await stopped;
+    },
+    30_000,
+  );
 });
 
 // ---- extends 四级校验三分支 -----------------------------------------------------------

@@ -329,6 +329,9 @@ interface StarTarget {
  */
 export class StarJoiner {
   private stopped = false;
+  private resolveStopped!: () => void;
+  /** 023：stop 信号——与 superviseStar 的无界等待点（waitClose）race，stop 落重连窗口不挂起。 */
+  private readonly stoppedSignal: Promise<void>;
   private readonly pipes = new Map<string, AttachPipeClient>();
   private readonly supervise: Promise<void>[] = [];
   private sessionId?: string;
@@ -345,7 +348,11 @@ export class StarJoiner {
       /** spawn 时已知的会话名（claude -n 原生透传）——有则横幅打三段地址行，无名（codex/未命名）只打星名行。 */
       spawnName?: string;
     },
-  ) {}
+  ) {
+    this.stoppedSignal = new Promise((resolve) => {
+      this.resolveStopped = resolve;
+    });
+  }
 
   /** spawn 前调用：同步解析星目标并打横幅（TUI 接管控制台前落定），快照现存会话（差分基线）。 */
   async begin(): Promise<void> {
@@ -418,6 +425,7 @@ export class StarJoiner {
   /** 子进程退出后调用：detach（尽力而为）并收线。 */
   async stop(): Promise<void> {
     this.stopped = true;
+    this.resolveStopped(); // 023：唤醒重连窗口里可能在新管道上永等的 waitClose
     if (this.sessionId !== undefined) {
       for (const pipe of this.pipes.values()) {
         try {
@@ -525,7 +533,8 @@ export class StarJoiner {
         }
         const starName = target.entry.name ?? target.selector;
         deps.log(`已入星 ${starName}：会话可经 tcp:${starName}:${deps.machineName}:${attachName ?? sessionId.slice(0, 8)} 直达`);
-        await pipe.waitClose(); // 聚合器重启/管道断——重连原样重声明
+        // 聚合器重启/管道断——重连原样重声明；stop 时经信号即时唤醒（023：stop 落重连窗口不挂起）
+        await Promise.race([pipe.waitClose(), this.stoppedSignal]);
         if (!this.stopped) deps.log(`星 ${starName} 聚合器连接断开，重连中……`);
       } finally {
         this.pipes.delete(target.selector);

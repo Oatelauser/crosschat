@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### 023：StarJoiner.stop() 重连窗口挂起竞态修复
+
+- **修复启动器退出挂起**：`crosschat claude/codex --connect` 的子会话退出时，若 stop() 恰落在聚合器重连窗口（管道断开重试中），重连完成后监督循环在新健康管道的 `waitClose` 上永等——包装器进程不退出。现 stop 信号与该等待点 race，stop 即时唤醒收线（预存形状，018 批二引入、021 实施时发现）
+
 ### 020：三段寻址工具维度（会话段限定词 工具/名）
 
 - **会话段可选工具限定词**：`--via tcp:<星>:<机器>:<工具>/<会话名>`（如 `tcp:cloud-broker:yang:claude/cloudworker10` 与 `…:codex/cloudworker10` 各达各的）——同机 claude/codex 同名（多适配器常态）消歧；裸名唯一时照旧可用（1.6.1 已发布地址零破坏）。分隔符选 `/`（`@` 已固定表示"谁@哪台机"）
