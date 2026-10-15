@@ -16,6 +16,7 @@ label: wayfinder:map
   - **活文档跟最新发布**：书教最新已发布 npm 版，随 main 推送自动重部署；无版本快照，CHANGELOG 不入书
 - 技术栈：mdBook + GitHub Pages；源文件住 `/docs-book`，与业务代码隔离；仓库已有 ci/publish 两管线，deploy-book 纯增量（零回归铁律不破）。
 - 写作规范（承用户题词 + 家规）：Diátaxis 四分流（Tutorial=五分钟无错闭环不讲原理 / How-To=「如何 XXX」Recipe / Reference=表格零废话 / Explanation=原理类比与图）；禁 AI 废话与主观最高级；代码块必指定语言 + 关键行中文注释；文字先行、完整命令实录；渐进揭示——前三章不塞底层细节（Vue/FastAPI 官方文档同款坡度）。
+- 加规（2026-10-15 用户两条）：**emoji 角色标识**——对话与场景中机器人/用户等角色一看符号即辨（🤖/👤 类），全书统一词表随 003 定调；**图示优先**——一图胜千言，流程/架构/拓扑尽量用图不讲长文，命令实录仍走文字（复制可用优先）。
 - 参考件：`docs/embassy-main/.github/workflows/pages.yml`（embassy 本地副本的 Pages 管线，001 的对照物）。
 - 技能：按票型调用 research / grilling(+domain-modeling) / prototype / task。
 - Tracker 约定（本地 markdown，同产品图）：claim = 把票的 `claimed-by` 改成自己；blocking 用 `blocked-by` 字段；解决 = 在票文件末尾追加 `## Resolution` 一节并把 `status` 改为 `closed`，然后在下方 Decisions so far 加一行。编号独立于产品图（本图自有 001 起）。
