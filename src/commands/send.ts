@@ -15,7 +15,7 @@ import {
   resolveCallerIdentity,
   type CallerIdentity,
 } from '../identity.js';
-import { resolveTargetByName } from '../resolve.js';
+import { resolveTargetById, resolveTargetByName } from '../resolve.js';
 import { composeEnvelope } from '../envelope.js';
 import {
   bodyTooLargeMessage,
@@ -65,6 +65,12 @@ export interface SendArgs {
   maxBodyKb?: string;
   /** 票A：--max-turn 原始值（正整数轮数）；解析与容错在 limits.ts。 */
   maxTurn?: string;
+  /**
+   * 018 批一：投递管线注入的会话级目标（三段寻址命中星成员时由 broker→聚合器
+   * 透传的会话 ID）。命令面不暴露——id 定位绕过名字解析（resolveTargetById），
+   * to 值仅作占位（sessionId 在场即被忽略）。
+   */
+  targetSessionId?: string;
 }
 
 export interface SendDeps {
@@ -349,7 +355,11 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
       // claude-side --to names still resolvable; otherwise let resolveTargetByName report it
     }
     // Guard above ensures exactly one of --to/--conversation; here it is --to.
-    const resolved = resolveTargetByName(args.to ?? '', scan.sessions, threads);
+    // 018：targetSessionId 在场=会话级直达投递——id 定位优先，名字解析跳过。
+    const resolved =
+      args.targetSessionId !== undefined
+        ? resolveTargetById(args.targetSessionId, scan.sessions, threads)
+        : resolveTargetByName(args.to ?? '', scan.sessions, threads);
     target =
       resolved.side === 'claude'
         ? { p: 'claude', id: resolved.session.sessionId }

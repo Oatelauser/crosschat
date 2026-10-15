@@ -97,6 +97,26 @@ export function resolveTargetByName(
   );
 }
 
+/**
+ * 018 会话级星成员的 id 定位（跨机直达投递用）：claude 注册表按 sessionId、
+ * codex 按线程 id 各查一次——成员键是会话 ID，名字只是句柄，id 命中即投递，
+ * 绝无同名歧义。零命中=成员已死/不在本机（聚合器活性核验漏网或刚除名）。
+ */
+export function resolveTargetById(
+  sessionId: string,
+  sessions: readonly ClaudeSessionEntry[],
+  threads: readonly CodexThreadSummary[],
+): ResolvedTarget {
+  const claude = sessions.find((session) => session.sessionId === sessionId);
+  if (claude !== undefined) return { side: 'claude', session: claude };
+  const codex = threads.find((thread) => thread.id === sessionId);
+  if (codex !== undefined) return { side: 'codex', thread: codex };
+  throw new MultichatError(
+    'TARGET_NOT_FOUND',
+    `会话 ${sessionId.slice(0, 8)} 不在本机（claude 进程退出或 codex 线程不存在）——成员可能刚被聚合器除名，稍后重试或改用名字投递`,
+  );
+}
+
 function describeAvailableNames(
   sessions: readonly ClaudeSessionEntry[],
   threads: readonly CodexThreadSummary[],

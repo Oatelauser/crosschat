@@ -9,6 +9,7 @@ import { dirname } from 'node:path';
 import { Buffer } from 'node:buffer';
 import { WebSocket, WebSocketServer } from 'ws';
 import {
+  CAP_SESSION_MEMBERS,
   ERR,
   MAX_PAYLOAD_BYTES,
   PROTOCOL_VERSION,
@@ -27,6 +28,8 @@ import type {
   RosterMachine,
   RosterResultFrame,
   SendFrame,
+  SessionMemberDecl,
+  SessionsFrame,
   StatusPayload,
   StatusQueryFrame,
   StatusResultFrame,
@@ -83,11 +86,20 @@ interface Session {
   machineName?: string;
   lastPong: number;
   connectTimer?: ReturnType<typeof setTimeout>;
+  /** 018：该连接声明的会话成员（sessions 帧全量重播语义；undefined=从未声明）。连接断即随机器条目消失。 */
+  members?: Map<string, SessionMemberDecl>;
 }
 
 type RouteOutcome =
   | { kind: 'result'; frame: ResultFrame & { status: 'delivered' | 'queued' | 'parked' } }
   | { kind: 'status'; frame: StatusResultFrame }
+  | { kind: 'error'; code: string; message: string };
+
+/** 018 send/file 目标解析结果（机器级双轨 + 会话级第三轨）。 */
+type ResolvedTarget =
+  | { kind: 'local' }
+  | { kind: 'node'; ws: WebSocket }
+  | { kind: 'session'; ws: WebSocket; sessionId: string }
   | { kind: 'error'; code: string; message: string };
 
 interface PendingResult {
@@ -125,6 +137,8 @@ export class Broker {
   private readonly online = new Map<string, Session>();
   private readonly pending = new Map<string, PendingResult>();
   private readonly fileRoutes = new Map<string, FileRoute>();
+  /** 018 extends 星内映射（内存）：旧名 → 接续声明（归属连接——断连/重播即失效）。同旧名先声明先得。 */
+  private readonly extendsByOldName = new Map<string, { holder: Session; decl: SessionMemberDecl }>();
   private hbTimer?: ReturnType<typeof setInterval>;
 
   constructor(deps: BrokerDeps) {
@@ -207,12 +221,13 @@ export class Broker {
       void this.onMessage(session, data.toString());
     });
     // B0：注册表带 starId / E0：带星名 则随 info 下发（缺省不发——additive，旧节点无感）
+    // 018（9b）：caps 广播会话级星成员能力——聚合器据此识别新 broker（老 broker 恒空数组）
     const { starId, name } = readRegistry(this.d.registryFile);
     this.send(ws, {
       op: 'info',
       proto: PROTOCOL_VERSION,
       server: `crosschat/${this.d.version}`,
-      caps: [],
+      caps: [CAP_SESSION_MEMBERS],
       ...(starId === undefined ? {} : { starId }),
       ...(name === undefined ? {} : { name }),
     });
@@ -229,6 +244,10 @@ export class Broker {
   private onClose(session: Session): void {
     this.sessions.delete(session);
     if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
+    // 018：该连接声明的 extends 随机器条目消失（成员表挂在 session 上同灭）
+    for (const [oldName, entry] of this.extendsByOldName) {
+      if (entry.holder === session) this.extendsByOldName.delete(oldName);
+    }
     // F0：online 键=归一 mid（onConnect 写入侧同款），下线按同键回收
     if (session.machineId !== undefined) {
       const midNorm = normalizeMid(session.machineId);
@@ -307,7 +326,52 @@ export class Broker {
       }
       return;
     }
+    if (frame.op === 'sessions') {
+      this.onSessions(session, frame);
+      return;
+    }
     // 其余帧型（info/receipt/deliver）服务端无行为
+  }
+
+  /**
+   * 018：会话成员声明帧（node 角色独占）——全量重播语义：数组即该连接当前
+   * 全部成员，空数组=清空。extends 星内映射随声明重建：同旧名先声明先得，
+   * 后声明者收 EXTENDS_CONFLICT 回执（成员本身照常入册——失败方向不锁死用户）。
+   * 双活性（9a）由聚合器核验，broker 只聚合计数不做活性判断。
+   */
+  private onSessions(session: Session, frame: SessionsFrame): void {
+    if (session.machineId === undefined) return; // sender 角色不收成员声明
+    if (!Array.isArray(frame.sessions)) return; // 坏形状丢弃
+    const members = new Map<string, SessionMemberDecl>();
+    for (const decl of frame.sessions) {
+      if (decl === null || typeof decl !== 'object' || typeof decl.sessionId !== 'string' || decl.sessionId === '') {
+        continue; // 单条坏形状跳过，不整帧拒
+      }
+      members.set(decl.sessionId, decl);
+    }
+    session.members = members;
+    // 归属重建：先撤本连接旧声明，再逐条登记
+    for (const [oldName, entry] of this.extendsByOldName) {
+      if (entry.holder === session) this.extendsByOldName.delete(oldName);
+    }
+    for (const decl of members.values()) {
+      if (decl.extends === undefined) continue;
+      const oldName = typeof decl.extends === 'string' ? decl.extends : decl.extends.name;
+      const existing = this.extendsByOldName.get(oldName);
+      if (existing !== undefined && existing.holder !== session) {
+        const holder = existing.holder.machineName ?? existing.holder.machineId?.slice(0, 8) ?? '?';
+        const winner = existing.decl.name ?? existing.decl.sessionId.slice(0, 8);
+        this.send(session.ws, {
+          op: 'error',
+          code: ERR.EXTENDS_CONFLICT,
+          message: `会话 ${decl.name ?? decl.sessionId.slice(0, 8)} 的 extends 旧名 ${oldName} 已由 ${holder} 的会话 ${winner} 接续（先声明先得）——本条 extends 未生效`,
+        });
+        this.log(`extends-conflict ${oldName}：${session.machineName ?? '?'} 后到，${holder} 先得`);
+        continue;
+      }
+      this.extendsByOldName.set(oldName, { holder: session, decl });
+    }
+    this.log(`sessions ${session.machineName ?? session.machineId.slice(0, 8)}: ${members.size} 成员`);
   }
 
   private async onConnect(session: Session, frame: ConnectFrame): Promise<void> {
@@ -395,7 +459,9 @@ export class Broker {
       this.send(sender.ws, { op: 'error', code, message, id: frame.id });
       this.log(`route ${from}→${target} ${code}`);
     };
-    const resolved = this.resolveTarget(target);
+    // 018：含冒号的目标先整段按机器名解析（零回归锚点：冒号机器名照旧机器级），
+    // 失败再拆最后一段作会话名（机器段可含冒号，会话名聚合器侧已禁冒号）。
+    const resolved = target.includes(':') ? this.resolveTargetWithSession(target) : this.resolveTarget(target);
     if (resolved.kind === 'error') return fail(resolved.code, resolved.message);
     if (resolved.kind === 'local') {
       // 目标是 broker 本机：本机投递处理器（B2 起 serve 接线真实现）。
@@ -426,6 +492,7 @@ export class Broker {
     const targetSession = resolved.ws;
     // 转发 deliver（B2：to/conversation/origin 随帧透传），等对应 id 的 result 再映射 receipt 回发送方。
     // F1：fromMachine 只写真 roster 名（无名瞬态发送方缺省——投递侧省略信封属性，不填 origin 编码/unknown 占位）。
+    // 018：会话轨命中时附带 sessionId——聚合器本地按它注入投递（id 定位，不经名字解析）。
     this.send(targetSession, {
       op: 'deliver',
       id: frame.id,
@@ -434,6 +501,7 @@ export class Broker {
       to: frame.to,
       conversation: frame.conversation,
       origin: frame.origin,
+      ...(resolved.kind === 'session' ? { sessionId: resolved.sessionId } : {}),
     });
     const outcome = await new Promise<RouteOutcome>((resolve) => {
       const timer = setTimeout(() => {
@@ -573,10 +641,10 @@ export class Broker {
    * F0：spec 与注册表条目 mid 均在读取侧归一后比对——带杠 UUID（Windows
    * MachineGuid）与纯 hex 两形态互投同轨；存储与帧携带值保持历史形态。
    */
-  private resolveTarget(spec: string): { kind: 'local' } | { kind: 'node'; ws: WebSocket } | { kind: 'error'; code: string; message: string } {
+  private resolveTarget(spec: string): ResolvedTarget {
     const registry = readRegistry(this.d.registryFile);
     const ownNorm = normalizeMid(this.d.machineId() ?? '');
-    const pick = (resolved: NodeEntry): { kind: 'local' } | { kind: 'node'; ws: WebSocket } | { kind: 'error'; code: string; message: string } => {
+    const pick = (resolved: NodeEntry): ResolvedTarget => {
       const midNorm = normalizeMid(resolved.machineId ?? '');
       if (ownNorm !== '' && midNorm === ownNorm) return { kind: 'local' };
       const target = midNorm === '' ? undefined : this.online.get(midNorm);
@@ -611,6 +679,67 @@ export class Broker {
       return { kind: 'error', code: ERR.MACHINE_NAME_COLLISION, message: `多台机器同名 ${spec}（machine-id：${ids}）——改用 mid 前缀寻址` };
     }
     return pick(candidates[0]!);
+  }
+
+  /**
+   * 018：三段寻址 `tcp:<星>:<机器>:<会话>` 的 broker 侧拆解——targetMachine 携带
+   * `<机器>:<会话>`（最后一个冒号后是会话段：机器名可含冒号、会话名聚合器侧
+   * 已禁冒号）。整段先按现行机器名解析（冒号机器名零回归锚点），失败才拆段。
+   * 会话段查该机器聚合器连接的成员表：命中→会话轨（sessionId 随 deliver 注入）；
+   * 非成员→extends 指路或教学报错。alive-wins：活成员在则正常投递，extends 休眠。
+   */
+  private resolveTargetWithSession(spec: string): ResolvedTarget {
+    const whole = this.resolveTarget(spec);
+    if (whole.kind !== 'error') return whole;
+    const idx = spec.lastIndexOf(':');
+    if (idx <= 0 || idx === spec.length - 1) return whole; // 无会话段可拆——原错误照报
+    const machineSpec = spec.slice(0, idx);
+    const sessionName = spec.slice(idx + 1);
+    const machine = this.resolveTarget(machineSpec);
+    if (machine.kind === 'error') return machine;
+    if (machine.kind === 'local') {
+      // broker 本机的会话成员同样经由本机聚合器（成员表/活性在聚合器；deliverLocal 无会话注入）
+      const ownNorm = normalizeMid(this.d.machineId() ?? '');
+      const conn = ownNorm === '' ? undefined : this.online.get(ownNorm);
+      if (conn === undefined) {
+        return { kind: 'error', code: ERR.NOT_READY, message: 'broker 本机无聚合器连接——会话级投递需本机跑 crosschat serve --connect' };
+      }
+      return this.resolveSessionMember(conn, sessionName);
+    }
+    const conn = this.sessionByWs(machine.ws);
+    if (conn === undefined) return machine; // 防御：解析出的 ws 不在会话表——按机器级走
+    return this.resolveSessionMember(conn, sessionName);
+  }
+
+  /** 会话段在目标机器连接的成员表内解析（名字或 id 命中；alive-wins 优先于 extends）。 */
+  private resolveSessionMember(target: Session, sessionName: string): ResolvedTarget {
+    for (const decl of target.members?.values() ?? []) {
+      if (decl.name === sessionName || decl.sessionId === sessionName) {
+        return { kind: 'session', ws: target.ws, sessionId: decl.sessionId };
+      }
+    }
+    const ext = this.extendsByOldName.get(sessionName);
+    if (ext !== undefined) {
+      const succMachine = ext.holder.machineName ?? ext.holder.machineId?.slice(0, 8) ?? '?';
+      const succName = ext.decl.name ?? ext.decl.sessionId.slice(0, 8);
+      return {
+        kind: 'error',
+        code: ERR.SESSION_SUPERSEDED,
+        message: `会话 ${sessionName} 已由 ${succMachine}:${succName} 接续——改投接任者 tcp:<星>:${succMachine}:${succName}`,
+      };
+    }
+    return {
+      kind: 'error',
+      code: ERR.SESSION_NOT_MEMBER,
+      message: `会话 ${sessionName} 不是星成员——会话须经启动器入星（crosschat claude/codex --connect <星>）才能按名投递`,
+    };
+  }
+
+  private sessionByWs(ws: WebSocket): Session | undefined {
+    for (const session of this.sessions) {
+      if (session.ws === ws) return session;
+    }
+    return undefined;
   }
 
   /**

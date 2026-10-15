@@ -4,11 +4,20 @@
  * 全是本机既有行为）、收 file-* 帧落盘 inbox。断线指数退避 1s→2s→…封顶
  * 60s 永不放弃；连续失败 ≥5 分钟进静音模式（日志每 10 次一条）。
  */
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { createServer, type Server } from 'node:net';
+import { dirname, join } from 'node:path';
+import process from 'node:process';
 import { WebSocket } from 'ws';
 import { MultichatError } from '../errors.js';
-import { encodeFrame, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
+import {
+  CAP_SESSION_MEMBERS,
+  encodeFrame,
+  hasCap,
+  MAX_PAYLOAD_BYTES,
+  parseFrame,
+  PROTOCOL_VERSION,
+} from './protocol.js';
 import type {
   DeliverFrame,
   ErrorFrame,
@@ -18,10 +27,14 @@ import type {
   Frame,
   InfoFrame,
   ResultFrame,
+  SessionMemberDecl,
 } from './protocol.js';
 import { runSend, type SendDeps } from '../commands/send.js';
 import type { CodexThreadWithMeta } from '../codex/discovery.js';
+import { codexHomeDir, lookupRolloutMetas } from '../codex/rollout-meta.js';
 import { FileInbox } from './file-channel.js';
+import { sanitizeName } from './registry.js';
+import { PIPE_PREFIX } from '../platform/pipe-transport.js';
 import type { StatusPayload, StatusQueryFrame } from './protocol.js';
 
 /** B0 多星地基：一个 broker 条目（旧形状读进 broker 对象、新形状 brokers[] 元素）。 */
@@ -174,6 +187,8 @@ export function syncNodeJsonEntry(
  * deliver 帧 → 本机 runSend（broker 侧 deliverLocal 同用此桥）：
  * payload=正文，to/conversation/origin 透传；origin 是发送机的
  * encodeOriginIdentity 编码（ssh 远端 CLI 的 --origin 同语义）。
+ * 018：sessionId 在场=会话级直达（三段寻址命中星成员）——注入 targetSessionId，
+ * id 定位优先（deliver.to 仅占位，名字解析跳过）。
  */
 export async function deliverViaRunSend(frame: DeliverFrame, deps: SendDeps): Promise<ResultFrame> {
   let output: string;
@@ -182,7 +197,8 @@ export async function deliverViaRunSend(frame: DeliverFrame, deps: SendDeps): Pr
     // from-machine 属性来源；无名瞬态发送方（frame 缺省）不注入。
     output = await runSend(
       {
-        to: frame.to,
+        to: frame.sessionId === undefined ? frame.to : (frame.to ?? frame.sessionId),
+        ...(frame.sessionId === undefined ? {} : { targetSessionId: frame.sessionId }),
         conversation: frame.conversation,
         bodyArg: frame.payload,
         origin: frame.origin,
@@ -288,6 +304,87 @@ export interface NodeClientDeps {
   /** 连续失败多久进静音（默认 5 分钟）。 */
   quietAfterMs?: number;
   onSignal?(sig: 'SIGINT' | 'SIGTERM', cb: () => void): void;
+  /** 018：attach 管道标签（缺省=条目星名→starId；测试注入唯一值防撞名）。 */
+  attachLabel?: string;
+  /** 018：成员活性核验周期（缺省 30s 与心跳同量级；测试注入短值）。 */
+  memberCheckMs?: number;
+  /** 018：codex 线程活性核验的 CODEX_HOME（缺省真 codexHomeDir；测试注入临时目录保密闭）。 */
+  codexHome?: string;
+}
+
+/** 018：会话成员表条目（内存态——零新持久文件；连接断/失活即消失）。 */
+interface MemberEntry {
+  sessionId: string;
+  name?: string;
+  /** 机器限定旧名（machine 缺省=同机旧名）。 */
+  extends?: { machine?: string; name: string };
+}
+
+/**
+ * 018：本（机器,星）attach 管道名——管道名含星名可发现（启动器据 node.json
+ * 条目同源计算）；win named pipe / unix domain socket 同名约定，复用平台
+ * 管道层前缀（PIPE_PREFIX）。dir=tcp 状态目录（UDS 落盘处）。
+ */
+export function attachPipePath(entry: BrokerEntry, dir: string, labelOverride?: string): string {
+  const label = labelOverride ?? entry.name ?? entry.starId ?? 'star';
+  return process.platform === 'win32'
+    ? `${PIPE_PREFIX}crosschat-attach-${label}`
+    : join(dir, `attach-${label}.sock`);
+}
+
+/**
+ * 018 attach/detach IPC 帧的成员声明校验：sessionId 非空；名字净化后禁冒号
+ * （tcp 三段寻址保留字，与星名同规则）；extends 收敛为 {machine?,name}。
+ */
+function parseMemberDecl(raw: unknown): { ok: true; entry: MemberEntry } | { ok: false; error: string } {
+  if (raw === null || typeof raw !== 'object') return { ok: false, error: '成员声明形状错误（须为对象）' };
+  const r = raw as { sessionId?: unknown; name?: unknown; extends?: unknown };
+  if (typeof r.sessionId !== 'string' || r.sessionId === '') {
+    return { ok: false, error: '成员声明缺 sessionId（成员键=会话 ID，启动器 spawn 后必持有）' };
+  }
+  const name = typeof r.name === 'string' ? sanitizeName(r.name) : undefined;
+  if (name !== undefined && name.includes(':')) {
+    return { ok: false, error: `会话名 ${name} 禁含冒号（tcp:<星>:<机器>:<会话> 三段寻址保留字）` };
+  }
+  let ext: { machine?: string; name: string } | undefined;
+  if (r.extends !== undefined) {
+    if (typeof r.extends === 'string') {
+      const oldName = sanitizeName(r.extends);
+      if (oldName === undefined || oldName.includes(':')) {
+        return { ok: false, error: 'extends 旧会话名非法（非空、禁冒号）' };
+      }
+      ext = { name: oldName };
+    } else if (typeof r.extends === 'object' && r.extends !== null) {
+      const q = r.extends as { machine?: unknown; name?: unknown };
+      const oldName = typeof q.name === 'string' ? sanitizeName(q.name) : undefined;
+      const machine = typeof q.machine === 'string' ? sanitizeName(q.machine) : undefined;
+      if (oldName === undefined || oldName.includes(':')) {
+        return { ok: false, error: 'extends 旧会话名非法（非空、禁冒号）' };
+      }
+      ext = machine === undefined ? { name: oldName } : { machine, name: oldName };
+    } else {
+      return { ok: false, error: 'extends 须为旧会话名字符串或 {machine,name}' };
+    }
+  }
+  return {
+    ok: true,
+    entry: {
+      sessionId: r.sessionId,
+      ...(name === undefined ? {} : { name }),
+      ...(ext === undefined ? {} : { extends: ext }),
+    },
+  };
+}
+
+/** MemberEntry → sessions 帧声明元素（extends 还原为字符串/对象双形态）。 */
+function memberToDecl(m: MemberEntry): SessionMemberDecl {
+  return {
+    sessionId: m.sessionId,
+    ...(m.name === undefined ? {} : { name: m.name }),
+    ...(m.extends === undefined
+      ? {}
+      : { extends: m.extends.machine === undefined ? m.extends.name : { machine: m.extends.machine, name: m.extends.name } }),
+  };
 }
 
 interface FrameWaiter {
@@ -304,7 +401,7 @@ interface StateWaiter {
 }
 
 export class NodeClient {
-  private readonly d: NodeClientDeps & { backoffBaseMs: number; quietAfterMs: number };
+  private readonly d: NodeClientDeps & { backoffBaseMs: number; quietAfterMs: number; memberCheckMs: number };
   private stopped = false;
   private ws?: WebSocket;
   private state: NodeStatusFile['state'] = 'connecting';
@@ -316,15 +413,25 @@ export class NodeClient {
   private minuteTimer?: ReturnType<typeof setInterval>;
   private mainLoop?: Promise<void>;
   private stopResolve?: () => void;
+  /** 018：会话成员表（内存态，跨重连存续——重连后全量重播）。 */
+  private readonly members = new Map<string, MemberEntry>();
+  /** 018：attach IPC 服务端（每（本机,星）一条；首度上线时起，stop 关）。 */
+  private attachServer?: Server;
+  /** 018：attach 连接自持（stop 时全毁——win 管道名随最后句柄释放）。 */
+  private readonly attachSockets = new Set<import('node:net').Socket>();
+  private memberTimer?: ReturnType<typeof setInterval>;
+  /** 018：broker 会话级能力（info.caps 协商；false=老 broker，成员声明不发送）。 */
+  private brokerSessionCap = false;
 
   constructor(deps: NodeClientDeps) {
-    this.d = { backoffBaseMs: 1_000, quietAfterMs: 300_000, ...deps };
+    this.d = { backoffBaseMs: 1_000, quietAfterMs: 300_000, memberCheckMs: 30_000, ...deps };
   }
 
   /** 阻塞跑直到 stop（serve --connect 前台姿态）。 */
   async run(): Promise<void> {
     this.d.onSignal?.('SIGINT', () => void this.stop());
     this.d.onSignal?.('SIGTERM', () => void this.stop());
+    this.memberTimer = setInterval(() => this.checkMemberLiveness(), this.d.memberCheckMs);
     this.mainLoop = this.loop();
     await new Promise<void>((resolve) => {
       this.stopResolve = resolve;
@@ -344,6 +451,8 @@ export class NodeClient {
       this.ws?.close(1000, 'node stopping');
     } catch { /* 竞态关闭忽略 */ }
     clearInterval(this.minuteTimer);
+    clearInterval(this.memberTimer);
+    this.closeAttachServer();
     this.stopResolve?.();
     await this.mainLoop?.catch(() => {});
   }
@@ -426,6 +535,12 @@ export class NodeClient {
         throw new Error(`协议不匹配：服务端 ${info.op === 'info' ? info.proto : '?'}`);
       }
       this.syncBrokerInfo(info as InfoFrame);
+      // 018（9b）：caps 协商——info.caps 不含会话成员标识=老 broker（proto:1），
+      // 成员声明不发送（发了也被静默丢），日志显性留痕；命令面告警批二接。
+      this.brokerSessionCap = hasCap((info as InfoFrame).caps, CAP_SESSION_MEMBERS);
+      if (!this.brokerSessionCap) {
+        this.log('broker 不支持会话级星成员（proto:1）——已降级机器级，本机成员声明不发送');
+      }
       ws.send(encodeFrame({
         op: 'connect',
         proto: PROTOCOL_VERSION,
@@ -433,6 +548,7 @@ export class NodeClient {
         machineId: this.d.machineId() ?? '',
         auth: cfg.key,
         ...(this.d.config.showName === undefined ? {} : { name: this.d.config.showName }),
+        caps: [CAP_SESSION_MEMBERS],
       }));
       const verdict = await this.nextFrame((f) => f.op === 'connected' || f.op === 'error', 10_000);
       if (verdict.op === 'error') {
@@ -441,6 +557,11 @@ export class NodeClient {
       everOnline = true;
       this.setState('online');
       this.log(`online（broker ${cfg.name ?? url}）`);
+      // 018：首度上线起 attach 管道（此后跨重连常驻）；重连恢复链第一级——
+      // 先核活性（清掉断线期间死掉的成员）再全量重播 sessions 帧。
+      this.startAttachServer();
+      this.checkMemberLiveness();
+      this.sendSessions();
       this.minuteTimer = setInterval(() => {
         if (this.state === 'online') this.writeStatus(undefined);
       }, 60_000);
@@ -502,6 +623,10 @@ export class NodeClient {
     if (frame.op === 'file-begin' || frame.op === 'file-chunk' || frame.op === 'file-end') {
       this.onFile(frame);
     }
+    if (frame.op === 'error') {
+      // 018：无等待者兜到的 broker 回执（如 extends 冲突）——上日志不静默
+      this.log(`broker 回执错误 ${(frame as ErrorFrame).code}: ${(frame as ErrorFrame).message}`);
+    }
   }
 
   /** E1：status-query → 本机扫描 → status-result（载荷分段见 buildStatusPayload）。 */
@@ -541,6 +666,158 @@ export class NodeClient {
     const res = this.d.fileInbox.end(frame.id);
     this.send(res);
     this.log(`file ${frame.id} ${res.ok ? `→ ${res.path}` : `失败: ${res.error}`}`);
+  }
+
+  /**
+   * 018：attach IPC 服务端——每（本机,星）一条 named pipe / UDS（管道名含星名
+   * 可发现，启动器据 node.json 同源计算）。帧为换行分隔 JSON：attach/detach/
+   * sync（全量对账），逐帧回执 {ok} 一行。同用户 ACL：UDS 落监听后收紧 0600；
+   * win named pipe 默认 DACL 即创建者可写。监听失败只降级（日志留痕）不倒守护。
+   */
+  private startAttachServer(): void {
+    if (this.attachServer !== undefined) return;
+    const pipePath = attachPipePath(this.d.config.entries[0]!, dirname(this.d.configFile), this.d.attachLabel);
+    const server = createServer((socket) => {
+      this.attachSockets.add(socket);
+      socket.on('close', () => this.attachSockets.delete(socket));
+      let buf = '';
+      socket.on('data', (chunk) => {
+        buf += chunk.toString('utf8');
+        for (;;) {
+          const idx = buf.indexOf('\n');
+          if (idx < 0) break;
+          const line = buf.slice(0, idx).trim();
+          buf = buf.slice(idx + 1);
+          if (line === '') continue;
+          this.handleAttachLine(line, (reply) => {
+            try {
+              socket.write(`${JSON.stringify(reply)}\n`);
+            } catch {
+              // 对端已断开——回执尽力而为
+            }
+          });
+        }
+      });
+      socket.on('error', () => socket.destroy());
+    });
+    server.on('error', (err) => {
+      this.attachServer = undefined;
+      this.log(`attach 管道 ${pipePath} 监听失败（${err instanceof Error ? err.message : String(err)}）——会话入星不可用`);
+    });
+    server.listen({ path: pipePath }, () => {
+      if (process.platform !== 'win32') {
+        try {
+          chmodSync(pipePath, 0o600);
+        } catch {
+          // ACL 收紧尽力而为
+        }
+      }
+      this.log(`attach 管道 ${pipePath} 已监听`);
+    });
+    this.attachServer = server;
+  }
+
+  private closeAttachServer(): void {
+    const server = this.attachServer;
+    if (server === undefined) return;
+    this.attachServer = undefined;
+    for (const socket of this.attachSockets) {
+      try {
+        socket.destroy();
+      } catch {
+        // 已断开忽略
+      }
+    }
+    this.attachSockets.clear();
+    try {
+      server.close(() => {});
+    } catch {
+      // 已关闭忽略
+    }
+  }
+
+  /** attach IPC 单帧处理：attach/detach/sync，成员表变化即重播 sessions 帧。 */
+  private handleAttachLine(line: string, reply: (r: { ok: true } | { ok: false; error: string }) => void): void {
+    let req: unknown;
+    try {
+      req = JSON.parse(line);
+    } catch {
+      return reply({ ok: false, error: 'attach 帧不是合法 JSON' });
+    }
+    if (req === null || typeof req !== 'object') {
+      return reply({ ok: false, error: 'attach 帧形状错误' });
+    }
+    const r = req as { op?: unknown; sessionId?: unknown; sessions?: unknown };
+    if (r.op === 'attach') {
+      const parsed = parseMemberDecl(r);
+      if (!parsed.ok) return reply({ ok: false, error: parsed.error });
+      this.members.set(parsed.entry.sessionId, parsed.entry);
+      this.log(`member-up ${parsed.entry.name ?? parsed.entry.sessionId.slice(0, 8)}`);
+      this.sendSessions();
+      return reply({ ok: true });
+    }
+    if (r.op === 'detach') {
+      if (typeof r.sessionId !== 'string' || r.sessionId === '') {
+        return reply({ ok: false, error: 'detach 缺 sessionId' });
+      }
+      const gone = this.members.delete(r.sessionId);
+      if (gone) {
+        this.log(`member-down ${r.sessionId.slice(0, 8)}（detach）`);
+        this.sendSessions();
+      }
+      return reply({ ok: true }); // 幂等：不在表内也算成功
+    }
+    if (r.op === 'sync') {
+      if (!Array.isArray(r.sessions)) {
+        return reply({ ok: false, error: 'sync 缺 sessions 数组' });
+      }
+      const entries: MemberEntry[] = [];
+      for (const raw of r.sessions) {
+        const parsed = parseMemberDecl(raw);
+        if (!parsed.ok) return reply({ ok: false, error: parsed.error });
+        entries.push(parsed.entry);
+      }
+      this.members.clear();
+      for (const e of entries) this.members.set(e.sessionId, e);
+      this.log(`sync 成员表：${entries.length} 条`);
+      this.sendSessions();
+      return reply({ ok: true });
+    }
+    return reply({ ok: false, error: `未知 attach 操作：${String(r.op)}` });
+  }
+
+  /**
+   * 018 双活性模型（9a）：claude 成员=注册表扫描进程存活（复用现有扫描）；
+   * codex 成员=线程存在（lookupRolloutMetas 落盘实体，durable 永不自动除名）。
+   * 两侧都查无=失活→除名并重播。
+   */
+  private checkMemberLiveness(): void {
+    if (this.members.size === 0) return;
+    try {
+      const scan = this.d.makeSendDeps().listClaudeSessions();
+      const claudeIds = new Set(scan.sessions.map((session) => session.sessionId));
+      const rest = [...this.members.keys()].filter((id) => !claudeIds.has(id));
+      let codexIds: Set<string> | undefined;
+      if (rest.length > 0) {
+        codexIds = new Set(lookupRolloutMetas(this.d.codexHome ?? codexHomeDir(), rest).keys());
+      }
+      let changed = false;
+      for (const id of rest) {
+        if (codexIds?.has(id)) continue; // codex 线程在——durable 活性
+        this.members.delete(id);
+        changed = true;
+        this.log(`member-down ${id.slice(0, 8)}（claude 进程退出且无 codex 线程）已除名`);
+      }
+      if (changed) this.sendSessions();
+    } catch {
+      // 活性核验失败不倒守护（下轮再查）
+    }
+  }
+
+  /** 018：全量重播 sessions 帧（上线时 & 成员表变化时；老 broker/离线不发）。 */
+  private sendSessions(): void {
+    if (this.state !== 'online' || !this.brokerSessionCap) return;
+    this.send({ op: 'sessions', sessions: [...this.members.values()].map(memberToDecl) });
   }
 
   private nextFrame(pred: (f: Frame) => boolean, timeoutMs: number): Promise<Frame> {

@@ -15,7 +15,24 @@ export const ERR = {
   NOT_READY: 'NOT_READY',
   /** B2 修订：file-begin 尺寸预拒（>64MiB）。 */
   FILE_TOO_LARGE: 'FILE_TOO_LARGE',
+  /** 018：三段寻址的会话段不是星成员（教学：会话须经启动器入星）。 */
+  SESSION_NOT_MEMBER: 'SESSION_NOT_MEMBER',
+  /** 018：死名已由 extends 接续（报错文本指路接任者）。 */
+  SESSION_SUPERSEDED: 'SESSION_SUPERSEDED',
+  /** 018：extends 同旧名先声明先得，后声明者冲突回执。 */
+  EXTENDS_CONFLICT: 'EXTENDS_CONFLICT',
 } as const;
+
+/**
+ * 018 proto:3 能力标识：握手帧 caps 数组含此值 = 会话级星成员可用。
+ * caps 缺省/不含 = 老节点（proto:1 行为不变）；后续能力（如 010 TLS）沿此数组追加。
+ */
+export const CAP_SESSION_MEMBERS = 'session-members';
+
+/** caps 数组包含判定（缺省数组=老节点，恒 false）。 */
+export function hasCap(caps: string[] | undefined, cap: string): boolean {
+  return Array.isArray(caps) && caps.includes(cap);
+}
 
 export interface InfoFrame {
   op: 'info';
@@ -35,6 +52,8 @@ export interface ConnectFrame {
   auth: string;
   /** B2.1 修订：节点自报的人读显示名（≤32 字符、无控制符）。寻址权威是 machine-id 前缀，名字不参与回信路由。 */
   name?: string;
+  /** 018 proto:3：能力声明（缺省=老节点，proto:1 行为不变）。broker 据此识别会话级成员感知的聚合器。 */
+  caps?: string[];
 }
 export interface ConnectedFrame {
   op: 'connected';
@@ -74,6 +93,8 @@ export interface DeliverFrame {
   to?: string;
   conversation?: string;
   origin?: string;
+  /** 018：会话级投递目标（三段寻址命中成员的会话 ID）——聚合器本地按它注入投递，不再经名字解析。 */
+  sessionId?: string;
 }
 export interface ResultFrame {
   op: 'result';
@@ -170,6 +191,26 @@ export interface StatusResultFrame {
   error?: string;
 }
 
+/** 018 extends 旧名声明：字符串=同机旧名；{machine,name}=机器限定旧名（跨机接续）。 */
+export type ExtendsRef = string | { machine: string; name: string };
+
+/** 018 会话成员声明（sessions 帧元素）：成员键=会话 ID（claude sessionId / codex thread id），名字仅显示/寻址句柄。 */
+export interface SessionMemberDecl {
+  sessionId: string;
+  name?: string;
+  /** 显式继承的旧会话名（唯一通道 --extend-session；隐式/同名继承已否决）。 */
+  extends?: ExtendsRef;
+}
+
+/**
+ * 018 会话成员声明帧（聚合器→broker，node 角色独占）：全量重播语义——数组即
+ * 该机（该连接）当前全部会话成员，空数组=清空。连接断开即随机器条目消失。
+ */
+export interface SessionsFrame {
+  op: 'sessions';
+  sessions: SessionMemberDecl[];
+}
+
 export type Frame =
   | InfoFrame
   | ConnectFrame
@@ -186,7 +227,8 @@ export type Frame =
   | RosterFrame
   | RosterResultFrame
   | StatusQueryFrame
-  | StatusResultFrame;
+  | StatusResultFrame
+  | SessionsFrame;
 
 const OPS = new Set([
   'info',
@@ -205,6 +247,7 @@ const OPS = new Set([
   'roster-result',
   'status-query',
   'status-result',
+  'sessions',
 ]);
 
 /** 解析一帧 ws 文本消息；JSON 损坏或 op 未知返回 undefined（调用方丢弃）。 */
