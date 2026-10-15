@@ -795,7 +795,7 @@ describe('018 批二：/rename 自动跟随（claude 扫描 + codex 名字回填
       sh.state.codex = [{ id: CODEX_THREAD, name: 'cname' }];
       let renamed = false;
       let codexNamed = false;
-      for (let i = 0; i < 60; i++) {
+      for (let i = 0; i < 150; i++) {
         if (!renamed) {
           const r = await send3(`n1${i}`, 'node-host:boss2');
           if (r.op === 'receipt' && r.status === 'delivered') renamed = true;
@@ -805,14 +805,15 @@ describe('018 批二：/rename 自动跟随（claude 扫描 + codex 名字回填
           if (r.op === 'receipt' && r.status === 'delivered') codexNamed = true;
         }
         if (renamed && codexNamed) break;
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        await new Promise((resolve) => setTimeout(resolve, 200));
       }
       expect(renamed).toBe(true); // 新名直达
       expect(codexNamed).toBe(true); // codex 名字从线程表回填
       expect(await send3('n3', 'node-host:boss')).toMatchObject({ op: 'error', code: 'SESSION_NOT_MEMBER' }); // 旧名退位
       await pipe.close();
     },
-    20_000,
+    // CI 慢速 runner（Windows）上每轮两次 WS 往返显著慢于本机——窗口放宽到 60s（本机 15s 压线过的同款时序）
+    60_000,
   );
 });
 
