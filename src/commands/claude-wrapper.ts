@@ -27,6 +27,20 @@ import { realStarJoinDeps, splitStarLauncherArgs, StarJoinDeps, StarJoiner } fro
 
 const INBOUND_SETTINGS = JSON.stringify({ crossSessionInbound: 'accept' });
 
+/** 021 横幅显示用：从透传参数读 claude 原生 -n/--名（只读不认领——spawn 时名可知才打三段地址行）。 */
+function claudeSpawnName(passthrough: readonly string[]): string | undefined {
+  for (let i = 0; i < passthrough.length; i++) {
+    const token = passthrough[i]!;
+    if (token === '-n' || token === '--name') {
+      const next = passthrough[i + 1];
+      return next !== undefined && next !== '' && !next.startsWith('-') ? next : undefined;
+    }
+    if (token.startsWith('--name=') && token.length > '--name='.length) return token.slice('--name='.length);
+    if (token.startsWith('-n=') && token.length > '-n='.length) return token.slice('-n='.length);
+  }
+  return undefined;
+}
+
 export interface ClaudeWrapperDeps {
   resolveExe(): string;
   /** Child env base（身份清洗与旋钮注入的基底）；缺省 process.env。 */
@@ -81,11 +95,13 @@ export async function runClaudeWrapper(
   // 018 批二：--connect <星> 在场=入星启动——spawn 前快照、存活期守连接、退出即 detach；
   // 入星任何失败只出一行 stderr，不连坐会话本身
   if (star.connects.length > 0) {
+    const spawnName = claudeSpawnName(passthrough);
     const joiner = new StarJoiner({
       deps: deps.star ?? realStarJoinDeps(),
       side: 'claude',
       connects: star.connects,
       ...(star.extendSession === undefined ? {} : { extendSession: star.extendSession }),
+      ...(spawnName === undefined ? {} : { spawnName }),
     });
     await joiner.begin();
     try {

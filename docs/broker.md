@@ -212,9 +212,10 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 1.新会话入星 = 自动启动聚合器（假设没启动） + 启动会话入星
 ```
 > crosschat claude -n <会话名> --connect <星名>     # -n 是 claude 原生命名参数，包装器只透传不认领
-已入星 <星名>：会话可经 tcp:<星名>:<本机名>:<会话名> 直达
+入星 <星名>——会话地址 tcp:<星名>:<本机名>:<会话名>（attach 自动，异常见日志）
 ```
 隐式操作：
+- 横幅在 claude 接管屏幕**前**打印（报地址不预支成功）；启动后入星全程静默——attach 确认/断连重连提示落 `~/.crosschat/tcp/launcher.log`，失败才出一行 stderr
 - 聚合器没跑会**自动拉起**（几秒内），不用管；**退出 claude 时自动退星**（detach），无需收拾动作
 - 会话死 → 聚合器扫描自动从星除名；会话内 `/rename` 改名 → 聚合器扫描（≤30s）自动跟随改名
 
@@ -243,6 +244,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 ```
 > crosschat codex --connect <星>
+入星 <星>（attach 自动，异常见日志）      # codex 无 -n：启动前只打星名行，地址待 /rename 后由扫描补
 # （codex 交互里）/rename <会话名>
 # 聚合器下一轮扫描（≤30s）即把该名挂进成员表，三段寻址生效
 ```
@@ -251,7 +253,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 ```
 > crosschat claude -n <会话名> --connect <星> --connect <另一星>
-# 两颗星各出一行"已入星"，tcp:<星>:<本机名>:<会话名> 与 tcp:<另一星>:<本机名>:<会话名> 都直达
+# 两颗星各出一行"入星"，tcp:<星>:<本机名>:<会话名> 与 tcp:<另一星>:<本机名>:<会话名> 都直达
 ```
 
 **验证**（两步：成员表见它；真发一条是最终裁决——本机对自己发也走全链）：
@@ -357,8 +359,8 @@ crosschat send --via tcp:<星>:<机器>:<会话> --body "构建跑了吗"
 
 ```
 > crosschat claude -n boss2 --connect cloud --extend-session boss
-已入星 cloud：会话可经 tcp:cloud:host-a:boss2 直达
-# 有对话史时多一行提示：
+入星 cloud——会话地址 tcp:cloud:host-a:boss2（attach 自动，异常见日志）
+# 有对话史时日志（~/.crosschat/tcp/launcher.log）里多一行：
 #   extends boss：本机有该名对话史——接续登记后，投给旧名的消息将指路到新会话
 ```
 
@@ -430,7 +432,7 @@ broker 不支持会话成员（proto:3），已降级机器级——本机会话
 1. `crosschat serve --connect cloud-broker --detach`
    → 云机自己的聚合器（星在本机时连自己也算 node 职责；已跑过则跳过）
 2. cd 到任意工作目录，跑：`crosschat claude -n cloudworker10 --connect cloud-broker`
-   → 期望一行：`已入星 cloud-broker：会话可经 tcp:cloud-broker:cloud:cloudworker10 直达`
+   → 期望一行（claude 启动前）：`入星 cloud-broker——会话地址 tcp:cloud-broker:cloud:cloudworker10（attach 自动，异常见日志）`
    → 进入 claude 后随便说一句话让它活着
 
 **本机：**

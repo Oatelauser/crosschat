@@ -267,6 +267,7 @@ function starJoinDeps(sh: StarHarness, overrides: Partial<StarJoinDeps> = {}): S
     tcpBaseDir: sh.baseDir,
     stdout: () => {},
     stderr: () => {},
+    log: () => {},
     listClaudeSessions: () => {
       const d = scanDeps(sh.state);
       return d.listClaudeSessions();
@@ -339,12 +340,16 @@ describe('018 批二：启动器入星链路', () => {
       sh.state.claude = [{ sessionId: 'sess-existing', name: 'old', updatedAt: 1 }];
       const out: string[] = [];
       const err: string[] = [];
+      const logs: string[] = [];
       const joiner = new StarJoiner({
-        deps: starJoinDeps(sh, { stdout: (l) => out.push(l), stderr: (l) => err.push(l) }),
+        deps: starJoinDeps(sh, { stdout: (l) => out.push(l), stderr: (l) => err.push(l), log: (l) => logs.push(l) }),
         side: 'claude',
         connects: ['sl-l1'],
+        spawnName: 'boss',
       });
       await joiner.begin();
+      // 021 时序：横幅在 begin()（=spawn 前）即打印——报地址不预支"已入星"
+      expect(out).toEqual(['入星 sl-l1——会话地址 tcp:sl-l1:node-host:boss（attach 自动，异常见日志）']);
       // 模拟子进程 spawn 出新会话（快照差分命中 sess-child）
       sh.state.claude = [
         { sessionId: 'sess-existing', name: 'old', updatedAt: 1 },
@@ -363,7 +368,10 @@ describe('018 批二：启动器入星链路', () => {
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
       expect(sh.spawnedSelectors).toEqual(['sl-l1']); // 聚合器不在→自动 serve --connect --detach
-      expect(out.some((l) => l.includes('已入星 sl-l1') && l.includes('tcp:sl-l1:node-host:boss'))).toBe(true);
+      // 021：attach 确认落日志；spawn 后成功路径控制台零输出
+      expect(logs.some((l) => l.includes('已入星 sl-l1') && l.includes('tcp:sl-l1:node-host:boss'))).toBe(true);
+      expect(out).toHaveLength(1);
+      expect(err).toHaveLength(0);
       expect(sh.state.delivered.length).toBeGreaterThan(0);
       // 子进程退出 → detach → 成员除名（detach/重播异步，轮询至生效）
       await joiner.stop();
@@ -395,6 +403,7 @@ describe('018 批二：启动器入星链路', () => {
         tcpBaseDir: shA.baseDir,
         stdout: () => {},
         stderr: () => {},
+        log: () => {},
         listClaudeSessions: () => scanDeps(shA.state).listClaudeSessions(),
         listCodexThreads: async () => [],
         spawnServeDetach: (selector) => {
@@ -437,6 +446,72 @@ describe('018 批二：启动器入星链路', () => {
       await joiner.stop();
     },
     25_000,
+  );
+
+  it(
+    '021 断连静默：聚合器被杀→重连提示落日志、控制台零输出、成员籍自动恢复',
+    async () => {
+      const sh = await startStarStar('sl-q1');
+      sh.state.claude = [{ sessionId: 'sess-base', name: 'old', updatedAt: 1 }];
+      const agg = await sh.aggregator(); // 预起聚合器：ensureAggregator 直连管道，且握有可停实例
+      const out: string[] = [];
+      const err: string[] = [];
+      const logs: string[] = [];
+      const joiner = new StarJoiner({
+        deps: starJoinDeps(sh, { stdout: (l) => out.push(l), stderr: (l) => err.push(l), log: (l) => logs.push(l) }),
+        side: 'claude',
+        connects: ['sl-q1'],
+      });
+      await joiner.begin();
+      expect(out).toEqual(['入星 sl-q1（attach 自动，异常见日志）']); // 无 -n：spawn 前只打星名行
+      sh.state.claude = [
+        { sessionId: 'sess-base', name: 'old', updatedAt: 1 },
+        { sessionId: 'sess-kid', name: 'boss', updatedAt: 99 },
+      ];
+      const sender = await senderOn(sh.harness.url, key('s'));
+      const deliver = async (id: string): Promise<Frame> => {
+        sender.send({ op: 'send', id, targetMachine: 'node-host:boss', body: 'x' });
+        return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
+      };
+      let attached = false;
+      for (let i = 0; i < 50; i++) {
+        const r = await deliver(`q${i}`);
+        if (r.op === 'receipt' && r.status === 'delivered') {
+          attached = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      expect(attached).toBe(true);
+      expect(logs.some((l) => l.includes('已入星 sl-q1'))).toBe(true);
+      const outLen = out.length;
+      const errLen = err.length;
+      const logsLen = logs.length;
+      // 杀聚合器：管道断——提示落日志（控制台零输出），重连自动恢复成员籍
+      await agg.stop();
+      let reconnected = false;
+      for (let i = 0; i < 80; i++) {
+        const r = await deliver(`r${i}`);
+        if (r.op === 'receipt' && r.status === 'delivered') {
+          reconnected = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      expect(reconnected).toBe(true);
+      expect(logs.slice(logsLen).some((l) => l.includes('聚合器连接断开，重连中'))).toBe(true);
+      expect(out).toHaveLength(outLen); // 全程控制台零新增
+      expect(err).toHaveLength(errLen);
+      // 等启动器自身重声明落定（第二行"已入星"）再收线——stop() 与重连窗口撞车会让
+      // waitClose 永等（既有潜伏竞态，021 不动收线逻辑，票外另修）
+      for (let i = 0; i < 50; i++) {
+        if (logs.slice(logsLen).some((l) => l.includes('已入星 sl-q1'))) break;
+        if (i === 49) throw new Error('重连后未重新 attach');
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+      await joiner.stop();
+    },
+    40_000,
   );
 });
 

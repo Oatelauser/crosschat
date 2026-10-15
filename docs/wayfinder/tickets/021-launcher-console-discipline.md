@@ -1,7 +1,7 @@
 # 启动器控制台输出纪律（横幅不串 TUI）
 
 label: wayfinder:design
-status: open
+status: closed
 blocked-by: （无——先行于 020：其启动期同名预警依赖本票纪律）
 claimed-by: （待领）
 
@@ -24,3 +24,11 @@ claimed-by: （待领）
 
 - 规模 S 票：横幅时序重排 + spawn 后静默 + 日志落点 + 测试（现有入星输出断言改为时序断言）
 - 停止条件：npm run check 全绿；真机——`claude -n X --connect 星` 横幅在 claude TUI 出现前打印一次、TUI 内零残留输出；杀聚合器模拟断连，TUI 无输出且日志有记录、重连自动恢复成员籍
+
+## Resolution
+
+**2026-10-15 实施关票**（主会话验收：npm run check 亲跑全绿 707 过 + diff 过目）。横幅前移 `StarJoiner.begin()`（spawn 前同步，报地址不预支成功——`入星 X——会话地址 tcp:…（attach 自动，异常见日志）`）；spawn 后成功路径全静默（确认/重连/extends 出声落 `~/.crosschat/tcp/launcher.log`，复用 appendWithRotate）；失败保留一次 stderr；claude 侧 `claudeSpawnName()` 只读提取 -n/--name 打三段地址行，codex/无名只打星名行；adopt 桥 log 置空（前台命令）。测试：首链路改时序断言 + 新增断连静默用例；broker.md 文案对齐。
+
+**残留**：真机 TUI 零残留实测随 1.6.2 升级 drill 补（单测已覆盖等价语义）。
+
+**票外发现（未修，建议另开小票）**：`StarJoiner.stop()` 既有潜伏竞态——stop 落在重连窗口（pipes 暂空）时，superviseStar 在新管道 waitClose 上永等 → 启动器退出挂起。旧代码同形状非本票引入，零回归铁律下未动；修法=stop 时 resolve 一个 stopped 信号与 waitClose race。

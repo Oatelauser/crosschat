@@ -500,6 +500,7 @@ async function runAdoptServe(args: ServeArgs, deps: ServeDeps): Promise<number> 
       tcpBaseDir: deps.baseDir,
       stdout: (line) => deps.stdout(line),
       stderr: (line) => (deps.stderr ?? deps.stdout)(line),
+      log: () => {}, // adopt 是前台命令，输出留控制台——无静默路径
       listClaudeSessions: () => send.listClaudeSessions(),
       listCodexThreads: async () => (await send.listCodexThreads()).map((thread) => ({ id: thread.id, name: thread.name })),
       spawnServeDetach: spawnServeDetachReal,
