@@ -4,11 +4,11 @@
 
 一句话，三层概念——每层一条命令：
 
-| 概念 | 谁来做 | 命令 |
-|---|---|---|
-| **启动星** | broker 机（一次） | `crosschat serve --detach` |
-| **机器连星** | 每台机器（一次） | `crosschat serve --connect <星> --detach`（1.6.0 起兼任聚合器） |
-| **会话入星** | 每个要被跨机直达的会话 | `crosschat claude -n <名> --connect <星>` |
+| 概念 | 谁来做    | 命令                                                            |
+|---|-----------|-----------------------------------------------------------------|
+| **启动星** | broker 机 | `crosschat serve --detach`                                      |
+| **机器连星** | node 机   | `crosschat serve --connect <星> --detach`（1.6.0 起兼任聚合器） |
+| **会话入星** | 跨机会话  | `crosschat claude -n <会话> --connect <星>`（还有其他方式）     |
 
 星起来、机器连上、会话入星之后，星内任何人按三段地址直达该会话（免 `--to`）：
 
@@ -44,7 +44,7 @@ crosschat send --via tcp:<星>:<机器>:<会话> --body "跑一次构建，产�
 
 ## 一、环境搭建
 
-### 1.1 broker 当选规则
+### 1.1 broker 选择规则
 
 选一台当星心（broker）——它挂了跨机就瘫。三条标准：**常驻**（最常开机）、**可达**（其余机器连得到它）、**端口可开**（能放行一个入站端口）。对号入座：
 
@@ -60,18 +60,19 @@ crosschat send --via tcp:<星>:<机器>:<会话> --body "跑一次构建，产�
 两种形态——后台常驻为主，前台调试为辅：
 
 ```
-> crosschat serve --detach
-broker 后台运行中 pid=12345 端口 7260（日志：/root/.crosschat/tcp/broker.log）
-
-# 前台形态（看得见实时日志，Ctrl+C 退出）：
 > crosschat serve
 已自动生成本机 node.json（/root/.crosschat/tcp/node.json，host=127.0.0.1——本机 send --via tcp: 凭证）
 broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 # 换端口：crosschat serve --port 7777（给一次即记住）
 # 起星名：crosschat serve --name cloud（给一次即记住；缺省取本机 hostname）
+# 后台启动：crosschat serve --detach
+# 全部参数都加上：crosschat serve --port 7777 --name cloud --detach（给一次即记住）
 ```
 
-首次 serve 自动做两件事：把自己登记为星内首个成员（机器级即刻可收可发）；写好本机自用 `~/.crosschat/tcp/node.json`（host=127.0.0.1，本机发送的凭证）。
+首次 broker 启动，自动做三件事：
+- 持久化命令参数(broker节点配置文件 `~/.crosschat/tcp/broker.json`)，后续重启不在需要参数，使用`crosschat serve --detach`或者`crosschat serve`命令
+- 把当前机器作为node节点，登记为星内首个成员（机器级即刻可收可发）
+- 写好本机自用的node节点配置文件 `~/.crosschat/tcp/node.json`（host=127.0.0.1，本机发送的凭证）
 
 **验证**（两条都过 = 星已就绪）：
 
@@ -86,16 +87,10 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 #### 1.2.2 生成连接密钥
 
-一台 node 机一份钥匙；`--gen-key N` 一次打 N 份，打印的整段 JSON 交给对应机器：
+生成 node 节点的钥匙；`--gen-key N` 一次打 N 份，打印的整段 JSON 交给对应机器，存放在`~/.crosschat/tcp/node.json`：
 
 ```
 > crosschat serve --gen-key 2
-自动探测 broker 地址：192.168.1.10:7260（多网卡/NAT 常探错——按下述规则人工核对改写 node.json 的 host 与 port）：
-  · broker 机自身 → 无需分发（首次 serve 已自动写好 127.0.0.1 的自用 node.json）
-  · broker 是云主机/NAT 内网机 → host 填对外公网 IP（探测常拿内网 IP，必核对）
-  · 普通局域网 → broker 机的局域网 IP；broker 用非默认端口时 port 一并改
-分发前把每份 node.json 的 showName 改成「贴这份配置的机器」的自报名字（建议=其 hostname；纯显示用——寻址走 machine-id 前缀，不依赖它；改名=改 showName 后重启常驻——节点机重启节点客户端、broker 机重启 serve）
---------------------------------
 {
   "brokers": [
     {
@@ -106,26 +101,22 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
       "key": "a3f0…64位hex…"
     }
   ],
-  "showName": "改成「贴这份配置的机器」的名字"
+  "showName": "<当前node机器名>"
 }
 --------------------------------
 { …第二份同构… }
-放置路径（目标机器）：~/.crosschat/tcp/node.json（win 写法 C:\Users\<用户>\.crosschat\tcp\node.json）
-多星：一台机入多个 broker 时，把各星钥匙的条目合并进同一份 brokers 数组即可
-本命令须在 broker 机上执行（钥匙登记进本机 broker.json）；broker 机自用的 node.json 已由首次 serve 写好，勿用钥匙覆盖
-钥匙已进入终端回滚缓冲，分发完建议清屏
 ```
 
 输出怎么读，四条：
 
 1. **探测行**：打印的 host 只是探测值——云主机/NAT 必改**对外公网 IP**，局域网核对 LAN IP（探测常错，人工核对是规则不是建议）
 2. **JSON 体**：`key`（该机钥匙）、`name`（星名）、`starId`（星标识）三个字段**照抄不改**；只有 `host`/`port` 按探测行规则改
-3. **showName**：改成"贴这份配置的机器"的名字（建议=其 hostname）——纯显示用，寻址不依赖；这是 roster 怎么称呼它的唯一来源
+3. **showName**：改成「当前 node 机器」的名字（建议星内唯一）——机器名用于 tcp:<星>:<机器> 的机器段寻址与 roster 显示；这是 star 集群怎么称呼这台机器的唯一来源；改名=改 showName 后重启常驻（node 机重启聚合器、broker 机重启 serve）
 4. **安全**：钥匙进过终端回滚缓冲，分发完建议清屏；本命令只在 broker 机上跑
 
 此步的最终验证在 1.3——node 机凭这份钥匙连上星，即钥匙正确。
 
-#### 1.2.3 升级操作
+#### 1.2.3 升级broker节点
 
 ```
 > npm i -g @oatelauser/crosschat@latest
@@ -144,14 +135,14 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 #### 1.3.1 配置连接密钥
 
-本机先装 crosschat（`npm i -g @oatelauser/crosschat && crosschat install-skills`），再把钥匙存成 `~/.crosschat/tcp/node.json`。占位符对照：
+本机先装 crosschat（`npm i -g @oatelauser/crosschat && crosschat install-skills`），再把钥匙存成 `~/.crosschat/tcp/node.json`。一般情况下都不需要怎么修改，具体见`1.2.2 生成连接密钥`的配置即可，占位符对照：
 
-| 占位符 | 填什么 |
-|---|---|
+| 占位符 | 填什么                                                                     |
+|---|----------------------------------------------------------------------------|
 | `<broker公网IP>` | broker 的可达地址——云机/NAT 填**对外公网 IP**（按 1.2.2 探测行三规则核对） |
-| `<端口>` | broker 端口，数字不带引号（默认 7260） |
-| `<星名>` / `<starId>` / `<钥匙>` | 钥匙 JSON 里原样照抄，不改 |
-| `<本机名>` | 本机自报名（建议=hostname；roster 里怎么称呼你） |
+| `<端口>` | broker 端口，数字不带引号（默认 7260）                                     |
+| `<星名>` / `<starId>` / `<钥匙>` | 钥匙 JSON 里原样照抄，不改                                                 |
+| `<本机名>` | 本机自报名（建议=hostname；star 集群里怎么称呼你）                         |
 
 完整文件示例：
 
@@ -161,7 +152,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 > cat ~/.crosschat/tcp/node.json
 {
   "brokers": [
-    { "host": "<broker公网IP>", "port": 7260, "name": "<星名>", "starId": "<starId>", "key": "<钥匙>" }
+    { "host": "<broker公网IP>", "port": <端口>, "name": "<星名>", "starId": "<starId>", "key": "<钥匙>" }
   ],
   "showName": "<本机名>"
 }
@@ -177,9 +168,13 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 #### 1.3.2 启动聚合器连接星
 
 ```
-> crosschat serve --connect <星> --detach
+> crosschat serve --connect <星名> --detach
 节点客户端后台运行中 pid=8412（日志：/home/me/.crosschat/tcp/node.log）
 ```
+隐式操作：
+- **每（机器×星）永远只有一个聚合器**：重复 `serve --connect <同星>` 会被双开防护直接拒绝（exit 1 + 教你先 `serve --stop`）
+- 它兼任两职：机器级收发（本机出站的星凭证）+ 本机会话的星成员聚合（N 个会话共用这**一条**连接，不随会话数增长）
+- 启动会话时的 `--connect` 会在聚合器没跑时**自动拉起**——本节手动命令是兜底不是必经
 
 1.6.0 起这条常驻连接**兼任聚合器**，一份进程两份职责：**收件**（断了=别人发你 `PEER_OFFLINE`；断线自动重连永不放弃）+ **维护本机会话的星籍**（把入星声明报给星——2.3/2.4/2.5 的换轨、收编、自愈全靠它）。多星机按星名各跑一条：
 
@@ -204,14 +199,37 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 #### 1.3.3 启动会话（入星）
 
-**新 claude 会话入星**——聚合器没跑会**自动拉起**（几秒内），不用管：
+**claude 会话入星**：
 
+1.新会话入星 = 自动启动聚合器（假设没启动） + 启动会话入星
 ```
-> crosschat claude -n <会话名> --connect <星>
-已入星 <星>：会话可经 tcp:<星>:<本机名>:<会话名> 直达
+> crosschat claude -n <会话名> --connect <星名>     # -n 是 claude 原生命名参数，包装器只透传不认领
+已入星 <星名>：会话可经 tcp:<星名>:<本机名>:<会话名> 直达
 ```
+隐式操作：
+- 聚合器没跑会**自动拉起**（几秒内），不用管；**退出 claude 时自动退星**（detach），无需收拾动作
+- 会话死 → 聚合器扫描自动从星除名；会话内 `/rename` 改名 → 聚合器扫描（≤30s）自动跟随改名
 
-之后进入正常 claude 交互——**退出 claude 时自动退星**（detach），无需收拾动作。
+2.启动式的 `/resume` 恢复上下文入星（推荐——对**任何**对话都成立，无论它之前入没入过星）
+```
+> crosschat claude --connect <星名>   # 起进程入星（此刻还没名字）
+> /resume <会话名>                    # 进程内切对话
+```
+隐式操作：
+- 成员资格跟着**进程**走（启动那一刻的会话 id）；claude 的 `/resume` **保号**（实测：同 id 切对话）→ 资格不丢
+- **resume 进哪个对话，哪个对话即经本会话可达**——等效收编：之前从没入过星的对话，切进来就直达
+- 会话名自动跟随 resume 进来的对话名（扫描 ≤30s 更新）；退出自动退星
+
+3.普通方式 `/resume`（裸起会话）——**注意：这种方式不入星**，分情况：
+```
+> crosschat serve --connect <星名> --detach   # 只启动聚合器（聚合器不自动收编任何会话）
+> crosschat claude                             # 裸起会话：没带 --connect，不入星
+> /resume <会话名>
+```
+分情况说明：
+- resume 的是**普通对话**（从没入过星）→ 星内无人可达它，投三段地址报 `SESSION_NOT_MEMBER`
+- resume 的是**星内老对话** → **也不会自动归队**：成员资格绑的是进程 id，原进程死时已自动除名，同 id 复活**不会**自动恢复（成员靠声明，不靠推断）
+- 补救：收编 `crosschat serve --connect <星名> --adopt <会话名>`（`status --stars` 会在诊断行直接打印这条命令，照抄即可）
 
 **codex 形态**（无 `-n`：codex 没有启动期命名参数，进去后改名，聚合器扫描自动跟随）：
 
@@ -237,13 +255,35 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 双机全链把玩（对端机器的会话、错误教学、extends、adopt、重启自愈）见 **2.7 验证阶梯**。
 
-#### 1.3.4 升级操作
+#### 1.3.4 会话继承（换轨接任）
+
+会话上下文耗尽、换新会话接班时，用 `--extend-session` 声明继承——对端投**旧会话名**会得到接任者指路，不用挨个通知：
+
+1.改名接任（新会话用新名）
+```
+> crosschat claude -n <新会话名> --connect <星名> --extend-session <旧会话名>
+# 对端再投 tcp:<星名>:<本机名>:<旧会话名> →
+# ❌ SESSION_SUPERSEDED：旧会话已由 <新会话名> 接任（报错里带 tcp:<星名>:<本机名>:<新会话名> 指路）
+# 对端改投 <新会话名> 即达
+```
+2.同名接任（新会话沿用旧名）——**不需要** --extend-session
+```
+> crosschat claude -n <旧会话名原样> --connect <星名>
+# 名字是寻址句柄：旧名随新会话复活，对端按原名照投即达
+```
+隐式操作：
+- **先声明先得**：同一旧名只认第一个 --extend-session 声明，后来的启动时报错拒绝
+- **活着优先**：旧会话还活着时声明接任 → 存为"候任"，旧会话正常收消息，死后接任才生效
+- **校验分级**：本机有该旧名的对话史 → 严格校验防手滑；无记录 → 静默放行（无人会查询的名字，声明无害）
+
+#### 1.3.5 node节点升级
 
 同 broker 节点款，重启换成守护形态：
 
 ```
 > npm i -g @oatelauser/crosschat@latest
-> crosschat serve --stop && crosschat serve --connect <星> --detach
+> crosschat serve --stop
+> crosschat serve --connect <星名> --detach  # 或者使用会话入星的操作，也可以启动聚合器
 > crosschat install-skills
 ```
 
