@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+### 018：proto:3 会话级星成员（批二：命令面与链路；批一协议核心见下）
+
+- **入星启动**：`crosschat claude -n <名> --connect <星>` / `crosschat codex --connect <星>`（codex 无 -n，`/rename` 后聚合器扫描自动跟随）——`--connect` 可重复（多星并存）；聚合器不在自动 `serve --connect <星> --detach` 拉起（013 双开护栏在位），attach 管道重试连接；启动器存活期间守连接（聚合器重启自动重声明，含 extends），会话退出即退星；任何入星失败只出一行 stderr 不连坐会话本身
+- **三段寻址命令面**：`crosschat send --via tcp:<星>:<机器>:<会话> --body "…"` **免 --to**（会话段即收件人，此前批一只通帧层，CLI 被 TARGET_REQUIRED 挡住——本批接线）；非成员名 `SESSION_NOT_MEMBER` 教学、死名接任 `SESSION_SUPERSEDED` 指路、alive-wins 语义随批一
+- **extends 四级校验接线**（失败方向不锁死）：旧名仍是星内活成员（roster 聚合的聚合器内存）→ 拒绝并指路；本机 send-log 有该名跨星对话史 → 放行并出声；都无 → 静默放行（无人查询的名字）；broker 侧同旧名先声明先得（`EXTENDS_CONFLICT` 回执不锁死）。**偏离说明**：会话分片 ref 带星标识但不带会话名——"分片有该名对话史"的实际落盘证据面是 send-log 的 to 显示名（尾窗），已在代码注释与手册注明
+- **恢复链②（broker 补丁）**：broker 为每机器**断连后保留最后已知成员名单**（lastKnownMembers，纯内存零持久文件）；新增 `members-query`/`members-result` 帧——聚合器重启上线查回名单 → 逐个本地验活（claude 扫描/codex rollout）→ 活的自动重新入册（孤儿找回）、死名不复活；修复了一个自毁竞态：首上线的空 sessions 重播会把 broker 名单清零——空表现跳过首播（broker 侧未声明=无成员，路由语义等价）。双失忆（broker+聚合器都重启）恢复链空 → 走 adopt
+- **`serve --adopt <会话名>`**（与 `--connect <星>` 连用，可选 `--extend-session`）：按名找本机活会话（复用 send 的 resolve——UNKNOWN 带候选、claude/codex 同名 NAME_COLLISION）→ 按其会话 ID 向聚合器 attach（**收编活进程不新建**）；已是成员幂等提示；已是成员+`--extend-session`=补接任声明（改名场景）；聚合器不在自动拉起
+- **status 星会话视图**：`--stars` 每星下新增会话成员行（`机器:会话名 (extends←旧名)` 精简格式，仅明细视图——裸跑三段式摘要不炸行）；本机会话活着但非成员且该星守护在线 → 诊断行**当场打印完整 adopt 命令**（名字已填，复制即用）；本机 broker 星自动经 roster 原位升级为全量机器表（含 mid8/离线机/成员）
+- **9b 降级告警显性化**：broker 无 session-members cap 时启动器/`serve --connect --detach` 父进程/前台聚合器在**命令行**（stdout/stderr）打一行"broker 不支持会话成员（proto:3），已降级机器级"——不只日志；新增瞬态 caps 探针 `fetchBrokerCaps`（修复 open/message 竞态丢首帧）
+- **/rename 自动跟随（裁定 1 补全）**：聚合器活性循环（30s）顺带做名字跟随——claude 扫描名覆盖（无名扫描不抹 -n 名）、codex 名从线程表回填（9a"id 先行、名字从扫描回填"落地）
+- **协议**：新增 `sessions`（批一）/`members-query`/`members-result` 帧、`roster-result.machines[].sessions` 字段、attach 管道 `status` 探针 op（回执 {ok,online,brokerCap,members}）——全部 additive，老节点/老 broker 零感知
+- **resolve.ts 判定序入参放宽为结构最小类型**（pid 可缺省）——adopt 直接喂注入扫描结果；`send --to/--conversation` 校验对三段 via 形态豁免
+- **过渡期承诺**：两段式机器寻址（`--via tcp:<机器>`/`tcp:<星>:<机器>` + `--to`）与 ambient 会话投递**保持可用**——非成员收紧仅作用于三段会话寻址；ambient 全弃用是未来单独的迁移决策，随版另告
+- 文档随册：README 会话入星章（全命令形态/图解/adopt/降级）、[转发器手册 2.3/4.8](docs/broker.md)（教学级用法 + proto:3 帧表/caps/attach 管道）、[联邦手册五](docs/federation.md)（会话级操作速查）、SKILL.md 三段寻址与新错误码教学
+
 ### 013：双开防护
 
 - **`serve --connect <星>` 起守护前拒同星双开**：扫本机进程清单（与 `--stop` 同一扫描与自身排除），已有同星守护在跑即 exit 1——broker 同机双守护会互顶乒乓（在途消息随顶换丢失、status 文件互写抖动），此前唯一防线是记得先 stop

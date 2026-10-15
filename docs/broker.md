@@ -1,4 +1,4 @@
-# 转发器手册（tcp broker · proto:1）
+# 转发器手册（tcp broker · proto:1/3）
 
 > 本文是 [README · 通信方式](../README.md#-通信方式) 表中"跨机联邦 · tcp"的完整手册。
 
@@ -186,6 +186,114 @@ delivered to worker2@host-b(9f8e7d6c) (turn 1) · 续话 c3
 - **懒删除回收**：inbox 文件 >5 天删；总量 >512MiB 从最旧删起——**附件过期就没了**：收到"已送达"但路径不存在（>5 天），回对端"附件已过期，请重发 --file"
 - **单文件上限 64MiB**；超限报 `FILE_TOO_LARGE`，请压缩或分段
 
+### 2.3 会话级星成员（proto:3）：入星启动 / 三段寻址 / 换轨接续 / 收编
+
+第二章开头的跨机聊天是**机器级**投递：`--via tcp:host-b --to worker2`——worker2 这个名字由**对端机器**自己解析。proto:3 把粒度升到**会话**：会话经启动器声明"入星"后，星内任何人都能按 `<星>:<机器>:<会话>` 直达该会话，不再依赖对端机的名字解析；没入星的会话名在三段寻址下直接报错指路。机器级两段寻址（`--via tcp:<机器>` / `--via tcp:<星>:<机器>` + `--to`）**过渡期保持原样可用**，两套并存。
+
+四句心智：
+
+- **入星 = 用 crosschat 启动器起会话**：`crosschat claude -n <名> --connect <星>`（裸起的会话不入星——规范即门槛）
+- **找人 = 三段寻址**：`crosschat send --via tcp:<星>:<机器>:<会话> --body "…"`（免 `--to`，会话段就是收件人）
+- **换轨接任 = 启动时声明**：`--extend-session <旧名>`——旧会话退休后，投给旧名的消息自动被指路到接任者
+- **失联找回 = 收编**：`crosschat serve --connect <星> --adopt <会话名>`——status 诊断行会把这个命令**原样打印**出来，复制即用
+
+#### 2.3.1 入星启动（全部命令形态）
+
+前提：本机已按第一章入网（`~/.crosschat/tcp/node.json` 在场）。**新会话入星**（claude）：
+
+```bash
+crosschat claude -n boss --connect cloud
+# 终端输出（聚合器不在会自动拉起，几秒内）：
+#   已入星 cloud：会话可经 tcp:cloud:host-a:boss 直达
+# 之后进入正常 claude 交互——退出 claude 时自动退星（detach），无需任何收拾动作
+```
+
+**codex 形态**（无 `-n`：codex 没有启动期命名参数，进去后 `/rename boss`，聚合器扫描自动跟随）：
+
+```bash
+crosschat codex --connect cloud
+# （codex 内）/rename boss
+# 聚合器下一轮扫描（≤30s）即把 boss 挂进成员表，三段寻址生效
+```
+
+**多星并存**（`--connect` 可重复；一台机/一个会话可同时挂多颗星）：
+
+```bash
+crosschat claude -n boss --connect cloud --connect lab
+# 两颗星各输出一行"已入星"，tcp:cloud:<机>:boss 与 tcp:lab:<机>:boss 都直达
+```
+
+**恢复/换轨场景**（旧会话 boss 退休了，新会话接任它的名字血统）：
+
+```bash
+crosschat claude -n boss2 --connect cloud --extend-session boss
+# 有对话史时多一行提示：
+#   extends boss：本机有该名对话史——接续登记后，投给旧名的消息将指路到新会话
+```
+
+`--extend-session` 的四级校验（失败方向不锁死）：旧名仍是**活成员** → 拒绝并指路（先退旧会话或去掉旗标）；本机有该名对话史 → 放行并出声；都无 → 静默放行（没人查询的名字无害）；broker 侧同旧名撞车 → 回执 `EXTENDS_CONFLICT` 指路先声明者（后声明者照常入星，只是 extends 不生效）。
+
+#### 2.3.2 三段寻址（图解）
+
+```
+crosschat send --via tcp:cloud:host-b:boss --body "构建跑了吗"
+                      │     │      │      └ 会话名（星成员名；禁冒号）
+                      │     │      └──────── 机器名或 mid8（收件机）
+                      │     └─────────────── 星名（多星时的选择器）
+                      └───────────────────── tcp 通道
+```
+
+发送方零状态：这串地址可以照抄进任何题词/文档（回信照旧走信封自带的 reply-hint，不依赖它）。投递路径：
+
+```
+发送机 ──send(targetMachine="host-b:boss")──▶ broker（cloud）
+   broker 查星内成员表 ──▶ 命中 host-b 聚合器声明的成员 boss（键=会话 ID）
+   ──deliver(sessionId=…)─▶ host-b 聚合器 ──▶ 按会话 ID 直投（不经名字解析）
+```
+
+错误两条：非成员名 → `SESSION_NOT_MEMBER`（教学：会话须经启动器入星）；死名有人接任 → `SESSION_SUPERSEDED`（报错原文给出接任者的三段地址，改投即可）。**alive-wins**：旧名还是活成员时 extends 休眠——投旧名仍到旧会话本尊，这是防误伤的保守语义。
+
+#### 2.3.3 改名与活性（自动部分，无需操作）
+
+- **改名跟随**：claude 会话内改名，聚合器下一轮扫描（≤30s）自动更新成员表（同会话 ID 换名）；codex 同理。改名后旧名自然退位（投旧名按非成员报错）——要保留旧名可达性，见 2.3.4 的接任声明。
+- **双活性模型**：claude 成员活性 = 进程在（退出即除名）；codex 成员活性 = 线程在（rollout 落盘、durable——TUI 关了线程还在，resume 即复活，**永不自动除名**；extends 对 codex 几乎不适用）。
+
+#### 2.3.4 adopt 收编（场景 E 全解：什么时候用、命令哪来）
+
+**什么时候需要**：会话活着、但不在星成员表里。三种来路——① 双端重启失忆（broker 与聚合器都重启过，恢复链拿不回名单）；② 会话不是经启动器起的（裸 `claude`/`codex` 起的，现在想入星）；③ 改名后想补旧名接任声明。**判定信号**：投三段报 `SESSION_NOT_MEMBER`，或 `crosschat status --stars` 里出现诊断行：
+
+```
+$ crosschat status --stars
+tcp: 共 1 星
+cloud ✓ 可达，2 机器在线
+  守护: cloud: online
+  host-a(ec542c2c) 在线
+  会话: host-a:boss、host-a:worker2 (extends←boss)
+  建议: crosschat serve --connect cloud --adopt limbo（会话活着但非成员——收编活进程入星）
+```
+
+**照抄诊断行**（名字已填好），或手写：
+
+```bash
+crosschat serve --connect cloud --adopt limbo
+# 已收编 limbo（claude，id 9f8e7d6c）入星 cloud
+# 三段寻址：tcp:cloud:host-a:limbo
+```
+
+语义四条：按名找**本机活会话**（复用 send 的名字解析：名字不存在=报错列候选；claude/codex 同名=`NAME_COLLISION` 消歧）；命中即按其**会话 ID** 向聚合器 attach——**收编活进程，不新建**，现场上下文无损；已是成员=幂等提示（exit 0）；可与 `--extend-session <旧名>` 并用补血统（也是"改名后接任旧名"的声明通道）。
+
+#### 2.3.5 降级告警（9b）与恢复链
+
+**降级告警**：本机 crosschat 比 broker 机新（broker 还是 proto:1 老版本）时，启动器/聚合器会在**命令行直接打一行**：
+
+```
+broker 不支持会话成员（proto:3），已降级机器级——本机会话的入星声明不生效（机器级收发不受影响）
+```
+
+含义：机器级两段寻址/文件通道照常工作，只是入星/三段寻址/extends 不生效。解法 = 升级 broker 机的 crosschat 后重启 serve，零配置自动恢复。
+
+**恢复链**（重启自愈，一般无需人工）：聚合器重启 → 向 broker 查回本机最后已知名单 → 逐个本地验活 → 活的自动重新入册（孤儿会话自动找回，死名不复活）；broker 也重启过（双失忆）→ 恢复链空 → 走 2.3.4 的 adopt（status 诊断行会把命令打印好）。启动器还活着时则连查都不用查——旗标在手，原样重声明（含 extends）。
+
 ---
 
 ## 三、底层实现
@@ -246,17 +354,17 @@ delivered to boss@yang(ec542c2c) (turn 2) · 续话 c2
 
 ### 3.5 多星成员（原单星边界，已解除）
 
-早期"一台机一份 node.json = 一个星"的边界已解除：node.json 数组形状多条目、会话引用尾部携带星标识（mc2_ flags bit 10）、发送按**限定器 → 引用星 → 单条目 → 教学**四序本地选星——无缓存文件、无网络探测，O(1)。信封格式与 skill 教学零改动（回信照抄即路由）；旧版解析器遇新引用走"升级后重试"教学（ref 模块设计好的偏差路径）。收件守护仍按星常驻（一星一条）——会话级懒接收需 broker 存储转发，仍挂账。星外机器也仍可走 [ssh 联邦](federation.md)（两通道正交并存）。
+早期"一台机一份 node.json = 一个星"的边界已解除：node.json 数组形状多条目、会话引用尾部携带星标识（mc2_ flags bit 10）、发送按**限定器 → 引用星 → 单条目 → 教学**四序本地选星——无缓存文件、无网络探测，O(1)。信封格式与 skill 教学零改动（回信照抄即路由）；旧版解析器遇新引用走"升级后重试"教学（ref 模块设计好的偏差路径）。收件守护按星常驻（一星一条）；**会话级星成员（proto:3）已落地**（见 2.3 与第四章）——每（机器,星）仍一条连接，会话成员经本地 attach 管道声明，不随会话数增长连接。星外机器也仍可走 [ssh 联邦](federation.md)（两通道正交并存）。
 
 </details>
 
 ---
 
-## 四、协议 proto:1（对接实现指南）
+## 四、协议 proto:1/3（对接实现指南）
 
-> 草案期——稳定后对第三方实现承诺兼容。
+> 草案期——稳定后对第三方实现承诺兼容。proto:3 不是线上版本号翻页：`proto` 字段仍为 1，新能力经握手 `caps` 数组协商（见 4.1）。
 
-<details><summary>展开：握手时序 / 14 帧示例 / 完整帧流 / 错误矩阵 / 文件状态机 / 最小客户端（点击）</summary>
+<details><summary>展开：握手时序 / 帧表 / 完整帧流 / 错误矩阵 / 文件状态机 / 最小客户端 / caps 协商与 attach 管道（点击）</summary>
 
 这一章写给要在自己的语言/运行时里实现兼容端的人（自建 broker、写个轻量发送器都算）。全部字段以帧表为准，示例值是占位样式。
 
@@ -279,26 +387,29 @@ S → C   {"op":"connected","machineName":"yang"}
 
 - **心跳**：服务端每 30s 发 ws ping，60s 无 pong 判死断开——客户端用标准 ws 库回 pong 即可，无需应用层帧
 
-### 4.2 帧表（16 型；`?`=可缺省）
+### 4.2 帧表（19 型；`?`=可缺省）
 
 | 帧 | 方向 | 字段 |
 |---|---|---|
 | `info` | S→C | proto, server, caps, starId? |
-| `connect` | C→S | proto, role(node/sender), machineId?, auth, name?（≤32 字符显示名） |
+| `connect` | C→S | proto, role(node/sender), machineId?, auth, name?（≤32 字符显示名）, caps?（proto:3 能力声明，缺省=老节点） |
 | `connected` | S→C | machineName? |
 | `error` | 双向 | code, message, id? |
 | `send` | C→S | id, targetMachine, to?, conversation?, body, origin? |
 | `receipt` | S→C | id, status(delivered/queued/parked), turn?, replyRef?, output? |
-| `deliver` | S→C | id, fromMachine?, payload, to?, conversation?, origin? |
+| `deliver` | S→C | id, fromMachine?, payload, to?, conversation?, origin?, sessionId?（三段命中时会话 ID 注入，id 定位不经名字解析） |
 | `result` | C→S | id, status(delivered/queued/parked/error), turn?, replyRef?, code?, message?, output? |
 | `file-begin` | C→S | id, targetMachine, sha256, name, size |
 | `file-chunk` | C→S | id, seq, bytes(base64) |
 | `file-end` | C→S | id |
 | `file-result` | S→C | id, ok, path?, error?, resumeFrom?, dedup? |
 | `roster` | C→S | （空） |
-| `roster-result` | S→C | machines:[{name?, mid8, online}] |
+| `roster-result` | S→C | machines:[{name?, mid8, online, sessions?}]（proto:3：sessions=该机成员 [{sessionId, name?, extends?}]，老 broker 缺省） |
 | `status-query` | 双向 | id, targetMachine（请求方→broker→目标节点原帧转发） |
 | `status-result` | 双向 | id, ok, payload?({claude:[…], codex:[…]｜{unavailable}}), error? |
+| `sessions` | C→S（node） | sessions:[{sessionId, name?, extends?}]——全量重播：数组即该连接当前全部成员，空数组=清空；extends 旧名 string=同机 / {machine,name}=跨机 |
+| `members-query` | C→S（node） | （空）——聚合器重启后查回"我以前的成员" |
+| `members-result` | S→C | members:[{sessionId, name?, extends?}]——broker 断连后保留的最后已知名单（纯内存，broker 重启即空） |
 
 每帧示例（占位值）：
 
@@ -378,6 +489,26 @@ C → file-end{id}
 
 参考实现是**单 broker 星型**——多实例集群需自行解决实例间路由（哪台节点连在哪个实例）与注册表共享，本实现不含（一台机器入多颗星由节点侧承担，见 3.5）。注册表格式见 broker 机 `~/.crosschat/tcp/broker.json`（顶层 starId/name(星名)/port；nodes[] 内 label/key/machineId/machineName/addedAt）。节点侧 node.json：`{brokers:[{host,port,name(星名),starId,key}…], showName(本机显示名)}`——旧字段 alias/顶层 name 读取时自动映射。`nodes[].machineName` 不是权威——单一事实源是各机自己的 node.json `showName`（节点机经连接帧上报、broker 机经 serve 启动读回刷新；显式缺失/空则清除，roster 回退 mid8）。会话引用 mc2_ 可在尾部携带 starId（flags bit 10）——旧版解析器遇此扩展走 `INVALID_CONVERSATION_REF`+升级指引，属设计好的版本偏差路径。
 
+### 4.8 proto:3 能力协商（caps）与 attach 管道
+
+**caps 协商**（线版本号不动，能力走握手数组）：
+
+- broker 的 `info` 恒带 `caps`，proto:3 起含 `"session-members"`；老 broker（proto:1 期）`caps` 缺省或为空
+- 会话级感知的聚合器在 `connect` 带上 `caps:["session-members"]`；缺省 = 老节点，broker 按机器级对待（零回归）
+- 聚合器发现 broker 无此 cap → **不发** `sessions`/`members-query`（老 broker 对未知 op 静默丢，发了也白发），并在命令面打一行降级告警（见 2.3.5）
+- 后续能力（如 010 TLS）沿 `caps` 数组追加，不翻 `proto` 字段
+
+**attach 管道**（启动器↔聚合器的本机 IPC；win named pipe `\\.\pipe\crosschat-attach-<星名>` / unix `<tcp目录>/attach-<星名>.sock`）：换行分隔 JSON，逐帧回执一行：
+
+| 帧 | 语义 |
+|---|---|
+| `{op:"attach", sessionId, name?, extends?}` | 声明成员（成员键=会话 ID；name/extends 禁冒号；幂等重声明=覆盖） |
+| `{op:"detach", sessionId}` | 退星（幂等：不在表内也回 ok） |
+| `{op:"sync", sessions:[…]}` | 全量对账（替换整表） |
+| `{op:"status"}` | 只读探针 → 回 `{ok, online, brokerCap, members:[…]}`（启动器 extends 校验与 adopt 幂等判断的数据源） |
+
+聚合器侧语义：成员表变化即全量重播 `sessions` 帧；活性核验每 30s（claude=进程扫描，codex=rollout 落盘存在，durable 永不自动除名）；扫描同时做改名跟随（同 id 换名即更新重播）。
+
 </details>
 
 ---
@@ -391,6 +522,10 @@ C → file-end{id}
 | `PEER_OFFLINE 机器 X 已注册但当前不在线` | 对端节点没连 | 对端 `crosschat serve --connect`；稍后重试；若两端另配了 ssh 也可走 ssh 形态 |
 | `UNKNOWN_MACHINE 注册表没有…` | 目标名/mid 没登记或抄错 | broker 机 `crosschat serve --list` 查 mid8 与名字 |
 | `MACHINE_NAME_COLLISION` | 同名机器或 mid 前缀太短 | 报错里列了 mid——改用（更长的）mid 前缀寻址 |
+| `SESSION_NOT_MEMBER 会话 X 不是星成员` | 三段寻址的会话名没入星（裸起的会话） | 该会话所在机用启动器入星（`crosschat claude -n <名> --connect <星>`）；会话已活着则 `crosschat serve --connect <星> --adopt <名>` 收编 |
+| `SESSION_SUPERSEDED 已由 <机器>:<会话> 接续` | 旧名是死名且有接任者（--extend-session 声明过） | 照报错里的 `tcp:<星>:<机器>:<会话>` 改投接任者 |
+| `EXTENDS_CONFLICT`（启动器/adopt） | extends 旧名仍是活成员（alive-wins 下会休眠） | 先退旧会话再接续，或去掉 `--extend-session` 直接开新名 |
+| 启动器/聚合器打"broker 不支持会话成员（proto:3），已降级机器级" | broker 机 crosschat 还是老版本 | 机器级收发不受影响；升级 broker 机 crosschat 后 `serve --stop && serve --detach` 重启即恢复 |
 | 想看远机上有啥会话 | 本机 status 不跨机 | `crosschat status --via tcp:<机器>`（tcp 星；过滤参数同本地）；ssh 形态对端仍用 `ssh <对端> crosschat status` |
 | status `节点客户端: 未运行` | 本机节点客户端没起（收不到消息的原因） | `crosschat serve --connect --detach` |
 | `STAR_ID_MISMATCH 星标识不符已停机` | node.json 条目与 broker 现星标识不符（贴错星/配置陈旧） | 向管理员重新索取 node.json，重启 --connect |

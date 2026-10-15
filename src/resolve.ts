@@ -1,6 +1,4 @@
 import { MultichatError } from './errors.js';
-import type { ClaudeSessionEntry } from './claude/registry.js';
-import type { CodexThreadSummary } from './codex/client.js';
 
 /**
  * `--to <name>` resolution (ticket 003): exact match on the claude registry
@@ -15,20 +13,36 @@ import type { CodexThreadSummary } from './codex/client.js';
  * D0 判定序：全名精确（字节不变）→ 前缀匹配（大小写不敏感、只前缀不包含，
  * 跨两侧已命名对象）→ 唯一命中投递 / 多命中列候选教完整名 / 零命中照旧走
  * id 寻址与 NAME_NOT_FOUND。
+ *
+ * 018 批二：入参放宽为结构最小类型（ClaudeSessionEntry/CodexThreadSummary
+ * 天然满足）——serve --adopt 直接喂注入扫描结果，不必整备完整行形状。
  */
 
+/** 名字判定所需的最小 claude 侧行形状（真实扫描行天然满足；pid 仅进消歧文案）。 */
+export interface ResolveClaudeRow {
+  sessionId: string;
+  name?: string;
+  pid?: number;
+}
+
+/** 名字判定所需的最小 codex 侧行形状（真实线程行天然满足）。 */
+export interface ResolveCodexRow {
+  id: string;
+  name: string | null;
+}
+
 export type ResolvedTarget =
-  | { side: 'claude'; session: ClaudeSessionEntry }
-  | { side: 'codex'; thread: CodexThreadSummary };
+  | { side: 'claude'; session: ResolveClaudeRow }
+  | { side: 'codex'; thread: ResolveCodexRow };
 
 export function resolveTargetByName(
   name: string,
-  sessions: readonly ClaudeSessionEntry[],
-  threads: readonly CodexThreadSummary[],
+  sessions: readonly ResolveClaudeRow[],
+  threads: readonly ResolveCodexRow[],
 ): ResolvedTarget {
   const claudeMatches = sessions.filter((session) => session.name === name && session.sessionId !== '');
   if (claudeMatches.length > 1) {
-    const candidates = claudeMatches.map((session) => `pid ${session.pid} (${session.sessionId})`).join(', ');
+    const candidates = claudeMatches.map((session) => `pid ${session.pid ?? '?'} (${session.sessionId})`).join(', ');
     throw new MultichatError(
       'NAME_COLLISION',
       `Multiple Claude sessions are named ${JSON.stringify(name)}: ${candidates}.`,
@@ -104,8 +118,8 @@ export function resolveTargetByName(
  */
 export function resolveTargetById(
   sessionId: string,
-  sessions: readonly ClaudeSessionEntry[],
-  threads: readonly CodexThreadSummary[],
+  sessions: readonly ResolveClaudeRow[],
+  threads: readonly ResolveCodexRow[],
 ): ResolvedTarget {
   const claude = sessions.find((session) => session.sessionId === sessionId);
   if (claude !== undefined) return { side: 'claude', session: claude };
@@ -118,8 +132,8 @@ export function resolveTargetById(
 }
 
 function describeAvailableNames(
-  sessions: readonly ClaudeSessionEntry[],
-  threads: readonly CodexThreadSummary[],
+  sessions: readonly ResolveClaudeRow[],
+  threads: readonly ResolveCodexRow[],
 ): string {
   const claudeNames = sessions.flatMap((session) =>
     session.name !== undefined && session.sessionId !== '' ? [session.name] : [],

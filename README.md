@@ -120,13 +120,73 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 
 与 ssh 跨机同构：题词里多了「走 tcp 跨机」四个字；回信命令由引用自动路由（不带 `--via`），worker2 零配置照抄即回；另支持 `--file` 文件通道与 CI 零进程直发（见转发器手册）。
 
-## 📡 通信方式
+## ⭐ 会话入星与三段寻址（tcp 星成员 · proto:3）
+
+> 前提：两台机器已按[转发器手册](docs/broker.md)第一章入网（broker 在跑、本机有 `~/.crosschat/tcp/node.json`）。本章是**操作全集**；协议与内部机制见手册 2.3/4.8。
+
+机器级跨机（`--via tcp:<机器> --to <名>`）里，名字由**对端机器**解析。proto:3 把粒度升到**会话**：会话经启动器声明入星后，星内任何人按 `<星>:<机器>:<会话>` 直达该会话；没入星的会话名在三段寻址下报错指路。**机器级两段寻址与 ambient 会话投递在过渡期保持可用（非成员收紧仅作用于三段会话寻址）**——ambient 全弃用是未来单独的迁移决策。
+
+### 入星启动（全部形态，复制即用）
+
+```bash
+# 新 claude 会话入星（-n 给会话名；聚合器不在会自动拉起，退出会话自动退星）
+crosschat claude -n boss --connect cloud
+
+# codex 形态（无 -n：进去 /rename boss，聚合器扫描自动跟随）
+crosschat codex --connect cloud
+
+# 多星并存（--connect 可重复）
+crosschat claude -n boss --connect cloud --connect lab
+
+# 新会话接任退休旧会话的名字血统（换轨）
+crosschat claude -n boss2 --connect cloud --extend-session boss
+```
+
+启动器存活期间守连接（聚合器重启会自动重声明，含 extends）；会话退出即退星。`--extend-session` 四级校验失败方向不锁死：旧名仍是活成员 → 拒绝并指路（退旧会话或去旗标）；本机有旧名对话史 → 放行并提示；都无 → 静默放行；broker 侧同旧名先声明先得（后者收 `EXTENDS_CONFLICT` 指路，不影响入星）。
+
+### 三段寻址（直达星成员）
+
+```
+crosschat send --via tcp:cloud:host-b:boss --body "构建跑了吗"
+                      │     │      │      └ 会话名（星成员名，禁冒号）
+                      │     │      └──────── 机器名或 mid8
+                      │     └─────────────── 星名
+                      └───────────────────── tcp 通道
+```
+
+- 三段形态**免 `--to`**（会话段就是收件人）；回信照旧走信封 reply-hint，零配置
+- 非成员名 → `SESSION_NOT_MEMBER`（教学入星）；死名有接任者 → `SESSION_SUPERSEDED`（报错给出接任者的三段地址，改投即可）；旧名还活着 → alive-wins，照投旧会话本尊
+
+### adopt 收编（会话活着但不在星里）
+
+三种来路：双端重启失忆（broker+聚合器都重启过）、会话是裸起的（没经启动器）、改名后想补旧名接任。**信号**：三段投递报 `SESSION_NOT_MEMBER`，或 `crosschat status --stars` 出诊断行——诊断行**当场打印完整命令**，照抄：
+
+```bash
+crosschat status --stars
+#   cloud ✓ 可达，2 机器在线
+#   守护: cloud: online
+#   会话: host-a:boss、host-a:worker2 (extends←boss)
+#   建议: crosschat serve --connect cloud --adopt limbo（会话活着但非成员——收编活进程入星）
+
+crosschat serve --connect cloud --adopt limbo            # 收编活进程（按其会话 ID，不新建）
+crosschat serve --connect cloud --adopt boss2 --extend-session boss   # 已是成员时=补接任声明
+```
+
+名字不存在=报错列候选；claude/codex 同名=`NAME_COLLISION` 消歧；已是成员=幂等提示（exit 0）。
+
+### 重启自愈与降级告警
+
+- **恢复链**：聚合器重启 → 向 broker 查回本机最后已知名单 → 本地验活 → 活的自动重新入册（孤儿找回，死名不复活）；broker 也重启过 → 恢复链空 → 走上方 adopt。启动器还活着时最简单——旗标在手原样重声明
+- **降级告警**：broker 机 crosschat 是老版本时，启动器/聚合器在命令行打一行 `broker 不支持会话成员（proto:3），已降级机器级——…`。含义：机器级收发不受影响，入星类功能不生效；升级 broker 机并重启 serve 即恢复
+
+
 
 | 方式 | 一句话 | 状态 | 深入 |
 |---|---|---|---|
 | **单机会话** | 同机 agent 互发，`--to <名字>` 即起对话，忙时自动入队/发件箱 | ✅ v1.0 | [使用手册](docs/usage.md)：发起方式 / 投递语义 / 底层命令 / 边界 |
 | **跨机联邦 · ssh** | 加 `--via ssh:<对端hostname>`，消息经 ssh 落到对端机器，回复自动回来 | ✅ v1.3.3 | [联邦手册](docs/federation.md)：环境搭建（按 OS）/ 跨机聊天 / 底层实现 / CLI 契约 |
 | **跨机联邦 · tcp** | `crosschat serve` 起常驻转发器（星型+预共享钥匙），`--via tcp:<机器/mid8>` 直发、`--file` 文件通道 | ✅ v1.4.0 | [转发器手册](docs/broker.md)：环境搭建 / 跨机聊天 / 底层实现 / proto:1 对接 / 排障 |
+| **会话级星成员 · proto:3** | 启动器入星（`crosschat claude/codex --connect <星>`）+ 三段寻址（`--via tcp:<星>:<机器>:<会话>`）+ extends 换轨接任 + adopt 收编 | ✅ 018 | 本页[会话入星章](#-会话入星与三段寻址tcp-星成员--proto3)；全量细则 [转发器手册 2.3](docs/broker.md) |
 | 跨机联邦 · broker 增强 | 忙时持久队列、异步回执、投递状态机（tcp 形态之上的 store-and-forward） | 🚧 规划中 | — |
 
 ssh 配置方向一句话：**每台机写自己的 `~/.ssh/config`，内容是"怎么连对端"**（别名推荐=对端 hostname）——完整五步与命令样例见上表手册。
@@ -223,6 +283,7 @@ ssh: 共 2 段对话
 | skill 误删/过期 | `crosschat install-skills` |
 | 升级 crosschat 代码后 | `npm run build`（skill 有变再 install-skills） |
 | 消息发出对方没反应 | 先 `status` 确认在线；`parked` 的等对方空闲自动补投；UNCERTAIN 类勿重发先核实 |
+| 三段寻址报 `SESSION_NOT_MEMBER` | 会话没入星（裸起的）或双端重启失忆 | `crosschat status --stars` 看诊断行 → 照抄 `serve --connect <星> --adopt <名>`；或经启动器重起会话 |
 
 ## 📚 更多文档
 
@@ -254,7 +315,11 @@ ssh: 共 2 段对话
 - [ ] 🖼️ TUI 看板与服务安装（开机自启）
 - [ ] 🤖 新 agent 适配器（GLM、opencode、zcode、deepseek-harness；有原生唤醒通道则原生，否则论证降级）
 
-<details><summary>已完成（v1.0.0 – v1.3.3）</summary>
+<details><summary>已完成（v1.0.0 – v1.3.3 + 018）</summary>
+
+**018（proto:3 会话级星成员）**
+- [x] ⭐ 会话入星（启动器 `--connect <星>` 可重复多星、聚合器自动拉起、退出即退星）+ 三段寻址 `--via tcp:<星>:<机器>:<会话>`（免 --to、非成员名收紧报错指路）+ `--extend-session` 显式换轨接任（四级校验、alive-wins、先声明先得）+ `serve --adopt` 收编活进程（status --stars 诊断行当场打印命令）+ 重启自愈链（broker lastKnownMembers + members-query 查回验活、双失忆走 adopt）+ /rename 自动跟随 + caps 协商降级显性告警；机器级两段寻址/roster/状态文件零改动（过渡期并存），见[会话入星章](#-会话入星与三段寻址tcp-星成员--proto3)与[转发器手册 2.3](docs/broker.md)
+
 
 **v1.0.0**
 - [x] Claude ↔ Codex / Claude ↔ Claude / Codex ↔ Codex 双向消息（真机联调验证）

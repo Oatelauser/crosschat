@@ -3,6 +3,7 @@ import process from 'node:process';
 import { resolveCodexExecutable } from '../codex/transport.js';
 import { splitLauncherKnobs, validateLauncherKnob } from '../limits.js';
 import { otherIdentityKeys, stripOtherFamilies } from '../identity.js';
+import { realStarJoinDeps, splitStarLauncherArgs, StarJoinDeps, StarJoiner } from './session-star.js';
 
 /**
  * `crosschat codex [args...]`（票A 第五单）：与 crosschat claude 成对的
@@ -27,6 +28,8 @@ export interface CodexWrapperDeps {
   env?: NodeJS.ProcessEnv;
   /** Spawns interactively (stdio inherit); resolves to the child's exit code. env 缺省 = 继承 process.env。 */
   spawnInherit(exe: string, args: readonly string[], env?: NodeJS.ProcessEnv): Promise<number>;
+  /** 018 批二：入星腿依赖（--connect 在场时使用）；缺省 realStarJoinDeps()。 */
+  star?: StarJoinDeps;
 }
 
 export function defaultCodexWrapperDeps(): CodexWrapperDeps {
@@ -46,7 +49,9 @@ export async function runCodexWrapper(
   args: readonly string[],
   deps: CodexWrapperDeps = defaultCodexWrapperDeps(),
 ): Promise<number> {
-  const { passthrough, maxBodyKb, maxTurn } = splitLauncherKnobs(args);
+  // 018 批二：--connect <星> 在场=入星启动（codex 无 -n——名字原生 /rename 后由聚合器回填）
+  const star = splitStarLauncherArgs(args, { nameFlag: false });
+  const { passthrough, maxBodyKb, maxTurn } = splitLauncherKnobs(star.passthrough);
   const maxBodyKbNum = validateLauncherKnob('crosschat codex', '--max-body-kb', maxBodyKb);
   const maxTurnNum = validateLauncherKnob('crosschat codex', '--max-turn', maxTurn);
   const parentEnv = deps.env ?? process.env;
@@ -63,5 +68,20 @@ export async function runCodexWrapper(
           'codex',
         );
   // 无 --settings 类注入：codex 接收靠原生 daemon，参数全部原样转发。
+  // 入星腿与 claude 同构：spawn 前快照、守连接、退出 detach；失败只出一行 stderr。
+  if (star.connects.length > 0) {
+    const joiner = new StarJoiner({
+      deps: deps.star ?? realStarJoinDeps(),
+      side: 'codex',
+      connects: star.connects,
+      ...(star.extendSession === undefined ? {} : { extendSession: star.extendSession }),
+    });
+    await joiner.begin();
+    try {
+      return await deps.spawnInherit(deps.resolveExe(), passthrough, env);
+    } finally {
+      await joiner.stop();
+    }
+  }
   return deps.spawnInherit(deps.resolveExe(), passthrough, env);
 }

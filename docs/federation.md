@@ -463,6 +463,33 @@ ssh <host> crosschat send --to <名字> --body - [其余参数透传]
 
 ---
 
+## 五、tcp 星的会话级成员（proto:3 操作速查）
+
+ssh 联邦与 tcp 星是**正交并存**的两条跨机通道：ssh 按机器投递（`--via ssh:<host> --to <名>`，名字在对端机解析）；tcp 星在机器级之上另有**会话级**投递——会话经启动器入星后按 `<星>:<机器>:<会话>` 直达。两通道怎么选：对端在 tcp 星里且你要**稳定直达某个会话**用三段；否则 ssh 照旧。日常操作五条（全量教学见[转发器手册 2.3](broker.md)）：
+
+```bash
+# ① 入星启动（claude 带 -n；codex 无 -n，进去 /rename 即被聚合器跟随）
+crosschat claude -n boss --connect cloud
+crosschat codex --connect cloud
+
+# ② 三段直达（免 --to；会话名禁冒号）
+crosschat send --via tcp:cloud:host-b:boss --body "构建跑了吗"
+
+# ③ 换轨接任（旧会话退休，新会话接它的名字血统——投旧名自动被指路到新会话）
+crosschat claude -n boss2 --connect cloud --extend-session boss
+
+# ④ 收编（会话活着但不在星里——status --stars 的诊断行会把命令原样打印出来）
+crosschat status --stars
+crosschat serve --connect cloud --adopt limbo
+
+# ⑤ 看星内会话成员表（每星下按机器列成员；extends 血统一并标注）
+crosschat status --stars
+```
+
+错误速读：`SESSION_NOT_MEMBER`=该会话名没入星（走 ④ 收编或 ① 重起）；`SESSION_SUPERSEDED`=旧名已死有接任者（报错给出接任者三段地址，改投）；启动器/聚合器打"已降级机器级"=broker 机 crosschat 过旧（升级重启即恢复，机器级收发不受影响）。ssh 侧不受这些语义影响——ssh 形态永远按机器投递。
+
+---
+
 ## 排障对照（失败速查）
 
 | 症状 | 根因 | 解法 |

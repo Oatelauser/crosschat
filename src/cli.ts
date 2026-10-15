@@ -79,7 +79,8 @@ commands:
                                 crosschat status)
                               --stars               tcp star detail: per-star
                                 reachability, daemon state, full machine
-                                table (bare run shows the three-section
+                                table, session members per machine
+                                (bare run shows the three-section
                                 summary; any filter flag falls back to
                                 the detail view)
                               --all                 also list unnamed sessions
@@ -106,6 +107,11 @@ commands:
                                 node-<星名>.log)
                               --detach             run the broker or node
                                 (with --connect) in the background
+                              --adopt <会话名>      (with --connect) adopt
+                                a live local session into the star
+                                by its sessionId (no new process;
+                                optional --extend-session <旧名>;
+                                idempotent if already a member)
                               --stop [broker|node|选择器]
                                 stop a running broker/node; a
                                 selector stops only that node
@@ -134,6 +140,17 @@ commands:
                               --max-turn <N>       turn budget stamped
                                 into envelopes
                                 (env CROSSCHAT_MAX_TURN)
+                            star-membership launch flags (018):
+                              -n <会话名>          session name used
+                                for star addressing (no colon)
+                              --connect <星>       join this session to
+                                the star (repeatable = multi-star;
+                                the local aggregator is auto-started
+                                when absent; detached on exit)
+                              --extend-session <旧名>
+                                declare succession of a retired
+                                session name (senders of the old
+                                name get redirected)
   codex [any native args]   start the real codex CLI (no codex settings
                             injected); any native codex args (e.g.
                             resume, --profile, --help) pass through
@@ -142,6 +159,10 @@ commands:
                                 from this session
                               --max-turn <N>       turn budget stamped
                                 into envelopes
+                            plus the same star flags (no -n here: name
+                            the thread with /rename — the aggregator
+                            picks it up):
+                              --connect <星> / --extend-session <旧名>
 
 options:
   --json                    single-line JSON output (send/status)
@@ -319,11 +340,13 @@ export function parseServeArgs(argv: readonly string[]): ServeArgs {
       args.detach = true;
     } else if (name === '--connect') {
       args.connect = nextValue() ?? '';
-    } else if (name === '--port' || name === '--remove' || name === '--name') {
+    } else if (name === '--port' || name === '--remove' || name === '--name' || name === '--adopt' || name === '--extend-session') {
       const value = nextValue();
       if (value === undefined) throw new MultichatError('USAGE', `serve: ${name} requires a value`);
       if (name === '--port') args.portArg = value;
       else if (name === '--name') args.nameArg = value;
+      else if (name === '--adopt') args.adopt = value;
+      else if (name === '--extend-session') args.extendSession = value;
       else args.remove = value;
     } else if (name === '--gen-key') {
       args.genKeyArg = nextValue() ?? '1';

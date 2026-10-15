@@ -55,6 +55,7 @@ crosschat status
 - 投给 codex 的消息：**开窗、关窗、忙时均可投**（daemon 0.160+）。对方正在跑 turn 也不阻塞——消息直接**入队**（输出 `queued`），当前轮结束即进入对话被处理；TUI 窗口会实时刷出。输出 `delivered`（已送达）/ `queued`（已入队，轮末处理）/ `parked`（仅旧 daemon 异常态，已暂存），三者都**无需重发**。`queued` 的消费确认免费搭载在业务流量上——对端的下一条来信带更高 turn 号即证明已消费，无需轮询、无显式回执。
 - **跨机发送**：`crosschat send --via ssh:<对端hostname> --to <名/id8> --body "…"`——对端是另一台机器上安装了 crosschat 的会话（hostname = `~/.ssh/config` 里的 Host 别名，推荐直接用对端系统 hostname）；名字在目标机上解析，回执带 `@<机器名>(<mid8>)` 后缀，错误同码透传（前缀 `[via <host>]`）。
 - **tcp 形态同构**：`crosschat send --via tcp:<机器名或mid8> …` 与 ssh 形态用法相同（tcp 网络需该机 `~/.crosschat/tcp/node.json` 在场）。**回复永远不用管形态**：信封的回复命令不带 `--via`，照抄执行即自动选路——单机/ssh/tcp 两式合一，引用里已带两端机器指纹（tcp 会话另带星标识，按它选本机 node.json 条目）。仅主动发起跨机新消息（`--to`）时才需要手写 `--via`。
+- **tcp 三段寻址（直达星成员，免 --to）**：`crosschat send --via tcp:<星>:<机器>:<会话> --body "…"`——会话名须是对端经启动器入星的成员（`crosschat claude -n <名> --connect <星>` 起的会话；裸起的会话名报 `SESSION_NOT_MEMBER`，可让对端 `crosschat serve --connect <星> --adopt <名>` 收编后重发）。会话名禁冒号。
 - 对方要主动找你？**你发出的跨机信封自带 `from-machine`（你的机器名）**，加上会话名就是对方的发起坐标——对方照 `--via tcp:<from-machine> --to <你的会话名>` 即可发起，不需要另行打听。
 - 跨机的对端**不在本机 status 里**——tcp 星查远机会话用 `crosschat status --via tcp:<机器>`（过滤参数 `--claude`/`--codex`/`--name` 同本地），ssh 形态对端仍用 `ssh <对端> crosschat status`；查到名字再发，**别赌名字发送**。
 - 跨机对话的轮次纪律更要遵守：防乒乓限流器是单机记账的，**turn 计数是跨机唯一防线**——接近预算即总结收尾。
@@ -66,6 +67,8 @@ crosschat status
 - 超长处理的场景指引听报错的：报错按你当前通道只给那一条，照做即可——**准确数字以报错为准**（报错才是权威，本文件只给地图）。
 - `TCP_TRANSPORT_FAILED`（tcp 形态）：连不上 broker 或等回执超时——**远端状态不明，勿盲目重发**（可能与首次投递叠加）。先在对端查 send-log 或 `status --conversations` 核实后再决定。
 - `PEER_OFFLINE`（tcp 形态）：对端机器当前不在线——稍后重试；若两端另配了 ssh 也可走 ssh 形态。
+- `SESSION_NOT_MEMBER`（tcp 三段寻址）：会话名没入星（非成员收紧）——让对端经启动器入星或 `serve --connect <星> --adopt <名>` 收编后重发；机器级两段寻址不受影响。
+- `SESSION_SUPERSEDED`（tcp 三段寻址）：旧名是死名且有人接任（`--extend-session` 声明过）——报错里已给出接任者的三段地址，改投它即可。
 - 收到"文件 … 已送达"但那个路径不存在：附件超过 5 天被回收——回对端"**附件已过期，请重发 --file**"。
 - `RATE_LIMITED`：发送过快（每对端点 60 秒最多 30 条）。**等待后重试**，或直接总结收尾；系统不会静默丢弃或自动重试。
 - `CODEX_THREAD_LOCKED` / `CODEX_THREAD_BUSY_TIMEOUT`：旧 daemon（≤0.157 / 未附着 TUI）下线程被窗口占用或长 turn 在跑。消息**已暂存（parked，exit 0），无需重发**——**看门狗每 0.5–5 分钟自动重投，不需要手动跑 status**；每线程最多暂存 200 条，滞留内容随时可读 mailbox 镜像 `~/.crosschat/mailbox/<线程ID>.md`（全平台同路径）。0.160+ 正常不会再遇到：忙时直接入队（`queued`）。

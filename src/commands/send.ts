@@ -549,7 +549,13 @@ function resolveTargetArgs(args: SendArgs): void {
     throw new MultichatError('TARGET_CONFLICT', 'Use either --to <name> or --conversation <ref>, not both.');
   }
   if (args.to === undefined && args.conversation === undefined) {
-    throw new MultichatError('TARGET_REQUIRED', 'Specify a target: --to <name> or --conversation <ref>.');
+    // 018 三段寻址：--via tcp:<星>:<机器>:<会话> 自带收件人（会话段即目标，
+    // 机器段可含冒号、会话名禁冒号）——此形态免 --to；其余形态照旧必须给目标
+    const segments = args.via === undefined ? [] : args.via.startsWith('tcp:') ? args.via.slice(4).split(':') : [];
+    const threePart = segments.length === 3 && segments.every((segment) => segment !== '');
+    if (!threePart) {
+      throw new MultichatError('TARGET_REQUIRED', 'Specify a target: --to <name> or --conversation <ref>.');
+    }
   }
 }
 

@@ -17,6 +17,7 @@ import { Broker, DEFAULT_PORT, defaultDeliverLocal } from '../serve/broker.js';
 import { ensureStarId, ensureStarName, genKeys, listNodes, readRegistry, registryFileOf, removeNode, sanitizeName, setName, setPort, tcpDir, writeRegistry } from '../serve/registry.js';
 import { buildStatusPayload, deliverViaRunSend, formatBrokerEntry, NodeClient, readNodeConfig, syncNodeJsonEntry, type BrokerEntry, type NodeConfig } from '../serve/node.js';
 import { FileInbox } from '../serve/file-channel.js';
+import { runAdopt, spawnServeDetachReal, warnIfBrokerLacksSessionCaps } from './session-star.js';
 import type { SendDeps } from './send.js';
 import type { DeliverFrame, ErrorFrame, ResultFrame, SendFrame, StatusPayload } from '../serve/protocol.js';
 
@@ -34,12 +35,18 @@ export interface ServeArgs {
   stopSelector?: string;
   /** B2：节点模式（可选带 broker 别名校验 node.json）；'' = 未给值。 */
   connect?: string;
+  /** 018 批二：--adopt <会话名>——收编本机活会话入 --connect 星（一次性命令）。 */
+  adopt?: string;
+  /** 018 批二：--extend-session <旧名>——adopt 并用补血统（也供文档示例）。 */
+  extendSession?: string;
 }
 
 export interface ServeDeps {
   /** 注册表/状态/日志的根目录；真跑 ~/.crosschat，测试注入临时目录。 */
   baseDir: string;
   stdout(line: string): void;
+  /** 018 批二：stderr 行输出（adopt 报错/9b 告警）；缺省复用 stdout。 */
+  stderr?(line: string): void;
   env: NodeJS.ProcessEnv;
   version: string;
   machineId: () => string | undefined;
@@ -94,12 +101,28 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
   if (args.remove !== undefined) return runRemove(args.remove, deps, registryFile);
   if (args.stopSelector !== undefined) return runStopSelector(args.stopSelector, deps);
   if (args.stopTarget !== undefined) return runStop(args.stopTarget, deps, registryFile);
+  // 018 批二：--adopt 收编（一次性命令，与 --connect 连用）
+  if (args.adopt !== undefined) {
+    if (args.connect === undefined) {
+      throw new MultichatError('USAGE', '--adopt 与 --connect <星> 连用——示例：crosschat serve --connect <星名> --adopt <会话名>');
+    }
+    if (args.detach) throw new MultichatError('USAGE', '--adopt 是一次性收编命令，不支持 --detach');
+    return runAdoptServe(args, deps);
+  }
   const detachedChild = deps.env.CROSSCHAT_SERVE_DETACHED === '1';
   if (args.connect !== undefined) {
     // 013 双开防护：起守护前拒同星（前台在本进程、--detach 在父进程各扫一次；
     // detached 子进程不扫——父进程 spawn 前已扫，且父进程退场前会被误当活守护）
     if (!detachedChild) guardSameStarDaemon(args.connect, deps);
     if (args.detach && !detachedChild) {
+      // 9b：detach 父进程退场前代子进程出声（子进程的 stdout 已落日志文件）——
+      // broker 无 proto:3 cap 时控制台一行降级告警，不只日志
+      try {
+        const { entry } = selectConnectEntry(args.connect, readNodeConfig(join(tcpDir(deps.baseDir), 'node.json')));
+        await warnIfBrokerLacksSessionCaps(entry, (line) => deps.stdout(line));
+      } catch {
+        // 选不出条目/探不到 broker：交子进程自己的教学报错与告警
+      }
       // E0：日志文件名取解析后的星名（用户用 starId 前缀起停也落到星名日志）；
       // 解析失败（无 node.json 等）退回原选择器——子进程会给出教学报错
       let logName: string;
@@ -443,10 +466,47 @@ async function runForegroundNode(aliasArg: string, deps: ServeDeps): Promise<num
     now: deps.now,
     log: logLine,
     onSignal: deps.onSignal,
+    // 9b：降级告警直达命令面（前台=控制台一行；detach 子进程 stdout 即日志，
+    // 控制台声量由 detach 父进程的预检补）
+    warn: (line) => logLine(line),
   });
   logLine(`节点客户端启动：目标 broker ${entry.name ?? `${entry.host}:${entry.port}`}（Ctrl+C 退出）`);
   await client.run();
   return 0;
+}
+
+/**
+ * 018 批二：--adopt 的 ServeDeps→StarJoinDeps 桥——本机会话扫描经 makeSendDeps
+ * （与投递同源），自动拉聚合器/证据源与启动器共用同一实现。
+ */
+async function runAdoptServe(args: ServeArgs, deps: ServeDeps): Promise<number> {
+  if (deps.makeSendDeps === undefined) {
+    throw new MultichatError('INTERNAL', 'makeSendDeps 未接线（测试环境不支持 adopt）');
+  }
+  const send = deps.makeSendDeps();
+  let machineName = deps.hostname();
+  try {
+    machineName = readNodeConfig(join(tcpDir(deps.baseDir), 'node.json')).showName ?? machineName;
+  } catch {
+    // 读不出配置：hostname 兜底（仅显示用）
+  }
+  return runAdopt(
+    {
+      connect: args.connect ?? '',
+      adopt: args.adopt!,
+      ...(args.extendSession === undefined ? {} : { extendSession: args.extendSession }),
+    },
+    {
+      tcpBaseDir: deps.baseDir,
+      stdout: (line) => deps.stdout(line),
+      stderr: (line) => (deps.stderr ?? deps.stdout)(line),
+      listClaudeSessions: () => send.listClaudeSessions(),
+      listCodexThreads: async () => (await send.listCodexThreads()).map((thread) => ({ id: thread.id, name: thread.name })),
+      spawnServeDetach: spawnServeDetachReal,
+      machineName,
+      now: deps.now,
+    },
+  );
 }
 
 function readResultTimeoutMs(env: NodeJS.ProcessEnv): number {

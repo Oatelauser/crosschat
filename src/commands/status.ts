@@ -1,4 +1,4 @@
-import type { RosterMachine, StatusCodexRow, StatusPayload } from '../serve/protocol.js';
+import type { RosterMachine, SessionMemberDecl, StatusCodexRow, StatusPayload } from '../serve/protocol.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ClaudeRegistryScan } from '../claude/registry.js';
@@ -205,7 +205,7 @@ interface StarGroup {
   name: string;
   reachable: boolean;
   online: number;
-  machines: Array<{ name?: string; mid8: string; online: boolean }>;
+  machines: Array<{ name?: string; mid8: string; online: boolean; sessions?: SessionMemberDecl[] }>;
   daemons: StarDaemon[];
 }
 
@@ -250,6 +250,17 @@ async function collectStars(deps: StatusDeps, nowMs: number): Promise<StarGroup[
       continue;
     }
     const machines = await deps.roster(entry);
+    // 018：本机 broker 星已从 status 文件入组（仅名字无 mid8）——同星条目的
+    // roster 数据更全（mid8/离线机/会话成员），原位升级而非跳过
+    if (machines !== undefined && seen.has(name)) {
+      const group = groups.find((g) => g.name === name);
+      if (group !== undefined) {
+        group.reachable = true;
+        group.online = machines.filter((m) => m.online).length;
+        group.machines = machines;
+      }
+      continue;
+    }
     push(name, machines !== undefined, machines ?? []);
   }
   return groups;
@@ -270,9 +281,15 @@ function starSummaryLines(groups: StarGroup[]): string[] {
   return lines;
 }
 
-/** `--stars` 星内明细：每星可达行 + 守护态行 + 全量机器表（含离线星与未跑守护）。 */
-function starsText(deps: StatusDeps, nowMs: number, groups: StarGroup[]): string {
+/**
+ * `--stars` 星内明细：每星可达行 + 守护态行 + 全量机器表（含离线星与未跑守护）
+ * + 会话成员行（018：`机器:会话名 (extends←旧名)` 精简格式，仅明细视图——
+ * 裸跑摘要不炸行）+ adopt 诊断行（本机会话活着但非成员且本机守护在线 →
+ * 当场打印完整收编命令，复制即用）。
+ */
+async function starsText(deps: StatusDeps, nowMs: number, groups: StarGroup[]): Promise<string> {
   if (deps.tcpDir === undefined) return 'tcp: 未入网（本机无 ~/.crosschat/tcp）';
+  const localNames = await collectLocalSessionNames(deps);
   const lines = [groups.length === 0 ? 'tcp: 无' : `tcp: 共 ${groups.length} 星`];
   for (const g of groups) {
     lines.push(g.reachable ? `${g.name} ✓ 可达，${g.online} 机器在线` : `${g.name} ✗ 不可达`);
@@ -280,8 +297,44 @@ function starsText(deps: StatusDeps, nowMs: number, groups: StarGroup[]): string
     lines.push(`  守护: ${daemons === '' ? '未运行' : daemons}`);
     const machines = [...g.machines].sort((a, b) => Number(b.online) - Number(a.online));
     for (const m of machines) lines.push(`  ${machineDisp(m)} ${m.online ? '在线' : '离线'}`);
+    for (const m of machines) {
+      if ((m.sessions?.length ?? 0) === 0) continue;
+      const label = m.name ?? (m.mid8 === '' ? '?' : m.mid8);
+      const members = m.sessions!.map((s) => {
+        const ext =
+          s.extends === undefined
+            ? ''
+            : ` (extends←${typeof s.extends === 'string' ? s.extends : `${s.extends.machine}:${s.extends.name}`})`;
+        return `${label}:${s.name ?? s.sessionId.slice(0, 8)}${ext}`;
+      });
+      lines.push(`  会话: ${members.join('、')}`);
+    }
+    // 诊断（场景 E 恢复指路）：会话活着但非成员且该星本机守护在线——收编命令当场打印
+    if (g.reachable && g.daemons.some((d) => d.state === 'online') && localNames.length > 0) {
+      const memberNames = new Set<string>();
+      for (const m of machines) for (const s of m.sessions ?? []) if (s.name !== undefined) memberNames.add(s.name);
+      const unmatched = localNames.filter((name) => !memberNames.has(name)).slice(0, 5);
+      for (const name of unmatched) {
+        lines.push(`  建议: crosschat serve --connect ${g.name} --adopt ${name}（会话活着但非成员——收编活进程入星）`);
+      }
+    }
   }
   return lines.join('\n');
+}
+
+/** 本机活会话的显示名（claude 注册表 + codex 线程表；仅命名会话）。 */
+async function collectLocalSessionNames(deps: StatusDeps): Promise<string[]> {
+  const names = deps.listClaudeSessions().sessions.flatMap((session) =>
+    session.sessionId !== '' && session.name !== undefined ? [session.name] : [],
+  );
+  try {
+    for (const thread of await deps.listCodexThreads()) {
+      if (thread.name !== null && thread.name !== '') names.push(thread.name);
+    }
+  } catch {
+    // codex down is a valid status answer——claude 侧照给
+  }
+  return names;
 }
 
 /**
@@ -366,7 +419,7 @@ export async function runStatus(
   const nowMs = deps.now?.() ?? Date.now();
   // G0 --stars：tcp 星内明细视图——text 整视图替换；--json 走下方旧键全保留 + stars 新键
   const starGroups = stars ? await collectStars(deps, nowMs) : undefined;
-  if (stars && !json) return starsText(deps, nowMs, starGroups!);
+  if (stars && !json) return await starsText(deps, nowMs, starGroups!);
   // G0 裸跑三段式摘要：任何旗标/json 在场 = 现行明细视图逐字节不变（零回归锚）
   if (
     !json &&

@@ -147,6 +147,12 @@ export interface RosterMachine {
   name?: string;
   mid8: string;
   online: boolean;
+  /**
+   * 018（批二）：该机当前声明的会话成员（在线聚合器的成员表快照；老 broker
+   * 不发此字段——additive，旧读者忽略）。status --stars 视图与启动器 extends
+   * 校验（旧名是否仍是活成员）共用。
+   */
+  sessions?: SessionMemberDecl[];
 }
 export interface RosterResultFrame {
   op: 'roster-result';
@@ -211,6 +217,22 @@ export interface SessionsFrame {
   sessions: SessionMemberDecl[];
 }
 
+/**
+ * 018 恢复链②（批二）：聚合器重启上线后向 broker 查回"我以前的成员"
+ * （broker 断连后保留的最后已知名单，纯内存——broker 也重启过则回空数组，
+ * 双失忆边角走 adopt 收编）。node 角色独占；老 broker 不识此帧（发了被丢，
+ * 聚合器侧 cap 协商先行，不会发）。
+ */
+export interface MembersQueryFrame {
+  op: 'members-query';
+}
+
+/** members-query 应答：该机器最后已知名单（含 extends；死活由聚合器本地验活过滤）。 */
+export interface MembersResultFrame {
+  op: 'members-result';
+  members: SessionMemberDecl[];
+}
+
 export type Frame =
   | InfoFrame
   | ConnectFrame
@@ -228,7 +250,9 @@ export type Frame =
   | RosterResultFrame
   | StatusQueryFrame
   | StatusResultFrame
-  | SessionsFrame;
+  | SessionsFrame
+  | MembersQueryFrame
+  | MembersResultFrame;
 
 const OPS = new Set([
   'info',
@@ -248,6 +272,8 @@ const OPS = new Set([
   'status-query',
   'status-result',
   'sessions',
+  'members-query',
+  'members-result',
 ]);
 
 /** 解析一帧 ws 文本消息；JSON 损坏或 op 未知返回 undefined（调用方丢弃）。 */

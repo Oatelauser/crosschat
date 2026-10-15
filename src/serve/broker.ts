@@ -24,6 +24,7 @@ import type {
   FileEndFrame,
   FileResultFrame,
   Frame,
+  MembersResultFrame,
   ResultFrame,
   RosterMachine,
   RosterResultFrame,
@@ -139,6 +140,13 @@ export class Broker {
   private readonly fileRoutes = new Map<string, FileRoute>();
   /** 018 extends 星内映射（内存）：旧名 → 接续声明（归属连接——断连/重播即失效）。同旧名先声明先得。 */
   private readonly extendsByOldName = new Map<string, { holder: Session; decl: SessionMemberDecl }>();
+  /**
+   * 018 恢复链②（批二）：每机器断连后保留的最后已知成员名单（lastKnownMembers
+   * 语义——纯内存、零持久文件）。sessions 帧到达即刷新该机快照；连接断开
+   * 【不删】（聚合器重启上线后 members-query 查回 → 本地验活 → 活的重入册）。
+   * broker 自身重启即全失忆——双失忆边角走 adopt 收编命令（设计内路径）。
+   */
+  private readonly lastKnownMembers = new Map<string, SessionMemberDecl[]>();
   private hbTimer?: ReturnType<typeof setInterval>;
 
   constructor(deps: BrokerDeps) {
@@ -330,6 +338,10 @@ export class Broker {
       this.onSessions(session, frame);
       return;
     }
+    if (frame.op === 'members-query') {
+      this.onMembersQuery(session);
+      return;
+    }
     // 其余帧型（info/receipt/deliver）服务端无行为
   }
 
@@ -350,6 +362,8 @@ export class Broker {
       members.set(decl.sessionId, decl);
     }
     session.members = members;
+    // 018 恢复链②：刷新该机最后已知名单（断连保留；连接在场时 members 即权威）
+    this.lastKnownMembers.set(normalizeMid(session.machineId), [...members.values()]);
     // 归属重建：先撤本连接旧声明，再逐条登记
     for (const [oldName, entry] of this.extendsByOldName) {
       if (entry.holder === session) this.extendsByOldName.delete(oldName);
@@ -372,6 +386,19 @@ export class Broker {
       this.extendsByOldName.set(oldName, { holder: session, decl });
     }
     this.log(`sessions ${session.machineName ?? session.machineId.slice(0, 8)}: ${members.size} 成员`);
+  }
+
+  /**
+   * 018 恢复链②：聚合器（重启后）查回本机最后已知成员名单。死活不在 broker
+   * 判断——聚合器逐个本地验活（claude 扫描/codex 线程），死的不再入册。
+   * broker 也重启过（双失忆）则回空数组，收编走 adopt 命令路径。
+   */
+  private onMembersQuery(session: Session): void {
+    if (session.machineId === undefined) return; // sender 角色不受理
+    const known = this.lastKnownMembers.get(normalizeMid(session.machineId)) ?? [];
+    const reply: MembersResultFrame = { op: 'members-result', members: known };
+    this.send(session.ws, reply);
+    this.log(`members-query ${session.machineName ?? session.machineId.slice(0, 8)}: 回 ${known.length} 条最后已知名单`);
   }
 
   private async onConnect(session: Session, frame: ConnectFrame): Promise<void> {
@@ -625,10 +652,13 @@ export class Broker {
     for (const node of registry.nodes) {
       const nm = normalizeMid(node.machineId ?? '');
       if (nm === '') continue;
+      const conn = this.online.get(nm);
+      const decls = conn?.members !== undefined && conn.members.size > 0 ? [...conn.members.values()] : undefined;
       machines.set(nm, {
         ...(node.machineName === undefined ? {} : { name: node.machineName }),
         mid8: nm.slice(0, 8),
-        online: (ownNorm !== '' && nm === ownNorm) || this.online.has(nm),
+        online: (ownNorm !== '' && nm === ownNorm) || conn !== undefined,
+        ...(decls === undefined ? {} : { sessions: decls }),
       });
     }
     return { op: 'roster-result', machines: [...machines.values()] };

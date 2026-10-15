@@ -4,6 +4,7 @@ import { MultichatError } from '../errors.js';
 import { resolveClaudeExe } from '../claude/resolve-exe.js';
 import { splitLauncherKnobs, validateLauncherKnob } from '../limits.js';
 import { otherIdentityKeys, stripOtherFamilies } from '../identity.js';
+import { realStarJoinDeps, splitStarLauncherArgs, StarJoinDeps, StarJoiner } from './session-star.js';
 
 /**
  * `crosschat claude [args...]`: start the real claude CLI with
@@ -32,6 +33,8 @@ export interface ClaudeWrapperDeps {
   env?: NodeJS.ProcessEnv;
   /** Spawns interactively (stdio inherit); resolves to the child's exit code. env 缺省 = 继承 process.env（现状行为）。 */
   spawnInherit(exe: string, args: readonly string[], env?: NodeJS.ProcessEnv): Promise<number>;
+  /** 018 批二：入星腿依赖（--connect 在场时使用）；缺省 realStarJoinDeps()。 */
+  star?: StarJoinDeps;
 }
 
 export function defaultClaudeWrapperDeps(): ClaudeWrapperDeps {
@@ -57,7 +60,8 @@ export async function runClaudeWrapper(
         + 'Merge that JSON into your settings file and start claude directly instead.',
     );
   }
-  const { passthrough, maxBodyKb, maxTurn } = splitLauncherKnobs(args);
+  const star = splitStarLauncherArgs(args, { nameFlag: true });
+  const { passthrough, maxBodyKb, maxTurn } = splitLauncherKnobs(star.passthrough);
   const maxBodyKbNum = validateLauncherKnob('crosschat claude', '--max-body-kb', maxBodyKb);
   const maxTurnNum = validateLauncherKnob('crosschat claude', '--max-turn', maxTurn);
   const parentEnv = deps.env ?? process.env;
@@ -74,5 +78,22 @@ export async function runClaudeWrapper(
           'claude',
         );
   const exe = deps.resolveExe();
+  // 018 批二：--connect <星> 在场=入星启动——spawn 前快照、存活期守连接、退出即 detach；
+  // 入星任何失败只出一行 stderr，不连坐会话本身
+  if (star.connects.length > 0) {
+    const joiner = new StarJoiner({
+      deps: deps.star ?? realStarJoinDeps(),
+      side: 'claude',
+      ...(star.sessionName === undefined ? {} : { sessionName: star.sessionName }),
+      connects: star.connects,
+      ...(star.extendSession === undefined ? {} : { extendSession: star.extendSession }),
+    });
+    await joiner.begin();
+    try {
+      return await deps.spawnInherit(exe, ['--settings', INBOUND_SETTINGS, ...passthrough], env);
+    } finally {
+      await joiner.stop();
+    }
+  }
   return deps.spawnInherit(exe, ['--settings', INBOUND_SETTINGS, ...passthrough], env);
 }

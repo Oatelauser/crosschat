@@ -310,6 +310,11 @@ export interface NodeClientDeps {
   memberCheckMs?: number;
   /** 018：codex 线程活性核验的 CODEX_HOME（缺省真 codexHomeDir；测试注入临时目录保密闭）。 */
   codexHome?: string;
+  /**
+   * 018（9b 批二）：降级告警直达命令面（stdout/stderr 一行，不只日志）——
+   * broker 无 session-members cap 时调用一次。缺省不打印（嵌入式调用方零噪音）。
+   */
+  warn?(line: string): void;
 }
 
 /** 018：会话成员表条目（内存态——零新持久文件；连接断/失活即消失）。 */
@@ -422,6 +427,8 @@ export class NodeClient {
   private memberTimer?: ReturnType<typeof setInterval>;
   /** 018：broker 会话级能力（info.caps 协商；false=老 broker，成员声明不发送）。 */
   private brokerSessionCap = false;
+  /** 018（9b）：降级告警只出声一次（重连老 broker 不刷屏；升级 broker 后按新能力行事）。 */
+  private warnedNoCap = false;
 
   constructor(deps: NodeClientDeps) {
     this.d = { backoffBaseMs: 1_000, quietAfterMs: 300_000, memberCheckMs: 30_000, ...deps };
@@ -431,7 +438,7 @@ export class NodeClient {
   async run(): Promise<void> {
     this.d.onSignal?.('SIGINT', () => void this.stop());
     this.d.onSignal?.('SIGTERM', () => void this.stop());
-    this.memberTimer = setInterval(() => this.checkMemberLiveness(), this.d.memberCheckMs);
+    this.memberTimer = setInterval(() => void this.checkMemberLiveness(), this.d.memberCheckMs);
     this.mainLoop = this.loop();
     await new Promise<void>((resolve) => {
       this.stopResolve = resolve;
@@ -540,6 +547,11 @@ export class NodeClient {
       this.brokerSessionCap = hasCap((info as InfoFrame).caps, CAP_SESSION_MEMBERS);
       if (!this.brokerSessionCap) {
         this.log('broker 不支持会话级星成员（proto:1）——已降级机器级，本机成员声明不发送');
+        if (!this.warnedNoCap) {
+          this.warnedNoCap = true;
+          // 9b：命令面一行告警（不只日志）——detach 场景由 serve 父进程预检补声
+          this.d.warn?.('broker 不支持会话成员（proto:3），已降级机器级——本机会话的入星声明不生效（机器级收发不受影响）');
+        }
       }
       ws.send(encodeFrame({
         op: 'connect',
@@ -561,7 +573,13 @@ export class NodeClient {
       // 先核活性（清掉断线期间死掉的成员）再全量重播 sessions 帧。
       this.startAttachServer();
       this.checkMemberLiveness();
-      this.sendSessions();
+      // 018：跨重连存续的成员先全量重播；空表跳过——首上线的空重播会把 broker
+      // 的 lastKnownMembers 清零（恢复链②的查回源），查回后再由 recoverMembers
+      // 驱动重播。broker 侧新连接未声明=无成员，路由语义与空表等价。
+      if (this.members.size > 0) this.sendSessions();
+      // 018 恢复链②（异步不阻塞上线）：向 broker 查回本机最后已知名单，活的
+      // 自动找回（孤儿会话成员仍在）；查不回（老 broker/双失忆）走 adopt 路径
+      void this.recoverMembers();
       this.minuteTimer = setInterval(() => {
         if (this.state === 'online') this.writeStatus(undefined);
       }, 60_000);
@@ -736,8 +754,11 @@ export class NodeClient {
     }
   }
 
-  /** attach IPC 单帧处理：attach/detach/sync，成员表变化即重播 sessions 帧。 */
-  private handleAttachLine(line: string, reply: (r: { ok: true } | { ok: false; error: string }) => void): void {
+  /** attach IPC 单帧处理：attach/detach/sync/status，成员表变化即重播 sessions 帧。 */
+  private handleAttachLine(
+    line: string,
+    reply: (r: { ok: true } | { ok: true; online: boolean; brokerCap: boolean; members: SessionMemberDecl[] } | { ok: false; error: string }) => void,
+  ): void {
     let req: unknown;
     try {
       req = JSON.parse(line);
@@ -783,20 +804,33 @@ export class NodeClient {
       this.sendSessions();
       return reply({ ok: true });
     }
+    if (r.op === 'status') {
+      // 018 批二：启动器/adopt 的只读探针——当前成员表 + broker 能力（extends
+      // 校验与幂等判断的数据源；不动成员表不触发重播）
+      return reply({
+        ok: true,
+        online: this.state === 'online',
+        brokerCap: this.brokerSessionCap,
+        members: [...this.members.values()].map(memberToDecl),
+      });
+    }
     return reply({ ok: false, error: `未知 attach 操作：${String(r.op)}` });
   }
 
   /**
    * 018 双活性模型（9a）：claude 成员=注册表扫描进程存活（复用现有扫描）；
    * codex 成员=线程存在（lookupRolloutMetas 落盘实体，durable 永不自动除名）。
-   * 两侧都查无=失活→除名并重播。
+   * 两侧都查无=失活→除名并重播。批二补裁定 1 的 /rename 自动跟随：claude 名
+   * 以扫描为准（有名才覆盖——无名扫描不抹掉启动器 -n 给的名）；codex 名从
+   * 线程表回填/跟随（9a"名字从扫描回填"，daemon 不可用只跳过本轮改名）。
    */
-  private checkMemberLiveness(): void {
+  private async checkMemberLiveness(): Promise<void> {
     if (this.members.size === 0) return;
     try {
-      const scan = this.d.makeSendDeps().listClaudeSessions();
-      const claudeIds = new Set(scan.sessions.map((session) => session.sessionId));
-      const rest = [...this.members.keys()].filter((id) => !claudeIds.has(id));
+      const deps = this.d.makeSendDeps();
+      const scan = deps.listClaudeSessions();
+      const claudeById = new Map(scan.sessions.map((session) => [session.sessionId, session]));
+      const rest = [...this.members.keys()].filter((id) => !claudeById.has(id));
       let codexIds: Set<string> | undefined;
       if (rest.length > 0) {
         codexIds = new Set(lookupRolloutMetas(this.d.codexHome ?? codexHomeDir(), rest).keys());
@@ -808,9 +842,80 @@ export class NodeClient {
         changed = true;
         this.log(`member-down ${id.slice(0, 8)}（claude 进程退出且无 codex 线程）已除名`);
       }
+      // 名字跟随（改名→id 跟随，roster 显示与按名寻址随扫描自新）
+      let codexNames: Map<string, string> | undefined;
+      const codexNameOf = async (id: string): Promise<string | undefined> => {
+        if (codexNames === undefined) {
+          codexNames = new Map();
+          try {
+            for (const thread of await deps.listCodexThreads()) {
+              if (thread.name !== null && thread.name !== '') codexNames.set(thread.id, thread.name);
+            }
+          } catch {
+            // codex daemon 不可用：改名跟随本轮跳过（活性判定不依赖它）
+          }
+        }
+        return codexNames.get(id);
+      };
+      for (const [id, member] of this.members) {
+        const claudeSession = claudeById.get(id);
+        const want =
+          claudeSession !== undefined
+            ? claudeSession.name
+            : await codexNameOf(id);
+        if (want === undefined || want === member.name || want.includes(':')) continue;
+        member.name = want;
+        changed = true;
+        this.log(`member-rename ${id.slice(0, 8)} → ${want}（扫描跟随）`);
+      }
       if (changed) this.sendSessions();
     } catch {
       // 活性核验失败不倒守护（下轮再查）
+    }
+  }
+
+  /**
+   * 018 恢复链②：members-query 查回 broker 保留的本机最后已知名单 → 逐个
+   * 本地验活（claude 扫描 ∪ codex rollout）→ 活的且尚未在册的重新入册并重播
+   * （孤儿自动找回——聚合器重启后无人重 attach 的活会话）。验活不过的死名
+   * 不复活；broker 也失忆（回空/超时）不报错——那是 adopt 收编的设计路径。
+   */
+  private async recoverMembers(): Promise<void> {
+    if (!this.brokerSessionCap || this.stopped) return;
+    try {
+      this.send({ op: 'members-query' });
+      const frame = await this.nextFrame((f) => f.op === 'members-result', 5_000);
+      if (frame.op !== 'members-result' || !Array.isArray(frame.members)) return;
+      const known = frame.members.filter(
+        (decl) => decl !== null && typeof decl === 'object' && typeof decl.sessionId === 'string' && decl.sessionId !== '',
+      );
+      if (known.length === 0) return;
+      const deps = this.d.makeSendDeps();
+      const claudeIds = new Set(deps.listClaudeSessions().sessions.map((session) => session.sessionId));
+      const rest = known.map((decl) => decl.sessionId).filter((id) => !claudeIds.has(id));
+      const codexIds =
+        rest.length > 0 ? new Set(lookupRolloutMetas(this.d.codexHome ?? codexHomeDir(), rest).keys()) : new Set<string>();
+      let revived = 0;
+      for (const decl of known) {
+        if (!claudeIds.has(decl.sessionId) && !codexIds.has(decl.sessionId)) continue; // 死名不复活
+        if (this.members.has(decl.sessionId)) continue; // 活启动器已重 attach——保留现声明
+        const ext =
+          decl.extends === undefined
+            ? undefined
+            : typeof decl.extends === 'string'
+              ? { name: decl.extends }
+              : { ...(decl.extends.machine === undefined ? {} : { machine: decl.extends.machine }), name: decl.extends.name };
+        this.members.set(decl.sessionId, {
+          sessionId: decl.sessionId,
+          ...(decl.name === undefined ? {} : { name: decl.name }),
+          ...(ext === undefined ? {} : { extends: ext }),
+        });
+        revived++;
+        this.log(`member-recovered ${decl.name ?? decl.sessionId.slice(0, 8)}（broker 名单验活找回）`);
+      }
+      if (revived > 0) this.sendSessions();
+    } catch {
+      // 查不回（老 broker 超时/连接抖动）不倒守护——重 attach/members-query 下轮重连再试
     }
   }
 

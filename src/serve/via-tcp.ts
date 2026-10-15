@@ -492,6 +492,38 @@ export function fetchRoster(tcpBaseDir: string, timeoutMs = 2_000): Promise<Rost
   return fetchRosterFor(tcpBaseDir, undefined, timeoutMs);
 }
 
+/**
+ * 018 批二（9b）：瞬态读 broker 握手 info 的 caps——启动器/serve --detach 父
+ * 进程的降级预检（只等第一帧 info 即关，不做 connect 握手）。任何失败返回
+ * undefined（探测不到=不告警；聚合器重连时会再出声）。message 监听在 open
+ * 之前挂好——info 帧在 open 事件后即刻可达，晚了会丢首帧。
+ */
+export async function fetchBrokerCaps(entry: BrokerEntry, timeoutMs = 2_000): Promise<string[] | undefined> {
+  const ws = new WebSocket(`ws://${entry.host}:${entry.port}`, { maxPayload: MAX_PAYLOAD_BYTES });
+  const firstFrame = new Promise<Frame | undefined>((resolve) => {
+    const t = setTimeout(() => resolve(undefined), timeoutMs);
+    ws.once('message', (data) => {
+      clearTimeout(t);
+      resolve(parseFrame(data.toString()));
+    });
+    ws.once('error', () => {
+      clearTimeout(t);
+      resolve(undefined);
+    });
+  });
+  const opened = new Promise<boolean>((resolve) => {
+    ws.once('open', () => resolve(true));
+    ws.once('error', () => resolve(false));
+  });
+  if (!(await opened)) {
+    try { ws.close(); } catch { /* 已断开 */ }
+    return undefined;
+  }
+  const info = await firstFrame;
+  try { ws.close(); } catch { /* 已断开 */ }
+  return info !== undefined && info.op === 'info' ? info.caps : undefined;
+}
+
 /** E1 status --via tcp:<机器> 的传输腿依赖（cli 注真值，测试注临时目录）。 */
 export interface TcpStatusDeps {
   env: Record<string, string | undefined>;
