@@ -10,6 +10,7 @@ claimed-by: （待领）
 空书上线：docs-book 脚手架 + 自动部署管道打通。
 
 - `docs-book/book.toml`（按 001 结论配中文/主题）+ `docs-book/src/SUMMARY.md`（002 定稿版）+ 首页欢迎页（书名一句话 + 「书还在写」告示）
+- 书名拍板（雾区毕业并入本票）：book.toml `title` 与首页需要书名——开工时向用户要，或给 2-3 个推荐一选
 - `.github/workflows/deploy-book.yml`：按 001 拍板的路线（artifact vs gh-pages）写，触发=push main
 - 推 main、Actions 绿灯、Pages 在线可打开、目录可点、断链检查绿
 - 人工一步属用户：repo Settings → Pages → Source 翻到对应源（票面给一句口令，其余全自动）

@@ -24,11 +24,11 @@ label: wayfinder:map
 ## Decisions so far
 
 - [mdBook + GitHub Pages 管道调研](tickets/001-mdbook-pipeline-research.md): 装 mdBook 用 peaceiris/actions-mdbook@v2.0.0 钉 0.5.4；部署走官方 artifact 路线（configure-pages v6.0.0 / upload-pages-artifact v5.0.0 / deploy-pages v5.0.1，Settings→Pages→Source 手点选 GitHub Actions）；中文搜索无分词接受整词局限、侧边栏用 0.5.0 内置 header-nav；断链用 mdbook-linkcheck2 v0.13.0 挡在部署前（详见 research/book-mdbook 分支 docs/wayfinder/book/research/mdbook-pipeline.md）
+- [书的完整目录拍板](tickets/002-book-toc-grilling.md): 定稿 32 节四部（前言 + 教程 7 课 + 指南 8 Recipe + 参考 7 表 + 原理 7 篇 + 附录 3 件），SUMMARY.md v1.0 入 main；四拍板——六课全写（毕业=tcp 星组网）、Windows 演示主线（Linux 每步一行带过）、第 4 课命名/换轨留主线、附录三件全收；六份旧文档素材全覆盖
 
 ## Not yet specified
 
 - README 瘦身形态与旧文档删除时点——等目录与首章成型后再钉
-- 书名/主题皮肤（中文搜索、侧边栏体验）——001 出结论、002 定目录后，如用户在意再入票
 - drill-reports 实战素材是否入书（教学主线成型后再评估）
 
 ## Out of scope
