@@ -60,7 +60,7 @@ export async function runClaudeWrapper(
         + 'Merge that JSON into your settings file and start claude directly instead.',
     );
   }
-  const star = splitStarLauncherArgs(args, { nameFlag: true });
+  const star = splitStarLauncherArgs(args);
   const { passthrough, maxBodyKb, maxTurn } = splitLauncherKnobs(star.passthrough);
   const maxBodyKbNum = validateLauncherKnob('crosschat claude', '--max-body-kb', maxBodyKb);
   const maxTurnNum = validateLauncherKnob('crosschat claude', '--max-turn', maxTurn);
@@ -84,7 +84,6 @@ export async function runClaudeWrapper(
     const joiner = new StarJoiner({
       deps: deps.star ?? realStarJoinDeps(),
       side: 'claude',
-      ...(star.sessionName === undefined ? {} : { sessionName: star.sessionName }),
       connects: star.connects,
       ...(star.extendSession === undefined ? {} : { extendSession: star.extendSession }),
     });

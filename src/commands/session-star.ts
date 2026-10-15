@@ -29,8 +29,7 @@ import { listCodexThreads as listCodexThreadsReal } from '../codex/discovery.js'
 export interface StarLauncherFlags {
   /** 剥离星旗标后的原样透传参数。 */
   passthrough: string[];
-  /** claude 侧 -n 会话名（codex 无——名字原生 /rename 后由聚合器回填）。 */
-  sessionName?: string;
+  /** 会话名不经旗标面——claude -n 原生透传，名字由聚合器扫描回填。 */
   /** --connect 取值（可重复=多星；''=裸默认腿）。 */
   connects: string[];
   /** --extend-session 旧会话名。 */
@@ -38,14 +37,13 @@ export interface StarLauncherFlags {
 }
 
 /**
- * 剥离并解析入星旗标：`-n <名>`（opts.nameFlag 才认领）、`--connect <星>`
+ * 剥离并解析入星旗标（只认死自家发明）：`--connect <星>`
  * （可重复，支持 `--connect=星`）、`--extend-session <旧名>`。其余参数原样
  * 透传（含两个旋钮——旋钮剥离仍由 splitLauncherKnobs 在 passthrough 上做）。
  */
-export function splitStarLauncherArgs(args: readonly string[], opts: { nameFlag: boolean }): StarLauncherFlags {
+export function splitStarLauncherArgs(args: readonly string[]): StarLauncherFlags {
   const passthrough: string[] = [];
   const connects: string[] = [];
-  let sessionName: string | undefined;
   let extendSession: string | undefined;
   const valueOf = (token: string, inline: string | undefined, next: string | undefined, what: string): string => {
     const value = inline ?? next;
@@ -59,11 +57,7 @@ export function splitStarLauncherArgs(args: readonly string[], opts: { nameFlag:
     const eq = token.indexOf('=');
     const name = eq > 0 ? token.slice(0, eq) : token;
     const inline = eq > 0 ? token.slice(eq + 1) : undefined;
-    if (opts.nameFlag && (name === '-n' || name === '--name')) {
-      if (sessionName !== undefined) throw new MultichatError('USAGE', '-n 只能给一次（一个会话一个名）');
-      sessionName = valueOf(token, inline, args[i + 1], '-n <会话名>');
-      if (inline === undefined) i++;
-    } else if (name === '--connect') {
+    if (name === '--connect') {
       // --connect 可选值：裸 --connect=默认腿（'--connect' 后跟旗标也按裸腿）
       const value = inline ?? (args[i + 1] !== undefined && !args[i + 1]!.startsWith('--') ? args[i + 1]! : '');
       if (inline === undefined && value !== '') i++;
@@ -73,16 +67,14 @@ export function splitStarLauncherArgs(args: readonly string[], opts: { nameFlag:
       extendSession = valueOf(token, inline, args[i + 1], '--extend-session <旧会话名>');
       if (inline === undefined) i++;
     } else {
+      // 只认死自家旗标：-n/--name 等 claude/codex 原生参数一律原样放行（2026-10-15 用户裁定）
       passthrough.push(token);
     }
-  }
-  if (sessionName !== undefined && sessionName.includes(':')) {
-    throw new MultichatError('USAGE', `会话名 ${sessionName} 禁含冒号（tcp:<星>:<机器>:<会话> 三段寻址保留字）`);
   }
   if (extendSession !== undefined && extendSession.includes(':')) {
     throw new MultichatError('USAGE', `--extend-session 旧会话名 ${extendSession} 禁含冒号（跨机旧名用 {机器}:{名} 形态暂不在旗标面，先同名接续）`);
   }
-  return { passthrough, connects, ...(sessionName === undefined ? {} : { sessionName }), ...(extendSession === undefined ? {} : { extendSession }) };
+  return { passthrough, connects, ...(extendSession === undefined ? {} : { extendSession }) };
 }
 
 // ---- 依赖 -----------------------------------------------------------------------
@@ -335,7 +327,6 @@ export class StarJoiner {
     private readonly opts: {
       deps: StarJoinDeps;
       side: 'claude' | 'codex';
-      sessionName?: string;
       connects: string[];
       extendSession?: string;
     },
@@ -389,23 +380,24 @@ export class StarJoiner {
     if (targets.length === 0) return;
     // 9b：broker 能力预检（每星一行；探测不到不出声——聚合器重连时另行告警）
     for (const target of targets) await warnIfBrokerLacksSessionCaps(target.entry, deps.stderr);
-    const sessionId = await this.detectSessionId();
-    if (sessionId === undefined) {
+    const detected = await this.detectSession();
+    if (detected === undefined) {
       if (!this.stopped) {
         deps.stderr('未探测到新会话的 ID（启动器超时/会话即退）——会话未入星；若会话仍活可 crosschat serve --connect <星> --adopt <会话名> 收编');
       }
       return;
     }
+    const { sessionId } = detected;
     this.sessionId = sessionId;
     if (this.stopped) return;
     for (const target of targets) {
-      this.supervise.push(this.superviseStar(target, sessionId));
+      this.supervise.push(this.superviseStar(target, sessionId, detected.name));
     }
     await Promise.allSettled(this.supervise);
   }
 
-  /** 快照差分探测子会话 ID（claude=注册表新 sessionId；codex=新线程 id）。 */
-  private async detectSessionId(timeoutMs = 120_000): Promise<string | undefined> {
+  /** 快照差分探测子会话（claude=注册表新条目，含其当前名——-n 原生已写入；codex=新线程 id）。 */
+  private async detectSession(timeoutMs = 120_000): Promise<{ sessionId: string; name?: string } | undefined> {
     const { deps, side } = this.opts;
     const deadline = (deps.now?.() ?? Date.now()) + timeoutMs;
     for (;;) {
@@ -417,13 +409,14 @@ export class StarJoiner {
             .sessions.filter((session) => session.sessionId !== '' && !this.knownClaude.has(session.sessionId));
           if (fresh.length > 0) {
             fresh.sort((a, b) => (b.updatedAt ?? b.startedAt ?? 0) - (a.updatedAt ?? a.startedAt ?? 0));
-            return fresh[0]!.sessionId;
+            const top = fresh[0]!;
+            return { sessionId: top.sessionId, ...(top.name === undefined || top.name === null ? {} : { name: top.name }) };
           }
         } else {
           const fresh = (await deps.listCodexThreads()).filter((thread) => !this.knownCodex.has(thread.id));
           if (fresh.length > 0) {
             fresh.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-            return fresh[0]!.id;
+            return { sessionId: fresh[0]!.id }; // codex 名字天然后置（/rename），attach 不带名，扫描回填
           }
         }
       } catch {
@@ -435,8 +428,9 @@ export class StarJoiner {
   }
 
   /** 单星监督循环：ensure→（首度）校验+告警→attach→管道断则重连重声明。 */
-  private async superviseStar(target: StarTarget, sessionId: string): Promise<void> {
-    const { deps, sessionName, extendSession } = this.opts;
+  private async superviseStar(target: StarTarget, sessionId: string, name?: string): Promise<void> {
+    const { deps, extendSession } = this.opts;
+    const attachName = name; // 快照差分时注册表已有名（-n 原生写入）——attach 即时带上；改名后续由聚合器扫描跟随
     let validated = false;
     while (!this.stopped) {
       let pipe: AttachPipeClient;
@@ -465,7 +459,7 @@ export class StarJoiner {
         const reply = await pipe.send({
           op: 'attach',
           sessionId,
-          ...(sessionName === undefined ? {} : { name: sessionName }),
+          ...(attachName === undefined ? {} : { name: attachName }),
           ...(this.opts.extendSession === undefined ? {} : { extends: this.opts.extendSession }),
         });
         if (!reply.ok) {
@@ -473,7 +467,7 @@ export class StarJoiner {
           return;
         }
         const starName = target.entry.name ?? target.selector;
-        deps.stdout(`已入星 ${starName}：会话可经 tcp:${starName}:${deps.machineName}:${sessionName ?? sessionId.slice(0, 8)} 直达`);
+        deps.stdout(`已入星 ${starName}：会话可经 tcp:${starName}:${deps.machineName}:${attachName ?? sessionId.slice(0, 8)} 直达`);
         await pipe.waitClose(); // 聚合器重启/管道断——重连原样重声明
         if (!this.stopped) deps.stderr(`星 ${starName} 聚合器连接断开，重连中……`);
       } finally {

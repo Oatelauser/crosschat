@@ -287,29 +287,25 @@ function starJoinDeps(sh: StarHarness, overrides: Partial<StarJoinDeps> = {}): S
 // ---- 旗标解析 ---------------------------------------------------------------------
 
 describe('018 批二：启动器旗标解析', () => {
-  it('claude：-n/--connect 可重复/--extend-session 剥离，其余透传', () => {
-    const flags = splitStarLauncherArgs(
-      ['-n', 'boss', '--connect', 'sl-a', '--model', 'sonnet', '--connect=sl-b', '--extend-session', 'old'],
-      { nameFlag: true },
-    );
-    expect(flags.sessionName).toBe('boss');
+  it('只认死自家旗标：--connect 可重复/--extend-session 剥离，-n 等 claude/codex 原生参数原样透传', () => {
+    const flags = splitStarLauncherArgs([
+      '-n', 'boss', '--connect', 'sl-a', '--model', 'sonnet', '--connect=sl-b', '--extend-session', 'old',
+    ]);
     expect(flags.connects).toEqual(['sl-a', 'sl-b']);
     expect(flags.extendSession).toBe('old');
-    expect(flags.passthrough).toEqual(['--model', 'sonnet']);
+    expect(flags.passthrough).toEqual(['-n', 'boss', '--model', 'sonnet']);
   });
 
-  it('codex：-n 不认领原样透传；裸 --connect=默认腿', () => {
-    const flags = splitStarLauncherArgs(['-n', 'x', '--connect', '--extend-session', 'old'], { nameFlag: false });
-    expect(flags.sessionName).toBeUndefined();
+  it('裸 --connect=默认腿；-n 透传不受影响', () => {
+    const flags = splitStarLauncherArgs(['-n', 'x', '--connect', '--extend-session', 'old']);
     expect(flags.connects).toEqual(['']);
     expect(flags.passthrough).toEqual(['-n', 'x']);
   });
 
-  it('会话名/旧名禁冒号；--connect 缺值拒绝', () => {
-    expect(() => splitStarLauncherArgs(['-n', 'a:b', '--connect', 's'], { nameFlag: true })).toThrow(MultichatError);
-    expect(() => splitStarLauncherArgs(['-n', 'a', '--extend-session', 'x:y'], { nameFlag: true })).toThrow(MultichatError);
-    expect(() => splitStarLauncherArgs(['--connect'], { nameFlag: false })).not.toThrow(); // 裸 --connect 合法
-    expect(() => splitStarLauncherArgs(['--extend-session'], { nameFlag: false })).toThrow(MultichatError);
+  it('旧名禁冒号；--connect 缺值拒绝', () => {
+    expect(() => splitStarLauncherArgs(['--extend-session', 'x:y'])).toThrow(MultichatError);
+    expect(() => splitStarLauncherArgs(['--extend-session'])).toThrow(MultichatError);
+    expect(() => splitStarLauncherArgs(['--connect'])).not.toThrow(); // 裸 --connect 合法
   });
 
   it('serve 解析：--adopt/--extend-session 值旗标；--adopt 无 --connect 即拒', async () => {
@@ -346,7 +342,6 @@ describe('018 批二：启动器入星链路', () => {
       const joiner = new StarJoiner({
         deps: starJoinDeps(sh, { stdout: (l) => out.push(l), stderr: (l) => err.push(l) }),
         side: 'claude',
-        sessionName: 'boss',
         connects: ['sl-l1'],
       });
       await joiner.begin();
@@ -410,8 +405,9 @@ describe('018 批二：启动器入星链路', () => {
         now: () => Date.now(),
         aggregatorTimeoutMs: 8_000,
       };
-      shA.state.claude = [{ sessionId: 'sess-multi', name: 'boss' }];
-      const joiner = new StarJoiner({ deps, side: 'claude', sessionName: 'boss', connects: ['sl-ma', 'sl-mb'] });
+      // 基线=旧会话；spawn 后新会话 sess-multi 出现（夹具曾把两者写反，靠旗标强塞名侥幸过——现按差分语义修正）
+      shA.state.claude = [{ sessionId: 'sess-base', name: 'x', updatedAt: 1 }];
+      const joiner = new StarJoiner({ deps, side: 'claude', connects: ['sl-ma', 'sl-mb'] });
       await joiner.begin();
       shA.state.claude = [
         { sessionId: 'sess-base', name: 'x', updatedAt: 1 },

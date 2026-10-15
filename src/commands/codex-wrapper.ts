@@ -50,7 +50,7 @@ export async function runCodexWrapper(
   deps: CodexWrapperDeps = defaultCodexWrapperDeps(),
 ): Promise<number> {
   // 018 批二：--connect <星> 在场=入星启动（codex 无 -n——名字原生 /rename 后由聚合器回填）
-  const star = splitStarLauncherArgs(args, { nameFlag: false });
+  const star = splitStarLauncherArgs(args);
   const { passthrough, maxBodyKb, maxTurn } = splitLauncherKnobs(star.passthrough);
   const maxBodyKbNum = validateLauncherKnob('crosschat codex', '--max-body-kb', maxBodyKb);
   const maxTurnNum = validateLauncherKnob('crosschat codex', '--max-turn', maxTurn);
