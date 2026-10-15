@@ -39,3 +39,13 @@ claimed-by: （待领）
 
 - 规模 M 票：聚合器 attach IPC + 成员/extends 帧 + broker 会话级 roster 与解析 + 启动器旗标 + status 视图 + 记忆互备两链 + 测试（含真实平台形态夹具）+ 文档/skill 随版
 - 停止条件：npm run check 全绿；三机真机验收（win/WSL/cloud）——会话入星/多星并存/直达投递/extends 接任弹错指路/改名跟随/改名接任声明/双端重启自愈链/非成员名报错；机器级流程零回归（除裁定 3 明示收紧）
+
+## 实施记录（2026-10-15，两批 subagent）
+
+批一 95320fd（协议核心：caps/sessions 帧/会话 roster/三段解析/attach IPC/双活性，+17 测试）；批二 665edc8（启动器旗标/adopt/members-query 恢复/status 视图/四级校验/9b 告警/教学级文档 README+broker.md+federation.md+SKILL，+17 测试）。check 706/11 全绿。偏离备案：extends 证据面用 send-log 显示名尾窗（分片 ref 不含会话名）；四级中 broker/守护两级并查；sessionId 探测用快照差分（并发竞态可 adopt 纠正）；跨机限定旧名旗标形态暂不支持（禁冒号）。
+
+## 真机验收记录（2026-10-15 win+WSL，部分通过）
+
+**已真机实证**（聚合器/broker 日志与 win 侧输出）：启动器 --connect 自动拉聚合器+attach+成员广播（member-up ×2）；member-rename 扫描跟随（drillboss→tmp-db）；member-down 活性精确除名；broker 会话 roster 行（win status --stars 见 会话: wsl:tmp-db）；三段寻址解析与非成员 SESSION_NOT_MEMBER 教学（多次）；attach 管道监听协议。
+**未真机实证**（706 测试含集成用例覆盖，环境受阻——网关 502 抖动致 claude 保活会话秒崩 + WSL 后台进程启动不稳）：三段 delivered 成功路径、SESSION_SUPERSEDED 指路、adopt 实收编、members-query 重启恢复、降级告警。遗留：用户手动跑 README/手册实测清单 A–D（WSL 侧聚合器已就绪待用），或网关稳定后复测。
+**旁支发现**：claude -p 模式下 -n 底层改名未生效（注册名走目录自动名，扫描跟随纠正显示）——非阻塞，待后续观察（交互式 -n 正常）。
