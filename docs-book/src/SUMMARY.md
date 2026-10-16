@@ -42,6 +42,7 @@
 # 第三部 参考
 
 - [命令总表](reference/commands.md)
+- [ssh 命令详解](reference/ssh-commands.md)
 - [地址格式总表](reference/addressing.md)
 - [投递语义与限制](reference/delivery-semantics.md)
 - [环境变量总表](reference/env-vars.md)
