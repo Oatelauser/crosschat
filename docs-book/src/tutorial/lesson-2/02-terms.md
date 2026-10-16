@@ -17,7 +17,7 @@
 
 部署前最值得先讲清的一对关系：**推荐把 `~/.ssh/config` 里的别名直接写成对端的系统 hostname**——对端敲 `hostname` 输出什么，你这边 `Host` 就写什么。
 
-这是回信自动选路的软依赖，不是硬校验。手写 `--via ssh:<任意合法别名>` 永远可用；但跨机信封里的回信命令不带 `--via`（[2.4 第一条跨机消息](04-first-message.md)会亲眼看到），对端执行时按 ref 里的机器名自动补路由——补出来的正是发起方的 hostname。⚠️ 别名 ≠ hostname 时，"对端 ssh config 里有这个 hostname 当别名"就不成立，自动回程断掉（报 SSH_TRANSPORT_FAILED，指引补别名）。别名 = hostname，一次配对，终身免念。
+这是回信自动选路的软依赖，不是硬校验。手写 `--via ssh:<任意合法别名>` 永远可用；但跨机信封里的回信命令不带 `--via`（[2.5 第一条跨机消息](05-first-message.md)会亲眼看到），对端执行时按 ref 里的机器名自动补路由——补出来的正是发起方的 hostname。⚠️ 别名 ≠ hostname 时，"对端 ssh config 里有这个 hostname 当别名"就不成立，自动回程断掉（报 SSH_TRANSPORT_FAILED，指引补别名）。别名 = hostname，一次配对，终身免念。
 
 ## 机器指纹 mid
 
@@ -28,4 +28,4 @@ delivered to beta2@yangwsl(9f8e7d6c) (turn 1)
                         └── 这 8 个十六进制字符就是 yangwsl 的 mid8
 ```
 
-两端 mid 都在时，"是不是同一台机器"由 mid 说了算——hostname 相同也骗不过去；任一端 mid 读不到，才退回比 hostname（[2.5 同名机器](05-mechanism.md#同名机器)一节看它怎么工作）。
+两端 mid 都在时，"是不是同一台机器"由 mid 说了算——hostname 相同也骗不过去；任一端 mid 读不到，才退回比 hostname（[2.6 同名机器](06-mechanism.md#同名机器)一节看它怎么工作）。

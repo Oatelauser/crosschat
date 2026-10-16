@@ -1,4 +1,4 @@
-# 2.3 SSH 部署与配置
+# 2.4 SSH 部署与配置
 
 这一节做完，你得到：两台机器互相认得对方的 ssh 密钥、彼此免密登录、crosschat 出腿自证通过。本质就是配一次双向免密 ssh——crosschat 复用它，自己零额外配置。
 
@@ -97,6 +97,15 @@ Warning: Permanently added '<对端地址>' (ED25519) to the list of known hosts
 1.6.4
 ```
 这一条同时验了四件事：网络通、密钥对、对端找得到 crosschat、版本不过旧。对端反方向再跑一条（`ssh <本机hostname> crosschat --version`），✅ 两边都出版本号 = 部署完成。
+
+装完顺手再补两条望诊（详解见[体检与望诊](05-first-message.md#体检与望诊)）：
+
+```console
+> ssh peer crosschat doctor
+> ssh peer crosschat status
+```
+
+第一条看对端**环境能跑**（Node / codex daemon / skill），第二条看对端**有人能收**（会话名单）。
 
 对端是 Linux 时，它的同侧步骤每步一行（还没装 crosschat 先装：Node ≥22，`npm i -g @oatelauser/crosschat && crosschat install-skills`）：
 
@@ -198,4 +207,4 @@ Windows 对端的等价解法：把 npm 全局目录加进系统 PATH。上一�
 delivered to <会话名>@win(3f2a81b0) (turn 1) · 续话 c1
 ```
 
-[2.5 通信机制](05-mechanism.md)的全部机制在这条命令里照常运转。
+[2.6 通信机制](06-mechanism.md)的全部机制在这条命令里照常运转。
