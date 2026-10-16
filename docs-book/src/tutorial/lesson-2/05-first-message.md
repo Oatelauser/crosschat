@@ -1,4 +1,4 @@
-# 2.4 第一条跨机消息
+# 2.5 第一条跨机消息
 
 ## 对话全景
 
@@ -73,7 +73,7 @@ delivered to claude/boss@win(3f2a81b0) (turn 2) · 续话 c3
 
 隐式发生什么：回信命令里没有 `--via`，也不需要——发起方机器名已经坐在 c3 背后的对话引用（ref）里，执行侧按它自动补路由：本机 ssh config 里有 win 这个别名，就走 ssh；没有别名但本机入了 tcp 星（第3课），就换 tcp 腿；都没有就照旧试 ssh 并在失败时报错指路。这就是 [2.2 别名与 hostname](02-terms.md#别名与-hostname) 那句"别名 = hostname 是软依赖"的落点：win 在 yangwsl 侧的别名恰好叫 win，回程自动成立。
 
-信封括注里那句"长正文/含敏感字符可省 --body 改管道喂 stdin"对跨机同样成立——正文走 stdin 管道，不进任何一层的命令行，`$`、反引号、引号逐字到达（[第1课 单机通信](../lesson-1.md)的管道手法原样可用，这也是 [2.5 通信机制](05-mechanism.md)会展开的一条设计）。
+信封括注里那句"长正文/含敏感字符可省 --body 改管道喂 stdin"对跨机同样成立——正文走 stdin 管道，不进任何一层的命令行，`$`、反引号、引号逐字到达（[第1课 单机通信](../lesson-1.md)的管道手法原样可用，这也是 [2.6 通信机制](06-mechanism.md)会展开的一条设计）。
 
 ## 查对端名单
 
@@ -92,7 +92,7 @@ ssh: 无
 
 隐式发生什么：这就是一次普通的 ssh 远程命令，跑的是对端自己的 status——你看到的是对端那张名单，过滤参数照常可用（`ssh yangwsl crosschat status --claude`）。
 
-名单上的会话也不问出身，**TUI 不是收件前提**。codex 的投递目标一律是 daemon 里的线程——TUI 只是其中一个窗口（窗口占着线程时反而会挡住投递，报 CODEX_THREAD_LOCKED，关窗或等它释放即恢复），`codex exec` 这类无头方式拉起的线程同样在名单里，未命名的用 id8 寻址；claude 这边，后台（bg）会话与交互会话同权可投。例外只有 [2.3](03-deploy-config.md) 说过的 win 收件腿：codex 不可达（AF_UNIX 跨登录会话隔离）。唯一不担保的是在命令行里一次性匿名拉起的 claude（比如 `claude -p` 干一次性活）——它进不进名单取决于自己有没有注册消息通道，crosschat 不做承诺：发之前 status 看一眼，别赌。
+名单上的会话也不问出身，**TUI 不是收件前提**。codex 的投递目标一律是 daemon 里的线程——TUI 只是其中一个窗口（窗口占着线程时反而会挡住投递，报 CODEX_THREAD_LOCKED，关窗或等它释放即恢复），`codex exec` 这类无头方式拉起的线程同样在名单里，未命名的用 id8 寻址；claude 这边，后台（bg）会话与交互会话同权可投。例外只有 [2.4](04-deploy-config.md) 说过的 win 收件腿：codex 不可达（AF_UNIX 跨登录会话隔离）。唯一不担保的是在命令行里一次性匿名拉起的 claude（比如 `claude -p` 干一次性活）——它进不进名单取决于自己有没有注册消息通道，crosschat 不做承诺：发之前 status 看一眼，别赌。
 
 反方向看自己：跨机对话发起后，**本机**的 `crosschat status --conversations` 会出现这一对（发起侧也记账）：
 
@@ -102,6 +102,48 @@ ssh: 无
 ```
 
 一行里双方、最近轮次、投递状态、行尾续话柄都在。注意 `status --via tcp:<机器>` 那种远程枚举形态是[第3课 跨机通信（tcp）](../lesson-3.md)的 tcp 通道能力；ssh 对端就用上面这条 ssh 命令。
+
+## 体检与望诊
+
+三条命令回答三个问题：本机环境能跑吗（doctor）、对端环境能跑吗（远程 doctor）、我的跨机对话都怎么样（status 过滤）。
+
+先立一个边界：**doctor 不检查 ssh 联邦**。它体检的是所在机器自己的环境——Node 版本（≥22）、claude 可路由会话、codex CLI 与 daemon 版本（≥0.160 才有忙时入队）、双侧 skill 安装、双身份残留；入了 tcp 星的机器另查星条目与 broker 可达。ssh 别名、密钥、连通性这些联邦项不在它的清单里——联邦诊断走 [2.4](04-deploy-config.md) 的自证命令。
+
+```console
+> crosschat doctor
+环境
+  ✅ Node v22.9.0 (≥22)
+  ✅ claude CLI C:\...\claude.exe；可路由会话 2 个
+  ✅ codex CLI 0.160.0
+  ✅ codex daemon 0.160.0
+  ✅ claude 侧 skill 与安装源一致
+  ✅ codex 侧 skill 与安装源一致
+  ✅ 无双身份残留
+结论: 7 项通过，0 项警告，0 项错误
+```
+
+读法两条：只有 ❌ 让退出码非 0（脚本可判）；⚠️ 是合法状态的教学提示——codex 没装、daemon 没跑都只警告不判错，"这台机器是纯 claude 机"是合法答案。对端没入 tcp 星时 tcp 段整段不出现，就像上面临录这样干净。
+
+远程望诊就是同一条命令经 ssh 到对端跑——你坐在本机看对端的体检报告：
+
+```console
+> ssh yangwsl crosschat doctor
+环境
+  ✅ Node v22.11.0 (≥22)
+  ✅ claude CLI /usr/local/bin/claude；可路由会话 1 个
+  ⚠️ codex daemon 未运行；要用 codex 通道时先执行: codex app-server daemon start
+结论: 5 项通过，1 项警告，0 项错误
+```
+
+（实录里的 ✅⚠️ 是 doctor 程序自己打的，不是排版装饰——照抄即得同样输出。）最后是 status 的 ssh 专属过滤：
+
+```console
+> crosschat status --conversations --via ssh
+会话:
+  文档book → ssh专家    9 分钟前   turn 6   delivered  c17
+```
+
+`--via ssh` 只留 ssh 腿的对话段（tcp 的用 `--via tcp`）——跨机对话多了以后，这一条就是你的 ssh 联邦台账。
 
 ## 正文超限时
 
@@ -121,7 +163,7 @@ crosschat: MESSAGE_TOO_LARGE: Body is 20000 bytes; the limit is 16384. 可提额
 crosschat: MESSAGE_TOO_LARGE: [via yangwsl] Body is 20000 bytes; the limit is 16384 on this machine (a --via remote send). 发送方本机提额无效——上限属接收方（本机）配置。大内容走 scp 旁路：发送方先落盘，scp <文件> <接收方>:/tmp/<文件名>，再 crosschat send --via ssh:<接收方> … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）。确需直发大内容：由接收方（本机）操作者调 CROSSCHAT_MAX_BODY_KIB。
 ```
 
-✅ 照报错教的做（scp 与 `--via` 共用同一份别名和密钥，[2.3 SSH 部署与配置](03-deploy-config.md)配一次全通）：
+✅ 照报错教的做（scp 与 `--via` 共用同一份别名和密钥，[2.4 SSH 部署与配置](04-deploy-config.md)配一次全通）：
 
 ```console
 > scp big-analysis.txt yangwsl:/tmp/big-analysis.txt

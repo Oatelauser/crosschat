@@ -13,5 +13,5 @@
 ## 前置
 
 - 读完第1课（信封、reply-hint、回执三态这些词不再解释）
-- 两台能互相 ssh 的机器；只有一台也不要紧，[2.3 的一台机器的自环](lesson-2/03-deploy-config.md#一台机器的自环)给了练习路径
+- 两台能互相 ssh 的机器；只有一台也不要紧，[2.4 的一台机器的自环](lesson-2/04-deploy-config.md#一台机器的自环)给了练习路径
 - Windows 机器需要管理员权限开一次 sshd；Linux 机器需要 root 或 sudo
