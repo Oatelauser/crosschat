@@ -859,7 +859,9 @@ export class Broker {
   }
 
   /** B2.1：roster 应答——注册表全部已激活机器（mid 去重）+ 在线态；broker 自身恒在线。
-   * F0：mid8 与去重键取归一形态（带杠条目与纯 hex 条目同机合一）。 */
+   * F0：mid8 与去重键取归一形态（带杠条目与纯 hex 条目同机合一）。
+   * 028：册内下线成员随 offlineSessions 单列（sessions 保持活成员语义不动——
+   * extends 校验共用）；不在注册表的机器的册条目不展示（机器已除网）。 */
   private buildRoster(): RosterResultFrame {
     const registry = readRegistry(this.d.registryFile);
     const ownNorm = normalizeMid(this.d.machineId() ?? '');
@@ -876,6 +878,22 @@ export class Broker {
         ...(decls === undefined ? {} : { sessions: decls }),
       });
     }
+    const offlineByMid = new Map<string, SessionMemberDecl[]>();
+    for (const entry of this.roster) {
+      if (entry.online || !machines.has(entry.machine)) continue;
+      const decl: SessionMemberDecl = {
+        sessionId: entry.sessionId,
+        ...(entry.name === undefined ? {} : { name: entry.name }),
+        ...(entry.tool === undefined ? {} : { tool: entry.tool }),
+        ...(entry.extendsName === undefined
+          ? {}
+          : { extends: entry.extendsMachine === undefined ? entry.extendsName : { machine: entry.extendsMachine, name: entry.extendsName } }),
+      };
+      const list = offlineByMid.get(entry.machine);
+      if (list === undefined) offlineByMid.set(entry.machine, [decl]);
+      else list.push(decl);
+    }
+    for (const [mid, decls] of offlineByMid) machines.get(mid)!.offlineSessions = decls;
     return { op: 'roster-result', machines: [...machines.values()] };
   }
 

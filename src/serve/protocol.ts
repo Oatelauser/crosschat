@@ -170,6 +170,11 @@ export interface RosterMachine {
    * 校验（旧名是否仍是活成员）共用。
    */
   sessions?: SessionMemberDecl[];
+  /**
+   * 028：该机在册但下线的成员（roster offline 条目；additive）。sessions 保持
+   * "活成员"语义不动（extends 校验共用），下线面单列——status --stars 三态展示。
+   */
+  offlineSessions?: SessionMemberDecl[];
 }
 export interface RosterResultFrame {
   op: 'roster-result';

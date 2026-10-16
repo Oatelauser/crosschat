@@ -5,6 +5,21 @@
 ## [Unreleased]
 
 
+## [1.7.0] - 2026-10-16
+
+### 028：成员资格 v2——双模式星成员制（破坏式）
+
+- **破坏性变更：`--connect` 语义反转**。启动器 `crosschat claude/codex --connect <星>` 从"临时挂星（退出即退星）"升级为**永久注册入册**（默认）；旧语义（退出即离册）由新旗标 `--rm` 承接（docker --rm 语义）。**迁移**：旧脚本里的一次性 worker 需加 `--rm`，长期会话无需任何改动（且从此退出不再掉籍）
+- **星册（roster）落盘**：broker 每星一份 `~/.crosschat/tcp/roster.json`（tmp+rename 原子写、broker 单写者）记成员与在线态——broker 重启不失忆，018 的"双端重启失忆走 adopt"由落盘根治；聚合器重启走查回验活
+- **双模式**：永久（默认）退出=**下线**（册位保留，`status --stars` 显示 `下线: ⚪…` 行），同 id `/resume`/重启=**自动复活上线**；临时（`--rm`）退出即删册位零痕迹；`--rm × --extend-session` 互斥、`serve --connect --rm` 拒绝
+- **对账循环常态化**：018 的重启后一次性恢复链扩为常驻循环（聚合器 members-query 拉册切片 → 本地验活 → 上报 online/offline 翻转）——复活检测、死亡下线、broker/聚合器重启恢复同由一机制承担
+- **extends = 唯一名字转移口**：名字被接任后原会话同 id 回归**不夺回**（`EXTENDS_CONFLICT` 剥名教学，id8 点对点可达）
+- **`serve --connect <星> --member-remove <名|id8>`**：删册位（自退/管理删双角色，幂等，星内任何机器可执）；**`--adopt` = 永久注册**（收编活会话）
+- **新错误族**：`SESSION_OFFLINE`（在册未在线——等复活/接任/id8，绝不静默改投）、`MACHINE_BOUND`（跨机 resume——册位绑原机器，迁移走显式操作）；五条边界规则入测试
+- **skill 分层重构**：单文件 SKILL.md（129 行）拆为瘦主文件（回复关键路径零跳转：信封解剖+照抄 reply-hint+管道两式范例自足）+ `references/errors.md`（全量错误码目录，含新错误族）+ `references/stars.md`（三动词分层/双模式册/下线复活/extends/adopt/member-remove/恢复配方）+ `references/advanced.md`（限额地图/PS BOM/文件通道）；install-skills 递归拷贝零机制改动，**doctor 一致性检查改递归整树比对**（差异文件点名）
+- **status 三态展示**：`--stars` 成员行三态（在线现样式 / 下线 ⚪ 行带诊断提示 / 非册裸会话）；`status --via tcp:<机器>` 远端会话行标注"非册(裸起)"（027-E 移交）；下线成员名不再触发 adopt 建议（对账循环会自动复活）
+- 018 测试族语义改写（死→下线不再除名、双失忆由落盘根治）；文档三动词分层改写（[broker.md 1.3.3](docs/broker.md)/[federation.md 五](docs/federation.md)/README）、三角色表补"成员=册+双模式"
+
 ## [1.6.4] - 2026-10-16
 
 ### 026：幽灵常驻进程修复（doctor 验活失真 + --stop 空停不善后）

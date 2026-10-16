@@ -225,7 +225,7 @@ function baseDoctorDeps(overrides: Partial<DoctorDeps> = {}): DoctorDeps {
     },
     homeDir: () => root,
     listOutbox: () => [],
-    repoSkillContent: () => 'skill',
+    repoSkillFiles: () => [{ path: 'SKILL.md', content: 'skill' }],
     probeTcp: () => true,
     ...overrides,
   };

@@ -18,7 +18,7 @@ function makeDeps(over: Partial<DoctorDeps> = {}): DoctorDeps {
     readFile: () => 'SKILL body',
     homeDir: () => 'C:\\home',
     listOutbox: () => [],
-    repoSkillContent: () => 'SKILL body',
+    repoSkillFiles: () => [{ path: 'SKILL.md', content: 'SKILL body' }],
     ...over,
   };
 }
@@ -158,8 +158,27 @@ describe('runDoctor', () => {
     const stale = runDoctor(makeDeps({ readFile: () => 'old skill body' }));
     expect(stale.output).toContain('claude 侧 skill 与安装源不一致');
     expect(stale.output).toContain('codex 侧 skill 与安装源不一致');
-    const noRepo = runDoctor(makeDeps({ repoSkillContent: () => undefined }));
-    expect(noRepo.output).toContain('claude 侧 skill 已安装（安装源 SKILL.md 未定位到，跳过版本比对）');
+    const noRepo = runDoctor(makeDeps({ repoSkillFiles: () => undefined }));
+    expect(noRepo.output).toContain('claude 侧 skill 已安装（安装源 skill 目录未定位到，跳过版本比对）');
+  });
+
+  it('028 skill 分层：递归比对 references/ 子文件，点名差异文件；多出文件不算不一致', () => {
+    const repo = [
+      { path: 'SKILL.md', content: 'main' },
+      { path: 'references/errors.md', content: 'errors' },
+      { path: 'references/stars.md', content: 'stars' },
+    ];
+    const contents: Record<string, string> = {
+      'C:\\home\\.claude\\skills\\crosschat\\SKILL.md': 'main',
+      'C:\\home\\.claude\\skills\\crosschat\\references\\errors.md': 'errors',
+      'C:\\home\\.claude\\skills\\crosschat\\references\\stars.md': 'stale stars', // 子文件漂了
+      'C:\\home\\.codex\\skills\\crosschat\\SKILL.md': 'main',
+      'C:\\home\\.codex\\skills\\crosschat\\references\\errors.md': 'errors',
+      'C:\\home\\.codex\\skills\\crosschat\\references\\stars.md': 'stars',
+    };
+    const report = runDoctor(makeDeps({ repoSkillFiles: () => repo, readFile: (p) => contents[p] }));
+    expect(report.output).toContain('⚠️ claude 侧 skill 与安装源不一致（references/stars.md）');
+    expect(report.output).toContain('✅ codex 侧 skill 与安装源一致');
   });
 
   it('warns on dual caller-identity residue with the env -u remedy', () => {

@@ -205,7 +205,7 @@ interface StarGroup {
   name: string;
   reachable: boolean;
   online: number;
-  machines: Array<{ name?: string; mid8: string; online: boolean; sessions?: SessionMemberDecl[] }>;
+  machines: Array<{ name?: string; mid8: string; online: boolean; sessions?: SessionMemberDecl[]; offlineSessions?: SessionMemberDecl[] }>;
   daemons: StarDaemon[];
 }
 
@@ -310,10 +310,21 @@ async function starsText(deps: StatusDeps, nowMs: number, groups: StarGroup[]): 
       });
       lines.push(`  会话: ${members.join('、')}`);
     }
+    // 028 三态之下线：在册未在线（册位保留）——⚪ 标记 + 三条出路诊断
+    for (const m of machines) {
+      if ((m.offlineSessions?.length ?? 0) === 0) continue;
+      const label = m.name ?? (m.mid8 === '' ? '?' : m.mid8);
+      const off = m.offlineSessions!.map(
+        (s) => `⚪${label}:${s.tool === undefined ? '' : `${s.tool}/`}${s.name ?? s.sessionId.slice(0, 8)}`,
+      );
+      lines.push(`  下线: ${off.join('、')}（等 resume 复活；接任 --extend-session；删 --member-remove）`);
+    }
     // 诊断（场景 E 恢复指路）：会话活着但非成员且该星本机守护在线——收编命令当场打印
+    // （下线成员名也算册内名——对账循环数秒内验活复活，不再建议 adopt）
     if (g.reachable && g.daemons.some((d) => d.state === 'online') && localNames.length > 0) {
       const memberNames = new Set<string>();
-      for (const m of machines) for (const s of m.sessions ?? []) if (s.name !== undefined) memberNames.add(s.name);
+      for (const m of machines)
+        for (const s of [...(m.sessions ?? []), ...(m.offlineSessions ?? [])]) if (s.name !== undefined) memberNames.add(s.name);
       const unmatched = localNames.filter((name) => !memberNames.has(name)).slice(0, 5);
       for (const name of unmatched) {
         lines.push(`  建议: crosschat serve --connect ${g.name} --adopt ${name}（会话活着但非成员——收编活进程入星）`);
@@ -623,6 +634,38 @@ function sshPeerLabel(row: ConversationSummary): string {
 }
 
 /**
+ * 027-E：目标机的星籍键集（在线+下线成员的名/工具限定名/id8），供远程视图
+ * 标注"非册(裸起)"。逐 node.json 条目探 roster，找到目标机（名等或 mid 前缀）
+ * 即返；全不可达/未入网/机器不在册 → undefined（无从判定，不标）。
+ */
+async function remoteMemberKeys(deps: StatusDeps, target: string): Promise<Set<string> | undefined> {
+  if (deps.roster === undefined || deps.tcpDir === undefined) return undefined;
+  let entries: BrokerEntry[];
+  try {
+    entries = readNodeConfig(join(deps.tcpDir, 'node.json')).entries;
+  } catch {
+    return undefined;
+  }
+  const needle = target.toLowerCase().replace(/-/g, '');
+  for (const entry of entries) {
+    const machines = await deps.roster(entry);
+    if (machines === undefined) continue;
+    const hit = machines.find((m) => m.name === target || (needle !== '' && m.mid8.toLowerCase().startsWith(needle)));
+    if (hit === undefined) continue;
+    const keys = new Set<string>();
+    for (const s of [...(hit.sessions ?? []), ...(hit.offlineSessions ?? [])]) {
+      if (s.name !== undefined) {
+        keys.add(s.name);
+        if (s.tool !== undefined) keys.add(`${s.tool}/${s.name}`);
+      }
+      keys.add(s.sessionId.slice(0, 8));
+    }
+    return keys;
+  }
+  return undefined;
+}
+
+/**
  * E1 远程视图（票012）：`status --via tcp:<机器>`——经 broker 拉对端扫描载荷，
  * 过滤参数在请求方本地套用，分段渲染与本地主视图同构（无 TUI 占用标记——
  * 载荷不含写者锁；无转发器小节——那是本机概念）。codex 不可用降级为
@@ -636,6 +679,11 @@ async function remoteStatusView(deps: StatusDeps, json: boolean, filters: Status
   const matches = nameMatcher(filters.name);
   const codexRows: StatusCodexRow[] | undefined = Array.isArray(payload.codex) ? payload.codex : undefined;
   const codexUnavailable = codexRows === undefined ? (payload.codex as { unavailable: string }).unavailable : undefined;
+  // 027-E 移交：远端行标注非册（裸起）——目标机星籍（roster 在线+下线切片）比对扫描行；
+  // roster 不可达或机器不在任何星 = 无从判定，静默不标。
+  const memberKeys = json ? undefined : await remoteMemberKeys(deps, target);
+  const bareMark = (candidates: string[]): string =>
+    memberKeys !== undefined && candidates.length > 0 && !candidates.some((k) => memberKeys.has(k)) ? '  非册(裸起)' : '';
 
   if (json) {
     // 契约同本地 json：--name 滤行、选段省键；未命名行始终在场（--all 不影响 json）
@@ -659,7 +707,8 @@ async function remoteStatusView(deps: StatusDeps, json: boolean, filters: Status
       if (rows.length === 0) lines.push('  (none)');
       for (const row of rows) {
         lines.push(
-          `  ${(row.name ?? '(unnamed)').padEnd(24)} ${row.kind.padEnd(12)} ${row.status.padEnd(16)} pid ${String(row.pid).padEnd(6)} ${formatCwdShort(row.cwd ?? undefined)}`,
+          `  ${(row.name ?? '(unnamed)').padEnd(24)} ${row.kind.padEnd(12)} ${row.status.padEnd(16)} pid ${String(row.pid).padEnd(6)} ${formatCwdShort(row.cwd ?? undefined)}` +
+            bareMark(row.name === null ? [] : [row.name, `claude/${row.name}`]),
         );
       }
     }
@@ -677,7 +726,10 @@ async function remoteStatusView(deps: StatusDeps, json: boolean, filters: Status
           const dir = formatCwdShort(row.cwd ?? undefined).padEnd(20);
           const created = formatCreatedAt(row.createdAt ?? undefined).padEnd(11);
           const originator = (row.originator ?? '-').padEnd(16);
-          lines.push(`  ${name} ${dir} ${created} ${originator} ${row.id}  ${row.status}`);
+          lines.push(
+            `  ${name} ${dir} ${created} ${originator} ${row.id}  ${row.status}` +
+              bareMark([...(row.name === null ? [] : [row.name, `codex/${row.name}`]), row.id]),
+          );
         }
       }
     }

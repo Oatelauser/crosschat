@@ -129,20 +129,26 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 ### 入星启动（全部形态，复制即用）
 
 ```bash
-# 新 claude 会话入星（-n 给会话名；聚合器不在会自动拉起，退出会话自动退星）
+# 新 claude 会话入星（-n 给会话名；1.7.0 起默认永久注册：退出=下线、同 id resume 自动复活；聚合器不在会自动拉起）
 crosschat claude -n <名> --connect <星>
 
-# codex 形态（无 -n：进去 /rename <名>，聚合器扫描自动跟随）
+# 一次性 worker 用 --rm（docker --rm 语义：退出即离册零痕迹；--rm × --extend-session 互斥）
+crosschat claude -n <一次性名> --connect <星> --rm
+
+# codex 形态（无 -n：进去 /rename <名>，聚合器扫描自动跟随；同样吃双模式——永久默认/--rm 临时）
 crosschat codex --connect <星>
 
-# 多星并存（--connect 可重复）
+# 多星并存（--connect 可重复；各星独立册，--rm 作用于全部 --connect）
 crosschat claude -n <名> --connect <星> --connect <另一星>
 
-# 新会话接任退休旧会话的名字血统（换轨）
+# 新会话接任退休旧会话的名字血统（换轨；接任后原会话同 id 回归不夺回名字）
 crosschat claude -n <新名> --connect <星> --extend-session <旧名>
+
+# 彻底删册位（下线≠删除；幂等，自退/管理删皆可）
+crosschat serve --connect <星> --member-remove <名|id8>
 ```
 
-启动器存活期间守连接（聚合器重启会自动重声明，含 extends）；会话退出即退星。`--extend-session` 四级校验失败方向不锁死：旧名仍是活成员 → 拒绝并指路（退旧会话或去旗标）；本机有旧名对话史 → 放行并提示；都无 → 静默放行；broker 侧同旧名先声明先得（后者收 `EXTENDS_CONFLICT` 指路，不影响入星）。
+启动器存活期间守连接（聚合器重启会自动重声明，含 extends）；永久成员**退出=下线不是退星**（册位保留在星册，`status --stars` 见 ⚪ 下线行，同 id `/resume`/重启数秒内自动复活；期间投递报 `SESSION_OFFLINE` 等上线，绝不静默改投）。`--extend-session` 四级校验失败方向不锁死：旧名仍是活成员 → 拒绝并指路（退旧会话或去旗标）；本机有旧名对话史 → 放行并提示；都无 → 静默放行；broker 侧同旧名先声明先得（后者收 `EXTENDS_CONFLICT` 指路，不影响入星）。
 
 ### 三段寻址（直达星成员）
 
@@ -156,11 +162,11 @@ crosschat send --via tcp:<星>:<机器>:<会话> --body "构建跑了吗"
 
 - 三段形态**免 `--to`**（会话段就是收件人）；回信照旧走信封 reply-hint，零配置
 - 同机 claude/codex 同名（多适配器常态）会话段带工具限定词消歧：`tcp:<星>:<机器>:claude/<名>` 与 `…:codex/<名>` 各达各的；裸名唯一照旧可用（撞名报 `NAME_COLLISION` 列全部限定地址，同工具同名改列 id8 投短前缀）
-- 非成员名 → `SESSION_NOT_MEMBER`（教学入星）；死名有接任者 → `SESSION_SUPERSEDED`（报错给出接任者的三段地址——带工具限定词，改投即可）；旧名还活着 → alive-wins，照投旧会话本尊
+- 非成员名 → `SESSION_NOT_MEMBER`（教学入星）；在册但下线 → `SESSION_OFFLINE`（1.7.0：等 resume 复活 / extends 接任 / id8 点对点，绝不静默改投）；死名有接任者 → `SESSION_SUPERSEDED`（报错给出接任者的三段地址——带工具限定词，改投即可）；旧名还活着 → alive-wins，照投旧会话本尊
 
 ### adopt 收编（会话活着但不在星里）
 
-三种来路：双端重启失忆（broker+聚合器都重启过）、会话是裸起的（没经启动器）、改名后想补旧名接任。**信号**：三段投递报 `SESSION_NOT_MEMBER`，或 `crosschat status --stars` 出诊断行——诊断行**当场打印完整命令**，照抄：
+三种来路：册位被 `--rm`/member-remove 删过（1.6.x 的"双端重启失忆"已由落盘星册根治——重启不再丢名单）、会话是裸起的（没经启动器）、改名后想补旧名接任。**信号**：三段投递报 `SESSION_NOT_MEMBER`，或 `crosschat status --stars` 出诊断行——诊断行**当场打印完整命令**，照抄：
 
 ```bash
 crosschat status --stars
@@ -177,7 +183,7 @@ crosschat serve --connect <星> --adopt <名> --extend-session <旧名>   # 已�
 
 ### 重启自愈与降级告警
 
-- **恢复链**：聚合器重启 → 向 broker 查回本机最后已知名单 → 本地验活 → 活的自动重新入册（孤儿找回，死名不复活）；broker 也重启过 → 恢复链空 → 走上方 adopt。启动器还活着时最简单——旗标在手原样重声明
+- **对账循环**（1.7.0 常态化）：聚合器每轮向 broker 查本机册切片 → 本地验活 → 册内活的自动复活入册（孤儿找回、裸 resume 回归同走此路）；死→上报下线（册位保留）。星册落盘（`roster.json`）——broker 重启也不失忆，1.6.x 的"双端重启失忆走 adopt"已根治，adopt 只剩 `--rm`/删除过的会话与裸会话需要
 - **降级告警**：broker 机 crosschat 是老版本时，启动器/聚合器在命令行打一行 `broker 不支持会话成员（proto:3），已降级机器级——…`。含义：机器级收发不受影响，入星类功能不生效；升级 broker 机并重启 serve 即恢复
 
 > 全链验证阶梯（三段直达 → 错误教学 → extends 接任 → adopt 收编 → 重启自愈，每步带期望输出）：[跨机通信：tcp · 2.7](docs/broker.md)
@@ -287,7 +293,8 @@ ssh: 共 2 段对话
 | skill 误删/过期 | `crosschat install-skills` |
 | 升级 crosschat 代码后 | `npm run build`（skill 有变再 install-skills） |
 | 消息发出对方没反应 | 先 `status` 确认在线；`parked` 的等对方空闲自动补投；UNCERTAIN 类勿重发先核实 |
-| 三段寻址报 `SESSION_NOT_MEMBER` | 会话没入星（裸起的）或双端重启失忆 | `crosschat status --stars` 看诊断行 → 照抄 `serve --connect <星> --adopt <名>`；或经启动器重起会话 |
+| 三段寻址报 `SESSION_NOT_MEMBER` | 会话没入星（裸起的）或册位被 `--rm`/member-remove 删过 | `crosschat status --stars` 看诊断行 → 照抄 `serve --connect <星> --adopt <名>`；或经启动器重起会话 |
+| 三段寻址报 `SESSION_OFFLINE` | 永久成员下线（退出=下线非退星，1.7.0） | 等 resume 自动复活后重发；或对端 `--extend-session` 接任；或会话段投 id8 |
 
 ## 📚 更多文档
 

@@ -17,7 +17,7 @@ import { FileInbox } from '../src/serve/file-channel.js';
 import { runViaTcpStatus } from '../src/serve/via-tcp.js';
 import { encodeFrame, parseFrame, type Frame, type StatusPayload } from '../src/serve/protocol.js';
 import { parseStatusArgs } from '../src/cli.js';
-import { runStatus } from '../src/commands/status.js';
+import { runStatus, type StatusDeps } from '../src/commands/status.js';
 import { MultichatError } from '../src/errors.js';
 import type { SendDeps } from '../src/commands/send.js';
 import type { CodexThreadWithMeta } from '../src/codex/discovery.js';
@@ -439,5 +439,47 @@ describe('CLI：parseStatusArgs 与远程视图渲染', () => {
       'USAGE',
     );
     expect(err.message).toContain('node.json');
+  });
+
+  it('027-E：星籍在场的远端行——成员行不标、非册行标"非册(裸起)"；roster 不可达不标', async () => {
+    const dir = mkdtempSync(join(root, 'mark-'));
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    writeFileSync(join(dir, 'tcp', 'node.json'), JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 9, name: 'cloud', key: key('k') }] }));
+    const local: StatusPayload = {
+      claude: [
+        { name: 'worker', kind: 'interactive', status: 'idle', pid: 1, cwd: null },
+        { name: 'limbo', kind: 'interactive', status: 'idle', pid: 2, cwd: null },
+      ],
+      codex: [{ name: 'helper', status: 'idle', id: 'abcd1234', cwd: null, createdAt: null, originator: null }],
+    };
+    const deps = (roster: StatusDeps['roster']) => ({
+      listClaudeSessions: () => ({ sessions: [], malformed: 0 }),
+      listCodexThreads: async () => [],
+      fetchRemoteStatus: async () => ({ target: 'cloud', payload: local }),
+      tcpDir: join(dir, 'tcp'),
+      roster,
+    });
+    const memberRoster = async () => [
+      {
+        name: 'cloud',
+        mid8: 'a1b2c3d4',
+        online: true,
+        sessions: [
+          { sessionId: 'worker-session-id-000000001', name: 'worker', tool: 'claude' },
+          { sessionId: 'abcd1234-0000-0000-0000-000000000002', name: 'helper', tool: 'codex' },
+        ],
+        offlineSessions: [{ sessionId: 'gone-session-id-0000000003', name: 'gone', tool: 'claude' }],
+      },
+    ];
+    const out = await runStatus(deps(memberRoster), false, false, {}, 'tcp:cloud');
+    const workerLine = out.split('\n').find((l) => l.includes('worker'))!;
+    expect(workerLine).not.toContain('非册');
+    const limboLine = out.split('\n').find((l) => l.includes('limbo'))!;
+    expect(limboLine).toContain('非册(裸起)');
+    const helperLine = out.split('\n').find((l) => l.includes('helper'))!;
+    expect(helperLine).not.toContain('非册'); // codex 名与 id8 双命中
+    // roster 不可达 = 无从判定，一律不标
+    const blind = await runStatus(deps(async () => undefined), false, false, {}, 'tcp:cloud');
+    expect(blind).not.toContain('非册');
   });
 });

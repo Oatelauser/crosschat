@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -38,8 +38,8 @@ export interface DoctorDeps {
   watchdogRunning?(): { running: boolean; pid?: number };
   /** Clock for parked-age display; defaults to Date.now. */
   now?(): number;
-  /** 安装源（npm 包内 skills/crosschat/SKILL.md 副本）内容；undefined = not locatable (skip compare). */
-  repoSkillContent(): string | undefined;
+  /** 安装源（npm 包内 skills/crosschat/ 整树，含 references/；028 分层起递归比对）；undefined = not locatable (skip compare). */
+  repoSkillFiles(): Array<{ path: string; content: string }> | undefined;
   /**
    * 票B B2：tcp 配置目录（node.json/broker.json 所在）。Omitted → tcp checks
    * are skipped entirely (byte-identical to before); defaultDoctorDeps wires
@@ -105,14 +105,21 @@ export function defaultDoctorDeps(): DoctorDeps {
         return false;
       }
     },
-    repoSkillContent: () => {
+    repoSkillFiles: () => {
       try {
         // dist/commands/ is two levels below the package root (same as install-skills).
-        // 基准是包内 skills 副本而非仓库工作树（015："安装源"正名）。
-        return readFileSync(
-          fileURLToPath(new URL('../../skills/crosschat/SKILL.md', import.meta.url)),
-          'utf8',
-        );
+        // 基准是包内 skills 整树副本而非仓库工作树（015"安装源"正名；028 分层后含 references/）。
+        const base = fileURLToPath(new URL('../../skills/crosschat', import.meta.url));
+        const files: Array<{ path: string; content: string }> = [];
+        const walk = (dir: string, prefix: string): void => {
+          for (const name of readdirSync(dir).sort()) {
+            const full = join(dir, name);
+            if (statSync(full).isDirectory()) walk(full, `${prefix}${name}/`);
+            else files.push({ path: `${prefix}${name}`, content: readFileSync(full, 'utf8') });
+          }
+        };
+        walk(base, '');
+        return files;
       } catch {
         return undefined;
       }
@@ -203,22 +210,25 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
   }
 
   // 5. skill installation (compared against the install source when locatable)
-  // 015：基准是 deps.repoSkillContent() —— npm 包内 skills 副本（见 defaultDoctorDeps），
-  // 不是仓库工作树，故文案叫"安装源"而非"仓库"。
-  const repo = deps.repoSkillContent();
+  // 015：基准是 deps.repoSkillFiles() —— npm 包内 skills 副本（见 defaultDoctorDeps），
+  // 不是仓库工作树，故文案叫"安装源"而非"仓库"。028 起 skill 分层（references/），
+  // 比对改递归整树；多出文件不管（install-skills 只覆盖不删除，冗余无害）。
+  const repo = deps.repoSkillFiles();
   for (const root of ['.claude', '.codex'] as const) {
     const side = root === '.claude' ? 'claude' : 'codex';
-    const path = join(deps.homeDir(), root, 'skills', 'crosschat', 'SKILL.md');
+    const skillDir = join(deps.homeDir(), root, 'skills', 'crosschat');
+    const path = join(skillDir, 'SKILL.md');
     if (!deps.exists(path)) {
       attention(`⚠️ ${side} 侧 skill 未安装（${path}）；运行 crosschat install-skills`);
       continue;
     }
     if (repo === undefined) {
-      ok(`✅ ${side} 侧 skill 已安装（安装源 SKILL.md 未定位到，跳过版本比对）`);
+      ok(`✅ ${side} 侧 skill 已安装（安装源 skill 目录未定位到，跳过版本比对）`);
       continue;
     }
-    if (deps.readFile(path) === repo) ok(`✅ ${side} 侧 skill 与安装源一致`);
-    else attention(`⚠️ ${side} 侧 skill 与安装源不一致；重跑 crosschat install-skills`);
+    const diff = repo.filter((f) => deps.readFile(join(skillDir, f.path)) !== f.content).map((f) => f.path);
+    if (diff.length === 0) ok(`✅ ${side} 侧 skill 与安装源一致`);
+    else attention(`⚠️ ${side} 侧 skill 与安装源不一致（${diff.slice(0, 3).join('、')}）；重跑 crosschat install-skills`);
   }
 
   // 6. dual caller-identity residue in this shell

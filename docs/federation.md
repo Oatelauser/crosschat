@@ -468,26 +468,31 @@ ssh <host> crosschat send --to <名字> --body - [其余参数透传]
 ssh 联邦与 tcp 星是**正交并存**的两条跨机通道：ssh 按机器投递（`--via ssh:<host> --to <名>`，名字在对端机解析）；tcp 星的会话投递走三段直达——会话经启动器入星后按 `<星>:<机器>:<会话>` 寻址（机器级操作——`status --via tcp:<机器>` 远程枚举与文件通道——另有保留）。两通道怎么选：对端在 tcp 星里且你要**直达某个会话**用三段；否则 ssh 照旧。日常操作五条（全量教学见[跨机通信：tcp](broker.md)）：
 
 ```bash
-# ① 入星启动（claude 带 -n；codex 无 -n，进去 /rename 即被聚合器跟随）
+# ① 入星启动（claude 带 -n；codex 无 -n，进去 /rename 即被聚合器跟随。1.7.0 起默认永久注册：
+#    退出=下线非退星，同 id resume 自动复活；一次性 worker 加 --rm，退出即离册）
 crosschat claude -n boss --connect cloud
 crosschat codex --connect cloud
+crosschat claude -n once-worker --connect cloud --rm
 
 # ② 三段直达（免 --to；会话名禁冒号；同机 claude/codex 同名时带工具限定词 <工具>/<会话名>）
 crosschat send --via tcp:cloud:host-b:boss --body "构建跑了吗"
 crosschat send --via tcp:cloud:host-b:claude/boss --body "给 claude 那位"   # 撞名消歧，各达各的
 
-# ③ 换轨接任（旧会话退休，新会话接它的名字血统——投旧名自动被指路到新会话）
+# ③ 换轨接任（旧会话退休，新会话接它的名字血统——投旧名自动被指路到新会话；接任后原会话回归不夺回）
 crosschat claude -n boss2 --connect cloud --extend-session boss
 
 # ④ 收编（会话活着但不在星里——status --stars 的诊断行会把命令原样打印出来）
 crosschat status --stars
 crosschat serve --connect cloud --adopt limbo
 
-# ⑤ 看星内会话成员表（每星下按机器列成员；extends 血统一并标注）
+# ⑤ 看星内会话成员表（每星下按机器列成员；extends 血统一并标注；下线成员 ⚪ 行在册可复活）
 crosschat status --stars
+
+# ⑥ 删册位（下线≠删除；幂等，自退/管理删皆可，星内任何机器可执）
+crosschat serve --connect cloud --member-remove <名|id8>
 ```
 
-错误速读：`SESSION_NOT_MEMBER`=该会话名没入星（走 ④ 收编或 ① 重起）；`NAME_COLLISION`=同名撞车（报错列出带工具限定词的地址，照抄即达；同工具同名时改列 id8，会话段投 `<id 前 8 位>` 短前缀）；`SESSION_SUPERSEDED`=旧名已死有接任者（报错给出接任者三段地址——带工具限定词，改投）；启动器/聚合器打"已降级机器级"=broker 机 crosschat 过旧（升级重启即恢复，机器级收发不受影响）。ssh 侧不受这些语义影响——ssh 形态永远按机器投递。
+错误速读：`SESSION_NOT_MEMBER`=该会话名没入星或已被 `--rm`/删除（走 ④ 收编或 ① 重起）；`SESSION_OFFLINE`=在册但下线（等 resume 复活，或 ③ 接任，或会话段投 id8 点对点——绝不静默改投）；`MACHINE_BOUND`=同 id 换机器 resume（先 ⑥ 删原册位再新机入星）；`NAME_COLLISION`=同名撞车（报错列出带工具限定词的地址，照抄即达；同工具同名时改列 id8，会话段投 `<id 前 8 位>` 短前缀）；`SESSION_SUPERSEDED`=旧名已死有接任者（报错给出接任者三段地址——带工具限定词，改投）；启动器/聚合器打"已降级机器级"=broker 机 crosschat 过旧（升级重启即恢复，机器级收发不受影响）。ssh 侧不受这些语义影响——ssh 形态永远按机器投递。
 
 ---
 

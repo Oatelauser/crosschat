@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { conversationFamily, runStatus, type StatusDeps } from '../src/commands/status.js';
+import type { RosterMachine } from '../src/serve/protocol.js';
 import { conversationSummaries, type ConversationSummary } from '../src/conversation-summary.js';
 import type { ClaudeSessionEntry } from '../src/claude/registry.js';
 import type { CodexThreadWithMeta } from '../src/codex/discovery.js';
@@ -52,7 +53,7 @@ interface SummaryFixture {
   claude?: ClaudeSessionEntry[];
   codex?: CodexThreadWithMeta[];
   rows?: ConversationSummary[];
-  tcp?: { nodeJson?: unknown; nodeStatus?: Array<[file: string, status: Record<string, unknown>]>; roster?: (entry?: { name?: string }) => Promise<Array<{ name?: string; mid8: string; online: boolean }> | undefined> };
+  tcp?: { nodeJson?: unknown; nodeStatus?: Array<[file: string, status: Record<string, unknown>]>; roster?: (entry?: { name?: string }) => Promise<RosterMachine[] | undefined> };
   watchdogRunning?: () => boolean;
 }
 
@@ -196,6 +197,30 @@ describe('G0 status --stars 星内明细', () => {
 
   it('未接线 tcpDir：教学一行', async () => {
     expect(await runStatus(summaryDeps(), false, false, {}, undefined, true)).toContain('tcp: 未入网');
+  });
+
+  it('028 三态：在册下线成员行 ⚪ 标记 + 三条出路；下线名不再触发 adopt 建议', async () => {
+    const fx: SummaryFixture = {
+      claude: [claudeEntry('sc-1', 'boss', NOW - 60_000)],
+      tcp: {
+        nodeJson: { brokers: [{ host: 'h1', port: 1, name: 'cloud', key: 'k1' }] },
+        nodeStatus: [onlineDaemon('cloud')],
+        roster: async () => [
+          {
+            name: 'hub',
+            mid8: 'a1b2c3d4',
+            online: true,
+            sessions: [{ sessionId: 'sess-live-0000000000000000', name: 'alive', tool: 'claude' }],
+            offlineSessions: [{ sessionId: 'sess-boss-00000000000000000', name: 'boss', tool: 'claude' }],
+          },
+        ],
+      },
+    };
+    const out = await runStatus(summaryDeps(fx), false, false, {}, undefined, true);
+    expect(out).toContain('  会话: hub:claude/alive');
+    expect(out).toContain('  下线: ⚪hub:claude/boss（等 resume 复活；接任 --extend-session；删 --member-remove）');
+    // 本机活会话 boss 与下线成员同名——对账循环会验活复活，不给 adopt 建议
+    expect(out).not.toContain('建议:');
   });
 });
 
