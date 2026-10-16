@@ -21,7 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: actions/configure-pages@v6.0.0
       - uses: peaceiris/actions-mdbook@v2.0.0 # 预编译二进制装 mdbook，免 Rust
         with:
           mdbook-version: '0.5.4'
