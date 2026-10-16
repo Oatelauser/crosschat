@@ -5,6 +5,21 @@
 ## [Unreleased]
 
 
+## [1.6.3] - 2026-10-16
+
+### 024：v1.6.2 首轮现场反馈打磨
+
+- **信封正向坐标 from-addr**：tcp 腿信封新增加性属性 `from-addr="tcp:<星>:<机器>:<工具>/<会话>"`（claude/名、codex/id8、human 降机器级），渲染于 from-machine 之后——收件方一眼知道对端在哪台机哪个形态，消除"以为对端在本机"的错位；from-machine 值字节不动（016① 分片绑定零回归）；ssh 腿保持 from-machine、单机不补（同机无错位）
+- **reply-hint 内建管道教学**：信封回复提示尾加纯文字括注"（长正文/含敏感字符可省 --body 改管道喂 stdin）"——治转义坑的结构性根子（hint 原本只教 inline `--body`，照抄纪律把所有收件方赶进转义坑）；红线：括注禁带管道符命令（防伪造信封判定误伤），测试锚定
+- **skill 教学扩容**：stdin 管道从备选升为"长正文/含敏感字符一律管道优先"（bash 单引号 heredoc + PowerShell here-string 两式范例+逐字到达样例）；PS 轻路径三层（单引号 inline→here-string→`ReadAllText`，注明 Get-Content 5.1 编码坑）；大小限额地图（`--max-body-kb`/env 提额旗标链、claude 64KiB/codex 1MiB 端点硬顶、tcp ≤64MiB 超限自动文件通道、ssh scp 旁路）；"查自己地址"=`status --stars` 成员行；CALLER_IDENTITY_CONFLICT 自纠 PowerShell 写法前置
+- 决策锚点：`--body-file` 砍掉（转义与限额正交，管道全场景覆盖，低入侵不添私有旗标；重开条件=适配器无 shell 环境）；原生会话弹窗调研归档（`crossSessionInbound: accept` 可消弹窗但用户级弃人闸，免弹窗正路=启动器，见 drill-reports/native-claude-popup-20261016）
+
+### 025：doctor 分组树展示
+
+- 平铺编号清单改两级缩进分组树：`环境` / `tcp · <星名>`（逐星聚合，不可达星一眼可辨）/ `其他`——组名顶格、条目缩进两空格、无框线（grep 友好）、编号条目退役、空组不出行、"其他"殿后
+- 陈旧状态文件按文件名星段归组（`status-node-<星>.json`→对应星；无线索归"其他"）；检查项集合/判定逻辑/诊断文案/退出码/结论行**零变化**（纯展示层 +105 行 ≤150 预算，结构测试钉死结论行与退出码语义）
+
+
 ## [1.6.2] - 2026-10-15
 
 ### 023：StarJoiner.stop() 重连窗口挂起竞态修复

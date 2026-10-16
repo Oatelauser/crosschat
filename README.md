@@ -81,7 +81,7 @@ mac：unix 实现共享，理论可达、未实测。
 🤖 worker 收到            📨 来自另一会话的消息:
                           <cross-session-message from-name="codex/01a…" turn="1">
                           给我回复你好的消息
-                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"
+                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
 🤖 worker[worker -> boss] 你好
 🤖 boss 收到              📨 你好（turn 2）
 ```
@@ -97,7 +97,7 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 🤖 beta2 收到             📨 来自另一会话的消息:
                           <cross-session-message from-name="codex/boss@win" turn="1">
                           你好 beta2，这是跨机问候
-                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"
+                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
 🤖 beta2[beta2 -> boss]   收到！跨机闭环成立
 🤖 boss 收到              📨 收到！跨机闭环成立（turn 2，自动经 ssh 回到 win）
 ```
@@ -113,7 +113,7 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 🤖 worker2 收到            📨 来自另一会话的消息:
                           <cross-session-message from-name="boss" turn="1">
                           …跑一次构建并回报结果…
-                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"
+                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
 🤖 worker2[worker2 -> boss] 构建完成，产物清单见下一条
 🤖 boss 收到               📨 构建完成，产物清单见下一条（turn 2，自动经 broker 跨机回来）
 ```

@@ -48,7 +48,7 @@
 
 ```
 <cross-session-message from-name="发送方" turn="N">
-<crosschat-reply-hint reply-as="接收方">回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"</crosschat-reply-hint>
+<crosschat-reply-hint reply-as="接收方">回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>
 <正文（保留字标签已中性化，防伪造信封）>
 </cross-session-message>
 ```

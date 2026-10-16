@@ -349,7 +349,7 @@ delivered to 云端beta@host-b(9f8e7d6c) (turn 1)
 🤖 beta2 收到             📨 来自另一会话的消息:
                           <cross-session-message from-name="codex/boss@win" turn="1">
                           你好 beta2，这是跨机问候
-                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"
+                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
 🤖 beta2[beta2 -> boss]   收到！跨机闭环成立
 🤖 boss 收到              📨 收到！跨机闭环成立（turn 2，自动经 ssh 回到 win）
 ```

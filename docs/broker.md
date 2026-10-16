@@ -320,9 +320,9 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 ```
 👤 用户[boss -> worker2]  用 crosschat 走 tcp 跨机给 tcp:<star>:<showName> 机器的 claude 会话「worker2」发任务：要求它跑一次构建并回报结果。
 🤖 worker2 收到            📨 来自另一会话的消息:
-                          <cross-session-message from-name="boss" turn="1">
+                          <cross-session-message from-name="boss" from-machine="<A机>" from-addr="tcp:<星>:<A机>:claude/boss" turn="1">
                           …跑一次构建并回报结果…
-                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"
+                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
 🤖 worker2[worker2 -> boss] 构建完成，产物清单见下一条
 🤖 boss 收到               📨 构建完成，产物清单见下一条（turn 2，自动经 broker 跨机回到 A 机）
 ```
@@ -525,8 +525,8 @@ delivered to worker2@host-b(9f8e7d6c) (turn 1) · 续话 c3
 B 机会话里自动出现信封（无需任何题词）：
 ```
 📨 来自另一会话的消息:
-<cross-session-message from-name="boss" turn="1">
-<crosschat-reply-hint reply-as="worker2">回复请运行: crosschat send --conversation c5 --body "<你的回复>"</crosschat-reply-hint>
+<cross-session-message from-name="boss" from-machine="yang" from-addr="tcp:cloud:yang:claude/boss" turn="1">
+<crosschat-reply-hint reply-as="worker2">回复请运行: crosschat send --conversation c5 --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>
 …
 跑一次构建，产物清单发回来
 </cross-session-message>
