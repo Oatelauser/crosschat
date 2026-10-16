@@ -16,6 +16,18 @@
 🤖 boss 收到              📨 收到！跨机闭环成立（turn 2，自动经 ssh 回到 win）
 ```
 
+```text
+win · boss                              yangwsl · beta2
+   │                                       │
+   │ ① send --via ssh:yangwsl --to beta2   │
+   │ ────────────── ssh 管道 ─────────────► │ ② 收到信封（from-machine="win"，
+   │                                       │      回信命令不带 --via）
+   │                                       │
+   │                                       │ ③ 照抄 hint 回信 --conversation c3
+   │ ◄────── 回程按 ref 自动选路走 ssh ───── │
+   │ ④ 收到回复（turn 2）                    │
+```
+
 与单机的全部差别只有四个字：题词里多了「走 ssh 跨机」。命令由 boss 自己组装，beta2 照信封回信，双方谁都没敲过一次完整地址。下面把本课的四条命令逐一拆开——每条都是：用途 → 完整实录 → 隐式发生什么。
 
 ## 发起跨机消息
@@ -113,6 +125,11 @@ crosschat: MESSAGE_TOO_LARGE: [via yangwsl] Body is 20000 bytes; the limit is 16
 > scp big-analysis.txt yangwsl:/tmp/big-analysis.txt
 > crosschat send --via ssh:yangwsl --to beta2 --body "分析 /tmp/big-analysis.txt，结论报过来"
 delivered to beta2@yangwsl(9f8e7d6c) (turn 3) · 续话 c1
+```
+
+```text
+① 本机落盘 big-analysis.txt ──► ② scp 到对端 /tmp/ ──► ③ send 只发一句话（带对端本地路径）
+   （超限的大正文留在这里）        与 --via 同一份别名/密钥      消息通道只走路径引用
 ```
 
 大结果回传同理反向走一遍（对端 scp 回来，或题词让对端把结果落盘发路径）。
