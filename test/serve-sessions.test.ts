@@ -528,7 +528,9 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
     await attach.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss' });
     const port = Number(new URL(harness.url).port);
     await harness.broker.stop();
-    await client.waitForState('reconnect-wait');
+    // 慢机先例（同 /rename 跟随用例 60s 注释）：负载下 broker 关停→状态翻转可拖过
+    // 默认 5s——窗口放宽，实现侧重播仍是上线即发（connectOnce 同步 sendSessions）
+    await client.waitForState('reconnect-wait', 8_000);
     // 同端口同注册表拉起新 broker——客户端自行回线上并重播成员表
     const broker2 = new Broker({
       registryFile: harness.registryFile,
@@ -547,9 +549,10 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
     await client.waitForState('online', 8_000);
     const sender = await senderOn(`ws://127.0.0.1:${port}`, key('s'));
     sender.send({ op: 'send', id: 'n3', targetMachine: 'node-host:boss', body: 'after restart' });
-    const receipt = await sender.waitFor((f) => f.op === 'receipt' && f.id === 'n3');
+    // 同上慢机窗口：重连退避档（50ms×2^n）在负载下可把恢复链顶到默认 5s 踩线
+    const receipt = await sender.waitFor((f) => f.op === 'receipt' && f.id === 'n3', 10_000);
     expect(receipt).toMatchObject({ status: 'delivered' });
-  }, 15_000);
+  }, 25_000);
 
   it('028 claude 活性：扫描核验——死 claude 成员转下线（教学）、活成员续投', async () => {
     const { harness, attach } = await startNodeStar(
@@ -736,6 +739,26 @@ describe('028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-rem
     });
     expect(existsSync(`${rosterFileOf(registryFile)}.tmp`)).toBe(false); // tmp+rename 收尾
   });
+
+  it('028 下线成员随 roster 帧下发（offlineSessions 单列；sessions 保持活成员语义）', async () => {
+    const { url, registryFile } = await startBroker();
+    seed(registryFile, [
+      { key: key('s'), machineName: 'sender-host' },
+      { key: key('n'), machineId: WIN_MID, machineName: 'win-box' },
+    ]);
+    const node = await nodeOn(url, key('n'), WIN_MID, { name: 'win-box' });
+    node.send(sessionsFrame([{ sessionId: 'sess-boss', name: 'boss', tool: 'claude' }]));
+    await new Promise((resolve) => setTimeout(resolve, 200)); // 等 onSessions 落册
+    node.send(sessionsFrame([])); // 全量重播空 = 下线（册位保留）
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const sender = await senderOn(url, key('s'));
+    sender.send({ op: 'roster' });
+    const res = await sender.waitFor((f) => f.op === 'roster-result');
+    const win = (res.op === 'roster-result' ? res.machines : []).find((m) => m.name === 'win-box')!;
+    expect(win.online).toBe(true); // 机器连接在——只是成员下线
+    expect(win.sessions).toBeUndefined(); // 活成员语义不动（extends 校验共用）
+    expect(win.offlineSessions).toEqual([{ sessionId: 'sess-boss', name: 'boss', tool: 'claude' }]);
+  }, 10_000);
 
   it('边界1 跨机 resume：册在 M1、id 活在 M2 → MACHINE_BOUND 拒绝复活+教学（册位仍绑 M1）', async () => {
     const { url, registryFile } = await startBroker();
