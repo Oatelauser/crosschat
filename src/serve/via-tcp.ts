@@ -19,7 +19,7 @@ import { CODEX_ENDPOINT_MAX_BODY_BYTES } from '../limits.js';
 import type { SendLogEntry } from '../send-log.js';
 import type { SendArgs, SendDeps } from '../commands/send.js';
 import { encodeFrame, ERR, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
-import type { ErrorFrame, FileResultFrame, Frame, ReceiptFrame, RosterMachine, StatusPayload, StatusResultFrame } from './protocol.js';
+import type { ErrorFrame, FileResultFrame, Frame, MemberRemoveResultFrame, ReceiptFrame, RosterMachine, StatusPayload, StatusResultFrame } from './protocol.js';
 import { defaultBaseDir, tcpDir } from './registry.js';
 import { formatBrokerEntry, readNodeConfig, type BrokerEntry } from './node.js';
 import { FILE_CHUNK_BYTES, FILE_MAX_BYTES, readFileForSend } from './file-channel.js';
@@ -499,6 +499,38 @@ export async function fetchRosterFor(
 /** B2.1 原签名（探 entries[0]）——单条目路径与既有调用方沿用。 */
 export function fetchRoster(tcpBaseDir: string, timeoutMs = 2_000): Promise<RosterMachine[] | undefined> {
   return fetchRosterFor(tcpBaseDir, undefined, timeoutMs);
+}
+
+/**
+ * 028 `serve --connect <星> --member-remove <名|id8>` 的传输腿：瞬态 sender
+ * 连接发 member-remove 帧等回执（星内任何机器可执——纯册状态操作，无需本地
+ * 验活）。broker 不可达/超时按传输失败教学重抛。
+ */
+export async function requestMemberRemove(
+  entry: BrokerEntry,
+  target: string,
+  timeoutMs = 8_000,
+): Promise<MemberRemoveResultFrame> {
+  const conn = await SenderConn.open(`ws://${entry.host}:${entry.port}`, entry.key, undefined, Math.min(timeoutMs, 15_000));
+  try {
+    await conn.send({ op: 'member-remove', target });
+    const frame = await conn.waitFor((f) => f.op === 'member-remove-result' || f.op === 'error', timeoutMs);
+    if (frame.op === 'error') {
+      throw new MultichatError(frame.code, frame.message);
+    }
+    if (frame.op !== 'member-remove-result') {
+      throw new MultichatError('TCP_TRANSPORT_FAILED', 'broker 应答形状异常（非 member-remove-result）');
+    }
+    return frame;
+  } catch (err) {
+    if (err instanceof MultichatError) throw err;
+    throw new MultichatError(
+      'TCP_TRANSPORT_FAILED',
+      `member-remove 未应答（${err instanceof Error ? err.message : String(err)}）——broker 在跑吗（crosschat serve）？两端 crosschat 都需 ≥1.7.0`,
+    );
+  } finally {
+    conn.close();
+  }
 }
 
 /**

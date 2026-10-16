@@ -35,17 +35,21 @@ export interface StarLauncherFlags {
   connects: string[];
   /** --extend-session 旧会话名。 */
   extendSession?: string;
+  /** 028 --rm：临时修饰（退出即离册零痕迹，docker --rm 语义；须与 --connect 连用）。 */
+  rm?: boolean;
 }
 
 /**
  * 剥离并解析入星旗标（只认死自家发明）：`--connect <星>`
- * （可重复，支持 `--connect=星`）、`--extend-session <旧名>`。其余参数原样
- * 透传（含两个旋钮——旋钮剥离仍由 splitLauncherKnobs 在 passthrough 上做）。
+ * （可重复，支持 `--connect=星`）、`--extend-session <旧名>`、`--rm`（028 临时
+ * 修饰，与 --extend-session 互斥——临时会话无接任语义）。其余参数原样透传
+ * （含两个旋钮——旋钮剥离仍由 splitLauncherKnobs 在 passthrough 上做）。
  */
 export function splitStarLauncherArgs(args: readonly string[]): StarLauncherFlags {
   const passthrough: string[] = [];
   const connects: string[] = [];
   let extendSession: string | undefined;
+  let rm = false;
   const valueOf = (token: string, inline: string | undefined, next: string | undefined, what: string): string => {
     const value = inline ?? next;
     if (value === undefined || value === '' || value.startsWith('--')) {
@@ -67,6 +71,8 @@ export function splitStarLauncherArgs(args: readonly string[]): StarLauncherFlag
       if (extendSession !== undefined) throw new MultichatError('USAGE', '--extend-session 只能给一次');
       extendSession = valueOf(token, inline, args[i + 1], '--extend-session <旧会话名>');
       if (inline === undefined) i++;
+    } else if (name === '--rm') {
+      rm = true;
     } else {
       // 只认死自家旗标：-n/--name 等 claude/codex 原生参数一律原样放行（2026-10-15 用户裁定）
       passthrough.push(token);
@@ -75,7 +81,14 @@ export function splitStarLauncherArgs(args: readonly string[]): StarLauncherFlag
   if (extendSession !== undefined && extendSession.includes(':')) {
     throw new MultichatError('USAGE', `--extend-session 旧会话名 ${extendSession} 禁含冒号（跨机旧名用 {机器}:{名} 形态暂不在旗标面，先同名接续）`);
   }
-  return { passthrough, connects, ...(extendSession === undefined ? {} : { extendSession }) };
+  // 028 边界2：--rm × --extend-session 互斥（临时会话无接任语义）
+  if (rm && extendSession !== undefined) {
+    throw new MultichatError('USAGE', '--rm 与 --extend-session 互斥——--rm 是临时会话（退出即离册零痕迹），无接任语义；要接续旧名去掉 --rm（永久注册）');
+  }
+  if (rm && connects.length === 0) {
+    throw new MultichatError('USAGE', '--rm 修饰 --connect <星>（crosschat claude/codex --connect <星> --rm）——单独使用无意义');
+  }
+  return { passthrough, connects, ...(extendSession === undefined ? {} : { extendSession }), ...(rm ? { rm: true } : {}) };
 }
 
 // ---- 依赖 -----------------------------------------------------------------------
@@ -347,6 +360,8 @@ export class StarJoiner {
       extendSession?: string;
       /** spawn 时已知的会话名（claude -n 原生透传）——有则横幅打三段地址行，无名（codex/未命名）只打星名行。 */
       spawnName?: string;
+      /** 028 --rm：临时会话——退出即离册零痕迹（erase detach）；缺省永久注册（退出=下线，册位保留）。 */
+      rm?: boolean;
     },
   ) {
     this.stoppedSignal = new Promise((resolve) => {
@@ -422,16 +437,23 @@ export class StarJoiner {
     }
   }
 
-  /** 子进程退出后调用：detach（尽力而为）并收线。 */
+  /**
+   * 子进程退出后调用：detach（尽力而为）并收线。028 双模式：默认永久——detach
+   * 不带 erase（聚合器移出声明集=下线，broker 册位保留，同 id resume 自动复活）；
+   * --rm 临时——detach 带 erase（聚合器本地表外再报 broker 删条，退出零痕迹）。
+   */
   async stop(): Promise<void> {
     this.stopped = true;
     this.resolveStopped(); // 023：唤醒重连窗口里可能在新管道上永等的 waitClose
     if (this.sessionId !== undefined) {
       for (const pipe of this.pipes.values()) {
         try {
-          await Promise.race([pipe.send({ op: 'detach', sessionId: this.sessionId }), sleep(800)]);
+          await Promise.race([
+            pipe.send({ op: 'detach', sessionId: this.sessionId, ...(this.opts.rm === true ? { erase: true } : {}) }),
+            sleep(800),
+          ]);
         } catch {
-          // 聚合器已不可达——成员随活性核验自除
+          // 聚合器已不可达——成员随活性核验下线（--rm 未上报的册内条目滞留下线态）
         }
         pipe.close();
       }

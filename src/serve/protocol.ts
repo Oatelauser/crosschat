@@ -17,6 +17,10 @@ export const ERR = {
   FILE_TOO_LARGE: 'FILE_TOO_LARGE',
   /** 018：三段寻址的会话段不是星成员（教学：会话须经启动器入星）。 */
   SESSION_NOT_MEMBER: 'SESSION_NOT_MEMBER',
+  /** 028：册内在册但当前下线（教学：等 resume 复活/extends 接任/id8 点对点——绝不静默改投）。 */
+  SESSION_OFFLINE: 'SESSION_OFFLINE',
+  /** 028 边界1：跨机 resume——册位绑原机器（教学：迁移走显式操作）。 */
+  MACHINE_BOUND: 'MACHINE_BOUND',
   /** 018：死名已由 extends 接续（报错文本指路接任者）。 */
   SESSION_SUPERSEDED: 'SESSION_SUPERSEDED',
   /** 018：extends 同旧名先声明先得，后声明者冲突回执。 */
@@ -237,9 +241,9 @@ export interface SessionsFrame {
 }
 
 /**
- * 018 恢复链②（批二）：聚合器重启上线后向 broker 查回"我以前的成员"
- * （broker 断连后保留的最后已知名单，纯内存——broker 也重启过则回空数组，
- * 双失忆边角走 adopt 收编）。node 角色独占；老 broker 不识此帧（发了被丢，
+ * 018 恢复链②（批二）：聚合器向 broker 查回"我机器的册内名单"（028 起常驻
+ * 对账循环的输入——broker 答以落盘 roster 的本机切片，broker 重启不失忆；
+ * 老 broker 答最后已知名单）。node 角色独占；老 broker 不识此帧（发了被丢，
  * 聚合器侧 cap 协商先行，不会发）。
  */
 export interface MembersQueryFrame {
@@ -250,6 +254,26 @@ export interface MembersQueryFrame {
 export interface MembersResultFrame {
   op: 'members-result';
   members: SessionMemberDecl[];
+}
+
+/**
+ * 028 成员删除（双向帧）：命令面 `serve --connect <星> --member-remove <名|id8>`
+ * 与聚合器 --rm 退场离册共用。星内任何机器可发（同星共钥=互信域，纯册状态
+ * 操作）；broker 侧命中即删 roster 条目并向归属机聚合器转发同帧（清本地表）。
+ */
+export interface MemberRemoveFrame {
+  op: 'member-remove';
+  /** 名字精确或会话 id 前缀（≥8 位）。 */
+  target: string;
+}
+
+/** member-remove 应答：幂等（零命中=ok 注明本不在册）；多名命中=拒绝列 id8 教消歧。 */
+export interface MemberRemoveResultFrame {
+  op: 'member-remove-result';
+  ok: boolean;
+  /** 已删除条目的人读标识（名或 id8）。 */
+  removed: string[];
+  error?: string;
 }
 
 export type Frame =
@@ -271,7 +295,9 @@ export type Frame =
   | StatusResultFrame
   | SessionsFrame
   | MembersQueryFrame
-  | MembersResultFrame;
+  | MembersResultFrame
+  | MemberRemoveFrame
+  | MemberRemoveResultFrame;
 
 const OPS = new Set([
   'info',
@@ -293,6 +319,8 @@ const OPS = new Set([
   'sessions',
   'members-query',
   'members-result',
+  'member-remove',
+  'member-remove-result',
 ]);
 
 /** 解析一帧 ws 文本消息；JSON 损坏或 op 未知返回 undefined（调用方丢弃）。 */

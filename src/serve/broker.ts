@@ -2,10 +2,10 @@
  * tcp broker 服务端（票B B1）：全网唯一监听端口、节点零入站的星型组件。
  * ws 复用仓内依赖；投递处理器注入化（B2 接 runSend，B1 默认 NOT_READY）。
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { timingSafeEqual } from 'node:crypto';
 import { hostname } from 'node:os';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import process from 'node:process';
 import { Buffer } from 'node:buffer';
 import { WebSocket, WebSocketServer } from 'ws';
@@ -36,6 +36,8 @@ import type {
   StatusPayload,
   StatusQueryFrame,
   StatusResultFrame,
+  MemberRemoveFrame,
+  MemberRemoveResultFrame,
 } from './protocol.js';
 import { readRegistry, sanitizeName, writeRegistry, type NodeEntry } from './registry.js';
 import { FILE_MAX_BYTES, FileInbox } from './file-channel.js';
@@ -46,6 +48,65 @@ import { normalizeMid } from '../platform/machine-id.js';
  * 7260 未分配；顺延候选 7261/7262 亦未分配（留作将来冲突时顺延）。
  */
 export const DEFAULT_PORT = 7260;
+
+/**
+ * 028 星成员册（roster）条目：成员资格 v2 的落盘事实源——注册/下线/复活/
+ * extends 接任/remove 全部落此。broker 单写者（tmp+rename 原子写）；每星一份
+ * （本 broker 一星，与 registry 同目录）；聚合器 sessions 帧=该机成员的在线
+ * 声明，未声明的在册条目=下线（死亡不再除名）。
+ */
+export interface RosterEntry {
+  /** 成员键=会话 ID（claude sessionId / codex thread id），全星唯一。 */
+  sessionId: string;
+  name?: string;
+  tool?: string;
+  /** 归属机器（归一 mid）——复活判定的机器一致性锚（边界1：跨机拒绝）。 */
+  machine: string;
+  machineName?: string;
+  online: boolean;
+  /** 经 --extend-session 接任的旧名（接任转移的持久证据——接任者胜复活）。 */
+  extendsName?: string;
+  /** 接任旧名的归属机器（跨机接续 {machine,name} 的 machine 段）。 */
+  extendsMachine?: string;
+}
+
+/** roster 文件与 registry/status 同目录同风格：tcp/roster.json。 */
+export function rosterFileOf(registryFile: string): string {
+  return join(dirname(registryFile), 'roster.json');
+}
+
+/** 读 roster；不存在/损坏按空册（册是状态不是资产，重建走重声明路径）。 */
+export function readRoster(file: string): RosterEntry[] {
+  let raw: string;
+  try {
+    raw = readFileSync(file, 'utf8');
+  } catch {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(raw) as { entries?: unknown } | null;
+    if (parsed === null || typeof parsed !== 'object' || !Array.isArray(parsed.entries)) return [];
+    return parsed.entries.filter(
+      (e): e is RosterEntry =>
+        e !== null && typeof e === 'object' && typeof (e as RosterEntry).sessionId === 'string' && (e as RosterEntry).sessionId !== '',
+    );
+  } catch {
+    return [];
+  }
+}
+
+/** tmp+rename 原子写（与 node.json 同款约定）；失败只留日志不倒服务。 */
+function writeRoster(file: string, entries: RosterEntry[]): boolean {
+  try {
+    mkdirSync(dirname(file), { recursive: true });
+    const tmp = `${file}.tmp`;
+    writeFileSync(tmp, `${JSON.stringify({ entries }, null, 2)}\n`, 'utf8');
+    renameSync(tmp, file);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export interface BrokerDeps {
   registryFile: string;
@@ -141,18 +202,11 @@ export class Broker {
   private readonly pending = new Map<string, PendingResult>();
   private readonly fileRoutes = new Map<string, FileRoute>();
   /**
-   * 018 extends 星内映射（内存）：旧名 → 接续声明列表（归属连接——断连/重播即
-   * 失效）。020 限定化：同旧名跨工具各归各血统（claude"boss"与 codex"boss"共存），
-   * 同工具同旧名仍先声明先得（后到收 EXTENDS_CONFLICT）。
+   * 028 星成员册（落盘事实源，start 时从 roster.json 载入）：条目含归属机器与
+   * 在线态——sessions 帧是各机的在线声明（未声明=下线），extends 接任与册位
+   * 随 broker 重启存活（018 的内存 lastKnownMembers/extendsByOldName 由本册取代）。
    */
-  private readonly extendsByOldName = new Map<string, { holder: Session; decl: SessionMemberDecl }[]>();
-  /**
-   * 018 恢复链②（批二）：每机器断连后保留的最后已知成员名单（lastKnownMembers
-   * 语义——纯内存、零持久文件）。sessions 帧到达即刷新该机快照；连接断开
-   * 【不删】（聚合器重启上线后 members-query 查回 → 本地验活 → 活的重入册）。
-   * broker 自身重启即全失忆——双失忆边角走 adopt 收编命令（设计内路径）。
-   */
-  private readonly lastKnownMembers = new Map<string, SessionMemberDecl[]>();
+  private roster: RosterEntry[] = [];
   private hbTimer?: ReturnType<typeof setInterval>;
 
   constructor(deps: BrokerDeps) {
@@ -172,6 +226,7 @@ export class Broker {
   async start(): Promise<number> {
     const registry = readRegistry(this.d.registryFile);
     this.starName = registry.name;
+    this.roster = readRoster(rosterFileOf(this.d.registryFile));
     const wantPort = this.d.port ?? registry.port ?? DEFAULT_PORT;
     const wss = new WebSocketServer({ host: '0.0.0.0', port: wantPort, maxPayload: MAX_PAYLOAD_BYTES });
     try {
@@ -258,12 +313,6 @@ export class Broker {
   private onClose(session: Session): void {
     this.sessions.delete(session);
     if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
-    // 018：该连接声明的 extends 随机器条目消失（成员表挂在 session 上同灭）
-    for (const [oldName, list] of this.extendsByOldName) {
-      const rest = list.filter((e) => e.holder !== session);
-      if (rest.length === 0) this.extendsByOldName.delete(oldName);
-      else if (rest.length < list.length) this.extendsByOldName.set(oldName, rest);
-    }
     // F0：online 键=归一 mid（onConnect 写入侧同款），下线按同键回收
     if (session.machineId !== undefined) {
       const midNorm = normalizeMid(session.machineId);
@@ -271,6 +320,9 @@ export class Broker {
         this.online.delete(midNorm);
         this.log(`node-down ${session.machineName ?? ''}(${session.machineId.slice(0, 8)})`);
         this.writeStatus('running');
+        // 028：聚合器断连——该机在册条目全部转下线（顶换窗口里新连接已接管则跳过；
+        // 册位保留，聚合器回线后由常驻对账循环按本地验活复活）
+        if (this.online.get(midNorm) === undefined) this.setMachineOffline(midNorm);
       }
     }
     for (const [id, entry] of this.pending) {
@@ -350,14 +402,19 @@ export class Broker {
       this.onMembersQuery(session);
       return;
     }
+    if (frame.op === 'member-remove') {
+      this.onMemberRemove(session, frame);
+      return;
+    }
     // 其余帧型（info/receipt/deliver）服务端无行为
   }
 
   /**
-   * 018：会话成员声明帧（node 角色独占）——全量重播语义：数组即该连接当前
-   * 全部成员，空数组=清空。extends 星内映射随声明重建：同旧名先声明先得，
-   * 后声明者收 EXTENDS_CONFLICT 回执（成员本身照常入册——失败方向不锁死用户）。
-   * 双活性（9a）由聚合器核验，broker 只聚合计数不做活性判断。
+   * 018/028：会话成员声明帧（node 角色独占）——全量重播语义：数组即该连接当前
+   * 全部在线成员；未声明的该机在册条目=下线（028：死亡不再除名）。声明逐条落
+   * 册（roster 持久），边界在此钉死：跨机声明拒绝复活（MACHINE_BOUND）、名字
+   * 已被 extends 接任不夺回（名字剥离+教学）、同旧名同工具先声明先得
+   * （EXTENDS_CONFLICT，成员本身照常入册——失败方向不锁死用户）。
    */
   private onSessions(session: Session, frame: SessionsFrame): void {
     if (session.machineId === undefined) return; // sender 角色不收成员声明
@@ -372,48 +429,191 @@ export class Broker {
       const tool = sanitizeTool(rawTool);
       members.set(decl.sessionId, { ...rest, ...(tool === undefined ? {} : { tool }) });
     }
-    session.members = members;
-    // 018 恢复链②：刷新该机最后已知名单（断连保留；连接在场时 members 即权威）
-    this.lastKnownMembers.set(normalizeMid(session.machineId), [...members.values()]);
-    // 归属重建：先撤本连接旧声明，再逐条登记
-    for (const [oldName, list] of this.extendsByOldName) {
-      const rest = list.filter((e) => e.holder !== session);
-      if (rest.length === 0) this.extendsByOldName.delete(oldName);
-      else if (rest.length < list.length) this.extendsByOldName.set(oldName, rest);
-    }
-    for (const decl of members.values()) {
-      if (decl.extends === undefined) continue;
-      const oldName = typeof decl.extends === 'string' ? decl.extends : decl.extends.name;
-      const list = this.extendsByOldName.get(oldName) ?? [];
-      // 020：同旧名同工具先声明先得；跨工具血统共存（各归各）
-      const clash = list.find((e) => (e.decl.tool ?? undefined) === (decl.tool ?? undefined));
-      if (clash !== undefined) {
-        const holder = clash.holder.machineName ?? clash.holder.machineId?.slice(0, 8) ?? '?';
-        const winner = clash.decl.name ?? clash.decl.sessionId.slice(0, 8);
-        this.send(session.ws, {
-          op: 'error',
-          code: ERR.EXTENDS_CONFLICT,
-          message: `会话 ${decl.name ?? decl.sessionId.slice(0, 8)} 的 extends 旧名 ${oldName}${decl.tool === undefined ? '' : `（${decl.tool} 血统）`} 已由 ${holder} 的会话 ${winner} 接续（先声明先得）——本条 extends 未生效`,
-        });
-        this.log(`extends-conflict ${oldName}：${session.machineName ?? '?'} 后到，${holder} 先得`);
-        continue;
-      }
-      this.extendsByOldName.set(oldName, [...list, { holder: session, decl }]);
-    }
-    this.log(`sessions ${session.machineName ?? session.machineId.slice(0, 8)}: ${members.size} 成员`);
+    session.members = new Map(
+      this.applyRosterUpdate(normalizeMid(session.machineId), session.machineName, [...members.values()], session)
+        .map((d) => [d.sessionId, d]),
+    );
+    this.log(`sessions ${session.machineName ?? session.machineId.slice(0, 8)}: ${session.members.size} 成员`);
   }
 
   /**
-   * 018 恢复链②：聚合器（重启后）查回本机最后已知成员名单。死活不在 broker
-   * 判断——聚合器逐个本地验活（claude 扫描/codex 线程），死的不再入册。
-   * broker 也重启过（双失忆）则回空数组，收编走 adopt 命令路径。
+   * 028 roster 核心转移点：声明集 → 册（落盘），返回生效声明集（连接成员表/
+   * 路由真相源只收生效条目——跨机拒收整条、名字被接任则剥名保留 id 寻址）。
+   * 注册/复活=同 id 上线（机器一致才准）；下线=该机未声明的在册条目翻 offline；
+   * extends 接任=记 extendsName（持久，接任者胜复活）。教学回执走 error 帧
+   * 直发声明方连接。
+   */
+  private applyRosterUpdate(mid: string, machineName: string | undefined, decls: SessionMemberDecl[], from: Session): SessionMemberDecl[] {
+    let changed = false;
+    const effective: SessionMemberDecl[] = [];
+    const declared = new Set(decls.map((d) => d.sessionId));
+    for (const decl of decls) {
+      const existing = this.roster.find((e) => e.sessionId === decl.sessionId);
+      // 边界1：跨机 resume——册位绑原机器，异机声明拒绝复活+教学（迁移走显式操作）
+      if (existing !== undefined && existing.machine !== mid) {
+        const bound = existing.machineName ?? existing.machine.slice(0, 8);
+        this.send(from.ws, {
+          op: 'error',
+          code: ERR.MACHINE_BOUND,
+          message: `会话 ${decl.name ?? decl.sessionId.slice(0, 8)} 的册位绑在 ${bound}（同 id 异机不复活）——迁移走显式操作：先在 ${bound} 执行 crosschat serve --connect <星> --member-remove ${decl.sessionId.slice(0, 8)}，再在本机重新入星`,
+        });
+        this.log(`machine-bound 拒绝：${decl.sessionId.slice(0, 8)} 册在 ${bound}，${machineName ?? mid.slice(0, 8)} 声明`);
+        continue;
+      }
+      let name = decl.name;
+      // 边界6（extends 胜复活）：名字已被接任——原会话回归不夺回，名字剥离只留 id 寻址
+      if (name !== undefined) {
+        const successor = this.roster.find(
+          (e) => e.extendsName === name && e.sessionId !== decl.sessionId && (e.tool ?? undefined) === (decl.tool ?? undefined),
+        );
+        if (successor !== undefined) {
+          const succMachine = successor.machineName ?? successor.machine.slice(0, 8);
+          const succName = successor.name ?? successor.sessionId.slice(0, 8);
+          this.send(from.ws, {
+            op: 'error',
+            code: ERR.EXTENDS_CONFLICT,
+            message: `会话名 ${name} 已由 ${succMachine}:${successor.tool === undefined ? '' : `${successor.tool}/`}${succName} 接任（--extend-session），回归不夺回——本会话按 id 寻址 tcp:${this.starName ?? '<星>'}:${machineName ?? mid.slice(0, 8)}:${decl.sessionId.slice(0, 8)}，或换名重启`,
+          });
+          this.log(`extends-wins：${decl.sessionId.slice(0, 8)} 回归不夺回名字 ${name}（接任者 ${succMachine}）`);
+          name = undefined;
+        }
+      }
+      // extends 接任登记（020 血统限定：同旧名同工具先声明先得，后到不生效）
+      let extendsName = existing?.extendsName;
+      let extendsMachine = existing?.extendsMachine;
+      if (decl.extends !== undefined) {
+        const oldName = typeof decl.extends === 'string' ? decl.extends : decl.extends.name;
+        const oldMachine = typeof decl.extends === 'string' ? undefined : decl.extends.machine;
+        const clash = this.roster.find(
+          (e) => e.extendsName === oldName && e.sessionId !== decl.sessionId && (e.tool ?? undefined) === (decl.tool ?? undefined),
+        );
+        if (clash !== undefined) {
+          const holder = clash.machineName ?? clash.machine.slice(0, 8);
+          const winner = clash.name ?? clash.sessionId.slice(0, 8);
+          this.send(from.ws, {
+            op: 'error',
+            code: ERR.EXTENDS_CONFLICT,
+            message: `会话 ${decl.name ?? decl.sessionId.slice(0, 8)} 的 extends 旧名 ${oldName}${decl.tool === undefined ? '' : `（${decl.tool} 血统）`} 已由 ${holder} 的会话 ${winner} 接续（先声明先得）——本条 extends 未生效`,
+          });
+          this.log(`extends-conflict ${oldName}：${machineName ?? '?'} 后到，${holder} 先得`);
+        } else {
+          extendsName = oldName;
+          extendsMachine = oldMachine;
+        }
+      }
+      // 注册/复活（同 id 且机器一致）：upsert 上线（幂等——字段无变化不写盘）
+      const next: RosterEntry = {
+        sessionId: decl.sessionId,
+        ...(name === undefined ? {} : { name }),
+        ...(decl.tool === undefined ? {} : { tool: decl.tool }),
+        machine: mid,
+        ...(machineName === undefined ? {} : { machineName }),
+        online: true,
+        ...(extendsName === undefined ? {} : { extendsName }),
+        ...(extendsMachine === undefined || typeof decl.extends !== 'object' ? {} : { extendsMachine }),
+      };
+      if (existing === undefined) {
+        this.roster.push(next);
+        changed = true;
+      } else if (
+        existing.name !== next.name || existing.tool !== next.tool || existing.online !== true ||
+        existing.extendsName !== next.extendsName || existing.extendsMachine !== next.extendsMachine ||
+        existing.machineName !== next.machineName
+      ) {
+        this.roster[this.roster.indexOf(existing)] = next;
+        changed = true;
+      }
+      effective.push(name === undefined ? { ...decl, name: undefined } : decl);
+    }
+    // 下线：该机在册但未声明（死/退出）——册位保留，翻 offline（--rm 走 member-remove 删条）
+    for (const entry of this.roster) {
+      if (entry.machine === mid && entry.online && !declared.has(entry.sessionId)) {
+        entry.online = false;
+        changed = true;
+        this.log(`member-offline ${entry.name ?? entry.sessionId.slice(0, 8)}（未声明，册位保留）`);
+      }
+    }
+    if (changed) this.persistRoster();
+    return effective;
+  }
+
+  /** 该机在册条目全部转下线（聚合器断连；册位保留）。 */
+  private setMachineOffline(mid: string): void {
+    let changed = false;
+    for (const entry of this.roster) {
+      if (entry.machine === mid && entry.online) {
+        entry.online = false;
+        changed = true;
+      }
+    }
+    if (changed) this.persistRoster();
+  }
+
+  private persistRoster(): void {
+    if (!writeRoster(rosterFileOf(this.d.registryFile), this.roster)) {
+      this.log('roster 落盘失败（下次数变化重试）');
+    }
+  }
+
+  /**
+   * 028 恢复链常态化输入：聚合器查"我机器的册内切片"（在线+下线都在——本地
+   * 验活后活的重新声明=复活，死的保持未声明=下线）。老语义（最后已知名单）
+   * 由本切片取代；broker 重启不再失忆（roster 落盘）。
    */
   private onMembersQuery(session: Session): void {
     if (session.machineId === undefined) return; // sender 角色不受理
-    const known = this.lastKnownMembers.get(normalizeMid(session.machineId)) ?? [];
-    const reply: MembersResultFrame = { op: 'members-result', members: known };
+    const mid = normalizeMid(session.machineId);
+    const slice = this.roster
+      .filter((e) => e.machine === mid)
+      .map((e): SessionMemberDecl => ({
+        sessionId: e.sessionId,
+        ...(e.name === undefined ? {} : { name: e.name }),
+        ...(e.tool === undefined ? {} : { tool: e.tool }),
+        ...(e.extendsName === undefined ? {} : { extends: e.extendsMachine === undefined ? e.extendsName : { machine: e.extendsMachine, name: e.extendsName } }),
+      }));
+    const reply: MembersResultFrame = { op: 'members-result', members: slice };
     this.send(session.ws, reply);
-    this.log(`members-query ${session.machineName ?? session.machineId.slice(0, 8)}: 回 ${known.length} 条最后已知名单`);
+    this.log(`members-query ${session.machineName ?? session.machineId.slice(0, 8)}: 回 ${slice.length} 条册内切片`);
+  }
+
+  /**
+   * 028 成员删除（星内任何机器可执——纯册状态操作；--rm 退场离册同帧）。
+   * 幂等：零命中=成功注明本不在册；多名/多 id 前缀命中=拒绝列 id8 教消歧。
+   * 删除后向归属机聚合器（若在线）转发同帧清其本地表，防下次重播回册。
+   */
+  private onMemberRemove(session: Session, frame: MemberRemoveFrame): void {
+    const target = frame.target;
+    // 匹配泳道（先specific后模糊）：精确会话 id（--rm erase 上报全量 id）→
+    // id 前缀（≥8 位 hex 形态，命令面 id8）→ 名字精确。首泳道命中即定。
+    const lower = target.toLowerCase();
+    const exact = this.roster.filter((e) => e.sessionId === target);
+    const hits =
+      exact.length > 0
+        ? exact
+        : target.length >= 8 && /^[0-9a-fA-F-]+$/.test(target)
+          ? this.roster.filter((e) => e.sessionId.toLowerCase().startsWith(lower))
+          : this.roster.filter((e) => e.name === target);
+    const reply = (ok: boolean, removed: string[], error?: string): void => {
+      const res: MemberRemoveResultFrame = { op: 'member-remove-result', ok, removed, ...(error === undefined ? {} : { error }) };
+      this.send(session.ws, res);
+    };
+    if (hits.length > 1) {
+      const lines = hits.map((e) => `  ${e.machineName ?? e.machine.slice(0, 8)}:${e.tool === undefined ? '' : `${e.tool}/`}${e.name ?? '?'}(${e.sessionId.slice(0, 8)})`).join('\n');
+      reply(false, [], `成员 ${target} 命中多个册内条目：\n${lines}\n改用会话 id 前 8 位精确删除`);
+      this.log(`member-remove ${target}：多命中拒绝`);
+      return;
+    }
+    const removed: string[] = [];
+    for (const entry of hits) {
+      this.roster.splice(this.roster.indexOf(entry), 1);
+      removed.push(entry.name ?? entry.sessionId.slice(0, 8));
+      // 归属机聚合器在线则转发清本地表（否则其重播会把条目带回册——幂等无害但噪音）
+      const owner = this.online.get(entry.machine);
+      if (owner !== undefined && owner !== session) this.send(owner.ws, { op: 'member-remove', target: entry.sessionId });
+    }
+    if (removed.length > 0) this.persistRoster();
+    reply(true, removed, removed.length === 0 ? `成员 ${target} 本不在册（幂等成功）` : undefined);
+    this.log(`member-remove ${target}：删 ${removed.length} 条`);
   }
 
   private async onConnect(session: Session, frame: ConnectFrame): Promise<void> {
@@ -762,7 +962,9 @@ export class Broker {
    * 恰有 tool"的自伤边角）→ 1 命中投 / >1 碰撞错误。未命中才拆 `工具/` 前缀，
    * 且前缀仅当命中该机已声明的 tool 值才当限定词（broker 永不硬编码工具清单，
    * 新适配器声明即寻址）；再 id8/加长前缀（≥8 位 hex，照机器段 mid8 规则）；
-   * 最后 extends 旧名（alive-wins：活成员在则 extends 休眠）。
+   * 再 extends 旧名（roster 接任者优先——含复活不夺回）；最后 028 下线检查
+   * （册内在册未在线→SESSION_OFFLINE 教学，绝不静默改投）；册外无名照旧
+   * SESSION_NOT_MEMBER。
    */
   private resolveSessionMember(target: Session, sessionName: string): ResolvedTarget {
     const members = [...target.members?.values() ?? []];
@@ -792,7 +994,8 @@ export class Broker {
       }
     }
     // 3) 会话 id 前缀（id8 短前缀寻址；多命中教加长——照机器段 mid8 规则）
-    if (sessionName.length >= 8 && /^[0-9a-fA-F-]+$/.test(sessionName)) {
+    const idLike = sessionName.length >= 8 && /^[0-9a-fA-F-]+$/.test(sessionName);
+    if (idLike) {
       const lower = sessionName.toLowerCase();
       const byId = members.filter((m) => m.sessionId.toLowerCase().startsWith(lower));
       if (byId.length === 1) return hit(byId[0]!);
@@ -801,9 +1004,21 @@ export class Broker {
         return { kind: 'error', code: ERR.NAME_COLLISION, message: `会话 id 前缀 ${sessionName} 在 ${machine} 上命中多个成员（${ids}）——加长前缀后重试` };
       }
     }
-    // 4) extends 旧名（裸名收全部血统；跨工具多血统=碰撞列接任者）
+    // 4) extends 旧名（roster 接任者优先——含 028 复活不夺回；裸名收全部血统）
     const sup = this.extendsHit(undefined, sessionName);
     if (sup !== undefined) return sup;
+    // 5) 028 下线成员（该机在册、当前未在线）——报错等上线，绝不静默改投
+    const down = this.roster.find(
+      (e) => e.machine === normalizeMid(target.machineId ?? '') && !e.online &&
+        (e.name === sessionName || (idLike && e.sessionId.toLowerCase().startsWith(sessionName.toLowerCase()))),
+    );
+    if (down !== undefined) {
+      return {
+        kind: 'error',
+        code: ERR.SESSION_OFFLINE,
+        message: `成员 ${down.name ?? down.sessionId.slice(0, 8)} 已下线（册位保留）——等其 resume 上线（同 id 自动复活）或 --extend-session 接任；点对点直达其特定会话可用 id8 寻址（现也下线，上线即达）`,
+      };
+    }
     return {
       kind: 'error',
       code: ERR.SESSION_NOT_MEMBER,
@@ -843,18 +1058,18 @@ export class Broker {
     };
   }
 
-  /** extends 旧名命中（020 限定化同治）：1 血统→SUPERSEDED 指路；多血统→碰撞列接任者地址。 */
+  /** extends 旧名命中（028 起查落盘 roster——接任随册持久；1 血统→SUPERSEDED 指路；多血统→碰撞列接任者地址）。 */
   private extendsHit(tool: string | undefined, oldName: string): ResolvedTarget | undefined {
-    const entries = this.extendsByOldName.get(oldName) ?? [];
-    const hits = tool === undefined ? entries : entries.filter((e) => (e.decl.tool ?? undefined) === tool);
+    const entries = this.roster.filter((e) => e.extendsName === oldName);
+    const hits = tool === undefined ? entries : entries.filter((e) => (e.tool ?? undefined) === tool);
     if (hits.length === 0) return undefined;
     if (hits.length === 1) return this.superseded(oldName, hits[0]!);
     const star = this.starName ?? '<星>';
     const lines = hits
       .map((e) => {
-        const m = e.holder.machineName ?? e.holder.machineId?.slice(0, 8) ?? '?';
-        const n = e.decl.name ?? e.decl.sessionId.slice(0, 8);
-        return `  tcp:${star}:${m}:${e.decl.tool === undefined ? '' : `${e.decl.tool}/`}${n}`;
+        const m = e.machineName ?? e.machine.slice(0, 8);
+        const n = e.name ?? e.sessionId.slice(0, 8);
+        return `  tcp:${star}:${m}:${e.tool === undefined ? '' : `${e.tool}/`}${n}`;
       })
       .join('\n');
     return {
@@ -865,10 +1080,10 @@ export class Broker {
   }
 
   /** SESSION_SUPERSEDED 指路（020：接任者带工具限定词；无 tool 同旧形态）。 */
-  private superseded(oldName: string, entry: { holder: Session; decl: SessionMemberDecl }): ResolvedTarget {
-    const succMachine = entry.holder.machineName ?? entry.holder.machineId?.slice(0, 8) ?? '?';
-    const succName = entry.decl.name ?? entry.decl.sessionId.slice(0, 8);
-    const succTool = entry.decl.tool === undefined ? '' : `${entry.decl.tool}/`;
+  private superseded(oldName: string, entry: RosterEntry): ResolvedTarget {
+    const succMachine = entry.machineName ?? entry.machine.slice(0, 8);
+    const succName = entry.name ?? entry.sessionId.slice(0, 8);
+    const succTool = entry.tool === undefined ? '' : `${entry.tool}/`;
     return {
       kind: 'error',
       code: ERR.SESSION_SUPERSEDED,

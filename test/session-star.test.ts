@@ -373,17 +373,17 @@ describe('018 批二：启动器入星链路', () => {
       expect(out).toHaveLength(1);
       expect(err).toHaveLength(0);
       expect(sh.state.delivered.length).toBeGreaterThan(0);
-      // 子进程退出 → detach → 成员除名（detach/重播异步，轮询至生效）
+      // 子进程退出 → detach（无 erase）→ 册位保留转下线（028 默认=永久注册）
       await joiner.stop();
       let gone: Frame | undefined;
       for (let i = 0; i < 30; i++) {
         const r = await deliver(`wx${i}`, 'node-host:boss');
-        if (r.op === 'error' && r.code === 'SESSION_NOT_MEMBER') {
+        if (r.op === 'error' && r.code === 'SESSION_OFFLINE') {
           gone = r;
           break;
         }
       }
-      expect(gone).toMatchObject({ op: 'error', code: 'SESSION_NOT_MEMBER' });
+      expect(gone).toMatchObject({ op: 'error', code: 'SESSION_OFFLINE' });
     },
     20_000,
   );
@@ -652,9 +652,9 @@ describe('018 批二：extends 四级校验', () => {
 
 // ---- members-query 恢复链 -----------------------------------------------------------
 
-describe('018 批二：members-query 恢复链（孤儿找回/死名过滤/双失忆→adopt）', () => {
+describe('018/028 恢复链常态化（孤儿找回/死转下线/册落盘不丢）', () => {
   it(
-    '聚合器重启：查回名单→本地验活→活的重入册、死的除名不复活（linux 32-hex 形态）',
+    '聚合器重启：册切片对账→活的重入册复活、死的转下线册位保留（linux 32-hex 形态）',
     async () => {
       const sh = await startStarStar('sl-r1', { mid: LINUX_MID, machineName: 'lin-box' });
       sh.state.claude = [
@@ -678,7 +678,7 @@ describe('018 批二：members-query 恢复链（孤儿找回/死名过滤/双�
       sh.state.claude = [{ sessionId: 'sess-boss', name: 'boss' }];
       const aggB = await sh.aggregator();
       await aggB.waitForState('online');
-      // members-query 恢复：boss 验活找回；gone 死名不复活
+      // 028 常驻对账：boss 验活复活（无需重新声明）；gone 死名转下线（册位保留）
       let bossOk = false;
       for (let i = 0; i < 40; i++) {
         const r = await send3(`rb${i}`, 'lin-box:boss');
@@ -689,13 +689,14 @@ describe('018 批二：members-query 恢复链（孤儿找回/死名过滤/双�
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
       expect(bossOk).toBe(true);
-      expect(await send3('r2', 'lin-box:gone')).toMatchObject({ op: 'error', code: 'SESSION_NOT_MEMBER' });
+      const gone = await send3('r2', 'lin-box:gone');
+      expect(gone).toMatchObject({ op: 'error', code: 'SESSION_OFFLINE' }); // 不再除名——下线等复活
     },
     20_000,
   );
 
   it(
-    '双失忆（broker+聚合器都重启）→ 恢复链空 → serve --adopt 收编活进程找回',
+    '028 broker 重启册不丢（roster 落盘）：成员自动复活；册外活会话走 adopt 收编',
     async () => {
       const sh = await startStarStar('sl-r2');
       sh.state.claude = [{ sessionId: 'sess-boss', name: 'boss' }];
@@ -704,7 +705,7 @@ describe('018 批二：members-query 恢复链（孤儿找回/死名过滤/双�
       expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss' })).ok).toBe(true);
       await aggA.stop();
       await pipe.close();
-      // broker 也重启（lastKnownMembers 纯内存→失忆）
+      // broker 重启——roster.json 落盘（018 双失忆边角由册根治）
       const port = Number(new URL(sh.harness.url).port);
       await sh.harness.broker.stop();
       const broker2 = new Broker({
@@ -721,29 +722,39 @@ describe('018 批二：members-query 恢复链（孤儿找回/死名过滤/双�
       });
       brokers.push(broker2);
       await broker2.start();
-      // 新聚合器：members-query 拿回空名单——boss 虽活但非成员（双失忆边角）
+      // 新聚合器对账：boss 本地活 → 册内条目自动复活（无需 adopt/重新声明）
       const aggC = await sh.aggregator();
       await aggC.waitForState('online');
-      await new Promise((resolve) => setTimeout(resolve, 1_000)); // 等 recoverMembers 空转落定
       const sender = await senderOn(`ws://127.0.0.1:${port}`, key('s'));
-      sender.send({ op: 'send', id: 'am1', targetMachine: 'node-host:boss', body: 'x' });
-      const lost = await sender.waitFor((f) => (f.op === 'error' || f.op === 'receipt') && f.id === 'am1');
-      expect(lost).toMatchObject({ op: 'error', code: 'SESSION_NOT_MEMBER' });
-      // adopt 收编：活进程按 sessionId 入册（不新建进程）
+      let revived = false;
+      for (let i = 0; i < 40; i++) {
+        sender.send({ op: 'send', id: `am1${i}`, targetMachine: 'node-host:boss', body: 'x' });
+        const r = await sender.waitFor((f) => (f.op === 'error' || f.op === 'receipt') && f.id === `am1${i}`);
+        if (r.op === 'receipt' && r.status === 'delivered') {
+          revived = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      expect(revived).toBe(true); // broker 重启后册仍在——同 id 自动复活
+      // 册外活进程（从未入册）仍走 adopt 收编
+      sh.state.claude = [
+        { sessionId: 'sess-boss', name: 'boss' },
+        { sessionId: 'sess-orphan', name: 'orphan', updatedAt: 99 },
+      ];
       const out: string[] = [];
       const rc = await runAdopt(
-        { connect: 'sl-r2', adopt: 'boss' },
+        { connect: 'sl-r2', adopt: 'orphan' },
         starJoinDeps(sh, { stdout: (l) => out.push(l), stderr: (l) => out.push(l) }),
       );
       expect(rc).toBe(0);
-      expect(out.some((l) => l.includes('已收编 boss'))).toBe(true);
-      expect(out.some((l) => l.includes('tcp:sl-r2:node-host:boss'))).toBe(true);
-      sender.send({ op: 'send', id: 'am2', targetMachine: 'node-host:boss', body: 'back' });
+      expect(out.some((l) => l.includes('已收编 orphan'))).toBe(true);
+      sender.send({ op: 'send', id: 'am2', targetMachine: 'node-host:orphan', body: 'back' });
       const back = await sender.waitFor((f) => f.op === 'receipt' && f.id === 'am2');
       expect(back).toMatchObject({ status: 'delivered' });
       // 幂等：再次 adopt → 提示已是成员
       const out2: string[] = [];
-      const rc2 = await runAdopt({ connect: 'sl-r2', adopt: 'boss' }, starJoinDeps(sh, { stdout: (l) => out2.push(l), stderr: (l) => out2.push(l) }));
+      const rc2 = await runAdopt({ connect: 'sl-r2', adopt: 'orphan' }, starJoinDeps(sh, { stdout: (l) => out2.push(l), stderr: (l) => out2.push(l) }));
       expect(rc2).toBe(0);
       expect(out2.some((l) => l.includes('已是星 sl-r2 成员'))).toBe(true);
     },
@@ -951,6 +962,141 @@ describe('018 批二：兼容锁（机器级零回归锚）', () => {
     expect(() => parseStatusArgs(['--stars', '--claude'])).toThrow(MultichatError);
     expect(parseStatusArgs(['--stars', '--json'])).toMatchObject({ stars: true, json: true });
   });
+});
+
+// ---- 028 双模式与命令面 -------------------------------------------------------------------
+
+describe('028 双模式与命令面', () => {
+  it('旗标面：--rm 剥离透传；--rm×--extend-session 互斥（边界2）；--rm 无 --connect 拒绝', () => {
+    const flags = splitStarLauncherArgs(['-n', 'w', '--connect', 's1', '--rm', '--model', 'x']);
+    expect(flags.rm).toBe(true);
+    expect(flags.connects).toEqual(['s1']);
+    expect(flags.passthrough).toEqual(['-n', 'w', '--model', 'x']);
+    expect(() => splitStarLauncherArgs(['--connect', 's1', '--rm', '--extend-session', 'old'])).toThrow('互斥');
+    expect(() => splitStarLauncherArgs(['--rm'])).toThrow('--rm 修饰 --connect');
+  });
+
+  it('serve 命令面：--connect --rm 组合拒绝（边界5）；--member-remove 解析与缺 --connect 即拒', async () => {
+    expect(parseServeArgs(['--connect', 's1', '--rm'])).toMatchObject({ connect: 's1', rm: true });
+    expect(parseServeArgs(['--connect', 's1', '--member-remove', 'boss'])).toMatchObject({ connect: 's1', memberRemove: 'boss' });
+    const baseDeps = {
+      baseDir: mkdtempSync(join(root, 'srv-')),
+      stdout: () => {},
+      env: {},
+      version: 't',
+      machineId: () => 'm',
+      hostname: () => 'h',
+      networkInterfaces: () => ({}),
+      now: () => 0,
+      onSignal: () => {},
+    };
+    await expect(runServe({ connect: 's1', rm: true }, baseDeps)).rejects.toThrow('临时会话旗标');
+    await expect(runServe({ memberRemove: 'boss' }, baseDeps)).rejects.toThrow('--member-remove 与 --connect');
+  });
+
+  it(
+    '双模式集成：默认永久（退出=下线/裸 resume 同 id 复活）；--rm 零痕迹（退出册外无名）',
+    async () => {
+      const sh = await startStarStar('sl-dm', { memberCheckMs: 100 });
+      await sh.aggregator();
+      sh.state.claude = [{ sessionId: 'sess-base', name: 'old', updatedAt: 1 }];
+      const sender = await senderOn(sh.harness.url, key('s'));
+      const deliver = async (id: string, target: string): Promise<Frame> => {
+        sender.send({ op: 'send', id, targetMachine: target, body: 'x' });
+        return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
+      };
+      const pollFor = async (target: string, want: 'delivered' | string, prefix: string): Promise<Frame> => {
+        let last = 'none';
+        for (let i = 0; i < 60; i++) {
+          const r = await deliver(`${prefix}${i}`, target);
+          last = r.op === 'error' ? `${r.op}:${r.code}` : `${r.op}:${(r as { status?: string }).status ?? ''}`;
+          if (want === 'delivered' && r.op === 'receipt' && r.status === 'delivered') return r;
+          if (want !== 'delivered' && r.op === 'error' && r.code === want) return r;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+        throw new Error(`pollFor ${target} ${want} 未达成（最后收到 ${last}）`);
+      };
+      // 永久模式（默认）：spawn 入星 → 退出（进程死+detach）→ 下线册位保留
+      const joiner1 = new StarJoiner({ deps: starJoinDeps(sh), side: 'claude', connects: ['sl-dm'], spawnName: 'boss' });
+      await joiner1.begin();
+      sh.state.claude = [
+        { sessionId: 'sess-base', name: 'old', updatedAt: 1 },
+        { sessionId: 'sess-kid', name: 'boss', updatedAt: 99 },
+      ];
+      await pollFor('node-host:boss', 'delivered', 'd1');
+      sh.state.claude = [{ sessionId: 'sess-base', name: 'old', updatedAt: 1 }]; // 会话退出
+      await joiner1.stop();
+      const off = await pollFor('node-host:boss', 'SESSION_OFFLINE', 'd2');
+      expect(off.op === 'error' && off.message).toContain('resume');
+      // 裸 resume：同 id 会话回归（无启动器重声明）→ 对账循环验活自动复活
+      sh.state.claude = [
+        { sessionId: 'sess-base', name: 'old', updatedAt: 1 },
+        { sessionId: 'sess-kid', name: 'boss', updatedAt: 100 },
+      ];
+      await pollFor('node-host:boss', 'delivered', 'd3');
+      // --rm 模式：退出即离册零痕迹——会话进程仍活也册外无名
+      const joiner2 = new StarJoiner({ deps: starJoinDeps(sh), side: 'claude', connects: ['sl-dm'], spawnName: 'worker', rm: true });
+      await joiner2.begin();
+      sh.state.claude = [
+        { sessionId: 'sess-base', name: 'old', updatedAt: 1 },
+        { sessionId: 'sess-kid', name: 'boss', updatedAt: 100 },
+        { sessionId: 'sess-tmp', name: 'worker', updatedAt: 101 },
+      ];
+      await pollFor('node-host:worker', 'delivered', 'd4');
+      await joiner2.stop(); // 一次性 worker 退出（扫描里进程仍在——册必须已无痕）
+      await pollFor('node-host:worker', 'SESSION_NOT_MEMBER', 'd5');
+    },
+    60_000,
+  );
+
+  it(
+    'member-remove 命令面：runServe 删册→册外无名（进程仍活）；幂等再删注明本不在册',
+    async () => {
+      const sh = await startStarStar('sl-mr');
+      sh.state.claude = [{ sessionId: 'sess-boss', name: 'boss' }];
+      await sh.aggregator();
+      const pipe = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
+      expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss' })).ok).toBe(true);
+      for (let i = 0; i < 40; i++) {
+        const roster = await fetchRosterFor(sh.baseDir, sh.entry);
+        if (roster?.some((m) => m.sessions?.some((s) => s.name === 'boss'))) break;
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+      const serveDepsOf = (out: string[]) => ({
+        baseDir: sh.baseDir,
+        stdout: (l: string) => out.push(l),
+        stderr: (l: string) => out.push(l),
+        env: {},
+        version: 't',
+        machineId: () => 'NODE-MID',
+        hostname: () => 'node-host',
+        networkInterfaces: () => ({}),
+        now: () => Date.now(),
+        onSignal: () => {},
+      });
+      const out: string[] = [];
+      expect(await runServe({ connect: 'sl-mr', memberRemove: 'boss' }, serveDepsOf(out))).toBe(0);
+      expect(out.some((l) => l.includes('已从星 sl-mr') && l.includes('boss'))).toBe(true);
+      // 聚合器收清表推送重播后：册外无名（进程仍活——册是事实源）
+      const sender = await senderOn(sh.harness.url, key('s'));
+      let gone: Frame | undefined;
+      for (let i = 0; i < 30; i++) {
+        sender.send({ op: 'send', id: `mr${i}`, targetMachine: 'node-host:boss', body: 'x' });
+        const r = await sender.waitFor((f) => (f.op === 'error' || f.op === 'receipt') && f.id === `mr${i}`);
+        if (r.op === 'error' && r.code === 'SESSION_NOT_MEMBER') {
+          gone = r;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+      expect(gone).toMatchObject({ code: 'SESSION_NOT_MEMBER' });
+      const out2: string[] = [];
+      expect(await runServe({ connect: 'sl-mr', memberRemove: 'boss' }, serveDepsOf(out2))).toBe(0);
+      expect(out2.some((l) => l.includes('本不在册'))).toBe(true); // 幂等：删不存在条目=成功注明
+      await pipe.close();
+    },
+    20_000,
+  );
 });
 
 // ---- 020 工具限定词：启动器声明与 spawn 前预警 ----------------------------------------------

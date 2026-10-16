@@ -435,6 +435,12 @@ export class NodeClient {
   private stopResolve?: () => void;
   /** 018：会话成员表（内存态，跨重连存续——重连后全量重播）。 */
   private readonly members = new Map<string, MemberEntry>();
+  /**
+   * 028 --rm 墓碑：erase 删册的会话不再由对账循环复活（进程退出有迟滞——
+   * erase 与切片回执竞态会把刚删的活会话拉回册，破"零痕迹"）。显式 attach
+   * 重新入星即解除（启动器/adopt 是有意的再注册）。
+   */
+  private readonly erased = new Set<string>();
   /** 018：attach IPC 服务端（每（本机,星）一条；首度上线时起，stop 关）。 */
   private attachServer?: Server;
   /** 018：attach 连接自持（stop 时全毁——win 管道名随最后句柄释放）。 */
@@ -444,6 +450,8 @@ export class NodeClient {
   private brokerSessionCap = false;
   /** 018（9b）：降级告警只出声一次（重连老 broker 不刷屏；升级 broker 后按新能力行事）。 */
   private warnedNoCap = false;
+  /** 028：对账循环重入闸（members-query 往返慢于 tick 时跳过本轮，防等待者堆积）。 */
+  private reconciling = false;
 
   constructor(deps: NodeClientDeps) {
     this.d = { backoffBaseMs: 1_000, quietAfterMs: 300_000, memberCheckMs: 30_000, ...deps };
@@ -584,17 +592,13 @@ export class NodeClient {
       everOnline = true;
       this.setState('online');
       this.log(`online（broker ${cfg.name ?? url}）`);
-      // 018：首度上线起 attach 管道（此后跨重连常驻）；重连恢复链第一级——
-      // 先核活性（清掉断线期间死掉的成员）再全量重播 sessions 帧。
+      // 018：首度上线起 attach 管道（此后跨重连常驻）。
       this.startAttachServer();
-      this.checkMemberLiveness();
-      // 018：跨重连存续的成员先全量重播；空表跳过——首上线的空重播会把 broker
-      // 的 lastKnownMembers 清零（恢复链②的查回源），查回后再由 recoverMembers
-      // 驱动重播。broker 侧新连接未声明=无成员，路由语义与空表等价。
+      // 018：跨重连存续的成员先全量重播（活的立即回在线）；空表跳过——028 起
+      // 空重播=该机册条目全部翻下线，复活交给常驻对账循环（下一行异步起跑）。
       if (this.members.size > 0) this.sendSessions();
-      // 018 恢复链②（异步不阻塞上线）：向 broker 查回本机最后已知名单，活的
-      // 自动找回（孤儿会话成员仍在）；查不回（老 broker/双失忆）走 adopt 路径
-      void this.recoverMembers();
+      // 028 恢复链常态化：上线即对账一轮（死转下线/同 id 复活在此落定）
+      void this.checkMemberLiveness();
       this.minuteTimer = setInterval(() => {
         if (this.state === 'online') this.writeStatus(undefined);
       }, 60_000);
@@ -641,12 +645,25 @@ export class NodeClient {
       if (w.pred(frame)) {
         clearTimeout(w.timer);
         this.frameWaiters.splice(i, 1);
+        // 028：消费即出缓冲——周期对账（members-query 每 tick 一问）不吃旧回执
+        const consumed = this.frameLog.indexOf(frame);
+        if (consumed >= 0) this.frameLog.splice(consumed, 1);
         w.resolve(frame);
         return;
       }
     }
     if (frame.op === 'deliver') {
       void this.onDeliver(frame);
+      return;
+    }
+    if (frame.op === 'member-remove') {
+      // 028：broker 册删除的归属机清表推送（管理删/member-remove 命令侧）——
+      // 本地移出声明集并重播，防下次全量重播把条目带回册；墓碑挡对账复活
+      this.erased.add(frame.target);
+      if (this.members.delete(frame.target)) {
+        this.log(`member-removed ${frame.target.slice(0, 8)}（broker 册删除推送）`);
+        this.sendSessions();
+      }
       return;
     }
     if (frame.op === 'status-query') {
@@ -791,11 +808,12 @@ export class NodeClient {
     if (req === null || typeof req !== 'object') {
       return reply({ ok: false, error: 'attach 帧形状错误' });
     }
-    const r = req as { op?: unknown; sessionId?: unknown; sessions?: unknown };
+    const r = req as { op?: unknown; sessionId?: unknown; sessions?: unknown; erase?: unknown };
     if (r.op === 'attach') {
       const parsed = parseMemberDecl(r);
       if (!parsed.ok) return reply({ ok: false, error: parsed.error });
       this.members.set(parsed.entry.sessionId, parsed.entry);
+      this.erased.delete(parsed.entry.sessionId); // 显式再注册解除 --rm 墓碑
       this.log(`member-up ${parsed.entry.name ?? parsed.entry.sessionId.slice(0, 8)}`);
       this.sendSessions();
       return reply({ ok: true });
@@ -805,6 +823,16 @@ export class NodeClient {
         return reply({ ok: false, error: 'detach 缺 sessionId' });
       }
       const gone = this.members.delete(r.sessionId);
+      if (r.erase === true) {
+        // 028 --rm：临时会话退出即离册零痕迹——本地表外再报 broker 删册内条目；
+        // 墓碑挡对账复活（切片可能是 erase 前的旧照）
+        this.erased.add(r.sessionId);
+        if (this.state === 'online' && this.brokerSessionCap) {
+          this.send({ op: 'member-remove', target: r.sessionId });
+        } else {
+          this.log(`member-erase ${r.sessionId.slice(0, 8)} 未上报（broker 不可达/无能力）——册内条目将滞留下线态`);
+        }
+      }
       if (gone) {
         this.log(`member-down ${r.sessionId.slice(0, 8)}（detach）`);
         this.sendSessions();
@@ -841,31 +869,71 @@ export class NodeClient {
   }
 
   /**
-   * 018 双活性模型（9a）：claude 成员=注册表扫描进程存活（复用现有扫描）；
-   * codex 成员=线程存在（lookupRolloutMetas 落盘实体，durable 永不自动除名）。
-   * 两侧都查无=失活→除名并重播。批二补裁定 1 的 /rename 自动跟随：claude 名
-   * 以扫描为准（有名才覆盖——无名扫描不抹掉启动器 -n 给的名）；codex 名从
-   * 线程表回填/跟随（9a"名字从扫描回填"，daemon 不可用只跳过本轮改名）。
+   * 028 常驻对账循环（018 双活性 + 恢复链②合并常态化，每 memberCheckMs 一轮）：
+   * members-query 拉本机册内切片（broker 落盘 roster 的机器切片，含下线条目）
+   * → 本地验活一次（claude 注册表 ∪ codex rollout）→ 切片刻活且 (tool,id)
+   * 匹配而未声明=重入册复活（同 id resume 无需再声明）；已声明而本地查无=
+   * 移出声明集上报下线（028：死亡不再除名，册位留在 broker）；名字跟随照旧
+   * （claude 扫描为准、codex 线程表回填）。跨机复活被 broker 切片天然排除
+   * （每机只见自己的条目），异机声明由 broker 侧 MACHINE_BOUND 拒绝。
    */
   private async checkMemberLiveness(): Promise<void> {
-    if (this.members.size === 0) return;
+    if (this.state !== 'online' || !this.brokerSessionCap || this.stopped || this.reconciling) return;
+    this.reconciling = true;
     try {
+      // 1) 册内切片（老 broker 不识 member-remove 但识 members-query；超时/抖动只跳过复活侧）
+      let slice: SessionMemberDecl[] = [];
+      try {
+        this.send({ op: 'members-query' });
+        const frame = await this.nextFrame((f) => f.op === 'members-result', 5_000);
+        if (frame.op === 'members-result' && Array.isArray(frame.members)) {
+          slice = frame.members.filter(
+            (decl) => decl !== null && typeof decl === 'object' && typeof decl.sessionId === 'string' && decl.sessionId !== '',
+          );
+        }
+      } catch {
+        // 查不回：本轮只做本地活性（下轮再查）
+      }
+      // 2) 本地验活一次：claude 扫描 ∪ codex rollout（id → 来源工具即复活判定的 tool 锚）
       const deps = this.d.makeSendDeps();
       const scan = deps.listClaudeSessions();
       const claudeById = new Map(scan.sessions.map((session) => [session.sessionId, session]));
-      const rest = [...this.members.keys()].filter((id) => !claudeById.has(id));
-      let codexIds: Set<string> | undefined;
-      if (rest.length > 0) {
-        codexIds = new Set(lookupRolloutMetas(this.d.codexHome ?? codexHomeDir(), rest).keys());
-      }
+      const rest = [...new Set([...this.members.keys(), ...slice.map((d) => d.sessionId)])].filter((id) => !claudeById.has(id));
+      const codexIds =
+        rest.length > 0 ? new Set(lookupRolloutMetas(this.d.codexHome ?? codexHomeDir(), rest).keys()) : new Set<string>();
+      const toolOf = (id: string): string | undefined =>
+        claudeById.has(id) ? 'claude' : codexIds.has(id) ? 'codex' : undefined;
       let changed = false;
-      for (const id of rest) {
-        if (codexIds?.has(id)) continue; // codex 线程在——durable 活性
+      // 3) 复活：册刻活而未声明（孤儿/裸 resume 回归）——重入册并重播
+      for (const decl of slice) {
+        if (this.members.has(decl.sessionId)) continue; // 活启动器已声明——保留现声明
+        if (this.erased.has(decl.sessionId)) continue; // --rm/管理删墓碑——删了不复活
+        const aliveTool = toolOf(decl.sessionId);
+        if (aliveTool === undefined) continue; // 死名不复活
+        if (sanitizeTool(decl.tool) !== undefined && sanitizeTool(decl.tool) !== aliveTool) continue; // (tool,id) 精确匹配
+        const ext =
+          decl.extends === undefined
+            ? undefined
+            : typeof decl.extends === 'string'
+              ? { name: decl.extends }
+              : { ...(decl.extends.machine === undefined ? {} : { machine: decl.extends.machine }), name: decl.extends.name };
+        this.members.set(decl.sessionId, {
+          sessionId: decl.sessionId,
+          ...(decl.name === undefined ? {} : { name: decl.name }),
+          ...(aliveTool === undefined ? {} : { tool: aliveTool }), // 020：tool 缺失由验活来源回填
+          ...(ext === undefined ? {} : { extends: ext }),
+        });
+        changed = true;
+        this.log(`member-revived ${decl.name ?? decl.sessionId.slice(0, 8)}（册内成员本地验活复活）`);
+      }
+      // 4) 下线：已声明而本地查无——移出声明集（broker 册位保留，不再除名）
+      for (const id of [...this.members.keys()]) {
+        if (toolOf(id) !== undefined) continue;
         this.members.delete(id);
         changed = true;
-        this.log(`member-down ${id.slice(0, 8)}（claude 进程退出且无 codex 线程）已除名`);
+        this.log(`member-offline ${id.slice(0, 8)}（本地验活无此会话，上报下线——册位保留）`);
       }
-      // 名字跟随（改名→id 跟随，roster 显示与按名寻址随扫描自新）
+      // 5) 名字跟随（改名→id 跟随，roster 显示与按名寻址随扫描自新）
       let codexNames: Map<string, string> | undefined;
       const codexNameOf = async (id: string): Promise<string | undefined> => {
         if (codexNames === undefined) {
@@ -891,58 +959,13 @@ export class NodeClient {
         changed = true;
         this.log(`member-rename ${id.slice(0, 8)} → ${want}（扫描跟随）`);
       }
-      if (changed) this.sendSessions();
+      // 切片非空即每轮重播：声明集就是在线报告——broker 据此把该机未声明的
+      // 在册条目翻下线（对账闭环；幂等 upsert，无变化不写盘）
+      if (changed || slice.length > 0) this.sendSessions();
     } catch {
-      // 活性核验失败不倒守护（下轮再查）
-    }
-  }
-
-  /**
-   * 018 恢复链②：members-query 查回 broker 保留的本机最后已知名单 → 逐个
-   * 本地验活（claude 扫描 ∪ codex rollout）→ 活的且尚未在册的重新入册并重播
-   * （孤儿自动找回——聚合器重启后无人重 attach 的活会话）。验活不过的死名
-   * 不复活；broker 也失忆（回空/超时）不报错——那是 adopt 收编的设计路径。
-   */
-  private async recoverMembers(): Promise<void> {
-    if (!this.brokerSessionCap || this.stopped) return;
-    try {
-      this.send({ op: 'members-query' });
-      const frame = await this.nextFrame((f) => f.op === 'members-result', 5_000);
-      if (frame.op !== 'members-result' || !Array.isArray(frame.members)) return;
-      const known = frame.members.filter(
-        (decl) => decl !== null && typeof decl === 'object' && typeof decl.sessionId === 'string' && decl.sessionId !== '',
-      );
-      if (known.length === 0) return;
-      const deps = this.d.makeSendDeps();
-      const claudeIds = new Set(deps.listClaudeSessions().sessions.map((session) => session.sessionId));
-      const rest = known.map((decl) => decl.sessionId).filter((id) => !claudeIds.has(id));
-      const codexIds =
-        rest.length > 0 ? new Set(lookupRolloutMetas(this.d.codexHome ?? codexHomeDir(), rest).keys()) : new Set<string>();
-      let revived = 0;
-      for (const decl of known) {
-        if (!claudeIds.has(decl.sessionId) && !codexIds.has(decl.sessionId)) continue; // 死名不复活
-        if (this.members.has(decl.sessionId)) continue; // 活启动器已重 attach——保留现声明
-        const ext =
-          decl.extends === undefined
-            ? undefined
-            : typeof decl.extends === 'string'
-              ? { name: decl.extends }
-              : { ...(decl.extends.machine === undefined ? {} : { machine: decl.extends.machine }), name: decl.extends.name };
-        // 020：tool 随名单找回；缺失（老 broker 名单/老声明）由验活来源回填——
-        // claude 注册表命中=claude，codex rollout 命中=codex（重启自愈回填同一来源）。
-        const tool = sanitizeTool(decl.tool) ?? (claudeIds.has(decl.sessionId) ? 'claude' : codexIds.has(decl.sessionId) ? 'codex' : undefined);
-        this.members.set(decl.sessionId, {
-          sessionId: decl.sessionId,
-          ...(decl.name === undefined ? {} : { name: decl.name }),
-          ...(tool === undefined ? {} : { tool }),
-          ...(ext === undefined ? {} : { extends: ext }),
-        });
-        revived++;
-        this.log(`member-recovered ${decl.name ?? decl.sessionId.slice(0, 8)}（broker 名单验活找回）`);
-      }
-      if (revived > 0) this.sendSessions();
-    } catch {
-      // 查不回（老 broker 超时/连接抖动）不倒守护——重 attach/members-query 下轮重连再试
+      // 对账失败不倒守护（下轮再查）
+    } finally {
+      this.reconciling = false;
     }
   }
 
@@ -953,8 +976,9 @@ export class NodeClient {
   }
 
   private nextFrame(pred: (f: Frame) => boolean, timeoutMs: number): Promise<Frame> {
-    const seen = this.frameLog.find(pred);
-    if (seen !== undefined) return Promise.resolve(seen);
+    // 028：命中即取走（同 pred 的周期查询不再复读首帧旧回执）
+    const idx = this.frameLog.findIndex(pred);
+    if (idx >= 0) return Promise.resolve(this.frameLog.splice(idx, 1)[0]!);
     return new Promise((resolve, reject) => {
       const waiter: FrameWaiter = {
         pred,

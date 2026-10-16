@@ -17,6 +17,7 @@ import { Broker, DEFAULT_PORT, defaultDeliverLocal } from '../serve/broker.js';
 import { ensureStarId, ensureStarName, genKeys, listNodes, readRegistry, registryFileOf, removeNode, sanitizeName, setName, setPort, tcpDir, writeRegistry } from '../serve/registry.js';
 import { buildStatusPayload, deliverViaRunSend, formatBrokerEntry, NodeClient, readNodeConfig, syncNodeJsonEntry, type BrokerEntry, type NodeConfig } from '../serve/node.js';
 import { FileInbox } from '../serve/file-channel.js';
+import { requestMemberRemove } from '../serve/via-tcp.js';
 import { runAdopt, spawnServeDetachReal, warnIfBrokerLacksSessionCaps } from './session-star.js';
 import { listNodeStatusFiles } from './status.js';
 import type { SendDeps } from './send.js';
@@ -40,6 +41,10 @@ export interface ServeArgs {
   adopt?: string;
   /** 018 批二：--extend-session <旧名>——adopt 并用补血统（也供文档示例）。 */
   extendSession?: string;
+  /** 028：--rm 出现在 serve 面即拒（边界5——机器守护无临时语义，只认不透传防误用）。 */
+  rm?: boolean;
+  /** 028：--member-remove <名|id8>——删 --connect 星册内条目（幂等；星内任何机器可执）。 */
+  memberRemove?: string;
 }
 
 export interface ServeDeps {
@@ -102,6 +107,13 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
   if (args.remove !== undefined) return runRemove(args.remove, deps, registryFile);
   if (args.stopSelector !== undefined) return runStopSelector(args.stopSelector, deps);
   if (args.stopTarget !== undefined) return runStop(args.stopTarget, deps, registryFile);
+  // 028 边界5：serve --connect --rm 拒绝——--rm 是会话级临时旗标，机器守护生命周期独立
+  if (args.rm) {
+    throw new MultichatError(
+      'USAGE',
+      'serve --connect 是机器级守护（聚合器生命周期独立，--rm 不触碰它）——临时会话旗标用于启动器：crosschat claude/codex --connect <星> --rm；退机器走 crosschat serve --stop',
+    );
+  }
   // 018 批二：--adopt 收编（一次性命令，与 --connect 连用）
   if (args.adopt !== undefined) {
     if (args.connect === undefined) {
@@ -109,6 +121,14 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
     }
     if (args.detach) throw new MultichatError('USAGE', '--adopt 是一次性收编命令，不支持 --detach');
     return runAdoptServe(args, deps);
+  }
+  // 028：--member-remove 删册（一次性命令，与 --connect 连用；幂等）
+  if (args.memberRemove !== undefined) {
+    if (args.connect === undefined) {
+      throw new MultichatError('USAGE', '--member-remove 与 --connect <星> 连用——示例：crosschat serve --connect <星名> --member-remove <会话名|id8>');
+    }
+    if (args.detach) throw new MultichatError('USAGE', '--member-remove 是一次性删册命令，不支持 --detach');
+    return runMemberRemoveServe(args, deps);
   }
   const detachedChild = deps.env.CROSSCHAT_SERVE_DETACHED === '1';
   if (args.connect !== undefined) {
@@ -516,6 +536,32 @@ async function runAdoptServe(args: ServeArgs, deps: ServeDeps): Promise<number> 
       now: deps.now,
     },
   );
+}
+
+/**
+ * 028 `serve --connect <星> --member-remove <名|id8>`：纯册状态操作——不经本机
+ * 扫描（adopt 需本地验活故本机限定；remove 星内任何机器可执，同星共钥=互信域）。
+ * 自退/管理删一体；幂等（本不在册=成功注明）。多条命中由 broker 拒绝并教 id8。
+ */
+async function runMemberRemoveServe(args: ServeArgs, deps: ServeDeps): Promise<number> {
+  const config = readNodeConfig(join(tcpDir(deps.baseDir), 'node.json'));
+  const { entry } = selectConnectEntry(args.connect ?? '', config);
+  try {
+    const result = await requestMemberRemove(entry, args.memberRemove!);
+    if (!result.ok) {
+      (deps.stderr ?? deps.stdout)(`member-remove 失败：${result.error ?? '未知错误'}`);
+      return 1;
+    }
+    deps.stdout(
+      result.removed.length === 0
+        ? `成员 ${args.memberRemove} 本不在册（幂等成功，零改动）`
+        : `已从星 ${entry.name ?? args.connect} 册内移除：${result.removed.join('、')}`,
+    );
+    return 0;
+  } catch (err) {
+    (deps.stderr ?? deps.stdout)(err instanceof Error ? err.message : String(err));
+    return 1;
+  }
 }
 
 function readResultTimeoutMs(env: NodeJS.ProcessEnv): number {

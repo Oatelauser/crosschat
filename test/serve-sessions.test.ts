@@ -2,13 +2,13 @@
  * 018 批一：proto:3 会话级星成员——协议帧/broker 聚合/聚合器 attach 与活性。
  * 夹具用真实平台形状：win 带杠 MachineGuid、linux 32-hex（F0 归一互认）。
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createConnection, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { type RawData, WebSocketServer } from 'ws';
-import { Broker, type BrokerDeps } from '../src/serve/broker.js';
+import { Broker, readRoster, rosterFileOf, type BrokerDeps } from '../src/serve/broker.js';
 import {
   CAP_SESSION_MEMBERS,
   encodeFrame,
@@ -63,7 +63,10 @@ async function startBroker(overrides: Partial<BrokerDeps> = {}): Promise<Harness
     machineId: () => 'BROKER-MID',
     hostname: () => 'broker-host',
     now: () => Date.now(),
-    log: (line) => logs.push(line),
+    log: (line) => {
+      logs.push(line);
+      if (process.env.CC_DBG === '1') console.error(`[bk] ${line}`);
+    },
     deliverLocal: async () => ({ op: 'error', code: 'NOT_READY', message: 'nope' }),
     port: 0,
     ...slowHeartbeat,
@@ -97,6 +100,9 @@ class TestClient {
     this.ws.on('message', (data: RawData) => {
       const frame = parseFrame(data.toString());
       if (frame === undefined) return;
+      if (process.env.CC_DBG === '1') {
+        console.error(`[cli] <- ${frame.op}${'id' in frame ? ` ${String((frame as { id?: string }).id)}` : ''}${frame.op === 'error' ? ` ${(frame as { code?: string }).code}` : ''}`);
+      }
       this.frames.push(frame);
       for (let i = 0; i < this.waiters.length; i++) {
         const w = this.waiters[i]!;
@@ -223,7 +229,7 @@ describe('018 broker：caps 协商与会话成员聚合', () => {
     expect(err.op === 'error' && err.message).toContain('--connect');
   });
 
-  it('空数组=清空该机会话成员（全量重播语义）', async () => {
+  it('028 空数组重播=该机在册条目转下线（SESSION_OFFLINE 教学）；同 id 再声明=复活直达', async () => {
     const { url, registryFile } = await startBroker();
     seed(registryFile, [
       { key: key('s'), machineName: 'sender-host' },
@@ -235,7 +241,13 @@ describe('018 broker：caps 协商与会话成员聚合', () => {
     const sender = await senderOn(url, key('s'));
     sender.send({ op: 'send', id: 's3', targetMachine: 'win-box:boss', body: 'x' });
     const err = await sender.waitFor((f) => f.op === 'error' && f.id === 's3');
-    expect(err).toMatchObject({ code: 'SESSION_NOT_MEMBER' });
+    expect(err).toMatchObject({ code: 'SESSION_OFFLINE' });
+    expect(err.op === 'error' && err.message).toContain('--extend-session');
+    // 同 id 再声明=复活上线（册位一直在，无需重新入星）
+    node.send(sessionsFrame([{ sessionId: 'sess-boss', name: 'boss' }]));
+    sender.send({ op: 'send', id: 's3b', targetMachine: 'win-box:boss', body: 'x' });
+    const deliver = await node.waitFor((f) => f.op === 'deliver' && f.id === 's3b');
+    expect(deliver).toMatchObject({ op: 'deliver', sessionId: 'sess-boss' });
   });
 
   it('alive-wins：旧名活会话在则正常投递，extends 休眠', async () => {
@@ -294,7 +306,7 @@ describe('018 broker：caps 协商与会话成员聚合', () => {
     expect(err.op === 'error' && err.message).toContain('win-box:succ-a');
   });
 
-  it('断连除名：同机顶替连接未声明成员→旧成员消失', async () => {
+  it('028 顶替连接空声明→旧成员转下线（册位保留）；同 id 复活直达', async () => {
     const { url, registryFile } = await startBroker();
     seed(registryFile, [
       { key: key('s'), machineName: 'sender-host' },
@@ -302,13 +314,18 @@ describe('018 broker：caps 协商与会话成员聚合', () => {
     ]);
     const first = await nodeOn(url, key('n'), WIN_MID, { name: 'win-box' });
     first.send(sessionsFrame([{ sessionId: 'sess-boss', name: 'boss' }]));
-    // 同机新连接顶掉旧连接（F0 顶换语义）——新连接不声明成员
-    await nodeOn(url, key('n'), WIN_MID, { name: 'win-box' });
+    // 同机新连接顶掉旧连接（F0 顶换语义）——新连接空声明（对账重播形态）
+    const second = await nodeOn(url, key('n'), WIN_MID, { name: 'win-box' });
     await first.closed(5_000);
+    second.send(sessionsFrame([]));
     const sender = await senderOn(url, key('s'));
     sender.send({ op: 'send', id: 's7', targetMachine: 'win-box:boss', body: 'x' });
     const err = await sender.waitFor((f) => f.op === 'error' && f.id === 's7');
-    expect(err).toMatchObject({ code: 'SESSION_NOT_MEMBER' });
+    expect(err).toMatchObject({ code: 'SESSION_OFFLINE' }); // 不再除名——死亡上报下线
+    second.send(sessionsFrame([{ sessionId: 'sess-boss', name: 'boss' }]));
+    sender.send({ op: 'send', id: 's7b', targetMachine: 'win-box:boss', body: 'x' });
+    const deliver = await second.waitFor((f) => f.op === 'deliver' && f.id === 's7b');
+    expect(deliver).toMatchObject({ sessionId: 'sess-boss' });
   });
 
   it('mid 前缀+会话三段（F0 归一：前缀寻址 linux 32-hex 机器）', async () => {
@@ -496,14 +513,14 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
     expect(detach).toEqual({ ok: true });
   });
 
-  it('成员表变化即重播：detach 后三段报 SESSION_NOT_MEMBER', async () => {
+  it('028 成员表变化即重播：detach（无 erase）后三段报 SESSION_OFFLINE（册位保留）', async () => {
     const { harness, attach } = await startNodeStar('t3', { claude: [{ sessionId: 'sess-boss', name: 'boss' }] });
     await attach.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss' });
     await attach.send({ op: 'detach', sessionId: 'sess-boss' });
     const sender = await senderOn(harness.url, key('s'));
     sender.send({ op: 'send', id: 'n2', targetMachine: 'node-host:boss', body: 'x' });
     const err = await sender.waitFor((f) => f.op === 'error' && f.id === 'n2');
-    expect(err).toMatchObject({ code: 'SESSION_NOT_MEMBER' });
+    expect(err).toMatchObject({ code: 'SESSION_OFFLINE' });
   });
 
   it('重连全量重播：broker 重启后无需重新 attach 即恢复会话寻址', async () => {
@@ -534,7 +551,7 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
     expect(receipt).toMatchObject({ status: 'delivered' });
   }, 15_000);
 
-  it('claude 活性：扫描核验——死 claude 成员除名、活成员续投', async () => {
+  it('028 claude 活性：扫描核验——死 claude 成员转下线（教学）、活成员续投', async () => {
     const { harness, attach } = await startNodeStar(
       't5',
       { claude: [{ sessionId: 'sess-boss', name: 'boss' }] },
@@ -542,17 +559,18 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
     );
     await attach.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss' });
     await attach.send({ op: 'attach', sessionId: 'sess-gone', name: 'gone' });
-    await new Promise((resolve) => setTimeout(resolve, 500)); // 等活性循环至少一轮
+    await new Promise((resolve) => setTimeout(resolve, 500)); // 等对账循环至少一轮
     const sender = await senderOn(harness.url, key('s'));
     sender.send({ op: 'send', id: 'n6', targetMachine: 'node-host:gone', body: 'x' });
     const err = await sender.waitFor((f) => f.op === 'error' && f.id === 'n6');
-    expect(err).toMatchObject({ code: 'SESSION_NOT_MEMBER' });
+    expect(err).toMatchObject({ code: 'SESSION_OFFLINE' }); // 死=下线（册位保留，不再除名）
+    expect(err.op === 'error' && err.message).toContain('resume');
     sender.send({ op: 'send', id: 'n7', targetMachine: 'node-host:boss', body: 'still here' });
     const receipt = await sender.waitFor((f) => f.op === 'receipt' && f.id === 'n7');
     expect(receipt).toMatchObject({ status: 'delivered' });
   }, 10_000);
 
-  it('双活性（9a）：codex 线程存在（rollout 落盘）永不除名；两侧皆无的死名被除名', async () => {
+  it('028 双活性（9a）：codex 线程存在（rollout 落盘）永不下线；两侧皆无的死名转下线', async () => {
     const codexHome = mkdtempSync(join(root, 'codexhome-'));
     const dir = join(codexHome, 'sessions', '2026', '10', '15');
     mkdirSync(dir, { recursive: true });
@@ -567,14 +585,14 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
     );
     await attach.send({ op: 'attach', sessionId: CODEX_THREAD, name: 'cname' });
     await attach.send({ op: 'attach', sessionId: 'sess-dead', name: 'deadname' });
-    await new Promise((resolve) => setTimeout(resolve, 500)); // 等活性循环至少一轮
+    await new Promise((resolve) => setTimeout(resolve, 500)); // 等对账循环至少一轮
     const sender = await senderOn(harness.url, key('s'));
     sender.send({ op: 'send', id: 'n4', targetMachine: 'node-host:cname', body: 'to codex' });
     const receipt = await sender.waitFor((f) => f.op === 'receipt' && f.id === 'n4');
     expect(receipt).toMatchObject({ status: 'delivered' }); // codex 成员经 rollout 核验存活
     sender.send({ op: 'send', id: 'n5', targetMachine: 'node-host:deadname', body: 'x' });
     const err = await sender.waitFor((f) => f.op === 'error' && f.id === 'n5');
-    expect(err).toMatchObject({ code: 'SESSION_NOT_MEMBER' }); // 无 rollout 的死名已除名
+    expect(err).toMatchObject({ code: 'SESSION_OFFLINE' }); // 无 rollout 的死名转下线（册位保留）
   }, 10_000);
 });
 
@@ -693,6 +711,115 @@ describe('020 broker：会话段工具限定词与收命中集', () => {
     // 无声明 tool 集 → claude/boss 不当限定词（整体按名解析 → 非成员）
     const q = await deliver(sender, node, 's2', 'win-box:claude/boss');
     expect(q).toMatchObject({ code: 'SESSION_NOT_MEMBER' });
+  });
+});
+
+describe('028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove', () => {
+  it('roster 落盘形态：条目含 tool+会话 id+名+机器+在线态；tmp 已 rename 收尾', async () => {
+    const { url, registryFile } = await startBroker();
+    seed(registryFile, [
+      { key: key('s'), machineName: 'sender-host' },
+      { key: key('n'), machineId: WIN_MID, machineName: 'win-box' },
+    ]);
+    const node = await nodeOn(url, key('n'), WIN_MID, { name: 'win-box' });
+    node.send(sessionsFrame([{ sessionId: 'sess-boss', name: 'boss', tool: 'claude' }]));
+    await new Promise((resolve) => setTimeout(resolve, 200)); // 等 onSessions 落盘
+    const roster = readRoster(rosterFileOf(registryFile));
+    expect(roster).toHaveLength(1);
+    expect(roster[0]).toMatchObject({
+      sessionId: 'sess-boss',
+      name: 'boss',
+      tool: 'claude',
+      machine: WIN_MID.replace(/-/g, ''), // 归一 mid（复活判定的机器锚）
+      machineName: 'win-box',
+      online: true,
+    });
+    expect(existsSync(`${rosterFileOf(registryFile)}.tmp`)).toBe(false); // tmp+rename 收尾
+  });
+
+  it('边界1 跨机 resume：册在 M1、id 活在 M2 → MACHINE_BOUND 拒绝复活+教学（册位仍绑 M1）', async () => {
+    const { url, registryFile } = await startBroker();
+    seed(registryFile, [
+      { key: key('s'), machineName: 'sender-host' },
+      { key: key('w'), machineId: WIN_MID, machineName: 'win-box' },
+      { key: key('l'), machineId: LINUX_MID, machineName: 'lin-box' },
+    ]);
+    const win = await nodeOn(url, key('w'), WIN_MID, { name: 'win-box' });
+    win.send(sessionsFrame([{ sessionId: 'sess-x', name: 'boss', tool: 'claude' }]));
+    // 同 id 异机声明（跨机 resume）——拒绝复活，教学指向显式迁移
+    const lin = await nodeOn(url, key('l'), LINUX_MID, { name: 'lin-box' });
+    lin.send(sessionsFrame([{ sessionId: 'sess-x', name: 'boss', tool: 'claude' }]));
+    const err = await lin.waitFor((f) => f.op === 'error' && f.code === 'MACHINE_BOUND');
+    expect(err.op === 'error' && err.message).toContain('win-box');
+    expect(err.op === 'error' && err.message).toContain('--member-remove');
+    // 册位仍绑 M1：lin 机器上无名（本机册切片为空），win 上照旧可达
+    const sender = await senderOn(url, key('s'));
+    sender.send({ op: 'send', id: 'mb1', targetMachine: 'lin-box:boss', body: 'x' });
+    const notOnLin = await sender.waitFor((f) => f.op === 'error' && f.id === 'mb1');
+    expect(notOnLin).toMatchObject({ code: 'SESSION_NOT_MEMBER' });
+    sender.send({ op: 'send', id: 'mb2', targetMachine: 'win-box:boss', body: 'x' });
+    const deliver = await win.waitFor((f) => f.op === 'deliver' && f.id === 'mb2');
+    expect(deliver).toMatchObject({ sessionId: 'sess-x' });
+  });
+
+  it('extends 胜复活：接任后原会话同 id 回归不夺回（名字剥离教学；id8 点对点直达）', async () => {
+    const { url, registryFile } = await startBroker();
+    seed(registryFile, [
+      { key: key('s'), machineName: 'sender-host' },
+      { key: key('n'), machineId: WIN_MID, machineName: 'win-box' },
+    ]);
+    const node = await nodeOn(url, key('n'), WIN_MID, { name: 'win-box' });
+    // 原会话 sess-old 持名 boss → 下线 → sess-new 接任（extends boss）
+    node.send(sessionsFrame([{ sessionId: 'aaaabbbb1111', name: 'boss', tool: 'claude' }]));
+    node.send(sessionsFrame([{ sessionId: 'sess-new', name: 'boss2', tool: 'claude', extends: 'boss' }]));
+    // 原会话同 id 回归并索回名字——不夺回：名字剥离+教学
+    node.send(sessionsFrame([
+      { sessionId: 'aaaabbbb1111', name: 'boss', tool: 'claude' },
+      { sessionId: 'sess-new', name: 'boss2', tool: 'claude', extends: 'boss' },
+    ]));
+    const err = await node.waitFor((f) => f.op === 'error' && f.code === 'EXTENDS_CONFLICT' && f.message.includes('夺回'));
+    expect(err.op === 'error' && err.message).toContain('boss2');
+    expect(err.op === 'error' && err.message).toContain('aaaabbbb'); // id8 寻址教学
+    const sender = await senderOn(url, key('s'));
+    // 旧名指路接任者（SUPERSEDED）；原会话按 id8 点对点直达
+    sender.send({ op: 'send', id: 'ex1', targetMachine: 'win-box:boss', body: 'x' });
+    const sup = await sender.waitFor((f) => f.op === 'error' && f.id === 'ex1');
+    expect(sup).toMatchObject({ code: 'SESSION_SUPERSEDED' });
+    sender.send({ op: 'send', id: 'ex2', targetMachine: 'win-box:aaaabbbb', body: 'direct' });
+    const deliver = await node.waitFor((f) => f.op === 'deliver' && f.id === 'ex2');
+    expect(deliver).toMatchObject({ sessionId: 'aaaabbbb1111' });
+  });
+
+  it('member-remove：按名删即册外无名；幂等零命中=成功注明；多名命中拒绝教 id8', async () => {
+    const { url, registryFile } = await startBroker();
+    seed(registryFile, [
+      { key: key('s'), machineName: 'sender-host' },
+      { key: key('n'), machineId: WIN_MID, machineName: 'win-box' },
+    ]);
+    const node = await nodeOn(url, key('n'), WIN_MID, { name: 'win-box' });
+    node.send(sessionsFrame([
+      { sessionId: 'ccccdddd1111', name: 'boss', tool: 'claude' },
+      { sessionId: 'eeeeffff2222', name: 'boss', tool: 'codex' },
+    ]));
+    const sender = await senderOn(url, key('s'));
+    // 多名命中（跨工具同名）：拒绝并列 id8 教精确删除
+    sender.send({ op: 'member-remove', target: 'boss' });
+    const amb = await sender.waitFor((f) => f.op === 'member-remove-result');
+    expect(amb).toMatchObject({ op: 'member-remove-result', ok: false });
+    expect(amb.op === 'member-remove-result' && amb.error).toContain('ccccdddd');
+    // id8 精确删一条：归属机收清表推送（聚合器语义）后重播，册外无名
+    sender.send({ op: 'member-remove', target: 'ccccdddd1111' });
+    const del = await sender.waitFor((f) => f.op === 'member-remove-result' && f.ok === true);
+    expect(del.op === 'member-remove-result' && del.removed).toEqual(['boss']);
+    await node.waitFor((f) => f.op === 'member-remove' && f.target === 'ccccdddd1111');
+    node.send(sessionsFrame([{ sessionId: 'eeeeffff2222', name: 'boss', tool: 'codex' }])); // 重播去掉被删成员
+    sender.send({ op: 'send', id: 'mr2', targetMachine: 'win-box:claude/boss', body: 'x' });
+    const gone = await sender.waitFor((f) => f.op === 'error' && f.id === 'mr2');
+    expect(gone).toMatchObject({ code: 'SESSION_NOT_MEMBER' }); // 删除=零残留（非下线态）
+    // 幂等：再删同名不存在条目——成功注明本不在册
+    sender.send({ op: 'member-remove', target: 'ccccdddd1111' });
+    const again = await sender.waitFor((f) => f.op === 'member-remove-result' && f.ok === true && f.removed.length === 0);
+    expect(again.op === 'member-remove-result' && again.error).toContain('本不在册');
   });
 });
 

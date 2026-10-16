@@ -102,6 +102,7 @@ export async function runClaudeWrapper(
       connects: star.connects,
       ...(star.extendSession === undefined ? {} : { extendSession: star.extendSession }),
       ...(spawnName === undefined ? {} : { spawnName }),
+      ...(star.rm === true ? { rm: true } : {}),
     });
     await joiner.begin();
     try {

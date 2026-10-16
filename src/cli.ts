@@ -111,7 +111,13 @@ commands:
                                 a live local session into the star
                                 by its sessionId (no new process;
                                 optional --extend-session <旧名>;
-                                idempotent if already a member)
+                                idempotent if already a member;
+                                permanent registration)
+                              --member-remove <名|id8>
+                                (with --connect) remove a roster
+                                entry (self-exit or admin delete;
+                                idempotent; any machine in the
+                                star may run it)
                               --stop [broker|node|选择器]
                                 stop a running broker/node; a
                                 selector stops only that node
@@ -146,11 +152,19 @@ commands:
                               --connect <星>       join this session to
                                 the star (repeatable = multi-star;
                                 the local aggregator is auto-started
-                                when absent; detached on exit)
+                                when absent; permanent roster
+                                registration — exit = offline, same
+                                id resume auto-revives)
+                              --rm                temporary membership
+                                (with --connect): zero trace on
+                                exit (docker --rm semantics; cannot
+                                combine with --extend-session)
                               --extend-session <旧名>
                                 declare succession of a retired
                                 session name (senders of the old
-                                name get redirected)
+                                name get redirected; the successor
+                                wins even if the original session
+                                returns)
   codex [any native args]   start the real codex CLI (no codex settings
                             injected); any native codex args (e.g.
                             resume, --profile, --help) pass through
@@ -338,15 +352,18 @@ export function parseServeArgs(argv: readonly string[]): ServeArgs {
       args.list = true;
     } else if (name === '--detach') {
       args.detach = true;
+    } else if (name === '--rm') {
+      args.rm = true; // 028：只认不执行——runServe 拒绝并教学（机器守护无临时语义）
     } else if (name === '--connect') {
       args.connect = nextValue() ?? '';
-    } else if (name === '--port' || name === '--remove' || name === '--name' || name === '--adopt' || name === '--extend-session') {
+    } else if (name === '--port' || name === '--remove' || name === '--name' || name === '--adopt' || name === '--extend-session' || name === '--member-remove') {
       const value = nextValue();
       if (value === undefined) throw new MultichatError('USAGE', `serve: ${name} requires a value`);
       if (name === '--port') args.portArg = value;
       else if (name === '--name') args.nameArg = value;
       else if (name === '--adopt') args.adopt = value;
       else if (name === '--extend-session') args.extendSession = value;
+      else if (name === '--member-remove') args.memberRemove = value;
       else args.remove = value;
     } else if (name === '--gen-key') {
       args.genKeyArg = nextValue() ?? '1';

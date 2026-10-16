@@ -75,6 +75,7 @@ export async function runCodexWrapper(
       side: 'codex',
       connects: star.connects,
       ...(star.extendSession === undefined ? {} : { extendSession: star.extendSession }),
+      ...(star.rm === true ? { rm: true } : {}),
     });
     await joiner.begin();
     try {
