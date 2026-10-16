@@ -35,7 +35,7 @@
 
 | 层 | 错误码 | 含义与自救 |
 |---|---|---|
-| 本地等超时（或 ssh 进程没退） | SSH_TRANSPORT_TIMEOUT | 等满上限杀了本地进程，**远端状态不明——勿盲目重发**（可能与首次投递叠加），先在对端查 send-log 或 status 核实 |
+| 本地等超时（或 ssh 进程没退） | SSH_TRANSPORT_TIMEOUT | ⚠️ 等满上限杀了本地进程，**远端状态不明——勿盲目重发**（可能与首次投递叠加），先在对端查 send-log 或 status 核实 |
 | ssh 自身失败（退出码 255） | SSH_TRANSPORT_FAILED | 不通/密钥/known_hosts；自证命令就在报错里：`ssh <对端> crosschat --version` |
 | 远端 crosschat 业务错 | 原错误码 + `[via 对端]` 前缀 | 对端把 `crosschat: CODE: message` 写到 **stderr**，本机从 stderr 匹配后**同码重抛**——MESSAGE_TOO_LARGE 的自纠指引跨机原样有效；匹配不上的（对端崩了）归 REMOTE_FAILED，带 stderr 尾部 |
 

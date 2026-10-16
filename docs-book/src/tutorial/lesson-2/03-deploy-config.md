@@ -26,7 +26,7 @@ True
 ```
 （Linux：`ls ~/.ssh/id_ed25519.pub || ssh-keygen -t ed25519`）
 
-**第三步 · 公钥交换**——两台机器互装对方的公钥，漏任何一侧必卡认证
+**第三步 · 公钥交换**——两台机器互装对方的公钥，⚠️ 漏任何一侧必卡认证
 
 win 的公钥给对端：打印 `Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub`，把整行追加到对端的 authorized_keys：
 ```bash
@@ -40,7 +40,7 @@ echo '<win公钥整行>' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorize
 > icacls $kf /inheritance:r /grant "SYSTEM:(F)" /grant "BUILTIN\Administrators:(F)"
 ```
 
-**第四步 · 认得对端**（写 ssh config；**别名必须 = 对端 hostname**，原因见 2.2）
+**第四步 · 认得对端**（写 ssh config；⚠️ **别名必须 = 对端 hostname**，原因见 2.2）
 
 ```
 > notepad $env:USERPROFILE\.ssh\config
@@ -69,7 +69,7 @@ Warning: Permanently added '<对端地址>' (ED25519) to the list of known hosts
 > ssh -o BatchMode=yes peer crosschat --version
 1.6.4
 ```
-这一条同时验了四件事：网络通、密钥对、对端找得到 crosschat、版本不过旧。对端反方向再跑一条（`ssh win crosschat --version`），两边都出版本号 = 部署完成。
+这一条同时验了四件事：网络通、密钥对、对端找得到 crosschat、版本不过旧。对端反方向再跑一条（`ssh win crosschat --version`），✅ 两边都出版本号 = 部署完成。
 
 ## 单向 NAT 差量
 
@@ -87,13 +87,13 @@ Host win
   User <win用户名>
 ```
 
-三条纪律，每条都是真机实测翻出来的：
+⚠️ 三条纪律，每条都是真机实测翻出来的：
 
 1. **User 行必写**——缺了它，ssh 默认拿对端自己的用户名去连你 → `root@localhost: Permission denied`（2026-10-08 实测翻车点）
 2. **Port 必须是 2222**——写成 22 等于连到对端自己的 sshd → `Host key verification failed`
 3. **隧道随会话活**——会话断了回信就断（出腿不受影响），重连即恢复
 
-对端回程自证（走的就是隧道，穿回你的机器）：
+✅ 对端回程自证（走的就是隧道，穿回你的机器）：
 
 ```console
 > ssh -o BatchMode=yes win crosschat --version
@@ -104,7 +104,7 @@ Host win
 
 ## 远端找得到 crosschat 吗
 
-sshd 起的登录 shell 只见**系统** PATH。npm 装的 crosschat 若落在用户级前缀（nvm、自定义目录），自证会这样报：
+sshd 起的登录 shell 只见**系统** PATH。⚠️ npm 装的 crosschat 若落在用户级前缀（nvm、自定义目录），自证会这样报：
 
 ```console
 crosschat: REMOTE_FAILED [via peer] 远端异常退出(127): command not found

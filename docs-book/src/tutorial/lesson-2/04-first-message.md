@@ -39,7 +39,7 @@ queued to beta2@yangwsl(9f8e7d6c) (turn 2; 对方正忙，已入队，本轮结�
 
 delivered / queued 都无需重发；parked 是旧版守护的异常态，已暂存、看门狗自动重投，同样无需手动干预。行尾「续话 c1」是本机配的会话短柄，续话照抄。
 
-再把别名敲错一次，看看跨机报错长什么样（传输层不通时）：
+❌ 再把别名敲错一次，看看跨机报错长什么样（传输层不通时）：
 
 ```console
 > crosschat send --via ssh:yangsl --to beta2 --body "…"        # 别名手滑少了个 w
@@ -93,21 +93,21 @@ ssh: 无
 
 用途：正文超过大小上限时，按报错指的路走 scp 旁路——大内容不过消息通道。
 
-先看本地直接挡下的样子（默认上限下硬塞 20KB）：
+❌ 先看本地直接挡下的样子（默认上限下硬塞 20KB）：
 
 ```console
 > crosschat send --via ssh:yangwsl --to beta2 --body "<20KB 长文>"
 crosschat: MESSAGE_TOO_LARGE: Body is 20000 bytes; the limit is 16384. 可提额：--max-body-kb <KiB> 或 CROSSCHAT_MAX_BODY_KIB=<KiB>（claude 端点硬顶 64KiB、codex 端点 1MiB，到顶只能落盘）。跨机大内容（ssh 形态）：先 scp <文件> yangwsl:/tmp/<文件名>，再 crosschat send --via ssh:yangwsl … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）
 ```
 
-还有一种更隐蔽的：本机提了额、出发了、**在对端被拦下**——错误带 `[via]` 前缀回来，教学也换成接收方视角：
+❌ 还有一种更隐蔽的：本机提了额、出发了、**在对端被拦下**——错误带 `[via]` 前缀回来，教学也换成接收方视角：
 
 ```console
 > crosschat send --via ssh:yangwsl --to beta2 --body "<20KB 长文>" --max-body-kb 64
 crosschat: MESSAGE_TOO_LARGE: [via yangwsl] Body is 20000 bytes; the limit is 16384 on this machine (a --via remote send). 发送方本机提额无效——上限属接收方（本机）配置。大内容走 scp 旁路：发送方先落盘，scp <文件> <接收方>:/tmp/<文件名>，再 crosschat send --via ssh:<接收方> … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）。确需直发大内容：由接收方（本机）操作者调 CROSSCHAT_MAX_BODY_KIB。
 ```
 
-照报错教的做（scp 与 `--via` 共用同一份别名和密钥，2.3 配一次全通）：
+✅ 照报错教的做（scp 与 `--via` 共用同一份别名和密钥，2.3 配一次全通）：
 
 ```console
 > scp big-analysis.txt yangwsl:/tmp/big-analysis.txt
