@@ -111,6 +111,12 @@ export interface SendDeps {
    * （星内 roster 真名）——跨机信封 from-machine 属性来源；无名瞬态发送方缺省。
    */
   fromMachine?: string;
+  /**
+   * 024 方案3：tcp 投递管线传入的本腿星名（broker=注册表星名，node=条目
+   * name，无名退 starId 前缀）——与 fromMachine 拼信封正向三段坐标
+   * from-addr；单机/ssh 恒缺省（ssh 无星概念）。
+   */
+  fromStarName?: string;
 }
 
 /**
@@ -441,6 +447,20 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     deps.conversationStateFile === undefined ? undefined : handleForRef(deps.conversationStateFile, newRef);
   const replyRef = encodeRef(newRef);
   const fromName = displayName(caller);
+  // 024 方案3：tcp 跨机信封正向三段坐标 tcp:<星>:<机器>:<工具>/<会话>——工具/
+  // 会话段与 020 限定词语法对齐（claude/<名>、codex/<id8>，human 无会话段降为
+  // 机器级）。星段=本腿经由星（022 多星下任一可达星皆可为发起坐标，不暗示
+  // 唯一）；ssh 腿无星概念、单机/无名发送方缺省 → from-addr 整个不出现。
+  const fromQualifier =
+    caller.p === 'claude'
+      ? `claude/${caller.name ?? caller.id.slice(0, 8)}`
+      : caller.p === 'codex'
+        ? `codex/${caller.id.slice(0, 8)}`
+        : undefined;
+  const fromAddr =
+    deps.fromStarName !== undefined && fromMachine !== undefined
+      ? `tcp:${deps.fromStarName}:${fromMachine}${fromQualifier === undefined ? '' : `:${fromQualifier}`}`
+      : undefined;
   /** Every exit path logs who sent what to whom (B14, +from in B16, +fromName in B21). */
   const logNow = (fields: Omit<SendLogEntry, 'ts'>): void => {
     deps.appendLog?.(logEntry(deps, { from: identityKey(caller), fromName, ...fields }));
@@ -462,7 +482,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
       args.targetSessionId !== undefined && claudeSession.name !== undefined
         ? `claude/${claudeSession.name}`
         : (claudeSession.name ?? shortId('claude', claudeSession.sessionId));
-    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(handle === undefined ? {} : { handle }) });
+    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(fromAddr === undefined ? {} : { fromAddr }), ...(handle === undefined ? {} : { handle }) });
     try {
       await deps.deliverClaude(
         { pid: claudeSession.pid, messagingSocketPath: claudeSession.messagingSocketPath },
@@ -485,7 +505,7 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
     args.targetSessionId !== undefined && threadName !== undefined
       ? `codex/${threadName}`
       : (threadName ?? shortId('codex', target.id));
-  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(handle === undefined ? {} : { handle }) });
+  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(fromAddr === undefined ? {} : { fromAddr }), ...(handle === undefined ? {} : { handle }) });
   const parkNow = (): number => {
     park(
       deps.outboxDir,

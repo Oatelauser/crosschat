@@ -676,9 +676,17 @@ export class NodeClient {
   private async onDeliver(frame: DeliverFrame): Promise<void> {
     // B1：经此腿投递签发的 ref 盖上本连接条目的星标识（握手时已校验/回填的
     // entries[0]）——回信方按它选本机条目，路由成为纯函数 f(ref, node.json)。
-    const starId = this.d.config.entries[0]!.starId;
+    // 024 方案3：星名一并注入（信封正向坐标星段）——无名条目退 starId 前缀，
+    // 选星语法星名/starId 前缀都认。
+    const entry = this.d.config.entries[0]!;
+    const starId = entry.starId;
+    const starName = entry.name ?? starId;
     const deps = this.d.makeSendDeps();
-    const result = await deliverViaRunSend(frame, starId === undefined ? deps : { ...deps, refStarId: starId });
+    const result = await deliverViaRunSend(frame, {
+      ...deps,
+      ...(starId === undefined ? {} : { refStarId: starId }),
+      ...(starName === undefined ? {} : { fromStarName: starName }),
+    });
     this.send(result);
     this.log(`deliver ${frame.id} → ${result.status}${result.status === 'error' ? ` (${result.code})` : ''}`);
   }

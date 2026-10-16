@@ -334,6 +334,9 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
   // B1 多星：broker 自投递签发的 ref 盖注册表星标识（与 gen-key 分发的钥匙同源）
   const registryFile = registryFileOf(deps.baseDir);
   const registryStarId = ensureStarId(registryFile);
+  // 024 方案3：broker 自投递的信封正向坐标星段（E0 缺省轨道——未定名时与
+  // 自登记同一事实源持久化清洗后的 hostname）。
+  const registryStarName = ensureStarName(registryFile, deps.hostname());
   // B2：broker 机自己也是全权节点——deliverLocal 接 runSend、file 落本机收件。
   const deliverLocal = deps.makeSendDeps === undefined
     ? defaultDeliverLocal
@@ -349,7 +352,11 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
           conversation: frame.conversation,
           origin: frame.origin,
         };
-        const r = await deliverViaRunSend(deliver, { ...deps.makeSendDeps!(), refStarId: registryStarId });
+        const r = await deliverViaRunSend(deliver, {
+          ...deps.makeSendDeps!(),
+          refStarId: registryStarId,
+          ...(registryStarName === undefined ? {} : { fromStarName: registryStarName }),
+        });
         // deliverViaRunSend 的失败即 ResultFrame{status:'error'}——规整为
         // ErrorFrame，broker 本地分支的失败语义（op:'error'）保持 B1 不变。
         return r.status === 'error'

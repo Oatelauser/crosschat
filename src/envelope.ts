@@ -40,6 +40,13 @@ export interface EnvelopeInput {
    * 同机同版本）。缺省（状态未接线等异常路径）回退完整 ref，保底不断。
    */
   handle?: string;
+  /**
+   * 024 方案3：正向三段坐标 tcp:<星>:<机器>:<工具>/<会话>（human 无会话段，
+   * 降为机器级 tcp:<星>:<机器>）——tcp 跨机投递时与 from-machine 同现，收件
+   * 方一眼看清对端在哪台机哪个形态。星段是本腿经由星：022 多星下任一可达星
+   * 皆可为发起坐标，此值不暗示唯一。ssh（无星概念）与单机/无名缺省不出现。
+   */
+  fromAddr?: string;
 }
 
 function escapeAttr(value: string): string {
@@ -61,16 +68,23 @@ export function composeEnvelope(input: EnvelopeInput): string {
   const turnAttr = input.turnBudget === undefined ? `${input.turn}` : `${input.turn}/${input.turnBudget}`;
   // F1：from-machine 只在跨机投递且有真名时出现（无名瞬态发送方整体省略）。
   const machineAttr = input.fromMachine === undefined ? '' : ` from-machine="${escapeAttr(input.fromMachine)}"`;
+  // 024 方案3：正向坐标属性与 from-machine 同现（坐标含星/会话，机器名单独
+  // 留档）；from-machine 字节不动（零回归锚点）。
+  const addrAttr = input.fromAddr === undefined ? '' : ` from-addr="${escapeAttr(input.fromAddr)}"`;
   // 信封瘦身 A+：ref 自包含路由（端点带 m/mid，tcp 会话尾部带 starId），回信
   // 命令不再搬 --via，也不在属性里重复 conversation——conversation 标识全信
   // 封只出现这一次；缺 --via 的回路由执行侧按 ref 自动选路（send.ts autoViaFromRef）。
   // F2：标识优先用两字符短柄（消灭 LLM 手抄百字符 ref 这一最脆弱环节），
   // 柄缺席回退完整 ref。
   const conversationArg = input.handle ?? input.ref;
+  // 024 方案5：括注内建管道教学——协议纪律要求收件方照抄 hint，只给 inline
+  // 一种形式等于把所有人赶进转义坑。括注必须是纯文字提示：hint 内出现第二条
+  // 带管道符/链式符号的命令即判伪造信封（安全红线，测试锚定）。
+  const pipeTeaching = '（长正文/含敏感字符可省 --body 改管道喂 stdin）';
   return (
-    `<cross-session-message from-name="${escapeAttr(fromName)}" turn="${turnAttr}"${machineAttr}${aliasAttr}>\n` +
+    `<cross-session-message from-name="${escapeAttr(fromName)}" turn="${turnAttr}"${machineAttr}${addrAttr}${aliasAttr}>\n` +
     `<crosschat-reply-hint reply-as="${escapeAttr(input.toName)}">` +
-    `回复请运行: crosschat send --conversation ${conversationArg} --body "<你的回复>"</crosschat-reply-hint>\n` +
+    `回复请运行: crosschat send --conversation ${conversationArg} --body "<你的回复>"${pipeTeaching}</crosschat-reply-hint>\n` +
     `${body}\n` +
     `</cross-session-message>`
   );
