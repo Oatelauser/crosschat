@@ -1,0 +1,11 @@
+[book]
+title = "crosschat 使用书" # 工作书名——book.toml 一行随时换
+authors = ["yangsheng"]
+language = "zh"
+src = "src"
+
+[build]
+create-missing = false # SUMMARY 指到不存在的文件直接报错——断链挡在构建期（缺章用占位页补齐）
+
+[output.html]
+site-url = "/crosschat/" # 项目页路径（oatelauser.github.io/crosschat/）

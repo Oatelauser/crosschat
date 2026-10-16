@@ -1,0 +1,40 @@
+name: deploy-book
+
+# 书写完即发布：docs-book 有改动推 main 就重建在线书（调研票 001 定案的官方 artifact 路线）
+on:
+  push:
+    branches: [main]
+    paths: ['docs-book/**', '.github/workflows/deploy-book.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: peaceiris/actions-mdbook@v2.0.0 # 预编译二进制装 mdbook，免 Rust
+        with:
+          mdbook-version: '0.5.4'
+      - run: mdbook build docs-book
+      - uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: docs-book/book
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5.0.1
