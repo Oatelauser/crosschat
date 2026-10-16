@@ -81,6 +81,8 @@ PowerShell——单引号 here-string，**收尾 `'@` 必须顶格**（行首不
 '@ | crosschat send --conversation c3
 ```
 
+Windows PowerShell 5.1 管道可能给 stdin 前置一个 BOM（U+FEFF，正文首部多一个不可见字符）——需要字节精确时先跑 `$OutputEncoding = New-Object System.Text.UTF8Encoding $false` 再管道；PowerShell 7 无此问题。
+
 文件正文：bash 用 `cat <文件> | crosschat send …`；PowerShell 用 `[IO.File]::ReadAllText(<路径>) | crosschat send …`——**勿用 `Get-Content`**（Windows PowerShell 5.1 按系统码页读文件，非 ASCII 内容会乱码）。
 
 PowerShell 轻路径分层（按正文长短选最轻的）：
