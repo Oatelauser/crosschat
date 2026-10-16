@@ -39,7 +39,7 @@ win · boss                              yangwsl · beta2
 delivered to beta2@yangwsl(9f8e7d6c) (turn 1) · 续话 c1
 ```
 
-隐式发生什么，一段讲完：这条命令没有在本机投递——crosschat 组装了一条**固定的远端命令**，经 ssh 送到 yangwsl 执行，等价于有人在那台机器上敲了 `send --to beta2`。名字 beta2 在对端名单里解析，本机同名会话与此无关。回执从对端传回后按本机格式重渲染，所以输出跟单机几乎一样，只有收件人多了机器段 `@yangwsl(9f8e7d6c)`——名字加对端指纹（2.2 的 mid8）。忙时三态照单机语义：
+隐式发生什么，一段讲完：这条命令没有在本机投递——crosschat 组装了一条**固定的远端命令**，经 ssh 送到 yangwsl 执行，等价于有人在那台机器上敲了 `send --to beta2`。名字 beta2 在对端名单里解析，本机同名会话与此无关。回执从对端传回后按本机格式重渲染，所以输出跟单机几乎一样，只有收件人多了机器段 `@yangwsl(9f8e7d6c)`——名字加对端指纹（[2.2 机器指纹 mid](02-terms.md#机器指纹-mid)）。忙时三态照单机语义：
 
 ```console
 queued to beta2@yangwsl(9f8e7d6c) (turn 2; 对方正忙，已入队，本轮结束即处理) · 续话 c1
@@ -71,9 +71,9 @@ crosschat: SSH_TRANSPORT_FAILED: ssh 无法到达 yangsl（不通/密钥/known_h
 delivered to claude/boss@win(3f2a81b0) (turn 2) · 续话 c3
 ```
 
-隐式发生什么：回信命令里没有 `--via`，也不需要——发起方机器名已经坐在 c3 背后的对话引用（ref）里，执行侧按它自动补路由：本机 ssh config 里有 win 这个别名，就走 ssh；没有别名但本机入了 tcp 星（第3课），就换 tcp 腿；都没有就照旧试 ssh 并在失败时报错指路。这就是 2.2 那句"别名 = hostname 是软依赖"的落点：win 在 yangwsl 侧的别名恰好叫 win，回程自动成立。
+隐式发生什么：回信命令里没有 `--via`，也不需要——发起方机器名已经坐在 c3 背后的对话引用（ref）里，执行侧按它自动补路由：本机 ssh config 里有 win 这个别名，就走 ssh；没有别名但本机入了 tcp 星（第3课），就换 tcp 腿；都没有就照旧试 ssh 并在失败时报错指路。这就是 [2.2 别名与 hostname](02-terms.md#别名与-hostname) 那句"别名 = hostname 是软依赖"的落点：win 在 yangwsl 侧的别名恰好叫 win，回程自动成立。
 
-信封括注里那句"长正文/含敏感字符可省 --body 改管道喂 stdin"对跨机同样成立——正文走 stdin 管道，不进任何一层的命令行，`$`、反引号、引号逐字到达（第1课的管道手法原样可用，这也是 2.5 会展开的一条设计）。
+信封括注里那句"长正文/含敏感字符可省 --body 改管道喂 stdin"对跨机同样成立——正文走 stdin 管道，不进任何一层的命令行，`$`、反引号、引号逐字到达（[第1课 单机通信](../lesson-1.md)的管道手法原样可用，这也是 [2.5 通信机制](05-mechanism.md)会展开的一条设计）。
 
 ## 查对端名单
 
@@ -99,7 +99,7 @@ ssh: 无
   文档book → ssh专家    9 分钟前   turn 6   delivered  c17
 ```
 
-一行里双方、最近轮次、投递状态、行尾续话柄都在。注意 `status --via tcp:<机器>` 那种远程枚举形态是第3课的 tcp 通道能力；ssh 对端就用上面这条 ssh 命令。
+一行里双方、最近轮次、投递状态、行尾续话柄都在。注意 `status --via tcp:<机器>` 那种远程枚举形态是[第3课 跨机通信（tcp）](../lesson-3.md)的 tcp 通道能力；ssh 对端就用上面这条 ssh 命令。
 
 ## 正文超限时
 
@@ -119,7 +119,7 @@ crosschat: MESSAGE_TOO_LARGE: Body is 20000 bytes; the limit is 16384. 可提额
 crosschat: MESSAGE_TOO_LARGE: [via yangwsl] Body is 20000 bytes; the limit is 16384 on this machine (a --via remote send). 发送方本机提额无效——上限属接收方（本机）配置。大内容走 scp 旁路：发送方先落盘，scp <文件> <接收方>:/tmp/<文件名>，再 crosschat send --via ssh:<接收方> … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）。确需直发大内容：由接收方（本机）操作者调 CROSSCHAT_MAX_BODY_KIB。
 ```
 
-✅ 照报错教的做（scp 与 `--via` 共用同一份别名和密钥，2.3 配一次全通）：
+✅ 照报错教的做（scp 与 `--via` 共用同一份别名和密钥，[2.3 SSH 部署与配置](03-deploy-config.md)配一次全通）：
 
 ```console
 > scp big-analysis.txt yangwsl:/tmp/big-analysis.txt
