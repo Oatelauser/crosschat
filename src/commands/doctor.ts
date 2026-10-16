@@ -118,21 +118,32 @@ export function defaultDoctorDeps(): DoctorDeps {
 }
 
 export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport {
-  const lines: string[] = [];
+  // 025 分组树：环境 / tcp·<星> / 其他 三段两级缩进（组名顶格、条目缩进两空格，
+  // 不用框线保持 grep 友好）。检查项、判定、计数、退出码全部不变——纯展示层重排。
+  const groups: { title: string; lines: string[] }[] = [];
+  const group = (title: string): string[] => {
+    const found = groups.find((g) => g.title === title);
+    if (found !== undefined) return found.lines;
+    const bucket: string[] = [];
+    groups.push({ title, lines: bucket });
+    return bucket;
+  };
+  const starTitle = (star: string): string => `tcp · ${star}`;
+  let cur = group('环境');
   let pass = 0;
   let warn = 0;
   let bad = 0;
   const ok = (line: string) => {
     pass += 1;
-    lines.push(line);
+    cur.push(line);
   };
   const attention = (line: string) => {
     warn += 1;
-    lines.push(line);
+    cur.push(line);
   };
   const fail = (line: string) => {
     bad += 1;
-    lines.push(line);
+    cur.push(line);
   };
 
   // 1. Node >= 22
@@ -219,31 +230,33 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
   } else ok('✅ 无双身份残留');
 
   // 6.5 票B B2：tcp 转发器配置——node.json/broker.json 可解析、钥字段齐、
-  // broker TCP 可达（探活超时 2s）。B2 多星：node.json 逐条目检查/探活；
-  // 单条目输出与 B2 之前逐字节同形。目录未接线或无任何配置文件 → 整段跳过。
+  // broker TCP 可达（探活超时 2s）。B2 多星：node.json 逐条目检查/探活。
+  // 025：逐条目行归 `tcp · <星名>` 组（星名=条目 name，缺省 host:port）；
+  // 编号条目（"条目 1/2"）退役——星名即分组标题。tcpDir 级单查（注册表、
+  // node.json 损坏）无星可归时挂裸 tcp 组。目录未接线或无任何配置文件 → 整段跳过。
   if (deps.tcpDir !== undefined) {
     const nodeRaw = deps.readFile(join(deps.tcpDir, 'node.json'));
     const brokerRaw = deps.readFile(join(deps.tcpDir, 'broker.json'));
     if (nodeRaw !== undefined || brokerRaw !== undefined) {
+      const label = (e: BrokerEntry): string => e.name ?? `${e.host}:${e.port}`;
       let entries: BrokerEntry[] | undefined;
       if (nodeRaw !== undefined) {
         try {
           entries = readNodeConfig(join(deps.tcpDir, 'node.json')).entries;
         } catch {
+          cur = group('tcp');
           fail(`❌ tcp 节点配置 node.json 损坏或缺钥字段（${join(deps.tcpDir, 'node.json')}）——向管理员重新索取 node.json 覆盖`);
         }
         if (entries !== undefined) {
-          const label = (e: BrokerEntry): string => e.name ?? `${e.host}:${e.port}`;
-          const multi = entries.length > 1;
-          entries.forEach((e, i) => {
-            ok(multi
-              ? `✅ tcp 节点条目 ${i + 1}/${entries!.length} 可解析（broker ${label(e)}）`
-              : `✅ tcp 节点配置可解析（broker ${label(e)}）`);
-          });
-          if (multi) {
+          for (const e of entries) {
+            cur = group(starTitle(label(e)));
+            ok('✅ 节点条目可解析');
+          }
+          if (entries.length > 1) {
             // 多条目专属体检：旧条目缺 starId / 两条目疑似同一星
             for (const e of entries) {
               if (e.starId === undefined) {
+                cur = group(starTitle(label(e)));
                 attention(`⚠️ 条目 ${label(e)} 缺 starId（旧配置——连一次自动回填或重新索取 node.json）`);
               }
             }
@@ -252,34 +265,34 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
               if (e.starId === undefined) continue;
               const prev = firstOfStar.get(e.starId);
               if (prev === undefined) firstOfStar.set(e.starId, label(e));
-              else attention(`⚠️ 条目 ${prev} 与 ${label(e)} 的 starId 相同（${e.starId}）——疑似同一星配了两次`);
+              else {
+                cur = group(starTitle(label(e)));
+                attention(`⚠️ 条目 ${prev} 与 ${label(e)} 的 starId 相同（${e.starId}）——疑似同一星配了两次`);
+              }
             }
           }
         }
       }
+      if (entries !== undefined) {
+        const probe = deps.probeTcp ?? (() => true);
+        for (const e of entries) {
+          cur = group(starTitle(label(e)));
+          if (probe(e.host, e.port)) ok(`✅ broker 可达（${e.host}:${e.port}）`);
+          else fail(`❌ broker 不可达（${e.host}:${e.port}）——确认 broker 机 crosschat serve 在跑、网络/防火墙放行端口`);
+        }
+      }
       if (brokerRaw !== undefined) {
+        // 注册表是 tcpDir 级单查：归首个星组，无条目可归时挂裸 tcp 组
+        cur = groups.find((g) => g.title.startsWith('tcp ·'))?.lines ?? group('tcp');
         try {
           const reg = JSON.parse(brokerRaw) as { nodes?: { label?: string; key?: string }[] };
           if (!Array.isArray(reg.nodes) || reg.nodes.some((n) => typeof n.label !== 'string' || typeof n.key !== 'string')) {
             throw new Error('bad shape');
           }
-          ok(`✅ tcp broker 注册表可解析（${reg.nodes.length} 节点）`);
+          ok(`✅ broker 注册表可解析（${reg.nodes.length} 节点）`);
         } catch {
-          fail('❌ tcp broker 注册表 broker.json 损坏或字段缺失——crosschat serve --list 核对，必要时重发钥匙');
+          fail('❌ broker 注册表 broker.json 损坏或字段缺失——crosschat serve --list 核对，必要时重发钥匙');
         }
-      }
-      if (entries !== undefined) {
-        const probe = deps.probeTcp ?? (() => true);
-        const multi = entries.length > 1;
-        entries.forEach((e, i) => {
-          if (probe(e.host, e.port)) {
-            ok(multi ? `✅ 条目 ${i + 1} broker TCP 可达（${e.name ?? ''} ${e.host}:${e.port}）` : `✅ broker TCP 可达（${e.host}:${e.port}）`);
-          } else {
-            fail(multi
-              ? `❌ 条目 ${i + 1} broker TCP 不可达（${e.host}:${e.port}）——确认 broker 机 crosschat serve 在跑、网络/防火墙放行端口`
-              : `❌ broker TCP 不可达（${e.host}:${e.port}）——确认 broker 机 crosschat serve 在跑、网络/防火墙放行端口`);
-          }
-        });
       }
     }
   }
@@ -288,21 +301,34 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
   // CLI 版本比对——不一致 = 升级了 npm 包但常驻进程没重启（新 CLI + 旧常驻）。
   // 旧守护 status 文件无 version 字段 → 跳过不误报；⚠️ 级不 ❌（行为怪异不是故障）。
   // 015：lastUpdated 超 TCP_STATUS_FRESH_MS = 守护已停止（心跳每周期刷新）——
-  // 跳过对账不误报"升级后未重启"，文末一行点名可删；重启口诀按守护类型给。
+  // 跳过对账不误报"升级后未重启"，逐文件点名可删；重启口诀按守护类型给。
+  // 025 归组：status-node-<星>.json 按文件名星段；无星段的按产生者——broker 用
+  // 自身 name（E0），默认节点守护用 brokerAlias；都无线索 → 其他组。
   if (deps.tcpDir !== undefined && deps.cliVersion !== undefined) {
     const nowMs = deps.now?.() ?? Date.now();
-    const skipped: string[] = [];
     const reconcile = (file: string, label: string, restartCmd: string): void => {
       const raw = deps.readFile(join(deps.tcpDir!, file));
       if (raw === undefined) return;
-      let parsed: { version?: unknown; lastUpdated?: unknown };
+      let parsed: { version?: unknown; lastUpdated?: unknown; name?: unknown; brokerAlias?: unknown };
       try {
-        parsed = JSON.parse(raw) as { version?: unknown; lastUpdated?: unknown };
+        parsed = JSON.parse(raw) as { version?: unknown; lastUpdated?: unknown; name?: unknown; brokerAlias?: unknown };
       } catch {
         return; // 坏文件不在此项的职责内（tcp 配置项已覆盖可查的坏形状）
       }
+      if (file === 'status-node.json') {
+        cur = typeof parsed.brokerAlias === 'string' && parsed.brokerAlias !== ''
+          ? group(starTitle(parsed.brokerAlias))
+          : group('其他');
+      } else if (file === 'status-broker.json') {
+        cur = typeof parsed.name === 'string' && parsed.name !== ''
+          ? group(starTitle(parsed.name))
+          : group('其他');
+      } else {
+        cur = group(starTitle(nodeStatusSelector(file)));
+      }
       if (!(nowMs - Date.parse(String(parsed.lastUpdated)) < TCP_STATUS_FRESH_MS)) {
-        skipped.push(file);
+        // 行动提示非故障：不计入通过/警告/错误计数
+        cur.push(`ℹ️ 陈旧状态文件（守护已停止）跳过版本对账：${file}——确认无用后可删除`);
         return;
       }
       const version = parsed.version;
@@ -329,13 +355,10 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
         selector === '' ? 'crosschat serve --connect --detach' : `crosschat serve --connect ${selector} --detach`,
       );
     }
-    if (skipped.length > 0) {
-      // 行动提示非故障：不计入通过/警告/错误计数
-      lines.push(`ℹ️ 跳过 ${skipped.length} 个陈旧状态文件（守护已停止）的版本对账：${skipped.join(' ')}——确认无用后可删除`);
-    }
   }
 
   // 7. outbox state + watchdog + mailbox (informational)
+  cur = group('其他');
   const parked = deps.listOutbox();
   if (parked.length === 0) {
     ok('✅ 发件箱空（无暂存消息）');
@@ -345,13 +368,20 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
     for (const { threadId, count, oldestParkedAt } of parked) {
       pass += 1;
       const age = oldestParkedAt === undefined ? '' : `，最旧 ${Math.max(1, Math.round((nowMs - oldestParkedAt) / 60_000))} 分钟`;
-      lines.push(
+      cur.push(
         `⏳ 线程 ${threadId.slice(0, 8)} 暂存 ${count} 条${age}（看门狗${watchdog.running ? '运行中' : '未运行'}；` +
           `滞留内容: ${mailboxFileFor(defaultOutboxDir(), threadId)}）`,
       );
     }
   }
 
+  // 025 组装：组名行顶格、条目行缩进两空格；空组不出行（如对账无差异的 tcp 组）；
+  // 其他组固定殿后（其条目可能在 tcp 组之前产生，如无星段的陈旧状态文件）
+  const lines: string[] = [];
+  for (const g of groups.filter((g) => g.title !== '其他').concat(groups.filter((g) => g.title === '其他'))) {
+    if (g.lines.length === 0) continue;
+    lines.push(g.title, ...g.lines.map((l) => `  ${l}`));
+  }
   lines.push(`结论: ${pass} 项通过，${warn} 项警告，${bad} 项错误`);
   return { output: lines.join('\n'), failed: bad > 0 };
 }

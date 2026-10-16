@@ -48,6 +48,18 @@ describe('runDoctor', () => {
     expect(report.output).toContain('结论:');
   });
 
+  // 025：两级缩进分组树——组名顶格、条目行缩进两空格、结论行格式与退出码不动
+  it('renders the grouped tree: bare group headers, two-space indented entries', () => {
+    const report = runDoctor(makeDeps());
+    const lines = report.output.split('\n');
+    expect(lines[0]).toBe('环境');
+    expect(lines[1]).toBe('  ✅ Node v24.7.0 (≥22)');
+    expect(lines.at(-3)).toBe('其他');
+    expect(lines.at(-2)).toBe('  ✅ 发件箱空（无暂存消息）');
+    expect(lines.at(-1)).toBe('结论: 8 项通过，0 项警告，0 项错误');
+    expect(report.failed).toBe(false);
+  });
+
   it('fails on Node < 22', () => {
     const report = runDoctor(makeDeps({ nodeVersion: '20.11.0' }));
     expect(report.failed).toBe(true);

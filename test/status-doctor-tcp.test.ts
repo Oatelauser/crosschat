@@ -246,9 +246,10 @@ describe('doctor tcp 三项检查', () => {
     writeFileSync(join(dir, 'tcp', 'broker.json'), JSON.stringify({ nodes: [{ label: 'node-1', key: 'k', addedAt: 'x' }] }));
     const deps = baseDoctorDeps({ tcpDir: join(dir, 'tcp') });
     const report = runDoctor(deps);
-    expect(report.output).toContain('✅ tcp 节点配置可解析（broker br）');
-    expect(report.output).toContain('✅ tcp broker 注册表可解析（1 节点）');
-    expect(report.output).toContain('✅ broker TCP 可达（127.0.0.1:7260）');
+    expect(report.output).toContain('tcp · br');
+    expect(report.output).toContain('✅ 节点条目可解析');
+    expect(report.output).toContain('✅ broker 注册表可解析（1 节点）');
+    expect(report.output).toContain('✅ broker 可达（127.0.0.1:7260）');
     expect(report.failed).toBe(false);
   });
 
@@ -258,7 +259,7 @@ describe('doctor tcp 三项检查', () => {
     writeFileSync(join(dir, 'tcp', 'node.json'), '{not json');
     const deps = baseDoctorDeps({ tcpDir: join(dir, 'tcp'), probeTcp: () => false });
     const report = runDoctor(deps);
-    expect(report.output).toContain('❌ tcp 节点配置 node.json 损坏');
+    expect(report.output).toContain('tcp\n  ❌ tcp 节点配置 node.json 损坏');
     expect(report.failed).toBe(true);
   });
 
@@ -268,28 +269,25 @@ describe('doctor tcp 三项检查', () => {
     writeFileSync(join(dir, 'tcp', 'node.json'), JSON.stringify({ broker: { host: '10.255.255.1', port: 7260 }, key: 'k' }));
     const deps = baseDoctorDeps({ tcpDir: join(dir, 'tcp'), probeTcp: () => false });
     const report = runDoctor(deps);
-    expect(report.output).toContain('❌ broker TCP 不可达');
+    expect(report.output).toContain('tcp · 10.255.255.1:7260');
+    expect(report.output).toContain('❌ broker 不可达（10.255.255.1:7260）——确认 broker 机 crosschat serve 在跑、网络/防火墙放行端口');
     expect(report.output).toContain('crosschat serve');
     expect(report.failed).toBe(true);
   });
 
-  it('B2 zero regression: a single legacy entry keeps the exact tcp lines (no starId warning)', () => {
+  it('025: single legacy entry → one tcp · group (可解析→可达→注册表), no numbering, no starId warning', () => {
     const dir = mkdtempSync(join(root, 't-'));
     mkdirSync(join(dir, 'tcp'), { recursive: true });
     writeFileSync(join(dir, 'tcp', 'node.json'), JSON.stringify({ broker: { host: '127.0.0.1', port: 7260, alias: 'br' }, key: 'k' }));
     writeFileSync(join(dir, 'tcp', 'broker.json'), JSON.stringify({ nodes: [{ label: 'node-1', key: 'k', addedAt: 'x' }] }));
     const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp') }));
-    const tcpLines = report.output.split('\n').filter((l) => l.includes('tcp') || l.includes('broker TCP'));
-    expect(tcpLines).toEqual([
-      '✅ tcp 节点配置可解析（broker br）',
-      '✅ tcp broker 注册表可解析（1 节点）',
-      '✅ broker TCP 可达（127.0.0.1:7260）',
-    ]);
+    expect(report.output).toContain('tcp · br\n  ✅ 节点条目可解析\n  ✅ broker 可达（127.0.0.1:7260）\n  ✅ broker 注册表可解析（1 节点）');
     expect(report.output).not.toContain('starId');
+    expect(report.output).not.toContain('条目 1');
     expect(report.failed).toBe(false);
   });
 
-  it('B2: multi-entry node.json gets per-entry lines, missing-starId and duplicate-star warnings', () => {
+  it('B2: multi-entry node.json groups per star, missing-starId and duplicate-star warnings', () => {
     const dir = mkdtempSync(join(root, 't-'));
     mkdirSync(join(dir, 'tcp'), { recursive: true });
     writeFileSync(
@@ -311,13 +309,11 @@ describe('doctor tcp 三项检查', () => {
       },
     });
     const report = runDoctor(deps);
-    expect(report.output).toContain('✅ tcp 节点条目 1/3 可解析（broker br1）');
-    expect(report.output).toContain('✅ tcp 节点条目 2/3 可解析（broker br2）');
-    expect(report.output).toContain('✅ tcp 节点条目 3/3 可解析（broker br3）');
+    // 星名即分组标题（条目顺序），编号条目退役
+    expect(report.output.split('\n').filter((l) => l.startsWith('tcp'))).toEqual(['tcp · br1', 'tcp · br2', 'tcp · br3']);
+    expect(report.output).toContain('tcp · br2\n  ✅ 节点条目可解析\n  ⚠️ 条目 br1 与 br2 的 starId 相同（aaaabbbbcccc）——疑似同一星配了两次\n  ❌ broker 不可达（10.0.0.2:7260）——确认 broker 机 crosschat serve 在跑、网络/防火墙放行端口');
     expect(report.output).toContain('⚠️ 条目 br3 缺 starId（旧配置——连一次自动回填或重新索取 node.json）');
-    expect(report.output).toContain('⚠️ 条目 br1 与 br2 的 starId 相同（aaaabbbbcccc）——疑似同一星配了两次');
-    expect(report.output).toContain('✅ 条目 1 broker TCP 可达（br1 10.0.0.1:7260）');
-    expect(report.output).toContain('❌ 条目 2 broker TCP 不可达（10.0.0.2:7260）——确认 broker 机 crosschat serve 在跑、网络/防火墙放行端口');
+    expect(report.output).toContain('tcp · br1\n  ✅ 节点条目可解析\n  ✅ broker 可达（10.0.0.1:7260）');
     expect(probes).toEqual(['10.0.0.1', '10.0.0.2', '10.0.0.3']); // 各自探活
     expect(report.failed).toBe(true);
   });
@@ -333,11 +329,12 @@ describe('F1 doctor 版本对账（常驻 vs 本机 CLI）', () => {
     expect(report.failed).toBe(false);
   });
 
-  it('broker 版本不一致 → ⚠️ 点名两版本与重启口诀（不 ❌）', () => {
+  it('broker 版本不一致 → ⚠️ 点名两版本与重启口诀（不 ❌）；status 带 name 时归该星组', () => {
     const dir = mkdtempSync(join(root, 't-'));
-    writeBrokerStatus(join(dir, 'tcp'), { state: 'running', port: 7260, lastUpdated: iso(-3_000), version: '1.5.4' });
+    writeBrokerStatus(join(dir, 'tcp'), { state: 'running', port: 7260, name: 'cloud', lastUpdated: iso(-3_000), version: '1.5.4' });
     const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.5.5' }));
     expect(report.output).toContain('⚠️ 常驻进程（broker）为 v1.5.4，本机 v1.5.5——升级后未重启：serve --stop && serve --detach');
+    expect(report.output).toContain('tcp · cloud\n  ⚠️ 常驻进程（broker）为 v1.5.4'); // 025：按产生者（name）归组
     expect(report.failed).toBe(false); // ⚠️ 级不 ❌
   });
 
@@ -366,8 +363,8 @@ describe('F1 doctor 版本对账（常驻 vs 本机 CLI）', () => {
     expect(report.output).not.toContain('serve --stop && serve --detach'); // 节点腿不给 broker 口诀
   });
 
-  // 015 刀一：lastUpdated 过期 = 守护已停止——跳过对账不误报，一行点名可删
-  it('陈旧状态文件（>90s）跳过版本对账：不误报升级后未重启，ℹ️ 一行点名可删', () => {
+  // 015 刀一：lastUpdated 过期 = 守护已停止——跳过对账不误报；025 起逐文件归组点名可删
+  it('陈旧状态文件（>90s）跳过版本对账：不误报，ℹ️ 逐文件归组点名（星段→星组，无星段→其他）', () => {
     const dir = mkdtempSync(join(root, 't-'));
     mkdirSync(join(dir, 'tcp'), { recursive: true });
     writeBrokerStatus(join(dir, 'tcp'), { state: 'running', port: 7260, lastUpdated: iso(-600_000), version: '1.4.0' });
@@ -376,8 +373,9 @@ describe('F1 doctor 版本对账（常驻 vs 本机 CLI）', () => {
     writeNodeStatus(join(dir, 'tcp'), { state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000), version: '1.5.5' });
     const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.5.5' }));
     expect(report.output).not.toContain('升级后未重启');
-    expect(report.output).toContain('ℹ️ 跳过 2 个陈旧状态文件（守护已停止）的版本对账：status-broker.json status-node-work.json——确认无用后可删除');
-    expect(report.output.match(/ℹ️ 跳过/g)).toHaveLength(1); // 一行，不逐文件刷屏
+    expect(report.output).toContain('tcp · work\n  ℹ️ 陈旧状态文件（守护已停止）跳过版本对账：status-node-work.json——确认无用后可删除');
+    expect(report.output).toContain('其他\n  ℹ️ 陈旧状态文件（守护已停止）跳过版本对账：status-broker.json——确认无用后可删除');
+    expect(report.output.match(/ℹ️ 陈旧状态文件/g)).toHaveLength(2); // 逐文件，各归各组
     expect(report.failed).toBe(false);
   });
 
