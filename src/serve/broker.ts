@@ -6,6 +6,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { timingSafeEqual } from 'node:crypto';
 import { hostname } from 'node:os';
 import { dirname } from 'node:path';
+import process from 'node:process';
 import { Buffer } from 'node:buffer';
 import { WebSocket, WebSocketServer } from 'ws';
 import {
@@ -940,6 +941,7 @@ export class Broker {
             state,
             port: this.port,
             version: this.d.version, // F1：doctor 版本对账（常驻版本 vs 本机 CLI）
+            pid: process.pid, // 026：doctor 验活用
             ...(this.starName === undefined ? {} : { name: this.starName }),
             startedAt: this.startedAt !== undefined ? new Date(this.startedAt).toISOString() : undefined,
             lastUpdated: new Date(this.d.now()).toISOString(),

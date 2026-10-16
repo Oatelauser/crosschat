@@ -10,6 +10,7 @@ import { resolveCodexExecutable } from '../codex/transport.js';
 import { defaultOutboxDir, mailboxFileFor, outboxSummary } from '../outbox.js';
 import { watchdogStatus } from '../watchdog.js';
 import { readNodeConfig, type BrokerEntry } from '../serve/node.js';
+import { isProcessAlive } from '../platform/process-inspector.js';
 import { listNodeStatusFiles, nodeStatusSelector, TCP_STATUS_FRESH_MS } from './status.js';
 
 /**
@@ -51,6 +52,8 @@ export interface DoctorDeps {
   cliVersion?: string;
   /** F1：tcp 目录列文件（status-node*.json 对账用）；缺省 readdirSync。 */
   readDir?(dir: string): string[];
+  /** 026：pid 验活（新鲜状态文件防幽灵误报）；缺省真 isProcessAlive。 */
+  isProcessAlive?(pid: number): boolean;
 }
 
 export interface DoctorReport {
@@ -309,9 +312,9 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
     const reconcile = (file: string, label: string, restartCmd: string): void => {
       const raw = deps.readFile(join(deps.tcpDir!, file));
       if (raw === undefined) return;
-      let parsed: { version?: unknown; lastUpdated?: unknown; name?: unknown; brokerAlias?: unknown };
+      let parsed: { version?: unknown; lastUpdated?: unknown; name?: unknown; brokerAlias?: unknown; pid?: unknown };
       try {
-        parsed = JSON.parse(raw) as { version?: unknown; lastUpdated?: unknown; name?: unknown; brokerAlias?: unknown };
+        parsed = JSON.parse(raw) as typeof parsed;
       } catch {
         return; // 坏文件不在此项的职责内（tcp 配置项已覆盖可查的坏形状）
       }
@@ -329,6 +332,15 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
       if (!(nowMs - Date.parse(String(parsed.lastUpdated)) < TCP_STATUS_FRESH_MS)) {
         // 行动提示非故障：不计入通过/警告/错误计数
         cur.push(`ℹ️ 陈旧状态文件（守护已停止）跳过版本对账：${file}——确认无用后可删除`);
+        return;
+      }
+      // 026：新鲜不轻信——心跳窗内守护可能已死（云端幽灵案）。带 pid 用验活核对；
+      // 无 pid（旧守护所写）无法核——两者都降 ℹ️，绝不报"升级后未重启"。
+      const pid = parsed.pid;
+      if (typeof pid !== 'number' || !(deps.isProcessAlive ?? isProcessAlive)(pid)) {
+        cur.push(
+          `ℹ️ 新鲜状态文件但${typeof pid === 'number' ? `pid ${pid} 不存活` : '无 pid 可验活'}（守护已停止）跳过版本对账：${file}`,
+        );
         return;
       }
       const version = parsed.version;

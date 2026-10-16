@@ -322,17 +322,17 @@ describe('doctor tcp 三项检查', () => {
 describe('F1 doctor 版本对账（常驻 vs 本机 CLI）', () => {
   it('版本一致 → 无警告行', () => {
     const dir = mkdtempSync(join(root, 't-'));
-    writeBrokerStatus(join(dir, 'tcp'), { state: 'running', port: 7260, lastUpdated: iso(-3_000), version: '1.5.5' });
-    writeNodeStatus(join(dir, 'tcp'), { state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000), version: '1.5.5' });
-    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.5.5' }));
+    writeBrokerStatus(join(dir, 'tcp'), { state: 'running', port: 7260, lastUpdated: iso(-3_000), version: '1.5.5', pid: 4242 });
+    writeNodeStatus(join(dir, 'tcp'), { state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000), version: '1.5.5', pid: 4243 });
+    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.5.5', isProcessAlive: () => true }));
     expect(report.output).not.toContain('升级后未重启');
     expect(report.failed).toBe(false);
   });
 
   it('broker 版本不一致 → ⚠️ 点名两版本与重启口诀（不 ❌）；status 带 name 时归该星组', () => {
     const dir = mkdtempSync(join(root, 't-'));
-    writeBrokerStatus(join(dir, 'tcp'), { state: 'running', port: 7260, name: 'cloud', lastUpdated: iso(-3_000), version: '1.5.4' });
-    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.5.5' }));
+    writeBrokerStatus(join(dir, 'tcp'), { state: 'running', port: 7260, name: 'cloud', lastUpdated: iso(-3_000), version: '1.5.4', pid: 4242 });
+    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.5.5', isProcessAlive: () => true }));
     expect(report.output).toContain('⚠️ 常驻进程（broker）为 v1.5.4，本机 v1.5.5——升级后未重启：serve --stop && serve --detach');
     expect(report.output).toContain('tcp · cloud\n  ⚠️ 常驻进程（broker）为 v1.5.4'); // 025：按产生者（name）归组
     expect(report.failed).toBe(false); // ⚠️ 级不 ❌
@@ -341,10 +341,10 @@ describe('F1 doctor 版本对账（常驻 vs 本机 CLI）', () => {
   it('节点守护（带选择器）版本不一致单独点名；旧守护无 version 字段跳过不误报', () => {
     const dir = mkdtempSync(join(root, 't-'));
     mkdirSync(join(dir, 'tcp'), { recursive: true });
-    writeFileSync(join(dir, 'tcp', 'status-node-work.json'), JSON.stringify({ state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000), version: '1.4.0' }));
+    writeFileSync(join(dir, 'tcp', 'status-node-work.json'), JSON.stringify({ state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000), version: '1.4.0', pid: 4242 }));
     // 旧守护：status-node.json 无 version 字段 → 不误报
     writeNodeStatus(join(dir, 'tcp'), { state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000) });
-    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.5.5' }));
+    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.5.5', isProcessAlive: () => true }));
     expect(report.output).toContain('⚠️ 常驻进程（节点守护 work）为 v1.4.0，本机 v1.5.5');
     expect(report.output).not.toContain('节点守护）为 vundefined');
     const warns = report.output.match(/升级后未重启/g) ?? [];
@@ -355,12 +355,32 @@ describe('F1 doctor 版本对账（常驻 vs 本机 CLI）', () => {
   it('节点守护版本不一致 → 建议按星名给 --connect 重启命令（默认守护=裸 --connect）', () => {
     const dir = mkdtempSync(join(root, 't-'));
     mkdirSync(join(dir, 'tcp'), { recursive: true });
-    writeFileSync(join(dir, 'tcp', 'status-node-work.json'), JSON.stringify({ state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000), version: '1.4.0' }));
-    writeNodeStatus(join(dir, 'tcp'), { state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000), version: '1.4.0' });
-    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.5.5' }));
+    writeFileSync(join(dir, 'tcp', 'status-node-work.json'), JSON.stringify({ state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000), version: '1.4.0', pid: 4242 }));
+    writeNodeStatus(join(dir, 'tcp'), { state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000), version: '1.4.0', pid: 4243 });
+    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.5.5', isProcessAlive: () => true }));
     expect(report.output).toContain('（节点守护 work）为 v1.4.0，本机 v1.5.5——升级后未重启：crosschat serve --connect work --detach');
     expect(report.output).toContain('（节点守护）为 v1.4.0，本机 v1.5.5——升级后未重启：crosschat serve --connect --detach');
     expect(report.output).not.toContain('serve --stop && serve --detach'); // 节点腿不给 broker 口诀
+  });
+
+  // 026：新鲜不轻信——pid 验活死 → ℹ️ 降级（心跳窗内的真死亡）
+  it('新鲜状态文件但 pid 不存活 → ℹ️ 跳过对账，不报升级后未重启', () => {
+    const dir = mkdtempSync(join(root, 't-'));
+    writeBrokerStatus(join(dir, 'tcp'), { state: 'running', port: 7260, lastUpdated: iso(-3_000), version: '1.5.4', pid: 9999 });
+    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.5.5', isProcessAlive: () => false }));
+    expect(report.output).not.toContain('升级后未重启');
+    expect(report.output).toContain('ℹ️ 新鲜状态文件但pid 9999 不存活（守护已停止）跳过版本对账：status-broker.json');
+    expect(report.failed).toBe(false);
+  });
+
+  // 026 云端幽灵案：旧守护写的文件无 pid——新鲜窗内同样降 ℹ️，绝不报"升级后未重启"
+  it('新鲜状态文件无 pid（旧守护所写）→ ℹ️ 跳过对账（幽灵案），不报升级后未重启', () => {
+    const dir = mkdtempSync(join(root, 't-'));
+    writeNodeStatus(join(dir, 'tcp'), { state: 'online', brokerAlias: 'br', since: iso(-60_000), lastUpdated: iso(-3_000), version: '1.6.2' });
+    const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp'), cliVersion: '1.6.3', isProcessAlive: () => true }));
+    expect(report.output).not.toContain('升级后未重启');
+    expect(report.output).toContain('ℹ️ 新鲜状态文件但无 pid 可验活（守护已停止）跳过版本对账：status-node.json');
+    expect(report.failed).toBe(false);
   });
 
   // 015 刀一：lastUpdated 过期 = 守护已停止——跳过对账不误报；025 起逐文件归组点名可删

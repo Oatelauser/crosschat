@@ -286,6 +286,8 @@ export interface NodeStatusFile {
   nextAttemptAt?: string;
   /** F1：本守护的 crosschat 版本（doctor 版本对账）；旧守护缺省。 */
   version?: string;
+  /** 026：守护进程 pid（doctor 新鲜文件验活防幽灵）；旧守护缺省。 */
+  pid?: number;
 }
 
 export interface NodeClientDeps {
@@ -1002,6 +1004,7 @@ export class NodeClient {
       since: new Date(this.stateSince).toISOString(),
       lastUpdated: new Date(this.d.now()).toISOString(),
       ...(this.d.version === undefined ? {} : { version: this.d.version }),
+      pid: process.pid, // 026：doctor 验活用
       ...(nextAttemptAt === undefined ? {} : { nextAttemptAt: new Date(nextAttemptAt).toISOString() }),
     };
     try {

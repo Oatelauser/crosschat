@@ -297,6 +297,26 @@ describe('B2 --stop 选择器与停机顺序（注入进程扫描/杀进程）',
     expect(await runServe({ stopTarget: 'both' }, deps)).toBe(0);
     expect(kills).toEqual([10, 11, 5]); // 节点在前，broker 最后
   });
+
+  // 026 空停善后：守护已异常死亡（零进程命中）但状态文件停在 online/running——复位 stopped，其余字段保留
+  it('bare --stop with zero hits resets ghost status files (online/running → stopped, fields kept)', async () => {
+    const kills: number[] = [];
+    const { deps, lines } = stopDeps([], kills);
+    const tcp = join(deps.baseDir, 'tcp');
+    mkdirSync(tcp, { recursive: true });
+    const nodeJson = JSON.stringify({ state: 'online', brokerAlias: 'cloud', since: '2026-10-16T00:00:00.000Z', lastUpdated: new Date().toISOString(), version: '1.6.2' });
+    writeFileSync(join(tcp, 'status-node.json'), nodeJson);
+    writeFileSync(join(tcp, 'status-broker.json'), JSON.stringify({ state: 'running', port: 7260, lastUpdated: new Date().toISOString(), version: '1.6.2' }));
+    expect(await runServe({ stopTarget: 'both' }, deps)).toBe(0);
+    expect(kills).toEqual([]);
+    const node = JSON.parse(readFileSync(join(tcp, 'status-node.json'), 'utf8')) as Record<string, unknown>;
+    const broker = JSON.parse(readFileSync(join(tcp, 'status-broker.json'), 'utf8')) as Record<string, unknown>;
+    expect(node.state).toBe('stopped');
+    expect(node.version).toBe('1.6.2'); // 其余字段保留
+    expect(broker.state).toBe('stopped');
+    expect(lines.some((l) => l.includes('stop node: 幽灵状态文件复位 stopped：status-node.json'))).toBe(true);
+    expect(lines.some((l) => l.includes('stop broker: 幽灵状态文件复位 stopped：status-broker.json'))).toBe(true);
+  });
 });
 });
 

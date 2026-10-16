@@ -18,6 +18,7 @@ import { ensureStarId, ensureStarName, genKeys, listNodes, readRegistry, registr
 import { buildStatusPayload, deliverViaRunSend, formatBrokerEntry, NodeClient, readNodeConfig, syncNodeJsonEntry, type BrokerEntry, type NodeConfig } from '../serve/node.js';
 import { FileInbox } from '../serve/file-channel.js';
 import { runAdopt, spawnServeDetachReal, warnIfBrokerLacksSessionCaps } from './session-star.js';
+import { listNodeStatusFiles } from './status.js';
 import type { SendDeps } from './send.js';
 import type { DeliverFrame, ErrorFrame, ResultFrame, SendFrame, StatusPayload } from '../serve/protocol.js';
 
@@ -685,15 +686,41 @@ function runStopSelector(selector: string, deps: ServeDeps): number {
   return rc;
 }
 
+/**
+ * 026 空停善后：零进程命中但状态文件仍 online/running = 守护已异常死亡（心跳窗内的
+ * 幽灵文件）——复位 state:"stopped"（其余字段原样保留），免得 doctor/status 误信。
+ * 返回复位的文件名；写失败不阻塞停机。
+ */
+function resetGhostStatusFiles(dir: string, files: string[], ghostState: string): string[] {
+  const reset: string[] = [];
+  for (const file of files) {
+    try {
+      const path = join(dir, file);
+      const parsed = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+      if (parsed.state !== ghostState) continue;
+      writeFileSync(path, `${JSON.stringify({ ...parsed, state: 'stopped' }, null, 2)}\n`, 'utf8');
+      reset.push(file);
+    } catch {
+      // 善后失败不阻塞停机
+    }
+  }
+  return reset;
+}
+
 function runStop(target: 'broker' | 'node' | 'both', deps: ServeDeps, registryFile: string): number {
   const procs = (deps.listServeProcesses ?? listServeProcesses)();
   const kill = deps.killPid ?? killPid;
   const brokers = procs.filter((p) => !p.cmdline.includes('--connect'));
   const nodes = procs.filter((p) => p.cmdline.includes('--connect'));
+  const statusDir = tcpDir(deps.baseDir);
   let rc = 0;
   // B2：both 时先停全部节点守护再停 broker——节点腿断流在前，broker 关闭在后
   if (target === 'node' || target === 'both') {
-    if (nodes.length === 0) deps.stdout('stop node: 未发现运行中的节点');
+    if (nodes.length === 0) {
+      deps.stdout('stop node: 未发现运行中的节点');
+      const reset = resetGhostStatusFiles(statusDir, listNodeStatusFiles(statusDir), 'online');
+      if (reset.length > 0) deps.stdout(`stop node: 幽灵状态文件复位 stopped：${reset.join('、')}`);
+    }
     for (const n of nodes) {
       if (kill(n.pid)) deps.stdout(`stop node: pid ${n.pid} 已终止`);
       else {
@@ -703,7 +730,11 @@ function runStop(target: 'broker' | 'node' | 'both', deps: ServeDeps, registryFi
     }
   }
   if (target === 'broker' || target === 'both') {
-    if (brokers.length === 0) deps.stdout('stop broker: 未发现运行中的 broker');
+    if (brokers.length === 0) {
+      deps.stdout('stop broker: 未发现运行中的 broker');
+      const reset = resetGhostStatusFiles(statusDir, ['status-broker.json'], 'running');
+      if (reset.length > 0) deps.stdout(`stop broker: 幽灵状态文件复位 stopped：${reset.join('、')}`);
+    }
     const port = readRegistry(registryFile).port ?? DEFAULT_PORT;
     const confirmed = (deps.pidsOnPort ?? pidsOnPort)(port);
     for (const b of brokers) {
