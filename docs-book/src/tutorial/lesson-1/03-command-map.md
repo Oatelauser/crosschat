@@ -26,6 +26,6 @@ send 是唯一入口，日常就三种形态，各有各的时机：
 |---|---|---|
 | `--to` 新消息 | 开口找人或换话题 | `crosschat send --to worker --body "……"` |
 | `--conversation` 回信 | 收到信封后照抄回信 | `crosschat send --conversation c21 --body "……"` |
-| 管道长正文 | 正文很长或含 `$`、引号等敏感字符 | `'……' | crosschat send --to worker`（省 `--body`） |
+| 管道长正文 | 正文很长或含 `$`、引号等敏感字符 | `'……' \| crosschat send --to worker`（省 `--body`） |
 
 三种形态在 [1.4 第一次对话](04-first-chat.md)里各有一次真实实录；正文大小的上限与提额在 [1.5 上限与限流](05-mechanism.md#上限与限流)。
