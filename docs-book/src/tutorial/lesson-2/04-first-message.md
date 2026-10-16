@@ -92,6 +92,8 @@ ssh: 无
 
 隐式发生什么：这就是一次普通的 ssh 远程命令，跑的是对端自己的 status——你看到的是对端那张名单，过滤参数照常可用（`ssh yangwsl crosschat status --claude`）。
 
+名单上的会话也不问出身，**TUI 不是收件前提**。codex 的投递目标一律是 daemon 里的线程——TUI 只是其中一个窗口（窗口占着线程时反而会挡住投递，报 CODEX_THREAD_LOCKED，关窗或等它释放即恢复），`codex exec` 这类无头方式拉起的线程同样在名单里，未命名的用 id8 寻址；claude 这边，后台（bg）会话与交互会话同权可投。例外只有 [2.3](03-deploy-config.md) 说过的 win 收件腿：codex 不可达（AF_UNIX 跨登录会话隔离）。唯一不担保的是在命令行里一次性匿名拉起的 claude（比如 `claude -p` 干一次性活）——它进不进名单取决于自己有没有注册消息通道，crosschat 不做承诺：发之前 status 看一眼，别赌。
+
 反方向看自己：跨机对话发起后，**本机**的 `crosschat status --conversations` 会出现这一对（发起侧也记账）：
 
 ```console
