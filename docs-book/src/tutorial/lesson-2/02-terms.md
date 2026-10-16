@@ -23,7 +23,7 @@
 
 hostname 会撞名——真实世界就有两台机器都叫 yang 的联邦在跑。mid（machine-id）是每台装机唯一的指纹。crosschat 取它的前 8 位（mid8）放进回执机器段：
 
-```
+```console
 delivered to beta2@yangwsl(9f8e7d6c) (turn 1)
                         └── 这 8 个十六进制字符就是 yangwsl 的 mid8
 ```

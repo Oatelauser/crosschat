@@ -26,7 +26,7 @@ crosschat 不新建任何连接层。网络、认证、加密全部复用 ssh；
 
 ssh 形态有一个默认前提：**两台机器彼此都能 ssh 到对方**（同局域网、VPN、或双方都有公网地址）。按你的网络对号入座：
 
-```
+```text
 双向可达                              单向 NAT（本机在 NAT 后）
 win ────► yangwsl                     win ────► 云端 Linux
 win ◄──── yangwsl                     win ✗───── （云端连不回）

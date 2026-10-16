@@ -8,7 +8,7 @@
 
 **第一步 · 开本机 sshd**（收件腿的终点——对端要能 ssh 进来给你投递）
 
-```
+```console
 > Get-Service sshd
 Status  Name
 Running sshd
@@ -29,12 +29,12 @@ True
 **第三步 · 公钥交换**——两台机器互装对方的公钥，漏任何一侧必卡认证
 
 win 的公钥给对端：打印 `Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub`，把整行追加到对端的 authorized_keys：
-```
+```bash
 # 在 Linux 对端上：
 echo '<win公钥整行>' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
 ```
 对端的公钥给 win：管理员组用户必须走专用文件，三条在**终端(管理员)**里跑，无输出 = 成功：
-```
+```powershell
 > $kf = "$env:ProgramData\ssh\administrators_authorized_keys"
 > Add-Content $kf -Value '<对端公钥整行>'
 > icacls $kf /inheritance:r /grant "SYSTEM:(F)" /grant "BUILTIN\Administrators:(F)"
@@ -46,7 +46,7 @@ echo '<win公钥整行>' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorize
 > notepad $env:USERPROFILE\.ssh\config
 ```
 文件末尾追加（占位符换成真值）：
-```
+```text
 Host yangwsl peer
   HostName <对端地址>
   Port <对端端口>
@@ -57,7 +57,7 @@ Host yangwsl peer
 
 **第五步 · 播种对端指纹**（首连自动记指纹，防后续卡密钥确认）
 
-```
+```console
 > ssh -o StrictHostKeyChecking=accept-new peer exit
 Warning: Permanently added '<对端地址>' (ED25519) to the list of known hosts.
 ```
@@ -65,7 +65,7 @@ Warning: Permanently added '<对端地址>' (ED25519) to the list of known hosts
 
 **第六步 · 出腿自证**（部署完成的判据）
 
-```
+```console
 > ssh -o BatchMode=yes peer crosschat --version
 1.6.4
 ```
@@ -80,7 +80,7 @@ Warning: Permanently added '<对端地址>' (ED25519) to the list of known hosts
 
 然后在**对端**把回程别名写成指向隧道口（双向场景第四步的对端侧在此换成这份）：
 
-```
+```text
 Host win
   HostName localhost
   Port 2222
@@ -95,7 +95,7 @@ Host win
 
 对端回程自证（走的就是隧道，穿回你的机器）：
 
-```
+```console
 > ssh -o BatchMode=yes win crosschat --version
 1.6.4
 ```
@@ -106,7 +106,7 @@ Host win
 
 sshd 起的登录 shell 只见**系统** PATH。npm 装的 crosschat 若落在用户级前缀（nvm、自定义目录），自证会这样报：
 
-```
+```console
 crosschat: REMOTE_FAILED [via peer] 远端异常退出(127): command not found
 ```
 
@@ -116,7 +116,7 @@ crosschat: REMOTE_FAILED [via peer] 远端异常退出(127): command not found
 
 没有第二台机器，也能把本课全部跑一遍——消息真的走一轮 ssh 管道再回到本机会话（sshd 已在 22 端口）：
 
-```
+```console
 > crosschat send --via ssh:localhost --to <本机会话名> --body "自环测试"
 delivered to <会话名>@win(3f2a81b0) (turn 1) · 续话 c1
 ```

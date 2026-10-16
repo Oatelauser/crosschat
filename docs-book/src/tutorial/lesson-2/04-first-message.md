@@ -4,7 +4,7 @@
 
 先看一次完整的跨机对话长什么样（真实实测实录；👤 是你，🤖 是 agent，📨 是 agent 收到的外来消息）：
 
-```
+```console
 👤 用户[boss -> beta2]    用 crosschat 走 ssh 跨机给 yangwsl 机器的会话「beta2」问好，要求对方回复。
 🤖 boss                   （组装并发出了那条跨机命令——下面第一条）
 🤖 beta2 收到             📨 来自另一会话的消息:
@@ -22,14 +22,14 @@
 
 用途：给另一台机器上的会话发一条消息，名字在**对端**机上解析。
 
-```
+```console
 > crosschat send --via ssh:yangwsl --to beta2 --body "你好 beta2，这是跨机问候，收到请回"
 delivered to beta2@yangwsl(9f8e7d6c) (turn 1) · 续话 c1
 ```
 
 隐式发生什么，一段讲完：这条命令没有在本机投递——crosschat 组装了一条**固定的远端命令**，经 ssh 送到 yangwsl 执行，等价于有人在那台机器上敲了 `send --to beta2`。名字 beta2 在对端名单里解析，本机同名会话与此无关。回执从对端传回后按本机格式重渲染，所以输出跟单机几乎一样，只有收件人多了机器段 `@yangwsl(9f8e7d6c)`——名字加对端指纹（2.2 的 mid8）。忙时三态照单机语义：
 
-```
+```console
 queued to beta2@yangwsl(9f8e7d6c) (turn 2; 对方正忙，已入队，本轮结束即处理) · 续话 c1
 
 已寄存给 beta2@yangwsl(9f8e7d6c)（对方忙，未送达）。队列共 1 条，看门狗每 0.5–5 分钟自动重试，无需手动 status。
@@ -41,7 +41,7 @@ delivered / queued 都无需重发；parked 是旧版守护的异常态，已暂
 
 再把别名敲错一次，看看跨机报错长什么样（传输层不通时）：
 
-```
+```console
 > crosschat send --via ssh:yangsl --to beta2 --body "…"        # 别名手滑少了个 w
 crosschat: SSH_TRANSPORT_FAILED: ssh 无法到达 yangsl（不通/密钥/known_hosts）。自证: ssh yangsl crosschat --version（顺带核对版本）；检查 ~/.ssh/config 与网络。
 ```
@@ -54,7 +54,7 @@ crosschat: SSH_TRANSPORT_FAILED: ssh 无法到达 yangsl（不通/密钥/known_h
 
 用途：对端收到跨机消息后回复——照抄信封里的命令，一个地址都不用写。
 
-```
+```console
 > crosschat send --conversation c3 --body "收到！跨机闭环成立"
 delivered to claude/boss@win(3f2a81b0) (turn 2) · 续话 c3
 ```
@@ -67,7 +67,7 @@ delivered to claude/boss@win(3f2a81b0) (turn 2) · 续话 c3
 
 用途：发之前先确认对端有什么会话——跨机的对端**不在本机 status 里**，别赌名字发送。
 
-```
+```console
 > ssh yangwsl crosschat status
 本机会话: claude 1 · codex 1
   claude beta2  3 分钟前
@@ -82,7 +82,7 @@ ssh: 无
 
 反方向看自己：跨机对话发起后，**本机**的 `crosschat status --conversations` 会出现这一对（发起侧也记账）：
 
-```
+```console
 会话:
   文档book → ssh专家    9 分钟前   turn 6   delivered  c17
 ```
@@ -95,21 +95,21 @@ ssh: 无
 
 先看本地直接挡下的样子（默认上限下硬塞 20KB）：
 
-```
+```console
 > crosschat send --via ssh:yangwsl --to beta2 --body "<20KB 长文>"
 crosschat: MESSAGE_TOO_LARGE: Body is 20000 bytes; the limit is 16384. 可提额：--max-body-kb <KiB> 或 CROSSCHAT_MAX_BODY_KIB=<KiB>（claude 端点硬顶 64KiB、codex 端点 1MiB，到顶只能落盘）。跨机大内容（ssh 形态）：先 scp <文件> yangwsl:/tmp/<文件名>，再 crosschat send --via ssh:yangwsl … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）
 ```
 
 还有一种更隐蔽的：本机提了额、出发了、**在对端被拦下**——错误带 `[via]` 前缀回来，教学也换成接收方视角：
 
-```
+```console
 > crosschat send --via ssh:yangwsl --to beta2 --body "<20KB 长文>" --max-body-kb 64
 crosschat: MESSAGE_TOO_LARGE: [via yangwsl] Body is 20000 bytes; the limit is 16384 on this machine (a --via remote send). 发送方本机提额无效——上限属接收方（本机）配置。大内容走 scp 旁路：发送方先落盘，scp <文件> <接收方>:/tmp/<文件名>，再 crosschat send --via ssh:<接收方> … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）。确需直发大内容：由接收方（本机）操作者调 CROSSCHAT_MAX_BODY_KIB。
 ```
 
 照报错教的做（scp 与 `--via` 共用同一份别名和密钥，2.3 配一次全通）：
 
-```
+```console
 > scp big-analysis.txt yangwsl:/tmp/big-analysis.txt
 > crosschat send --via ssh:yangwsl --to beta2 --body "分析 /tmp/big-analysis.txt，结论报过来"
 delivered to beta2@yangwsl(9f8e7d6c) (turn 3) · 续话 c1
