@@ -33,4 +33,4 @@ crosschat 拒绝了这条路。它没有自己的守护进程、不监听任何�
 
 这不是偷懒，是设计边界：消息的"底座"（管道、注册表、会话进程）本来就在，crosschat 只做投递这一件事，能不常驻就不常驻。好处立竿见影——没有"crosschat 挂了"这种故障形态；坏处也明说：它不缓存离线消息、不做历史检索，那些是别的东西的职责（[第四部 设计边界](../../explanation/design-boundary.md)展开讲）。
 
-一个例外要提前打招呼：codex 侧的接收依赖 codex 自己的 app-server daemon——那是 codex 生态的常驻件，不是 crosschat 的。[1.4 通信机制](04-mechanism.md)会看清两条投递腿各靠什么活着。
+一个例外要提前打招呼：codex 侧的接收依赖 codex 自己的 app-server daemon——那是 codex 生态的常驻件，不是 crosschat 的。[1.5 通信机制](05-mechanism.md)会看清两条投递腿各靠什么活着。

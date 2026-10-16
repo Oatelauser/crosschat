@@ -1,6 +1,6 @@
 # 1.4 通信机制
 
-[1.3 第一次对话](03-first-chat.md)的每条命令背后踩着同一套地层。这一节把一条 send 拆成旅程看一遍，然后六件最值得知道的机制讲透：两条投递腿、身份、信封、回信认路、忙时三态、上限与限流。
+[1.4 第一次对话](04-first-chat.md)的每条命令背后踩着同一套地层。这一节把一条 send 拆成旅程看一遍，然后六件最值得知道的机制讲透：两条投递腿、身份、信封、回信认路、忙时三态、上限与限流。
 
 ## 一条 send 的旅程
 
@@ -43,7 +43,7 @@ crosschat send --to worker --body "……"
 
 ## codex 腿：proxy 与 daemon
 
-同样先看"不用它会怎样"：daemon 没跑，codex 侧整条腿瘫痪，报错长这样（真实实录，[1.3](03-first-chat.md)起 worker 前捕获）：
+同样先看"不用它会怎样"：daemon 没跑，codex 侧整条腿瘫痪，报错长这样（真实实录，[1.4](04-first-chat.md)起 worker 前捕获）：
 
 ```console
 > crosschat status --codex
@@ -77,7 +77,7 @@ proxy 进程 ── stdio 上做 WebSocket 升级 ──► app-server daemon（
 
 ## 信封解剖
 
-[1.3](03-first-chat.md#对面收到了什么)那个信封，字段逐个看：
+[1.4](04-first-chat.md#对面收到了什么)那个信封，字段逐个看：
 
 ```text
 <cross-session-message from-name="单机通信专家" turn="1">
