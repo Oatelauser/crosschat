@@ -28,6 +28,13 @@ True
 
 **第三步 · 公钥交换**——两台机器互装对方的公钥，⚠️ 漏任何一侧必卡认证
 
+```text
+第一步 打印            第二步 装入                        效果
+win   id_ed25519.pub ─────► Linux ~/.ssh/authorized_keys      （win 免密连 Linux ✓）
+Linux id_ed25519.pub ─────► win   administrators_authorized_keys（Linux 免密连 win ✓）
+两支方向都要装；漏一支 = 一个方向通、另一个方向卡认证
+```
+
 win 的公钥给对端：打印 `Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub`，把整行追加到对端的 authorized_keys：
 ```bash
 # 在 Linux 对端上：
@@ -77,6 +84,17 @@ Warning: Permanently added '<对端地址>' (ED25519) to the list of known hosts
 
 - win 用 Xshell：会话属性 → 连接 → SSH → 隧道 → 添加"远程(传入)"，源 `localhost:2222`，目标 `localhost:22`，保持会话开着
 - 或 Terminal 跑一条挂着：`ssh -N -R 2222:localhost:22 -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes peer`
+
+```text
+出站腿（与双向场景完全一样）
+  win ─────────────── ssh ──────────────► 云端 Linux
+
+回程腿（云端连不回 NAT 内的 win，改走常驻反向隧道）
+  云端 Linux
+    │  对端别名 win = localhost:2222
+    ▼
+  localhost:2222 ══ 隧道（随 Xshell / ssh -R 会话常驻）══► win 的 sshd:22
+```
 
 然后在**对端**把回程别名写成指向隧道口（双向场景第四步的对端侧在此换成这份）：
 
