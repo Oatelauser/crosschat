@@ -1,4 +1,4 @@
-# 1.4 第一次对话
+# 1.3 第一次对话
 
 ## 对话全景
 
@@ -44,7 +44,7 @@ crosschat claude -n boss
 /rename worker
 ```
 
-`crosschat claude` / `crosschat codex` 会原样转发其余参数（`-c`、`resume`、`--model` 照用），只多做了接收开通与身份清洗两件事（[1.3](03-install.md#doctor-自检)立的习惯就是它）。名字可以带空格——命令里记得加引号：`-n "boss 2"`。
+`crosschat claude` / `crosschat codex` 会原样转发其余参数（`-c`、`resume`、`--model` 照用），只多做了接收开通与身份清洗两件事（[环境搭建](../../preface/04-env-setup.md#doctor-自检)立的习惯就是它）。名字可以带空格——命令里记得加引号：`-n "boss 2"`。
 
 ## 查本机名单
 
@@ -107,7 +107,7 @@ delivered to codex/01a14554 (turn 1) · 续话 c21
 回执: 暂未在对方会话记录中确认（可能仍在落盘）；稍后查 send-log.jsonl 或重跑 status
 ```
 
-一行回执三个信息点：**delivered**（投递三态之一）、**turn 1**（这段对话第一轮）、**续话 c21**（本机短柄，回信照抄它）。第二行是回执探针：crosschat 投完会去对方会话记录里找这条消息的落盘痕迹，短窗口内没等到就如实说"暂未确认"——**"未确认"不是丢失**，稍后跑一次 `status --conversations` 通常就翻成已确认（[1.5](05-mechanism.md#忙了怎么办三态与看门狗)看全套）。
+一行回执三个信息点：**delivered**（投递三态之一）、**turn 1**（这段对话第一轮）、**续话 c21**（本机短柄，回信照抄它）。第二行是回执探针：crosschat 投完会去对方会话记录里找这条消息的落盘痕迹，短窗口内没等到就如实说"暂未确认"——**"未确认"不是丢失**，稍后跑一次 `status --conversations` 通常就翻成已确认（[1.4](04-mechanism.md#忙了怎么办三态与看门狗)看全套）。
 
 隐式发生什么：这条命令同时做了——解析发送方身份（从环境变量认出我是谁）、按 id8 定位线程、检查正文限额（默认 16KiB）、把对话引用前进一步（turn 计数）、投递、在 `~/.crosschat/send-log.jsonl` 记一行账（只有元数据，永不记正文）。全程一次性，跑完即退。
 
@@ -156,4 +156,4 @@ delivered to 二期8 (turn 1) · 续话 c19
 
 （PowerShell 主线：单引号 here-string，收尾 `'@` 必须顶格。Linux 一行带过：bash 用 `cat <<'EOF' | crosschat send --to <名>` 定界符带单引号，`$` 与反引号同样逐字不展开。更多读文件正文、编码防坑的分层见 [如何发送大内容](../../howto/large-content.md)。）
 
-到这里，一轮完整对话走通了。每条命令背后踩着哪套地层——[1.5 通信机制](05-mechanism.md)拆开看。
+到这里，一轮完整对话走通了。每条命令背后踩着哪套地层——[1.4 通信机制](04-mechanism.md)拆开看。

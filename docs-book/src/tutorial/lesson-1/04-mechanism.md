@@ -1,6 +1,6 @@
-# 1.5 通信机制
+# 1.4 通信机制
 
-[1.4 第一次对话](04-first-chat.md)的每条命令背后踩着同一套地层。这一节把一条 send 拆成旅程看一遍，然后六件最值得知道的机制讲透：两条投递腿、身份、信封、回信认路、忙时三态、上限与限流。
+[1.3 第一次对话](03-first-chat.md)的每条命令背后踩着同一套地层。这一节把一条 send 拆成旅程看一遍，然后六件最值得知道的机制讲透：两条投递腿、身份、信封、回信认路、忙时三态、上限与限流。
 
 ## 一条 send 的旅程
 
@@ -9,7 +9,7 @@ crosschat send --to worker --body "……"
    │
    ① 入口补投      先扫一眼发件箱，有滞留顺手补投（不连坐本命令）
    ② 身份反查      从环境变量认出发送方（claude/codex/human）
-   ③ 目标解析      名字全名 → 唯一前缀 → id8（1.4 的判定序）
+   ③ 目标解析      名字全名 → 唯一前缀 → id8（1.3 的判定序）
    ④ 上限检查      正文 ≤ 配置额（默认 16KiB），超额就地报错教学
    ⑤ 轮次前进      对话引用 turn+1（--to 同名即续上最近对话）
    ⑥ 投递          ┌ claude 目标 → 注册表 → 命名管道一次写
@@ -23,7 +23,7 @@ crosschat send --to worker --body "……"
 
 ## claude 腿：注册表与管道
 
-先看"不用它会怎样"：直接裸敲 `claude` 起的会话，管道上送来的消息会停在收件保持区——进程没开通跨会话入站，消息进不了对话。这就是 [1.3](03-install.md#doctor-自检)立下"用 `crosschat claude` 启动"习惯的原因：启动器多注入一个设置（`crossSessionInbound: accept`），门才开。
+先看"不用它会怎样"：直接裸敲 `claude` 起的会话，管道上送来的消息会停在收件保持区——进程没开通跨会话入站，消息进不了对话。这就是 [环境搭建](../../preface/04-env-setup.md#doctor-自检)立下"用 `crosschat claude` 启动"习惯的原因：启动器多注入一个设置（`crossSessionInbound: accept`），门才开。
 
 开了门，这条腿的工作方式朴素到极致：
 
@@ -43,7 +43,7 @@ crosschat send --to worker --body "……"
 
 ## codex 腿：proxy 与 daemon
 
-同样先看"不用它会怎样"：daemon 没跑，codex 侧整条腿瘫痪，报错长这样（真实实录，[1.4](04-first-chat.md)起 worker 前捕获）：
+同样先看"不用它会怎样"：daemon 没跑，codex 侧整条腿瘫痪，报错长这样（真实实录，[1.3](03-first-chat.md)起 worker 前捕获）：
 
 ```console
 > crosschat status --codex
@@ -73,11 +73,11 @@ proxy 进程 ── stdio 上做 WebSocket 升级 ──► app-server daemon（
 
 发送方不需要自报家门——crosschat 从环境变量反查：claude 会话带着自己的管道变量（去注册表里恰好匹配到一个会话，就是它）、codex 带着自己的线程变量，两者都没有就是 human。这套反查同时喂给三处：信封署名、限额桶、对话分片的端点。
 
-一个真实会踩的坑：两种变量同时在场（比如从 claude 终端里启动的 codex daemon 又派生了 shell），报 CALLER_IDENTITY_CONFLICT，报错原文里带着两条自纠路——临时 `env -u` 前缀清掉另一族，或从干净终端重启 daemon。启动器 `crosschat claude` / `crosschat codex` 已经把"剥对族变量"机构化了，所以照 [1.3](03-install.md#doctor-自检)的习惯启动，这个坑基本绝迹。全部环境变量见[环境变量总表](../../reference/env-vars.md)。
+一个真实会踩的坑：两种变量同时在场（比如从 claude 终端里启动的 codex daemon 又派生了 shell），报 CALLER_IDENTITY_CONFLICT，报错原文里带着两条自纠路——临时 `env -u` 前缀清掉另一族，或从干净终端重启 daemon。启动器 `crosschat claude` / `crosschat codex` 已经把"剥对族变量"机构化了，所以照 [环境搭建](../../preface/04-env-setup.md#doctor-自检)的习惯启动，这个坑基本绝迹。全部环境变量见[环境变量总表](../../reference/env-vars.md)。
 
 ## 信封解剖
 
-[1.4](04-first-chat.md#对面收到了什么)那个信封，字段逐个看：
+[1.3](03-first-chat.md#对面收到了什么)那个信封，字段逐个看：
 
 ```text
 <cross-session-message from-name="单机通信专家" turn="1">
@@ -117,7 +117,7 @@ proxy 进程 ── stdio 上做 WebSocket 升级 ──► app-server daemon（
 3. **`--to` 同名即续**——懒得翻短柄时，直接 `send --to worker` 自动接上这对会话的最近对话
 4. **迟回复不撞车**——两人拿着同一封旧信同时回信，轮次以本机分片记录的最新线为准，不会都算成同一轮
 
-完整的 `mc2_` 引用八十多字符、自包含全部路条；`mc1_` 旧格式永久兼容解码，旧信封不过期。细节与字节布局见[第2课 同名机器与 ref 讲解](../lesson-2/05-mechanism.md)（ref 是单机与跨机共用的机制，那边讲得最深）。
+完整的 `mc2_` 引用八十多字符、自包含全部路条；`mc1_` 旧格式永久兼容解码，旧信封不过期。细节与字节布局见[第2课 同名机器与 ref 讲解](../lesson-2/06-mechanism.md)（ref 是单机与跨机共用的机制，那边讲得最深）。
 
 ## 忙了怎么办：三态与看门狗
 
@@ -169,7 +169,7 @@ crosschat: MESSAGE_TOO_LARGE: Body is 17000 bytes; the limit is 16384. 可提额
 三句话划清单机通信承诺的范围：
 
 1. **信任边界 = 同一台机器的同一个用户**。unix 腿连 auth 都省了——内核担保管道两端同 uid；win 腿的密钥文件也只有同用户读得到。跨用户的隔离与防护，crosschat 不做也不承诺，见[安全模型](../../explanation/security.md)。
-2. **win 的一个平台例外**：codex daemon 的控制 socket 是 AF_UNIX，Windows 把它按登录会话隔离——从 sshd 会话、服务会话这类**另一登录会话**里投 codex 会吃连接拒绝（os error 10061）。日常终端与 daemon 同会话，无感；这条边界跨机侧同样成立，[第2课 2.3](../lesson-2/03-deploy-config.md)有实测注记。
+2. **win 的一个平台例外**：codex daemon 的控制 socket 是 AF_UNIX，Windows 把它按登录会话隔离——从 sshd 会话、服务会话这类**另一登录会话**里投 codex 会吃连接拒绝（os error 10061）。日常终端与 daemon 同会话，无感；这条边界跨机侧同样成立，[第2课 2.4](../lesson-2/04-deploy-config.md)有实测注记。
 3. **单机发文件没有专门通道**：发路径用 `--body`，发内容走管道。文件级传输（`--file`）是 tcp 星的内建能力，[第3课](../lesson-3.md)见。
 
 ## 一句话记住

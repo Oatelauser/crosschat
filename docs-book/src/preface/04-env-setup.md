@@ -1,4 +1,4 @@
-# 1.3 安装
+# 4. 环境搭建
 
 安装的目标只有一个：跑完本节，`crosschat doctor` 给出全绿或只有警告的自检报告。doctor 是 crosschat 自带的环境体检——装得对不对、缺什么、下一步该干什么，它一条命令说清。
 
@@ -99,6 +99,6 @@ tcp · cloud-broker
 {"status":"started","backend":"pid","pid":35652,...,"cliVersion":"0.160.1","appServerVersion":"0.160.0"}
 ```
 
-doctor 与 status 是一对搭档，各答一个问题：**doctor 答"环境为什么通/不通"**（依赖、版本、配置——查的是因），**status 答"现在有谁、消息到没到"**（名单、对话、滞留——查的是果）。环境报 ❌ 先 doctor，行为奇怪先 status；两条命令入口处都会顺手补投滞留消息（[1.5](05-mechanism.md#一条-send-的旅程)）。
+doctor 与 status 是一对搭档，各答一个问题：**doctor 答"环境为什么通/不通"**（依赖、版本、配置——查的是因），**status 答"现在有谁、消息到没到"**（名单、对话、滞留——查的是果）。环境报 ❌ 先 doctor，行为奇怪先 status；两条命令入口处都会顺手补投滞留消息（[1.4](../tutorial/lesson-1/04-mechanism.md#一条-send-的旅程)）。
 
-装完立一个习惯：**以后起会话用 `crosschat claude` / `crosschat codex`，不裸敲 `claude` / `codex`**。它们原样转发你熟悉的一切参数，只多做了两件事：让这个会话能收消息（裸启动的 claude 收不到，原因 [1.5 claude 腿](05-mechanism.md#claude-腿注册表与管道)讲），以及清理容易打架的身份环境变量。第一课到此，装备齐了——[1.4 第一次对话](04-first-chat.md)开始说话。
+装完立一个习惯：**以后起会话用 `crosschat claude` / `crosschat codex`，不裸敲 `claude` / `codex`**。它们原样转发你熟悉的一切参数，只多做了两件事：让这个会话能收消息（裸启动的 claude 收不到，原因 [1.4 claude 腿](../tutorial/lesson-1/04-mechanism.md#claude-腿注册表与管道)讲），以及清理容易打架的身份环境变量。环境搭建到此，装备齐了——[1.3 第一次对话](../tutorial/lesson-1/03-first-chat.md)开始说话。

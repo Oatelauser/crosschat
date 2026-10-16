@@ -1,17 +1,17 @@
 # 前言
 
-- [这本书讲什么](preface/what.md)
-- [怎么读](preface/how-to-read.md)
-- [符号约定](preface/symbols.md)
+- [1 这本书讲什么](preface/what.md)
+- [2 怎么读](preface/how-to-read.md)
+- [3 符号约定](preface/symbols.md)
+- [4 环境搭建](preface/04-env-setup.md)
 
 # 第一部 教程
 
 - [第1课 单机通信](tutorial/lesson-1.md)
   - [1.1 背景与场景](tutorial/lesson-1/01-background.md)
   - [1.2 术语](tutorial/lesson-1/02-terms.md)
-  - [1.3 安装](tutorial/lesson-1/03-install.md)
-  - [1.4 第一次对话](tutorial/lesson-1/04-first-chat.md)
-  - [1.5 通信机制](tutorial/lesson-1/05-mechanism.md)
+  - [1.3 第一次对话](tutorial/lesson-1/03-first-chat.md)
+  - [1.4 通信机制](tutorial/lesson-1/04-mechanism.md)
 - [第2课 跨机通信（ssh）](tutorial/lesson-2.md)
   - [2.1 背景与场景](tutorial/lesson-2/01-background.md)
   - [2.2 术语](tutorial/lesson-2/02-terms.md)
