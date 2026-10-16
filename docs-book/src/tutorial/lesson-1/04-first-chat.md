@@ -51,7 +51,7 @@ crosschat claude -n boss
 用途：发消息前先确认对端在册——名单就是本机此刻全部可投递的会话。
 
 ```console
-$ crosschat status
+> crosschat status
 本机会话: claude 4 · codex 20
   claude 文档book  1 分钟前
   claude 单机通信专家  4 分钟前
@@ -75,7 +75,7 @@ ssh: 无
 名单上的会话不挑启动方式，**TUI 不是收件前提**。codex 的投递目标一律是 daemon 里的线程——TUI 只是其中一个窗口（窗口占着线程时反而会挡住投递，报 CODEX_THREAD_LOCKED，关窗或等它释放即恢复），`codex exec` 这类无头方式拉起的线程同样在册可投，未命名的用 id8 寻址；claude 这边，后台（bg）会话与交互会话同权可投。真实例子（写作机器的 `status --codex --all`，前缀 `01a1` 开头的就是 id8）：
 
 ```console
-$ crosschat status --codex --all
+> crosschat status --codex --all
 codex:
   beta12         CC\test-cc    10-07 23:04 crosschat   01a116e5  not_loaded
   架构改造3       CC\ai-front-spec 10-03 13:18 codex-tui  01a10033  not_loaded
@@ -90,7 +90,7 @@ codex:
 用一个真实无头 worker 当收件人：先 `codex exec "只用一句中文回复：worker 已就位。"` 起一个线程（真实输出的关键几行）：
 
 ```console
-$ codex exec "只用一句中文回复：worker 已就位。"
+> codex exec "只用一句中文回复：worker 已就位。"
 OpenAI Codex v0.160.1
 --------
 session id: 01a14554-ba83-7402-bea7-2bccd9c4b5bb
@@ -102,7 +102,7 @@ worker 已就位。
 id8 就是 session id 的前 8 位（`01a14554`）。现在发消息——`--to` 名字与 id8 是同一个参数，判定序是全名精确、唯一前缀、最后 id：
 
 ```console
-$ crosschat send --to 01a14554 --body "第1课实录取材：收到请按信封里的回复命令回一句确认即可。"
+> crosschat send --to 01a14554 --body "第1课实录取材：收到请按信封里的回复命令回一句确认即可。"
 delivered to codex/01a14554 (turn 1) · 续话 c21
 回执: 暂未在对方会话记录中确认（可能仍在落盘）；稍后查 send-log.jsonl 或重跑 status
 ```
@@ -129,7 +129,7 @@ worker 收到的不是你敲的那行命令，而是一个信封。以下逐字�
 worker 的确照抄了。几分钟后查对话总览：
 
 ```console
-$ crosschat status --conversations
+> crosschat status --conversations
 会话:
   codex/01a14554 → 单机通信专家  1 分钟前  turn 2  delivered  c21
   文档book → 单机通信专家        9 分钟前  turn 5  delivered  c20

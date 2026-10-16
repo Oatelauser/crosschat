@@ -46,7 +46,7 @@ crosschat send --to worker --body "……"
 同样先看"不用它会怎样"：daemon 没跑，codex 侧整条腿瘫痪，报错长这样（真实实录，[1.4](04-first-chat.md)起 worker 前捕获）：
 
 ```console
-$ crosschat status --codex
+> crosschat status --codex
 codex:
   unavailable (CODEX_PROXY_SPAWN_FAILED: Failed to establish the codex app-server proxy channel.)
 ```
@@ -146,7 +146,7 @@ park（发件箱落盘 + mailbox 镜像可读）
 正文超限长这样（真实实录，17KB 撞默认线）：
 
 ```console
-$ crosschat send --to 01a14554 --body "<17000 字符>"
+> crosschat send --to 01a14554 --body "<17000 字符>"
 crosschat: MESSAGE_TOO_LARGE: Body is 17000 bytes; the limit is 16384. 可提额：--max-body-kb <KiB> 或 CROSSCHAT_MAX_BODY_KIB=<KiB>（claude 端点硬顶 64KiB、codex 端点 1MiB，到顶只能落盘）。Write the content to a file and send the path instead.
 ```
 
