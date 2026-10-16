@@ -5,6 +5,20 @@
 ## [Unreleased]
 
 
+## [1.6.4] - 2026-10-16
+
+### 026：幽灵常驻进程修复（doctor 验活失真 + --stop 空停不善后）
+
+- **doctor 版本对账加 pid 验活**：守护死亡后 90s 心跳窗内的 `state:online` 状态文件不再被当活进程——带 pid 且验活死、或旧守护文件无 pid 字段，均降级 ℹ️（跳过版本对账），不再误报"⚠️ 升级后未重启"；带 pid 且验活活照旧 ⚠️；超窗 ℹ️ 陈旧路径逐字节不变（零回归）
+- **心跳写者补记 pid**（additive）：节点守护与 broker 的 status 文件新增 `pid` 字段——doctor 验活有据可核，旧文件无 pid 自然走 ℹ️
+- **--stop 空停善后**：node/broker 停靠零进程命中时，把 state=online/running 的状态文件复位为 stopped（其余字段保留，写失败不阻塞停机）并打印复位行——幽灵窗口两头闭合
+- 缺陷来源：2026-10-16 云端 1.6.3 drill 实钓（守护异常消失后状态文件无 pid 可核、`--stop` 不留痕）
+
+### skill：PS 5.1 管道 BOM 防坑
+
+- here-string 管道教学补一句：Windows PowerShell 5.1 可能给 stdin 前置 BOM（U+FEFF），字节精确场景先 `$OutputEncoding = New-Object System.Text.UTF8Encoding $false`；PowerShell 7 无此问题（drill 实测发现）
+
+
 ## [1.6.3] - 2026-10-16
 
 ### 024：v1.6.2 首轮现场反馈打磨
