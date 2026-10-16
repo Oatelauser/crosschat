@@ -19,7 +19,7 @@
 - [第2课 跨机通信（ssh）](tutorial/lesson-2.md)
   - [2.1 背景与场景](tutorial/lesson-2/01-background.md)
   - [2.2 术语](tutorial/lesson-2/02-terms.md)
-  - [2.3 SSH 配置](tutorial/lesson-2/03-ssh-setup.md)
+  - [2.3 SSH 部署与配置](tutorial/lesson-2/03-deploy-config.md)
   - [2.4 第一条跨机消息](tutorial/lesson-2/04-first-message.md)
   - [2.5 通信机制](tutorial/lesson-2/05-mechanism.md)
 - [第3课 跨机通信（tcp）](tutorial/lesson-3.md)
