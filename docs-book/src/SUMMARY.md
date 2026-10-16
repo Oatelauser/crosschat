@@ -1,52 +1,69 @@
-<!-- 定稿 v1.0（2026-10-15 002 关票）——四拍板：六课全写 / Windows 演示主线（Linux 每步一行带过）/ 第4课命名换轨留主线 / 附录三件全收 -->
+<!-- 定稿 v2.3（2026-10-16，002 修订七轮收敛）——净标题+编号；括号仅存同名区分词（ssh/tcp）；
+     结构拍板：三课主线（命名溶解）/ 命令为主效果就地讲 / tcp 命令一览+细节归命令总表 /
+     通信机制（原「底层」删）/ 实操自验+附录C 承接验证 / 双题制（侧栏短题、章首长题见各页 H1） -->
 
 # 前言
 
-- [前言](preface.md)
+- [这本书讲什么](preface/what.md)
+- [怎么读](preface/how-to-read.md)
+- [符号约定](preface/symbols.md)
 
-# 第一部 教程 · 从零到会
+# 第一部 教程
 
-- [第0课 准备你的电脑](tutorial/00-setup-node.md)
-- [第1课 认识两位 AI 伙伴](tutorial/01-install-agents.md)
-- [第2课 请出传令官](tutorial/02-install-crosschat.md)
-- [第3课 第一次跨工具对话](tutorial/03-first-chat.md)
-- [第4课 起名字与换班](tutorial/04-naming.md)
-- [第5课 两台机器传话](tutorial/05-ssh.md)
-- [第6课 星型消息网](tutorial/06-tcp-star.md)
+- [第1课 单机通信](tutorial/lesson-1.md)
+  - [1.1 背景与场景](tutorial/lesson-1/01-background.md)
+  - [1.2 术语](tutorial/lesson-1/02-terms.md)
+  - [1.3 安装](tutorial/lesson-1/03-install.md)
+  - [1.4 第一次对话](tutorial/lesson-1/04-first-chat.md)
+  - [1.5 通信机制](tutorial/lesson-1/05-mechanism.md)
+- [第2课 跨机通信（ssh）](tutorial/lesson-2.md)
+  - [2.1 背景与场景](tutorial/lesson-2/01-background.md)
+  - [2.2 术语](tutorial/lesson-2/02-terms.md)
+  - [2.3 SSH 配置](tutorial/lesson-2/03-ssh-setup.md)
+  - [2.4 第一条跨机消息](tutorial/lesson-2/04-first-message.md)
+  - [2.5 通信机制](tutorial/lesson-2/05-mechanism.md)
+- [第3课 跨机通信（tcp）](tutorial/lesson-3.md)
+  - [3.1 背景与场景](tutorial/lesson-3/01-background.md)
+  - [3.2 术语](tutorial/lesson-3/02-terms.md)
+  - [3.3 命令一览](tutorial/lesson-3/03-command-map.md)
+  - [3.4 起星与入网](tutorial/lesson-3/04-star-setup.md)
+  - [3.5 会话入星与寻址](tutorial/lesson-3/05-join-address.md)
+  - [3.6 跨机消息与文件](tutorial/lesson-3/06-message-file.md)
+  - [3.7 升级](tutorial/lesson-3/07-upgrade.md)
 
-# 第二部 指南 · 遇到问题查这里
+# 第二部 指南
 
-- [如何查现在谁在线](howto/status.md)
-- [如何发大内容不炸](howto/large-content.md)
-- [如何让 AI 自己回信](howto/reply-ref.md)
-- [如何收编忘入星的会话](howto/adopt.md)
-- [如何给机器起显示名](howto/showname.md)
-- [如何排查「消息没到」](howto/troubleshoot.md)
-- [如何在 NAT 后面打反向隧道](howto/nat-tunnel.md)
-- [如何防俩 AI 聊到停不下来](howto/turn-budget.md)
+- [如何查看在线会话](howto/status.md)
+- [如何发送大内容](howto/large-content.md)
+- [如何让 AI 自动回信](howto/reply-ref.md)
+- [如何收编会话](howto/adopt.md)
+- [如何修改机器显示名](howto/showname.md)
+- [如何排查消息未送达](howto/troubleshoot.md)
+- [如何使用反向隧道](howto/nat-tunnel.md)
+- [如何控制对话轮次](howto/turn-budget.md)
 
-# 第三部 参考 · 查表
+# 第三部 参考
 
 - [命令总表](reference/commands.md)
-- [地址与寻址格式总表](reference/addressing.md)
-- [投递语义与边界限制表](reference/delivery-semantics.md)
-- [环境变量与旋钮总表](reference/env-vars.md)
-- [错误码总表与自纠动作](reference/error-codes.md)
-- [skill 信封字段表](reference/envelope.md)
-- [Agent 兼容性矩阵](reference/compatibility.md)
+- [地址格式总表](reference/addressing.md)
+- [投递语义与限制](reference/delivery-semantics.md)
+- [环境变量总表](reference/env-vars.md)
+- [错误码总表](reference/error-codes.md)
+- [信封字段表](reference/envelope.md)
+- [兼容性矩阵](reference/compatibility.md)
 
-# 第四部 原理 · 想明白的人看
+# 第四部 原理
 
-- [crosschat 的哲学：只做投递，不管生死](explanation/philosophy.md)
-- [一条消息的旅行](explanation/message-journey.md)
-- [发出去的消息会丢吗——发件箱与看门狗](explanation/outbox-watchdog.md)
-- [ssh 直连 vs tcp 星：不是两种传输，是两种部署拓扑](explanation/ssh-vs-tcp.md)
-- [为什么默认 16KiB](explanation/size-limits.md)
-- [信任边界在哪：安全模型](explanation/security.md)
-- [星是怎么自己活的](explanation/star-self-healing.md)
+- [设计边界：只做投递](explanation/design-boundary.md)
+- [一条消息的完整路径](explanation/message-path.md)
+- [发件箱与看门狗](explanation/outbox-watchdog.md)
+- [ssh 与 tcp 星怎么选](explanation/ssh-vs-tcp.md)
+- [16KiB 上限的由来](explanation/size-limit.md)
+- [安全模型与信任边界](explanation/security.md)
+- [tcp 星的内部机制](explanation/star-internals.md)
 
 # 附录
 
 - [A 名词表](appendix/glossary.md)
-- [B FAQ](appendix/faq.md)
-- [C 完整验证阶梯](appendix/verification-ladder.md)
+- [B 常见问题](appendix/faq.md)
+- [C 验证阶梯](appendix/ladder.md)
