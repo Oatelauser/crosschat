@@ -1,7 +1,7 @@
 # v1.6.2 首轮现场反馈打磨
 
 label: wayfinder:design
-status: open
+status: closed（2026-10-16 验收关票——第二轮现场反馈 ../drill-reports/field-feedback-20261016.md：逐字两式双向 100%、from-addr 双向、括注在场未误判；随 1.6.3 发版）
 blocked-by: （无——反馈归档 ../drill-reports/field-feedback-20261015.md）
 claimed-by: （待领）
 

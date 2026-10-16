@@ -1,7 +1,7 @@
 # doctor 分组树展示（按检查类型聚合，tcp 按星分组）
 
 label: wayfinder:design
-status: open
+status: closed（2026-10-16 验收关票——win 多星/WSL/云端三形态全过，结论行与退出码不变；随 1.6.3 发版）
 blocked-by: （无——015 doctor 降噪的续篇，展示层改动）
 claimed-by: （待领）
 
