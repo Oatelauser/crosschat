@@ -328,6 +328,8 @@ interface MemberEntry {
   tool?: string;
   /** 机器限定旧名（machine 缺省=同机旧名）。 */
   extends?: { machine?: string; name: string };
+  /** 029 --rm：临时成员——对账验死即报 member-remove（零痕迹），不留下线册位。 */
+  temporary?: boolean;
 }
 
 /**
@@ -348,7 +350,7 @@ export function attachPipePath(entry: BrokerEntry, dir: string, labelOverride?: 
  */
 function parseMemberDecl(raw: unknown): { ok: true; entry: MemberEntry } | { ok: false; error: string } {
   if (raw === null || typeof raw !== 'object') return { ok: false, error: '成员声明形状错误（须为对象）' };
-  const r = raw as { sessionId?: unknown; name?: unknown; tool?: unknown; extends?: unknown };
+  const r = raw as { sessionId?: unknown; name?: unknown; tool?: unknown; extends?: unknown; temporary?: unknown };
   if (typeof r.sessionId !== 'string' || r.sessionId === '') {
     return { ok: false, error: '成员声明缺 sessionId（成员键=会话 ID，启动器 spawn 后必持有）' };
   }
@@ -391,6 +393,7 @@ function parseMemberDecl(raw: unknown): { ok: true; entry: MemberEntry } | { ok:
       ...(name === undefined ? {} : { name }),
       ...(tool === undefined ? {} : { tool }),
       ...(ext === undefined ? {} : { extends: ext }),
+      ...(r.temporary === true ? { temporary: true } : {}),
     },
   };
 }
@@ -404,6 +407,7 @@ function memberToDecl(m: MemberEntry): SessionMemberDecl {
     ...(m.extends === undefined
       ? {}
       : { extends: m.extends.machine === undefined ? m.extends.name : { machine: m.extends.machine, name: m.extends.name } }),
+    ...(m.temporary === true ? { temporary: true } : {}),
   };
 }
 
@@ -922,16 +926,37 @@ export class NodeClient {
           ...(decl.name === undefined ? {} : { name: decl.name }),
           ...(aliveTool === undefined ? {} : { tool: aliveTool }), // 020：tool 缺失由验活来源回填
           ...(ext === undefined ? {} : { extends: ext }),
+          ...(decl.temporary === true ? { temporary: true } : {}), // 029：临时位随复活保留
         });
         changed = true;
         this.log(`member-revived ${decl.name ?? decl.sessionId.slice(0, 8)}（册内成员本地验活复活）`);
       }
-      // 4) 下线：已声明而本地查无——移出声明集（broker 册位保留，不再除名）
-      for (const id of [...this.members.keys()]) {
+      // 3.5) 029 死临时成员清册：切片里 temporary 而本地验死（含聚合器重启后
+      // 声明表为空的形态）——报 member-remove + 墓碑，零痕迹不留下线册位
+      for (const decl of slice) {
+        if (decl.temporary !== true || this.members.has(decl.sessionId)) continue;
+        if (toolOf(decl.sessionId) !== undefined || this.erased.has(decl.sessionId)) continue;
+        this.erased.add(decl.sessionId);
+        if (this.state === 'online' && this.brokerSessionCap) {
+          this.send({ op: 'member-remove', target: decl.sessionId });
+        }
+        this.log(`member-erase ${decl.sessionId.slice(0, 8)}（临时成员死亡清册——未上报则滞留下线态）`);
+      }
+      // 4) 下线：已声明而本地查无——永久成员移出声明集（broker 册位保留，不再除名）；
+      //    临时成员（029）改走 member-remove + 墓碑（异常死亡同零痕迹）
+      for (const [id, entry] of [...this.members.entries()]) {
         if (toolOf(id) !== undefined) continue;
         this.members.delete(id);
         changed = true;
-        this.log(`member-offline ${id.slice(0, 8)}（本地验活无此会话，上报下线——册位保留）`);
+        if (entry.temporary === true) {
+          this.erased.add(id);
+          if (this.state === 'online' && this.brokerSessionCap) {
+            this.send({ op: 'member-remove', target: id });
+          }
+          this.log(`member-erase ${entry.name ?? id.slice(0, 8)}（临时成员死亡清册，零痕迹）`);
+        } else {
+          this.log(`member-offline ${id.slice(0, 8)}（本地验活无此会话，上报下线——册位保留）`);
+        }
       }
       // 5) 名字跟随（改名→id 跟随，roster 显示与按名寻址随扫描自新）
       let codexNames: Map<string, string> | undefined;

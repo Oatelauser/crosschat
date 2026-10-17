@@ -548,6 +548,7 @@ export class StarJoiner {
           tool: side, // 020：启动器天然知道 side——同机跨工具同名消歧的声明源
           ...(attachName === undefined ? {} : { name: attachName }),
           ...(this.opts.extendSession === undefined ? {} : { extends: this.opts.extendSession }),
+          ...(this.opts.rm === true ? { temporary: true } : {}), // 029：临时位随声明入册（死亡即删）
         });
         if (!reply.ok) {
           deps.stderr(`入星 ${target.entry.name ?? target.selector} 失败：${reply.error ?? '聚合器拒绝 attach'}`);

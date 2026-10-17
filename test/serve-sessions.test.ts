@@ -597,6 +597,26 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
     const err = await sender.waitFor((f) => f.op === 'error' && f.id === 'n5');
     expect(err).toMatchObject({ code: 'SESSION_OFFLINE' }); // 无 rollout 的死名转下线（册位保留）
   }, 10_000);
+
+  it('029 临时成员异常死亡：对账验死报 member-remove 清册零痕迹（不留下线态）', async () => {
+    const { harness, attach } = await startNodeStar(
+      't9',
+      { claude: [{ sessionId: 'sess-boss', name: 'boss' }] },
+      { memberCheckMs: 100 },
+    );
+    await attach.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss' });
+    // 临时成员声明入册（--rm 形态：temporary 位随 attach），随后异常死亡（不在本地扫描里）
+    await attach.send({ op: 'attach', sessionId: 'sess-tmp', name: 'tmpname', temporary: true });
+    await new Promise((resolve) => setTimeout(resolve, 700)); // 等对账循环验死+member-remove 到册
+    const sender = await senderOn(harness.url, key('s'));
+    sender.send({ op: 'send', id: 'n8', targetMachine: 'node-host:tmpname', body: 'x' });
+    const err = await sender.waitFor((f) => f.op === 'error' && f.id === 'n8');
+    expect(err).toMatchObject({ code: 'SESSION_NOT_MEMBER' }); // 删册=从未入册同码（零痕迹）
+    // 永久成员不受牵连
+    sender.send({ op: 'send', id: 'n9', targetMachine: 'node-host:boss', body: 'still here' });
+    const receipt = await sender.waitFor((f) => f.op === 'receipt' && f.id === 'n9');
+    expect(receipt).toMatchObject({ status: 'delivered' });
+  }, 10_000);
 });
 
 describe('020 broker：会话段工具限定词与收命中集', () => {
@@ -758,6 +778,27 @@ describe('028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-rem
     expect(win.online).toBe(true); // 机器连接在——只是成员下线
     expect(win.sessions).toBeUndefined(); // 活成员语义不动（extends 校验共用）
     expect(win.offlineSessions).toEqual([{ sessionId: 'sess-boss', name: 'boss', tool: 'claude' }]);
+  }, 10_000);
+
+  it('029 临时位随声明入册落盘并随切片回带（temporary 端到端透传）', async () => {
+    const { url, registryFile } = await startBroker();
+    seed(registryFile, [
+      { key: key('s'), machineName: 'sender-host' },
+      { key: key('n'), machineId: WIN_MID, machineName: 'win-box' },
+    ]);
+    const node = await nodeOn(url, key('n'), WIN_MID, { name: 'win-box' });
+    node.send(sessionsFrame([
+      { sessionId: 'sess-perm', name: 'perm', tool: 'claude' },
+      { sessionId: 'sess-tmp', name: 'tmp', tool: 'claude', temporary: true },
+    ]));
+    await new Promise((resolve) => setTimeout(resolve, 200)); // 等 onSessions 落盘
+    const roster = readRoster(rosterFileOf(registryFile));
+    expect(roster.find((e) => e.sessionId === 'sess-tmp')?.temporary).toBe(true); // 册落盘带临时位
+    expect(roster.find((e) => e.sessionId === 'sess-perm')?.temporary).toBeUndefined(); // 永久位不带
+    node.send({ op: 'members-query' }); // 切片回带（聚合器重启后仍知谁是临时）
+    const slice = await node.waitFor((f) => f.op === 'members-result');
+    const tmp = (slice.op === 'members-result' ? slice.members : []).find((m) => m.sessionId === 'sess-tmp');
+    expect(tmp?.temporary).toBe(true);
   }, 10_000);
 
   it('边界1 跨机 resume：册在 M1、id 活在 M2 → MACHINE_BOUND 拒绝复活+教学（册位仍绑 M1）', async () => {

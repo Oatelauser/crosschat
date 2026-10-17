@@ -68,6 +68,8 @@ export interface RosterEntry {
   extendsName?: string;
   /** 接任旧名的归属机器（跨机接续 {machine,name} 的 machine 段）。 */
   extendsMachine?: string;
+  /** 029 --rm 临时成员：死亡即删册零痕迹（聚合器验死报 member-remove；切片回带本位）。 */
+  temporary?: boolean;
 }
 
 /** roster 文件与 registry/status 同目录同风格：tcp/roster.json。 */
@@ -511,6 +513,7 @@ export class Broker {
         online: true,
         ...(extendsName === undefined ? {} : { extendsName }),
         ...(extendsMachine === undefined || typeof decl.extends !== 'object' ? {} : { extendsMachine }),
+        ...(decl.temporary === true ? { temporary: true } : {}),
       };
       if (existing === undefined) {
         this.roster.push(next);
@@ -518,7 +521,7 @@ export class Broker {
       } else if (
         existing.name !== next.name || existing.tool !== next.tool || existing.online !== true ||
         existing.extendsName !== next.extendsName || existing.extendsMachine !== next.extendsMachine ||
-        existing.machineName !== next.machineName
+        existing.machineName !== next.machineName || existing.temporary !== next.temporary
       ) {
         this.roster[this.roster.indexOf(existing)] = next;
         changed = true;
@@ -570,6 +573,7 @@ export class Broker {
         ...(e.name === undefined ? {} : { name: e.name }),
         ...(e.tool === undefined ? {} : { tool: e.tool }),
         ...(e.extendsName === undefined ? {} : { extends: e.extendsMachine === undefined ? e.extendsName : { machine: e.extendsMachine, name: e.extendsName } }),
+        ...(e.temporary === true ? { temporary: true } : {}),
       }));
     const reply: MembersResultFrame = { op: 'members-result', members: slice };
     this.send(session.ws, reply);

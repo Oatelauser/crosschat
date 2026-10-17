@@ -495,3 +495,17 @@ describe('013 双开防护：--connect 同星守护互顶拒绝', () => {
     expect(() => guardSameStarDaemon('wsl-star', broken.deps)).not.toThrow();
   });
 });
+
+describe('030 killPid 确认死亡（linux SIGTERM 兜住 → SIGKILL 兜底）', () => {
+  it('SIGTERM 被忽略的进程仍被确认杀灭；已死 pid 视为成功', async () => {
+    const { spawn } = await import('node:child_process');
+    const { killPid } = await import('../src/commands/serve.js');
+    // 子进程显式吞掉 SIGTERM（模拟 linux 守护兜住信号的形态；win 的 SIGTERM=硬杀走快路）
+    const child = spawn(process.execPath, ['-e', "process.on('SIGTERM',()=>{}); setInterval(()=>{},1e9);"], { stdio: 'ignore' });
+    await new Promise((resolve) => { child.on('spawn', resolve); });
+    expect(killPid(child.pid!, 3_000)).toBe(true); // 确认死亡，非仅信号已发
+    const exited = new Promise<number | null>((resolve) => child.on('exit', (c) => resolve(c)));
+    expect(await exited).not.toBeNull();
+    expect(killPid(child.pid!, 1_000)).toBe(true); // 尸体 pid：目标态已达成
+  }, 15_000);
+});

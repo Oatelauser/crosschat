@@ -798,11 +798,39 @@ function runStop(target: 'broker' | 'node' | 'both', deps: ServeDeps, registryFi
   return rc;
 }
 
-function killPid(pid: number): boolean {
+/**
+ * 030 停机确认死亡：SIGTERM → 限时探活 → 仍活升级 SIGKILL → 仍活才算失败。
+ * （旧实现只确认"信号已发"——linux 侧 SIGTERM 被兜住即假报"已终止"，drill-028 F8；
+ * win 的 SIGTERM 即硬杀，探活立即通过零额外等待。）
+ */
+export function killPid(pid: number, waitMs = 2_000): boolean {
+  const alive = (): boolean => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (e) {
+      return (e as NodeJS.ErrnoException).code === 'EPERM'; // 存在但无权——保守按活
+    }
+  };
   try {
     process.kill(pid, 'SIGTERM');
-    return true;
-  } catch {
-    return false;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'ESRCH'; // 已死=目标态达成；无权等其他错=失败
   }
+  const deadline = Date.now() + waitMs;
+  while (Date.now() < deadline && alive()) syncSleep(50);
+  if (!alive()) return true;
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch {
+    return true; // 探活刚变死——成功
+  }
+  const deadline2 = Date.now() + waitMs;
+  while (Date.now() < deadline2 && alive()) syncSleep(50);
+  return !alive();
+}
+
+/** 同步等待（killPid 探活轮询用；Atomics.wait 免占线程的 std 同步睡法）。 */
+function syncSleep(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }

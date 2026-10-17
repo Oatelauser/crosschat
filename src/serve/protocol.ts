@@ -234,6 +234,13 @@ export interface SessionMemberDecl {
   tool?: string;
   /** 显式继承的旧会话名（唯一通道 --extend-session；隐式/同名继承已否决）。 */
   extends?: ExtendsRef;
+  /**
+   * 029 --rm 临时成员标记：死亡（含异常死亡）即删册零痕迹，不留下线册位。
+   * 启动器 --rm attach 声明携带 → 聚合器成员表 → broker 册落盘 → 切片回带，
+   * 对账循环验得死临时成员即报 member-remove（028 时仅包装器 detach·erase 路，
+   * kill 场景册位滞留下线态——drill-028 F1）。
+   */
+  temporary?: boolean;
 }
 
 /**
