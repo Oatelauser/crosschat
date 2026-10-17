@@ -78,4 +78,13 @@ codex:
 
 ## 跨机链路
 
-<!-- 跨机链路排查：待 ssh/tcp 专家补（ssh 腿超时/透传错误语义、tcp 星在线表与文件通道） -->
+ssh 腿的排查从错误码下手——跨机多一层"错误发生在哪一跳"，`[via <对端>]` 前缀标跳，前缀后的指引照单机一样照抄：
+
+| 错误码 | 发生了什么 | 一句话自救 |
+|---|---|---|
+| `SSH_TRANSPORT_TIMEOUT` | 本地等满上限杀了进程，**远端状态不明**（可能已投递） | 勿盲目重发（与首次叠加）——先在对端查 send-log 或 status 核实，确认未达再重发 |
+| `SSH_TRANSPORT_FAILED` | ssh 没打通（网络/密钥/known_hosts） | 报错自带自证命令：`ssh -o BatchMode=yes <对端> crosschat --version` |
+| 原错误码 + `[via 对端]` | 对端 crosschat 的业务错**同码透传** | 自纠指引跨机原样有效——MESSAGE_TOO_LARGE 照报错教 scp 三步 |
+| `REMOTE_FAILED [via 对端]` | 对端异常退出（附 stderr 尾部） | `(127): command not found` = 对端系统 PATH 缺 crosschat（[2.4 远端找得到 crosschat 吗](../tutorial/lesson-2/04-deploy-config.md#远端找得到-crosschat-吗)） |
+
+<!-- tcp 占位：星在线表与文件通道排查，待 tcp 专家 -->

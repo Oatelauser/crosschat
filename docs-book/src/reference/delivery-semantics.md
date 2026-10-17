@@ -52,4 +52,12 @@ codex 侧的忙时行为随 daemon 版本分界（crosschat 不起停 daemon，�
 
 ## 跨机投递
 
-<!-- 跨机投递语义：待 ssh/tcp 专家补（ssh 三层错误同码透传、tcp 星三态/PEER_OFFLINE/文件通道 64MiB） -->
+ssh 份：跨机**不改三态语义**——delivered / queued / parked 照单机成立，且经 ssh 即刻返回，"发送即完成本轮"跨机照旧（parked 的 mailbox 路径是对端机器的路径，输出标注"位于 <host>"）。差异全在错误面与记账：
+
+- **三层错误映射**：本地等待超时/进程未退 → `SSH_TRANSPORT_TIMEOUT`（状态不明勿盲目重发）；ssh 自身失败（退出码 255）→ `SSH_TRANSPORT_FAILED`；其余非 0 → 从对端 **stderr** 匹配 `crosschat: CODE: message` 结构后**同码重抛**、加 `[via <对端>]` 前缀——错误码的自纠指引跨机原样有效；匹配不上的归 `REMOTE_FAILED`（附 stderr 尾部 400 字）
+- **发起侧也落本机账**：跨机发送的每条结局都写本机 send-log（只元数据永不写正文）——跨机对话出现在本机 `status --conversations`，`--via ssh` 过滤即联邦台账
+- **大小限制的跨机生效方式**：出发前按最宽端点（1MiB）预检、超线本地挡下；过检的对端用自己的限额复检（claude 端点 64KiB 在对端才暴露）
+
+命令契约与四层错误全表见[ssh 命令详解](ssh-commands.md)。
+
+<!-- tcp 占位：星三态 / PEER_OFFLINE / 文件通道 64MiB，待 tcp 专家 -->

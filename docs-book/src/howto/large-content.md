@@ -30,4 +30,14 @@
 
 ## 跨机大内容
 
-<!-- scp 旁路三步（ssh 专家）与 --file 文件通道 64MiB（tcp 专家）归跨机；单机段完 -->
+跨机（ssh 形态）的大内容走 **scp 旁路**——它不是 crosschat 的内建通道：代码只做出发前预检、并在报错里教这三步，**真正执行 scp 的是你或 agent**：
+
+```console
+> scp big-analysis.txt yangwsl:/tmp/big-analysis.txt
+> crosschat send --via ssh:yangwsl --to beta2 --body "分析 /tmp/big-analysis.txt，结论报过来"
+delivered to beta2@yangwsl(9f8e7d6c) (turn 3) · 续话 c1
+```
+
+三步 = 本机落盘 → `scp` 到对端 `/tmp/` → `--via` 只发对端本地路径。scp 与 `--via` 共用同一份 ssh config、别名与密钥，部署配一次全通；大结果回传反向同构（对端 scp 回来，或题词让对端落盘发路径）。win↔WSL 的免网络捷径：`cp result.txt /mnt/c/Users/<你>/AppData/Local/Temp/`（直写 win 盘），用完即删。完整实录（含对端拦截的 `[via]` 变体教学）见[2.5 正文超限时](../tutorial/lesson-2/05-first-message.md#正文超限时)。
+
+<!-- tcp 占位：--file 文件通道 64MiB 自动分块，待 tcp 专家 -->

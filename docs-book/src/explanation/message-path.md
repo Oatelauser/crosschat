@@ -71,4 +71,16 @@ thread/unsubscribe → close（先 ws close 帧，再杀自己 spawn 的进程�
 
 ## 跨机腿
 
-<!-- ssh 腿（固定命令面/origin/stderr 同码透传）与 tcp 腿（broker 帧/文件通道）的路径展开：待 ssh/tcp 专家补 -->
+ssh 腿在单机路径外再包一层壳，投递内核原样——对端跑的就是一条完整的本机 send：
+
+| 步 | 发生什么 |
+|---|---|
+| 组装 | 固定 argv 面：`ssh <别名> -o BatchMode=yes -o ConnectTimeout=10 crosschat send --to/--conversation <目标> --json --origin <身份串>`——**没有 --body**，正文恒走 stdin（三方 shell 的引号矩阵整体免疫） |
+| 传输 | 双超时链：外层本机等待（`CROSSCHAT_SSH_TIMEOUT_MS`，默认 120s）+ 内层 TCP 连接（`ConnectTimeout=10` 固定）；BatchMode 让任何交互提示变快速失败而非挂满外层 |
+| 对端执行 | 登录 shell 起一条完整本机 send——名字解析、投递、排队、暂存全在对端（即本章单机路径的七步） |
+| 回执 | 对端 stdout 的 JSON 回流，本机解析重渲染：三态 + 机器段 `name(mid8)` + 短柄 |
+| 落账 | 发起侧写本机 send-log（只元数据）；对端签发的引用本地落账并配短柄——一段跨机对话，两边都有账 |
+
+身份注入（--origin）与错误三层映射的完整语义见[2.6 通信机制](../tutorial/lesson-2/06-mechanism.md)与[ssh 命令详解](../reference/ssh-commands.md)。
+
+<!-- tcp 腿占位：broker 帧 / 文件通道的路径展开，待 tcp 专家 -->
