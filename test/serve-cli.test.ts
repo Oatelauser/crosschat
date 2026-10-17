@@ -500,12 +500,32 @@ describe('030 killPid 确认死亡（linux SIGTERM 兜住 → SIGKILL 兜底）'
   it('SIGTERM 被忽略的进程仍被确认杀灭；已死 pid 视为成功', async () => {
     const { spawn } = await import('node:child_process');
     const { killPid } = await import('../src/commands/serve.js');
-    // 子进程显式吞掉 SIGTERM（模拟 linux 守护兜住信号的形态；win 的 SIGTERM=硬杀走快路）
-    const child = spawn(process.execPath, ['-e', "process.on('SIGTERM',()=>{}); setInterval(()=>{},1e9);"], { stdio: 'ignore' });
-    await new Promise((resolve) => { child.on('spawn', resolve); });
-    expect(killPid(child.pid!, 3_000)).toBe(true); // 确认死亡，非仅信号已发
-    const exited = new Promise<number | null>((resolve) => child.on('exit', (c) => resolve(c)));
-    expect(await exited).not.toBeNull();
-    expect(killPid(child.pid!, 1_000)).toBe(true); // 尸体 pid：目标态已达成
-  }, 15_000);
+    // 孙进程形态：真 stop 场景里守护不是 stop 命令的亲子女——同步探活窗口内亲子女
+    // 无法收割（linux 僵尸假活），故经中间进程隔一层血亲（孤儿由 init 收尸）
+    const INNER = "process.on('SIGTERM',()=>{});setInterval(()=>{},1e9);";
+    const outerScript =
+      `const {spawn}=require('node:child_process');` +
+      `const c=spawn(process.execPath,['-e',${JSON.stringify(INNER)}],{stdio:'ignore',detached:true});` +
+      `c.unref();console.log(c.pid);process.exit(0);`;
+    const outer = spawn(process.execPath, ['-e', outerScript], { stdio: ['ignore', 'pipe', 'inherit'] });
+    let out = '';
+    outer.stdout.on('data', (d) => (out += d));
+    await new Promise((resolve) => outer.on('exit', resolve));
+    const victim = parseInt(out.trim(), 10);
+    expect(Number.isInteger(victim)).toBe(true);
+    expect(killPid(victim, 3_000)).toBe(true); // 确认死亡，非仅信号已发（linux 走 SIGKILL 升级路）
+    const deadline = Date.now() + 2_000;
+    let gone = false;
+    while (Date.now() < deadline) {
+      try {
+        process.kill(victim, 0);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      } catch {
+        gone = true;
+        break;
+      }
+    }
+    expect(gone).toBe(true);
+    expect(killPid(victim, 1_000)).toBe(true); // 尸体 pid：目标态已达成
+  }, 20_000);
 });
