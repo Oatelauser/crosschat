@@ -2,17 +2,42 @@
 
 ## 对话全景
 
-先看一次完整的跨机对话长什么样（真实实测实录；👤 是你，🤖 是 agent，📨 是 agent 收到的外来消息）：
+你发跨机消息的方式跟单机一样：**在自己的会话里说一句话**——组装命令是 agent 的事，不是你的事。这一节用三步走完第一次跨机对话，全程你不需要记任何命令。
+
+**第一步 · 两头会话就位**
+
+你这一头：你本来就在一个会话里（比如 `crosschat claude -n boss` 起的那个）——你在里面说话，它替你发消息。对端那一头：yangwsl 机器上有个命名会话——让对端在自己的会话里 `/rename beta2`，再随便发一条激活即可（机器怎么配上 ssh 的，[2.4 SSH 部署与配置](04-deploy-config.md)已经做完，这里不再重讲）。
+
+**第二步 · 查对方会话**
+
+跨机的名单在**对端机器上**，本机 status 看不见——发之前看一眼，别赌名字：
 
 ```console
-👤 用户[boss -> beta2]    用 crosschat 走 ssh 跨机给 yangwsl 机器的会话「beta2」问好，要求对方回复。
-🤖 boss                   （组装并发出了那条跨机命令——下面第一条）
+> ssh yangwsl crosschat status
+本机会话: claude 1 · codex 1
+  claude beta2  3 分钟前
+  codex workteam  12 分钟前
+（全量: --claude|--codex|--name）
+tcp: 无
+ssh: 无
+（明细: --conversations --via ssh）
+```
+
+**第三步 · 一句话下令**
+
+👤 你在 boss 的会话里说：
+
+> 用 crosschat 走 ssh 跨机给 yangwsl 机器的会话「beta2」问好，要求对方回复。
+
+🤖 boss 自己组装命令、自己发（那条命令长什么样，在下一节——**那是 agent 的语言，你不用记**）。然后整段对话自己走完（真实实测实录，📨 是 agent 收到的外来消息）：
+
+```console
 🤖 beta2 收到             📨 来自另一会话的消息:
                           <cross-session-message from-name="claude/boss" turn="1" from-machine="win">
                           <crosschat-reply-hint reply-as="beta2">回复请运行: crosschat send --conversation c3 --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>
                           你好 beta2，这是跨机问候
                           </cross-session-message>
-🤖 beta2                  （照 hint 抄了一条回信命令——下面第二条）
+🤖 beta2                  （照 hint 抄了一条回信命令——一个地址都没写）
 🤖 boss 收到              📨 收到！跨机闭环成立（turn 2，自动经 ssh 回到 win）
 ```
 
@@ -28,11 +53,13 @@ win · boss                              yangwsl · beta2
    │ ④ 收到回复（turn 2）                    │
 ```
 
-与单机的全部差别只有四个字：题词里多了「走 ssh 跨机」。命令由 boss 自己组装，beta2 照信封回信，双方谁都没敲过一次完整地址。下面把本课的四条命令逐一拆开——每条都是：用途 → 完整实录 → 隐式发生什么。
+与单机的全部差别只有四个字：题词里多了「走 ssh 跨机」。命令由 boss 组装，beta2 照信封回信，双方谁都没敲过一次完整地址。
+
+下面几节把 agent 用的（或你想直接敲的）命令形态逐一拆开——每条都是：用途 → 完整实录 → 隐式发生什么。
 
 ## 发起跨机消息
 
-用途：给另一台机器上的会话发一条消息，名字在**对端**机上解析。
+全景第三步里，boss 替你组装的就是这条；你想自己直接敲，形态也一样：
 
 ```console
 > crosschat send --via ssh:yangwsl --to beta2 --body "你好 beta2，这是跨机问候，收到请回"
@@ -64,7 +91,7 @@ crosschat: SSH_TRANSPORT_FAILED: ssh 无法到达 yangsl（不通/密钥/known_h
 
 ## 回信不写地址
 
-用途：对端收到跨机消息后回复——照抄信封里的命令，一个地址都不用写。
+对端的 beta2 要回复时，它也只是照抄信封里的命令——一个地址都不用写，你的视角里依然是零命令：
 
 ```console
 > crosschat send --conversation c3 --body "收到！跨机闭环成立"
@@ -77,20 +104,9 @@ delivered to claude/boss@win(3f2a81b0) (turn 2) · 续话 c3
 
 ## 查对端名单
 
-用途：发之前先确认对端有什么会话——跨机的对端**不在本机 status 里**，别赌名字发送。
+全景第二步那条命令的门道与名单的细节：
 
-```console
-> ssh yangwsl crosschat status
-本机会话: claude 1 · codex 1
-  claude beta2  3 分钟前
-  codex workteam  12 分钟前
-（全量: --claude|--codex|--name）
-tcp: 无
-ssh: 无
-（明细: --conversations --via ssh）
-```
-
-隐式发生什么：这就是一次普通的 ssh 远程命令，跑的是对端自己的 status——你看到的是对端那张名单，过滤参数照常可用（`ssh yangwsl crosschat status --claude`）。
+这就是一次普通的 ssh 远程命令，跑的是对端自己的 status——你看到的是对端那张名单，过滤参数照常可用（`ssh yangwsl crosschat status --claude`）。
 
 名单上的会话也不问出身，**TUI 不是收件前提**。codex 的投递目标一律是 daemon 里的线程——TUI 只是其中一个窗口（窗口占着线程时反而会挡住投递，报 CODEX_THREAD_LOCKED，关窗或等它释放即恢复），`codex exec` 这类无头方式拉起的线程同样在名单里，未命名的用 id8 寻址；claude 这边，后台（bg）会话与交互会话同权可投。例外只有 [2.4](04-deploy-config.md) 说过的 win 收件腿：codex 不可达（AF_UNIX 跨登录会话隔离）。唯一不担保的是在命令行里一次性匿名拉起的 claude（比如 `claude -p` 干一次性活）——它进不进名单取决于自己有没有注册消息通道，crosschat 不做承诺：发之前 status 看一眼，别赌。
 
