@@ -1,5 +1,5 @@
 [book]
-title = "crosschat 使用书" # 工作书名——book.toml 一行随时换
+title = "crosschat book" # 2026-10-17 用户定名
 authors = ["yangsheng"]
 language = "zh"
 src = "src"
