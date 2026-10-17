@@ -6,6 +6,8 @@
 
 **让本机的 Claude Code 与 Codex CLI 互相对话** —— 无守护进程、原生投递、双向实测。
 
+📖 **[crosschat book](https://oatelauser.github.io/crosschat/)** —— 在线成书教程（前言与单机/ssh 两课已成，其余逐模块上线中）
+
 ![CI](https://github.com/Oatelauser/crosschat/actions/workflows/ci.yml/badge.svg) ![npm](https://img.shields.io/npm/v/@oatelauser/crosschat) ![license](https://img.shields.io/badge/license-MIT-green) ![node](https://img.shields.io/badge/node-%3E%3D22-339933) ![platform](https://img.shields.io/badge/platform-Win%20%7C%20Linux%20%28experimental%29-blue) ![agents](https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-blueviolet)
 
 </div>
@@ -300,6 +302,7 @@ ssh: 共 2 段对话
 
 | 文档 | 内容 |
 |---|---|
+| [crosschat book（在线）](https://oatelauser.github.io/crosschat/) | **成书教程**：前言 / 三课教程（单机 · ssh · tcp）/ 指南 / 参考 / 原理——mdBook 在线版，随 main 持续部署 |
 | [架构手册](docs/architecture.md) | **底层原理**：注册表/命名管道/daemon 通道、写者锁本质、信封与自包含引用、完整投递流程图 |
 | [使用手册](docs/usage.md) | **单机深度细则**：发起方式 / 往复规则 / 投递语义矩阵 / 边界与限制 |
 | [命令手册](docs/commands.md) | **全量命令**：完整参数 / 启动器 / 环境变量 |
