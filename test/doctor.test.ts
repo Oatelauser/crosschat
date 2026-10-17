@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { join } from 'node:path';
 import { runDoctor, type DoctorDeps } from '../src/commands/doctor.js';
 import type { ClaudeRegistryScan } from '../src/claude/registry.js';
 
@@ -168,13 +169,17 @@ describe('runDoctor', () => {
       { path: 'references/errors.md', content: 'errors' },
       { path: 'references/stars.md', content: 'stars' },
     ];
+    // 键照 doctor 同款 join 构造（homeDir+side+skills/crosschat+rel）——posix 下 join
+    // 会保住 homeDir 里的反斜杠再接正斜杠，写死 \\ 键在 linux/mac 全数失配（CI 实证）
+    const key = (side: '.claude' | '.codex', rel: string) =>
+      join(join('C:\\home', side, 'skills', 'crosschat'), rel);
     const contents: Record<string, string> = {
-      'C:\\home\\.claude\\skills\\crosschat\\SKILL.md': 'main',
-      'C:\\home\\.claude\\skills\\crosschat\\references\\errors.md': 'errors',
-      'C:\\home\\.claude\\skills\\crosschat\\references\\stars.md': 'stale stars', // 子文件漂了
-      'C:\\home\\.codex\\skills\\crosschat\\SKILL.md': 'main',
-      'C:\\home\\.codex\\skills\\crosschat\\references\\errors.md': 'errors',
-      'C:\\home\\.codex\\skills\\crosschat\\references\\stars.md': 'stars',
+      [key('.claude', 'SKILL.md')]: 'main',
+      [key('.claude', 'references/errors.md')]: 'errors',
+      [key('.claude', 'references/stars.md')]: 'stale stars', // 子文件漂了
+      [key('.codex', 'SKILL.md')]: 'main',
+      [key('.codex', 'references/errors.md')]: 'errors',
+      [key('.codex', 'references/stars.md')]: 'stars',
     };
     const report = runDoctor(makeDeps({ repoSkillFiles: () => repo, readFile: (p) => contents[p] }));
     expect(report.output).toContain('⚠️ claude 侧 skill 与安装源不一致（references/stars.md）');

@@ -73,7 +73,8 @@ describe('appendSendLog', () => {
     for (const line of readFileSync(`${file}.old`, 'utf8').trim().split('\n')) {
       expect(() => JSON.parse(line)).not.toThrow();
     }
-  });
+    // 慢机先例（同 f111d39 重连窗口）：5MiB 同步写+三次全量读在 CI 慢盘上可拖过默认 5s
+  }, 20_000);
 });
 
 describe('confirmInRollout', () => {
