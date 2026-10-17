@@ -46,7 +46,7 @@ codex 侧的忙时行为随 daemon 版本分界（crosschat 不起停 daemon，�
 
 ## 平台限制
 
-- **win · AF_UNIX 跨登录会话隔离**：codex daemon 的控制 socket 是 AF_UNIX，Windows 按登录会话隔离——从 sshd 会话、服务会话等**另一登录会话**投 codex 会报连接拒绝（os error 10061）。日常终端与 daemon 同会话无感；跨机侧同样成立（[第2课 2.3](../tutorial/lesson-2/03-deploy-config.md)注记）。
+- **win · AF_UNIX 跨登录会话隔离**：codex daemon 的控制 socket 是 AF_UNIX，Windows 按登录会话隔离——从 sshd 会话、服务会话等**另一登录会话**投 codex 会报连接拒绝（os error 10061）。日常终端与 daemon 同会话无感；跨机侧同样成立（[第2课 2.4](../tutorial/lesson-2/04-deploy-config.md)注记）。
 - **unix / macOS**：无此隔离；claude 腿 unix 上连 auth 行都省（同 uid 内核凭据担保，见[安全模型](../explanation/security.md)）。
 - **信任边界**：全部单机投递的隐含前提是**同一台机器的同一个用户**；跨用户不隔离也不承诺。
 
