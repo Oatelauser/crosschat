@@ -136,6 +136,25 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 > crosschat doctor
 ```
 
+#### 1.2.4 托管多颗星（可选）
+
+一台 broker 机要同时当几颗星的星心时，不必开多个进程占多个端口——`--add-star` 让同一个 serve 进程/端口托管第二颗星（vhost 同构：机器凭钥匙自证星籍，连接握手时按钥匙定归属星）：
+
+```
+> crosschat serve --stop                # 加星须先停 broker（星册文件要迁移）
+> crosschat serve --add-star second     # 星名规则同 --name；此后 serve 裸跑即托管全部星
+> crosschat serve --detach
+> crosschat serve --star second --gen-key 2   # 多星下发钥/删钥须 --star 指明目标星
+> crosschat serve --list                      # 分组列出各星的机器
+```
+
+四条语义：
+
+- **每星独立册**：成员册按星分文件（`roster.<星名>.json`），一颗星的成员/接任/下线与另一颗互不相干；同机入两星也互不干扰
+- **老节点零适配**：单星部署的 broker.json 与连接行为一字不变；老版本 crosschat 节点连多星 broker 照常工作（钥匙即路由）
+- **broker 机免自挂**：022 起 broker 进程自动内挂本机聚合器（attach 管道、成员表都在 serve 进程里）——星心机**不再需要** `serve --connect <自家星>`，手动再起会被 013 防护拦下教学
+- **故障域合并**：所有星共用一个进程——一进程崩=全部星瘫、升级窗口合并。自部署形态（星主同一人）下这是已接受的代价；不同主顾的星别并进同一 broker
+
 ### 1.3 node 节点
 
 #### 1.3.1 配置连接密钥
@@ -458,8 +477,7 @@ broker 不支持会话成员（proto:3），已降级机器级——本机会话
 
 **云机：**
 
-1. `crosschat serve --connect cloud-broker --detach`
-   → 云机自己的聚合器（星在本机时连自己也算 node 职责；已跑过则跳过）
+1. （022 起无需操作——broker 进程已自动内挂本机聚合器；旧版 crosschat 的星心机才需要 `crosschat serve --connect cloud-broker --detach` 起第二个常驻）
 2. cd 到任意工作目录，跑：`crosschat claude -n cloudworker10 --connect cloud-broker`
    → 期望一行（claude 启动前）：`入星 cloud-broker——会话地址 tcp:cloud-broker:cloud:cloudworker10（attach 自动，异常见日志）`
    → 进入 claude 后随便说一句话让它活着

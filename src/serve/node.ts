@@ -20,6 +20,7 @@ import {
   sanitizeTool,
 } from './protocol.js';
 import type {
+  ConnectedFrame,
   DeliverFrame,
   ErrorFrame,
   FileBeginFrame,
@@ -29,6 +30,7 @@ import type {
   InfoFrame,
   ResultFrame,
   SessionMemberDecl,
+  SocketLike,
 } from './protocol.js';
 import { runSend, type SendDeps } from '../commands/send.js';
 import type { CodexThreadWithMeta } from '../codex/discovery.js';
@@ -318,6 +320,11 @@ export interface NodeClientDeps {
    * broker 无 session-members cap 时调用一次。缺省不打印（嵌入式调用方零噪音）。
    */
   warn?(line: string): void;
+  /**
+   * 022：连接工厂注入（缺省真开 ws://）——broker 进程内挂本机聚合器时注入
+   * 本进程虚拟 socket（省回环 WS 与第二进程，见 serve 面自挂装配）。
+   */
+  makeSocket?: (url: string) => SocketLike;
 }
 
 /** 018：会话成员表条目（内存态——零新持久文件；连接断/失活即消失）。 */
@@ -427,7 +434,7 @@ interface StateWaiter {
 export class NodeClient {
   private readonly d: NodeClientDeps & { backoffBaseMs: number; quietAfterMs: number; memberCheckMs: number };
   private stopped = false;
-  private ws?: WebSocket;
+  private ws?: SocketLike;
   private state: NodeStatusFile['state'] = 'connecting';
   private stateSince = 0;
   private readonly frameWaiters: FrameWaiter[] = [];
@@ -546,7 +553,8 @@ export class NodeClient {
     const cfg = this.d.config.entries[0]!;
     const url = `ws://${cfg.host}:${cfg.port}`;
     this.frameLog = [];
-    const ws = new WebSocket(url, { maxPayload: MAX_PAYLOAD_BYTES });
+    // 022：ws 工厂可注入（broker 内挂聚合器走本进程虚拟 socket；缺省真开 ws://）
+    const ws = this.d.makeSocket !== undefined ? this.d.makeSocket(url) : new WebSocket(url, { maxPayload: MAX_PAYLOAD_BYTES });
     this.ws = ws;
     let everOnline = false;
     let closed: () => void = () => {};
@@ -556,7 +564,7 @@ export class NodeClient {
     ws.once('close', () => closed());
     ws.once('error', () => closed());
     ws.on('message', (data) => {
-      void this.onFrame(data.toString());
+      void this.onFrame(String(data));
     });
     try {
       await new Promise<void>((resolve, reject) => {
@@ -593,6 +601,11 @@ export class NodeClient {
       if (verdict.op === 'error') {
         throw new Error(`broker 拒绝: ${(verdict as ErrorFrame).code} ${(verdict as ErrorFrame).message}`);
       }
+      // 022 多星：info 无星标识（握手时序倒置——broker 见钥匙才知星）——connected
+      // 帧补核，同 syncBrokerInfo 预检语义（不一致即 STAR_ID_MISMATCH 停机等修配置）
+      if ((info as InfoFrame).starId === undefined && (verdict as ConnectedFrame).starId !== undefined) {
+        this.syncBrokerInfo(verdict as ConnectedFrame);
+      }
       everOnline = true;
       this.setState('online');
       this.log(`online（broker ${cfg.name ?? url}）`);
@@ -625,8 +638,9 @@ export class NodeClient {
    * B0 星标识哨兵 + E0 星名同步（info 后、发 connect 含 key 之前）：两侧
    * starId 都有且不等 → 拒发 key 中止连接；本机缺 → 回填；info.name（星名，
    * broker 权威）与条目不一致 → 原子覆盖写回（顺带清旧 alias 键）。
+   * 022：多星 broker 星标识在 connected 帧——同一函数复用（见 connectOnce 补核）。
    */
-  private syncBrokerInfo(info: InfoFrame): void {
+  private syncBrokerInfo(info: Pick<InfoFrame, 'starId' | 'name'>): void {
     const entry = this.d.config.entries[0]!;
     if (info.starId !== undefined && entry.starId !== undefined && entry.starId !== info.starId) {
       throw new MultichatError('STAR_ID_MISMATCH', '本 broker 星标识与本机配置不符——向管理员重新索取 node.json');

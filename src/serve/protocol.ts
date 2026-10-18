@@ -35,6 +35,27 @@ export const ERR = {
  */
 export const CAP_SESSION_MEMBERS = 'session-members';
 
+/**
+ * 022 多星能力标识：broker 一进程一端口托管多颗星。多星 broker 的 info 帧
+ * 不携带 starId/name（见钥匙才知星），星标识挪到 connected 帧——此 cap 即
+ * "info 无星标识是合法多星形态"的信号。纯信息性 additive，老节点零影响。
+ */
+export const CAP_MULTI_STAR = 'multi-star';
+
+/**
+ * 022：socket 形状（ws.WebSocket 结构性满足）——broker 自挂聚合器的本进程
+ * 虚拟连接按此接口注入 NodeClient/Broker，两个方向各持一端。
+ */
+export interface SocketLike {
+  readyState: number;
+  send(data: string, cb?: () => void): void;
+  close(code?: number, reason?: string): void;
+  ping?(): void;
+  terminate?(): void;
+  on(event: string, listener: (...args: unknown[]) => void): unknown;
+  once(event: string, listener: (...args: unknown[]) => void): unknown;
+}
+
 /** caps 数组包含判定（缺省数组=老节点，恒 false）。 */
 export function hasCap(caps: string[] | undefined, cap: string): boolean {
   return Array.isArray(caps) && caps.includes(cap);
@@ -75,6 +96,13 @@ export interface ConnectFrame {
 export interface ConnectedFrame {
   op: 'connected';
   machineName?: string;
+  /**
+   * 022 多星：星标识挪到钥匙核验后（info 帧无法预知连接属星）——多星 broker
+   * 在此回填，新客户端据此核对/同步条目；单星连接不带该字段（字节不变）。
+   */
+  starId?: string;
+  /** 022 多星：星名随 starId 同帧（broker 权威，条目同步与单星 info.name 同源）。 */
+  name?: string;
 }
 export interface ErrorFrame {
   op: 'error';

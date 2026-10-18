@@ -98,9 +98,17 @@ commands:
                                 (1-32 chars of A-Za-z0-9._-,
                                 no colon; the first --name given
                                 is remembered; default: hostname)
+                              --add-star <星名>    host a 2nd star on this
+                                broker (one process/port; roster
+                                split per star; run with broker
+                                stopped, restart to take effect)
+                              --star <星名|前缀>   scope --gen-key/--remove/
+                                --name to one hosted star (required
+                                when the broker hosts 2+ stars)
                               --gen-key [N]        print N node keys (default 1)
                                 and register them
                               --list               list registered nodes
+                                (multi-star: grouped by star)
                               --remove <label>     remove a node key
                               --connect [星名|星前缀]
                                 run this machine as a node client
@@ -360,7 +368,7 @@ export function parseServeArgs(argv: readonly string[]): ServeArgs {
       args.rm = true; // 028：只认不执行——runServe 拒绝并教学（机器守护无临时语义）
     } else if (name === '--connect') {
       args.connect = nextValue() ?? '';
-    } else if (name === '--port' || name === '--remove' || name === '--name' || name === '--adopt' || name === '--extend-session' || name === '--member-remove') {
+    } else if (name === '--port' || name === '--remove' || name === '--name' || name === '--adopt' || name === '--extend-session' || name === '--member-remove' || name === '--star' || name === '--add-star') {
       const value = nextValue();
       if (value === undefined) throw new MultichatError('USAGE', `serve: ${name} requires a value`);
       if (name === '--port') args.portArg = value;
@@ -368,6 +376,8 @@ export function parseServeArgs(argv: readonly string[]): ServeArgs {
       else if (name === '--adopt') args.adopt = value;
       else if (name === '--extend-session') args.extendSession = value;
       else if (name === '--member-remove') args.memberRemove = value;
+      else if (name === '--star') args.starArg = value; // 022：多星管理旗标的星域限定
+      else if (name === '--add-star') args.addStarArg = value; // 022：托管第二颗星
       else args.remove = value;
     } else if (name === '--gen-key') {
       args.genKeyArg = nextValue() ?? '1';

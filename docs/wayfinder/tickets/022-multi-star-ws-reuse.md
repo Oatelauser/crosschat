@@ -1,9 +1,9 @@
 # 多星 WS 连接复用（同机多星连接收敛）
 
 label: wayfinder:design
-status: open
+status: closed
 blocked-by: （无——但排期在 1.6.2 之后；019/020 批次在飞，map 挂账行验收时补）
-claimed-by: （待领）
+claimed-by: broker多星
 
 **优先级 A（用户 2026-10-15 指定，要求排期）**
 
@@ -29,12 +29,22 @@ claimed-by: （待领）
 - **故障域合并为已接受的运维代价**（一进程崩=所有星瘫、升级窗口合并）——CHANGELOG 与手册明示
 - **设计锚点（防跑偏）**：连接层 broker 本就是 epoll-reactor（Node 事件环复用星内全部机器连接），本票合并的是**星级进程**不是连接多路复用；模型同构 vhost/SNI——key 选星上下文 ≈ Host 头选 vhost；完全版一条 WS 多星 ≈ HTTP/2 流复用；broker 活是纯 JSON 路由（I/O-bound），**零 worker 池**，勿过度工程
 
-## 待定（grilling 收口）
+## 待定（grilling 收口 → 2026-10-18 实施会话定案）
 
-- 完全版帧面：帧带星字段 vs 连接内逻辑通道——实施前定
-- 020 限定词解析联动确认（三段寻址按星选条目 O(1)，预期零冲突）
-- broker 自挂 in-process（原方向 3）是否并入本票一起做——同一进程模型改动
+- ~~完全版帧面：帧带星字段 vs 连接内逻辑通道~~ → **定案：连接绑星，帧面零改动**。钥匙自证星籍在 connect 握手定星（SNI 同构），连接生命周期内属星不变；帧不带星字段、无逻辑通道。理由：设计锚点明言"本票合并的是星级进程不是连接多路复用"；票面自证连接廉价（成本在管理面=进程/端口，非 TCP 条数）；零帧面改动=零回归面最小、零 caps 强制协商。info.caps 追加 'multi-star' 标识（018 additive 模式，纯信息性——多星 broker 的 info 不再携带 starId/name，客户端据 connected 帧新字段核星）
+- ~~broker 自挂 in-process（原方向 3）是否并入~~ → **定案：并入**。同一进程模型改动，分票会二次触碰同批代码；F4（星心机自挂双连撞死）正是本票 drill 验收项。实现取**虚拟会话对**（virtual socket pair 注入 NodeClient ws 工厂）：聚合器逻辑全走真实 onConnect/onSessions/路由路径，零新成员/路由代码；本机已有同星外部守护时让位跳过（升级窗口平滑）
+- ~~020 限定词解析联动确认~~ → **定案：零冲突确认**。三段寻址客户端侧已按星选条目（selectBrokerEntry：星名/starId 前缀），连接即星；broker 侧 targetMachine/tool 限定词解析（resolveSessionMember）全部在 session 所属星的注册表切片与册内进行，纯星内操作天然隔离
+
+## 实施形状（2026-10-18 定案细节）
+
+- **注册表双形状**：单星=旧 broker.json 形状字节不动（零回归）；`--add-star <名>` 加第二星起转 `{port?, stars:[{starId,name?,nodes}]}` 新形状，回读兼容旧形状。add-star 时迁移 roster.json → roster.<星名>.json，且 broker 在跑则拒（防在跑册与迁移册漂移）
+- **每星独立册**：多星形状下 roster.<星名|starId>.json；单星沿用 roster.json（零迁移零回归）
+- **握手时序倒置（限多星）**：多星 broker 的 info 帧不带 starId/name（broker 见钥匙才知星），connected 帧补 starId+name 供新客户端核星；单星连接字节级不变。老节点连多星 broker：跳过预检照常工作（钥匙即路由）
+- **CLI**：`serve --add-star <名>`（一次性）；多星下 --gen-key/--remove/--name 需 `--star <名|starId前缀>` 限定（裸用=USAGE 教学）；--list 多星分组展示；serve 裸跑=托管全部星
+- **自挂让位与 013 延伸**：guardSameStarDaemon 认 status-broker.json stars 列表（pid 验活）——本机 broker 内挂星域后拒手动 serve --connect 同星（F4 消除）；反向：起 broker 时本机已有同星外部守护则该星跳过内挂
+- **故障域合并**：CHANGELOG 与手册明示（一进程崩=全部星瘫、升级窗口合并）
 
 ## 预算与停止条件
 
 待场景收口后定（方向 3 估 S~M：进程模型收敛+测试；方向 2A 估 M~L：协议形状+注册表+全链回归）。
+→ 收口后实按 **M~L** 执行（派单口径）；停止条件：check 全绿 + win/WSL 双机 drill（一进程两星/每星独立册/broker 重启册不丢/单星零回归）+ 报告落 docs/drill-reports/。

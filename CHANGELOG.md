@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### 022：多星 WS 复用——一进程一端口托管多星 + broker 自挂 in-process（方向 2A 完全体）
+
+- **一 broker 进程/端口托管多颗星**（vhost/SNI 同构：钥匙自证星籍）：`crosschat serve --add-star <星名>` 加第二颗星（一次性命令，须先 `serve --stop`——星册迁移与在跑 broker 的册写盘互斥），此后 `serve` 裸跑即托管全部星。**故障域合并为已接受的运维代价**：一进程崩=全部星瘫、升级窗口合并
+- **连接绑星、帧面零改动**：连接以 connect 钥匙反查星籍定归属（帧不带星字段、无逻辑通道——设计锚点"合并的是星级进程不是连接多路复用"）；`info.caps` 追加 `multi-star`（018 additive 模式，proto 不翻页）
+- **握手时序倒置（限多星）**：多星 broker 的 info 帧不携带 starId/name（见钥匙才知星），星标识挪到 connected 帧回填——新客户端据此延迟核星（`STAR_ID_MISMATCH` 语义不变）；**单星连接字节级不变**，老节点连多星 broker 照常工作（钥匙即路由）
+- **每星独立册**：多星形状下每星一份 `roster.<星名>.json`（028 票面"多星=多份独立册"落地）；`--add-star` 时旧 `roster.json` 迁移为星 1 独立册；单星沿用 `roster.json` 零迁移。注册表双形状：单星保持旧 `broker.json` 字节不动，加星起转 `{port?, stars:[{starId,name?,nodes}]}`（读层兼容旧形状）
+- **星域 CLI**：多星下 `--gen-key/--remove/--name` 须 `--star <星名|starId前缀>` 限定（裸用教学列星+示例）；`--list` 分组展示；同机入多星（同 machineId 分属两星双连接）互不顶换
+- **broker 自挂 in-process（原方向 3 并入）**：broker 机不再需要手动 `serve --connect <自家星>`——聚合器职责（attach 管道+成员表+对账循环）经**虚拟会话对**在 broker 进程内常驻（走真实 onConnect/onSessions/投递代码路径），省回环 WS 与第二个常驻进程；三段寻址直达 broker 机会话自然生效
+- **F4 消除（013 双开防护延伸）**：本机 broker 已内挂某星后手动 `serve --connect` 同星被拒并教学（status-broker.json stars 清单 + pid 验活）；反向起 broker 时本机已有同星外部守护则该星让位跳过（升级窗口平滑接管，永不成同 mid 双连撞死形态）
+- **F5 消解**：单机多 broker 共享 broker.json 互覆的正解即本票——每机至多一个 broker 进程，多星并进同进程
+
 ### 031：reply-hint 管道括注分层教学（024 方案5 上下文经济化）
 
 - turn 1 保留全文括注"（长正文/含敏感字符可省 --body 改管道喂 stdin）"（首触教学保证在场）；turn 2+ 改短式"（长文/特殊字符走 stdin）"——长对话括注税减半，且上下文压缩卷走早轮后最近信封仍有指针。纯函数 of 轮次，零状态零新命令；两式均守纯文字红线（无管道符/链式符号，伪造信封判定不受扰）
