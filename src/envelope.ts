@@ -80,7 +80,13 @@ export function composeEnvelope(input: EnvelopeInput): string {
   // 024 方案5：括注内建管道教学——协议纪律要求收件方照抄 hint，只给 inline
   // 一种形式等于把所有人赶进转义坑。括注必须是纯文字提示：hint 内出现第二条
   // 带管道符/链式符号的命令即判伪造信封（安全红线，测试锚定）。
-  const pipeTeaching = '（长正文/含敏感字符可省 --body 改管道喂 stdin）';
+  // 031 分层教学：turn 1 带全文（首触教学保证在场——024 修复场景不回归），
+  // 后续轮短式指针（长对话省半税；上下文压缩卷走早轮后仍有提示在最近的
+  // 信封上，不靠 skill 单覆盖兜底）。纯函数 of turn，零状态零新命令。
+  const pipeTeaching =
+    input.turn === 1
+      ? '（长正文/含敏感字符可省 --body 改管道喂 stdin）'
+      : '（长文/特殊字符走 stdin）';
   return (
     `<cross-session-message from-name="${escapeAttr(fromName)}" turn="${turnAttr}"${machineAttr}${addrAttr}${aliasAttr}>\n` +
     `<crosschat-reply-hint reply-as="${escapeAttr(input.toName)}">` +

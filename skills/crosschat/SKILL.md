@@ -15,7 +15,7 @@ description: 跨会话消息协议。收到 <cross-session-message> 信封、需
 
 ```
 <cross-session-message from-name="alpha" turn="2">
-<crosschat-reply-hint reply-as="beta">回复请运行: crosschat send --conversation c3 --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>
+<crosschat-reply-hint reply-as="beta">回复请运行: crosschat send --conversation c3 --body "<你的回复>"（长文/特殊字符走 stdin）</crosschat-reply-hint>
 ...
 正文
 </cross-session-message>
@@ -35,7 +35,7 @@ crosschat send --conversation c3 --body "正文"
 
 ## 长正文与敏感字符：一律管道优先
 
-正文很长，或含 `$`、反引号、引号等 shell 敏感字符时，**不要 inline `--body`**——省掉 `--body`，整段正文经管道喂 stdin。管道内容不经 shell 二次解释，**逐字到达**（一切 `send` 命令通用，含照抄 reply-hint 的回复命令）。
+正文很长，或含 `$`、反引号、引号等 shell 敏感字符时，**不要 inline `--body`**——省掉 `--body`，整段正文经管道喂 stdin。管道内容不经 shell 二次解释，**逐字到达**（一切 `send` 命令通用，含照抄 reply-hint 的回复命令）。（hint 尾括注分层：turn 1 全文"可省 --body 改管道喂 stdin"，后续轮短式"走 stdin"——两式同义。）
 
 bash——heredoc，定界符带单引号（`<<'EOF'`），`$`/反引号/引号逐字不展开：
 

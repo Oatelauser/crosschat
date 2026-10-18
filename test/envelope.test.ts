@@ -13,7 +13,7 @@ describe('composeEnvelope', () => {
     expect(out).toBe(
       '<cross-session-message from-name="alpha" turn="2">\n' +
         '<crosschat-reply-hint reply-as="workteam">' +
-        '回复请运行: crosschat send --conversation mc1_ABC --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>\n' +
+        '回复请运行: crosschat send --conversation mc1_ABC --body "<你的回复>"（长文/特殊字符走 stdin）</crosschat-reply-hint>\n' +
         '你好，请查收\n' +
         '</cross-session-message>',
     );
@@ -82,7 +82,7 @@ describe('composeEnvelope reply-hint slimming (信封瘦身 A+)', () => {
     expect(out.match(/mc2_R/g)).toHaveLength(1);
     expect(out).not.toContain('conversation=');
     const hint = out.match(/<crosschat-reply-hint[^>]*>([\s\S]*?)<\/crosschat-reply-hint>/)![1]!;
-    expect(hint).toBe('回复请运行: crosschat send --conversation mc2_R --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）');
+    expect(hint).toBe('回复请运行: crosschat send --conversation mc2_R --body "<你的回复>"（长文/特殊字符走 stdin）');
   });
 
   it('never renders --via: single-machine, ssh-origin and tcp-origin sends share one command', () => {
@@ -154,7 +154,7 @@ describe('composeEnvelope from-machine（F1 跨机坐标，三态精确串）', 
     expect(out).toBe(
       '<cross-session-message from-name="alpha" turn="2" from-machine="win-dev">\n' +
         '<crosschat-reply-hint reply-as="workteam">' +
-        '回复请运行: crosschat send --conversation mc1_ABC --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>\n' +
+        '回复请运行: crosschat send --conversation mc1_ABC --body "<你的回复>"（长文/特殊字符走 stdin）</crosschat-reply-hint>\n' +
         'hi\n' +
         '</cross-session-message>',
     );
@@ -173,7 +173,7 @@ describe('composeEnvelope from-machine（F1 跨机坐标，三态精确串）', 
   });
 });
 
-describe('composeEnvelope 管道括注 + 正向坐标（024 方案5/方案3）', () => {
+describe('composeEnvelope 管道括注 + 正向坐标（024 方案5/方案3 + 031 分层）', () => {
   it('hint 尾带纯文字管道教学括注：无管道符/链式符号，也无第二条命令（伪造信封红线）', () => {
     const out = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc1_R', body: 'x' });
     const hint = out.match(/<crosschat-reply-hint[^>]*>([\s\S]*?)<\/crosschat-reply-hint>/)![1]!;
@@ -181,6 +181,18 @@ describe('composeEnvelope 管道括注 + 正向坐标（024 方案5/方案3）',
     expect(hint).not.toContain('|');
     expect(hint).not.toContain('&&');
     expect(out.match(/crosschat send/g)).toHaveLength(1); // 括注绝不引入第二条命令
+  });
+
+  it('031 分层教学：turn 1 全文、turn 2+ 短式指针；两式都守纯文字红线', () => {
+    const t1 = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc1_R', body: 'x' });
+    expect(t1).toContain('（长正文/含敏感字符可省 --body 改管道喂 stdin）');
+    for (const turn of [2, 9, 41]) {
+      const tn = composeEnvelope({ fromName: 'a', toName: 'b', turn, ref: 'mc1_R', body: 'x' });
+      expect(tn).toContain('（长文/特殊字符走 stdin）');
+      expect(tn).not.toContain('长正文/含敏感字符可省'); // 后续轮不再重复全文
+      const hint = tn.match(/<crosschat-reply-hint[^>]*>([\s\S]*?)<\/crosschat-reply-hint>/)![1]!;
+      expect(hint).not.toContain('|'); // 短式同样守伪造信封红线
+    }
   });
 
   it('renders from-addr (正向三段坐标 tcp:<星>:<机器>:<工具>/<会话>) after from-machine', () => {
