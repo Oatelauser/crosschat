@@ -185,6 +185,20 @@ describe('runViaTcpSend against a real broker', () => {
     expect(fx.logs[0]).toMatchObject({ status: 'failed', code: 'NAME_NOT_FOUND' });
   }, 10_000);
 
+  it('027-F: selector present → error echo carries the star segment (misread-proof)', async () => {
+    const h = await startBroker(async () => ({
+      op: 'error' as const,
+      code: 'SESSION_OFFLINE',
+      message: '成员已下线',
+    }));
+    const fx = makeFixture(h);
+    const err = await expectCode(
+      runViaTcpSend({ via: 'tcp:broker-alias:broker-host', conversation: 'mc1_x' } as never, 'x', fx.deps),
+      'SESSION_OFFLINE',
+    );
+    expect(err.message).toContain('[via tcp:broker-alias:broker-host]');
+  }, 10_000);
+
   it('teaches PEER_OFFLINE with the ssh-alternative hint', async () => {
     const h = await startBroker(async () => deliveredReceipt);
     const fx = makeFixture(h);

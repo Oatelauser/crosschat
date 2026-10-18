@@ -277,10 +277,33 @@ describe('runSend reply routing via --conversation', () => {
 
   it('rejects a target session that left the registry', async () => {
     const gone = encodeRef(newConversationRef({ p: 'codex', id: 'team1111-aaaa' }, { p: 'claude', id: 'cs-gone' }));
-    await expectCode(
+    const err = await expectCode(
       send({ conversation: gone, bodyArg: 'h' }, { CODEX_THREAD_ID: 'team1111-aaaa' }),
       'TARGET_NOT_FOUND',
     );
+    // 027-A+：单机对话教学不回归——仍是 --to 同名即续，不出现 tcp 地址
+    expect(err.message).toContain('--to <名字>');
+    expect(err.message).not.toContain('tcp:');
+  });
+
+  it('027-A+：tcp 腿对端死亡报错拼可照抄三段 id8 地址（含 SUPERSEDED 指路预告）', async () => {
+    const ref = newConversationRef(
+      { p: 'codex', id: 'team1111-aaaa' },
+      { p: 'claude', id: 'cs-gone', m: 'peer-host' },
+    );
+    const err = await expectCode(
+      runSend(
+        { conversation: encodeRef(ref), bodyArg: 'h' },
+        {
+          ...makeDeps({ CODEX_THREAD_ID: 'team1111-aaaa' }),
+          hostname: () => 'peer-host', // 对端就住在"本机"（tcp 接收腿语境）——不选路，落本地解析
+          fromStarName: 'drillstar',
+        },
+      ),
+      'TARGET_NOT_FOUND',
+    );
+    expect(err.message).toContain('--via tcp:drillstar:peer-host:cs-gone');
+    expect(err.message).toContain('SESSION_SUPERSEDED');
   });
 
   it('rejects malformed refs', async () => {

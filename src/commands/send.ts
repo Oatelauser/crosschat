@@ -469,11 +469,21 @@ export async function runSend(args: SendArgs, deps: SendDeps): Promise<string> {
   if (target.p === 'claude') {
     const claudeSession = scan.sessions.find((session) => session.sessionId === target.id);
     if (claudeSession === undefined) {
+      // 027 A+：tcp 接收腿（fromStarName 在场）拼可照抄三段地址——ref 端点只带
+      // id 不带名，故会话段用 id8（照抄即达本体）；按名重投（名见来信信封
+      // from-name）在被接任时报 SESSION_SUPERSEDED 指路接任者，两跳闭环。
+      // ssh/单机对话保持原教学。
+      const tcpAddr =
+        deps.fromStarName !== undefined && (target.m ?? '') !== ''
+          ? `tcp:${deps.fromStarName}:${target.m}:${target.id.slice(0, 8)}`
+          : undefined;
       throw new MultichatError(
         'TARGET_NOT_FOUND',
         `Claude session ${target.id} is not currently routable (process exited or unregistered). ` +
-          '对端会话可能已重启——改用 --to <名字> 自动接续该端对最新对话（--to 同名即续，无需换名）。' +
-          'status 只列本机会话；跨机对端用 ssh <对端> crosschat status 查。',
+          (tcpAddr !== undefined
+            ? `对端会话可能已重启——点对点直达可照抄：crosschat send --via ${tcpAddr} --body "…"；按对端名三段重投（名见来信信封 from-name）则在被接任时获 SESSION_SUPERSEDED 指路。`
+            : '对端会话可能已重启——改用 --to <名字> 自动接续该端对最新对话（--to 同名即续，无需换名）。' +
+              'status 只列本机会话；跨机对端用 ssh <对端> crosschat status 查。'),
       );
     }
     checkSendLogRate(deps.sendLogFile, identityKey(caller), `claude:${target.id}`, deps.now());

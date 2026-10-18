@@ -393,21 +393,23 @@ async function sendBody(
 
   if (frame.op === 'error') {
     const { code, message } = frame as ErrorFrame;
+    // 027-F：回显原样带完整 --via（含星段）——selector 在场不丢（曾被误读为"地址被误拆"）
+    const viaEcho = args.via ?? `tcp:${target}`;
     if (code === ERR.PEER_OFFLINE) {
       logNow({ to: logTo, target: `via:tcp:${target}`, status: 'failed', code });
       throw new MultichatError(
         code,
-        `[via tcp:${target}] ${message}——对端离线，稍后重试；若两端另配了 ssh 也可走 ssh 形态`,
+        `[via ${viaEcho}] ${message}——对端离线，稍后重试；若两端另配了 ssh 也可走 ssh 形态`,
       );
     }
     if (code === ERR.UNKNOWN_MACHINE) {
       logNow({ to: logTo, target: `via:tcp:${target}`, status: 'failed', code });
       throw new MultichatError(
         code,
-        `[via tcp:${target}] ${message}——核对机器名：在 broker 机跑 crosschat serve --list 查看`,
+        `[via ${viaEcho}] ${message}——核对机器名：在 broker 机跑 crosschat serve --list 查看`,
       );
     }
-    const err = new MultichatError(code, `[via tcp:${target}] ${message}`);
+    const err = new MultichatError(code, `[via ${viaEcho}] ${message}`);
     logNow({ to: logTo, target: `via:tcp:${target}`, status: 'failed', code: err.code });
     throw err;
   }

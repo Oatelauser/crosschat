@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveTargetByName } from '../src/resolve.js';
+import { resolveTargetById, resolveTargetByName } from '../src/resolve.js';
 import { MultichatError } from '../src/errors.js';
 import type { ClaudeSessionEntry } from '../src/claude/registry.js';
 import type { CodexThreadSummary } from '../src/codex/client.js';
@@ -39,6 +39,19 @@ function expectCode(fn: () => unknown, code: string): MultichatError {
     return me;
   }
 }
+
+describe('resolveTargetById', () => {
+  it('027-A+：死成员教学含三段旧名重投与 SUPERSEDED 指路预告', () => {
+    const err = expectCode(() => resolveTargetById('cs-nope', sessions, threads), 'TARGET_NOT_FOUND');
+    expect(err.message).toContain('--via tcp:<星>:<机器>:<名>');
+    expect(err.message).toContain('SESSION_SUPERSEDED');
+  });
+
+  it('resolves by claude sessionId', () => {
+    const resolved = resolveTargetById('cs-beta', sessions, threads);
+    expect(resolved.side).toBe('claude');
+  });
+});
 
 describe('resolveTargetByName', () => {
   it('resolves a unique claude name', () => {

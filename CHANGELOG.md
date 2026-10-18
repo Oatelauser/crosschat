@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### 027：对端死亡恢复链两跳闭环（报错给可照抄地址）
+
+- **A+ 两处 TARGET_NOT_FOUND 升级**：tcp 接收腿对端死亡报错直接拼可照抄三段地址 `--via tcp:<星>:<机器>:<id8>`（点对点直达本体），并预告按对端名三段重投在被接任时获 `SESSION_SUPERSEDED` 指路（名见来信信封 from-name）；单机/ssh 对话教学不变（--to 同名即续）。resolve 侧死成员教学同步补三段重投与 SUPERSEDED 预告
+- **B help 并列两形态**：`send --help` 跨机说明 tcp 三段（会话直达）与 ssh 两段（`--via ssh:<host> --to <名>`）并列标注——消除"拿 ssh 两段式套 tcp"的猜测源（10-16 七步试错复盘病灶）
+- **F 错误回显带完整星段**：tcp 报错前缀原样回显整条 `--via`（含星选择器）——曾被误读为"地址被误拆"（解析一直正确，纯显示缺陷）
+- **G 语义勘误关账**：票面"c16 续到重启同名新进程"在 claude 侧不成立——旧 ref 指死 id 报 TARGET_NOT_FOUND（现有用例已钉）、同名新进程经 `--to` 续线可达（B15 已钉）、codex 线程 id 跨 resume 稳定故引用天然存活；恢复正解即本票 A+ 两跳
+- **I 验证关账**：`crosschat claude --resume <id> --connect <星>` 原生透传可用（028 drill 实证），skill stars.md 恢复配方补一步到位形态一句
+
 
 ## [1.7.0] - 2026-10-16
 

@@ -127,7 +127,7 @@ export function resolveTargetById(
   if (codex !== undefined) return { side: 'codex', thread: codex };
   throw new MultichatError(
     'TARGET_NOT_FOUND',
-    `会话 ${sessionId.slice(0, 8)} 不在本机（claude 进程退出或 codex 线程不存在）——成员可能刚被聚合器除名，稍后重试或改用名字投递`,
+    `会话 ${sessionId.slice(0, 8)} 不在本机（claude 进程退出或 codex 线程不存在）——成员可能刚被聚合器除名，稍后重试或改用名字投递（027：三段旧名重投 --via tcp:<星>:<机器>:<名>；有 extends 接任者将报 SESSION_SUPERSEDED 指路）`,
   );
 }
 

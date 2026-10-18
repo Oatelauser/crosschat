@@ -50,11 +50,15 @@ commands:
                                 (default: read stdin)
                               --via ssh:<host>     send to a peer machine
                                 (host = ~/.ssh/config alias, peer
-                                resolves names on its side)
+                                resolves names on its side; session
+                                send pairs with --to <名>)
                               --via tcp:<机器>     send via the tcp broker
                                 (机器 = machine name from
                                 "crosschat serve --list"; requires
-                                ~/.crosschat/tcp/node.json)
+                                ~/.crosschat/tcp/node.json);
+                                session-direct form:
+                                --via tcp:<星>:<机器>:<会话名>
+                                (star member直达)
                               --file <路径>        send a file through the
                                 tcp channel (with --via tcp: only,
                                 chunked, 64MiB cap; body defaults to
