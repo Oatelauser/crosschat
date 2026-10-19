@@ -1,7 +1,7 @@
 # 注册表单形状化 + 文件面收敛（022 修订票）
 
 label: wayfinder:design
-status: implemented（2026-10-19 check 756 绿 + 五幕真机 drill 全过，待二期9 验收关票）
+status: closed（2026-10-19 check 756 绿 + 五幕真机 drill 全过；同日二期10 验收通过关账，见文末验收记录）
 blocked-by: 无（022 已关账，本票修订其实施形状）
 claimed-by: broker多星
 
@@ -49,3 +49,11 @@ claimed-by: broker多星
 - 五幕真机 drill 全过：[drill-032-20261019](../../drill-reports/drill-032-20261019.md)（白机从零到多星：单文件成形/免停机加星/守护回连/清态收发闭环/无 caps 腿 BAD_PROTO 教学）
 - H3 口径清扫完成：broker.md（1.2.4/4.1/4.2/4.6/4.7/4.8）、README、CHANGELOG（032 破坏式条目+022 条目修订注）、SKILL/references grep 无残留
 - 两机状态按用户指令清零重建（冷备份 `D:\multichat-state-coldbackup-20261019\`），drill 毕保持联邦工作态；%TEMP% crosschat-* 16 件清理
+
+## 验收记录（2026-10-19 二期10）
+
+- 实施会话 broker多星 已退场不在活清单，完工回报催收无门——验收按 repo 证据链独立复核
+- check 本机复跑：**756 passed / 11 skipped / 0 failed** 全绿
+- 推送与 CI 实证（REST 查 Actions，本机无 gh）：**339481e 与 6b1b00a 均已推 origin/main**，对应 push/release 四跑（含 v1.8.0 release 触发 npm 发布）全 success
+- 两机环境抽查：win `~/.crosschat/tcp/broker.json` 为单形状 `{stars:[…]}` 内嵌 roster（yang+d32b 双星、tcp/ 下无册文件物种）；WSL `node.json` 指 d32b 星籍（127.0.0.1:7260）。清零重建系用户 2026-10-19 拍板在案
+- 破坏式升级为用户 Q4 拍板，验收只核证据链不翻案——**通过关账**
