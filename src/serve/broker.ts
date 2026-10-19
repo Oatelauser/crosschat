@@ -2,10 +2,10 @@
  * tcp broker 服务端（票B B1）：全网唯一监听端口、节点零入站的星型组件。
  * ws 复用仓内依赖；投递处理器注入化（B2 接 runSend，B1 默认 NOT_READY）。
  */
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { timingSafeEqual } from 'node:crypto';
 import { hostname } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname } from 'node:path';
 import process from 'node:process';
 import { Buffer } from 'node:buffer';
 import { WebSocket, WebSocketServer } from 'ws';
@@ -13,6 +13,7 @@ import {
   CAP_MULTI_STAR,
   CAP_SESSION_MEMBERS,
   ERR,
+  hasCap,
   MAX_PAYLOAD_BYTES,
   PROTOCOL_VERSION,
   encodeFrame,
@@ -42,11 +43,15 @@ import type {
   MemberRemoveResultFrame,
 } from './protocol.js';
 import {
-  readMultiRegistry,
+  loadBrokerFile,
+  mutateBrokerFile,
   sanitizeName,
-  updateNodeEntry,
   type NodeEntry,
+  type RosterEntry,
 } from './registry.js';
+
+/** 028→032 兼容再导出：RosterEntry 定义随星册内嵌挪至 registry.ts（broker.json 同文件）。 */
+export type { RosterEntry } from './registry.js';
 import { FILE_MAX_BYTES, FileInbox } from './file-channel.js';
 import { normalizeMid } from '../platform/machine-id.js';
 
@@ -58,73 +63,10 @@ export const DEFAULT_PORT = 7260;
 
 /**
  * 028 星成员册（roster）条目：成员资格 v2 的落盘事实源——注册/下线/复活/
- * extends 接任/remove 全部落此。broker 单写者（tmp+rename 原子写）；每星一份
- * （本 broker 一星，与 registry 同目录）；聚合器 sessions 帧=该机成员的在线
- * 声明，未声明的在册条目=下线（死亡不再除名）。
+ * extends 接任/remove 全落此。032 起随星内嵌 broker.json（定义在 registry.ts，
+ * 此处再导出）；聚合器 sessions 帧=该机成员的在线声明，未声明的在册条目=下线
+ * （死亡不再除名）。
  */
-export interface RosterEntry {
-  /** 成员键=会话 ID（claude sessionId / codex thread id），全星唯一。 */
-  sessionId: string;
-  name?: string;
-  tool?: string;
-  /** 归属机器（归一 mid）——复活判定的机器一致性锚（边界1：跨机拒绝）。 */
-  machine: string;
-  machineName?: string;
-  online: boolean;
-  /** 经 --extend-session 接任的旧名（接任转移的持久证据——接任者胜复活）。 */
-  extendsName?: string;
-  /** 接任旧名的归属机器（跨机接续 {machine,name} 的 machine 段）。 */
-  extendsMachine?: string;
-  /** 029 --rm 临时成员：死亡即删册零痕迹（聚合器验死报 member-remove；切片回带本位）。 */
-  temporary?: boolean;
-}
-
-/** roster 文件与 registry/status 同目录同风格：tcp/roster.json。 */
-export function rosterFileOf(registryFile: string): string {
-  return join(dirname(registryFile), 'roster.json');
-}
-
-/**
- * 022 星域 roster 路径：多星形状每星独立一册 roster.<星名|starId>.json
- * （028 票面明言"022 多星=多份独立册"）；旧单星形状沿用 roster.json 零迁移。
- */
-export function rosterFileForStar(registryFile: string, star: { starId?: string; name?: string }, multi: boolean): string {
-  if (!multi) return rosterFileOf(registryFile);
-  return join(dirname(registryFile), `roster.${star.name ?? star.starId ?? 'star'}.json`);
-}
-
-/** 读 roster；不存在/损坏按空册（册是状态不是资产，重建走重声明路径）。 */
-export function readRoster(file: string): RosterEntry[] {
-  let raw: string;
-  try {
-    raw = readFileSync(file, 'utf8');
-  } catch {
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(raw) as { entries?: unknown } | null;
-    if (parsed === null || typeof parsed !== 'object' || !Array.isArray(parsed.entries)) return [];
-    return parsed.entries.filter(
-      (e): e is RosterEntry =>
-        e !== null && typeof e === 'object' && typeof (e as RosterEntry).sessionId === 'string' && (e as RosterEntry).sessionId !== '',
-    );
-  } catch {
-    return [];
-  }
-}
-
-/** tmp+rename 原子写（与 node.json 同款约定）；失败只留日志不倒服务。 */
-function writeRoster(file: string, entries: RosterEntry[]): boolean {
-  try {
-    mkdirSync(dirname(file), { recursive: true });
-    const tmp = `${file}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify({ entries }, null, 2)}\n`, 'utf8');
-    renameSync(tmp, file);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export interface BrokerDeps {
   registryFile: string;
@@ -182,13 +124,13 @@ interface Session {
 /**
  * 022 星域状态：一星一册一在线表（连接绑星——Session.starId 定归属；同一
  * 机器入两星=两条连接两个星域互不干扰）。星级身份以 starId 为键（addStar
- * 恒生成；单星旧形状可能缺省——按 stars[0] 唯一性兜底）。
+ * 恒生成；缺省按 stars[0] 唯一性兜底）。032：册不再有独立文件——持久化走
+ * mutateBrokerFile 拼段（broker.json 单文件）。
  */
 interface StarState {
   starId?: string;
   name?: string;
   roster: RosterEntry[];
-  rosterFile: string;
   online: Map<string, Session>;
 }
 
@@ -256,18 +198,17 @@ export class Broker {
 
   /** 监听并返回实际端口（deps.port=0 时为随机端口）。 */
   async start(): Promise<number> {
-    // 022：星域载入（单星=stars[0]；每星独立册）。serve 面在 start 前已
-    // ensureStarId/ensureMultiStarIds——这里只读不写，裸用（测试）容许无名星。
-    const reg = readMultiRegistry(this.d.registryFile);
-    this.multiStar = reg.multi;
-    this.stars = reg.stars.map((s) => ({
+    // 022/032：星域载入（broker.json 单文件，册随星内嵌）。serve 面在 start
+    // 前已 bootstrap/ensureStarIds——这里只读不写，裸用（测试）容许无名星。
+    const doc = loadBrokerFile(this.d.registryFile);
+    this.multiStar = doc.stars.length > 1;
+    this.stars = doc.stars.map((s) => ({
       ...(s.starId === undefined ? {} : { starId: s.starId }),
       ...(s.name === undefined ? {} : { name: s.name }),
-      roster: readRoster(rosterFileForStar(this.d.registryFile, s, reg.multi)),
-      rosterFile: rosterFileForStar(this.d.registryFile, s, reg.multi),
+      roster: s.roster,
       online: new Map<string, Session>(),
     }));
-    const wantPort = this.d.port ?? reg.port ?? DEFAULT_PORT;
+    const wantPort = this.d.port ?? doc.port ?? DEFAULT_PORT;
     const wss = new WebSocketServer({ host: '0.0.0.0', port: wantPort, maxPayload: MAX_PAYLOAD_BYTES });
     try {
       await new Promise<void>((resolve, reject) => {
@@ -320,6 +261,7 @@ export class Broker {
   }
 
   private onConnection(ws: SocketLike): void {
+    this.syncStarsFromDisk();
     // 022 握手时序倒置：单星 broker 的 info 照旧携带星标识（现读注册表——
     // start 后补播种/改名即时可见，与旧版逐字节同语义）；多星 broker 见钥匙
     // 才知星——info 只报 caps（multi-star 标记即"info 无星标识是合法形态"的
@@ -372,6 +314,36 @@ export class Broker {
     }, this.d.connectTimeoutMs);
   }
 
+  /**
+   * 032：星域清单与磁盘对账（每笔连接入场时）——按 starId 匹配保留既有
+   * StarState（在线表/内存册权威不丢），磁盘新增星落位（start 后播种/在跑
+   * add-star 即时可见）、消失星剔除。星域节点表本就每操作现读，这里只对账
+   * 清单与身份。
+   */
+  private syncStarsFromDisk(): void {
+    const doc = loadBrokerFile(this.d.registryFile);
+    const next: StarState[] = [];
+    doc.stars.forEach((rec, index) => {
+      // 匹配序：starId 精确 → 位对应（stars[] append-only 不变量；无 id 星/手编
+      // 改 id 的星按位保留状态对象——在线表与内存册不因对账被清）。认领即刷新身份。
+      const existing = (rec.starId !== undefined ? this.stars.find((s) => s.starId === rec.starId) : undefined) ?? this.stars[index];
+      if (existing !== undefined) {
+        existing.starId = rec.starId ?? existing.starId;
+        existing.name = rec.name;
+        next.push(existing);
+      } else {
+        next.push({
+          ...(rec.starId === undefined ? {} : { starId: rec.starId }),
+          ...(rec.name === undefined ? {} : { name: rec.name }),
+          roster: rec.roster,
+          online: new Map<string, Session>(),
+        });
+      }
+    });
+    this.stars = next;
+    this.multiStar = next.length > 1;
+  }
+
   /** 连接入场公共段：注册会话、挂事件、预绑星（钥匙核验前的 hint，onConnect 定案）。 */
   private registerSession(ws: SocketLike, star?: { starId?: string; name?: string }): Session {
     const session: Session = { ws, authed: false, lastPong: this.d.now(), ...(star?.starId === undefined ? {} : { starId: star.starId }) };
@@ -396,15 +368,14 @@ export class Broker {
   }
 
   /**
-   * 022：星域节点表（注册表每笔现读——gen/remove 即时生效，哲学不变）。星域
-   * 状态按位对应磁盘 stars[]（append-only，删/换星须重启），每次现读顺带把
-   * starId/name 刷新进 StarState（start 后补播种/改名的星标识即时可见——
-   * 与旧版 info 帧每连接现读注册表同语义）。
+   * 022/032：星域节点表（broker.json 每笔现读——gen/remove/add-star 即时生
+   * 效，哲学不变）。星域状态按位对应磁盘 stars[]，现读顺带把 starId/name
+   * 刷新进 StarState（在跑加星/改名的星标识即时可见）。
    */
   private starNodes(star: StarState): NodeEntry[] {
     const index = this.stars.indexOf(star);
-    const reg = readMultiRegistry(this.d.registryFile);
-    const fresh = reg.multi ? reg.stars[index] : reg.stars[0];
+    const doc = loadBrokerFile(this.d.registryFile);
+    const fresh = doc.stars[index];
     if (fresh === undefined) return [];
     star.starId = fresh.starId;
     star.name = fresh.name;
@@ -657,8 +628,19 @@ export class Broker {
     if (changed) this.persistRoster(star);
   }
 
+  /**
+   * 032：册持久化——mutateBrokerFile 现读拼段（保住在跑 gen-key/add-star 写进
+   * 文件的新钥匙/新星，整写内存快照严禁）；按 starId 定位星，找不到（异常
+   * 形态）按位兜底。
+   */
   private persistRoster(star: StarState): void {
-    if (!writeRoster(star.rosterFile, star.roster)) {
+    try {
+      mutateBrokerFile(this.d.registryFile, (doc) => {
+        const index = this.stars.indexOf(star);
+        const target = doc.stars.find((s) => star.starId !== undefined && s.starId === star.starId) ?? doc.stars[index];
+        if (target !== undefined) target.roster = star.roster;
+      });
+    } catch {
       this.log('roster 落盘失败（下次数变化重试）');
     }
   }
@@ -740,6 +722,19 @@ export class Broker {
       session.ws.close(4000, 'bad proto');
       return;
     }
+    // 032 非兼容升级（用户拍板拒绝历史包袱）：连接方必须声明 multi-star 能力
+    // （node/sender 同规，新版两腿都发）——旧版 crosschat 不发 caps，一律拒并
+    // 教升级。无过渡期，两端同版是硬要求。
+    if (!hasCap(frame.caps, CAP_MULTI_STAR)) {
+      this.send(session.ws, {
+        op: 'error',
+        code: ERR.BAD_PROTO,
+        message: '对端 crosschat 版本过旧（未声明 multi-star 能力）——本 broker 已升级多星单文件格式，两端都须同版：npm i -g @oatelauser/crosschat@latest，然后 broker 机 serve --stop && serve、节点机守护自动重连',
+      });
+      this.log('bad-proto 拒绝旧版连接（无 multi-star 能力声明）');
+      session.ws.close(4000, 'legacy client');
+      return;
+    }
     // 注册表每笔连接现读（文件小，不缓存）：gen/remove 即时生效。022：钥匙
     // 反查星籍——遍历托管星域的节点表，命中即连接绑星（同 broker 机多星同端口）。
     let entry: NodeEntry | undefined;
@@ -781,12 +776,20 @@ export class Broker {
       }
       // B2.1：名字=connect 自报（重连改名即覆盖）；显示用，寻址权威是 mid 前缀。
       // （旧版用 broker 自己的 hostname() 回填——双机部署时把节点全标成 broker 机名，已删。）
-      // 022：machineId 绑定/名字回写按星域落注册表（形状感知）。
+      // 032：machineId 绑定/名字回写走 mutateBrokerFile 拼段（保住文件里在跑
+      // gen-key/add-star 写进的新段落）。
       const selfName = sanitizeName(frame.name);
       const bound = entry.machineId === undefined || entry.machineId === '';
-      updateNodeEntry(this.d.registryFile, this.multiStar ? star.starId : undefined, frame.auth, (e) => {
-        if (bound) e.machineId = mid;
-        if (selfName !== undefined) e.machineName = selfName;
+      const authKey = frame.auth;
+      const starId = star.starId;
+      const starIndex = this.stars.indexOf(star);
+      mutateBrokerFile(this.d.registryFile, (doc) => {
+        const target = doc.stars.find((s) => starId !== undefined && s.starId === starId) ?? doc.stars[starIndex];
+        const e = target?.nodes.find((n) => n.key === authKey);
+        if (e !== undefined) {
+          if (bound) e.machineId = mid;
+          if (selfName !== undefined) e.machineName = selfName;
+        }
       });
       session.machineId = mid;
       session.machineName = selfName ?? entry.machineName;
@@ -1270,7 +1273,7 @@ export class Broker {
    * mid 形态教学）。归一后为空的条目不参与匹配。
    */
   private unknownMachine(spec: string, reason: string, star?: StarState): string {
-    const nodes = star === undefined ? readMultiRegistry(this.d.registryFile).stars[0]!.nodes : this.starNodes(star);
+    const nodes = star === undefined ? (loadBrokerFile(this.d.registryFile).stars[0]?.nodes ?? []) : this.starNodes(star);
     const specNorm = normalizeMid(spec);
     const lines: string[] = [];
     let suggest = '';

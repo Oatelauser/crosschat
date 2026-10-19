@@ -2,13 +2,14 @@
  * 票B B2.1（a″ mid8 双轨寻址）行为测试：双轨路由/同机 deliverLocal/冲突列码/
  * 改名免疫/信封 tcp 盖章+ssh 字节锚点/自动补全三分支/roster/自报名净化/自登记。
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
-import { registryFileOf, tcpDir, writeRegistry, type NodeEntry } from '../src/serve/registry.js';
+import { registryFileOf, tcpDir, type NodeEntry } from '../src/serve/registry.js';
+import { seedBroker } from './helpers/broker-seed.js';
 import { encodeFrame, parseFrame, type Frame } from '../src/serve/protocol.js';
 import { fetchRoster, runViaTcpSend } from '../src/serve/via-tcp.js';
 import { deliverViaRunSend } from '../src/serve/node.js';
@@ -17,7 +18,8 @@ import { composeEnvelope } from '../src/envelope.js';
 import { encodeOrigin, decodeOriginIdentity } from '../src/federation.js';
 import { encodeRef } from '../src/ref.js';
 import { pickAutoVia, runSend, type SendDeps } from '../src/commands/send.js';
-import { ensureSelfEntry, realServeDeps, type ServeDeps } from '../src/commands/serve.js';
+import { ensureSelfEntries, realServeDeps, type ServeDeps } from '../src/commands/serve.js';
+import { ensureStarIds, loadBrokerFile } from '../src/serve/registry.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-b21-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -46,7 +48,7 @@ class Client {
       c.ws.once('error', reject);
     });
     await c.waitFor((f) => f.op === 'info');
-    c.send({ op: 'connect', proto: 1, role: opts.role, ...(opts.machineId === undefined ? {} : { machineId: opts.machineId }), auth, ...(opts.name === undefined ? {} : { name: opts.name }) });
+    c.send({ op: 'connect', proto: 1, role: opts.role, ...(opts.machineId === undefined ? {} : { machineId: opts.machineId }), auth, ...(opts.name === undefined ? {} : { name: opts.name }), caps: ['multi-star'] });
     await c.waitFor((f) => f.op === 'connected');
     return c;
   }
@@ -74,17 +76,19 @@ function startHarness(nodes: Partial<NodeEntry>[], overrides: Partial<BrokerDeps
   return (async (): Promise<Harness> => {
     const dir = mkdtempSync(join(root, 'case-'));
     const registryFile = registryFileOf(dir);
-    writeRegistry(registryFile, {
-      nodes: [
-        ...nodes.map((n, i) => ({
-          label: n.label ?? `node-${i + 1}`,
-          key: n.key ?? key(`k${i}`),
-          machineId: n.machineId,
-          machineName: n.machineName,
-          addedAt: '2026-01-01T00:00:00.000Z',
-        })),
-        { label: 'sender-key', key: key('s'), addedAt: '2026-01-01T00:00:00.000Z' },
-      ],
+    seedBroker(registryFile, {
+      stars: [{
+        nodes: [
+          ...nodes.map((n, i) => ({
+            label: n.label ?? `node-${i + 1}`,
+            key: n.key ?? key(`k${i}`),
+            machineId: n.machineId,
+            machineName: n.machineName,
+            addedAt: '2026-01-01T00:00:00.000Z',
+          })),
+          { label: 'sender-key', key: key('s'), addedAt: '2026-01-01T00:00:00.000Z' },
+        ],
+      }],
     });
     const logs: string[] = [];
     let deliverLocal: BrokerDeps['deliverLocal'] = async () => ({ op: 'error', code: 'NOT_READY', message: 'no local' });
@@ -184,8 +188,7 @@ describe('B2.1 self-reported name lifecycle', () => {
   it('sanitizes the connect name (>32 truncated, control chars stripped)', async () => {
     const h = await startHarness([{ key: key('k0') }]);
     await Client.connect(h.url, key('k0'), { role: 'node', machineId: 'eeee00001111', name: `${'x'.repeat(40)}\u0007尾` });
-    const entry = JSON.parse(readFileSync(h.registryFile, 'utf8')) as { nodes: NodeEntry[] };
-    const name = entry.nodes[0]!.machineName ?? '';
+    const name = loadBrokerFile(h.registryFile).stars[0]!.nodes[0]!.machineName ?? '';
     expect(name.length).toBeLessThanOrEqual(32);
     // eslint-disable-next-line no-control-regex -- 断言控制符已剥
     expect(name).not.toMatch(/[\u0000-\u001f]/);
@@ -196,8 +199,7 @@ describe('B2.1 self-reported name lifecycle', () => {
     const h = await startHarness([{ key: key('k0') }]);
     await Client.connect(h.url, key('k0'), { role: 'node', machineId: 'eeee00001111', name: 'old-name' });
     await Client.connect(h.url, key('k0'), { role: 'node', machineId: 'eeee00001111', name: 'new-name' });
-    const entry = JSON.parse(readFileSync(h.registryFile, 'utf8')) as { nodes: NodeEntry[] };
-    expect(entry.nodes[0]!.machineName).toBe('new-name');
+    expect(loadBrokerFile(h.registryFile).stars[0]!.nodes[0]!.machineName).toBe('new-name');
   }, 10_000);
 
   it('rename immunity: mid8 routing still hits the node after it renamed', async () => {
@@ -324,55 +326,49 @@ describe('B2.1 reply loop closure', () => {
   });
 });
 
-describe('B1 self node.json starId backfill (ensureSelfEntry)', () => {
+describe('B1 self node.json starId backfill (ensureSelfEntries)', () => {
   function selfDeps(dir: string): ServeDeps {
     return { ...realServeDeps(), baseDir: dir, machineId: () => 'a1b2c3d40000', hostname: () => 'hub' };
   }
+  const selfNode = (): NodeEntry => ({ label: 'self', key: 'k', machineId: 'a1b2c3d40000', machineName: 'hub', addedAt: '2026-01-01T00:00:00.000Z' });
 
-  it('backfills the registry starId into a matching entry that lacks it, touching nothing else', () => {
+  it('backfills starId into a matching entry lacking it（旧单条形状并轨数组+补 id）；registry starId 不动', () => {
     const dir = mkdtempSync(join(root, 'b1self-'));
     const deps = selfDeps(dir);
     const registryFile = registryFileOf(dir);
     mkdirSync(tcpDir(dir), { recursive: true });
     const nodeJson = join(tcpDir(dir), 'node.json');
-    writeRegistry(registryFile, {
-      starId: 'aaaabbbbcccc',
-      nodes: [{ label: 'self', key: 'k', machineId: 'a1b2c3d40000', machineName: 'hub', addedAt: '2026-01-01T00:00:00.000Z' }],
-    });
-    writeFileSync(nodeJson, JSON.stringify({ broker: { host: '127.0.0.1', port: 7260, alias: 'hub' }, key: 'k', name: 'hub' }, null, 2));
-    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
-    const parsed = JSON.parse(readFileSync(nodeJson, 'utf8')) as { broker: { host: string; port: number; name?: string; alias?: string; starId?: string }; key: string; showName?: string };
-    expect(parsed.broker.starId).toBe('aaaabbbbcccc');
-    expect(parsed.key).toBe('k');
-    expect(parsed.showName).toBe('hub'); // E0：重写时顶层旧 name 并轨为 showName
-    expect(parsed.broker.name).toBe('hub'); // 旧 alias 值并轨进 name（=星名，注册表缺省轨道同取 hostname）
-    // 注册表 starId 原样未被改写
-    expect((JSON.parse(readFileSync(registryFile, 'utf8')) as { starId?: string }).starId).toBe('aaaabbbbcccc');
+    seedBroker(registryFile, { stars: [{ starId: 'aaaabbbbcccc', nodes: [selfNode()] }] });
+    writeFileSync(nodeJson, JSON.stringify({ broker: { host: '127.0.0.1', port: 7260 }, key: 'k', name: 'hub' }, null, 2));
+    expect(ensureSelfEntries(deps, registryFile, 7260)).toEqual([]); // 对齐成功零出声
+    const parsed = JSON.parse(readFileSync(nodeJson, 'utf8')) as { brokers: Array<{ host: string; port: number; starId?: string; key: string }>; showName?: string };
+    expect(parsed.brokers[0]!.starId).toBe('aaaabbbbcccc');
+    expect(parsed.brokers[0]!.key).toBe('k');
+    expect(parsed.showName).toBe('hub'); // 旧顶层 name 并轨 showName
+    expect(loadBrokerFile(registryFile).stars[0]!.starId).toBe('aaaabbbbcccc');
   });
 
-  it('generates a starId when the registry lacks one; never rewrites an entry that already has one', () => {
+  it('serve 序：ensureStarIds 先补 id，自登记带进 node.json；既有 starId 不覆写', () => {
     const dir = mkdtempSync(join(root, 'b1self-'));
     const deps = selfDeps(dir);
     const registryFile = registryFileOf(dir);
     mkdirSync(tcpDir(dir), { recursive: true });
     const nodeJson = join(tcpDir(dir), 'node.json');
-    writeRegistry(registryFile, {
-      nodes: [{ label: 'self', key: 'k', machineId: 'a1b2c3d40000', machineName: 'hub', addedAt: '2026-01-01T00:00:00.000Z' }],
-    });
-    writeFileSync(nodeJson, JSON.stringify({ broker: { host: '127.0.0.1', port: 7260, alias: 'hub' }, key: 'k', name: 'hub' }, null, 2));
-    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
-    const starId = (JSON.parse(readFileSync(nodeJson, 'utf8')) as { broker: { starId?: string } }).broker.starId;
+    seedBroker(registryFile, { stars: [{ nodes: [selfNode()] }] });
+    writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 7260, key: 'k' }] }));
+    ensureStarIds(registryFile);
+    ensureSelfEntries(deps, registryFile, 7260);
+    const starId = (JSON.parse(readFileSync(nodeJson, 'utf8')) as { brokers: Array<{ starId?: string }> }).brokers[0]!.starId;
     expect(starId).toMatch(/^[0-9a-f]{12}$/);
-    expect((JSON.parse(readFileSync(registryFile, 'utf8')) as { starId?: string }).starId).toBe(starId);
-    // 已有 starId（即便与注册表不同）→ 不重写
-    writeFileSync(nodeJson, JSON.stringify({ broker: { host: '127.0.0.1', port: 7260, alias: 'hub', starId: 'deadbeef0000' }, key: 'k', name: 'hub' }, null, 2));
-    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
-    expect((JSON.parse(readFileSync(nodeJson, 'utf8')) as { broker: { starId?: string } }).broker.starId).toBe('deadbeef0000');
+    expect(loadBrokerFile(registryFile).stars[0]!.starId).toBe(starId);
+    writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 7260, key: 'k', starId: 'deadbeef0000' }] }));
+    ensureSelfEntries(deps, registryFile, 7260);
+    expect((JSON.parse(readFileSync(nodeJson, 'utf8')) as { brokers: Array<{ starId?: string }> }).brokers[0]!.starId).toBe('deadbeef0000');
   });
 });
 
-describe('B2.1 serve self-init', () => {
-  it('registers a self entry and writes the local node.json (127.0.0.1); idempotent, status written→ok', () => {
+describe('B2.1 serve self-init（bootstrap 后首跑）', () => {
+  it('registers a self entry and writes the local node.json (127.0.0.1); idempotent（再跑零出声零改写）', () => {
     const dir = mkdtempSync(join(root, 'self-'));
     const deps: ServeDeps = {
       ...realServeDeps(),
@@ -381,28 +377,25 @@ describe('B2.1 serve self-init', () => {
       hostname: () => 'hub',
     };
     const registryFile = registryFileOf(dir);
-    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'written' });
-    const reg = JSON.parse(readFileSync(registryFile, 'utf8')) as { nodes: NodeEntry[] };
-    expect(reg.nodes).toHaveLength(1);
-    expect(reg.nodes[0]).toMatchObject({ label: 'self', machineId: 'a1b2c3d40000', machineName: 'hub' });
-    const nodeJson = JSON.parse(readFileSync(join(tcpDir(dir), 'node.json'), 'utf8')) as { brokers: { host: string; port: number; name: string; starId: string; key: string }[]; showName: string };
-    // B-fix：自用 node.json 新写一律数组形状（单星=一项）；E0 词表：name=星名、showName=本机显示名
+    seedBroker(registryFile, { stars: [{ nodes: [] }] }); // bootstrap 后形态（无名空星）
+    const notes = ensureSelfEntries(deps, registryFile, 7260);
+    expect(notes.some((l) => l.includes('已自动生成本机 node.json'))).toBe(true);
+    const star = loadBrokerFile(registryFile).stars[0]!;
+    expect(star.nodes).toHaveLength(1);
+    expect(star.nodes[0]).toMatchObject({ label: 'self', machineId: 'a1b2c3d40000', machineName: 'hub' });
+    const nodeJson = JSON.parse(readFileSync(join(tcpDir(dir), 'node.json'), 'utf8')) as { brokers: Array<{ host: string; port: number; key: string }>; showName: string };
     expect(nodeJson.brokers).toHaveLength(1);
-    expect(nodeJson.brokers[0]).toEqual({ host: '127.0.0.1', port: 7260, name: 'hub', starId: expect.any(String), key: expect.any(String) });
+    expect(nodeJson.brokers[0]).toMatchObject({ host: '127.0.0.1', port: 7260 });
     expect(nodeJson.showName).toBe('hub');
-    // B0：自用条目的 starId 与注册表一致（12 hex）
-    expect(nodeJson.brokers[0]!.starId).toMatch(/^[0-9a-f]{12}$/);
-    expect((JSON.parse(readFileSync(registryFile, 'utf8')) as { starId?: string }).starId).toBe(nodeJson.brokers[0]!.starId);
-    // 幂等：再来一次不重复登记、不覆盖既有 node.json，状态 ok（静默分支）
-    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
-    const reg2 = JSON.parse(readFileSync(registryFile, 'utf8')) as { nodes: NodeEntry[] };
-    expect(reg2.nodes).toHaveLength(1);
-    expect(existsSync(join(tcpDir(dir), 'node.json'))).toBe(true);
+    // 幂等：再来一次零出声、node.json 字节不变、注册表不重复登记
+    const before = readFileSync(join(tcpDir(dir), 'node.json'), 'utf8');
+    expect(ensureSelfEntries(deps, registryFile, 7260)).toEqual([]);
+    expect(readFileSync(join(tcpDir(dir), 'node.json'), 'utf8')).toBe(before);
+    expect(loadBrokerFile(registryFile).stars[0]!.nodes).toHaveLength(1);
   });
 
-  // 三态体检（B-fix 语义：按"本 broker 钥匙条目"定位——多星机上自用条目与外星条目共存）：
-  // 无本 broker 钥匙 → foreign（文件指向谁就报谁）；有钥匙条目但 host/port 不符 → stale；坏文件 → stale
-  it('classifies an existing node.json as foreign or stale without touching it', () => {
+  // foreign（他星配置：不追加自用条目只出声）/ stale（自用钥匙指向不符只出声）/ 坏文件（重建）
+  it('classifies an existing node.json as foreign or stale; corrupt file is rebuilt', () => {
     const dir = mkdtempSync(join(root, 'self-'));
     const deps: ServeDeps = {
       ...realServeDeps(),
@@ -413,23 +406,26 @@ describe('B2.1 serve self-init', () => {
     const registryFile = registryFileOf(dir);
     const nodeJson = join(tcpDir(dir), 'node.json');
     mkdirSync(tcpDir(dir), { recursive: true });
-    // 旧形状他星配置：钥匙不是本 broker 的 → foreign
-    writeFileSync(nodeJson, JSON.stringify({ broker: { host: '192.168.1.5', port: 7260, alias: 'other' }, key: 'k', name: 'n' }));
-    expect(ensureSelfEntry(deps, registryFile, 7260)).toMatchObject({ status: 'foreign', host: '192.168.1.5' });
-    // 数组形状含外星条目：同样 foreign（报首条指向）
-    writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '10.9.9.9', port: 7260, alias: 'w', key: 'wk' }], name: 'n' }));
-    expect(ensureSelfEntry(deps, registryFile, 7260)).toMatchObject({ status: 'foreign', host: '10.9.9.9' });
-    // 本 broker 钥匙条目在、但端口不符（数组形状）→ stale
-    const selfKey = (JSON.parse(readFileSync(registryFile, 'utf8')) as { nodes: NodeEntry[] }).nodes[0]!.key!;
-    writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 8123, alias: 'hub', key: selfKey }], name: 'hub' }));
-    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'stale' });
+    seedBroker(registryFile, { stars: [{ nodes: [] }] });
+    // 他星配置（钥匙不是本 broker 的）→ foreign 出声、文件原样
+    writeFileSync(nodeJson, JSON.stringify({ broker: { host: '192.168.1.5', port: 7260 }, key: 'x', name: 'n' }));
+    let notes = ensureSelfEntries(deps, registryFile, 7260);
+    expect(notes.some((l) => l.includes('不含本 broker 的自用钥匙') && l.includes('192.168.1.5'))).toBe(true);
+    expect((JSON.parse(readFileSync(nodeJson, 'utf8')) as { broker: { host: string } }).broker.host).toBe('192.168.1.5');
+    // 自用钥匙在、端口漂移 → stale 出声
+    const selfKey = loadBrokerFile(registryFile).stars[0]!.nodes[0]!.key;
+    writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 8123, key: selfKey }] }));
+    notes = ensureSelfEntries(deps, registryFile, 7260);
+    expect(notes.some((l) => l.includes('陈旧或端口漂移'))).toBe(true);
+    // 坏文件 → 读不进按不存在重建
     writeFileSync(nodeJson, 'not json at all');
-    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'stale' });
-    expect(readFileSync(nodeJson, 'utf8')).toBe('not json at all');
+    notes = ensureSelfEntries(deps, registryFile, 7260);
+    expect(notes.some((l) => l.includes('已自动生成本机 node.json'))).toBe(true);
+    expect(() => JSON.parse(readFileSync(nodeJson, 'utf8'))).not.toThrow();
   });
 });
 
-describe('017 showName 单一事实源（ensureSelfEntry 启动刷新 machineName）', () => {
+describe('017 showName 单一事实源（ensureSelfEntries 启动刷新 machineName）', () => {
   const selfEntry = (machineName?: string): NodeEntry => ({
     label: 'self',
     key: 'k',
@@ -437,12 +433,11 @@ describe('017 showName 单一事实源（ensureSelfEntry 启动刷新 machineNam
     ...(machineName === undefined ? {} : { machineName }),
     addedAt: '2026-01-01T00:00:00.000Z',
   });
-  // name 预落定：ensureStarName 不再写注册表（无变化不写用例要字节级安静）
   function setup(machineName?: string): { deps: ServeDeps; registryFile: string; nodeJson: string } {
     const dir = mkdtempSync(join(root, 't017-'));
     mkdirSync(tcpDir(dir), { recursive: true });
     const registryFile = registryFileOf(dir);
-    writeRegistry(registryFile, { starId: 'aaaabbbbcccc', name: 'hub', nodes: [selfEntry(machineName)] });
+    seedBroker(registryFile, { stars: [{ starId: 'aaaabbbbcccc', name: 'hub', nodes: [selfEntry(machineName)] }] });
     return {
       deps: { ...realServeDeps(), baseDir: dir, machineId: () => 'a1b2c3d40000', hostname: () => 'hub' },
       registryFile,
@@ -450,47 +445,49 @@ describe('017 showName 单一事实源（ensureSelfEntry 启动刷新 machineNam
     };
   }
   const readSelf = (file: string): NodeEntry =>
-    (JSON.parse(readFileSync(file, 'utf8')) as { nodes: NodeEntry[] }).nodes[0]!;
+    loadBrokerFile(file).stars[0]!.nodes[0]!;
 
-  it('重启（再跑 ensureSelfEntry）读回 showName 刷新注册表 machineName——改名主链', () => {
+  it('重启（再跑 ensureSelfEntries）读回 showName 刷新注册表 machineName——改名主链', () => {
     const { deps, registryFile, nodeJson } = setup('hub');
     writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 7260, key: 'k' }], showName: 'cloud' }));
-    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
+    expect(ensureSelfEntries(deps, registryFile, 7260)).toEqual([]);
     expect(readSelf(registryFile).machineName).toBe('cloud');
   });
 
   it('foreign 形态（自用条目不在 node.json）照样读顶层 showName 刷新', () => {
     const { deps, registryFile, nodeJson } = setup('hub');
     writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '10.9.9.9', port: 7260, key: 'wk', name: 'other' }], showName: 'cloud' }));
-    expect(ensureSelfEntry(deps, registryFile, 7260)).toMatchObject({ status: 'foreign' });
+    const notes = ensureSelfEntries(deps, registryFile, 7260);
+    expect(notes.some((l) => l.includes('不含本 broker 的自用钥匙'))).toBe(true);
     expect(readSelf(registryFile).machineName).toBe('cloud');
   });
 
   it('语义对称：showName 显式缺失/空白 → 清除 machineName（roster 回退纯 mid8）', () => {
     const { deps, registryFile, nodeJson } = setup('hub');
     writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 7260, key: 'k' }] }));
-    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
+    expect(ensureSelfEntries(deps, registryFile, 7260)).toEqual([]);
     expect(readSelf(registryFile).machineName).toBeUndefined();
     expect('machineName' in readSelf(registryFile)).toBe(false); // 键整个消失，非 null 残留
     // 空白串同清（sanitizeName 剥空）
-    writeRegistry(registryFile, { name: 'hub', nodes: [selfEntry('cloud')] });
+    seedBroker(registryFile, { stars: [{ starId: 'aaaabbbbcccc', name: 'hub', nodes: [selfEntry('cloud')] }] });
     writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 7260, key: 'k' }], showName: '   ' }));
-    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
+    expect(ensureSelfEntries(deps, registryFile, 7260)).toEqual([]);
     expect(readSelf(registryFile).machineName).toBeUndefined();
   });
 
-  it('node.json 读不了/损坏 → 维持注册表现值（不因解析失败误删）', () => {
+  it('node.json 读不了/损坏 → 重建（新语义：坏文件视同不存在）', () => {
     const { deps, registryFile, nodeJson } = setup('cloud');
     writeFileSync(nodeJson, 'not json at all');
-    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'stale' });
-    expect(readSelf(registryFile).machineName).toBe('cloud');
+    const notes = ensureSelfEntries(deps, registryFile, 7260);
+    expect(notes.some((l) => l.includes('已自动生成本机 node.json'))).toBe(true);
+    expect(() => JSON.parse(readFileSync(nodeJson, 'utf8'))).not.toThrow();
   });
 
   it('无变化不写：showName 与现值一致时注册表字节不变（与 E0 星名同步同款）', () => {
     const { deps, registryFile, nodeJson } = setup('cloud');
-    writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 7260, key: 'k', name: 'hub' }], showName: 'cloud' }, null, 2));
+    writeFileSync(nodeJson, JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 7260, key: 'k', name: 'hub', starId: 'aaaabbbbcccc' }], showName: 'cloud' }, null, 2));
     const before = readFileSync(registryFile, 'utf8');
-    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
+    expect(ensureSelfEntries(deps, registryFile, 7260)).toEqual([]);
     expect(readFileSync(registryFile, 'utf8')).toBe(before);
   });
 
@@ -508,8 +505,8 @@ describe('017 showName 单一事实源（ensureSelfEntry 启动刷新 machineNam
       JSON.stringify({ brokers: [{ host: '127.0.0.1', port, key: key('k0'), name: 'hub' }], showName: 'cloud' }),
     );
     const deps: ServeDeps = { ...realServeDeps(), baseDir: h.dir, machineId: () => 'a1b2c3d40000', hostname: () => 'hub' };
-    expect(ensureSelfEntry(deps, h.registryFile, port)).toEqual({ status: 'ok' });
-    expect(readSelf(h.registryFile).machineName).toBe('cloud');
+    expect(ensureSelfEntries(deps, h.registryFile, port)).toEqual([]);
+    expect(loadBrokerFile(h.registryFile).stars[0]!.nodes[0]!.machineName).toBe('cloud');
     const sender = await senderOn(h);
     sender.send({ op: 'send', id: 'n1', targetMachine: 'cloud', body: 'by-new-name' });
     const receipt = await sender.waitFor((f) => f.op === 'receipt' && f.id === 'n1');
@@ -602,25 +599,19 @@ describe('B3.1 drill fixes', () => {
   });
 });
 
-describe('E0 ensureSelfEntry 星名同步（broker 自用条目不走节点客户端，在此对齐）', () => {
+describe('E0 ensureSelfEntries 星名同步（broker 自用条目不走节点客户端，在此对齐）', () => {
   it('overwrites a legacy alias with the registry star name (and keeps starId untouched)', () => {
     const dir = mkdtempSync(join(root, 'e0self-'));
     const deps = { ...realServeDeps(), baseDir: dir, machineId: () => 'a1b2c3d40000', hostname: () => 'hub' } as ServeDeps;
     const registryFile = registryFileOf(dir);
     mkdirSync(tcpDir(dir), { recursive: true });
     const nodeJson = join(tcpDir(dir), 'node.json');
-    writeRegistry(registryFile, {
-      starId: 'aaaabbbbcccc',
-      name: 'cloud',
-      nodes: [{ label: 'self', key: 'k', machineId: 'a1b2c3d40000', machineName: 'hub', addedAt: '2026-01-01T00:00:00.000Z' }],
-    });
+    seedBroker(registryFile, { stars: [{ starId: 'aaaabbbbcccc', name: 'cloud', nodes: [{ label: 'self', key: 'k', machineId: 'a1b2c3d40000', machineName: 'hub', addedAt: '2026-01-01T00:00:00.000Z' }] }] });
     writeFileSync(nodeJson, JSON.stringify({ broker: { host: '127.0.0.1', port: 7260, alias: 'hub', starId: 'aaaabbbbcccc' }, key: 'k', name: 'hub' }, null, 2));
-    expect(ensureSelfEntry(deps, registryFile, 7260)).toEqual({ status: 'ok' });
-    const parsed = JSON.parse(readFileSync(nodeJson, 'utf8')) as { broker: { name?: string; alias?: string; starId?: string }; showName?: string; name?: string };
-    expect(parsed.broker.name).toBe('cloud'); // 星名以注册表为准（显式 --name cloud）
-    expect(parsed.broker.alias).toBeUndefined();
-    expect(parsed.broker.starId).toBe('aaaabbbbcccc'); // 既有 starId 不碰
-    expect(parsed.showName).toBe('hub');
-    expect(parsed.name).toBeUndefined();
+    expect(ensureSelfEntries(deps, registryFile, 7260)).toEqual([]);
+    const parsed = JSON.parse(readFileSync(nodeJson, 'utf8')) as { brokers: Array<{ name?: string; starId?: string }>; showName?: string };
+    expect(parsed.brokers[0]!.name).toBe('cloud'); // 星名以注册表为准（显式 --name cloud）
+    expect(parsed.brokers[0]!.starId).toBe('aaaabbbbcccc'); // 既有 starId 不碰
+    expect(parsed.showName).toBe('hub'); // 旧顶层 name 并轨 showName、alias 淘汰
   });
 });

@@ -9,7 +9,8 @@ import { MultichatError } from '../src/errors.js';
 import { drain, park } from '../src/outbox.js';
 import { encodeOrigin } from '../src/federation.js';
 import { Broker } from '../src/serve/broker.js';
-import { registryFileOf, writeRegistry } from '../src/serve/registry.js';
+import { registryFileOf } from '../src/serve/registry.js';
+import { seedBroker } from './helpers/broker-seed.js';
 import type { SendFrame } from '../src/serve/protocol.js';
 import { appendSendLog, type SendLogEntry } from '../src/send-log.js';
 import type { ClaudeRegistryScan, ClaudeSessionEntry } from '../src/claude/registry.js';
@@ -689,8 +690,8 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
     const seen: SendFrame[] = [];
     const dir = scratch('');
     // broker 本机即对端机（machineId=对端 mid）→ send 帧走 deliverLocal，可断言帧内容
-    writeRegistry(registryFileOf(dir), {
-      nodes: [{ label: 'self', key: key('k'), machineId: 'aaaa0000ef12', machineName: 'peer-host', addedAt: 'x' }],
+    seedBroker(registryFileOf(dir), {
+      stars: [{ nodes: [{ label: 'self', key: key('k'), machineId: 'aaaa0000ef12', machineName: 'peer-host', addedAt: 'x' }] }],
     });
     const broker = new Broker({
       registryFile: registryFileOf(dir),

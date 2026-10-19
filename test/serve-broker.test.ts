@@ -10,7 +10,8 @@ import {
   type BrokerDeps,
 } from '../src/serve/broker.js';
 import { encodeFrame, parseFrame, type Frame } from '../src/serve/protocol.js';
-import { registryFileOf, writeRegistry, type NodeEntry } from '../src/serve/registry.js';
+import { loadBrokerFile, registryFileOf, writeBrokerFile, type NodeEntry } from '../src/serve/registry.js';
+import { seedBroker } from './helpers/broker-seed.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-serve-broker-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -29,14 +30,16 @@ const clients: TestClient[] = [];
 const key = (c: string) => c.repeat(64);
 
 function seed(file: string, nodes: Partial<NodeEntry>[]): void {
-  writeRegistry(file, {
-    nodes: nodes.map((n, i) => ({
-      label: n.label ?? `node-${i + 1}`,
-      key: n.key ?? key(`${i + 1}`),
-      machineId: n.machineId,
-      machineName: n.machineName,
-      addedAt: '2026-01-01T00:00:00.000Z',
-    })),
+  seedBroker(file, {
+    stars: [{
+      nodes: nodes.map((n, i) => ({
+        label: n.label ?? `node-${i + 1}`,
+        key: n.key ?? key(`${i + 1}`),
+        machineId: n.machineId,
+        machineName: n.machineName,
+        addedAt: '2026-01-01T00:00:00.000Z',
+      })),
+    }],
   });
 }
 
@@ -138,6 +141,7 @@ async function handshake(url: string, auth: string, machineId?: string, proto = 
     machineId,
     auth,
     ...(name === undefined ? {} : { name }),
+    caps: ['multi-star'],
   });
   return client;
 }
@@ -149,9 +153,9 @@ describe('broker handshake and auth', () => {
     const client = await handshake(url, key('a'), 'm-1111', 1, 'node-host');
     const connected = await client.waitFor((f) => f.op === 'connected');
     expect(connected.op === 'connected' && connected.machineName).toBe('node-host');
-    const entry = JSON.parse(readFileSync(registryFile, 'utf8')) as { nodes: NodeEntry[] };
-    expect(entry.nodes[0]?.machineId).toBe('m-1111');
-    expect(entry.nodes[0]?.machineName).toBe('node-host');
+    const doc = loadBrokerFile(registryFile);
+    expect(doc.stars[0]!.nodes[0]?.machineId).toBe('m-1111');
+    expect(doc.stars[0]!.nodes[0]?.machineName).toBe('node-host');
     const status = JSON.parse(readFileSync(statusFile, 'utf8')) as { state: string; onlineNodes: string[]; version?: string };
     expect(status.state).toBe('running');
     expect(status.onlineNodes).toEqual(['node-host']);
@@ -163,9 +167,9 @@ describe('broker handshake and auth', () => {
     seed(registryFile, [{ key: key('a') }]);
     const client = await handshake(url, key('a'), 'm-2222');
     await client.waitFor((f) => f.op === 'connected');
-    const entry = JSON.parse(readFileSync(registryFile, 'utf8')) as { nodes: NodeEntry[] };
-    expect(entry.nodes[0]?.machineId).toBe('m-2222');
-    expect(entry.nodes[0]?.machineName).toBeUndefined();
+    const doc = loadBrokerFile(registryFile);
+    expect(doc.stars[0]!.nodes[0]?.machineId).toBe('m-2222');
+    expect(doc.stars[0]!.nodes[0]?.machineName).toBeUndefined();
   });
 
   it('rejects a wrong key with BAD_AUTH after a constant delay', async () => {
@@ -210,17 +214,17 @@ describe('broker handshake and auth', () => {
   // B0：info 帧按注册表现发 starId（缺省不发——additive）
   it('carries the registry starId in the info frame, and omits the field without one', async () => {
     const withStar = await startBroker();
-    writeRegistry(withStar.registryFile, {
-      starId: 'a1b2c3d4e5f6',
-      nodes: [{ label: 'node-1', key: key('a'), addedAt: '2026-01-01T00:00:00.000Z' }],
+    seedBroker(withStar.registryFile, {
+      stars: [{ starId: 'a1b2c3d4e5f6', nodes: [{ label: 'node-1', key: key('a'), addedAt: '2026-01-01T00:00:00.000Z' }] }],
     });
     const c1 = new TestClient(withStar.url);
     await c1.opened();
     const info1 = await c1.waitFor((f) => f.op === 'info');
     expect(info1.op === 'info' && info1.starId).toBe('a1b2c3d4e5f6');
 
+    // 032：无 starId 的星（手编形状）——info 照旧省略该字段（additive）
     const withoutStar = await startBroker();
-    seed(withoutStar.registryFile, [{ key: key('a') }]);
+    writeBrokerFile(withoutStar.registryFile, { stars: [{ nodes: [{ label: 'node-1', key: key('a'), addedAt: '2026-01-01T00:00:00.000Z' }] }] });
     const c2 = new TestClient(withoutStar.url);
     await c2.opened();
     const info2 = await c2.waitFor((f) => f.op === 'info');
@@ -234,7 +238,7 @@ describe('broker send routing', () => {
     const sender = new TestClient(url);
     await sender.opened();
     await sender.waitFor((f) => f.op === 'info');
-    sender.send({ op: 'connect', proto: 1, role: 'sender', auth: key('s') });
+    sender.send({ op: 'connect', proto: 1, role: 'sender', auth: key('s'), caps: ['multi-star'] });
     await sender.waitFor((f) => f.op === 'connected');
     return sender;
   }

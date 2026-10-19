@@ -1,5 +1,7 @@
 # 多星 WS 连接复用（同机多星连接收敛）
 
+> **修订注记（2026-10-19）**：本票"实施形状"节所记**注册表双形状**与**独立 roster 文件**两项，经用户四轮 grilling 审查后由 [032](032-registry-single-shape.md) 推翻——单文件单形状（stars[] 内嵌 roster）、非兼容升级拒旧腿。连接绑星/握手倒置/内挂自挂/013 延伸四支柱不变。下文保持历史原貌。
+
 label: wayfinder:design
 status: closed
 blocked-by: （无——但排期在 1.6.2 之后；019/020 批次在飞，map 挂账行验收时补）

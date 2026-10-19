@@ -1,166 +1,154 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+/**
+ * 032 注册表单形状：loadBrokerFile/writeBrokerFile/mutateBrokerFile 三纪律、
+ * 星域 CLI 单实现（genKeysFor/setNameFor/removeNodeFor/addStarTo/selectStar）、
+ * 非兼容语义（旧形状按损坏 .bak 重建）。
+ */
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
-  ensureStarId,
-  ensureStarName,
-  genKeys,
-  listNodes,
-  readRegistry,
+  addStarTo,
+  ensureStarIds,
+  genKeysFor,
+  loadBrokerFile,
+  mutateBrokerFile,
   registryFileOf,
-  removeNode,
+  removeNodeFor,
   sanitizeStarName,
-  setName,
-  setPort,
-  writeRegistry,
+  selectStar,
+  setNameFor,
+  setPortFor,
+  writeBrokerFile,
 } from '../src/serve/registry.js';
 import { MultichatError } from '../src/errors.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-serve-reg-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-const freshFile = (): string => registryFileOf(mkdtempSync(join(root, 'case-')));
+const key = (c: string) => c.repeat(64);
+const node = (label: string, k: string, machineId?: string) => ({ label, key: k, ...(machineId === undefined ? {} : { machineId }), addedAt: '2026-01-01T00:00:00.000Z' });
+const fileOf = (): string => {
+  const dir = mkdtempSync(join(root, 'case-'));
+  mkdirSync(join(dir, 'tcp'), { recursive: true });
+  return registryFileOf(dir);
+};
 
-describe('genKeys', () => {
-  it('numbers labels sequentially across calls and persists entries', () => {
-    const file = freshFile();
-    const first = genKeys(file, 2, { host: '192.168.1.5', port: 7260 });
-    expect(first.map((r) => r.label)).toEqual(['node-1', 'node-2']);
-    const second = genKeys(file, 1, { host: '192.168.1.5', port: 7260 });
-    expect(second.map((r) => r.label)).toEqual(['node-3']);
-    const labels = listNodes(file).map((n) => n.label);
-    expect(labels).toEqual(['node-1', 'node-2', 'node-3']);
+describe('032 单形状读写', () => {
+  it('写读往返：stars[] 内嵌 roster；文件缺失=空表', () => {
+    const file = fileOf();
+    expect(loadBrokerFile(file).stars).toEqual([]);
+    writeBrokerFile(file, {
+      port: 7260,
+      stars: [{ starId: 'aaaabbbbcccc', name: 'alpha', nodes: [node('self', key('s'))], roster: [{ sessionId: 'sess-1', machine: 'm', online: true }] }],
+    });
+    const doc = loadBrokerFile(file);
+    expect(doc.port).toBe(7260);
+    expect(doc.stars[0]!.name).toBe('alpha');
+    expect(doc.stars[0]!.nodes).toHaveLength(1);
+    expect(doc.stars[0]!.roster).toHaveLength(1);
   });
 
-  it('emits full node.json content with 2-space indent', () => {
-    const file = freshFile();
-    const [{ key, nodeJsonContent }] = genKeys(file, 1, { host: '10.0.0.2', port: 9000 });
-    expect(nodeJsonContent).toBe(
-      `{\n  "brokers": [\n    {\n      "host": "10.0.0.2",\n      "port": 9000,\n      "key": "${key}"\n    }\n  ],\n  "showName": "改成「贴这份配置的机器」的名字"\n}\n`,
-    );
-    expect(key).toMatch(/^[0-9a-f]{64}$/);
+  it('非兼容：旧单星形状（顶层 nodes）按损坏处理——.bak 兜底+空表重建', () => {
+    const file = fileOf();
+    writeFileSync(file, JSON.stringify({ port: 7260, starId: 'aaaabbbbcccc', name: 'old', nodes: [node('n1', key('a'))] }));
+    const doc = loadBrokerFile(file);
+    expect(doc.stars).toEqual([]); // 不归一——bootstrap 重建路
+    expect(existsSync(`${file}.bak`)).toBe(true); // 钥匙资产留底
+    expect((JSON.parse(readFileSync(`${file}.bak`, 'utf8')) as { nodes: unknown[] }).nodes).toHaveLength(1);
   });
 
-  it('refuses over 10 with USAGE', () => {
-    const file = freshFile();
-    expect(() => genKeys(file, 11, { host: 'h', port: 1 })).toThrowError(MultichatError);
-    try {
-      genKeys(file, 0, { host: 'h', port: 1 });
-      expect.unreachable('should have thrown');
-    } catch (err) {
-      expect((err as MultichatError).code).toBe('USAGE');
-    }
-  });
-
-  it('emits array-shape node.json (brokers[0] carries starId and key)', () => {
-    const file = freshFile();
-    const [{ key, nodeJsonContent }] = genKeys(file, 1, { host: '10.0.0.2', port: 9000, name: 'hub', starId: 'a1b2c3d4e5f6' });
-    const parsed = JSON.parse(nodeJsonContent) as { brokers: { host: string; port: number; name: string; starId: string; key: string }[]; showName: string };
-    expect(parsed.brokers).toHaveLength(1);
-    expect(parsed.brokers[0]).toEqual({ host: '10.0.0.2', port: 9000, name: 'hub', starId: 'a1b2c3d4e5f6', key });
-    expect(parsed.showName).toBe('改成「贴这份配置的机器」的名字');
-    expect('alias' in parsed.brokers[0]).toBe(false); // E0：写层不再产出旧键
-  });
-});
-
-describe('ensureStarId', () => {
-  it('B0: generates a 12-hex starId, persists it, and is idempotent on re-read', () => {
-    const file = freshFile();
-    const first = ensureStarId(file);
-    expect(first).toMatch(/^[0-9a-f]{12}$/);
-    expect(readRegistry(file).starId).toBe(first);
-    // 幂等：复读直接返回既有值，不重新生成
-    expect(ensureStarId(file)).toBe(first);
-    expect(readRegistry(file).starId).toBe(first);
-    // 既有节点在 starId 落盘时保留
-    genKeys(file, 1, { host: 'h', port: 1, name: 'a', starId: ensureStarId(file) });
-    expect(ensureStarId(file)).toBe(first);
-    expect(listNodes(file)).toHaveLength(1);
+  it('mutateBrokerFile 拼段纪律：星域写者保留其他星的段落（addStar 在跑安全的地基）', () => {
+    const file = fileOf();
+    writeBrokerFile(file, { stars: [
+      { starId: 'aaaabbbbcccc', name: 'alpha', nodes: [node('n1', key('a'))], roster: [{ sessionId: 'sa', machine: 'ma', online: true }] },
+      { starId: 'bbbbaaaacccc', name: 'beta', nodes: [], roster: [] },
+    ] });
+    // 模拟：beta 侧（新加的星）先写 roster，alpha 侧基于"旧快照"整写——被纪律拦
+    mutateBrokerFile(file, (doc) => {
+      const beta = doc.stars.find((s) => s.starId === 'bbbbaaaacccc')!;
+      beta.roster = [{ sessionId: 'sb', machine: 'mb', online: false }];
+    });
+    mutateBrokerFile(file, (doc) => {
+      const alpha = doc.stars.find((s) => s.starId === 'aaaabbbbcccc')!;
+      alpha.nodes.push(node('n2', key('b')));
+    });
+    const doc = loadBrokerFile(file);
+    expect(doc.stars.find((s) => s.name === 'beta')!.roster).toHaveLength(1); // 前一写者的段落原样
+    expect(doc.stars.find((s) => s.name === 'alpha')!.nodes).toHaveLength(2);
   });
 });
 
-describe('registry file', () => {
-  it('treats missing file as empty and keeps port across writes', () => {
-    const file = freshFile();
-    expect(readRegistry(file)).toEqual({ nodes: [] });
-    setPort(file, 7260);
-    genKeys(file, 1, { host: 'h', port: 7260 });
-    expect(readRegistry(file).port).toBe(7260);
-    expect(readRegistry(file).nodes).toHaveLength(1);
+describe('星域 CLI 单实现', () => {
+  it('genKeysFor：label 顺延、node.json 文本带星名/starId、只动目标星 nodes', () => {
+    const file = fileOf();
+    writeBrokerFile(file, { stars: [{ starId: 'aaaabbbbcccc', name: 'alpha', nodes: [], roster: [{ sessionId: 'x', machine: 'm', online: true }] }] });
+    const results = genKeysFor(file, 'aaaabbbbcccc', 2, { host: '10.0.0.2', port: 9000, name: 'alpha' });
+    expect(results.map((r) => r.label)).toEqual(['node-1', 'node-2']);
+    const parsed = JSON.parse(results[0]!.nodeJsonContent) as { brokers: Array<{ name?: string; starId?: string; key: string }> };
+    expect(parsed.brokers[0]!.name).toBe('alpha');
+    expect(parsed.brokers[0]!.starId).toBe('aaaabbbbcccc');
+    expect(parsed.brokers[0]!.key).toBe(results[0]!.key);
+    expect(() => genKeysFor(file, 'aaaabbbbcccc', 11, { host: 'h', port: 1 })).toThrowError(MultichatError);
+    const doc = loadBrokerFile(file);
+    expect(doc.stars[0]!.nodes).toHaveLength(2);
+    expect(doc.stars[0]!.roster).toHaveLength(1); // 册段未被发钥触碰
+    expect(() => genKeysFor(file, 'dddd00001111', 1, { host: 'h', port: 1 })).toThrowError(/不在注册表/);
   });
 
-  it('backs up a corrupt file to .bak and rebuilds as empty', () => {
-    const file = freshFile();
-    writeRegistry(file, { nodes: [] });
-    const corrupt = '{ this is not json';
-    // 直接写坏内容模拟损坏（绕过 writeRegistry 的 JSON 保证）
-    writeFileSync(file, corrupt, 'utf8');
-    expect(readRegistry(file)).toEqual({ nodes: [] });
-    expect(readFileSync(`${file}.bak`, 'utf8')).toBe(corrupt);
+  it('selectStar：星名精确 → starId 前缀唯一 → 零/多命中教学', () => {
+    const stars = [
+      { starId: 'aaaabbbbcccc', name: 'alpha', nodes: [], roster: [] },
+      { starId: 'bbbbaaaacccc', name: 'beta', nodes: [], roster: [] },
+    ];
+    expect(selectStar(stars, 'alpha').name).toBe('alpha');
+    expect(selectStar(stars, 'bbbb').starId).toBe('bbbbaaaacccc');
+    expect(() => selectStar(stars, 'zzz')).toThrowError(/不匹配任何星/);
   });
 
-  it('removes nodes by label and reports misses', () => {
-    const file = freshFile();
-    genKeys(file, 2, { host: 'h', port: 1 });
-    expect(removeNode(file, 'node-1')).toBe(true);
-    expect(listNodes(file).map((n) => n.label)).toEqual(['node-2']);
-    expect(removeNode(file, 'node-1')).toBe(false);
-    expect(removeNode(file, 'nope')).toBe(false);
-    expect(existsSync(file)).toBe(true);
-  });
-});
-
-describe('E0 星名（setName/ensureStarName）', () => {
-  it('setName persists a legal name and an explicit re-set updates it', () => {
-    const file = freshFile();
-    setName(file, 'cloud');
-    expect(readRegistry(file).name).toBe('cloud');
-    setName(file, 'home-2.lan');
-    expect(readRegistry(file).name).toBe('home-2.lan');
-    // 既有字段（port/starId/nodes）不受影响
-    setPort(file, 9000);
-    setName(file, 'cloud');
-    const reg = readRegistry(file);
-    expect(reg.port).toBe(9000);
-    expect(reg.name).toBe('cloud');
+  it('setNameFor：星名唯一性大小写不敏感、不得与 starId 相同；零级联（roster 原样）', () => {
+    const file = fileOf();
+    writeBrokerFile(file, { stars: [
+      { starId: 'aaaabbbbcccc', name: 'alpha', nodes: [], roster: [{ sessionId: 'x', machine: 'm', online: true }] },
+      { starId: 'bbbbaaaacccc', name: 'beta', nodes: [], roster: [] },
+    ] });
+    setNameFor(file, 'aaaabbbbcccc', 'gamma');
+    expect(loadBrokerFile(file).stars[0]!.name).toBe('gamma');
+    expect(loadBrokerFile(file).stars[0]!.roster).toHaveLength(1);
+    expect(() => setNameFor(file, 'aaaabbbbcccc', 'BETA')).toThrowError(/冲突/); // 大小写不敏感
+    expect(() => setNameFor(file, 'aaaabbbbcccc', 'bbbbaaaacccc')).toThrowError(/冲突/); // 与 starId 相同
+    expect(() => setNameFor(file, 'aaaabbbbcccc', 'bad:name')).toThrowError(MultichatError);
   });
 
-  it('setName rejects colon / overlong / empty with USAGE carrying the rule', () => {
-    const file = freshFile();
-    for (const bad of ['cl:oud', `${'a'.repeat(33)}`, '', '空 格', '星名']) {
-      try {
-        setName(file, bad);
-        expect.unreachable(`should have thrown: ${bad}`);
-      } catch (e: unknown) {
-        expect(e).toBeInstanceOf(MultichatError);
-        expect((e as MultichatError).code).toBe('USAGE');
-        expect((e as MultichatError).message).toContain('禁冒号');
-      }
-    }
-    expect(readRegistry(file).name).toBeUndefined(); // 全被拒之门外，未落一个
+  it('addStarTo：大小写撞名/starId 撞名拒绝；新星空表落位', () => {
+    const file = fileOf();
+    writeBrokerFile(file, { stars: [{ starId: 'aaaabbbbcccc', name: 'alpha', nodes: [], roster: [] }] });
+    const id = addStarTo(file, 'beta');
+    expect(id).toMatch(/^[0-9a-f]{12}$/);
+    expect(loadBrokerFile(file).stars[1]).toMatchObject({ name: 'beta', nodes: [], roster: [] });
+    expect(() => addStarTo(file, 'ALPHA')).toThrowError(/冲突/);
+    expect(() => addStarTo(file, 'aaaabbbbcccc')).toThrowError(/冲突/);
   });
 
-  it('sanitizeStarName keeps only [A-Za-z0-9._-] and truncates to 32', () => {
-    expect(sanitizeStarName('My-PC#01')).toBe('My-PC01');
-    expect(sanitizeStarName(`${'a'.repeat(40)}!!`)).toBe('a'.repeat(32));
-    expect(sanitizeStarName('中文主机')).toBeUndefined();
+  it('removeNodeFor / setPortFor / ensureStarIds', () => {
+    const file = fileOf();
+    writeBrokerFile(file, { stars: [
+      { starId: 'aaaabbbbcccc', nodes: [node('n1', key('a')), node('n2', key('b'))], roster: [] },
+      { nodes: [], roster: [] }, // 手编无名星
+    ] });
+    expect(removeNodeFor(file, 'aaaabbbbcccc', 'n1')).toBe(true);
+    expect(removeNodeFor(file, 'aaaabbbbcccc', 'n1')).toBe(false);
+    setPortFor(file, 7777);
+    const doc = loadBrokerFile(file);
+    expect(doc.port).toBe(7777);
+    expect(doc.stars[0]!.nodes).toHaveLength(1);
+    expect(ensureStarIds(file)).toBe(true); // 手编无名星补 id
+    expect(loadBrokerFile(file).stars[1]!.starId).toMatch(/^[0-9a-f]{12}$/);
   });
 
-  it('ensureStarName defaults to the cleaned hostname once, then stays', () => {
-    const file = freshFile();
-    expect(ensureStarName(file, 'Yang-PC#01')).toBe('Yang-PC01');
-    expect(readRegistry(file).name).toBe('Yang-PC01');
-    // 幂等：注册表已有 → 后续 hostname 再变也不改
-    expect(ensureStarName(file, 'other-host')).toBe('Yang-PC01');
-    // 显式 setName 优先于缺省轨道
-    setName(file, 'cloud');
-    expect(ensureStarName(file, 'whatever')).toBe('cloud');
-  });
-
-  it('ensureStarName leaves the registry unnamed for an uncleanable hostname', () => {
-    const file = freshFile();
-    expect(ensureStarName(file, '中文')).toBeUndefined();
-    expect(readRegistry(file).name).toBeUndefined();
+  it('sanitizeStarName：剥非法字符截 32', () => {
+    expect(sanitizeStarName('My-Host_01.abc')).toBe('My-Host_01.abc');
+    expect(sanitizeStarName('主host-01!')).toBe('host-01'); // 只留字符集内
+    expect(sanitizeStarName('主机')).toBeUndefined();
   });
 });

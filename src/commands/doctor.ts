@@ -295,14 +295,20 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
         }
       }
       if (brokerRaw !== undefined) {
-        // 注册表是 tcpDir 级单查：归首个星组，无条目可归时挂裸 tcp 组
+        // 注册表是 tcpDir 级单查：归首个星组，无条目可归时挂裸 tcp 组。
+        // 032 单形状：{port?, stars:[{starId,name?,nodes,roster}]}——逐星验 nodes，
+        // 节点数合计展示。
         cur = groups.find((g) => g.title.startsWith('tcp ·'))?.lines ?? group('tcp');
         try {
-          const reg = JSON.parse(brokerRaw) as { nodes?: { label?: string; key?: string }[] };
-          if (!Array.isArray(reg.nodes) || reg.nodes.some((n) => typeof n.label !== 'string' || typeof n.key !== 'string')) {
+          const doc = JSON.parse(brokerRaw) as { stars?: Array<{ nodes?: Array<{ label?: unknown; key?: unknown }> }> };
+          if (
+            !Array.isArray(doc.stars) || doc.stars.length === 0 ||
+            doc.stars.some((s) => !Array.isArray(s.nodes) || s.nodes.some((n) => typeof n.label !== 'string' || typeof n.key !== 'string'))
+          ) {
             throw new Error('bad shape');
           }
-          ok(`✅ broker 注册表可解析（${reg.nodes.length} 节点）`);
+          const total = doc.stars.reduce((sum, s) => sum + (s.nodes?.length ?? 0), 0);
+          ok(`✅ broker 注册表可解析（${doc.stars.length} 星 ${total} 节点）`);
         } catch {
           fail('❌ broker 注册表 broker.json 损坏或字段缺失——crosschat serve --list 核对，必要时重发钥匙');
         }

@@ -4,12 +4,21 @@
 
 ## [Unreleased]
 
+### 032：注册表单文件单形状 + 非兼容升级（破坏式，022 四轮 grilling 收敛）
+
+- **破坏性变更：broker.json 单文件单形状**：`{port?, stars:[{starId, name?, nodes, roster:{entries}}]}`——注册表与星册同文件，`roster.json`/`roster.<星名>.json` 文件物种消灭（022 期短暂存在的双形状与独立册未随版发布即被推翻）。旧形状文件视为损坏：自动 `.bak` 备份后从空表重建，**无迁移路径**（用户拍板"不走特殊兼容，拒绝历史包袱"；测试两机已清档冷备份重来）
+- **破坏性变更：握手 caps 闸门（非兼容）**：connect 不带 `multi-star` 能力的旧版腿一律 `BAD_PROTO` 拒连并教 `npm i -g @oatelauser/crosschat@latest`（node 腿与 sender 腿同规，单星部署同样生效）——旧版"老节点零适配"承诺作废
+- **三写者纪律**：单写入口 `mutateBrokerFile`（sync 读→拼自家段→tmp+rename 原子写）——roster 段 broker 独占 / nodes 段 CLI+onConnect 共享 / port·星名·加星 CLI 独占；splice 只动自家段，在跑 broker 的册写不被并发 CLI 覆盖
+- **懒 bootstrap**：空表时变更型管理命令（`--port/--name/--gen-key/--add-star/--remove`）与 serve 首启自动造 stars[0]（hostname 缺省星名+自登记）；`--connect`（node 机）永不触发建星
+- **加星免停机**：`--add-star` 在跑 broker 时可直接执行（splice 保未知段），重启 serve 即托管新星——022 的"须先 --stop"解除
+- gen-key 输出带目标星名行（`入星 <星名>：生成 N 把钥匙`）；doctor 的 broker.json 检查按 stars[] 解析
+
 ### 022：多星 WS 复用——一进程一端口托管多星 + broker 自挂 in-process（方向 2A 完全体）
 
-- **一 broker 进程/端口托管多颗星**（vhost/SNI 同构：钥匙自证星籍）：`crosschat serve --add-star <星名>` 加第二颗星（一次性命令，须先 `serve --stop`——星册迁移与在跑 broker 的册写盘互斥），此后 `serve` 裸跑即托管全部星。**故障域合并为已接受的运维代价**：一进程崩=全部星瘫、升级窗口合并
+- **一 broker 进程/端口托管多颗星**（vhost/SNI 同构：钥匙自证星籍）：`crosschat serve --add-star <星名>` 加第二颗星（一次性命令；032 起在跑 broker 也可直接加，重启 serve 生效），此后 `serve` 裸跑即托管全部星。**故障域合并为已接受的运维代价**：一进程崩=全部星瘫、升级窗口合并
 - **连接绑星、帧面零改动**：连接以 connect 钥匙反查星籍定归属（帧不带星字段、无逻辑通道——设计锚点"合并的是星级进程不是连接多路复用"）；`info.caps` 追加 `multi-star`（018 additive 模式，proto 不翻页）
-- **握手时序倒置（限多星）**：多星 broker 的 info 帧不携带 starId/name（见钥匙才知星），星标识挪到 connected 帧回填——新客户端据此延迟核星（`STAR_ID_MISMATCH` 语义不变）；**单星连接字节级不变**，老节点连多星 broker 照常工作（钥匙即路由）
-- **每星独立册**：多星形状下每星一份 `roster.<星名>.json`（028 票面"多星=多份独立册"落地）；`--add-star` 时旧 `roster.json` 迁移为星 1 独立册；单星沿用 `roster.json` 零迁移。注册表双形状：单星保持旧 `broker.json` 字节不动，加星起转 `{port?, stars:[{starId,name?,nodes}]}`（读层兼容旧形状）
+- **握手时序倒置（限多星）**：多星 broker 的 info 帧不携带 starId/name（见钥匙才知星），星标识挪到 connected 帧回填——新客户端据此延迟核星（`STAR_ID_MISMATCH` 语义不变）；单星连接字节级不变（"老节点照常工作"已被 032 非兼容闸门推翻，见 032 节）
+- **注册表与星册的落盘形状**：022 期实现为双形状+每星独立册文件，未随版发布即被 032 推翻收敛为**单文件单形状**（见 032 节）
 - **星域 CLI**：多星下 `--gen-key/--remove/--name` 须 `--star <星名|starId前缀>` 限定（裸用教学列星+示例）；`--list` 分组展示；同机入多星（同 machineId 分属两星双连接）互不顶换
 - **broker 自挂 in-process（原方向 3 并入）**：broker 机不再需要手动 `serve --connect <自家星>`——聚合器职责（attach 管道+成员表+对账循环）经**虚拟会话对**在 broker 进程内常驻（走真实 onConnect/onSessions/投递代码路径），省回环 WS 与第二个常驻进程；三段寻址直达 broker 机会话自然生效
 - **F4 消除（013 双开防护延伸）**：本机 broker 已内挂某星后手动 `serve --connect` 同星被拒并教学（status-broker.json stars 清单 + pid 验活）；反向起 broker 时本机已有同星外部守护则该星让位跳过（升级窗口平滑接管，永不成同 mid 双连撞死形态）

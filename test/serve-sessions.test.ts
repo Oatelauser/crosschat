@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 018 批一：proto:3 会话级星成员——协议帧/broker 聚合/聚合器 attach 与活性。
  * 夹具用真实平台形状：win 带杠 MachineGuid、linux 32-hex（F0 归一互认）。
  */
@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { type RawData, WebSocketServer } from 'ws';
-import { Broker, readRoster, rosterFileOf, type BrokerDeps } from '../src/serve/broker.js';
+import { Broker, type BrokerDeps } from '../src/serve/broker.js';
 import {
   CAP_SESSION_MEMBERS,
   encodeFrame,
@@ -17,7 +17,8 @@ import {
   type Frame,
   type SessionsFrame,
 } from '../src/serve/protocol.js';
-import { registryFileOf, writeRegistry, type NodeEntry } from '../src/serve/registry.js';
+import { loadBrokerFile, registryFileOf, type NodeEntry } from '../src/serve/registry.js';
+import { seedBroker } from './helpers/broker-seed.js';
 import { attachPipePath, NodeClient, type BrokerEntry } from '../src/serve/node.js';
 import { FileInbox } from '../src/serve/file-channel.js';
 import type { SendDeps } from '../src/commands/send.js';
@@ -78,14 +79,16 @@ async function startBroker(overrides: Partial<BrokerDeps> = {}): Promise<Harness
 }
 
 function seed(file: string, nodes: Partial<NodeEntry>[]): void {
-  writeRegistry(file, {
-    nodes: nodes.map((n, i) => ({
-      label: n.label ?? `node-${i + 1}`,
-      key: n.key ?? key(`${i + 1}`),
-      machineId: n.machineId,
-      machineName: n.machineName,
-      addedAt: '2026-01-01T00:00:00.000Z',
-    })),
+  seedBroker(file, {
+    stars: [{
+      nodes: nodes.map((n, i) => ({
+        label: n.label ?? `node-${i + 1}`,
+        key: n.key ?? key(`${i + 1}`),
+        machineId: n.machineId,
+        machineName: n.machineName,
+        addedAt: '2026-01-01T00:00:00.000Z',
+      })),
+    }],
   });
 }
 
@@ -165,8 +168,9 @@ async function nodeOn(url: string, auth: string, machineId: string, opts: { name
     machineId,
     auth,
     ...(opts.name === undefined ? {} : { name: opts.name }),
-    ...(opts.old === true ? {} : { caps: [CAP_SESSION_MEMBERS] }),
+    ...(opts.old === true ? {} : { caps: [CAP_SESSION_MEMBERS, 'multi-star'] }),
   });
+  if (opts.old === true) return client; // 032 非兼容：无 caps 连不上，connected 永不来，直接返回让调用方收 error
   await client.waitFor((f) => f.op === 'connected');
   return client;
 }
@@ -175,7 +179,7 @@ async function senderOn(url: string, auth: string): Promise<TestClient> {
   const client = new TestClient(url);
   await client.opened();
   await client.waitFor((f) => f.op === 'info');
-  client.send({ op: 'connect', proto: 1, role: 'sender', auth });
+  client.send({ op: 'connect', proto: 1, role: 'sender', auth, caps: ['multi-star'] });
   await client.waitFor((f) => f.op === 'connected');
   return client;
 }
@@ -185,16 +189,20 @@ function sessionsFrame(sessions: SessionsFrame['sessions']): SessionsFrame {
 }
 
 describe('018 broker：caps 协商与会话成员聚合', () => {
-  it('info 广播 session-members 能力；无 caps 的老节点（proto:1）握手照旧', async () => {
+  it('info 广播 session-members 能力；032 非兼容：无 caps 的老节点（proto:1）被拒并教升级', async () => {
     const { url, registryFile } = await startBroker();
     seed(registryFile, [{ key: key('n'), machineId: WIN_MID, machineName: 'win-box' }]);
     const client = new TestClient(url);
     await client.opened();
     const info = await client.waitFor((f) => f.op === 'info');
     expect(info.op === 'info' && info.caps).toContain(CAP_SESSION_MEMBERS);
-    // 老节点：connect 不带 caps——握手不受影响（混星零回归）
+    // 老节点：connect 不带 caps——032 用户拍板非兼容升级，BAD_PROTO 拒 + 升级教学
     const oldNode = await nodeOn(url, key('n'), WIN_MID, { name: 'win-box', old: true });
-    expect(oldNode.ws.readyState).toBe(WebSocket.OPEN);
+    const err = await oldNode.waitFor((f) => f.op === 'error');
+    expect(err.op === 'error' && err.code).toBe('BAD_PROTO');
+    expect(err.op === 'error' && err.message).toContain('版本过旧');
+    expect(err.op === 'error' && err.message).toContain('npm i -g @oatelauser/crosschat@latest');
+    expect(await oldNode.closed()).toBeDefined();
   });
 
   it('成员声明→三段寻址命中：deliver 注入 sessionId（win 带杠 mid 形态）', async () => {
@@ -342,17 +350,17 @@ describe('018 broker：caps 协商与会话成员聚合', () => {
     expect(deliver).toMatchObject({ op: 'deliver', id: 's8', sessionId: 'lin-sess-1' });
   });
 
-  it('老节点混星零回归：机器级投递 deliver 帧无 sessionId、形状照旧', async () => {
+  it('未声明成员的节点：机器级投递 deliver 帧无 sessionId、形状照旧', async () => {
     const { url, registryFile } = await startBroker();
     seed(registryFile, [
       { key: key('s'), machineName: 'sender-host' },
       { key: key('n'), machineId: WIN_MID, machineName: 'win-box' },
     ]);
-    // 老节点：connect 无 caps、从不发 sessions 帧
-    const oldNode = await nodeOn(url, key('n'), WIN_MID, { name: 'win-box', old: true });
+    // 新节点但从不发 sessions 帧（032 后老节点被拒，机器级帧形状用此形态钉死）
+    const node = await nodeOn(url, key('n'), WIN_MID, { name: 'win-box' });
     const sender = await senderOn(url, key('s'));
     sender.send({ op: 'send', id: 'm1', targetMachine: 'win-box', to: 'boss', body: 'machine level', origin: 'origin-x' });
-    const deliver = await oldNode.waitFor((f) => f.op === 'deliver');
+    const deliver = await node.waitFor((f) => f.op === 'deliver');
     expect(deliver).toMatchObject({ op: 'deliver', id: 'm1', fromMachine: 'sender-host', payload: 'machine level', to: 'boss', origin: 'origin-x' });
     expect('sessionId' in deliver).toBe(false);
   });
@@ -747,7 +755,7 @@ describe('028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-rem
     const node = await nodeOn(url, key('n'), WIN_MID, { name: 'win-box' });
     node.send(sessionsFrame([{ sessionId: 'sess-boss', name: 'boss', tool: 'claude' }]));
     await new Promise((resolve) => setTimeout(resolve, 200)); // 等 onSessions 落盘
-    const roster = readRoster(rosterFileOf(registryFile));
+    const roster = loadBrokerFile(registryFile).stars[0]!.roster;
     expect(roster).toHaveLength(1);
     expect(roster[0]).toMatchObject({
       sessionId: 'sess-boss',
@@ -757,7 +765,7 @@ describe('028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-rem
       machineName: 'win-box',
       online: true,
     });
-    expect(existsSync(`${rosterFileOf(registryFile)}.tmp`)).toBe(false); // tmp+rename 收尾
+    expect(existsSync(`${registryFile}.tmp`)).toBe(false); // tmp+rename 收尾
   });
 
   it('028 下线成员随 roster 帧下发（offlineSessions 单列；sessions 保持活成员语义）', async () => {
@@ -792,7 +800,7 @@ describe('028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-rem
       { sessionId: 'sess-tmp', name: 'tmp', tool: 'claude', temporary: true },
     ]));
     await new Promise((resolve) => setTimeout(resolve, 200)); // 等 onSessions 落盘
-    const roster = readRoster(rosterFileOf(registryFile));
+    const roster = loadBrokerFile(registryFile).stars[0]!.roster;
     expect(roster.find((e) => e.sessionId === 'sess-tmp')?.temporary).toBe(true); // 册落盘带临时位
     expect(roster.find((e) => e.sessionId === 'sess-perm')?.temporary).toBeUndefined(); // 永久位不带
     node.send({ op: 'members-query' }); // 切片回带（聚合器重启后仍知谁是临时）

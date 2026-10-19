@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+﻿import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,7 +6,8 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { type RawData } from 'ws';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
 import { encodeFrame, parseFrame, type Frame } from '../src/serve/protocol.js';
-import { registryFileOf, writeRegistry, type NodeEntry } from '../src/serve/registry.js';
+import { registryFileOf, writeBrokerFile, type NodeEntry } from '../src/serve/registry.js';
+import { seedBroker } from './helpers/broker-seed.js';
 import { NodeClient, deliverViaRunSend, readNodeConfig, NOT_JOINED_MESSAGE } from '../src/serve/node.js';
 import { FileInbox } from '../src/serve/file-channel.js';
 import type { SendDeps } from '../src/commands/send.js';
@@ -60,14 +61,16 @@ async function startBroker(overrides: Partial<BrokerDeps> = {}): Promise<Harness
 }
 
 function seed(file: string, nodes: Partial<NodeEntry>[]): void {
-  writeRegistry(file, {
-    nodes: nodes.map((n, i) => ({
-      label: n.label ?? `node-${i + 1}`,
-      key: n.key ?? key(`${i + 1}`),
-      machineId: n.machineId,
-      machineName: n.machineName,
-      addedAt: '2026-01-01T00:00:00.000Z',
-    })),
+  seedBroker(file, {
+    stars: [{
+      nodes: nodes.map((n, i) => ({
+        label: n.label ?? `node-${i + 1}`,
+        key: n.key ?? key(`${i + 1}`),
+        machineId: n.machineId,
+        machineName: n.machineName,
+        addedAt: '2026-01-01T00:00:00.000Z',
+      })),
+    }],
   });
 }
 
@@ -126,7 +129,7 @@ async function senderOn(url: string, auth: string): Promise<TestClient> {
   const client = new TestClient(url);
   await client.opened();
   await client.waitFor((f) => f.op === 'info');
-  client.send({ op: 'connect', proto: 1, role: 'sender', auth });
+  client.send({ op: 'connect', proto: 1, role: 'sender', auth, caps: ['multi-star'] });
   await client.waitFor((f) => f.op === 'connected');
   return client;
 }
@@ -206,7 +209,8 @@ describe('node client lifecycle', () => {
 
   it('maps a deliver frame to runSend and returns a structured result through the broker', async () => {
     const harness = await startBroker();
-    seed(harness.registryFile, [{ key: key('n'), machineId: 'NODE-MID', machineName: 'node-host' }]);
+    // B1 零回归锚点要"注册表无 starId"——seedBroker 恒盖 id，此处直写无 id 星
+    writeBrokerFile(harness.registryFile, { stars: [{ nodes: [{ label: 'node-1', key: key('n'), machineId: 'NODE-MID', machineName: 'node-host', addedAt: 'x' }] }] });
     const dir = mkdtempSync(join(root, 'st-'));
     const capture = fakeSendDeps(true);
     const client = makeNodeClient(harness, dir, { makeSendDeps: () => capture.deps });
@@ -394,9 +398,8 @@ describe('B0 starId handshake', () => {
   const STAR = 'aaaabbbbcccc';
 
   function seedWithStar(harness: Harness): void {
-    writeRegistry(harness.registryFile, {
-      starId: STAR,
-      nodes: [{ label: 'node-1', key: key('n'), addedAt: '2026-01-01T00:00:00.000Z' }],
+    seedBroker(harness.registryFile, {
+      stars: [{ starId: STAR, nodes: [{ label: 'node-1', key: key('n'), addedAt: '2026-01-01T00:00:00.000Z' }] }],
     });
   }
 
@@ -493,7 +496,8 @@ describe('B0 starId handshake', () => {
 
   it('passes when the local entry has starId but the broker info omits it', async () => {
     const harness = await startBroker();
-    seed(harness.registryFile, [{ key: key('n'), machineName: 'node-host' }]); // 注册表无 starId → info 不带
+    // 注册表无 starId（手编形状）→ info 不带；客户端缺侧证据不预检、照常上线
+    writeBrokerFile(harness.registryFile, { stars: [{ nodes: [{ label: 'node-1', key: key('n'), machineName: 'node-host', addedAt: 'x' }] }] });
     const dir = mkdtempSync(join(root, 'st-'));
     const client = starClient(harness, dir, { starId: STAR }, () => {});
     void client.run();
@@ -507,9 +511,8 @@ describe('B1 multi-star: delivery pipeline stamps starId into issued refs', () =
 
   it('node daemon deliver: the receipt ref carries the connected entry starId', async () => {
     const harness = await startBroker();
-    writeRegistry(harness.registryFile, {
-      starId: STAR,
-      nodes: [{ label: 'node-1', key: key('n'), machineId: 'NODE-MID', machineName: 'node-host', addedAt: '2026-01-01T00:00:00.000Z' }],
+    seedBroker(harness.registryFile, {
+      stars: [{ starId: STAR, nodes: [{ label: 'node-1', key: key('n'), machineId: 'NODE-MID', machineName: 'node-host', addedAt: '2026-01-01T00:00:00.000Z' }] }],
     });
     const dir = mkdtempSync(join(root, 'b1-'));
     const inbox = mkdtempSync(join(root, 'node-'));
@@ -542,10 +545,9 @@ describe('B1 multi-star: delivery pipeline stamps starId into issued refs', () =
     await new Promise<void>((resolve) => reserve.listen(0, '127.0.0.1', () => resolve()));
     const port = (reserve.address() as { port: number }).port;
     await new Promise<void>((resolve) => reserve.close(() => resolve()));
-    writeRegistry(registryFile, {
-      starId: STAR,
+    seedBroker(registryFile, {
       port,
-      nodes: [{ label: 'self', key: key('s'), machineId: 'BROKER-MID', machineName: 'broker-host', addedAt: '2026-01-01T00:00:00.000Z' }],
+      stars: [{ starId: STAR, nodes: [{ label: 'self', key: key('s'), machineId: 'BROKER-MID', machineName: 'broker-host', addedAt: '2026-01-01T00:00:00.000Z' }] }],
     });
     let stop: (() => void) | undefined;
     const deps: ServeDeps = {
@@ -661,10 +663,8 @@ describe('E0 星名同步（info.name 帧权威覆盖）', () => {
   const STAR = 'aaaabbbbcccc';
 
   function seedStarNamed(harness: Harness, name?: string): void {
-    writeRegistry(harness.registryFile, {
-      starId: STAR,
-      ...(name === undefined ? {} : { name }),
-      nodes: [{ label: 'node-1', key: key('n'), addedAt: '2026-01-01T00:00:00.000Z' }],
+    seedBroker(harness.registryFile, {
+      stars: [{ starId: STAR, ...(name === undefined ? {} : { name }), nodes: [{ label: 'node-1', key: key('n'), addedAt: '2026-01-01T00:00:00.000Z' }] }],
     });
   }
 

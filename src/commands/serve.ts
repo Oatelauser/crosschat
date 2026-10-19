@@ -4,7 +4,7 @@
  * runSend，fileInbox 落盘本机收件）。
  */
 import { execSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
+import { mkdirSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir, hostname, networkInterfaces, type NetworkInterfaceInfo } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -14,31 +14,25 @@ import { MultichatError } from '../errors.js';
 import { appendWithRotate } from '../log-rotate.js';
 import { machineId } from '../platform/machine-id.js';
 import { isProcessAlive } from '../platform/process-inspector.js';
-import { Broker, DEFAULT_PORT, defaultDeliverLocal, rosterFileForStar, rosterFileOf } from '../serve/broker.js';
+import { Broker, DEFAULT_PORT, defaultDeliverLocal } from '../serve/broker.js';
 import {
-  ensureMultiStarIds,
-  ensureStarId,
-  ensureStarName,
-  genKeys,
-  genKeysForStar,
-  listNodes,
-  readMultiRegistry,
-  readRegistry,
+  addStarTo,
+  bootstrapStar1,
+  ensureStarIds,
+  genKeysFor,
+  loadBrokerFile,
   registryFileOf,
-  removeNode,
-  removeNodeForStar,
+  removeNodeFor,
   sanitizeName,
   selectStar,
-  setName,
-  setNameForStar,
-  setPort,
-  STAR_NAME_RE,
+  setNameFor,
+  setPortFor,
   tcpDir,
-  writeMultiRegistry,
-  writeRegistry,
-  type StarReg,
+  writeBrokerFile,
+  type NodeEntry,
+  type StarRecord,
 } from '../serve/registry.js';
-import { buildStatusPayload, deliverViaRunSend, formatBrokerEntry, NodeClient, readNodeConfig, syncNodeJsonEntry, type BrokerEntry, type NodeConfig } from '../serve/node.js';
+import { buildStatusPayload, deliverViaRunSend, formatBrokerEntry, NodeClient, readNodeConfig, type BrokerEntry, type NodeConfig } from '../serve/node.js';
 import { VirtualSocket } from '../serve/virtual-socket.js';
 import { FileInbox } from '../serve/file-channel.js';
 import { requestMemberRemove } from '../serve/via-tcp.js';
@@ -115,13 +109,18 @@ export function realServeDeps(): ServeDeps {
 export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number> {
   const registryFile = registryFileOf(deps.baseDir);
   let port: number | undefined;
+  // 032 懒 bootstrap：变更类管理命令在空表时静默造星 1（裸机直接可用）；
+  // --connect（节点机）与只读/停机路径不触发——节点机不造 broker 身份。
+  const mutatingCmd = args.connect === undefined && args.stopTarget === undefined && args.stopSelector === undefined &&
+    (args.portArg !== undefined || args.nameArg !== undefined || args.genKeyArg !== undefined || args.addStarArg !== undefined || args.remove !== undefined);
+  if (mutatingCmd) bootstrapStar1(registryFile, deps.hostname());
   if (args.portArg !== undefined) {
     const n = Number.parseInt(args.portArg, 10);
     if (!Number.isInteger(n) || n < 1 || n > 65535) {
       throw new MultichatError('USAGE', `--port 须为 1-65535 的整数，收到：${args.portArg}`);
     }
     port = n;
-    setPort(registryFile, n); // 显式 --port 即持久化指令（首次记住，再给即更新）
+    setPortFor(registryFile, n); // 显式 --port 即持久化指令（首次记住，再给即更新）
   }
   // 022 --add-star（一次性命令；先于其余管理旗标处理）
   if (args.addStarArg !== undefined) {
@@ -131,22 +130,19 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
     if (args.detach) throw new MultichatError('USAGE', '--add-star 是一次性命令，不支持 --detach');
     return runAddStar(args.addStarArg, deps, registryFile);
   }
-  // 022 星域解析：多星注册表下变更类旗标需 --star 限定（--list 只读分组展示除外）
+  // 022/032 星域解析：单星隐式选中（裸 --gen-key/--name/--remove 照常），
+  // 多星（stars>1）须 --star 限定（--list 只读分组展示除外）
   const starScope = resolveStarScope(args, registryFile);
   if (args.nameArg !== undefined) {
     // E0 星名：与 --port 同语义（显式给即持久化）；节点模式无星名概念
     if (args.connect !== undefined) {
       throw new MultichatError('USAGE', '--name 是 broker 星名设置，节点模式不支持——去 broker 机上跑 crosschat serve --name <星名>');
     }
-    if (starScope.multi) {
-      requireStarScope(starScope, registryFile, '--name <新星名>');
-      setNameForStar(registryFile, starScope.star!.starId!, args.nameArg);
-    } else {
-      setName(registryFile, args.nameArg);
-    }
+    requireStarScope(starScope, registryFile, '--name <新星名>');
+    setNameFor(registryFile, starScope.star!.starId!, args.nameArg);
   }
   if (args.genKeyArg !== undefined) return runGenKey(args.genKeyArg, deps, registryFile, port, starScope);
-  if (args.list) return runList(deps, registryFile, starScope);
+  if (args.list) return runList(deps, registryFile);
   if (args.remove !== undefined) return runRemove(args.remove, deps, registryFile, starScope);
   if (args.stopSelector !== undefined) return runStopSelector(args.stopSelector, deps);
   if (args.stopTarget !== undefined) return runStop(args.stopTarget, deps, registryFile);
@@ -207,129 +203,76 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
   }
   if (args.detach && !detachedChild) {
     // 父进程先自登记并出声（子进程里再跑是幂等空转）——后台模式控制台不留黑盒。
-    // 022：多星形状走逐星自登记（旧 ensureSelfEntry 的旧形状读写会毁 stars[]）
-    const effectivePort = port ?? readMultiRegistry(registryFile).port ?? DEFAULT_PORT;
-    if (readMultiRegistry(registryFile).multi) {
-      ensureSelfEntriesMulti(deps, registryFile, effectivePort);
-    } else {
-      announceSelfEntry(deps, ensureSelfEntry(deps, registryFile, effectivePort));
-    }
+    const effectivePort = port ?? loadBrokerFile(registryFile).port ?? DEFAULT_PORT;
+    for (const line of ensureSelfEntries(deps, registryFile, effectivePort)) deps.stdout(line);
     return runDetach(deps, [], 'broker.log', effectivePort);
   }
   return runForegroundBroker(deps, port);
 }
 
-/** 022：星域解析（--star 仅多星形状有意义；单星旧形状忽略）。 */
-function resolveStarScope(args: ServeArgs, registryFile: string): { multi: boolean; star?: StarReg } {
-  const reg = readMultiRegistry(registryFile);
-  if (!reg.multi) return { multi: false };
+/**
+ * 022/032 星域解析：`--star` 仅 stars>1 时有意义（单星隐式选中——裸
+ * --gen-key/--name/--remove 在单星机照常）。空表（未初始化）star=undefined，
+ * 由 requireStarScope 统一教学"先跑一次 serve"。
+ */
+function resolveStarScope(args: ServeArgs, registryFile: string): { multi: boolean; star?: StarRecord } {
+  const doc = loadBrokerFile(registryFile);
+  if (doc.stars.length <= 1) return { multi: false, star: doc.stars[0] };
   if (args.starArg === undefined) return { multi: true };
-  return { multi: true, star: selectStar(reg.stars, args.starArg) };
+  return { multi: true, star: selectStar(doc.stars, args.starArg) };
 }
 
-/** 多星缺 --star 的统一教学（列星+示例，与选择器报错同风格）。 */
-function requireStarScope(scope: { multi: boolean; star?: StarReg }, registryFile: string, flag: string): void {
-  if (!scope.multi || scope.star !== undefined) return;
-  const stars = readMultiRegistry(registryFile).stars;
-  const list = stars.map((s) => s.name ?? s.starId ?? '(未定名)').join('、');
+/** 星域未定的统一教学：空表教初始化；多星缺 --star 教列星+示例。 */
+function requireStarScope(scope: { multi: boolean; star?: StarRecord }, registryFile: string, flag: string): void {
+  if (scope.star !== undefined) return;
+  const doc = loadBrokerFile(registryFile);
+  if (doc.stars.length === 0) {
+    throw new MultichatError('USAGE', `broker.json 尚未初始化（空表）——先在本机跑一次 crosschat serve 完成首星初始化，再用 ${flag}`);
+  }
+  const list = doc.stars.map((s) => s.name ?? s.starId ?? '(未定名)').join('、');
   throw new MultichatError(
     'USAGE',
-    `本 broker 托管多颗星，${flag} 须 --star <星名|starId前缀> 限定目标星——现有：${list}；示例：crosschat serve --star ${stars[0]!.name ?? stars[0]!.starId} ${flag}`,
+    `本 broker 托管多颗星，${flag} 须 --star <星名|starId前缀> 限定目标星——现有：${list}；示例：crosschat serve --star ${doc.stars[0]!.name ?? doc.stars[0]!.starId} ${flag}`,
   );
 }
 
-function runGenKey(genKeyArg: string, deps: ServeDeps, registryFile: string, port: number | undefined, starScope: { multi: boolean; star?: StarReg }): number {
+function runGenKey(genKeyArg: string, deps: ServeDeps, registryFile: string, port: number | undefined, starScope: { multi: boolean; star?: StarRecord }): number {
   const n = Number.parseInt(genKeyArg, 10);
   if (!Number.isInteger(n) || n < 1) {
     throw new MultichatError('USAGE', `--gen-key 数量须为 1-10 的整数，收到：${genKeyArg}`);
   }
   const host = firstNonInternalIPv4(deps.networkInterfaces());
-  const portNum = port ?? readMultiRegistry(registryFile).port ?? DEFAULT_PORT;
-  if (starScope.multi) {
-    // 022 多星：--star 限定发钥（bare 用法在教学入口拦）
-    if (starScope.star === undefined) {
-      const stars = readMultiRegistry(registryFile).stars;
-      const list = stars.map((s) => s.name ?? s.starId ?? '(未定名)').join('、');
-      throw new MultichatError(
-        'USAGE',
-        `本 broker 托管多颗星，--gen-key 须 --star 限定目标星——现有：${list}；示例：crosschat serve --star ${stars[0]!.name ?? stars[0]!.starId} --gen-key 1`,
-      );
-    }
-    const star = starScope.star;
-    const results = genKeysForStar(registryFile, star.starId!, n, { host, port: portNum, ...(star.name === undefined ? {} : { name: star.name }) });
-    deps.stdout(`自动探测 broker 地址：${host}:${portNum}（多网卡/NAT 常探错——人工核对改写 node.json 的 host 与 port）`);
-    deps.stdout(`以下钥匙入星 ${star.name ?? star.starId}（条目 name 即星名，连接自动同步，不用改）`);
-    for (const result of results) {
-      deps.stdout('--------------------------------');
-      deps.stdout(result.nodeJsonContent.trimEnd());
-    }
-    deps.stdout('放置路径（目标机器）：~/.crosschat/tcp/node.json（入多星则把各星条目合并进同一份 brokers 数组）');
-    deps.stdout('钥匙已进入终端回滚缓冲，分发完建议清屏');
-    return 0;
-  }
-  const starName = ensureStarName(registryFile, deps.hostname());
-  const results = genKeys(registryFile, n, { host, port: portNum, ...(starName === undefined ? {} : { name: starName }), starId: ensureStarId(registryFile) });
+  const portNum = port ?? loadBrokerFile(registryFile).port ?? DEFAULT_PORT;
+  requireStarScope(starScope, registryFile, '--gen-key');
+  // 现读目标星（--name 同命令先行改名时 scope 里的对象已陈旧）
+  const star = loadBrokerFile(registryFile).stars.find((s) => s.starId === starScope.star!.starId) ?? starScope.star!;
+  const results = genKeysFor(registryFile, star.starId!, n, { host, port: portNum, ...(star.name === undefined ? {} : { name: star.name }) });
   deps.stdout(`自动探测 broker 地址：${host}:${portNum}（多网卡/NAT 常探错——按下述规则人工核对改写 node.json 的 host 与 port）：`);
   deps.stdout('  · broker 机自身 → 无需分发（首次 serve 已自动写好 127.0.0.1 的自用 node.json）');
   deps.stdout('  · broker 是云主机/NAT 内网机 → host 填对外公网 IP（探测常拿内网 IP，必核对）');
   deps.stdout('  · 普通局域网 → broker 机的局域网 IP；broker 用非默认端口时 port 一并改');
-  deps.stdout(`分发前把每份 node.json 的 showName 改成「贴这份配置的机器」的自报名字（建议=其 hostname；纯显示用——roster 怎么称呼它，寻址/回信不依赖，走 machine-id 前缀；改名=改 showName 后重启常驻——节点机重启节点客户端、broker 机重启 serve）；条目 name=${starName === undefined ? '（本机未定星名，可留空）' : starName} 是星名（broker 权威，连接自动同步，不用改）`);
+  deps.stdout(`分发前把每份 node.json 的 showName 改成「贴这份配置的机器」的自报名字（建议=其 hostname；纯显示用——寻址/回信走 machine-id 前缀）；条目 name=${star.name ?? '（未定名）'} 是星名（broker 权威，连接自动同步，不用改）`);
+  deps.stdout(`入星 ${star.name ?? star.starId}：生成 ${results.length} 把钥匙`);
   for (const result of results) {
     deps.stdout('--------------------------------');
     deps.stdout(result.nodeJsonContent.trimEnd());
   }
-  deps.stdout('放置路径（目标机器）：~/.crosschat/tcp/node.json（win 写法 C:\\Users\\<用户>\\.crosschat\\tcp\\node.json）');
-  deps.stdout('多星：一台机入多个 broker 时，把各星钥匙的条目合并进同一份 brokers 数组即可；本配置为数组形状，目标机 crosschat 需 ≥1.5.2');
+  deps.stdout('放置路径（目标机器）：~/.crosschat/tcp/node.json（win 写法 C:\\Users\\<用户>\\.crosschat\\tcp\\node.json；入多星把各星条目合并进同一份 brokers 数组）');
   deps.stdout('本命令须在 broker 机上执行（钥匙登记进本机 broker.json）；broker 机自己的 node.json 已由首次 serve 自动写好，勿用上面的钥匙覆盖');
   deps.stdout('钥匙已进入终端回滚缓冲，分发完建议清屏');
   return 0;
 }
 
 /**
- * 022 --add-star <名>：本 broker 托管第二颗星——starId 生成、星册迁移
- * （roster.json → roster.<星名>.json）、注册表转 stars[] 形状。broker 在跑
- * 则拒（册迁移与在跑 broker 的册写盘会竞态漂移）。自登记/自挂随下次 serve
- * 启动落定。
+ * 022/032 --add-star <名>：托管下一颗星。splice 保未知段——在跑 broker 的
+ * 册写不会抹掉它，重启 serve 即托管（自登记/自挂随启动落定）。空表经入口懒
+ * bootstrap 已造星 1（hostname 缺省名）。
  */
 function runAddStar(name: string, deps: ServeDeps, registryFile: string): number {
-  if (!STAR_NAME_RE.test(name)) {
-    throw new MultichatError('USAGE', `--add-star 星名须为 1-32 个字母/数字/./_/-（禁冒号——tcp 限定词语法保留字），收到：${name}`);
-  }
-  let procs: ProcInfo[] = [];
-  try {
-    procs = (deps.listServeProcesses ?? listServeProcesses)();
-  } catch {
-    // 扫描失败=探测不到在跑 broker，继续（风险：册迁移竞态——见下方提示）
-  }
-  const runningBroker = procs.find((p) => !p.cmdline.includes('--connect'));
-  if (runningBroker !== undefined) {
-    throw new MultichatError(
-      'USAGE',
-      `检测到本机 broker 在跑（pid ${runningBroker.pid}）——--add-star 要迁移星册文件，先 crosschat serve --stop 再加星（重启后生效）`,
-    );
-  }
-  const reg = readMultiRegistry(registryFile);
-  // 单星转轨前补 starId（旧 pre-B0 注册表可能无）
-  if (!reg.multi && reg.stars[0]!.starId === undefined) reg.stars[0]!.starId = ensureStarId(registryFile);
-  const first = reg.stars[0]!;
-  // 唯一性：星名互斥、且不与任何 starId 撞（星册文件名按 名|starId 区分）
-  if (reg.stars.some((s) => s.name === name) || reg.stars.some((s) => s.starId === name)) {
-    throw new MultichatError('USAGE', `星名 ${name} 已用于本 broker 的另一颗星（或与某 starId 相同）——星名须唯一`);
-  }
-  // 星册迁移：旧单星册 roster.json → roster.<星1 label>.json（存在才迁；此后按星分册）
-  if (!reg.multi) {
-    const legacy = rosterFileOf(registryFile);
-    const target = rosterFileForStar(registryFile, first, true);
-    if (existsSync(legacy)) {
-      renameSync(legacy, target);
-      deps.stdout(`星册迁移：roster.json → ${target.split(/[\\/]/).pop()}（星 ${first.name ?? first.starId} 独立成册）`);
-    }
-  }
-  reg.stars.push({ starId: randomBytes(6).toString('hex'), name, nodes: [] });
-  reg.multi = true;
-  writeMultiRegistry(registryFile, reg);
-  deps.stdout(`已加星 ${name}——本 broker 现托管 ${reg.stars.length} 颗星（一进程一端口；重启 crosschat serve 生效）`);
-  deps.stdout('发钥：crosschat serve --star <星名> --gen-key <n>；查星：crosschat serve --list');
+  const count = loadBrokerFile(registryFile).stars.length;
+  addStarTo(registryFile, name);
+  deps.stdout(`已加星 ${name}——本 broker 现托管 ${count + 1} 颗星（一进程一端口；重启 crosschat serve 生效）`);
+  deps.stdout('发钥：crosschat serve --star <星名> --gen-key <n>（单星期免 --star）；查星：crosschat serve --list');
   deps.stdout('注意：多星共用一个 broker 进程——故障域合并（一进程崩=全部星瘫、升级窗口合并），此为已接受的运维代价');
   return 0;
 }
@@ -343,9 +286,9 @@ function firstNonInternalIPv4(ifaces: NodeJS.Dict<NetworkInterfaceInfo[]>): stri
   return '127.0.0.1';
 }
 
-function runList(deps: ServeDeps, registryFile: string, starScope: { multi: boolean; star?: StarReg }): number {
-  const reg = readMultiRegistry(registryFile);
-  const printNodes = (nodes: ReturnType<typeof listNodes>): void => {
+function runList(deps: ServeDeps, registryFile: string): number {
+  const doc = loadBrokerFile(registryFile);
+  const printNodes = (nodes: NodeEntry[]): void => {
     deps.stdout(`${'label'.padEnd(10)}${'name'.padEnd(18)}${'mid8'.padEnd(10)}added-at`);
     for (const node of nodes) {
       deps.stdout(
@@ -354,34 +297,23 @@ function runList(deps: ServeDeps, registryFile: string, starScope: { multi: bool
     }
     if (nodes.length === 0) deps.stdout('（注册表为空）');
   };
-  if (starScope.multi) {
-    // 022：多星分组展示（只读命令不强制 --star）
-    for (const star of reg.stars) {
-      deps.stdout(`=== 星 ${star.name ?? star.starId ?? '(未定名)'} ===`);
-      printNodes(star.nodes);
-    }
+  if (doc.stars.length === 0) {
+    deps.stdout('（注册表为空——先跑一次 crosschat serve 初始化）');
     return 0;
   }
-  printNodes(listNodes(registryFile));
+  // 022：多星分组展示（只读命令不强制 --star）；单星平铺
+  for (const star of doc.stars) {
+    if (doc.stars.length > 1) deps.stdout(`=== 星 ${star.name ?? star.starId ?? '(未定名)'} ===`);
+    printNodes(star.nodes);
+  }
   return 0;
 }
 
-function runRemove(label: string, deps: ServeDeps, registryFile: string, starScope: { multi: boolean; star?: StarReg }): number {
-  if (starScope.multi) {
-    if (starScope.star === undefined) {
-      const stars = readMultiRegistry(registryFile).stars;
-      const list = stars.map((s) => s.name ?? s.starId ?? '(未定名)').join('、');
-      throw new MultichatError(
-        'USAGE',
-        `本 broker 托管多颗星，--remove 须 --star 限定目标星——现有：${list}；示例：crosschat serve --star ${stars[0]!.name ?? stars[0]!.starId} --remove node-1`,
-      );
-    }
-    const removed = removeNodeForStar(registryFile, starScope.star.starId!, label);
-    deps.stdout(removed ? `已从星 ${starScope.star.name ?? starScope.star.starId} 移除 ${label}` : `星 ${starScope.star.name ?? starScope.star.starId} 未找到 ${label}`);
-    return removed ? 0 : 1;
-  }
-  const removed = removeNode(registryFile, label);
-  deps.stdout(removed ? `已移除 ${label}` : `未找到 ${label}`);
+function runRemove(label: string, deps: ServeDeps, registryFile: string, starScope: { multi: boolean; star?: StarRecord }): number {
+  requireStarScope(starScope, registryFile, '--remove <label>');
+  const star = starScope.star!;
+  const removed = removeNodeFor(registryFile, star.starId!, label);
+  deps.stdout(removed ? `已从星 ${star.name ?? star.starId} 移除 ${label}` : `星 ${star.name ?? star.starId} 未找到 ${label}`);
   return removed ? 0 : 1;
 }
 
@@ -402,104 +334,97 @@ function runDetach(deps: ServeDeps, extraArgs: string[], logName: string, portNu
 }
 
 /**
- * B2.1：broker 首启自登记——本机条目直接落注册表（machineId=本机、name=hostname），
- * 并自动写本机 node.json（host=127.0.0.1）。broker 机与其他节点完全同构：
- * 其他机器可立即用 mid8/名字寻址本机，本机 send --via tcp: 也有凭证，零管理员动作。
- * 017：此后每次启动读回 node.json 顶层 showName 刷新 machineName（单一事实源），
- * broker 机改名与纯 node 机同一规则（后者经连接帧上报，物理等价）。
- *
- * 三态结局（'ok' = 已存在且与当前 broker 一致，静默不打扰）；undefined = 无 machineId。
+ * B2.1/022/032：broker 首启自登记（逐星）——每星 self 节点条目（machineId=
+ * 本机）落 broker.json + 本机 node.json 对应条目（host=127.0.0.1）。broker
+ * 机与其他节点完全同构（mid8/名字可寻址、send --via tcp: 有凭证，零管理员
+ * 动作）。017：machineName 沿 node.json 顶层 showName 单一事实源刷新（显式
+ * 缺失/空=清除；逐星同名）。返回出声行（首写 node.json / foreign 指向提示）。
  */
-export type SelfEntryStatus = 'written' | 'ok' | 'foreign' | 'stale';
-export interface SelfEntryResult {
-  status: SelfEntryStatus;
-  /** 'foreign' 时的既有指向（人读显示，绝不回显钥匙）。 */
-  host?: string;
-  port?: number;
-}
-
-export function ensureSelfEntry(deps: ServeDeps, registryFile: string, port: number): SelfEntryResult | undefined {
+export function ensureSelfEntries(deps: ServeDeps, registryFile: string, port: number): string[] {
   const mid = deps.machineId();
-  if (mid === undefined || mid === '') return undefined;
-  // E0：星名缺省轨道在此落定（首次 serve 取清洗后的 hostname 持久化）
-  const starName = ensureStarName(registryFile, deps.hostname());
-  const registry = readRegistry(registryFile);
-  let self = registry.nodes.find((node) => node.machineId === mid);
-  if (self === undefined) {
-    self = { label: 'self', key: randomBytes(32).toString('hex'), machineId: mid, machineName: deps.hostname(), addedAt: new Date(deps.now()).toISOString() };
-    registry.nodes.push(self);
-    writeRegistry(registryFile, registry);
-  }
+  if (mid === undefined || mid === '') return [];
   const nodeJson = join(tcpDir(deps.baseDir), 'node.json');
-  if (!existsSync(nodeJson)) {
-    mkdirSync(tcpDir(deps.baseDir), { recursive: true });
-    // B0：自用 node.json 同带 starId（与 gen-key 分发的钥匙同构）；
-    // 新写一律数组形状（单星=一项，多星=多项——只产出一种形状）。
-    // E0 词表：条目 name=星名（broker 权威）、顶层 showName=本机显示名
-    const starId = ensureStarId(registryFile);
-    writeFileSync(
-      nodeJson,
-      `${JSON.stringify(
-        {
-          brokers: [{ host: '127.0.0.1', port, ...(starName === undefined ? {} : { name: starName }), starId, key: self.key }],
-          showName: deps.hostname(),
-        },
-        null,
-        2,
-      )}\n`,
-      'utf8',
-    );
-    return { status: 'written' };
-  }
-  // 已存在：宽松解析判状态（双形状；坏文件交给上层教学报错）
-  let entries: BrokerEntry[];
+  let entries: BrokerEntry[] = [];
   let showName: string | undefined;
+  let existed = true;
   try {
     const config = readNodeConfig(nodeJson);
     entries = config.entries;
     showName = config.showName;
   } catch {
-    // 017：node.json 整体读不了/损坏——machineName 维持注册表现值（不因解析失败误删）
-    return { status: 'stale' };
+    existed = false;
   }
-  // 017 机器自报名单一事实源：启动读回本机 node.json 顶层 showName 刷新注册表
-  // machineName（顶层字段，读取不依赖自用条目归属——foreign 形态照读）。语义对称：
-  // showName 显式缺失/空 → 清除（roster 回退纯 mid8）；无变化不写（与下方星名
-  // 同步"一致不写"同款）。改名重启 serve 生效——与升级口诀同节奏。
-  const wantName = sanitizeName(showName);
-  if (self.machineName !== wantName) {
-    self.machineName = wantName;
-    writeRegistry(registryFile, registry);
+  // 首跑（node.json 尚不存在）视 hostname 为默认 showName——017 的"缺失即清除"
+  // 只对已存在的配置生效，否则会把注册表 machineName 误清（首写还没得读）
+  const wantName = sanitizeName(showName ?? (existed ? undefined : deps.hostname()));
+  const notes: string[] = [];
+  const doc = loadBrokerFile(registryFile);
+  let regChanged = false;
+  let jsonChanged = !existed;
+  for (const star of doc.stars) {
+    let self = star.nodes.find((n) => n.machineId === mid);
+    if (self === undefined) {
+      self = {
+        label: doc.stars.length === 1 ? 'self' : `self-${star.name ?? star.starId ?? 'star'}`,
+        key: randomBytes(32).toString('hex'),
+        machineId: mid,
+        machineName: wantName ?? deps.hostname(),
+        addedAt: new Date(deps.now()).toISOString(),
+      };
+      star.nodes.push(self);
+      regChanged = true;
+    } else if (self.machineName !== wantName) {
+      self.machineName = wantName; // 017：showName 缺省即清除（undefined 落 JSON 省略）
+      regChanged = true;
+    }
   }
-  // 找本 broker 的钥匙条目（多星机上自用条目可与外星条目共存于同一数组）
-  const mine = entries.find((e) => e.key === self.key);
-  if (mine === undefined) {
-    const first = entries[0];
-    return { status: 'foreign', host: first?.host, port: first?.port };
+  // foreign/stale 判定（B-fix 语义按"本 broker 钥匙条目"定位）：既存 node.json 无任何
+  // 自用钥匙=他星配置（不追加自用条目——本机发送沿用它，只出声）；自用钥匙在但
+  // 指向不符=陈旧。多星机已有任一自用钥匙 → 缺的星正常补条目。
+  const selfKeys = new Set(doc.stars.flatMap((s) => s.nodes.filter((n) => n.machineId === mid).map((n) => n.key)));
+  const foreign = existed && entries.length > 0 && !entries.some((e) => selfKeys.has(e.key));
+  let stale = false;
+  if (!foreign) {
+    for (const star of doc.stars) {
+      const self = star.nodes.find((n) => n.machineId === mid)!;
+      const mine = entries.find((e) => e.key === self.key);
+      if (mine === undefined) {
+        // B0/E0 词表：条目 name=星名（broker 权威）、starId 同构、顶层 showName=本机显示名
+        entries.push({
+          host: '127.0.0.1',
+          port,
+          ...(star.name === undefined ? {} : { name: star.name }),
+          ...(star.starId === undefined ? {} : { starId: star.starId }),
+          key: self.key,
+        });
+        jsonChanged = true;
+      } else if (mine.host === '127.0.0.1' && mine.port === port) {
+        // B1 补 starId / E0 星名同步：broker 自用条目不走节点客户端的 info 同步，在此对齐
+        if ((star.name !== undefined && mine.name !== star.name) || (star.starId !== undefined && mine.starId === undefined)) {
+          if (star.name !== undefined) mine.name = star.name;
+          if (star.starId !== undefined && mine.starId === undefined) mine.starId = star.starId;
+          jsonChanged = true;
+        }
+      } else if (selfKeys.has(mine.key)) {
+        stale = true; // 自用钥匙指向别处（陈旧/端口漂移）——只出声不覆写
+      }
+    }
   }
-  if (mine.host !== '127.0.0.1' || mine.port !== port) return { status: 'stale' };
-  // B1 补 starId / E0 星名同步：broker 自用条目不走节点客户端的 info 同步，
-  // 在此对齐（星名不一致覆盖 + 清旧 alias 键；一致不写）。失败不倒 serve。
-  const patch: { starId?: string; name?: string } = {};
-  if (mine.starId === undefined) patch.starId = ensureStarId(registryFile);
-  if (starName !== undefined && mine.name !== starName) patch.name = starName;
-  if (patch.starId !== undefined || patch.name !== undefined) {
-    syncNodeJsonEntry(nodeJson, { host: '127.0.0.1', port, key: self.key }, patch);
+  if (regChanged) writeBrokerFile(registryFile, doc); // serve 启动期独占写（broker 未起）
+  if (jsonChanged) {
+    mkdirSync(tcpDir(deps.baseDir), { recursive: true });
+    const top: { brokers: BrokerEntry[]; showName?: string } = { brokers: entries };
+    if (showName !== undefined) top.showName = showName;
+    else if (!existed) top.showName = deps.hostname(); // 首写落个默认显示名
+    writeFileSync(nodeJson, `${JSON.stringify(top, null, 2)}\n`, 'utf8');
+    if (!existed) notes.push(`已自动生成本机 node.json（${nodeJson}，host=127.0.0.1——本机 send --via tcp: 凭证）`);
+  } else if (foreign) {
+    const first = entries[0]!;
+    notes.push(`检测到 node.json 不含本 broker 的自用钥匙（指向 ${first.host}:${first.port}）——本机 tcp 发送将走它；若本机要自连，移走该文件后重启 serve`);
+  } else if (stale) {
+    notes.push(`检测到 node.json 的自用条目指向与当前 broker 不符（陈旧或端口漂移）——本机自连发送会失败；删除该文件重启 serve 可重建（${nodeJson}）`);
   }
-  return { status: 'ok' };
-}
-
-/** 自登记结局出声（written/foreign/stale 三种；ok 静默——状态没变不刷屏）。 */
-function announceSelfEntry(deps: ServeDeps, result: SelfEntryResult | undefined): void {
-  if (result === undefined) return;
-  const path = join(tcpDir(deps.baseDir), 'node.json');
-  if (result.status === 'written') {
-    deps.stdout(`已自动生成本机 node.json（${path}，host=127.0.0.1——本机 send --via tcp: 凭证）`);
-  } else if (result.status === 'foreign') {
-    deps.stdout(`检测到已有 node.json（指向 ${result.host}:${result.port}）——本机 tcp 发送将走它；若本机现在是 broker 要自连，移走该文件后重启 serve`);
-  } else if (result.status === 'stale') {
-    deps.stdout(`检测到已有 node.json 但钥匙/端口与当前 broker 不符（陈旧或损坏）——本地发送会失败；删除该文件重启 serve 可重建（${path}）`);
-  }
+  return notes;
 }
 
 async function runForegroundBroker(deps: ServeDeps, port: number | undefined): Promise<number> {
@@ -515,21 +440,16 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
       }
     : (line: string) => deps.stdout(line);
   const registryFile = registryFileOf(deps.baseDir);
-  // 022 星域落定：旧单星形状走原 ensureStarId/ensureStarName（字节不变）；多星
-  // 形状只补各星 starId（星名在 --add-star 时已定，hostname 缺省轨道不适用）。
-  const multiReg = readMultiRegistry(registryFile);
-  if (!multiReg.multi) {
-    ensureStarId(registryFile);
-    ensureStarName(registryFile, deps.hostname());
-  } else {
-    ensureMultiStarIds(registryFile);
-  }
+  // 032 bootstrap（H1 唯一安装路径，与管理命令共用懒初始化）+ 手编缺 id 兜底
+  const bootstrapped = bootstrapStar1(registryFile, deps.hostname());
+  ensureStarIds(registryFile);
+  const bootDoc = loadBrokerFile(registryFile);
+  const sole = bootDoc.stars.length === 1 ? bootDoc.stars[0] : undefined;
   // B1：broker 自投递签发的 ref 盖注册表星标识（与 gen-key 分发的钥匙同源；
-  // 多星下按发送方连接的属星盖——deliverLocal 第三参）
-  const registryStarId = multiReg.multi ? undefined : ensureStarId(registryFile);
-  // 024 方案3：broker 自投递的信封正向坐标星段（E0 缺省轨道——未定名时与
-  // 自登记同一事实源持久化清洗后的 hostname）。
-  const registryStarName = multiReg.multi ? undefined : ensureStarName(registryFile, deps.hostname());
+  // 多星下按发送方连接的属星盖——deliverLocal 第三参；sole 缺省兜底=单星）
+  const registryStarId = sole?.starId;
+  // 024 方案3：broker 自投递的信封正向坐标星段（E0 缺省轨道）。
+  const registryStarName = sole?.name;
   // B2：broker 机自己也是全权节点——deliverLocal 接 runSend、file 落本机收件。
   const deliverLocal = deps.makeSendDeps === undefined
     ? defaultDeliverLocal
@@ -563,16 +483,14 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
   const scanStatus = deps.makeSendDeps === undefined
     ? undefined
     : async (): Promise<StatusPayload> => buildStatusPayload(deps.makeSendDeps!());
-  // B2.1：起服务前自登记（本机=全权成员，mid8/名字可寻址 + 本机 node.json）。
-  // 后台子进程不重复出声——父进程 spawn 前已向控制台播报过。
-  // 022：多星形状逐星自登记（每星 self 条目+node.json 条目）。
-  const effectivePort = port ?? readMultiRegistry(registryFile).port ?? DEFAULT_PORT;
-  if (multiReg.multi) {
-    ensureSelfEntriesMulti(deps, registryFile, effectivePort);
-    if (!detached) deps.stdout(`本 broker 托管 ${multiReg.stars.length} 颗星（一进程一端口；故障域合并为已接受代价）`);
-  } else {
-    const self = ensureSelfEntry(deps, registryFile, effectivePort);
-    if (!detached) announceSelfEntry(deps, self);
+  // B2.1/022：起服务前逐星自登记（本机=每星全权成员，mid8/名字可寻址 + 本机
+  // node.json）。后台子进程不重复出声——父进程 spawn 前已向控制台播报过。
+  const effectivePort = port ?? bootDoc.port ?? DEFAULT_PORT;
+  const selfNotes = ensureSelfEntries(deps, registryFile, effectivePort);
+  if (!detached) {
+    for (const line of selfNotes) deps.stdout(line);
+    if (bootstrapped) deps.stdout(`已初始化星 ${sole?.name ?? sole?.starId}（broker.json 单文件格式；send --via tcp: 即用）`);
+    if (bootDoc.stars.length > 1) deps.stdout(`本 broker 托管 ${bootDoc.stars.length} 颗星（一进程一端口；故障域合并为已接受代价）`);
   }
   const broker = new Broker({
     registryFile: registryFileOf(deps.baseDir),
@@ -612,74 +530,13 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
 }
 
 /**
- * 022：多星形状的逐星自登记——每星 self 节点条目（本机 mid）+ 本机 node.json
- * 对应条目（127.0.0.1:port，随星名/starId）；machineName 沿 017 从 node.json
- * 顶层 showName 刷新（单一事实源，逐星同名）。
- */
-function ensureSelfEntriesMulti(deps: ServeDeps, registryFile: string, port: number): void {
-  const mid = deps.machineId();
-  if (mid === undefined || mid === '') return;
-  const reg = readMultiRegistry(registryFile);
-  const nodeJson = join(tcpDir(deps.baseDir), 'node.json');
-  let entries: BrokerEntry[] = [];
-  let showName: string | undefined;
-  let nodeJsonExisted = true;
-  try {
-    const config = readNodeConfig(nodeJson);
-    entries = config.entries;
-    showName = config.showName;
-  } catch {
-    nodeJsonExisted = false;
-  }
-  const wantName = sanitizeName(showName);
-  let regChanged = false;
-  let jsonChanged = !nodeJsonExisted;
-  for (const star of reg.stars) {
-    let self = star.nodes.find((n) => n.machineId === mid);
-    if (self === undefined) {
-      self = {
-        label: `self-${star.name ?? star.starId ?? 'star'}`,
-        key: randomBytes(32).toString('hex'),
-        machineId: mid,
-        machineName: wantName ?? deps.hostname(),
-        addedAt: new Date(deps.now()).toISOString(),
-      };
-      star.nodes.push(self);
-      regChanged = true;
-    } else if (self.machineName !== wantName) {
-      self.machineName = wantName; // 017：showName 缺省即清除（undefined 落 JSON 时省略）
-      regChanged = true;
-    }
-    if (!entries.some((e) => e.key === self!.key)) {
-      entries.push({
-        host: '127.0.0.1',
-        port,
-        ...(star.name === undefined ? {} : { name: star.name }),
-        ...(star.starId === undefined ? {} : { starId: star.starId }),
-        key: self.key,
-      });
-      jsonChanged = true;
-    }
-  }
-  if (regChanged) writeMultiRegistry(registryFile, reg);
-  if (jsonChanged) {
-    mkdirSync(tcpDir(deps.baseDir), { recursive: true });
-    writeFileSync(
-      nodeJson,
-      `${JSON.stringify({ brokers: entries, ...(showName === undefined ? {} : { showName }) }, null, 2)}\n`,
-      'utf8',
-    );
-  }
-}
-
-/**
  * 022：起本进程聚合器（每托管星一个 NodeClient + 虚拟会话对）。外部守护让位
  * 判定：本机进程扫描见同星 serve --connect 在跑即跳过该星（守护 cmdline 的
  * 选择器对同一份 node.json 归一比对，与 guardSameStarDaemon 同一解析序）。
  */
 function bootstrapLocalAggregators(deps: ServeDeps, broker: Broker, logLine: (line: string) => void): NodeClient[] {
   const registryFile = registryFileOf(deps.baseDir);
-  const reg = readMultiRegistry(registryFile);
+  const reg = loadBrokerFile(registryFile);
   const nodeJson = join(tcpDir(deps.baseDir), 'node.json');
   let config: NodeConfig | undefined;
   try {
@@ -713,10 +570,10 @@ function bootstrapLocalAggregators(deps: ServeDeps, broker: Broker, logLine: (li
     const label = entry.name ?? star.starId;
     const starId = star.starId;
     const client = new NodeClient({
-      config: { entries: [entry] },
+      config: { entries: [entry], ...(config!.showName === undefined ? {} : { showName: config!.showName }) },
       configFile: nodeJson,
       machineId: deps.machineId,
-      statusFile: join(tcpDir(deps.baseDir), `status-node-${label}.json`),
+      // 032：内挂聚合器不写 status-node（非独立进程，broker 行同 pid 全覆盖）
       version: deps.version,
       fileInbox: new FileInbox({
         inboxDir: join(tcpDir(deps.baseDir), 'inbox'),
@@ -1126,7 +983,7 @@ function runStop(target: 'broker' | 'node' | 'both', deps: ServeDeps, registryFi
       const reset = resetGhostStatusFiles(statusDir, ['status-broker.json'], 'running');
       if (reset.length > 0) deps.stdout(`stop broker: 幽灵状态文件复位 stopped：${reset.join('、')}`);
     }
-    const port = readMultiRegistry(registryFile).port ?? DEFAULT_PORT;
+    const port = loadBrokerFile(registryFile).port ?? DEFAULT_PORT;
     const confirmed = (deps.pidsOnPort ?? pidsOnPort)(port);
     for (const b of brokers) {
       if (!confirmed.has(b.pid)) {

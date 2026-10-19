@@ -141,17 +141,16 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 一台 broker 机要同时当几颗星的星心时，不必开多个进程占多个端口——`--add-star` 让同一个 serve 进程/端口托管第二颗星（vhost 同构：机器凭钥匙自证星籍，连接握手时按钥匙定归属星）：
 
 ```
-> crosschat serve --stop                # 加星须先停 broker（星册文件要迁移）
-> crosschat serve --add-star second     # 星名规则同 --name；此后 serve 裸跑即托管全部星
-> crosschat serve --detach
+> crosschat serve --add-star second     # 星名规则同 --name；broker 在跑也可直接加（册写不丢）
+> crosschat serve --stop && crosschat serve --detach   # 重启生效——此后 serve 裸跑即托管全部星
 > crosschat serve --star second --gen-key 2   # 多星下发钥/删钥须 --star 指明目标星
 > crosschat serve --list                      # 分组列出各星的机器
 ```
 
 四条语义：
 
-- **每星独立册**：成员册按星分文件（`roster.<星名>.json`），一颗星的成员/接任/下线与另一颗互不相干；同机入两星也互不干扰
-- **老节点零适配**：单星部署的 broker.json 与连接行为一字不变；老版本 crosschat 节点连多星 broker 照常工作（钥匙即路由）
+- **单文件单形状**：注册表与星册同在 `broker.json` 一份文件（每星自带 roster 段）——一颗星的成员/接任/下线与另一颗互不相干；同机入两星也互不干扰
+- **非兼容升级（032 拍板）**：连接握手须声明 `multi-star` 能力（新版客户端自动带）；旧版 crosschat 腿连上即拒——`BAD_PROTO` 并教 `npm i -g @oatelauser/crosschat@latest`，不留兼容包袱（单星部署同样要求新版）
 - **broker 机免自挂**：022 起 broker 进程自动内挂本机聚合器（attach 管道、成员表都在 serve 进程里）——星心机**不再需要** `serve --connect <自家星>`，手动再起会被 013 防护拦下教学
 - **故障域合并**：所有星共用一个进程——一进程崩=全部星瘫、升级窗口合并。自部署形态（星主同一人）下这是已接受的代价；不同主顾的星别并进同一 broker
 
@@ -602,12 +601,15 @@ delivered to boss@yang(ec542c2c) (turn 2) · 续话 c2
 - **握手三帧**（连接建立即开始，10s 未完成握手服务端关闭，close code 4000）：
 
 ```
-S → C   {"op":"info","proto":1,"server":"crosschat/1.5.1","caps":[],"starId":"a1b2c3d4e5f6"}
-C → S   {"op":"connect","proto":1,"role":"node","machineId":"<全 mid，64位hex>","auth":"<64位hex钥匙>","name":"host-b"}
+S → C   {"op":"info","proto":1,"server":"crosschat/1.5.1","caps":["session-members"],"starId":"a1b2c3d4e5f6","name":"yang"}
+C → S   {"op":"connect","proto":1,"role":"node","machineId":"<全 mid，64位hex>","auth":"<64位hex钥匙>","name":"host-b","caps":["session-members","multi-star"]}
 S → C   {"op":"connected","machineName":"yang"}
 ```
 
-- `starId`：broker 的星标识（broker.json 顶层 12 hex，首次 serve 生成）——节点客户端在**发 connect（钥匙）之前**比对：与本机条目不符即断连（`STAR_ID_MISMATCH`，钥匙不出手）；条目缺 starId 则放行并自动回填
+多星 broker 的握手时序倒置（单星字节不变）：`info` **不带** starId/name（caps 多一项 `"multi-star"`）——归属星由钥匙自证（连接绑星），`connected` 回填 `starId`/`name`。
+
+- `starId`：星标识（broker.json 各星条目内 12 hex，首次 serve 生成）——单星时 info 携带，节点客户端在**发 connect（钥匙）之前**比对：与本机条目不符即断连（`STAR_ID_MISMATCH`，钥匙不出手）；多星时改由 connected 回填后校验
+- `caps`（connect 侧）：032 起**必带** `multi-star`——不带（旧版腿）即 `BAD_PROTO` 拒连并教 `npm i -g @oatelauser/crosschat@latest`（非兼容升级，不留历史包袱）
 - `role`：`node`（常驻收件，必须带 machineId，首次连接时把 mid 绑定到该钥匙；重连改名即覆盖显示名）或 `sender`（瞬态发送，只要 auth）
 - 钥匙不在注册表 / node 的 machineId 与登记不符 → 恒定延迟 500ms 后 `BAD_AUTH`（close 4001）——延迟是防钥匙枚举计时
 - 协议版本不符 → `BAD_PROTO`（close 4000）
@@ -619,9 +621,9 @@ S → C   {"op":"connected","machineName":"yang"}
 
 | 帧 | 方向 | 字段 |
 |---|---|---|
-| `info` | S→C | proto, server, caps, starId? |
-| `connect` | C→S | proto, role(node/sender), machineId?, auth, name?（≤32 字符显示名）, caps?（proto:3 能力声明，缺省=老节点） |
-| `connected` | S→C | machineName? |
+| `info` | S→C | proto, server, caps, starId?, name?（多星时不带） |
+| `connect` | C→S | proto, role(node/sender), machineId?, auth, name?（≤32 字符显示名）, caps（必带 `multi-star`；node 侧另加 `session-members`） |
+| `connected` | S→C | machineName?, starId?, name?（多星时回填星籍） |
 | `error` | 双向 | code, message, id? |
 | `send` | C→S | id, targetMachine, to?, conversation?, body, origin? |
 | `receipt` | S→C | id, status(delivered/queued/parked), turn?, replyRef?, output? |
@@ -708,7 +710,7 @@ C → file-end{id}
 ### 4.6 最小第三方客户端（纯发送器，5 步）
 
 1. WebSocket 文本连接 `ws://<broker>:7260`，单帧 ≤2MiB
-2. 等 `info`（校验 proto=1）→ 回 `connect{proto:1, role:"sender", auth:"<钥匙>"}`
+2. 等 `info`（校验 proto=1）→ 回 `connect{proto:1, role:"sender", auth:"<钥匙>", caps:["multi-star"]}`（032 起无 caps 即拒）
 3. 等 `connected`（收到 `error` 按矩阵应对）
 4. 发 `send{id:<自造唯一id>, targetMachine, to, body}` → 等同 id 的 `receipt`（或 `error`）
 5. 拿到回执即关闭连接
@@ -717,14 +719,14 @@ C → file-end{id}
 
 ### 4.7 第三方实现者注意
 
-参考实现是**单 broker 星型**——多实例集群需自行解决实例间路由（哪台节点连在哪个实例）与注册表共享，本实现不含（一台机器入多颗星由节点侧承担，见 3.5）。注册表格式见 broker 机 `~/.crosschat/tcp/broker.json`（顶层 starId/name(星名)/port；nodes[] 内 label/key/machineId/machineName/addedAt）。节点侧 node.json：`{brokers:[{host,port,name(星名),starId,key}…], showName(本机显示名)}`——旧字段 alias/顶层 name 读取时自动映射。`nodes[].machineName` 不是权威——单一事实源是各机自己的 node.json `showName`（节点机经连接帧上报、broker 机经 serve 启动读回刷新；显式缺失/空则清除，roster 回退 mid8）。会话引用 mc2_ 可在尾部携带 starId（flags bit 10）——旧版解析器遇此扩展走 `INVALID_CONVERSATION_REF`+升级指引，属设计好的版本偏差路径。
+参考实现是**单 broker 星型**——多实例集群需自行解决实例间路由（哪台节点连在哪个实例）与注册表共享，本实现不含（一台机器入多颗星由节点侧承担，见 3.5）。注册表格式见 broker 机 `~/.crosschat/tcp/broker.json`（032 单文件单形状：`{port?, stars:[{starId, name?, nodes, roster:{entries}}]}`——注册表与各星星册同文件；nodes[] 内 label/key/machineId/machineName/addedAt）。节点侧 node.json：`{brokers:[{host,port,name(星名),starId,key}…], showName(本机显示名)}`——旧字段 alias/顶层 name 读取时自动映射。`nodes[].machineName` 不是权威——单一事实源是各机自己的 node.json `showName`（节点机经连接帧上报、broker 机经 serve 启动读回刷新；显式缺失/空则清除，roster 回退 mid8）。会话引用 mc2_ 可在尾部携带 starId（flags bit 10）——旧版解析器遇此扩展走 `INVALID_CONVERSATION_REF`+升级指引，属设计好的版本偏差路径。
 
 ### 4.8 proto:3 能力协商（caps）与 attach 管道
 
 **caps 协商**（线版本号不动，能力走握手数组）：
 
-- broker 的 `info` 恒带 `caps`，proto:3 起含 `"session-members"`；老 broker（proto:1 期）`caps` 缺省或为空
-- 会话级感知的聚合器在 `connect` 带上 `caps:["session-members"]`；缺省 = 老节点，broker 按机器级对待（零回归）
+- broker 的 `info` 恒带 `caps`，proto:3 起含 `"session-members"`，多星 broker 另含 `"multi-star"`；老 broker（proto:1 期）`caps` 缺省或为空
+- 会话级感知的聚合器在 `connect` 带上 `caps:["session-members","multi-star"]`；**不带 `multi-star` 的旧版腿 032 起直接拒连**（BAD_PROTO+升级教学，非兼容升级），不带 `session-members` 的新版腿按机器级对待
 - 聚合器发现 broker 无此 cap → **不发** `sessions`/`members-query`（老 broker 对未知 op 静默丢，发了也白发），并在命令面打一行降级告警（见 [2.5](#25-重启自愈与降级告警)）
 - 后续能力（如 010 TLS）沿 `caps` 数组追加，不翻 `proto` 字段
 

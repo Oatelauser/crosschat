@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
-import { registryFileOf, writeRegistry, type NodeEntry } from '../src/serve/registry.js';
+import { registryFileOf, type NodeEntry } from '../src/serve/registry.js';
+import { seedBroker } from './helpers/broker-seed.js';
 import { FileInbox } from '../src/serve/file-channel.js';
 import { runViaTcpSend, selectBrokerEntry, tcpTimeoutMs } from '../src/serve/via-tcp.js';
 import type { BrokerEntry } from '../src/serve/node.js';
@@ -48,11 +49,13 @@ async function startBroker(deliverLocal: BrokerDeps['deliverLocal'], inboxDirs?:
   const dir = mkdtempSync(join(root, 'case-'));
   const registryFile = registryFileOf(dir);
   // sender 用 key('k')；broker 自己是 'broker-host'（BROKER-MID）→ 本机路由
-  writeRegistry(registryFile, {
-    nodes: nodes ?? [
-      { label: 'self', key: key('k'), machineId: 'BROKER-MID', machineName: 'broker-host', addedAt: 'x' },
-      { label: 'ghost', key: key('g'), machineId: 'm-ghost', machineName: 'ghost-host', addedAt: 'x' },
-    ],
+  seedBroker(registryFile, {
+    stars: [{
+      nodes: nodes ?? [
+        { label: 'self', key: key('k'), machineId: 'BROKER-MID', machineName: 'broker-host', addedAt: 'x' },
+        { label: 'ghost', key: key('g'), machineId: 'm-ghost', machineName: 'ghost-host', addedAt: 'x' },
+      ],
+    }],
   });
   const broker = new Broker({
     registryFile,
@@ -547,8 +550,8 @@ describe('016① 跨机回执机器段统一 name(mid8)', () => {
   async function startPeerBroker(deliverLocal: BrokerDeps['deliverLocal']): Promise<Harness> {
     const dir = mkdtempSync(join(root, 'case-'));
     const registryFile = registryFileOf(dir);
-    writeRegistry(registryFile, {
-      nodes: [{ label: 'self', key: key('k'), machineId: peerMid, machineName: 'peer-host', addedAt: 'x' }],
+    seedBroker(registryFile, {
+      stars: [{ nodes: [{ label: 'self', key: key('k'), machineId: peerMid, machineName: 'peer-host', addedAt: 'x' }] }],
     });
     const broker = new Broker({
       registryFile,

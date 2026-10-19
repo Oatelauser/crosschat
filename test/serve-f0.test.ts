@@ -10,7 +10,8 @@ import { join } from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
-import { registryFileOf, writeRegistry, type NodeEntry } from '../src/serve/registry.js';
+import { registryFileOf, type NodeEntry } from '../src/serve/registry.js';
+import { seedBroker } from './helpers/broker-seed.js';
 import { encodeFrame, parseFrame, type Frame } from '../src/serve/protocol.js';
 import { runSend, type SendDeps } from '../src/commands/send.js';
 import { encodeRef } from '../src/ref.js';
@@ -31,14 +32,16 @@ afterEach(async () => {
 });
 
 function seed(file: string, nodes: Partial<NodeEntry>[]): void {
-  writeRegistry(file, {
-    nodes: nodes.map((n, i) => ({
-      label: n.label ?? `node-${i + 1}`,
-      key: n.key ?? key(`k${i}`),
-      machineId: n.machineId,
-      machineName: n.machineName,
-      addedAt: '2026-01-01T00:00:00.000Z',
-    })),
+  seedBroker(file, {
+    stars: [{
+      nodes: nodes.map((n, i) => ({
+        label: n.label ?? `node-${i + 1}`,
+        key: n.key ?? key(`k${i}`),
+        machineId: n.machineId,
+        machineName: n.machineName,
+        addedAt: '2026-01-01T00:00:00.000Z',
+      })),
+    }],
   });
 }
 
@@ -101,6 +104,7 @@ class Client {
       ...(opts.machineId === undefined ? {} : { machineId: opts.machineId }),
       auth,
       ...(opts.name === undefined ? {} : { name: opts.name }),
+      caps: ['multi-star'],
     });
     await c.waitFor((f) => f.op === 'connected');
     return c;
@@ -207,7 +211,7 @@ describe('F0 onConnect 绑定比对（双侧归一，防升级窗口断连）', 
   it('异值仍拒（BAD_AUTH）', async () => {
     const h = await startBroker([{ key: key('k0'), machineId: DASHED }], { authFailDelayMs: 20 });
     const c = await Client.raw(h.url);
-    c.send({ op: 'connect', proto: 1, role: 'node', machineId: '9999aaaa9999aaaa9999aaaa9999aaaa', auth: key('k0') });
+    c.send({ op: 'connect', proto: 1, role: 'node', machineId: '9999aaaa9999aaaa9999aaaa9999aaaa', auth: key('k0'), caps: ['multi-star'] });
     const err = await c.waitFor((f) => f.op === 'error');
     expect(err.op === 'error' && err.code).toBe('BAD_AUTH');
     expect(err.op === 'error' && err.message).toContain('machineId');

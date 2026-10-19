@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 018 批二：命令面与链路——启动器旗标/自动拉聚合器/attach 重试/退出 detach、
  * extends 四级校验三分支、members-query 恢复（验活过滤死名）、adopt 全错误
  * 路径与幂等、status 星会话视图与诊断行、9b 命令面告警、改名跟随。
@@ -11,7 +11,8 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { type RawData, WebSocketServer } from 'ws';
 import { Broker } from '../src/serve/broker.js';
 import { CAP_SESSION_MEMBERS, encodeFrame, parseFrame, type Frame } from '../src/serve/protocol.js';
-import { registryFileOf, writeRegistry, type NodeEntry } from '../src/serve/registry.js';
+import { registryFileOf, type NodeEntry } from '../src/serve/registry.js';
+import { seedBroker } from './helpers/broker-seed.js';
 import { NodeClient, attachPipePath, type BrokerEntry } from '../src/serve/node.js';
 import { FileInbox } from '../src/serve/file-channel.js';
 import { fetchRosterFor } from '../src/serve/via-tcp.js';
@@ -82,14 +83,16 @@ async function startBroker(): Promise<Harness> {
 }
 
 function seed(file: string, nodes: Partial<NodeEntry>[]): void {
-  writeRegistry(file, {
-    nodes: nodes.map((n, i) => ({
-      label: n.label ?? `node-${i + 1}`,
-      key: n.key ?? key(`${i + 1}`),
-      machineId: n.machineId,
-      machineName: n.machineName,
-      addedAt: '2026-01-01T00:00:00.000Z',
-    })),
+  seedBroker(file, {
+    stars: [{
+      nodes: nodes.map((n, i) => ({
+        label: n.label ?? `node-${i + 1}`,
+        key: n.key ?? key(`${i + 1}`),
+        machineId: n.machineId,
+        machineName: n.machineName,
+        addedAt: '2026-01-01T00:00:00.000Z',
+      })),
+    }],
   });
 }
 
@@ -147,7 +150,7 @@ async function senderOn(url: string, auth: string): Promise<TestClient> {
   const client = new TestClient(url);
   await client.opened();
   await client.waitFor((f) => f.op === 'info');
-  client.send({ op: 'connect', proto: 1, role: 'sender', auth });
+  client.send({ op: 'connect', proto: 1, role: 'sender', auth, caps: ['multi-star'] });
   await client.waitFor((f) => f.op === 'connected');
   return client;
 }

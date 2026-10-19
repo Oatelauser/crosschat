@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { parseServeArgs } from '../src/cli.js';
 import { guardSameStarDaemon, matchServeProcesses, runServe, selectConnectEntry, type ServeArgs, type ServeDeps } from '../src/commands/serve.js';
-import { listNodes, registryFileOf } from '../src/serve/registry.js';
+import { loadBrokerFile, registryFileOf } from '../src/serve/registry.js';
 import { MultichatError } from '../src/errors.js';
 import type { NetworkInterfaceInfo } from 'node:os';
 
@@ -112,8 +112,9 @@ describe('runServe --gen-key / --list / --remove', () => {
     expect(parsed.showName).toBe('改成「贴这份配置的机器」的名字');
     expect(parsed.brokers[0]!.starId).toMatch(/^[0-9a-f]{12}$/);
     expect(parsed.brokers[0]!.key).toMatch(/^[0-9a-f]{64}$/);
-    expect((JSON.parse(readFileSync(registryFileOf(dir), 'utf8')) as { starId?: string }).starId).toBe(parsed.brokers[0]!.starId);
-    expect(listNodes(registryFileOf(dir)).map((n) => n.label)).toEqual(['node-1', 'node-2']);
+    // 032：注册表单形状——starId 与钥匙条目同在 stars[0]
+    expect(loadBrokerFile(registryFileOf(dir)).stars[0]!.starId).toBe(parsed.brokers[0]!.starId);
+    expect(loadBrokerFile(registryFileOf(dir)).stars[0]!.nodes.map((n) => n.label)).toEqual(['node-1', 'node-2']);
   });
 
   it('persists an explicit --port into the registry', async () => {
@@ -147,9 +148,9 @@ describe('runServe --gen-key / --list / --remove', () => {
     await runServe({ genKeyArg: '1' }, deps);
     lines.length = 0;
     expect(await runServe({ remove: 'node-1' }, deps)).toBe(0);
-    expect(lines.at(-1)).toBe('已移除 node-1');
+    expect(lines.at(-1)).toContain('已从星 h 移除 node-1'); // 032：消息带星域限定
     expect(await runServe({ remove: 'node-1' }, deps)).toBe(1);
-    expect(lines.at(-1)).toBe('未找到 node-1');
+    expect(lines.at(-1)).toContain('未找到 node-1');
   });
 });
 
@@ -344,10 +345,11 @@ describe('E0 serve --name（星名持久化与互斥）', () => {
   it('persists an explicit --name (with --port semantics: given once, remembered)', async () => {
     const { deps, dir } = nameDeps();
     await runServe({ nameArg: 'cloud', genKeyArg: '1' }, deps);
-    expect(JSON.parse(readFileSync(registryFileOf(dir), 'utf8'))).toMatchObject({ name: 'cloud' });
+    // 032 单形状：星名在 stars[0].name
+    expect(loadBrokerFile(registryFileOf(dir)).stars[0]!.name).toBe('cloud');
     // 再给即更新
     await runServe({ nameArg: 'home', genKeyArg: '1' }, deps);
-    expect(JSON.parse(readFileSync(registryFileOf(dir), 'utf8'))).toMatchObject({ name: 'home' });
+    expect(loadBrokerFile(registryFileOf(dir)).stars[0]!.name).toBe('home');
   });
 
   it('rejects a colon / overlong / empty name with USAGE naming the rule', async () => {

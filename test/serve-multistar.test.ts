@@ -1,26 +1,16 @@
 /**
- * 022 多星 WS 复用（方向 2A 完全体 + 自挂 in-process）：
- * - 一进程一端口托管多星：info 无星标识/caps multi-star、connected 回填星籍、
- *   钥匙反查星域、星间册与注册表隔离、同机入两星双连接不互撞
- * - NodeClient 多星延迟核星（connected 帧）与单星 info 预检字节回归
- * - 本进程自挂：虚拟会话对（admitLocal + makeSocket）走真实握手/成员/投递路径
- * - 注册表双形状读写、--add-star 迁移、--star 星域管理教学、013 延伸防护
+ * 032 多星单文件：一进程一端口托管多星（连接绑星/握手倒置/caps 闸门）+
+ * 星域隔离（同文件 stars[] 切片）+ 内挂聚合器（虚拟会话对）+ bootstrap 与 CLI。
  */
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createConnection, type Socket } from 'node:net';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { type RawData } from 'ws';
-import { Broker, rosterFileForStar, rosterFileOf } from '../src/serve/broker.js';
-import {
-  readMultiRegistry,
-  registryFileOf,
-  writeMultiRegistry,
-  writeRegistry,
-  type NodeEntry,
-  type StarReg,
-} from '../src/serve/registry.js';
+import { Broker } from '../src/serve/broker.js';
+import { loadBrokerFile, registryFileOf, type NodeEntry } from '../src/serve/registry.js';
+import { seedBroker } from './helpers/broker-seed.js';
 import { encodeFrame, parseFrame, CAP_MULTI_STAR, CAP_SESSION_MEMBERS, type Frame, type InfoFrame, type ConnectedFrame } from '../src/serve/protocol.js';
 import { NodeClient, attachPipePath, type BrokerEntry } from '../src/serve/node.js';
 import { VirtualSocket } from '../src/serve/virtual-socket.js';
@@ -52,33 +42,29 @@ function entry(partial: Partial<NodeEntry>): NodeEntry {
   return { label: partial.label ?? 'node-1', key: partial.key ?? key('1'), addedAt: '2026-01-01T00:00:00.000Z', ...partial };
 }
 
-async function startMultiBroker(): Promise<{
-  broker: Broker;
-  url: string;
-  registryFile: string;
-  logs: string[];
-}> {
+async function startMultiBroker(): Promise<{ broker: Broker; url: string; registryFile: string; logs: string[] }> {
   const dir = mkdtempSync(join(root, 'case-'));
   const registryFile = registryFileOf(dir);
-  const stars: StarReg[] = [
-    {
-      starId: STAR_A,
-      name: 'alpha',
-      nodes: [
-        entry({ label: 'a1', key: key('a'), machineId: 'aaaa1111aaaa', machineName: 'a-host' }),
-        entry({ label: 'a-self', key: key('as'), machineId: 'bbbb1111aaaa', machineName: 'broker-host' }),
-      ],
-    },
-    {
-      starId: STAR_B,
-      name: 'beta',
-      nodes: [
-        entry({ label: 'b1', key: key('b'), machineId: 'bbbb2222bbbb', machineName: 'b-host' }),
-        entry({ label: 'b2', key: key('b2') }), // 未绑机器——同机入两星用
-      ],
-    },
-  ];
-  writeMultiRegistry(registryFile, { stars, multi: true });
+  seedBroker(registryFile, {
+    stars: [
+      {
+        starId: STAR_A,
+        name: 'alpha',
+        nodes: [
+          entry({ label: 'a1', key: key('a'), machineId: 'aaaa1111aaaa', machineName: 'a-host' }),
+          entry({ label: 'a-self', key: key('as'), machineId: 'bbbb1111aaaa', machineName: 'broker-host' }),
+        ],
+      },
+      {
+        starId: STAR_B,
+        name: 'beta',
+        nodes: [
+          entry({ label: 'b1', key: key('b'), machineId: 'bbbb2222bbbb', machineName: 'b-host' }),
+          entry({ label: 'b2', key: key('b2') }),
+        ],
+      },
+    ],
+  });
   const logs: string[] = [];
   const broker = new Broker({
     registryFile,
@@ -164,13 +150,14 @@ async function handshake(url: string, auth: string, machineId?: string, name?: s
     ...(machineId === undefined ? {} : { machineId }),
     auth,
     ...(name === undefined ? {} : { name }),
+    caps: [CAP_MULTI_STAR],
   });
   const verdict = await c.waitFor((f) => f.op === 'connected' || f.op === 'error');
   expect(verdict.op).toBe('connected');
   return verdict as ConnectedFrame;
 }
 
-describe('022 多星握手与星域隔离', () => {
+describe('032 多星握手与星域隔离', () => {
   it('多星 info 不带星标识、caps 含 multi-star；connected 回填属星星籍', async () => {
     const { url } = await startMultiBroker();
     const a = new TestClient(url);
@@ -180,7 +167,7 @@ describe('022 多星握手与星域隔离', () => {
     expect(info.name).toBeUndefined();
     expect(info.caps).toContain(CAP_MULTI_STAR);
     expect(info.caps).toContain(CAP_SESSION_MEMBERS);
-    a.send({ op: 'connect', proto: 1, role: 'node', machineId: 'aaaa1111aaaa', auth: key('a'), name: 'a-host' });
+    a.send({ op: 'connect', proto: 1, role: 'node', machineId: 'aaaa1111aaaa', auth: key('a'), name: 'a-host', caps: [CAP_MULTI_STAR] });
     const conn = (await a.waitFor((f) => f.op === 'connected')) as ConnectedFrame;
     expect(conn.starId).toBe(STAR_A);
     expect(conn.name).toBe('alpha');
@@ -188,10 +175,22 @@ describe('022 多星握手与星域隔离', () => {
     const b = new TestClient(url);
     await b.opened();
     await b.waitFor((f) => f.op === 'info');
-    b.send({ op: 'connect', proto: 1, role: 'node', machineId: 'bbbb2222bbbb', auth: key('b'), name: 'b-host' });
+    b.send({ op: 'connect', proto: 1, role: 'node', machineId: 'bbbb2222bbbb', auth: key('b'), name: 'b-host', caps: [CAP_MULTI_STAR] });
     const connB = (await b.waitFor((f) => f.op === 'connected')) as ConnectedFrame;
     expect(connB.starId).toBe(STAR_B);
     expect(connB.name).toBe('beta');
+  }, 10_000);
+
+  it('032 非兼容闸门：无 caps 旧腿（node 与 sender 同规）→ BAD_PROTO + 升级教学', async () => {
+    const { url } = await startMultiBroker();
+    const c = new TestClient(url);
+    await c.opened();
+    await c.waitFor((f) => f.op === 'info');
+    c.send({ op: 'connect', proto: 1, role: 'node', machineId: 'aaaa1111aaaa', auth: key('a') }); // 无 caps=旧腿
+    const err = await c.waitFor((f) => f.op === 'error');
+    expect((err as { code: string }).code).toBe('BAD_PROTO');
+    expect((err as { message: string }).message).toContain('版本过旧');
+    expect((err as { message: string }).message).toContain('npm i -g @oatelauser/crosschat@latest');
   }, 10_000);
 
   it('钥匙不属任何星 → BAD_AUTH（跨星错钥匙不放行）', async () => {
@@ -199,15 +198,15 @@ describe('022 多星握手与星域隔离', () => {
     const c = new TestClient(url);
     await c.opened();
     await c.waitFor((f) => f.op === 'info');
-    c.send({ op: 'connect', proto: 1, role: 'node', machineId: 'cccc3333cccc', auth: key('z') });
+    c.send({ op: 'connect', proto: 1, role: 'node', machineId: 'cccc3333cccc', auth: key('z'), caps: [CAP_MULTI_STAR] });
     const err = await c.waitFor((f) => f.op === 'error');
     expect((err as { code: string }).code).toBe('BAD_AUTH');
   }, 10_000);
 
-  it('单星旧形状字节回归：info 带星标识、connected 无星籍字段', async () => {
+  it('单星：info 带星标识、connected 无星籍字段；同文件单星切片照常', async () => {
     const dir = mkdtempSync(join(root, 'sole-'));
     const registryFile = registryFileOf(dir);
-    writeRegistry(registryFile, { starId: STAR_A, name: 'alpha', nodes: [entry({ key: key('a'), machineId: 'aaaa1111aaaa' })] });
+    seedBroker(registryFile, { stars: [{ starId: STAR_A, name: 'alpha', nodes: [entry({ key: key('a'), machineId: 'aaaa1111aaaa' })] }] });
     const broker = new Broker({
       registryFile,
       statusFile: join(dir, 'status-broker.json'),
@@ -227,8 +226,8 @@ describe('022 多星握手与星域隔离', () => {
     const info = (await c.waitFor((f) => f.op === 'info')) as InfoFrame;
     expect(info.starId).toBe(STAR_A);
     expect(info.name).toBe('alpha');
-    expect(info.caps).toEqual([CAP_SESSION_MEMBERS]); // 不含 multi-star
-    c.send({ op: 'connect', proto: 1, role: 'node', machineId: 'aaaa1111aaaa', auth: key('a') });
+    expect(info.caps).toEqual([CAP_SESSION_MEMBERS]); // 单星不广告 multi-star
+    c.send({ op: 'connect', proto: 1, role: 'node', machineId: 'aaaa1111aaaa', auth: key('a'), caps: [CAP_MULTI_STAR] });
     const conn = (await c.waitFor((f) => f.op === 'connected')) as ConnectedFrame;
     expect(conn.starId).toBeUndefined();
     expect(conn.name).toBeUndefined();
@@ -239,14 +238,13 @@ describe('022 多星握手与星域隔离', () => {
     const a = new TestClient(url);
     await a.opened();
     await a.waitFor((f) => f.op === 'info');
-    a.send({ op: 'connect', proto: 1, role: 'node', machineId: 'aaaa1111aaaa', auth: key('a'), name: 'a-host' });
+    a.send({ op: 'connect', proto: 1, role: 'node', machineId: 'aaaa1111aaaa', auth: key('a'), name: 'a-host', caps: [CAP_MULTI_STAR] });
     await a.waitFor((f) => f.op === 'connected');
     a.send({ op: 'roster' });
     const roster = await a.waitFor((f) => f.op === 'roster-result');
     const machines = (roster as { machines: Array<{ name?: string }> }).machines;
     expect(machines.map((m) => m.name)).toContain('a-host');
     expect(machines.map((m) => m.name)).not.toContain('b-host');
-    // B 星机器名对 A 星连接不可见
     a.send({ op: 'send', id: 'x1', targetMachine: 'b-host', body: 'cross-star?' });
     const err = await a.waitFor((f) => f.op === 'error' && (f as { id?: string }).id === 'x1');
     expect((err as { code: string }).code).toBe('UNKNOWN_MACHINE');
@@ -260,24 +258,45 @@ describe('022 多星握手与星域隔离', () => {
     expect(logs.filter((l) => l.includes('node-up')).length).toBe(2);
   }, 10_000);
 
-  it('每星独立册：sessions 声明各落各的 roster.<星名>.json', async () => {
+  it('每星独立册（同文件切片）：sessions 声明只落本星 roster 段', async () => {
     const { url, registryFile } = await startMultiBroker();
     const a = new TestClient(url);
     await a.opened();
     await a.waitFor((f) => f.op === 'info');
-    a.send({ op: 'connect', proto: 1, role: 'node', machineId: 'aaaa1111aaaa', auth: key('a'), name: 'a-host', caps: [CAP_SESSION_MEMBERS] });
+    a.send({ op: 'connect', proto: 1, role: 'node', machineId: 'aaaa1111aaaa', auth: key('a'), name: 'a-host', caps: [CAP_SESSION_MEMBERS, CAP_MULTI_STAR] });
     await a.waitFor((f) => f.op === 'connected');
     a.send({ op: 'sessions', sessions: [{ sessionId: 'sess-a1', name: 'worker-a', tool: 'claude' }] });
     await new Promise((r) => setTimeout(r, 200));
-    const rosterA = JSON.parse(readFileSync(rosterFileForStar(registryFile, { starId: STAR_A, name: 'alpha' }, true), 'utf8')) as { entries: Array<{ sessionId: string }> };
-    expect(rosterA.entries.map((e) => e.sessionId)).toEqual(['sess-a1']);
-    expect(existsSync(rosterFileForStar(registryFile, { starId: STAR_B, name: 'beta' }, true))).toBe(false);
-    // 单星旧形状仍写 roster.json（零回归路径）
-    expect(rosterFileForStar(registryFile, {}, false)).toBe(rosterFileOf(registryFile));
+    const doc = loadBrokerFile(registryFile);
+    expect(doc.stars.find((s) => s.name === 'alpha')!.roster.map((e) => e.sessionId)).toEqual(['sess-a1']);
+    expect(doc.stars.find((s) => s.name === 'beta')!.roster).toEqual([]); // 邻星册段未被触碰
+  }, 10_000);
+
+  it('在跑 addStar 安全：册持久化 splice 保住磁盘新星段（重启托管语义的地基）', async () => {
+    const { url, registryFile } = await startMultiBroker();
+    // 磁盘上被 CLI 加了第三颗星（在跑 broker 不知情）
+    seedBroker(registryFile, {
+      stars: [
+        ...loadBrokerFile(registryFile).stars,
+        { starId: 'ccccddddcccc', name: 'gamma', nodes: [], roster: [{ sessionId: 'sess-g', machine: 'mm', online: true }] },
+      ],
+    });
+    // 在跑 broker 写 alpha 册（fresh-read splice）
+    const a = new TestClient(url);
+    await a.opened();
+    await a.waitFor((f) => f.op === 'info');
+    a.send({ op: 'connect', proto: 1, role: 'node', machineId: 'aaaa1111aaaa', auth: key('a'), name: 'a-host', caps: [CAP_SESSION_MEMBERS, CAP_MULTI_STAR] });
+    await a.waitFor((f) => f.op === 'connected');
+    a.send({ op: 'sessions', sessions: [{ sessionId: 'sess-a1', name: 'worker-a', tool: 'claude' }] });
+    await new Promise((r) => setTimeout(r, 200));
+    const doc = loadBrokerFile(registryFile);
+    expect(doc.stars).toHaveLength(3); // gamma 段原样带过
+    expect(doc.stars.find((s) => s.name === 'gamma')!.roster).toHaveLength(1);
+    expect(doc.stars.find((s) => s.name === 'alpha')!.roster[0]!.sessionId).toBe('sess-a1');
   }, 10_000);
 });
 
-describe('022 NodeClient 多星延迟核星', () => {
+describe('032 NodeClient 多星延迟核星', () => {
   function fakeSendDeps(): { delivered: string[]; deps: Parameters<NonNullable<ConstructorParameters<typeof NodeClient>[0]['makeSendDeps']>>[0] } {
     const delivered: string[] = [];
     return {
@@ -346,16 +365,15 @@ describe('022 NodeClient 多星延迟核星', () => {
   }, 10_000);
 });
 
-describe('022 本进程自挂（虚拟会话对）', () => {
+describe('032 本进程自挂（虚拟会话对）', () => {
   it('admitLocal+makeSocket：真实握手上线、attach 入成员、三段直达投递不经回环 WS', async () => {
     const dir = mkdtempSync(join(root, 'local-'));
     const registryFile = registryFileOf(dir);
-    writeMultiRegistry(registryFile, {
+    seedBroker(registryFile, {
       stars: [{ starId: STAR_A, name: 'alpha', nodes: [
         entry({ label: 'self', key: key('as'), machineId: 'bbbb1111aaaa', machineName: 'broker-host' }),
         entry({ label: 'snd', key: key('x') }),
       ] }],
-      multi: true,
     });
     const logs: string[] = [];
     const delivered: string[] = [];
@@ -378,7 +396,7 @@ describe('022 本进程自挂（虚拟会话对）', () => {
     writeFileSync(join(dir, 'node.json'), JSON.stringify({ brokers: [selfEntry], showName: 'broker-host' }, null, 2));
     const inbox = mkdtempSync(join(root, 'inbox-'));
     const client = new NodeClient({
-      config: { entries: [selfEntry] },
+      config: { entries: [selfEntry], showName: 'broker-host' },
       configFile: join(dir, 'node.json'),
       machineId: () => 'bbbb1111aaaa',
       statusFile: join(dir, 'status-node.json'),
@@ -413,16 +431,18 @@ describe('022 本进程自挂（虚拟会话对）', () => {
     await client.waitForState('online');
     expect(logs.some((l) => l.includes('online（broker'))).toBe(true);
 
-    // attach 管道在 broker 进程内常驻：成员入册
+    // attach 管道在 broker 进程内常驻：成员入册（同文件 alpha 册段）
     const attach = await attachTalk(attachPipePath(selfEntry, dir, 'ms-local'));
     const reply = await attach.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude' });
     expect(reply).toEqual({ ok: true });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(loadBrokerFile(registryFile).stars[0]!.roster.some((e) => e.sessionId === 'sess-boss')).toBe(true);
 
     // 三段寻址到 broker 机会话：虚拟会话承接 deliver（无回环 WS）
     const sender = new TestClient(url);
     await sender.opened();
     await sender.waitFor((f) => f.op === 'info');
-    sender.send({ op: 'connect', proto: 1, role: 'sender', auth: key('x') });
+    sender.send({ op: 'connect', proto: 1, role: 'sender', auth: key('x'), caps: [CAP_MULTI_STAR] });
     await sender.waitFor((f) => f.op === 'connected');
     sender.send({ op: 'send', id: 'n1', targetMachine: 'broker-host:boss', body: 'hello local' });
     const receipt = await sender.waitFor((f) => f.op === 'receipt' && (f as { id?: string }).id === 'n1');
@@ -463,7 +483,7 @@ function attachTalk(pipePath: string): Promise<{ send(r: unknown): Promise<{ ok:
   });
 }
 
-describe('022 注册表双形状与 CLI', () => {
+describe('032 bootstrap 与 CLI', () => {
   function cliDeps(extra: Partial<ServeDeps> = {}): { deps: ServeDeps; lines: string[]; dir: string; registryFile: string } {
     const dir = mkdtempSync(join(root, 'cli-'));
     const lines: string[] = [];
@@ -473,7 +493,7 @@ describe('022 注册表双形状与 CLI', () => {
       env: {},
       version: 'test',
       machineId: () => 'MID-TEST',
-      hostname: () => 'h',
+      hostname: () => 'cli-host',
       networkInterfaces: () => ({}),
       now: () => Date.now(),
       onSignal: () => {},
@@ -483,62 +503,57 @@ describe('022 注册表双形状与 CLI', () => {
     return { deps, lines, dir, registryFile: registryFileOf(dir) };
   }
 
-  it('readMultiRegistry 旧形状归一 stars[0] 且 multi:false；写回保持旧形状', () => {
-    const { registryFile } = cliDeps();
-    writeRegistry(registryFile, { port: 7260, starId: STAR_A, name: 'alpha', nodes: [entry({ key: key('a') })] });
-    const reg = readMultiRegistry(registryFile);
-    expect(reg.multi).toBe(false);
-    expect(reg.port).toBe(7260);
-    expect(reg.stars[0]!.starId).toBe(STAR_A);
-    expect(reg.stars[0]!.nodes).toHaveLength(1);
-    writeMultiRegistry(registryFile, reg);
-    const raw = JSON.parse(readFileSync(registryFile, 'utf8')) as Record<string, unknown>;
-    expect(raw.nodes).toBeDefined(); // 旧形状字段
-    expect(raw.stars).toBeUndefined();
-  });
+  it('bootstrap（H1 唯一安装路径）：空表 serve 首启造 stars[0]（id+hostname 缺省名+空表），幂等', async () => {
+    const { deps, lines, registryFile, dir } = cliDeps({ listServeProcesses: () => [] });
+    // runForegroundBroker 会起真 broker——用随机端口跑完即停
+    let stop: (() => void) | undefined;
+    const d2: ServeDeps = { ...deps, onSignal: (_s, cb) => { stop = cb; } };
+    const servePromise = runServe({}, d2);
+    await new Promise((r) => setTimeout(r, 1_500));
+    const doc = loadBrokerFile(registryFile);
+    expect(doc.stars).toHaveLength(1);
+    expect(doc.stars[0]!.starId).toMatch(/^[0-9a-f]{12}$/);
+    expect(doc.stars[0]!.name).toBe('cli-host'); // hostname 缺省星名
+    expect(doc.stars[0]!.nodes).toHaveLength(1); // 自登记 self
+    expect(doc.stars[0]!.roster).toEqual([]);
+    expect(lines.some((l) => l.includes('已初始化星 cli-host'))).toBe(true);
+    stop!();
+    expect(await servePromise).toBe(0);
+    void dir;
+  }, 15_000);
 
-  it('--add-star：拒在跑 broker、迁移星册、转 stars[] 形状、重名拒绝', async () => {
-    // 在跑 broker → 拒
-    const busy = cliDeps({ listServeProcesses: () => [{ pid: 77, cmdline: 'node dist/cli.js serve' }] });
-    await expect(runServe({ addStarArg: 'beta' }, busy.deps)).rejects.toThrow(/先 crosschat serve --stop/);
-    // 静机上：旧形状 + roster.json → 加星
-    const { deps, lines, registryFile } = cliDeps();
-    writeRegistry(registryFile, { starId: STAR_A, name: 'alpha', nodes: [entry({ key: key('a') })] });
-    writeFileSync(rosterFileOf(registryFile), JSON.stringify({ entries: [{ sessionId: 'sess-a1', machine: 'm', online: true }] }));
+  it('--add-star：空表懒 bootstrap 造星 1（hostname 缺省名）再加星；大小写撞名拒', async () => {
+    const { deps, registryFile } = cliDeps();
     expect(await runServe({ addStarArg: 'beta' }, deps)).toBe(0);
-    const reg = readMultiRegistry(registryFile);
-    expect(reg.multi).toBe(true);
-    expect(reg.stars).toHaveLength(2);
-    expect(reg.stars[1]!.name).toBe('beta');
-    expect(reg.stars[1]!.nodes).toHaveLength(0);
-    expect(reg.stars[1]!.starId).toMatch(/^[0-9a-f]{12}$/);
-    expect(existsSync(rosterFileOf(registryFile))).toBe(false); // 旧册已迁
-    expect(existsSync(rosterFileForStar(registryFile, { starId: STAR_A, name: 'alpha' }, true))).toBe(true);
-    expect(lines.some((l) => l.includes('托管 2 颗星'))).toBe(true);
-    expect(lines.some((l) => l.includes('故障域合并'))).toBe(true);
-    // 重名/与 starId 同名拒绝
-    await expect(runServe({ addStarArg: 'beta' }, deps)).rejects.toThrow(/已用于/);
-    await expect(runServe({ addStarArg: STAR_A }, deps)).rejects.toThrow(/已用于/);
+    const doc = loadBrokerFile(registryFile);
+    expect(doc.stars).toHaveLength(2);
+    expect(doc.stars[0]!.name).toBe('cli-host'); // 懒 bootstrap 的 hostname 缺省星名
+    expect(doc.stars[1]).toMatchObject({ name: 'beta', nodes: [], roster: [] });
+    await expect(runServe({ addStarArg: 'CLI-HOST' }, deps)).rejects.toThrow(/冲突/);
   });
 
-  it('多星下 --gen-key/--remove 裸用教学、--star 限定生效', async () => {
+  it('多星下 --gen-key/--remove 裸用教学、--star 限定生效；单星隐式（免 --star）', async () => {
     const { deps, lines, registryFile } = cliDeps();
-    writeMultiRegistry(registryFile, {
+    seedBroker(registryFile, {
       stars: [
-        { starId: STAR_A, name: 'alpha', nodes: [entry({ key: key('a') })] },
-        { starId: STAR_B, name: 'beta', nodes: [] },
+        { starId: STAR_A, name: 'alpha', nodes: [entry({ key: key('a') })], roster: [] },
+        { starId: STAR_B, name: 'beta', nodes: [], roster: [] },
       ],
-      multi: true,
     });
     await expect(runServe({ genKeyArg: '1' }, deps)).rejects.toThrow(/--gen-key 须 --star/);
-    await expect(runServe({ remove: 'node-1' }, deps)).rejects.toThrow(/--remove 须 --star/);
+    await expect(runServe({ remove: 'node-1' }, deps)).rejects.toThrow(/须 --star/);
     expect(await runServe({ genKeyArg: '1', starArg: 'beta' }, deps)).toBe(0);
-    const reg = readMultiRegistry(registryFile);
+    const reg = loadBrokerFile(registryFile);
     expect(reg.stars[0]!.nodes).toHaveLength(1); // alpha 未动
     expect(reg.stars[1]!.nodes).toHaveLength(1); // beta 得钥
     expect(lines.some((l) => l.includes('入星 beta'))).toBe(true);
     expect(await runServe({ remove: 'node-1', starArg: 'beta' }, deps)).toBe(0);
-    expect(readMultiRegistry(registryFile).stars[1]!.nodes).toHaveLength(0);
+    expect(loadBrokerFile(registryFile).stars[1]!.nodes).toHaveLength(0);
+    // 单星隐式：裸 --gen-key 直接作用于唯一星
+    const solo = cliDeps();
+    seedBroker(solo.registryFile, { stars: [{ starId: STAR_A, name: 'alpha', nodes: [], roster: [] }] });
+    expect(await runServe({ genKeyArg: '1' }, solo.deps)).toBe(0);
+    expect(loadBrokerFile(solo.registryFile).stars[0]!.nodes).toHaveLength(1);
     // --list 分组展示
     lines.length = 0;
     expect(await runServe({ list: true }, deps)).toBe(0);
@@ -567,4 +582,17 @@ describe('022 注册表双形状与 CLI', () => {
     expect((err as MultichatError).message).toContain('已内挂');
     expect((err as MultichatError).message).toContain('无需另起');
   });
+
+  it('内挂聚合器不写 status-node 文件（非独立进程）', async () => {
+    const { deps, registryFile, dir } = cliDeps();
+    seedBroker(registryFile, { stars: [{ starId: STAR_A, name: 'alpha', nodes: [], roster: [] }] });
+    let stop: (() => void) | undefined;
+    const d2: ServeDeps = { ...deps, onSignal: (_s, cb) => { stop = cb; } };
+    const servePromise = runServe({}, d2);
+    await new Promise((r) => setTimeout(r, 1_500));
+    stop!();
+    expect(await servePromise).toBe(0);
+    expect(existsSync(join(dir, 'tcp', 'status-broker.json'))).toBe(true);
+    expect(existsSync(join(dir, 'tcp', 'status-node-alpha.json'))).toBe(false); // 内挂不写 status-node
+  }, 15_000);
 });

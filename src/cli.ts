@@ -98,10 +98,10 @@ commands:
                                 (1-32 chars of A-Za-z0-9._-,
                                 no colon; the first --name given
                                 is remembered; default: hostname)
-                              --add-star <星名>    host a 2nd star on this
+                              --add-star <星名>    host another star on this
                                 broker (one process/port; roster
-                                split per star; run with broker
-                                stopped, restart to take effect)
+                                lives inside broker.json; takes
+                                effect on next serve restart)
                               --star <星名|前缀>   scope --gen-key/--remove/
                                 --name to one hosted star (required
                                 when the broker hosts 2+ stars)

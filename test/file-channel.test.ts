@@ -7,7 +7,8 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { type RawData } from 'ws';
 import { Broker } from '../src/serve/broker.js';
 import { encodeFrame, parseFrame, type Frame } from '../src/serve/protocol.js';
-import { registryFileOf, writeRegistry } from '../src/serve/registry.js';
+import { registryFileOf } from '../src/serve/registry.js';
+import { seedBroker } from './helpers/broker-seed.js';
 import {
   FILE_CHUNK_BYTES,
   FILE_MAX_BYTES,
@@ -164,7 +165,7 @@ class WsProbe {
   async handshake(auth: string, machineId?: string): Promise<void> {
     await this.opened();
     await this.waitFor((f) => f.op === 'info');
-    this.send({ op: 'connect', proto: 1, role: machineId === undefined ? 'sender' : 'node', machineId, auth });
+    this.send({ op: 'connect', proto: 1, role: machineId === undefined ? 'sender' : 'node', machineId, auth, caps: ['multi-star'] });
     await this.waitFor((f) => f.op === 'connected');
   }
 
@@ -208,8 +209,8 @@ interface LocalHarness {
 async function startLocalBroker(): Promise<LocalHarness> {
   const dir = mkdtempSync(join(root, 'case-'));
   const registryFile = registryFileOf(dir);
-  writeRegistry(registryFile, {
-    nodes: [{ label: 'self', key: key('k'), machineId: 'BROKER-MID', machineName: 'broker-host', addedAt: 'x' }],
+  seedBroker(registryFile, {
+    stars: [{ nodes: [{ label: 'self', key: key('k'), machineId: 'BROKER-MID', machineName: 'broker-host', addedAt: 'x' }] }],
   });
   const box = inbox();
   const bodies: string[] = [];
@@ -298,7 +299,7 @@ describe('file channel end-to-end through the broker', () => {
   it('rejects file-begin over 64MiB at the broker with FILE_TOO_LARGE', async () => {
     const dir = mkdtempSync(join(root, 'case-'));
     const registryFile = registryFileOf(dir);
-    writeRegistry(registryFile, { nodes: [{ label: 'self', key: key('k'), machineId: 'BROKER-MID', machineName: 'broker-host', addedAt: 'x' }] });
+    seedBroker(registryFile, { stars: [{ nodes: [{ label: 'self', key: key('k'), machineId: 'BROKER-MID', machineName: 'broker-host', addedAt: 'x' }] }] });
     const broker = new Broker({
       registryFile,
       statusFile: join(dir, 'status-broker.json'),

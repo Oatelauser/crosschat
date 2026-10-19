@@ -11,6 +11,7 @@ import process from 'node:process';
 import { WebSocket } from 'ws';
 import { MultichatError } from '../errors.js';
 import {
+  CAP_MULTI_STAR,
   CAP_SESSION_MEMBERS,
   encodeFrame,
   hasCap,
@@ -297,7 +298,12 @@ export interface NodeClientDeps {
   /** B0：node.json 路径——starId 回填写回原文件用。 */
   configFile: string;
   machineId: () => string | undefined;
-  statusFile: string;
+  /**
+   * 守护状态文件（status-node[-<星>].json；doctor/--stop 消费）。032 起可选：
+   * broker 进程内挂的聚合器不是独立进程（同 pid 同生命周期，broker 行全覆盖）
+   * ——省略即不写，status 视图不出现幽灵"守护"行。
+   */
+  statusFile?: string;
   /** F1：本守护的 crosschat 版本，落 status 文件供 doctor 对账；缺省不写该字段。 */
   version?: string;
   fileInbox: FileInbox;
@@ -595,7 +601,8 @@ export class NodeClient {
         machineId: this.d.machineId() ?? '',
         auth: cfg.key,
         ...(this.d.config.showName === undefined ? {} : { name: this.d.config.showName }),
-        caps: [CAP_SESSION_MEMBERS],
+        // 032 非兼容升级：multi-star 能力声明是新版腿的通行证（无它即旧版被拒）
+        caps: [CAP_SESSION_MEMBERS, CAP_MULTI_STAR],
       }));
       const verdict = await this.nextFrame((f) => f.op === 'connected' || f.op === 'error', 10_000);
       if (verdict.op === 'error') {
@@ -1060,6 +1067,7 @@ export class NodeClient {
   }
 
   private writeStatus(nextAttemptAt: number | undefined): void {
+    if (this.d.statusFile === undefined) return; // 内挂聚合器：非独立进程不落 status
     const entry = this.d.config.entries[0]!;
     const status: NodeStatusFile = {
       state: this.state,

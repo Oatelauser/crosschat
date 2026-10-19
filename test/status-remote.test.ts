@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 票012（E1）：远程会话枚举 status --via tcp:<机器>。
  * - broker 路由：转发在线节点（pending id 回程）/ownMid 本地应答/离线 PEER_OFFLINE/超时回 error
  * - 守护应答：payload 分段、codex unavailable 部分应答（扫描注入）
@@ -11,7 +11,8 @@ import { join } from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { type RawData, WebSocketServer } from 'ws';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
-import { registryFileOf, writeRegistry, type NodeEntry } from '../src/serve/registry.js';
+import { registryFileOf, type NodeEntry } from '../src/serve/registry.js';
+import { seedBroker } from './helpers/broker-seed.js';
 import { NodeClient } from '../src/serve/node.js';
 import { FileInbox } from '../src/serve/file-channel.js';
 import { runViaTcpStatus } from '../src/serve/via-tcp.js';
@@ -88,14 +89,16 @@ async function startBroker(overrides: Partial<BrokerDeps> = {}): Promise<Harness
     { label: 'node-1', key: key('n'), machineId: NODE_MID, machineName: 'node-host' },
     { label: 'ghost', key: key('g'), machineId: GHOST_MID, machineName: 'ghost-host' },
   ];
-  writeRegistry(registryFile, {
-    nodes: seedNodes.map((n, i) => ({
-      label: n.label ?? `node-${i}`,
-      key: n.key ?? key(`${i}`),
-      machineId: n.machineId,
-      machineName: n.machineName,
-      addedAt: '2026-01-01T00:00:00.000Z',
-    })),
+  seedBroker(registryFile, {
+    stars: [{
+      nodes: seedNodes.map((n, i) => ({
+        label: n.label ?? `node-${i}`,
+        key: n.key ?? key(`${i}`),
+        machineId: n.machineId,
+        machineName: n.machineName,
+        addedAt: '2026-01-01T00:00:00.000Z',
+      })),
+    }],
   });
   const broker = new Broker({
     registryFile,
@@ -168,7 +171,7 @@ async function senderOn(port: number, auth = key('k')): Promise<TestClient> {
   const client = new TestClient(`ws://127.0.0.1:${port}`);
   await client.opened();
   await client.waitFor((f) => f.op === 'info');
-  client.send({ op: 'connect', proto: 1, role: 'sender', auth });
+  client.send({ op: 'connect', proto: 1, role: 'sender', auth, caps: ['multi-star'] });
   await client.waitFor((f) => f.op === 'connected');
   return client;
 }
@@ -252,7 +255,7 @@ describe('broker：status-query 路由', () => {
     const dumb = new TestClient(`ws://127.0.0.1:${h.port}`);
     await dumb.opened();
     await dumb.waitFor((f) => f.op === 'info');
-    dumb.send({ op: 'connect', proto: 1, role: 'node', machineId: NODE_MID, auth: key('n') });
+    dumb.send({ op: 'connect', proto: 1, role: 'node', machineId: NODE_MID, auth: key('n'), caps: ['multi-star'] });
     await dumb.waitFor((f) => f.op === 'connected');
     const sender = await senderOn(h.port);
     sender.send({ op: 'status-query', id: 'q4', targetMachine: 'node-host' });

@@ -18,7 +18,7 @@ import { decodeRef } from '../ref.js';
 import { CODEX_ENDPOINT_MAX_BODY_BYTES } from '../limits.js';
 import type { SendLogEntry } from '../send-log.js';
 import type { SendArgs, SendDeps } from '../commands/send.js';
-import { encodeFrame, ERR, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
+import { CAP_MULTI_STAR, encodeFrame, ERR, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
 import type { ErrorFrame, FileResultFrame, Frame, MemberRemoveResultFrame, ReceiptFrame, RosterMachine, StatusPayload, StatusResultFrame } from './protocol.js';
 import { defaultBaseDir, tcpDir } from './registry.js';
 import { formatBrokerEntry, readNodeConfig, type BrokerEntry } from './node.js';
@@ -96,7 +96,8 @@ class SenderConn {
       if (info.op !== 'info' || info.proto !== PROTOCOL_VERSION) {
         throw new Error(`broker 协议不匹配（期望 ${PROTOCOL_VERSION}）`);
       }
-      conn.send({ op: 'connect', proto: PROTOCOL_VERSION, role: 'sender', machineId, auth });
+      // 032 非兼容升级：sender 腿同样声明 multi-star 能力（新版通行证，无它即被拒）
+      conn.send({ op: 'connect', proto: PROTOCOL_VERSION, role: 'sender', machineId, auth, caps: [CAP_MULTI_STAR] });
       const verdict = await conn.waitFor((f) => f.op === 'connected' || f.op === 'error', timeoutMs);
       if (verdict.op === 'error') {
         throw new MultichatError('TCP_TRANSPORT_FAILED', `broker 拒绝连接：${(verdict as ErrorFrame).code} ${(verdict as ErrorFrame).message}——核对 ~/.crosschat/tcp/node.json 与 broker 注册表`);

@@ -243,12 +243,12 @@ describe('doctor tcp 三项检查', () => {
     const dir = mkdtempSync(join(root, 't-'));
     mkdirSync(join(dir, 'tcp'), { recursive: true });
     writeFileSync(join(dir, 'tcp', 'node.json'), JSON.stringify({ broker: { host: '127.0.0.1', port: 7260, alias: 'br' }, key: 'k' }));
-    writeFileSync(join(dir, 'tcp', 'broker.json'), JSON.stringify({ nodes: [{ label: 'node-1', key: 'k', addedAt: 'x' }] }));
+    writeFileSync(join(dir, 'tcp', 'broker.json'), JSON.stringify({ stars: [{ starId: 'aaaabbbbcccc', nodes: [{ label: 'node-1', key: 'k', addedAt: 'x' }], roster: [] }] }));
     const deps = baseDoctorDeps({ tcpDir: join(dir, 'tcp') });
     const report = runDoctor(deps);
     expect(report.output).toContain('tcp · br');
     expect(report.output).toContain('✅ 节点条目可解析');
-    expect(report.output).toContain('✅ broker 注册表可解析（1 节点）');
+    expect(report.output).toContain('✅ broker 注册表可解析（1 星 1 节点）');
     expect(report.output).toContain('✅ broker 可达（127.0.0.1:7260）');
     expect(report.failed).toBe(false);
   });
@@ -279,9 +279,9 @@ describe('doctor tcp 三项检查', () => {
     const dir = mkdtempSync(join(root, 't-'));
     mkdirSync(join(dir, 'tcp'), { recursive: true });
     writeFileSync(join(dir, 'tcp', 'node.json'), JSON.stringify({ broker: { host: '127.0.0.1', port: 7260, alias: 'br' }, key: 'k' }));
-    writeFileSync(join(dir, 'tcp', 'broker.json'), JSON.stringify({ nodes: [{ label: 'node-1', key: 'k', addedAt: 'x' }] }));
+    writeFileSync(join(dir, 'tcp', 'broker.json'), JSON.stringify({ stars: [{ starId: 'aaaabbbbcccc', nodes: [{ label: 'node-1', key: 'k', addedAt: 'x' }], roster: [] }] }));
     const report = runDoctor(baseDoctorDeps({ tcpDir: join(dir, 'tcp') }));
-    expect(report.output).toContain('tcp · br\n  ✅ 节点条目可解析\n  ✅ broker 可达（127.0.0.1:7260）\n  ✅ broker 注册表可解析（1 节点）');
+    expect(report.output).toContain('tcp · br\n  ✅ 节点条目可解析\n  ✅ broker 可达（127.0.0.1:7260）\n  ✅ broker 注册表可解析（1 星 1 节点）');
     expect(report.output).not.toContain('starId');
     expect(report.output).not.toContain('条目 1');
     expect(report.failed).toBe(false);
