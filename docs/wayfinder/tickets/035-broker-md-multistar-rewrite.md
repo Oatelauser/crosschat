@@ -19,7 +19,7 @@ claimed-by: 二期10
 ## 实施清单
 
 - broker.md 全篇重写 + 验证阶梯更新（含热加删星 drill 步骤）。
-- SKILL.md / references 的 tcp 相关行随改口径；README 触点核对。
+- SKILL.md / references 的 tcp 相关行随改口径（含 errors.md 补 ADMIN_REQUIRED/STAR_DELETED 目录行）；README 触点核对；**docs/federation.md 触点核对**（tcp 重配/加星发钥步骤口径已变——2026-10-20 验收时补入）。
 - 成书线（crosschat book）同步提醒：文档票落地后知会文档book2（tcp 行拼装待接，勿抢跑）。
 
 ## 预算与停止条件
