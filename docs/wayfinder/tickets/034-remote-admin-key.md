@@ -18,11 +18,11 @@ claimed-by: 二期10
    - 星管理员：上述 + 本星 gen-key 发钥 / remove-node 删节点；**set-name 不给**（星名=broker 主本机）
    - broker 主（本机插座）：全部，含 add-star / remove-star / set-name / 发吊管理钥 / list-stars
    - **set-port 无命令**：`--port` 旗标与管理 op **全删**（033 的 set-port 插座 op 随本票回收——修订先例同 032 修订 022）；端口=broker.json 手编字段重启生效；首启非默认口=手写 broker.json（doctor 教学指路）。理由：机器级旋钮远程改=防火墙锁门风险 + 用户最少命令面原则
-4. **挑战应答握手**：管理连接（adminKey）走 HMAC(钥匙, 一次性 nonce) 证明，**钥匙永不过线**；additive cap `challenge-auth` 仅管理连接启用，星钥连接维持现状。诚实边界：会话内容与新发星钥仍明文——TLS 窗口期用户知情在案（010 落地闭合）
+4. **挑战应答握手**：管理连接（adminKey）走 HMAC(钥匙, 一次性 nonce) 证明，**钥匙永不过线**；additive cap `challenge-auth` 仅管理连接启用，星钥连接维持现状。**无降级路径**：cap 缺席或被剥（中间人）即拒绝连接并教学，绝不回落裸钥发送管理钥。诚实边界：会话内容与新发星钥仍明文——TLS 窗口期用户知情在案（010 落地闭合）
 5. **读 op 三条**：list-stars（仅 broker 主本机）/ list-nodes / list-members（本星，成员与星管理员皆可）——**回显永不含钥匙**（发钥只走 gen-key 显式动作）
 6. **审计**：broker.log 逐笔记管理 op + 来源（本机插座 / 星管理钥 label）
 7. **错误码**：`ADMIN_REQUIRED`（非管理员调管理 op，教学指路找管理员）；`STAR_DELETED` 收编 ERR 表（033 遗留拍板项）。协议规范 §四 同步更新
-8. **破坏升级授权**（用户口令）：034 落地时 win/WSL `~/.crosschat` **清零重建**，按新协议（挑战应答）从零配——drill 即重建过程；现联邦（yang/d32b、在册会话、WSL 守护）重配、会话重新 adopt
+8. **破坏升级授权**（用户口令）：034 落地时 win/WSL `~/.crosschat` **清零前整目录冷备份**（032 先例 `D:\multichat-state-coldbackup-*`）再清零重建，按新协议（挑战应答）从零配——drill 即重建过程；现联邦（yang/d32b、在册会话、WSL 守护）重配、会话重新 adopt
 9. **备选已评估否决**：ssh 包装路线（用户否——复杂度）/node.json 独立管理型条目（用户否，改同条目字段）/独立 admin.json 文件（用户倾向字段案后弃）/broker 管理钥乙案（用户收敛方向默认甲）/轮询·fs.watch（033 已否）
 
 ## 实施清单
