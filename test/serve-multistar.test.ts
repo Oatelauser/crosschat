@@ -588,7 +588,8 @@ describe('032 bootstrap 与 CLI', () => {
 
   it('内挂聚合器不写 status-node 文件（非独立进程）', async () => {
     const { deps, registryFile, dir } = cliDeps();
-    seedBroker(registryFile, { stars: [{ starId: STAR_A, name: 'alpha', nodes: [], roster: [] }] });
+    // port 0=随机口（本机 7260 常有真 broker 在跑——写死默认口必 EADDRINUSE，7260 挂账收敛）
+    seedBroker(registryFile, { port: 0, stars: [{ starId: STAR_A, name: 'alpha', nodes: [], roster: [] }] });
     let stop: (() => void) | undefined;
     const d2: ServeDeps = { ...deps, onSignal: (_s, cb) => { stop = cb; } };
     const servePromise = runServe({}, d2);

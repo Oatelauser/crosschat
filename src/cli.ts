@@ -94,10 +94,11 @@ commands:
                             default port ${DEFAULT_PORT}; a non-default
                             port is a hand-edited broker.json field —
                             edit, then restart serve)
-                              --name <星名>        broker star name
+                              --name <星名>        rename the broker's star
                                 (1-32 chars of A-Za-z0-9._-,
-                                no colon; the first --name given
-                                is remembered; default: hostname)
+                                no colon; with 2+ stars --star
+                                is required; serve never creates
+                                stars — that is --add-star's job)
                               --add-star <星名>    host another star on this
                                 broker (one process/port; roster
                                 lives inside broker.json; hot:
