@@ -1,7 +1,7 @@
 # 星级分权管理面：星管理钥+挑战应答（原"远程管理与管理员钥匙"，四轮 grilling 重构）
 
 label: wayfinder:design
-status: open（2026-10-20 定案，二期10 派发实施会话）
+status: closed（2026-10-20 实施关账：实施会话完成+check 773 绿，二期10 清零重建真机 drill 验收全过，见文末验收记录）
 blocked-by: 033（已关账）
 claimed-by: 二期10
 
@@ -41,3 +41,13 @@ claimed-by: 二期10
 1. `npm run check` 全绿（三段投递/成员语义零回归）
 2. WSL→win 远程管理真机 drill 全过（清零重建即验收现场）
 3. 协议规范章节与实现一致；CI 三系统绿
+
+## 验收记录（2026-10-20 二期10）
+
+- 实施会话完工（check 自跑 773 绿 +9 用例），主会话抽查无降级落码（openAdmin：cap 检查先于一切发送、HMAC 证明、BAD_AUTH 路径）+ check 复跑全绿
+- **清零重建 drill 全过**（破坏升级授权执行）：双端整目录冷备份 `D:\multichat-state-coldbackup-20261020\`（win 15 文件+WSL tar）→ 两机清零 → 新协议从零重建（零星起步→--add-star yang/d32b 热加→WSL 入 d32b→本会话 adopt 入 yang）
+- **远程管理链（WSL 持星管理钥管 win broker）**：读（--list-nodes，星钥身份，回显不含钥匙）✅；挑战应答写（--gen-key 增→--remove 删）✅；**吊销后死钥重试 BAD_AUTH**（教学直指 --list 查 label）✅；审计行逐笔在场（admin-auth 入星+admin-op 带来源）✅
+- **set-port 无命令活体证**：`--port 9999` → "已移除（034）——端口是 broker.json 手编字段" 教学 ✅
+- 终态：WSL=纯成员（adminKey 已剥）、双星全通、会话在册；弃钥节点清理完毕
+- 提交 8605ed5 已推 origin，**CI 三系统 success**
+- 记档：①读 op 经管理连接时审计来源 label 显示 "(?)"（星钥读路径的来源标注待打磨——cosmetic，候选小票）②PS 5.1 管道喂 WSL 写文件带 UTF-8 BOM（坑的管道路径变体——喂 WSL 落盘须 sed 剥 BOM，教训入记忆）③吊钥须 --star 限定（多星守卫正确）
