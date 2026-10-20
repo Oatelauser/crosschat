@@ -12,7 +12,7 @@ claimed-by: 二期10
 ## 决策（用户 2026-10-20 拍板）
 
 1. **走 WS + 管理员钥匙**（ssh 包装路线被用户否——"增加复杂度"）：connect 握手认出管理员钥匙即授管理权（无星绑定，星删不灭——钥匙存 broker.json 顶层 admins 段，随 broker 活）。
-2. **远程 op 与本机插座同一套**（add-star / remove-star / gen-key / set-showname / set-name / set-port），同一套 registry 库函数，broker 校验+落盘+对账+回执。
+2. **远程 op 与本机插座同一套**（以 033 实施清单为准：add-star / remove-star / gen-key / set-name / set-port / set-showname / remove-node），同一套 registry 库函数，broker 校验+落盘+对账+回执。
 3. **TLS 明确后置**（用户知情接受）：010 TLS 落地前，管理员钥匙在公网明文线上可被截=全域沦陷，窗口期风险在案；TLS 落地后此暴露闭合。票面记此账。
 4. 非管理员调管理 op → 权限报错教学；旧 broker 收新 op → 明确降级报错（不静默）。
 
