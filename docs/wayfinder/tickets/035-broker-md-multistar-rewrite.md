@@ -1,7 +1,7 @@
 # broker.md 多星常态重构（文档票）
 
 label: wayfinder:design
-status: open（2026-10-20 定案，二期10 自领）
+status: implemented（2026-10-20 实施完成：broker.md 969 行全篇重构+SKILL/references/README 同口径，db78a18 已推 CI 三系统绿；**待用户亲读验收关账**——本票验收人=用户）
 blocked-by: 033, 034
 claimed-by: 二期10
 
