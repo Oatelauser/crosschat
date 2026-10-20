@@ -2,7 +2,7 @@
  * 018 批一：proto:3 会话级星成员——协议帧/broker 聚合/聚合器 attach 与活性。
  * 夹具用真实平台形状：win 带杠 MachineGuid、linux 32-hex（F0 归一互认）。
  */
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createConnection, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -763,8 +763,10 @@ describe('028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-rem
       tool: 'claude',
       machine: WIN_MID.replace(/-/g, ''), // 归一 mid（复活判定的机器锚）
       machineName: 'win-box',
-      online: true,
     });
+    // 033 台账静态化：roster.online 不落盘（活性归运行时；缺字段=默认离线）
+    expect(roster[0]!.online).toBeUndefined();
+    expect(readFileSync(registryFile, 'utf8')).not.toContain('"online"');
     expect(existsSync(`${registryFile}.tmp`)).toBe(false); // tmp+rename 收尾
   });
 

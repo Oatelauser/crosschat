@@ -9,7 +9,7 @@ import { createConnection, type Socket } from 'node:net';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { type RawData } from 'ws';
 import { Broker } from '../src/serve/broker.js';
-import { loadBrokerFile, registryFileOf, type NodeEntry } from '../src/serve/registry.js';
+import { loadBrokerFile, registryFileOf, writeBrokerFile, type NodeEntry } from '../src/serve/registry.js';
 import { seedBroker } from './helpers/broker-seed.js';
 import { encodeFrame, parseFrame, CAP_MULTI_STAR, CAP_SESSION_MEMBERS, type Frame, type InfoFrame, type ConnectedFrame } from '../src/serve/protocol.js';
 import { NodeClient, attachPipePath, type BrokerEntry } from '../src/serve/node.js';
@@ -503,33 +503,36 @@ describe('032 bootstrap 与 CLI', () => {
     return { deps, lines, dir, registryFile: registryFileOf(dir) };
   }
 
-  it('bootstrap（H1 唯一安装路径）：空表 serve 首启造 stars[0]（id+hostname 缺省名+空表），幂等', async () => {
+  it('033 serve 永不造星：空表首启零星合法（不建星、不写 node.json），教学指 --add-star', async () => {
     const { deps, lines, registryFile, dir } = cliDeps({ listServeProcesses: () => [] });
-    // runForegroundBroker 会起真 broker——用随机端口跑完即停
+    writeBrokerFile(registryFile, { port: 0, stars: [] }); // port 0=随机口（本机 7260 有真 broker）
+    // runForegroundBroker 会起真 broker——随机端口跑完即停
     let stop: (() => void) | undefined;
     const d2: ServeDeps = { ...deps, onSignal: (_s, cb) => { stop = cb; } };
     const servePromise = runServe({}, d2);
     await new Promise((r) => setTimeout(r, 1_500));
     const doc = loadBrokerFile(registryFile);
-    expect(doc.stars).toHaveLength(1);
-    expect(doc.stars[0]!.starId).toMatch(/^[0-9a-f]{12}$/);
-    expect(doc.stars[0]!.name).toBe('cli-host'); // hostname 缺省星名
-    expect(doc.stars[0]!.nodes).toHaveLength(1); // 自登记 self
-    expect(doc.stars[0]!.roster).toEqual([]);
-    expect(lines.some((l) => l.includes('已初始化星 cli-host'))).toBe(true);
+    expect(doc.stars).toHaveLength(0); // 033：懒 bootstrap 已删——零星=合法待配
+    expect(lines.some((l) => l.includes('零星待配') && l.includes('--add-star'))).toBe(true);
     stop!();
     expect(await servePromise).toBe(0);
     void dir;
   }, 15_000);
 
-  it('--add-star：空表懒 bootstrap 造星 1（hostname 缺省名）再加星；大小写撞名拒', async () => {
-    const { deps, registryFile } = cliDeps();
-    expect(await runServe({ addStarArg: 'beta' }, deps)).toBe(0);
+  it('033 --add-star 首星显式命名（空表加星=星 1，自带自登记+node.json）；大小写撞名拒', async () => {
+    const { deps, registryFile, dir } = cliDeps();
+    expect(await runServe({ addStarArg: 'alpha' }, deps)).toBe(0);
     const doc = loadBrokerFile(registryFile);
-    expect(doc.stars).toHaveLength(2);
-    expect(doc.stars[0]!.name).toBe('cli-host'); // 懒 bootstrap 的 hostname 缺省星名
-    expect(doc.stars[1]).toMatchObject({ name: 'beta', nodes: [], roster: [] });
-    await expect(runServe({ addStarArg: 'CLI-HOST' }, deps)).rejects.toThrow(/冲突/);
+    expect(doc.stars).toHaveLength(1);
+    expect(doc.stars[0]).toMatchObject({ name: 'alpha', roster: [] });
+    expect(doc.stars[0]!.starId).toMatch(/^[0-9a-f]{12}$/);
+    expect(doc.stars[0]!.nodes).toHaveLength(1); // 自登记 self（冷路径播种）
+    expect(doc.stars[0]!.nodes[0]).toMatchObject({ label: 'self', machineId: 'MID-TEST' });
+    // node.json 自用条目（host=127.0.0.1，含星名+starId）
+    const nodeJson = JSON.parse(readFileSync(join(dir, 'tcp', 'node.json'), 'utf8')) as { brokers: Array<{ host: string; starId: string; name: string }> };
+    expect(nodeJson.brokers).toHaveLength(1);
+    expect(nodeJson.brokers[0]).toMatchObject({ host: '127.0.0.1', name: 'alpha' });
+    await expect(runServe({ addStarArg: 'ALPHA' }, deps)).rejects.toThrow(/冲突/);
   });
 
   it('多星下 --gen-key/--remove 裸用教学、--star 限定生效；单星隐式（免 --star）', async () => {

@@ -76,6 +76,8 @@ interface BrokerStatusFile {
   name?: string;
   lastUpdated: string;
   onlineNodes?: string[];
+  /** 033：托管星清单（writeStatus 落；零星=合法待配——教学行用）。 */
+  stars?: unknown[];
 }
 
 function readStatusJson<T>(file: string): T | undefined {
@@ -153,6 +155,10 @@ async function tcpForwarderLines(tcpDir: string | undefined, nowMs: number, rost
     const head = broker.name === undefined ? '服务端' : `服务端 ${broker.name} `;
     lines.push(`broker: ${head}端口 ${broker.port ?? '?'}，${nodes.length} 节点在线`);
     if (nodes.length > 0) lines.push(`在线机器: ${nodes.join('、')}`);
+    // 033：零星=合法待配（serve 永不造星）——教学指 --add-star
+    if (Array.isArray(broker.stars) && broker.stars.length === 0) {
+      lines.push('零星待配（合法状态）——首星：crosschat serve --add-star <星名>');
+    }
     return lines;
   }
   // B2.1：非 broker 机（本机 status-broker.json 不新鲜）且有 roster 接线 → 瞬态拉在线表；

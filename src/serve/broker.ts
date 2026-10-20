@@ -2,13 +2,15 @@
  * tcp broker 服务端（票B B1）：全网唯一监听端口、节点零入站的星型组件。
  * ws 复用仓内依赖；投递处理器注入化（B2 接 runSend，B1 默认 NOT_READY）。
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { timingSafeEqual } from 'node:crypto';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { hostname } from 'node:os';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import process from 'node:process';
 import { Buffer } from 'node:buffer';
+import * as net from 'node:net';
 import { WebSocket, WebSocketServer } from 'ws';
+import { PIPE_PREFIX } from '../platform/pipe-transport.js';
 import {
   CAP_MULTI_STAR,
   CAP_SESSION_MEMBERS,
@@ -43,9 +45,16 @@ import type {
   MemberRemoveResultFrame,
 } from './protocol.js';
 import {
+  addStarTo,
+  genKeysFor,
   loadBrokerFile,
   mutateBrokerFile,
+  removeNodeFor,
+  removeStarFrom,
   sanitizeName,
+  setNameFor,
+  setPortFor,
+  setShowNameFor,
   type NodeEntry,
   type RosterEntry,
 } from './registry.js';
@@ -96,6 +105,22 @@ export interface BrokerDeps {
   resultTimeoutMs?: number;
   /** 心跳 ping 发射器（测试注入 noop 模拟永不 pong 的死连接）。 */
   ping?: (ws: SocketLike) => void;
+  /**
+   * 033：内挂聚合器播种/收尾（serve 面注入）。spawn 含外部守护让位检查（幂等
+   * ——未登记/让位形态静默跳过）；stop 供删星/停机收尾。热加星对账即调。
+   */
+  spawnLocalAggregator?: (starId: string) => void;
+  stopLocalAggregator?: (starId: string) => Promise<void>;
+}
+
+/**
+ * 033 管理插座回执：一行 JSON（ok=false 时 error 带人话教学）。CLI 打印的
+ * "已生效"必出自此回执（021 不预支成功纪律）。
+ */
+export interface AdminReply {
+  ok: boolean;
+  error?: string;
+  [key: string]: unknown;
 }
 
 /** B1 默认本机投递：处理器尚未接线。 */
@@ -166,10 +191,12 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 export class Broker {
-  private readonly d: Required<Omit<BrokerDeps, 'port' | 'fileInbox' | 'scanStatus'>> & {
+  private readonly d: Required<Omit<BrokerDeps, 'port' | 'fileInbox' | 'scanStatus' | 'spawnLocalAggregator' | 'stopLocalAggregator'>> & {
     port?: number;
     fileInbox?: FileInbox;
     scanStatus?: () => Promise<StatusPayload>;
+    spawnLocalAggregator?: (starId: string) => void;
+    stopLocalAggregator?: (starId: string) => Promise<void>;
   };
   private wss?: WebSocketServer;
   private port?: number;
@@ -182,6 +209,18 @@ export class Broker {
   private readonly pending = new Map<string, PendingResult>();
   private readonly fileRoutes = new Map<string, FileRoute>();
   private hbTimer?: ReturnType<typeof setInterval>;
+  /** 033：本机管理插座（台账唯一写入口的受理端；地址随机=知道地址即能力）。 */
+  private adminServer?: net.Server;
+  private adminPipe?: string;
+  /** unix 域套接字文件路径（win 命名管不落盘，undefined）；stop 时清理。 */
+  private adminSockFile?: string;
+  /** 在途管理连接（stop 时强制收口——旧 typings 无 closeAllConnections）。 */
+  private readonly adminSockets = new Set<net.Socket>();
+  /**
+   * 033 已收尾会话（热删星闭连接）：onClose 跳过星域清理——starOf 的单星兜底
+   * 会把被删星的残余会话误归到幸存星（同 mid 双星形态下误清对方在线表）。
+   */
+  private readonly reapedSessions = new Set<Session>();
 
   constructor(deps: BrokerDeps) {
     this.d = {
@@ -227,6 +266,7 @@ export class Broker {
     const addr = wss.address();
     this.port = typeof addr === 'object' && addr !== null ? addr.port : wantPort;
     this.startedAt = this.d.now();
+    this.startAdminPipe();
     this.writeStatus('running');
     this.hbTimer = setInterval(() => this.heartbeat(), this.d.heartbeatMs);
     wss.on('connection', (ws) => this.onConnection(ws));
@@ -234,10 +274,255 @@ export class Broker {
     return this.port;
   }
 
-  /** 优雅退出：关所有连接、清定时器、写终态。 */
+  /**
+   * 033：起本机管理插座（win 命名管 / unix 域套接字，**零 TCP 端口**）。地址
+   * 随机（知道地址=能力，同仓 cc-msg-* 管道先例），写进 status-broker.json 的
+   * adminPipe 字段——CLI 管理命令热路径由此找到它。受理台账写 op（决策2：
+   * broker 运行期是台账唯一写者）。监听失败不倒 broker（CLI 退冷路径，日志留痕）。
+   */
+  private startAdminPipe(): void {
+    const sockDir = dirname(this.d.statusFile);
+    const pipe = process.platform === 'win32'
+      ? `${PIPE_PREFIX}crosschat-admin-${randomBytes(8).toString('hex')}`
+      : join(sockDir, `admin-${randomBytes(8).toString('hex')}.sock`);
+    const server = net.createServer();
+    server.on('connection', (socket) => this.onAdminConnection(socket));
+    try {
+      mkdirSync(sockDir, { recursive: true });
+      server.listen(pipe);
+      this.adminServer = server;
+      this.adminPipe = pipe;
+      if (process.platform !== 'win32') this.adminSockFile = pipe;
+      this.d.log(`admin 插座已监听：${pipe}`);
+    } catch (err) {
+      this.d.log(`admin 插座监听失败（CLI 将走冷路径）：${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  /** 一问一答：一行 JSON 请求 → 一行 JSON 回执（AdminReply），超时/坏形状拒绝。 */
+  private onAdminConnection(socket: net.Socket): void {
+    this.adminSockets.add(socket);
+    socket.on('close', () => this.adminSockets.delete(socket));
+    let buf = '';
+    let replied = false;
+    const timer = setTimeout(() => {
+      try {
+        socket.end(`${JSON.stringify({ ok: false, error: '管理请求处理超时' })}\n`);
+      } catch {
+        // 已断开
+      }
+    }, 10_000);
+    socket.on('error', () => {
+      clearTimeout(timer);
+      socket.destroy();
+    });
+    socket.on('data', (chunk) => {
+      if (replied) return;
+      buf += chunk.toString('utf8');
+      if (buf.length > 65_536) {
+        socket.destroy();
+        return;
+      }
+      const idx = buf.indexOf('\n');
+      if (idx < 0) return;
+      replied = true;
+      clearTimeout(timer);
+      const line = buf.slice(0, idx);
+      void (async () => {
+        let reply: AdminReply;
+        try {
+          const req = JSON.parse(line) as Record<string, unknown>;
+          if (req === null || typeof req !== 'object' || typeof req.op !== 'string') {
+            reply = { ok: false, error: '管理请求形状错误（须为含 op 的 JSON 对象）' };
+          } else {
+            reply = await this.adminOp(req);
+          }
+        } catch (err) {
+          reply = { ok: false, error: err instanceof Error ? err.message : String(err) };
+        }
+        try {
+          socket.end(`${JSON.stringify(reply)}\n`);
+        } catch {
+          // 对端已断开
+        }
+      })();
+    });
+  }
+
+  /**
+   * 033 op 分发——全调 registry.ts 库函数（冷路径 CLI 直调同一套，函数不分
+   * 家），回执带对账后状态。星清单变更 op 经 reconcileStars 增量播种/收尾。
+   */
+  private async adminOp(req: Record<string, unknown>): Promise<AdminReply> {
+    const str = (k: string): string | undefined => (typeof req[k] === 'string' ? (req[k] as string) : undefined);
+    const int = (k: string): number | undefined => (typeof req[k] === 'number' && Number.isInteger(req[k]) ? (req[k] as number) : undefined);
+    switch (req.op) {
+      case 'add-star': {
+        const name = str('name');
+        if (name === undefined || name === '') return { ok: false, error: 'add-star 缺少 name' };
+        const starId = addStarTo(this.d.registryFile, name, {
+          machineId: this.d.machineId(),
+          hostname: this.d.hostname(),
+          port: this.port ?? DEFAULT_PORT,
+        });
+        this.reconcileStars(); // 新星落位 + 按需播种内挂聚合器
+        return { ok: true, starId, stars: this.stars.length };
+      }
+      case 'remove-star': {
+        const starId = str('starId');
+        if (starId === undefined) return { ok: false, error: 'remove-star 缺少 starId' };
+        const removed = removeStarFrom(this.d.registryFile, starId);
+        if (removed === undefined) return { ok: false, error: `星 ${starId} 不在台账——crosschat serve --list 可查` };
+        await this.teardownStar(starId); // 弃状态→停聚合器→闭连接（收"星已删除"教学）
+        this.writeStatus('running');
+        return { ok: true, removed };
+      }
+      case 'set-showname': {
+        const name = str('name');
+        if (name === undefined) return { ok: false, error: 'set-showname 缺少 name（空串=清除）' };
+        setShowNameFor(join(dirname(this.d.registryFile), 'node.json'), name);
+        // 重挂内挂聚合器：重连握手即自报新名（machineName 回写随 connect 落台账）
+        for (const star of [...this.stars]) {
+          if (star.starId === undefined) continue;
+          try {
+            await this.d.stopLocalAggregator?.(star.starId);
+          } catch {
+            // 收尾尽力而为
+          }
+          this.d.spawnLocalAggregator?.(star.starId);
+        }
+        return { ok: true };
+      }
+      case 'gen-key': {
+        const starId = str('starId');
+        const n = int('n');
+        const host = str('host');
+        if (starId === undefined || n === undefined || host === undefined) {
+          return { ok: false, error: 'gen-key 缺少 starId/n/host' };
+        }
+        const star = loadBrokerFile(this.d.registryFile).stars.find((s) => s.starId === starId);
+        if (star === undefined) return { ok: false, error: `星 ${starId} 不在台账` };
+        const results = genKeysFor(this.d.registryFile, starId, n, {
+          host,
+          port: this.port ?? DEFAULT_PORT, // 热路径端口以在跑 broker 实际监听口为准
+          ...(star.name === undefined ? {} : { name: star.name }),
+        });
+        return { ok: true, results };
+      }
+      case 'set-name': {
+        const starId = str('starId');
+        const name = str('name');
+        if (starId === undefined || name === undefined) return { ok: false, error: 'set-name 缺少 starId/name' };
+        setNameFor(this.d.registryFile, starId, name);
+        this.reconcileStars(); // 星名刷新进内存星域 + status
+        return { ok: true };
+      }
+      case 'set-port': {
+        const port = int('port');
+        if (port === undefined) return { ok: false, error: 'set-port 缺少 port' };
+        setPortFor(this.d.registryFile, port);
+        return { ok: true, note: `端口 ${port} 已记录——port 不热换，重启 crosschat serve 生效` };
+      }
+      case 'remove-node': {
+        const starId = str('starId');
+        const label = str('label');
+        if (starId === undefined || label === undefined) return { ok: false, error: 'remove-node 缺少 starId/label' };
+        return { ok: true, removed: removeNodeFor(this.d.registryFile, starId, label) };
+      }
+      default:
+        return { ok: false, error: `未知管理 op：${String(req.op)}` };
+    }
+  }
+
+  /**
+   * 033 对账+增量播种/收尾（管理 op 触发；幂等）：磁盘新增星落位并按需播种内
+   * 挂聚合器；消失星收尾。syncStarsFromDisk 复用（032 连接入场对账同款）。
+   */
+  private reconcileStars(): void {
+    const before = new Set(this.stars.flatMap((s) => (s.starId === undefined ? [] : [s.starId])));
+    this.syncStarsFromDisk();
+    const after = new Set(this.stars.flatMap((s) => (s.starId === undefined ? [] : [s.starId])));
+    for (const id of after) {
+      if (!before.has(id)) {
+        try {
+          this.d.spawnLocalAggregator?.(id);
+        } catch (err) {
+          this.log(`聚合器播种失败 星 ${id}：${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    }
+    for (const id of before) {
+      if (!after.has(id)) void this.teardownStar(id);
+    }
+    this.writeStatus('running');
+  }
+
+  /**
+   * 033 消失星收尾（决策1 顺序）：弃状态 → 停聚合器 → 闭连接。被删星在线会话
+   * 先收"星已删除"错误帧再断（教学语；册随星葬、钥匙作废）。幂等（星不在=仅刷
+   * 状态）。错误码用字面量 STAR_DELETED 不入 protocol.ts ERR——帧面零改动（034
+   * 领地），客户端按未知 code 通用路径展示 message。
+   */
+  private async teardownStar(starId: string): Promise<void> {
+    const star = this.stars.find((s) => s.starId === starId);
+    this.stars = this.stars.filter((s) => s.starId !== starId);
+    this.multiStar = this.stars.length > 1;
+    try {
+      await this.d.stopLocalAggregator?.(starId);
+    } catch {
+      // 收尾尽力而为
+    }
+    if (star !== undefined) {
+      const label = star.name ?? starId;
+      for (const session of [...star.online.values()]) {
+        this.sessions.delete(session);
+        this.reapedSessions.add(session); // onClose 跳过星域清理（防单星兜底误归幸存星）
+        if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
+        this.send(session.ws, {
+          op: 'error',
+          code: 'STAR_DELETED',
+          message: `星 ${label} 已被删除（crosschat serve --remove-star）——册随星葬、钥匙作废、无墓碑无复活；如需重建找管理员 crosschat serve --add-star`,
+        });
+        try {
+          session.ws.close(4001, 'star deleted');
+        } catch {
+          // 竞态关闭忽略
+        }
+        this.log(`star-deleted 断开 ${session.machineName ?? session.machineId?.slice(0, 8) ?? '?'}（星 ${label}）`);
+      }
+    }
+    this.writeStatus('running');
+  }
+
+  /** 优雅退出：先停管理插座（不再受理台账写）再撤星状态、关连接、写终态。 */
   async stop(): Promise<void> {
     if (this.stopped) return;
     this.stopped = true;
+    if (this.adminServer !== undefined) {
+      const admin = this.adminServer;
+      this.adminServer = undefined;
+      for (const socket of this.adminSockets) {
+        try {
+          socket.destroy();
+        } catch {
+          // 已断开
+        }
+      }
+      this.adminSockets.clear();
+      try {
+        admin.close();
+      } catch {
+        // 已关路径忽略
+      }
+    }
+    if (this.adminSockFile !== undefined) {
+      try {
+        rmSync(this.adminSockFile);
+      } catch {
+        // 清理尽力而为
+      }
+      this.adminSockFile = undefined;
+    }
     if (this.hbTimer !== undefined) clearInterval(this.hbTimer);
     for (const entry of this.pending.values()) {
       clearTimeout(entry.timer);
@@ -385,6 +670,20 @@ export class Broker {
   private onClose(session: Session): void {
     this.sessions.delete(session);
     if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
+    for (const [id, entry] of this.pending) {
+      if (entry.targetWs === session.ws) {
+        clearTimeout(entry.timer);
+        this.pending.delete(id);
+        entry.resolve({ kind: 'error', code: ERR.PEER_OFFLINE, message: '节点连接断开' });
+      }
+    }
+    // B2：清掉该连接参与的一切文件路由（对端等待者会随断线失败）
+    for (const [id, route] of this.fileRoutes) {
+      if (route.senderWs === session.ws || route.targetWs === session.ws) this.fileRoutes.delete(id);
+    }
+    // 033：被删星收尾的会话——星域状态已随星弃置，跳过在线表/册回收（starOf
+    // 的单星兜底会把残余会话误归幸存星）
+    if (this.reapedSessions.delete(session)) return;
     // F0：online 键=归一 mid（onConnect 写入侧同款），下线按同键回收（022：星域内）
     if (session.machineId !== undefined) {
       const star = this.starOf(session);
@@ -400,20 +699,10 @@ export class Broker {
         }
       }
     }
-    for (const [id, entry] of this.pending) {
-      if (entry.targetWs === session.ws) {
-        clearTimeout(entry.timer);
-        this.pending.delete(id);
-        entry.resolve({ kind: 'error', code: ERR.PEER_OFFLINE, message: '节点连接断开' });
-      }
-    }
-    // B2：清掉该连接参与的一切文件路由（对端等待者会随断线失败）
-    for (const [id, route] of this.fileRoutes) {
-      if (route.senderWs === session.ws || route.targetWs === session.ws) this.fileRoutes.delete(id);
-    }
   }
 
   private async onMessage(session: Session, text: string): Promise<void> {
+    if (this.reapedSessions.has(session)) return; // 033：星已删的残余帧丢弃（防兜底误入幸存星）
     const frame = parseFrame(text);
     if (frame === undefined) return; // 损坏/未知帧丢弃
     if (!session.authed) {
@@ -749,7 +1038,9 @@ export class Broker {
       }
     }
     if (entry === undefined || star === undefined) {
-      await this.authFail(session, '钥匙不匹配');
+      // 033 教学语核对（决策6）：零星/删星后死星钥连入在此直指"星可能未创建或
+      // 已删除，找管理员"——发送方（--via tcp: 三段投递）同文直报，不走防重发绕弯。
+      await this.authFail(session, '钥匙不匹配任何星——星可能未创建或已删除（--remove-star 即废钥），找管理员核对 node.json 或索取新配置');
       return;
     }
     if (star.starId !== undefined) session.starId = star.starId;
@@ -1326,6 +1617,8 @@ export class Broker {
             port: this.port,
             version: this.d.version, // F1：doctor 版本对账（常驻版本 vs 本机 CLI）
             pid: process.pid, // 026：doctor 验活用
+            // 033：管理插座地址（CLI 热路径据此连入；stopped 态保留无妨——CLI 先验 state+pid）
+            ...(this.adminPipe === undefined ? {} : { adminPipe: this.adminPipe }),
             ...(sole === undefined || sole.name === undefined ? {} : { name: sole.name }),
             // 022：托管星域清单（单星也写——013 延伸防护按它识别"本机 broker 已
             // 内挂该星聚合器"，免手动 serve --connect 双开）

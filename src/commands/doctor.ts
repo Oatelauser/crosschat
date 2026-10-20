@@ -302,13 +302,18 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
         try {
           const doc = JSON.parse(brokerRaw) as { stars?: Array<{ nodes?: Array<{ label?: unknown; key?: unknown }> }> };
           if (
-            !Array.isArray(doc.stars) || doc.stars.length === 0 ||
+            !Array.isArray(doc.stars) ||
             doc.stars.some((s) => !Array.isArray(s.nodes) || s.nodes.some((n) => typeof n.label !== 'string' || typeof n.key !== 'string'))
           ) {
             throw new Error('bad shape');
           }
-          const total = doc.stars.reduce((sum, s) => sum + (s.nodes?.length ?? 0), 0);
-          ok(`✅ broker 注册表可解析（${doc.stars.length} 星 ${total} 节点）`);
+          // 033：零星=合法待配状态（serve 永不造星）——教学指 --add-star，不判错
+          if (doc.stars.length === 0) {
+            attention('⚠️ broker.json 零星（合法待配状态——serve 永不自动造星）——首星：crosschat serve --add-star <星名>');
+          } else {
+            const total = doc.stars.reduce((sum, s) => sum + (s.nodes?.length ?? 0), 0);
+            ok(`✅ broker 注册表可解析（${doc.stars.length} 星 ${total} 节点）`);
+          }
         } catch {
           fail('❌ broker 注册表 broker.json 损坏或字段缺失——crosschat serve --list 核对，必要时重发钥匙');
         }

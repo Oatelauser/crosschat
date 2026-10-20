@@ -100,8 +100,19 @@ commands:
                                 is remembered; default: hostname)
                               --add-star <星名>    host another star on this
                                 broker (one process/port; roster
-                                lives inside broker.json; takes
-                                effect on next serve restart)
+                                lives inside broker.json; hot:
+                                takes effect immediately on a
+                                running broker, no restart)
+                              --remove-star <星名|前缀>
+                                delete a hosted star entirely
+                                (roster buried, keys voided, no
+                                resurrection; the last star may
+                                be deleted — zero stars is a
+                                legal unconfigured state)
+                              --show-name <名>      rename this machine's
+                                display name on the broker host
+                                (hot: remounts in-process
+                                aggregators; '' clears)
                               --star <星名|前缀>   scope --gen-key/--remove/
                                 --name to one hosted star (required
                                 when the broker hosts 2+ stars)
@@ -368,7 +379,7 @@ export function parseServeArgs(argv: readonly string[]): ServeArgs {
       args.rm = true; // 028：只认不执行——runServe 拒绝并教学（机器守护无临时语义）
     } else if (name === '--connect') {
       args.connect = nextValue() ?? '';
-    } else if (name === '--port' || name === '--remove' || name === '--name' || name === '--adopt' || name === '--extend-session' || name === '--member-remove' || name === '--star' || name === '--add-star') {
+    } else if (name === '--port' || name === '--remove' || name === '--name' || name === '--adopt' || name === '--extend-session' || name === '--member-remove' || name === '--star' || name === '--add-star' || name === '--remove-star' || name === '--show-name') {
       const value = nextValue();
       if (value === undefined) throw new MultichatError('USAGE', `serve: ${name} requires a value`);
       if (name === '--port') args.portArg = value;
@@ -377,7 +388,9 @@ export function parseServeArgs(argv: readonly string[]): ServeArgs {
       else if (name === '--extend-session') args.extendSession = value;
       else if (name === '--member-remove') args.memberRemove = value;
       else if (name === '--star') args.starArg = value; // 022：多星管理旗标的星域限定
-      else if (name === '--add-star') args.addStarArg = value; // 022：托管第二颗星
+      else if (name === '--add-star') args.addStarArg = value; // 022：托管下一颗星
+      else if (name === '--remove-star') args.removeStarArg = value; // 033：删整星（最后一颗可删）
+      else if (name === '--show-name') args.showNameArg = value; // 033：broker 机显示名热改
       else args.remove = value;
     } else if (name === '--gen-key') {
       args.genKeyArg = nextValue() ?? '1';

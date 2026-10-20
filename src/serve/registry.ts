@@ -30,7 +30,12 @@ export interface RosterEntry {
   /** 归属机器（归一 mid）——复活判定的机器一致性锚（边界1：跨机拒绝）。 */
   machine: string;
   machineName?: string;
-  online: boolean;
+  /**
+   * 在线态（**内存瞬态，033 起不落盘**——台账静态化）：活性归运行时（内存连接
+   * 表 + status-broker.json）。读侧缺字段=默认离线（聚合器重连数秒自愈）；旧
+   * 文件残留的 online 值读入即剥除，写侧永远不出文件。
+   */
+  online?: boolean;
   /** 经 --extend-session 接任的旧名（接任转移的持久证据——接任者胜复活）。 */
   extendsName?: string;
   /** 接任旧名的归属机器（跨机接续 {machine,name} 的 machine 段）。 */
@@ -89,10 +94,19 @@ export function registryFileOf(baseDir: string): string {
 /** 册条目形状过滤（坏条目跳过不整文件判死——册是状态可重建）。 */
 function parseRoster(raw: unknown): RosterEntry[] {
   if (!Array.isArray(raw)) return [];
-  return raw.filter(
-    (e): e is RosterEntry =>
-      e !== null && typeof e === 'object' && typeof (e as RosterEntry).sessionId === 'string' && (e as RosterEntry).sessionId !== '',
-  );
+  return raw
+    .filter(
+      (e): e is RosterEntry =>
+        e !== null && typeof e === 'object' && typeof (e as RosterEntry).sessionId === 'string' && (e as RosterEntry).sessionId !== '',
+    )
+    .map(stripOnline);
+}
+
+/** 033：roster 条目剥 online（读侧旧值归一、写侧静态化共用——台账只存静态）。 */
+function stripOnline(e: RosterEntry): RosterEntry {
+  const copy = { ...e };
+  delete copy.online;
+  return copy;
 }
 
 /**
@@ -135,7 +149,12 @@ export function loadBrokerFile(file: string): BrokerFile {
 export function writeBrokerFile(file: string, doc: BrokerFile): void {
   mkdirSync(dirname(file), { recursive: true });
   const tmp = `${file}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify(doc, null, 2)}\n`, 'utf8');
+  // 033 台账静态化：写侧 roster 剥 online（活性归运行时——缺字段=默认离线）。
+  // 本函数是裸写器（测试/播种直接写部分形状）——stars/roster 缺席时原样写。
+  const staticDoc = Array.isArray(doc.stars)
+    ? { ...doc, stars: doc.stars.map((s) => (Array.isArray(s.roster) ? { ...s, roster: s.roster.map(stripOnline) } : s)) }
+    : doc;
+  writeFileSync(tmp, `${JSON.stringify(staticDoc, null, 2)}\n`, 'utf8');
   renameSync(tmp, file);
 }
 
@@ -262,15 +281,60 @@ export function setNameFor(file: string, starId: string, name: string): void {
 }
 
 /**
- * --add-star <名> 校验+落星：新星 {starId: 12hex, name, 空 nodes, 空册}。
- * splice 保未知段 → 在跑 broker 的册写不会抹掉它；重启 serve 托管。
- * 返回新星 starId。
+ * 033 node.json 最小读写面（星生命周期库函数自用——加/删星同步 broker 机自
+ * 登记条目）。只做结构性搬运不做校验（完整解析在 node.ts readNodeConfig）；
+ * 损坏/缺失文件按 undefined 处理，绝不因 node.json 坏而坏台账。
  */
-export function addStarTo(file: string, name: string): string {
+interface NodeJsonRaw { brokers: Array<Record<string, unknown>>; showName?: string }
+
+function nodeJsonOf(brokerFile: string): string {
+  return join(dirname(brokerFile), 'node.json');
+}
+
+function readNodeJsonRaw(file: string): NodeJsonRaw | undefined {
+  try {
+    const parsed = JSON.parse(readFileSync(file, 'utf8')) as NodeJsonRaw | null;
+    if (parsed === null || typeof parsed !== 'object' || !Array.isArray(parsed.brokers)) return undefined;
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeNodeJsonRaw(file: string, doc: NodeJsonRaw): void {
+  mkdirSync(dirname(file), { recursive: true });
+  const tmp = `${file}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(doc, null, 2)}\n`, 'utf8');
+  renameSync(tmp, file);
+}
+
+/** 033 add-star 自登记播种（与 serve.ts ensureSelfEntries 同语义的最小面）。 */
+export interface AddStarSelfOpts {
+  /** 本机 machineId（缺失=不自登记，纯预配加星）。 */
+  machineId?: string;
+  /** 本机 hostname（node.json 首写缺省显示名/册内 machineName 兜底）。 */
+  hostname?: string;
+  /** node.json 自用条目的端口（broker 监听口；调用方必给）。 */
+  port?: number;
+}
+
+/**
+ * --add-star <名> 校验+落星：新星 {starId: 12hex, name, 空 nodes, 空册}。
+ * splice 保未知段 → 在跑 broker 的册写不会抹掉它。033 起（台账静态化+热闭环）
+ * 可带自登记播种：star.nodes 落 self 条目 + broker 机 node.json 追加自用条目
+ * （127.0.0.1）——热加星后内挂聚合器即有钥匙可挂，免重启。返回新星 starId。
+ */
+export function addStarTo(file: string, name: string, self: AddStarSelfOpts = {}): string {
   if (!STAR_NAME_RE.test(name)) {
     throw new MultichatError('USAGE', `--add-star 星名须为 1-32 个字母/数字/./_/-（禁冒号——tcp 限定词语法保留字），收到：${name}`);
   }
   const lower = name.toLowerCase();
+  const wantSelf = self.machineId !== undefined && self.machineId !== '';
+  const selfKey = randomBytes(32).toString('hex');
+  const nodeJson = nodeJsonOf(file);
+  const nodeDoc = readNodeJsonRaw(nodeJson);
+  const nodeExisted = nodeDoc !== undefined;
+  const shown = sanitizeName(nodeDoc?.showName ?? (nodeExisted ? undefined : self.hostname)) ?? self.hostname;
   let starId = '';
   mutateBrokerFile(file, (doc) => {
     const clash = doc.stars.find((s) => s.name?.toLowerCase() === lower || s.starId === name);
@@ -278,28 +342,92 @@ export function addStarTo(file: string, name: string): string {
       throw new MultichatError('USAGE', `星名 ${name} 与既有星 ${clash.name ?? clash.starId} 冲突（唯一性大小写不敏感，且不得与 starId 相同）`);
     }
     starId = randomBytes(6).toString('hex');
-    doc.stars.push({ starId, name, nodes: [], roster: [] });
+    const first = doc.stars.length === 0;
+    doc.stars.push({
+      starId,
+      name,
+      nodes: wantSelf
+        ? [{
+            label: first ? 'self' : `self-${name}`,
+            key: selfKey,
+            machineId: self.machineId,
+            ...(shown === undefined || shown === '' ? {} : { machineName: shown }),
+            addedAt: new Date().toISOString(),
+          }]
+        : [],
+      roster: [],
+    });
   });
+  if (wantSelf && self.port !== undefined) {
+    // foreign 判定与 ensureSelfEntries 同款：既存 node.json 无任何自用钥匙=他星
+    // 配置（不追加自用条目）；已有任一自用钥匙/首建 → 正常补条目。
+    const doc0 = nodeDoc ?? { brokers: [] as Array<Record<string, unknown>> };
+    const owned = new Set(
+      loadBrokerFile(file).stars.flatMap((s) => s.nodes.filter((n) => n.machineId === self.machineId).map((n) => n.key)),
+    );
+    const foreign = nodeExisted && doc0.brokers.length > 0 && !doc0.brokers.some((e) => e.key === selfKey || (typeof e.key === 'string' && owned.has(e.key)));
+    if (!foreign && !doc0.brokers.some((e) => e.starId === starId)) {
+      doc0.brokers.push({ host: '127.0.0.1', port: self.port, name, starId, key: selfKey });
+      const next: NodeJsonRaw = nodeExisted
+        ? doc0
+        : { brokers: doc0.brokers, ...(self.hostname === undefined || self.hostname === '' ? {} : { showName: self.hostname }) }; // 首建落默认显示名（ensureSelfEntries 同款）
+      writeNodeJsonRaw(nodeJson, next);
+    }
+  }
   return starId;
 }
 
-/**
- * 032 bootstrap（H1 唯一安装路径）：空表时造 stars[0]（starId 生成+hostname
- * 缺省星名+空表）。serve 裸跑与变更类管理命令（--port/--name/--gen-key/
- * --add-star）懒调用——裸机 gen-key 直接可用；`--connect`（节点机）永不触发。
- * 返回是否新建（serve 用它出"已初始化星"声）。
- */
-export function bootstrapStar1(file: string, fallbackHostname: string): boolean {
-  let created = false;
-  mutateBrokerFile(file, (doc) => {
-    if (doc.stars.length === 0) {
-      const name = sanitizeStarName(fallbackHostname);
-      doc.stars.push({ starId: randomBytes(6).toString('hex'), ...(name === undefined ? {} : { name }), nodes: [], roster: [] });
-      created = true;
-    }
-  });
-  return created;
+/** 033 --remove-star 的删除回执（将死清单/已删回显共用）。 */
+export interface RemovedStarInfo {
+  name?: string;
+  nodes: number;
+  roster: number;
 }
+
+/**
+ * 033 --remove-star：册随星葬——splice broker.json 星段 + broker 机 node.json
+ * 自登记条目摘除（按 starId）。最后一颗星允许删（零星合法）。无墓碑无复活。
+ * 返回删除摘要；星不在台账（并发已删）返回 undefined。
+ */
+export function removeStarFrom(file: string, starId: string): RemovedStarInfo | undefined {
+  let removed: RemovedStarInfo | undefined;
+  mutateBrokerFile(file, (doc) => {
+    const index = doc.stars.findIndex((s) => s.starId === starId);
+    if (index < 0) return;
+    const star = doc.stars[index]!;
+    const info: RemovedStarInfo = { nodes: star.nodes.length, roster: star.roster.length };
+    if (star.name !== undefined) info.name = star.name;
+    removed = info;
+    doc.stars.splice(index, 1);
+  });
+  const nodeJson = nodeJsonOf(file);
+  const nodeDoc = readNodeJsonRaw(nodeJson);
+  if (nodeDoc !== undefined && nodeDoc.brokers.some((e) => e.starId === starId)) {
+    writeNodeJsonRaw(nodeJson, { ...nodeDoc, brokers: nodeDoc.brokers.filter((e) => e.starId !== starId) });
+  }
+  return removed;
+}
+
+/**
+ * 033 --show-name（broker 机热改）：node.json 顶层 showName 净化落盘（空=
+ * 清除，017 语义）。文件不存在则不动（本机尚无任何星配置——冷路径教学由
+ * 调用方负责）。返回净化后的名字（清除=undefined）。
+ */
+export function setShowNameFor(nodeJsonFile: string, name: string): string | undefined {
+  const clean = sanitizeName(name);
+  const doc = readNodeJsonRaw(nodeJsonFile);
+  if (doc === undefined) return undefined;
+  if (clean === undefined) delete doc.showName;
+  else doc.showName = clean;
+  writeNodeJsonRaw(nodeJsonFile, doc);
+  return clean;
+}
+
+/**
+ * 032 bootstrap 已随 033 退役（用户拍板"serve 永不造星"）：空表=合法待配状态，
+ * 首星走 `crosschat serve --add-star <星名>` 显式命名（hostname 丑名随葬）。
+ * 预配机不断腿——CLI 冷路径直调本文件库函数即可起表。
+ */
 
 /** 补齐缺 starId 的星（手编文件兜底；有变化才写）。返回是否写过。 */
 export function ensureStarIds(file: string): boolean {

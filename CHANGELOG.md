@@ -4,7 +4,14 @@
 
 ## [Unreleased]
 
-（空——1.8.0 发版车已开走）
+### 033：星生命周期热闭环与台账静态化（2026-10-20 七轮 grilling 定案）
+
+- **行为变更（全新安装）**：serve 永不自动造星——空表首启=零星合法待配状态，首星须显式 `crosschat serve --add-star <星名>`（hostname 缺省丑名随葬；懒 bootstrap 与 mutatingCmd 造星钩子删除）。doctor/status/--list/--gen-key 零星态均出教学行指 `--add-star`
+- **加/删/改星全免重启（管理插座）**：CLI 落盘型命令完成后经**本机管理插座**（win 命名管/unix 域套接字，零 TCP 端口；地址随机写 status-broker.json `adminPipe` 字段，知道地址=能力）通知在跑 broker 立即对账（轮询与 fs.watch 均被否决留痕）。对账幂等按 starId：磁盘新增星落位并播种内挂聚合器；消失星收尾（弃状态→停聚合器→闭连接）。CLI 打印"已生效"必出自 broker 回执（021 不预支成功纪律）；**插座连上但回执超时=报错重试，绝不回落直写**（broker 运行期是台账唯一写者）；broker 未跑时 CLI 直调同一套 registry 库函数落盘（打印区分，首星/预配机不断腿）
+- **`--remove-star <名|starId前缀>`**：删整星——执行前打印将死清单（星/机器/成员数）无 y/n 交互；册随星葬、钥匙作废、无墓碑无复活；**最后一颗星允许删**（零星合法）；清理面=broker.json 星段+broker 机 node.json 自登记条目+status 刷新；被删星在线会话收"星已删除"断连教学（错误码 STAR_DELETED 字面量，帧面零改动）；拿死星钥连入的 BAD_AUTH 教学语直指"星可能未创建或已删除，找管理员"，发送方直报不走防重发绕弯；node 侧死条目靠教学自清
+- **`--show-name <名>`（仅 broker 机）**：经插座改 node.json showName+重挂内挂聚合器（秒级生效）；冷路径直写+serve 启动生效；node 机维持手编+重启守护口径
+- **broker.json 只存静态**：`roster.online` 字段出文件（读侧缺字段=默认离线、旧值读入归一剥除，聚合器重连数秒自愈；新旧互读无害）——"每次会话上下线整文件重写"的写放大随葬，活性归运行时（内存连接表+status-broker.json）
+- 内挂聚合器宿主化（bootstrapLocalAggregators 拆 spawn/stop per-star，含外部守护让位检查）；`--add-star` 自带自登记播种（star.nodes self 条目+node.json 自用条目）；`--gen-key/--name/--port/--remove` 同走插座热路径（port 仍不热换——重启生效）；管理插座 op 清单：add-star/remove-star/set-showname/gen-key/set-name/set-port/remove-node（全调 registry.ts 库函数，回执带对账后状态）；broker `stop()` 先停插座再撤星状态
 
 ## [1.8.0] - 2026-10-19
 
