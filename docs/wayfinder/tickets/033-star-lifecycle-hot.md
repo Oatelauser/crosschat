@@ -23,7 +23,7 @@ claimed-by: 二期10
 
 ## 实施清单
 
-- broker.ts：onAdminPoke → syncStarsFromDisk（复用）+ 增量播种/收尾；bootstrapLocalAggregators 拆 spawnLocalAggregator(starId)（含外部守护让位检查）；管理插座 server + op 分发（add-star / remove-star / set-showname / gen-key / set-name / set-port——全调 registry.ts 库函数，回执带对账后状态）；stop() 先停插座；writeStatus 扩 adminPipe。
+- broker.ts：onAdminPoke → syncStarsFromDisk（复用）+ 增量播种/收尾；bootstrapLocalAggregators 拆 spawnLocalAggregator(starId)（含外部守护让位检查）；管理插座 server + op 分发（add-star / remove-star / set-showname / gen-key / set-name / set-port / **remove-node（--remove 节点删除）**——全调 registry.ts 库函数，回执带对账后状态）；stop() 先停插座；writeStatus 扩 adminPipe；**插座连上但回执超时=CLI 报错重试，绝不回落直写**（broker 活着即唯一写者）；**零星/删星后 node 拿死星钥连入的 BAD_AUTH 教学语核对**（点明"星可能未创建或已删除，找管理员"）。
 - registry.ts：写侧 roster 不含 online；addStarTo 增 ensureSelfEntries；removeStarFrom 新增（splice 星段 + broker 机 node.json 自登记条目摘除）。
 - serve.ts：删 bootstrapStar1/mutatingCmd 钩子；管理命令热路径连插座、冷路径直调库函数（打印区分）；--remove-star 旗标 + 将死清单；showName 热改。
 - doctor/status：零星态教学行。
