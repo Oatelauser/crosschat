@@ -1,7 +1,7 @@
 # 星生命周期热闭环与台账静态化（代码票 A）
 
 label: wayfinder:design
-status: open（2026-10-20 七轮 grilling 定案，二期10 自领）
+status: closed（2026-10-20 实施关账：实施会话完成+check 766 绿，二期10 真机 drill 五步验收全过，见文末验收记录）
 blocked-by: 无
 claimed-by: 二期10
 
@@ -36,3 +36,15 @@ claimed-by: 二期10
 2. 真机 drill（win broker 在跑）：--add-star 免重启即时托管收发 → --remove-star 即时收尾 → 删最后一颗 → --add-star 重建 → 删后三段投递直报"星已被删除"；全程其他星零中断
 3. broker.json 抽查：无 online 字段、零星态文件形状合法
 4. 临时文件清理；提交并推送核 ahead
+
+## 验收记录（2026-10-20 二期10）
+
+- 实施会话完工（check 自跑 766 绿 +10 新用例），主会话抽查两处要害落码（adminOp 三分支含 pid 验活/teardown 顺序含 reapedSessions 防误归护栏）+ check 复跑全绿
+- **真机 drill 五步全过**（win 本机 7260，repo dist 新码，WSL 软链自动同版）：
+  1. 新码 broker 托管既有 yang+d32b（旧形状 roster online 残留读侧归一无恙）；WSL 守护重接 wsl32 在线（该守护昨 16:03 已死于 reconnect-wait，非本票所致）
+  2. **热加星** `--add-star drill1`：免重启即时托管（回执"经在跑 broker 已生效"、聚合器落位、yang/d32b/wsl32 零感知）
+  3. **全链三段实发**：adopt 本会话入 drill1 → `tcp:drill1:yang:二期10` delivered 且**消息物理回舱**（信封注入实证）
+  4. **热删星** `--remove-star drill1`：将死清单→三面收尾（连接断/聚合器收/status 刷）→邻星零中断；删后本机投递直报"选择器不匹配+现存星清单"（自登记随删摘除），远端死钥场景 BAD_AUTH 教学由集成用例钉死
+  5. 文件抽查：broker.json **无 online 字段**（add-star 整写顺带清洗全档）、无 drill1 残留；node.json 自登记同步摘除；status-broker.json `adminPipe` 随机地址落位
+- 提交 ac85fb6 已推 origin；CI（含 linux 的 unix 插座路径覆盖）随 push 核验
+- 已知边界记档：删星瞬间在途无 id 帧走通用传输失败文案（毫秒级窗口，票面未覆盖）；STAR_DELETED 用字面量未入 ERR 表——归 034 拍板收编
