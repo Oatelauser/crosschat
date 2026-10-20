@@ -108,7 +108,7 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 
 ### 跨机 tcp：常驻转发器（broker 星型）
 
-准备（一次性，管理员动作）：选一台机器 `crosschat serve --detach` 启动星（broker），`--gen-key` 发钥匙、其余机器贴好 node.json 后 `crosschat serve --connect <星> --detach` 常驻在线（1.6.0 起兼任聚合器），会话用 `crosschat claude -n <名> --connect <星>` 入星（→ [跨机通信：tcp](docs/broker.md)：环境搭建 / 日常使用 / 底层实现 / 协议参考）。然后整个过程：
+准备（一次性，管理员动作）：选一台机器 `crosschat serve --detach` 起服务（永不造星）、`crosschat serve --add-star <星名>` 显式造星（热生效）、`--gen-key` 发钥匙，其余机器贴好 node.json 后 `crosschat serve --connect <星> --detach` 常驻在线（1.6.0 起兼任聚合器），会话用 `crosschat claude -n <名> --connect <星>` 入星（→ [跨机通信：tcp](docs/broker.md)：环境搭建 / 日常使用 / 底层实现 / 协议参考）。然后整个过程：
 
 ```
 👤 用户[boss -> worker2]  用 crosschat 走 tcp 跨机给 host-b 机器的 claude 会话「worker2」发任务，要求它跑一次构建并回报结果。
@@ -196,7 +196,7 @@ crosschat serve --connect <星> --adopt <名> --extend-session <旧名>   # 已�
 |---|---|---|---|
 | **单机会话** | 同机 agent 互发，`--to <名字>` 即起对话，忙时自动入队/发件箱 | ✅ v1.0 | [使用手册](docs/usage.md)：发起方式 / 投递语义 / 底层命令 / 边界 |
 | **跨机联邦 · ssh** | 加 `--via ssh:<对端hostname>`，消息经 ssh 落到对端机器，回复自动回来 | ✅ v1.3.3 | [联邦手册](docs/federation.md)：环境搭建（按 OS）/ 跨机聊天 / 底层实现 / CLI 契约 |
-| **跨机联邦 · tcp** | `crosschat serve --detach` 启动星（broker），机器 `serve --connect <星> --detach` 连星（1.6.0 起兼任聚合器），会话入星后三段寻址 `--via tcp:<星>:<机器>:<会话>` 直达；`--file` 文件通道 | ✅ v1.6.0 | [跨机通信：tcp](docs/broker.md)：环境搭建 / 日常使用 / 底层实现 / 协议参考 / 排障 |
+| **跨机联邦 · tcp** | `crosschat serve --detach` 起服务 + `serve --add-star <星名>` 造星（热生效），机器 `serve --connect <星> --detach` 连星（1.6.0 起兼任聚合器），会话入星后三段寻址 `--via tcp:<星>:<机器>:<会话>` 直达；`--file` 文件通道 | ✅ v1.6.0 | [跨机通信：tcp](docs/broker.md)：环境搭建 / 日常使用 / 底层实现 / 协议参考 / 排障 |
 | **会话级星成员 · proto:3** | 启动器入星（`crosschat claude/codex --connect <星>`）+ 三段寻址（`--via tcp:<星>:<机器>:<会话>`）+ extends 换轨接任 + adopt 收编 | ✅ 018 | 本页[会话入星章](#-会话入星与三段寻址tcp-星成员--proto3)；验证阶梯与全量细则 [跨机通信：tcp](docs/broker.md) |
 | 跨机联邦 · broker 增强 | 忙时持久队列、异步回执、投递状态机（tcp 形态之上的 store-and-forward） | 🚧 规划中 | — |
 
@@ -215,7 +215,7 @@ crosschat send --via tcp:<机器名/mid8> --to <名> --file <路径>  # tcp 文�
 echo … | crosschat send --to <名字>                 # 正文走 stdin
 crosschat status [--json] [--conversations] [--stars] [--claude|--codex] [--name <子串>] [--all]   # 裸跑三段式摘要；旗标在场=明细视图（--via tcp|ssh 配 --conversations 按传输滤）
 crosschat doctor                                    # 一键环境体检（有 ❌ 时退出码 1）
-crosschat serve [--name/--port/--gen-key/--list/--remove/--connect/--detach/--stop]  # tcp 星：broker(--name 星名)/机器连星·聚合器(--connect)/钥匙管理（见跨机通信手册）
+crosschat serve [--add-star/--remove-star/--gen-key/--list/--connect/--detach/--stop]  # tcp 星：起服务+造星(--add-star)/机器连星·聚合器(--connect)/钥匙管理（见跨机通信手册）
 crosschat clean [--force]                           # 清 tcp 收件/断点残留（默认懒删除规则；--force 全清）
 crosschat uninstall [--yes]                         # 卸载数据面（serve 在跑拒删；结尾 npm uninstall 收尾）
 crosschat install-skills [--dir <根>]               # 安装/更新 agent skill（幂等）

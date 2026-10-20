@@ -81,6 +81,6 @@ PowerShell——单引号 here-string，**收尾 `'@` 必须顶格**（行首不
 
 ## 深入主题（按需读；回复路径用不到）
 
-- `references/stars.md` — 星成员册：三动词分层（serve=机器接入 / `--connect`=会话注册 / `--rm`=临时）、双模式（永久注册默认/临时退出即离册）、下线与复活、extends 接任、adopt 收编、member-remove、掉线恢复配方
+- `references/stars.md` — 星成员册：分层动词（broker 机 `serve`+`--add-star <星名>` 起服务·造星（热生效，serve 永不自动造星）/ `--connect` 机器接入·会话注册 / `--rm` 临时）、双模式（永久注册默认/临时退出即离册）、下线与复活、extends 接任、adopt 收编、member-remove、掉线恢复配方
 - `references/errors.md` — 报错自纠目录：全部错误码 + 逐码自纠
 - `references/advanced.md` — 大小限额地图、PowerShell BOM/编码防坑、文件通道与附件回收

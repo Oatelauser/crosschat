@@ -4,9 +4,12 @@
 
 | 动词 | 谁用 | 干什么 |
 |---|---|---|
-| `crosschat serve --detach` / `serve --connect <星>` | 机器 | **机器接入**：起 broker（星心）或节点守护（机器级收发+聚合器） |
+| `crosschat serve --detach` + `serve --add-star <星名>` | broker 机 | **起服务**（永不造星）+ **造星**（首星同此命令；热生效，加删改星免重启；零星合法） |
+| `crosschat serve --connect <星>` | node 机 | **机器接入**：节点守护（机器级收发+聚合器） |
 | `crosschat claude/codex -n <名> --connect <星>` | 会话 | **会话注册入册**（1.7.0 起默认**永久**：退出=下线，册位保留） |
 | 同上 + `--rm` | 会话 | **临时**（docker --rm 语义）：退出即离册零痕迹——一次性 worker 用它 |
+
+- 造星/删星/发钥是 broker 机管理员（或持星管理钥的星管理员，`--via tcp:<星>`）的事；agent 会话侧一般只碰 `--connect`/`--rm`。
 
 - `--rm` 只作用于**会话册位**，不碰机器守护（聚合器生命周期独立——永久成员的复活检测靠它活着；退机器走 `serve --stop`）。`--rm × --extend-session` 互斥报错。
 - 多星：`--connect` 可重复，各星独立册、独立上下线；`--rm` 作用于同命令全部 `--connect`。

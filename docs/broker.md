@@ -2,44 +2,45 @@
 
 > 本文是 [README · 通信方式](../README.md#-通信方式) 表中"跨机联邦 · tcp"的完整手册。
 
-一句话，三层概念——每层一条命令：
+一句话，四个动作——每个一条命令：
 
-| 概念 | 谁来做    | 命令                                                            |
+| 动作 | 谁来做    | 命令                                                            |
 |---|-----------|-----------------------------------------------------------------|
-| **启动星** | broker 机 | `crosschat serve --detach`                                      |
+| **起服务** | broker 机 | `crosschat serve --detach`（起端口与转发，**永不造星**）        |
+| **造星**   | broker 机 | `crosschat serve --add-star <星名>`（首星同此命令；热生效）     |
 | **机器连星** | node 机   | `crosschat serve --connect <星> --detach`（1.6.0 起兼任聚合器） |
 | **会话入星** | 跨机会话  | `crosschat claude -n <会话> --connect <星>`（1.7.0 起默认**永久注册**；一次性 worker 加 `--rm`）|
 
-星起来、机器连上、会话入星之后，星内任何人按三段地址直达该会话（免 `--to`）：
+星建好、机器连上、会话入星之后，星内任何人按三段地址直达该会话（免 `--to`）：
 
 ```bash
 crosschat send --via tcp:<星>:<机器>:<会话> --body "跑一次构建，产物清单发回来"
 # → delivered to worker2@host-b(9f8e7d6c) (turn 1) · 续话 c1
 ```
 
-### 三个角色：broker / node / 聚合器
+### 角色：broker / node / 聚合器 / 成员
 
 | 角色 | 是什么 | 一句话职责 |
 |---|---|---|
-| **broker**（星心） | 星心机器上的常驻服务（`crosschat serve`，1.2 部署） | 星的消息中转站：管机器注册表 + 会话成员册（roster，落盘不失忆），一切跨机消息经它转发；它挂了跨机就瘫 |
-| **node**（节点机） | 接入星的每台机器，凭一份 [node.json 钥匙](#131-配置连接密钥)入网 | broker 机首次 serve 时把自己登记为星内首个 node（机器级即刻可收可发），其余机器贴钥匙后 `serve --connect` 入网 |
+| **broker**（星心） | 星心机器上的常驻服务（`crosschat serve`，[1.2](#12-broker-机起服务与造星) 部署） | 星的消息中转站：管机器注册表 + 会话成员册（roster，落盘不失忆），一切跨机消息经它转发；它挂了跨机就瘫。一个 serve 进程托管多颗星（`--add-star`），全部星共用一个进程/端口 |
+| **node**（节点机） | 接入星的每台机器，凭一份 [node.json 钥匙](#131-配置连接密钥)入网 | broker 机由 serve/加星**自登记**为星内首个 node（机器级即刻可收可发），其余机器贴钥匙后 `serve --connect` 入网 |
 | **聚合器** | node 机上 `serve --connect` 起的那条常驻连接（[1.3.2](#132-启动聚合器连接星)） | 一份进程两份职责：机器级**收件** + 维护本机会话的**星籍**（N 个会话共用这一条连接，不随会话数增长） |
 | **成员**（会话册） | 经[启动器入星](#133-启动会话入星)的 claude/codex 会话 | **册+双模式**：永久（默认——退出=下线、册位保留、同 id resume 自动复活）或临时（`--rm`——退出即离册）；三段寻址 `tcp:<星>:<机器>:<会话>` 的终点 |
 
-在此之上才是**会话**：经[启动器入星](#133-启动会话入星)的 claude/codex 会话成为星成员——三段寻址 `tcp:<星>:<机器>:<会话>` 的终点；机器连星了但会话没入星，星内依然找不到它。
+在此之上才是**会话**：机器连星了但会话没入星，星内依然找不到它。
 
 ### 怎么用这篇手册
 
 | 你这台机是… | 做哪节 |
 |---|---|
-| broker 机（星心） | 只做 [1.2](#12-broker-节点)。机器级收发 serve 启动即有；要跑入星会话时 1.3 的[启动会话](#133-启动会话入星)照用（聚合器自动拉起，无需手动） |
+| broker 机（星心） | [1.2](#12-broker-机起服务与造星) 全做（起服务→造星→发钥→管理）。要跑入星会话时 1.3 的[启动会话](#133-启动会话入星)照用（聚合器自动拉起，无需手动） |
 | node 机（其余机器） | [1.3](#13-node-节点) 全做 |
 | CI 机（只发不收） | [1.3](#13-node-节点) 只贴钥匙，不跑 --connect |
 
 - 部署（[一](#一环境搭建)）→ 日常使用（[二](#二日常使用)，含全链验证阶梯）→ 底层实现（[三](#三底层实现)，折叠）→ 协议参考（[四](#四协议参考proto13-对接实现指南)，折叠）→ [排障](#排障对照)（永不折叠）
 - **验证一律编号步骤**：每步"命令 → 期望输出"成对，顺序执行、照抄可跑
 - 命令块：`>` = 敲的，其余 = 期望输出，`#` = 备注；Linux 写法，win 等价（`nano`→`notepad`）
-- 端口默认 **7260**；钥匙 = 一份 `node.json`，唯一入网凭证；`<XX>` = 占位符
+- 端口默认 **7260**（改口=手编 broker.json，[1.2.1](#121-启动服务serve永不造星)）；钥匙 = 一份 `node.json`，唯一入网凭证；`<XX>` = 占位符
 
 ---
 
@@ -54,53 +55,106 @@ crosschat send --via tcp:<星>:<机器>:<会话> --body "跑一次构建，产�
 - win + WSL 同物理机 → 算两台机，选常开侧；**win 连 WSL broker 的 host 用 127.0.0.1**（WSL 镜像网络下它报的 LAN IP 从 win 不可达，实测）
 - 已有 [ssh 联邦](federation.md) → 机器 ≥3 台或要文件通道时才值得切 tcp
 
-### 1.2 broker 节点
+### 1.2 broker 机：起服务与造星
 
-#### 1.2.1 启动 broker 服务
+两件事分两步：**serve 只起端口与转发服务，永不造星**（零星启动是合法待配状态）；每一颗星——包括第一颗——都由 `--add-star` 显式命名创建，加删改全程免重启。星建好后再发钥（1.2.3）、再谈管理分权（1.2.4）与远程管理（1.2.5）。
 
-两种形态——后台常驻为主，前台调试为辅：
+#### 1.2.1 启动服务（serve，永不造星）
 
 ```
-> crosschat serve
-已自动生成本机 node.json（/root/.crosschat/tcp/node.json，host=127.0.0.1——本机 send --via tcp: 凭证）
-broker listening on 0.0.0.0:7260（Ctrl+C 退出）
-# 换端口：crosschat serve --port 7777（给一次即记住）
-# 起星名：crosschat serve --name cloud（给一次即记住；缺省取本机 hostname）
-# 后台启动：crosschat serve --detach
-# 全部参数都加上：crosschat serve --port 7777 --name cloud --detach（给一次即记住）
+> crosschat serve --detach
+broker 后台运行中 pid=8412 端口 7260（日志：/home/me/.crosschat/tcp/broker.log）
+# 前台调试：crosschat serve（零星态会先打一行教学：首星 crosschat serve --add-star <星名>）
+# 端口默认 7260；非默认口=手编 ~/.crosschat/tcp/broker.json 顶层 "port" 后重启 serve（--port 命令已移除）
 ```
 
-首次 broker 启动，自动做三件事：
-- 持久化命令参数（broker 节点配置文件 `~/.crosschat/tcp/broker.json`），后续重启不再需要参数，使用 `crosschat serve --detach` 或者 `crosschat serve` 命令
-- 把当前机器作为[node节点](#13-node-节点)，登记为星内首个成员（机器级即刻可收可发）
-- 写好本机自用的[node节点配置文件](#131-配置连接密钥)（host=127.0.0.1，本机发送的凭证）
+serve 启动时把 broker 机**自登记**进已建的每颗星（星内首个 node——机器级即刻可收可发）并写好本机自用的 node.json（host=127.0.0.1，本机发送的凭证）；配置落盘 `~/.crosschat/tcp/broker.json`（端口+星册），后续重启只需 `crosschat serve` / `serve --detach`，不带参数。
 
-**验证**（两条都过 = 星已就绪）：
+**验证**（两条都过 = 服务已就绪；星在下一步造）：
 
-1. 验证注册表列出 `self` 行（本机已是星内首成员）：
+1. 验证端口监听：
    ```
-   > crosschat serve --list
-   label     name              mid8      added-at
-   self      yang              ec542c2c  2026-10-11T02:12:00.059Z
-   ```
-2. 验证 broker 启动的端口是否监听
-   ```
-   > ss -tln | grep <端口，默认是7260>
+   > ss -tln | grep 7260
    LISTEN 0 128 0.0.0.0:7260 ...
    ```
+2. 验证零星态教学（台账此时无星，合法待配）：
+   ```
+   > crosschat serve --list
+   （台账零星——合法待配状态；首星：crosschat serve --add-star <星名>，serve 永不自动造星）
+   ```
 
-#### 1.2.2 生成连接密钥
+#### 1.2.2 造星（--add-star，热生效）
 
-生成 node 节点的钥匙；`--gen-key N` 一次打 N 份，打印的整段 JSON 交给对应机器，存放在[node节点配置文件](#131-配置连接密钥)：
+星是显式命名创建的（1-32 字符 `A-Za-z0-9._-`，禁冒号），首星与后续星同一命令：
 
 ```
-> crosschat serve --gen-key 2
+> crosschat serve --add-star cloud
+已加星 cloud——本 broker 现托管 1 颗星（经在跑 broker 已生效，免重启；自登记+内挂聚合器随对账落位）
+发钥：crosschat serve --star <星名> --gen-key <n>（单星期免 --star）；查星：crosschat serve --list
+注意：多星共用一个 broker 进程——故障域合并（一进程崩=全部星瘫、升级窗口合并），此为已接受的运维代价
+# broker 没在跑时同样可加：回执变"已落盘，serve 启动即托管"
+```
+
+再加一颗星（同一进程同一端口，vhost 同构——机器凭钥匙自证星籍，连接握手时按钥匙定归属星）：
+
+```
+> crosschat serve --add-star lab
+已加星 lab——本 broker 现托管 2 颗星（经在跑 broker 已生效，免重启；自登记+内挂聚合器随对账落位）
+# …后两行同上
+```
+
+**热生效语义**：加星/删星/改星名/改显示名/发钥/删钥/发吊星管理钥都免重启——CLI 落盘型命令完成后经本机管理插座通知在跑 broker 立即对账，打印"经在跑 broker 已生效"必出自 broker 回执（不预支成功）；broker 没跑则落盘、下次 serve 启动即托管（回执会注明）。托管多颗星后，管理命令须 `--star <星名|starId前缀>` 限定目标星（只托管一颗时可省——CLI 漏给会点名现有星并给示例）。
+
+四条多星语义：
+
+- **单文件单形状**：注册表与星册同在 `broker.json` 一份文件（每星自带 roster 段）——一颗星的成员/接任/下线与另一颗互不相干；同机入两星也互不干扰
+- **非兼容升级（032 拍板）**：连接握手须声明 `multi-star` 能力（新版客户端自动带）；旧版 crosschat 腿连上即拒——`BAD_PROTO` 并教 `npm i -g @oatelauser/crosschat@latest`，不留兼容包袱
+- **broker 机免自挂**：broker 进程自动内挂本机聚合器（attach 管道、成员表都在 serve 进程里）——星心机**不需要** `serve --connect <自家星>`，手动再起会被双开防护拦下教学
+- **故障域合并**：所有星共用一个进程——一进程崩=全部星瘫、升级窗口合并。自部署形态（星主同一人）下这是已接受的代价；不同主顾的星别并进同一 broker
+
+**验证**（分组列出各星；单星平铺无 `===` 头，管理钥条目 name 列标（星管理钥）见 [1.2.4](#124-管理权限三层)）：
+
+```
+> crosschat serve --list
+=== 星 cloud ===
+label     name              mid8      added-at
+self      yang              ec542c2c  2026-10-11T02:12:00.059Z
+=== 星 lab ===
+label     name              mid8      added-at
+self-lab  yang              ec542c2c  2026-10-11T02:20:00.000Z
+```
+
+改星名 / 改 broker 机显示名（都走本机管理面，热生效）：
+
+```
+> crosschat serve --star cloud --name prod --detach
+# 改星名：本机域专属（星管理员拿不到）；--name 不是一次性命令——改完照常进入 serve，加 --detach 免前台
+> crosschat serve --show-name win-main
+显示名已改为 win-main（经在跑 broker——内挂聚合器已重挂，秒级生效）
+# --show-name 只改 broker 机的显示名；node 机改名=手编 node.json showName + 重启守护（1.3.1）
+```
+
+删星（`--remove-star`）见 [1.2.6](#126-删星--remove-star)。
+
+#### 1.2.3 发钥（--gen-key）
+
+生成 node 节点的钥匙；`--gen-key N` 一次打 N 份（1-10），打印的整段 JSON 交给对应机器，存放在[node节点配置文件](#131-配置连接密钥)。多星托管时须 `--star` 指明目标星：
+
+```
+> crosschat serve --star cloud --gen-key 2
+自动探测 broker 地址：192.168.1.10:7260（多网卡/NAT 常探错——按下述规则人工核对改写 node.json 的 host 与 port）：
+  · broker 机自身 → 无需分发（首次 serve 已自动写好 127.0.0.1 的自用 node.json）
+  · broker 是云主机/NAT 内网机 → host 填对外公网 IP（探测常拿内网 IP，必核对）
+  · 普通局域网 → broker 机的局域网 IP；broker 用非默认端口时 port 一并改
+分发前把每份 node.json 的 showName 改成「贴这份配置的机器」的自报名字（建议=其 hostname；纯显示用——寻址/回信走 machine-id 前缀）；条目 name=cloud 是星名（broker 权威，连接自动同步，不用改）
+入星 cloud：生成 2 把钥匙
+--------------------------------
 {
   "brokers": [
     {
       "host": "192.168.1.10",
       "port": 7260,
-      "name": "yang",
+      "name": "cloud",
       "starId": "a1b2c3d4e5f6",
       "key": "a3f0…64位hex…"
     }
@@ -109,9 +163,12 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 }
 --------------------------------
 { …第二份同构… }
+放置路径（目标机器）：~/.crosschat/tcp/node.json（win 写法 C:\Users\<用户>\.crosschat\tcp\node.json；入多星把各星条目合并进同一份 brokers 数组）
+本命令须在 broker 机上执行（钥匙登记进本机 broker.json）；broker 机自己的 node.json 已由首次 serve 自动写好，勿用上面的钥匙覆盖
+钥匙已进入终端回滚缓冲，分发完建议清屏
 ```
 
-输出怎么读，四条：
+输出怎么读，四条（CLI 回显已带前两条，这里点重点）：
 
 1. **host**：打印的 host 只是探测值——云主机/NAT 必改**对外公网 IP**，局域网核对 LAN IP（探测常错，人工核对是规则不是建议）
 2. **JSON 体**：`key`（该机钥匙）、`name`（星名）、`starId`（星标识）三个字段**照抄不改**；只有 `host`/`port` 按 host 条规则改
@@ -120,7 +177,104 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 此步的最终验证在 [1.3](#13-node-节点)——node 机凭这份钥匙连上星，即钥匙正确。
 
-#### 1.2.3 升级broker节点
+#### 1.2.4 管理权限三层
+
+管理是分层的，一把钥匙只干一层的事（034 拍板）。三层角色：
+
+| 角色 | 凭什么 | 能做什么 |
+|---|---|---|
+| **普通成员**（node） | 星钥（node.json 条目的 `key`） | 机器收发 + 会话入星 + **读本星**清单（`--list-nodes` / `--list-members`）+ 删册位 `--member-remove`（028：星内任何机器可执） |
+| **星管理员** | 星管理钥（同条目可选字段 `adminKey`，**发放即绑定一星、一星一权**） | 上述 + 本星发钥 `--gen-key` / 删节点 `--remove`——可经 `--via tcp:<星>` 远程执行 |
+| **broker 主** | 本机插座（在 broker 机上跑 CLI 即是） | 全部：加删星、改星名、发/吊星管理钥、`--list` 分组清单、`--show-name`…… |
+
+> 表按**连接身份**论。世上不存在全能远程钥匙：加删星/改星名/发吊星管理钥只认 broker 机本机（管理插座）；在 broker 机上跑 CLI=本机插座=broker 主——机器物理在场即全权。
+
+三条硬边界：
+
+- **星管理钥永不过线**：管理连接走挑战应答（broker 发一次性 nonce，客户端回 HMAC 证明），钥匙本体不出现在任何网络帧里；`info` 无 `challenge-auth` 能力（旧版/中间人剥除）即拒连，**无降级路径**——绝不回落裸钥发送
+- **越权即拒**：普通成员调管理 op / 任何人远程调本机域 op → `ADMIN_REQUIRED` 并教学找谁
+- **审计逐笔**：管理写 op 进 broker.log 逐笔记来源（`audit admin-op <动作> <对象> 来源=本机插座` 或 `来源=星管理钥(<label>)`）
+
+发星管理钥（broker 机；`--star` 限定目标星）：
+
+```
+> crosschat serve --star cloud --gen-admin-key ops-wsl
+已发星管理钥 ops-wsl（星 cloud——经在跑 broker 已生效）
+贴钥：把下面一行并进目标机器 node.json 该星条目（与星钥同条目；钥匙永不过线——连接走挑战应答）：
+  "adminKey": "b7f1…64位hex…"
+远程管理（目标机器）：crosschat serve --via tcp:cloud --gen-key <n> | --remove <label> | --list-nodes | --list-members
+本命令须在 broker 机上执行（管理钥登记进本机 broker.json）；钥匙已进入终端回滚缓冲，分发完建议清屏
+```
+
+吊星管理钥（broker 机；label 或前缀）：
+
+```
+> crosschat serve --star cloud --remove-admin-key ops-wsl
+已吊星管理钥 ops-wsl（星 cloud——经在跑 broker 已生效，持有者下次连接即 BAD_AUTH）
+```
+
+`--list` 里管理钥条目同表可见、永不回显钥匙本体：
+
+```
+> crosschat serve --list
+=== 星 cloud ===
+label     name              mid8      added-at
+self      yang              ec542c2c  2026-10-11T02:12:00.059Z
+ops-wsl   （星管理钥）       -         2026-10-20T03:11:00.000Z
+```
+
+#### 1.2.5 远程管理（--via tcp）
+
+星管理员不必登 broker 机：在本机（条目带该星钥匙/管理钥的机器）上用 `--via tcp:<星>` 远程管。**读用星钥（成员身份），写用星管理钥（挑战应答）**——都是"该星的"身份，不是 broker 主：
+
+```
+> crosschat serve --via tcp:cloud --list-nodes
+星 cloud 节点表（2 条；不含钥匙）：
+  self      yang              ec542c2c  2026-10-11T02:12:00.059Z
+  host-b    host-b            9f8e7d6c  2026-10-12T08:30:00.000Z
+
+> crosschat serve --via tcp:cloud --list-members
+星 cloud 成员册（2 条）：
+  9f8e7d6c claude/worker2 @ host-b（在线）
+  ec542c2c claude/boss @ yang
+```
+
+写 op（本机条目须带 `adminKey`，见 [1.2.4](#124-管理权限三层) 发钥）：
+
+```
+> crosschat serve --via tcp:cloud --gen-key 1
+远端发钥（星 cloud，broker ws://192.168.1.10:7260）：生成 1 把钥匙
+--------------------------------
+{ …node.json 同 1.2.3… }
+放置路径（目标机器）：~/.crosschat/tcp/node.json（入多星把各星条目合并进同一份 brokers 数组）
+钥匙已进入终端回滚缓冲，分发完建议清屏
+
+> crosschat serve --via tcp:cloud --remove host-b
+已从星 cloud 远端移除 host-b
+```
+
+两条教学错误（照抄即自纠）：
+
+- 本机条目无 `adminKey` → `本机 node.json 的星 cloud 条目无 adminKey（星管理钥）——找 broker 主发放（broker 机 crosschat serve --star <星> --gen-admin-key <label>），把回显的 adminKey 并进该星条目`
+- 钥匙已吊/不属于该星 → `BAD_AUTH 星管理钥证明不匹配（钥匙已吊销或不属于本 broker 的星）——找 broker 主核对：crosschat serve --list 可查管理钥 label`
+
+#### 1.2.6 删星（--remove-star）
+
+删整星是破坏性动作：执行前先打**将死清单**（无 y/n 交互——看清再回车）；册随星葬、钥匙作废、无墓碑无复活；**最后一颗星也允许删**（零星合法）：
+
+```
+> crosschat serve --remove-star drill1
+将删除星 drill1：登记机器 1 台、册内成员 1 名——册随星葬、钥匙作废、无墓碑无复活（被删星连接即断）
+星 drill1 已删除（经在跑 broker：连接已断、聚合器已收、status 已刷新）
+```
+
+删后语义三条：
+
+- 被删星的**在线成员**先收 `STAR_DELETED 星 X 已被删除（crosschat serve --remove-star）——册随星葬、钥匙作废、无墓碑无复活；如需重建找管理员 crosschat serve --add-star` 错误帧再断连
+- **发送方直报**：其他机器拿死星钥再投 → `BAD_AUTH 钥匙不匹配任何星——星可能未创建或已删除（--remove-star 即废钥），找管理员核对 node.json 或索取新配置`（不走防重发绕弯）；broker 机自登记条目随删摘除，本机投递改报 `--via 选择器 drill1 不匹配任何条目——本机 node.json 现有：…（现存星清单）`
+- **重建** = 重新 `--add-star` + 重新配钥入星（旧钥匙已废，node 侧死条目靠上述教学自清）
+
+#### 1.2.7 升级 broker 节点
 
 ```
 > npm i -g @oatelauser/crosschat@latest
@@ -136,24 +290,6 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 > crosschat doctor
 ```
 
-#### 1.2.4 托管多颗星（可选）
-
-一台 broker 机要同时当几颗星的星心时，不必开多个进程占多个端口——`--add-star` 让同一个 serve 进程/端口托管第二颗星（vhost 同构：机器凭钥匙自证星籍，连接握手时按钥匙定归属星）：
-
-```
-> crosschat serve --add-star second     # 星名规则同 --name；broker 在跑也可直接加（册写不丢）
-> crosschat serve --stop && crosschat serve --detach   # 重启生效——此后 serve 裸跑即托管全部星
-> crosschat serve --star second --gen-key 2   # 多星下发钥/删钥须 --star 指明目标星
-> crosschat serve --list                      # 分组列出各星的机器
-```
-
-四条语义：
-
-- **单文件单形状**：注册表与星册同在 `broker.json` 一份文件（每星自带 roster 段）——一颗星的成员/接任/下线与另一颗互不相干；同机入两星也互不干扰
-- **非兼容升级（032 拍板）**：连接握手须声明 `multi-star` 能力（新版客户端自动带）；旧版 crosschat 腿连上即拒——`BAD_PROTO` 并教 `npm i -g @oatelauser/crosschat@latest`，不留兼容包袱（单星部署同样要求新版）
-- **broker 机免自挂**：022 起 broker 进程自动内挂本机聚合器（attach 管道、成员表都在 serve 进程里）——星心机**不再需要** `serve --connect <自家星>`，手动再起会被 013 防护拦下教学
-- **故障域合并**：所有星共用一个进程——一进程崩=全部星瘫、升级窗口合并。自部署形态（星主同一人）下这是已接受的代价；不同主顾的星别并进同一 broker
-
 ### 1.3 node 节点
 
 #### 1.3.1 配置连接密钥
@@ -162,7 +298,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 | 占位符 | 填什么                                                                     |
 |---|----------------------------------------------------------------------------|
-| `<broker公网IP>` | broker 的可达地址——云机/NAT 填**对外公网 IP**（按 [1.2.2](#122-生成连接密钥) 的 host 规则核对） |
+| `<broker公网IP>` | broker 的可达地址——云机/NAT 填**对外公网 IP**（按 [1.2.3](#123-发钥--gen-key) 的 host 规则核对） |
 | `<端口>` | broker 端口，数字不带引号（默认 7260）                                     |
 | `<星名>` / `<starId>` / `<钥匙>` | 钥匙 JSON 里原样照抄，不改                                                 |
 | `<本机名>` | 本机自报名（建议=hostname；star 集群里怎么称呼你）                         |
@@ -181,7 +317,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 }
 ```
 
-**机器改名 = 改本机 node.json 的 showName + 重启常驻**（节点机重启节点客户端、broker 机重启 serve）——全机种唯一的名字来源，别手改 broker.json。
+**机器改名**：node 机=改本机 node.json 的 `showName` + 重启守护；broker 机=`crosschat serve --show-name <名>` 热改（秒级）。showName 是全机种唯一的名字来源，别手改 broker.json。
 
 **验证**：
 ```
@@ -307,7 +443,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 > crosschat send --via tcp:<星>:<本机名>:<会话名> --body "联调测试"
 ```
 
-双机全链把玩（对端机器的会话、错误教学、extends、adopt、重启自愈）见 [2.7 验证阶梯](#27-验证阶梯全链把玩顺序执行)。
+双机全链把玩（对端机器的会话、错误教学、extends、adopt、重启自愈、热加删星）见 [2.7 验证阶梯](#27-验证阶梯全链把玩顺序执行)。
 
 #### 1.3.4 会话继承（换轨接任）
 
@@ -333,7 +469,7 @@ broker listening on 0.0.0.0:7260（Ctrl+C 退出）
 
 #### 1.3.5 node节点升级
 
-同 [1.2.3](#123-升级broker节点) broker 节点款，重启换成守护形态：
+同 [1.2.7](#127-升级-broker-节点) broker 节点款，重启换成守护形态：
 
 ```
 > npm i -g @oatelauser/crosschat@latest
@@ -454,7 +590,7 @@ cloud ✓ 可达，2 机器在线
 broker 不支持会话成员（proto:3），已降级机器级——本机会话的入星声明不生效（机器级收发不受影响）
 ```
 
-含义：机器级操作（远程枚举、文件通道）照常工作，只是入星/三段寻址/extends 不生效。解法 = 按 [1.2.3](#123-升级broker节点) 升级 broker 机的 crosschat 后重启 serve，零配置自动恢复。
+含义：机器级操作（远程枚举、文件通道）照常工作，只是入星/三段寻址/extends 不生效。解法 = 按 [1.2.7](#127-升级-broker-节点) 升级 broker 机的 crosschat 后重启 serve，零配置自动恢复。
 
 ### 2.6 文件通道（--file，机器级）
 
@@ -472,7 +608,7 @@ broker 不支持会话成员（proto:3），已降级机器级——本机会话
 
 ### 2.7 验证阶梯（全链把玩，顺序执行）
 
-双机剧本：星 `cloud-broker` 跑在云机（[第一章](#一环境搭建)搭好，云机与发起端都已贴钥匙），云机上再入星两个会话当对端。每步"命令 → 期望输出"成对，从上往下走完 = 三段寻址、错误教学、换轨接任、收编、重启自愈全部亲手过一遍。
+双机剧本：云机 serve 已起、已 `--add-star cloud-broker`（[第一章](#一环境搭建)搭好，云机与发起端都已贴钥匙），云机上再入星两个会话当对端。每步"命令 → 期望输出"成对，从上往下走完 = 三段寻址、错误教学、换轨接任、收编、重启自愈、热加删星全部亲手过一遍。
 
 **云机：**
 
@@ -518,14 +654,29 @@ broker 不支持会话成员（proto:3），已降级机器级——本机会话
 
 **重启自愈（云机，保持 cloudworker11 活着）：**
 
-14. `crosschat serve --stop cloud-broker && crosschat serve --connect cloud-broker --detach`
+14. `crosschat serve --stop && crosschat serve --detach`
     → 本机 `status --stars`：cloudworker11 成员行数秒内自动回来（恢复链验活重入册）
+
+**热星 drill（云机 broker 在跑，加星→收→删全程免重启）：**
+
+15. `crosschat serve --add-star drill1`
+    → 期望：`已加星 drill1——本 broker 现托管 2 颗星（经在跑 broker 已生效，免重启；自登记+内挂聚合器随对账落位）`——cloud-broker 星全程零感知
+16. 云机 cd 到工作目录跑：`crosschat claude -n drillworker --connect drill1`，随便说一句话让它活着
+    → 期望一行：`入星 drill1——会话地址 tcp:drill1:cloud:drillworker（attach 自动，异常见日志）`
+    → 云机 `status --stars`：drill1 星下出现 `会话: cloud:drillworker`
+17. 云机：`crosschat send --via tcp:drill1:cloud:drillworker --body "热星验证"`
+    → 期望：`delivered to drillworker@cloud(000c6989) (turn 1)`——broker 一次都没重启
+18. 云机：`crosschat serve --remove-star drill1`
+    → 期望两行：`将删除星 drill1：登记机器 1 台、册内成员 1 名——册随星葬、钥匙作废、无墓碑无复活（被删星连接即断）` + `星 drill1 已删除（经在跑 broker：连接已断、聚合器已收、status 已刷新）`
+    → 云机再投同地址 `crosschat send --via tcp:drill1:cloud:drillworker --body x`
+    → 期望：`USAGE: --via 选择器 drill1 不匹配任何条目——本机 node.json 现有：cloud-broker(6b76e1)`（broker 机自登记条目随删摘除，现存星清单直报）
+    → **其他机器**拿 drill1 死星钥再投 → 期望：`BAD_AUTH: 钥匙不匹配任何星——星可能未创建或已删除（--remove-star 即废钥），找管理员核对 node.json 或索取新配置`
 
 ---
 
 ## 三、底层实现
 
-<details><summary>展开：内部调用链 / mid8 寻址 / 自登记 / 手动命令实录 / 多星成员（点击）</summary>
+<details><summary>展开：内部调用链 / mid8 寻址 / 自登记与管理插座 / 手动命令实录 / 多星成员（点击）</summary>
 
 这一章回答"它到底怎么跑通的"。排障深挖、或想理解设计取舍时读。
 
@@ -551,11 +702,15 @@ crosschat send --via tcp:cloud:host-b:boss --body "…"
 - **名字 = 人读显示**：机器段填注册名也行（非 hex 按注册名/label 解析），但对端改名/两机撞名时名字失效，mid8 永远找得到人——信封回程路条因此永远盖 mid8
 - 命中 broker 自己（machineId 相同）→ 走本机投递，不过网络
 
-### 3.3 broker 机自登记（为什么 serve 会自动写 node.json）
+### 3.3 自登记与管理插座（为什么加星免重启、谁能写台账）
 
-首次 `crosschat serve` 干两件事：把自己登记进 broker.json（`label: "self"`，带 machineId + 专属钥匙）——其他机器立刻可寻址它、发给它的消息走本机直投不过网络；若 `~/.crosschat/tcp/node.json` 不存在则写一份 host=127.0.0.1 的自用凭证（本机 `send --via tcp:` 时连回自己鉴权）。存在则**跳过不覆盖**并按状态出声：指向别家（提示本机发送将走它）/ 钥匙或端口陈旧（BAD_AUTH 预警，删文件重启重建）/ 一致（静默）。
+**自登记**：serve 启动与 `--add-star` 都会把 broker 机登记进每颗星（star.nodes 的 self 条目，带 machineId + 专属钥匙）——其他机器立刻可寻址它、发给它的消息走本机直投不过网络；同时写本机 `~/.crosschat/tcp/node.json` 自用凭证（host=127.0.0.1，本机 `send --via tcp:` 连回自己鉴权）。已存在则**跳过不覆盖**并按状态出声：指向别家（提示本机发送将走它）/ 钥匙或端口陈旧（BAD_AUTH 预警，删文件重启重建）/ 一致（静默）。broker 机与其他节点完全同构——所有机器的发送走同一条代码路径，这是协议教学能内建的前提。
 
-> 设计取舍：broker 只认钥匙不认人（连 127.0.0.1 来的也要刷卡——"本机免检"等于给同机所有进程开后门）；`send` 是无状态 CLI 每次都是新进程，只认 node.json。所有机器（节点/CI/broker 机）的发送走**同一条代码路径**，不分情况——这是协议教学能内建的前提。
+**管理插座（033 热闭环的核心）**：broker 运行期是台账（broker.json）**唯一写者**——管理命令（加删星/改星名/改显示名/发钥删钥/发吊星管理钥）热路径经本机管理插座（unix socket / win 命名管，零 TCP 端口；地址随机=知道地址即能力，写进 status-broker.json）受理，CLI 打印"已生效"必出自 broker 回执；插座连上但回执超时=CLI 报错教重试，**绝不回落直写**。broker 没跑时走冷路径：CLI 直调同一套 registry 库函数落盘（函数不分家——首星/预配机不断腿），serve 启动即托管。对账幂等（按 starId）：磁盘新增星落位并播种内挂聚合器；消失星收尾（弃状态→停聚合器→闭连接，被删星在线会话先收"星已删除"教学帧）。
+
+**审计（034）**：管理写 op 逐笔记 broker.log——`audit admin-op <动作> <对象> 来源=本机插座`（本机 CLI）或 `来源=星管理钥(<label>)`（远程挑战应答连接）；星管理钥连接入星另记 `admin-auth 星管理钥(<label>) 入星 <星>`。
+
+> 设计取舍：broker 只认钥匙不认人（连 127.0.0.1 来的也要刷卡——"本机免检"等于给同机所有进程开后门）；管理插座只在本机、地址随机——"broker 主"不是一把钥匙，是**物理在场**这件事本身，世上不存在全能远程钥匙由此落地。
 
 ### 3.4 手动命令实录（agent 视角之外，人肉操作时用）
 
@@ -622,7 +777,7 @@ S → C   {"op":"connected"}          # 命中即连接绑星（发放即绑定�
 - **无降级路径**：`info.caps` 无 `challenge-auth`（旧版/被中间人剥除）即拒连，绝不回落裸钥发送管理钥
 - 被吊管理钥的下一次挑战应答即 `BAD_AUTH`（验证面每连接现读台账）
 
-- `starId`：星标识（broker.json 各星条目内 12 hex，首次 serve 生成）——单星时 info 携带，节点客户端在**发 connect（钥匙）之前**比对：与本机条目不符即断连（`STAR_ID_MISMATCH`，钥匙不出手）；多星时改由 connected 回填后校验
+- `starId`：星标识（broker.json 各星条目内 12 hex，`--add-star` 时生成）——单星时 info 携带，节点客户端在**发 connect（钥匙）之前**比对：与本机条目不符即断连（`STAR_ID_MISMATCH`，钥匙不出手）；多星时改由 connected 回填后校验
 - `caps`（connect 侧）：032 起**必带** `multi-star`——不带（旧版腿）即 `BAD_PROTO` 拒连并教 `npm i -g @oatelauser/crosschat@latest`（非兼容升级，不留历史包袱）
 - `role`：`node`（常驻收件，必须带 machineId，首次连接时把 mid 绑定到该钥匙；重连改名即覆盖显示名）或 `sender`（瞬态发送，只要 auth）
 - 钥匙不在注册表 / node 的 machineId 与登记不符 → 恒定延迟 500ms 后 `BAD_AUTH`（close 4001）——延迟是防钥匙枚举计时
@@ -631,7 +786,7 @@ S → C   {"op":"connected"}          # 命中即连接绑星（发放即绑定�
 
 - **心跳**：服务端每 30s 发 ws ping，60s 无 pong 判死断开——客户端用标准 ws 库回 pong 即可，无需应用层帧
 
-### 4.2 帧表（23 型；`?`=可缺省）
+### 4.2 帧表（25 型；`?`=可缺省）
 
 | 帧 | 方向 | 字段 |
 |---|---|---|
@@ -654,6 +809,8 @@ S → C   {"op":"connected"}          # 命中即连接绑星（发放即绑定�
 | `sessions` | C→S（node） | sessions:[{sessionId, name?, extends?}]——全量重播：数组即该连接当前全部成员，空数组=清空；extends 旧名 string=同机 / {machine,name}=跨机 |
 | `members-query` | C→S（node） | （空）——聚合器重启后查回"我以前的成员" |
 | `members-result` | S→C | members:[{sessionId, name?, extends?}]——broker 断连后保留的最后已知名单（纯内存，broker 重启即空） |
+| `member-remove` | C→S | target（028 删册：名精确或 id 前缀 ≥8 位；星内任何机器可发——命令面 `serve --connect <星> --member-remove` 与聚合器 `--rm` 退场共用） |
+| `member-remove-result` | S→C | ok, removed:[名\|id8…], error?——幂等（零命中=ok 注明本不在册）；多名命中=拒绝列 id8 教消歧 |
 | `auth-challenge` | S→C | nonce——034 管理连接挑战（一次性；防重放） |
 | `auth-proof` | C→S | proof——HMAC-SHA256(星管理钥, nonce) 的 hex（钥匙本体永不出现在任何帧里） |
 | `admin-op` | C→S | id, action, n?(gen-key), host?(gen-key), label?(remove-node)——034 星管理域：action∈{list-nodes, list-members, gen-key, remove-node}；list-stars/set-name 等本机域 op 一律 ADMIN_REQUIRED |
@@ -780,15 +937,22 @@ C → file-end{id}
 | `MACHINE_BOUND 册位绑在 X` | 同 id 换机器 resume（跨机复活被拒） | 先在原机器 `serve --connect <星> --member-remove <名|id8>` 删册位，再到新机器重新入星 |
 | `SESSION_SUPERSEDED 已由 <机器>:<会话> 接续` | 旧名是死名且有接任者（--extend-session 声明过） | 照报错里的 `tcp:<星>:<机器>:<会话>` 改投接任者 |
 | `EXTENDS_CONFLICT`（启动器/adopt） | extends 旧名仍是活成员（alive-wins 下会休眠） | 先退旧会话再接续，或去掉 `--extend-session` 直接开新名 |
+| `STAR_DELETED 星 X 已被删除`（成员被断连） | 星被 `--remove-star`（册随星葬、钥匙作废） | 无复活——找 broker 主 `--add-star` 重建后重新配钥入星 |
+| `BAD_AUTH 钥匙不匹配任何星——星可能未创建或已删除` | 拿死星钥投递（星被删或从未创建） | 同上——重建后重新配钥；别重试（旧钥已废） |
+| `--via 选择器 X 不匹配任何条目…`（broker 机投已删星） | broker 机自登记条目随删星摘除 | 报错里已列现存星清单；星重建后自登记自动回填 |
+| `ADMIN_REQUIRED 管理op…` | 非管理员调管理 op（普通成员发钥/删节点、任何人远程调本机域 op） | 找星管理员（星管理钥，`--via` 写 op）或到 broker 机本机执行；世上不存在全能远程钥匙 |
+| `BAD_AUTH 星管理钥证明不匹配…` | 星管理钥已被吊销或不属于该 broker 的星 | broker 主 `crosschat serve --list` 查管理钥 label；要恢复就重发 `--gen-admin-key` 并换新 adminKey |
+| `USAGE serve: --port 已移除（034）` | 用了已删的 `--port` 旗标 | 手编 broker.json 顶层 `"port"` 后重启 serve；首启非默认口=先手写 broker.json（`{"port": <N>, "stars": []}`）再 serve |
+| `零星待配（合法状态）`（serve/status/doctor） | broker.json 无星——serve 永不自动造星，零星合法 | `crosschat serve --add-star <星名>` 显式创建首星（[1.2.2](#122-造星--add-star热生效)） |
 | 老命令 `--via tcp:<机器> --to <会话名>` 报错教学 | 两段式会话投递已废弃（019） | 会话投递改用三段寻址 `tcp:<星>:<机器>:<会话>`；机器级操作（status 枚举/`--file`）不受影响 |
 | 启动器/聚合器打"broker 不支持会话成员（proto:3），已降级机器级" | broker 机 crosschat 还是老版本 | 机器级收发不受影响；升级 broker 机 crosschat 后 `serve --stop && serve --detach` 重启即恢复 |
 | 想看远机上有啥会话 | 本机 status 不跨机 | `crosschat status --via tcp:<机器>`（tcp 星；过滤参数同本地）；ssh 形态对端仍用 `ssh <对端> crosschat status` |
 | status `节点客户端: 未运行` | 本机聚合器没起（收不到消息的原因） | `crosschat serve --connect <星> --detach` |
 | `STAR_ID_MISMATCH 星标识不符已停机` | node.json 条目与 broker 现星标识不符（贴错星/配置陈旧） | 向管理员重新索取 node.json，重启 --connect |
 | 多星机裸写 `--via tcp:<机器>` 报"列条目"教学 | 多条目且无会话引用可循 | 加限定词 `--via tcp:<星>:<机器>`；回信不受影响（引用自动带星） |
-| status 第二行 broker 不可达 | node.json host/port 错 / 防火墙 / broker 没跑 | 按 [1.2](#12-broker-节点)/[1.3](#13-node-节点) 核对；云机安全组 |
+| status 第二行 broker 不可达 | node.json host/port 错 / 防火墙 / broker 没跑 | 按 [1.2](#12-broker-机起服务与造星)/[1.3](#13-node-节点) 核对；云机安全组 |
 | 收到"文件…已送达"但路径不存在 | 附件 >5 天被懒删除回收 | 回对端"附件已过期，请重发 --file" |
-| serve 启动即退、报错含 `EADDRINUSE` | 端口被占（多半是旧实例） | `crosschat serve --stop` 再起；或 `--port` 换端口（会记住） |
+| serve 启动即退、报错含 `EADDRINUSE` | 端口被占（多半是旧实例） | `crosschat serve --stop` 再起；换端口=手编 broker.json 顶层 `"port"` 后重启（`--port` 已移除） |
 | 升级 npm 包后跨机行为怪异（新 CLI + 旧常驻） | npm 升级只换了 CLI，`serve` 常驻进程仍跑旧版本 | `crosschat serve --stop && crosschat serve --detach`（broker 机）或 `serve --stop && serve --connect <星> --detach`（节点机）重启常驻；`crosschat doctor` 的版本对账行会点名 |
 
 ## 清理与卸载
@@ -802,4 +966,4 @@ C → file-end{id}
 
 ---
 
-> **迁移注记**：1.6.0 前手册教授的两段式会话寻址（`--via tcp:<星>:<机器> --to <会话名>`）已废弃（wayfinder [019](wayfinder/tickets/019-ambient-session-delivery-retirement.md)）——会话投递统一走三段寻址；机器级操作（远程枚举、文件通道、roster）不受影响。
+> **迁移注记**：1.6.0 前手册教授的两段式会话寻址（`--via tcp:<星>:<机器> --to <会话名>`）已废弃（wayfinder [019](wayfinder/tickets/019-ambient-session-delivery-retirement.md)）——会话投递统一走三段寻址；机器级操作（远程枚举、文件通道、roster）不受影响。1.8.0 前"serve 首启自动造星 / `--port` 换端口"口径已废（wayfinder [033](wayfinder/tickets/033-star-lifecycle-hot.md)/[034](wayfinder/tickets/034-remote-admin-key.md)）——星一律 `--add-star` 显式创建，端口是 broker.json 手编字段。

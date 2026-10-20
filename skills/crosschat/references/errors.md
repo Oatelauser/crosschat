@@ -10,6 +10,8 @@
 - `MACHINE_BOUND`（1.7.0 新）：跨机 resume——册位绑原机器，同 id 异机不复活。迁移走显式操作：先在原机器 `crosschat serve --connect <星> --member-remove <名|id8>` 删册位，再到新机器重新入星。
 - `NAME_COLLISION`（tcp 三段寻址）：同名撞车——报错列出带工具限定词的地址（`<星>:<机器>:claude/<名>`），照抄改投即达；同工具同名时改列 `名(id8)`，会话段投 `<id 前 8 位>` 短前缀直达。
 - `SESSION_SUPERSEDED`（tcp 三段寻址）：旧名是死名且有人接任（`--extend-session` 声明过）——报错里已给出接任者的三段地址（带工具限定词），改投它即可。
+- `STAR_DELETED`（tcp）：星已被 `--remove-star`——册随星葬、钥匙作废、无复活，被删星连接即断。找 broker 主 `crosschat serve --add-star <星名>` 重建后重新配钥入星；拿死星钥发送会报 `BAD_AUTH 钥匙不匹配任何星——星可能未创建或已删除`，别重试（旧钥已废）。
+- `ADMIN_REQUIRED`（tcp 远程管理 op）：非管理员调管理 op（普通成员发钥/删节点，或任何人远程调加删星/改星名等本机域 op）——世上不存在全能远程钥匙；找星管理员（星管理钥，`--via tcp:<星>` 写 op）或到 broker 机本机执行。
 - 收到"文件 … 已送达"但那个路径不存在：附件超过 5 天被回收——回对端"**附件已过期，请重发 --file**"。
 - `CODEX_THREAD_LOCKED` / `CODEX_THREAD_BUSY_TIMEOUT`：旧 daemon（≤0.157 / 未附着 TUI）下线程被窗口占用或长 turn 在跑。消息**已暂存（parked，exit 0），无需重发**——**看门狗每 0.5–5 分钟自动重投，不需要手动跑 status**；每线程最多暂存 200 条，滞留内容随时可读 mailbox 镜像 `~/.crosschat/mailbox/<线程ID>.md`（全平台同路径）。0.160+ 正常不会再遇到：忙时直接入队（`queued`）。
 - `CALLER_IDENTITY_CONFLICT`：环境里同时残留 `CLAUDE_CODE_*` 与 `CODEX_*` 身份变量（常见于从 Claude 终端启动的 codex daemon 派生的 shell）。临时自纠 = 先清残留再发送，照抄——PowerShell（先清，再发）：
