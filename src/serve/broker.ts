@@ -3,7 +3,7 @@
  * ws 复用仓内依赖；投递处理器注入化（B2 接 runSend，B1 默认 NOT_READY）。
  */
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { hostname } from 'node:os';
 import { dirname, join } from 'node:path';
 import process from 'node:process';
@@ -12,6 +12,7 @@ import * as net from 'node:net';
 import { WebSocket, WebSocketServer } from 'ws';
 import { PIPE_PREFIX } from '../platform/pipe-transport.js';
 import {
+  CAP_CHALLENGE_AUTH,
   CAP_MULTI_STAR,
   CAP_SESSION_MEMBERS,
   ERR,
@@ -23,6 +24,9 @@ import {
   sanitizeTool,
 } from './protocol.js';
 import type {
+  AdminOpFrame,
+  AdminOpResultFrame,
+  AuthProofFrame,
   ConnectFrame,
   ErrorFrame,
   FileBeginFrame,
@@ -46,14 +50,15 @@ import type {
 } from './protocol.js';
 import {
   addStarTo,
+  genAdminKeyFor,
   genKeysFor,
   loadBrokerFile,
   mutateBrokerFile,
+  removeAdminKeyFor,
   removeNodeFor,
   removeStarFrom,
   sanitizeName,
   setNameFor,
-  setPortFor,
   setShowNameFor,
   type NodeEntry,
   type RosterEntry,
@@ -144,6 +149,15 @@ interface Session {
   members?: Map<string, SessionMemberDecl>;
   /** 022 连接绑星：钥匙核验命中的星（多星下路由/册/注册表全按它切片；单星旧形状缺省=stars[0]）。 */
   starId?: string;
+  /**
+   * 034 认证身份（authed 后有值）：'member'=星钥连接（node/sender，同星共钥=
+   * 互信域）；'admin'=星管理钥连接（挑战应答）。管理 op 的角色矩阵按它闸。
+   */
+  identity?: 'member' | 'admin';
+  /** 034 挑战应答在途（管理连接）：nonce 一次性——发证明即消费，重复证明按重放拒。 */
+  challenge?: { nonce: string };
+  /** 034 星管理钥 label（审计来源行用——钥匙本体永不进日志）。 */
+  adminLabel?: string;
 }
 
 /**
@@ -189,6 +203,26 @@ function safeEqual(a: string, b: string): boolean {
   // 长度不同先失败：timingSafeEqual 对不等长直接抛
   return ab.length === bb.length && timingSafeEqual(ab, bb);
 }
+
+/**
+ * 034 op×角色矩阵（表驱动）：WS 管理 op（admin-op 帧）→ 允许的连接身份。
+ * 三层角色：普通成员（星钥）读本星；星管理员（星管理钥）另可发钥/删节点；
+ * broker 主=本机插座专属（世上不存在全能远程钥匙）——list-stars/set-name/
+ * add-star/remove-star 等本机域 op 空表即"WS 无人可用"，一律 ADMIN_REQUIRED。
+ */
+const ADMIN_OP_MATRIX: Record<string, readonly ('member' | 'admin')[]> = {
+  'list-nodes': ['member', 'admin'],
+  'list-members': ['member', 'admin'],
+  'gen-key': ['admin'],
+  'remove-node': ['admin'],
+  'list-stars': [],
+  'set-name': [],
+  'add-star': [],
+  'remove-star': [],
+  'set-showname': [],
+  'gen-admin-key': [],
+  'remove-admin-key': [],
+};
 
 export class Broker {
   private readonly d: Required<Omit<BrokerDeps, 'port' | 'fileInbox' | 'scanStatus' | 'spawnLocalAggregator' | 'stopLocalAggregator'>> & {
@@ -356,6 +390,7 @@ export class Broker {
   private async adminOp(req: Record<string, unknown>): Promise<AdminReply> {
     const str = (k: string): string | undefined => (typeof req[k] === 'string' ? (req[k] as string) : undefined);
     const int = (k: string): number | undefined => (typeof req[k] === 'number' && Number.isInteger(req[k]) ? (req[k] as number) : undefined);
+    const LOCAL = '本机插座'; // 034 审计来源：插座受理即 broker 主本人（地址随机=能力）
     switch (req.op) {
       case 'add-star': {
         const name = str('name');
@@ -365,6 +400,7 @@ export class Broker {
           hostname: this.d.hostname(),
           port: this.port ?? DEFAULT_PORT,
         });
+        this.auditAdmin('add-star', `星 ${name}`, LOCAL);
         this.reconcileStars(); // 新星落位 + 按需播种内挂聚合器
         return { ok: true, starId, stars: this.stars.length };
       }
@@ -373,6 +409,7 @@ export class Broker {
         if (starId === undefined) return { ok: false, error: 'remove-star 缺少 starId' };
         const removed = removeStarFrom(this.d.registryFile, starId);
         if (removed === undefined) return { ok: false, error: `星 ${starId} 不在台账——crosschat serve --list 可查` };
+        this.auditAdmin('remove-star', `星 ${removed.name ?? starId}`, LOCAL);
         await this.teardownStar(starId); // 弃状态→停聚合器→闭连接（收"星已删除"教学）
         this.writeStatus('running');
         return { ok: true, removed };
@@ -381,6 +418,7 @@ export class Broker {
         const name = str('name');
         if (name === undefined) return { ok: false, error: 'set-showname 缺少 name（空串=清除）' };
         setShowNameFor(join(dirname(this.d.registryFile), 'node.json'), name);
+        this.auditAdmin('set-showname', `显示名 ${name}`, LOCAL);
         // 重挂内挂聚合器：重连握手即自报新名（machineName 回写随 connect 落台账）
         for (const star of [...this.stars]) {
           if (star.starId === undefined) continue;
@@ -407,6 +445,7 @@ export class Broker {
           port: this.port ?? DEFAULT_PORT, // 热路径端口以在跑 broker 实际监听口为准
           ...(star.name === undefined ? {} : { name: star.name }),
         });
+        this.auditAdmin('gen-key', `星 ${star.name ?? starId} n=${n}`, LOCAL);
         return { ok: true, results };
       }
       case 'set-name': {
@@ -414,20 +453,36 @@ export class Broker {
         const name = str('name');
         if (starId === undefined || name === undefined) return { ok: false, error: 'set-name 缺少 starId/name' };
         setNameFor(this.d.registryFile, starId, name);
+        this.auditAdmin('set-name', `星 ${name}`, LOCAL);
         this.reconcileStars(); // 星名刷新进内存星域 + status
         return { ok: true };
       }
-      case 'set-port': {
-        const port = int('port');
-        if (port === undefined) return { ok: false, error: 'set-port 缺少 port' };
-        setPortFor(this.d.registryFile, port);
-        return { ok: true, note: `端口 ${port} 已记录——port 不热换，重启 crosschat serve 生效` };
+      case 'gen-admin-key': {
+        // 034 发星管理钥（仅 broker 主本机插座）：label 绑定一星，回执带 adminKey
+        const starId = str('starId');
+        const label = str('label');
+        if (starId === undefined || label === undefined) return { ok: false, error: 'gen-admin-key 缺少 starId/label' };
+        const result = genAdminKeyFor(this.d.registryFile, starId, label);
+        this.auditAdmin('gen-admin-key', `星 ${starId} label=${label}`, LOCAL);
+        return { ok: true, result };
+      }
+      case 'remove-admin-key': {
+        // 034 吊星管理钥（仅 broker 主本机插座）：被吊钥的下一次挑战应答即 BAD_AUTH
+        const starId = str('starId');
+        const label = str('label');
+        if (starId === undefined || label === undefined) return { ok: false, error: 'remove-admin-key 缺少 starId/label' };
+        const removed = removeAdminKeyFor(this.d.registryFile, starId, label);
+        this.auditAdmin('remove-admin-key', `星 ${starId} label=${removed ?? label}`, LOCAL);
+        if (removed === undefined) return { ok: false, error: `星 ${starId} 无匹配管理钥 ${label}——crosschat serve --list 可查` };
+        return { ok: true, removed };
       }
       case 'remove-node': {
         const starId = str('starId');
         const label = str('label');
         if (starId === undefined || label === undefined) return { ok: false, error: 'remove-node 缺少 starId/label' };
-        return { ok: true, removed: removeNodeFor(this.d.registryFile, starId, label) };
+        const removed = removeNodeFor(this.d.registryFile, starId, label);
+        this.auditAdmin('remove-node', `星 ${starId} label=${label}`, LOCAL);
+        return { ok: true, removed };
       }
       default:
         return { ok: false, error: `未知管理 op：${String(req.op)}` };
@@ -460,8 +515,8 @@ export class Broker {
   /**
    * 033 消失星收尾（决策1 顺序）：弃状态 → 停聚合器 → 闭连接。被删星在线会话
    * 先收"星已删除"错误帧再断（教学语；册随星葬、钥匙作废）。幂等（星不在=仅刷
-   * 状态）。错误码用字面量 STAR_DELETED 不入 protocol.ts ERR——帧面零改动（034
-   * 领地），客户端按未知 code 通用路径展示 message。
+   * 状态）。错误码 STAR_DELETED（034 收编 protocol.ts ERR 表——033 期为帧面
+   * 零改动用的字面量）。
    */
   private async teardownStar(starId: string): Promise<void> {
     const star = this.stars.find((s) => s.starId === starId);
@@ -480,7 +535,7 @@ export class Broker {
         if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
         this.send(session.ws, {
           op: 'error',
-          code: 'STAR_DELETED',
+          code: ERR.STAR_DELETED,
           message: `星 ${label} 已被删除（crosschat serve --remove-star）——册随星葬、钥匙作废、无墓碑无复活；如需重建找管理员 crosschat serve --add-star`,
         });
         try {
@@ -558,7 +613,9 @@ export class Broker {
       op: 'info',
       proto: PROTOCOL_VERSION,
       server: `crosschat/${this.d.version}`,
-      caps: this.stars.length > 1 ? [CAP_SESSION_MEMBERS, CAP_MULTI_STAR] : [CAP_SESSION_MEMBERS],
+      // 034：challenge-auth additive——管理连接（星管理钥）握手走挑战应答；
+      // 客户端见此 cap 缺席即拒连无降级。星钥连接行为不变。
+      caps: this.stars.length > 1 ? [CAP_SESSION_MEMBERS, CAP_MULTI_STAR, CAP_CHALLENGE_AUTH] : [CAP_SESSION_MEMBERS, CAP_CHALLENGE_AUTH],
       ...(sole === undefined || sole.starId === undefined ? {} : { starId: sole.starId }),
       ...(sole === undefined || sole.name === undefined ? {} : { name: sole.name }),
     });
@@ -706,8 +763,23 @@ export class Broker {
     const frame = parseFrame(text);
     if (frame === undefined) return; // 损坏/未知帧丢弃
     if (!session.authed) {
+      // 034 挑战应答：管理连接 connect 后只等 auth-proof（nonce 一次性）；
+      // 其余帧（含再来一份 connect）丢弃——握手超时兜底不变。
+      if (session.challenge !== undefined) {
+        if (frame.op === 'auth-proof') await this.onAuthProof(session, frame);
+        return;
+      }
       if (frame.op !== 'connect') return; // 只等 connect，握手超时兜底
       await this.onConnect(session, frame);
+      return;
+    }
+    // 034 防重放：已认证连接上的重复 connect/auth-proof = 重放证明，拒绝不静默
+    if (frame.op === 'connect' || frame.op === 'auth-proof') {
+      await this.authFail(session, '重复握手/挑战证明（重放）拒绝——挑战一次性，每连接至多一份证明');
+      return;
+    }
+    if (frame.op === 'admin-op') {
+      this.onAdminOpFrame(session, frame);
       return;
     }
     if (frame.op === 'send') {
@@ -1026,11 +1098,20 @@ export class Broker {
     }
     // 注册表每笔连接现读（文件小，不缓存）：gen/remove 即时生效。022：钥匙
     // 反查星籍——遍历托管星域的节点表，命中即连接绑星（同 broker 机多星同端口）。
+    if (frame.admin === true) {
+      await this.onAdminConnect(session, frame);
+      return;
+    }
+    if (typeof frame.auth !== 'string' || frame.auth === '') {
+      await this.authFail(session, 'connect 缺钥匙（auth）——管理连接改带 admin:true 走挑战应答');
+      return;
+    }
+    const auth = frame.auth; // 闭包内不可依赖属性收窄——先落局部量
     let entry: NodeEntry | undefined;
     let star: StarState | undefined;
     for (const candidate of this.stars) {
       const nodes = this.starNodes(candidate);
-      const hit = nodes.find((node) => safeEqual(frame.auth, node.key));
+      const hit = nodes.find((node) => node.key !== undefined && safeEqual(auth, node.key));
       if (hit !== undefined) {
         entry = hit;
         star = candidate;
@@ -1103,6 +1184,7 @@ export class Broker {
     }
     if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
     session.authed = true;
+    session.identity = 'member';
     // 022：多星连接的星标识在钥匙核验后回填（握手时序倒置——info 帧无法预知属星）
     this.send(session.ws, {
       op: 'connected',
@@ -1111,6 +1193,165 @@ export class Broker {
       ...(this.stars.length > 1 && star.name !== undefined ? { name: star.name } : {}),
     });
     this.writeStatus('running');
+  }
+
+  /**
+   * 034 管理连接（connect.admin=true）：不发挑战前先守一条硬边界——auth 在场
+   * 即拒（钥匙永不过线，绝不收"顺手套钥"形态）。随后发一次性 nonce，等证明。
+   */
+  private async onAdminConnect(session: Session, frame: ConnectFrame): Promise<void> {
+    if (typeof frame.auth === 'string' && frame.auth !== '') {
+      await this.authFail(session, '管理连接不得携带钥匙（挑战应答——adminKey 永不过线），去掉 auth 字段重连');
+      return;
+    }
+    const nonce = randomBytes(32).toString('hex');
+    session.challenge = { nonce };
+    this.send(session.ws, { op: 'auth-challenge', nonce });
+  }
+
+  /**
+   * 034 挑战证明核验：proof = HMAC-SHA256(adminKey, nonce) hex，全星域管理钥
+   * 逐条验（台账每笔现读——被吊钥此处即刻失效）。nonce 即消费（一次性），
+   * 命中即定星籍（发放即绑定一星）与 label（审计来源）；未命中恒定延迟拒。
+   */
+  private async onAuthProof(session: Session, frame: AuthProofFrame): Promise<void> {
+    const nonce = session.challenge?.nonce;
+    session.challenge = undefined;
+    if (nonce === undefined || typeof frame.proof !== 'string' || frame.proof === '') {
+      await this.authFail(session, '挑战应答形状错误（无在途挑战或 proof 缺失）');
+      return;
+    }
+    for (const star of this.stars) {
+      for (const node of this.starNodes(star)) {
+        if (node.adminKey === undefined) continue;
+        const expect = createHmac('sha256', node.adminKey).update(nonce).digest('hex');
+        if (!safeEqual(frame.proof, expect)) continue;
+        session.identity = 'admin';
+        session.adminLabel = node.label;
+        if (star.starId !== undefined) session.starId = star.starId;
+        if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
+        session.authed = true;
+        this.send(session.ws, {
+          op: 'connected',
+          ...(this.stars.length > 1 && star.starId !== undefined ? { starId: star.starId } : {}),
+          ...(this.stars.length > 1 && star.name !== undefined ? { name: star.name } : {}),
+        });
+        this.log(`admin-auth 星管理钥(${node.label}) 入星 ${star.name ?? star.starId ?? '?'}`);
+        this.writeStatus('running');
+        return;
+      }
+    }
+    await this.authFail(session, '星管理钥证明不匹配（钥匙已吊销或不属于本 broker 的星）——找 broker 主核对：crosschat serve --list 可查管理钥 label');
+  }
+
+  /**
+   * 034 审计：管理 op 逐笔记 broker.log——来源=本机插座 | 星管理钥(label)。
+   * 钥匙本体永不进日志（只记 label）。
+   */
+  private auditAdmin(action: string, subject: string, source: string): void {
+    this.log(`audit admin-op ${action} ${subject} 来源=${source}`);
+  }
+
+  /** 034 WS 管理 op（admin-op 帧）：矩阵闸 → 星域执行 → 审计。 */
+  private onAdminOpFrame(session: Session, frame: AdminOpFrame): void {
+    const identity = session.identity ?? 'member';
+    const allowed = ADMIN_OP_MATRIX[frame.action];
+    if (allowed === undefined || !allowed.includes(identity)) {
+      const message =
+        allowed === undefined || allowed.length === 0
+          ? `管理 op ${frame.action} 仅 broker 主本机可用（本机插座/CLI）——世上不存在全能远程钥匙；本星只读清单走 list-nodes/list-members`
+          : `管理 op ${frame.action} 需星管理员（星管理钥）——当前连接是普通成员（星钥）；找 broker 主发星管理钥：crosschat serve --star <星> --gen-admin-key <label>`;
+      this.send(session.ws, { op: 'error', code: ERR.ADMIN_REQUIRED, message, id: frame.id });
+      this.log(`admin-required ${frame.action}（${identity} 身份请求被拒）`);
+      return;
+    }
+    const star = this.starOf(session);
+    if (star === undefined) {
+      this.send(session.ws, { op: 'error', code: 'INTERNAL', message: '连接属星未定（异常形态）', id: frame.id });
+      return;
+    }
+    const starLabel = star.name ?? star.starId ?? '?';
+    const audit = (action: string): void => this.auditAdmin(action, `星 ${starLabel}`, `星管理钥(${session.adminLabel ?? '?'})`);
+    switch (frame.action) {
+      case 'list-nodes': {
+        // 回显永不含钥匙：label/显示名/mid8/addedAt；管理钥条目带 admin 标记
+        const nodes = this.starNodes(star).map((n) => ({
+          label: n.label,
+          ...(n.machineName === undefined ? {} : { name: n.machineName }),
+          ...(n.machineId === undefined ? {} : { mid8: n.machineId.slice(0, 8) }),
+          addedAt: n.addedAt,
+          ...(n.adminKey === undefined ? {} : { admin: true }),
+        }));
+        const reply: AdminOpResultFrame = { op: 'admin-op-result', id: frame.id, ok: true, nodes };
+        this.send(session.ws, reply);
+        audit('list-nodes');
+        return;
+      }
+      case 'list-members': {
+        const members = star.roster.map((e) => ({
+          sessionId: e.sessionId,
+          ...(e.name === undefined ? {} : { name: e.name }),
+          ...(e.tool === undefined ? {} : { tool: e.tool }),
+          machine: e.machine,
+          ...(e.machineName === undefined ? {} : { machineName: e.machineName }),
+          ...(e.online === true ? { online: true } : {}),
+        }));
+        const reply: AdminOpResultFrame = { op: 'admin-op-result', id: frame.id, ok: true, members };
+        this.send(session.ws, reply);
+        audit('list-members');
+        return;
+      }
+      case 'gen-key': {
+        const n = frame.n;
+        if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > 10) {
+          this.send(session.ws, { op: 'error', code: ERR.BAD_PROTO, message: 'gen-key 数量须为 1-10 的整数', id: frame.id });
+          return;
+        }
+        if (star.starId === undefined || typeof frame.host !== 'string' || frame.host === '') {
+          this.send(session.ws, { op: 'error', code: ERR.BAD_PROTO, message: 'gen-key 缺 starId/host（异常形状）', id: frame.id });
+          return;
+        }
+        const starName = star.name;
+        try {
+          const results = genKeysFor(this.d.registryFile, star.starId, n, {
+            host: frame.host,
+            port: this.port ?? DEFAULT_PORT,
+            ...(starName === undefined ? {} : { name: starName }),
+          });
+          const reply: AdminOpResultFrame = { op: 'admin-op-result', id: frame.id, ok: true, results };
+          this.send(session.ws, reply);
+          audit('gen-key');
+        } catch (err) {
+          this.send(session.ws, { op: 'error', code: 'USAGE', message: err instanceof Error ? err.message : String(err), id: frame.id });
+        }
+        return;
+      }
+      case 'remove-node': {
+        if (star.starId === undefined || typeof frame.label !== 'string' || frame.label === '') {
+          this.send(session.ws, { op: 'error', code: ERR.BAD_PROTO, message: 'remove-node 缺 starId/label', id: frame.id });
+          return;
+        }
+        // 管理钥条目不走本 op（管理员互吊是越权面）——吊钥仅 broker 主本机
+        const target = this.starNodes(star).find((n) => n.label === frame.label);
+        if (target?.adminKey !== undefined) {
+          this.send(session.ws, {
+            op: 'error',
+            code: ERR.ADMIN_REQUIRED,
+            message: `label ${frame.label} 是星管理钥条目——吊管理钥仅 broker 主本机：crosschat serve --star ${starLabel} --remove-admin-key ${frame.label}`,
+            id: frame.id,
+          });
+          this.log(`admin-required remove-node(${frame.label})（管理钥条目，星管理员不可吊同侪）`);
+          return;
+        }
+        const removed = removeNodeFor(this.d.registryFile, star.starId, frame.label);
+        const reply: AdminOpResultFrame = { op: 'admin-op-result', id: frame.id, ok: true, removed };
+        this.send(session.ws, reply);
+        audit('remove-node');
+        return;
+      }
+      default:
+        this.send(session.ws, { op: 'error', code: ERR.ADMIN_REQUIRED, message: `管理 op ${frame.action} 仅 broker 主本机可用`, id: frame.id });
+    }
   }
 
   /** 鉴权失败统一路径：恒定延迟再回 BAD_AUTH，挫钥匙枚举计时。 */

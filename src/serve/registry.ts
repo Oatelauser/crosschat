@@ -5,7 +5,8 @@
  *
  * 写纪律（三铁律，代码强制）：所有写者走 `mutateBrokerFile`（同步读→只拼
  * 自己的段→tmp+rename）；段所有权 roster=broker 独占 / nodes=CLI+onConnect
- * 回写共管 / port+name+加星=CLI；starId 永不变（星身份锚，改名零级联）。
+ * 回写共管 / name+加星=CLI / port=**手编专属**（034 起 --port 无命令——改文件
+ * 重启生效）；starId 永不变（星身份锚，改名零级联）。
  */
 import { copyFileSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -15,10 +16,17 @@ import { MultichatError } from '../errors.js';
 
 export interface NodeEntry {
   label: string;
-  key: string;
+  /** 星钥（机器身份）。034 起可选——管理钥条目只有 adminKey（不是机器身份）。 */
+  key?: string;
   machineId?: string;
   machineName?: string;
   addedAt: string;
+  /**
+   * 034 星管理钥（与星钥同 nodes 表同条目形状存放——发放即绑定一星）：管理钥
+   * 条目只有 label+adminKey+addedAt（无 key/machineId——不是机器身份）。钥匙
+   * 只存 broker 侧与持有者 node.json 条目，永不过线（挑战应答）。
+   */
+  adminKey?: string;
 }
 
 /** 028 星成员册条目（032 起随星内嵌 broker.json；字段语义不变）。 */
@@ -253,11 +261,54 @@ export function removeNodeFor(file: string, starId: string, label: string): bool
   return removed;
 }
 
-/** 改端口（唯一写者 --port；只动顶层 port 段）。 */
-export function setPortFor(file: string, port: number): void {
+/**
+ * 034 --gen-admin-key <label> --star <星>：发星管理钥（一星一权；条目落该星
+ * nodes 表，与星钥同条目形状）。label 与星名同字符集（禁冒号）；节点/管理钥
+ * 共用 label 空间（--list 一表可见，重名拒绝）。
+ */
+export interface GenAdminKeyResult {
+  label: string;
+  adminKey: string;
+}
+
+export function genAdminKeyFor(file: string, starId: string, label: string): GenAdminKeyResult {
+  if (!STAR_NAME_RE.test(label)) {
+    throw new MultichatError('USAGE', `--gen-admin-key label 须为 1-32 个字母/数字/./_/-（禁冒号），收到：${label}`);
+  }
+  let adminKey = '';
   mutateBrokerFile(file, (doc) => {
-    doc.port = port;
+    const star = doc.stars.find((s) => s.starId === starId);
+    if (star === undefined) throw new MultichatError('USAGE', `--star ${starId} 不在注册表——crosschat serve --list 可查`);
+    if (star.nodes.some((n) => n.label === label)) {
+      throw new MultichatError('USAGE', `label ${label} 在该星已存在（节点与管理钥共用 label 空间）——换一个`);
+    }
+    adminKey = randomBytes(32).toString('hex');
+    star.nodes.push({ label, adminKey, addedAt: new Date().toISOString() });
   });
+  return { label, adminKey };
+}
+
+/**
+ * 034 --remove-admin-key <label|前缀>（仅 broker 主本机）：吊星管理钥。label
+ * 精确 → 前缀唯一（歧义教加长）；零命中返回 undefined（幂等报告由调用方打印）。
+ * 被吊钥的下一次挑战应答即 BAD_AUTH（验证面每连接现读台账）。
+ */
+export function removeAdminKeyFor(file: string, starId: string, labelOrPrefix: string): string | undefined {
+  let removed: string | undefined;
+  mutateBrokerFile(file, (doc) => {
+    const star = doc.stars.find((s) => s.starId === starId);
+    if (star === undefined) return;
+    const admins = star.nodes.filter((n) => n.adminKey !== undefined);
+    const exact = admins.find((n) => n.label === labelOrPrefix);
+    const hits = exact !== undefined ? [exact] : admins.filter((n) => n.label.startsWith(labelOrPrefix));
+    if (hits.length === 1) {
+      removed = hits[0]!.label;
+      star.nodes = star.nodes.filter((n) => n !== hits[0]);
+    } else if (hits.length > 1) {
+      throw new MultichatError('USAGE', `--remove-admin-key ${labelOrPrefix} 前缀命中多个管理钥（${hits.map((n) => n.label).join('、')}）——加长前缀使其唯一`);
+    }
+  });
+  return removed;
 }
 
 /**

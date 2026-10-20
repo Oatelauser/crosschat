@@ -27,6 +27,10 @@ export const ERR = {
   EXTENDS_CONFLICT: 'EXTENDS_CONFLICT',
   /** 020：会话段撞名（多命中）——复用单机 --to 同码（多候选列名单），教学文案区分场景。 */
   NAME_COLLISION: 'NAME_COLLISION',
+  /** 034：非管理员调管理 op（教学：找星管理员或 broker 主；世上不存在全能远程钥匙）。 */
+  ADMIN_REQUIRED: 'ADMIN_REQUIRED',
+  /** 033 引入（时为字面量）、034 收编 ERR 表：星已删除（册随星葬、钥匙作废、无墓碑无复活）。 */
+  STAR_DELETED: 'STAR_DELETED',
 } as const;
 
 /**
@@ -41,6 +45,13 @@ export const CAP_SESSION_MEMBERS = 'session-members';
  * "info 无星标识是合法多星形态"的信号。纯信息性 additive，老节点零影响。
  */
 export const CAP_MULTI_STAR = 'multi-star';
+
+/**
+ * 034 挑战应答能力：管理连接（星管理钥）握手走 nonce→HMAC 证明，钥匙永不过线。
+ * additive——仅管理连接启用，星钥连接维持现状。客户端见 info 无此 cap（旧版/
+ * 被中间人剥除）即拒连，**无降级路径**（绝不回落裸钥发送管理钥）。
+ */
+export const CAP_CHALLENGE_AUTH = 'challenge-auth';
 
 /**
  * 022：socket 形状（ws.WebSocket 结构性满足）——broker 自挂聚合器的本进程
@@ -87,11 +98,17 @@ export interface ConnectFrame {
   proto: number;
   role: 'node' | 'sender';
   machineId?: string;
-  auth: string;
+  /** 星钥（node/sender 角色）；034 管理连接（admin=true）必须缺席——adminKey 永不过线。 */
+  auth?: string;
   /** B2.1 修订：节点自报的人读显示名（≤32 字符、无控制符）。寻址权威是 machine-id 前缀，名字不参与回信路由。 */
   name?: string;
   /** 018 proto:3：能力声明（缺省=老节点，proto:1 行为不变）。broker 据此识别会话级成员感知的聚合器。 */
   caps?: string[];
+  /**
+   * 034 管理连接声明：true 时 auth 必须缺席（星管理钥永不过线）——broker 回
+   * auth-challenge（一次性 nonce），客户端以 auth-proof（HMAC 证明）应答。
+   */
+  admin?: boolean;
 }
 export interface ConnectedFrame {
   op: 'connected';
@@ -316,6 +333,75 @@ export interface MemberRemoveResultFrame {
   error?: string;
 }
 
+/**
+ * 034 管理连接挑战（broker→客户端）：一次性 nonce，客户端以
+ * auth-proof = HMAC-SHA256(星管理钥, nonce) 的 hex 应答。nonce 每连接每挑战
+ * 现发——捕获的旧证明在他连接（nonce 不同）或本连接（一次性消费）都不再有效。
+ */
+export interface AuthChallengeFrame {
+  op: 'auth-challenge';
+  nonce: string;
+}
+
+/** 034 挑战应答证明（客户端→broker）：钥匙本体永不出现在任何帧里。 */
+export interface AuthProofFrame {
+  op: 'auth-proof';
+  proof: string;
+}
+
+/**
+ * 034 管理 op 请求（星管理域，已认证连接）：action×角色矩阵在 broker 侧表驱动
+ * （成员=星钥连接可读本星；星管理员=星管理钥连接另可发钥/删节点；越权回
+ * ADMIN_REQUIRED）。未知 action 同样 ADMIN_REQUIRED（本机专属 op 不上网）。
+ */
+export interface AdminOpFrame {
+  op: 'admin-op';
+  id: string;
+  action: string;
+  /** gen-key：发钥数量（1-10）。 */
+  n?: number;
+  /** gen-key：node.json 文本落点 host（端口以 broker 实际监听口为准）。 */
+  host?: string;
+  /** remove-node：目标 label。 */
+  label?: string;
+}
+
+/** 034 list-nodes 回显行——**永不携带 key/adminKey**（发钥只走 gen-key 显式动作）。 */
+export interface AdminNodeRow {
+  label: string;
+  name?: string;
+  mid8?: string;
+  addedAt: string;
+  /** 星管理钥条目标记（非机器身份——无 key/machineId）。 */
+  admin?: boolean;
+}
+
+/** 034 list-members 回显行（册内成员快照；册本身无钥匙）。 */
+export interface AdminMemberRow {
+  sessionId: string;
+  name?: string;
+  tool?: string;
+  machine: string;
+  machineName?: string;
+  online?: boolean;
+}
+
+/** 034 管理 op 回执（一问一答；ok=false 时 error 带人话教学）。 */
+export interface AdminOpResultFrame {
+  op: 'admin-op-result';
+  id: string;
+  ok: boolean;
+  error?: string;
+  /** gen-key：新钥与 node.json 文本（发钥是显式动作——仅此路径回显钥匙）。 */
+  results?: Array<{ label: string; key: string; nodeJsonContent: string }>;
+  /** list-nodes 回显（无钥匙）。 */
+  nodes?: AdminNodeRow[];
+  /** list-members 回显。 */
+  members?: AdminMemberRow[];
+  /** remove-node：是否删到。 */
+  removed?: boolean;
+}
+
 export type Frame =
   | InfoFrame
   | ConnectFrame
@@ -337,7 +423,11 @@ export type Frame =
   | MembersQueryFrame
   | MembersResultFrame
   | MemberRemoveFrame
-  | MemberRemoveResultFrame;
+  | MemberRemoveResultFrame
+  | AuthChallengeFrame
+  | AuthProofFrame
+  | AdminOpFrame
+  | AdminOpResultFrame;
 
 const OPS = new Set([
   'info',
@@ -361,6 +451,10 @@ const OPS = new Set([
   'members-result',
   'member-remove',
   'member-remove-result',
+  'auth-challenge',
+  'auth-proof',
+  'admin-op',
+  'admin-op-result',
 ]);
 
 /** 解析一帧 ws 文本消息；JSON 损坏或 op 未知返回 undefined（调用方丢弃）。 */

@@ -10,6 +10,7 @@ import { resolveCodexExecutable } from '../codex/transport.js';
 import { defaultOutboxDir, mailboxFileFor, outboxSummary } from '../outbox.js';
 import { watchdogStatus } from '../watchdog.js';
 import { readNodeConfig, type BrokerEntry } from '../serve/node.js';
+import { DEFAULT_PORT } from '../serve/broker.js';
 import { isProcessAlive } from '../platform/process-inspector.js';
 import { listNodeStatusFiles, nodeStatusSelector, TCP_STATUS_FRESH_MS } from './status.js';
 
@@ -300,10 +301,11 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
         // 节点数合计展示。
         cur = groups.find((g) => g.title.startsWith('tcp ·'))?.lines ?? group('tcp');
         try {
-          const doc = JSON.parse(brokerRaw) as { stars?: Array<{ nodes?: Array<{ label?: unknown; key?: unknown }> }> };
+          // 034：nodes[] 含管理钥条目（label+adminKey，无 key）——key 改可选，只强校验 label
+          const doc = JSON.parse(brokerRaw) as { port?: unknown; stars?: Array<{ nodes?: Array<{ label?: unknown; key?: unknown; adminKey?: unknown }> }> };
           if (
             !Array.isArray(doc.stars) ||
-            doc.stars.some((s) => !Array.isArray(s.nodes) || s.nodes.some((n) => typeof n.label !== 'string' || typeof n.key !== 'string'))
+            doc.stars.some((s) => !Array.isArray(s.nodes) || s.nodes.some((n) => typeof n.label !== 'string'))
           ) {
             throw new Error('bad shape');
           }
@@ -313,6 +315,12 @@ export function runDoctor(deps: DoctorDeps = defaultDoctorDeps()): DoctorReport 
           } else {
             const total = doc.stars.reduce((sum, s) => sum + (s.nodes?.length ?? 0), 0);
             ok(`✅ broker 注册表可解析（${doc.stars.length} 星 ${total} 节点）`);
+          }
+          // 034：非默认口教学——--port 命令已删，端口=broker.json 手编字段（首启非默认口=先手写再 serve）
+          if (typeof doc.port === 'number' && doc.port !== DEFAULT_PORT) {
+            attention(
+              `⚠️ broker 监听口 ${doc.port} 非默认 ${DEFAULT_PORT}——端口是 broker.json 手编字段（--port 命令已移除）：改 ${join(deps.tcpDir!, 'broker.json')} 顶层 "port" 后重启 crosschat serve 生效；首启非默认口=先手写 broker.json（{"port": <N>, "stars": []}）再 serve`,
+            );
           }
         } catch {
           fail('❌ broker 注册表 broker.json 损坏或字段缺失——crosschat serve --list 核对，必要时重发钥匙');

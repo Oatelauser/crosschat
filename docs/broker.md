@@ -608,6 +608,20 @@ S → C   {"op":"connected","machineName":"yang"}
 
 多星 broker 的握手时序倒置（单星字节不变）：`info` **不带** starId/name（caps 多一项 `"multi-star"`）——归属星由钥匙自证（连接绑星），`connected` 回填 `starId`/`name`。
 
+**管理连接（034 星管理钥，挑战应答——钥匙永不过线）**：`connect` 带 `admin:true` 且**不带 auth**，broker 回一次性 `nonce`，客户端以 `proof = HMAC-SHA256(星管理钥, nonce)` 的 hex 应答：
+
+```
+S → C   {"op":"info","proto":1,"server":"crosschat/…","caps":["session-members","challenge-auth",…]}
+C → S   {"op":"connect","proto":1,"role":"sender","admin":true,"caps":["multi-star","challenge-auth"]}
+S → C   {"op":"auth-challenge","nonce":"<64位hex一次性>"}
+C → S   {"op":"auth-proof","proof":"<HMAC-SHA256(adminKey, nonce) 的 hex>"}
+S → C   {"op":"connected"}          # 命中即连接绑星（发放即绑定一星）；未命中=BAD_AUTH（close 4001）
+```
+
+- nonce 每连接每挑战现发、证明一次性消费——捕获的旧证明在他连接（nonce 不同）或本连接（已消费，重放=BAD_AUTH）都不再有效
+- **无降级路径**：`info.caps` 无 `challenge-auth`（旧版/被中间人剥除）即拒连，绝不回落裸钥发送管理钥
+- 被吊管理钥的下一次挑战应答即 `BAD_AUTH`（验证面每连接现读台账）
+
 - `starId`：星标识（broker.json 各星条目内 12 hex，首次 serve 生成）——单星时 info 携带，节点客户端在**发 connect（钥匙）之前**比对：与本机条目不符即断连（`STAR_ID_MISMATCH`，钥匙不出手）；多星时改由 connected 回填后校验
 - `caps`（connect 侧）：032 起**必带** `multi-star`——不带（旧版腿）即 `BAD_PROTO` 拒连并教 `npm i -g @oatelauser/crosschat@latest`（非兼容升级，不留历史包袱）
 - `role`：`node`（常驻收件，必须带 machineId，首次连接时把 mid 绑定到该钥匙；重连改名即覆盖显示名）或 `sender`（瞬态发送，只要 auth）
@@ -617,12 +631,12 @@ S → C   {"op":"connected","machineName":"yang"}
 
 - **心跳**：服务端每 30s 发 ws ping，60s 无 pong 判死断开——客户端用标准 ws 库回 pong 即可，无需应用层帧
 
-### 4.2 帧表（19 型；`?`=可缺省）
+### 4.2 帧表（23 型；`?`=可缺省）
 
 | 帧 | 方向 | 字段 |
 |---|---|---|
 | `info` | S→C | proto, server, caps, starId?, name?（多星时不带） |
-| `connect` | C→S | proto, role(node/sender), machineId?, auth, name?（≤32 字符显示名）, caps（必带 `multi-star`；node 侧另加 `session-members`） |
+| `connect` | C→S | proto, role(node/sender), machineId?, auth?, name?（≤32 字符显示名）, caps（必带 `multi-star`；node 侧另加 `session-members`）, admin?（034 管理连接=true 且不带 auth——走挑战应答） |
 | `connected` | S→C | machineName?, starId?, name?（多星时回填星籍） |
 | `error` | 双向 | code, message, id? |
 | `send` | C→S | id, targetMachine, to?, conversation?, body, origin? |
@@ -640,6 +654,10 @@ S → C   {"op":"connected","machineName":"yang"}
 | `sessions` | C→S（node） | sessions:[{sessionId, name?, extends?}]——全量重播：数组即该连接当前全部成员，空数组=清空；extends 旧名 string=同机 / {machine,name}=跨机 |
 | `members-query` | C→S（node） | （空）——聚合器重启后查回"我以前的成员" |
 | `members-result` | S→C | members:[{sessionId, name?, extends?}]——broker 断连后保留的最后已知名单（纯内存，broker 重启即空） |
+| `auth-challenge` | S→C | nonce——034 管理连接挑战（一次性；防重放） |
+| `auth-proof` | C→S | proof——HMAC-SHA256(星管理钥, nonce) 的 hex（钥匙本体永不出现在任何帧里） |
+| `admin-op` | C→S | id, action, n?(gen-key), host?(gen-key), label?(remove-node)——034 星管理域：action∈{list-nodes, list-members, gen-key, remove-node}；list-stars/set-name 等本机域 op 一律 ADMIN_REQUIRED |
+| `admin-op-result` | S→C | id, ok, error?, results?(gen-key 新钥+node.json 文本——仅此路径回显钥匙), nodes?/members?（读回显**永不带钥匙**）, removed? |
 
 每帧示例（占位值）：
 
@@ -689,6 +707,8 @@ C → result{id:"a1b2c3", status:"delivered", turn:"1", replyRef:"mc2_…"}
 | `FILE_TOO_LARGE` | file-begin 的 size > 64MiB（broker 预拒） | 压缩或分段 |
 | `TCP_TRANSPORT_FAILED` | 客户端侧：连不上 broker / 等回执超时断线 | 核对 node.json host:port、防火墙；超时型**勿盲目重发** |
 | `FILE_TRANSFER_FAILED` | 客户端侧：文件落盘失败 | 查磁盘/权限，重跑 |
+| `ADMIN_REQUIRED` | 034：非管理员调管理 op（成员发钥/删节点、任何人远程调本机域 op） | 找星管理员（星管理钥）或 broker 主本机执行；世上不存在全能远程钥匙 |
+| `STAR_DELETED` | 星已被 `--remove-star`（册随星葬、钥匙作废、无墓碑无复活） | 找 broker 主重建（`--add-star`）后重新配钥入星 |
 
 ### 4.5 文件通道状态机
 
@@ -719,14 +739,15 @@ C → file-end{id}
 
 ### 4.7 第三方实现者注意
 
-参考实现是**单 broker 星型**——多实例集群需自行解决实例间路由（哪台节点连在哪个实例）与注册表共享，本实现不含（一台机器入多颗星由节点侧承担，见 3.5）。注册表格式见 broker 机 `~/.crosschat/tcp/broker.json`（032 单文件单形状：`{port?, stars:[{starId, name?, nodes, roster:{entries}}]}`——注册表与各星星册同文件；nodes[] 内 label/key/machineId/machineName/addedAt）。节点侧 node.json：`{brokers:[{host,port,name(星名),starId,key}…], showName(本机显示名)}`——旧字段 alias/顶层 name 读取时自动映射。`nodes[].machineName` 不是权威——单一事实源是各机自己的 node.json `showName`（节点机经连接帧上报、broker 机经 serve 启动读回刷新；显式缺失/空则清除，roster 回退 mid8）。会话引用 mc2_ 可在尾部携带 starId（flags bit 10）——旧版解析器遇此扩展走 `INVALID_CONVERSATION_REF`+升级指引，属设计好的版本偏差路径。
+参考实现是**单 broker 星型**——多实例集群需自行解决实例间路由（哪台节点连在哪个实例）与注册表共享，本实现不含（一台机器入多颗星由节点侧承担，见 3.5）。注册表格式见 broker 机 `~/.crosschat/tcp/broker.json`（032 单文件单形状：`{port?, stars:[{starId, name?, nodes, roster:{entries}}]}`——注册表与各星星册同文件；nodes[] 内 label/key/machineId/machineName/addedAt，034 起 key 可选：星管理钥条目=label+adminKey+addedAt（无 key/machineId，与星钥同表存放）；顶层 `port` 是**手编字段**——`--port` 命令已移除，改文件重启生效）。节点侧 node.json：`{brokers:[{host,port,name(星名),starId,key,adminKey?}…], showName(本机显示名)}`——旧字段 alias/顶层 name 读取时自动映射；adminKey（星管理钥，与星钥同条目）可选，供远程管理写 op 走挑战应答。`nodes[].machineName` 不是权威——单一事实源是各机自己的 node.json `showName`（节点机经连接帧上报、broker 机经 serve 启动读回刷新；显式缺失/空则清除，roster 回退 mid8）。会话引用 mc2_ 可在尾部携带 starId（flags bit 10）——旧版解析器遇此扩展走 `INVALID_CONVERSATION_REF`+升级指引，属设计好的版本偏差路径。
 
 ### 4.8 proto:3 能力协商（caps）与 attach 管道
 
 **caps 协商**（线版本号不动，能力走握手数组）：
 
-- broker 的 `info` 恒带 `caps`，proto:3 起含 `"session-members"`，多星 broker 另含 `"multi-star"`；老 broker（proto:1 期）`caps` 缺省或为空
+- broker 的 `info` 恒带 `caps`，proto:3 起含 `"session-members"`，多星 broker 另含 `"multi-star"`，034 起恒含 `"challenge-auth"`（管理连接挑战应答）；老 broker（proto:1 期）`caps` 缺省或为空
 - 会话级感知的聚合器在 `connect` 带上 `caps:["session-members","multi-star"]`；**不带 `multi-star` 的旧版腿 032 起直接拒连**（BAD_PROTO+升级教学，非兼容升级），不带 `session-members` 的新版腿按机器级对待
+- 034 管理连接在 `connect` 带上 `admin:true` + `caps:["multi-star","challenge-auth"]`；客户端见 `info.caps` 缺 `challenge-auth` 即拒连（无降级——绝不裸发星管理钥），星钥连接不受影响
 - 聚合器发现 broker 无此 cap → **不发** `sessions`/`members-query`（老 broker 对未知 op 静默丢，发了也白发），并在命令面打一行降级告警（见 [2.5](#25-重启自愈与降级告警)）
 - 后续能力（如 010 TLS）沿 `caps` 数组追加，不翻 `proto` 字段
 

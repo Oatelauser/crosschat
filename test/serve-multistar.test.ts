@@ -11,7 +11,7 @@ import WebSocket, { type RawData } from 'ws';
 import { Broker } from '../src/serve/broker.js';
 import { loadBrokerFile, registryFileOf, writeBrokerFile, type NodeEntry } from '../src/serve/registry.js';
 import { seedBroker } from './helpers/broker-seed.js';
-import { encodeFrame, parseFrame, CAP_MULTI_STAR, CAP_SESSION_MEMBERS, type Frame, type InfoFrame, type ConnectedFrame } from '../src/serve/protocol.js';
+import { encodeFrame, parseFrame, CAP_CHALLENGE_AUTH, CAP_MULTI_STAR, CAP_SESSION_MEMBERS, type Frame, type InfoFrame, type ConnectedFrame } from '../src/serve/protocol.js';
 import { NodeClient, attachPipePath, type BrokerEntry } from '../src/serve/node.js';
 import { VirtualSocket } from '../src/serve/virtual-socket.js';
 import { FileInbox } from '../src/serve/file-channel.js';
@@ -226,7 +226,7 @@ describe('032 多星握手与星域隔离', () => {
     const info = (await c.waitFor((f) => f.op === 'info')) as InfoFrame;
     expect(info.starId).toBe(STAR_A);
     expect(info.name).toBe('alpha');
-    expect(info.caps).toEqual([CAP_SESSION_MEMBERS]); // 单星不广告 multi-star
+    expect(info.caps).toEqual([CAP_SESSION_MEMBERS, CAP_CHALLENGE_AUTH]); // 单星不广告 multi-star；034 起恒带 challenge-auth
     c.send({ op: 'connect', proto: 1, role: 'node', machineId: 'aaaa1111aaaa', auth: key('a'), caps: [CAP_MULTI_STAR] });
     const conn = (await c.waitFor((f) => f.op === 'connected')) as ConnectedFrame;
     expect(conn.starId).toBeUndefined();

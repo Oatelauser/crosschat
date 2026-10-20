@@ -30,11 +30,22 @@ describe('parseServeArgs', () => {
     expect(parseServeArgs(['--gen-key=3'])).toEqual({ genKeyArg: '3' });
   });
 
-  it('parses --port/--remove values and --list/--detach flags', () => {
-    expect(parseServeArgs(['--port', '7260'])).toEqual({ portArg: '7260' });
+  it('parses --remove values, --list/--detach/--list-nodes/--list-members flags; 034 admin-key/via value flags', () => {
     expect(parseServeArgs(['--remove', 'node-2'])).toEqual({ remove: 'node-2' });
     expect(parseServeArgs(['--list', '--detach'])).toEqual({ list: true, detach: true });
-    expect(parseServeArgs(['--port=7000', '--list'])).toEqual({ portArg: '7000', list: true });
+    expect(parseServeArgs(['--list-nodes'])).toEqual({ listNodes: true });
+    expect(parseServeArgs(['--list-members'])).toEqual({ listMembers: true });
+    expect(parseServeArgs(['--gen-admin-key', 'ops'])).toEqual({ genAdminKeyArg: 'ops' });
+    expect(parseServeArgs(['--remove-admin-key=wsl'])).toEqual({ removeAdminKeyArg: 'wsl' });
+    expect(parseServeArgs(['--via', 'tcp:d32b'])).toEqual({ viaArg: 'tcp:d32b' });
+    expectUsage(() => parseServeArgs(['--gen-admin-key']), 'requires a value');
+  });
+
+  // 034：--port 无命令——解析直接拒（教学指 broker.json 手编），help 也不再提供
+  it('rejects --port outright (port is a hand-edited broker.json field)', () => {
+    expectUsage(() => parseServeArgs(['--port', '7000']), '已移除');
+    expectUsage(() => parseServeArgs(['--port=7000']), 'broker.json');
+    expectUsage(() => parseServeArgs(['--port']), '已移除');
   });
 
   it('parses --stop with optional broker|node value; other values become B2 selectors', () => {
@@ -68,7 +79,6 @@ describe('parseServeArgs', () => {
 
   it('rejects non-flag tokens and missing values', () => {
     expectUsage(() => parseServeArgs(['serve', 'extra']), 'unexpected argument');
-    expectUsage(() => parseServeArgs(['--port']), 'requires a value');
   });
 });
 
@@ -129,22 +139,8 @@ describe('runServe --gen-key / --list / --remove', () => {
     expect(loadBrokerFile(registryFileOf(dir)).stars[0]!.nodes.map((n) => n.label)).toEqual(['node-1', 'node-2']);
   });
 
-  it('persists an explicit --port into the registry', async () => {
-    const { deps, dir } = makeDeps();
-    seedStar(dir);
-    await runServe({ genKeyArg: '1', portArg: '9000' }, deps);
-    expect(JSON.parse(readFileSync(registryFileOf(dir), 'utf8'))).toMatchObject({ port: 9000 });
-  });
-
-  it('rejects an out-of-range port with USAGE', async () => {
-    const { deps } = makeDeps();
-    const err: unknown = await runServe({ portArg: '70000' }, deps).then(
-      () => undefined,
-      (e: unknown) => e,
-    );
-    expect(err).toBeInstanceOf(MultichatError);
-    expect((err as MultichatError).message).toContain('1-65535');
-  });
+  // 034：--port 旗标已删（端口=broker.json 手编字段）——旧行为用例随葬，
+  // 解析面拒绝用例见 parseServeArgs 组。
 
   it('lists registered nodes with label/machine/mid/added-at', async () => {
     const { deps, lines, dir } = makeDeps();

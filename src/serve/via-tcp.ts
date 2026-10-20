@@ -4,7 +4,7 @@
  * output 同格式；错误同码重抛 + [via tcp:目标] 前缀）；发起侧记账与 ssh via
  * 分支同款。文件走 file-begin/chunk/end 分块流（256KiB/块，64MiB 上限）。
  */
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { hostname as osHostname, tmpdir as osTmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rmSync, writeFileSync } from 'node:fs';
@@ -18,8 +18,8 @@ import { decodeRef } from '../ref.js';
 import { CODEX_ENDPOINT_MAX_BODY_BYTES } from '../limits.js';
 import type { SendLogEntry } from '../send-log.js';
 import type { SendArgs, SendDeps } from '../commands/send.js';
-import { CAP_MULTI_STAR, encodeFrame, ERR, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
-import type { ErrorFrame, FileResultFrame, Frame, MemberRemoveResultFrame, ReceiptFrame, RosterMachine, StatusPayload, StatusResultFrame } from './protocol.js';
+import { CAP_CHALLENGE_AUTH, CAP_MULTI_STAR, encodeFrame, ERR, hasCap, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
+import type { AdminOpResultFrame, AuthChallengeFrame, ErrorFrame, FileResultFrame, Frame, InfoFrame, MemberRemoveResultFrame, ReceiptFrame, RosterMachine, StatusPayload, StatusResultFrame } from './protocol.js';
 import { defaultBaseDir, tcpDir } from './registry.js';
 import { formatBrokerEntry, readNodeConfig, type BrokerEntry } from './node.js';
 import { FILE_CHUNK_BYTES, FILE_MAX_BYTES, readFileForSend } from './file-channel.js';
@@ -45,8 +45,8 @@ interface Waiter {
   timer: ReturnType<typeof setTimeout>;
 }
 
-/** 一条到 broker 的瞬态发送连接（sender 角色）。 */
-class SenderConn {
+/** 一条到 broker 的瞬态发送连接（sender 角色）；034 起管理面（读=星钥/写=星管理钥）复用同壳。 */
+export class SenderConn {
   private readonly waiters: Waiter[] = [];
   /** 已收帧缓冲：open 与 waitFor 注册之间到达的帧先落此，注册时回查。 */
   private readonly frameLog: Frame[] = [];
@@ -108,6 +108,50 @@ class SenderConn {
       throw err instanceof MultichatError
         ? err
         : new MultichatError('TCP_TRANSPORT_FAILED', `无法连上 broker（${url}）：${err instanceof Error ? err.message : String(err)}——核对 node.json 的 broker 地址与 crosschat serve 是否在跑`);
+    }
+  }
+
+  /**
+   * 034 管理连接握手（星管理钥）：connect 不带 auth（钥匙永不过线）→ 收一次性
+   * nonce → 回 HMAC 证明 → 等 connected。**无降级路径**：info 无 challenge-auth
+   * cap（旧版 broker/被中间人剥除）即拒连，绝不回落裸钥发送 adminKey。
+   */
+  static async openAdmin(url: string, adminKey: string, timeoutMs: number): Promise<SenderConn> {
+    const ws = new WebSocket(url, { maxPayload: MAX_PAYLOAD_BYTES });
+    const conn = new SenderConn(ws);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error('connect timeout')), timeoutMs);
+        ws.once('open', () => { clearTimeout(t); resolve(); });
+        ws.once('error', (err) => { clearTimeout(t); reject(err); });
+      });
+      const info = await conn.waitFor((f) => f.op === 'info', timeoutMs);
+      if (info.op !== 'info' || info.proto !== PROTOCOL_VERSION) {
+        throw new Error(`broker 协议不匹配（期望 ${PROTOCOL_VERSION}）`);
+      }
+      if (!hasCap((info as InfoFrame).caps, CAP_CHALLENGE_AUTH)) {
+        throw new MultichatError(
+          'TCP_TRANSPORT_FAILED',
+          'broker 未声明挑战应答能力（challenge-auth 缺席——版本过旧或能力被剥除）——绝不发送星管理钥（无降级路径）；升级 broker 机 crosschat 后重试',
+        );
+      }
+      conn.send({ op: 'connect', proto: PROTOCOL_VERSION, role: 'sender', admin: true, caps: [CAP_MULTI_STAR, CAP_CHALLENGE_AUTH] });
+      const challenge = await conn.waitFor((f) => f.op === 'auth-challenge' || f.op === 'error', timeoutMs);
+      if (challenge.op === 'error') {
+        throw new MultichatError('TCP_TRANSPORT_FAILED', `broker 拒绝管理连接：${(challenge as ErrorFrame).code} ${(challenge as ErrorFrame).message}`);
+      }
+      const proof = createHmac('sha256', adminKey).update((challenge as AuthChallengeFrame).nonce).digest('hex');
+      await conn.send({ op: 'auth-proof', proof });
+      const verdict = await conn.waitFor((f) => f.op === 'connected' || f.op === 'error', timeoutMs);
+      if (verdict.op === 'error') {
+        throw new MultichatError('BAD_AUTH', `星管理钥被拒：${(verdict as ErrorFrame).message}`);
+      }
+      return conn;
+    } catch (err) {
+      conn.close();
+      throw err instanceof MultichatError
+        ? err
+        : new MultichatError('TCP_TRANSPORT_FAILED', `管理连接未建立（${url}）：${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -534,6 +578,25 @@ export async function requestMemberRemove(
   } finally {
     conn.close();
   }
+}
+
+/**
+ * 034 远程管理 op 传输腿：已认证连接（星钥=成员 / 星管理钥=管理员）上一问一答
+ * admin-op 帧。error 帧按码重抛（ADMIN_REQUIRED/BAD_AUTH 教学语原样直达）。
+ */
+export async function requestAdminOp(
+  conn: SenderConn,
+  action: string,
+  params: { n?: number; host?: string; label?: string } = {},
+  timeoutMs = 10_000,
+): Promise<AdminOpResultFrame> {
+  const id = randomUUID();
+  await conn.send({ op: 'admin-op', id, action, ...params });
+  const frame = await conn.waitFor((f) => (f.op === 'admin-op-result' || f.op === 'error') && f.id === id, timeoutMs);
+  if (frame.op === 'error') {
+    throw new MultichatError((frame as ErrorFrame).code, (frame as ErrorFrame).message);
+  }
+  return frame as AdminOpResultFrame;
 }
 
 /**

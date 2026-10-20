@@ -19,18 +19,20 @@ import { Broker, DEFAULT_PORT, defaultDeliverLocal, type AdminReply } from '../s
 import {
   addStarTo,
   ensureStarIds,
+  genAdminKeyFor,
   genKeysFor,
   loadBrokerFile,
   registryFileOf,
+  removeAdminKeyFor,
   removeNodeFor,
   removeStarFrom,
   sanitizeName,
   selectStar,
   setNameFor,
-  setPortFor,
   setShowNameFor,
   tcpDir,
   writeBrokerFile,
+  type GenAdminKeyResult,
   type GenKeyResult,
   type NodeEntry,
   type StarRecord,
@@ -38,17 +40,16 @@ import {
 import { buildStatusPayload, deliverViaRunSend, formatBrokerEntry, NodeClient, readNodeConfig, type BrokerEntry, type NodeConfig } from '../serve/node.js';
 import { VirtualSocket } from '../serve/virtual-socket.js';
 import { FileInbox } from '../serve/file-channel.js';
-import { requestMemberRemove } from '../serve/via-tcp.js';
+import { requestAdminOp, requestMemberRemove, SenderConn } from '../serve/via-tcp.js';
 import { runAdopt, spawnServeDetachReal, warnIfBrokerLacksSessionCaps } from './session-star.js';
 import { listNodeStatusFiles } from './status.js';
 import type { SendDeps } from './send.js';
 import type { DeliverFrame, ErrorFrame, ResultFrame, SendFrame, StatusPayload } from '../serve/protocol.js';
 
 export interface ServeArgs {
-  portArg?: string;
   /** E0 星名（broker 专用；校验/持久化在 registry.setName；多星下须与 --star 连用）。 */
   nameArg?: string;
-  /** 022：星域选择器（多星注册表下限定 --gen-key/--remove/--name 的目标星）。 */
+  /** 022：星域选择器（多星注册表下限定 --gen-key/--remove/--name/--gen-admin-key/--remove-admin-key 的目标星）。 */
   starArg?: string;
   /** 022：--add-star <名>——broker 托管下一颗星（033 起热闭环：在跑 broker 即时托管免重启）。 */
   addStarArg?: string;
@@ -56,9 +57,19 @@ export interface ServeArgs {
   removeStarArg?: string;
   /** 033：--show-name <名>——broker 机显示名热改（node.json showName + 重挂内挂聚合器；空串=清除）。 */
   showNameArg?: string;
+  /** 034：--gen-admin-key <label>——发星管理钥（仅 broker 主本机；一星一权，挑战应答，钥匙永不过线）。 */
+  genAdminKeyArg?: string;
+  /** 034：--remove-admin-key <label|前缀>——吊星管理钥（仅 broker 主本机）。 */
+  removeAdminKeyArg?: string;
   /** 数字字符串，缺省 '1'；上限校验在 registry.genKeys。 */
   genKeyArg?: string;
   list?: boolean;
+  /** 034：--list-nodes——读一颗星的节点表（无钥匙回显；--via tcp:<星> 走远端）。 */
+  listNodes?: boolean;
+  /** 034：--list-members——读一颗星的成员册（--via tcp:<星> 走远端）。 */
+  listMembers?: boolean;
+  /** 034：--via tcp:<星>——远程管理路由（读=星钥成员身份；写=条目 adminKey 星管理员身份）。 */
+  viaArg?: string;
   remove?: string;
   detach?: boolean;
   stopTarget?: 'broker' | 'node' | 'both';
@@ -182,28 +193,13 @@ function adminFailed(deps: ServeDeps, error: string): number {
 
 export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number> {
   const registryFile = registryFileOf(deps.baseDir);
-  let port: number | undefined;
   // 033：懒 bootstrap 已删（serve 永不造星——空表=合法待配，首星走 --add-star
   // 显式命名）；管理命令热路径经管理插座（broker 回执才算"已生效"），冷路径
   // 直调 registry 库函数（broker 未跑——函数与热路径同一套，首星/预配机不断腿）。
+  // 034：--port 旗标全删（端口=broker.json 手编字段重启生效——set-port 插座 op 同删）。
   const oneShotCount = [args.addStarArg, args.removeStarArg, args.showNameArg].filter((v) => v !== undefined).length;
   if (oneShotCount > 1) {
     throw new MultichatError('USAGE', '--add-star / --remove-star / --show-name 均为一次性命令，一次只给一个');
-  }
-  if (args.portArg !== undefined) {
-    const n = Number.parseInt(args.portArg, 10);
-    if (!Number.isInteger(n) || n < 1 || n > 65535) {
-      throw new MultichatError('USAGE', `--port 须为 1-65535 的整数，收到：${args.portArg}`);
-    }
-    port = n;
-    // 显式 --port 即持久化指令（首次记住，再给即更新）——033 起经插座（在跑
-    // broker 是唯一写者）；port 不热换（重启生效，手册明写）。
-    const outcome = await adminOp(deps, { op: 'set-port', port: n });
-    if (outcome.kind === 'hot') {
-      if (!outcome.reply.ok) throw new MultichatError('USAGE', `改端口失败：${outcome.reply.error ?? '未知错误'}`);
-      if (typeof outcome.reply.note === 'string') deps.stdout(outcome.reply.note);
-    } else if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
-    else setPortFor(registryFile, n);
   }
   // 022 --add-star / 033 --remove-star / --show-name（一次性命令；先于其余管理旗标处理）
   if (args.addStarArg !== undefined) {
@@ -227,6 +223,9 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
     if (args.detach) throw new MultichatError('USAGE', '--show-name 是一次性命令，不支持 --detach');
     return runShowName(args.showNameArg, deps);
   }
+  // 034 远程管理路由：--via tcp:<星> 时 --gen-key/--remove/--list-nodes/--list-members
+  // 发往远端 broker（读=星钥成员身份；写=条目 adminKey 星管理员挑战应答）。
+  if (args.viaArg !== undefined) return runRemoteAdmin(args, deps);
   // 022/032 星域解析：单星隐式选中（裸 --gen-key/--name/--remove 照常），
   // 多星（stars>1）须 --star 限定（--list 只读分组展示除外）
   const starScope = resolveStarScope(args, registryFile);
@@ -244,8 +243,22 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
     } else if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
     else setNameFor(registryFile, nameStar.starId!, args.nameArg);
   }
-  if (args.genKeyArg !== undefined) return runGenKey(args.genKeyArg, deps, registryFile, port, starScope);
+  // 034 星管理钥发/吊（仅 broker 主本机：热经插座，冷直调库函数——发放即绑定一星）
+  if (args.genAdminKeyArg !== undefined) {
+    if (args.connect !== undefined) throw new MultichatError('USAGE', '--gen-admin-key 是 broker 侧命令，不与 --connect 连用');
+    if (args.detach) throw new MultichatError('USAGE', '--gen-admin-key 是一次性命令，不支持 --detach');
+    return runGenAdminKey(args.genAdminKeyArg, deps, registryFile, starScope);
+  }
+  if (args.removeAdminKeyArg !== undefined) {
+    if (args.connect !== undefined) throw new MultichatError('USAGE', '--remove-admin-key 是 broker 侧命令，不与 --connect 连用');
+    if (args.detach) throw new MultichatError('USAGE', '--remove-admin-key 是一次性命令，不支持 --detach');
+    return runRemoveAdminKey(args.removeAdminKeyArg, deps, registryFile, starScope);
+  }
+  if (args.genKeyArg !== undefined) return runGenKey(args.genKeyArg, deps, registryFile, starScope);
   if (args.list) return runList(deps, registryFile);
+  // 034 本机读 op（冷读 broker.json，broker 机视角；远端走 --via tcp:<星> 已提前分流）
+  if (args.listNodes) return runListNodes(deps, registryFile, starScope);
+  if (args.listMembers) return runListMembers(deps, registryFile, starScope);
   if (args.remove !== undefined) return runRemove(args.remove, deps, registryFile, starScope);
   if (args.stopSelector !== undefined) return runStopSelector(args.stopSelector, deps);
   if (args.stopTarget !== undefined) return runStop(args.stopTarget, deps, registryFile);
@@ -306,11 +319,11 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
   }
   if (args.detach && !detachedChild) {
     // 父进程先自登记并出声（子进程里再跑是幂等空转）——后台模式控制台不留黑盒。
-    const effectivePort = port ?? loadBrokerFile(registryFile).port ?? DEFAULT_PORT;
+    const effectivePort = loadBrokerFile(registryFile).port ?? DEFAULT_PORT;
     for (const line of ensureSelfEntries(deps, registryFile, effectivePort)) deps.stdout(line);
     return runDetach(deps, [], 'broker.log', effectivePort);
   }
-  return runForegroundBroker(deps, port);
+  return runForegroundBroker(deps);
 }
 
 /**
@@ -339,13 +352,13 @@ function requireStarScope(scope: { multi: boolean; star?: StarRecord }, registry
   );
 }
 
-async function runGenKey(genKeyArg: string, deps: ServeDeps, registryFile: string, port: number | undefined, starScope: { multi: boolean; star?: StarRecord }): Promise<number> {
+async function runGenKey(genKeyArg: string, deps: ServeDeps, registryFile: string, starScope: { multi: boolean; star?: StarRecord }): Promise<number> {
   const n = Number.parseInt(genKeyArg, 10);
   if (!Number.isInteger(n) || n < 1) {
     throw new MultichatError('USAGE', `--gen-key 数量须为 1-10 的整数，收到：${genKeyArg}`);
   }
   const host = firstNonInternalIPv4(deps.networkInterfaces());
-  const portNum = port ?? loadBrokerFile(registryFile).port ?? DEFAULT_PORT;
+  const portNum = loadBrokerFile(registryFile).port ?? DEFAULT_PORT;
   requireStarScope(starScope, registryFile, '--gen-key');
   // 现读目标星（--name 同命令先行改名时 scope 里的对象已陈旧）
   const star = loadBrokerFile(registryFile).stars.find((s) => s.starId === starScope.star!.starId) ?? starScope.star!;
@@ -492,11 +505,13 @@ function firstNonInternalIPv4(ifaces: NodeJS.Dict<NetworkInterfaceInfo[]>): stri
 
 function runList(deps: ServeDeps, registryFile: string): number {
   const doc = loadBrokerFile(registryFile);
+  // 034：管理钥条目同表可见（name 列标（星管理钥））——清单永不回显钥匙本体
   const printNodes = (nodes: NodeEntry[]): void => {
     deps.stdout(`${'label'.padEnd(10)}${'name'.padEnd(18)}${'mid8'.padEnd(10)}added-at`);
     for (const node of nodes) {
+      const nameCell = node.adminKey !== undefined ? '（星管理钥）' : node.machineName ?? '-';
       deps.stdout(
-        `${node.label.padEnd(10)}${(node.machineName ?? '-').padEnd(18)}${(node.machineId?.slice(0, 8) ?? '-').padEnd(10)}${node.addedAt}`,
+        `${node.label.padEnd(10)}${nameCell.padEnd(18)}${(node.machineId?.slice(0, 8) ?? '-').padEnd(10)}${node.addedAt}`,
       );
     }
     if (nodes.length === 0) deps.stdout('（注册表为空）');
@@ -531,6 +546,171 @@ async function runRemove(label: string, deps: ServeDeps, registryFile: string, s
   const removed = removeNodeFor(registryFile, star.starId!, label);
   deps.stdout(removed ? `已从星 ${star.name ?? star.starId} 移除 ${label}` : `星 ${star.name ?? star.starId} 未找到 ${label}`);
   return removed ? 0 : 1;
+}
+
+/**
+ * 034 --gen-admin-key <label> --star <星>（仅 broker 主本机）：发星管理钥——
+ * 一星一权、发放即绑定该星；热经插座（审计行随发），冷直调库函数。回显一次
+ * adminKey 并教"并进目标机 node.json 该星条目"（与星钥同条目）。
+ */
+async function runGenAdminKey(label: string, deps: ServeDeps, registryFile: string, starScope: { multi: boolean; star?: StarRecord }): Promise<number> {
+  requireStarScope(starScope, registryFile, '--gen-admin-key <label>');
+  const star = loadBrokerFile(registryFile).stars.find((s) => s.starId === starScope.star!.starId) ?? starScope.star!;
+  let result: GenAdminKeyResult;
+  const outcome = await adminOp(deps, { op: 'gen-admin-key', starId: star.starId!, label });
+  if (outcome.kind === 'hot') {
+    if (!outcome.reply.ok) {
+      (deps.stderr ?? deps.stdout)(`发星管理钥失败：${outcome.reply.error ?? '未知错误'}`);
+      return 1;
+    }
+    const r = outcome.reply.result as GenAdminKeyResult | undefined;
+    if (r === undefined || typeof r.adminKey !== 'string') return adminFailed(deps, '管理插座回执缺 result（形状异常）');
+    result = r;
+    deps.stdout(`已发星管理钥 ${label}（星 ${star.name ?? star.starId}——经在跑 broker 已生效）`);
+  } else if (outcome.kind === 'failed') {
+    return adminFailed(deps, outcome.error);
+  } else {
+    result = genAdminKeyFor(registryFile, star.starId!, label);
+    deps.stdout(`已发星管理钥 ${label}（星 ${star.name ?? star.starId}——broker 未在跑，已落盘）`);
+  }
+  deps.stdout('贴钥：把下面一行并进目标机器 node.json 该星条目（与星钥同条目；钥匙永不过线——连接走挑战应答）：');
+  deps.stdout(`  "adminKey": "${result.adminKey}"`);
+  deps.stdout(`远程管理（目标机器）：crosschat serve --via tcp:${star.name ?? star.starId} --gen-key <n> | --remove <label> | --list-nodes | --list-members`);
+  deps.stdout('本命令须在 broker 机上执行（管理钥登记进本机 broker.json）；钥匙已进入终端回滚缓冲，分发完建议清屏');
+  return 0;
+}
+
+/** 034 --remove-admin-key <label|前缀>（仅 broker 主本机）：吊钥；被吊钥的下一次挑战应答即 BAD_AUTH。 */
+async function runRemoveAdminKey(selector: string, deps: ServeDeps, registryFile: string, starScope: { multi: boolean; star?: StarRecord }): Promise<number> {
+  requireStarScope(starScope, registryFile, '--remove-admin-key <label|前缀>');
+  const star = starScope.star!;
+  const outcome = await adminOp(deps, { op: 'remove-admin-key', starId: star.starId!, label: selector });
+  if (outcome.kind === 'hot') {
+    if (!outcome.reply.ok) {
+      (deps.stderr ?? deps.stdout)(`吊星管理钥失败：${outcome.reply.error ?? '未知错误'}`);
+      return 1;
+    }
+    deps.stdout(`已吊星管理钥 ${String(outcome.reply.removed)}（星 ${star.name ?? star.starId}——经在跑 broker 已生效，持有者下次连接即 BAD_AUTH）`);
+    return 0;
+  }
+  if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
+  const removed = removeAdminKeyFor(registryFile, star.starId!, selector);
+  deps.stdout(removed ? `已吊星管理钥 ${removed}（星 ${star.name ?? star.starId}）` : `星 ${star.name ?? star.starId} 无匹配管理钥 ${selector}`);
+  return removed ? 0 : 1;
+}
+
+/** 034 --list-nodes（本机冷读；远端形态走 --via）：回显永不带钥匙。 */
+function runListNodes(deps: ServeDeps, registryFile: string, starScope: { multi: boolean; star?: StarRecord }): number {
+  requireStarScope(starScope, registryFile, '--list-nodes');
+  const star = starScope.star!;
+  const nodes = loadBrokerFile(registryFile).stars.find((s) => s.starId === star.starId)?.nodes ?? star.nodes;
+  deps.stdout(`星 ${star.name ?? star.starId} 节点表（${nodes.length} 条；不含钥匙）：`);
+  deps.stdout(`${'label'.padEnd(10)}${'name'.padEnd(18)}${'mid8'.padEnd(10)}added-at`);
+  for (const node of nodes) {
+    const nameCell = node.adminKey !== undefined ? '（星管理钥）' : node.machineName ?? '-';
+    deps.stdout(`${node.label.padEnd(10)}${nameCell.padEnd(18)}${(node.machineId?.slice(0, 8) ?? '-').padEnd(10)}${node.addedAt}`);
+  }
+  return 0;
+}
+
+/** 034 --list-members（本机冷读；远端形态走 --via）。 */
+function runListMembers(deps: ServeDeps, registryFile: string, starScope: { multi: boolean; star?: StarRecord }): number {
+  requireStarScope(starScope, registryFile, '--list-members');
+  const star = starScope.star!;
+  const roster = loadBrokerFile(registryFile).stars.find((s) => s.starId === star.starId)?.roster ?? star.roster;
+  deps.stdout(`星 ${star.name ?? star.starId} 成员册（${roster.length} 条）：`);
+  for (const e of roster) {
+    deps.stdout(
+      `  ${e.sessionId.slice(0, 8)} ${e.tool === undefined ? '' : `${e.tool}/`}${e.name ?? '?'} @ ${e.machineName ?? e.machine.slice(0, 8)}${e.online === true ? '（在线）' : ''}`,
+    );
+  }
+  return 0;
+}
+
+/**
+ * 034 远程管理路由：--via tcp:<星>（条目选择与 --connect 同判定序）。读 op
+ * （list-nodes/list-members）星钥即够（成员身份）；写 op（gen-key/remove-node）
+ * 需条目 adminKey（星管理员，挑战应答——钥匙永不过线，无降级路径）。
+ */
+async function runRemoteAdmin(args: ServeArgs, deps: ServeDeps): Promise<number> {
+  if (args.connect !== undefined || args.detach) {
+    throw new MultichatError('USAGE', '--via tcp:<星> 是一次性远程管理命令，不与 --connect/--detach 连用');
+  }
+  const via = args.viaArg!;
+  if (!via.startsWith('tcp:') || via.slice(4) === '') {
+    throw new MultichatError('USAGE', '--via 须为 tcp:<星名|starId前缀> 形态——示例：crosschat serve --via tcp:d32b --list-nodes');
+  }
+  const action =
+    args.genKeyArg !== undefined ? 'gen-key'
+      : args.remove !== undefined ? 'remove-node'
+        : args.listNodes ? 'list-nodes'
+          : args.listMembers ? 'list-members'
+            : undefined;
+  if (action === undefined) {
+    throw new MultichatError('USAGE', '--via tcp:<星> 须与 --gen-key/--remove/--list-nodes/--list-members 连用（远程管理域）');
+  }
+  const config = readNodeConfig(join(tcpDir(deps.baseDir), 'node.json'));
+  const { entry } = selectConnectEntry(via.slice(4), config);
+  const url = `ws://${entry.host}:${entry.port}`;
+  const timeoutMs = 10_000;
+  try {
+    if (action === 'list-nodes' || action === 'list-members') {
+      // 读 op：星钥=成员身份（读本星）——无需管理钥
+      const conn = await SenderConn.open(url, entry.key, undefined, timeoutMs);
+      try {
+        const r = await requestAdminOp(conn, action, {}, timeoutMs);
+        if (action === 'list-nodes') {
+          deps.stdout(`星 ${entry.name ?? entry.starId ?? '?'} 节点表（${r.nodes?.length ?? 0} 条；不含钥匙）：`);
+          for (const n of r.nodes ?? []) {
+            deps.stdout(`  ${n.label.padEnd(10)}${(n.admin === true ? '（星管理钥）' : n.name ?? '-').padEnd(18)}${(n.mid8 ?? '-').padEnd(10)}${n.addedAt}`);
+          }
+        } else {
+          deps.stdout(`星 ${entry.name ?? entry.starId ?? '?'} 成员册（${r.members?.length ?? 0} 条）：`);
+          for (const m of r.members ?? []) {
+            deps.stdout(`  ${m.sessionId.slice(0, 8)} ${m.tool === undefined ? '' : `${m.tool}/`}${m.name ?? '?'} @ ${m.machineName ?? m.machine.slice(0, 8)}${m.online === true ? '（在线）' : ''}`);
+          }
+        }
+        return 0;
+      } finally {
+        conn.close();
+      }
+    }
+    // 写 op：星管理员（挑战应答）——条目无 adminKey 即教学找 broker 主
+    if (entry.adminKey === undefined) {
+      throw new MultichatError(
+        'USAGE',
+        `本机 node.json 的星 ${entry.name ?? via.slice(4)} 条目无 adminKey（星管理钥）——找 broker 主发放（broker 机 crosschat serve --star <星> --gen-admin-key <label>），把回显的 adminKey 并进该星条目`,
+      );
+    }
+    const conn = await SenderConn.openAdmin(url, entry.adminKey, timeoutMs);
+    try {
+      if (action === 'gen-key') {
+        const n = Number.parseInt(args.genKeyArg!, 10);
+        if (!Number.isInteger(n) || n < 1) throw new MultichatError('USAGE', `--gen-key 数量须为 1-10 的整数，收到：${args.genKeyArg}`);
+        const r = await requestAdminOp(conn, 'gen-key', { n, host: entry.host }, timeoutMs);
+        deps.stdout(`远端发钥（星 ${entry.name ?? '?'}，broker ${url}）：生成 ${r.results?.length ?? 0} 把钥匙`);
+        for (const result of r.results ?? []) {
+          deps.stdout('--------------------------------');
+          deps.stdout(result.nodeJsonContent.trimEnd());
+        }
+        deps.stdout('放置路径（目标机器）：~/.crosschat/tcp/node.json（入多星把各星条目合并进同一份 brokers 数组）');
+        deps.stdout('钥匙已进入终端回滚缓冲，分发完建议清屏');
+        return 0;
+      }
+      const label = args.remove!;
+      const r = await requestAdminOp(conn, 'remove-node', { label }, timeoutMs);
+      deps.stdout(r.removed === true ? `已从星 ${entry.name ?? '?'} 远端移除 ${label}` : `星 ${entry.name ?? '?'} 未找到 ${label}`);
+      return r.removed === true ? 0 : 1;
+    } finally {
+      conn.close();
+    }
+  } catch (err) {
+    if (err instanceof MultichatError) throw err;
+    throw new MultichatError(
+      'TCP_TRANSPORT_FAILED',
+      `远程管理未达（${err instanceof Error ? err.message : String(err)}）——broker 在跑吗（crosschat serve）？两端 crosschat 都须为 034 挑战应答协议版本`,
+    );
+  }
 }
 
 /** 后台化：spawn 自身 detached + env 标记防循环；日志写 tcp/<name>（B2 节点命名条目=node-<选择器>.log）。broker 传端口（节点客户端外连无监听口）。 */
@@ -606,12 +786,13 @@ export function ensureSelfEntries(deps: ServeDeps, registryFile: string, port: n
       const mine = entries.find((e) => e.key === self.key);
       if (mine === undefined) {
         // B0/E0 词表：条目 name=星名（broker 权威）、starId 同构、顶层 showName=本机显示名
+        // （self 按 machineId 命中——管理钥条目无 machineId，self.key 必在）
         entries.push({
           host: '127.0.0.1',
           port,
           ...(star.name === undefined ? {} : { name: star.name }),
           ...(star.starId === undefined ? {} : { starId: star.starId }),
-          key: self.key,
+          key: self.key!,
         });
         jsonChanged = true;
       } else if (mine.host === '127.0.0.1' && mine.port === port) {
@@ -643,7 +824,7 @@ export function ensureSelfEntries(deps: ServeDeps, registryFile: string, port: n
   return notes;
 }
 
-async function runForegroundBroker(deps: ServeDeps, port: number | undefined): Promise<number> {
+async function runForegroundBroker(deps: ServeDeps): Promise<number> {
   const detached = deps.env.CROSSCHAT_SERVE_DETACHED === '1';
   const logFile = join(tcpDir(deps.baseDir), 'broker.log');
   const logLine = detached
@@ -700,7 +881,8 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
     : async (): Promise<StatusPayload> => buildStatusPayload(deps.makeSendDeps!());
   // B2.1/022：起服务前逐星自登记（本机=每星全权成员，mid8/名字可寻址 + 本机
   // node.json）。后台子进程不重复出声——父进程 spawn 前已向控制台播报过。
-  const effectivePort = port ?? bootDoc.port ?? DEFAULT_PORT;
+  // 034：监听口=broker.json 手编 port（--port 旗标已删），缺省 DEFAULT_PORT。
+  const effectivePort = bootDoc.port ?? DEFAULT_PORT;
   const selfNotes = ensureSelfEntries(deps, registryFile, effectivePort);
   if (!detached) {
     for (const line of selfNotes) deps.stdout(line);
@@ -728,7 +910,6 @@ async function runForegroundBroker(deps: ServeDeps, port: number | undefined): P
       inboxDir: join(tcpDir(deps.baseDir), 'inbox'),
       partsDir: join(tcpDir(deps.baseDir), 'parts'),
     }),
-    port,
     resultTimeoutMs: readResultTimeoutMs(deps.env),
     spawnLocalAggregator: (starId) => aggregatorRef.spawn?.(starId),
     stopLocalAggregator: (starId) => aggregatorRef.stop?.(starId) ?? Promise.resolve(),

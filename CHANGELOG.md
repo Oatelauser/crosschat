@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### 034：星级分权管理面——星管理钥+挑战应答（2026-10-20 四轮 grilling 定案）
+
+- **破坏性变更：`--port` 无命令（旗标+插座 op 全删）**：端口=broker.json 手编字段（改文件重启生效）；首启非默认口=先手写 broker.json（`{"port": <N>, "stars": []}`）再 serve；doctor 非默认口出教学行指路。解析 `--port` 直接拒绝并教学；help 不再提供；033 的 set-port 插座 op 随葬（回"未知管理 op"）。**升级注意：按新协议（挑战应答）从零重配**——旧脚本里的 `--port` 须改手编文件
+- **三层角色（世上不存在全能远程钥匙）**：普通成员（星钥——读本星 nodes/members ✅，member-remove 照旧）/ 星管理员（星管理钥，**一星一权**——另可本星 gen-key 发钥、remove-node 删节点；set-name 不给）/ broker 主（本机插座专属——add-star/remove-star/set-name/发吊管理钥/list-stars 等本机域 op 不上网，WS 调用一律 `ADMIN_REQUIRED` 教学）
+- **星管理钥**：`crosschat serve --gen-admin-key <label> --star <星>` 发（本机插座热路径/冷路径同库函数）、`--list` 见（条目标（星管理钥），**清单永不回显钥匙**）、`--remove-admin-key <label|前缀>` 吊（被吊钥下次挑战应答即 BAD_AUTH）；存放=node.json 该星条目可选字段 `adminKey`（与星钥同条目——管理身份随星绑定）；broker 侧台账同表（nodes[] 条目 label+adminKey，key 可选化）
+- **挑战应答握手（钥匙永不过线）**：管理连接 connect 带 `admin:true` 不带 auth → broker 发一次性 nonce → 客户端回 HMAC-SHA256(adminKey, nonce) 证明 → 命中即连接绑星；nonce 一次性消费（同连接重放证明=BAD_AUTH）；additive cap `challenge-auth`（info 恒带）——**无降级路径**：cap 缺席（旧版/被中间人剥除）客户端即拒连，绝不回落裸钥。诚实边界：会话内容与新发星钥仍明文（TLS 窗口期，010 落地闭合）
+- **管理 op 帧族（WS 星管理域）**：`admin-op`/`admin-op-result` 帧——action=list-nodes/list-members（成员+星管）/gen-key/remove-node（星管）；op×角色矩阵表驱动（越权回 `ADMIN_REQUIRED` 教学）；读回显**永不带钥匙**（发钥只走 gen-key 显式动作）；管理钥吊销不归星管理员（remove-node 撞管理钥条目=ADMIN_REQUIRED 指路本机）
+- **远程管理路由**：`crosschat serve --via tcp:<星> --gen-key/--remove/--list-nodes/--list-members`——读 op 星钥即够（成员身份瞬态连接），写 op 需 node.json 条目 adminKey（挑战应答星管理员身份）；`--list-nodes`/`--list-members` 新读旗标（本机冷读/`--via` 远程）
+- **审计**：broker.log 逐笔记管理 op——`audit admin-op <action> <对象> 来源=本机插座 | 星管理钥(<label>)`（钥匙本体永不进日志）；插座全 op（含 033 存量）与 WS 管理 op 均覆盖
+- **错误码**：`ADMIN_REQUIRED` 入 ERR；`STAR_DELETED` 收编 ERR 表（033 期字面量转正）；协议参考（broker.md §四）同步：帧表 23 型、握手挑战应答时序、错误矩阵两行、caps 说明
+
 ### 033：星生命周期热闭环与台账静态化（2026-10-20 七轮 grilling 定案）
 
 - **行为变更（全新安装）**：serve 永不自动造星——空表首启=零星合法待配状态，首星须显式 `crosschat serve --add-star <星名>`（hostname 缺省丑名随葬；懒 bootstrap 与 mutatingCmd 造星钩子删除）。doctor/status/--list/--gen-key 零星态均出教学行指 `--add-star`

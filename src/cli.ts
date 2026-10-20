@@ -91,9 +91,9 @@ commands:
                                 (hidden by default in the main view)
   doctor                    environment health check (exits 1 on any ❌)
   serve [options]           run/manage the tcp broker (star topology,
-                            default port ${DEFAULT_PORT}; the first --port
-                            given is remembered and reused on bare runs)
-                              --port <N>           listen port 1-65535
+                            default port ${DEFAULT_PORT}; a non-default
+                            port is a hand-edited broker.json field —
+                            edit, then restart serve)
                               --name <星名>        broker star name
                                 (1-32 chars of A-Za-z0-9._-,
                                 no colon; the first --name given
@@ -114,12 +114,36 @@ commands:
                                 (hot: remounts in-process
                                 aggregators; '' clears)
                               --star <星名|前缀>   scope --gen-key/--remove/
-                                --name to one hosted star (required
-                                when the broker hosts 2+ stars)
+                                --name/--gen-admin-key/--remove-
+                                admin-key to one hosted star
+                                (required when the broker hosts 2+ stars)
                               --gen-key [N]        print N node keys (default 1)
                                 and register them
+                              --gen-admin-key <label>
+                                issue a star-admin key bound to one
+                                star (broker host only; challenge-
+                                response auth — the key never
+                                crosses the wire)
+                              --remove-admin-key <label|前缀>
+                                revoke a star-admin key (broker
+                                host only; revoked keys get
+                                BAD_AUTH on next connect)
                               --list               list registered nodes
-                                (multi-star: grouped by star)
+                                (multi-star: grouped by star; admin
+                                key entries marked — keys never
+                                shown)
+                              --list-nodes         read one star's node table
+                                (no keys echoed; add --via tcp:<星>
+                                to query the broker remotely)
+                              --list-members       read one star's session
+                                roster (same --via remote form)
+                              --via tcp:<星名|前缀>
+                                route --gen-key/--remove/--list-
+                                nodes/--list-members to a remote
+                                broker: reads use the star key
+                                (member), writes need adminKey in
+                                the node.json entry (star admin,
+                                challenge-response)
                               --remove <label>     remove a node key
                               --connect [星名|星前缀]
                                 run this machine as a node client
@@ -347,10 +371,11 @@ export function parseInstallSkillsArgs(argv: readonly string[]): InstallSkillsAr
 }
 
 /**
- * Hand-rolled serve arg parsing: --port/--remove/--name take values (space or
- * =), --gen-key/--stop/--connect take optional values (a following non-flag
- * token), --list/--detach are flags. Raw values only — numeric/star-name
- * validation lives in commands/serve.ts.
+ * Hand-rolled serve arg parsing: --remove/--name take values (space or =),
+ * --gen-key/--stop/--connect take optional values (a following non-flag
+ * token), --list/--detach are flags; --port is rejected outright (034: 端口=
+ * broker.json 手编字段). Raw values only — numeric/star-name validation lives
+ * in commands/serve.ts.
  */
 export function parseServeArgs(argv: readonly string[]): ServeArgs {
   const args: ServeArgs = {};
@@ -373,17 +398,26 @@ export function parseServeArgs(argv: readonly string[]): ServeArgs {
     };
     if (name === '--list') {
       args.list = true;
+    } else if (name === '--list-nodes') {
+      args.listNodes = true; // 034：读一颗星节点表（无钥匙回显；--via 走远端）
+    } else if (name === '--list-members') {
+      args.listMembers = true; // 034：读一颗星成员册
     } else if (name === '--detach') {
       args.detach = true;
     } else if (name === '--rm') {
       args.rm = true; // 028：只认不执行——runServe 拒绝并教学（机器守护无临时语义）
     } else if (name === '--connect') {
       args.connect = nextValue() ?? '';
-    } else if (name === '--port' || name === '--remove' || name === '--name' || name === '--adopt' || name === '--extend-session' || name === '--member-remove' || name === '--star' || name === '--add-star' || name === '--remove-star' || name === '--show-name') {
+    } else if (name === '--port') {
+      // 034：--port 无命令（旗标+插座 op 全删）——端口=broker.json 手编字段
+      throw new MultichatError(
+        'USAGE',
+        'serve: --port 已移除（034）——端口是 broker.json 手编字段：改 ~/.crosschat/tcp/broker.json 顶层 "port" 后重启 crosschat serve 生效（首启非默认口=先手写 broker.json 再 serve）',
+      );
+    } else if (name === '--remove' || name === '--name' || name === '--adopt' || name === '--extend-session' || name === '--member-remove' || name === '--star' || name === '--add-star' || name === '--remove-star' || name === '--show-name' || name === '--gen-admin-key' || name === '--remove-admin-key' || name === '--via') {
       const value = nextValue();
       if (value === undefined) throw new MultichatError('USAGE', `serve: ${name} requires a value`);
-      if (name === '--port') args.portArg = value;
-      else if (name === '--name') args.nameArg = value;
+      if (name === '--name') args.nameArg = value;
       else if (name === '--adopt') args.adopt = value;
       else if (name === '--extend-session') args.extendSession = value;
       else if (name === '--member-remove') args.memberRemove = value;
@@ -391,6 +425,9 @@ export function parseServeArgs(argv: readonly string[]): ServeArgs {
       else if (name === '--add-star') args.addStarArg = value; // 022：托管下一颗星
       else if (name === '--remove-star') args.removeStarArg = value; // 033：删整星（最后一颗可删）
       else if (name === '--show-name') args.showNameArg = value; // 033：broker 机显示名热改
+      else if (name === '--gen-admin-key') args.genAdminKeyArg = value; // 034：发星管理钥
+      else if (name === '--remove-admin-key') args.removeAdminKeyArg = value; // 034：吊星管理钥
+      else if (name === '--via') args.viaArg = value; // 034：远程管理路由（tcp:<星>）
       else args.remove = value;
     } else if (name === '--gen-key') {
       args.genKeyArg = nextValue() ?? '1';

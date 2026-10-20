@@ -10,15 +10,16 @@ import { afterAll, describe, expect, it } from 'vitest';
 import {
   addStarTo,
   ensureStarIds,
+  genAdminKeyFor,
   genKeysFor,
   loadBrokerFile,
   mutateBrokerFile,
   registryFileOf,
+  removeAdminKeyFor,
   removeNodeFor,
   sanitizeStarName,
   selectStar,
   setNameFor,
-  setPortFor,
   writeBrokerFile,
 } from '../src/serve/registry.js';
 import { MultichatError } from '../src/errors.js';
@@ -130,7 +131,7 @@ describe('星域 CLI 单实现', () => {
     expect(() => addStarTo(file, 'aaaabbbbcccc')).toThrowError(/冲突/);
   });
 
-  it('removeNodeFor / setPortFor / ensureStarIds', () => {
+  it('removeNodeFor / ensureStarIds（034：setPortFor 已删——端口手编专属）', () => {
     const file = fileOf();
     writeBrokerFile(file, { stars: [
       { starId: 'aaaabbbbcccc', nodes: [node('n1', key('a')), node('n2', key('b'))], roster: [] },
@@ -138,12 +139,31 @@ describe('星域 CLI 单实现', () => {
     ] });
     expect(removeNodeFor(file, 'aaaabbbbcccc', 'n1')).toBe(true);
     expect(removeNodeFor(file, 'aaaabbbbcccc', 'n1')).toBe(false);
-    setPortFor(file, 7777);
     const doc = loadBrokerFile(file);
-    expect(doc.port).toBe(7777);
     expect(doc.stars[0]!.nodes).toHaveLength(1);
     expect(ensureStarIds(file)).toBe(true); // 手编无名星补 id
     expect(loadBrokerFile(file).stars[1]!.starId).toMatch(/^[0-9a-f]{12}$/);
+  });
+
+  it('genAdminKeyFor/removeAdminKeyFor：同表存放、label 空间共用、前缀吊钥', () => {
+    const file = fileOf();
+    writeBrokerFile(file, { stars: [{ starId: 'aaaabbbbcccc', name: 'alpha', nodes: [node('n1', key('a'))], roster: [] }] });
+    const r1 = genAdminKeyFor(file, 'aaaabbbbcccc', 'ops-wsl');
+    expect(r1.adminKey).toMatch(/^[0-9a-f]{64}$/);
+    // 管理钥条目与星钥同 nodes 表（无 key/machineId），读写往返不丢
+    const doc = loadBrokerFile(file);
+    expect(doc.stars[0]!.nodes).toHaveLength(2);
+    expect(doc.stars[0]!.nodes[1]).toMatchObject({ label: 'ops-wsl', adminKey: r1.adminKey });
+    // label 空间共用：与既有节点/管理钥撞名即拒
+    expect(() => genAdminKeyFor(file, 'aaaabbbbcccc', 'n1')).toThrowError(/已存在/);
+    expect(() => genAdminKeyFor(file, 'aaaabbbbcccc', 'ops-wsl')).toThrowError(/已存在/);
+    expect(() => genAdminKeyFor(file, 'aaaabbbbcccc', 'bad:label')).toThrowError(/禁冒号/);
+    // 前缀吊钥：唯一前缀命中；歧义教加长；零命中 undefined
+    genAdminKeyFor(file, 'aaaabbbbcccc', 'ops-win');
+    expect(() => removeAdminKeyFor(file, 'aaaabbbbcccc', 'ops-')).toThrowError(/加长前缀/);
+    expect(removeAdminKeyFor(file, 'aaaabbbbcccc', 'ops-ws')).toBe('ops-wsl');
+    expect(removeAdminKeyFor(file, 'aaaabbbbcccc', 'ops-wsl')).toBeUndefined();
+    expect(loadBrokerFile(file).stars[0]!.nodes.map((n) => n.label)).toEqual(['n1', 'ops-win']);
   });
 
   it('sanitizeStarName：剥非法字符截 32', () => {
