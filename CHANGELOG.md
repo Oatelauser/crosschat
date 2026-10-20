@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-20
+
 ### 034：星级分权管理面——星管理钥+挑战应答（2026-10-20 四轮 grilling 定案）
 
 - **破坏性变更：`--port` 无命令（旗标+插座 op 全删）**：端口=broker.json 手编字段（改文件重启生效）；首启非默认口=先手写 broker.json（`{"port": <N>, "stars": []}`）再 serve；doctor 非默认口出教学行指路。解析 `--port` 直接拒绝并教学；help 不再提供；033 的 set-port 插座 op 随葬（回"未知管理 op"）。**升级注意：按新协议（挑战应答）从零重配**——旧脚本里的 `--port` 须改手编文件
@@ -23,6 +25,12 @@
 - **`--show-name <名>`（仅 broker 机）**：经插座改 node.json showName+重挂内挂聚合器（秒级生效）；冷路径直写+serve 启动生效；node 机维持手编+重启守护口径
 - **broker.json 只存静态**：`roster.online` 字段出文件（读侧缺字段=默认离线、旧值读入归一剥除，聚合器重连数秒自愈；新旧互读无害）——"每次会话上下线整文件重写"的写放大随葬，活性归运行时（内存连接表+status-broker.json）
 - 内挂聚合器宿主化（bootstrapLocalAggregators 拆 spawn/stop per-star，含外部守护让位检查）；`--add-star` 自带自登记播种（star.nodes self 条目+node.json 自用条目）；`--gen-key/--name/--port/--remove` 同走插座热路径（port 仍不热换——重启生效）；管理插座 op 清单：add-star/remove-star/set-showname/gen-key/set-name/set-port/remove-node（全调 registry.ts 库函数，回执带对账后状态）；broker `stop()` 先停插座再撤星状态
+
+### 杂项
+
+- **035：broker.md 多星常态重构**——通篇按多星常态叙事（不分单星/多星两套讲法）：serve 永不造星、造星走 --add-star 热生效、三层权限模型、远程管理、删星全链；验证阶梯加热星 drill（15-18 步）；排障表新增 6 行；SKILL/references/README 同口径（federation.md 核对无需改）
+- **7260 挂账收敛**：内挂聚合器测试用例改随机口（seedBroker port:0）——真 broker 在跑时本地 check 不再 EADDRINUSE/测试 broker 劫持真守护
+- cli.ts help `--name` 条目改 033 后真语义（rename 既有星、多星须 --star、serve 永不造星——旧 default:hostname 文案清除）
 
 ## [1.8.0] - 2026-10-19
 
