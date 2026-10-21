@@ -1,4 +1,4 @@
-import type { Session, SessionDetail, SessionListRequest, SessionPage, SessionReader, SessionRef } from './model.js';
+import type { Session, SessionDetail, SessionListRequest, SessionPage, SessionReader, SessionRef, SourceError } from './model.js';
 import { cancelledPage, errorPage, isRecord, untilAborted } from './reading.js';
 
 export interface SessionFilter {
@@ -14,6 +14,21 @@ export interface SessionQuery extends SessionListRequest {
 interface CursorSource {
   providerId: string;
   cursor: string;
+}
+
+interface QueryState {
+  sources: Array<{ reader: SessionReader; cursor?: string }>;
+  errors: SourceError[];
+  incomplete: boolean;
+}
+
+const errorKinds = new Set<SourceError['kind']>(['missing', 'unreadable', 'malformed', 'unavailable', 'legacy-limit', 'cancelled', 'invalid-cursor', 'unsupported']);
+
+function cursorError(value: unknown, contextId: string): SourceError {
+  if (!isRecord(value) || !isRecord(value.source) || value.source.contextId !== contextId || typeof value.source.providerId !== 'string' || typeof value.kind !== 'string' || ![...errorKinds].some((kind) => kind === value.kind) || typeof value.message !== 'string' || (value.source.path !== undefined && typeof value.source.path !== 'string') || (value.nextStep !== undefined && typeof value.nextStep !== 'string')) throw new Error('Invalid cursor error');
+  const kind = [...errorKinds].find((kind) => kind === value.kind);
+  if (kind === undefined) throw new Error('Invalid cursor error kind');
+  return { source: { contextId, providerId: value.source.providerId, ...(typeof value.source.path === 'string' ? { path: value.source.path } : {}) }, kind, message: value.message, ...(typeof value.nextStep === 'string' ? { nextStep: value.nextStep } : {}) };
 }
 
 function filterKey(filter?: SessionFilter): string {
@@ -41,12 +56,13 @@ export class SessionCatalog {
 
   async query(request: SessionQuery): Promise<SessionPage> {
     if (request.signal?.aborted) return cancelledPage(request.contextId, 'catalog', this.now());
-    let sources: Array<{ reader: SessionReader; cursor?: string }>;
+    let state: QueryState;
     try {
-      sources = this.sources(request);
+      state = this.sources(request);
     } catch {
       return errorPage({ source: { contextId: request.contextId, providerId: 'catalog' }, kind: 'invalid-cursor', message: 'Session page cursor does not match this query.', nextStep: 'Refresh from the first page.' }, this.now());
     }
+    const { sources } = state;
     const work = Promise.all(sources.map(async ({ reader, cursor }) => {
       try {
         return await reader.list({ contextId: request.contextId, cursor, limit: request.limit, signal: request.signal });
@@ -62,12 +78,13 @@ export class SessionCatalog {
     }
     if (request.signal?.aborted) return cancelledPage(request.contextId, 'catalog', this.now());
     const pending = pages.flatMap((page, index) => page.nextCursor === null ? [] : [{ providerId: sources[index].reader.providerId, cursor: page.nextCursor }]);
-    const errors = pages.flatMap((page) => page.errors);
+    const errors = [...state.errors, ...pages.flatMap((page) => page.errors)];
+    const incomplete = state.incomplete || errors.length > 0 || pages.some((page) => page.completeness !== 'complete' && page.nextCursor === null);
     const items = pages.flatMap((page) => page.items).filter((item) => matches(item, request.filter));
     return {
       items,
-      nextCursor: pending.length === 0 ? null : Buffer.from(JSON.stringify({ contextId: request.contextId, filterKey: filterKey(request.filter), pending })).toString('base64url'),
-      completeness: pages.every((page) => page.completeness === 'complete') ? 'complete'
+      nextCursor: pending.length === 0 ? null : Buffer.from(JSON.stringify({ contextId: request.contextId, filterKey: filterKey(request.filter), pending, errors, incomplete })).toString('base64url'),
+      completeness: !incomplete && pages.every((page) => page.completeness === 'complete') ? 'complete'
         : pages.length > 0 && pages.every((page) => page.completeness === 'unavailable') ? 'unavailable'
           : pages.some((page) => page.completeness === 'cancelled') ? 'cancelled' : 'partial',
       errors, observedAt: this.now(),
@@ -90,19 +107,21 @@ export class SessionCatalog {
     return { item: null, completeness: page.completeness, observedAt: page.observedAt, errors: page.errors };
   }
 
-  private sources(request: SessionQuery): Array<{ reader: SessionReader; cursor?: string }> {
-    if (request.cursor === undefined) return [...this.readers.values()].filter((reader) => request.filter?.providerIds === undefined || request.filter.providerIds.includes(reader.providerId)).map((reader) => ({ reader }));
+  private sources(request: SessionQuery): QueryState {
+    if (request.cursor === undefined) return { sources: [...this.readers.values()].filter((reader) => request.filter?.providerIds === undefined || request.filter.providerIds.includes(reader.providerId)).map((reader) => ({ reader })), errors: [], incomplete: false };
     const value: unknown = JSON.parse(Buffer.from(request.cursor, 'base64url').toString('utf8'));
-    if (!isRecord(value) || value.contextId !== request.contextId || value.filterKey !== filterKey(request.filter) || !Array.isArray(value.pending)) throw new Error('Invalid cursor');
+    if (!isRecord(value) || value.contextId !== request.contextId || value.filterKey !== filterKey(request.filter) || !Array.isArray(value.pending) || !Array.isArray(value.errors) || typeof value.incomplete !== 'boolean') throw new Error('Invalid cursor');
+    const errors = value.errors.map((error) => cursorError(error, request.contextId));
     const pending: CursorSource[] = [];
     for (const entry of value.pending) {
       if (!isRecord(entry) || typeof entry.providerId !== 'string' || typeof entry.cursor !== 'string' || pending.some((source) => source.providerId === entry.providerId)) throw new Error('Invalid cursor source');
       pending.push({ providerId: entry.providerId, cursor: entry.cursor });
     }
-    return pending.map(({ providerId, cursor }) => {
+    const sources = pending.map(({ providerId, cursor }) => {
       const reader = this.readers.get(providerId);
       if (reader === undefined || (request.filter?.providerIds !== undefined && !request.filter.providerIds.includes(providerId))) throw new Error('Unknown cursor provider');
       return { reader, cursor };
     });
+    return { sources, errors, incomplete: value.incomplete || errors.length > 0 };
   }
 }
