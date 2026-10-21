@@ -29,7 +29,8 @@
     "build": "tsc",
     "test": "vitest run --dir test",
     "lint": "eslint src test",
-    "check": "npm run lint && npm run build && npm test"
+    "check:imports": "node scripts/runtime-import-graph.mjs",
+    "check": "npm run lint && npm run check:imports && npm run build && npm test"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
