@@ -136,6 +136,13 @@ export interface ServiceStopDeps {
   pidsOnPort?(port: number): Set<number>;
 }
 
+export type ServiceStopRequest = { target: 'broker' | 'node' | 'both' } | { selector: string };
+export interface ServiceStopResult {
+  state: 'ready' | 'failed';
+  events: ServiceStopEvent[];
+  error?: string;
+}
+
 function resetGhostStatusFiles(dir: string, files: string[], ghostState: string): string[] {
   const reset: string[] = [];
   for (const file of files) {
@@ -153,9 +160,9 @@ function resetGhostStatusFiles(dir: string, files: string[], ghostState: string)
 }
 
 export function stopServices(
-  request: { target: 'broker' | 'node' | 'both' } | { selector: string },
+  request: ServiceStopRequest,
   deps: ServiceStopDeps,
-): { state: 'ready' | 'failed'; events: ServiceStopEvent[] } {
+): ServiceStopResult {
   const procs = (deps.listServeProcesses ?? listServeProcesses)();
   const kill = deps.killPid ?? killPid;
   const events: ServiceStopEvent[] = [];
