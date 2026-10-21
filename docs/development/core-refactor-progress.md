@@ -6,7 +6,7 @@
 
 - 用户要求按排期先完成核心改造：T01、T02、T05、T03、T04、T13。
 - T06—T12、T14中的TUI实现/交互验收等待核心完成后用户另行确认。
-- D01/D02功能方案已由用户确认，进入实施；用户再次强调本次直接升级，无旧端兼容、降级或混合版本支持。TUI仍不实施。
+- D01/D02功能方案已由用户确认并实施验收；本次直接升级，无旧端兼容、降级或混合版本支持。TUI仍不实施。
 - 验收通过后从活动队列删除任务及所有引用；保留验收事实。
 
 ## 读取顺序
@@ -18,7 +18,7 @@
 
 ## 契约与验证
 
-- 保留旧CLI文本/JSON/退出码、默认扫描量、status补投、wire/ref、权限、册位及管理冷热和清理规则。
+- 保留既有CLI/默认扫描量/status补投/ref/权限/册位及管理冷热和清理规则，已批准的发现与撤权行为以[当前接口](core-api.md)为准。
 - npm + Vitest；`scripts/setup-package-manager.js`不存在，直接以package.json和package-lock识别。
 - 起点基线：lint/build通过；778测试通过、11跳过。真实会话live测试未启用。
 - 有意义的新接口/回归先RED再GREEN；root集中提交，子任务禁止提交，避免共享工作区交叉stage。
@@ -26,19 +26,19 @@
 
 ## 当前状态
 
-上一批核心改造已完成。当前实施D01/D02获批功能变更；TUI等待用户另行确认。应用接口总览见 `docs/development/core-api.md`。
+核心改造及D01/D02获批功能变更均已完成；所有已验收任务及其依赖引用已从活动队列删除。剩余仅TUI任务，等待用户另行确认。应用接口总览见 `docs/development/core-api.md`。
 
-### 当前并行工作（续接先看这里）
+### 本轮功能验收（2026-10-21 23:04，Asia/Shanghai）
 
-- root：CLI `discover`、TCP发现client/握手取消、serve真实依赖装配、统一验收及文档；唯一提交者。
-- discovery_service：只读Provider DTO/SSH已通过定向检查；继续NodeClient发现handler与取消；改node.ts前等待revocation_pause交还。
-- broker_revocation：按星与凭证撤权、同步重入竞态36项通过；继续broker新发现路由，独立pending、随机转发ID、同星/目标socket核验、8并发、取消/超时/断线/撤权收口。
-- revocation_pause：NodeClient/原生启动器明确撤权暂停（双hash marker，无裸钥）、持久化失败的暂停owner与IPC隔离；完成后交还node.ts。
-- 已保存本轮RED/GREEN检查点：`ac9d850/656a42d`通知协议，`6881551`发现/撤权RED，`5600ba2`TCP协议/取消RED，`ceff45c/8705981/db68674`broker撤权与同步重入，`2eae084/c6758ab`元数据脱敏与详情ID，`233592e`暂停持久化失败RED，`e038c22`构建CLI RED。
-- 协议新帧：`discover-query {id,targetMachine,request}`、`discover-result {id,ok,result?,error?}`、`discover-cancel {id}`；`credential-revoked {starId,kind,reason,message}`。新端点不调用status/补投，不做旧端fallback；无身份或目标字段混入发现request。
-- 尚未跑本轮全量check，不宣称D01/D02验收完成。所有测试仅临时目录/受控socket与子进程，真实live禁用。
+- 产品提交`031801f`上运行`npm run check`退出0：lint、AST依赖图、TypeScript构建、全量Vitest通过。
+- **989通过、11跳过（总1000）；76个文件通过、3跳过。** 比上一批894通过增加95个用例。图为94模块/267运行时边，无环、未解析本地依赖或跨层违规。
+- D01：本机JSON `discover`、固定命令/stdin的SSH与新TCP发现共用Provider DTO；100匿名会话按21分页、完整ID详情、第三Provider、脱敏、来源隔离、游标绑定、取消/超时及字节上限均验证。受控真实broker/node WebSocket全链通过，不调用status/补投、无旧端fallback。
+- D02：节点/管理钥按星和实际凭证立即撤权，包括无mid sender；鉴权中撤权、同步顶换/转发/停机重入、后续帧拒绝、在途路由清理、永久册位保留、相邻星隔离均通过。明确撤权暂停重连及启动器保障，换钥显式恢复；普通断网/BAD_AUTH保持原退避。
+- 写暂停记录失败时保留暂停IPC owner；IPC断开结算等待请求；损坏marker不盲目拉起；内挂异常不成为未处理rejection。状态按当前凭证证据展示，换钥后的旧快照显示待核实。
+- 本轮RED/GREEN证据在当前分支：`6881551/ceff45c`基础发现/撤权、`5600ba2/845028d`TCP与集成、`8705981/db68674`同步转发、`2eae084/c6758ab`脱敏/详情、`233592e/faf509f`持久化失败、`ce3b998/6a90e46`鉴权/内挂/停机、`f508281/6a90e46`封套上限、`f71edf6/2c1fc84`IPC退出、`cfc9202/031801f`换钥状态。其余定向检查保留于提交历史。
+- 首轮全量仅旧测试匹配“上线”日志失败（其余986通过），实际日志已改“启动”避免预支就绪；更新该断言后11项定向通过，最终全量如上。未靠跳过测试通过验收。
 
-## 功能变更访谈进展
+## 功能批准记录
 
 用户在grilling第一轮回复“都按推荐”，已选择：
 
@@ -48,7 +48,7 @@
 - 第二轮：Q4用户明确“不是做兼容性升级，没人用，不用考虑”，直接采用当前新接口/协议，不写旧端fallback/降级/混合版本分支；不做自动升级/部署。
 - Q5=A：当前来源可发现的非归档集合，含匿名、未加载和完整分页，不扩原生归档/聊天历史。
 - Q6=A：明确撤钥后暂停该星自动重连及启动器自动拉守护，保留配置，换钥后显式重新连接；普通断网仍按原退避恢复。
-- 六项选择构成最终实施规格。D01/D02可实施；TUI仍未获开工确认。
+- 六项选择构成最终实施规格，已实施验收；TUI仍未获开工确认。
 - 沿用既有权限与生命周期：SSH限登录用户，TCP限该星授权目标；不读聊天正文/密钥；撤销按星和凭证隔离，不终止原生会话、不清永久册位、不影响其他星。
 
 ## 已验收事实
@@ -60,7 +60,7 @@
 - T04已验收：本机/远程typed管理共享CLI，独立改名不启动服务；热失败/断开无回执不冷写，权限与错误教学保持；starting/ready/failed证据、后台stop隔离阻塞扫描并显式释放owner；清理plan/execute同规则，预览不删除。
 - T13已验收：typed发送结果与formatter分离，TCP本机桥不反解析CLI；内部queued证据与旧wire/JSON区分，成员活性/工具/查名经Provider委派，保留旧策略、册位、生命周期与回执。
 
-## 最终统一验证
+## 上一批统一验证
 
 - 提交 `32153be` 的产品代码上运行 `npm run check`，2026-10-21 22:01（Asia/Shanghai）退出0：lint、AST图、TypeScript build、全量Vitest均通过。
 - 图为85个模块、238条运行时边，无环、无未解析本地依赖、无禁止的跨层依赖。
@@ -71,7 +71,7 @@
 
 ## 下一步
 
-- 实施并验收D01/D02，成功后删除活动项及已满足依赖；不实施TUI或真实第三工具。
+- 等用户确认后从活动队列T06开始TUI；本轮不实施TUI或真实第三工具。
 - 无需重跑已通过检查，除非继续修改产品代码或出现新失败；续接先读本记录与剩余活动任务，避免重载历史设计讨论。
 
 ## 测试隔离与限制
@@ -79,3 +79,4 @@
 - 一次新增Codex分页测试最初只stub channel而漏stub spawn，曾启动真实proxy；RPC仅进入fake channel，测试session均已close。已补FakeProxyChild/spawnProxy并重跑相关40项全部通过；以后不得把此前情况描述为“从未启动真实工具”。
 - 旧serve-sessions测试helper也已补临时codexHome。普通验收不启用CROSSCHAT_LIVE，不发送真实消息或修改用户配置。
 - 新诊断进程取消及构建入口在Windows、临时HOME/空PATH受控子进程实测通过；POSIX组终止分支仅代码检查，未在本机实测。
+- 本轮发现/撤权验证在Windows、临时目录与受控socket上完成；SSH取消回收使用受控本地子进程验证，未登录真实SSH目标。未启用真实原生会话live测试，也未自动升级/重启用户服务。
