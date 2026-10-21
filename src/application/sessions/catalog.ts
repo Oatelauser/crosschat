@@ -96,7 +96,7 @@ export class SessionCatalog {
     const reader = this.readers.get(ref.providerId);
     if (reader === undefined) return this.detailPage(errorPage({ source: ref, kind: 'unsupported', message: 'Session provider is not available in this context.' }, this.now()));
     try {
-      const result = await untilAborted(reader.get({ contextId: ref.contextId, nativeId: ref.nativeId, signal: options.signal }), options.signal);
+      const result = await untilAborted(reader.get({ contextId: ref.contextId, nativeId: ref.nativeId, referenceKind: ref.referenceKind, signal: options.signal }), options.signal);
       return options.signal?.aborted ? this.detailPage(cancelledPage(ref.contextId, ref.providerId, this.now())) : result;
     } catch {
       return this.detailPage(options.signal?.aborted ? cancelledPage(ref.contextId, ref.providerId, this.now()) : errorPage({ source: ref, kind: 'unavailable', message: 'Session detail could not be read.' }, this.now()));

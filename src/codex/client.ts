@@ -192,7 +192,7 @@ export function openCodexSession(options: CodexSessionOptions = {}): () => Promi
               id: raw.id,
               name: typeof raw.name === 'string' ? raw.name : null,
               rawStatus: raw.status,
-              attributes: { cwd: raw.cwd, path: raw.path, createdAt: raw.createdAt, updatedAt: raw.updatedAt, source: raw.source },
+              attributes: { cwd: raw.cwd, path: raw.path, createdAt: raw.createdAt, updatedAt: raw.updatedAt, source: raw.source, originator: raw.originator },
             };
           }),
           nextCursor: typeof result.nextCursor === 'string' ? result.nextCursor : null,

@@ -43,7 +43,8 @@ export async function findSession(reader: SessionReader, request: SessionGetRequ
   for (;;) {
     const page = await reader.list({ contextId: request.contextId, cursor, signal: request.signal });
     errors.push(...page.errors);
-    const item = page.items.find((candidate) => candidate.ref.nativeId === request.nativeId);
+    const item = page.items.find((candidate) => candidate.ref.nativeId === request.nativeId
+      && (candidate.ref.referenceKind ?? 'native') === (request.referenceKind ?? 'native'));
     if (item !== undefined || page.nextCursor === null || page.completeness === 'cancelled' || page.completeness === 'unavailable') {
       const completeness = page.completeness === 'complete' && errors.length > 0 ? 'partial' : page.completeness;
       return { item: item ?? null, completeness, observedAt: page.observedAt, errors };

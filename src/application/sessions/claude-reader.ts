@@ -1,9 +1,10 @@
 import { readdir, readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { defaultClaudeSessionsDir } from '../../claude/registry.js';
 import { isProcessAlive } from '../../platform/process-inspector.js';
 import { sessionKey } from './model.js';
-import type { ProviderCapabilities, Session, SessionListRequest, SessionPage, SessionReader, SourceError } from './model.js';
+import type { ProviderCapabilities, Session, SessionListRequest, SessionPage, SessionReader, SessionRef, SourceError } from './model.js';
 import { abortError, cancelledPage, errorPage, findSession, isRecord, untilAborted } from './reading.js';
 
 export interface ClaudeReaderOptions {
@@ -17,6 +18,34 @@ export interface ClaudeReaderOptions {
 }
 
 const capabilities: ProviderCapabilities = { discovery: true, delivery: true, launch: false, diagnostics: false };
+
+interface ClaudePageCursor {
+  version: 1;
+  contextId: string;
+  offset: number;
+  fingerprint: string;
+}
+
+function decodeCursor(raw: string, contextId: string): ClaudePageCursor | undefined {
+  try {
+    const cursor: unknown = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
+    if (!isRecord(cursor) || cursor.version !== 1 || cursor.contextId !== contextId
+      || typeof cursor.offset !== 'number' || !Number.isSafeInteger(cursor.offset) || cursor.offset < 1
+      || typeof cursor.fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(cursor.fingerprint)) return undefined;
+    return { version: 1, contextId, offset: cursor.offset, fingerprint: cursor.fingerprint };
+  } catch {
+    return undefined;
+  }
+}
+
+function invalidCursor(contextId: string, observedAt: number, changed = false): SessionPage {
+  const page = errorPage({
+    source: { contextId, providerId: 'claude' }, kind: 'invalid-cursor',
+    message: changed ? 'Claude session registry changed between pages.' : 'Invalid Claude page cursor or limit.',
+    nextStep: 'Refresh from the first page.',
+  }, observedAt);
+  return changed ? { ...page, completeness: 'partial' } : page;
+}
 
 function readError(contextId: string, path: string, error: unknown): SourceError {
   const missing = isRecord(error) && error.code === 'ENOENT';
@@ -46,10 +75,14 @@ export function createClaudeSessionReader(options: ClaudeReaderOptions = {}): Se
   };
 
   async function scan(request: SessionListRequest): Promise<SessionPage> {
-    const offset = request.cursor === undefined ? 0 : Number(request.cursor);
+    const cursor = request.cursor === undefined ? undefined : decodeCursor(request.cursor, request.contextId);
     const limit = request.limit ?? 100;
-    if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1) return errorPage({ source: { contextId: request.contextId, providerId: 'claude' }, kind: 'invalid-cursor', message: 'Invalid Claude page cursor or limit.', nextStep: 'Refresh from the first page.' }, now());
+    if ((request.cursor !== undefined && cursor === undefined) || !Number.isSafeInteger(limit) || limit < 1) return invalidCursor(request.contextId, now());
     const files = (await io.readDirectory(directory)).filter((file) => file.endsWith('.json')).sort();
+    const fingerprint = createHash('sha256').update(JSON.stringify(files)).digest('hex');
+    if (cursor !== undefined && cursor.fingerprint !== fingerprint) return invalidCursor(request.contextId, now(), true);
+    const offset = cursor?.offset ?? 0;
+    if (cursor !== undefined && offset >= files.length) return invalidCursor(request.contextId, now());
     const items: Session[] = [];
     const errors: SourceError[] = [];
     const end = Math.min(offset + limit, files.length);
@@ -74,7 +107,7 @@ export function createClaudeSessionReader(options: ClaudeReaderOptions = {}): Se
       if (!await alive(entry.pid, request.signal)) continue;
       if (request.signal?.aborted) throw abortError();
       const hasSessionId = typeof entry.sessionId === 'string' && entry.sessionId !== '';
-      const ref = { contextId: request.contextId, providerId: 'claude', nativeId: hasSessionId ? String(entry.sessionId) : String(entry.pid) };
+      const ref: SessionRef = { contextId: request.contextId, providerId: 'claude', nativeId: hasSessionId ? String(entry.sessionId) : String(entry.pid), referenceKind: hasSessionId ? 'native' : 'process' };
       items.push({
         ref, key: sessionKey(ref), name: typeof entry.name === 'string' && entry.name !== '' ? entry.name : null,
         rawStatus: entry.status ?? 'unknown', capabilities,
@@ -82,7 +115,7 @@ export function createClaudeSessionReader(options: ClaudeReaderOptions = {}): Se
       });
     }
     if (request.signal?.aborted) throw abortError();
-    const nextCursor = end < files.length ? String(end) : null;
+    const nextCursor = end < files.length ? Buffer.from(JSON.stringify({ version: 1, contextId: request.contextId, offset: end, fingerprint })).toString('base64url') : null;
     return { items, nextCursor, completeness: errors.length === 0 && nextCursor === null ? 'complete' : 'partial', errors, observedAt: now() };
   }
 

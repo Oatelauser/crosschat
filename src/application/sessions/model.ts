@@ -3,11 +3,13 @@ export interface SessionRef {
   contextId: string;
   providerId: string;
   nativeId: string;
+  /** Process references are temporary; omission means a native session ID. */
+  referenceKind?: 'native' | 'process';
 }
 
 /** Collision-free internal key. This does not replace any wire or persisted key. */
 export function sessionKey(ref: SessionRef): string {
-  return JSON.stringify([ref.contextId, ref.providerId, ref.nativeId]);
+  return JSON.stringify([ref.contextId, ref.providerId, ref.referenceKind ?? 'native', ref.nativeId]);
 }
 
 /** Serializable metadata. Implementations of optional capabilities live separately. */
@@ -70,6 +72,7 @@ export interface SessionListRequest {
 export interface SessionGetRequest {
   contextId: string;
   nativeId: string;
+  referenceKind?: 'native' | 'process';
   signal?: AbortSignal;
 }
 
