@@ -1,5 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import fs from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -12,6 +13,9 @@ import { FileInbox } from '../src/serve/file-channel.js';
 import { attachPipePath, NodeClient, type NodeClientDeps } from '../src/serve/node.js';
 import type { BrokerEntry } from '../src/serve/node-config.js';
 
+const FIXTURE_ID = randomUUID().slice(0, 8);
+const NAME_A = 'revoked-' + FIXTURE_ID + '-alpha';
+const NAME_B = 'revoked-' + FIXTURE_ID + '-beta';
 const STAR_A = 'aaaabbbbcccc';
 const NODE_KEY = 'a'.repeat(64);
 const cleanup: Array<() => void | Promise<void>> = [];
@@ -54,7 +58,7 @@ async function controlledBroker(rejectNodes = false, options: { starId?: string;
           return;
         }
       }
-      socket.send(JSON.stringify({ op: 'connected', starId: options.starId ?? STAR_A, name: options.name ?? 'alpha' }));
+      socket.send(JSON.stringify({ op: 'connected', starId: options.starId ?? STAR_A, name: options.name ?? NAME_A }));
     });
   });
   cleanup.push(async () => {
@@ -123,7 +127,7 @@ describe('explicit credential revocation pauses this star', () => {
   it('ends the node leg and blocks launcher auto-start while preserving node.json', async () => {
     const home = temporaryHome();
     const broker = await controlledBroker();
-    const entry = { host: '127.0.0.1', port: broker.port, name: 'alpha', starId: STAR_A, key: NODE_KEY };
+    const entry = { host: '127.0.0.1', port: broker.port, name: NAME_A, starId: STAR_A, key: NODE_KEY };
     const configFile = join(home, 'tcp', 'node.json');
     const config = `${JSON.stringify({ brokers: [entry] }, null, 2)}\n`;
     writeFileSync(configFile, config);
@@ -136,7 +140,7 @@ describe('explicit credential revocation pauses this star', () => {
 
     await expect.poll(() => finished, { timeout: 800 }).toBe(true);
     await running;
-    const status: unknown = JSON.parse(readFileSync(join(home, 'tcp', 'status-node-alpha.json'), 'utf8'));
+    const status: unknown = JSON.parse(readFileSync(join(home, 'tcp', `status-node-${entry.name}.json`), 'utf8'));
     expect(status).toMatchObject({ state: 'revoked' });
     expect(readFileSync(configFile, 'utf8')).toBe(config);
     const spawned: string[] = [];
@@ -149,7 +153,7 @@ describe('explicit credential revocation pauses this star', () => {
   it('ordinary disconnect still reconnects with the existing backoff', async () => {
     const home = temporaryHome();
     const broker = await controlledBroker();
-    const entry = { host: '127.0.0.1', port: broker.port, name: 'alpha', starId: STAR_A, key: NODE_KEY };
+    const entry = { host: '127.0.0.1', port: broker.port, name: NAME_A, starId: STAR_A, key: NODE_KEY };
     writeFileSync(join(home, 'tcp', 'node.json'), JSON.stringify({ brokers: [entry] }));
     const client = nodeClient(home, entry);
     void client.run();
@@ -165,7 +169,7 @@ describe('explicit credential revocation pauses this star', () => {
   it('BAD_AUTH retries and does not manufacture an explicit revocation pause', async () => {
     const home = temporaryHome();
     const broker = await controlledBroker(true);
-    const entry = { host: '127.0.0.1', port: broker.port, name: 'alpha', starId: STAR_A, key: NODE_KEY };
+    const entry = { host: '127.0.0.1', port: broker.port, name: NAME_A, starId: STAR_A, key: NODE_KEY };
     writeFileSync(join(home, 'tcp', 'node.json'), JSON.stringify({ brokers: [entry] }));
     const logs: string[] = [];
     const client = nodeClient(home, entry, logs);
@@ -180,7 +184,7 @@ describe('explicit credential revocation pauses this star', () => {
   it('persists a handshake-time revocation even before starId was filled into config', async () => {
     const home = temporaryHome();
     const broker = await controlledBroker(false, { revokeBeforeConnected: true });
-    const entry = { host: '127.0.0.1', port: broker.port, name: 'alpha', key: NODE_KEY };
+    const entry = { host: '127.0.0.1', port: broker.port, name: NAME_A, key: NODE_KEY };
     const config = JSON.stringify({ brokers: [entry] });
     writeFileSync(join(home, 'tcp', 'node.json'), config);
     const client = nodeClient(home, entry);
@@ -203,7 +207,7 @@ describe('explicit credential revocation pauses this star', () => {
   it('retains the old pause while a new key can explicitly connect', async () => {
     const home = temporaryHome();
     const broker = await controlledBroker();
-    const entry = { host: '127.0.0.1', port: broker.port, name: 'alpha', starId: STAR_A, key: NODE_KEY };
+    const entry = { host: '127.0.0.1', port: broker.port, name: NAME_A, starId: STAR_A, key: NODE_KEY };
     writeFileSync(join(home, 'tcp', 'node.json'), JSON.stringify({ brokers: [entry] }));
     const original = nodeClient(home, entry);
     const running = original.run();
@@ -230,7 +234,7 @@ describe('explicit credential revocation pauses this star', () => {
   it('ignores a different star, an admin revocation and a malformed revocation', async () => {
     const home = temporaryHome();
     const broker = await controlledBroker();
-    const entry = { host: '127.0.0.1', port: broker.port, name: 'alpha', starId: STAR_A, key: NODE_KEY };
+    const entry = { host: '127.0.0.1', port: broker.port, name: NAME_A, starId: STAR_A, key: NODE_KEY };
     writeFileSync(join(home, 'tcp', 'node.json'), JSON.stringify({ brokers: [entry] }));
     const client = nodeClient(home, entry);
     void client.run();
@@ -251,7 +255,7 @@ describe('explicit credential revocation pauses this star', () => {
   it('a corrupt pause record blocks automatic starts instead of silently resuming', async () => {
     const home = temporaryHome();
     const broker = await controlledBroker();
-    const entry = { host: '127.0.0.1', port: broker.port, name: 'alpha', starId: STAR_A, key: NODE_KEY };
+    const entry = { host: '127.0.0.1', port: broker.port, name: NAME_A, starId: STAR_A, key: NODE_KEY };
     writeFileSync(join(home, 'tcp', 'node.json'), JSON.stringify({ brokers: [entry] }));
     const client = nodeClient(home, entry);
     const running = client.run();
@@ -273,10 +277,10 @@ describe('explicit credential revocation pauses this star', () => {
   it('stops one launcher supervisor without restarting it or disrupting another star', async () => {
     const home = temporaryHome();
     const alpha = await controlledBroker();
-    const beta = await controlledBroker(false, { starId: 'dddd11112222', name: 'beta' });
+    const beta = await controlledBroker(false, { starId: 'dddd11112222', name: NAME_B });
     // Deliberately use the same credential value: star identity still isolates pause evidence.
-    const entryA = { host: '127.0.0.1', port: alpha.port, name: 'alpha', starId: STAR_A, key: NODE_KEY };
-    const entryB = { host: '127.0.0.1', port: beta.port, name: 'beta', starId: 'dddd11112222', key: NODE_KEY };
+    const entryA = { host: '127.0.0.1', port: alpha.port, name: NAME_A, starId: STAR_A, key: NODE_KEY };
+    const entryB = { host: '127.0.0.1', port: beta.port, name: NAME_B, starId: 'dddd11112222', key: NODE_KEY };
     writeFileSync(join(home, 'tcp', 'node.json'), JSON.stringify({ brokers: [entryA, entryB] }));
     const nodeA = nodeClient(home, entryA);
     const nodeB = nodeClient(home, entryB);
@@ -291,7 +295,7 @@ describe('explicit credential revocation pauses this star', () => {
     deps.log = (line) => logs.push(line);
     deps.stderr = (line) => errors.push(line);
     deps.listClaudeSessions = () => ({ sessions: freshSession ? [{ sessionId: 'fixture-session', name: 'native-session' }] : [] });
-    const joiner = new StarJoiner({ deps, side: 'claude', connects: ['alpha', 'beta'] });
+    const joiner = new StarJoiner({ deps, side: 'claude', connects: [NAME_A, NAME_B] });
     cleanup.push(() => joiner.stop());
     await joiner.begin();
     freshSession = true;
@@ -312,7 +316,7 @@ describe('explicit credential revocation pauses this star', () => {
 
   it('ignores a delayed revocation from a socket that has already been replaced', async () => {
     const home = temporaryHome();
-    const entry = { host: 'fixture', port: 9, name: 'alpha', starId: STAR_A, key: NODE_KEY };
+    const entry = { host: 'fixture', port: 9, name: NAME_A, starId: STAR_A, key: NODE_KEY };
     writeFileSync(join(home, 'tcp', 'node.json'), JSON.stringify({ brokers: [entry] }));
     class BufferedSocket extends EventEmitter {
       readyState: number = WebSocket.CONNECTING;
@@ -327,7 +331,7 @@ describe('explicit credential revocation pauses this star', () => {
       send(data: string): void {
         const raw: unknown = JSON.parse(data);
         if (raw !== null && typeof raw === 'object' && 'op' in raw && raw.op === 'connect') {
-          queueMicrotask(() => this.emit('message', JSON.stringify({ op: 'connected', starId: STAR_A, name: 'alpha' })));
+          queueMicrotask(() => this.emit('message', JSON.stringify({ op: 'connected', starId: STAR_A, name: NAME_A })));
         }
       }
       close(): void {
@@ -360,7 +364,7 @@ describe('explicit credential revocation pauses this star', () => {
   it('keeps a paused IPC owner if the pause evidence cannot be persisted', async () => {
     const home = temporaryHome();
     const broker = await controlledBroker();
-    const entry = { host: '127.0.0.1', port: broker.port, name: 'alpha', starId: STAR_A, key: NODE_KEY };
+    const entry = { host: '127.0.0.1', port: broker.port, name: NAME_A, starId: STAR_A, key: NODE_KEY };
     writeFileSync(join(home, 'tcp', 'node.json'), JSON.stringify({ brokers: [entry] }));
     const client = nodeClient(home, entry);
     let finished = false;

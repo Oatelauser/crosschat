@@ -394,7 +394,7 @@ export class NodeClient {
         }
         throw err;
       }
-      if (this.stopped) break;
+      if (this.stopped || this.state === 'revoked') break;
       attempt = everOnline ? 0 : attempt + 1;
       if (attempt === 1) firstFailAt = this.d.now();
       const failedFor = firstFailAt === undefined ? 0 : this.d.now() - firstFailAt;
@@ -529,14 +529,25 @@ export class NodeClient {
       if (frame.kind !== 'node' || this.authenticatingSocket !== socket
         || (entry.starId !== undefined && frame.starId !== entry.starId)) return;
       // Persist before closing attach IPC: launcher supervisors must observe the pause before reconnecting.
+      let persisted = false;
       try {
         writeNodeRevocation(this.d.configFile, entry, frame.starId, this.d.now());
+        persisted = true;
       } catch {
         this.log('撤权暂停记录写入失败，请检查 tcp 目录写权限');
       }
       this.setState('revoked');
       this.log('节点凭证已撤销，自动重连已暂停；换钥后显式重新连接');
-      void this.stop();
+      if (persisted) {
+        void this.stop();
+      } else {
+        // Keep the paused IPC owner alive when persistence fails, so launchers cannot replace it.
+        clearInterval(this.minuteTimer);
+        clearInterval(this.memberTimer);
+        this.clearFrameWaiters(new Error('credential revoked'));
+        this.startAttachServer();
+        try { socket.close(1008, 'credential revoked'); } catch { /* Already closed. */ }
+      }
       return;
     }
     this.frameLog.push(frame);
@@ -699,6 +710,10 @@ export class NodeClient {
     line: string,
     reply: (r: { ok: true } | { ok: true; online: boolean; brokerCap: boolean; members: SessionMemberDecl[] } | { ok: false; error: string }) => void,
   ): void {
+    if (this.state === 'revoked') {
+      reply({ ok: false, error: '节点凭证已撤销，自动重连已暂停；换钥后显式重新连接' });
+      return;
+    }
     let req: unknown;
     try {
       req = JSON.parse(line);
