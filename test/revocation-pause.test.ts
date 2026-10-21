@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { syncBuiltinESMExports } from 'node:module';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -124,6 +125,30 @@ function revoke(socket: WebSocket, starId = STAR_A): void {
 }
 
 describe('explicit credential revocation pauses this star', () => {
+  it('settles an attach request when immediate revocation closes IPC before the reply', async () => {
+    const home = temporaryHome();
+    const path = attachPipePath({ host: 'fixture', port: 9, key: NODE_KEY, name: `${NAME_A}-close` }, join(home, 'tcp'));
+    const server = createServer((socket) => socket.once('data', () => socket.destroy()));
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(path, resolve);
+    });
+    cleanup.push(() => new Promise<void>((resolve) => server.close(() => resolve())));
+    const pipe = await connectAttachPipe(path);
+    cleanup.push(() => pipe.close());
+    const bounded = <T>(pending: Promise<T>): Promise<T | { timeout: true }> => Promise.race([
+      pending,
+      new Promise<{ timeout: true }>((resolve) => setTimeout(() => resolve({ timeout: true }), 120)),
+    ]);
+
+    const reply = await bounded(pipe.send({ op: 'attach', sessionId: 'fixture-native' }));
+
+    expect(reply).toMatchObject({ ok: false, error: expect.any(String) });
+    await pipe.waitClose();
+    expect(await bounded(pipe.send({ op: 'detach', sessionId: 'fixture-native' })))
+      .toMatchObject({ ok: false, error: expect.any(String) });
+  });
+
   it('ends the node leg and blocks launcher auto-start while preserving node.json', async () => {
     const home = temporaryHome();
     const broker = await controlledBroker();
