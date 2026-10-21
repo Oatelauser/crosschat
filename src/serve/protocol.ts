@@ -2,6 +2,8 @@
  * tcp broker 协议层（票B B1）：单文件、客户端服务端共用。JSON 单帧单 ws
  * 文本消息。B2 才有行为实现的帧（file-* 等）类型先定义全。
  */
+import type { DiscoveryRequest, DiscoveryResponse } from '../application/discovery/model.js';
+
 export const PROTOCOL_VERSION = 1;
 export const MAX_PAYLOAD_BYTES = 2 * 1024 * 1024;
 
@@ -281,6 +283,37 @@ export interface StatusResultFrame {
   error?: string;
 }
 
+/** Current-version, read-only discovery. Payloads are validated by the discovery module. */
+export interface DiscoverQueryFrame {
+  op: 'discover-query';
+  id: string;
+  targetMachine: string;
+  request: DiscoveryRequest;
+}
+export interface DiscoverResultFrame {
+  op: 'discover-result';
+  id: string;
+  ok: boolean;
+  result?: DiscoveryResponse;
+  error?: string;
+}
+export interface DiscoverCancelFrame {
+  op: 'discover-cancel';
+  id: string;
+}
+
+function isDiscoveryEnvelope(value: Record<string, unknown>): boolean {
+  if (typeof value.id !== 'string' || value.id.length === 0 || value.id.length > 256) return false;
+  if (value.op === 'discover-cancel') return true;
+  if (value.op === 'discover-query') {
+    return typeof value.targetMachine === 'string' && value.targetMachine.length > 0 && value.targetMachine.length <= 1024
+      && typeof value.request === 'object' && value.request !== null && !Array.isArray(value.request);
+  }
+  return typeof value.ok === 'boolean' && (value.ok
+    ? typeof value.result === 'object' && value.result !== null && !Array.isArray(value.result)
+    : typeof value.error === 'string');
+}
+
 /** 018 extends 旧名声明：字符串=同机旧名；{machine,name}=机器限定旧名（跨机接续）。 */
 export type ExtendsRef = string | { machine: string; name: string };
 
@@ -437,6 +470,9 @@ export type Frame =
   | RosterResultFrame
   | StatusQueryFrame
   | StatusResultFrame
+  | DiscoverQueryFrame
+  | DiscoverResultFrame
+  | DiscoverCancelFrame
   | SessionsFrame
   | MembersQueryFrame
   | MembersResultFrame
@@ -465,6 +501,9 @@ const OPS = new Set([
   'roster-result',
   'status-query',
   'status-result',
+  'discover-query',
+  'discover-result',
+  'discover-cancel',
   'sessions',
   'members-query',
   'members-result',
@@ -487,6 +526,7 @@ export function parseFrame(text: string): Frame | undefined {
   if (typeof obj !== 'object' || obj === null) return undefined;
   const op = (obj as { op?: unknown }).op;
   if (op === 'credential-revoked' && !isCredentialRevoked(obj as Record<string, unknown>)) return undefined;
+  if ((op === 'discover-query' || op === 'discover-result' || op === 'discover-cancel') && !isDiscoveryEnvelope(obj as Record<string, unknown>)) return undefined;
   return typeof op === 'string' && OPS.has(op) ? (obj as Frame) : undefined;
 }
 

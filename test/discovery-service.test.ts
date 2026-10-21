@@ -132,6 +132,21 @@ describe('complete read-only discovery service', () => {
     };
     expect(await service.execute({ op: 'detail', providerId: 'third-provider', nativeId: 'full' }, { signal: late.signal })).toMatchObject({ detail: { completeness: 'cancelled', item: null } });
   });
+
+  it('isolates malformed source metadata and retains the other providers with a source-specific error', async () => {
+    const valid = thirdReader();
+    const malformed: SessionReader = {
+      ...thirdReader(), providerId: 'malformed-provider',
+      async list({ contextId }) {
+        const ref = { contextId, providerId: 'malformed-provider', nativeId: 'opaque-id' };
+        const attributes: Record<string, unknown> = {};
+        attributes.circular = attributes;
+        return { items: [{ ref, key: sessionKey(ref), name: null, rawStatus: 'unknown', capabilities, attributes }], nextCursor: null, completeness: 'complete', errors: [], observedAt: 1 };
+      },
+    };
+    const response = await new DiscoveryService([valid, malformed]).execute({ op: 'list' });
+    expect(response).toMatchObject({ op: 'list', page: { completeness: 'partial', items: [{ ref: { providerId: 'third-provider' } }], errors: [expect.objectContaining({ source: { contextId: 'local', providerId: 'malformed-provider' }, kind: 'malformed' })] } });
+  });
 });
 
 describe('discovery JSON boundary', () => {

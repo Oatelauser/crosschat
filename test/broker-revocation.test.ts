@@ -7,8 +7,9 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { Broker, defaultDeliverLocal } from '../src/serve/broker.js';
+import type { BrokerDeps } from '../src/serve/broker.js';
 import { CAP_MULTI_STAR, CAP_SESSION_MEMBERS } from '../src/serve/protocol.js';
-import type { SocketLike } from '../src/serve/protocol.js';
+import type { ResultFrame, SocketLike, StatusPayload } from '../src/serve/protocol.js';
 import { loadBrokerFile, mutateBrokerFile, registryFileOf } from '../src/serve/registry.js';
 import { seedBroker } from './helpers/broker-seed.js';
 
@@ -65,7 +66,11 @@ class DeferredCloseSocket extends EventEmitter implements SocketLike {
   readyState: number = WebSocket.OPEN;
   readonly frames: Packet[] = [];
   closes = 0;
-  send(text: string): void { this.frames.push(packet(text)); }
+  send(text: string): void {
+    const frame = packet(text);
+    this.frames.push(frame);
+    this.emit('sent', frame);
+  }
   receive(frame: Packet): void { this.emit('message', JSON.stringify(frame)); }
   close(): void { this.closes++; }
   finish(): void {
@@ -74,7 +79,7 @@ class DeferredCloseSocket extends EventEmitter implements SocketLike {
   }
 }
 
-async function fixture(): Promise<{
+async function fixture(overrides: Partial<BrokerDeps> = {}): Promise<{
   broker: Broker;
   file: string;
   statusFile: string;
@@ -84,6 +89,7 @@ async function fixture(): Promise<{
   beginAdmin: () => Promise<Client>;
   local: (request: Packet) => Promise<Record<string, unknown>>;
   controlled: (auth: string, machineId?: string) => DeferredCloseSocket;
+  controlledAdmin: (adminKey: string) => DeferredCloseSocket;
 }> {
   const dir = mkdtempSync(join(tmpdir(), 'crosschat-revocation-'));
   const file = registryFileOf(dir);
@@ -99,6 +105,7 @@ async function fixture(): Promise<{
     registryFile: file, statusFile, version: 'test', machineId: () => '9999999900000000', hostname: () => 'broker',
     now: () => Date.now(), log: (line) => logs.push(line), deliverLocal: defaultDeliverLocal,
     port: 0, heartbeatMs: 60_000, connectTimeoutMs: 5_000, authFailDelayMs: 1, resultTimeoutMs: 2_000,
+    ...overrides,
   });
   const port = await broker.start();
   const clients: Client[] = [];
@@ -156,6 +163,16 @@ async function fixture(): Promise<{
       controlled.push(socket);
       broker.admitLocal(socket, STAR_A);
       socket.receive({ op: 'connect', proto: 1, role: machineId === undefined ? 'sender' : 'node', machineId, auth, caps: [CAP_MULTI_STAR, CAP_SESSION_MEMBERS] });
+      expect(socket.frames).toContainEqual(expect.objectContaining({ op: 'connected' }));
+      return socket;
+    },
+    controlledAdmin: (adminKey) => {
+      const socket = new DeferredCloseSocket();
+      controlled.push(socket);
+      broker.admitLocal(socket, STAR_A);
+      socket.receive({ op: 'connect', proto: 1, role: 'sender', admin: true, caps: [CAP_MULTI_STAR] });
+      const challenge = socket.frames.find((frame) => frame.op === 'auth-challenge')!;
+      socket.receive({ op: 'auth-proof', proof: createHmac('sha256', adminKey).update(String(challenge.nonce)).digest('hex') });
       expect(socket.frames).toContainEqual(expect.objectContaining({ op: 'connected' }));
       return socket;
     },
@@ -302,5 +319,42 @@ describe('broker credential revocation', () => {
     await Promise.resolve();
     expect(sender.frames.some((p) => p.op === 'receipt' || p.op === 'file-result')).toBe(false);
     expect(target.frames.some((p) => p.op === 'file-chunk')).toBe(false);
+  });
+
+  it.each(['send', 'status-query'])('settles %s immediately if a virtual target is revoked synchronously while forwarding', async (op) => {
+    const f = await fixture();
+    const sender = f.controlled(KEY_KEEP);
+    const target = f.controlled(KEY_A, MID_A);
+    const admin = f.controlledAdmin(ADMIN_KEEP);
+    target.on('sent', (frame: Packet) => {
+      if (frame.op === 'deliver' || frame.op === 'status-query') {
+        admin.receive({ op: 'admin-op', id: 'synchronous-remove', action: 'remove-node', label: 'victim' });
+      }
+    });
+    sender.receive({ op, id: 'synchronous-request', targetMachine: MID_A, body: 'possibly-forwarded' });
+    await expect.poll(() => sender.frames.find((frame) => frame.id === 'synchronous-request'), { timeout: 500 }).toMatchObject({ op: 'error', code: 'CREDENTIAL_REVOKED' });
+  });
+
+  it('preserves the broker owner permission to remove an admin entry through local remove-node and invalidates its sessions', async () => {
+    const f = await fixture();
+    const admin = await f.admin(ADMIN_A);
+    expect(await f.local({ op: 'remove-node', starId: STAR_A, label: 'admin-victim' })).toMatchObject({ ok: true, removed: true });
+    expect(await admin.wait('credential-revoked')).toMatchObject({ kind: 'admin', reason: 'admin-key-revoked' });
+  });
+
+  it('suppresses late local delivery and status successes after sender revocation', async () => {
+    let finishDelivery!: (result: ResultFrame) => void;
+    let finishStatus!: (payload: StatusPayload) => void;
+    const delivery = new Promise<ResultFrame>((resolve) => { finishDelivery = resolve; });
+    const status = new Promise<StatusPayload>((resolve) => { finishStatus = resolve; });
+    const f = await fixture({ deliverLocal: () => delivery, scanStatus: () => status });
+    const sender = f.controlled(KEY_A);
+    sender.receive({ op: 'send', id: 'local-send', targetMachine: '9999999900000000', body: 'already-started' });
+    sender.receive({ op: 'status-query', id: 'local-status', targetMachine: '9999999900000000' });
+    expect(await f.local({ op: 'remove-node', starId: STAR_A, label: 'victim' })).toMatchObject({ removed: true });
+    finishDelivery({ op: 'result', id: 'local-send', status: 'delivered' });
+    finishStatus({ claude: [], codex: [] });
+    await Promise.resolve();
+    expect(sender.frames.some((p) => p.op === 'receipt' || p.op === 'status-result')).toBe(false);
   });
 });

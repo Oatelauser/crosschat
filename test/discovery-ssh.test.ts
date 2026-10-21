@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { spawn as spawnChild } from 'node:child_process';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSshDiscoveryClient } from '../src/application/discovery/index.js';
@@ -100,5 +101,22 @@ describe('read-only SSH discovery transport', () => {
     child.finish({ op: 'detail', providers: [], detail: { item: null, completeness: 'complete', errors: [], observedAt: 1 } });
     expect(await pending).toMatchObject({ page: { completeness: 'unavailable', errors: [expect.objectContaining({ kind: 'malformed' })] } });
     expect(spawn).toHaveBeenCalledOnce();
+  });
+
+  it('reaps an owned, controlled process when a live SSH read is cancelled', async () => {
+    let child: ReturnType<typeof spawnChild> | undefined;
+    let closed: Promise<number | null> | undefined;
+    const controller = new AbortController();
+    const client = createSshDiscoveryClient({ host: 'fixture', spawn: (_command, _args, options) => {
+      const controlled = spawnChild(process.execPath, ['-e', 'process.stdin.resume(); setInterval(() => {}, 1000);'], options);
+      child = controlled;
+      closed = new Promise((resolve) => controlled.once('close', resolve));
+      return controlled;
+    } });
+    const pending = client.execute({ op: 'list' }, { signal: controller.signal });
+    controller.abort();
+    expect(await pending).toMatchObject({ page: { completeness: 'cancelled' } });
+    await closed;
+    expect(child?.killed).toBe(true);
   });
 });
