@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { createConnection, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket, { type RawData, WebSocketServer } from 'ws';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
 import {
@@ -22,6 +22,7 @@ import { seedBroker } from './helpers/broker-seed.js';
 import { attachPipePath, NodeClient, type BrokerEntry } from '../src/serve/node.js';
 import { FileInbox } from '../src/serve/file-channel.js';
 import type { SendDeps } from '../src/commands/send.js';
+import type { MemberProvider } from '../src/application/members/index.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-serve-sessions-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -625,6 +626,26 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
     const receipt = await sender.waitFor((f) => f.op === 'receipt' && f.id === 'n9');
     expect(receipt).toMatchObject({ status: 'delivered' });
   }, 10_000);
+
+  it('delegates revival tool and name following to a third provider capability', async () => {
+    const probe = vi.fn(async ({ nativeId }: { nativeId: string }) => ({ nativeId, presence: 'present' as const, name: null, completeness: 'complete' as const, errors: [], observedAt: 1 }));
+    const source: MemberProvider = { providerId: 'thirdtool', liveness: { probe }, readName: vi.fn(async () => 'provider-renamed') };
+    const { harness, attach } = await startNodeStar('provider-third', {}, { memberCheckMs: 50, memberProviders: () => [source] });
+    await attach.send({ op: 'attach', sessionId: 'opaque-third-id', name: 'old-name' });
+    await attach.send({ op: 'detach', sessionId: 'opaque-third-id' });
+    await vi.waitFor(() => expect(probe).toHaveBeenCalled(), { timeout: 2_000 });
+    await vi.waitFor(() => expect(loadBrokerFile(harness.registryFile).stars[0]?.roster).toEqual([expect.objectContaining({ sessionId: 'opaque-third-id', name: 'provider-renamed', tool: 'thirdtool' })]), { timeout: 2_000 });
+  });
+
+  it('leaves temporary members declared when provider liveness is unknown', async () => {
+    const probe = vi.fn(async ({ nativeId }: { nativeId: string }) => ({ nativeId, presence: 'unknown' as const, name: null, completeness: 'unavailable' as const, errors: [], observedAt: 1 }));
+    const source: MemberProvider = { providerId: 'thirdtool', liveness: { probe }, readName: vi.fn(async () => undefined) };
+    const { harness, attach } = await startNodeStar('provider-unknown', {}, { memberCheckMs: 50, memberProviders: () => [source] });
+    await attach.send({ op: 'attach', sessionId: 'unknown-id', name: 'keep-me', temporary: true });
+    await vi.waitFor(() => expect(probe).toHaveBeenCalled(), { timeout: 2_000 });
+    expect(await attach.send({ op: 'status' })).toMatchObject({ members: [expect.objectContaining({ sessionId: 'unknown-id', name: 'keep-me', temporary: true })] });
+    expect(loadBrokerFile(harness.registryFile).stars[0]?.roster).toEqual([expect.objectContaining({ sessionId: 'unknown-id', temporary: true })]);
+  });
 });
 
 describe('020 broker：会话段工具限定词与收命中集', () => {
