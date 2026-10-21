@@ -66,6 +66,27 @@ describe('structured diagnostics', () => {
     expect(result.summary).toEqual({ pass: 6, warn: 3, error: 0, failed: false });
     expect(JSON.stringify(result)).not.toContain('secret-');
   });
+
+  it('parses node configuration from the injected read without opening a real config path or exposing keys', async () => {
+    const { collectDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
+    const probeTcp = vi.fn(() => false);
+    const result = collectDoctorDiagnostics(fixture({
+      tcpDir: '/virtual-only/tcp', probeTcp,
+      readFile: (file) => file.endsWith('node.json')
+        ? JSON.stringify({ brokers: [{ host: 'test-host', port: 7260, name: 'test-star', key: 'secret-key', adminKey: 'secret-admin' }] })
+        : undefined,
+    }));
+    expect(probeTcp).toHaveBeenCalledWith('test-host', 7260);
+    expect(result.groups.find((group) => group.context.kind === 'tcp')).toMatchObject({
+      context: { kind: 'tcp', star: 'test-star' },
+      checks: [
+        { code: 'node-config-ready', level: 'pass', data: {} },
+        { code: 'broker-unreachable', level: 'error', data: { host: 'test-host', port: 7260 } },
+      ],
+    });
+    expect(result.summary.failed).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('secret-');
+  });
 });
 
 describe('isolated cancellable diagnostics', () => {
