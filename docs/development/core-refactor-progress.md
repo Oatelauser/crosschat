@@ -26,17 +26,18 @@
 
 ## 任务状态
 
-- T01：进行中，更新架构事实、契约与渐进规范。
-- T02：待分配，配置/选择器提取和导入图门禁。
-- T05：待分配，纯核心会话读取模型、两个Provider和第三测试Adapter；UI资源/快捷键登记移交T06。
-- T03/T04/T13：接口前置就绪后推进；诊断/清理可先对独立接缝测试提取。
+- T02：core_config负责配置/选择器、迁移相关import、AST图工具和测试；root负责package门禁集成。
+- T05：core_sessions负责application/sessions、Codex新分页API和相关测试；UI资源/快捷键仍在T06。
+- T03/T04：core_diagnostics_cleanup负责doctor/clean及application/diagnostics、cleanup；root负责status helper、其余只读查询及管理/服务接口。
+- T13：root待T02/T05接口就绪，负责typed发送结果和NodeClient成员能力委派。
+- 子任务生产修改已过RED checkpoint：bb03ef6（T02/T05）；e5ecf5c（诊断/清理）。生产实现均未验收。
 
 ## 已验收事实
 
-尚无本阶段实施任务验收完成。详见后续逐项记录；活动队列不得保留完成项。
+- T01已验收：architecture.md按源码更新本机/SSH/TCP/持久状态/权限，§10固定兼容契约；规范和渐进检查策略已记录。使用本轮未改源码前的lint/build及778通过/11跳过基线。本任务为文档，无新增产品行为。
 
 ## 下一步
 
-- 分配不冲突的T02、T05、诊断/清理提取，root负责T01及后续只读/管理/投递整合。
+- root先完成新只读查询RED及status-files helper，等待各agent GREEN后按明确文件提交并集成。
 - 每次分派记录文件owner与接口，完成目标测试后再做集成check。
 - 在上下文压缩前，将确切测试结果、未提交文件、待决点与下一命令更新到本记录。

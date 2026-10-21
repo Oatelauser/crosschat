@@ -1,7 +1,7 @@
 # crosschat 底层原理
 
 > 本文讲清楚一条消息从发送到被处理的完整路径，以及每个设计决策背后的机制事实。
-> 全部结论来自真机实测（见 [research/](research/) 与 [drill-reports/](drill-reports/)）。
+> 原生通道机制来自 [research/](research/) 与 [drill-reports/](drill-reports/) 中的实测；当前模块和兼容边界以源码及测试为准。2026-10-21 对照 `dfd2362` 更新。本文中的 Codex TUI 指原生客户端，crosschat 管理 TUI 尚未实施。
 
 ## 1. 总览
 
@@ -19,7 +19,9 @@
                     （消息注入为用户消息）           （模型直接被驱动干活）
 ```
 
-没有守护进程：每次 `crosschat send` 都独立完成发现、鉴权、投递全过程；对话状态（引用、轮次）**编码在消息本身**里，不落在任何服务端。
+本机 CLI 每次调用独立完成发现、鉴权和投递。SSH 通过远端 CLI 执行；可选 TCP 形态另有常驻 broker（按星转发、管理、维护成员表）和 node 聚合器（本机投递、星籍对账），协议与三层权限见 [broker.md](broker.md)。原生会话及聊天仍由 Claude Code/Codex 管理。
+
+crosschat 有持久状态：`~/.crosschat` 保存对话分片/短柄、发送日志、outbox/mailbox、机器标识和 TCP 配置/台账；broker/node 的活性快照写入 `status-*.json`。待投队列由按需启动、箱空即退的 watchdog 重试。路由和轮次保存在完整引用中，不依赖中央对话服务。
 
 ## 2. Claude 侧通道（named pipe + peer 协议）
 
@@ -55,7 +57,7 @@
 
 回信命令**不带 `--via`**：`--conversation` 引用自含路由（tcp 对话的 ref 尾部带星标识、端点带机器指纹，CLI 自动选路；ssh 对话按机器别名走既有补全）——跨机/单机一种句式，agent 照抄即可。
 
-**自包含引用**是"无状态却可对话"的关键：`mc1_` 后是 base64url 的 `{两端身份(native UUID), nonce, 轮次}`。回复时 CLI 解码引用、校验调用方必是两端之一、目标取另一端、轮次 +1——**不查任何持久状态**。native UUID 稳定（跨会话重启），所以引用在会话存活期内一直有效。
+新引用使用二进制 `mc2_`（旧 `mc1_` JSON 编码仍可读），包括两端原生身份、nonce、轮次和可选机器/星路由。回复解码引用并校验调用方，目标取另一端、轮次加一。本机 `cN` 短柄需查对话分片后转换成完整引用；跨机传递完整引用。持久对话状态还参与连续轮次、短柄和回执记录，不能把整个发送流程视为无持久读取。
 
 ## 5. 身份反查（我是谁）
 
@@ -76,7 +78,7 @@ daemon ≥0.160 上**忙线程不再等待**：turn/start 被接受并按线程�
 ```
 crosschat send --to X --body "…"
   ├─ 排涝 outbox（入口机会式补投，加锁）
-  ├─ body ≤16KiB？超 → MESSAGE_TOO_LARGE（指引落盘发路径）
+  ├─ 校验正文额度（默认16KiB；参数/环境可调，受端点硬顶约束）
   ├─ 身份反查（env）→ 限流检查（30 条/60s/对端点）
   ├─ 解析 X：claude 注册表精确名 / codex thread/list 名（未找到/碰撞 → 错误+候选清单）
   ├─ 组信封（from/turn/reply-ref/教学提示/中性化）
@@ -91,17 +93,33 @@ crosschat send --to X --body "…"
 
 ## 8. 安全模型
 
-- **信任边界 = 同一 Windows 用户**：管道/注册表/key 文件按用户隔离；无任何网络监听
+- **本机**：管道、注册表和 key 文件按用户隔离；SSH 在远端登录用户权限内运行 CLI。
+- **TCP**：broker 监听 WS，星钥认证成员，星管理钥挑战应答授权星内管理，本机管理插座授权 broker 主。没有全权远程钥匙；当前 WS 未启用 TLS，相关边界见 [broker.md §1.2.4](broker.md#124-管理权限三层)。
 - **接收是显式授权的**：只有 `crosschat claude` 启动的会话开接收许可；跨会话消息在 transcript 中带 `peer` 来源标记，用户可区分自己敲的与外部注入的
 - **信封不是签名**：正文是不可信内容（保留字已中性化，防伪造信封结构）；消息是请求不是授权——skill 里明文教 agent 这条纪律
 - **审批永不代答**：codex 等人工审批时 crosschat 直接报错退出
 
 ## 9. 平台接缝（二期 mac/linux 的扩展点）
 
-| 接口 | Windows 实现 | POSIX 对应 |
+| 当前接缝 | Windows 实现 | POSIX 对应 |
 |---|---|---|
-| `PipeTransport` | named pipe + peerToken auth 行 | Unix domain socket（`/tmp/cc-socks/<pid>.sock`，embassy 原路径） |
-| `ProcessInspector` | `process.kill(pid,0)` / CIM | `ps` |
-| `PathLayout` | `~/.crosschat`（全平台统一）、`~/.claude`、`~/.codex` | 同左（无 XDG 分叉） |
+| `platform/pipe-transport.ts` 原生投递 | named pipe + peerToken auth 行 | Unix domain socket（沿用原生路径） |
+| `platform/process-inspector.ts` 进程函数 | `process.kill(pid,0)` / CIM | 平台进程检查 |
+| `state-root.ts` 等路径函数 | `~/.crosschat`、`~/.claude`、`~/.codex` | 同左（无 XDG 分叉） |
 
 命令面（`send`/`status`）形状稳定承诺：内部架构演进（无状态 → 常驻 broker）不改变 agent 侧用法。
+
+## 10. 核心改造的兼容契约
+
+应用接口提供结构化结果，命令入口负责文本/JSON和退出码；配置、选择器不导入命令或 NodeClient。工具差异封装在 Provider，连接差异封装在 Context；内部会话键包含上下文、Provider、完整原生引用。新增纯读取路径与旧命令副作用分离，不反向从 CLI 文本恢复数据。
+
+本轮保留以下现状，修改功能须先获用户同意：
+
+- 旧 CLI 文本、JSON、退出码、Codex 默认 `thread/list` 20 条及未知状态报错不变。新读取接口保留原始状态、分页、部分结果与来源错误。
+- CLI `status` 入口仍可能补投；新查询不得补投、修复/备份配置或启动原生会话。`broker.json` 静态台账不保存 online，活性由快照/roster 判断。
+- broker 运行期是台账唯一写者；热管理连接收到失败或无回执，不能冷回退写盘。冷路径仍调用现有 registry 原子 mutation。
+- 删节点当前仅撤销凭证，已认证连接继续；立即断连是待批准功能。改星名的独立应用接口不借用会继续启动服务的旧 `runServe --name` 入口。
+- 清理保留5日/512MiB/30日与 `--force` 原规则；预览只读，执行使用同一计划。默认额度16KiB，Claude端点64KiB、Codex端点1MiB硬顶等限制不变。
+- 原有 ref/origin/wire、成员册键、权限、投递/排队/寄存、回执及 watchdog 生命周期不迁移。OpenCode/zcode 只预留扩展接缝，尚无真实接入。
+
+验证采用现有回归加接口边界测试：只读无副作用、匿名分页/未知状态、第三测试 Provider、取消释放、热写失败不回退和清理预览。基线 `lint/build` 通过，778测试通过/11跳过；基线未启用真实会话 live 测试。渐进 lint 和 AST 导入图门禁随模块迁移启用，约定见 [代码规范](development/code-standards.md)，实施证据见 [核心改造记录](development/core-refactor-progress.md)。
