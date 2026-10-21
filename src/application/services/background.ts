@@ -49,9 +49,18 @@ export async function stopServicesInBackground(request: ServiceStopRequest, deps
     worker = createWorker(new URL('./stop-worker.js', import.meta.url), { workerData: { baseDir: deps.baseDir, request } });
     const ownedWorker = worker;
     result = await new Promise<ServiceStopResult>((resolve) => {
-      ownedWorker.once('message', (value: unknown) => resolve(isStopResult(value) ? value : failure('后台服务停机回执形状异常')));
-      ownedWorker.once('error', (error) => resolve(failure(error)));
-      ownedWorker.once('exit', (code) => resolve(failure(`后台服务停机任务未返回回执（退出码 ${code}）`)));
+      const finish = (value: ServiceStopResult): void => {
+        ownedWorker.off('message', onMessage);
+        ownedWorker.off('error', onError);
+        ownedWorker.off('exit', onExit);
+        resolve(value);
+      };
+      const onMessage = (value: unknown): void => finish(isStopResult(value) ? value : failure('后台服务停机回执形状异常'));
+      const onError = (error: Error): void => finish(failure(error));
+      const onExit = (code: number): void => finish(failure(`后台服务停机任务未返回回执（退出码 ${code}）`));
+      ownedWorker.once('message', onMessage);
+      ownedWorker.once('error', onError);
+      ownedWorker.once('exit', onExit);
     });
   } catch (error) {
     result = failure(error);
