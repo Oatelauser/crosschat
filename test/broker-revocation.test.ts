@@ -175,12 +175,16 @@ describe('broker credential revocation', () => {
     await expect.poll(() => loadBrokerFile(f.file).stars.every((s) => s.roster.length === 1)).toBe(true);
     expect(await f.local({ op: 'remove-node', starId: STAR_A, label: 'victim' })).toMatchObject({ ok: true, removed: true });
     for (const c of [victim, sender1, sender2]) {
-      expect(await c.wait('credential-revoked')).toMatchObject({ starId: STAR_A, kind: 'node' });
+      expect(await c.wait('credential-revoked')).toMatchObject({ starId: STAR_A, kind: 'node', reason: 'node-removed' });
       await expect.poll(() => c.ws.readyState).toBe(WebSocket.CLOSED);
     }
     const doc = loadBrokerFile(f.file);
-    expect(doc.stars[0]!.roster).toContainEqual(expect.objectContaining({ sessionId: 'permanent-alpha', online: false }));
-    expect(doc.stars[1]!.roster).toContainEqual(expect.objectContaining({ sessionId: 'permanent-beta', online: true }));
+    expect(doc.stars[0]!.roster).toContainEqual(expect.objectContaining({ sessionId: 'permanent-alpha' }));
+    expect(doc.stars[1]!.roster).toContainEqual(expect.objectContaining({ sessionId: 'permanent-beta' }));
+    keep.send({ op: 'admin-op', id: 'alpha-members', action: 'list-members' });
+    neighbor.send({ op: 'admin-op', id: 'beta-members', action: 'list-members' });
+    expect((await keep.wait('admin-op-result', 'alpha-members')).members).not.toContainEqual(expect.objectContaining({ sessionId: 'permanent-alpha', online: true }));
+    expect((await neighbor.wait('admin-op-result', 'beta-members')).members).toContainEqual(expect.objectContaining({ sessionId: 'permanent-beta', online: true }));
     keep.send({ op: 'roster' });
     neighbor.send({ op: 'roster' });
     expect(await keep.wait('roster-result')).toMatchObject({ machines: [expect.objectContaining({ mid8: MID_KEEP.slice(0, 8), online: true })] });
@@ -214,7 +218,7 @@ describe('broker credential revocation', () => {
     const neighbor = await f.admin(ADMIN_B);
     const member = await f.connect(KEY_A);
     expect(await f.local({ op: 'remove-admin-key', starId: STAR_A, label: 'admin-v' })).toMatchObject({ ok: true, removed: 'admin-victim' });
-    for (const c of victims) expect(await c.wait('credential-revoked')).toMatchObject({ starId: STAR_A, kind: 'admin' });
+    for (const c of victims) expect(await c.wait('credential-revoked')).toMatchObject({ starId: STAR_A, kind: 'admin', reason: 'admin-key-revoked' });
     for (const c of [keep, neighbor, member]) {
       c.send({ op: 'admin-op', id: 'still-authorized', action: 'list-nodes' });
       expect(await c.wait('admin-op-result', 'still-authorized')).toMatchObject({ ok: true });
@@ -245,7 +249,9 @@ describe('broker credential revocation', () => {
     expect(victim.frames).toContainEqual(expect.objectContaining({ op: 'credential-revoked' }));
     expect(victim.frames.some((p) => p.id === 'after-revoke-read')).toBe(false);
     expect(replacement.frames.some((p) => p.id === 'after-revoke-send')).toBe(false);
-    expect(loadBrokerFile(f.file).stars[0]!.roster).toEqual([expect.objectContaining({ sessionId: 'before-revoke', online: false })]);
+    expect(loadBrokerFile(f.file).stars[0]!.roster).toEqual([expect.objectContaining({ sessionId: 'before-revoke' })]);
+    keepSender.send({ op: 'admin-op', id: 'offline-member', action: 'list-members' });
+    expect((await keepSender.wait('admin-op-result', 'offline-member')).members).not.toContainEqual(expect.objectContaining({ sessionId: 'before-revoke', online: true }));
     keepSender.send({ op: 'roster' });
     expect(await keepSender.wait('roster-result')).toMatchObject({ machines: [expect.objectContaining({ mid8: MID_KEEP.slice(0, 8), online: true })] });
   });

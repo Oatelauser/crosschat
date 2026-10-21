@@ -159,6 +159,10 @@ interface Session {
   challenge?: { nonce: string };
   /** 034 星管理钥 label（审计来源行用——钥匙本体永不进日志）。 */
   adminLabel?: string;
+  /** D02：实际认证凭证归属；sender 无 machineId，撤销不能以机器或 label 代替。 */
+  credential?: { kind: 'node' | 'admin'; key: string };
+  /** 撤权同步生效，close 回调前已经排队的帧也不得再执行。 */
+  revoked?: boolean;
 }
 
 /**
@@ -187,6 +191,7 @@ type ResolvedTarget =
   | { kind: 'error'; code: string; message: string };
 
 interface PendingResult {
+  senderWs: SocketLike;
   targetWs: SocketLike;
   timer: ReturnType<typeof setTimeout>;
   resolve: (outcome: RouteOutcome) => void;
@@ -488,25 +493,65 @@ export class Broker {
         return { ok: true, result };
       }
       case 'remove-admin-key': {
-        // 034 吊星管理钥（仅 broker 主本机插座）：被吊钥的下一次挑战应答即 BAD_AUTH
+        // 吊星管理钥仅 broker 主本机：认证连接立即失效，在途挑战仍现读台账验证。
         const starId = str('starId');
         const label = str('label');
         if (starId === undefined || label === undefined) return { ok: false, error: 'remove-admin-key 缺少 starId/label' };
+        const entries = loadBrokerFile(this.d.registryFile).stars.find((s) => s.starId === starId)?.nodes ?? [];
         const removed = removeAdminKeyFor(this.d.registryFile, starId, label);
         this.auditAdmin('remove-admin-key', `星 ${starId} label=${removed ?? label}`, LOCAL);
         if (removed === undefined) return { ok: false, error: `星 ${starId} 无匹配管理钥 ${label}——crosschat serve --list 可查` };
+        this.revokeCredentials(starId, entries.filter((entry) => entry.label === removed));
         return { ok: true, removed };
       }
       case 'remove-node': {
         const starId = str('starId');
         const label = str('label');
         if (starId === undefined || label === undefined) return { ok: false, error: 'remove-node 缺少 starId/label' };
-        const removed = removeNodeFor(this.d.registryFile, starId, label);
+        const removed = this.removeNodeCredential(starId, label);
         this.auditAdmin('remove-node', `星 ${starId} label=${label}`, LOCAL);
         return { ok: true, removed };
       }
       default:
         return { ok: false, error: `未知管理 op：${String(req.op)}` };
+    }
+  }
+
+  /** 两个管理入口共用撤钥与在线失效，保留 registry 的精确 label/返回语义。 */
+  private removeNodeCredential(starId: string, label: string): boolean {
+    const entries = loadBrokerFile(this.d.registryFile).stars.find((s) => s.starId === starId)?.nodes.filter((entry) => entry.label === label) ?? [];
+    const removed = removeNodeFor(this.d.registryFile, starId, label);
+    if (removed) this.revokeCredentials(starId, entries);
+    return removed;
+  }
+
+  /** 先标记所有匹配连接，再清路由/在线态和通知，避免同步虚拟连接回调重入。 */
+  private revokeCredentials(starId: string, entries: NodeEntry[]): void {
+    const affected = [...this.sessions].filter((session) => {
+      if (session.starId !== starId || session.credential === undefined) return false;
+      const credential = session.credential;
+      return entries.some((entry) => {
+        const key = credential.kind === 'admin' ? entry.adminKey : entry.key;
+        return key !== undefined && safeEqual(credential.key, key);
+      });
+    });
+    for (const session of affected) session.revoked = true;
+    for (const session of affected) {
+      const kind = session.credential!.kind;
+      const message = kind === 'admin'
+        ? '星管理钥已撤销，管理连接已失效；请向 broker 主索取新管理钥后重新连接'
+        : '节点凭证已撤销，该星连接已失效并暂停自动重连；保留本机配置，换钥后显式重新连接';
+      this.releaseSession(session, {
+        code: ERR.CREDENTIAL_REVOKED,
+        message: '对端凭证已撤销，连接已失效；已转发请求的结果需核实后再决定是否重发',
+      });
+      this.send(session.ws, { op: 'credential-revoked', starId, kind, reason: kind === 'admin' ? 'admin-key-revoked' : 'node-removed', message });
+      try {
+        session.ws.close(4001, 'credential revoked');
+      } catch {
+        // 状态与权限已经撤销，关闭中的连接无需重试。
+      }
+      this.log(`credential-revoked ${kind} 星 ${starId} ${session.adminLabel ?? session.machineName ?? session.machineId?.slice(0, 8) ?? 'sender'}`);
     }
   }
 
@@ -742,18 +787,28 @@ export class Broker {
   }
 
   private onClose(session: Session): void {
+    this.releaseSession(session, { code: ERR.PEER_OFFLINE, message: '节点连接断开' });
+  }
+
+  /** 关闭事件与明确撤权共用资源收尾；撤权不等待 socket close。 */
+  private releaseSession(session: Session, error: { code: string; message: string }): void {
     this.sessions.delete(session);
     if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
     for (const [id, entry] of this.pending) {
-      if (entry.targetWs === session.ws) {
+      if (entry.targetWs === session.ws || entry.senderWs === session.ws) {
         clearTimeout(entry.timer);
         this.pending.delete(id);
-        entry.resolve({ kind: 'error', code: ERR.PEER_OFFLINE, message: '节点连接断开' });
+        entry.resolve({ kind: 'error', ...error });
       }
     }
-    // B2：清掉该连接参与的一切文件路由（对端等待者会随断线失败）
+    // 撤权时 surviving sender 不会断线，显式结束其等待，但不宣称撤回已转发数据。
     for (const [id, route] of this.fileRoutes) {
-      if (route.senderWs === session.ws || route.targetWs === session.ws) this.fileRoutes.delete(id);
+      if (route.senderWs !== session.ws && route.targetWs !== session.ws) continue;
+      this.fileRoutes.delete(id);
+      if (error.code === ERR.CREDENTIAL_REVOKED && route.targetWs === session.ws && route.senderWs !== session.ws) {
+        const sender = [...this.sessions].find((candidate) => candidate.ws === route.senderWs);
+        if (sender !== undefined && !sender.revoked) this.send(route.senderWs, { op: 'file-result', id, ok: false, error: error.message });
+      }
     }
     // 033：被删星收尾的会话——星域状态已随星弃置，跳过在线表/册回收（防残余
     // 会话误入幸存星）
@@ -776,7 +831,7 @@ export class Broker {
   }
 
   private async onMessage(session: Session, text: string): Promise<void> {
-    if (this.reapedSessions.has(session)) return; // 033：星已删的残余帧丢弃（防误入幸存星）
+    if (session.revoked || this.reapedSessions.has(session)) return; // 已撤权/删星的排队帧丢弃
     const frame = parseFrame(text);
     if (frame === undefined) return; // 损坏/未知帧丢弃
     if (!session.authed) {
@@ -1208,6 +1263,7 @@ export class Broker {
     if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
     session.authed = true;
     session.identity = 'member';
+    session.credential = { kind: 'node', key: auth };
     // 022/036：星标识在钥匙核验后回填（握手时序恒倒置——info 无法预知属星，
     // 单星也回填）
     this.send(session.ws, {
@@ -1252,6 +1308,7 @@ export class Broker {
         const expect = createHmac('sha256', node.adminKey).update(nonce).digest('hex');
         if (!safeEqual(frame.proof, expect)) continue;
         session.identity = 'admin';
+        session.credential = { kind: 'admin', key: node.adminKey };
         session.adminLabel = node.label;
         session.starId = star.starId;
         if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
@@ -1368,7 +1425,7 @@ export class Broker {
           this.log(`admin-required remove-node(${frame.label})（管理钥条目，星管理员不可吊同侪）`);
           return;
         }
-        const removed = removeNodeFor(this.d.registryFile, star.starId, frame.label);
+        const removed = this.removeNodeCredential(star.starId, frame.label);
         const reply: AdminOpResultFrame = { op: 'admin-op-result', id: frame.id, ok: true, removed };
         this.send(session.ws, reply);
         audit('remove-node');
@@ -1382,6 +1439,7 @@ export class Broker {
   /** 鉴权失败统一路径：恒定延迟再回 BAD_AUTH，挫钥匙枚举计时。 */
   private async authFail(session: Session, message: string): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, this.d.authFailDelayMs));
+    if (session.revoked || !this.sessions.has(session)) return;
     this.send(session.ws, { op: 'error', code: ERR.BAD_AUTH, message });
     this.log(`bad-auth 拒绝连接（${message}）`);
     session.ws.close(4001, 'bad auth');
@@ -1396,6 +1454,7 @@ export class Broker {
       return;
     }
     const fail = (code: string, message: string) => {
+      if (sender.revoked) return;
       this.send(sender.ws, { op: 'error', code, message, id: frame.id });
       this.log(`route ${from}→${target} ${code}`);
     };
@@ -1414,6 +1473,7 @@ export class Broker {
       } catch (err) {
         outcome = { op: 'error', code: ERR.NOT_READY, message: err instanceof Error ? err.message : String(err) };
       }
+      if (sender.revoked) return;
       if (outcome.op === 'error') return fail(outcome.code, outcome.message);
       // B2：deliverLocal 可能回 error 态 ResultFrame（结构化失败）——同按失败路由
       if (outcome.status === 'error') {
@@ -1449,8 +1509,9 @@ export class Broker {
         this.pending.delete(frame.id);
         resolve({ kind: 'error', code: ERR.PEER_OFFLINE, message: `节点 ${target} 未在 ${this.d.resultTimeoutMs}ms 内回应 result` });
       }, this.d.resultTimeoutMs);
-      this.pending.set(frame.id, { targetWs: targetSession, timer, resolve });
+      this.pending.set(frame.id, { senderWs: sender.ws, targetWs: targetSession, timer, resolve });
     });
+    if (sender.revoked) return;
     if (outcome.kind === 'error') return fail(outcome.code, outcome.message);
     if (outcome.kind === 'status') return fail('INTERNAL', 'send 路由收到 status 回程（id 串扰）'); // 防御：send/status 的 id 各自随机，不应互串
     const result = outcome.frame;
@@ -1474,6 +1535,7 @@ export class Broker {
     const target = frame.targetMachine;
     const from = sender.machineName ?? 'unknown';
     const fail = (code: string, message: string): void => {
+      if (sender.revoked) return;
       this.send(sender.ws, { op: 'error', code, message, id: frame.id });
       this.log(`status-route ${from}→${target} ${code}`);
     };
@@ -1488,6 +1550,7 @@ export class Broker {
         return fail(ERR.NOT_READY, '本机会话扫描器未接线（升级 broker 机 crosschat）');
       }
       const payload = await this.d.scanStatus();
+      if (sender.revoked) return;
       this.send(sender.ws, { op: 'status-result', id: frame.id, ok: true, payload });
       this.log(`status-route ${from}→${target}(local) ok`);
       return;
@@ -1498,8 +1561,9 @@ export class Broker {
         this.pending.delete(frame.id);
         resolve({ kind: 'error', code: ERR.PEER_OFFLINE, message: `节点 ${target} 未在 ${this.d.resultTimeoutMs}ms 内回应 status-result` });
       }, this.d.resultTimeoutMs);
-      this.pending.set(frame.id, { targetWs: resolved.ws, timer, resolve });
+      this.pending.set(frame.id, { senderWs: sender.ws, targetWs: resolved.ws, timer, resolve });
     });
+    if (sender.revoked) return;
     if (outcome.kind === 'error') return fail(outcome.code, outcome.message);
     this.send(sender.ws, outcome.frame);
     this.log(`status-route ${from}→${target} ok`);
