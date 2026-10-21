@@ -70,15 +70,26 @@ describe('service snapshots and managed files', () => {
   it('validates service fields and distinguishes stale/stopped from current readiness', async () => {
     const { queryServiceStatuses } = await import('../src/application/queries/index.js');
     const { tcpDir } = await fixture();
-    await writeFile(join(tcpDir, 'status-broker.json'), JSON.stringify({ state: 'running', port: 7260, lastUpdated: new Date(now).toISOString(), adminPipe: 'private-capability', onlineNodes: ['one'], stars: [{ starId: 'star-full', name: 'cloud' }] }));
+    await writeFile(join(tcpDir, 'status-broker.json'), JSON.stringify({ state: 'running', pid: 1234, port: 7260, lastUpdated: new Date(now).toISOString(), adminPipe: 'private-capability', onlineNodes: ['one'], stars: [{ starId: 'star-full', name: 'cloud' }] }));
     await writeFile(join(tcpDir, 'status-node.json'), JSON.stringify({ state: 'online', brokerAlias: 'cloud', since: '2026-10-20', lastUpdated: new Date(now - 90_000).toISOString() }));
     await writeFile(join(tcpDir, 'status-node-bad.json'), '{"state":"online","lastUpdated":55}');
-    const result = await queryServiceStatuses({ tcpDir, now: () => now });
+    const result = await queryServiceStatuses({ tcpDir, now: () => now, isProcessAlive: () => true });
     expect(result.completeness).toBe('partial');
     expect(result.items.find((item) => item.kind === 'broker')).toMatchObject({ freshness: 'fresh', readiness: 'ready', port: 7260 });
     expect(result.items.find((item) => item.file === 'status-node.json')).toMatchObject({ freshness: 'stale', readiness: 'unknown' });
     expect(result.errors).toEqual([expect.objectContaining({ kind: 'malformed', source: join(tcpDir, 'status-node-bad.json') })]);
     expect(JSON.stringify(result)).not.toContain('private-capability');
+  });
+
+  it('never labels fresh ghost or legacy snapshots as confirmed ready', async () => {
+    const { queryServiceStatuses } = await import('../src/application/queries/index.js');
+    const { tcpDir } = await fixture();
+    const file = join(tcpDir, 'status-broker.json');
+    await writeFile(file, JSON.stringify({ state: 'running', pid: 1234, lastUpdated: new Date(now).toISOString() }));
+    const dead = await queryServiceStatuses({ tcpDir, now: () => now, isProcessAlive: () => false });
+    expect(dead.items[0]).toMatchObject({ freshness: 'fresh', readiness: 'unknown', pid: 1234, processAlive: false });
+    await writeFile(file, JSON.stringify({ state: 'running', lastUpdated: new Date(now).toISOString() }));
+    expect((await queryServiceStatuses({ tcpDir, now: () => now })).items[0].readiness).toBe('unknown');
   });
 
   it('lists file metadata without reading secret content or creating missing directories', async () => {
@@ -95,6 +106,13 @@ describe('service snapshots and managed files', () => {
 });
 
 describe('bounded log query', () => {
+  it('retains a complete line when the bounded window starts exactly at its boundary', async () => {
+    const { queryLogTail } = await import('../src/application/queries/index.js');
+    const { tcpDir } = await fixture();
+    const file = join(tcpDir, 'broker.log');
+    await writeFile(file, 'head\nkeep\n');
+    expect((await queryLogTail({ file, maxBytes: 5 })).lines).toEqual(['keep']);
+  });
   it('bounds bytes, drops incomplete edge lines, supports filtering and detects replacement/truncation', async () => {
     const { queryLogTail } = await import('../src/application/queries/index.js');
     const { tcpDir } = await fixture();
