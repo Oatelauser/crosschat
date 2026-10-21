@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { stopServicesInBackground } from '../src/application/services/background.js';
 
 const roots: string[] = [];
@@ -22,6 +22,14 @@ afterEach(async () => {
 });
 
 describe('owned background service stop', () => {
+  it('returns a typed failure when worker startup fails', async () => {
+    const { root } = fixture('');
+    expect(await stopServicesInBackground({ target: 'node' }, {
+      baseDir: root, createWorker: () => { throw new Error('fixture worker startup failed'); },
+    })).toEqual({ state: 'failed', events: [], error: 'fixture worker startup failed' });
+    expect(workers).toEqual([]);
+  });
+
   it('keeps the calling event loop responsive and releases the worker before completing', async () => {
     const { root, workerFile } = fixture(`
       const end = Date.now() + 100;
@@ -31,6 +39,7 @@ describe('owned background service stop', () => {
     `);
     let exited = false;
     let job: unknown;
+    let listenersBeforeTermination: number[] = [];
     const done = stopServicesInBackground({ target: 'node' }, {
       baseDir: root,
       createWorker: (_url, options) => {
@@ -38,6 +47,14 @@ describe('owned background service stop', () => {
         const worker = new Worker(workerFile, options);
         workers.push(worker);
         worker.once('exit', () => { exited = true; });
+        worker.on('message', () => {});
+        worker.on('error', () => {});
+        worker.on('exit', () => {});
+        const terminate = worker.terminate.bind(worker);
+        vi.spyOn(worker, 'terminate').mockImplementation(() => {
+          listenersBeforeTermination = ['message', 'error', 'exit'].map((event) => worker.listenerCount(event));
+          return terminate();
+        });
         return worker;
       },
     });
@@ -46,6 +63,7 @@ describe('owned background service stop', () => {
     expect(await done).toEqual({ state: 'ready', events: [{ kind: 'none', target: 'node' }] });
     expect(job).toEqual({ baseDir: root, request: { target: 'node' } });
     expect(exited).toBe(true);
+    expect(listenersBeforeTermination).toEqual([1, 1, 2]);
   });
 
   it.each([
