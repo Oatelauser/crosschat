@@ -5,9 +5,10 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import type { DiscoveryEndpoint, DiscoveryResponse } from '../src/application/discovery/model.js';
+import { parseDiscoveryResponse } from '../src/application/discovery/boundary.js';
 import { FileInbox } from '../src/serve/file-channel.js';
 import { NodeClient } from '../src/serve/node.js';
-import { parseFrame, PROTOCOL_VERSION } from '../src/serve/protocol.js';
+import { MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from '../src/serve/protocol.js';
 import type { Frame } from '../src/serve/protocol.js';
 
 const STAR_ID = 'aaaabbbbcccc';
@@ -84,6 +85,22 @@ describe('node discovery forwarding lifecycle', () => {
     expect(JSON.stringify(result(sockets[0], 'read-1'))).not.toContain('hidden-token');
     expect(discover).toHaveBeenCalledWith({ op: 'list', limit: 100 }, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(makeSendDeps).not.toHaveBeenCalled();
+    const nearLimit = parseDiscoveryResponse(response());
+    if (nearLimit.op !== 'list') throw new Error('Expected list response');
+    const item = nearLimit.page.items[0];
+    item.attributes = { hint: 17, blob: '' };
+    item.attributes = { hint: 17, blob: 'x'.repeat(MAX_PAYLOAD_BYTES - Buffer.byteLength(JSON.stringify(nearLimit)) - 1) };
+    discover.mockResolvedValueOnce(nearLimit);
+    sockets[0].receive(query('near-frame-limit'));
+    await vi.waitFor(() => {
+      const frame = result(sockets[0], 'near-frame-limit');
+      expect(frame?.op).toBe('discover-result');
+      if (frame?.op === 'discover-result') {
+        expect(frame.ok).toBe(false);
+        expect(frame.error).toBe('INVALID_RESULT');
+      }
+    });
+    expect(sockets[0].readyState).toBe(WebSocket.OPEN);
   });
 
   it('rejects pre-authentication and malformed payloads without starting a read', async () => {
