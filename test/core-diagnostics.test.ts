@@ -1,4 +1,10 @@
 import { Worker } from 'node:worker_threads';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import process from 'node:process';
+import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import { runDoctor } from '../src/commands/doctor.js';
 import type { DoctorDeps } from '../src/commands/doctor.js';
@@ -90,6 +96,50 @@ describe('structured diagnostics', () => {
 });
 
 describe('isolated cancellable diagnostics', () => {
+  it('terminates a real probe child through the default built isolation path on cancellation', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'crosschat-diagnostic-tree-'));
+    const marker = join(dir, 'probe-pid');
+    let probePid: number | undefined;
+    let settled: Promise<string> | undefined;
+    try {
+      // Build only the query owner into a local package. The adjacent controlled
+      // probe replaces doctor, so this never scans the user's actual settings.
+      const querySource = readFileSync(new URL('../src/application/diagnostics/query.ts', import.meta.url), 'utf8');
+      const built = ts.transpileModule(querySource, {
+        compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2023 },
+      }).outputText;
+      writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
+      writeFileSync(join(dir, 'query.js'), built);
+      const childScript = `require('node:fs').writeFileSync(${JSON.stringify(marker)},String(process.pid));setInterval(()=>{},1000);`;
+      const isolatedScript = `import {spawnSync} from 'node:child_process'; spawnSync(process.execPath,['-e',${JSON.stringify(childScript)}]);`;
+      writeFileSync(join(dir, 'worker.js'), isolatedScript);
+      writeFileSync(join(dir, 'isolated.js'), isolatedScript);
+      const { queryDoctorDiagnostics } = await import(pathToFileURL(join(dir, 'query.js')).href);
+      const controller = new AbortController();
+      const pending = queryDoctorDiagnostics({ signal: controller.signal });
+      settled = pending.then(() => 'resolved', (error: Error) => error.name);
+      const deadline = Date.now() + 3_000;
+      while (!existsSync(marker) && Date.now() < deadline) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      }
+      expect(existsSync(marker)).toBe(true);
+      probePid = Number(readFileSync(marker, 'utf8'));
+      controller.abort();
+      const outcome = await Promise.race([
+        settled,
+        new Promise<string>((resolve) => setTimeout(() => resolve('still waiting for blocking probe'), 500)),
+      ]);
+      expect(outcome).toBe('AbortError');
+      expect(() => process.kill(probePid!, 0)).toThrow();
+    } finally {
+      if (probePid !== undefined) {
+        try { process.kill(probePid); } catch { /* Already owned and terminated. */ }
+      }
+      await settled;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('rejects an already-cancelled query before creating a worker', async () => {
     const { queryDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
     const controller = new AbortController();
