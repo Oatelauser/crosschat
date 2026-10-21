@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest';
+import { ChildProcess } from 'node:child_process';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
+import { Readable, Writable } from 'node:stream';
 import { normalizeThreadStatus, openCodexSession } from '../src/codex/client.js';
 import type { CodexMessageChannel } from '../src/codex/transport.js';
+
+class FakeProxyChild extends ChildProcess implements ChildProcessWithoutNullStreams {
+  override stdin = new Writable({ write: (_chunk, _encoding, callback) => callback() });
+  override stdout = new Readable({ read() {} });
+  override stderr = new Readable({ read() {} });
+  override stdio: ChildProcessWithoutNullStreams['stdio'] = [this.stdin, this.stdout, this.stderr, undefined, undefined];
+  override exitCode = 0;
+}
+
+function spawnProxy(): ChildProcessWithoutNullStreams {
+  const child = new FakeProxyChild();
+  setImmediate(() => child.emit('spawn'));
+  return child;
+}
 
 function channel() {
   const sent: Array<{ id?: number; method: string; params: Record<string, unknown> }> = [];
@@ -17,7 +34,7 @@ function channel() {
 describe('Codex internal paged read contract', () => {
   it('keeps the legacy limit-20 non-archived request and rejecting unknown status unchanged', async () => {
     const fake = channel();
-    const session = await openCodexSession({ channelFactory: async () => fake.channel })();
+    const session = await openCodexSession({ spawnProxy, channelFactory: async () => fake.channel })();
     const list = session.listThreads();
     expect(fake.sent[0].params).toMatchObject({ limit: 20, archived: false });
     expect(fake.sent[0].params).not.toHaveProperty('cursor');
@@ -29,7 +46,7 @@ describe('Codex internal paged read contract', () => {
 
   it('provides cursor-based pages of 21 and 100 anonymous threads preserving raw unknown status', async () => {
     const fake = channel();
-    const session = await openCodexSession({ channelFactory: async () => fake.channel })();
+    const session = await openCodexSession({ spawnProxy, channelFactory: async () => fake.channel })();
     try {
       const first = session.listThreadPage({ limit: 21 });
       expect(fake.sent[0].params).toMatchObject({ limit: 21, archived: false });
@@ -51,7 +68,7 @@ describe('Codex internal paged read contract', () => {
 
   it('does not assert completeness when an older response omits nextCursor', async () => {
     const fake = channel();
-    const session = await openCodexSession({ channelFactory: async () => fake.channel })();
+    const session = await openCodexSession({ spawnProxy, channelFactory: async () => fake.channel })();
     try {
       const request = session.listThreadPage({});
       fake.respond({ data: [] });
@@ -63,7 +80,7 @@ describe('Codex internal paged read contract', () => {
 
   it('stops waiting for an in-flight page when it is cancelled', async () => {
     const fake = channel();
-    const session = await openCodexSession({ channelFactory: async () => fake.channel, requestTimeoutMs: 100 })();
+    const session = await openCodexSession({ spawnProxy, channelFactory: async () => fake.channel, requestTimeoutMs: 100 })();
     try {
       const controller = new AbortController();
       const request = session.listThreadPage({ signal: controller.signal });

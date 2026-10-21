@@ -490,6 +490,7 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
       backoffBaseMs: 50,
       attachLabel: label,
       memberCheckMs: 60_000,
+      codexHome: join(dir, 'codex-home'),
       ...overrides,
     });
     nodeClients.push(client);

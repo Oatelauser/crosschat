@@ -17,7 +17,8 @@ import { handleForRef, recordConversation } from '../conversations.js';
 import { decodeRef } from '../ref.js';
 import { CODEX_ENDPOINT_MAX_BODY_BYTES } from '../limits.js';
 import type { SendLogEntry } from '../send-log.js';
-import type { SendArgs, SendDeps } from '../commands/send.js';
+import type { SendArgs, SendDeps, SendResult } from '../application/send/types.js';
+import { formatSendResult } from '../application/send/format.js';
 import { CAP_CHALLENGE_AUTH, CAP_MULTI_STAR, encodeFrame, ERR, hasCap, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
 import type { AdminOpResultFrame, AuthChallengeFrame, ErrorFrame, FileResultFrame, Frame, InfoFrame, MemberRemoveResultFrame, ReceiptFrame, RosterMachine, StatusPayload, StatusResultFrame } from './protocol.js';
 import { defaultBaseDir, tcpDir } from './registry.js';
@@ -263,6 +264,10 @@ export function parseTcpViaSpec(via: string): { selector: string | undefined; ta
 
 /** via 分支入口（send.ts 在 ssh 分流前调用）。body 在 --file 无 --body 时可为 undefined。 */
 export async function runViaTcpSend(args: SendArgs, body: string | undefined, deps: SendDeps): Promise<string> {
+  return formatSendResult(await sendViaTcp(args, body, deps), args.json === true);
+}
+
+export async function sendViaTcp(args: SendArgs, body: string | undefined, deps: SendDeps): Promise<SendResult> {
   // B1：`tcp:<选择器>:<目标>`——第一个':'前是选择器（星名/starId 前缀），其余是目标
   const { selector, target } = parseTcpViaSpec(args.via!);
   if (target === '') {
@@ -334,14 +339,7 @@ export async function runViaTcpSend(args: SendArgs, body: string | undefined, de
     const out = await sendBody(conn, args, finalBody, origin, target, timeoutMs, deps, caller, logNow, logTo, transportFailure);
     if (tmpFile === undefined) return out;
     rmSync(tmpFile, { force: true });
-    if (args.json === true) {
-      try {
-        return JSON.stringify({ ...JSON.parse(out) as Record<string, unknown>, file: landedPath });
-      } catch {
-        return out;
-      }
-    }
-    return `${out}\n正文超限已自动转文件通道：${landedPath}`;
+    return { ...out, receipt: { ...out.receipt, file: landedPath }, automaticFile: landedPath };
   } catch (err) {
     if (tmpFile !== undefined && err instanceof Error) {
       err.message += `\n正文原文已保留: ${tmpFile}`;
@@ -419,7 +417,7 @@ async function sendBody(
   logNow: (fields: Omit<SendLogEntry, 'ts'>) => void,
   logTo: string,
   transportFailure: TransportFail,
-): Promise<string> {
+): Promise<SendResult> {
   const id = randomUUID();
   await conn.send({
     op: 'send',
@@ -461,7 +459,7 @@ async function sendBody(
   }
 
   const receipt = frame as ReceiptFrame;
-  // 节点附带了完整 runSend --json 输出——按 ssh 形态同款格式化
+  // 旧 wire 兼容：远端 output 是 JSON 字符串，在传输边界解析；本机桥不反解析 CLI。
   let remote: { status: string; to: string; turn: number; replyRef: string; queue?: number; mailbox?: string } | undefined;
   if (receipt.output !== undefined) {
     try {
@@ -494,21 +492,11 @@ async function sendBody(
     }
   }
   const displayTo = `${remote?.to ?? target}@${machine}`;
-  if (args.json === true) {
-    return JSON.stringify({ status, to: displayTo, turn, replyRef, ...(remote?.queue !== undefined ? { queue: remote.queue } : {}), ...(remote?.mailbox !== undefined ? { mailbox: remote.mailbox } : {}), via: `tcp:${target}` });
-  }
-  if (status === 'parked') {
-    return [
-      `已寄存给 ${displayTo}（对方忙，未送达）。队列共 ${remote?.queue ?? 1} 条，看门狗每 0.5–5 分钟自动重试，无需手动 status。`,
-      `人工随时可读滞留内容: ${remote?.mailbox ?? ''}（位于 ${machine}）`,
-      handle === undefined ? `reply-ref: ${replyRef}` : `续话: ${handle}`,
-    ].join('\n');
-  }
-  const tail = handle === undefined ? `\nreply-ref: ${replyRef}` : ` · 续话 ${handle}`;
-  if (status === 'queued') {
-    return `queued to ${displayTo} (turn ${turn ?? '?'}; 对方正忙，已入队，本轮结束即处理)${tail}`;
-  }
-  return `delivered to ${displayTo} (turn ${turn ?? '?'})${tail}`;
+  return {
+    status,
+    receipt: { status, to: displayTo, turn, replyRef, ...(remote?.queue !== undefined ? { queue: remote.queue } : {}), ...(remote?.mailbox !== undefined ? { mailbox: remote.mailbox } : {}), via: `tcp:${target}` },
+    route: { kind: 'tcp', displayTo, machine }, handle,
+  };
 }
 
 function formatMiB(bytes: number): string {

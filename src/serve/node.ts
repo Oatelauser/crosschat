@@ -1,6 +1,6 @@
 /**
  * 节点客户端（票B B2）：`crosschat serve --connect` 的常驻腿——连 broker、
- * 收 deliver 帧进程内调 runSend（与 ssh 远端 CLI 同权：会话状态/限流/发件箱
+ * 收 deliver 帧进程内调发送应用接口（与 ssh 远端 CLI 同权：会话状态/限流/发件箱
  * 全是本机既有行为）、收 file-* 帧落盘 inbox。断线指数退避 1s→2s→…封顶
  * 60s 永不放弃；连续失败 ≥5 分钟进静音模式（日志每 10 次一条）。
  */
@@ -33,9 +33,12 @@ import type {
   SessionMemberDecl,
   SocketLike,
 } from './protocol.js';
-import { runSend, type SendDeps } from '../commands/send.js';
+import { sendMessage } from '../application/send/index.js';
+import { formatSendResult } from '../application/send/format.js';
+import type { SendDeps } from '../application/send/types.js';
 import type { CodexThreadWithMeta } from '../codex/discovery.js';
-import { codexHomeDir, lookupRolloutMetas } from '../codex/rollout-meta.js';
+import { createLegacyMemberProviders, readMemberSnapshot } from '../application/members/index.js';
+import type { MemberProvider, MemberProviderFactory } from '../application/members/index.js';
 import { FileInbox } from './file-channel.js';
 import { sanitizeName } from './registry.js';
 import { PIPE_PREFIX } from '../platform/pipe-transport.js';
@@ -47,53 +50,38 @@ export { formatBrokerEntry, NOT_JOINED_MESSAGE, readNodeConfig, syncNodeJsonEntr
 export type { BrokerEntry, NodeConfig } from './node-config.js';
 
 /**
- * deliver 帧 → 本机 runSend（broker 侧 deliverLocal 同用此桥）：
+ * deliver 帧 → 本机 typed 发送结果（broker 侧 deliverLocal 同用此桥）：
  * payload=正文，to/conversation/origin 透传；origin 是发送机的
  * encodeOriginIdentity 编码（ssh 远端 CLI 的 --origin 同语义）。
  * 018：sessionId 在场=会话级直达（三段寻址命中星成员）——注入 targetSessionId，
  * id 定位优先（deliver.to 仅占位，名字解析跳过）。
  */
 export async function deliverViaRunSend(frame: DeliverFrame, deps: SendDeps): Promise<ResultFrame> {
-  let output: string;
   try {
-    // F1：broker 透传的发送方 roster 真名随 deps 进 runSend——跨机信封的
-    // from-machine 属性来源；无名瞬态发送方（frame 缺省）不注入。
-    output = await runSend(
+    const result = await sendMessage(
       {
         to: frame.sessionId === undefined ? frame.to : (frame.to ?? frame.sessionId),
         ...(frame.sessionId === undefined ? {} : { targetSessionId: frame.sessionId }),
         conversation: frame.conversation,
         bodyArg: frame.payload,
         origin: frame.origin,
-        json: true,
       },
       frame.fromMachine === undefined ? deps : { ...deps, fromMachine: frame.fromMachine },
     );
-  } catch (err) {
-    if (err instanceof MultichatError) {
-      return { op: 'result', id: frame.id, status: 'error', code: err.code, message: err.message };
-    }
     return {
-      op: 'result',
-      id: frame.id,
-      status: 'error',
-      code: 'INTERNAL',
-      message: err instanceof Error ? err.message : String(err),
+      op: 'result', id: frame.id,
+      // Existing wire status remains unchanged; queued evidence is in output.queued.
+      status: result.receipt.status,
+      turn: result.receipt.turn === undefined ? undefined : String(result.receipt.turn),
+      replyRef: result.receipt.replyRef,
+      output: formatSendResult(result, true),
     };
-  }
-  // runSend --json 输出：{status,to,turn,replyRef[,queue,mailbox]}
-  try {
-    const receipt = JSON.parse(output) as { status: 'delivered' | 'queued' | 'parked'; turn?: number; replyRef?: string };
+  } catch (error) {
     return {
-      op: 'result',
-      id: frame.id,
-      status: receipt.status,
-      turn: receipt.turn === undefined ? undefined : String(receipt.turn),
-      replyRef: receipt.replyRef,
-      output,
+      op: 'result', id: frame.id, status: 'error',
+      code: error instanceof MultichatError ? error.code : 'INTERNAL',
+      message: error instanceof Error ? error.message : String(error),
     };
-  } catch {
-    return { op: 'result', id: frame.id, status: 'error', code: 'INTERNAL', message: `本机回执不是 JSON: ${output.slice(0, 200)}` };
   }
 }
 
@@ -180,6 +168,8 @@ export interface NodeClientDeps {
   memberCheckMs?: number;
   /** 018：codex 线程活性核验的 CODEX_HOME（缺省真 codexHomeDir；测试注入临时目录保密闭）。 */
   codexHome?: string;
+  /** Optional provider capabilities; the default preserves native reconciliation policy. */
+  memberProviders?: MemberProviderFactory;
   /**
    * 018（9b 批二）：降级告警直达命令面（stdout/stderr 一行，不只日志）——
    * broker 无 session-members cap 时调用一次。缺省不打印（嵌入式调用方零噪音）。
@@ -779,15 +769,18 @@ export class NodeClient {
       } catch {
         // 查不回：本轮只做本地活性（下轮再查）
       }
-      // 2) 本地验活一次：claude 扫描 ∪ codex rollout（id → 来源工具即复活判定的 tool 锚）
-      const deps = this.d.makeSendDeps();
-      const scan = deps.listClaudeSessions();
-      const claudeById = new Map(scan.sessions.map((session) => [session.sessionId, session]));
-      const rest = [...new Set([...this.members.keys(), ...slice.map((d) => d.sessionId)])].filter((id) => !claudeById.has(id));
-      const codexIds =
-        rest.length > 0 ? new Set(lookupRolloutMetas(this.d.codexHome ?? codexHomeDir(), rest).keys()) : new Set<string>();
+      // 2) Provider capabilities own native liveness, source selection and name lookup.
+      const request = { contextId: 'local', nativeIds: [...new Set([...this.members.keys(), ...slice.map((decl) => decl.sessionId)])] };
+      let providers: readonly MemberProvider[];
+      if (this.d.memberProviders !== undefined) {
+        providers = this.d.memberProviders(request);
+      } else {
+        const deps = this.d.makeSendDeps();
+        providers = createLegacyMemberProviders({ listClaudeSessions: deps.listClaudeSessions, listCodexThreads: deps.listCodexThreads, codexHome: this.d.codexHome, now: this.d.now }, request.nativeIds);
+      }
+      const observations = await readMemberSnapshot(providers, request);
       const toolOf = (id: string): string | undefined =>
-        claudeById.has(id) ? 'claude' : codexIds.has(id) ? 'codex' : undefined;
+        observations.get(id)?.providerId;
       let changed = false;
       // 3) 复活：册刻活而未声明（孤儿/裸 resume 回归）——重入册并重播
       for (const decl of slice) {
@@ -840,26 +833,8 @@ export class NodeClient {
         }
       }
       // 5) 名字跟随（改名→id 跟随，roster 显示与按名寻址随扫描自新）
-      let codexNames: Map<string, string> | undefined;
-      const codexNameOf = async (id: string): Promise<string | undefined> => {
-        if (codexNames === undefined) {
-          codexNames = new Map();
-          try {
-            for (const thread of await deps.listCodexThreads()) {
-              if (thread.name !== null && thread.name !== '') codexNames.set(thread.id, thread.name);
-            }
-          } catch {
-            // codex daemon 不可用：改名跟随本轮跳过（活性判定不依赖它）
-          }
-        }
-        return codexNames.get(id);
-      };
       for (const [id, member] of this.members) {
-        const claudeSession = claudeById.get(id);
-        const want =
-          claudeSession !== undefined
-            ? claudeSession.name
-            : await codexNameOf(id);
+        const want = await observations.get(id)?.readName();
         if (want === undefined || want === member.name || want.includes(':')) continue;
         member.name = want;
         changed = true;

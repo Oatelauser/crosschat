@@ -12,7 +12,8 @@ import {
   type CallerIdentity,
 } from './identity.js';
 import type { ClaudeRegistryScan } from './claude/registry.js';
-import type { SendArgs, SendDeps } from './commands/send.js';
+import type { SendArgs, SendDeps, SendResult } from './application/send/types.js';
+import { formatSendResult } from './application/send/format.js';
 
 /**
  * Federation v1 (ticket 008, batch B1): `--via ssh:<host>` turns the local
@@ -215,6 +216,10 @@ interface RemoteReceipt {
 
 /** Entry point of the via branch — everything federation lives behind this (D9). */
 export async function runViaSend(args: SendArgs, body: string, deps: SendDeps): Promise<string> {
+  return formatSendResult(await sendViaSsh(args, body, deps), args.json === true);
+}
+
+export async function sendViaSsh(args: SendArgs, body: string, deps: SendDeps): Promise<SendResult> {
   const { host } = parseViaValue(args.via!);
   validateRemoteFlagValues(args);
 
@@ -297,21 +302,11 @@ export async function runViaSend(args: SendArgs, body: string, deps: SendDeps): 
       // a non-decodable ref must never fail the already-delivered send
     }
   }
-  if (args.json === true) {
-    return JSON.stringify({ ...receipt, via: `ssh:${host}` });
-  }
-  if (receipt.status === 'parked') {
-    return [
-      `已寄存给 ${displayTo}（对方忙，未送达）。队列共 ${receipt.queue ?? 1} 条，看门狗每 0.5–5 分钟自动重试，无需手动 status。`,
-      `人工随时可读滞留内容: ${receipt.mailbox ?? ''}（位于 ${machine}）`,
-      handle === undefined ? `reply-ref: ${receipt.replyRef}` : `续话: ${handle}`,
-    ].join('\n');
-  }
-  const tail = handle === undefined ? `\nreply-ref: ${receipt.replyRef}` : ` · 续话 ${handle}`;
-  if (receipt.status === 'queued') {
-    return `queued to ${displayTo} (turn ${receipt.turn}; 对方正忙，已入队，本轮结束即处理)${tail}`;
-  }
-  return `delivered to ${displayTo} (turn ${receipt.turn})${tail}`;
+  return {
+    status: receipt.status === 'queued' || (receipt as { queued?: boolean }).queued === true ? 'queued' : receipt.status,
+    receipt: { ...receipt, via: `ssh:${host}` },
+    route: { kind: 'ssh', displayTo, machine }, handle,
+  };
 }
 
 /** 发起方展示名（B2 起与 via-tcp 共用——tcp/ssh 记账同源）。 */
