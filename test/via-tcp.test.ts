@@ -48,7 +48,7 @@ describe('typed TCP receipt evidence', () => {
       output: JSON.stringify({ status: 'delivered', to: 'boss', turn: 1, replyRef: 'mc1_x', queued: true }),
     }));
     const fixture = makeFixture(harness);
-    const result = await sendViaTcp({ to: 'boss', via: 'tcp:broker-host' }, 'test', fixture.deps);
+    const result = await sendViaTcp({ conversation: 'mc1_x', via: 'tcp:broker-host' }, 'test', fixture.deps);
     expect(result.status).toBe('queued');
     expect(result.receipt.status).toBe('delivered');
     expect(JSON.parse(formatSendResult(result, true)).status).toBe('delivered');
