@@ -1,0 +1,119 @@
+import { Worker } from 'node:worker_threads';
+import { describe, expect, it, vi } from 'vitest';
+import { runDoctor } from '../src/commands/doctor.js';
+import type { DoctorDeps } from '../src/commands/doctor.js';
+
+function fixture(overrides: Partial<DoctorDeps> = {}): DoctorDeps {
+  return {
+    nodeVersion: '24.7.0',
+    env: {},
+    resolveClaude: () => 'claude',
+    listClaudeSessions: () => ({ sessions: [], malformed: 1 }),
+    codexBin: () => 'codex',
+    run: (_bin, args) => args[0] === '--version'
+      ? { status: 0, stdout: 'codex-cli 0.160.0\n' }
+      : { status: 1, stdout: 'not running\n' },
+    exists: () => true,
+    readFile: () => undefined,
+    homeDir: () => '/isolated-home',
+    listOutbox: () => [],
+    repoSkillFiles: () => undefined,
+    now: () => 1_800_000_000_000,
+    ...overrides,
+  };
+}
+
+describe('structured diagnostics', () => {
+  it('separates typed checks and severity counts from the unchanged synchronous CLI rendering', async () => {
+    const { collectDoctorDiagnostics, renderDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
+    const deps = fixture({ nodeVersion: '20.0.0' });
+    const result = collectDoctorDiagnostics(deps);
+    const checks = result.groups.flatMap((group) => group.checks);
+    expect(checks.find((check) => check.code === 'node-unsupported')).toMatchObject({
+      level: 'error', data: { version: '20.0.0' },
+    });
+    expect(checks.find((check) => check.code === 'claude-registry-malformed')).toMatchObject({
+      level: 'warn', data: { count: 1 },
+    });
+    expect(result.summary).toEqual({ pass: 5, warn: 3, error: 1, failed: true });
+    expect(renderDoctorDiagnostics(result)).toEqual(runDoctor(deps));
+    expect(renderDoctorDiagnostics(result).output).toBe([
+      '环境',
+      '  ❌ Node v20.0.0（需 ≥22）',
+      '  ⚠️ claude CLI 可解析（claude），但当前无可路由会话（crosschat claude 启动的会话才可接收）',
+      '  ⚠️ claude 注册表 1 个损坏条目（已忽略）',
+      '  ✅ codex CLI 0.160.0',
+      '  ⚠️ codex daemon 未运行；要用 codex 通道时先执行: codex app-server daemon start',
+      '  ✅ claude 侧 skill 已安装（安装源 skill 目录未定位到，跳过版本比对）',
+      '  ✅ codex 侧 skill 已安装（安装源 skill 目录未定位到，跳过版本比对）',
+      '  ✅ 无双身份残留',
+      '其他',
+      '  ✅ 发件箱空（无暂存消息）',
+      '结论: 5 项通过，3 项警告，1 项错误',
+    ].join('\n'));
+  });
+
+  it('keeps stopped-daemon info out of counters and never exposes credential fields in check data', async () => {
+    const { collectDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
+    const result = collectDoctorDiagnostics(fixture({
+      tcpDir: '/isolated-home/tcp', cliVersion: '1.10.0', readDir: () => [],
+      readFile: (file) => file.endsWith('status-broker.json')
+        ? JSON.stringify({ version: '0.1.0', lastUpdated: '2000-01-01', key: 'secret-key', adminKey: 'secret-admin' })
+        : undefined,
+    }));
+    const checks = result.groups.flatMap((group) => group.checks);
+    expect(checks.find((check) => check.code === 'status-stale')).toMatchObject({ level: 'info', data: { file: 'status-broker.json' } });
+    expect(result.summary).toEqual({ pass: 6, warn: 3, error: 0, failed: false });
+    expect(JSON.stringify(result)).not.toContain('secret-');
+  });
+});
+
+describe('isolated cancellable diagnostics', () => {
+  it('rejects an already-cancelled query before creating a worker', async () => {
+    const { queryDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
+    const controller = new AbortController();
+    controller.abort();
+    const createWorker = vi.fn(() => new Worker('', { eval: true }));
+    await expect(queryDoctorDiagnostics({ signal: controller.signal, createWorker })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(createWorker).not.toHaveBeenCalled();
+  });
+
+  it('runs blocking work off the caller loop and terminates its worker on cancellation', async () => {
+    const { queryDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
+    const worker = new Worker("require('node:worker_threads').parentPort.postMessage({ready:true}); Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0);", { eval: true });
+    await new Promise<void>((resolve) => worker.once('message', () => resolve()));
+    const terminate = vi.spyOn(worker, 'terminate');
+    const controller = new AbortController();
+    const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
+    const pending = queryDoctorDiagnostics({ signal: controller.signal, createWorker: () => worker });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(terminate).toHaveBeenCalledOnce();
+    expect(worker.threadId).toBe(-1);
+    expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
+    expect(worker.listenerCount('message')).toBe(0);
+    expect(worker.listenerCount('error')).toBe(0);
+  });
+
+  it('releases the worker after success and propagates worker errors without producing a healthy report', async () => {
+    const { collectDoctorDiagnostics, queryDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
+    const report = collectDoctorDiagnostics(fixture());
+    const worker = new Worker('require("node:worker_threads").parentPort.postMessage(require("node:worker_threads").workerData);', { eval: true, workerData: report });
+    const terminate = vi.spyOn(worker, 'terminate');
+    expect(await queryDoctorDiagnostics({ createWorker: () => worker })).toEqual(report);
+    expect(terminate).toHaveBeenCalledOnce();
+    expect(worker.threadId).toBe(-1);
+
+    const broken = new Worker('throw new Error("isolated probe failed");', { eval: true });
+    await expect(queryDoctorDiagnostics({ createWorker: () => broken })).rejects.toThrow('isolated probe failed');
+    expect(broken.threadId).toBe(-1);
+  });
+
+  it('rejects an isolated task that exits without a diagnostic result', async () => {
+    const { queryDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
+    const worker = new Worker('', { eval: true });
+    await expect(queryDoctorDiagnostics({ createWorker: () => worker })).rejects.toThrow('without a diagnostic result');
+    expect(worker.threadId).toBe(-1);
+  });
+});
