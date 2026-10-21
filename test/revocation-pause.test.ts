@@ -146,6 +146,20 @@ describe('explicit credential revocation pauses this star', () => {
     expect(detail).not.toContain('凭证已撤销');
     expect(summary).toContain('暂停状态待核实');
     expect(detail).toContain('暂停状态待核实');
+    expect(JSON.parse(await runStatus(deps, true))).toMatchObject({
+      tcp: { node: { state: 'revoked', pause: { state: 'unknown' } } },
+    });
+
+    writeFileSync(configFile, JSON.stringify({ brokers: [entry] }));
+    expect(await runStatus(deps, false)).toContain('凭证已撤销，自动重连已暂停');
+    expect(JSON.parse(await runStatus(deps, true))).toMatchObject({
+      tcp: { node: { state: 'revoked', pause: { state: 'revoked' } } },
+    });
+    const marker = readdirSync(join(home, 'tcp')).find((name) => name.startsWith('revoked-'));
+    writeFileSync(join(home, 'tcp', marker!), '{broken');
+    const unreadable = await runStatus(deps, false, false, { section: 'claude' });
+    expect(unreadable).toContain('记录不可读，连接状态 unknown');
+    expect(unreadable).not.toContain('凭证已撤销');
   });
 
   it('settles an attach request when immediate revocation closes IPC before the reply', async () => {

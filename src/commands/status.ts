@@ -12,6 +12,7 @@ import type { SendLogEntry } from '../send-log.js';
 import { readNodeConfig } from '../serve/node-config.js';
 import type { BrokerEntry } from '../serve/node-config.js';
 import type { NodeStatusFile } from '../serve/node.js';
+import { readNodeRevocation } from '../serve/revocation.js';
 import { listNodeStatusFiles, nodeStatusSelector, TCP_STATUS_FRESH_MS } from '../application/status/status-files.js';
 export { listNodeStatusFiles, nodeStatusSelector, TCP_STATUS_FRESH_MS } from '../application/status/status-files.js';
 
@@ -95,9 +96,9 @@ function shortDisplay(s: string): string {
 }
 
 /** 单守护状态行（prefix='节点客户端:' 单条目 / '节点客户端[<选择器>]:' 多条目）。 */
-function nodeStateLine(prefix: string, st: NodeStatusFile): string {
+function nodeStateLine(prefix: string, st: NodeStatusFile, dir: string): string {
   if (st.state === 'online') return `${prefix} online ${shortDisplay(`tcp:${st.brokerAlias}`)} (since ${formatCreatedAt(st.since)})`;
-  if (st.state === 'revoked') return `${prefix} 凭证已撤销，自动重连已暂停；换钥后显式重新连接`;
+  if (st.state === 'revoked') return `${prefix} ${nodePauseStatus(st, dir).message}`;
   if (st.state === 'reconnect-wait') {
     const next = st.nextAttemptAt === undefined ? '-' : formatHms(st.nextAttemptAt);
     return `${prefix} 重连等待中，下次尝试 ${next}`;
@@ -105,7 +106,36 @@ function nodeStateLine(prefix: string, st: NodeStatusFile): string {
   return `${prefix} 连接中 ${shortDisplay(`tcp:${st.brokerAlias}`)}`;
 }
 
-/** A revocation pause persists until explicit reconnection replaces this snapshot. */
+interface NodePauseStatus {
+  state: 'revoked' | 'unknown';
+  summary: string;
+  message: string;
+}
+
+/** Snapshot state alone cannot revoke a replacement key; current credential evidence is authoritative. */
+function nodePauseStatus(status: NodeStatusFile, dir: string): NodePauseStatus {
+  const unknown: NodePauseStatus = {
+    state: 'unknown', summary: '暂停状态待核实',
+    message: '暂停状态待核实（当前凭证无匹配撤权记录）；请显式重新连接或检查日志',
+  };
+  try {
+    const configFile = join(dir, 'node.json');
+    const { entries } = readNodeConfig(configFile);
+    const entry = entries.find((candidate) => (candidate.name ?? `${candidate.host}:${candidate.port}`) === status.brokerAlias);
+    if (entry === undefined || readNodeRevocation(configFile, entry) === undefined) return unknown;
+    return {
+      state: 'revoked', summary: '凭证已撤销，自动重连已暂停',
+      message: '凭证已撤销，自动重连已暂停；换钥后显式重新连接',
+    };
+  } catch {
+    return {
+      state: 'unknown', summary: '暂停状态待核实（记录不可读）',
+      message: '撤权暂停记录不可读，连接状态 unknown；自动连接保持暂停，请检查 node.json 和 revoked-*.json',
+    };
+  }
+}
+
+/** Keep pause observations visible; their meaning is checked against current credentials. */
 function nodeStatusCurrent(status: NodeStatusFile | undefined, nowMs: number): status is NodeStatusFile {
   return status !== undefined && (status.state === 'revoked' || nowMs - Date.parse(status.lastUpdated) < TCP_STATUS_FRESH_MS);
 }
@@ -131,10 +161,10 @@ async function tcpForwarderLines(tcpDir: string | undefined, nowMs: number, rost
         continue;
       }
       anyFresh = true;
-      lines.push(nodeStateLine(`节点客户端[${tag}]:`, node!));
+      lines.push(nodeStateLine(`节点客户端[${tag}]:`, node!, tcpDir));
     } else if (fresh) {
       anyFresh = true;
-      lines.push(nodeStateLine('节点客户端:', node!));
+      lines.push(nodeStateLine('节点客户端:', node!, tcpDir));
     }
   }
   if (!multi && !anyFresh) lines.push('节点客户端: 未运行');
@@ -193,6 +223,7 @@ function pushRosterLines(lines: string[], label: string, machines: RosterMachine
 interface StarDaemon {
   selector: string;
   state: NodeStatusFile['state'] | '未运行';
+  pause?: NodePauseStatus;
 }
 
 /** 一颗星的分组视图数据：可达性 + 全量机器表 + 连它的守护态。 */
@@ -216,7 +247,10 @@ async function collectStars(deps: StatusDeps, nowMs: number): Promise<StarGroup[
     const st = readStatusJson<NodeStatusFile>(join(deps.tcpDir, file));
     const fresh = nodeStatusCurrent(st, nowMs);
     const state: StarDaemon['state'] = fresh ? st!.state : '未运行';
-    const entry: StarDaemon = { selector: nodeStatusSelector(file) || '默认', state };
+    const entry: StarDaemon = {
+      selector: nodeStatusSelector(file) || '默认', state,
+      ...(state === 'revoked' ? { pause: nodePauseStatus(st!, deps.tcpDir) } : {}),
+    };
     const list = daemonsByStar.get(st?.brokerAlias ?? '');
     if (list === undefined) daemonsByStar.set(st?.brokerAlias ?? '', [entry]);
     else list.push(entry);
@@ -267,9 +301,8 @@ const machineDisp = (m: { name?: string; mid8: string }): string => (m.mid8 === 
 function starSummaryLines(groups: StarGroup[]): string[] {
   const lines: string[] = [];
   for (const g of groups) {
-    const client = g.daemons.some((d) => d.state === 'revoked')
-      ? '凭证已撤销，自动重连已暂停'
-      : g.daemons.some((d) => d.state === 'online') ? 'online' : '未运行';
+    const client = g.daemons.some((d) => d.state === 'online') ? 'online'
+      : g.daemons.find((d) => d.state === 'revoked')?.pause?.summary ?? '未运行';
     const head = g.reachable ? `${g.name} ✓ 可达，${g.online} 机器在线` : `${g.name} ✗ 不可达`;
     lines.push(`  ${head} · 客户端 ${client}`);
     const machines = [...g.machines].sort((a, b) => Number(b.online) - Number(a.online)).slice(0, 5);
@@ -290,7 +323,7 @@ async function starsText(deps: StatusDeps, nowMs: number, groups: StarGroup[]): 
   const lines = [groups.length === 0 ? 'tcp: 无' : `tcp: 共 ${groups.length} 星`];
   for (const g of groups) {
     lines.push(g.reachable ? `${g.name} ✓ 可达，${g.online} 机器在线` : `${g.name} ✗ 不可达`);
-    const daemons = g.daemons.map((d) => `${d.selector}: ${d.state === 'revoked' ? 'revoked（凭证已撤销，自动重连已暂停）' : d.state}`).join('、');
+    const daemons = g.daemons.map((d) => `${d.selector}: ${d.pause === undefined ? d.state : `${d.pause.state}（${d.pause.summary}）`}`).join('、');
     lines.push(`  守护: ${daemons === '' ? '未运行' : daemons}`);
     const machines = [...g.machines].sort((a, b) => Number(b.online) - Number(a.online));
     for (const m of machines) lines.push(`  ${machineDisp(m)} ${m.online ? '在线' : '离线'}`);
@@ -743,17 +776,20 @@ function tcpJson(tcpDir: string | undefined, nowMs: number): { node: unknown; br
   const brokerFresh =
     broker !== undefined && broker.state === 'running' && nowMs - Date.parse(broker.lastUpdated) < TCP_STATUS_FRESH_MS;
   return {
-    node: nodeFresh ? node : null,
+    node: nodeFresh ? { ...node, ...(node.state === 'revoked' ? { pause: nodePauseStatus(node, tcpDir) } : {}) } : null,
     broker: brokerFresh ? { port: broker!.port ?? null, onlineNodes: broker!.onlineNodes ?? [] } : null,
   };
 }
 
 /** B2：--json 的多守护小节——逐 status-node*.json（选择器 + 新鲜状态，陈旧为 null）。 */
-function nodeProfilesJson(tcpDir: string, nowMs: number): Array<{ selector: string; status: NodeStatusFile | null }> {
+function nodeProfilesJson(tcpDir: string, nowMs: number): Array<{ selector: string; status: (NodeStatusFile & { pause?: NodePauseStatus }) | null }> {
   return listNodeStatusFiles(tcpDir).map((file) => {
     const st = readStatusJson<NodeStatusFile>(join(tcpDir, file));
     const fresh = nodeStatusCurrent(st, nowMs);
-    return { selector: nodeStatusSelector(file), status: fresh ? st! : null };
+    return {
+      selector: nodeStatusSelector(file),
+      status: fresh ? { ...st, ...(st.state === 'revoked' ? { pause: nodePauseStatus(st, tcpDir) } : {}) } : null,
+    };
   });
 }
 
