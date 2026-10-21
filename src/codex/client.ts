@@ -28,9 +28,31 @@ export interface CodexThreadSummary {
   status: CodexThreadStatus;
 }
 
+export interface CodexThreadPageOptions {
+  cursor?: string;
+  limit?: number;
+  signal?: AbortSignal;
+}
+
+export interface CodexRawThreadSummary {
+  id: string;
+  name: string | null;
+  rawStatus: unknown;
+  attributes: Readonly<Record<string, unknown>>;
+}
+
+export interface CodexThreadPage {
+  data: CodexRawThreadSummary[];
+  nextCursor: string | null;
+  /** Missing on injected modern readers; explicit partial for older payloads. */
+  completeness?: 'complete' | 'partial';
+}
+
 export interface CodexSession {
   initialize(): Promise<void>;
   listThreads(): Promise<CodexThreadSummary[]>;
+  /** Additive read-only paging; optional for existing injected session adapters. */
+  listThreadPage?(options: CodexThreadPageOptions): Promise<CodexThreadPage>;
   resumeThread(threadId: string): Promise<CodexThreadStatus>;
   startTurn(threadId: string, text: string): Promise<CodexTurn>;
   steerTurn(threadId: string, expectedTurnId: string, text: string): Promise<string>;
@@ -44,6 +66,10 @@ export interface CodexSession {
 }
 
 export type CodexSessionFactory = () => Promise<CodexSession>;
+
+export interface CodexThreadPageSession extends CodexSession {
+  listThreadPage(options: CodexThreadPageOptions): Promise<CodexThreadPage>;
+}
 
 export interface CodexSessionOptions {
   requestTimeoutMs?: number;
@@ -89,12 +115,12 @@ export function normalizeThreadStatus(value: unknown): CodexThreadStatus {
  * (spawn proxy -> WebSocket upgrade -> JSON-RPC client); the caller owns
  * close(). One session per operation; no pooling, no reuse.
  */
-export function openCodexSession(options: CodexSessionOptions = {}): CodexSessionFactory {
+export function openCodexSession(options: CodexSessionOptions = {}): () => Promise<CodexThreadPageSession> {
   return async () => {
     const proxy = await openCodexProxySession(options);
     const rpc = new CodexRpcClient(proxy.channel, options.requestTimeoutMs);
     const input = (text: string) => [{ text, type: 'text' }];
-    const session: CodexSession = {
+    const session: CodexThreadPageSession = {
       async initialize(): Promise<void> {
         await rpc.request('initialize', {
           capabilities: { experimentalApi: true },
@@ -127,6 +153,35 @@ export function openCodexSession(options: CodexSessionOptions = {}): CodexSessio
             status: normalizeThreadStatus(raw.status),
           };
         });
+      },
+      async listThreadPage(page: CodexThreadPageOptions): Promise<CodexThreadPage> {
+        if (page.signal?.aborted) throw new DOMException('Codex page read cancelled.', 'AbortError');
+        const limit = page.limit ?? 100;
+        if (!Number.isSafeInteger(limit) || limit < 1) throw protocolError('thread/list page limit must be a positive integer.');
+        const result = await rpc.request('thread/list', {
+          archived: false,
+          limit,
+          ...(page.cursor === undefined ? {} : { cursor: page.cursor }),
+          sortKey: 'recency_at',
+          sourceKinds: ['cli', 'vscode', 'exec'],
+          useStateDbOnly: true,
+        });
+        if (page.signal?.aborted) throw new DOMException('Codex page read cancelled.', 'AbortError');
+        if (!isRecord(result) || !Array.isArray(result.data)) throw protocolError('thread/list response missing data array.');
+        if (result.nextCursor !== undefined && result.nextCursor !== null && typeof result.nextCursor !== 'string') throw protocolError('thread/list response has malformed cursor.');
+        return {
+          data: result.data.map((raw) => {
+            if (!isRecord(raw) || typeof raw.id !== 'string') throw protocolError('thread/list item missing id.');
+            return {
+              id: raw.id,
+              name: typeof raw.name === 'string' ? raw.name : null,
+              rawStatus: raw.status,
+              attributes: { cwd: raw.cwd, path: raw.path, createdAt: raw.createdAt, updatedAt: raw.updatedAt, source: raw.source },
+            };
+          }),
+          nextCursor: typeof result.nextCursor === 'string' ? result.nextCursor : null,
+          completeness: result.nextCursor === undefined ? 'partial' : 'complete',
+        };
       },
       async resumeThread(threadId: string): Promise<CodexThreadStatus> {
         const result = await rpc.request('thread/resume', {
