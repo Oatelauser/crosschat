@@ -55,7 +55,7 @@ export function parseDiscoveryRequest(input: unknown): DiscoveryRequest {
 function sensitiveKey(key: string): boolean {
   const normalized = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
   return ['key', 'adminkey', 'auth', 'authorization', 'proof', 'challenge', 'signature', 'credentials', 'messages', 'message', 'history', 'chat', 'transcript', 'turns', 'prompt', 'content', 'input', 'output', 'prototype', 'constructor', 'proto'].includes(normalized)
-    || /token|secret|password|privatekey|apikey|socketpath|pipepath|authproof|credential/.test(normalized);
+    || /key$|token|secret|password|socket|pipepath|auth(?:proof|challenge|response|signature)|credential/.test(normalized);
 }
 
 /** Copy only bounded JSON metadata; never invoke toJSON or carry prototype properties. */

@@ -24,10 +24,10 @@ export function completeRemoteDiscoveryResponse(input: unknown, request: Discove
   const errors = (response.op === 'list' ? response.page.errors : response.detail.errors).map((error) => ({ ...error, source: { ...error.source, contextId: scope.contextId } }));
   if (response.op === 'list') {
     const nextCursor = response.page.nextCursor === null ? null : Buffer.from(JSON.stringify({ target: scope.target, contextId: scope.contextId, filter: filterKey(request), cursor: response.page.nextCursor })).toString('base64url');
-    return { ...response, page: { ...response.page, errors, items: response.page.items.map(rebind), nextCursor } };
+    return parseDiscoveryResponse({ ...response, page: { ...response.page, errors, items: response.page.items.map(rebind), nextCursor } });
   }
   if (request.op !== 'detail') throw new Error('Invalid detail request.');
   const item = response.detail.item;
   if (item !== null && (item.ref.providerId !== request.providerId || item.ref.nativeId !== request.nativeId || (item.ref.referenceKind ?? 'native') !== (request.referenceKind ?? 'native'))) throw new Error('Discovery response returned a different session.');
-  return { ...response, detail: { ...response.detail, errors, item: item === null ? null : rebind(item) } };
+  return parseDiscoveryResponse({ ...response, detail: { ...response.detail, errors, item: item === null ? null : rebind(item) } });
 }

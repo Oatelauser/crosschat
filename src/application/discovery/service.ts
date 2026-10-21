@@ -41,6 +41,7 @@ export class DiscoveryService implements DiscoveryEndpoint {
         try {
           const response = parseDiscoveryResponse({ op: 'list', providers, page });
           if (response.op !== 'list') throw new Error('Invalid source operation.');
+          if (response.page.items.some((item) => item.ref.contextId !== request.contextId)) throw new Error('Invalid source context.');
           return { ...response.page, items: response.page.items.map((item) => ({ ...item, key: sessionKey(item.ref) })) };
         } catch { return malformed(request.contextId); }
       },
@@ -50,6 +51,7 @@ export class DiscoveryService implements DiscoveryEndpoint {
           const response = parseDiscoveryResponse({ op: 'detail', providers, detail });
           if (response.op !== 'detail') throw new Error('Invalid source operation.');
           const item = response.detail.item;
+          if (item !== null && (item.ref.contextId !== request.contextId || item.ref.nativeId !== request.nativeId || (item.ref.referenceKind ?? 'native') !== (request.referenceKind ?? 'native'))) throw new Error('Invalid detail reference.');
           return { ...response.detail, item: item === null ? null : { ...item, key: sessionKey(item.ref) } };
         } catch {
           const page = malformed(request.contextId);
