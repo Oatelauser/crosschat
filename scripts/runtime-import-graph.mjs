@@ -152,10 +152,18 @@ export const coreModuleRules = [
   { from: 'serve/connect-selector.ts', forbidden: ['commands/', 'serve/node.ts', 'tui/'] },
 ];
 
+/** New application adapters inherit the dependency boundary without a manual allowlist. */
+export function coreRulesFor(graph) {
+  return [
+    ...coreModuleRules,
+    ...graph.files.filter((file) => file.startsWith('application/')).map((from) => ({ from, forbidden: ['commands/', 'tui/'] })),
+  ];
+}
+
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const graph = buildRuntimeImportGraph(process.argv[2] ?? 'src');
   const cycles = findRuntimeCycles(graph);
-  const violations = findForbiddenDependencies(graph, coreModuleRules);
+  const violations = findForbiddenDependencies(graph, coreRulesFor(graph));
   for (const cycle of cycles) console.error(`Runtime dependency cycle: ${cycle.join(', ')}`);
   for (const edge of graph.unresolved) console.error(`Unresolved runtime import: ${edge.from} -> ${edge.specifier}`);
   for (const violation of violations) console.error(`Forbidden runtime dependency: ${violation.path.join(' -> ')}`);
