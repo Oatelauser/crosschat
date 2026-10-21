@@ -2,7 +2,7 @@ import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { defaultOutboxDir, mailboxFileFor } from '../../outbox.js';
 import { watchdogStatus } from '../../watchdog.js';
-import { readNodeConfig } from '../../serve/node-config.js';
+import { parseNodeConfig } from '../../serve/node-config.js';
 import type { BrokerEntry } from '../../serve/node-config.js';
 import { DEFAULT_PORT } from '../../serve/broker.js';
 import { isProcessAlive } from '../../platform/process-inspector.js';
@@ -94,7 +94,7 @@ export function collectDoctorDiagnostics(deps: DoctorDeps): DiagnosticResult {
       const label = (entry: BrokerEntry): string => entry.name ?? `${entry.host}:${entry.port}`;
       let entries: BrokerEntry[] | undefined;
       if (nodeRaw !== undefined) {
-        try { entries = readNodeConfig(nodePath).entries; }
+        try { entries = parseNodeConfig(nodeRaw, nodePath).entries; }
         catch {
           current = group({ kind: 'tcp' });
           add({ code: 'node-config-invalid', data: { path: nodePath } });
