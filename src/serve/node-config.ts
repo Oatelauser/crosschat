@@ -72,6 +72,11 @@ export function readNodeConfig(configFile: string): NodeConfig {
   } catch {
     throw new MultichatError('USAGE', NOT_JOINED_MESSAGE);
   }
+  return parseNodeConfig(raw, configFile);
+}
+
+/** 注入原始 node.json 内容的无 IO 归一化入口；错误仍带调用方来源路径。 */
+export function parseNodeConfig(raw: string, configFile = 'node.json'): NodeConfig {
   try {
     const parsed = JSON.parse(raw) as {
       broker?: { host?: unknown; port?: unknown; alias?: unknown; starId?: unknown };
