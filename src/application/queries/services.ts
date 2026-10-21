@@ -64,9 +64,10 @@ export async function queryServiceStatuses(options: TextOptions & { tcpDir: stri
         const snapshot = result.value;
         if (snapshot.pid !== undefined) snapshot.processAlive = (options.isProcessAlive ?? isProcessAlive)(snapshot.pid);
         if (snapshot.freshness === 'fresh' && snapshot.processAlive === true && snapshot.state !== 'stopped') {
-          snapshot.readiness = snapshot.state === 'running' || snapshot.state === 'online' ? 'ready'
-            : snapshot.state === 'connecting' ? 'starting'
-              : snapshot.state === 'reconnect-wait' ? 'waiting' : 'unknown';
+          if (snapshot.kind === 'broker') snapshot.readiness = snapshot.state === 'running' ? 'ready' : 'unknown';
+          else if (snapshot.state === 'online') snapshot.readiness = 'ready';
+          else if (snapshot.state === 'connecting') snapshot.readiness = 'starting';
+          else if (snapshot.state === 'reconnect-wait') snapshot.readiness = 'waiting';
         }
         items.push(snapshot);
       }
