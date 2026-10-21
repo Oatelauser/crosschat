@@ -98,4 +98,17 @@ describe('core provider-neutral session queries', () => {
     expect(other).toMatchObject({ completeness: 'unavailable', errors: [expect.objectContaining({ kind: 'invalid-cursor' })] });
     expect(source.list).toHaveBeenCalledOnce();
   });
+
+  it('retains failed source completeness when another source finishes on a later page', async () => {
+    const unavailable = reader('failed-provider');
+    unavailable.list = vi.fn().mockRejectedValue(new Error('offline'));
+    const paged = reader('third-provider');
+    paged.list = vi.fn().mockResolvedValueOnce({ items: [], nextCursor: 'next', completeness: 'partial', errors: [], observedAt: 1 }).mockResolvedValueOnce({ items: [], nextCursor: null, completeness: 'complete', errors: [], observedAt: 2 });
+    const catalog = new SessionCatalog([unavailable, paged]);
+    const first = await catalog.query({ contextId: 'local' });
+    expect(first.completeness).toBe('partial');
+    const last = await catalog.query({ contextId: 'local', cursor: first.nextCursor ?? undefined });
+    expect(last.completeness).toBe('partial');
+    expect(last.errors).toEqual([expect.objectContaining({ source: { contextId: 'local', providerId: 'failed-provider' }, kind: 'unavailable' })]);
+  });
 });
