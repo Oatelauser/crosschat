@@ -7,6 +7,7 @@ import {
   buildRuntimeImportGraph,
   findForbiddenDependencies,
   findRuntimeCycles,
+  coreRulesFor,
 } from '../scripts/runtime-import-graph.mjs';
 
 const roots: string[] = [];
@@ -118,6 +119,16 @@ describe('runtime import graph', () => {
       { from: 'core/config.ts', to: 'commands/serve.ts', path: ['core/config.ts', 'shared.ts', 'commands/serve.ts'] },
     ]);
   });
+
+  it('applies application boundaries to newly added adapters automatically', () => {
+    const graph = buildRuntimeImportGraph(fixture({
+      'application/new-provider.ts': 'export * from "../commands/entry.js";',
+      'commands/entry.ts': '',
+    }));
+    expect(findForbiddenDependencies(graph, coreRulesFor(graph))).toEqual([
+      { from: 'application/new-provider.ts', to: 'commands/entry.ts', path: ['application/new-provider.ts', 'commands/entry.ts'] },
+    ]);
+  });
 });
 
 describe('core source architecture', () => {
@@ -137,5 +148,10 @@ describe('core source architecture', () => {
       { from: 'serve/node-config.ts', forbidden: ['commands/', 'serve/node.ts', 'tui/'] },
       { from: 'serve/connect-selector.ts', forbidden: ['commands/', 'serve/node.ts', 'tui/'] },
     ])).toEqual([]);
+  });
+
+  it('keeps every application adapter independent of command and UI entry points', () => {
+    const graph = buildRuntimeImportGraph(sourceRoot);
+    expect(findForbiddenDependencies(graph, coreRulesFor(graph))).toEqual([]);
   });
 });
