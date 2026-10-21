@@ -118,6 +118,14 @@ describe('service snapshots and managed files', () => {
       { state: 'future-node', readiness: 'unknown' },
     ]);
     expect(result.errors).toEqual([]);
+    // A state known to the other service kind is still unknown for this one.
+    await writeFile(join(tcpDir, 'status-broker.json'), JSON.stringify({ state: 'online', pid: 1234, lastUpdated: new Date(now).toISOString() }));
+    await writeFile(join(tcpDir, 'status-node-next.json'), JSON.stringify({ state: 'running', pid: 1235, lastUpdated: new Date(now).toISOString() }));
+    const otherKind = await queryServiceStatuses({ tcpDir, now: () => now, isProcessAlive: () => true });
+    expect(otherKind.items.map(({ state, readiness }) => ({ state, readiness }))).toEqual([
+      { state: 'online', readiness: 'unknown' },
+      { state: 'running', readiness: 'unknown' },
+    ]);
   });
 
   it('lists file metadata without reading secret content or creating missing directories', async () => {
