@@ -26,6 +26,13 @@ function connection(conn: SenderConn): RemoteAdminConnection {
   return { request: (action, params) => requestAdminOp(conn, action, params, TIMEOUT_MS), close: () => conn.close() };
 }
 
+/** Preserve the existing CLI error boundary for both transport and response rendering. */
+export function normalizeRemoteManagementError(error: unknown): MultichatError {
+  if (error instanceof MultichatError) return error;
+  return new MultichatError('TCP_TRANSPORT_FAILED',
+    `远程管理未达（${error instanceof Error ? error.message : String(error)}）——broker 在跑吗（crosschat serve）？两端 crosschat 都须为 034 挑战应答协议版本`);
+}
+
 /** Member reads and administrator challenge writes retain the existing wire adapter. */
 export async function executeRemoteManagement(
   entry: BrokerEntry,
@@ -54,8 +61,6 @@ export async function executeRemoteManagement(
       conn.close();
     }
   } catch (error) {
-    if (error instanceof MultichatError) throw error;
-    throw new MultichatError('TCP_TRANSPORT_FAILED',
-      `远程管理未达（${error instanceof Error ? error.message : String(error)}）——broker 在跑吗（crosschat serve）？两端 crosschat 都须为 034 挑战应答协议版本`);
+    throw normalizeRemoteManagementError(error);
   }
 }

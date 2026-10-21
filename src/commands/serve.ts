@@ -35,7 +35,7 @@ import { FileInbox } from '../serve/file-channel.js';
 import { requestMemberRemove } from '../serve/via-tcp.js';
 import { runAdopt, spawnServeDetachReal, warnIfBrokerLacksSessionCaps } from './session-star.js';
 import { addStar, generateAdminKey, generateKeys, removeAdminKey, removeNode, removeStar, renameStar, setDisplayName } from '../application/management/local.js';
-import { executeRemoteManagement } from '../application/management/remote.js';
+import { executeRemoteManagement, normalizeRemoteManagementError } from '../application/management/remote.js';
 import type { RemoteManagementRequest } from '../application/management/remote.js';
 import { startDetachedService, stopServices } from '../application/services/local.js';
 import { connectValueOf, listServeProcesses } from '../application/services/processes.js';
@@ -607,31 +607,35 @@ async function runRemoteAdmin(args: ServeArgs, deps: ServeDeps): Promise<number>
   const url = `ws://${entry.host}:${entry.port}`;
   const request: RemoteManagementRequest = action === 'gen-key' ? { op: action, count: args.genKeyArg! }
     : action === 'remove-node' ? { op: action, label: args.remove! } : { op: action };
-  const r = await executeRemoteManagement(entry, request, { selector: via.slice(4) });
-  if (action === 'list-nodes') {
-    deps.stdout(`星 ${entry.name ?? entry.starId ?? '?'} 节点表（${r.nodes?.length ?? 0} 条；不含钥匙）：`);
-    for (const n of r.nodes ?? []) {
-      deps.stdout(`  ${n.label.padEnd(10)}${(n.admin === true ? '（星管理钥）' : n.name ?? '-').padEnd(18)}${(n.mid8 ?? '-').padEnd(10)}${n.addedAt}`);
+  try {
+    const r = await executeRemoteManagement(entry, request, { selector: via.slice(4) });
+    if (action === 'list-nodes') {
+      deps.stdout(`星 ${entry.name ?? entry.starId ?? '?'} 节点表（${r.nodes?.length ?? 0} 条；不含钥匙）：`);
+      for (const n of r.nodes ?? []) {
+        deps.stdout(`  ${n.label.padEnd(10)}${(n.admin === true ? '（星管理钥）' : n.name ?? '-').padEnd(18)}${(n.mid8 ?? '-').padEnd(10)}${n.addedAt}`);
+      }
+    } else if (action === 'list-members') {
+      deps.stdout(`星 ${entry.name ?? entry.starId ?? '?'} 成员册（${r.members?.length ?? 0} 条）：`);
+      for (const m of r.members ?? []) {
+        deps.stdout(`  ${m.sessionId.slice(0, 8)} ${m.tool === undefined ? '' : `${m.tool}/`}${m.name ?? '?'} @ ${m.machineName ?? m.machine.slice(0, 8)}${m.online === true ? '（在线）' : ''}`);
+      }
+    } else if (action === 'gen-key') {
+      deps.stdout(`远端发钥（星 ${entry.name ?? '?'}，broker ${url}）：生成 ${r.results?.length ?? 0} 把钥匙`);
+      for (const result of r.results ?? []) {
+        deps.stdout('--------------------------------');
+        deps.stdout(result.nodeJsonContent.trimEnd());
+      }
+      deps.stdout('放置路径（目标机器）：~/.crosschat/tcp/node.json（入多星把各星条目合并进同一份 brokers 数组）');
+      deps.stdout('钥匙已进入终端回滚缓冲，分发完建议清屏');
+    } else {
+      const label = args.remove!;
+      deps.stdout(r.removed === true ? `已从星 ${entry.name ?? '?'} 远端移除 ${label}` : `星 ${entry.name ?? '?'} 未找到 ${label}`);
+      return r.removed === true ? 0 : 1;
     }
-  } else if (action === 'list-members') {
-    deps.stdout(`星 ${entry.name ?? entry.starId ?? '?'} 成员册（${r.members?.length ?? 0} 条）：`);
-    for (const m of r.members ?? []) {
-      deps.stdout(`  ${m.sessionId.slice(0, 8)} ${m.tool === undefined ? '' : `${m.tool}/`}${m.name ?? '?'} @ ${m.machineName ?? m.machine.slice(0, 8)}${m.online === true ? '（在线）' : ''}`);
-    }
-  } else if (action === 'gen-key') {
-    deps.stdout(`远端发钥（星 ${entry.name ?? '?'}，broker ${url}）：生成 ${r.results?.length ?? 0} 把钥匙`);
-    for (const result of r.results ?? []) {
-      deps.stdout('--------------------------------');
-      deps.stdout(result.nodeJsonContent.trimEnd());
-    }
-    deps.stdout('放置路径（目标机器）：~/.crosschat/tcp/node.json（入多星把各星条目合并进同一份 brokers 数组）');
-    deps.stdout('钥匙已进入终端回滚缓冲，分发完建议清屏');
-  } else {
-    const label = args.remove!;
-    deps.stdout(r.removed === true ? `已从星 ${entry.name ?? '?'} 远端移除 ${label}` : `星 ${entry.name ?? '?'} 未找到 ${label}`);
-    return r.removed === true ? 0 : 1;
+    return 0;
+  } catch (error) {
+    throw normalizeRemoteManagementError(error);
   }
-  return 0;
 }
 
 /** 后台化：spawn 自身 detached + env 标记防循环；日志写 tcp/<name>（B2 节点命名条目=node-<选择器>.log）。broker 传端口（节点客户端外连无监听口）。 */
