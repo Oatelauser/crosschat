@@ -26,12 +26,17 @@ function referenceKind(value: unknown): 'native' | 'process' | undefined {
   return invalid();
 }
 
+function boundedRequest(request: DiscoveryRequest): DiscoveryRequest {
+  if (Buffer.byteLength(JSON.stringify(request)) > DISCOVERY_MAX_BYTES) invalid();
+  return request;
+}
+
 export function parseDiscoveryRequest(input: unknown): DiscoveryRequest {
   if (!isRecord(input)) invalid();
   if (input.op === 'detail') {
     keys(input, ['op', 'providerId', 'nativeId', 'referenceKind']);
     const kind = referenceKind(input.referenceKind);
-    return { op: 'detail', providerId: text(input.providerId), nativeId: text(input.nativeId), ...(kind === undefined ? {} : { referenceKind: kind }) };
+    return boundedRequest({ op: 'detail', providerId: text(input.providerId), nativeId: text(input.nativeId), ...(kind === undefined ? {} : { referenceKind: kind }) });
   }
   if (input.op !== 'list') invalid();
   keys(input, ['op', 'cursor', 'limit', 'filter']);
@@ -49,7 +54,7 @@ export function parseDiscoveryRequest(input: unknown): DiscoveryRequest {
       ...(typeof input.filter.text === 'string' ? { text: input.filter.text } : {}),
     };
   }
-  return { op: 'list', ...(cursor === undefined ? {} : { cursor }), ...(typeof input.limit === 'number' ? { limit: input.limit } : {}), ...(filter === undefined ? {} : { filter }) };
+  return boundedRequest({ op: 'list', ...(cursor === undefined ? {} : { cursor }), ...(typeof input.limit === 'number' ? { limit: input.limit } : {}), ...(filter === undefined ? {} : { filter }) });
 }
 
 function sensitiveKey(key: string): boolean {
