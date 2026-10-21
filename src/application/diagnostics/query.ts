@@ -37,8 +37,9 @@ export async function queryDoctorDiagnostics(options: DiagnosticQueryOptions = {
     : undefined;
   const task = thread ?? child!;
   let detach = (): void => {};
+  let result: DiagnosticResult;
   try {
-    return await new Promise<DiagnosticResult>((resolve, reject) => {
+    result = await new Promise<DiagnosticResult>((resolve, reject) => {
       const onAbort = (): void => { reject(abortError()); };
       const onMessage = (result: DiagnosticResult): void => {
         if (signal?.aborted) reject(abortError());
@@ -63,6 +64,8 @@ export async function queryDoctorDiagnostics(options: DiagnosticQueryOptions = {
     if (thread !== undefined) await thread.terminate();
     else await terminateProcessTree(child!);
   }
+  if (signal?.aborted) throw abortError();
+  return result;
 }
 
 async function terminateProcessTree(child: ChildProcess): Promise<void> {

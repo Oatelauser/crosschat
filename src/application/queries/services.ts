@@ -1,5 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { isProcessAlive } from '../../platform/process-inspector.js';
 import { TCP_STATUS_FRESH_MS, nodeStatusSelector } from '../status/status-files.js';
 import { checkAbort, isRecord, optionalString, queryError, readParsed } from './reading.js';
 import type { QueryError, TextOptions } from './reading.js';
@@ -12,6 +13,8 @@ export interface ServiceSnapshot {
   lastUpdated: string;
   freshness: 'fresh' | 'stale';
   readiness: 'ready' | 'starting' | 'waiting' | 'stopped' | 'unknown';
+  pid?: number;
+  processAlive?: boolean;
   version?: string;
   brokerAlias?: string;
   port?: number;
@@ -35,13 +38,11 @@ function parseSnapshot(raw: string, file: string, observedAt: number): ServiceSn
     throw new Error('Invalid service state');
   }
   const freshness = observedAt - Date.parse(value.lastUpdated) < TCP_STATUS_FRESH_MS ? 'fresh' : 'stale';
-  const readiness = value.state === 'stopped' ? 'stopped'
-    : freshness === 'stale' ? 'unknown'
-      : value.state === 'running' || value.state === 'online' ? 'ready'
-        : value.state === 'connecting' ? 'starting' : 'waiting';
+  const readiness = value.state === 'stopped' ? 'stopped' : 'unknown';
   return {
     file, kind, selector: kind === 'node' ? nodeStatusSelector(file) : '',
     state: value.state, lastUpdated: value.lastUpdated, freshness, readiness,
+    pid: typeof value.pid === 'number' && Number.isInteger(value.pid) && value.pid > 0 ? value.pid : undefined,
     version: optionalString(value.version), brokerAlias: optionalString(value.brokerAlias),
     port: typeof value.port === 'number' ? value.port : undefined,
     onlineNodes: Array.isArray(value.onlineNodes) ? value.onlineNodes.filter((item): item is string => typeof item === 'string') : undefined,
@@ -50,8 +51,8 @@ function parseSnapshot(raw: string, file: string, observedAt: number): ServiceSn
   };
 }
 
-/** Reads snapshots only; no PID scan, drain, connection or configuration repair. */
-export async function queryServiceStatuses(options: TextOptions & { tcpDir: string }): Promise<CollectionResult<ServiceSnapshot>> {
+/** Reads snapshots plus a signal-0 PID probe; never scans processes or writes state. */
+export async function queryServiceStatuses(options: TextOptions & { tcpDir: string; isProcessAlive?: (pid: number) => boolean }): Promise<CollectionResult<ServiceSnapshot>> {
   const observedAt = (options.now ?? Date.now)();
   const items: ServiceSnapshot[] = [];
   const errors: QueryError[] = [];
@@ -62,7 +63,14 @@ export async function queryServiceStatuses(options: TextOptions & { tcpDir: stri
       checkAbort(options.signal);
       const result = await readParsed(join(options.tcpDir, file), (raw) => parseSnapshot(raw, file, observedAt), { ...options, now: () => observedAt });
       if (result.state === 'cancelled') return { items: [], completeness: 'cancelled', observedAt, errors: result.errors };
-      if (result.value !== null) items.push(result.value);
+      if (result.value !== null) {
+        const snapshot = result.value;
+        if (snapshot.pid !== undefined) snapshot.processAlive = (options.isProcessAlive ?? isProcessAlive)(snapshot.pid);
+        if (snapshot.freshness === 'fresh' && snapshot.processAlive === true && snapshot.state !== 'stopped') {
+          snapshot.readiness = snapshot.state === 'running' || snapshot.state === 'online' ? 'ready' : snapshot.state === 'connecting' ? 'starting' : 'waiting';
+        }
+        items.push(snapshot);
+      }
       errors.push(...result.errors);
     }
   } catch (error) {

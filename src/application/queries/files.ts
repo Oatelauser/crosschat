@@ -22,13 +22,16 @@ export async function queryManagedFiles(options: QueryOptions & { baseDir: strin
   try {
     checkAbort(options.signal);
     for (const { directory, category } of directories) {
+      checkAbort(options.signal);
       let entries;
       try {
         const parent = await lstat(directory);
+        checkAbort(options.signal);
         if (!parent.isDirectory() || parent.isSymbolicLink()) continue;
         entries = await readdir(directory, { withFileTypes: true });
       } catch (error) {
         const issue = queryError(directory, error);
+        if (issue.kind === 'cancelled') throw error;
         if (issue.kind !== 'missing') result.errors.push(issue);
         continue;
       }
