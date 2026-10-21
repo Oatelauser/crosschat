@@ -1,7 +1,7 @@
 # 单星特例全灭与星域统一指名（036）
 
 label: wayfinder:design
-status: open（2026-10-21 定案，二期10 派发实施会话）
+status: closed（2026-10-21 实施关账：实施会话完成+check 778 绿，二期10 真机 drill 验收全过，见文末验收记录）
 blocked-by: 无（033/034/035 已关账）
 claimed-by: 二期10
 
@@ -39,3 +39,16 @@ claimed-by: 二期10
 1. `npm run check` 全绿
 2. 真机 drill（验收=二期10；**优先查 stateRoot 可否环境变量隔离——可行则独立目录跑 0星→1星→2星 同命令路径，不动真联邦**；不可行再经用户口令拆真网重建）
 3. CI 三系统绿
+
+## 验收记录（2026-10-21 二期10）
+
+- 实施会话完工（check 自跑 778 绿 +5 新用例/改写 8），主会话抽查要害落码（组合守卫/requireStarScope 新教学/showName 双形态/add-star 新回执）+ check 复跑全绿；**护栏实证：022"条目缺 starId 回填"用例未动保持绿**
+- **真机 drill 全过**（stateRoot 无环境隔离已探明→按用户授权拆真网）：
+  1. 换新码 broker → 双星动前照；**一次性组合拒绝活证**（`--name foo --add-star bar` → USAGE 列冲突"分开执行"）
+  2. **拆到零星**（d32b→yang 最后一颗可删）→ 零星合法态
+  3. **单星新语义活证**：造首星 yang → 裸跑 `--gen-key` → USAGE **"单星也不例外——036 起统一当多星处理"**+示例；`--star yang --gen-key` 过；本会话 re-adopt
+  4. 第二星热加 → WSL 重贴钥回归（wsl32 在线）
+  5. **按星 show-name 活证**：`--star d32b --show-name win-d32b` → 同机双名并存（d32b 星 win-d32b/yang 星 yang），status 显示随条目；回设归位
+- 附带收账：watchdog 测试环境性缺陷修复（pid 写死 12345→0——活联邦在跑即红的根因，票外环境修）；STAR_ID_MISMATCH 检测点后移至 connected（恒倒置的必然推论，用例已注明）
+- 提交 942c009；**推送挂账**（github 直连重置+代理不在，ahead 2 待网络恢复补推+CI 核验）
+- 记档：status-broker.json 顶层 `name` 字段仍是单星特例残留（票面未列，最小面保留——候选小票）
