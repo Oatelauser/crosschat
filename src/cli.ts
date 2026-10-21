@@ -96,9 +96,10 @@ commands:
                             edit, then restart serve)
                               --name <星名>        rename the broker's star
                                 (1-32 chars of A-Za-z0-9._-,
-                                no colon; with 2+ stars --star
-                                is required; serve never creates
-                                stars — that is --add-star's job)
+                                no colon; requires --star —
+                                single star included; serve
+                                never creates stars — that is
+                                --add-star's job)
                               --add-star <星名>    host another star on this
                                 broker (one process/port; roster
                                 lives inside broker.json; hot:
@@ -111,13 +112,17 @@ commands:
                                 be deleted — zero stars is a
                                 legal unconfigured state)
                               --show-name <名>      rename this machine's
-                                display name on the broker host
-                                (hot: remounts in-process
-                                aggregators; '' clears)
+                                display name: bare = machine-
+                                wide default ('' clears); with
+                                --star <星> = per-star override
+                                in that node.json entry
+                                (hot: remounts aggregators)
                               --star <星名|前缀>   scope --gen-key/--remove/
                                 --name/--gen-admin-key/--remove-
-                                admin-key to one hosted star
-                                (required when the broker hosts 2+ stars)
+                                admin-key/--show-name to one
+                                hosted star (always required
+                                by these flags — a single-star
+                                broker is no exception)
                               --gen-key [N]        print N node keys (default 1)
                                 and register them
                               --gen-admin-key <label>

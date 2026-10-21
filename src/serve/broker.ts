@@ -60,6 +60,7 @@ import {
   sanitizeName,
   setNameFor,
   setShowNameFor,
+  setStarShowNameFor,
   type NodeEntry,
   type RosterEntry,
 } from './registry.js';
@@ -147,7 +148,7 @@ interface Session {
   connectTimer?: ReturnType<typeof setTimeout>;
   /** 018：该连接声明的会话成员（sessions 帧全量重播语义；undefined=从未声明）。连接断即随机器条目消失。 */
   members?: Map<string, SessionMemberDecl>;
-  /** 022 连接绑星：钥匙核验命中的星（多星下路由/册/注册表全按它切片；单星旧形状缺省=stars[0]）。 */
+  /** 022 连接绑星：钥匙核验命中的星（路由/册/注册表全按它切片；036 起无单星兜底——未绑星=异常形态）。 */
   starId?: string;
   /**
    * 034 认证身份（authed 后有值）：'member'=星钥连接（node/sender，同星共钥=
@@ -251,8 +252,9 @@ export class Broker {
   /** 在途管理连接（stop 时强制收口——旧 typings 无 closeAllConnections）。 */
   private readonly adminSockets = new Set<net.Socket>();
   /**
-   * 033 已收尾会话（热删星闭连接）：onClose 跳过星域清理——starOf 的单星兜底
-   * 会把被删星的残余会话误归到幸存星（同 mid 双星形态下误清对方在线表）。
+   * 033 已收尾会话（热删星闭连接）：onClose/onMessage 跳过星域清理与帧处理。
+   * 036 起 starOf 兜底已删（残余会话的 starId 指向已弃星、starOf 自然未命中），
+   * 此集合转为防御性收口（删星竞态窗口内到达的帧/关闭事件不落入幸存星）。
    */
   private readonly reapedSessions = new Set<Session>();
 
@@ -417,9 +419,28 @@ export class Broker {
       case 'set-showname': {
         const name = str('name');
         if (name === undefined) return { ok: false, error: 'set-showname 缺少 name（空串=清除）' };
-        setShowNameFor(join(dirname(this.d.registryFile), 'node.json'), name);
+        const nodeJson = join(dirname(this.d.registryFile), 'node.json');
+        // 036 双形态：带 starId=条目级覆盖（只重挂该星聚合器）；缺省=全局默认
+        //（顶层 showName，重挂全部）。重挂即重连握手自报新名（machineName 回写
+        // 随 connect 落台账——每星一份）。
+        const starId = str('starId');
+        if (starId !== undefined) {
+          try {
+            setStarShowNameFor(nodeJson, starId, name);
+          } catch (err) {
+            return { ok: false, error: err instanceof Error ? err.message : String(err) };
+          }
+          this.auditAdmin('set-showname', `星 ${starId} 显示名 ${name}`, LOCAL);
+          try {
+            await this.d.stopLocalAggregator?.(starId);
+          } catch {
+            // 收尾尽力而为
+          }
+          this.d.spawnLocalAggregator?.(starId);
+          return { ok: true };
+        }
+        setShowNameFor(nodeJson, name);
         this.auditAdmin('set-showname', `显示名 ${name}`, LOCAL);
-        // 重挂内挂聚合器：重连握手即自报新名（machineName 回写随 connect 落台账）
         for (const star of [...this.stars]) {
           if (star.starId === undefined) continue;
           try {
@@ -531,7 +552,7 @@ export class Broker {
       const label = star.name ?? starId;
       for (const session of [...star.online.values()]) {
         this.sessions.delete(session);
-        this.reapedSessions.add(session); // onClose 跳过星域清理（防单星兜底误归幸存星）
+        this.reapedSessions.add(session); // onClose 跳过星域清理（防残余会话误入幸存星）
         if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
         this.send(session.ws, {
           op: 'error',
@@ -602,22 +623,17 @@ export class Broker {
 
   private onConnection(ws: SocketLike): void {
     this.syncStarsFromDisk();
-    // 022 握手时序倒置：单星 broker 的 info 照旧携带星标识（现读注册表——
-    // start 后补播种/改名即时可见，与旧版逐字节同语义）；多星 broker 见钥匙
-    // 才知星——info 只报 caps（multi-star 标记即"info 无星标识是合法形态"的
-    // 信号），星标识挪到 connected 帧回填。
-    const sole = this.stars.length === 1 ? this.stars[0]! : undefined;
-    if (sole !== undefined) this.starNodes(sole); // 现读刷新星标识（info 用）
-    const session = this.registerSession(ws, sole === undefined ? undefined : { starId: sole.starId, name: sole.name });
+    // 022/036 握手时序恒倒置：info 只报 caps（multi-star 标记即"info 无星标识
+    // 是合法形态"的信号），星标识由钥匙自证、connected 帧回填——单星 broker 的
+    // info 携带星标识旧形随葬（统一当多星处理）。
+    const session = this.registerSession(ws);
     this.send(ws, {
       op: 'info',
       proto: PROTOCOL_VERSION,
       server: `crosschat/${this.d.version}`,
       // 034：challenge-auth additive——管理连接（星管理钥）握手走挑战应答；
       // 客户端见此 cap 缺席即拒连无降级。星钥连接行为不变。
-      caps: this.stars.length > 1 ? [CAP_SESSION_MEMBERS, CAP_MULTI_STAR, CAP_CHALLENGE_AUTH] : [CAP_SESSION_MEMBERS, CAP_CHALLENGE_AUTH],
-      ...(sole === undefined || sole.starId === undefined ? {} : { starId: sole.starId }),
-      ...(sole === undefined || sole.name === undefined ? {} : { name: sole.name }),
+      caps: [CAP_SESSION_MEMBERS, CAP_MULTI_STAR, CAP_CHALLENGE_AUTH],
     });
     session.connectTimer = setTimeout(() => {
       this.log('connect-timeout 关闭未握手连接');
@@ -638,13 +654,13 @@ export class Broker {
     const star = this.stars.find((s) => s.starId === starId);
     if (star === undefined) return;
     const session = this.registerSession(ws, star);
+    // 036：info 恒倒置形（与 onConnection 同形）——星标识由 connected 回填，
+    // 内挂聚合器预检走同一条延迟核星路径
     this.send(ws, {
       op: 'info',
       proto: PROTOCOL_VERSION,
       server: `crosschat/${this.d.version}`,
-      caps: [CAP_SESSION_MEMBERS],
-      ...(star.starId === undefined ? {} : { starId: star.starId }),
-      ...(star.name === undefined ? {} : { name: star.name }),
+      caps: [CAP_SESSION_MEMBERS, CAP_MULTI_STAR, CAP_CHALLENGE_AUTH],
     });
     session.connectTimer = setTimeout(() => {
       this.log('connect-timeout 关闭本进程聚合器连接（握手未完成——异常形态）');
@@ -700,13 +716,14 @@ export class Broker {
     return session;
   }
 
-  /** 022：连接属星（钥匙核验后的权威归属；单星缺省 stars[0]）。 */
+  /**
+   * 022/036：连接属星（钥匙核验后的权威归属）。036 起 stars[0] 兜底删除——
+   * 032 后钥匙必绑星、连入按钥匙定籍；未绑星连接（异常形态）返回 undefined，
+   * 调用方按"属星未定"处理。
+   */
   private starOf(session: Session): StarState | undefined {
-    if (session.starId !== undefined) {
-      const hit = this.stars.find((s) => s.starId === session.starId);
-      if (hit !== undefined) return hit;
-    }
-    return this.stars.length === 1 ? this.stars[0] : undefined;
+    if (session.starId === undefined) return undefined;
+    return this.stars.find((s) => s.starId === session.starId);
   }
 
   /**
@@ -738,8 +755,8 @@ export class Broker {
     for (const [id, route] of this.fileRoutes) {
       if (route.senderWs === session.ws || route.targetWs === session.ws) this.fileRoutes.delete(id);
     }
-    // 033：被删星收尾的会话——星域状态已随星弃置，跳过在线表/册回收（starOf
-    // 的单星兜底会把残余会话误归幸存星）
+    // 033：被删星收尾的会话——星域状态已随星弃置，跳过在线表/册回收（防残余
+    // 会话误入幸存星）
     if (this.reapedSessions.delete(session)) return;
     // F0：online 键=归一 mid（onConnect 写入侧同款），下线按同键回收（022：星域内）
     if (session.machineId !== undefined) {
@@ -759,7 +776,7 @@ export class Broker {
   }
 
   private async onMessage(session: Session, text: string): Promise<void> {
-    if (this.reapedSessions.has(session)) return; // 033：星已删的残余帧丢弃（防兜底误入幸存星）
+    if (this.reapedSessions.has(session)) return; // 033：星已删的残余帧丢弃（防误入幸存星）
     const frame = parseFrame(text);
     if (frame === undefined) return; // 损坏/未知帧丢弃
     if (!session.authed) {
@@ -1124,7 +1141,13 @@ export class Broker {
       await this.authFail(session, '钥匙不匹配任何星——星可能未创建或已删除（--remove-star 即废钥），找管理员核对 node.json 或索取新配置');
       return;
     }
-    if (star.starId !== undefined) session.starId = star.starId;
+    // 036：钥匙必绑星——命中星缺 starId（手编异常形状）即拒（starOf 兜底已删，
+    // 未绑星连接无处归属）；serve 启动会自动补 id，教学指路。
+    if (star.starId === undefined) {
+      await this.authFail(session, '命中星的 starId 缺失（手编异常形状）——broker 机跑一次 crosschat serve 自动补 id 后重连');
+      return;
+    }
+    session.starId = star.starId;
     if (frame.role === 'node') {
       const mid = frame.machineId ?? '';
       if (mid === '') {
@@ -1185,12 +1208,13 @@ export class Broker {
     if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
     session.authed = true;
     session.identity = 'member';
-    // 022：多星连接的星标识在钥匙核验后回填（握手时序倒置——info 帧无法预知属星）
+    // 022/036：星标识在钥匙核验后回填（握手时序恒倒置——info 无法预知属星，
+    // 单星也回填）
     this.send(session.ws, {
       op: 'connected',
       machineName: session.machineName,
-      ...(this.stars.length > 1 && star.starId !== undefined ? { starId: star.starId } : {}),
-      ...(this.stars.length > 1 && star.name !== undefined ? { name: star.name } : {}),
+      ...(star.starId === undefined ? {} : { starId: star.starId }),
+      ...(star.name === undefined ? {} : { name: star.name }),
     });
     this.writeStatus('running');
   }
@@ -1222,19 +1246,20 @@ export class Broker {
       return;
     }
     for (const star of this.stars) {
+      if (star.starId === undefined) continue; // 036：无 id 星不可绑籍（同星钥路径）
       for (const node of this.starNodes(star)) {
         if (node.adminKey === undefined) continue;
         const expect = createHmac('sha256', node.adminKey).update(nonce).digest('hex');
         if (!safeEqual(frame.proof, expect)) continue;
         session.identity = 'admin';
         session.adminLabel = node.label;
-        if (star.starId !== undefined) session.starId = star.starId;
+        session.starId = star.starId;
         if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
         session.authed = true;
         this.send(session.ws, {
           op: 'connected',
-          ...(this.stars.length > 1 && star.starId !== undefined ? { starId: star.starId } : {}),
-          ...(this.stars.length > 1 && star.name !== undefined ? { name: star.name } : {}),
+          ...(star.starId === undefined ? {} : { starId: star.starId }),
+          ...(star.name === undefined ? {} : { name: star.name }),
         });
         this.log(`admin-auth 星管理钥(${node.label}) 入星 ${star.name ?? star.starId ?? '?'}`);
         this.writeStatus('running');
@@ -1836,8 +1861,8 @@ export class Broker {
       mkdirSync(dirname(this.d.statusFile), { recursive: true });
       // 017：broker 自身恒在线——本机 status 的"在线机器"含本机（带（本机）标），
       // 改 showName 重启 serve 后本机 status 即见新名。与 buildRoster ownNorm 同判：
-      // 注册表有本机条目才算（名字取注册表），未注册不虚列。022：按星分组——单星
-      // 保持旧格式逐机器罗列；多星一行一星（星名: 机器表）。
+      // 注册表有本机条目才算（名字取注册表），未注册不虚列。022/036：按星分组
+      // 单一格式——一行一星（星名: 机器表），单星扁平旧形随葬。
       const ownNorm = normalizeMid(this.d.machineId() ?? '');
       const sole = this.stars.length === 1 ? this.stars[0]! : undefined;
       const onlineNodes: string[] = [];
@@ -1847,8 +1872,7 @@ export class Broker {
           const selfEntry = this.starNodes(star).find((n) => normalizeMid(n.machineId ?? '') === ownNorm);
           if (selfEntry !== undefined) names.unshift(`${selfEntry.machineName ?? ownNorm.slice(0, 8)}（本机）`);
         }
-        if (sole !== undefined) onlineNodes.push(...names);
-        else onlineNodes.push(`${star.name ?? star.starId ?? '?'}: ${names.length > 0 ? names.join('、') : '（无在线）'}`);
+        onlineNodes.push(`${star.name ?? star.starId ?? '?'}: ${names.length > 0 ? names.join('、') : '（无在线）'}`);
       }
       writeFileSync(
         this.d.statusFile,

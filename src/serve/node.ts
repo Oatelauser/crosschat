@@ -54,6 +54,11 @@ export interface BrokerEntry {
    * 节点）走挑战应答证明，钥匙永不过线。读 op 星钥即够，无此字段也可用。
    */
   adminKey?: string;
+  /**
+   * 036 条目级显示名覆盖（broker 机 --star --show-name 写入；node 机手编同
+   * 生效）：connect 自报名取 条目级 ?? 顶层全局（修订 017 单一事实源）。
+   */
+  showName?: string;
 }
 
 /** 归一化后的 node.json：旧/新双形状都收进 entries（多条目路由选择是 B1）。 */
@@ -76,7 +81,7 @@ export const NOT_JOINED_MESSAGE =
 /** 单条目净化校验：缺 key/host 或 port 非整数即坏形状。 */
 function parseBrokerEntry(raw: unknown): BrokerEntry {
   if (raw === null || typeof raw !== 'object') throw new Error('bad shape');
-  const e = raw as { host?: unknown; port?: unknown; name?: unknown; alias?: unknown; starId?: unknown; key?: unknown; adminKey?: unknown };
+  const e = raw as { host?: unknown; port?: unknown; name?: unknown; alias?: unknown; starId?: unknown; key?: unknown; adminKey?: unknown; showName?: unknown };
   if (
     typeof e.key !== 'string' || e.key === '' ||
     typeof e.host !== 'string' || typeof e.port !== 'number' || !Number.isInteger(e.port)
@@ -93,6 +98,8 @@ function parseBrokerEntry(raw: unknown): BrokerEntry {
     key: e.key,
     // 034：星管理钥（可选字段——与星钥同条目）
     ...(typeof e.adminKey === 'string' && e.adminKey !== '' ? { adminKey: e.adminKey } : {}),
+    // 036：条目级显示名覆盖（可选字段；空串视同缺席——CLI 清除即删键）
+    ...(typeof e.showName === 'string' && e.showName !== '' ? { showName: e.showName } : {}),
   };
 }
 
@@ -607,7 +614,8 @@ export class NodeClient {
         role: 'node',
         machineId: this.d.machineId() ?? '',
         auth: cfg.key,
-        ...(this.d.config.showName === undefined ? {} : { name: this.d.config.showName }),
+        // 036：自报名取条目级覆盖 ?? 顶层全局（修订 017 单一事实源为双态）
+        ...((cfg.showName ?? this.d.config.showName) === undefined ? {} : { name: cfg.showName ?? this.d.config.showName }),
         // 032 非兼容升级：multi-star 能力声明是新版腿的通行证（无它即旧版被拒）
         caps: [CAP_SESSION_MEMBERS, CAP_MULTI_STAR],
       }));

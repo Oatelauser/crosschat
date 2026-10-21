@@ -90,7 +90,7 @@ serve 启动时把 broker 机**自登记**进已建的每颗星（星内首个 n
 ```
 > crosschat serve --add-star cloud
 已加星 cloud——本 broker 现托管 1 颗星（经在跑 broker 已生效，免重启；自登记+内挂聚合器随对账落位）
-发钥：crosschat serve --star <星名> --gen-key <n>（单星期免 --star）；查星：crosschat serve --list
+发钥：crosschat serve --star <星名> --gen-key <n>（星域命令一律须 --star——单星亦然）；查星：crosschat serve --list
 注意：多星共用一个 broker 进程——故障域合并（一进程崩=全部星瘫、升级窗口合并），此为已接受的运维代价
 # broker 没在跑时同样可加：回执变"已落盘，serve 启动即托管"
 ```
@@ -103,7 +103,7 @@ serve 启动时把 broker 机**自登记**进已建的每颗星（星内首个 n
 # …后两行同上
 ```
 
-**热生效语义**：加星/删星/改星名/改显示名/发钥/删钥/发吊星管理钥都免重启——CLI 落盘型命令完成后经本机管理插座通知在跑 broker 立即对账，打印"经在跑 broker 已生效"必出自 broker 回执（不预支成功）；broker 没跑则落盘、下次 serve 启动即托管（回执会注明）。托管多颗星后，管理命令须 `--star <星名|starId前缀>` 限定目标星（只托管一颗时可省——CLI 漏给会点名现有星并给示例）。
+**热生效语义**：加星/删星/改星名/改显示名/发钥/删钥/发吊星管理钥都免重启——CLI 落盘型命令完成后经本机管理插座通知在跑 broker 立即对账，打印"经在跑 broker 已生效"必出自 broker 回执（不预支成功）；broker 没跑则落盘、下次 serve 启动即托管（回执会注明）。托管多颗星后，星域管理命令（`--name` / `--gen-key` / `--gen-admin-key` / `--remove-admin-key` / `--remove` / `--list-nodes` / `--list-members` / `--star --show-name`）一律 `--star <星名|starId前缀>` 指名目标星——**单星也不例外**（036 起统一当多星处理，不存在单星机特殊形态；漏给会点名现有星并给示例）。
 
 四条多星语义：
 
@@ -130,15 +130,19 @@ self-lab  yang              ec542c2c  2026-10-11T02:20:00.000Z
 > crosschat serve --star cloud --name prod --detach
 # 改星名：本机域专属（星管理员拿不到）；--name 不是一次性命令——改完照常进入 serve，加 --detach 免前台
 > crosschat serve --show-name win-main
-显示名已改为 win-main（经在跑 broker——内挂聚合器已重挂，秒级生效）
-# --show-name 只改 broker 机的显示名；node 机改名=手编 node.json showName + 重启守护（1.3.1）
+显示名已改为 win-main（经在跑 broker——聚合器已重挂，秒级生效）
+> crosschat serve --star cloud --show-name cloud-main
+星 cloud 显示名已改为 cloud-main（经在跑 broker——聚合器已重挂，秒级生效）
+# --show-name 两形态：裸=全局默认名（'' 清除）；--star <星> =该星条目级覆盖（node.json 条目 showName，
+# 缺省回落顶层全局值；'' 清除覆盖回落全局）——broker 机可按星用不同机器名，注册表 machineName 每星一份
+# node 机改名=手编 node.json（顶层全局或条目级 showName，同口径生效）+ 重启守护（1.3.1）
 ```
 
 删星（`--remove-star`）见 [1.2.6](#126-删星--remove-star)。
 
 #### 1.2.3 发钥（--gen-key）
 
-生成 node 节点的钥匙；`--gen-key N` 一次打 N 份（1-10），打印的整段 JSON 交给对应机器，存放在[node节点配置文件](#131-配置连接密钥)。多星托管时须 `--star` 指明目标星：
+生成 node 节点的钥匙；`--gen-key N` 一次打 N 份（1-10），打印的整段 JSON 交给对应机器，存放在[node节点配置文件](#131-配置连接密钥)。须 `--star <星名>` 指明目标星（单星亦然——036 起星域命令一律指名）：
 
 ```
 > crosschat serve --star cloud --gen-key 2
@@ -317,7 +321,7 @@ ops-wsl   （星管理钥）       -         2026-10-20T03:11:00.000Z
 }
 ```
 
-**机器改名**：node 机=改本机 node.json 的 `showName` + 重启守护；broker 机=`crosschat serve --show-name <名>` 热改（秒级）。showName 是全机种唯一的名字来源，别手改 broker.json。
+**机器改名**：node 机=改本机 node.json 的 `showName`（顶层=全局默认；条目级=按星覆盖，缺省回落全局）+ 重启守护；broker 机=`crosschat serve --show-name <名>` 全局热改 / `--star <星> --show-name <名>` 按星热改（秒级）。名字来源=各机自己的 node.json（全局默认+按星覆盖，036 双态），别手改 broker.json。
 
 **验证**：
 ```
@@ -761,7 +765,7 @@ C → S   {"op":"connect","proto":1,"role":"node","machineId":"<全 mid，64位h
 S → C   {"op":"connected","machineName":"yang"}
 ```
 
-多星 broker 的握手时序倒置（单星字节不变）：`info` **不带** starId/name（caps 多一项 `"multi-star"`）——归属星由钥匙自证（连接绑星），`connected` 回填 `starId`/`name`。
+握手时序恒倒置（036 起单星同形——不存在单星机特殊形态）：`info` **不带** starId/name（caps 恒含 `"multi-star"`）——归属星由钥匙自证（连接绑星），`connected` 回填 `starId`/`name`。
 
 **管理连接（034 星管理钥，挑战应答——钥匙永不过线）**：`connect` 带 `admin:true` 且**不带 auth**，broker 回一次性 `nonce`，客户端以 `proof = HMAC-SHA256(星管理钥, nonce)` 的 hex 应答：
 
@@ -777,7 +781,7 @@ S → C   {"op":"connected"}          # 命中即连接绑星（发放即绑定�
 - **无降级路径**：`info.caps` 无 `challenge-auth`（旧版/被中间人剥除）即拒连，绝不回落裸钥发送管理钥
 - 被吊管理钥的下一次挑战应答即 `BAD_AUTH`（验证面每连接现读台账）
 
-- `starId`：星标识（broker.json 各星条目内 12 hex，`--add-star` 时生成）——单星时 info 携带，节点客户端在**发 connect（钥匙）之前**比对：与本机条目不符即断连（`STAR_ID_MISMATCH`，钥匙不出手）；多星时改由 connected 回填后校验
+- `starId`：星标识（broker.json 各星条目内 12 hex，`--add-star` 时生成）——info 恒不携带（036 起单星同形），节点客户端在 connected 回填后校验：与本机条目不符即断连（`STAR_ID_MISMATCH`，钥匙不出手）、缺失即回填
 - `caps`（connect 侧）：032 起**必带** `multi-star`——不带（旧版腿）即 `BAD_PROTO` 拒连并教 `npm i -g @oatelauser/crosschat@latest`（非兼容升级，不留历史包袱）
 - `role`：`node`（常驻收件，必须带 machineId，首次连接时把 mid 绑定到该钥匙；重连改名即覆盖显示名）或 `sender`（瞬态发送，只要 auth）
 - 钥匙不在注册表 / node 的 machineId 与登记不符 → 恒定延迟 500ms 后 `BAD_AUTH`（close 4001）——延迟是防钥匙枚举计时
@@ -790,9 +794,9 @@ S → C   {"op":"connected"}          # 命中即连接绑星（发放即绑定�
 
 | 帧 | 方向 | 字段 |
 |---|---|---|
-| `info` | S→C | proto, server, caps, starId?, name?（多星时不带） |
+| `info` | S→C | proto, server, caps（恒含 `multi-star`）；starId/name **恒不带**（036 起单星同形——倒置形，星标识由 connected 回填） |
 | `connect` | C→S | proto, role(node/sender), machineId?, auth?, name?（≤32 字符显示名）, caps（必带 `multi-star`；node 侧另加 `session-members`）, admin?（034 管理连接=true 且不带 auth——走挑战应答） |
-| `connected` | S→C | machineName?, starId?, name?（多星时回填星籍） |
+| `connected` | S→C | machineName?, starId?, name?（恒回填星籍——036 起单星同形） |
 | `error` | 双向 | code, message, id? |
 | `send` | C→S | id, targetMachine, to?, conversation?, body, origin? |
 | `receipt` | S→C | id, status(delivered/queued/parked), turn?, replyRef?, output? |
@@ -896,7 +900,7 @@ C → file-end{id}
 
 ### 4.7 第三方实现者注意
 
-参考实现是**单 broker 星型**——多实例集群需自行解决实例间路由（哪台节点连在哪个实例）与注册表共享，本实现不含（一台机器入多颗星由节点侧承担，见 3.5）。注册表格式见 broker 机 `~/.crosschat/tcp/broker.json`（032 单文件单形状：`{port?, stars:[{starId, name?, nodes, roster:{entries}}]}`——注册表与各星星册同文件；nodes[] 内 label/key/machineId/machineName/addedAt，034 起 key 可选：星管理钥条目=label+adminKey+addedAt（无 key/machineId，与星钥同表存放）；顶层 `port` 是**手编字段**——`--port` 命令已移除，改文件重启生效）。节点侧 node.json：`{brokers:[{host,port,name(星名),starId,key,adminKey?}…], showName(本机显示名)}`——旧字段 alias/顶层 name 读取时自动映射；adminKey（星管理钥，与星钥同条目）可选，供远程管理写 op 走挑战应答。`nodes[].machineName` 不是权威——单一事实源是各机自己的 node.json `showName`（节点机经连接帧上报、broker 机经 serve 启动读回刷新；显式缺失/空则清除，roster 回退 mid8）。会话引用 mc2_ 可在尾部携带 starId（flags bit 10）——旧版解析器遇此扩展走 `INVALID_CONVERSATION_REF`+升级指引，属设计好的版本偏差路径。
+参考实现是**单 broker 星型**——多实例集群需自行解决实例间路由（哪台节点连在哪个实例）与注册表共享，本实现不含（一台机器入多颗星由节点侧承担，见 3.5）。注册表格式见 broker 机 `~/.crosschat/tcp/broker.json`（032 单文件单形状：`{port?, stars:[{starId, name?, nodes, roster:{entries}}]}`——注册表与各星星册同文件；nodes[] 内 label/key/machineId/machineName/addedAt，034 起 key 可选：星管理钥条目=label+adminKey+addedAt（无 key/machineId，与星钥同表存放）；顶层 `port` 是**手编字段**——`--port` 命令已移除，改文件重启生效）。节点侧 node.json：`{brokers:[{host,port,name(星名),starId,key,adminKey?,showName?(条目级显示名覆盖——036)}…], showName(本机全局默认显示名)}`——旧字段 alias/顶层 name 读取时自动映射；adminKey（星管理钥，与星钥同条目）可选，供远程管理写 op 走挑战应答。`nodes[].machineName` 不是权威——名字来源是各机自己的 node.json（顶层全局默认 + 条目级按星覆盖双态，036 修订 017 单一事实源；节点机经连接帧上报、broker 机经 serve 启动读回刷新；显式缺失/空则清除，roster 回退 mid8）。会话引用 mc2_ 可在尾部携带 starId（flags bit 10）——旧版解析器遇此扩展走 `INVALID_CONVERSATION_REF`+升级指引，属设计好的版本偏差路径。
 
 ### 4.8 proto:3 能力协商（caps）与 attach 管道
 

@@ -32,6 +32,9 @@ const key = (c: string) => c.repeat(64);
 function seed(file: string, nodes: Partial<NodeEntry>[]): void {
   seedBroker(file, {
     stars: [{
+      // 036：固定 starId——同测试内多次 seed（补登记机器）不再换星身份
+      //（starOf 兜底删后，换 id 会让已连接会话的属星失配）
+      starId: 'aaaabbbbcccc',
       nodes: nodes.map((n, i) => ({
         label: n.label ?? `node-${i + 1}`,
         key: n.key ?? key(`${i + 1}`),
@@ -158,7 +161,7 @@ describe('broker handshake and auth', () => {
     expect(doc.stars[0]!.nodes[0]?.machineName).toBe('node-host');
     const status = JSON.parse(readFileSync(statusFile, 'utf8')) as { state: string; onlineNodes: string[]; version?: string };
     expect(status.state).toBe('running');
-    expect(status.onlineNodes).toEqual(['node-host']);
+    expect(status.onlineNodes).toEqual([`${doc.stars[0]!.starId}: node-host`]); // 036：单星也按星分组（星名: 机器表）
     expect(status.version).toBe('1.4.0-test'); // F1：doctor 版本对账的数据源
   });
 
@@ -211,8 +214,8 @@ describe('broker handshake and auth', () => {
     expect(await first.closed()).toBe(1000);
   });
 
-  // B0：info 帧按注册表现发 starId（缺省不发——additive）
-  it('carries the registry starId in the info frame, and omits the field without one', async () => {
+  // 036：info 恒倒置形——星标识不再上 info（单星旧形随葬），connected 回填
+  it('omits starId from info in both shapes; connected backfills the registry starId', async () => {
     const withStar = await startBroker();
     seedBroker(withStar.registryFile, {
       stars: [{ starId: 'a1b2c3d4e5f6', nodes: [{ label: 'node-1', key: key('a'), addedAt: '2026-01-01T00:00:00.000Z' }] }],
@@ -220,15 +223,23 @@ describe('broker handshake and auth', () => {
     const c1 = new TestClient(withStar.url);
     await c1.opened();
     const info1 = await c1.waitFor((f) => f.op === 'info');
-    expect(info1.op === 'info' && info1.starId).toBe('a1b2c3d4e5f6');
+    expect(info1.op === 'info' && 'starId' in info1).toBe(false); // 036：info 恒不带星标识
+    c1.send({ op: 'connect', proto: 1, role: 'node', machineId: 'm-1', auth: key('a'), caps: ['multi-star'] });
+    const conn1 = await c1.waitFor((f) => f.op === 'connected');
+    expect(conn1.op === 'connected' && (conn1 as { starId?: string }).starId).toBe('a1b2c3d4e5f6'); // connected 回填
+    c1.ws.close();
 
-    // 032：无 starId 的星（手编形状）——info 照旧省略该字段（additive）
-    const withoutStar = await startBroker();
+    // 032/036：无 starId 的星（手编形状）——钥匙无法绑籍（starOf 兜底已删）→ BAD_AUTH 教学补 id
+    const withoutStar = await startBroker({ authFailDelayMs: 20 });
     writeBrokerFile(withoutStar.registryFile, { stars: [{ nodes: [{ label: 'node-1', key: key('a'), addedAt: '2026-01-01T00:00:00.000Z' }] }] });
     const c2 = new TestClient(withoutStar.url);
     await c2.opened();
     const info2 = await c2.waitFor((f) => f.op === 'info');
     expect(info2.op === 'info' && 'starId' in info2).toBe(false);
+    c2.send({ op: 'connect', proto: 1, role: 'node', machineId: 'm-1', auth: key('a'), caps: ['multi-star'] });
+    const err2 = await c2.waitFor((f) => f.op === 'error');
+    expect(err2.op === 'error' && (err2 as { code?: string }).code).toBe('BAD_AUTH');
+    expect(err2.op === 'error' && (err2 as { message?: string }).message).toContain('starId 缺失');
   });
 });
 
@@ -348,8 +359,10 @@ describe('broker heartbeat and lifecycle', () => {
     const node = await handshake(url, key('a'), 'aaaa00001111');
     await node.waitFor((f) => f.op === 'connected');
     const status = JSON.parse(readFileSync(statusFile, 'utf8')) as { onlineNodes: string[] };
-    // broker 自身恒在线且居首；改 showName 重启 serve 后本机 status 即见新名（不再自排除）
-    expect(status.onlineNodes).toEqual(['cloud（本机）', 'alpha']);
+    // broker 自身恒在线且居首；改 showName 重启 serve 后本机 status 即见新名（不再自排除）。
+    // 036：单星也按星分组——一行一星（星名: 机器表；此星未命名故显示 starId）
+    const starId = loadBrokerFile(registryFile).stars[0]!.starId!;
+    expect(status.onlineNodes).toEqual([`${starId}: cloud（本机）、alpha`]);
   });
 
   it('refreshes lastUpdated on every heartbeat cycle', async () => {

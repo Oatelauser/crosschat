@@ -233,8 +233,8 @@ function genKeysInto(nodes: NodeEntry[], n: number, opts: { host: string; port: 
 }
 
 /**
- * 星域发钥（--star 限定；单星由 serve 面隐式选中后调用）。splice 只动目标星
- * 的 nodes 段，roster 段原样保留。
+ * 星域发钥（--star 限定——036 起单星也须指名，CLI 面不再隐式选中）。splice
+ * 只动目标星的 nodes 段，roster 段原样保留。
  */
 export function genKeysFor(file: string, starId: string, n: number, opts: { host: string; port: number; name?: string }): GenKeyResult[] {
   let results: GenKeyResult[] = [];
@@ -470,6 +470,28 @@ export function setShowNameFor(nodeJsonFile: string, name: string): string | und
   if (doc === undefined) return undefined;
   if (clean === undefined) delete doc.showName;
   else doc.showName = clean;
+  writeNodeJsonRaw(nodeJsonFile, doc);
+  return clean;
+}
+
+/**
+ * 036 --star <星> --show-name <名>（按星机器名）：node.json 条目级 showName
+ * 覆盖——缺省回落顶层全局值（修订 017"单一事实源"为"全局默认+按星覆盖"）。
+ * 空=清除条目覆盖（回落全局）。按条目 starId 定位；文件缺失/无该星条目=异常
+ * 形态（USAGE 教学上抛）。返回净化后的名字（清除=undefined）。
+ */
+export function setStarShowNameFor(nodeJsonFile: string, starId: string, name: string): string | undefined {
+  const clean = sanitizeName(name);
+  const doc = readNodeJsonRaw(nodeJsonFile);
+  if (doc === undefined) {
+    throw new MultichatError('USAGE', '本机尚无 node.json（未入任何星）——条目级显示名无从谈起，先入星再按星命名');
+  }
+  const hit = doc.brokers.find((e) => e.starId === starId);
+  if (hit === undefined) {
+    throw new MultichatError('USAGE', `node.json 无 starId=${starId} 的条目（本机不在该星）——crosschat serve --list 可查托管星`);
+  }
+  if (clean === undefined) delete hit.showName;
+  else hit.showName = clean;
   writeNodeJsonRaw(nodeJsonFile, doc);
   return clean;
 }

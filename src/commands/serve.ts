@@ -30,6 +30,7 @@ import {
   selectStar,
   setNameFor,
   setShowNameFor,
+  setStarShowNameFor,
   tcpDir,
   writeBrokerFile,
   type GenAdminKeyResult,
@@ -47,9 +48,9 @@ import type { SendDeps } from './send.js';
 import type { DeliverFrame, ErrorFrame, ResultFrame, SendFrame, StatusPayload } from '../serve/protocol.js';
 
 export interface ServeArgs {
-  /** E0 星名（broker 专用；校验/持久化在 registry.setName；多星下须与 --star 连用）。 */
+  /** E0 星名（broker 专用；校验/持久化在 registry.setName；036 起一律须与 --star 连用——单星亦然）。 */
   nameArg?: string;
-  /** 022：星域选择器（多星注册表下限定 --gen-key/--remove/--name/--gen-admin-key/--remove-admin-key 的目标星）。 */
+  /** 022/036：星域选择器（星域八子的目标星限定——单星也不再隐式命中）。 */
   starArg?: string;
   /** 022：--add-star <名>——broker 托管下一颗星（033 起热闭环：在跑 broker 即时托管免重启）。 */
   addStarArg?: string;
@@ -201,6 +202,29 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
   if (oneShotCount > 1) {
     throw new MultichatError('USAGE', '--add-star / --remove-star / --show-name 均为一次性命令，一次只给一个');
   }
+  // 036 决策3：一次性命令与其他管理旗标同给即拒并列冲突旗标——不再静默吞
+  //（用户实证踩过：--name cloud --add-star cloudstar 中 --name 被无声忽略）。
+  // --star 不算冲突（它是 --show-name 按星形态的限定词）；--connect/--detach
+  // 由各一次性命令自身的既有拒绝兜（更早、教学更准）。
+  if (oneShotCount === 1) {
+    const oneShot = args.addStarArg !== undefined ? '--add-star' : args.removeStarArg !== undefined ? '--remove-star' : '--show-name';
+    const conflicts = ([
+      ['--name', args.nameArg],
+      ['--gen-key', args.genKeyArg],
+      ['--remove', args.remove],
+      ['--gen-admin-key', args.genAdminKeyArg],
+      ['--remove-admin-key', args.removeAdminKeyArg],
+      ['--list', args.list],
+      ['--list-nodes', args.listNodes],
+      ['--list-members', args.listMembers],
+      ['--via', args.viaArg],
+      ['--stop', args.stopTarget],
+      ['--stop', args.stopSelector],
+    ] as Array<[string, unknown]>).filter(([, v]) => v !== undefined && v !== false).map(([f]) => f);
+    if (conflicts.length > 0) {
+      throw new MultichatError('USAGE', `${oneShot} 是一次性命令，不与 ${conflicts.join('、')} 同给（同给会被无声忽略）——分开执行`);
+    }
+  }
   // 022 --add-star / 033 --remove-star / --show-name（一次性命令；先于其余管理旗标处理）
   if (args.addStarArg !== undefined) {
     if (args.connect !== undefined) {
@@ -221,13 +245,14 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
       throw new MultichatError('USAGE', '--show-name 是 broker 机命令，不与 --connect 连用');
     }
     if (args.detach) throw new MultichatError('USAGE', '--show-name 是一次性命令，不支持 --detach');
-    return runShowName(args.showNameArg, deps);
+    // 036 两形态：--star <星>=条目级覆盖；裸=全局默认（现行为保留）
+    return runShowName(args.showNameArg, deps, resolveStarScope(args, registryFile).star);
   }
   // 034 远程管理路由：--via tcp:<星> 时 --gen-key/--remove/--list-nodes/--list-members
   // 发往远端 broker（读=星钥成员身份；写=条目 adminKey 星管理员挑战应答）。
   if (args.viaArg !== undefined) return runRemoteAdmin(args, deps);
-  // 022/032 星域解析：单星隐式选中（裸 --gen-key/--name/--remove 照常），
-  // 多星（stars>1）须 --star 限定（--list 只读分组展示除外）
+  // 022/036 星域解析：星域七子一律 --star 指名（单星隐式命中随葬——统一当多星
+  // 处理；--list 只读分组展示除外）
   const starScope = resolveStarScope(args, registryFile);
   if (args.nameArg !== undefined) {
     // E0 星名：与 --port 同语义（显式给即持久化）；节点模式无星名概念
@@ -327,32 +352,33 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
 }
 
 /**
- * 022/032 星域解析：`--star` 仅 stars>1 时有意义（单星隐式选中——裸
- * --gen-key/--name/--remove 在单星机照常）。空表（未初始化）star=undefined，
- * 由 requireStarScope 统一教学"先跑一次 serve"。
+ * 022/036 星域解析：星域命令一律 `--star` 指名——单星隐式命中随葬（统一当
+ * 多星处理）。缺 --star 时 star=undefined，由 requireStarScope 统一教学（空表
+ * 教 --add-star；有星教列星+示例）。
  */
-function resolveStarScope(args: ServeArgs, registryFile: string): { multi: boolean; star?: StarRecord } {
-  const doc = loadBrokerFile(registryFile);
-  if (doc.stars.length <= 1) return { multi: false, star: doc.stars[0] };
-  if (args.starArg === undefined) return { multi: true };
-  return { multi: true, star: selectStar(doc.stars, args.starArg) };
+function resolveStarScope(args: ServeArgs, registryFile: string): { star?: StarRecord } {
+  if (args.starArg === undefined) return {};
+  return { star: selectStar(loadBrokerFile(registryFile).stars, args.starArg) };
 }
 
-/** 星域未定的统一教学：空表教 --add-star（033 起首星显式命名）；多星缺 --star 教列星+示例。 */
-function requireStarScope(scope: { multi: boolean; star?: StarRecord }, registryFile: string, flag: string): void {
+/**
+ * 星域未定的统一教学：空表教 --add-star（033 起首星显式命名）；缺 --star 教
+ * 列星+示例——036 起单星也须指名（"本 broker 托管多颗星"的措辞随葬）。
+ */
+function requireStarScope(scope: { star?: StarRecord }, registryFile: string, flag: string): void {
   if (scope.star !== undefined) return;
   const doc = loadBrokerFile(registryFile);
   if (doc.stars.length === 0) {
-    throw new MultichatError('USAGE', `broker.json 零星（合法待配状态——serve 永不自动造星）——先 crosschat serve --add-star <星名> 显式创建首星，再用 ${flag}`);
+    throw new MultichatError('USAGE', `broker.json 零星（合法待配状态——serve 永不自动造星）——先 crosschat serve --add-star <星名> 显式创建首星，再用 --star <星> ${flag}`);
   }
   const list = doc.stars.map((s) => s.name ?? s.starId ?? '(未定名)').join('、');
   throw new MultichatError(
     'USAGE',
-    `本 broker 托管多颗星，${flag} 须 --star <星名|starId前缀> 限定目标星——现有：${list}；示例：crosschat serve --star ${doc.stars[0]!.name ?? doc.stars[0]!.starId} ${flag}`,
+    `${flag} 须 --star <星名|starId前缀> 指名目标星（单星也不例外——036 起统一当多星处理）——现有：${list}；示例：crosschat serve --star ${doc.stars[0]!.name ?? doc.stars[0]!.starId} ${flag}`,
   );
 }
 
-async function runGenKey(genKeyArg: string, deps: ServeDeps, registryFile: string, starScope: { multi: boolean; star?: StarRecord }): Promise<number> {
+async function runGenKey(genKeyArg: string, deps: ServeDeps, registryFile: string, starScope: { star?: StarRecord }): Promise<number> {
   const n = Number.parseInt(genKeyArg, 10);
   if (!Number.isInteger(n) || n < 1) {
     throw new MultichatError('USAGE', `--gen-key 数量须为 1-10 的整数，收到：${genKeyArg}`);
@@ -419,7 +445,7 @@ async function runAddStar(name: string, deps: ServeDeps, registryFile: string): 
     });
     deps.stdout(`已加星 ${name}——本 broker 现托管 ${count + 1} 颗星（broker 未在跑——已落盘，serve 启动即托管）`);
   }
-  deps.stdout('发钥：crosschat serve --star <星名> --gen-key <n>（单星期免 --star）；查星：crosschat serve --list');
+  deps.stdout('发钥：crosschat serve --star <星名> --gen-key <n>（星域命令一律须 --star——单星亦然）；查星：crosschat serve --list');
   deps.stdout('注意：多星共用一个 broker 进程——故障域合并（一进程崩=全部星瘫、升级窗口合并），此为已接受的运维代价');
   return 0;
 }
@@ -464,19 +490,31 @@ async function runRemoveStar(selector: string, deps: ServeDeps, registryFile: st
 }
 
 /**
- * 033 --show-name <名>（仅 broker 机）：热路径经插座改 node.json showName +
- * 重挂内挂聚合器（重连握手自报新名，秒级）；冷路径直写 node.json（serve 启动
- * 生效）。node 机维持 017 口径（手编+重启守护）。空串=清除（017 语义）。
+ * 033/036 --show-name <名>（仅 broker 机）两形态：裸=全局默认名（node.json
+ * 顶层 showName，空串=清除）；--star <星>=条目级覆盖（空串=清覆盖回落全局）。
+ * 热路径经插座（重挂聚合器——按星形态只重挂该星、全局形态重挂全部，秒级）；
+ * 冷路径直写 node.json（serve 启动生效）。node 机维持手编口径（条目字段同生
+ * 效——connect 自报取条目级 ?? 顶层）。
  */
-async function runShowName(name: string, deps: ServeDeps): Promise<number> {
+async function runShowName(name: string, deps: ServeDeps, star?: StarRecord): Promise<number> {
   const clean = sanitizeName(name);
-  const outcome = await adminOp(deps, { op: 'set-showname', name });
+  const starId = star?.starId;
+  if (star !== undefined && starId === undefined) {
+    deps.stdout(`星 ${star.name ?? '?'} 缺 starId（手编异常形状）——先跑一次 crosschat serve 自动补 id 再按星命名`);
+    return 1;
+  }
+  const scope = starId === undefined ? '' : `星 ${star!.name ?? starId} `;
+  const outcome = await adminOp(deps, starId === undefined ? { op: 'set-showname', name } : { op: 'set-showname', name, starId });
   if (outcome.kind === 'hot') {
     if (!outcome.reply.ok) {
       (deps.stderr ?? deps.stdout)(`改显示名失败：${outcome.reply.error ?? '未知错误'}`);
       return 1;
     }
-    deps.stdout(clean === undefined ? '显示名已清除（经在跑 broker——内挂聚合器已重挂，秒级生效）' : `显示名已改为 ${clean}（经在跑 broker——内挂聚合器已重挂，秒级生效）`);
+    deps.stdout(
+      clean === undefined
+        ? `${scope}显示名已清除（经在跑 broker——聚合器已重挂，秒级生效）`
+        : `${scope}显示名已改为 ${clean}（经在跑 broker——聚合器已重挂，秒级生效）`,
+    );
     return 0;
   }
   if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
@@ -485,11 +523,19 @@ async function runShowName(name: string, deps: ServeDeps): Promise<number> {
     deps.stdout(`本机尚无 node.json（未入任何星）——先 crosschat serve --add-star <星名> 或入星后再设显示名`);
     return 1;
   }
-  setShowNameFor(nodeJson, name);
+  if (starId === undefined) setShowNameFor(nodeJson, name);
+  else {
+    try {
+      setStarShowNameFor(nodeJson, starId, name);
+    } catch (err) {
+      (deps.stderr ?? deps.stdout)(err instanceof Error ? err.message : String(err));
+      return 1;
+    }
+  }
   deps.stdout(
     clean === undefined
-      ? '显示名已清除（node.json showName——broker 未在跑，serve 启动即生效；节点机改后须重启守护）'
-      : `显示名已改为 ${clean}（node.json showName——broker 未在跑，serve 启动即生效；节点机改后须重启守护）`,
+      ? `${scope}显示名已清除（node.json——broker 未在跑，serve 启动即生效；节点机改后须重启守护）`
+      : `${scope}显示名已改为 ${clean}（node.json——broker 未在跑，serve 启动即生效；节点机改后须重启守护）`,
   );
   return 0;
 }
@@ -528,7 +574,7 @@ function runList(deps: ServeDeps, registryFile: string): number {
   return 0;
 }
 
-async function runRemove(label: string, deps: ServeDeps, registryFile: string, starScope: { multi: boolean; star?: StarRecord }): Promise<number> {
+async function runRemove(label: string, deps: ServeDeps, registryFile: string, starScope: { star?: StarRecord }): Promise<number> {
   requireStarScope(starScope, registryFile, '--remove <label>');
   const star = starScope.star!;
   // 033：--remove（节点删除）同走插座防直写暗道；冷路径直调库函数
@@ -553,7 +599,7 @@ async function runRemove(label: string, deps: ServeDeps, registryFile: string, s
  * 一星一权、发放即绑定该星；热经插座（审计行随发），冷直调库函数。回显一次
  * adminKey 并教"并进目标机 node.json 该星条目"（与星钥同条目）。
  */
-async function runGenAdminKey(label: string, deps: ServeDeps, registryFile: string, starScope: { multi: boolean; star?: StarRecord }): Promise<number> {
+async function runGenAdminKey(label: string, deps: ServeDeps, registryFile: string, starScope: { star?: StarRecord }): Promise<number> {
   requireStarScope(starScope, registryFile, '--gen-admin-key <label>');
   const star = loadBrokerFile(registryFile).stars.find((s) => s.starId === starScope.star!.starId) ?? starScope.star!;
   let result: GenAdminKeyResult;
@@ -581,7 +627,7 @@ async function runGenAdminKey(label: string, deps: ServeDeps, registryFile: stri
 }
 
 /** 034 --remove-admin-key <label|前缀>（仅 broker 主本机）：吊钥；被吊钥的下一次挑战应答即 BAD_AUTH。 */
-async function runRemoveAdminKey(selector: string, deps: ServeDeps, registryFile: string, starScope: { multi: boolean; star?: StarRecord }): Promise<number> {
+async function runRemoveAdminKey(selector: string, deps: ServeDeps, registryFile: string, starScope: { star?: StarRecord }): Promise<number> {
   requireStarScope(starScope, registryFile, '--remove-admin-key <label|前缀>');
   const star = starScope.star!;
   const outcome = await adminOp(deps, { op: 'remove-admin-key', starId: star.starId!, label: selector });
@@ -600,7 +646,7 @@ async function runRemoveAdminKey(selector: string, deps: ServeDeps, registryFile
 }
 
 /** 034 --list-nodes（本机冷读；远端形态走 --via）：回显永不带钥匙。 */
-function runListNodes(deps: ServeDeps, registryFile: string, starScope: { multi: boolean; star?: StarRecord }): number {
+function runListNodes(deps: ServeDeps, registryFile: string, starScope: { star?: StarRecord }): number {
   requireStarScope(starScope, registryFile, '--list-nodes');
   const star = starScope.star!;
   const nodes = loadBrokerFile(registryFile).stars.find((s) => s.starId === star.starId)?.nodes ?? star.nodes;
@@ -614,7 +660,7 @@ function runListNodes(deps: ServeDeps, registryFile: string, starScope: { multi:
 }
 
 /** 034 --list-members（本机冷读；远端形态走 --via）。 */
-function runListMembers(deps: ServeDeps, registryFile: string, starScope: { multi: boolean; star?: StarRecord }): number {
+function runListMembers(deps: ServeDeps, registryFile: string, starScope: { star?: StarRecord }): number {
   requireStarScope(starScope, registryFile, '--list-members');
   const star = starScope.star!;
   const roster = loadBrokerFile(registryFile).stars.find((s) => s.starId === star.starId)?.roster ?? star.roster;
@@ -733,8 +779,9 @@ function runDetach(deps: ServeDeps, extraArgs: string[], logName: string, portNu
  * B2.1/022/032：broker 首启自登记（逐星）——每星 self 节点条目（machineId=
  * 本机）落 broker.json + 本机 node.json 对应条目（host=127.0.0.1）。broker
  * 机与其他节点完全同构（mid8/名字可寻址、send --via tcp: 有凭证，零管理员
- * 动作）。017：machineName 沿 node.json 顶层 showName 单一事实源刷新（显式
- * 缺失/空=清除；逐星同名）。返回出声行（首写 node.json / foreign 指向提示）。
+ * 动作）。036：machineName 逐星刷新——条目级 showName 覆盖、缺省回落顶层全
+ * 局值（显式缺失/空=清除；修订 017"单一事实源"）。返回出声行（首写 node.json
+ * / foreign 指向提示）。
  */
 export function ensureSelfEntries(deps: ServeDeps, registryFile: string, port: number): string[] {
   const mid = deps.machineId();
@@ -750,15 +797,17 @@ export function ensureSelfEntries(deps: ServeDeps, registryFile: string, port: n
   } catch {
     existed = false;
   }
-  // 首跑（node.json 尚不存在）视 hostname 为默认 showName——017 的"缺失即清除"
-  // 只对已存在的配置生效，否则会把注册表 machineName 误清（首写还没得读）
-  const wantName = sanitizeName(showName ?? (existed ? undefined : deps.hostname()));
   const notes: string[] = [];
   const doc = loadBrokerFile(registryFile);
   let regChanged = false;
   let jsonChanged = !existed;
   for (const star of doc.stars) {
     let self = star.nodes.find((n) => n.machineId === mid);
+    // 036：机器名按星取——条目级 showName 覆盖，缺省回落顶层全局值（修订 017
+    // 单一事实源）。首跑（node.json 尚不存在）视 hostname 为默认——"缺失即
+    // 清除"只对已存在的配置生效，否则会把注册表 machineName 误清（首写还没得读）
+    const entryShow = self?.key !== undefined ? entries.find((e) => e.key === self!.key)?.showName : undefined;
+    const wantName = sanitizeName(entryShow ?? showName ?? (existed ? undefined : deps.hostname()));
     if (self === undefined) {
       self = {
         label: doc.stars.length === 1 ? 'self' : `self-${star.name ?? star.starId ?? 'star'}`,

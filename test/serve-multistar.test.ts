@@ -203,7 +203,7 @@ describe('032 多星握手与星域隔离', () => {
     expect((err as { code: string }).code).toBe('BAD_AUTH');
   }, 10_000);
 
-  it('单星：info 带星标识、connected 无星籍字段；同文件单星切片照常', async () => {
+  it('036 单星也恒倒置形：info 无星标识、caps 含 multi-star；connected 回填星籍；status 单星也按星分组', async () => {
     const dir = mkdtempSync(join(root, 'sole-'));
     const registryFile = registryFileOf(dir);
     seedBroker(registryFile, { stars: [{ starId: STAR_A, name: 'alpha', nodes: [entry({ key: key('a'), machineId: 'aaaa1111aaaa' })] }] });
@@ -224,13 +224,16 @@ describe('032 多星握手与星域隔离', () => {
     const c = new TestClient(`ws://127.0.0.1:${port}`);
     await c.opened();
     const info = (await c.waitFor((f) => f.op === 'info')) as InfoFrame;
-    expect(info.starId).toBe(STAR_A);
-    expect(info.name).toBe('alpha');
-    expect(info.caps).toEqual([CAP_SESSION_MEMBERS, CAP_CHALLENGE_AUTH]); // 单星不广告 multi-star；034 起恒带 challenge-auth
-    c.send({ op: 'connect', proto: 1, role: 'node', machineId: 'aaaa1111aaaa', auth: key('a'), caps: [CAP_MULTI_STAR] });
+    expect(info.starId).toBeUndefined(); // 036：单星 info 携带星标识旧形随葬
+    expect(info.name).toBeUndefined();
+    expect(info.caps).toEqual([CAP_SESSION_MEMBERS, CAP_MULTI_STAR, CAP_CHALLENGE_AUTH]); // caps 恒含 multi-star（统一当多星处理）
+    c.send({ op: 'connect', proto: 1, role: 'node', machineId: 'aaaa1111aaaa', auth: key('a'), name: 'a-host', caps: [CAP_MULTI_STAR] });
     const conn = (await c.waitFor((f) => f.op === 'connected')) as ConnectedFrame;
-    expect(conn.starId).toBeUndefined();
-    expect(conn.name).toBeUndefined();
+    expect(conn.starId).toBe(STAR_A); // 单星也由 connected 回填
+    expect(conn.name).toBe('alpha');
+    // 036：writeStatus 单格式——单星也按星分组（星名: 机器表）
+    const status = JSON.parse(readFileSync(join(dir, 'status-broker.json'), 'utf8')) as { onlineNodes: string[] };
+    expect(status.onlineNodes).toEqual(['alpha: a-host']);
   }, 10_000);
 
   it('星域隔离：A 星连接的 roster 只见 A 星机器；投 B 星机器名报 UNKNOWN_MACHINE', async () => {
@@ -535,7 +538,7 @@ describe('032 bootstrap 与 CLI', () => {
     await expect(runServe({ addStarArg: 'ALPHA' }, deps)).rejects.toThrow(/冲突/);
   });
 
-  it('多星下 --gen-key/--remove 裸用教学、--star 限定生效；单星隐式（免 --star）', async () => {
+  it('多星下 --gen-key/--remove 裸用教学、--star 限定生效；单星裸用同样拒绝（036 单星隐式已删）', async () => {
     const { deps, lines, registryFile } = cliDeps();
     seedBroker(registryFile, {
       stars: [
@@ -552,10 +555,11 @@ describe('032 bootstrap 与 CLI', () => {
     expect(lines.some((l) => l.includes('入星 beta'))).toBe(true);
     expect(await runServe({ remove: 'node-1', starArg: 'beta' }, deps)).toBe(0);
     expect(loadBrokerFile(registryFile).stars[1]!.nodes).toHaveLength(0);
-    // 单星隐式：裸 --gen-key 直接作用于唯一星
+    // 036：单星隐式命中已删——裸 --gen-key 拒绝教学，--star 指名后照常
     const solo = cliDeps();
     seedBroker(solo.registryFile, { stars: [{ starId: STAR_A, name: 'alpha', nodes: [], roster: [] }] });
-    expect(await runServe({ genKeyArg: '1' }, solo.deps)).toBe(0);
+    await expect(runServe({ genKeyArg: '1' }, solo.deps)).rejects.toThrow(/须 --star/);
+    expect(await runServe({ genKeyArg: '1', starArg: 'alpha' }, solo.deps)).toBe(0);
     expect(loadBrokerFile(solo.registryFile).stars[0]!.nodes).toHaveLength(1);
     // --list 分组展示
     lines.length = 0;
@@ -599,4 +603,76 @@ describe('032 bootstrap 与 CLI', () => {
     expect(existsSync(join(dir, 'tcp', 'status-broker.json'))).toBe(true);
     expect(existsSync(join(dir, 'tcp', 'status-node-alpha.json'))).toBe(false); // 内挂不写 status-node
   }, 15_000);
+
+  it('036 七子单星裸跑一律拒绝教学（单星隐式命中全灭）；--star 指名后照常', async () => {
+    const { deps, registryFile } = cliDeps();
+    seedBroker(registryFile, { stars: [{ starId: STAR_A, name: 'alpha', nodes: [entry({ label: 'n1', key: key('a') })], roster: [] }] });
+    const bare: Array<[string, Parameters<typeof runServe>[0]]> = [
+      ['--name', { nameArg: 'beta' }],
+      ['--gen-key', { genKeyArg: '1' }],
+      ['--gen-admin-key', { genAdminKeyArg: 'lab' }],
+      ['--remove-admin-key', { removeAdminKeyArg: 'lab' }],
+      ['--remove', { remove: 'n1' }],
+      ['--list-nodes', { listNodes: true }],
+      ['--list-members', { listMembers: true }],
+    ];
+    for (const [flag, args] of bare) {
+      await expect(runServe(args, deps), `${flag} 单星裸跑应拒绝`).rejects.toThrow(/须 --star/);
+    }
+    expect(await runServe({ listNodes: true, starArg: 'alpha' }, deps)).toBe(0);
+    expect(await runServe({ listMembers: true, starArg: 'alpha' }, deps)).toBe(0);
+  });
+
+  it('036 一次性命令与管理旗标组合拒绝（列冲突旗标，不再静默吞）', async () => {
+    const { deps, dir, registryFile } = cliDeps();
+    seedBroker(registryFile, { stars: [{ starId: STAR_A, name: 'alpha', nodes: [], roster: [] }] });
+    // 用户实证踩过的坑：--name cloud --add-star cloudstar 中 --name 被无声忽略
+    await expect(runServe({ addStarArg: 'cloudstar', nameArg: 'cloud' }, deps)).rejects.toThrow(/--add-star 是一次性命令，不与 --name/);
+    await expect(runServe({ showNameArg: 'x', genKeyArg: '1' }, deps)).rejects.toThrow(/--show-name 是一次性命令，不与 --gen-key/);
+    await expect(runServe({ removeStarArg: 'alpha', list: true }, deps)).rejects.toThrow(/--remove-star 是一次性命令，不与 --list/);
+    await expect(runServe({ addStarArg: 'b', showNameArg: 'x' }, deps)).rejects.toThrow(/一次性命令，一次只给一个/);
+    // --star 是 --show-name 按星形态的限定词——不算冲突（冷路径直写条目）
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    writeFileSync(join(dir, 'tcp', 'node.json'), `${JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 7260, name: 'alpha', starId: STAR_A, key: key('as') }] }, null, 2)}\n`);
+    expect(await runServe({ showNameArg: 'x', starArg: 'alpha' }, deps)).toBe(0);
+  });
+
+  it('036 0星→1星→2星同命令路径：--gen-key 全程同一形态（缺 --star 的教学随星数演进）', async () => {
+    const { deps, registryFile } = cliDeps();
+    writeBrokerFile(registryFile, { stars: [] });
+    await expect(runServe({ genKeyArg: '1' }, deps)).rejects.toThrow(/零星.*--add-star/);
+    await expect(runServe({ genKeyArg: '1', starArg: 'alpha' }, deps)).rejects.toThrow(/不匹配任何星/); // 零星时 --star 也无的放矢
+    expect(await runServe({ addStarArg: 'alpha' }, deps)).toBe(0);
+    await expect(runServe({ genKeyArg: '1' }, deps)).rejects.toThrow(/须 --star/); // 1 星：无隐式命中
+    expect(await runServe({ genKeyArg: '1', starArg: 'alpha' }, deps)).toBe(0);
+    expect(await runServe({ addStarArg: 'beta' }, deps)).toBe(0);
+    await expect(runServe({ genKeyArg: '1' }, deps)).rejects.toThrow(/alpha、beta/); // 2 星：教学列双星
+    expect(await runServe({ genKeyArg: '1', starArg: 'beta' }, deps)).toBe(0);
+    const doc = loadBrokerFile(registryFile);
+    expect(doc.stars[0]!.nodes).toHaveLength(2); // self + node-1
+    expect(doc.stars[1]!.nodes).toHaveLength(2); // self-beta + node-1
+  });
+
+  it('036 --star --show-name 冷路径：node.json 条目级覆盖（顶层不动）；\'\' 清除回落全局；裸形态写顶层', async () => {
+    const { deps, lines, dir, registryFile } = cliDeps();
+    seedBroker(registryFile, { stars: [{ starId: STAR_A, name: 'alpha', nodes: [entry({ label: 'self', key: key('as'), machineId: 'MID-TEST', machineName: 'cli-host' })], roster: [] }] });
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    const nodeJson = join(dir, 'tcp', 'node.json');
+    writeFileSync(nodeJson, `${JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 7260, name: 'alpha', starId: STAR_A, key: key('as') }], showName: 'global-name' }, null, 2)}\n`);
+    // 按星形态：条目级落盘，顶层全局不动
+    expect(await runServe({ showNameArg: 'per-star', starArg: 'alpha' }, deps)).toBe(0);
+    expect(lines.some((l) => l.includes('星 alpha 显示名已改为 per-star'))).toBe(true);
+    const doc = JSON.parse(readFileSync(nodeJson, 'utf8')) as { brokers: Array<{ showName?: string }>; showName?: string };
+    expect(doc.brokers[0]!.showName).toBe('per-star');
+    expect(doc.showName).toBe('global-name');
+    // '' 清除条目覆盖 → 回落全局
+    expect(await runServe({ showNameArg: '', starArg: 'alpha' }, deps)).toBe(0);
+    const cleared = JSON.parse(readFileSync(nodeJson, 'utf8')) as { brokers: Array<{ showName?: string }> };
+    expect(cleared.brokers[0]!.showName).toBeUndefined();
+    // 裸形态：顶层全局（现行为保留）
+    expect(await runServe({ showNameArg: 'new-global' }, deps)).toBe(0);
+    const globalDoc = JSON.parse(readFileSync(nodeJson, 'utf8')) as { brokers: Array<{ showName?: string }>; showName?: string };
+    expect(globalDoc.showName).toBe('new-global');
+    expect(globalDoc.brokers[0]!.showName).toBeUndefined(); // 条目级不被裸形态触碰
+  });
 });

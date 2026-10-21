@@ -116,7 +116,7 @@ describe('runServe --gen-key / --list / --remove', () => {
   it('prints warning first, N node.json blocks, security hint last; registers keys', async () => {
     const { deps, lines, dir } = makeDeps();
     seedStar(dir);
-    const rc = await runServe({ genKeyArg: '2' }, deps);
+    const rc = await runServe({ genKeyArg: '2', starArg: 'main' }, deps);
     expect(rc).toBe(0);
     expect(lines[0]).toContain('自动探测 broker 地址：192.168.1.7:7260');
     expect(lines[0]).toContain('人工核对改写 node.json 的 host 与 port');
@@ -145,7 +145,7 @@ describe('runServe --gen-key / --list / --remove', () => {
   it('lists registered nodes with label/machine/mid/added-at', async () => {
     const { deps, lines, dir } = makeDeps();
     seedStar(dir);
-    await runServe({ genKeyArg: '1' }, deps);
+    await runServe({ genKeyArg: '1', starArg: 'main' }, deps);
     lines.length = 0;
     const rc = await runServe({ list: true }, deps);
     expect(rc).toBe(0);
@@ -156,11 +156,11 @@ describe('runServe --gen-key / --list / --remove', () => {
   it('removes a label and reports misses with exit 1', async () => {
     const { deps, lines, dir } = makeDeps();
     seedStar(dir);
-    await runServe({ genKeyArg: '1' }, deps);
+    await runServe({ genKeyArg: '1', starArg: 'main' }, deps);
     lines.length = 0;
-    expect(await runServe({ remove: 'node-1' }, deps)).toBe(0);
+    expect(await runServe({ remove: 'node-1', starArg: 'main' }, deps)).toBe(0);
     expect(lines.at(-1)).toContain('已从星 main 移除 node-1'); // 032：消息带星域限定
-    expect(await runServe({ remove: 'node-1' }, deps)).toBe(1);
+    expect(await runServe({ remove: 'node-1', starArg: 'main' }, deps)).toBe(1);
     expect(lines.at(-1)).toContain('未找到 node-1');
   });
 });
@@ -356,11 +356,11 @@ describe('E0 serve --name（星名持久化与互斥）', () => {
   it('persists an explicit --name (with --port semantics: given once, remembered)', async () => {
     const { deps, dir } = nameDeps();
     writeBrokerFile(registryFileOf(dir), { stars: [{ starId: 'aaaabbbbcccc', name: 'orig', nodes: [], roster: [] }] }); // 033：先有星才有改名
-    await runServe({ nameArg: 'cloud', genKeyArg: '1' }, deps);
+    await runServe({ nameArg: 'cloud', genKeyArg: '1', starArg: 'aaaabbbbcccc' }, deps);
     // 032 单形状：星名在 stars[0].name
     expect(loadBrokerFile(registryFileOf(dir)).stars[0]!.name).toBe('cloud');
     // 再给即更新
-    await runServe({ nameArg: 'home', genKeyArg: '1' }, deps);
+    await runServe({ nameArg: 'home', genKeyArg: '1', starArg: 'aaaabbbbcccc' }, deps);
     expect(loadBrokerFile(registryFileOf(dir)).stars[0]!.name).toBe('home');
   });
 
@@ -368,7 +368,7 @@ describe('E0 serve --name（星名持久化与互斥）', () => {
     for (const bad of ['cl:oud', 'a'.repeat(33), '']) {
       const { deps, dir } = nameDeps();
       writeBrokerFile(registryFileOf(dir), { stars: [{ starId: 'aaaabbbbcccc', name: 'orig', nodes: [], roster: [] }] });
-      const err: unknown = await runServe({ nameArg: bad, genKeyArg: '1' }, deps).then(
+      const err: unknown = await runServe({ nameArg: bad, genKeyArg: '1', starArg: 'aaaabbbbcccc' }, deps).then(
         () => undefined,
         (e: unknown) => e,
       );
@@ -396,7 +396,7 @@ describe('E0 serve --name（星名持久化与互斥）', () => {
     const base = nameDeps();
     const deps = { ...base.deps, stdout: (l: string) => lines.push(l) };
     writeBrokerFile(registryFileOf(base.dir), { stars: [{ starId: 'aaaabbbbcccc', name: 'orig', nodes: [], roster: [] }] }); // 033：先有星（改名+发钥同命令）
-    await runServe({ nameArg: 'cloud', genKeyArg: '1' }, deps);
+    await runServe({ nameArg: 'cloud', genKeyArg: '1', starArg: 'aaaabbbbcccc' }, deps);
     const block = lines.find((l) => l.startsWith('{'))!;
     const parsed = JSON.parse(block) as { brokers: { name: string }[]; showName: string };
     expect(parsed.brokers[0]!.name).toBe('cloud');

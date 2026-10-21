@@ -63,6 +63,8 @@ async function startBroker(overrides: Partial<BrokerDeps> = {}): Promise<Harness
 function seed(file: string, nodes: Partial<NodeEntry>[]): void {
   seedBroker(file, {
     stars: [{
+      // 036：固定 starId——钥匙必绑星（无 id 星的连接按 BAD_AUTH 拒）
+      starId: 'aaaabbbbcccc',
       nodes: nodes.map((n, i) => ({
         label: n.label ?? `node-${i + 1}`,
         key: n.key ?? key(`${i + 1}`),
@@ -209,8 +211,9 @@ describe('node client lifecycle', () => {
 
   it('maps a deliver frame to runSend and returns a structured result through the broker', async () => {
     const harness = await startBroker();
-    // B1 零回归锚点要"注册表无 starId"——seedBroker 恒盖 id，此处直写无 id 星
-    writeBrokerFile(harness.registryFile, { stars: [{ nodes: [{ label: 'node-1', key: key('n'), machineId: 'NODE-MID', machineName: 'node-host', addedAt: 'x' }] }] });
+    // 036：钥匙必绑星——B1 期"注册表无 starId 也能收发"锚点随葬（starOf 兜底
+    // 已删，无 id 星连接按 BAD_AUTH 拒）；ref 随 connected 回填的条目 starId 签发
+    seed(harness.registryFile, [{ key: key('n'), machineId: 'NODE-MID', machineName: 'node-host' }]);
     const dir = mkdtempSync(join(root, 'st-'));
     const capture = fakeSendDeps(true);
     const client = makeNodeClient(harness, dir, { makeSendDeps: () => capture.deps });
@@ -222,8 +225,8 @@ describe('node client lifecycle', () => {
     expect(receipt).toMatchObject({ op: 'receipt', id: 's1', status: 'delivered' });
     if (receipt.op === 'receipt') {
       expect(receipt.replyRef).toMatch(/^mc[12]_/);
-      // B1 零回归锚点：无星连接（注册表无 starId）签发的 ref 不带 starId
-      expect(decodeRef(receipt.replyRef ?? '').starId).toBeUndefined();
+      // 036：可连的星必有 starId——connected 回填条目后签发的 ref 带星标识
+      expect(decodeRef(receipt.replyRef ?? '').starId).toBe('aaaabbbbcccc');
       const output = JSON.parse(receipt.output ?? '') as { status: string; to: string };
       expect(output).toMatchObject({ status: 'delivered', to: 'boss' });
     }
@@ -418,7 +421,7 @@ describe('B0 starId handshake', () => {
     });
   }
 
-  it('STAR_ID_MISMATCH aborts before connect and permanently stops (B2: no retry)', async () => {
+  it('STAR_ID_MISMATCH aborts on connected backfill and permanently stops (B2: no retry)', async () => {
     const harness = await startBroker();
     seedWithStar(harness);
     const dir = mkdtempSync(join(root, 'st-'));
@@ -430,9 +433,11 @@ describe('B0 starId handshake', () => {
     expect(logs.some((l) => l.includes('STAR_ID_MISMATCH') && l.includes('向管理员重新索取 node.json'))).toBe(true);
     expect(logs.some((l) => l.includes('星标识不符已停机') && l.includes('重启 crosschat serve --connect'))).toBe(true);
     expect(logs.some((l) => l.includes('reconnect-wait'))).toBe(false); // 停机不重试
-    // 钥匙本是匹配的——若 connect 已发，客户端会上线且 broker 记 node-up
+    // 036 恒倒置形：星标识在 connected 回填后才校验（info 不再预载——与 022 起
+    // 多星形态一致）——客户端仍未上线；钥匙匹配故 broker 记过 node-up（连接随
+    // 即被客户端关闭）
     expect(logs.some((l) => l.includes('online（'))).toBe(false);
-    expect(harness.logs.some((l) => l.includes('node-up'))).toBe(false);
+    expect(harness.logs.some((l) => l.includes('node-up'))).toBe(true);
   }, 10_000);
 
   it('goes online when both sides carry the same starId', async () => {
@@ -494,14 +499,15 @@ describe('B0 starId handshake', () => {
     await client.stop();
   }, 10_000);
 
-  it('passes when the local entry has starId but the broker info omits it', async () => {
+  it('036 无 id 星（手编形状）：连接按 BAD_AUTH 拒——broker 机跑一次 serve 补 id', async () => {
     const harness = await startBroker();
-    // 注册表无 starId（手编形状）→ info 不带；客户端缺侧证据不预检、照常上线
+    // 注册表星无 starId（手编形状）→ 钥匙无法绑籍（starOf 兜底已删）→ BAD_AUTH
     writeBrokerFile(harness.registryFile, { stars: [{ nodes: [{ label: 'node-1', key: key('n'), machineName: 'node-host', addedAt: 'x' }] }] });
     const dir = mkdtempSync(join(root, 'st-'));
     const client = starClient(harness, dir, { starId: STAR }, () => {});
     void client.run();
-    await client.waitForState('online');
+    await client.waitForState('reconnect-wait'); // 被拒退避重试（配置可修——serve 补 id 即愈，不硬停机）
+    expect(harness.logs.some((l) => l.includes('bad-auth') && l.includes('starId 缺失'))).toBe(true);
     await client.stop();
   }, 10_000);
 });

@@ -444,3 +444,68 @@ describe('033 插座冷热路径与 stop 收口', () => {
     expect(loadBrokerFile(registryFile).stars.map((s) => s.name)).toEqual(['alpha', 'after-stop']);
   }, 20_000);
 });
+
+describe('036 按星机器名（--star --show-name）热闭环', () => {
+  /** 轮询等待条件成立（聚合器重挂重连异步——machineName 回写有毫秒级迟滞）。 */
+  async function until(cond: () => boolean, ms = 5_000): Promise<void> {
+    const deadline = Date.now() + ms;
+    while (Date.now() < deadline) {
+      if (cond()) return;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    throw new Error('until timeout');
+  }
+
+  it('按星只重挂该星：条目覆盖落 node.json、注册表该星 machineName 更新、邻星回落全局不变；--list 显示随条目；\'\' 清除回落全局', async () => {
+    const { deps, lines, dir, registryFile } = cliDeps();
+    const selfKeyA = key('as');
+    const selfKeyB = key('bs');
+    mkdirSync(join(dir, 'tcp'), { recursive: true });
+    // port: 0 = 随机监听口（不碰 7260）；双星各带 broker 机 self 条目（machineName 同名起步）
+    writeFileSync(
+      registryFile,
+      `${JSON.stringify({ port: 0, stars: [
+        { starId: 'aaaabbbbcccc', name: 'alpha', nodes: [entry({ label: 'self', key: selfKeyA, machineId: MID, machineName: 'cli-host' })], roster: [] },
+        { starId: 'bbbbccccdddd', name: 'beta', nodes: [entry({ label: 'self-beta', key: selfKeyB, machineId: MID, machineName: 'cli-host' })], roster: [] },
+      ] }, null, 2)}\n`,
+      'utf8',
+    );
+    writeFileSync(
+      join(dir, 'tcp', 'node.json'),
+      `${JSON.stringify({ brokers: [
+        { host: '127.0.0.1', port: 0, name: 'alpha', starId: 'aaaabbbbcccc', key: selfKeyA },
+        { host: '127.0.0.1', port: 0, name: 'beta', starId: 'bbbbccccdddd', key: selfKeyB },
+      ], showName: 'cli-host' }, null, 2)}\n`,
+      'utf8',
+    );
+    const serve = startServe(deps);
+    await new Promise((r) => setTimeout(r, 1_500));
+
+    // 按星命名 alpha：插座热路径（只重挂 alpha 聚合器）
+    lines.length = 0;
+    expect(await runServe({ showNameArg: 'alpha-main', starArg: 'alpha' }, deps)).toBe(0);
+    expect(lines.some((l) => l.includes('星 alpha 显示名已改为 alpha-main') && l.includes('秒级生效'))).toBe(true);
+    // node.json：alpha 条目级覆盖落位；beta 条目无覆盖；顶层全局不动
+    const nodeJson = JSON.parse(readFileSync(join(dir, 'tcp', 'node.json'), 'utf8')) as { brokers: Array<{ starId?: string; showName?: string }>; showName?: string };
+    expect(nodeJson.brokers.find((e) => e.starId === 'aaaabbbbcccc')!.showName).toBe('alpha-main');
+    expect(nodeJson.brokers.find((e) => e.starId === 'bbbbccccdddd')!.showName).toBeUndefined();
+    expect(nodeJson.showName).toBe('cli-host');
+    // 注册表：alpha self machineName 随重挂重连自报更新；beta（未重挂）保持全局名
+    await until(() => loadBrokerFile(registryFile).stars[0]!.nodes.find((n) => n.label === 'self')!.machineName === 'alpha-main');
+    expect(loadBrokerFile(registryFile).stars[1]!.nodes.find((n) => n.label === 'self-beta')!.machineName).toBe('cli-host');
+    // --list 显示随条目（决策5）：各星机器名取该星 nodes[].machineName
+    lines.length = 0;
+    expect(await runServe({ list: true }, deps)).toBe(0);
+    expect(lines.some((l) => l.includes('alpha-main'))).toBe(true);
+    expect(lines.some((l) => l.includes('=== 星 beta ==='))).toBe(true);
+    expect(lines.some((l) => l.includes('cli-host'))).toBe(true);
+    // '' 清除条目覆盖 → 重挂回落全局
+    expect(await runServe({ showNameArg: '', starArg: 'alpha' }, deps)).toBe(0);
+    await until(() => loadBrokerFile(registryFile).stars[0]!.nodes.find((n) => n.label === 'self')!.machineName === 'cli-host');
+    const cleared = JSON.parse(readFileSync(join(dir, 'tcp', 'node.json'), 'utf8')) as { brokers: Array<{ starId?: string; showName?: string }> };
+    expect(cleared.brokers.find((e) => e.starId === 'aaaabbbbcccc')!.showName).toBeUndefined();
+
+    serve.stop();
+    expect(await serve.done).toBe(0);
+  }, 20_000);
+});

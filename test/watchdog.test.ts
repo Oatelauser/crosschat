@@ -30,7 +30,9 @@ describe('watchdogStatus', () => {
 
   it('treats a fresh heartbeat as running, a stale one as dead', () => {
     const dir = freshDir();
-    writeFileSync(join(dir, 'watchdog.lock'), `12345 1000000`, 'utf8');
+    // pid=0：跳过 kill 探活分支（写死宿主 pid 会随机器进程表碰巧存活而翻车——
+    // 真联邦在跑的机器上实测踩过 12345 存活导致 stale 判 running）
+    writeFileSync(join(dir, 'watchdog.lock'), `0 1000000`, 'utf8');
     expect(watchdogStatus(dir, 1000000 + 89_000).running).toBe(true);
     expect(watchdogStatus(dir, 1000000 + 91_000).running).toBe(false);
   });
