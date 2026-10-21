@@ -23,7 +23,7 @@ describe('pure broker and node queries', () => {
     const options = { tcpDir, now: () => now };
     expect(await queryBroker(options)).toMatchObject({ state: 'missing', value: null });
     const file = join(tcpDir, 'broker.json');
-    for (const raw of ['null', '{"stars":{}}', '{"stars":[{"nodes":[]}]}', '{broken']) {
+    for (const raw of ['null', '{"stars":{}}', '{"stars":[{"nodes":"invalid"}]}', '{broken']) {
       await writeFile(file, raw);
       expect(await queryBroker(options)).toMatchObject({ state: 'malformed', value: null });
       expect(await readdir(tcpDir)).toEqual(['broker.json']);

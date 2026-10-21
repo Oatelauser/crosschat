@@ -1,5 +1,5 @@
 import type { RosterMachine, SessionMemberDecl, StatusCodexRow, StatusPayload } from '../serve/protocol.js';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ClaudeRegistryScan } from '../claude/registry.js';
 import type { CodexThreadWithMeta } from '../codex/discovery.js';
@@ -12,6 +12,8 @@ import type { SendLogEntry } from '../send-log.js';
 import { readNodeConfig } from '../serve/node-config.js';
 import type { BrokerEntry } from '../serve/node-config.js';
 import type { NodeStatusFile } from '../serve/node.js';
+import { listNodeStatusFiles, nodeStatusSelector, TCP_STATUS_FRESH_MS } from '../application/status/status-files.js';
+export { listNodeStatusFiles, nodeStatusSelector, TCP_STATUS_FRESH_MS } from '../application/status/status-files.js';
 
 /**
  * Read-only `status`: claude registry sessions (name/kind/status/pid/dir) plus
@@ -68,9 +70,6 @@ export interface StatusDeps {
   watchdogRunning?(): boolean;
 }
 
-/** B2 freshness bound: a status file older than this reads as "没在跑". */
-export const TCP_STATUS_FRESH_MS = 90_000;
-
 interface BrokerStatusFile {
   state: string;
   port?: number;
@@ -88,24 +87,6 @@ function readStatusJson<T>(file: string): T | undefined {
   } catch {
     return undefined;
   }
-}
-
-/** B2：tcp 目录下的节点守护状态文件（默认在前，其余按选择器名排序）。F1 起 doctor 版本对账同用（readdir 可注入）。 */
-export function listNodeStatusFiles(tcpDir: string, readdir: (dir: string) => string[] = readdirSync): string[] {
-  let names: string[];
-  try {
-    names = readdir(tcpDir);
-  } catch {
-    return [];
-  }
-  return names
-    .filter((f) => /^status-node(-.*)?\.json$/.test(f))
-    .sort((a, b) => (a === 'status-node.json' ? -1 : b === 'status-node.json' ? 1 : a.localeCompare(b)));
-}
-
-/** 文件名 → 选择器（status-node.json=''；status-node-work.json='work'）。 */
-export function nodeStatusSelector(file: string): string {
-  return file === 'status-node.json' ? '' : file.replace(/^status-node-/, '').replace(/\.json$/, '');
 }
 
 /** status 展示层截短：超过 16 字符的展示串显示 <前14>…（node.json 与 CLI 参数不受影响）。 */

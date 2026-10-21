@@ -1,0 +1,73 @@
+import { readdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import { TCP_STATUS_FRESH_MS, nodeStatusSelector } from '../status/status-files.js';
+import { checkAbort, isRecord, optionalString, queryError, readParsed } from './reading.js';
+import type { QueryError, TextOptions } from './reading.js';
+
+export interface ServiceSnapshot {
+  file: string;
+  kind: 'broker' | 'node';
+  selector: string;
+  state: string;
+  lastUpdated: string;
+  freshness: 'fresh' | 'stale';
+  readiness: 'ready' | 'starting' | 'waiting' | 'stopped' | 'unknown';
+  version?: string;
+  brokerAlias?: string;
+  port?: number;
+  onlineNodes?: string[];
+  stars?: { starId: string; name?: string }[];
+}
+export interface CollectionResult<T> {
+  items: T[];
+  completeness: 'complete' | 'partial' | 'unavailable' | 'cancelled';
+  observedAt: number;
+  errors: QueryError[];
+}
+
+function parseSnapshot(raw: string, file: string, observedAt: number): ServiceSnapshot {
+  const value: unknown = JSON.parse(raw);
+  if (!isRecord(value) || typeof value.state !== 'string' || typeof value.lastUpdated !== 'string' || !Number.isFinite(Date.parse(value.lastUpdated))) {
+    throw new Error('Invalid snapshot');
+  }
+  const kind = file === 'status-broker.json' ? 'broker' : 'node';
+  if (kind === 'broker' ? !['running', 'stopped'].includes(value.state) : !['online', 'connecting', 'reconnect-wait', 'stopped'].includes(value.state)) {
+    throw new Error('Invalid service state');
+  }
+  const freshness = observedAt - Date.parse(value.lastUpdated) < TCP_STATUS_FRESH_MS ? 'fresh' : 'stale';
+  const readiness = value.state === 'stopped' ? 'stopped'
+    : freshness === 'stale' ? 'unknown'
+      : value.state === 'running' || value.state === 'online' ? 'ready'
+        : value.state === 'connecting' ? 'starting' : 'waiting';
+  return {
+    file, kind, selector: kind === 'node' ? nodeStatusSelector(file) : '',
+    state: value.state, lastUpdated: value.lastUpdated, freshness, readiness,
+    version: optionalString(value.version), brokerAlias: optionalString(value.brokerAlias),
+    port: typeof value.port === 'number' ? value.port : undefined,
+    onlineNodes: Array.isArray(value.onlineNodes) ? value.onlineNodes.filter((item): item is string => typeof item === 'string') : undefined,
+    stars: Array.isArray(value.stars) ? value.stars.flatMap((star) => isRecord(star) && typeof star.starId === 'string'
+      ? [{ starId: star.starId, name: optionalString(star.name) }] : []) : undefined,
+  };
+}
+
+/** Reads snapshots only; no PID scan, drain, connection or configuration repair. */
+export async function queryServiceStatuses(options: TextOptions & { tcpDir: string }): Promise<CollectionResult<ServiceSnapshot>> {
+  const observedAt = (options.now ?? Date.now)();
+  const items: ServiceSnapshot[] = [];
+  const errors: QueryError[] = [];
+  try {
+    checkAbort(options.signal);
+    const files = (await readdir(options.tcpDir)).filter((file) => /^status-(broker|node(-.*)?)\.json$/.test(file)).sort();
+    for (const file of files) {
+      checkAbort(options.signal);
+      const result = await readParsed(join(options.tcpDir, file), (raw) => parseSnapshot(raw, file, observedAt), { ...options, now: () => observedAt });
+      if (result.state === 'cancelled') return { items: [], completeness: 'cancelled', observedAt, errors: result.errors };
+      if (result.value !== null) items.push(result.value);
+      errors.push(...result.errors);
+    }
+  } catch (error) {
+    const issue = queryError(options.tcpDir, error);
+    return { items: [], completeness: issue.kind === 'cancelled' ? 'cancelled' : 'unavailable', observedAt, errors: [issue] };
+  }
+  return { items, completeness: errors.length === 0 ? 'complete' : items.length === 0 ? 'unavailable' : 'partial', observedAt, errors };
+}
