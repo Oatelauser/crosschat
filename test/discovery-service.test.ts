@@ -150,7 +150,7 @@ describe('complete read-only discovery service', () => {
 
   it('rejects a detail reader returning a different full native ID', async () => {
     const response = await new DiscoveryService([thirdReader()]).execute({ op: 'detail', providerId: 'third-provider', nativeId: 'another-full-id' });
-    expect(response).toMatchObject({ detail: { item: null, completeness: 'unavailable', errors: [expect.objectContaining({ source: { providerId: 'third-provider' }, kind: 'malformed' })] } });
+    expect(response).toMatchObject({ detail: { item: null, completeness: 'unavailable', errors: [expect.objectContaining({ source: { contextId: 'local', providerId: 'third-provider' }, kind: 'malformed' })] } });
   });
 });
 

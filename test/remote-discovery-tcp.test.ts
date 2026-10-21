@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -6,11 +6,16 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { createTcpDiscoveryClient } from '../src/application/remote-discovery/tcp.js';
 import { Broker } from '../src/serve/broker.js';
 import { writeBrokerFile } from '../src/serve/registry.js';
-import { PROTOCOL_VERSION } from '../src/serve/protocol.js';
+import type { DiscoveryEndpoint } from '../src/application/discovery/model.js';
+import { DiscoveryService } from '../src/application/discovery/service.js';
+import { createClaudeSessionReader } from '../src/application/sessions/claude-reader.js';
+import { NodeClient } from '../src/serve/node.js';
+import { FileInbox } from '../src/serve/file-channel.js';
 
 const cleanups: Array<() => void | Promise<void>> = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
 const key = 'a'.repeat(64);
+const ownMid = '9999999900000000';
 const response = (nextCursor: string | null = null) => ({
   op: 'list' as const,
   providers: [{ providerId: 'future-tool', capabilities: { discovery: true, delivery: false, launch: false, diagnostics: false } }],
@@ -19,17 +24,21 @@ const response = (nextCursor: string | null = null) => ({
   nextCursor, completeness: nextCursor === null ? 'complete' as const : 'partial' as const, errors: [], observedAt: 1 },
 });
 
-async function fixture(discover: (...args: any[]) => Promise<any>) {
+async function fixture(discover: DiscoveryEndpoint['execute']) {
   const dir = mkdtempSync(join(tmpdir(), 'crosschat-discover-tcp-'));
   cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
   const registryFile = join(dir, 'broker.json');
-  writeBrokerFile(registryFile, { version: 1, stars: [{ starId: 'star-a', name: 'alpha', nodes: [{ label: 'node', key, addedAt: '2026-01-01' }] }] });
-  const broker = new Broker({ registryFile, statusFile: join(dir, 'status.json'), machineId: 'broker-full-id', hostname: 'broker-host',
+  writeBrokerFile(registryFile, { stars: [{ starId: 'star-a', name: 'alpha', nodes: [
+    { label: 'node', key, addedAt: '2026-01-01' },
+    { label: 'broker-host', key: 'd'.repeat(64), machineId: ownMid, addedAt: '2026-01-01' },
+    { label: 'remote-node', key: 'b'.repeat(64), machineId: '1111111122222222', addedAt: '2026-01-01' },
+  ] }] });
+  const broker = new Broker({ registryFile, statusFile: join(dir, 'status.json'), machineId: () => ownMid, hostname: () => 'broker-host',
     version: 'test', now: Date.now, log: () => undefined, deliverLocal: async (f) => ({ op: 'result', id: f.id, status: 'delivered' }),
     discover, port: 0, heartbeatMs: 60_000 });
   const port = await broker.start();
   cleanups.push(() => broker.stop());
-  return { url: `ws://127.0.0.1:${port}`, broker };
+  return { url: `ws://127.0.0.1:${port}`, broker, dir };
 }
 
 function client(url: string, targetMachine = 'broker-host') {
@@ -37,6 +46,46 @@ function client(url: string, targetMachine = 'broker-host') {
 }
 
 describe('TCP complete read-only discovery', () => {
+  it('reads 100 anonymous sessions across real broker/node WebSockets and resolves full-ID details', async () => {
+    const { url, dir } = await fixture(async () => response());
+    const directory = join(dir, 'registry');
+    mkdirSync(directory);
+    for (let index = 0; index < 100; index++) writeFileSync(join(directory, `${index}.json`), JSON.stringify({
+      pid: 12345, sessionId: `anonymous-native-session-${index.toString().padStart(3, '0')}`, kind: 'interactive', status: 'idle',
+      messagingSocketPath: 'never-expose-this-socket', cwd: '/fixture/project',
+    }));
+    const service = new DiscoveryService([createClaudeSessionReader({ directory, isProcessAlive: () => true })]);
+    const entry = { host: '127.0.0.1', port: Number(new URL(url).port), key: 'b'.repeat(64), starId: 'star-a', name: 'alpha' };
+    const node = new NodeClient({ config: { entries: [entry] }, configFile: join(dir, 'node.json'),
+      machineId: () => '1111111122222222', fileInbox: new FileInbox({ inboxDir: join(dir, 'inbox'), partsDir: join(dir, 'parts') }),
+      makeSendDeps: () => { throw new Error('Discovery must not use messaging dependencies.'); },
+      memberProviders: () => [], codexHome: join(dir, 'codex'), attachLabel: dir.split(/[\\/]/).at(-1), memberCheckMs: 60000,
+      now: Date.now, log: () => undefined, discover: (request, options) => service.execute(request, options),
+    });
+    const running = node.run();
+    cleanups.push(async () => { await node.stop(); await running; });
+    await node.waitForState('online');
+    const remote = client(url, 'remote-node');
+    const ids: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const result = await remote.execute({ op: 'list', limit: 21, ...(cursor === undefined ? {} : { cursor }) }, { contextId: 'tcp:alpha:remote-node' });
+      if (result.op !== 'list') throw new Error('Expected list response.');
+      expect(result.page.errors).toEqual([]);
+      expect(JSON.stringify(result)).not.toContain('never-expose-this-socket');
+      for (const item of result.page.items) {
+        expect(item.name).toBeNull();
+        expect(item.ref.contextId).toBe('tcp:alpha:remote-node');
+        ids.push(item.ref.nativeId);
+      }
+      cursor = result.page.nextCursor ?? undefined;
+      expect(result.page.completeness).toBe(cursor === undefined ? 'complete' : 'partial');
+    } while (cursor !== undefined);
+    expect(new Set(ids).size).toBe(100);
+    const detail = await remote.execute({ op: 'detail', providerId: 'claude', nativeId: ids[99]! });
+    expect(detail).toMatchObject({ op: 'detail', detail: { completeness: 'complete', item: { ref: { nativeId: ids[99] }, attributes: { cwd: '/fixture/project' } } } });
+  });
+
   it('uses a dedicated endpoint, preserves full anonymous references and future Provider attributes', async () => {
     const discover = vi.fn(async () => response());
     const { url } = await fixture(discover);
@@ -93,9 +142,9 @@ describe('TCP complete read-only discovery', () => {
     expect(server.clients.size).toBe(0);
   });
 
-  it('keeps explicit revocation separate from ordinary unreachable source errors', async () => {
+  it('reports rejected authentication as an unavailable source', async () => {
     const { url } = await fixture(async () => response());
-    const wrong = createTcpDiscoveryClient({ broker: { host: '127.0.0.1', port: Number(new URL(url).port), key: 'b'.repeat(64) }, targetMachine: 'broker-host', timeoutMs: 100 });
+    const wrong = createTcpDiscoveryClient({ broker: { host: '127.0.0.1', port: Number(new URL(url).port), key: 'e'.repeat(64) }, targetMachine: 'broker-host', timeoutMs: 100 });
     expect(await wrong.execute({ op: 'list' })).toMatchObject({ page: { completeness: 'unavailable' } });
   });
 });

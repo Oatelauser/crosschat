@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import process from 'node:process';
 import { MultichatError } from '../errors.js';
+import { createLocalDiscoveryService } from './discover.js';
+import type { DiscoveryEndpoint } from '../application/discovery/model.js';
 import { appendWithRotate } from '../log-rotate.js';
 import { machineId } from '../platform/machine-id.js';
 import { isProcessAlive } from '../platform/process-inspector.js';
@@ -101,6 +103,8 @@ export interface ServeDeps {
   onSignal(sig: 'SIGINT' | 'SIGTERM', cb: () => void): void;
   /** B2：真 SendDeps 工厂（deliverLocal 接 runSend 用）；缺省回 NOT_READY（B1 行为，测试用）。 */
   makeSendDeps?(stdinText?: string): SendDeps;
+  /** Read-only metadata, shared by local broker reads and node discovery requests. */
+  discover?: DiscoveryEndpoint['execute'];
   /** B2：--stop 的进程扫描/杀进程/端口反查注入（测试用）；缺省真扫真杀。 */
   listServeProcesses?: () => ProcInfo[];
   killPid?: (pid: number) => boolean;
@@ -108,6 +112,7 @@ export interface ServeDeps {
 }
 
 export function realServeDeps(): ServeDeps {
+  const discovery = createLocalDiscoveryService();
   return {
     baseDir: join(homedir(), '.crosschat'),
     stdout: (line) => process.stdout.write(`${line}\n`),
@@ -120,6 +125,7 @@ export function realServeDeps(): ServeDeps {
     networkInterfaces: () => networkInterfaces(),
     now: () => Date.now(),
     onSignal: (sig, cb) => process.on(sig, cb),
+    discover: (request, options) => discovery.execute(request, options),
   };
 }
 
@@ -829,6 +835,7 @@ async function runForegroundBroker(deps: ServeDeps): Promise<number> {
     log: logLine,
     deliverLocal,
     scanStatus,
+    discover: deps.discover,
     fileInbox: new FileInbox({
       inboxDir: join(tcpDir(deps.baseDir), 'inbox'),
       partsDir: join(tcpDir(deps.baseDir), 'parts'),
@@ -913,6 +920,7 @@ function makeAggregatorHost(
     const client = new NodeClient({
       config: { entries: [entry], ...(config.showName === undefined ? {} : { showName: config.showName }) },
       configFile: nodeJson,
+      discover: deps.discover,
       machineId: deps.machineId,
       // 032：内挂聚合器不写 status-node（非独立进程，broker 行同 pid 全覆盖）
       version: deps.version,
@@ -971,6 +979,7 @@ async function runForegroundNode(aliasArg: string, deps: ServeDeps): Promise<num
   const client = new NodeClient({
     config: { ...config, entries: [entry] },
     configFile: join(tcpDir(deps.baseDir), 'node.json'),
+    discover: deps.discover,
     machineId: deps.machineId,
     statusFile: join(tcpDir(deps.baseDir), `status-node${suffix}.json`),
     version: deps.version, // F1：doctor 版本对账

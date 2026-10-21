@@ -47,6 +47,10 @@ import type { StatusPayload, StatusQueryFrame } from './protocol.js';
 import { syncNodeJsonEntry } from './node-config.js';
 import type { BrokerEntry, NodeConfig } from './node-config.js';
 import { readNodeRevocation, writeNodeRevocation } from './revocation.js';
+import { parseDiscoveryRequest, parseDiscoveryResponse } from '../application/discovery/boundary.js';
+import type { DiscoveryEndpoint, DiscoveryRequest } from '../application/discovery/model.js';
+import { untilAborted } from '../application/sessions/reading.js';
+import type { DiscoverQueryFrame } from './protocol.js';
 export { formatBrokerEntry, NOT_JOINED_MESSAGE, readNodeConfig, syncNodeJsonEntry } from './node-config.js';
 export type { BrokerEntry, NodeConfig } from './node-config.js';
 
@@ -181,6 +185,8 @@ export interface NodeClientDeps {
    * 本进程虚拟 socket（省回环 WS 与第二进程，见 serve 面自挂装配）。
    */
   makeSocket?: (url: string) => SocketLike;
+  /** Current read-only discovery; never substitutes the legacy status scan. */
+  discover?: DiscoveryEndpoint['execute'];
 }
 
 /** 018：会话成员表条目（内存态——零新持久文件；连接断/失活即消失）。 */
@@ -287,11 +293,18 @@ interface StateWaiter {
   timer: ReturnType<typeof setTimeout>;
 }
 
+interface NodeDiscoveryRead {
+  socket: SocketLike;
+  controller: AbortController;
+}
+
 export class NodeClient {
   private readonly d: NodeClientDeps & { backoffBaseMs: number; quietAfterMs: number; memberCheckMs: number };
   private stopped = false;
   private ws?: SocketLike;
   private authenticatingSocket?: SocketLike;
+  private discoverySocket?: SocketLike;
+  private readonly discoveryReads = new Map<string, NodeDiscoveryRead>();
   private state: NodeStatusFile['state'] = 'connecting';
   private stateSince = 0;
   private readonly frameWaiters: FrameWaiter[] = [];
@@ -348,6 +361,7 @@ export class NodeClient {
       return;
     }
     this.stopped = true;
+    this.cancelDiscoveryReads();
     this.clearFrameWaiters(new Error('stopped'));
     try {
       this.ws?.close(1000, 'node stopping');
@@ -422,8 +436,8 @@ export class NodeClient {
     const closedPromise = new Promise<void>((resolve) => {
       closed = resolve;
     });
-    ws.once('close', () => closed());
-    ws.once('error', () => closed());
+    ws.once('close', () => { this.cancelDiscoveryReads(ws); closed(); });
+    ws.once('error', () => { this.cancelDiscoveryReads(ws); closed(); });
     ws.on('message', (data) => {
       void this.onFrame(String(data), ws);
     });
@@ -472,6 +486,7 @@ export class NodeClient {
         this.syncBrokerInfo(verdict as ConnectedFrame);
       }
       everOnline = true;
+      this.discoverySocket = ws;
       this.setState('online');
       this.log(`online（broker ${cfg.name ?? url}）`);
       // 018：首度上线起 attach 管道（此后跨重连常驻）。
@@ -491,11 +506,13 @@ export class NodeClient {
       // B2：星标识不符是永久性配置错——上抛给主循环停机（其余错误照旧退避重试）
       if (err instanceof MultichatError && err.code === 'STAR_ID_MISMATCH') throw err;
     } finally {
+      this.cancelDiscoveryReads(ws);
       clearInterval(this.minuteTimer);
       this.clearFrameWaiters(new Error('connection closed'));
       try { ws.close(); } catch { /* 已断开 */ }
       if (this.ws === ws) this.ws = undefined;
       if (this.authenticatingSocket === ws) this.authenticatingSocket = undefined;
+      if (this.discoverySocket === ws) this.discoverySocket = undefined;
     }
     return everOnline;
   }
@@ -528,6 +545,7 @@ export class NodeClient {
       const entry = this.d.config.entries[0]!;
       if (frame.kind !== 'node' || this.authenticatingSocket !== socket
         || (entry.starId !== undefined && frame.starId !== entry.starId)) return;
+      this.cancelDiscoveryReads(socket);
       // Persist before closing attach IPC: launcher supervisors must observe the pause before reconnecting.
       let persisted = false;
       try {
@@ -547,6 +565,19 @@ export class NodeClient {
         this.clearFrameWaiters(new Error('credential revoked'));
         this.startAttachServer();
         try { socket.close(1008, 'credential revoked'); } catch { /* Already closed. */ }
+      }
+      return;
+    }
+    if (frame.op === 'discover-query') {
+      void this.onDiscoveryQuery(frame, socket);
+      return;
+    }
+    if (frame.op === 'discover-cancel') {
+      if (this.discoverySocket !== socket) return;
+      const read = this.discoveryReads.get(frame.id);
+      if (read?.socket === socket) {
+        this.discoveryReads.delete(frame.id);
+        read.controller.abort();
       }
       return;
     }
@@ -587,6 +618,47 @@ export class NodeClient {
     if (frame.op === 'error') {
       // 018：无等待者兜到的 broker 回执（如 extends 冲突）——上日志不静默
       this.log(`broker 回执错误 ${(frame as ErrorFrame).code}: ${(frame as ErrorFrame).message}`);
+    }
+  }
+
+  private cancelDiscoveryReads(socket?: SocketLike): void {
+    if (socket === undefined || this.discoverySocket === socket) this.discoverySocket = undefined;
+    for (const [id, read] of this.discoveryReads) {
+      if (socket !== undefined && read.socket !== socket) continue;
+      this.discoveryReads.delete(id);
+      read.controller.abort();
+    }
+  }
+
+  private async onDiscoveryQuery(frame: DiscoverQueryFrame, socket: SocketLike): Promise<void> {
+    const fail = (error: string) => {
+      if (this.ws === socket && socket.readyState === WebSocket.OPEN && !this.stopped) socket.send(encodeFrame({ op: 'discover-result', id: frame.id, ok: false, error }));
+    };
+    if (this.discoverySocket !== socket || this.state !== 'online') { fail('NOT_AUTHENTICATED'); return; }
+    let request: DiscoveryRequest;
+    try { request = parseDiscoveryRequest(frame.request); }
+    catch { fail('INVALID_REQUEST'); return; }
+    if (this.d.discover === undefined) { fail('NOT_READY'); return; }
+    if (this.discoveryReads.has(frame.id)) { fail('DUPLICATE_REQUEST'); return; }
+    if (this.discoveryReads.size >= 8) { fail('BUSY'); return; }
+    const read: NodeDiscoveryRead = { socket, controller: new AbortController() };
+    this.discoveryReads.set(frame.id, read);
+    const current = () => !this.stopped && this.ws === socket && this.discoverySocket === socket && this.state === 'online'
+      && socket.readyState === WebSocket.OPEN && !read.controller.signal.aborted && this.discoveryReads.get(frame.id) === read;
+    try {
+      const input = await untilAborted(this.d.discover(request, { contextId: 'local', signal: read.controller.signal }), read.controller.signal);
+      if (!current()) return;
+      const result = parseDiscoveryResponse(input);
+      if (result.op !== request.op) { fail('INVALID_RESULT'); return; }
+      if (result.op === 'detail' && request.op === 'detail' && result.detail.item !== null) {
+        const ref = result.detail.item.ref;
+        if (ref.providerId !== request.providerId || ref.nativeId !== request.nativeId || (ref.referenceKind ?? 'native') !== (request.referenceKind ?? 'native')) { fail('INVALID_RESULT'); return; }
+      }
+      socket.send(encodeFrame({ op: 'discover-result', id: frame.id, ok: true, result }));
+    } catch {
+      if (current()) fail('DISCOVERY_FAILED');
+    } finally {
+      if (this.discoveryReads.get(frame.id) === read) this.discoveryReads.delete(frame.id);
     }
   }
 

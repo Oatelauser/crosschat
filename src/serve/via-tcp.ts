@@ -55,14 +55,20 @@ export class SenderConn {
   /** 已被某次 waitFor 消费掉的帧——同 id 两阶段（begin/end 应答）互不误认。 */
   private readonly consumed = new WeakSet<Frame>();
   private closed = false;
+  private connectedStarId: string | undefined;
+
+  get starId(): string | undefined { return this.connectedStarId; }
 
   private constructor(readonly ws: WebSocket) {
     ws.on('close', () => {
+      this.closed = true;
       for (const w of this.waiters.splice(0)) {
         clearTimeout(w.timer);
         w.reject(new Error('连接断开'));
       }
     });
+    // An owned socket may error after handshake listeners have been removed.
+    ws.on('error', () => this.close());
     ws.on('message', (data) => {
       const frame = parseFrame(data.toString());
       if (frame === undefined) return;
@@ -85,15 +91,35 @@ export class SenderConn {
     }
   }
 
-  static async open(url: string, auth: string, machineId: string | undefined, timeoutMs: number): Promise<SenderConn> {
+  private waitOpened(timeoutMs: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const finish = (error?: Error): void => {
+        clearTimeout(timer);
+        this.ws.off('open', opened);
+        this.ws.off('error', failed);
+        this.ws.off('close', disconnected);
+        if (error === undefined) resolve(); else reject(error);
+      };
+      const opened = (): void => finish();
+      const failed = (error: Error): void => finish(error);
+      const disconnected = (): void => finish(new Error('连接断开'));
+      const timer = setTimeout(() => finish(new Error('connect timeout')), timeoutMs);
+      this.ws.once('open', opened);
+      this.ws.once('error', failed);
+      this.ws.once('close', disconnected);
+      if (this.ws.readyState === WebSocket.OPEN) finish();
+      else if (this.closed) disconnected();
+    });
+  }
+
+  static async open(url: string, auth: string, machineId: string | undefined, timeoutMs: number, signal?: AbortSignal): Promise<SenderConn> {
+    signal?.throwIfAborted();
     const ws = new WebSocket(url, { maxPayload: MAX_PAYLOAD_BYTES });
     const conn = new SenderConn(ws);
+    const abort = (): void => conn.close();
+    signal?.addEventListener('abort', abort, { once: true });
     try {
-      await new Promise<void>((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error('connect timeout')), timeoutMs);
-        ws.once('open', () => { clearTimeout(t); resolve(); });
-        ws.once('error', (err) => { clearTimeout(t); reject(err); });
-      });
+      await conn.waitOpened(timeoutMs);
       const info = await conn.waitFor((f) => f.op === 'info', timeoutMs);
       if (info.op !== 'info' || info.proto !== PROTOCOL_VERSION) {
         throw new Error(`broker 协议不匹配（期望 ${PROTOCOL_VERSION}）`);
@@ -104,13 +130,15 @@ export class SenderConn {
       if (verdict.op === 'error') {
         throw new MultichatError('TCP_TRANSPORT_FAILED', `broker 拒绝连接：${(verdict as ErrorFrame).code} ${(verdict as ErrorFrame).message}——核对 ~/.crosschat/tcp/node.json 与 broker 注册表`);
       }
+      if (verdict.op === 'connected') conn.connectedStarId = verdict.starId;
+      signal?.throwIfAborted();
       return conn;
     } catch (err) {
       conn.close();
       throw err instanceof MultichatError
         ? err
         : new MultichatError('TCP_TRANSPORT_FAILED', `无法连上 broker（${url}）：${err instanceof Error ? err.message : String(err)}——核对 node.json 的 broker 地址与 crosschat serve 是否在跑`);
-    }
+    } finally { signal?.removeEventListener('abort', abort); }
   }
 
   /**
@@ -118,15 +146,14 @@ export class SenderConn {
    * nonce → 回 HMAC 证明 → 等 connected。**无降级路径**：info 无 challenge-auth
    * cap（旧版 broker/被中间人剥除）即拒连，绝不回落裸钥发送 adminKey。
    */
-  static async openAdmin(url: string, adminKey: string, timeoutMs: number): Promise<SenderConn> {
+  static async openAdmin(url: string, adminKey: string, timeoutMs: number, signal?: AbortSignal): Promise<SenderConn> {
+    signal?.throwIfAborted();
     const ws = new WebSocket(url, { maxPayload: MAX_PAYLOAD_BYTES });
     const conn = new SenderConn(ws);
+    const abort = (): void => conn.close();
+    signal?.addEventListener('abort', abort, { once: true });
     try {
-      await new Promise<void>((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error('connect timeout')), timeoutMs);
-        ws.once('open', () => { clearTimeout(t); resolve(); });
-        ws.once('error', (err) => { clearTimeout(t); reject(err); });
-      });
+      await conn.waitOpened(timeoutMs);
       const info = await conn.waitFor((f) => f.op === 'info', timeoutMs);
       if (info.op !== 'info' || info.proto !== PROTOCOL_VERSION) {
         throw new Error(`broker 协议不匹配（期望 ${PROTOCOL_VERSION}）`);
@@ -148,13 +175,15 @@ export class SenderConn {
       if (verdict.op === 'error') {
         throw new MultichatError('BAD_AUTH', `星管理钥被拒：${(verdict as ErrorFrame).message}`);
       }
+      if (verdict.op === 'connected') conn.connectedStarId = verdict.starId;
+      signal?.throwIfAborted();
       return conn;
     } catch (err) {
       conn.close();
       throw err instanceof MultichatError
         ? err
         : new MultichatError('TCP_TRANSPORT_FAILED', `管理连接未建立（${url}）：${err instanceof Error ? err.message : String(err)}`);
-    }
+    } finally { signal?.removeEventListener('abort', abort); }
   }
 
   send(frame: Frame): Promise<void> {
@@ -190,6 +219,7 @@ export class SenderConn {
   }
 
   private drop(w: Waiter): void {
+    clearTimeout(w.timer);
     const i = this.waiters.indexOf(w);
     if (i >= 0) this.waiters.splice(i, 1);
   }
@@ -201,7 +231,8 @@ export class SenderConn {
       w.reject(new Error('连接断开'));
     }
     try {
-      this.ws.close();
+      if (this.ws.readyState === WebSocket.CONNECTING) this.ws.terminate();
+      else this.ws.close();
     } catch { /* 已断开 */ }
   }
 }

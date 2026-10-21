@@ -69,6 +69,9 @@ import {
 export type { RosterEntry } from './registry.js';
 import { FILE_MAX_BYTES, FileInbox } from './file-channel.js';
 import { normalizeMid } from '../platform/machine-id.js';
+import { parseDiscoveryRequest, parseDiscoveryResponse } from '../application/discovery/boundary.js';
+import type { DiscoveryEndpoint, DiscoveryRequest, DiscoveryResponse } from '../application/discovery/model.js';
+import type { DiscoverQueryFrame, DiscoverResultFrame } from './protocol.js';
 
 /**
  * 默认端口 7260。IANA service-names-port-numbers 核对（2026-10-10 实查）：
@@ -102,6 +105,8 @@ export interface BrokerDeps {
   fileInbox?: FileInbox;
   /** E1：本机会话扫描（status-query 目标是 ownMid 时应答）；缺省 NOT_READY。 */
   scanStatus?: () => Promise<StatusPayload>;
+  /** 当前只读发现入口；每次读取独立取消，不复用有补投副作用的旧 status。 */
+  discover?: DiscoveryEndpoint['execute'];
   /** 显式端口（0 = 随机，测试用）；缺省读注册表再缺省 DEFAULT_PORT。 */
   port?: number;
   heartbeatMs?: number;
@@ -197,6 +202,16 @@ interface PendingResult {
   resolve: (outcome: RouteOutcome) => void;
 }
 
+interface PendingDiscovery {
+  sender: Session;
+  requestId: string;
+  starId: string;
+  request: DiscoveryRequest;
+  target?: Session;
+  controller?: AbortController;
+  timer: ReturnType<typeof setTimeout>;
+}
+
 /** B2：一笔文件传输的路由（id → 发送方与目标连接；targetWs=undefined 即本机）。 */
 interface FileRoute {
   senderWs: SocketLike;
@@ -231,10 +246,11 @@ const ADMIN_OP_MATRIX: Record<string, readonly ('member' | 'admin')[]> = {
 };
 
 export class Broker {
-  private readonly d: Required<Omit<BrokerDeps, 'port' | 'fileInbox' | 'scanStatus' | 'spawnLocalAggregator' | 'stopLocalAggregator'>> & {
+  private readonly d: Required<Omit<BrokerDeps, 'port' | 'fileInbox' | 'scanStatus' | 'discover' | 'spawnLocalAggregator' | 'stopLocalAggregator'>> & {
     port?: number;
     fileInbox?: FileInbox;
     scanStatus?: () => Promise<StatusPayload>;
+    discover?: DiscoveryEndpoint['execute'];
     spawnLocalAggregator?: (starId: string) => void;
     stopLocalAggregator?: (starId: string) => Promise<void>;
   };
@@ -247,6 +263,8 @@ export class Broker {
   private stopped = false;
   private readonly sessions = new Set<Session>();
   private readonly pending = new Map<string, PendingResult>();
+  /** 发现路由使用 broker 私有 id，客户端 id 仅在其连接内有效。 */
+  private readonly discoveries = new Map<string, PendingDiscovery>();
   private readonly fileRoutes = new Map<string, FileRoute>();
   private hbTimer?: ReturnType<typeof setInterval>;
   /** 033：本机管理插座（台账唯一写入口的受理端；地址随机=知道地址即能力）。 */
@@ -588,6 +606,9 @@ export class Broker {
     const star = this.stars.find((s) => s.starId === starId);
     this.stars = this.stars.filter((s) => s.starId !== starId);
     this.multiStar = this.stars.length > 1;
+    for (const session of this.sessions) {
+      if (session.starId === starId) this.cancelDiscoveriesFor(session, { code: ERR.STAR_DELETED, message: '星已删除，会话发现已取消' });
+    }
     try {
       await this.d.stopLocalAggregator?.(starId);
     } catch {
@@ -650,6 +671,10 @@ export class Broker {
       entry.resolve({ kind: 'error', code: ERR.PEER_OFFLINE, message: 'broker 关闭' });
     }
     this.pending.clear();
+    for (const routeId of [...this.discoveries.keys()]) {
+      const entry = this.disposeDiscovery(routeId, true);
+      if (entry !== undefined) this.discoveryError(entry, ERR.PEER_OFFLINE, 'broker 关闭，会话发现已取消');
+    }
     for (const session of this.sessions) {
       try {
         session.ws.close(1000, 'broker shutting down');
@@ -793,6 +818,7 @@ export class Broker {
   /** 关闭事件与明确撤权共用资源收尾；撤权不等待 socket close。 */
   private releaseSession(session: Session, error: { code: string; message: string }): void {
     this.sessions.delete(session);
+    this.cancelDiscoveriesFor(session, error);
     if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
     for (const [id, entry] of this.pending) {
       if (entry.targetWs === session.ws || entry.senderWs === session.ws) {
@@ -852,6 +878,20 @@ export class Broker {
     }
     if (frame.op === 'admin-op') {
       this.onAdminOpFrame(session, frame);
+      return;
+    }
+    if (frame.op === 'discover-query') {
+      this.routeDiscovery(session, frame);
+      return;
+    }
+    if (frame.op === 'discover-result') {
+      this.onDiscoveryResult(session, frame);
+      return;
+    }
+    if (frame.op === 'discover-cancel') {
+      for (const [routeId, entry] of this.discoveries) {
+        if (entry.sender === session && entry.requestId === frame.id) this.disposeDiscovery(routeId, true);
+      }
       return;
     }
     if (frame.op === 'send') {
@@ -1443,6 +1483,118 @@ export class Broker {
     this.send(session.ws, { op: 'error', code: ERR.BAD_AUTH, message });
     this.log(`bad-auth 拒绝连接（${message}）`);
     session.ws.close(4001, 'bad auth');
+  }
+
+  private discoverySenderActive(entry: PendingDiscovery): boolean {
+    return !entry.sender.revoked && this.sessions.has(entry.sender) && entry.sender.ws.readyState === WebSocket.OPEN
+      && entry.sender.starId === entry.starId && this.starOf(entry.sender) !== undefined;
+  }
+
+  private discoveryError(entry: PendingDiscovery, code: string, message: string): void {
+    if (this.discoverySenderActive(entry)) this.send(entry.sender.ws, { op: 'error', id: entry.requestId, code, message });
+  }
+
+  /** 先删归属和 timer 再发取消，abort/虚拟 socket 的同步回调也不能完成旧请求。 */
+  private disposeDiscovery(routeId: string, cancel: boolean): PendingDiscovery | undefined {
+    const entry = this.discoveries.get(routeId);
+    if (entry === undefined) return;
+    this.discoveries.delete(routeId);
+    clearTimeout(entry.timer);
+    if (cancel) {
+      entry.controller?.abort();
+      if (entry.target !== undefined) this.send(entry.target.ws, { op: 'discover-cancel', id: routeId });
+    }
+    return entry;
+  }
+
+  private cancelDiscoveriesFor(session: Session, error: { code: string; message: string }): void {
+    for (const [routeId, entry] of this.discoveries) {
+      if (entry.sender !== session && entry.target !== session) continue;
+      this.disposeDiscovery(routeId, true);
+      if (entry.sender !== session) this.discoveryError(entry, error.code, error.message);
+    }
+  }
+
+  private routeDiscovery(sender: Session, frame: DiscoverQueryFrame): void {
+    const fail = (code: string, message: string): void => this.send(sender.ws, { op: 'error', id: frame.id, code, message });
+    let request: DiscoveryRequest;
+    try {
+      if (Buffer.byteLength(encodeFrame(frame)) > MAX_PAYLOAD_BYTES) throw new Error('oversized');
+      request = parseDiscoveryRequest(frame.request);
+    } catch {
+      return fail(ERR.BAD_PROTO, '会话发现请求形状错误或超过帧大小上限');
+    }
+    const owned = [...this.discoveries.values()].filter((entry) => entry.sender === sender);
+    if (owned.some((entry) => entry.requestId === frame.id)) return fail(ERR.BAD_PROTO, '会话发现请求 id 已在该连接使用，请等待或取消原请求');
+    if (owned.length >= 8) return fail(ERR.BAD_PROTO, '每个连接最多同时执行 8 个会话发现请求');
+    const star = this.starOf(sender);
+    if (star?.starId === undefined) return fail('INTERNAL', '连接属星未定');
+    const resolved = this.resolveTarget(frame.targetMachine, star);
+    if (resolved.kind === 'error') return fail(resolved.code, resolved.message);
+    if (resolved.kind === 'session') return fail(ERR.BAD_PROTO, '会话发现必须指定机器');
+    if (resolved.kind === 'local' && this.d.discover === undefined) return fail(ERR.NOT_READY, '本机只读会话发现入口未接线');
+    const target = resolved.kind === 'node' ? [...this.sessions].find((session) => session.ws === resolved.ws) : undefined;
+    if (resolved.kind === 'node' && (target === undefined || target.revoked || target.starId !== star.starId)) return fail(ERR.PEER_OFFLINE, '目标节点连接已失效');
+    const routeId = randomBytes(24).toString('hex');
+    const timer = setTimeout(() => {
+      const expired = this.disposeDiscovery(routeId, true);
+      if (expired !== undefined) this.discoveryError(expired, ERR.PEER_OFFLINE, '会话发现超时，读取已取消');
+    }, this.d.resultTimeoutMs);
+    const entry: PendingDiscovery = {
+      sender, requestId: frame.id, starId: star.starId, request, timer,
+      ...(target === undefined ? { controller: new AbortController() } : { target }),
+    };
+    this.discoveries.set(routeId, entry);
+    if (target !== undefined) {
+      this.send(target.ws, { op: 'discover-query', id: routeId, targetMachine: frame.targetMachine, request });
+    } else {
+      void this.executeLocalDiscovery(routeId, entry);
+    }
+  }
+
+  private async executeLocalDiscovery(routeId: string, entry: PendingDiscovery): Promise<void> {
+    let result: DiscoveryResponse;
+    try {
+      result = await this.d.discover!(entry.request, { contextId: 'local', signal: entry.controller?.signal });
+    } catch {
+      if (this.discoveries.get(routeId) !== entry) return;
+      this.disposeDiscovery(routeId, false);
+      if (this.discoverySenderActive(entry)) this.send(entry.sender.ws, { op: 'discover-result', id: entry.requestId, ok: false, error: '本机会话发现失败，请检查节点服务后重试' });
+      return;
+    }
+    if (this.discoveries.get(routeId) === entry) this.completeDiscovery(routeId, entry, result);
+  }
+
+  private onDiscoveryResult(target: Session, frame: DiscoverResultFrame): void {
+    const entry = this.discoveries.get(frame.id);
+    if (entry?.target !== target || target.revoked || !this.sessions.has(target) || target.starId !== entry.starId) return;
+    const star = this.starOf(target);
+    if (star === undefined || target.machineId === undefined || star.online.get(normalizeMid(target.machineId)) !== target) return;
+    if (!frame.ok) {
+      this.disposeDiscovery(frame.id, false);
+      if (this.discoverySenderActive(entry)) this.send(entry.sender.ws, { op: 'discover-result', id: entry.requestId, ok: false, error: '目标节点会话发现失败，请检查节点服务后重试' });
+      return;
+    }
+    this.completeDiscovery(frame.id, entry, frame.result);
+  }
+
+  private completeDiscovery(routeId: string, entry: PendingDiscovery, input: unknown): void {
+    this.disposeDiscovery(routeId, false);
+    if (!this.discoverySenderActive(entry)) return;
+    try {
+      const result = parseDiscoveryResponse(input);
+      if (result.op !== entry.request.op) throw new Error('wrong operation');
+      if (result.op === 'detail' && entry.request.op === 'detail' && result.detail.item !== null) {
+        const ref = result.detail.item.ref;
+        if (ref.providerId !== entry.request.providerId || ref.nativeId !== entry.request.nativeId
+          || (ref.referenceKind ?? 'native') !== (entry.request.referenceKind ?? 'native')) throw new Error('wrong session');
+      }
+      const frame: DiscoverResultFrame = { op: 'discover-result', id: entry.requestId, ok: true, result };
+      if (Buffer.byteLength(encodeFrame(frame)) > MAX_PAYLOAD_BYTES) throw new Error('oversized');
+      this.send(entry.sender.ws, frame);
+    } catch {
+      this.discoveryError(entry, ERR.BAD_PROTO, '目标返回的会话发现数据形状错误或超过帧大小上限');
+    }
   }
 
   private async routeSend(sender: Session, frame: SendFrame): Promise<void> {
