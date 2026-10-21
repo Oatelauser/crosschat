@@ -40,7 +40,8 @@ function parseBroker(raw: string): BrokerSummary {
       if (!isRecord(node) || typeof node.label !== 'string') throw new Error('Invalid credential');
       return {
         label: node.label,
-        credential: typeof node.adminKey === 'string' ? 'admin' : typeof node.key === 'string' ? 'member' : 'unknown',
+        credential: typeof node.adminKey === 'string' && node.adminKey !== '' ? 'admin'
+          : typeof node.key === 'string' && node.key !== '' ? 'member' : 'unknown',
         machineId: optionalString(node.machineId), machineName: optionalString(node.machineName), addedAt: optionalString(node.addedAt),
       };
     });

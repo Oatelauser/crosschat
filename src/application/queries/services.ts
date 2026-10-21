@@ -34,9 +34,6 @@ function parseSnapshot(raw: string, file: string, observedAt: number): ServiceSn
     throw new Error('Invalid snapshot');
   }
   const kind = file === 'status-broker.json' ? 'broker' : 'node';
-  if (kind === 'broker' ? !['running', 'stopped'].includes(value.state) : !['online', 'connecting', 'reconnect-wait', 'stopped'].includes(value.state)) {
-    throw new Error('Invalid service state');
-  }
   const freshness = observedAt - Date.parse(value.lastUpdated) < TCP_STATUS_FRESH_MS ? 'fresh' : 'stale';
   const readiness = value.state === 'stopped' ? 'stopped' : 'unknown';
   return {
@@ -67,7 +64,9 @@ export async function queryServiceStatuses(options: TextOptions & { tcpDir: stri
         const snapshot = result.value;
         if (snapshot.pid !== undefined) snapshot.processAlive = (options.isProcessAlive ?? isProcessAlive)(snapshot.pid);
         if (snapshot.freshness === 'fresh' && snapshot.processAlive === true && snapshot.state !== 'stopped') {
-          snapshot.readiness = snapshot.state === 'running' || snapshot.state === 'online' ? 'ready' : snapshot.state === 'connecting' ? 'starting' : 'waiting';
+          snapshot.readiness = snapshot.state === 'running' || snapshot.state === 'online' ? 'ready'
+            : snapshot.state === 'connecting' ? 'starting'
+              : snapshot.state === 'reconnect-wait' ? 'waiting' : 'unknown';
         }
         items.push(snapshot);
       }
