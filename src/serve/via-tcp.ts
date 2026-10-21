@@ -21,7 +21,8 @@ import type { SendArgs, SendDeps } from '../commands/send.js';
 import { CAP_CHALLENGE_AUTH, CAP_MULTI_STAR, encodeFrame, ERR, hasCap, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
 import type { AdminOpResultFrame, AuthChallengeFrame, ErrorFrame, FileResultFrame, Frame, InfoFrame, MemberRemoveResultFrame, ReceiptFrame, RosterMachine, StatusPayload, StatusResultFrame } from './protocol.js';
 import { defaultBaseDir, tcpDir } from './registry.js';
-import { formatBrokerEntry, readNodeConfig, type BrokerEntry } from './node.js';
+import { formatBrokerEntry, readNodeConfig } from './node-config.js';
+import type { BrokerEntry } from './node-config.js';
 import { FILE_CHUNK_BYTES, FILE_MAX_BYTES, readFileForSend } from './file-channel.js';
 
 /** 发起侧记账：与 runViaSend（ssh 腿）同款字段——tcp/ssh 两形态共用此 helper。 */

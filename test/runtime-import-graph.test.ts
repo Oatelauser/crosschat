@@ -31,7 +31,7 @@ describe('runtime import graph', () => {
     const root = fixture({
       'entry.ts': [
         '// import { ignored } from "./comment.js";',
-        'const text = "export * from \\\"./text.js\\\"";',
+        `const text = 'export * from "./text.js"';`,
         'import "./side-effect.js";',
         'import value, { type Shape } from "./value.js";',
         'export { value } from "./re-export.js";',

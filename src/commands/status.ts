@@ -9,7 +9,9 @@ import { MultichatError } from '../errors.js';
 import { decodeRef } from '../ref.js';
 import { normalizeMid } from '../platform/machine-id.js';
 import type { SendLogEntry } from '../send-log.js';
-import { readNodeConfig, type BrokerEntry, type NodeStatusFile } from '../serve/node.js';
+import { readNodeConfig } from '../serve/node-config.js';
+import type { BrokerEntry } from '../serve/node-config.js';
+import type { NodeStatusFile } from '../serve/node.js';
 
 /**
  * Read-only `status`: claude registry sessions (name/kind/status/pid/dir) plus

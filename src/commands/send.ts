@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer';
 import { hostname as osHostname } from 'node:os';
 import { join } from 'node:path';
 import { MultichatError } from '../errors.js';
-import { readNodeConfig } from '../serve/node.js';
+import { readNodeConfig } from '../serve/node-config.js';
 import type { ClaudeRegistryScan } from '../claude/registry.js';
 import type { CodexThreadSummary } from '../codex/client.js';
 import type { ClaudeDeliveryTarget } from '../claude/deliver.js';
