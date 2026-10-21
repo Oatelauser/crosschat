@@ -31,6 +31,8 @@ export const ERR = {
   ADMIN_REQUIRED: 'ADMIN_REQUIRED',
   /** 033 引入（时为字面量）、034 收编 ERR 表：星已删除（册随星葬、钥匙作废、无墓碑无复活）。 */
   STAR_DELETED: 'STAR_DELETED',
+  /** 明确撤权通知；普通 BAD_AUTH 不表示已建立的连接被撤权。 */
+  CREDENTIAL_REVOKED: 'CREDENTIAL_REVOKED',
 } as const;
 
 /**
@@ -126,6 +128,21 @@ export interface ErrorFrame {
   code: string;
   message: string;
   id?: string;
+}
+
+/** Revoke exactly one star/credential scope; never carries secret material. */
+export interface CredentialRevokedFrame {
+  op: 'credential-revoked';
+  starId: string;
+  kind: 'node' | 'admin';
+  reason: 'node-removed' | 'admin-key-revoked';
+  message: string;
+}
+
+function isCredentialRevoked(value: Record<string, unknown>): boolean {
+  return typeof value.starId === 'string' && value.starId !== '' && typeof value.message === 'string'
+    && ((value.kind === 'node' && value.reason === 'node-removed')
+      || (value.kind === 'admin' && value.reason === 'admin-key-revoked'));
 }
 export interface SendFrame {
   op: 'send';
@@ -407,6 +424,7 @@ export type Frame =
   | ConnectFrame
   | ConnectedFrame
   | ErrorFrame
+  | CredentialRevokedFrame
   | SendFrame
   | ReceiptFrame
   | DeliverFrame
@@ -434,6 +452,7 @@ const OPS = new Set([
   'connect',
   'connected',
   'error',
+  'credential-revoked',
   'send',
   'receipt',
   'deliver',
@@ -467,6 +486,7 @@ export function parseFrame(text: string): Frame | undefined {
   }
   if (typeof obj !== 'object' || obj === null) return undefined;
   const op = (obj as { op?: unknown }).op;
+  if (op === 'credential-revoked' && !isCredentialRevoked(obj as Record<string, unknown>)) return undefined;
   return typeof op === 'string' && OPS.has(op) ? (obj as Frame) : undefined;
 }
 
