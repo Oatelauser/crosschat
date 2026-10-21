@@ -88,4 +88,14 @@ describe('core provider-neutral session queries', () => {
     expect(late.completeness).toBe('cancelled');
     expect(late.items).toEqual([]);
   });
+
+  it('rejects a cursor reused in a different context without reading sources', async () => {
+    const source = reader('third-provider');
+    source.list = vi.fn().mockResolvedValue({ items: [], nextCursor: 'next', completeness: 'partial', errors: [], observedAt: 1 });
+    const catalog = new SessionCatalog([source]);
+    const first = await catalog.query({ contextId: 'local' });
+    const other = await catalog.query({ contextId: 'ssh:other', cursor: first.nextCursor ?? undefined });
+    expect(other).toMatchObject({ completeness: 'unavailable', errors: [expect.objectContaining({ kind: 'invalid-cursor' })] });
+    expect(source.list).toHaveBeenCalledOnce();
+  });
 });

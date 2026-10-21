@@ -41,7 +41,9 @@ describe('Codex internal paged read contract', () => {
       const second = session.listThreadPage({ cursor: page.nextCursor ?? undefined, limit: 100 });
       expect(fake.sent[1].params).toMatchObject({ cursor: 'opaque/cursor', limit: 100, archived: false });
       fake.respond({ data: Array.from({ length: 100 }, (_, index) => ({ id: `native/${index + 21}`, status: { type: 'idle' } })), nextCursor: null });
-      expect(await second).toMatchObject({ nextCursor: null, data: expect.any(Array) });
+      const last = await second;
+      expect(last.nextCursor).toBeNull();
+      expect(last.data).toHaveLength(100);
     } finally {
       await session.close();
     }
@@ -54,6 +56,19 @@ describe('Codex internal paged read contract', () => {
       const request = session.listThreadPage({});
       fake.respond({ data: [] });
       expect(await request).toMatchObject({ data: [], nextCursor: null, completeness: 'partial' });
+    } finally {
+      await session.close();
+    }
+  });
+
+  it('stops waiting for an in-flight page when it is cancelled', async () => {
+    const fake = channel();
+    const session = await openCodexSession({ channelFactory: async () => fake.channel, requestTimeoutMs: 100 })();
+    try {
+      const controller = new AbortController();
+      const request = session.listThreadPage({ signal: controller.signal });
+      controller.abort();
+      await expect(request).rejects.toMatchObject({ name: 'AbortError' });
     } finally {
       await session.close();
     }

@@ -81,6 +81,30 @@ describe('Claude pure reader', () => {
     expect(await source.list({ contextId: 'local', signal: controller.signal })).toMatchObject({ completeness: 'cancelled' });
     expect(readDirectory).not.toHaveBeenCalled();
   });
+
+  it('preserves earlier source errors when a detail search reaches the final page', async () => {
+    const names = Array.from({ length: 101 }, (_, index) => `${index}.json`);
+    const source = createClaudeSessionReader({
+      directory: 'fixture',
+      isProcessAlive: () => true,
+      io: {
+        readDirectory: async () => names,
+        readText: async (path) => path.endsWith('0.json') ? 'null' : JSON.stringify({ pid: 99, sessionId: path, kind: 'interactive', messagingSocketPath: 'fixture/socket' }),
+      },
+    });
+    const detail = await source.get({ contextId: 'local', nativeId: 'does-not-exist' });
+    expect(detail.item).toBeNull();
+    expect(detail.errors.length).toBeGreaterThan(0);
+    expect(detail.completeness).toBe('partial');
+  });
+
+  it('marks the pid reference used by old registry writers explicitly', async () => {
+    const source = createClaudeSessionReader({
+      directory: 'fixture', isProcessAlive: () => true,
+      io: { readDirectory: async () => ['old.json'], readText: async () => JSON.stringify({ pid: 7, kind: 'interactive', messagingSocketPath: 'fixture/socket' }) },
+    });
+    expect((await source.list({ contextId: 'local' })).items[0]).toMatchObject({ ref: { nativeId: '7' }, attributes: { nativeIdSource: 'pid' } });
+  });
 });
 
 describe('Codex pure reader', () => {
@@ -112,7 +136,7 @@ describe('Codex pure reader', () => {
   it('marks old session implementations partial and never fabricates a continuation', async () => {
     const session = codexSession();
     const page = await createCodexSessionReader({ sessionFactory: async () => session }).list({ contextId: 'local' });
-    expect(page).toMatchObject({ completeness: 'partial', nextCursor: null, items: [expect.objectContaining({ ref: { nativeId: 'old-id' } })], errors: [expect.objectContaining({ kind: 'legacy-limit' })] });
+    expect(page).toMatchObject({ completeness: 'partial', nextCursor: null, items: [expect.objectContaining({ ref: expect.objectContaining({ nativeId: 'old-id' }) })], errors: [expect.objectContaining({ kind: 'legacy-limit' })] });
   });
 
   it('closes an in-flight session on abort and drops late results', async () => {
@@ -124,5 +148,18 @@ describe('Codex pure reader', () => {
     controller.abort();
     expect(await request).toMatchObject({ completeness: 'cancelled', items: [] });
     expect(session.close).toHaveBeenCalledOnce();
+  });
+
+  it('releases a session that is established after its query was cancelled', async () => {
+    const controller = new AbortController();
+    const session = codexSession();
+    let resolveFactory: ((session: CodexSession) => void) | undefined;
+    const source = createCodexSessionReader({ sessionFactory: () => new Promise((resolve) => { resolveFactory = resolve; }) });
+    const request = source.list({ contextId: 'local', signal: controller.signal });
+    controller.abort();
+    expect(await request).toMatchObject({ completeness: 'cancelled', items: [] });
+    resolveFactory?.(session);
+    await vi.waitFor(() => expect(session.close).toHaveBeenCalledOnce());
+    expect(session.initialize).not.toHaveBeenCalled();
   });
 });
