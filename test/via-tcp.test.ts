@@ -6,7 +6,8 @@ import { Broker, type BrokerDeps } from '../src/serve/broker.js';
 import { registryFileOf, type NodeEntry } from '../src/serve/registry.js';
 import { seedBroker } from './helpers/broker-seed.js';
 import { FileInbox } from '../src/serve/file-channel.js';
-import { runViaTcpSend, selectBrokerEntry, tcpTimeoutMs } from '../src/serve/via-tcp.js';
+import { runViaTcpSend, sendViaTcp, selectBrokerEntry, tcpTimeoutMs } from '../src/serve/via-tcp.js';
+import { formatSendResult } from '../src/application/send/format.js';
 import type { BrokerEntry } from '../src/serve/node.js';
 import { decodeRef, encodeRef } from '../src/ref.js';
 import { recordConversation } from '../src/conversations.js';
@@ -39,6 +40,21 @@ const deliveredReceipt: ResultFrame = {
   replyRef: 'mc1_x',
   output: JSON.stringify({ status: 'delivered', to: 'boss', turn: 1, replyRef: 'mc1_x' }),
 };
+
+describe('typed TCP receipt evidence', () => {
+  it('reports queued evidence internally while preserving the delivered wire and CLI contract', async () => {
+    const harness = await startBroker(async (frame) => ({
+      ...deliveredReceipt, id: frame.id,
+      output: JSON.stringify({ status: 'delivered', to: 'boss', turn: 1, replyRef: 'mc1_x', queued: true }),
+    }));
+    const fixture = makeFixture(harness);
+    const result = await sendViaTcp({ to: 'boss', via: 'tcp:broker-host' }, 'test', fixture.deps);
+    expect(result.status).toBe('queued');
+    expect(result.receipt.status).toBe('delivered');
+    expect(JSON.parse(formatSendResult(result, true)).status).toBe('delivered');
+    expect(formatSendResult(result)).toContain('delivered to boss@');
+  });
+});
 
 interface Harness {
   port: number;
