@@ -12,6 +12,8 @@ import { runSend, type SendArgs, type SendDeps } from './commands/send.js';
 import { runStatus, type StatusDeps, type StatusFilters } from './commands/status.js';
 import { runInstallSkills, type InstallSkillsArgs } from './commands/install-skills.js';
 import { runDoctor } from './commands/doctor.js';
+import { runDiscover } from './commands/discover.js';
+import { DISCOVERY_MAX_BYTES } from './application/discovery/boundary.js';
 import { runClaudeWrapper } from './commands/claude-wrapper.js';
 import { runCodexWrapper } from './commands/codex-wrapper.js';
 import { defaultOutboxDir, drain } from './outbox.js';
@@ -89,6 +91,10 @@ commands:
                                 the detail view)
                               --all                 also list unnamed sessions
                                 (hidden by default in the main view)
+  discover                  read-only session metadata, always JSON;
+                            optional JSON list/detail request on stdin
+                            (includes unnamed sessions and full IDs;
+                            paged, no message delivery or repair)
   doctor                    environment health check (exits 1 on any ❌)
   serve [options]           run/manage the tcp broker (star topology,
                             default port ${DEFAULT_PORT}; a non-default
@@ -468,13 +474,34 @@ export function parseUninstallArgs(argv: readonly string[]): UninstallArgs {
   return args;
 }
 
-function readStdinText(): Promise<string | undefined> {  const stdin = process.stdin;
+function readStdinText(options: { maxBytes?: number; signal?: AbortSignal } = {}): Promise<string | undefined> {
+  const stdin = process.stdin;
   if (stdin.isTTY) return Promise.resolve(undefined);
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    stdin.on('data', (chunk: Buffer) => chunks.push(chunk));
-    stdin.on('end', () => resolve(Buffer.concat(chunks).toString('utf8') || undefined));
-    stdin.on('error', reject);
+    let bytes = 0;
+    const cleanup = (): void => {
+      stdin.off('data', data);
+      stdin.off('end', end);
+      stdin.off('error', error);
+      options.signal?.removeEventListener('abort', abort);
+    };
+    const error = (err: Error): void => { cleanup(); stdin.pause(); reject(err); };
+    const abort = (): void => error(new MultichatError('CANCELLED', 'stdin reading cancelled'));
+    const data = (chunk: Buffer): void => {
+      bytes += chunk.length;
+      if (options.maxBytes !== undefined && bytes > options.maxBytes) {
+        error(new MultichatError('USAGE', `discover input exceeds ${options.maxBytes} bytes`));
+        return;
+      }
+      chunks.push(chunk);
+    };
+    const end = (): void => { cleanup(); resolve(Buffer.concat(chunks).toString('utf8') || undefined); };
+    stdin.on('data', data);
+    stdin.on('end', end);
+    stdin.on('error', error);
+    options.signal?.addEventListener('abort', abort, { once: true });
+    if (options.signal?.aborted) abort();
   });
 }
 
@@ -649,6 +676,27 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     } catch (err) {
       return printFailure(err);
+    }
+  }
+  if (command === 'discover') {
+    if (rest.length === 1 && rest[0] === '--help') {
+      process.stdout.write(usage);
+      return 0;
+    }
+    const controller = new AbortController();
+    const abort = (): void => controller.abort();
+    process.on('SIGINT', abort);
+    process.on('SIGTERM', abort);
+    try {
+      if (rest.length > 0) throw new MultichatError('USAGE', 'discover takes one JSON request on stdin and no options');
+      const input = await readStdinText({ maxBytes: DISCOVERY_MAX_BYTES, signal: controller.signal });
+      const response = await runDiscover(input, undefined, { signal: controller.signal });
+      process.stdout.write(`${JSON.stringify(response)}\n`);
+      return 0;
+    } catch (err) { return printFailure(err); }
+    finally {
+      process.off('SIGINT', abort);
+      process.off('SIGTERM', abort);
     }
   }
   if (command === 'doctor') {

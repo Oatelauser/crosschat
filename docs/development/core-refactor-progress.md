@@ -28,6 +28,16 @@
 
 上一批核心改造已完成。当前实施D01/D02获批功能变更；TUI等待用户另行确认。应用接口总览见 `docs/development/core-api.md`。
 
+### 当前并行工作（续接先看这里）
+
+- root：CLI `discover`、TCP发现client/握手取消、serve真实依赖装配、统一验收及文档；唯一提交者。
+- discovery_service：只读Provider DTO/SSH已通过定向检查；继续NodeClient发现handler与取消；改node.ts前等待revocation_pause交还。
+- broker_revocation：按星与凭证撤权、同步重入竞态36项通过；继续broker新发现路由，独立pending、随机转发ID、同星/目标socket核验、8并发、取消/超时/断线/撤权收口。
+- revocation_pause：NodeClient/原生启动器明确撤权暂停（双hash marker，无裸钥）、持久化失败的暂停owner与IPC隔离；完成后交还node.ts。
+- 已保存本轮RED/GREEN检查点：`ac9d850/656a42d`通知协议，`6881551`发现/撤权RED，`5600ba2`TCP协议/取消RED，`ceff45c/8705981/db68674`broker撤权与同步重入，`2eae084/c6758ab`元数据脱敏与详情ID，`233592e`暂停持久化失败RED，`e038c22`构建CLI RED。
+- 协议新帧：`discover-query {id,targetMachine,request}`、`discover-result {id,ok,result?,error?}`、`discover-cancel {id}`；`credential-revoked {starId,kind,reason,message}`。新端点不调用status/补投，不做旧端fallback；无身份或目标字段混入发现request。
+- 尚未跑本轮全量check，不宣称D01/D02验收完成。所有测试仅临时目录/受控socket与子进程，真实live禁用。
+
 ## 功能变更访谈进展
 
 用户在grilling第一轮回复“都按推荐”，已选择：
