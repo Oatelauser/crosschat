@@ -4,12 +4,18 @@
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-10-21
+
 ### 036：单星特例全灭与星域统一指名（2026-10-21 用户拍板"统一当多星处理，不存在单星机特殊存在"）
 
 - **破坏性变更：星域八子一律必须 `--star` 指名（单星隐式命中删）**：`--name` / `--gen-key` / `--gen-admin-key` / `--remove-admin-key` / `--remove` / `--list-nodes` / `--list-members` 漏给 `--star` 即 USAGE 拒绝（点名现有星+给示例）——单星机同规；新增第八子 `--star <星> --show-name <名>`（按星机器名）。远程 `--via tcp:<星>` 形态天然豁免（星名已在选择器里）。**升级注意：单星机既有脚本/肌肉记忆里裸 `--gen-key`/`--name` 等命令现在须补 `--star <星名>`**；"单星期免 --star"教学行随葬（add-star 回执/手册/CLI help）
 - **`--show-name` 两形态（修订 017"机器名单一事实源"→"全局默认+按星覆盖"，留痕）**：裸=全局默认名（现行为保留，`''` 清除）；`--star <星>`=条目级覆盖（node.json 条目 `showName`，缺省回落顶层全局值，`''` 清除回落）。均走插座热改——按星形态只重挂该星聚合器、全局形态重挂全部；`--list` 各星机器名随该星 `nodes[].machineName`；node 机手编口径不变（条目字段同生效——connect 自报取条目级 ?? 顶层）
 - **一次性命令组合拒绝**：`--add-star` / `--remove-star` / `--show-name` 与其他管理旗标（--name/--gen-key/--remove/--gen-admin-key/--remove-admin-key/--list/--list-nodes/--list-members/--via/--stop）同给 → USAGE 拒绝并列出冲突旗标——不再静默吞（用户实证踩过：`--name cloud --add-star cloudstar` 中 `--name` 被无声忽略）；`--star` 不算冲突（它是 --show-name 按星形态的限定词）
 - **单星特例四层全灭（推翻 022"单星字节级不变"——留痕；035 刚教的"单星期免"行随葬系同版车正常迭代）**：status `onlineNodes` 永远按星分组（`星名: 机器、机器`——单星扁平旧形删）；握手恒倒置形——`info` 帧恒不带 starId/name（caps 恒含 `multi-star`）、`connected` 恒回填（1.9 客户端本就处理倒置形，混版本无痛）；`starOf()` 的 stars[0] 兜底删（032 后钥匙必绑星，未绑星连接按异常形态拒）。**回归护栏：022"条目缺 starId → connected 回填"用例保持绿**
+
+### 杂项
+
+- watchdog 测试环境性缺陷修复：写死 pid 12345 → 0（本机活联邦在跑时该 pid 恰好存活导致 check 误红——纯测试文件改动）
 
 ## [1.9.0] - 2026-10-20
 
