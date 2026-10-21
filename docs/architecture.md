@@ -109,7 +109,7 @@ crosschat send --to X --body "…"
 
 命令面（`send`/`status`）形状稳定承诺：内部架构演进（无状态 → 常驻 broker）不改变 agent 侧用法。
 
-## 10. 核心改造的兼容契约
+## 10. 核心改造的功能契约
 
 应用接口提供结构化结果，命令入口负责文本/JSON和退出码；配置、选择器不导入命令或 NodeClient。工具差异封装在 Provider，连接差异封装在 Context；内部会话键包含上下文、Provider、完整原生引用。新增纯读取路径与旧命令副作用分离，不反向从 CLI 文本恢复数据。
 
@@ -118,8 +118,8 @@ crosschat send --to X --body "…"
 - 旧 CLI 文本、JSON、退出码、Codex 默认 `thread/list` 20 条及未知状态报错不变。新读取接口保留原始状态、分页、部分结果与来源错误。
 - CLI `status` 入口仍可能补投；新查询不得补投、修复/备份配置或启动原生会话。`broker.json` 静态台账不保存 online，活性由快照/roster 判断。
 - broker 运行期是台账唯一写者；热管理连接收到失败或无回执，不能冷回退写盘。冷路径仍调用现有 registry 原子 mutation。
-- 删节点当前仅撤销凭证，已认证连接继续；立即断连是待批准功能。改星名的独立应用接口不借用会继续启动服务的旧 `runServe --name` 入口。
+- 用户已批准直接升级：SSH/TCP共用新完整只读发现接口（匿名、完整ID、分页、来源错误/详情），不做旧端回退。删节点/吊管理钥按星和实际认证凭证立即使已有连接失效；明确撤权暂停该星节点与启动器保障链，换钥后显式重连，普通断网仍自动恢复。改星名的独立应用接口不借用会继续启动服务的 `runServe --name` 入口。
 - 清理保留5日/512MiB/30日与 `--force` 原规则；预览只读，执行使用同一计划。默认额度16KiB，Claude端点64KiB、Codex端点1MiB硬顶等限制不变。
-- 原有 ref/origin/wire、成员册键、权限、投递/排队/寄存、回执及 watchdog 生命周期不迁移。OpenCode/zcode 只预留扩展接缝，尚无真实接入。
+- 原有 ref/origin、成员册键、权限、投递/排队/寄存、回执及 watchdog 生命周期不迁移；wire增加新发现与明确撤权帧。OpenCode/zcode只预留扩展接缝，尚无真实接入。模块与当前契约见[核心应用接口](development/core-api.md)。
 
 验证采用现有回归加接口边界测试：只读无副作用、匿名分页/未知状态、第三测试 Provider、取消释放、热写失败不回退和清理预览。基线 `lint/build` 通过，778测试通过/11跳过；基线未启用真实会话 live 测试。渐进 lint 和 AST 导入图门禁随模块迁移启用，约定见 [代码规范](development/code-standards.md)，实施证据见 [核心改造记录](development/core-refactor-progress.md)。

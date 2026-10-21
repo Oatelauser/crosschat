@@ -214,8 +214,12 @@ self-lab  yang              ec542c2c  2026-10-11T02:20:00.000Z
 
 ```
 > crosschat serve --star cloud --remove-admin-key ops-wsl
-已吊星管理钥 ops-wsl（星 cloud——经在跑 broker 已生效，持有者下次连接即 BAD_AUTH）
+已吊星管理钥 ops-wsl（星 cloud——经在跑 broker 已生效，现有管理连接已失效，后续连接即 BAD_AUTH）
 ```
+
+本轮直接升级：`--remove`/远程`remove-node`删除节点后，该星内使用该节点钥匙认证的已有node和sender连接立即失效；吊管理钥同样撤销对应已有管理连接。其他凭证、其他星和永久成员册不受影响。broker先禁止后续帧、清理在途路由，再发送明确的`credential-revoked`通知并关连接；已发出的投递不表示撤回。
+
+节点收到明确撤权后保存不含裸钥的暂停记录，并暂停该星守护重连和启动器自动拉起，保留node.json及原生会话。恢复时取得新钥、更新该星条目，再显式`crosschat serve --connect <星>`；普通网络中断仍自动重连，一般`BAD_AUTH`不当作明确撤权。暂停记录损坏会明确报错并停止自动拉起；写盘失败时保留暂停IPC owner，避免启动器立即重建连接。
 
 `--list` 里管理钥条目同表可见、永不回显钥匙本体：
 
@@ -332,7 +336,7 @@ ops-wsl   （星管理钥）       -         2026-10-20T03:11:00.000Z
 #### 1.3.2 启动聚合器连接星
 
 起这条常驻连接**兼任聚合器**，一份进程两份职责：
-- **收件**（断了=别人发你 `PEER_OFFLINE`；断线自动重连永不放弃）
+- **收件**（断了=别人发你 `PEER_OFFLINE`；普通断线自动重连；明确撤权后暂停该星重连与启动器自动拉起，换钥后显式重连）
 - **维护本机会话的星籍**（把入星声明报给星——[2.3](#23-extends-换轨接任旧会话退休新会话接班)/[2.4](#24-adopt-收编会话活着但不在星里)/[2.5](#25-重启自愈与降级告警) 的换轨、收编、自愈全靠它）
 
 ```
@@ -810,6 +814,10 @@ S → C   {"op":"connected"}          # 命中即连接绑星（发放即绑定�
 | `roster-result` | S→C | machines:[{name?, mid8, online, sessions?}]（proto:3：sessions=该机成员 [{sessionId, name?, extends?}]，老 broker 缺省） |
 | `status-query` | 双向 | id, targetMachine（请求方→broker→目标节点原帧转发） |
 | `status-result` | 双向 | id, ok, payload?({claude:[…], codex:[…]}｜{unavailable}), error? |
+| `discover-query` | 双向 | id, targetMachine, request（新只读发现：list/detail；不补投；broker转发时分配独立id） |
+| `discover-result` | 双向 | id, ok, result?（Provider/分页/完整ID/详情/来源错误）, error? |
+| `discover-cancel` | 双向 | id（仅请求owner可取消；broker向原目标传播取消） |
+| `credential-revoked` | S→C | starId, kind(node/admin), reason(node-removed/admin-key-revoked), message；先撤现有连接权限并清路由，再通知断开，不带钥匙 |
 | `sessions` | C→S（node） | sessions:[{sessionId, name?, extends?}]——全量重播：数组即该连接当前全部成员，空数组=清空；extends 旧名 string=同机 / {machine,name}=跨机 |
 | `members-query` | C→S（node） | （空）——聚合器重启后查回"我以前的成员" |
 | `members-result` | S→C | members:[{sessionId, name?, extends?}]——broker 断连后保留的最后已知名单（纯内存，broker 重启即空） |

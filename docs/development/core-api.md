@@ -8,6 +8,7 @@
 |---|---|---|
 | 连接配置与选择 | `src/serve/node-config.ts`、`connect-selector.ts` | 纯解析、旧新形状归一、选择器；读取不修复，写回仍用原子同步函数 |
 | 会话列表和详情 | `src/application/sessions/index.ts` | `SessionCatalog` 聚合 Provider，提供匿名名、raw 状态、完整引用、分页、采样和来源错误 |
+| 远端完整只读发现 | `src/application/discovery/index.ts`、`remote-discovery/tcp.ts` | 本机/SSH/TCP共用Provider DTO，匿名、完整ID、分页、来源错误与详情；请求取消逐跳释放读取，不调用status或补投 |
 | 星、服务、文件和日志读取 | `src/application/queries/index.ts` | 脱敏台账、权威 roster 组合、快照加 PID 证据、文件元数据、有界日志；不补投、不备份或修复 |
 | 诊断 | `src/application/diagnostics/index.ts` | 检查/判定/formatter 分离；异步查询在独立进程执行，取消回收整棵探测进程树 |
 | 本机与远程管理 | `src/application/management/local.ts`、`remote.ts` | 稳定 starId；热/冷/拒绝/失败有结构结果，热失败不冷写；远程保留现有挑战应答与权限 |
@@ -30,10 +31,20 @@
 
 日志每次重新打开文件，以文件标识及大小识别替换/截断；载荷窗口默认64KiB、最高2MiB，额外窥读一个边界字节避免误丢完整行。文件页仅列元数据，普通结果不含 key、adminKey 或管理插座地址。
 
-## 扩展与兼容边界
+## 远端发现与撤权
+
+`crosschat discover` 接收stdin上的单个JSON请求并输出单个JSON结果；空输入默认`{"op":"list"}`。列表支持`limit`（每Provider默认100、1—1000）、`cursor`和`filter:{providerIds?,text?}`；详情请求为`{"op":"detail","providerId":"claude","nativeId":"完整ID","referenceKind":"native"}`。结果保留Provider能力、原生状态、元数据、采样时间与每来源错误，不读取聊天正文，不回传投递插座或凭证。请求/响应最多2MiB，元数据有深度/数组/节点数量边界。
+
+`createSshDiscoveryClient({host}).execute(request,{contextId,signal})` 用固定远端命令`crosschat discover`，请求通过stdin JSON传递，超时/取消回收自己的SSH子进程；只读登录用户可见的来源。`createTcpDiscoveryClient({broker,targetMachine,admin?}).execute(...)` 使用新`discover-query/result/cancel`，可选管理钥挑战认证；按当前连接的星与目标节点授权，含该节点未入册的可发现会话。两端须使用本轮新版，不做旧端协商、status回退或自动升级。
+
+远端游标绑定连接上下文、端点/星/机器和筛选条件，不能换目标继续使用；详情核对完整Provider/原生ID/引用种类。broker给转发请求分配独立ID，核验回程实际socket与当前星内owner，每连接最多8个并发发现。取消、超时、断线、撤权和停机取消源读取并丢弃迟到响应。发现不读取原生归档；“完整”只指当前来源非归档集合。
+
+删除节点和吊管理钥现按星及实际认证凭证立即撤权，包含无机器ID的瞬态sender；同机器不同凭证、其他星不受影响。明确`credential-revoked`先使连接无权处理后续帧，再清路由并断开；永久成员册保留。节点收到明确撤权后暂停该星重连和启动器自动拉起，保存无裸钥的凭证指纹暂停记录；换钥后显式重连。普通断网和一般`BAD_AUTH`不当作明确撤权。暂停记录写失败时保留暂停IPC owner，读取损坏记录报错并停止自动拉起。
+
+## 扩展边界
 
 第三工具的读取接入实现 SessionReader，注册进 SessionCatalog；ContextReader 提供连接描述。工具能力声明与实现分开，第三测试 Provider 已验证通用筛选/详情/成员委派无需添加工具分支。
 
-真实 OpenCode/zcode 尚未接入。原有身份/ref/origin/wire/成员持久键仍保留两家兼容格式；新增真实投递或迁移这些格式须另给兼容方案并获批。完整 SSH/TCP 远端发现和删节点立即断连仍在活动清单等待决定，不能以本次接口提取声称已经实现。
+真实 OpenCode/zcode 尚未接入。第三工具可复用上述发现传输，核心不按工具分支分发；投递、启动和诊断能力分别登记。原有身份/ref/origin/成员持久键尚未迁移，未来功能变化仍须用户确认；本次直接升级，不增加旧版适配。
 
 `npm run check` 包含现有 lint、AST 导入图、构建与测试。应用模块禁止运行时依赖 commands/TUI，配置模块禁止依赖命令/NodeClient；新增应用模块自动继承门禁。迁移模块启用类型导入、未处理 Promise 和异步回调检查，合法与违规 fixture 均验证规则生效。实施与验收证据见 [核心改造记录](core-refactor-progress.md)。

@@ -214,6 +214,7 @@ crosschat send --via tcp:<星>:<机器>:<会话> --body "…"   # tcp 三段直�
 crosschat send --via tcp:<机器名/mid8> --to <名> --file <路径>  # tcp 文件通道（机器级；正文自动生成"已送达"）
 echo … | crosschat send --to <名字>                 # 正文走 stdin
 crosschat status [--json] [--conversations] [--stars] [--claude|--codex] [--name <子串>] [--all]   # 裸跑三段式摘要；旗标在场=明细视图（--via tcp|ssh 配 --conversations 按传输滤）
+crosschat discover                                  # 新只读JSON发现；stdin可传list/detail请求，包含匿名/完整ID/分页，不补投
 crosschat doctor                                    # 一键环境体检（有 ❌ 时退出码 1）
 crosschat serve [--add-star/--remove-star/--gen-key/--list/--connect/--detach/--stop]  # tcp 星：起服务+造星(--add-star)/机器连星·聚合器(--connect)/钥匙管理（见跨机通信手册）
 crosschat clean [--force]                           # 清 tcp 收件/断点残留（默认懒删除规则；--force 全清）
