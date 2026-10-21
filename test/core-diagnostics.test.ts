@@ -187,4 +187,18 @@ describe('isolated cancellable diagnostics', () => {
     await expect(queryDoctorDiagnostics({ createWorker: () => worker })).rejects.toThrow('without a diagnostic result');
     expect(worker.threadId).toBe(-1);
   });
+
+  it('does not return a completed result when cancellation arrives during owner disposal', async () => {
+    const { collectDoctorDiagnostics, queryDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
+    const report = collectDoctorDiagnostics(fixture());
+    const worker = new Worker('require("node:worker_threads").parentPort.postMessage(require("node:worker_threads").workerData);', { eval: true, workerData: report });
+    const controller = new AbortController();
+    const terminate = worker.terminate.bind(worker);
+    vi.spyOn(worker, 'terminate').mockImplementation(async () => {
+      controller.abort();
+      return terminate();
+    });
+    await expect(queryDoctorDiagnostics({ signal: controller.signal, createWorker: () => worker })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(worker.threadId).toBe(-1);
+  });
 });
