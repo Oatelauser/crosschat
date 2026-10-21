@@ -9,10 +9,12 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
 import { connectAttachPipe, ensureAggregator, queryAttachStatus, StarJoiner, type StarJoinDeps } from '../src/commands/session-star.js';
+import { runStatus } from '../src/commands/status.js';
 import type { SendDeps } from '../src/application/send/types.js';
 import { FileInbox } from '../src/serve/file-channel.js';
 import { attachPipePath, NodeClient, type NodeClientDeps } from '../src/serve/node.js';
 import type { BrokerEntry } from '../src/serve/node-config.js';
+import { writeNodeRevocation } from '../src/serve/revocation.js';
 
 const FIXTURE_ID = randomUUID().slice(0, 8);
 const NAME_A = 'revoked-' + FIXTURE_ID + '-alpha';
@@ -125,6 +127,27 @@ function revoke(socket: WebSocket, starId = STAR_A): void {
 }
 
 describe('explicit credential revocation pauses this star', () => {
+  it.each([0, 120_000])('does not report a new key as revoked from a %ims old snapshot', async (ageMs) => {
+    const home = temporaryHome();
+    const entry = { host: 'fixture', port: 9, name: NAME_A, starId: STAR_A, key: NODE_KEY };
+    const configFile = join(home, 'tcp', 'node.json');
+    writeNodeRevocation(configFile, entry, STAR_A, Date.now() - ageMs);
+    writeFileSync(configFile, JSON.stringify({ brokers: [{ ...entry, key: 'b'.repeat(64) }] }));
+    writeFileSync(join(home, 'tcp', 'status-node.json'), JSON.stringify({
+      state: 'revoked', brokerAlias: NAME_A, since: new Date(Date.now() - ageMs).toISOString(),
+      lastUpdated: new Date(Date.now() - ageMs).toISOString(),
+    }));
+    const deps = { tcpDir: join(home, 'tcp'), listClaudeSessions: () => ({ sessions: [], malformed: 0 }), listCodexThreads: async () => [] };
+
+    const summary = await runStatus(deps, false);
+    const detail = await runStatus(deps, false, false, { section: 'claude' });
+
+    expect(summary).not.toContain('凭证已撤销');
+    expect(detail).not.toContain('凭证已撤销');
+    expect(summary).toContain('暂停状态待核实');
+    expect(detail).toContain('暂停状态待核实');
+  });
+
   it('settles an attach request when immediate revocation closes IPC before the reply', async () => {
     const home = temporaryHome();
     const path = attachPipePath({ host: 'fixture', port: 9, key: NODE_KEY, name: `${NAME_A}-close` }, join(home, 'tcp'));
