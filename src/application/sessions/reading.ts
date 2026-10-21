@@ -45,7 +45,8 @@ export async function findSession(reader: SessionReader, request: SessionGetRequ
     errors.push(...page.errors);
     const item = page.items.find((candidate) => candidate.ref.nativeId === request.nativeId);
     if (item !== undefined || page.nextCursor === null || page.completeness === 'cancelled' || page.completeness === 'unavailable') {
-      return { item: item ?? null, completeness: page.completeness, observedAt: page.observedAt, errors };
+      const completeness = page.completeness === 'complete' && errors.length > 0 ? 'partial' : page.completeness;
+      return { item: item ?? null, completeness, observedAt: page.observedAt, errors };
     }
     if (seen.has(page.nextCursor)) {
       errors.push({ source: { contextId: request.contextId, providerId: reader.providerId }, kind: 'malformed', message: 'Session source repeated its page cursor.', nextStep: 'Refresh the source before reading more pages.' });

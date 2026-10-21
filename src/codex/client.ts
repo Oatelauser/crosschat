@@ -87,6 +87,22 @@ function protocolError(message: string): MultichatError {
   return new MultichatError('CODEX_PROTOCOL_ERROR', message);
 }
 
+/** The session owner still closes the transport after a cancelled read. */
+async function awaitPage<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (signal === undefined) return work;
+  let onAbort: (() => void) | undefined;
+  const cancelled = new Promise<never>((_, reject) => {
+    onAbort = () => reject(new DOMException('Codex page read cancelled.', 'AbortError'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
+  try {
+    return await Promise.race([work, cancelled]);
+  } finally {
+    if (onAbort !== undefined) signal.removeEventListener('abort', onAbort);
+  }
+}
+
 export function normalizeThreadStatus(value: unknown): CodexThreadStatus {
   if (!isRecord(value) || typeof value.type !== 'string') {
     throw protocolError('codex thread.status missing or malformed.');
@@ -158,14 +174,14 @@ export function openCodexSession(options: CodexSessionOptions = {}): () => Promi
         if (page.signal?.aborted) throw new DOMException('Codex page read cancelled.', 'AbortError');
         const limit = page.limit ?? 100;
         if (!Number.isSafeInteger(limit) || limit < 1) throw protocolError('thread/list page limit must be a positive integer.');
-        const result = await rpc.request('thread/list', {
+        const result = await awaitPage(rpc.request('thread/list', {
           archived: false,
           limit,
           ...(page.cursor === undefined ? {} : { cursor: page.cursor }),
           sortKey: 'recency_at',
           sourceKinds: ['cli', 'vscode', 'exec'],
           useStateDbOnly: true,
-        });
+        }), page.signal);
         if (page.signal?.aborted) throw new DOMException('Codex page read cancelled.', 'AbortError');
         if (!isRecord(result) || !Array.isArray(result.data)) throw protocolError('thread/list response missing data array.');
         if (result.nextCursor !== undefined && result.nextCursor !== null && typeof result.nextCursor !== 'string') throw protocolError('thread/list response has malformed cursor.');
