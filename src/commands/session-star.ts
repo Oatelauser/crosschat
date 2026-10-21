@@ -18,6 +18,7 @@ import type { SessionMemberDecl } from '../serve/protocol.js';
 import { attachPipePath } from '../serve/node.js';
 import { readNodeConfig } from '../serve/node-config.js';
 import type { BrokerEntry } from '../serve/node-config.js';
+import { assertNodeNotRevoked } from '../serve/revocation.js';
 import { tcpDir } from '../serve/registry.js';
 import { fetchBrokerCaps, fetchRosterFor } from '../serve/via-tcp.js';
 import { selectConnectEntry } from '../serve/connect-selector.js';
@@ -244,17 +245,21 @@ export async function queryAttachStatus(pipe: AttachPipeClient): Promise<AttachS
  * 侧在位——误拉会被拒，重试循环继续等真守护的管道），拉起后重试至超时。
  */
 export async function ensureAggregator(deps: StarJoinDeps, entry: BrokerEntry, selector: string): Promise<AttachPipeClient> {
+  const configFile = join(tcpDir(deps.tcpBaseDir), 'node.json');
+  assertNodeNotRevoked(configFile, entry);
   const pipePath = attachPipePath(entry, tcpDir(deps.tcpBaseDir));
   const timeoutMs = deps.aggregatorTimeoutMs ?? 30_000;
   try {
     return await connectAttachPipe(pipePath);
   } catch {
+    assertNodeNotRevoked(configFile, entry);
     // 不在线：自动拉起（失败不追问——可能 013 护栏拒绝=已有守护在起，重试等管道）
     deps.spawnServeDetach(selector);
   }
   const deadline = (deps.now?.() ?? Date.now()) + timeoutMs;
   for (;;) {
     await sleep(500);
+    assertNodeNotRevoked(configFile, entry);
     try {
       return await connectAttachPipe(pipePath);
     } catch {
@@ -560,7 +565,11 @@ export class StarJoiner {
         deps.log(`已入星 ${starName}：会话可经 tcp:${starName}:${deps.machineName}:${attachName ?? sessionId.slice(0, 8)} 直达`);
         // 聚合器重启/管道断——重连原样重声明；stop 时经信号即时唤醒（023：stop 落重连窗口不挂起）
         await Promise.race([pipe.waitClose(), this.stoppedSignal]);
+        if (!this.stopped) assertNodeNotRevoked(join(tcpDir(deps.tcpBaseDir), 'node.json'), target.entry);
         if (!this.stopped) deps.log(`星 ${starName} 聚合器连接断开，重连中……`);
+      } catch (err) {
+        deps.stderr(err instanceof Error ? err.message : String(err));
+        return;
       } finally {
         this.pipes.delete(target.selector);
         pipe.close();

@@ -46,6 +46,7 @@ import type { StatusPayload, StatusQueryFrame } from './protocol.js';
 
 import { syncNodeJsonEntry } from './node-config.js';
 import type { BrokerEntry, NodeConfig } from './node-config.js';
+import { readNodeRevocation, writeNodeRevocation } from './revocation.js';
 export { formatBrokerEntry, NOT_JOINED_MESSAGE, readNodeConfig, syncNodeJsonEntry } from './node-config.js';
 export type { BrokerEntry, NodeConfig } from './node-config.js';
 
@@ -128,7 +129,7 @@ export async function buildStatusPayload(
 }
 
 export interface NodeStatusFile {
-  state: 'connecting' | 'online' | 'reconnect-wait';
+  state: 'connecting' | 'online' | 'reconnect-wait' | 'revoked';
   /** E0 起记录解析后的星名（无星名退回 host:port）；字段名沿用旧版兼容。 */
   brokerAlias: string;
   since: string;
@@ -290,6 +291,7 @@ export class NodeClient {
   private readonly d: NodeClientDeps & { backoffBaseMs: number; quietAfterMs: number; memberCheckMs: number };
   private stopped = false;
   private ws?: SocketLike;
+  private authenticatingSocket?: SocketLike;
   private state: NodeStatusFile['state'] = 'connecting';
   private stateSince = 0;
   private readonly frameWaiters: FrameWaiter[] = [];
@@ -325,13 +327,17 @@ export class NodeClient {
 
   /** 阻塞跑直到 stop（serve --connect 前台姿态）。 */
   async run(): Promise<void> {
+    if (readNodeRevocation(this.d.configFile, this.d.config.entries[0]!) !== undefined) {
+      this.setState('revoked');
+      this.log('节点凭证已撤销，自动重连已暂停；换钥后显式重新连接');
+      return;
+    }
     this.d.onSignal?.('SIGINT', () => void this.stop());
     this.d.onSignal?.('SIGTERM', () => void this.stop());
+    const stopped = new Promise<void>((resolve) => { this.stopResolve = resolve; });
     this.memberTimer = setInterval(() => void this.checkMemberLiveness(), this.d.memberCheckMs);
     this.mainLoop = this.loop();
-    await new Promise<void>((resolve) => {
-      this.stopResolve = resolve;
-    });
+    await stopped;
     await this.mainLoop;
   }
 
@@ -419,7 +425,7 @@ export class NodeClient {
     ws.once('close', () => closed());
     ws.once('error', () => closed());
     ws.on('message', (data) => {
-      void this.onFrame(String(data));
+      void this.onFrame(String(data), ws);
     });
     try {
       await new Promise<void>((resolve, reject) => {
@@ -443,6 +449,7 @@ export class NodeClient {
           this.d.warn?.('broker 不支持会话成员（proto:3），已降级机器级——本机会话的入星声明不生效（机器级收发不受影响）');
         }
       }
+      this.authenticatingSocket = ws;
       ws.send(encodeFrame({
         op: 'connect',
         proto: PROTOCOL_VERSION,
@@ -455,6 +462,7 @@ export class NodeClient {
         caps: [CAP_SESSION_MEMBERS, CAP_MULTI_STAR],
       }));
       const verdict = await this.nextFrame((f) => f.op === 'connected' || f.op === 'error', 10_000);
+      if (this.stopped) return false;
       if (verdict.op === 'error') {
         throw new Error(`broker 拒绝: ${(verdict as ErrorFrame).code} ${(verdict as ErrorFrame).message}`);
       }
@@ -487,6 +495,7 @@ export class NodeClient {
       this.clearFrameWaiters(new Error('connection closed'));
       try { ws.close(); } catch { /* 已断开 */ }
       if (this.ws === ws) this.ws = undefined;
+      if (this.authenticatingSocket === ws) this.authenticatingSocket = undefined;
     }
     return everOnline;
   }
@@ -511,9 +520,25 @@ export class NodeClient {
     if (patch.name !== undefined) entry.name = patch.name;
   }
 
-  private async onFrame(text: string): Promise<void> {
+  private async onFrame(text: string, socket: SocketLike): Promise<void> {
+    if (this.stopped || this.ws !== socket) return;
     const frame = parseFrame(text);
     if (frame === undefined) return;
+    if (frame.op === 'credential-revoked') {
+      const entry = this.d.config.entries[0]!;
+      if (frame.kind !== 'node' || this.authenticatingSocket !== socket
+        || (entry.starId !== undefined && frame.starId !== entry.starId)) return;
+      // Persist before closing attach IPC: launcher supervisors must observe the pause before reconnecting.
+      try {
+        writeNodeRevocation(this.d.configFile, entry, frame.starId, this.d.now());
+      } catch {
+        this.log('撤权暂停记录写入失败，请检查 tcp 目录写权限');
+      }
+      this.setState('revoked');
+      this.log('节点凭证已撤销，自动重连已暂停；换钥后显式重新连接');
+      void this.stop();
+      return;
+    }
     this.frameLog.push(frame);
     for (let i = 0; i < this.frameWaiters.length; i++) {
       const w = this.frameWaiters[i]!;
@@ -857,6 +882,7 @@ export class NodeClient {
   }
 
   private nextFrame(pred: (f: Frame) => boolean, timeoutMs: number): Promise<Frame> {
+    if (this.stopped) return Promise.reject(new Error('stopped'));
     // 028：命中即取走（同 pred 的周期查询不再复读首帧旧回执）
     const idx = this.frameLog.findIndex(pred);
     if (idx >= 0) return Promise.resolve(this.frameLog.splice(idx, 1)[0]!);

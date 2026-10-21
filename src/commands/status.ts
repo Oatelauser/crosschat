@@ -97,6 +97,7 @@ function shortDisplay(s: string): string {
 /** 单守护状态行（prefix='节点客户端:' 单条目 / '节点客户端[<选择器>]:' 多条目）。 */
 function nodeStateLine(prefix: string, st: NodeStatusFile): string {
   if (st.state === 'online') return `${prefix} online ${shortDisplay(`tcp:${st.brokerAlias}`)} (since ${formatCreatedAt(st.since)})`;
+  if (st.state === 'revoked') return `${prefix} 凭证已撤销，自动重连已暂停；换钥后显式重新连接`;
   if (st.state === 'reconnect-wait') {
     const next = st.nextAttemptAt === undefined ? '-' : formatHms(st.nextAttemptAt);
     return `${prefix} 重连等待中，下次尝试 ${next}`;
@@ -186,7 +187,7 @@ function pushRosterLines(lines: string[], label: string, machines: RosterMachine
 /** 一颗星的本机守护条目（陈旧/缺文件按 未运行 计）。 */
 interface StarDaemon {
   selector: string;
-  state: 'online' | 'connecting' | 'reconnect-wait' | '未运行';
+  state: NodeStatusFile['state'] | '未运行';
 }
 
 /** 一颗星的分组视图数据：可达性 + 全量机器表 + 连它的守护态。 */
