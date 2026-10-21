@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import process from 'node:process';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { sendAdminRequest } from '../src/application/management/transport.js';
+import { executeRemoteManagement } from '../src/application/management/remote.js';
 import {
   addStar,
   generateAdminKey,
@@ -161,5 +162,30 @@ describe('local admin transport', () => {
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
+  });
+});
+
+describe('remote management adapter', () => {
+  const entry = { host: 'fixture-host', port: 7260, key: 'fixture-member-key', name: 'cloud' };
+
+  it('keeps read requests on member credentials and releases connections after a rejected request', async () => {
+    const close = vi.fn();
+    const openMember = vi.fn(async () => ({ request: async () => { throw new Error('remote unavailable'); }, close }));
+    const openAdmin = vi.fn();
+    await expect(executeRemoteManagement(entry, { op: 'list-nodes' }, { openMember, openAdmin })).rejects.toMatchObject({ code: 'TCP_TRANSPORT_FAILED' });
+    expect(openMember).toHaveBeenCalledOnce();
+    expect(openAdmin).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('requires an admin key for remote mutation and uses the admin challenge transport when present', async () => {
+    const request = vi.fn(async () => ({ op: 'admin-op-result', id: 'fixture', action: 'remove-node', removed: true }));
+    const close = vi.fn();
+    const openAdmin = vi.fn(async () => ({ request, close }));
+    await expect(executeRemoteManagement(entry, { op: 'remove-node', label: 'node-1' }, { openAdmin })).rejects.toMatchObject({ code: 'USAGE' });
+    expect(openAdmin).not.toHaveBeenCalled();
+    expect(await executeRemoteManagement({ ...entry, adminKey: 'fixture-admin-key' }, { op: 'remove-node', label: 'node-1' }, { openAdmin })).toMatchObject({ removed: true });
+    expect(request).toHaveBeenCalledWith('remove-node', { label: 'node-1' });
+    expect(close).toHaveBeenCalledOnce();
   });
 });
