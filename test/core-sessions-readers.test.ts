@@ -2,7 +2,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createClaudeSessionReader, createCodexSessionReader } from '../src/application/sessions/index.js';
+import { createClaudeSessionReader, createCodexSessionReader, SessionCatalog } from '../src/application/sessions/index.js';
 import type { CodexSession, CodexThreadPage } from '../src/codex/client.js';
 
 const directories: string[] = [];
@@ -104,6 +104,46 @@ describe('Claude pure reader', () => {
       io: { readDirectory: async () => ['old.json'], readText: async () => JSON.stringify({ pid: 7, kind: 'interactive', messagingSocketPath: 'fixture/socket' }) },
     });
     expect((await source.list({ contextId: 'local' })).items[0]).toMatchObject({ ref: { nativeId: '7' }, attributes: { nativeIdSource: 'pid' } });
+  });
+
+  it('keeps native IDs and process fallback references separate in keys and full-reference details', async () => {
+    const source = createClaudeSessionReader({
+      directory: 'fixture', isProcessAlive: () => true,
+      io: {
+        readDirectory: async () => ['legacy.json', 'native.json'],
+        readText: async (path) => JSON.stringify({ pid: 7, ...(path.endsWith('native.json') ? { sessionId: '7', name: 'native-session' } : { name: 'process-session' }), kind: 'interactive', messagingSocketPath: 'fixture/socket' }),
+      },
+    });
+    const page = await source.list({ contextId: 'local' });
+    expect(new Set(page.items.map((item) => item.key)).size).toBe(2);
+    const processSession = page.items.find((item) => item.ref.referenceKind === 'process');
+    expect(processSession?.ref.nativeId).toBe('7');
+    expect((await source.get({ contextId: 'local', nativeId: '7' })).item?.name).toBe('native-session');
+    expect((await source.get({ contextId: 'local', nativeId: '7', referenceKind: 'native' })).item?.name).toBe('native-session');
+    expect((await source.get({ contextId: 'local', nativeId: '7', referenceKind: 'process' })).item?.name).toBe('process-session');
+    if (processSession === undefined) throw new Error('Missing process session');
+    expect((await new SessionCatalog([source]).detail(processSession.ref)).item?.name).toBe('process-session');
+  });
+
+  it('requires a refresh when the registry file list changes between pages', async () => {
+    let files = ['a.json', 'b.json', 'c.json'];
+    const source = createClaudeSessionReader({
+      directory: 'fixture', isProcessAlive: () => true,
+      io: { readDirectory: async () => files, readText: async (path) => JSON.stringify({ pid: 7, sessionId: path, kind: 'interactive', messagingSocketPath: 'fixture/socket' }) },
+    });
+    const first = await source.list({ contextId: 'local', limit: 2 });
+    files = ['b.json', 'c.json'];
+    const changed = await source.list({ contextId: 'local', limit: 2, cursor: first.nextCursor ?? undefined });
+    expect(changed).toMatchObject({ items: [], nextCursor: null, completeness: 'partial', errors: [expect.objectContaining({ kind: 'invalid-cursor', nextStep: expect.stringContaining('Refresh') })] });
+  });
+
+  it('binds the provider cursor to its context before reading another page', async () => {
+    const readDirectory = vi.fn(async () => ['a.json', 'b.json']);
+    const source = createClaudeSessionReader({ directory: 'fixture', isProcessAlive: () => true, io: { readDirectory, readText: async (path) => JSON.stringify({ pid: 7, sessionId: path, kind: 'interactive', messagingSocketPath: 'fixture/socket' }) } });
+    const first = await source.list({ contextId: 'local', limit: 1 });
+    const other = await source.list({ contextId: 'ssh:other', cursor: first.nextCursor ?? undefined });
+    expect(other).toMatchObject({ items: [], errors: [expect.objectContaining({ kind: 'invalid-cursor' })] });
+    expect(readDirectory).toHaveBeenCalledOnce();
   });
 });
 

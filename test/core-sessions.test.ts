@@ -111,4 +111,10 @@ describe('core provider-neutral session queries', () => {
     expect(last.completeness).toBe('partial');
     expect(last.errors).toEqual([expect.objectContaining({ source: { contextId: 'local', providerId: 'failed-provider' }, kind: 'unavailable' })]);
   });
+
+  it('distinguishes process references while treating omitted and explicit native kind identically', () => {
+    const ref = { contextId: 'local', providerId: 'claude', nativeId: '7' };
+    expect(sessionKey(ref)).toBe(sessionKey({ ...ref, referenceKind: 'native' }));
+    expect(sessionKey(ref)).not.toBe(sessionKey({ ...ref, referenceKind: 'process' }));
+  });
 });
