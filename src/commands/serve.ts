@@ -3,9 +3,7 @@
  * + --connect 节点客户端。broker 裸跑自身也是全权节点（deliverLocal 接
  * runSend，fileInbox 落盘本机收件）。
  */
-import { execSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { createConnection } from 'node:net';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir, hostname, networkInterfaces, type NetworkInterfaceInfo } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -15,26 +13,15 @@ import { MultichatError } from '../errors.js';
 import { appendWithRotate } from '../log-rotate.js';
 import { machineId } from '../platform/machine-id.js';
 import { isProcessAlive } from '../platform/process-inspector.js';
-import { Broker, DEFAULT_PORT, defaultDeliverLocal, type AdminReply } from '../serve/broker.js';
+import { Broker, DEFAULT_PORT, defaultDeliverLocal } from '../serve/broker.js';
 import {
-  addStarTo,
   ensureStarIds,
-  genAdminKeyFor,
-  genKeysFor,
   loadBrokerFile,
   registryFileOf,
-  removeAdminKeyFor,
-  removeNodeFor,
-  removeStarFrom,
   sanitizeName,
   selectStar,
-  setNameFor,
-  setShowNameFor,
-  setStarShowNameFor,
   tcpDir,
   writeBrokerFile,
-  type GenAdminKeyResult,
-  type GenKeyResult,
   type NodeEntry,
   type StarRecord,
 } from '../serve/registry.js';
@@ -45,10 +32,17 @@ import { selectConnectEntry } from '../serve/connect-selector.js';
 export { selectConnectEntry } from '../serve/connect-selector.js';
 import { VirtualSocket } from '../serve/virtual-socket.js';
 import { FileInbox } from '../serve/file-channel.js';
-import { requestAdminOp, requestMemberRemove, SenderConn } from '../serve/via-tcp.js';
+import { requestMemberRemove } from '../serve/via-tcp.js';
 import { runAdopt, spawnServeDetachReal, warnIfBrokerLacksSessionCaps } from './session-star.js';
-import { listNodeStatusFiles } from './status.js';
-import type { SendDeps } from './send.js';
+import { addStar, generateAdminKey, generateKeys, removeAdminKey, removeNode, removeStar, renameStar, setDisplayName } from '../application/management/local.js';
+import { executeRemoteManagement } from '../application/management/remote.js';
+import type { RemoteManagementRequest } from '../application/management/remote.js';
+import { startDetachedService, stopServices } from '../application/services/local.js';
+import { connectValueOf, listServeProcesses } from '../application/services/processes.js';
+import type { ProcInfo } from '../application/services/processes.js';
+export { connectValueOf, killPid, matchServeProcesses } from '../application/services/processes.js';
+export type { ProcInfo } from '../application/services/processes.js';
+import type { SendDeps } from '../application/send/types.js';
 import type { DeliverFrame, ErrorFrame, ResultFrame, SendFrame, StatusPayload } from '../serve/protocol.js';
 
 export interface ServeArgs {
@@ -129,66 +123,8 @@ export function realServeDeps(): ServeDeps {
   };
 }
 
-/**
- * 033 管理插座客户端（CLI 侧）：热=在跑 broker 回执；cold=本机无在跑 broker
- * （直调 registry 库函数，打印区分）；failed=插座连上但回执超时/坏形状——
- * **绝不回落直写**（broker 活着即唯一写者，报错教重试）。
- */
-export type AdminOutcome = { kind: 'hot'; reply: AdminReply } | { kind: 'cold' } | { kind: 'failed'; error: string };
-
-/** 管理插座回执等待上限（连上+回执同一预算；注册表写+聚合器播种为快路径）。 */
-const ADMIN_RECEIPT_TIMEOUT_MS = 10_000;
-
-export async function adminOp(deps: ServeDeps, req: Record<string, unknown>): Promise<AdminOutcome> {
-  let pipe: string | undefined;
-  try {
-    const st = JSON.parse(readFileSync(join(tcpDir(deps.baseDir), 'status-broker.json'), 'utf8')) as
-      | { state?: unknown; pid?: unknown; adminPipe?: unknown }
-      | null;
-    // 热路径判定：状态新鲜 running + pid 验活 + 插座地址在场（旧版 broker 无此
-    // 字段=冷路径）。读到坏文件/无文件一律冷路径。
-    if (
-      st !== null && typeof st === 'object' && st.state === 'running' && typeof st.pid === 'number' &&
-      isProcessAlive(st.pid) && typeof st.adminPipe === 'string' && st.adminPipe !== ''
-    ) {
-      pipe = st.adminPipe;
-    }
-  } catch {
-    // 无状态文件=broker 未跑
-  }
-  if (pipe === undefined) return { kind: 'cold' };
-  return new Promise<AdminOutcome>((resolve) => {
-    const socket = createConnection({ path: pipe }, () => {
-      socket.write(`${JSON.stringify(req)}\n`);
-    });
-    const timer = setTimeout(() => {
-      socket.destroy();
-      resolve({
-        kind: 'failed',
-        error: `管理插座 ${pipe} 已连上但 ${ADMIN_RECEIPT_TIMEOUT_MS / 1000}s 内无回执——broker 活着即台账唯一写者，绝不回落直写；核对 broker 状态后重试`,
-      });
-    }, ADMIN_RECEIPT_TIMEOUT_MS);
-    let buf = '';
-    socket.on('data', (chunk) => {
-      buf += chunk.toString('utf8');
-      const idx = buf.indexOf('\n');
-      if (idx < 0) return;
-      clearTimeout(timer);
-      socket.destroy();
-      try {
-        resolve({ kind: 'hot', reply: JSON.parse(buf.slice(0, idx)) as AdminReply });
-      } catch {
-        resolve({ kind: 'failed', error: `管理插座回执不可解析：${buf.slice(0, 120)}` });
-      }
-    });
-    socket.on('error', () => {
-      // 状态新鲜+pid 活但管道拒连=broker 刚停的竞态（管道随进程生死）——冷路径
-      clearTimeout(timer);
-      socket.destroy();
-      resolve({ kind: 'cold' });
-    });
-  });
-}
+export { sendAdminRequest as adminOp } from '../application/management/transport.js';
+export type { AdminOutcome } from '../application/management/transport.js';
 
 /** 033：热路径失败统一出口——报错教重试，绝不回落直写。 */
 function adminFailed(deps: ServeDeps, error: string): number {
@@ -235,7 +171,7 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
       throw new MultichatError('USAGE', '--add-star 是 broker 侧命令，不与 --connect 连用');
     }
     if (args.detach) throw new MultichatError('USAGE', '--add-star 是一次性命令，不支持 --detach');
-    return runAddStar(args.addStarArg, deps, registryFile);
+    return runAddStar(args.addStarArg, deps);
   }
   if (args.removeStarArg !== undefined) {
     if (args.connect !== undefined) {
@@ -266,11 +202,9 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
     requireStarScope(starScope, registryFile, '--name <新星名>');
     // 033：改名经插座（在跑 broker 唯一写者+内存星域即时刷新）；冷路径直调库函数
     const nameStar = loadBrokerFile(registryFile).stars.find((s) => s.starId === starScope.star!.starId) ?? starScope.star!;
-    const outcome = await adminOp(deps, { op: 'set-name', starId: nameStar.starId!, name: args.nameArg });
-    if (outcome.kind === 'hot') {
-      if (!outcome.reply.ok) throw new MultichatError('USAGE', `改星名失败：${outcome.reply.error ?? '未知错误'}`);
-    } else if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
-    else setNameFor(registryFile, nameStar.starId!, args.nameArg);
+    const outcome = await renameStar({ starId: nameStar.starId!, name: args.nameArg }, deps);
+    if (outcome.kind === 'rejected') throw new MultichatError('USAGE', `改星名失败：${outcome.error}`);
+    if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
   }
   // 034 星管理钥发/吊（仅 broker 主本机：热经插座，冷直调库函数——发放即绑定一星）
   if (args.genAdminKeyArg !== undefined) {
@@ -290,7 +224,7 @@ export async function runServe(args: ServeArgs, deps: ServeDeps): Promise<number
   if (args.listMembers) return runListMembers(deps, registryFile, starScope);
   if (args.remove !== undefined) return runRemove(args.remove, deps, registryFile, starScope);
   if (args.stopSelector !== undefined) return runStopSelector(args.stopSelector, deps);
-  if (args.stopTarget !== undefined) return runStop(args.stopTarget, deps, registryFile);
+  if (args.stopTarget !== undefined) return runStop(args.stopTarget, deps);
   // 028 边界5：serve --connect --rm 拒绝——--rm 是会话级临时旗标，机器守护生命周期独立
   if (args.rm) {
     throw new MultichatError(
@@ -392,21 +326,13 @@ async function runGenKey(genKeyArg: string, deps: ServeDeps, registryFile: strin
   requireStarScope(starScope, registryFile, '--gen-key');
   // 现读目标星（--name 同命令先行改名时 scope 里的对象已陈旧）
   const star = loadBrokerFile(registryFile).stars.find((s) => s.starId === starScope.star!.starId) ?? starScope.star!;
-  let results: GenKeyResult[];
-  // 033 热路径：经插座由在跑 broker 落钥（唯一写者；node.json 文本里的端口取
-  // CLI 侧判定值，与冷路径同源）。冷路径直调同一库函数。
-  const outcome = await adminOp(deps, { op: 'gen-key', starId: star.starId!, n, host, port: portNum });
-  if (outcome.kind === 'hot') {
-    if (!outcome.reply.ok) {
-      (deps.stderr ?? deps.stdout)(`发钥失败：${outcome.reply.error ?? '未知错误'}`);
-      return 1;
-    }
-    if (!Array.isArray(outcome.reply.results)) return adminFailed(deps, '管理插座回执缺 results（形状异常）');
-    results = outcome.reply.results as GenKeyResult[];
-  } else if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
-  else {
-    results = genKeysFor(registryFile, star.starId!, n, { host, port: portNum, ...(star.name === undefined ? {} : { name: star.name }) });
+  const outcome = await generateKeys({ starId: star.starId!, n, host, port: portNum }, deps);
+  if (outcome.kind === 'rejected') {
+    (deps.stderr ?? deps.stdout)(`发钥失败：${outcome.error}`);
+    return 1;
   }
+  if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
+  const results = outcome.value.results;
   deps.stdout(`自动探测 broker 地址：${host}:${portNum}（多网卡/NAT 常探错——按下述规则人工核对改写 node.json 的 host 与 port）：`);
   deps.stdout('  · broker 机自身 → 无需分发（首次 serve 已自动写好 127.0.0.1 的自用 node.json）');
   deps.stdout('  · broker 是云主机/NAT 内网机 → host 填对外公网 IP（探测常拿内网 IP，必核对）');
@@ -429,25 +355,18 @@ async function runGenKey(genKeyArg: string, deps: ServeDeps, registryFile: strin
  * 管理插座对账后**即时托管免重启**（内挂聚合器随对账播种）；冷路径（broker
  * 未跑）落盘后 serve 启动即托管。零星机首星同走本命令（显式命名）。
  */
-async function runAddStar(name: string, deps: ServeDeps, registryFile: string): Promise<number> {
-  const outcome = await adminOp(deps, { op: 'add-star', name });
-  if (outcome.kind === 'hot') {
-    if (!outcome.reply.ok) {
-      (deps.stderr ?? deps.stdout)(`加星失败：${outcome.reply.error ?? '未知错误'}`);
-      return 1;
-    }
-    const count = typeof outcome.reply.stars === 'number' ? outcome.reply.stars : loadBrokerFile(registryFile).stars.length;
+async function runAddStar(name: string, deps: ServeDeps): Promise<number> {
+  const outcome = await addStar({ name }, deps);
+  if (outcome.kind === 'rejected') {
+    (deps.stderr ?? deps.stdout)(`加星失败：${outcome.error}`);
+    return 1;
+  }
+  if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
+  const count = outcome.value.stars;
+  if (outcome.mode === 'hot') {
     deps.stdout(`已加星 ${name}——本 broker 现托管 ${count} 颗星（经在跑 broker 已生效，免重启；自登记+内挂聚合器随对账落位）`);
-  } else if (outcome.kind === 'failed') {
-    return adminFailed(deps, outcome.error);
   } else {
-    const count = loadBrokerFile(registryFile).stars.length;
-    addStarTo(registryFile, name, {
-      machineId: deps.machineId(),
-      hostname: deps.hostname(),
-      port: loadBrokerFile(registryFile).port ?? DEFAULT_PORT,
-    });
-    deps.stdout(`已加星 ${name}——本 broker 现托管 ${count + 1} 颗星（broker 未在跑——已落盘，serve 启动即托管）`);
+    deps.stdout(`已加星 ${name}——本 broker 现托管 ${count} 颗星（broker 未在跑——已落盘，serve 启动即托管）`);
   }
   deps.stdout('发钥：crosschat serve --star <星名> --gen-key <n>（星域命令一律须 --star——单星亦然）；查星：crosschat serve --list');
   deps.stdout('注意：多星共用一个 broker 进程——故障域合并（一进程崩=全部星瘫、升级窗口合并），此为已接受的运维代价');
@@ -474,17 +393,17 @@ async function runRemoveStar(selector: string, deps: ServeDeps, registryFile: st
   deps.stdout(
     `将删除星 ${star.name ?? star.starId}：登记机器 ${star.nodes.length} 台、册内成员 ${star.roster.length} 名——册随星葬、钥匙作废、无墓碑无复活（被删星连接即断）`,
   );
-  const outcome = await adminOp(deps, { op: 'remove-star', starId: star.starId! });
-  if (outcome.kind === 'hot') {
-    if (!outcome.reply.ok) {
-      (deps.stderr ?? deps.stdout)(`删星失败：${outcome.reply.error ?? '未知错误'}`);
-      return 1;
-    }
+  const outcome = await removeStar({ starId: star.starId! }, deps);
+  if (outcome.kind === 'rejected') {
+    (deps.stderr ?? deps.stdout)(`删星失败：${outcome.error}`);
+    return 1;
+  }
+  if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
+  if (outcome.mode === 'hot') {
     deps.stdout(`星 ${star.name ?? star.starId} 已删除（经在跑 broker：连接已断、聚合器已收、status 已刷新）`);
     return 0;
   }
-  if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
-  const removed = removeStarFrom(registryFile, star.starId!);
+  const removed = outcome.value.removed;
   if (removed === undefined) {
     deps.stdout(`星 ${star.name ?? star.starId} 已不在台账（可能被并发删除）——crosschat serve --list 可查`);
     return 1;
@@ -508,12 +427,13 @@ async function runShowName(name: string, deps: ServeDeps, star?: StarRecord): Pr
     return 1;
   }
   const scope = starId === undefined ? '' : `星 ${star!.name ?? starId} `;
-  const outcome = await adminOp(deps, starId === undefined ? { op: 'set-showname', name } : { op: 'set-showname', name, starId });
-  if (outcome.kind === 'hot') {
-    if (!outcome.reply.ok) {
-      (deps.stderr ?? deps.stdout)(`改显示名失败：${outcome.reply.error ?? '未知错误'}`);
-      return 1;
-    }
+  const outcome = await setDisplayName(starId === undefined ? { name } : { name, starId }, deps);
+  if (outcome.kind === 'rejected') {
+    (deps.stderr ?? deps.stdout)(`改显示名失败：${outcome.error}`);
+    return 1;
+  }
+  if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
+  if (outcome.mode === 'hot') {
     deps.stdout(
       clean === undefined
         ? `${scope}显示名已清除（经在跑 broker——聚合器已重挂，秒级生效）`
@@ -521,20 +441,13 @@ async function runShowName(name: string, deps: ServeDeps, star?: StarRecord): Pr
     );
     return 0;
   }
-  if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
-  const nodeJson = join(tcpDir(deps.baseDir), 'node.json');
-  if (!existsSync(nodeJson)) {
+  if (!outcome.value.configured) {
     deps.stdout(`本机尚无 node.json（未入任何星）——先 crosschat serve --add-star <星名> 或入星后再设显示名`);
     return 1;
   }
-  if (starId === undefined) setShowNameFor(nodeJson, name);
-  else {
-    try {
-      setStarShowNameFor(nodeJson, starId, name);
-    } catch (err) {
-      (deps.stderr ?? deps.stdout)(err instanceof Error ? err.message : String(err));
-      return 1;
-    }
+  if (outcome.value.error !== undefined) {
+    (deps.stderr ?? deps.stdout)(outcome.value.error);
+    return 1;
   }
   deps.stdout(
     clean === undefined
@@ -582,19 +495,18 @@ async function runRemove(label: string, deps: ServeDeps, registryFile: string, s
   requireStarScope(starScope, registryFile, '--remove <label>');
   const star = starScope.star!;
   // 033：--remove（节点删除）同走插座防直写暗道；冷路径直调库函数
-  const outcome = await adminOp(deps, { op: 'remove-node', starId: star.starId!, label });
-  if (outcome.kind === 'hot') {
-    if (!outcome.reply.ok) {
-      (deps.stderr ?? deps.stdout)(`移除失败：${outcome.reply.error ?? '未知错误'}`);
-      return 1;
-    }
-    const removed = outcome.reply.removed === true;
-    deps.stdout(removed ? `已从星 ${star.name ?? star.starId} 移除 ${label}（经在跑 broker 已生效）` : `星 ${star.name ?? star.starId} 未找到 ${label}`);
-    return removed ? 0 : 1;
+  const outcome = await removeNode({ starId: star.starId!, label }, deps);
+  if (outcome.kind === 'rejected') {
+    (deps.stderr ?? deps.stdout)(`移除失败：${outcome.error}`);
+    return 1;
   }
   if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
-  const removed = removeNodeFor(registryFile, star.starId!, label);
-  deps.stdout(removed ? `已从星 ${star.name ?? star.starId} 移除 ${label}` : `星 ${star.name ?? star.starId} 未找到 ${label}`);
+  const removed = outcome.value.removed;
+  if (outcome.mode === 'hot') {
+    deps.stdout(removed ? `已从星 ${star.name ?? star.starId} 移除 ${label}（经在跑 broker 已生效）` : `星 ${star.name ?? star.starId} 未找到 ${label}`);
+  } else {
+    deps.stdout(removed ? `已从星 ${star.name ?? star.starId} 移除 ${label}` : `星 ${star.name ?? star.starId} 未找到 ${label}`);
+  }
   return removed ? 0 : 1;
 }
 
@@ -606,21 +518,16 @@ async function runRemove(label: string, deps: ServeDeps, registryFile: string, s
 async function runGenAdminKey(label: string, deps: ServeDeps, registryFile: string, starScope: { star?: StarRecord }): Promise<number> {
   requireStarScope(starScope, registryFile, '--gen-admin-key <label>');
   const star = loadBrokerFile(registryFile).stars.find((s) => s.starId === starScope.star!.starId) ?? starScope.star!;
-  let result: GenAdminKeyResult;
-  const outcome = await adminOp(deps, { op: 'gen-admin-key', starId: star.starId!, label });
-  if (outcome.kind === 'hot') {
-    if (!outcome.reply.ok) {
-      (deps.stderr ?? deps.stdout)(`发星管理钥失败：${outcome.reply.error ?? '未知错误'}`);
-      return 1;
-    }
-    const r = outcome.reply.result as GenAdminKeyResult | undefined;
-    if (r === undefined || typeof r.adminKey !== 'string') return adminFailed(deps, '管理插座回执缺 result（形状异常）');
-    result = r;
+  const outcome = await generateAdminKey({ starId: star.starId!, label }, deps);
+  if (outcome.kind === 'rejected') {
+    (deps.stderr ?? deps.stdout)(`发星管理钥失败：${outcome.error}`);
+    return 1;
+  }
+  if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
+  const result = outcome.value.result;
+  if (outcome.mode === 'hot') {
     deps.stdout(`已发星管理钥 ${label}（星 ${star.name ?? star.starId}——经在跑 broker 已生效）`);
-  } else if (outcome.kind === 'failed') {
-    return adminFailed(deps, outcome.error);
   } else {
-    result = genAdminKeyFor(registryFile, star.starId!, label);
     deps.stdout(`已发星管理钥 ${label}（星 ${star.name ?? star.starId}——broker 未在跑，已落盘）`);
   }
   deps.stdout('贴钥：把下面一行并进目标机器 node.json 该星条目（与星钥同条目；钥匙永不过线——连接走挑战应答）：');
@@ -634,17 +541,17 @@ async function runGenAdminKey(label: string, deps: ServeDeps, registryFile: stri
 async function runRemoveAdminKey(selector: string, deps: ServeDeps, registryFile: string, starScope: { star?: StarRecord }): Promise<number> {
   requireStarScope(starScope, registryFile, '--remove-admin-key <label|前缀>');
   const star = starScope.star!;
-  const outcome = await adminOp(deps, { op: 'remove-admin-key', starId: star.starId!, label: selector });
-  if (outcome.kind === 'hot') {
-    if (!outcome.reply.ok) {
-      (deps.stderr ?? deps.stdout)(`吊星管理钥失败：${outcome.reply.error ?? '未知错误'}`);
-      return 1;
-    }
-    deps.stdout(`已吊星管理钥 ${String(outcome.reply.removed)}（星 ${star.name ?? star.starId}——经在跑 broker 已生效，持有者下次连接即 BAD_AUTH）`);
-    return 0;
+  const outcome = await removeAdminKey({ starId: star.starId!, label: selector }, deps);
+  if (outcome.kind === 'rejected') {
+    (deps.stderr ?? deps.stdout)(`吊星管理钥失败：${outcome.error}`);
+    return 1;
   }
   if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
-  const removed = removeAdminKeyFor(registryFile, star.starId!, selector);
+  const removed = outcome.value.removed;
+  if (outcome.mode === 'hot') {
+    deps.stdout(`已吊星管理钥 ${String(removed)}（星 ${star.name ?? star.starId}——经在跑 broker 已生效，持有者下次连接即 BAD_AUTH）`);
+    return 0;
+  }
   deps.stdout(removed ? `已吊星管理钥 ${removed}（星 ${star.name ?? star.starId}）` : `星 ${star.name ?? star.starId} 无匹配管理钥 ${selector}`);
   return removed ? 0 : 1;
 }
@@ -702,80 +609,43 @@ async function runRemoteAdmin(args: ServeArgs, deps: ServeDeps): Promise<number>
   const config = readNodeConfig(join(tcpDir(deps.baseDir), 'node.json'));
   const { entry } = selectConnectEntry(via.slice(4), config);
   const url = `ws://${entry.host}:${entry.port}`;
-  const timeoutMs = 10_000;
-  try {
-    if (action === 'list-nodes' || action === 'list-members') {
-      // 读 op：星钥=成员身份（读本星）——无需管理钥
-      const conn = await SenderConn.open(url, entry.key, undefined, timeoutMs);
-      try {
-        const r = await requestAdminOp(conn, action, {}, timeoutMs);
-        if (action === 'list-nodes') {
-          deps.stdout(`星 ${entry.name ?? entry.starId ?? '?'} 节点表（${r.nodes?.length ?? 0} 条；不含钥匙）：`);
-          for (const n of r.nodes ?? []) {
-            deps.stdout(`  ${n.label.padEnd(10)}${(n.admin === true ? '（星管理钥）' : n.name ?? '-').padEnd(18)}${(n.mid8 ?? '-').padEnd(10)}${n.addedAt}`);
-          }
-        } else {
-          deps.stdout(`星 ${entry.name ?? entry.starId ?? '?'} 成员册（${r.members?.length ?? 0} 条）：`);
-          for (const m of r.members ?? []) {
-            deps.stdout(`  ${m.sessionId.slice(0, 8)} ${m.tool === undefined ? '' : `${m.tool}/`}${m.name ?? '?'} @ ${m.machineName ?? m.machine.slice(0, 8)}${m.online === true ? '（在线）' : ''}`);
-          }
-        }
-        return 0;
-      } finally {
-        conn.close();
-      }
+  const request: RemoteManagementRequest = action === 'gen-key' ? { op: action, count: args.genKeyArg! }
+    : action === 'remove-node' ? { op: action, label: args.remove! } : { op: action };
+  const r = await executeRemoteManagement(entry, request, { selector: via.slice(4) });
+  if (action === 'list-nodes') {
+    deps.stdout(`星 ${entry.name ?? entry.starId ?? '?'} 节点表（${r.nodes?.length ?? 0} 条；不含钥匙）：`);
+    for (const n of r.nodes ?? []) {
+      deps.stdout(`  ${n.label.padEnd(10)}${(n.admin === true ? '（星管理钥）' : n.name ?? '-').padEnd(18)}${(n.mid8 ?? '-').padEnd(10)}${n.addedAt}`);
     }
-    // 写 op：星管理员（挑战应答）——条目无 adminKey 即教学找 broker 主
-    if (entry.adminKey === undefined) {
-      throw new MultichatError(
-        'USAGE',
-        `本机 node.json 的星 ${entry.name ?? via.slice(4)} 条目无 adminKey（星管理钥）——找 broker 主发放（broker 机 crosschat serve --star <星> --gen-admin-key <label>），把回显的 adminKey 并进该星条目`,
-      );
+  } else if (action === 'list-members') {
+    deps.stdout(`星 ${entry.name ?? entry.starId ?? '?'} 成员册（${r.members?.length ?? 0} 条）：`);
+    for (const m of r.members ?? []) {
+      deps.stdout(`  ${m.sessionId.slice(0, 8)} ${m.tool === undefined ? '' : `${m.tool}/`}${m.name ?? '?'} @ ${m.machineName ?? m.machine.slice(0, 8)}${m.online === true ? '（在线）' : ''}`);
     }
-    const conn = await SenderConn.openAdmin(url, entry.adminKey, timeoutMs);
-    try {
-      if (action === 'gen-key') {
-        const n = Number.parseInt(args.genKeyArg!, 10);
-        if (!Number.isInteger(n) || n < 1) throw new MultichatError('USAGE', `--gen-key 数量须为 1-10 的整数，收到：${args.genKeyArg}`);
-        const r = await requestAdminOp(conn, 'gen-key', { n, host: entry.host }, timeoutMs);
-        deps.stdout(`远端发钥（星 ${entry.name ?? '?'}，broker ${url}）：生成 ${r.results?.length ?? 0} 把钥匙`);
-        for (const result of r.results ?? []) {
-          deps.stdout('--------------------------------');
-          deps.stdout(result.nodeJsonContent.trimEnd());
-        }
-        deps.stdout('放置路径（目标机器）：~/.crosschat/tcp/node.json（入多星把各星条目合并进同一份 brokers 数组）');
-        deps.stdout('钥匙已进入终端回滚缓冲，分发完建议清屏');
-        return 0;
-      }
-      const label = args.remove!;
-      const r = await requestAdminOp(conn, 'remove-node', { label }, timeoutMs);
-      deps.stdout(r.removed === true ? `已从星 ${entry.name ?? '?'} 远端移除 ${label}` : `星 ${entry.name ?? '?'} 未找到 ${label}`);
-      return r.removed === true ? 0 : 1;
-    } finally {
-      conn.close();
+  } else if (action === 'gen-key') {
+    deps.stdout(`远端发钥（星 ${entry.name ?? '?'}，broker ${url}）：生成 ${r.results?.length ?? 0} 把钥匙`);
+    for (const result of r.results ?? []) {
+      deps.stdout('--------------------------------');
+      deps.stdout(result.nodeJsonContent.trimEnd());
     }
-  } catch (err) {
-    if (err instanceof MultichatError) throw err;
-    throw new MultichatError(
-      'TCP_TRANSPORT_FAILED',
-      `远程管理未达（${err instanceof Error ? err.message : String(err)}）——broker 在跑吗（crosschat serve）？两端 crosschat 都须为 034 挑战应答协议版本`,
-    );
+    deps.stdout('放置路径（目标机器）：~/.crosschat/tcp/node.json（入多星把各星条目合并进同一份 brokers 数组）');
+    deps.stdout('钥匙已进入终端回滚缓冲，分发完建议清屏');
+  } else {
+    const label = args.remove!;
+    deps.stdout(r.removed === true ? `已从星 ${entry.name ?? '?'} 远端移除 ${label}` : `星 ${entry.name ?? '?'} 未找到 ${label}`);
+    return r.removed === true ? 0 : 1;
   }
+  return 0;
 }
 
 /** 后台化：spawn 自身 detached + env 标记防循环；日志写 tcp/<name>（B2 节点命名条目=node-<选择器>.log）。broker 传端口（节点客户端外连无监听口）。 */
 function runDetach(deps: ServeDeps, extraArgs: string[], logName: string, portNum?: number): number {
-  const logFile = join(tcpDir(deps.baseDir), logName);
-  mkdirSync(tcpDir(deps.baseDir), { recursive: true });
-  const fd = openSync(logFile, 'a');
-  const entry = process.argv[1] ?? fileURLToPath(new URL('../cli.js', import.meta.url));
-  const child = spawn(process.execPath, [realpathSync(entry), 'serve', ...extraArgs], {
-    detached: true,
-    stdio: ['ignore', fd, fd],
-    env: { ...deps.env, CROSSCHAT_SERVE_DETACHED: '1' },
+  const entryPath = process.argv[1] ?? fileURLToPath(new URL('../cli.js', import.meta.url));
+  const result = startDetachedService({ extraArgs, logName, ...(portNum === undefined ? {} : { port: portNum }) }, {
+    baseDir: deps.baseDir, env: deps.env, entryPath, now: deps.now,
   });
-  child.unref();
-  deps.stdout(`${logName.startsWith('node') ? '节点客户端' : 'broker'} 后台运行中 pid=${child.pid}${portNum !== undefined ? ` 端口 ${portNum}` : ''}（日志：${logFile}）`);
+  if (result.state === 'failed') throw result.cause ?? new Error(result.error);
+  deps.stdout(`${logName.startsWith('node') ? '节点客户端' : 'broker'} 后台运行中 pid=${result.pid}${portNum !== undefined ? ` 端口 ${portNum}` : ''}（日志：${result.logFile}）`);
   return 0;
 }
 
@@ -1194,99 +1064,6 @@ function readResultTimeoutMs(env: NodeJS.ProcessEnv): number {
   return Number.isInteger(n) && n >= 1_000 ? n : 120_000;
 }
 
-export interface ProcInfo {
-  pid: number;
-  cmdline: string;
-}
-
-interface RawProc {
-  pid: number;
-  /** 可执行名（win=ExecutablePath 基名；unix=comm）——宿主/shell 过滤的关键。 */
-  exe: string;
-  cmdline: string;
-}
-
-/**
- * B3.1 bug3：命中命令行特征后还须 (a) 可执行名确为 node/crosschat（排除
- * wsl.exe/conhost/powershell/bash 等宿主与 shell——它们命令行里嵌着整条
- * 子命令文本，按串匹配就会误杀宿主、连带杀掉 WSL 会话），且 (b) 命令行含
- * 完整脚本路径特征 dist/cli.js 与 serve 旗标。纯函数可注入测试。
- */
-export function matchServeProcesses(procs: RawProc[], selfPid: number): ProcInfo[] {
-  return procs.filter((p) => {
-    if (p.pid === selfPid || p.pid === 0) return false;
-    if (!/\bserve\b/.test(p.cmdline)) return false;
-    const base = p.exe.split(/[\\/]/).pop()?.toLowerCase() ?? '';
-    if (base !== 'node' && base !== 'node.exe' && base !== 'crosschat' && base !== 'crosschat.exe') return false;
-    return /dist[\\/]cli\.js/.test(p.cmdline);
-  });
-}
-
-/** 扫描本机进程清单（win=CIM；unix=ps），过 matchServeProcesses 身份校验。 */
-function listServeProcesses(): ProcInfo[] {
-  let out: string;
-  const procs: RawProc[] = [];
-  if (process.platform === 'win32') {
-    out = execSync(
-      'powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object CommandLine | Select-Object ProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Compress"',
-      { encoding: 'utf8' },
-    );
-    const parsed = JSON.parse(out || '[]') as { ProcessId: number; ExecutablePath?: string | null; CommandLine: string } | { ProcessId: number; ExecutablePath?: string | null; CommandLine: string }[];
-    for (const p of Array.isArray(parsed) ? parsed : [parsed]) {
-      procs.push({ pid: p.ProcessId, exe: p.ExecutablePath ?? '', cmdline: p.CommandLine });
-    }
-  } else {
-    out = execSync('ps -eo pid=,comm=,args=', { encoding: 'utf8' });
-    for (const line of out.split('\n')) {
-      const trimmed = line.trim();
-      if (trimmed === '') continue;
-      const [pidTok, comm, ...rest] = trimmed.split(/\s+/);
-      const pid = Number.parseInt(pidTok ?? '', 10);
-      if (Number.isInteger(pid)) procs.push({ pid, exe: comm ?? '', cmdline: rest.join(' ') });
-    }
-  }
-  return matchServeProcesses(procs, process.pid);
-}
-
-/** 注册表端口反查 pid（broker 双重确认用）。 */
-function pidsOnPort(port: number): Set<number> {
-  const pids = new Set<number>();
-  try {
-    if (process.platform === 'win32') {
-      const out = execSync('netstat -ano -p tcp', { encoding: 'utf8' });
-      for (const line of out.split('\n')) {
-        if (!line.includes('LISTENING')) continue;
-        const cols = line.trim().split(/\s+/);
-        if ((cols[1] ?? '').endsWith(`:${port}`)) {
-          const pid = Number.parseInt(cols[cols.length - 1] ?? '', 10);
-          if (Number.isInteger(pid)) pids.add(pid);
-        }
-      }
-    } else {
-      const out = execSync(`ss -tlnp 2>/dev/null || lsof -t -i :${port} -sTCP:LISTEN 2>/dev/null`, {
-        encoding: 'utf8',
-        shell: '/bin/sh',
-      });
-      for (const m of out.matchAll(/pid=(\d+)/g)) pids.add(Number.parseInt(m[1] ?? '', 10));
-      if (pids.size === 0) {
-        for (const line of out.split('\n')) {
-          const pid = Number.parseInt(line.trim(), 10);
-          if (Number.isInteger(pid)) pids.add(pid);
-        }
-      }
-    }
-  } catch {
-    // 工具缺失：返回空集，调用方按"未确认"处理
-  }
-  return pids;
-}
-
-/** 命令行里 --connect 的取值（空串=裸 --connect 默认守护；undefined=非节点进程）。 */
-export function connectValueOf(cmdline: string): string | undefined {
-  const m = cmdline.match(/--connect(?:=|\s+)([^\s]*)/);
-  return m === null ? undefined : m[1] ?? '';
-}
-
 /**
  * 013：双开防护——`serve --connect` 起守护前扫本机进程清单（与 --stop 同一
  * listServeProcesses：同一套身份闸门与自身 pid 排除，看见同一个世界），已有
@@ -1357,128 +1134,27 @@ export function guardSameStarDaemon(connectArg: string, deps: ServeDeps): void {
   }
 }
 
-/**
- * B2：--stop <选择器>——只停该选择器的节点守护（精确匹配 --connect 的取值，
- * 身份校验沿用 matchServeProcesses 的 exe/脚本特征闸门）。
- */
 function runStopSelector(selector: string, deps: ServeDeps): number {
-  const procs = (deps.listServeProcesses ?? listServeProcesses)();
-  const kill = deps.killPid ?? killPid;
-  const targets = procs.filter((p) => p.cmdline.includes('--connect') && connectValueOf(p.cmdline) === selector);
-  if (targets.length === 0) {
-    deps.stdout(`stop node: 未找到 ${selector}`);
-    return 1;
-  }
+  return printStopResult(stopServices({ selector }, deps), deps);
+}
+
+function runStop(target: 'broker' | 'node' | 'both', deps: ServeDeps): number {
+  return printStopResult(stopServices({ target }, deps), deps);
+}
+
+function printStopResult(result: ReturnType<typeof stopServices>, deps: ServeDeps): number {
   let rc = 0;
-  for (const n of targets) {
-    if (kill(n.pid)) deps.stdout(`stop node: pid ${n.pid} 已终止（--connect ${selector}）`);
-    else {
-      deps.stdout(`stop node: pid ${n.pid} 终止失败`);
-      rc = 1;
+  for (const event of result.events) {
+    switch (event.kind) {
+      case 'none': deps.stdout(event.target === 'node' ? 'stop node: 未发现运行中的节点' : 'stop broker: 未发现运行中的 broker'); break;
+      case 'selector-missing': deps.stdout(`stop node: 未找到 ${event.selector}`); rc = 1; break;
+      case 'ghost-reset': deps.stdout(`stop ${event.target}: 幽灵状态文件复位 stopped：${event.files.join('、')}`); break;
+      case 'terminate-failed': deps.stdout(`stop ${event.target}: pid ${event.pid} 终止失败`); rc = 1; break;
+      case 'unconfirmed': deps.stdout(`stop broker: pid ${event.pid} 命令行匹配但未持有端口 ${event.port}，未确认跳过`); break;
+      case 'terminated':
+        deps.stdout(`stop ${event.target}: pid ${event.pid} 已终止${event.selector !== undefined ? `（--connect ${event.selector}）` : event.port !== undefined ? `（端口 ${event.port} 双重确认）` : ''}`);
+        break;
     }
   }
   return rc;
-}
-
-/**
- * 026 空停善后：零进程命中但状态文件仍 online/running = 守护已异常死亡（心跳窗内的
- * 幽灵文件）——复位 state:"stopped"（其余字段原样保留），免得 doctor/status 误信。
- * 返回复位的文件名；写失败不阻塞停机。
- */
-function resetGhostStatusFiles(dir: string, files: string[], ghostState: string): string[] {
-  const reset: string[] = [];
-  for (const file of files) {
-    try {
-      const path = join(dir, file);
-      const parsed = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
-      if (parsed.state !== ghostState) continue;
-      writeFileSync(path, `${JSON.stringify({ ...parsed, state: 'stopped' }, null, 2)}\n`, 'utf8');
-      reset.push(file);
-    } catch {
-      // 善后失败不阻塞停机
-    }
-  }
-  return reset;
-}
-
-function runStop(target: 'broker' | 'node' | 'both', deps: ServeDeps, registryFile: string): number {
-  const procs = (deps.listServeProcesses ?? listServeProcesses)();
-  const kill = deps.killPid ?? killPid;
-  const brokers = procs.filter((p) => !p.cmdline.includes('--connect'));
-  const nodes = procs.filter((p) => p.cmdline.includes('--connect'));
-  const statusDir = tcpDir(deps.baseDir);
-  let rc = 0;
-  // B2：both 时先停全部节点守护再停 broker——节点腿断流在前，broker 关闭在后
-  if (target === 'node' || target === 'both') {
-    if (nodes.length === 0) {
-      deps.stdout('stop node: 未发现运行中的节点');
-      const reset = resetGhostStatusFiles(statusDir, listNodeStatusFiles(statusDir), 'online');
-      if (reset.length > 0) deps.stdout(`stop node: 幽灵状态文件复位 stopped：${reset.join('、')}`);
-    }
-    for (const n of nodes) {
-      if (kill(n.pid)) deps.stdout(`stop node: pid ${n.pid} 已终止`);
-      else {
-        deps.stdout(`stop node: pid ${n.pid} 终止失败`);
-        rc = 1;
-      }
-    }
-  }
-  if (target === 'broker' || target === 'both') {
-    if (brokers.length === 0) {
-      deps.stdout('stop broker: 未发现运行中的 broker');
-      const reset = resetGhostStatusFiles(statusDir, ['status-broker.json'], 'running');
-      if (reset.length > 0) deps.stdout(`stop broker: 幽灵状态文件复位 stopped：${reset.join('、')}`);
-    }
-    const port = loadBrokerFile(registryFile).port ?? DEFAULT_PORT;
-    const confirmed = (deps.pidsOnPort ?? pidsOnPort)(port);
-    for (const b of brokers) {
-      if (!confirmed.has(b.pid)) {
-        deps.stdout(`stop broker: pid ${b.pid} 命令行匹配但未持有端口 ${port}，未确认跳过`);
-        continue;
-      }
-      if (kill(b.pid)) deps.stdout(`stop broker: pid ${b.pid} 已终止（端口 ${port} 双重确认）`);
-      else {
-        deps.stdout(`stop broker: pid ${b.pid} 终止失败`);
-        rc = 1;
-      }
-    }
-  }
-  return rc;
-}
-
-/**
- * 030 停机确认死亡：SIGTERM → 限时探活 → 仍活升级 SIGKILL → 仍活才算失败。
- * （旧实现只确认"信号已发"——linux 侧 SIGTERM 被兜住即假报"已终止"，drill-028 F8；
- * win 的 SIGTERM 即硬杀，探活立即通过零额外等待。）
- */
-export function killPid(pid: number, waitMs = 2_000): boolean {
-  const alive = (): boolean => {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch (e) {
-      return (e as NodeJS.ErrnoException).code === 'EPERM'; // 存在但无权——保守按活
-    }
-  };
-  try {
-    process.kill(pid, 'SIGTERM');
-  } catch (e) {
-    return (e as NodeJS.ErrnoException).code === 'ESRCH'; // 已死=目标态达成；无权等其他错=失败
-  }
-  const deadline = Date.now() + waitMs;
-  while (Date.now() < deadline && alive()) syncSleep(50);
-  if (!alive()) return true;
-  try {
-    process.kill(pid, 'SIGKILL');
-  } catch {
-    return true; // 探活刚变死——成功
-  }
-  const deadline2 = Date.now() + waitMs;
-  while (Date.now() < deadline2 && alive()) syncSleep(50);
-  return !alive();
-}
-
-/** 同步等待（killPid 探活轮询用；Atomics.wait 免占线程的 std 同步睡法）。 */
-function syncSleep(ms: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
