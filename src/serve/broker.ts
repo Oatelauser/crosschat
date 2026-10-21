@@ -1243,6 +1243,8 @@ export class Broker {
       return;
     }
     session.starId = star.starId;
+    // 已核验的凭证先登记归属；顶换旧 socket 的同步回调可能在握手收尾前撤钥。
+    session.credential = { kind: 'node', key: auth };
     if (frame.role === 'node') {
       const mid = frame.machineId ?? '';
       if (mid === '') {
@@ -1293,6 +1295,11 @@ export class Broker {
           // 竞态关闭忽略
         }
       }
+      if (session.revoked || this.stopped || !this.sessions.has(session) || session.ws.readyState !== WebSocket.OPEN || this.starOf(session) !== star) return;
+      if (!this.starNodes(star).some((node) => node.key !== undefined && safeEqual(node.key, auth))) {
+        await this.authFail(session, '握手期间节点钥匙已失效，请核对配置后重新连接');
+        return;
+      }
       star.online.set(midNorm, session);
       this.log(`node-up ${session.machineName}(${mid.slice(0, 8)})`);
     }
@@ -1300,10 +1307,10 @@ export class Broker {
     if (frame.role !== 'node' && entry.machineName !== undefined) {
       session.machineName = entry.machineName;
     }
+    if (session.revoked || this.stopped || !this.sessions.has(session) || session.ws.readyState !== WebSocket.OPEN) return;
     if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
     session.authed = true;
     session.identity = 'member';
-    session.credential = { kind: 'node', key: auth };
     // 022/036：星标识在钥匙核验后回填（握手时序恒倒置——info 无法预知属星，
     // 单星也回填）
     this.send(session.ws, {
@@ -1517,6 +1524,7 @@ export class Broker {
 
   private routeDiscovery(sender: Session, frame: DiscoverQueryFrame): void {
     const fail = (code: string, message: string): void => this.send(sender.ws, { op: 'error', id: frame.id, code, message });
+    if (this.stopped) return fail(ERR.PEER_OFFLINE, 'broker 正在关闭，不再开始会话发现');
     let request: DiscoveryRequest;
     try {
       if (Buffer.byteLength(encodeFrame(frame)) > MAX_PAYLOAD_BYTES) throw new Error('oversized');

@@ -274,13 +274,12 @@ describe('broker read-only discovery routing', () => {
   });
 
   it('does not start new reads re-entered synchronously from cancellation while stopping', async () => {
-    let source!: Socket;
     const discover = vi.fn<DiscoveryEndpoint['execute']>(async (_request, options) => {
       if (discover.mock.calls.length === 1) options?.signal?.addEventListener('abort', () => source.query('during-stop', OWN_MID), { once: true });
       return await new Promise<DiscoveryResponse>(() => {});
     });
     const f = await fixture({ discover });
-    source = f.member();
+    const source = f.member();
     source.query('before-stop', OWN_MID);
     expect(discover).toHaveBeenCalledTimes(1);
     await f.broker.stop();

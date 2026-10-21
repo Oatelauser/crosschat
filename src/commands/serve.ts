@@ -551,7 +551,7 @@ async function runRemoveAdminKey(selector: string, deps: ServeDeps, registryFile
   if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
   const removed = outcome.value.removed;
   if (outcome.mode === 'hot') {
-    deps.stdout(`已吊星管理钥 ${String(removed)}（星 ${star.name ?? star.starId}——经在跑 broker 已生效，持有者下次连接即 BAD_AUTH）`);
+    deps.stdout(`已吊星管理钥 ${String(removed)}（星 ${star.name ?? star.starId}——经在跑 broker 已生效，现有管理连接已失效，后续连接即 BAD_AUTH）`);
     return 0;
   }
   deps.stdout(removed ? `已吊星管理钥 ${removed}（星 ${star.name ?? star.starId}）` : `星 ${star.name ?? star.starId} 无匹配管理钥 ${selector}`);
@@ -941,8 +941,11 @@ function makeAggregatorHost(
       },
     });
     clients.set(starId, client);
-    logLine(`本进程聚合器上线：星 ${label}（attach 管道/成员表/对账循环随 broker 常驻）`);
-    void client.run();
+    logLine(`本进程聚合器启动：星 ${label}（attach 管道/成员表/对账循环随 broker 常驻）`);
+    void client.run().catch((error: unknown) => {
+      const code = error instanceof MultichatError ? error.code : 'START_FAILED';
+      logLine(`本进程聚合器暂停：星 ${label}（${code}）；请检查撤权记录和配置后显式重新启动`);
+    });
   };
   const stop = async (starId: string): Promise<void> => {
     const client = clients.get(starId);

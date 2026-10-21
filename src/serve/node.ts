@@ -654,7 +654,9 @@ export class NodeClient {
         const ref = result.detail.item.ref;
         if (ref.providerId !== request.providerId || ref.nativeId !== request.nativeId || (ref.referenceKind ?? 'native') !== (request.referenceKind ?? 'native')) { fail('INVALID_RESULT'); return; }
       }
-      socket.send(encodeFrame({ op: 'discover-result', id: frame.id, ok: true, result }));
+      const payload = encodeFrame({ op: 'discover-result', id: frame.id, ok: true, result });
+      if (Buffer.byteLength(payload) > MAX_PAYLOAD_BYTES) { fail('INVALID_RESULT'); return; }
+      socket.send(payload);
     } catch {
       if (current()) fail('DISCOVERY_FAILED');
     } finally {
