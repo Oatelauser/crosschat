@@ -6,6 +6,7 @@ import { MultichatError } from '../src/errors.js';
 import {
   formatBrokerEntry,
   NOT_JOINED_MESSAGE,
+  parseNodeConfig,
   readNodeConfig,
   syncNodeJsonEntry,
   type BrokerEntry,
@@ -29,6 +30,23 @@ afterEach(() => {
 });
 
 describe('standalone node configuration', () => {
+  it('parses injected raw configuration without reading or writing its source path', () => {
+    const { root, file } = configFile();
+    const raw = JSON.stringify({ brokers: [first], name: 'legacy-machine' });
+    expect(parseNodeConfig(raw, file)).toEqual({ entries: [first], showName: 'legacy-machine' });
+    expect(parseNodeConfig(raw)).toEqual({ entries: [first], showName: 'legacy-machine' });
+    expect(readdirSync(root)).toEqual([]);
+  });
+
+  it('retains source-specific corruption errors when parsing injected raw data', () => {
+    expect(() => parseNodeConfig('{broken', 'injected-node.json')).toThrowError(
+      `node.json 损坏（injected-node.json）——向管理员重新索取覆盖；${NOT_JOINED_MESSAGE}`,
+    );
+    expect(() => parseNodeConfig('{"brokers":[]}')).toThrowError(
+      `node.json 损坏（node.json）——向管理员重新索取覆盖；${NOT_JOINED_MESSAGE}`,
+    );
+  });
+
   it('normalizes legacy aliases without writing, repairing or backing up the file', () => {
     const raw = JSON.stringify({ broker: { host: 'one', port: 7260, alias: 'cloud', starId: 'abcd1111' }, key: 'fixture-key-1', name: 'machine' });
     const { root, file } = configFile(raw);
