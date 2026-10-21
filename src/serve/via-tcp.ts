@@ -460,7 +460,7 @@ async function sendBody(
 
   const receipt = frame as ReceiptFrame;
   // 旧 wire 兼容：远端 output 是 JSON 字符串，在传输边界解析；本机桥不反解析 CLI。
-  let remote: { status: string; to: string; turn: number; replyRef: string; queue?: number; mailbox?: string } | undefined;
+  let remote: { status: string; to: string; turn: number; replyRef: string; queued?: boolean; queue?: number; mailbox?: string } | undefined;
   if (receipt.output !== undefined) {
     try {
       remote = JSON.parse(receipt.output) as typeof remote;
@@ -493,7 +493,7 @@ async function sendBody(
   }
   const displayTo = `${remote?.to ?? target}@${machine}`;
   return {
-    status,
+    status: status === 'delivered' && remote?.queued === true ? 'queued' : status,
     receipt: { status, to: displayTo, turn, replyRef, ...(remote?.queue !== undefined ? { queue: remote.queue } : {}), ...(remote?.mailbox !== undefined ? { mailbox: remote.mailbox } : {}), via: `tcp:${target}` },
     route: { kind: 'tcp', displayTo, machine }, handle,
   };

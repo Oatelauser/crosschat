@@ -26,11 +26,12 @@
 
 ## 任务状态
 
-- T02：core_config负责配置/选择器、迁移相关import、AST图工具和测试；root负责package门禁集成。
-- T05：core_sessions负责application/sessions、Codex新分页API和相关测试；UI资源/快捷键仍在T06。
-- T03/T04：core_diagnostics_cleanup负责doctor/clean及application/diagnostics、cleanup；root负责status helper、其余只读查询及管理/服务接口。
-- T13：root待T02/T05接口就绪，负责typed发送结果和NodeClient成员能力委派。
-- 子任务生产修改已过RED checkpoint：bb03ef6（T02/T05）；e5ecf5c（诊断/清理）。生产实现均未验收。
+- T02：提取/纯parser/解环已GREEN，133目标回归通过。AST门禁与渐进typed lint已接npm check；等集成check后验收。
+- T05：模型、Claude/Codex读取、分页/取消/部分结果已GREEN；core_sessions正修复新接口的目录变化游标和临时PID引用碰撞。UI登记仍在T06。
+- T03：doctor/clean拆分已提交，诊断真实受控子进程取消与迟到丢弃64测试通过；root查询8测试及旧status回归通过。core_diagnostics_cleanup独占queries目录+core-queries测试，正补queryStars组合/未知state/空凭证。
+- T04：core_config独占management/services和commands/serve.ts，typed local/remote+服务实现已落地，正在跑新旧管理回归；root不改这些文件。
+- T13：typed发送+成员Provider委派已提交72f4519，发送167/成员会话82项通过；新增TCP typed queued证据修复37项通过，尚未提交。members段由core_sessions完成；root拥有send/federation/via-tcp。
+- 所有生产实现均有RED/GREEN checkpoint，尚待最终整合验收，未删除未验收任务。
 
 ## 已验收事实
 
@@ -38,6 +39,12 @@
 
 ## 下一步
 
-- root先完成新只读查询RED及status-files helper，等待各agent GREEN后按明确文件提交并集成。
+- root补application依赖方向门禁，提交各补丁GREEN；等待T03/T04/T05最终GREEN，再跑npm run check并逐项删除已验收核心任务。
 - 每次分派记录文件owner与接口，完成目标测试后再做集成check。
 - 在上下文压缩前，将确切测试结果、未提交文件、待决点与下一命令更新到本记录。
+
+## 测试隔离与限制
+
+- 一次新增Codex分页测试最初只stub channel而漏stub spawn，曾启动真实proxy；RPC仅进入fake channel，测试session均已close。已补FakeProxyChild/spawnProxy并重跑相关40项全部通过；以后不得把此前情况描述为“从未启动真实工具”。
+- 旧serve-sessions测试helper也已补临时codexHome。普通验收不启用CROSSCHAT_LIVE，不发送真实消息或修改用户配置。
+- 新诊断进程取消及构建入口在Windows、临时HOME/空PATH受控子进程实测通过；POSIX组终止分支仅代码检查，未在本机实测。
