@@ -429,7 +429,11 @@ async function runShowName(name: string, deps: ServeDeps, star?: StarRecord): Pr
   const scope = starId === undefined ? '' : `星 ${star!.name ?? starId} `;
   const outcome = await setDisplayName(starId === undefined ? { name } : { name, starId }, deps);
   if (outcome.kind === 'rejected') {
-    (deps.stderr ?? deps.stdout)(`改显示名失败：${outcome.error}`);
+    if (outcome.reason === 'not-configured') {
+      deps.stdout(`本机尚无 node.json（未入任何星）——先 crosschat serve --add-star <星名> 或入星后再设显示名`);
+    } else {
+      (deps.stderr ?? deps.stdout)(outcome.mode === 'cold' ? outcome.error : `改显示名失败：${outcome.error}`);
+    }
     return 1;
   }
   if (outcome.kind === 'failed') return adminFailed(deps, outcome.error);
@@ -440,14 +444,6 @@ async function runShowName(name: string, deps: ServeDeps, star?: StarRecord): Pr
         : `${scope}显示名已改为 ${clean}（经在跑 broker——聚合器已重挂，秒级生效）`,
     );
     return 0;
-  }
-  if (!outcome.value.configured) {
-    deps.stdout(`本机尚无 node.json（未入任何星）——先 crosschat serve --add-star <星名> 或入星后再设显示名`);
-    return 1;
-  }
-  if (outcome.value.error !== undefined) {
-    (deps.stderr ?? deps.stdout)(outcome.value.error);
-    return 1;
   }
   deps.stdout(
     clean === undefined

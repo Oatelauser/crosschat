@@ -30,7 +30,7 @@ export interface ManagementDeps {
 
 export type ManagementResult<T> =
   | { kind: 'applied'; mode: 'hot' | 'cold'; value: T }
-  | { kind: 'rejected'; error: string }
+  | { kind: 'rejected'; error: string; mode?: 'hot' | 'cold'; reason?: 'not-configured' }
   | { kind: 'failed'; error: string };
 
 async function apply<T>(
@@ -83,8 +83,8 @@ export function removeStar(request: { starId: string }, deps: ManagementDeps): P
     (reply) => ({ removed: isRemovedStar(reply.removed) ? reply.removed : undefined }));
 }
 
-export function setDisplayName(request: { name: string; starId?: string }, deps: ManagementDeps): Promise<ManagementResult<{ configured: boolean; error?: string }>> {
-  return apply(deps, { op: 'set-showname', ...request }, () => {
+export async function setDisplayName(request: { name: string; starId?: string }, deps: ManagementDeps): Promise<ManagementResult<void>> {
+  const result = await apply<{ configured: boolean; error?: string }>(deps, { op: 'set-showname', ...request }, () => {
     const nodeJson = join(tcpDir(deps.baseDir), 'node.json');
     if (!existsSync(nodeJson)) return { configured: false };
     if (request.starId === undefined) setShowNameFor(nodeJson, request.name);
@@ -94,6 +94,12 @@ export function setDisplayName(request: { name: string; starId?: string }, deps:
     }
     return { configured: true };
   }, () => ({ configured: true }));
+  if (result.kind !== 'applied') return result;
+  if (!result.value.configured) {
+    return { kind: 'rejected', mode: 'cold', reason: 'not-configured', error: '本机尚无 node.json（未入任何星）' };
+  }
+  if (result.value.error !== undefined) return { kind: 'rejected', mode: 'cold', error: result.value.error };
+  return { kind: 'applied', mode: result.mode, value: undefined };
 }
 
 function isGeneratedKey(value: unknown): value is GenKeyResult {
