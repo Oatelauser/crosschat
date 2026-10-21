@@ -1491,6 +1491,14 @@ export class Broker {
       return;
     }
     const targetSession = resolved.ws;
+    // 虚拟连接同步回调，先登记等待者，结果/撤权才不会在转发期间丢失。
+    const waiting = new Promise<RouteOutcome>((resolve) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(frame.id);
+        resolve({ kind: 'error', code: ERR.PEER_OFFLINE, message: `节点 ${target} 未在 ${this.d.resultTimeoutMs}ms 内回应 result` });
+      }, this.d.resultTimeoutMs);
+      this.pending.set(frame.id, { senderWs: sender.ws, targetWs: targetSession, timer, resolve });
+    });
     // 转发 deliver（B2：to/conversation/origin 随帧透传），等对应 id 的 result 再映射 receipt 回发送方。
     // F1：fromMachine 只写真 roster 名（无名瞬态发送方缺省——投递侧省略信封属性，不填 origin 编码/unknown 占位）。
     // 018：会话轨命中时附带 sessionId——聚合器本地按它注入投递（id 定位，不经名字解析）。
@@ -1504,13 +1512,7 @@ export class Broker {
       origin: frame.origin,
       ...(resolved.kind === 'session' ? { sessionId: resolved.sessionId } : {}),
     });
-    const outcome = await new Promise<RouteOutcome>((resolve) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(frame.id);
-        resolve({ kind: 'error', code: ERR.PEER_OFFLINE, message: `节点 ${target} 未在 ${this.d.resultTimeoutMs}ms 内回应 result` });
-      }, this.d.resultTimeoutMs);
-      this.pending.set(frame.id, { senderWs: sender.ws, targetWs: targetSession, timer, resolve });
-    });
+    const outcome = await waiting;
     if (sender.revoked) return;
     if (outcome.kind === 'error') return fail(outcome.code, outcome.message);
     if (outcome.kind === 'status') return fail('INTERNAL', 'send 路由收到 status 回程（id 串扰）'); // 防御：send/status 的 id 各自随机，不应互串
@@ -1555,14 +1557,15 @@ export class Broker {
       this.log(`status-route ${from}→${target}(local) ok`);
       return;
     }
-    this.send(resolved.ws, frame);
-    const outcome = await new Promise<RouteOutcome>((resolve) => {
+    const waiting = new Promise<RouteOutcome>((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(frame.id);
         resolve({ kind: 'error', code: ERR.PEER_OFFLINE, message: `节点 ${target} 未在 ${this.d.resultTimeoutMs}ms 内回应 status-result` });
       }, this.d.resultTimeoutMs);
       this.pending.set(frame.id, { senderWs: sender.ws, targetWs: resolved.ws, timer, resolve });
     });
+    this.send(resolved.ws, frame);
+    const outcome = await waiting;
     if (sender.revoked) return;
     if (outcome.kind === 'error') return fail(outcome.code, outcome.message);
     this.send(sender.ws, outcome.frame);
