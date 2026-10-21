@@ -246,6 +246,48 @@ describe('broker read-only discovery routing', () => {
     expect(source.frames.some((frame) => frame.op === 'discover-result')).toBe(false);
   });
 
+  it.each(['close', 'revoked'])('aborts a local read when its source is %s', async (event) => {
+    let signal: AbortSignal | undefined;
+    const discover = vi.fn<DiscoveryEndpoint['execute']>(async (_request, options) => {
+      signal = options?.signal;
+      return await new Promise<DiscoveryResponse>(() => {});
+    });
+    const f = await fixture({ discover });
+    const source = f.member();
+    const admin = f.admin();
+    source.query('local-owner', OWN_MID);
+    await expect.poll(() => signal).toBeDefined();
+    if (event === 'close') source.close();
+    else admin.receive({ op: 'admin-op', id: 'revoke-source', action: 'remove-node', label: 'source' });
+    expect(signal!.aborted).toBe(true);
+  });
+
+  it('registers a remote read before forwarding so a synchronous virtual result is delivered', async () => {
+    const f = await fixture();
+    const source = f.member();
+    const target = f.member(TARGET_KEY, TARGET_MID);
+    target.on('sent', (frame: Frame) => {
+      if (frame.op === 'discover-query') target.receive({ op: 'discover-result', id: frame.id, ok: true, result: response() });
+    });
+    source.query('synchronous-result');
+    expect(await source.wait('discover-result', 'synchronous-result')).toMatchObject({ ok: true });
+  });
+
+  it('does not start new reads re-entered synchronously from cancellation while stopping', async () => {
+    let source!: Socket;
+    const discover = vi.fn<DiscoveryEndpoint['execute']>(async (_request, options) => {
+      if (discover.mock.calls.length === 1) options?.signal?.addEventListener('abort', () => source.query('during-stop', OWN_MID), { once: true });
+      return await new Promise<DiscoveryResponse>(() => {});
+    });
+    const f = await fixture({ discover });
+    source = f.member();
+    source.query('before-stop', OWN_MID);
+    expect(discover).toHaveBeenCalledTimes(1);
+    await f.broker.stop();
+    expect(discover).toHaveBeenCalledTimes(1);
+    expect(source.frames).toContainEqual(expect.objectContaining({ op: 'error', id: 'during-stop', code: 'PEER_OFFLINE' }));
+  });
+
   it('cancels a timed-out remote read and reports an explicit error without success', async () => {
     const f = await fixture({ resultTimeoutMs: 40 });
     const source = f.member();

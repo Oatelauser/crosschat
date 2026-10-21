@@ -157,7 +157,7 @@ describe('complete read-only discovery service', () => {
 describe('discovery JSON boundary', () => {
   it('accepts opaque IDs and open provider IDs but rejects unsupported operations, invalid limits and scope fields', () => {
     expect(parseDiscoveryRequest({ op: 'detail', providerId: 'third/new', nativeId: 'id with quotes " $(value)', referenceKind: 'native' })).toEqual({ op: 'detail', providerId: 'third/new', nativeId: 'id with quotes " $(value)', referenceKind: 'native' });
-    for (const input of [null, [], {}, { op: 'status' }, { op: 'list', limit: 0 }, { op: 'list', limit: 1001 }, { op: 'list', limit: 1.1 }, { op: 'list', contextId: 'other-user' }, { op: 'detail', providerId: 'x', nativeId: '' }, { op: 'list', filter: { providerIds: [17] } }]) {
+    for (const input of [null, [], {}, { op: 'status' }, { op: 'list', limit: 0 }, { op: 'list', limit: 1001 }, { op: 'list', limit: 1.1 }, { op: 'list', contextId: 'other-user' }, { op: 'detail', providerId: 'x', nativeId: '' }, { op: 'list', filter: { providerIds: [17] } }, { op: 'list', filter: { providerIds: Array(40).fill('x'.repeat(65536)) } }]) {
       expect(() => parseDiscoveryRequest(input)).toThrow();
     }
   });
