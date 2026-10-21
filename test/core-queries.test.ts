@@ -50,6 +50,20 @@ describe('pure broker and node queries', () => {
     expect(JSON.stringify([broker, connections])).not.toContain('never-');
   });
 
+  it('does not claim member or admin credentials for empty key strings', async () => {
+    const { queryBroker } = await import('../src/application/queries/index.js');
+    const { tcpDir } = await fixture();
+    await writeFile(join(tcpDir, 'broker.json'), JSON.stringify({ stars: [{ starId: 'star', nodes: [
+      { label: 'empty', key: '', adminKey: '' },
+      { label: 'member', key: 'private-member', adminKey: '' },
+      { label: 'admin', key: '', adminKey: 'private-admin' },
+      { label: 'missing' },
+    ] }] }));
+    const result = await queryBroker({ tcpDir });
+    expect(result.value?.stars[0].nodes.map((node) => node.credential)).toEqual(['unknown', 'member', 'admin', 'unknown']);
+    expect(JSON.stringify(result)).not.toContain('private-');
+  });
+
   it('does no IO when cancelled and drops a late file read result', async () => {
     const { queryBroker } = await import('../src/application/queries/index.js');
     const controller = new AbortController();
@@ -92,6 +106,20 @@ describe('service snapshots and managed files', () => {
     expect((await queryServiceStatuses({ tcpDir, now: () => now })).items[0].readiness).toBe('unknown');
   });
 
+  it('preserves unknown raw service states without claiming readiness even with a live PID', async () => {
+    const { queryServiceStatuses } = await import('../src/application/queries/index.js');
+    const { tcpDir } = await fixture();
+    await writeFile(join(tcpDir, 'status-broker.json'), JSON.stringify({ state: 'future-broker', pid: 1234, lastUpdated: new Date(now).toISOString() }));
+    await writeFile(join(tcpDir, 'status-node-next.json'), JSON.stringify({ state: 'future-node', pid: 1235, lastUpdated: new Date(now).toISOString() }));
+    const result = await queryServiceStatuses({ tcpDir, now: () => now, isProcessAlive: () => true });
+    expect(result.completeness).toBe('complete');
+    expect(result.items.map(({ state, readiness }) => ({ state, readiness }))).toEqual([
+      { state: 'future-broker', readiness: 'unknown' },
+      { state: 'future-node', readiness: 'unknown' },
+    ]);
+    expect(result.errors).toEqual([]);
+  });
+
   it('lists file metadata without reading secret content or creating missing directories', async () => {
     const { queryManagedFiles } = await import('../src/application/queries/index.js');
     const { root, tcpDir } = await fixture();
@@ -102,6 +130,158 @@ describe('service snapshots and managed files', () => {
     expect(JSON.stringify(result)).not.toContain('a-private-key');
     expect(await readdir(root)).toEqual(before);
     expect(result.errors).toEqual([]);
+  });
+});
+
+describe('composable star queries', () => {
+  async function starsFixture(ids: string[]) {
+    const { tcpDir } = await fixture();
+    const file = join(tcpDir, 'broker.json');
+    await writeFile(file, JSON.stringify({ stars: ids.map((starId) => ({
+      starId, name: `name-${starId}`, nodes: [{ label: 'credential', key: 'private-key' }],
+      roster: [{ sessionId: 'static-only', online: true }],
+    })) }));
+    return { tcpDir, file };
+  }
+
+  it('reads every star sequentially, preserves raw identities/tools and derives online counts only from the injected authority', async () => {
+    const { queryStars } = await import('../src/application/queries/index.js');
+    const { tcpDir, file } = await starsFixture(['full-star-a', 'full-star-b']);
+    const before = await readFile(file, 'utf8');
+    const seen: string[] = [];
+    let active = 0;
+    let peak = 0;
+    const result = await queryStars({
+      tcpDir, now: () => now,
+      readRoster: async (star) => {
+        expect(JSON.stringify(star)).not.toContain('private-key');
+        active += 1;
+        peak = Math.max(peak, active);
+        seen.push(star.starId!);
+        await Promise.resolve();
+        active -= 1;
+        return [
+          { mid8: `opaque-${star.starId}`, name: 'machine', online: true, sessions: [{ sessionId: 'opaque/native:id', tool: 'future-tool', name: '' }], extraSecret: 'private-payload' },
+          { mid8: 'offline', online: false, sessions: [], offlineSessions: [{ sessionId: 'offline/full/id', tool: 'third-tool' }] },
+        ];
+      },
+    });
+    expect(seen).toEqual(['full-star-a', 'full-star-b']);
+    expect(peak).toBe(1);
+    expect(result).toMatchObject({ completeness: 'complete', observedAt: now, errors: [] });
+    expect(result.items.map(({ star, health, onlineNodes }) => ({ starId: star.starId, health, onlineNodes }))).toEqual([
+      { starId: 'full-star-a', health: 'reachable', onlineNodes: 1 },
+      { starId: 'full-star-b', health: 'reachable', onlineNodes: 1 },
+    ]);
+    expect(result.items[0].machines[0]).toEqual({ mid8: 'opaque-full-star-a', name: 'machine', online: true, sessions: [{ sessionId: 'opaque/native:id', tool: 'future-tool', name: '' }] });
+    expect(result.items[0].machines[1].offlineSessions).toEqual([{ sessionId: 'offline/full/id', tool: 'third-tool' }]);
+    expect(JSON.stringify(result)).not.toContain('private-');
+    expect(await readFile(file, 'utf8')).toBe(before);
+    expect(await readdir(tcpDir)).toEqual(['broker.json']);
+  });
+
+  it('reports unknown partial live data when no roster capability is supplied, while zero configured stars are complete', async () => {
+    const { queryStars } = await import('../src/application/queries/index.js');
+    const { tcpDir } = await starsFixture(['full-star-a', 'full-star-b']);
+    const unknown = await queryStars({ tcpDir, now: () => now });
+    expect(unknown.completeness).toBe('partial');
+    expect(unknown.items.map(({ health, onlineNodes, machines }) => ({ health, onlineNodes, machines }))).toEqual([
+      { health: 'unknown', onlineNodes: null, machines: [] },
+      { health: 'unknown', onlineNodes: null, machines: [] },
+    ]);
+    expect(unknown.errors).toHaveLength(2);
+    expect(unknown.errors[0]).toMatchObject({ kind: 'unavailable', source: expect.stringContaining('full-star-a') });
+    const empty = await starsFixture([]);
+    const readRoster = vi.fn(async () => []);
+    expect(await queryStars({ tcpDir: empty.tcpDir, readRoster })).toMatchObject({ items: [], completeness: 'complete', errors: [] });
+    expect(readRoster).not.toHaveBeenCalled();
+  });
+
+  it('keeps successful stars when another reader fails or returns malformed data and does not echo secret errors', async () => {
+    const { queryStars } = await import('../src/application/queries/index.js');
+    const { tcpDir } = await starsFixture(['offline', 'bad', 'good']);
+    const result = await queryStars({ tcpDir, readRoster: async (star) => {
+      if (star.starId === 'offline') throw new Error('private-key: connection denied');
+      if (star.starId === 'bad') return [{ mid8: 'machine', online: true, sessions: [{ sessionId: 123, tool: 'third' }] }];
+      return [];
+    } });
+    expect(result.completeness).toBe('partial');
+    expect(result.items.map(({ star, health, onlineNodes }) => ({ starId: star.starId, health, onlineNodes }))).toEqual([
+      { starId: 'offline', health: 'unavailable', onlineNodes: null },
+      { starId: 'bad', health: 'unavailable', onlineNodes: null },
+      { starId: 'good', health: 'reachable', onlineNodes: 0 },
+    ]);
+    expect(result.errors).toEqual([
+      expect.objectContaining({ kind: 'unavailable', source: expect.stringContaining('offline') }),
+      expect.objectContaining({ kind: 'malformed', source: expect.stringContaining('bad') }),
+    ]);
+    expect(JSON.stringify(result)).not.toContain('private-key');
+  });
+
+  it('keeps old machine-only roster results reachable while explicitly marking missing sessions as partial', async () => {
+    const { queryStars } = await import('../src/application/queries/index.js');
+    const { tcpDir } = await starsFixture(['legacy']);
+    const result = await queryStars({ tcpDir, readRoster: async () => [{ mid8: 'legacy8', name: 'old machine', online: true }] });
+    expect(result.completeness).toBe('partial');
+    expect(result.items[0]).toMatchObject({ health: 'reachable', onlineNodes: 1, machines: [{ mid8: 'legacy8', online: true }] });
+    expect(result.items[0].machines[0]).not.toHaveProperty('sessions');
+    expect(result.errors).toEqual([expect.objectContaining({ kind: 'unavailable', source: expect.stringContaining('legacy'), message: expect.stringContaining('会话') })]);
+  });
+
+  it('validates roster boundaries instead of accepting arbitrary shape assertions', async () => {
+    const { queryStars } = await import('../src/application/queries/index.js');
+    const { tcpDir } = await starsFixture(['validate']);
+    const malformed: unknown[] = [
+      {}, [{ mid8: 8, online: true, sessions: [] }], [{ mid8: 'valid', online: 'yes', sessions: [] }],
+      [{ mid8: 'valid', online: true, name: 8, sessions: [] }],
+      [{ mid8: 'valid', online: true, sessions: {} }],
+      [{ mid8: 'valid', online: true, sessions: [{ sessionId: 'full', name: 8 }] }],
+      [{ mid8: 'valid', online: true, sessions: [{ sessionId: 'full', tool: 8 }] }],
+    ];
+    for (const raw of malformed) {
+      const result = await queryStars({ tcpDir, readRoster: async () => raw });
+      expect(result.items[0]).toMatchObject({ health: 'unavailable', onlineNodes: null, machines: [] });
+      expect(result.errors).toEqual([expect.objectContaining({ kind: 'malformed' })]);
+    }
+    expect((await queryStars({ tcpDir, readRoster: async () => undefined })).errors).toEqual([expect.objectContaining({ kind: 'unavailable' })]);
+  });
+
+  it('forwards cancellation, releases its listener and discards late roster data without starting the next star', async () => {
+    const { queryStars } = await import('../src/application/queries/index.js');
+    const { tcpDir } = await starsFixture(['one', 'two']);
+    const controller = new AbortController();
+    let finish!: (value: unknown) => void;
+    let began!: () => void;
+    const started = new Promise<void>((resolve) => { began = resolve; });
+    const readRoster = vi.fn((_star, signal?: AbortSignal) => {
+      expect(signal).toBe(controller.signal);
+      began();
+      return new Promise<unknown>((resolve) => { finish = resolve; });
+    });
+    const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
+    const pending = queryStars({ tcpDir, signal: controller.signal, readRoster });
+    await started;
+    controller.abort();
+    const result = await pending;
+    expect(result).toMatchObject({ completeness: 'cancelled', items: [], errors: [expect.objectContaining({ kind: 'cancelled' })] });
+    finish([{ mid8: 'late', online: true, sessions: [] }]);
+    await Promise.resolve();
+    expect(result.items).toEqual([]);
+    expect(readRoster).toHaveBeenCalledOnce();
+    expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
+  });
+
+  it('performs no metadata or roster read when already cancelled and reports metadata failure without calling the network seam', async () => {
+    const { queryStars } = await import('../src/application/queries/index.js');
+    const controller = new AbortController();
+    controller.abort();
+    const readText = vi.fn(async () => '{"stars":[]}');
+    const readRoster = vi.fn(async () => []);
+    expect(await queryStars({ tcpDir: '/unused', signal: controller.signal, readText, readRoster })).toMatchObject({ completeness: 'cancelled', items: [] });
+    expect(readText).not.toHaveBeenCalled();
+    const { tcpDir } = await fixture();
+    expect(await queryStars({ tcpDir, readRoster })).toMatchObject({ completeness: 'unavailable', items: [], errors: [expect.objectContaining({ kind: 'missing' })] });
+    expect(readRoster).not.toHaveBeenCalled();
   });
 });
 
