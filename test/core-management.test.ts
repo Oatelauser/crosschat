@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { createServer } from 'node:net';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -103,6 +103,20 @@ describe('local management application', () => {
     expect(result).toMatchObject({ kind: 'failed' });
     expect(readFileSync(file, 'utf8')).toBe(before);
   });
+
+  it('reports missing configuration and rejected cold display-name writes as rejected operations', async () => {
+    const { deps } = fixture();
+    const d = { ...deps, adminTransport: async () => ({ kind: 'cold' as const }) };
+    expect(await setDisplayName({ name: 'machine' }, d)).toMatchObject({
+      kind: 'rejected', mode: 'cold', reason: 'not-configured',
+    });
+    writeFileSync(join(deps.baseDir, 'tcp', 'node.json'), JSON.stringify({ brokers: [
+      { host: 'fixture-host', port: 7260, key: 'fixture-member-key', starId: 'another-star' },
+    ] }));
+    expect(await setDisplayName({ name: 'machine', starId: 'stable-star-id' }, d)).toMatchObject({
+      kind: 'rejected', mode: 'cold',
+    });
+  });
 });
 
 describe('local admin transport', () => {
@@ -179,7 +193,7 @@ describe('remote management adapter', () => {
   });
 
   it('requires an admin key for remote mutation and uses the admin challenge transport when present', async () => {
-    const request = vi.fn(async () => ({ op: 'admin-op-result', id: 'fixture', action: 'remove-node', removed: true }));
+    const request = vi.fn(async () => ({ op: 'admin-op-result', id: 'fixture', ok: true, removed: true }));
     const close = vi.fn();
     const openAdmin = vi.fn(async () => ({ request, close }));
     await expect(executeRemoteManagement(entry, { op: 'remove-node', label: 'node-1' }, { openAdmin })).rejects.toMatchObject({ code: 'USAGE' });
