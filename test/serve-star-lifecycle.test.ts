@@ -192,7 +192,7 @@ describe('033 热加星：不重启即托管即收发', () => {
     const nodeJson = JSON.parse(readFileSync(join(dir, 'tcp', 'node.json'), 'utf8')) as { brokers: Array<{ starId?: string }> };
     expect(nodeJson.brokers.some((e) => e.starId === doc.stars[1]!.starId)).toBe(true);
     // 内挂聚合器随对账播种（免重启）
-    expect(lines.some((l) => l.includes('本进程聚合器上线：星 beta'))).toBe(true);
+    expect(lines.some((l) => l.includes('本进程聚合器启动：星 beta'))).toBe(true);
 
     // 热发钥（同经插座）：beta 得 2 把新钥
     lines.length = 0;
