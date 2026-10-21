@@ -21,7 +21,7 @@ function thirdReader(): SessionReader {
       const ref = { contextId, providerId: 'third-provider', nativeId: 'opaque/full:id/unchanged' };
       return {
         items: [{ ref, key: sessionKey(ref), name: null, rawStatus: { type: 'future-state', code: 17 }, capabilities,
-          attributes: { cwd: '/fixture', future: { hint: 42, key: 'hidden-key', adminKey: 'hidden-admin' }, messagingSocketPath: 'hidden-socket', messages: ['hidden-chat'] } }],
+          attributes: { cwd: '/fixture', future: { hint: 42, key: 'hidden-key', adminKey: 'hidden-admin', brokerKey: 'hidden-broker', authResponse: 'hidden-proof' }, messagingSocketPath: 'hidden-socket', messages: ['hidden-chat'] } }],
         nextCursor: null, completeness: 'complete', errors: [], observedAt: 30,
       };
     },
@@ -146,6 +146,11 @@ describe('complete read-only discovery service', () => {
     };
     const response = await new DiscoveryService([valid, malformed]).execute({ op: 'list' });
     expect(response).toMatchObject({ op: 'list', page: { completeness: 'partial', items: [{ ref: { providerId: 'third-provider' } }], errors: [expect.objectContaining({ source: { contextId: 'local', providerId: 'malformed-provider' }, kind: 'malformed' })] } });
+  });
+
+  it('rejects a detail reader returning a different full native ID', async () => {
+    const response = await new DiscoveryService([thirdReader()]).execute({ op: 'detail', providerId: 'third-provider', nativeId: 'another-full-id' });
+    expect(response).toMatchObject({ detail: { item: null, completeness: 'unavailable', errors: [expect.objectContaining({ source: { providerId: 'third-provider' }, kind: 'malformed' })] } });
   });
 });
 
