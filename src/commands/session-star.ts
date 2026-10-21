@@ -165,7 +165,7 @@ function realMachineName(): string {
 
 export interface AttachPipeClient {
   /** 单帧请求/回执（换行 JSON；回执合并 status 探针字段）。 */
-  send(req: unknown): Promise<{ ok: boolean; error?: string } & Partial<AttachStatusReply>>;
+  send(req: unknown): Promise<{ ok: boolean; error?: string; disconnected?: boolean } & Partial<AttachStatusReply>>;
   /** 管道断开（聚合器停/重启）——监督循环据此重连。 */
   waitClose(): Promise<void>;
   close(): void;
@@ -187,7 +187,8 @@ export function connectAttachPipe(pipePath: string, retries = 0, retryMs = 300):
         let buf = '';
         let closedResolve: (() => void) | undefined;
         const closedPromise = new Promise<void>((r) => { closedResolve = r; });
-        const waiters: Array<(r: { ok: boolean; error?: string }) => void> = [];
+        const waiters: Array<(r: { ok: boolean; error?: string; disconnected?: boolean }) => void> = [];
+        const disconnected = () => ({ ok: false, error: 'attach 管道已断开，请求结果未确认', disconnected: true });
         socket.on('data', (chunk) => {
           buf += chunk.toString('utf8');
           for (;;) {
@@ -206,11 +207,15 @@ export function connectAttachPipe(pipePath: string, retries = 0, retryMs = 300):
             }
           }
         });
-        socket.once('close', () => closedResolve?.());
+        socket.once('close', () => {
+          for (const waiter of waiters.splice(0)) waiter(disconnected());
+          closedResolve?.();
+        });
         socket.on('error', () => socket.destroy());
         resolve({
           send: (req) =>
             new Promise((res) => {
+              if (socket.destroyed || !socket.writable) return res(disconnected());
               waiters.push((r) => res(r as { ok: boolean; error?: string } & Partial<AttachStatusReply>));
               socket.write(`${JSON.stringify(req)}\n`);
             }),
@@ -558,6 +563,11 @@ export class StarJoiner {
           ...(this.opts.rm === true ? { temporary: true } : {}), // 029：临时位随声明入册（死亡即删）
         });
         if (!reply.ok) {
+          assertNodeNotRevoked(join(tcpDir(deps.tcpBaseDir), 'node.json'), target.entry);
+          if (reply.disconnected) {
+            await Promise.race([sleep(1_000), this.stoppedSignal]);
+            continue;
+          }
           deps.stderr(`入星 ${target.entry.name ?? target.selector} 失败：${reply.error ?? '聚合器拒绝 attach'}`);
           return;
         }

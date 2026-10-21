@@ -105,6 +105,11 @@ function nodeStateLine(prefix: string, st: NodeStatusFile): string {
   return `${prefix} 连接中 ${shortDisplay(`tcp:${st.brokerAlias}`)}`;
 }
 
+/** A revocation pause persists until explicit reconnection replaces this snapshot. */
+function nodeStatusCurrent(status: NodeStatusFile | undefined, nowMs: number): status is NodeStatusFile {
+  return status !== undefined && (status.state === 'revoked' || nowMs - Date.parse(status.lastUpdated) < TCP_STATUS_FRESH_MS);
+}
+
 /**
  * 转发器区块（节点行 + broker 行 + 在线机器表）；dir=undefined → 空数组。
  * B2 多守护：逐个 status-node*.json 出行（多条目时带 [选择器] 标签）；
@@ -118,7 +123,7 @@ async function tcpForwarderLines(tcpDir: string | undefined, nowMs: number, rost
   let anyFresh = false;
   for (const file of files) {
     const node = readStatusJson<NodeStatusFile>(join(tcpDir, file));
-    const fresh = node !== undefined && nowMs - Date.parse(node.lastUpdated) < TCP_STATUS_FRESH_MS;
+    const fresh = nodeStatusCurrent(node, nowMs);
     if (multi) {
       const tag = nodeStatusSelector(file) || '默认';
       if (!fresh) {
@@ -209,7 +214,7 @@ async function collectStars(deps: StatusDeps, nowMs: number): Promise<StarGroup[
   const daemonsByStar = new Map<string, StarDaemon[]>();
   for (const file of listNodeStatusFiles(deps.tcpDir)) {
     const st = readStatusJson<NodeStatusFile>(join(deps.tcpDir, file));
-    const fresh = st !== undefined && nowMs - Date.parse(st.lastUpdated) < TCP_STATUS_FRESH_MS;
+    const fresh = nodeStatusCurrent(st, nowMs);
     const state: StarDaemon['state'] = fresh ? st!.state : '未运行';
     const entry: StarDaemon = { selector: nodeStatusSelector(file) || '默认', state };
     const list = daemonsByStar.get(st?.brokerAlias ?? '');
@@ -262,7 +267,9 @@ const machineDisp = (m: { name?: string; mid8: string }): string => (m.mid8 === 
 function starSummaryLines(groups: StarGroup[]): string[] {
   const lines: string[] = [];
   for (const g of groups) {
-    const client = g.daemons.some((d) => d.state === 'online') ? 'online' : '未运行';
+    const client = g.daemons.some((d) => d.state === 'revoked')
+      ? '凭证已撤销，自动重连已暂停'
+      : g.daemons.some((d) => d.state === 'online') ? 'online' : '未运行';
     const head = g.reachable ? `${g.name} ✓ 可达，${g.online} 机器在线` : `${g.name} ✗ 不可达`;
     lines.push(`  ${head} · 客户端 ${client}`);
     const machines = [...g.machines].sort((a, b) => Number(b.online) - Number(a.online)).slice(0, 5);
@@ -283,7 +290,7 @@ async function starsText(deps: StatusDeps, nowMs: number, groups: StarGroup[]): 
   const lines = [groups.length === 0 ? 'tcp: 无' : `tcp: 共 ${groups.length} 星`];
   for (const g of groups) {
     lines.push(g.reachable ? `${g.name} ✓ 可达，${g.online} 机器在线` : `${g.name} ✗ 不可达`);
-    const daemons = g.daemons.map((d) => `${d.selector}: ${d.state}`).join('、');
+    const daemons = g.daemons.map((d) => `${d.selector}: ${d.state === 'revoked' ? 'revoked（凭证已撤销，自动重连已暂停）' : d.state}`).join('、');
     lines.push(`  守护: ${daemons === '' ? '未运行' : daemons}`);
     const machines = [...g.machines].sort((a, b) => Number(b.online) - Number(a.online));
     for (const m of machines) lines.push(`  ${machineDisp(m)} ${m.online ? '在线' : '离线'}`);
@@ -731,7 +738,7 @@ async function remoteStatusView(deps: StatusDeps, json: boolean, filters: Status
 function tcpJson(tcpDir: string | undefined, nowMs: number): { node: unknown; broker: unknown } {
   if (tcpDir === undefined) return { node: null, broker: null };
   const node = readStatusJson<NodeStatusFile>(join(tcpDir, 'status-node.json'));
-  const nodeFresh = node !== undefined && nowMs - Date.parse(node.lastUpdated) < TCP_STATUS_FRESH_MS;
+  const nodeFresh = nodeStatusCurrent(node, nowMs);
   const broker = readStatusJson<BrokerStatusFile>(join(tcpDir, 'status-broker.json'));
   const brokerFresh =
     broker !== undefined && broker.state === 'running' && nowMs - Date.parse(broker.lastUpdated) < TCP_STATUS_FRESH_MS;
@@ -745,7 +752,7 @@ function tcpJson(tcpDir: string | undefined, nowMs: number): { node: unknown; br
 function nodeProfilesJson(tcpDir: string, nowMs: number): Array<{ selector: string; status: NodeStatusFile | null }> {
   return listNodeStatusFiles(tcpDir).map((file) => {
     const st = readStatusJson<NodeStatusFile>(join(tcpDir, file));
-    const fresh = st !== undefined && nowMs - Date.parse(st.lastUpdated) < TCP_STATUS_FRESH_MS;
+    const fresh = nodeStatusCurrent(st, nowMs);
     return { selector: nodeStatusSelector(file), status: fresh ? st! : null };
   });
 }
