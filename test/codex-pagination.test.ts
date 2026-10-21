@@ -50,10 +50,11 @@ describe('Codex internal paged read contract', () => {
     try {
       const first = session.listThreadPage({ limit: 21 });
       expect(fake.sent[0].params).toMatchObject({ limit: 21, archived: false });
-      fake.respond({ data: Array.from({ length: 21 }, (_, index) => ({ id: `native/${index}`, status: { type: 'future-status', extra: 'kept' } })), nextCursor: 'opaque/cursor' });
+      fake.respond({ data: Array.from({ length: 21 }, (_, index) => ({ id: `native/${index}`, originator: 'codex-exec', status: { type: 'future-status', extra: 'kept' } })), nextCursor: 'opaque/cursor' });
       const page = await first;
       expect(page.data).toHaveLength(21);
       expect(page.data[0]).toMatchObject({ name: null, rawStatus: { type: 'future-status', extra: 'kept' } });
+      expect(page.data[0].attributes.originator).toBe('codex-exec');
       expect(page.nextCursor).toBe('opaque/cursor');
       const second = session.listThreadPage({ cursor: page.nextCursor ?? undefined, limit: 100 });
       expect(fake.sent[1].params).toMatchObject({ cursor: 'opaque/cursor', limit: 100, archived: false });
