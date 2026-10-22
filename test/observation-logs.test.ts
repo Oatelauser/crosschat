@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile, rename } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile, rename, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -13,6 +13,13 @@ async function fixture() {
 }
 
 describe('bounded observation log reads', () => {
+  it('retains lossless filesystem identities for rotation on large Windows file IDs', async () => {
+    const { queryLogWindow } = await import('../src/application/queries/logs.js');
+    const { file } = await fixture();
+    await writeFile(file, 'event\n');
+    const metadata = await stat(file, { bigint: true });
+    expect((await queryLogWindow({ file })).cursor?.identity).toBe(`${metadata.dev}:${metadata.ino}:${metadata.birthtimeNs}`);
+  });
   it('retains readable sources when the node-log catalog cannot be read', async () => {
     const { queryManagedLog } = await import('../src/application/observations/logs.js');
     const { baseDir, file } = await fixture();
