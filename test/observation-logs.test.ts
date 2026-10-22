@@ -13,6 +13,25 @@ async function fixture() {
 }
 
 describe('bounded observation log reads', () => {
+  it('retains readable sources when the node-log catalog cannot be read', async () => {
+    const { queryManagedLog } = await import('../src/application/observations/logs.js');
+    const { baseDir, file } = await fixture();
+    await writeFile(file, 'readable local event\n');
+    await rm(join(baseDir, 'tcp'), { recursive: true });
+    await writeFile(join(baseDir, 'tcp'), 'not a directory');
+    const page = await queryManagedLog({ baseDir });
+    expect(page.items.map((line) => line.text)).toEqual(['readable local event']);
+    expect(page.completeness).toBe('partial');
+    expect(page.errors).toEqual(expect.arrayContaining([expect.objectContaining({ source: join(baseDir, 'tcp'), kind: 'unreadable' })]));
+    expect(page.sources).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'send-log' })]));
+  });
+  it('does not infer a local sender from an audit entry lacking a scoped reply reference', async () => {
+    const { queryManagedLog } = await import('../src/application/observations/logs.js');
+    const { baseDir, file } = await fixture();
+    await writeFile(file, JSON.stringify({ from: 'codex:same-native-id', target: 'claude:local-receiver', status: 'delivered' }));
+    expect((await queryManagedLog({ baseDir, sessionRef: { contextId: 'local', providerId: 'codex', nativeId: 'same-native-id' } })).items).toHaveLength(0);
+    expect((await queryManagedLog({ baseDir, sessionRef: { contextId: 'local', providerId: 'claude', nativeId: 'local-receiver' } })).items).toHaveLength(1);
+  });
   it('uses the same decoded endpoint attribution as communications for routed audit records', async () => {
     const { queryManagedLog } = await import('../src/application/observations/logs.js');
     const { baseDir, file } = await fixture();
