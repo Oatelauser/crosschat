@@ -73,6 +73,7 @@ export interface OverviewOptions {
   home: string;
   discovery: DiscoveryEndpoint;
   env?: NodeJS.ProcessEnv;
+  nativeEnvironment?: DiagnosticQueryOptions['nativeEnvironment'];
   readOutbox?(signal?: AbortSignal): Promise<OutboxMetadataResult>;
   readContexts?(signal?: AbortSignal): Promise<TuiContextsResult>;
   readServices?(signal?: AbortSignal): Promise<CollectionResult<ServiceSnapshot>>;
@@ -223,7 +224,7 @@ export function createLocalOverview(options: OverviewOptions): LocalOverview {
     try {
       checkAbort(request.signal);
       const query = options.queryDoctor ?? queryDoctorDiagnostics;
-      const work = query({ home: options.home, env: options.env, signal: request.signal, timeoutMs: options.doctorTimeoutMs ?? 30_000 });
+      const work = query({ home: options.home, env: options.env, nativeEnvironment: options.nativeEnvironment ?? 'isolated', signal: request.signal, timeoutMs: options.doctorTimeoutMs ?? 30_000 });
       const result = parseDiagnosticResult(await (options.queryDoctor ? untilAborted(work, request.signal) : work));
       checkAbort(request.signal);
       const repeated = new Map<string, number>();

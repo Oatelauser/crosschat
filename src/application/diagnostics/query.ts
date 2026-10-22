@@ -8,8 +8,10 @@ import type { DiagnosticCode, DiagnosticGroup, DiagnosticInput, DiagnosticResult
 
 export interface DiagnosticQueryOptions {
   signal?: AbortSignal;
+  /** Crosschat configuration root; an explicit home isolates native data by default. */
   home?: string;
   env?: NodeJS.ProcessEnv;
+  nativeEnvironment?: 'inherit' | 'isolated';
   timeoutMs?: number;
   /** Thread-only test seam. Tasks that spawn subprocesses use createProcess. */
   createWorker?(): Worker;
@@ -78,6 +80,7 @@ export function parseDiagnosticResult(input: unknown): DiagnosticResult {
 function environment(options: DiagnosticQueryOptions): NodeJS.ProcessEnv {
   const env = { ...process.env, ...options.env };
   if (options.home === undefined) return env;
+  if (options.nativeEnvironment === 'inherit') return { ...env, CROSSCHAT_DIAGNOSTIC_HOME: options.home };
   for (const key of Object.keys(env)) if (['HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'CODEX_HOME', 'CODEX_SQLITE_HOME', 'CLAUDE_CONFIG_DIR'].includes(key.toUpperCase())) delete env[key];
   return { ...env, HOME: options.home, USERPROFILE: options.home, CODEX_HOME: join(options.home, '.codex'), CLAUDE_CONFIG_DIR: join(options.home, '.claude'), CROSSCHAT_DIAGNOSTIC_HOME: options.home };
 }

@@ -78,7 +78,7 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
         const discovery = createLocalDiscoveryService(options.home === undefined ? {} : { home });
         const baseDir = join(home, '.crosschat');
         const membership = createSessionMembershipService({ baseDir, discovery });
-        const overview = createLocalOverview({ home, discovery });
+        const overview = createLocalOverview({ home, discovery, nativeEnvironment: options.home === undefined ? 'inherit' : 'isolated' });
         const communications = createCommunicationResources({
           readCommunications: ({ contextId, signal }) => communicationQueries.queryCommunications({ baseDir, contextId, signal }),
           readOutbox: ({ contextId, signal }) => communicationQueries.queryOutbox({ baseDir, contextId, signal }),
