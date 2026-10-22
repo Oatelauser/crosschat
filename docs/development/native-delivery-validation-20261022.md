@@ -44,7 +44,8 @@ Claude Code 2.1.307；临时 CLAUDE_CONFIG_DIR 和工作目录，原生 sdk-cli/
 - 早期临时原生试验 FULL_BUSY_D / FULL_IDLE_E 已实际进入当前聊天，完整信封字节及按 c6 回信到 Claude 均核对；临时注入不作为最终生产安装验收。
 - 正式全局 CLI + 同步 skill：Desktop→交互 Claude turn10/c6 完整信封，Claude 实际运行 `crosschat send --conversation c6 --delivery steer` 回信 turn11，完整信封已实际出现在当前聊天，追加于原活跃轮。原始回执 unconfirmed，约 2.5 秒后原生 user 历史才落盘；原目标绑定摘要复查 confirmed，没有重发。
 - busy queue：正式来信 turn13 在原轮 active 时 parked；原 task_complete 为 01:55:12.114Z，新 task_started 为 01:55:12.587Z，完整 user 信封 01:55:12.613Z 才进入新轮。目标 outbox 清空，原摘要复查 confirmed；Claude 01:55:38.136Z 实际收到默认 queue 的 turn14 ACK。前后元数据证据在 `crosschat-desktop-acceptance-cGO8sO/busy-queue-before.json` / `busy-queue-after.json`，当前界面也实际收到。
-- 正式空闲 queue/steer 待完成；已让原交互 Claude 执行只读等待两次 idle 后一次发送的临时脚本，下次续接须核对结果并清理脚本。
+- idle queue：原交互 Claude 的临时脚本从生产 adapter 于 01:58:20.855Z / 01:58:21.706Z 取得两次连续 idle，activeTurnId 均为 null；仅一次正式 CLI 发送，exit0、delivered、queued=false。turn16 完整信封实际唤醒当前聊天，root 默认 queue 回信 turn17。证据为 `crosschat-desktop-acceptance-cGO8sO/idle-queue-result.json`，历史与交互 Claude 收到 ACK 的复核另存 after 文件。
+- 最后一场 idle steer 待完成；已让原交互 Claude 执行同一临时脚本 mode steer，待当前轮完成后确认两次 idle 再发送。续接核对结果后清理脚本、移除已验收活动项并完成收尾。
 
 ## 隔离回归与 skill
 
