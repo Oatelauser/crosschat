@@ -121,6 +121,23 @@ describe('TUI lazy entry and ownership', () => {
     expect(await pending).toBe(0);
     expect(mocks.save).not.toHaveBeenCalled();
   });
+
+  it('does not save context changes made only while a cancelled filter was being edited', async () => {
+    const io = await fixture();
+    const pending = runTui({ ...io, contexts: [
+      { id: 'first', kind: 'local', label: 'first' }, { id: 'second', kind: 'ssh', label: 'second' },
+    ] });
+    await vi.waitFor(() => expect(mocks.render).toHaveBeenCalledOnce());
+    const controller = renderedController();
+    controller.handleKey({ name: '/' });
+    controller.handleKey({ name: 'paste', text: 'second' });
+    expect(controller.getSnapshot().selectedId).toBe('second');
+    controller.handleKey({ name: 'escape' });
+    expect(controller.getSnapshot().selectedId).toBe('first');
+    controller.handleKey({ name: 'q' });
+    expect(await pending).toBe(0);
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
 });
 
 describe('CLI TUI command isolation', () => {
