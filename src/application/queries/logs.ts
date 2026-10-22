@@ -38,13 +38,15 @@ export async function queryLogWindow(options: QueryOptions & { file: string; max
     checkAbort(options.signal);
     handle = await open(options.file, 'r');
     checkAbort(options.signal);
-    const stat = await handle.stat();
+    const stat = await handle.stat({ bigint: true });
     checkAbort(options.signal);
     if (!stat.isFile()) throw new Error('Not a regular log file');
-    const identity = `${stat.dev}:${stat.ino}:${stat.birthtimeMs}`;
-    result.cursor = { identity, size: stat.size };
-    result.rotated = options.previous !== undefined && (options.previous.identity !== identity || stat.size < options.previous.size);
-    const start = Math.max(0, stat.size - maxBytes);
+    const identity = `${stat.dev}:${stat.ino}:${stat.birthtimeNs}`;
+    const size = Number(stat.size);
+    if (!Number.isSafeInteger(size)) throw new Error('Log size exceeds supported byte offsets');
+    result.cursor = { identity, size };
+    result.rotated = options.previous !== undefined && (options.previous.identity !== identity || size < options.previous.size);
+    const start = Math.max(0, size - maxBytes);
     let startsMidLine = false;
     if (start > 0) {
       const boundary = Buffer.alloc(1);
@@ -52,7 +54,7 @@ export async function queryLogWindow(options: QueryOptions & { file: string; max
       checkAbort(options.signal);
       startsMidLine = boundary[0] !== 10;
     }
-    const buffer = Buffer.alloc(Math.min(stat.size, maxBytes));
+    const buffer = Buffer.alloc(Math.min(size, maxBytes));
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, start);
     checkAbort(options.signal);
     result.bytesRead = bytesRead;
