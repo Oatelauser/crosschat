@@ -359,4 +359,68 @@ describe('TUI interaction controller', () => {
       expect(controller.getSnapshot().detail?.scrollOffset).toBe(0);
     } finally { controller.dispose(); }
   });
+
+  it('keeps secret form values out of permission, write and success messages while preserving the field', async () => {
+    const secret = 'fixture-secret-value';
+    const action: TuiAction = { ...rename, fields: [{ id: 'token', label: '秘密', secret: true, initialValue: secret }] };
+    let step = 0;
+    const controller = createTuiController({ registry: mutationRegistry(action), contexts, adapters: { sessions: {
+      read: async () => ({ rows: [third], completeness: 'complete' }),
+      checkAction: async () => step === 0 ? { enabled: false, reason: `权限拒绝 ${secret}` } : { enabled: true },
+      mutate: async () => { if (step === 1) throw new Error(`写入失败 ${secret}`); return { message: `已完成 ${secret}` }; },
+    } } });
+    try {
+      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      controller.handleKey({ name: 'e' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.error).toContain('权限拒绝'));
+      expect(controller.getSnapshot().overlay?.error).not.toContain(secret);
+      expect(controller.getSnapshot().overlay?.fields[0].value).toBe(secret);
+      step = 1; controller.handleKey({ name: 'enter' }); controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.error).toContain('写入失败'));
+      expect(controller.getSnapshot().overlay?.error).not.toContain(secret);
+      expect(controller.getSnapshot().overlay?.fields[0].value).toBe(secret);
+      step = 2; controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('list'));
+      expect(controller.getSnapshot().notice).toContain('已完成');
+      expect(controller.getSnapshot().notice).not.toContain(secret);
+    } finally { controller.dispose(); }
+  });
+
+  it('aborts copy ownership on route change and keeps late clipboard results away from the new page', async () => {
+    let finish: (() => void) | undefined;
+    let signal: AbortSignal | undefined;
+    const controller = createTuiController({ registry: registry(), contexts, adapters: {}, clipboard: (_text, currentSignal) => {
+      signal = currentSignal; return new Promise<void>((resolve) => { finish = resolve; });
+    } });
+    try {
+      controller.handleKey({ name: 'y' });
+      expect(signal?.aborted).toBe(false);
+      command(controller, 'sessions');
+      expect(signal?.aborted).toBe(true);
+      finish?.(); await Promise.resolve();
+      expect(controller.getSnapshot().notice).not.toBe('已复制完整值');
+    } finally { controller.dispose(); }
+  });
+
+  it('marks interrupted cached reads as cancelled and rejects ambiguous row identities', async () => {
+    let count = 0;
+    let finish: ((page: TuiPage) => void) | undefined;
+    const controller = createTuiController({ registry: registry(), contexts, adapters: { sessions: { read: async () => {
+      count++;
+      if (count === 1) return { rows: [third], completeness: 'complete' };
+      if (count === 2) return new Promise<TuiPage>((resolve) => { finish = resolve; });
+      return { rows: [third, { ...other, id: third.id }], completeness: 'complete' };
+    } } } });
+    try {
+      command(controller, 'sessions'); await loaded(controller);
+      const pending = controller.refresh(); command(controller, 'ctx');
+      controller.handleKey({ name: 'escape' });
+      expect(controller.getSnapshot()).toMatchObject({ route: { resourceId: 'sessions' }, completeness: 'cancelled', rows: [third] });
+      finish?.({ rows: [other], completeness: 'complete' }); await pending;
+      await controller.refresh();
+      expect(controller.getSnapshot().error).toContain('重复稳定标识');
+      expect(controller.getSnapshot().completeness).toBe('partial');
+      expect(controller.getSnapshot().rows).toEqual([third]);
+    } finally { controller.dispose(); }
+  });
 });
