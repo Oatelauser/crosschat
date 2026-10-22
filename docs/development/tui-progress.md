@@ -11,17 +11,26 @@
 
 ## 分工与接缝
 
-- root：唯一stage/commit；共享`src/tui/model.ts`、Ink/React展示、CLI动态入口、终端资源owner、依赖/构建、统一验证与文档。
-- tui_controller：`src/tui/app/*`、`resources/*`及controller/registry测试。框架无关snapshot store，登记统一路由/帮助/动作/列。
-- tui_text：`src/tui/ui/text.ts`及文本测试。Unicode显示格、字素编辑、控制序列清理、详情换行。
-- tui_contexts：`src/application/contexts/*`及上下文测试。配置只读列表与独立UI选中偏好，不探测或认证远端。
+- root：唯一stage/commit；共享模型、Ink/React展示、统一集成/终端验收与文档。
+- tui_controller：`src/tui/app/*`、`resources/registry.ts`及对应测试。框架无关snapshot store、统一登记、固定owner弹层/确认、异步代际。
+- tui_text：文本/输入、ConPTY工装、`main.ts`/CLI动态入口及对应测试。
+- tui_contexts：只读上下文、偏好、状态登记；独立审查及终端/剪贴板生命周期修复。
 - 共享模型在`src/tui/model.ts`；UI通过snapshot/handleKey订阅controller，业务通过注入的read/checkAction/mutate接缝。新Provider不进入通用页面分支。
 
 ## 当前状态
 
 - 已读v6规格及按键表；源码位置/布局按该稿，旧稿中的底层能力缺口以已验收核心接口为准。
-- 文本/上下文新测试已验证缺实现RED，等待集中检查点。controller合同已冻结，待首批RED。
-- 尚无T06验收。完成顺序：登记/交互 → 展示/入口/资源释放 → 隔离集成 → 真实终端键盘/resize/恢复 → 全量check → 验收后删除活动项。
+- 共享模型、文本、上下文/偏好、表格、controller、表单、中文状态、展示与lazy入口已落地。真实业务adapter尚未启用，属于后续任务。
+- 已独立复核并修复：未决mount退出、复制子进程失败回收、Windows UTF8输入、偏好误写、未知/取消结果完整性、秘密回显、表单cursor与窄屏编辑。
+- ConPTY工装自测已通过80×24→40×12、UTF8输入与自有进程回收。完整TUI首轮真实终端发现合并输入`:s`被吞，正在输入层补回归修复；帮助窄屏长说明同步改为共享换行坐标。
+- 尚无T06验收。剩余：输入/帮助GREEN → 真实终端键盘/resize/正常/Ctrl+C/异常恢复 → 独立审查收口 → 全量check → 记录证据并删除活动项。
+
+## 检查点
+
+- `78bf202`授权/规格与首组RED；`2e62941`文本GREEN；`44c89f8`上下文/依赖GREEN。
+- `f8d5d19`导航/自适应表格；`e681fd0`固定owner表单/完整详情；`4fbb58c`状态登记。
+- `429c78b`ConPTY工装；`96e5b2c`展示/动态入口；`09c04cb`生命周期/偏好；`81049c7`中断/新行选择/窄表单；`bd068bd`Windows复制Unicode。
+- 每组新失效路径先保存RED再实施GREEN；尚未跑本轮全量check，不将定向通过视为总验收。
 
 ## 设计来源
 
