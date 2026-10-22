@@ -61,7 +61,7 @@ describe('default local and SSH resource composition', () => {
       command(controller, 'stars'); await vi.waitFor(() => expect(controller.getSnapshot().rows[0]?.cells.name).toBe('完整星'));
       controller.handleKey({ name: 'enter' }); await vi.waitFor(() => expect(controller.getSnapshot().rows[0]?.cells.name).toBe('完整节点'));
       controller.handleKey({ name: 'v' }); await vi.waitFor(() => expect(tcpMocks.sessions).toHaveBeenCalled());
-      expect(controller.getSnapshot().resource?.columns.some((column) => column.id === 'machine')).toBe(true);
+      await vi.waitFor(() => expect(controller.getSnapshot().resource?.columns.some((column) => column.id === 'machine')).toBe(true));
       expect(mocks.localRead).not.toHaveBeenCalled();
       command(controller, 'sessions'); await vi.waitFor(() => expect(mocks.localRead).toHaveBeenCalled());
     } finally { controller.dispose(); }
@@ -77,7 +77,7 @@ describe('default local and SSH resource composition', () => {
       expect(controller.getSnapshot().route.resourceId).toBe('machines');
       command(controller, 'sessions'); await vi.waitFor(() => expect(tcpMocks.sessions).toHaveBeenCalledWith(expect.objectContaining({ contextId: context.id })));
       expect(mocks.localRead).not.toHaveBeenCalled();
-      expect(controller.getSnapshot().resource?.columns.some((column) => column.id === 'machine')).toBe(true);
+      await vi.waitFor(() => expect(controller.getSnapshot().resource?.columns.some((column) => column.id === 'machine')).toBe(true));
     } finally { controller.dispose(); }
   });
   it.each(['complete', 'unknown', 'blocked'] as const)('does not recreate removed preferences after an uninstall attempt: %s', async (outcome) => {

@@ -9,6 +9,9 @@ import { createLocalOverview } from '../application/observations/overview.js';
 import { createLocalServices } from '../application/services/managed.js';
 import { createLocalMaintenance } from '../application/maintenance/index.js';
 import { createSshApplication } from '../application/ssh/index.js';
+import { createTcpApplication } from '../application/tcp/index.js';
+import { createTcpManagement } from '../application/tcp/management.js';
+import { createTcpConfiguration } from '../application/tcp/configuration.js';
 import { queryManagedFiles } from '../application/queries/files.js';
 import type { TuiActionRequest, TuiReadRequest, TuiResource, TuiResourceAdapter } from './model.js';
 import { contextsResource } from './resources/contexts.js';
@@ -21,6 +24,8 @@ import { createServicesResource } from './resources/services.js';
 import { createFilesResource } from './resources/files.js';
 import { createMaintenanceResource } from './resources/maintenance.js';
 import { createSshResource, createSshDoctorResource, createSshSessionsResource } from './resources/ssh.js';
+import { createTcpResources } from './resources/tcp.js';
+import { createConnectionsResource } from './resources/connections.js';
 
 function childEnvironment(home: string, isolated: boolean): NodeJS.ProcessEnv {
   const env = { ...process.env };
@@ -67,6 +72,15 @@ export function createDefaultResources(options: { home: string; isolatedHome: bo
   const doctor = createDoctorResource({ overview });
   const remoteSessions = createSshSessionsResource({ ssh });
   const remoteDoctor = createSshDoctorResource({ ssh });
+  const tcp = createTcpApplication({ baseDir });
+  const tcpResources = createTcpResources({ tcp, management: createTcpManagement({ baseDir, catalog: tcp, membership, discovery }) });
+  const ordinarySessions = byContext({ local: sessions.adapter, ssh: remoteSessions.adapter, tcp: tcpResources.sessions.adapter });
+  const sessionAdapter = (request: TuiReadRequest | TuiActionRequest) => request.context?.kind === 'local' && request.route?.query?.starId !== undefined ? tcpResources.sessions.adapter : ordinarySessions;
+  const allSessions: TuiResourceAdapter = {
+    read: (request) => sessionAdapter(request).read(request),
+    async checkAction(request) { return sessionAdapter(request).checkAction?.(request) ?? { enabled: false, reason: '当前连接未提供此会话操作。' }; },
+    async mutate(request) { const apply = sessionAdapter(request).mutate; if (!apply) throw new Error('当前连接未提供此会话操作。'); return apply(request); },
+  };
   const maintenance = createLocalMaintenance({ home, env });
   let savePreferences = true;
   let uninstallGeneration = 0;
@@ -75,7 +89,7 @@ export function createDefaultResources(options: { home: string; isolatedHome: bo
     readOutbox: ({ contextId, signal }) => queryOutbox({ baseDir, contextId, signal }),
   });
   const installed = [
-    { resource: sessions.resource, adapter: byContext({ local: sessions.adapter, ssh: remoteSessions.adapter }) },
+    { resource: sessions.resource, adapter: allSessions },
     { resource: doctor.resource, adapter: byContext({ local: doctor.adapter, ssh: remoteDoctor.adapter }) },
     createStatusResource({ overview }), communications.deliveries, communications.outbox,
     createLogsResource({ read: (request) => queryManagedLog({ ...request, baseDir }) }),
@@ -93,6 +107,8 @@ export function createDefaultResources(options: { home: string; isolatedHome: bo
       return result;
     } } }),
     createSshResource({ ssh }),
+    tcpResources.stars, tcpResources.machines, tcpResources.members, tcpResources.keys,
+    createConnectionsResource({ configuration: createTcpConfiguration({ baseDir }) }),
   ];
   const resources = new Map(installed.map((item) => [item.resource.id, item.resource]));
   resources.set(contextsResource.id, contextsResource);

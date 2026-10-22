@@ -11,7 +11,7 @@ function fixture() {
   ];
   const read = vi.fn(async () => ({ rows: [], completeness: 'complete' as const }));
   const registry = createResourceRegistry(defaultResources.map((resource) => resource.id === 'ctx' ? contextsResource : resource));
-  return { read, controller: createTuiController({ registry, contexts, adapters: { ssh: { read }, status: { read }, sessions: { read } } }) };
+  return { read, controller: createTuiController({ registry, contexts, adapters: { ssh: { read }, status: { read }, sessions: { read }, machines: { read }, connect: { read } } }) };
 }
 
 describe('context actions use declared presentation metadata', () => {
@@ -26,7 +26,7 @@ describe('context actions use declared presentation metadata', () => {
     } finally { controller.dispose(); }
   });
 
-  it('keeps guides readonly, makes unsupported tests explicit and opens the existing SSH picker without a write', async () => {
+  it('keeps guides readonly, tests the selected TCP star and opens the existing connection chooser without a write', async () => {
     const { controller, read } = fixture();
     try {
       controller.handleKey({ name: 'down' }); controller.handleKey({ name: 'g' });
@@ -34,10 +34,12 @@ describe('context actions use declared presentation metadata', () => {
       expect(JSON.stringify(controller.getSnapshot().detail)).toContain('同一');
       controller.handleKey({ name: 't' }); expect(read).not.toHaveBeenCalled();
       controller.handleKey({ name: 'escape' }); controller.handleKey({ name: 'down' }); controller.handleKey({ name: 't' });
-      expect(controller.getSnapshot().notice).toContain('TCP'); expect(read).not.toHaveBeenCalled();
+      await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
+      expect(controller.getSnapshot().route).toEqual({ resourceId: 'machines', contextId: 'tcp:pending' });
+      controller.handleKey({ name: 'escape' });
       controller.handleKey({ name: 'a' });
-      await vi.waitFor(() => expect(controller.getSnapshot().route.resourceId).toBe('ssh'));
-      expect(read).toHaveBeenCalledOnce();
+      await vi.waitFor(() => expect(controller.getSnapshot().route.resourceId).toBe('connect'));
+      await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
     } finally { controller.dispose(); }
   });
 

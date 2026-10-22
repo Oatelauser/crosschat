@@ -49,6 +49,7 @@ function commonActions(resourceId: string, mode: TuiMode): TuiAction[] {
 
 const definitions: ReadonlyArray<[string, string, readonly string[], string]> = [
   ['ctx', '连接上下文', ['contexts', 'connections'], '选择本机、SSH 或 TCP 连接'],
+  ['connect', '添加已有连接', [], '选择已有SSH或导入TCP配置'],
   ['sessions', '会话', ['session'], '会话发现、筛选与只读详情'], ['ssh', 'SSH 对端', [], '已配置 SSH 对端'],
   ['stars', '星', ['star'], '当前连接可管理的星'], ['machines', '节点', ['nodes'], '星内机器'],
   ['members', '成员册', ['roster'], '星内登记成员'], ['keys', '接入凭证', ['credentials', 'node-keys'], '凭证元数据'],
