@@ -1,4 +1,5 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { Component, useEffect, useSyncExternalStore } from 'react';
+import type { ReactNode } from 'react';
 import { Box, Text, useInput, usePaste, useWindowSize } from 'ink';
 import type { Key } from 'ink';
 import type { createTuiController } from '../app/controller.js';
@@ -118,7 +119,17 @@ function normalizeKey(input: string, key: Key): TuiKey {
   return { name: name ?? input, text: name ? undefined : input, ctrl: key.ctrl, shift: key.shift, alt: key.meta };
 }
 
-export function TuiApp({ controller, registry, version, onError }: { controller: Controller; registry: ResourceRegistry; version: string; onError(error: unknown): void }) {
+interface AppProps { controller: Controller; registry: ResourceRegistry; version: string; onError(error: unknown): void }
+
+// Keep exception messages and component stacks out of Ink's default error screen.
+class RenderBoundary extends Component<{ children: ReactNode; onError(error: unknown): void }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(error: unknown) { this.props.onError(error); }
+  render() { return this.state.failed ? null : this.props.children; }
+}
+
+function TuiRuntime({ controller, registry, version, onError }: AppProps) {
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   const size = useWindowSize();
   useEffect(() => { controller.resize(size.columns, size.rows); }, [controller, size.columns, size.rows]);
@@ -127,4 +138,8 @@ export function TuiApp({ controller, registry, version, onError }: { controller:
   const resource = registry.resolve(snapshot.route.resourceId);
   if (!resource) throw new Error('未登记的资源');
   return <TuiScreen snapshot={snapshot} resource={resource} version={version} />;
+}
+
+export function TuiApp(props: AppProps) {
+  return <RenderBoundary onError={props.onError}><TuiRuntime {...props} /></RenderBoundary>;
 }
