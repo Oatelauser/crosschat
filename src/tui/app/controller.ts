@@ -153,8 +153,9 @@ export function createTuiController(options: TuiControllerOptions) {
   function actionRoute(action: TuiAction, row = selectedRow()): TuiRoute | undefined {
     const linked = own(row?.actionRoutes, action.id);
     if (linked) return linked;
+    if (row?.actionRoutes === undefined && row?.navigate) return row.navigate;
     if (action.navigateTo) return { resourceId: action.navigateTo, contextId: page.route.contextId };
-    return row?.actionRoutes === undefined ? row?.navigate : undefined;
+    return undefined;
   }
   function actionEntries(targetMode: TuiMode): TuiActionEntry[] {
     return options.registry.actions(page.route.resourceId, targetMode).map((action) => {
@@ -802,6 +803,7 @@ export function createTuiController(options: TuiControllerOptions) {
     if (disposed) return;
     if (mode === 'form') { formKey(key); return; }
     if (shortcut(key) === 'Ctrl+C') {
+      if (page.canFollow) page.following = false;
       if (mode === 'input') inputKey({ name: 'escape' });
       if (mode === 'choice') { mode = 'list'; choice = undefined; publish(); }
       if (activeRead) cancelRead(true);
