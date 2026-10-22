@@ -60,6 +60,7 @@ function hostTokens(raw: string): string[] {
 
 function sshContexts(raw: string, source: string): TuiConnection[] {
   if (raw.includes('\0')) throw new Error('Invalid SSH configuration');
+  const configurationRevision = createHash('sha256').update(raw).digest('hex');
   const aliases = new Set<string>();
   for (const line of raw.split(/\r?\n/)) {
     const match = /^\s*Host(?:\s*=\s*|\s+|$)(.*)$/i.exec(line);
@@ -76,7 +77,7 @@ function sshContexts(raw: string, source: string): TuiConnection[] {
     name: alias,
     target: alias,
     identityHint: 'SSH 配置别名；身份尚未核实',
-    attributes: { source, coverage: 'host-aliases-only' },
+    attributes: { source, coverage: 'host-aliases-only', configurationRevision },
   }));
 }
 

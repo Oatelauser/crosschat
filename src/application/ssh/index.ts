@@ -11,7 +11,7 @@ import type { SshDiscoveryFailure } from '../discovery/ssh.js';
 import type { DiscoveryEndpoint, DiscoveryProvider, DiscoveryRequest, DiscoveryResponse } from '../discovery/model.js';
 import { discoveryFailure } from '../discovery/service.js';
 import type { QueryError } from '../queries/reading.js';
-import { untilAborted } from '../sessions/reading.js';
+import { isRecord, untilAborted } from '../sessions/reading.js';
 import type { Completeness } from '../sessions/model.js';
 
 export interface SshReadRequest { contextId: string; signal?: AbortSignal }
@@ -84,6 +84,19 @@ export function createSshApplication(options: SshApplicationOptions = {}): SshAp
     const contextId = execution.contextId ?? 'unselected';
     const selected = await target({ contextId, signal: execution.signal });
     if (!selected.connection) return failedDiscovery(request, contextId, selected.errors);
+    const revision = selected.connection.attributes.configurationRevision;
+    let remoteRequest = request;
+    if (request.op === 'list' && request.cursor !== undefined) {
+      try {
+        const cursor: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(request.cursor, 'base64url')));
+        if (!isRecord(cursor) || typeof revision !== 'string' || !/^[a-f0-9]{64}$/.test(revision) || cursor.configurationRevision !== revision || typeof cursor.cursor !== 'string' || !cursor.cursor) throw new Error('Changed SSH config.');
+        remoteRequest = parseDiscoveryRequest({ ...request, cursor: cursor.cursor });
+      } catch {
+        const failure = discoveryFailure(request, contextId, 'invalid-cursor', 'SSH 配置已经变化或分页上下文无效；已停止继续读取。', now());
+        if (failure.op === 'list') failure.page.errors[0].nextStep = '按 r 从第一页刷新，重新使用当前 Host 配置；不会合并不同配置的分页结果。';
+        return failure;
+      }
+    }
     let stderr = Buffer.alloc(0);
     const onStderr = (chunk: Buffer | string) => { if (stderr.length < STDERR_BYTES) stderr = Buffer.concat([stderr, Buffer.from(chunk).subarray(0, STDERR_BYTES - stderr.length)]); };
     let child: DiscoverySshChild | undefined;
@@ -92,7 +105,7 @@ export function createSshApplication(options: SshApplicationOptions = {}): SshAp
       const endpoint = createSshDiscoveryClient({ host: selected.connection.target, timeoutMs, now, onFailure: (reason) => { transportFailure = reason; }, spawn: (command, args, spawnOptions) => {
         child = spawn(command, args, spawnOptions); child.stderr.on('data', onStderr); return child;
       } });
-      const response = await endpoint.execute(request, execution);
+      const response = await endpoint.execute(remoteRequest, execution);
       const result = response.op === 'list' ? response.page : response.detail;
       if (result.completeness === 'unavailable') {
         const problem = result.errors.find((error) => error.kind === 'malformed');
@@ -100,6 +113,13 @@ export function createSshApplication(options: SshApplicationOptions = {}): SshAp
           : problem ? failure(contextId, '远端发现接口返回无效结果。', 'malformed', '在同一 SSH 用户下升级并核对 crosschat discover 接口；不会回退执行 status。')
           : executionFailure(contextId, stderr.toString('utf8'), null);
         result.errors = result.errors.map((error) => error.kind === 'invalid-cursor' ? error : { source: { contextId, providerId: 'ssh' }, kind: issue.kind, message: issue.message, nextStep: issue.nextStep });
+      }
+      if (response.op === 'list' && response.page.nextCursor !== null) {
+        if (typeof revision !== 'string' || !/^[a-f0-9]{64}$/.test(revision)) return failedDiscovery(request, contextId, [failure(contextId, 'SSH 配置读取没有提供可绑定的分页版本。', 'unavailable', '核对当前 SSH 配置来源后从第一页刷新；不会在未知配置版本间拼接分页。')]);
+        const cursor = Buffer.from(JSON.stringify({ configurationRevision: revision, cursor: response.page.nextCursor })).toString('base64url');
+        try { parseDiscoveryRequest({ op: 'list', cursor }); }
+        catch { return failedDiscovery(request, contextId, [failure(contextId, 'SSH 分页游标超过读取限额。', 'malformed', '核对远端 discover 分页来源后从第一页刷新。')]); }
+        response.page.nextCursor = cursor;
       }
       return response;
     } finally { child?.stderr.off('data', onStderr); }
