@@ -37,6 +37,7 @@ function time(value: number | null): string {
 function disabled(reason: string, nextStep: string): TuiActionAvailability { return { enabled: false, reason, nextStep }; }
 function scope(request: TuiReadRequest): Scope | undefined {
   if (!request.context || request.context.kind !== 'local') return undefined;
+  if (request.route?.contextId !== undefined && request.route.contextId !== request.context.id) return undefined;
   const query = request.route?.query;
   let session: SessionRef | undefined;
   if (query?.sessionRef !== undefined) {
@@ -60,7 +61,7 @@ function summary(page: Pick<TuiPage, 'rows' | 'completeness' | 'sampledAt'>, err
     { label: '完整性', value: page.completeness }, { label: '采样时间', value: time(page.sampledAt ?? null) }, { label: '匹配条数', value: String(page.rows.length) },
     { label: '含义', value: '投递状态、回执和暂存仅表示传输记录，不代表任务完成或原生聊天历史；刷新不会补投或修复。' },
     { label: '来源问题与下一步', value: errors.length ? errors.map((error) => `${error.source} <${error.kind}>：${error.message}\n下一步：${error.nextStep}`).join('\n\n') : '无读取错误。' },
-  ] } }, notice: '仅传输元数据，不代表任务完成；刷新不会重发。' };
+  ] } }, notice: page.rows.length === 0 && (scopeValue.session || scopeValue.pairId) ? '当前范围未找到可核实的元数据关联；不代表原生聊天为空或没有投递。刷新不会重发。' : '仅传输元数据，不代表任务完成；刷新不会重发。' };
 }
 
 function deliveryRow(item: CommunicationSummary): TuiRow {
@@ -73,15 +74,17 @@ function deliveryRow(item: CommunicationSummary): TuiRow {
   };
 }
 function itemPair(thread: OutboxThreadMetadata, callerKey?: string): string { return [callerKey ?? 'human', `${thread.providerId}:${thread.threadId}`].sort().join('\n'); }
-function queueRow(item: OutboxThreadMetadata): TuiRow {
+function queueRow(item: OutboxThreadMetadata, scopeValue?: { pairId: string; totalCount: number | null; known: boolean }): TuiRow {
   const pairs = [...new Set(item.items.map((entry) => itemPair(item, entry.callerKey)))];
-  const query: Readonly<Record<string, string>> = pairs.length === 1 ? { pairId: pairs[0] } : { sessionRef: JSON.stringify({ contextId: item.contextId, providerId: item.providerId, nativeId: item.threadId }) };
+  const query: Readonly<Record<string, string>> = scopeValue ? { pairId: scopeValue.pairId } : pairs.length === 1 ? { pairId: pairs[0] } : { sessionRef: JSON.stringify({ contextId: item.contextId, providerId: item.providerId, nativeId: item.threadId }) };
   const uncertain = item.items.some((entry) => entry.deliveryState === 'uncertain');
   const state = item.state !== 'ready' ? `读取不完整<${item.state}>` : uncertain ? '写入待核实<uncertain>' : item.items.some((entry) => entry.deliveryState === 'in-flight') ? '已有写入尝试<in-flight>' : '已暂存，未确认送达';
   return { id: item.id, contextId: item.contextId, cells: { name: item.toName || item.threadId, provider: item.providerId, count: item.count === null ? '未知' : String(item.count), oldest: time(item.oldestParkedAt), state }, searchText: json(item), copyValue: item.mailboxFile,
     actionRoutes: { deliveries: { resourceId: 'deliveries', contextId: item.contextId, query } },
     actionAvailability: { logs: disabled('现有看门狗没有独立日志文件。', '查看已有投递审计并核对本机滞留镜像；本界面不启动或重复投递。') },
-    detail: [{ label: '完整会话引用', value: json({ contextId: item.contextId, providerId: item.providerId, nativeId: item.threadId }) }, { label: '暂存条数', value: item.count === null ? '未知（读取不完整）' : String(item.count) }, { label: '最早暂存时间', value: time(item.oldestParkedAt) }, { label: '当前记录状态', value: state }, { label: '条目元数据', value: json(item.items) }, { label: '本机镜像路径', value: item.mailboxFile }, { label: '边界', value: '暂存不代表已送达；待核实写入不能自动重试。此处不展示消息正文、不改变原有补投规则。' }],
+    detail: [{ label: '完整会话引用', value: json({ contextId: item.contextId, providerId: item.providerId, nativeId: item.threadId }) },
+      ...(scopeValue ? [{ label: '关联范围', value: `${scopeValue.pairId}\n${scopeValue.known ? '下列条数与条目仅属此通信对。' : '关联范围尚待核实；来源读取不完整，不能确认匹配条数。'}` }, { label: '目标全部队列条数', value: scopeValue.totalCount === null ? '未知' : String(scopeValue.totalCount) }] : []),
+      { label: '暂存条数', value: item.count === null ? '未知（读取不完整）' : String(item.count) }, { label: '最早暂存时间', value: time(item.oldestParkedAt) }, { label: '当前记录状态', value: state }, { label: '条目元数据', value: json(item.items) }, { label: '本机镜像路径', value: item.mailboxFile }, { label: '边界', value: '暂存不代表已送达；待核实写入不能自动重试。此处不展示消息正文、不改变原有补投规则。' }],
   };
 }
 
@@ -106,10 +109,17 @@ export function createCommunicationResources(options: CommunicationResourceOptio
     try {
       const result = await cancellable(options.readOutbox({ contextId: request.context.id, signal: request.signal }), request.signal);
       if (request.signal.aborted) return failure('读取已取消。', 'cancelled');
-      const items = result.items.filter((item) => item.contextId === request.context!.id
-        && (!scoped.session || sessionKey({ contextId: item.contextId, providerId: item.providerId, nativeId: item.threadId }) === sessionKey(scoped.session))
-        && (scoped.pairId === undefined || item.items.some((entry) => itemPair(item, entry.callerKey) === scoped.pairId)));
-      return summary({ rows: items.map(queueRow), completeness: result.completeness, sampledAt: result.observedAt }, result.errors, scoped);
+      const rows = result.items.flatMap((item): TuiRow[] => {
+        if (item.contextId !== request.context!.id || (scoped.session && sessionKey({ contextId: item.contextId, providerId: item.providerId, nativeId: item.threadId }) !== sessionKey(scoped.session))) return [];
+        if (scoped.pairId === undefined) return [queueRow(item)];
+        const matching = item.items.filter((entry) => itemPair(item, entry.callerKey) === scoped.pairId);
+        const matchesTarget = scoped.pairId.split('\n').includes(`${item.providerId}:${item.threadId}`);
+        if (!matching.length && !(item.count === null && matchesTarget)) return [];
+        const subset = { ...item, items: matching, count: item.count === null ? null : matching.length,
+          toName: matching.at(-1)?.toName ?? null, oldestParkedAt: item.count === null || !matching.length ? null : Math.min(...matching.map((entry) => entry.parkedAt)) };
+        return [queueRow(subset, { pairId: scoped.pairId, totalCount: item.count, known: item.count !== null })];
+      });
+      return summary({ rows, completeness: result.completeness, sampledAt: result.observedAt }, result.errors, scoped);
     } catch { return failure(request.signal.aborted ? '读取已取消。' : '滞留元数据无法读取；按 r 重试并核对来源权限。', request.signal.aborted ? 'cancelled' : 'unavailable'); }
   } };
   return { deliveries: { resource: deliveries, adapter: deliveryAdapter }, outbox: { resource: outbox, adapter: outboxAdapter } };
