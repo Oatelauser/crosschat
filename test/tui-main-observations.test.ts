@@ -1,6 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import os from 'node:os';
+import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { isValidElement } from 'react';
@@ -57,6 +59,20 @@ beforeEach(() => {
 afterEach(async () => { await Promise.all(homes.splice(0).map((home) => rm(home, { recursive: true, force: true }))); });
 
 describe('default local observation wiring', () => {
+  it('preserves native environment paths when the caller has not requested an isolated home', async () => {
+    const io = await fixture();
+    const homeProbe = vi.spyOn(os, 'homedir').mockReturnValue(io.home);
+    syncBuiltinESMExports();
+    const active = runTui({ ...io, home: undefined });
+    try {
+      await vi.waitFor(() => expect(mocks.render).toHaveBeenCalledOnce());
+      expect(mocks.discovery).toHaveBeenCalledWith({});
+      expect(mocks.overview).toHaveBeenCalledWith(expect.objectContaining({ home: io.home, nativeEnvironment: 'inherit' }));
+    } finally {
+      io.signals.emit('SIGTERM'); await active;
+      homeProbe.mockRestore(); syncBuiltinESMExports();
+    }
+  });
   it('installs the five real readonly resources lazily and preserves exact related routes', async () => {
     const io = await fixture(); const active = runTui(io);
     try {
