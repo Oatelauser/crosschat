@@ -1,11 +1,26 @@
 import { parentPort, workerData } from 'node:worker_threads';
-import { readFileSync } from 'node:fs';
+import { closeSync, fstatSync, lstatSync, openSync, readSync } from 'node:fs';
 import { join } from 'node:path';
 import { MultichatError } from '../../errors.js';
 import { DEFAULT_PORT } from '../../serve/broker.js';
 import { tcpDir } from '../../serve/registry.js';
 import { guardSameStarDaemon } from './guard.js';
 import { connectValueOf, listServeProcesses, pidsOnPort } from './processes.js';
+
+function readBrokerMetadata(file: string): unknown {
+  const limit = 2 * 1024 * 1024;
+  const metadata = lstatSync(file);
+  if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error('Invalid broker metadata source');
+  const descriptor = openSync(file, 'r');
+  try {
+    const info = fstatSync(descriptor);
+    if (!info.isFile() || info.size > limit) throw new Error('Broker metadata exceeds its limit');
+    const buffer = Buffer.alloc(Math.min(info.size + 1, limit + 1));
+    const bytes = readSync(descriptor, buffer, 0, buffer.length, 0);
+    if (bytes > limit) throw new Error('Broker metadata exceeds its limit');
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, bytes))) as unknown;
+  } finally { closeSync(descriptor); }
+}
 
 if (parentPort === null) throw new Error('服务核验须由专属 worker 启动');
 try {
@@ -20,7 +35,7 @@ try {
     const processes = listServeProcesses();
     let port: number | undefined = DEFAULT_PORT;
     try {
-      const value: unknown = JSON.parse(readFileSync(join(tcpDir(input.baseDir), 'broker.json'), 'utf8'));
+      const value = readBrokerMetadata(join(tcpDir(input.baseDir), 'broker.json'));
       if (value === null || typeof value !== 'object' || !('stars' in value) || !Array.isArray(value.stars)) throw new Error('Invalid broker metadata');
       if ('port' in value) {
         if (typeof value.port !== 'number' || !Number.isInteger(value.port)) throw new Error('Invalid broker port');
