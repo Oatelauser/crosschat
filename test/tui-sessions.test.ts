@@ -110,6 +110,26 @@ describe('local TUI sessions resource', () => {
     expect(untouched.execute).not.toHaveBeenCalled();
   });
 
+  it('returns promptly when a discovery endpoint ignores cancellation and keeps completed pages', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const service: DiscoveryEndpoint = { execute: vi.fn(async () => {
+      calls++;
+      if (calls === 1) return response([session('claude', 'one')], { cursor: 'pending' });
+      return new Promise<DiscoveryResponse>(() => {});
+    }) };
+    const pending = read(createSessionsResource({ discovery: service }).adapter, controller.signal);
+    await vi.waitFor(() => expect(calls).toBe(2));
+    controller.abort();
+    const result = await Promise.race([pending, new Promise<undefined>((resolve) => setTimeout(resolve, 100))]);
+    expect(result).toMatchObject({ completeness: 'cancelled', rows: [{ id: sessionKey(session('claude', 'one').ref) }] });
+  });
+
+  it('retains earlier rows as partial when a later source page is unavailable', async () => {
+    const { adapter } = createSessionsResource({ discovery: endpoint([response([session('claude', 'one')], { cursor: 'pending' }), response([], { completeness: 'unavailable' })]) });
+    expect(await read(adapter)).toMatchObject({ completeness: 'partial', rows: [{ id: sessionKey(session('claude', 'one').ref) }] });
+  });
+
   it('rejects absent or non-local contexts without silently scanning this machine', async () => {
     const service = endpoint([response([])]);
     const { adapter } = createSessionsResource({ discovery: service });
@@ -139,6 +159,13 @@ describe('local TUI sessions resource', () => {
     const { adapter } = createSessionsResource({ discovery: endpoint([response([session('codex', uuid), session('claude', 'other', `codex/${uuid}`)]), response([session('claude', 'named', '可见名字')], { completeness: 'partial' })]) });
     expect((await read(adapter)).rows[0].copyValue).toBeUndefined();
     expect((await read(adapter)).rows[0].copyValue).toBeUndefined();
+  });
+
+  it('does not publish a send address when a provider only declares discovery', async () => {
+    const item = { ...session('claude', 'id', '只读会话'), capabilities: { ...capabilities, delivery: false } };
+    const page = await read(createSessionsResource({ discovery: endpoint([response([item])]) }).adapter);
+    expect(page.rows[0].copyValue).toBeUndefined();
+    expect(page.rows[0].actionAvailability?.copy).toMatchObject({ enabled: false });
   });
 
   it('registers read-only native guidance with future-provider extensions and disables unsupported mutations/scope', async () => {
