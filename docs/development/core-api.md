@@ -14,6 +14,9 @@
 | 本机观察 | `src/application/observations/{overview,communications,logs}.ts` | 状态组合、按需诊断、通信对/队列元数据与有界日志；安全DTO、局部错误、只读无补投 |
 | 本机与远程管理 | `src/application/management/local.ts`、`remote.ts` | 稳定 starId；热/冷/拒绝/失败有结构结果，热失败不冷写；远程保留现有挑战应答与权限 |
 | 服务起停 | `src/application/services/local.ts`、`background.ts` | spawn 仅代表 starting，需匹配进程与状态文件才 ready；后台停止隔离阻塞进程扫描，保留原身份与端口闸门 |
+| TUI本机服务任务 | `src/application/services/managed.ts` | read/check/execute，稳定目标+revision、原防双开、完整PID集合核对、进程存在与实际就绪分开 |
+| TUI维护 | `src/application/maintenance/index.ts` | list/preview/execute；确认指纹、执行端重算、逐项实际结果；共享旧skills/uninstall业务而保留CLI契约 |
+| SSH上下文 | `src/application/ssh/index.ts` | 已配置别名、完整发现、单目标检测、结构化远端doctor；无本机回落、内部游标绑定配置观察 |
 | 清理 | `src/application/cleanup/index.ts` | `planCleanup` 只读，`executeCleanup` 执行既定目标，保留原规则和 CLI 计数语义 |
 | 发送 | `src/application/send/index.ts`、`types.ts` | `sendMessage` 返回 typed 结果；`format.ts` 负责旧文本/JSON，TCP 本机桥直接使用结果 |
 | 成员对账 | `src/application/members/index.ts` | 有序 Provider 能力委派，保留现有活性/查名策略；unknown 不当成 absent |
@@ -28,6 +31,10 @@
 取消读取后丢弃迟到结果，Adapter 负责释放自己的连接、监听器和子进程。诊断查询在 finally 回收 owner 后再次检查取消。服务启动、管理和清理是写操作；停止等待不能表示回滚，超时应核实结果后再重试。旧 CLI 继续使用原同步 doctor/stop 边界；展示入口应使用异步应用接缝。
 
 `stopServicesInBackground` 在专属 Worker 中完成原有停机操作并回收 owner，不提供中断写操作的取消参数。调用方可丢弃迟到结果，停机仍会执行至完成。
+
+TUI服务任务通过`createLocalServices`绑定本机配置、状态和系统进程证据。`check/execute`携带完整id、revision和start/stop；配置/进程变化拒绝原目标。仅TUI停机传`expectedPids`，由`stopServices`在同次扫描核对完整集合后再kill；原CLI不传，原选择器行为保持。同步探测使用`runOwnedServiceProcess`拥有整个辅助进程树；TUI停机使用同类可回收owner，取消/超时后的外部kill不可回滚，结果需核实，旧background默认接口不变。
+
+`createLocalMaintenance({home,env,sourceDir?})`的list零IO，preview只读取元数据，execute只接operationId/expectedFingerprint，不接受任意目标路径。worker重新计算原规则清单；坏状态、链接、目的硬链接或无法完整核验的技能源/目标阻止TUI操作。旧CLI清理计数、安装失败停止次序、卸载逐项继续与退出码保持。结果区分complete/partial/blocked/changed，npm恒not-run；新尝试无回执显示unknown。composition在卸载发出后阻止退出写偏好，避免重建数据目录。
 
 `queryStars` 默认只读本机脱敏台账。Context 注入现有 roster 读取能力后才能判断在线数；未注入时明确 unknown/partial，不能据静态台账推断下线。旧端没有 sessions 字段时保留机器信息并标部分结果。详见 [查询模块说明](../../src/application/queries/README.md)。
 
@@ -48,6 +55,10 @@
 `crosschat discover` 接收stdin上的单个JSON请求并输出单个JSON结果；空输入默认`{"op":"list"}`。列表支持`limit`（每Provider默认100、1—1000）、`cursor`和`filter:{providerIds?,text?}`；详情请求为`{"op":"detail","providerId":"claude","nativeId":"完整ID","referenceKind":"native"}`。结果保留Provider能力、原生状态、元数据、采样时间与每来源错误，不读取聊天正文，不回传投递插座或凭证。请求/响应最多2MiB，元数据有深度/数组/节点数量边界。
 
 `createSshDiscoveryClient({host}).execute(request,{contextId,signal})` 用固定远端命令`crosschat discover`，请求通过stdin JSON传递，超时/取消回收自己的SSH子进程；只读登录用户可见的来源。`createTcpDiscoveryClient({broker,targetMachine,admin?}).execute(...)` 使用新`discover-query/result/cancel`，可选管理钥挑战认证；按当前连接的星与目标节点授权，含该节点未入册的可发现会话。两端须使用本轮新版，不做旧端协商、status回退或自动升级。
+
+`createSshApplication({home,...})`每次从当前配置重新核对明确Host，list不探测；inspect只做limit1采样，doctor固定执行`crosschat doctor --json`。该JSON选项由用户明确批准；无参doctor输出/检查/级别/退出码保持。远端退出1且合法结果的summary.failed为true表示已完成诊断，认证/接口失败不能当作体检结果。不解析旧文本来重建检查，不调用status，不回落本机。
+
+TUI内部游标额外绑定本次SSH配置文件内容hash，剥去外层后才将原cursor发送远端；文件变化拒绝续页，手动刷新从当前配置重读。该观察不证明固定UID，也不跟踪Include等间接配置的变化。显式隔离home由composition传`configFile/env`，两条SSH执行路径使用同一`-F`绝对配置路径；默认启动保持系统原SSH配置语义。此项不声称隔离全部密钥、agent或known_hosts，测试继续注入SSH进程。
 
 远端游标绑定连接上下文、端点/星/机器和筛选条件，不能换目标继续使用；详情核对完整Provider/原生ID/引用种类。broker给转发请求分配独立ID，核验回程实际socket与当前星内owner，每连接最多8个并发发现。取消、超时、断线、撤权和停机取消源读取并丢弃迟到响应。发现不读取原生归档；“完整”只指当前来源非归档集合。
 
