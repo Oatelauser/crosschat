@@ -1,5 +1,5 @@
 import { Worker } from 'node:worker_threads';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
@@ -150,6 +150,41 @@ describe('local maintenance plans and exact execution', () => {
     expect(existsSync(denied)).toBe(true);
     expect(existsSync(f.options.sourceDir)).toBe(true);
   });
+
+  it('refuses parent-directory junctions before a cleanup or skills target can escape the confirmed home scope', async () => {
+    const { previewMaintenance } = await import('../src/application/maintenance/operations.js');
+    const cleanup = fixture();
+    const outside = mkdtempSync(join(root, 'outside-'));
+    mkdirSync(join(outside, 'inbox'));
+    const outsideFile = join(outside, 'inbox', 'old');
+    writeFileSync(outsideFile, 'outside content');
+    const old = new Date(NOW - 9 * DAY); utimesSync(outsideFile, old, old);
+    mkdirSync(join(cleanup.home, '.crosschat'));
+    symlinkSync(outside, join(cleanup.home, '.crosschat', 'tcp'), process.platform === 'win32' ? 'junction' : 'dir');
+    expect(previewMaintenance('cleanup', cleanup.options)).toMatchObject({ enabled: false });
+    expect(readFileSync(outsideFile, 'utf8')).toBe('outside content');
+
+    const skills = fixture();
+    const outsideSkills = mkdtempSync(join(root, 'outside-skills-'));
+    mkdirSync(join(skills.home, '.claude'));
+    symlinkSync(outsideSkills, join(skills.home, '.claude', 'skills'), process.platform === 'win32' ? 'junction' : 'dir');
+    expect(previewMaintenance('install-skills', skills.options)).toMatchObject({ enabled: false });
+    expect(previewMaintenance('uninstall-data', skills.options)).toMatchObject({ enabled: false });
+    expect(existsSync(join(outsideSkills, 'crosschat'))).toBe(false);
+  });
+
+  it('stops the skills task after its first failure without pretending the second destination was attempted', async () => {
+    const { previewMaintenance, executeMaintenance } = await import('../src/application/maintenance/operations.js');
+    const f = fixture();
+    const preview = previewMaintenance('install-skills', f.options);
+    const install = vi.fn(() => { throw new Error('sensitive source material'); });
+    const result = executeMaintenance('install-skills', preview.fingerprint, { ...f.options, effects: { install } });
+    expect(install).toHaveBeenCalledOnce();
+    expect(result.status).toBe('partial');
+    expect(result.items.map((item) => item.outcome)).toEqual(['failed', 'skipped']);
+    expect(result.items[1].message).toContain('尚未尝试');
+    expect(JSON.stringify(result)).not.toContain('sensitive');
+  });
 });
 
 describe('owned maintenance worker lifecycle', () => {
@@ -178,5 +213,31 @@ describe('owned maintenance worker lifecycle', () => {
     expect(terminate).toHaveBeenCalledOnce();
     expect(worker.threadId).toBe(-1);
     expect(worker.listenerCount('message')).toBe(0);
+  });
+
+  it('rejects malformed IPC without echoing its raw contents and still terminates the owned worker', async () => {
+    const { createLocalMaintenance } = await import('../src/application/maintenance/index.js');
+    const f = fixture();
+    const worker = new Worker("setTimeout(()=>require('node:worker_threads').parentPort.postMessage({status:'complete',key:'SECRET'}),30);setInterval(()=>{},1000);", { eval: true });
+    const terminate = vi.spyOn(worker, 'terminate');
+    const maintenance = createLocalMaintenance({ ...f.options, createWorker: () => worker });
+    const error = await maintenance.preview({ operationId: 'cleanup' }).then(() => 'unexpected success', (value: Error) => value.message);
+    expect(error).toContain('无效');
+    expect(error).not.toContain('SECRET');
+    expect(terminate).toHaveBeenCalledOnce();
+    expect(worker.listenerCount('message')).toBe(0);
+    expect(worker.threadId).toBe(-1);
+  });
+
+  it('times out a pending write with an uncertain result and releases its worker and listeners', async () => {
+    const { createLocalMaintenance } = await import('../src/application/maintenance/index.js');
+    const f = fixture();
+    const worker = new Worker('setInterval(()=>{},1000);', { eval: true });
+    const terminate = vi.spyOn(worker, 'terminate');
+    const maintenance = createLocalMaintenance({ ...f.options, timeoutMs: 30, createWorker: () => worker });
+    await expect(maintenance.execute({ operationId: 'cleanup', expectedFingerprint: 'a'.repeat(64) })).rejects.toMatchObject({ name: 'TimeoutError', message: expect.stringContaining('结果待核实') });
+    expect(terminate).toHaveBeenCalledOnce();
+    expect(worker.listenerCount('message')).toBe(0);
+    expect(worker.threadId).toBe(-1);
   });
 });

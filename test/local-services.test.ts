@@ -110,4 +110,42 @@ describe('managed local service tasks', () => {
     expect(f.stop).not.toHaveBeenCalled();
     expect((await f.service.read({ contextId: 'ssh:other', signal: signal() })).completeness).toBe('unavailable');
   });
+
+  it('rejects a configuration revision changed while an asynchronous guard was running', async () => {
+    const f = await fixture();
+    const node = (await f.rows()).items[1];
+    let release = () => {};
+    let entered = () => {};
+    const guarded = new Promise<void>((resolve) => { entered = resolve; });
+    f.guard.mockImplementation(async () => { entered(); await new Promise<void>((resolve) => { release = resolve; }); return { allowed: true }; });
+    const action = f.service.execute(f.request(node, 'start')); await guarded;
+    await writeFile(f.config, JSON.stringify({ brokers: [{ ...entry, name: 'renamed' }] }));
+    await f.rows();
+    release();
+    expect(await action).toMatchObject({ state: 'failed' });
+    expect(f.launch).not.toHaveBeenCalled();
+  });
+
+  it('routes running service logs to the actual matching snapshot filename after the configured name changes', async () => {
+    const f = await fixture();
+    f.inspect.mockResolvedValue({ ...inspected, processes: [{ kind: 'node', pid: 1234, selector: 'full-star' }] });
+    f.statuses.push({ file: 'status-node-old-name.json', kind: 'node', selector: 'old-name', state: 'online', pid: 1234, processAlive: true, freshness: 'fresh', readiness: 'ready', lastUpdated: new Date(100).toISOString() });
+    expect((await f.rows()).items[1].sourceId).toBe('node:node-old-name.log');
+  });
+
+  it('keeps duplicate configured targets from producing duplicate row identities', async () => {
+    const f = await fixture();
+    await writeFile(f.config, JSON.stringify({ brokers: [entry, entry] }));
+    const page = await f.rows();
+    expect(new Set(page.items.map((item) => item.id)).size).toBe(page.items.length);
+    expect(page.items.filter((item) => item.kind === 'node').every((item) => !item.start.allowed)).toBe(true);
+  });
+
+  it('does not describe termination of a replacement PID as successful termination of the selected process', async () => {
+    const f = await fixture();
+    f.inspect.mockResolvedValue({ ...inspected, processes: [{ kind: 'node', pid: 1234, selector: 'full-star' }] });
+    const node = (await f.rows()).items[1];
+    f.stop.mockResolvedValue({ state: 'ready', events: [{ kind: 'terminated', target: 'node', pid: 5678, selector: 'full-star' }] });
+    expect(await f.service.execute(f.request(node, 'stop'))).toMatchObject({ state: 'unconfirmed' });
+  });
 });

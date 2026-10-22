@@ -78,4 +78,18 @@ describe('maintenance resource ownership and result accuracy', () => {
     await expect(f.adapter.mutate!({ ...action, context: { ...context, kind: 'ssh' } })).rejects.toThrow();
     expect(f.maintenance.execute).not.toHaveBeenCalled();
   });
+
+  it('marks a newer unacknowledged write as uncertain instead of showing its older success as the latest result', async () => {
+    const f = fixture(); const action = await request(f);
+    await f.adapter.checkAction!(action);
+    await f.adapter.mutate!(action);
+    await f.adapter.checkAction!(action);
+    f.maintenance.execute.mockRejectedValue(new Error('worker failed after possible write'));
+    await expect(f.adapter.mutate!(action)).rejects.toThrow();
+    const row = (await f.adapter.read({ context, signal: signal() })).rows[0];
+    expect(row.cells.state).toContain('待核实<unknown>');
+    expect(JSON.stringify(row.detail)).toContain('上次已确认结果');
+    expect(JSON.stringify(row.detail)).toContain('可能已有部分写入');
+    expect(JSON.stringify(row)).not.toContain('worker failed');
+  });
 });
