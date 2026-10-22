@@ -18,7 +18,7 @@ export async function copyText(value: string, options: ClipboardOptions = {}): P
   const platform = options.platform ?? process.platform;
   const command = platform === 'win32' ? 'powershell.exe' : platform === 'darwin' ? 'pbcopy' : 'wl-copy';
   const args = platform === 'win32'
-    ? ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', 'Set-Clipboard -Value ([Console]::In.ReadToEnd())']
+    ? ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', '[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false); Set-Clipboard -Value ([Console]::In.ReadToEnd())']
     : [];
   await new Promise<void>((resolve, reject) => {
     const spawn: NonNullable<ClipboardOptions['spawn']> = options.spawn ?? nodeSpawn;
