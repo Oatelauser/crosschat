@@ -111,7 +111,7 @@ export function TuiScreen({ snapshot, resource, version }: { snapshot: TuiSnapsh
     }).map((action) => `${action.shortcut} ${action.label}${action.enabled ? '' : '(不可用)'}`).join('  '), tone: 'cyan' },
     { text: snapshot.input?.hint ?? snapshot.actions.filter((entry) => ['help', 'quit', 'back', 'interrupt', 'form-cancel', 'field-enter'].includes(entry.id)).map((entry) => `${entry.shortcut} ${entry.label}`).join('  '), tone: 'gray' },
   ];
-  const lines = height < 10 ? [{ text: snapshot.mode === 'form' ? '请放大终端 · Esc取消' : '终端太小 · 请放大 · q退出', tone: 'yellow' as const }, ...top.slice(0, Math.max(0, height - 1))] : [...top, ...body.slice(0, bodyHeight), ...footer];
+  const lines = height < 10 ? [{ text: snapshot.mode === 'form' ? '请放大终端 · Esc取消' : '终端太小 · 请放大 · Ctrl+C取消/退出', tone: 'yellow' as const }, ...top.slice(0, Math.max(0, height - 1))] : [...top, ...body.slice(0, bodyHeight), ...footer];
   return <Box width={width} height={height} flexDirection="column" overflow="hidden">
     {lines.slice(0, height).map((line, index) => <Box key={index} height={1} flexShrink={0} width={width}><Text wrap="truncate" color={line.tone} backgroundColor={line.selected ? 'blue' : undefined}>{clipText(line.text, width) || ' '}</Text></Box>)}
   </Box>;
