@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { TuiContext, TuiPage, TuiResourceAdapter, TuiRow } from '../src/tui/model.js';
+import type { TuiAction, TuiContext, TuiPage, TuiResourceAdapter, TuiRow } from '../src/tui/model.js';
 import { createTuiController } from '../src/tui/app/controller.js';
 import { createResourceRegistry, defaultResources } from '../src/tui/resources/registry.js';
 
 const contexts: TuiContext[] = [
   { id: 'local', kind: 'local', label: '本机', target: 'fixture-pc' },
   { id: 'ssh:dev', kind: 'ssh', label: '开发机', description: 'SSH', target: 'dev' },
-  { id: 'tcp:star', kind: 'tcp', label: '测试星', description: 'TCP', target: 'example:7260' },
+  { id: 'tcp:orbit', kind: 'tcp', label: '测试星', description: 'TCP', target: 'example:7260' },
 ];
 
 function command(controller: ReturnType<typeof createTuiController>, value: string) {
@@ -30,6 +30,14 @@ async function loaded(controller: ReturnType<typeof createTuiController>) {
   await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
 }
 
+const rename: TuiAction = {
+  id: 'rename', label: '修改显示名', shortcut: 'e', ownerResourceId: 'sessions', selectionPolicy: 'required', capability: 'rename', mutation: true,
+  kind: 'form', fields: [{ id: 'name', label: '显示名', required: true }], impact: ['只修改当前目标的显示名'], returnPolicy: 'restore',
+};
+function mutationRegistry(action: TuiAction = rename) {
+  return createResourceRegistry(defaultResources.map((resource) => resource.id === 'sessions' ? { ...resource, unavailableReason: undefined, actions: [action] } : resource));
+}
+
 describe('TUI interaction controller', () => {
   it('starts on ctx with stable snapshots and filters its rows while offering commands', async () => {
     const { createTuiController } = await import('../src/tui/app/controller.js');
@@ -38,7 +46,7 @@ describe('TUI interaction controller', () => {
     try {
       const initial = controller.getSnapshot();
       expect(initial.route).toEqual({ resourceId: 'ctx' });
-      expect(initial.rows.map((row) => row.id)).toEqual(['local', 'ssh:dev', 'tcp:star']);
+      expect(initial.rows.map((row) => row.id)).toEqual(['local', 'ssh:dev', 'tcp:orbit']);
       expect(controller.getSnapshot()).toBe(initial);
       controller.handleKey({ name: ':' });
       controller.handleKey({ name: 's', text: 's' });
@@ -56,16 +64,16 @@ describe('TUI interaction controller', () => {
   });
 
   it('remembers a context selection without entering it and enters local and TCP defaults only on request', async () => {
-    const controller = createTuiController({ registry: registry(), contexts, initialSelectedContextId: 'tcp:star', adapters: {} });
+    const controller = createTuiController({ registry: registry(), contexts, initialSelectedContextId: 'tcp:orbit', adapters: {} });
     try {
-      expect(controller.getSnapshot()).toMatchObject({ route: { resourceId: 'ctx' }, selectedId: 'tcp:star', selectedIndex: 2 });
+      expect(controller.getSnapshot()).toMatchObject({ route: { resourceId: 'ctx' }, selectedId: 'tcp:orbit', selectedIndex: 2 });
       controller.handleKey({ name: 'enter' });
-      expect(controller.getSnapshot().route).toEqual({ resourceId: 'machines', contextId: 'tcp:star' });
+      expect(controller.getSnapshot().route).toEqual({ resourceId: 'machines', contextId: 'tcp:orbit' });
       expect(controller.getSnapshot().completeness).toBe('unavailable');
       expect(controller.getSnapshot().notice).toContain('尚未接入');
       expect(controller.getSnapshot().context?.permissionLabel).toBeUndefined();
       controller.handleKey({ name: 'escape' });
-      expect(controller.getSnapshot()).toMatchObject({ route: { resourceId: 'ctx' }, selectedId: 'tcp:star' });
+      expect(controller.getSnapshot()).toMatchObject({ route: { resourceId: 'ctx' }, selectedId: 'tcp:orbit' });
       controller.handleKey({ name: 'home' });
       controller.handleKey({ name: 'enter' });
       expect(controller.getSnapshot().route).toEqual({ resourceId: 'sessions', contextId: 'local' });
@@ -204,6 +212,151 @@ describe('TUI interaction controller', () => {
       controller.handleKey({ name: 'escape' });
       controller.handleKey({ name: 'q' });
       expect(onExit).toHaveBeenCalledOnce();
+    } finally { controller.dispose(); }
+  });
+
+  it('opens owner forms with fixed targets, defaults confirmation to cancel and isolates field input', async () => {
+    const mutate = vi.fn(async () => ({ message: '完成' }));
+    const onExit = vi.fn();
+    const controller = createTuiController({ registry: mutationRegistry(), contexts, adapters: { sessions: {
+      read: async () => ({ rows: [third, other], completeness: 'complete' }), checkAction: async () => ({ enabled: true, impact: ['只修改显示名'] }), mutate,
+    } }, onExit });
+    try {
+      controller.handleKey({ name: 'enter' });
+      await loaded(controller);
+      controller.handleKey({ name: 'e' });
+      await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('form'));
+      expect(controller.getSnapshot().overlay).toMatchObject({ ownerResourceId: 'sessions', targetId: third.id, contextId: 'local', confirmationDefault: 'cancel', fields: [{ id: 'name', value: '匿名' }] });
+      controller.handleKey({ name: 'text', text: 'qj?' });
+      expect(controller.getSnapshot().overlay?.fields[0].value).toBe('匿名qj?');
+      expect(controller.getSnapshot().selectedId).toBe(third.id);
+      expect(onExit).not.toHaveBeenCalled();
+      controller.handleKey({ name: 'enter' });
+      expect(controller.getSnapshot().overlay).toMatchObject({ phase: 'confirming', focusIndex: 1 });
+      controller.handleKey({ name: 'enter' });
+      expect(controller.getSnapshot().mode).toBe('list');
+      expect(mutate).not.toHaveBeenCalled();
+      controller.handleKey({ name: 'd' });
+      controller.handleKey({ name: 'e' });
+      expect(controller.getSnapshot().mode).toBe('detail');
+      expect(mutate).not.toHaveBeenCalled();
+    } finally { controller.dispose(); }
+  });
+
+  it('revalidates permissions and the original target, preserves failed form values and restores the source list after success', async () => {
+    let rows: readonly TuiRow[] = [third, other];
+    let allowed = true;
+    let fail = true;
+    const mutate = vi.fn(async (request) => {
+      if (fail) throw new Error('写入失败，请保留输入');
+      rows = rows.map((row) => row.id === request.target?.id ? { ...row, cells: { ...row.cells, name: request.values.name } } : row);
+      return { selectedId: third.id, message: '显示名已更新' };
+    });
+    const controller = createTuiController({ registry: mutationRegistry(), contexts, adapters: { sessions: {
+      read: async () => ({ rows, completeness: 'complete' }),
+      checkAction: async () => allowed ? { enabled: true, impact: ['当前目标显示名'] } : { enabled: false, reason: '权限已撤销', nextStep: '请重新核实授权' }, mutate,
+    } } });
+    try {
+      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      controller.handleKey({ name: '/' }); controller.handleKey({ name: 'text', text: 'third-provider' }); controller.handleKey({ name: 'enter' });
+      controller.handleKey({ name: 'e' });
+      await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('form'));
+      controller.handleKey({ name: 'text', text: ' 新名' });
+      rows = [other, third]; await controller.refresh();
+      expect(controller.getSnapshot().overlay?.targetId).toBe(third.id);
+      controller.handleKey({ name: 'enter' }); controller.handleKey({ name: 'tab' });
+      allowed = false; controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.error).toContain('权限已撤销'));
+      expect(controller.getSnapshot().overlay?.fields[0].value).toBe('匿名 新名');
+      expect(mutate).not.toHaveBeenCalled();
+      allowed = true; controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.error).toContain('写入失败'));
+      expect(controller.getSnapshot().overlay?.fields[0].value).toBe('匿名 新名');
+      expect(mutate.mock.calls[0][0].target?.id).toBe(third.id);
+      fail = false; controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('list'));
+      expect(controller.getSnapshot()).toMatchObject({ filter: 'third-provider', selectedId: third.id, notice: '显示名已更新' });
+      expect(controller.getSnapshot().rows[0].cells.name).toBe('匿名 新名');
+    } finally { controller.dispose(); }
+  });
+
+  it('does not retarget confirmation when a refreshed list removes the original selection', async () => {
+    let rows: readonly TuiRow[] = [third, other];
+    const mutate = vi.fn(async () => ({}));
+    const controller = createTuiController({ registry: mutationRegistry({ ...rename, fields: [] }), contexts, adapters: { sessions: {
+      read: async () => ({ rows, completeness: 'complete' }), checkAction: async () => ({ enabled: true }), mutate,
+    } } });
+    try {
+      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      controller.handleKey({ name: 'e' }); await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('form'));
+      rows = [other]; await controller.refresh();
+      controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.error).toContain('目标已不存在'));
+      expect(controller.getSnapshot().overlay?.targetId).toBe(third.id);
+      expect(mutate).not.toHaveBeenCalled();
+    } finally { controller.dispose(); }
+  });
+
+  it('marks an issued write as uncertain when the user cancels waiting and ignores its late result', async () => {
+    let finish: ((result: { message?: string }) => void) | undefined;
+    const mutate = vi.fn(() => new Promise<{ message?: string }>((resolve) => { finish = resolve; }));
+    const controller = createTuiController({ registry: mutationRegistry({ ...rename, fields: [] }), contexts, adapters: { sessions: {
+      read: async () => ({ rows: [third], completeness: 'complete' }), checkAction: async () => ({ enabled: true }), mutate,
+    } } });
+    try {
+      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      controller.handleKey({ name: 'e' }); await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('form'));
+      controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.phase).toBe('submitting'));
+      controller.handleKey({ name: 'escape' });
+      expect(controller.getSnapshot()).toMatchObject({ mode: 'list' });
+      expect(controller.getSnapshot().notice).toContain('待核实');
+      expect(controller.getSnapshot().notice).not.toContain('回滚');
+      command(controller, 'ctx');
+      finish?.({ message: '不应覆盖当前页面' });
+      await Promise.resolve(); await Promise.resolve();
+      expect(controller.getSnapshot()).toMatchObject({ mode: 'list', route: { resourceId: 'ctx' } });
+      expect(controller.getSnapshot().notice).not.toBe('不应覆盖当前页面');
+      expect(mutate).toHaveBeenCalledOnce();
+    } finally { controller.dispose(); }
+  });
+
+  it('supports field cursor editing and pastes while ignoring pasted list shortcuts', async () => {
+    const onExit = vi.fn();
+    const controller = createTuiController({ registry: mutationRegistry(), contexts, adapters: { sessions: {
+      read: async () => ({ rows: [third], completeness: 'complete' }), checkAction: async () => ({ enabled: true }), mutate: async () => ({}),
+    } }, onExit });
+    try {
+      controller.handleKey({ name: 'paste', text: 'q' });
+      expect(onExit).not.toHaveBeenCalled();
+      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      controller.handleKey({ name: 'e' }); await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('form'));
+      controller.handleKey({ name: 'home' }); controller.handleKey({ name: 'delete' });
+      controller.handleKey({ name: 'paste', text: '👩‍💻é' });
+      expect(controller.getSnapshot().overlay?.fields[0]).toMatchObject({ value: '👩‍💻é名', cursor: 2 });
+      controller.handleKey({ name: 'left' }); controller.handleKey({ name: 'backspace' });
+      expect(controller.getSnapshot().overlay?.fields[0]).toMatchObject({ value: 'é名', cursor: 0 });
+      controller.handleKey({ name: 'c', ctrl: true });
+      expect(controller.getSnapshot().mode).toBe('list');
+      expect(onExit).not.toHaveBeenCalled();
+    } finally { controller.dispose(); }
+  });
+
+  it('scrolls the full value of a single long detail field and keeps copying its original value', async () => {
+    const value = '长字段👩‍💻'.repeat(30);
+    const clipboard = vi.fn(async () => {});
+    const controller = createTuiController({ registry: registry(), contexts, adapters: { sessions: { read: async () => ({ rows: [{ id: 'long', cells: { name: '长字段' }, detail: [{ label: '完整值', value }] }], completeness: 'complete' }) } }, clipboard });
+    try {
+      controller.resize(30, 12);
+      command(controller, 'sessions'); await loaded(controller);
+      controller.handleKey({ name: 'd' }); controller.handleKey({ name: 'pagedown' });
+      expect(controller.getSnapshot().detail?.scrollOffset).toBeGreaterThan(0);
+      controller.handleKey({ name: 'end' });
+      expect(controller.getSnapshot().detail?.scrollOffset).toBeGreaterThan(3);
+      controller.handleKey({ name: 'y' });
+      await vi.waitFor(() => expect(clipboard).toHaveBeenCalledWith(value, expect.any(AbortSignal)));
+      controller.handleKey({ name: 'home' });
+      expect(controller.getSnapshot().detail?.scrollOffset).toBe(0);
     } finally { controller.dispose(); }
   });
 });

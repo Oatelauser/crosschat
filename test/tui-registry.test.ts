@@ -21,4 +21,29 @@ describe('TUI resource registry', () => {
     expect(() => createResourceRegistry([...defaultResources, { ...extension, aliases: ['sessions'] }])).toThrow();
     expect(() => createResourceRegistry([{ ...extension, columns: [{ id: 'native', label: '原值', width: 0 }] }])).toThrow();
   });
+
+  it('documents unavailable resource actions without exposing writes from details', async () => {
+    const { createResourceRegistry } = await import('../src/tui/resources/registry.js');
+    const registry = createResourceRegistry();
+    expect(registry.actions('machines', 'list')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ shortcut: 'a', label: '让新机器接入', ownerResourceId: 'machines', enabled: false, mutation: true }),
+      expect.objectContaining({ shortcut: 'Ctrl+D', label: '移除节点', enabled: false }),
+      expect.objectContaining({ shortcut: 'v', label: '全星会话', enabled: false }),
+    ]));
+    for (const resource of registry.resources) {
+      expect(registry.actions(resource.id, 'detail').every((action) => !action.mutation)).toBe(true);
+      for (const action of resource.actions.filter((action) => action.enabled === false)) {
+        expect(action.unavailableReason).toBeTruthy();
+        expect(action.nextStep).toBeTruthy();
+      }
+    }
+  });
+
+  it('rejects wrong action owners and ambiguous action shortcuts', async () => {
+    const { createResourceRegistry, defaultResources } = await import('../src/tui/resources/registry.js');
+    const action = { id: 'rename', label: '改名', shortcut: 'e', ownerResourceId: 'sessions', selectionPolicy: 'required' as const, mutation: true, kind: 'form' as const, returnPolicy: 'restore' as const };
+    const sessions = defaultResources.find((resource) => resource.id === 'sessions')!;
+    expect(() => createResourceRegistry([{ ...sessions, actions: [{ ...action, ownerResourceId: 'machines' }] }])).toThrow();
+    expect(() => createResourceRegistry([{ ...sessions, actions: [action, { ...action, id: 'other' }] }])).toThrow();
+  });
 });
