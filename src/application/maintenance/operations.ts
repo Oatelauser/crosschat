@@ -107,10 +107,12 @@ export function previewMaintenance(operationId: MaintenanceOperationId, options:
     targets = uninstallTargets(env.uninstall).map(({ path, label }) => ({ path, label, kind: 'directory' }));
     try {
       for (const target of targets) {
-        const parent = target.path === join(options.env?.LOCALAPPDATA ?? '', 'crosschat') && options.env?.LOCALAPPDATA
+        const parent = options.env?.LOCALAPPDATA && target.path === resolve(join(options.env.LOCALAPPDATA, 'crosschat'))
           ? resolve(options.env.LOCALAPPDATA) : env.home;
         verifyDirectoryPath(parent, target.path, true);
       }
+      // The legacy serve guard reads tcp snapshots; verify that read path too.
+      verifyDirectoryPath(env.home, join(env.uninstall.crosschatHome, 'tcp'));
     } catch { enabled = false; reason = '卸载目标目录不可完整核验；检查目录链接、类型及访问权限后重新预览。'; }
     if (enabled && uninstallServeRunning(env.uninstall)) {
       enabled = false; reason = 'crosschat serve 正在运行（或有新鲜节点快照）；先停止对应服务，再重新预览卸载。';
