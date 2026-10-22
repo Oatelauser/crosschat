@@ -105,7 +105,7 @@ describe('complete form confirmation content', () => {
     const { formContentLines } = await import('../src/tui/app/form.js');
     const action: TuiAction = {
       id: 'remove', label: '测试移除', shortcut: 'x', ownerResourceId: 'sessions', selectionPolicy: 'required', mutation: true,
-      kind: 'form', returnPolicy: 'restore',
+      kind: 'form', returnPolicy: 'restore', fields: [{ id: 'name', label: '显示名', initialValue: '保留输入' }],
     };
     const registry = createResourceRegistry(defaultResources.map((resource) => resource.id === 'sessions' ? { ...resource, actions: [action] } : resource));
     const failure = `未执行操作。${'请核对当前目标和权限。'.repeat(40)}末尾完整指引`;
@@ -118,7 +118,7 @@ describe('complete form confirmation content', () => {
       await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
       controller.handleKey({ name: 'x' });
       await vi.waitFor(() => expect(controller.getSnapshot().overlay?.impact).toContain('只影响当前目标'));
-      controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
+      controller.handleKey({ name: 'enter' }); controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
       await vi.waitFor(() => expect(controller.getSnapshot().overlay?.error).toBe(failure));
       const failed = controller.getSnapshot().overlay!;
       const errorLine = formContentLines(failed, 30).findIndex((line) => line.kind === 'error');
@@ -130,6 +130,12 @@ describe('complete form confirmation content', () => {
       expect(offset).toBe(content.length - 6);
       expect(content.slice(offset, offset + 6).map((line) => line.text).join('')).toContain('末尾完整指引');
       expect(controller.getSnapshot().overlay?.targetId).toBe('fixed-target');
+      controller.handleKey({ name: 'tab' });
+      const editing = controller.getSnapshot().overlay!;
+      const fieldLine = formContentLines(editing, 30).findIndex((line) => line.kind === 'field');
+      expect(editing).toMatchObject({ focusIndex: 0, phase: 'editing', fields: [{ value: '保留输入' }] });
+      expect(fieldLine).toBeGreaterThanOrEqual(editing.scrollOffset!);
+      expect(fieldLine).toBeLessThan(editing.scrollOffset! + 6);
     } finally { controller.dispose(); }
   });
 
