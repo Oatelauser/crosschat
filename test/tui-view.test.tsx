@@ -64,4 +64,22 @@ describe('TUI continuous terminal layout', () => {
       expect(output).not.toContain('never-show-render-secret');
     } finally { controller.dispose(); }
   });
+  it('keeps a secret field caret at its real grapheme cursor', () => {
+    const state = snapshot();
+    state.mode = 'form';
+    state.overlay = { ownerResourceId: 'ctx', actionId: 'configure', title: '配置', fields: [{ id: 'secret', label: '秘密', value: 'abcdef', secret: true, cursor: 2 }], focusIndex: 0, phase: 'editing', impact: [], confirmationDefault: 'cancel' };
+    expect(screen(state)).toContain('••▏••••');
+  });
+  it('shows a resize instruction instead of invisible form editing in a short terminal', () => {
+    const state = snapshot(80, 12);
+    state.mode = 'form';
+    state.overlay = { ownerResourceId: 'ctx', actionId: 'configure', title: '配置', fields: [{ id: 'name', label: '名称', value: 'abc' }], focusIndex: 0, phase: 'editing', impact: [], confirmationDefault: 'cancel' };
+    expect(screen(state)).toContain('请放大终端');
+  });
+  it('reserves visible editing space even when a form label is long', () => {
+    const state = snapshot(24);
+    state.mode = 'form';
+    state.overlay = { ownerResourceId: 'ctx', actionId: 'configure', title: '配置', fields: [{ id: 'name', label: '非常长的配置字段名称', value: 'abc', cursor: 1 }], focusIndex: 0, phase: 'editing', impact: [], confirmationDefault: 'cancel' };
+    expect(screen(state)).toContain('a▏bc');
+  });
 });
