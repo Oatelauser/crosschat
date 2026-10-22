@@ -224,6 +224,7 @@ describe('TCP machine binding refresh ownership', () => {
       const publish = vi.fn();
       const active = adapter.watch!({ context, route: { resourceId: 'machines', contextId: context.id, query: { starId: star.starId } }, signal: controller.signal }, publish);
       await vi.advanceTimersByTimeAsync(0);
+      expect(f.tcp.readStar).toHaveBeenCalledOnce(); // Controller has just read the initial page.
       const before = f.tcp.readStar.mock.calls.length;
       f.current.machines = [machines[0]];
       await vi.advanceTimersByTimeAsync(1999);
