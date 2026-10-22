@@ -14,7 +14,7 @@ import type { TuiController } from '../src/tui/app/controller.js';
 const mocks = vi.hoisted(() => ({ discovery: vi.fn(), membership: vi.fn(), overview: vi.fn(), status: vi.fn(), doctor: vi.fn(), communications: vi.fn(), outbox: vi.fn(), logs: vi.fn(), render: vi.fn() }));
 vi.mock('../src/application/discovery/local.js', () => ({ createLocalDiscoveryService: mocks.discovery }));
 vi.mock('../src/application/session-membership/index.js', () => ({ createSessionMembershipService: mocks.membership }));
-vi.mock('../src/application/observations/overview.js', () => ({ createLocalOverview: mocks.overview }));
+vi.mock('../src/application/observations/overview.js', async (original) => ({ ...await original<object>(), createLocalOverview: mocks.overview }));
 vi.mock('../src/application/observations/communications.js', () => ({ queryCommunications: mocks.communications, queryOutbox: mocks.outbox }));
 vi.mock('../src/application/observations/logs.js', () => ({ queryManagedLog: mocks.logs }));
 vi.mock('ink', () => ({ render: mocks.render }));

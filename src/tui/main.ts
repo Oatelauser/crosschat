@@ -1,12 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
 import process from 'node:process';
 import type { Writable } from 'node:stream';
 import { copyText } from '../application/clipboard.js';
 import { createTuiController } from './app/controller.js';
 import type { TuiContextPage, TuiControllerOptions } from './app/controller.js';
-import type { TuiContext, TuiResource, TuiResourceAdapter } from './model.js';
+import type { TuiContext, TuiResourceAdapter } from './model.js';
+import { presentContext } from './resources/contexts.js';
 import { createResourceRegistry, defaultResources } from './resources/registry.js';
 import type { ResourceRegistry } from './resources/registry.js';
 import { runTerminalSession } from './terminal.js';
@@ -46,18 +46,19 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
     stdin, stdout, stderr, signals: options.signals,
     mount: async (owner) => {
       const home = options.home ?? homedir();
+      const present = options.adapters === undefined ? presentContext : (context: TuiContext) => context;
       const { listTuiContexts, loadTuiPreferences, saveTuiPreferences } = await import('../application/contexts/index.js');
       if (owner.signal.aborted) return cancelledMount();
       const readContexts = async (signal: AbortSignal): Promise<TuiContextPage> => {
         const result = await listTuiContexts({ home, signal });
         return {
-          contexts: result.items.map((context) => ({ id: context.id, label: context.name, kind: context.kind, target: context.target, identityHint: context.identityHint })),
+          contexts: result.items.map((context) => present({ id: context.id, label: context.name, kind: context.kind, target: context.target, identityHint: context.identityHint })),
           completeness: signal.aborted ? 'cancelled' : result.errors.length ? 'partial' : 'complete',
           notice: result.errors.length ? result.errors.map((error) => `${error.source} <${error.kind}>：${error.message}；${error.nextStep}`).join('\n') : undefined,
         };
       };
       const [initialContexts, preferences] = await Promise.all([
-        options.contexts === undefined ? readContexts(owner.signal) : { contexts: options.contexts, completeness: 'complete' as const },
+        options.contexts === undefined ? readContexts(owner.signal) : { contexts: options.contexts.map(present), completeness: 'complete' as const },
         loadTuiPreferences({ home, signal: owner.signal }),
       ]);
       if (owner.signal.aborted) return cancelledMount();
@@ -66,31 +67,13 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
         import('ink'), import('./ui/app.js'), import('react'), options.version ?? packageVersion(),
       ]);
       if (owner.signal.aborted) return cancelledMount();
-      const installed: Array<{ resource: TuiResource; adapter: TuiResourceAdapter }> = [];
-      if (options.adapters === undefined) {
-        const [{ createLocalDiscoveryService }, { createSessionMembershipService }, { createSessionsResource }, communicationQueries, { queryManagedLog }, { createLocalOverview }, { createCommunicationResources }, { createLogsResource }, { createStatusResource, createDoctorResource }] = await Promise.all([
-          import('../application/discovery/local.js'), import('../application/session-membership/index.js'), import('./resources/sessions.js'),
-          import('../application/observations/communications.js'), import('../application/observations/logs.js'), import('../application/observations/overview.js'),
-          import('./resources/communications.js'), import('./resources/logs.js'), import('./resources/overview.js'),
-        ]);
-        if (owner.signal.aborted) return cancelledMount();
-        // Native environment overrides remain authoritative unless the caller supplies an isolated home.
-        const discovery = createLocalDiscoveryService(options.home === undefined ? {} : { home });
-        const baseDir = join(home, '.crosschat');
-        const membership = createSessionMembershipService({ baseDir, discovery });
-        const overview = createLocalOverview({ home, discovery, nativeEnvironment: options.home === undefined ? 'inherit' : 'isolated' });
-        const communications = createCommunicationResources({
-          readCommunications: ({ contextId, signal }) => communicationQueries.queryCommunications({ baseDir, contextId, signal }),
-          readOutbox: ({ contextId, signal }) => communicationQueries.queryOutbox({ baseDir, contextId, signal }),
-        });
-        installed.push(createSessionsResource({ discovery, membership, relatedResources: ['deliveries', 'logs'] }),
-          createStatusResource({ overview }), createDoctorResource({ overview }), communications.deliveries, communications.outbox,
-          createLogsResource({ read: (request) => queryManagedLog({ ...request, baseDir }) }));
-      }
-      const registry = options.registry ?? createResourceRegistry(defaultResources.map((resource) => installed.find((entry) => entry.resource.id === resource.id)?.resource ?? resource));
+      const composition = options.adapters === undefined
+        ? (await import('./composition.js')).createDefaultResources({ home, isolatedHome: options.home !== undefined }) : undefined;
+      if (owner.signal.aborted) return cancelledMount();
+      const registry = options.registry ?? createResourceRegistry(composition?.resources ?? defaultResources);
       let selectedContextId: string | undefined;
       const controller = createTuiController({
-        registry, contexts: initialContexts.contexts, adapters: options.adapters ?? Object.fromEntries(installed.map((entry) => [entry.resource.id, entry.adapter])),
+        registry, contexts: initialContexts.contexts, adapters: options.adapters ?? composition?.adapters ?? {},
         contextSource: options.contexts === undefined ? { initial: initialContexts, read: readContexts } : undefined,
         initialSelectedContextId: preferences.value?.selectedContextId,
         onContextSelection: (id) => { selectedContextId = id; },
