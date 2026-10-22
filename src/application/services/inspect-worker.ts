@@ -18,7 +18,7 @@ try {
     catch (error) { parentPort.postMessage({ allowed: false, reason: error instanceof MultichatError ? error.message : '无法核验同星服务占用' }); }
   } else if (request.kind === 'inspect') {
     const processes = listServeProcesses();
-    let port = DEFAULT_PORT;
+    let port: number | undefined = DEFAULT_PORT;
     try {
       const value: unknown = JSON.parse(readFileSync(join(tcpDir(input.baseDir), 'broker.json'), 'utf8'));
       if (value === null || typeof value !== 'object' || !('stars' in value) || !Array.isArray(value.stars)) throw new Error('Invalid broker metadata');
@@ -27,9 +27,10 @@ try {
         port = value.port;
       }
     } catch (error) {
-      if (error === null || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') throw error;
+      if (error === null || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') port = undefined;
     }
-    const confirmed = pidsOnPort(port);
+    // Port metadata failure blocks broker confirmation without discarding independently identified node processes.
+    const confirmed = port === undefined ? new Set<number>() : pidsOnPort(port);
     parentPort.postMessage({ state: 'ready', processes: processes.map((item) => item.cmdline.includes('--connect')
       ? { kind: 'node', pid: item.pid, selector: connectValueOf(item.cmdline) ?? '' } : { kind: 'broker', pid: item.pid }),
       confirmedBrokerPids: processes.filter((item) => !item.cmdline.includes('--connect') && confirmed.has(item.pid)).map((item) => item.pid) });

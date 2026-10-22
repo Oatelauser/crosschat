@@ -23,6 +23,7 @@ export type LocalServiceOperation = 'start' | 'stop';
 export interface ServiceActionCheck { allowed: boolean; reason?: string; nextStep?: string; impact: readonly string[] }
 export interface LocalService {
   id: string; revision: string; kind: 'broker' | 'node'; label: string; state: string; target: string;
+  readiness?: ServiceSnapshot['readiness'];
   selector?: string; pid?: number; sourceId?: string;
   start: ServiceActionCheck; stop: ServiceActionCheck;
   detail: readonly { label: string; value: string }[];
@@ -78,6 +79,9 @@ function matches(process: ServiceProcess, entry: BrokerEntry, config: NodeConfig
   try { return selectConnectEntry(process.selector ?? '', config).entry === entry; } catch { return false; }
 }
 function logSource(label: string): string | undefined { return label === '' ? 'node:node.log' : safeLabel(label) ? `node:node-${label}.log` : undefined; }
+function readiness(snapshot: ServiceSnapshot | undefined, process: ServiceProcess | undefined): ServiceSnapshot['readiness'] {
+  return process !== undefined && snapshot?.pid === process.pid && snapshot.freshness === 'fresh' && snapshot.processAlive === true ? snapshot.readiness : 'unknown';
+}
 
 /** Composition of existing service operations. Reads never run launch, stop, guard or registry writers. */
 export function createLocalServices(options: LocalServicesOptions): LocalServices {
@@ -120,6 +124,7 @@ export function createLocalServices(options: LocalServicesOptions): LocalService
       const brokerUncertain = !sourcesOK || !snapshotsOK || (!brokerRunning && brokerSnapshot?.processAlive === true);
       const brokerImpact = [`当前本机 broker，端口 ${port}；托管 ${broker.value?.stars.length ?? 0} 颗星。`, '停止会断开这些星的机器连接及内挂聚合器；不终止原生工具会话。', ...brokerProcesses.map((item) => `当前 broker PID ${item.pid}`)];
       const brokerRow: LocalService = { id: brokerId, revision: brokerRevision, kind: 'broker', label: 'broker', target: `本机:${port}`,
+        readiness: brokerUncertain ? 'unknown' : brokerRunning ? readiness(brokerSnapshot, brokerProcesses.length === 1 ? brokerProcesses[0] : undefined) : 'stopped',
         state: brokerUncertain ? 'unknown' : brokerRunning ? 'running' : 'not-running', ...(brokerProcesses.length === 1 ? { pid: brokerProcesses[0].pid } : {}), sourceId: 'broker',
         start: !sourcesOK || !snapshotsOK ? denied('服务进程或状态来源不完整，不能确认可安全启动。') : brokerUncertain ? denied('快照仍指向活进程，尚不能确认 broker 已停止。')
           : brokerRunning ? denied('已有 broker 服务在运行。') : broker.state !== 'ready' && broker.state !== 'missing' ? denied('broker 配置不可读或损坏；不会在查看或起停时自动重建。') : { allowed: true, impact: [brokerImpact[0], '会启动后台 broker，并按既有规则自登记、挂接本机聚合器；不会新建星。'] },
@@ -157,6 +162,7 @@ export function createLocalServices(options: LocalServicesOptions): LocalService
           : { allowed: true, impact: [`仅停止本机 PID ${current[0].pid} 的节点守护，原选择器 ${stoppable}。`, `目标星：${label} (${entry.starId ?? '未提供完整星标识'})；该星的本机机器连接和聚合器将停止。`, '不撤销节点钥匙、不删除星册位、不终止原生工具会话。'] };
         const revision = digest([id, entry.name, selected, current, hosted ? brokerProcesses[0].pid : null]);
         const row: LocalService = { id, revision, kind: 'node', label, target: `${entry.host}:${entry.port}`, ...(selected === undefined ? {} : { selector: selected }), ...(current.length === 1 ? { pid: current[0].pid } : hosted ? { pid: brokerProcesses[0].pid } : {}),
+          readiness: uncertain || hosted ? 'unknown' : current.length ? readiness(snapshot, current.length === 1 ? current[0] : undefined) : 'stopped',
           state: uncertain ? 'unknown' : current.length ? 'running' : hosted ? 'hosted' : 'not-running', ...(hosted ? { sourceId: 'broker' } : sourceId ? { sourceId } : {}), start, stop: stopping,
           detail: [{ label: '完整星标识', value: entry.starId ?? '未提供' }, { label: '目标', value: `${entry.host}:${entry.port}` }, { label: '启动选择器', value: selected ?? '无法唯一选择' }, { label: '实际运行选择器', value: current.map((item) => `${item.selector || '(裸默认)'} · PID ${item.pid}`).join('\n') || (hosted ? 'broker 内挂聚合器' : '未发现') }, { label: '快照', value: snapshot ? JSON.stringify(snapshot, null, 2) : '尚无快照' }] };
         items.push(row);
@@ -169,6 +175,7 @@ export function createLocalServices(options: LocalServicesOptions): LocalService
         const sameSelectors = processes.processes.filter((item) => item.kind === 'node' && item.selector === process.selector);
         const allowed = process.selector && sameSelectors.length === 1;
         const row: LocalService = { id, revision: digest([id, process.selector]), kind: 'node', label, target: '配置归属未知', pid: process.pid, state: 'unknown', ...(process.selector ? { selector: process.selector } : {}),
+          readiness: readiness(statuses.items.find((item) => item.kind === 'node' && item.pid === process.pid), process),
           start: denied('运行进程无法对应当前完整配置，不能启动替代服务。'), stop: allowed ? { allowed: true, impact: [`仅停止本机 PID ${process.pid} 的节点守护；原选择器 ${process.selector}。`, '配置归属未知；不终止原生工具、不修改凭证或星册。'] } : denied('选择器不明确或命中多个进程，不能执行精确停机。'),
           detail: [{ label: '归属', value: '此进程不能对应到当前 node.json 配置；先核对原选择器和进程。' }] };
         items.push(row);
