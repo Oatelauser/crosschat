@@ -70,6 +70,9 @@ import {
 export type { RosterEntry } from './registry.js';
 import { FILE_MAX_BYTES, FileInbox } from './file-channel.js';
 import { normalizeMid } from '../platform/machine-id.js';
+import { readSnapshotStar } from './snapshot-state.js';
+import { buildStarSnapshot } from './star-snapshot.js';
+import type { StarSnapshotRole } from './star-snapshot.js';
 import { parseDiscoveryRequest, parseDiscoveryResponse } from '../application/discovery/boundary.js';
 import type { DiscoveryEndpoint, DiscoveryRequest, DiscoveryResponse } from '../application/discovery/model.js';
 import type { DiscoverQueryFrame, DiscoverResultFrame } from './protocol.js';
@@ -233,6 +236,7 @@ function safeEqual(a: string, b: string): boolean {
  * add-star/remove-star 等本机域 op 空表即"WS 无人可用"，一律 ADMIN_REQUIRED。
  */
 const ADMIN_OP_MATRIX: Record<string, readonly ('member' | 'admin')[]> = {
+  'star-snapshot': ['member', 'admin'],
   'list-nodes': ['member', 'admin'],
   'list-members': ['member', 'admin'],
   'gen-key': ['admin'],
@@ -418,6 +422,12 @@ export class Broker {
     const int = (k: string): number | undefined => (typeof req[k] === 'number' && Number.isInteger(req[k]) ? (req[k] as number) : undefined);
     const LOCAL = '本机插座'; // 034 审计来源：插座受理即 broker 主本人（地址随机=能力）
     switch (req.op) {
+      case 'star-snapshot': {
+        const star = this.stars.find((entry) => entry.starId === str('starId'));
+        if (!star) return { ok: false, error: '所选星不存在，请刷新星列表。' };
+        try { return { ok: true, snapshot: this.starSnapshot(star, 'broker-owner') }; }
+        catch { return { ok: false, error: '无法完整读取此星快照；请检查台账与读取权限。' }; }
+      }
       case 'add-star': {
         const name = str('name');
         if (name === undefined || name === '') return { ok: false, error: 'add-star 缺少 name' };
@@ -1431,6 +1441,12 @@ export class Broker {
     const starLabel = star.name ?? star.starId ?? '?';
     const audit = (action: string): void => this.auditAdmin(action, `星 ${starLabel}`, `星管理钥(${session.adminLabel ?? '?'})`);
     switch (frame.action) {
+      case 'star-snapshot': {
+        try {
+          this.send(session.ws, { op: 'admin-op-result', id: frame.id, ok: true, snapshot: this.starSnapshot(star, identity === 'admin' ? 'star-admin' : 'member') });
+        } catch { this.send(session.ws, { op: 'admin-op-result', id: frame.id, ok: false, error: '无法完整读取此星快照；请检查台账与读取权限。' }); }
+        return;
+      }
       case 'list-nodes': {
         // 回显永不含钥匙：label/显示名/mid8/addedAt；管理钥条目带 admin 标记
         const nodes = this.starNodes(star).map((n) => ({
@@ -1857,6 +1873,17 @@ export class Broker {
     }
     for (const [mid, decls] of offlineByMid) machines.get(mid)!.offlineSessions = decls;
     return { op: 'roster-result', machines: [...machines.values()] };
+  }
+
+  private starSnapshot(star: StarState, role: StarSnapshotRole) {
+    if (!star.starId) throw new Error('缺少星身份');
+    const stored = readSnapshotStar(this.d.registryFile, star.starId);
+    const online = new Set(star.online.keys());
+    const own = normalizeMid(this.d.machineId() ?? '');
+    if (own) online.add(own);
+    const snapshot = buildStarSnapshot({ ...stored, roster: star.roster }, { role, onlineMachines: online });
+    if (Buffer.byteLength(JSON.stringify(snapshot)) > 2 * 1024 * 1024) throw new Error('星快照超过读取上限');
+    return snapshot;
   }
 
   /**

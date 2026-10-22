@@ -472,6 +472,8 @@ export interface AdminOpResultFrame {
   members?: AdminMemberRow[];
   /** remove-node：是否删到。 */
   removed?: boolean;
+  /** Approved read-only star scope. The application validates this unknown wire payload. */
+  snapshot?: import('./star-snapshot.js').StarSnapshot;
 }
 
 export type Frame =

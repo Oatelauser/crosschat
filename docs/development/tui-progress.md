@@ -76,6 +76,7 @@
 - 规格与批准状态：[TCP本轮规格](tui-t11-t12-spec.md)。已批准只读星快照，普通成员/星管理员仅本星、完整机器ID/成员/安全凭证版本、不返回钥匙，不新增管理审计；现有list-nodes/list-members行为保持。原子版本删除方案等待第二项选择，未获批前不实施相关产品。
 - 分工：t09_maintenance只读TCP应用/DTO及纯snapshot builder；t09_services TCP管理/原子registry helper/唯一revision helper；t10_ssh TCP资源及独立测试；root共享presentation/秘密结果态、broker/protocol胶水、composition、统一验收与文档。代理只能编辑所分配文件，RED保存后GREEN，禁真用户IO/生产服务。
 - 本轮Selected model is at capacity中断为服务容量提示；已核对三个代理仍运行并从检查点续接，没有重开任务或切模型。
+- 检查点：授权/共享RED`0f24857`，revision RED`5dda650`，应用聚合/管理RED`4eb5fd1`，资源RED`ff38e09`，共享presentation/秘密结果GREEN`bacd9cd`（49项定向通过），snapshot运输RED`bef45ef`。root已完成snapshot WS/adminPipe胶水和严格只读台账读取，受控broker/原管理回归13项通过；尚待保存GREEN与全部业务集成/ConPTY。
 
 ## 设计来源（原稿）
 
