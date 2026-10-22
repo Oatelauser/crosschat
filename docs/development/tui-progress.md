@@ -37,6 +37,16 @@
 - `a1b8d19`完整表单；`ff2edde`错误后焦点RED；`266463e`焦点GREEN；`108c6c0`极小窗口模式提示，最终全量/ConPTY验收基点。
 - 每组新失效路径先保存RED再实施GREEN；最终验证环境、隔离边界及证据路径保留在独立验收记录。
 
+## T07进行中
+
+- 当前规格与合同：[本机会话](tui-t07-spec.md)。基线`cf93a33`，不设时间截止。只有两项已列明的既有能力扩展获批，其余现有语义变化仍须先确认。
+- root：model/UI、`application/discovery/local.ts`默认只读组合及main接线、ConPTY集成、统一检查/文档；唯一stage/commit。
+- tui_controller：controller/registry、声明式facets/choice、动态动作字段/枚举表单、只读命名view、精确复制和上下文绑定；`test/tui-filters.test.ts`。
+- t07_sessions：`resources/sessions.ts`及资源测试；Discovery安全DTO全页聚合/错误/匿名/raw状态/指引，后续注入membership接口。
+- tui_contexts：`application/session-membership/*`及必要协议/共享attach提取与对应测试；不导入commands，不读取真实用户服务。
+- 已保存：`8a4bbb2`授权/首RED；`6b8f1aa`默认组合/UI RED；`72611e0`首资源/筛选/UI GREEN；`60042d7`取消/原子删册RED；`542f54b`取消/partial读取GREEN。动态表单/枚举字段第二RED已保存，等GREEN。
+- 待完成：精确删册协议GREEN；typed收编/删除应用层RED/GREEN；membership接入资源；main默认本机会话与隔离fixture；完整交互/真实ConPTY、独立审查及npm run check；验收后删活动项。尚无T07验收。
+
 ## 设计来源
 
 仓库外原稿：`C:/Users/yangsheng/.codex/visualizations/2026/10/21/01a15d5d-6d04-7b11-9ccb-39611d84b68b/crosschat-tui-v6-requirements.txt`、`crosschat-tui-v6-keys.txt`和49屏评审册。本轮可执行范围已提炼到长期外壳规格；无需每次重载历史稿。

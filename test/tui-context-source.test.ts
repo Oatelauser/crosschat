@@ -42,7 +42,7 @@ async function fixture() {
   const stdout = new Output();
   const stderr = new PassThrough();
   stderr.resume();
-  return { home, stdin, stdout, stderr, signals: new EventEmitter() };
+  return { home, stdin, stdout, stderr, signals: new EventEmitter(), adapters: {} };
 }
 function renderedController(): TuiController {
   const element: unknown = mocks.render.mock.calls[0]?.[0];

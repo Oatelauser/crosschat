@@ -33,7 +33,7 @@ async function fixture() {
   const signals = new EventEmitter();
   let errors = '';
   stderr.on('data', (chunk) => { errors += String(chunk); });
-  return { home, stdin, stdout, stderr, signals, errors: () => errors };
+  return { home, stdin, stdout, stderr, signals, adapters: {}, errors: () => errors };
 }
 beforeEach(() => {
   vi.clearAllMocks();
