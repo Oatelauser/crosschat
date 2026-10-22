@@ -6,6 +6,10 @@ import { createResourceRegistry } from '../src/tui/resources/registry.js';
 import { presentContext } from '../src/tui/resources/contexts.js';
 
 const mocks = vi.hoisted(() => ({ local: vi.fn(), membership: vi.fn(), overview: vi.fn(), services: vi.fn(), maintenance: vi.fn(), ssh: vi.fn(), files: vi.fn(), localRead: vi.fn(), serviceRead: vi.fn(), preview: vi.fn(), execute: vi.fn(), remoteRead: vi.fn(), remoteDoctor: vi.fn(), inspect: vi.fn(), list: vi.fn() }));
+const tcpMocks = vi.hoisted(() => ({ create: vi.fn(), management: vi.fn(), configuration: vi.fn(), stars: vi.fn(), star: vi.fn(), sessions: vi.fn(), preview: vi.fn(), apply: vi.fn() }));
+vi.mock('../src/application/tcp/index.js', () => ({ createTcpApplication: tcpMocks.create }));
+vi.mock('../src/application/tcp/management.js', () => ({ createTcpManagement: tcpMocks.management }));
+vi.mock('../src/application/tcp/configuration.js', () => ({ createTcpConfiguration: tcpMocks.configuration }));
 vi.mock('../src/application/discovery/local.js', () => ({ createLocalDiscoveryService: mocks.local }));
 vi.mock('../src/application/session-membership/index.js', () => ({ createSessionMembershipService: mocks.membership }));
 vi.mock('../src/application/observations/overview.js', async (original) => ({ ...await original<object>(), createLocalOverview: mocks.overview }));
@@ -36,11 +40,46 @@ beforeEach(() => {
   mocks.list.mockResolvedValue({ items: [{ id: remoteContext.id, kind: 'ssh', name: 'fixture', target: 'fixture', identityHint: '配置未认证', attributes: {} }], errors: [], observedAt: 42 });
   mocks.remoteDoctor.mockResolvedValue({ ...source, contextId: remoteContext.id, host: 'fixture', exitCode: 1, result: { groups: [{ context: { kind: 'environment' }, checks: [{ code: 'node-unsupported', level: 'error', data: { version: '20.0.0' } }] }], summary: { pass: 0, warn: 0, error: 1, failed: true } } });
   mocks.ssh.mockReturnValue({ list: mocks.list, discovery: { execute: mocks.remoteRead }, inspect: mocks.inspect, doctor: mocks.remoteDoctor });
+  const star = (contextId: string) => ({ id: `row:${contextId}:star`, contextId, starId: 'full-star', name: '完整星', revision: 'a'.repeat(64), role: contextId === 'local' ? 'broker-owner' : 'member', host: 'fixture.invalid', port: 7260, health: 'reachable', onlineNodes: 1 });
+  tcpMocks.stars.mockImplementation(async ({ contextId }) => ({ ...source, contextId, role: contextId === 'local' ? 'broker-owner' : 'member', configured: true, items: [star(contextId)] }));
+  tcpMocks.star.mockImplementation(async ({ contextId }) => ({ ...source, contextId, star: star(contextId), machines: [{ id: `row:${contextId}:machine`, contextId, starId: 'full-star', machineId: 'a'.repeat(32), mid8: 'a'.repeat(8), name: '完整节点', labels: ['node-1'], presence: 'online', addedAt: '2026-01-01' }], members: [], credentials: [] }));
+  tcpMocks.sessions.mockImplementation(async ({ contextId, scope }) => ({ ...source, contextId, star: star(contextId), scope, nodes: [], items: [{ id: `row:${contextId}:session`, contextId, starId: 'full-star', machineId: 'a'.repeat(32), mid8: 'a'.repeat(8), machineName: '完整节点', nativeId: 'native/full/id', providerId: 'future-provider', name: null, ref: { contextId: `node:${contextId}`, providerId: 'future-provider', nativeId: 'native/full/id' }, rawStatus: 'idle', capabilities, attributes: {}, member: null, membership: 'not-member', presence: 'online', discovered: true }] }));
+  tcpMocks.create.mockReturnValue({ readStars: tcpMocks.stars, readStar: tcpMocks.star, readSessions: tcpMocks.sessions });
+  tcpMocks.management.mockReturnValue({ preview: tcpMocks.preview, apply: tcpMocks.apply });
+  tcpMocks.configuration.mockReturnValue({ preview: vi.fn(), apply: vi.fn() });
 });
 afterEach(() => { vi.unstubAllEnvs(); });
 function command(controller: ReturnType<typeof createTuiController>, value: string) { for (const name of `:${value}`) controller.handleKey({ name, text: name }); controller.handleKey({ name: 'enter' }); }
 
 describe('default local and SSH resource composition', () => {
+  it('installs TCP adapters lazily and dispatches local star sessions separately from ordinary local sessions', async () => {
+    const composed = createDefaultResources({ home: '/isolated', isolatedHome: true });
+    expect(tcpMocks.create).toHaveBeenCalledWith(expect.objectContaining({ baseDir: join('/isolated', '.crosschat') }));
+    for (const method of [tcpMocks.stars, tcpMocks.star, tcpMocks.sessions, tcpMocks.preview, tcpMocks.apply]) expect(method).not.toHaveBeenCalled();
+    const controller = createTuiController({ registry: createResourceRegistry(composed.resources), contexts, adapters: composed.adapters });
+    try {
+      command(controller, 'stars'); await vi.waitFor(() => expect(controller.getSnapshot().rows[0]?.cells.name).toBe('完整星'));
+      controller.handleKey({ name: 'enter' }); await vi.waitFor(() => expect(controller.getSnapshot().rows[0]?.cells.name).toBe('完整节点'));
+      controller.handleKey({ name: 'v' }); await vi.waitFor(() => expect(tcpMocks.sessions).toHaveBeenCalled());
+      expect(controller.getSnapshot().resource?.columns.some((column) => column.id === 'machine')).toBe(true);
+      expect(mocks.localRead).not.toHaveBeenCalled();
+      command(controller, 'sessions'); await vi.waitFor(() => expect(mocks.localRead).toHaveBeenCalled());
+    } finally { controller.dispose(); }
+  });
+
+  it('routes a selected TCP connection to its machines and keeps failed remote reads away from local discovery', async () => {
+    const composed = createDefaultResources({ home: '/isolated', isolatedHome: true });
+    const context = presentContext({ id: 'tcp:fixture', kind: 'tcp', label: 'TCPfixture', target: 'fixture.invalid:7260' });
+    const controller = createTuiController({ registry: createResourceRegistry(composed.resources), contexts: [...contexts, context], initialSelectedContextId: context.id, adapters: composed.adapters });
+    try {
+      controller.handleKey({ name: 't' });
+      await vi.waitFor(() => expect(tcpMocks.star).toHaveBeenCalledWith(expect.objectContaining({ contextId: context.id })));
+      expect(controller.getSnapshot().route.resourceId).toBe('machines');
+      command(controller, 'sessions'); await vi.waitFor(() => expect(tcpMocks.sessions).toHaveBeenCalledWith(expect.objectContaining({ contextId: context.id })));
+      expect(mocks.localRead).not.toHaveBeenCalled();
+      expect(controller.getSnapshot().resource?.columns.some((column) => column.id === 'machine')).toBe(true);
+    } finally { controller.dispose(); }
+  });
   it.each(['complete', 'unknown', 'blocked'] as const)('does not recreate removed preferences after an uninstall attempt: %s', async (outcome) => {
     mocks.maintenance.mockReturnValue({ list: () => [{ id: 'uninstall-data', label: '卸载fixture', description: '固定范围', guidance: '不执行npm' }], preview: mocks.preview, execute: mocks.execute });
     mocks.preview.mockResolvedValue({ operationId: 'uninstall-data', label: '卸载fixture', observedAt: 42, fingerprint: 'f'.repeat(64), enabled: true, targets: [], effects: ['删除当前fixture数据'] });
