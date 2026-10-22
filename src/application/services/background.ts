@@ -27,7 +27,7 @@ function isStopEvent(value: unknown): value is ServiceStopEvent {
   }
 }
 
-function isStopResult(value: unknown): value is ServiceStopResult {
+export function isServiceStopResult(value: unknown): value is ServiceStopResult {
   return isRecord(value) && (value.state === 'ready' || value.state === 'failed') &&
     Array.isArray(value.events) && value.events.every(isStopEvent) &&
     (value.error === undefined || typeof value.error === 'string');
@@ -55,7 +55,7 @@ export async function stopServicesInBackground(request: ServiceStopRequest, deps
         ownedWorker.off('exit', onExit);
         resolve(value);
       };
-      const onMessage = (value: unknown): void => finish(isStopResult(value) ? value : failure('后台服务停机回执形状异常'));
+      const onMessage = (value: unknown): void => finish(isServiceStopResult(value) ? value : failure('后台服务停机回执形状异常'));
       const onError = (error: Error): void => finish(failure(error));
       const onExit = (code: number): void => finish(failure(`后台服务停机任务未返回回执（退出码 ${code}）`));
       ownedWorker.once('message', onMessage);

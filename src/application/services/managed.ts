@@ -12,7 +12,7 @@ import type { QueryError, ReadResult } from '../queries/reading.js';
 import { queryServiceStatuses } from '../queries/services.js';
 import type { CollectionResult, ServiceSnapshot } from '../queries/services.js';
 import { untilAborted } from '../sessions/reading.js';
-import { stopServicesInBackground } from './background.js';
+import { stopServicesOwned } from './owned-stop.js';
 import { checkServiceGuard, inspectServiceProcesses } from './inspection.js';
 import type { ServiceGuard, ServiceInspection, ServiceProcess } from './inspection.js';
 import { startDetachedService, waitForServiceReady } from './local.js';
@@ -94,7 +94,6 @@ export function createLocalServices(options: LocalServicesOptions): LocalService
   const waitReady = options.waitReady ?? ((started, signal) => waitForServiceReady(started, {
     readStatus: async (path) => JSON.parse(await readMetadata(path, signal)) as unknown,
   }, { signal }));
-  const stop = options.stop ?? ((request) => stopServicesInBackground(request, { baseDir: options.baseDir }));
   // Prepared operations belong to a particular observation, so concurrent reads cannot replace a confirmed plan.
   const launchRequests = new WeakMap<LocalService, { extraArgs: string[]; logName: string; port?: number }>();
   const stopRequests = new WeakMap<LocalService, ServiceStopRequest>();
@@ -224,12 +223,14 @@ export function createLocalServices(options: LocalServicesOptions): LocalService
       const stopRequest = stopRequests.get(checked.item);
       if (!stopRequest) return { state: 'failed', message: '停止目标已失效，请重新选择服务。', id: request.id };
       issued = true;
-      const result = await untilAborted(stop(stopRequest), request.signal);
+      const result = options.stop
+        ? await untilAborted(options.stop(stopRequest), request.signal)
+        : await stopServicesOwned(stopRequest, { baseDir: options.baseDir, signal: request.signal });
       const terminated = result.events.filter((event) => event.kind === 'terminated');
       const expected = stopRequest.expectedPids ?? [];
       const success = result.state === 'ready' && expected.length > 0 && terminated.length === expected.length
         && terminated.every((event) => expected.includes(event.pid) && event.target === checked.item!.kind);
-      return { state: success ? 'ready' : 'unconfirmed', message: success ? '已确认所选服务进程终止；原生会话未终止。' : '停机未取得完整终止回执，请核对进程和状态；不会自动重试。', id: request.id };
+      return { state: success ? 'ready' : 'unconfirmed', message: success ? '已确认所选服务进程终止；原生会话未终止。' : '停机未取得完整终止回执，结果待核实；已发出的停止信号未撤销，请核对进程和状态，不会自动重试。', id: request.id };
     } catch { return { state: issued ? 'unconfirmed' : request.signal?.aborted ? 'cancelled' : 'failed', message: issued ? '请求已发出，已停止等待；操作未撤销，结果待核实。' : request.signal?.aborted ? '已取消服务操作，尚未发出起停请求。' : '服务操作核验失败，尚未发出起停请求。', id: request.id }; }
   }
   return { read, check, execute };

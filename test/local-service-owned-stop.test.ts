@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import process from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { ChildProcess, ForkOptions } from 'node:child_process';
+import ts from 'typescript';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { stopServicesOwned } from '../src/application/services/owned-stop.js';
 import * as ownedStop from '../src/application/services/owned-stop.js';
@@ -35,6 +36,18 @@ async function fixture() {
   }
   return { baseDir, createProcess, started };
 }
+async function wrappedStopFixture() {
+  const baseDir = await mkdtemp(join(tmpdir(), 'crosschat-owned-stop-wrapper-')); roots.push(baseDir);
+  await writeFile(join(baseDir, 'package.json'), JSON.stringify({ type: 'module' }));
+  for (const source of ['stop-process', 'stop-worker']) {
+    const text = await readFile(new URL(`../src/application/services/${source}.ts`, import.meta.url), 'utf8');
+    await writeFile(join(baseDir, `${source}.js`), ts.transpileModule(text, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
+  }
+  const marker = join(baseDir, 'called.json');
+  await writeFile(join(baseDir, 'local.js'), `import { writeFileSync } from 'node:fs';\nexport function stopServices(request, deps) { writeFileSync(${JSON.stringify(marker)}, JSON.stringify({request,baseDir:deps.baseDir})); return {state:'ready',events:[{kind:'terminated',target:'node',pid:request.expectedPids[0],selector:request.selector}]}; }`);
+  const createProcess = (_entry: URL, settings: ForkOptions) => { const child = fork(join(baseDir, 'stop-process.js'), [], settings); children.push(child); return child; };
+  return { baseDir, marker, createProcess };
+}
 afterEach(async () => { vi.restoreAllMocks(); await Promise.all(children.splice(0).map(release)); await Promise.all(roots.splice(0).map((path) => rm(path, { recursive: true, force: true }))); });
 
 describe('TUI owned service stop process trees', () => {
@@ -59,6 +72,20 @@ describe('TUI owned service stop process trees', () => {
     const createProcess = vi.fn(f.createProcess);
     expect(await stopServicesOwned({ selector: 'fixture' }, { baseDir: f.baseDir, signal: owner.signal, createProcess })).toMatchObject({ state: 'failed' });
     expect(createProcess).not.toHaveBeenCalled();
+  });
+
+  it('runs the actual stop process wrapper and prior stop worker with the same fixed target, then releases the wrapper', async () => {
+    const f = await wrappedStopFixture();
+    const request = { selector: 'fixture', expectedPids: [1234] };
+    expect(await stopServicesOwned(request, { baseDir: f.baseDir, createProcess: f.createProcess })).toMatchObject({ state: 'ready', events: [{ kind: 'terminated', pid: 1234, selector: 'fixture' }] });
+    expect(JSON.parse(await readFile(f.marker, 'utf8'))).toEqual({ request, baseDir: f.baseDir });
+    expect(children.at(-1)?.exitCode !== null || children.at(-1)?.signalCode !== null).toBe(true);
+  });
+
+  it('retains prior request validation inside the real wrapper before any stop business call', async () => {
+    const f = await wrappedStopFixture();
+    expect(await stopServicesOwned({ selector: 'fixture', expectedPids: [-1] }, { baseDir: f.baseDir, createProcess: f.createProcess })).toMatchObject({ state: 'failed', events: [] });
+    await expect(readFile(f.marker, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('uses the owned stop default from the managed task and waits for tree cleanup before returning an uncertain issued result', async () => {
