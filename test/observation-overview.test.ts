@@ -1,5 +1,8 @@
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { fork } from 'node:child_process';
+import childProcess from 'node:child_process';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { Worker } from 'node:worker_threads';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,7 +17,7 @@ import { collectDoctorDiagnostics } from '../src/application/diagnostics/checks.
 import { writeNodeRevocation } from '../src/serve/revocation.js';
 
 const cleanup: Array<() => void | Promise<void>> = [];
-afterEach(async () => { vi.restoreAllMocks(); for (const dispose of cleanup.splice(0).reverse()) await dispose(); });
+afterEach(async () => { vi.restoreAllMocks(); syncBuiltinESMExports(); for (const dispose of cleanup.splice(0).reverse()) await dispose(); });
 const now = 1_800_000_000_000;
 const capabilities = { discovery: true, delivery: false, launch: false, diagnostics: false };
 const report: DiagnosticResult = { groups: [{ context: { kind: 'environment' }, checks: [
@@ -179,6 +182,48 @@ describe('safe isolated diagnostics for observation pages', () => {
       codexBin: () => { throw new Error('not installed'); }, repoSkillFiles: () => undefined, probeTcp: () => false });
     const parked = result.groups.flatMap((group) => group.checks).find((check) => check.code === 'outbox-parked');
     expect(parked?.data).toMatchObject({ mailboxFile: join(directory, '.crosschat', 'mailbox', 'fixture-thread.md') });
+  });
+
+  it('rejects malformed or oversized scoped doctor sources instead of silently reporting an empty outbox', async () => {
+    const directory = await home();
+    const outbox = join(directory, '.crosschat', 'outbox');
+    await mkdir(outbox, { recursive: true });
+    const file = join(outbox, 'fixture-thread.json');
+    const deps = defaultDoctorDeps({ home: directory, env: {} });
+    await writeFile(file, '{"items":"private-token malformed"}');
+    expect(() => deps.listOutbox()).toThrow();
+    await writeFile(file, 'x'.repeat(2 * 1024 * 1024 + 1));
+    expect(() => deps.listOutbox()).toThrow();
+    expect(() => deps.readFile(file)).toThrow();
+  });
+
+  it('uses explicit executable overrides without probing inherited native program locations', async () => {
+    const directory = await home();
+    const spawn = vi.spyOn(childProcess, 'spawnSync').mockReturnValue({ pid: 0, output: [], stdout: '', stderr: '', status: 1, signal: null });
+    const exists = vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    syncBuiltinESMExports();
+    const deps = defaultDoctorDeps({ home: directory, env: { CROSSCHAT_CLAUDE_BIN: 'fixture-claude', CROSSCHAT_CODEX_BIN: 'fixture-codex' } });
+    let claude: string | undefined; let codex: string | undefined;
+    try { claude = deps.resolveClaude(); } catch { /* Unbound resolver is the regression. */ }
+    try { codex = deps.codexBin(); } catch { /* Unbound resolver is the regression. */ }
+    expect({ claude, codex }).toEqual({ claude: 'fixture-claude', codex: 'fixture-codex' });
+    expect(spawn).not.toHaveBeenCalled();
+    expect(exists).not.toHaveBeenCalled();
+  });
+
+  it('keeps scoped registry reads bounded and reports unreadable watchdog evidence instead of claiming stopped', async () => {
+    const directory = await home();
+    const registry = join(directory, '.claude', 'sessions');
+    const outbox = join(directory, '.crosschat', 'outbox');
+    await mkdir(registry, { recursive: true });
+    await mkdir(outbox, { recursive: true });
+    const deps = defaultDoctorDeps({ home: directory, env: {} });
+    await writeFile(join(registry, 'fixture.json'), JSON.stringify({ pid: process.pid, kind: 'interactive', sessionId: 'fixture-full-native-id', messagingSocketPath: 'fixture-capability' }));
+    expect(deps.listClaudeSessions().sessions).toHaveLength(1);
+    await writeFile(join(registry, 'fixture.json'), 'x'.repeat(2 * 1024 * 1024 + 1));
+    expect(() => deps.listClaudeSessions()).toThrow();
+    await writeFile(join(outbox, 'watchdog.lock'), 'private-token malformed');
+    expect(() => deps.watchdogRunning?.()).toThrow();
   });
 
   it('rejects malformed or secret-bearing IPC result shapes without returning a healthy report', async () => {

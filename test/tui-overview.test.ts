@@ -62,4 +62,12 @@ describe('status and doctor resource adapters', () => {
     expect(remote).toMatchObject({ rows: [], completeness: 'unavailable' });
     expect(overview.readStatus).not.toHaveBeenCalled();
   });
+
+  it('does not turn a failed configuration read into a confirmed zero SSH or TCP connection count', async () => {
+    const { createStatusResource } = await import('../src/tui/resources/overview.js');
+    const overview = service();
+    overview.readStatus = vi.fn(async () => ({ ...status, connections: [] }));
+    const page = await createStatusResource({ overview }).adapter.read({ context, signal: new AbortController().signal });
+    for (const id of ['overview:ssh', 'overview:tcp']) expect(page.rows.find((row) => row.id === id)?.cells.state).toMatch(/未知|不完整/);
+  });
 });
