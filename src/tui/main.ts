@@ -66,21 +66,31 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
         import('ink'), import('./ui/app.js'), import('react'), options.version ?? packageVersion(),
       ]);
       if (owner.signal.aborted) return cancelledMount();
-      let sessions: { resource: TuiResource; adapter: TuiResourceAdapter } | undefined;
+      const installed: Array<{ resource: TuiResource; adapter: TuiResourceAdapter }> = [];
       if (options.adapters === undefined) {
-        const [{ createLocalDiscoveryService }, { createSessionMembershipService }, { createSessionsResource }] = await Promise.all([
+        const [{ createLocalDiscoveryService }, { createSessionMembershipService }, { createSessionsResource }, communicationQueries, { queryManagedLog }, { createLocalOverview }, { createCommunicationResources }, { createLogsResource }, { createStatusResource, createDoctorResource }] = await Promise.all([
           import('../application/discovery/local.js'), import('../application/session-membership/index.js'), import('./resources/sessions.js'),
+          import('../application/observations/communications.js'), import('../application/observations/logs.js'), import('../application/observations/overview.js'),
+          import('./resources/communications.js'), import('./resources/logs.js'), import('./resources/overview.js'),
         ]);
         if (owner.signal.aborted) return cancelledMount();
         // Native environment overrides remain authoritative unless the caller supplies an isolated home.
         const discovery = createLocalDiscoveryService(options.home === undefined ? {} : { home });
-        const membership = createSessionMembershipService({ baseDir: join(home, '.crosschat'), discovery });
-        sessions = createSessionsResource({ discovery, membership });
+        const baseDir = join(home, '.crosschat');
+        const membership = createSessionMembershipService({ baseDir, discovery });
+        const overview = createLocalOverview({ home, discovery });
+        const communications = createCommunicationResources({
+          readCommunications: ({ contextId, signal }) => communicationQueries.queryCommunications({ baseDir, contextId, signal }),
+          readOutbox: ({ contextId, signal }) => communicationQueries.queryOutbox({ baseDir, contextId, signal }),
+        });
+        installed.push(createSessionsResource({ discovery, membership, relatedResources: ['deliveries', 'logs'] }),
+          createStatusResource({ overview }), createDoctorResource({ overview }), communications.deliveries, communications.outbox,
+          createLogsResource({ read: (request) => queryManagedLog({ ...request, baseDir }) }));
       }
-      const registry = options.registry ?? createResourceRegistry(defaultResources.map((resource) => resource.id === 'sessions' && sessions ? sessions.resource : resource));
+      const registry = options.registry ?? createResourceRegistry(defaultResources.map((resource) => installed.find((entry) => entry.resource.id === resource.id)?.resource ?? resource));
       let selectedContextId: string | undefined;
       const controller = createTuiController({
-        registry, contexts: initialContexts.contexts, adapters: options.adapters ?? (sessions ? { sessions: sessions.adapter } : {}),
+        registry, contexts: initialContexts.contexts, adapters: options.adapters ?? Object.fromEntries(installed.map((entry) => [entry.resource.id, entry.adapter])),
         contextSource: options.contexts === undefined ? { initial: initialContexts, read: readContexts } : undefined,
         initialSelectedContextId: preferences.value?.selectedContextId,
         onContextSelection: (id) => { selectedContextId = id; },

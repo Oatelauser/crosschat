@@ -100,7 +100,7 @@ export function TuiScreen({ snapshot, resource, version }: { snapshot: TuiSnapsh
   const permission = snapshot.context ? snapshot.context.permissionLabel ?? (snapshot.context.kind === 'local' ? '本机用户' : '未认证') : '选择连接';
   const top: Line[] = [
     { text: `crosschat ${version} · ${snapshot.context?.label ?? 'ctx'} · 权限：${permission}`, tone: 'cyan' },
-    { text: snapshot.input ? `${snapshot.input.kind === 'command' ? ':' : '/'}${editingLine(snapshot.input.editor.text, snapshot.input.editor.cursor, width - 1)}` : `:${resource.id}  ${resource.label}${snapshot.filter ? `  /${snapshot.filter}` : ''}${snapshot.sampledAt === undefined ? '' : ` · 采样 ${new Date(snapshot.sampledAt).toLocaleTimeString()}`}` },
+    { text: snapshot.input ? `${snapshot.input.kind === 'command' ? ':' : '/'}${editingLine(snapshot.input.editor.text, snapshot.input.editor.cursor, width - 1)}` : `:${resource.id}  ${resource.label}${snapshot.following === undefined ? '' : snapshot.following ? ' · 跟随中' : ' · 已暂停'}${snapshot.filter ? `  /${snapshot.filter}` : ''}${snapshot.sampledAt === undefined ? '' : ` · 采样 ${new Date(snapshot.sampledAt).toLocaleTimeString()}`}` },
   ];
   const candidates = snapshot.input?.candidates ?? [];
   const chosen = snapshot.input?.candidateIndex;

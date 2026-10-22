@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { pairKeyOfEntry } from '../../conversations.js';
+import { communicationPairId } from './communications.js';
 import { decodeRef } from '../../ref.js';
 import { queryLogWindow } from '../queries/logs.js';
 import type { LogCursor } from '../queries/logs.js';
@@ -49,7 +49,8 @@ async function sources(baseDir: string, signal?: AbortSignal): Promise<ManagedLo
   catch (error) { if (!isRecord(error) || error.code !== 'ENOENT') throw error; names = []; }
   checkAbort(signal);
   for (const name of names.sort()) if (/^node(?:-[^/\\\0]+)?\.log(?:\.old)?$/.test(name)) known.push({ id: `node:${name}`, label: `节点日志 ${name}`, path: join(tcp, name) });
-  return [...known, ...known.filter((source) => !source.id.endsWith('.old')).map((source) => ({ id: `${source.id}.old`, label: `${source.label}（轮转副本）`, path: `${source.path}.old` }))];
+  const all = [...known, ...known.filter((source) => !source.id.endsWith('.old')).map((source) => ({ id: `${source.id}.old`, label: `${source.label}（轮转副本）`, path: `${source.path}.old` }))];
+  return [...new Map(all.map((source) => [source.id, source])).values()];
 }
 
 function safeLine(raw: string): string {
@@ -76,7 +77,7 @@ function matches(raw: string, options: ManagedLogOptions): boolean {
   if (!isRecord(entry) || typeof entry.target !== 'string') return false;
   const from = typeof entry.from === 'string' ? entry.from : undefined;
   const replyRef = typeof entry.replyRef === 'string' ? entry.replyRef : undefined;
-  if (options.pairId && pairKeyOfEntry({ target: entry.target, from, replyRef }) !== options.pairId) return false;
+  if (options.pairId && communicationPairId({ target: entry.target, from, replyRef }) !== options.pairId) return false;
   const ref = options.sessionRef;
   if (!ref) return true;
   if (ref.referenceKind === 'process' || ref.contextId !== (options.contextId ?? 'local')) return false;
@@ -104,10 +105,12 @@ export async function queryManagedLog(options: ManagedLogOptions): Promise<Manag
     const epoch = (options.previous?.epoch ?? 0) + (page.rotated ? 1 : 0);
     const errors: QueryError[] = [...page.errors];
     if (page.omittedLeadingLine) errors.push({ source: source.path, kind: 'unavailable', message: '尾窗开头有一行未完整读取，已隐藏片段且不可复制', nextStep: '按 t 查看轮转来源；超出窗口的内容请在原生终端检查完整文件' });
-    return { source, sources: catalog, items: page.entries.filter((entry) => matches(entry.text, options)).map((entry) => ({ ...entry, text: safeLine(entry.text), id: JSON.stringify([source.id, page.cursor?.identity, epoch, entry.offset]) })),
+    const rowLimit = page.entries.length > 1000;
+    if (rowLimit) errors.push({ source: source.path, kind: 'unavailable', message: '只显示最近1000个完整起始行', nextStep: '筛选当前有界窗口；更早内容可在原生终端查看完整文件' });
+    return { source, sources: catalog, items: page.entries.slice(-1000).filter((entry) => matches(entry.text, options)).map((entry) => ({ ...entry, text: safeLine(entry.text), id: JSON.stringify([source.id, page.cursor?.identity, epoch, entry.offset]) })),
       completeness: page.state === 'ready' ? page.truncated || errors.length ? 'partial' : 'complete' : page.state === 'cancelled' ? 'cancelled' : 'unavailable',
       observedAt: page.observedAt, errors, checkpoint: page.cursor ? { cursor: page.cursor, epoch } : undefined,
-      bytesRead: page.bytesRead, truncated: page.truncated, omittedLeadingLine: page.omittedLeadingLine, rotated: page.rotated };
+      bytesRead: page.bytesRead, truncated: page.truncated || rowLimit, omittedLeadingLine: page.omittedLeadingLine, rotated: page.rotated };
   } catch (error) {
     const issue = queryError('logs', error);
     return { ...empty, completeness: issue.kind === 'cancelled' ? 'cancelled' : 'unavailable', errors: [issue] };

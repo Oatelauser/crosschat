@@ -17,6 +17,8 @@ export interface SessionsResourceOptions {
   membership?: SessionMembershipService;
   pageSize?: number;
   now?: () => number;
+  /** Links are available only when their readonly resources are installed. */
+  relatedResources?: readonly ('deliveries' | 'logs')[];
 }
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -116,6 +118,9 @@ function address(session: DiscoverySession, items: readonly DiscoverySession[], 
 
 /** Read-only discovery DTOs become UI data; provider and context execution stays outside the page. */
 export function createSessionsResource(options: SessionsResourceOptions): { resource: TuiResource; adapter: TuiResourceAdapter } {
+  const related = new Set(options.relatedResources ?? []);
+  const activeResource: TuiResource = { ...resource, actions: resource.actions.map((entry) => (entry.id === 'deliveries' || entry.id === 'logs') && related.has(entry.id)
+    ? { ...entry, kind: 'navigate', enabled: true, unavailableReason: undefined, nextStep: undefined } : entry) };
   const statuses = options.statusRegistry ?? createStatusRegistry();
   const guides = new Map<string, NativeSessionGuide>(Object.entries({ ...nativeGuides, ...options.nativeGuides }));
   const now = options.now ?? Date.now;
@@ -167,6 +172,7 @@ export function createSessionsResource(options: SessionsResourceOptions): { reso
       const rowAvailability: Record<string, TuiActionAvailability> = target.unavailable ? { copy: target.unavailable } : {};
       if (item.ref.referenceKind === 'process') {
         rowAvailability.adopt = rowAvailability['remove-member'] = unavailable('临时进程引用没有核实的原生会话 ID，不能修改星册位。', '在原生工具确认完整会话身份后刷新。');
+        rowAvailability.deliveries = rowAvailability.logs = unavailable('临时进程引用不能精确关联传输记录。', '在原生工具确认完整会话身份后刷新。');
       }
       const originalGuide = guides.get(item.ref.providerId)?.(item) ?? { title: `${item.ref.providerId} 原生操作`, fields: [{ label: '下一步', value: `此工具未登记专用操作指引，请回到 ${item.ref.providerId} 原生界面操作。` }] };
       return {
@@ -175,6 +181,7 @@ export function createSessionsResource(options: SessionsResourceOptions): { reso
         detail: [{ label: '名称', value: item.name || '匿名' }, { label: '原生引用', value: reference }, { label: '原生状态', value: json(item.rawStatus) }, { label: '能力', value: json(item.capabilities) }, { label: '属性', value: json(item.attributes) }, { label: '采样时间', value: new Date(observedAt).toISOString() }],
         copyValues: { ref: reference }, ...(target.value === undefined ? {} : { copyValue: target.value }),
         actionAvailability: rowAvailability,
+        actionRoutes: item.ref.referenceKind === 'process' ? undefined : Object.fromEntries([...related].map((id) => [id, { resourceId: id, contextId, query: { sessionRef: reference, ...(id === 'logs' ? { source: 'send-log' } : {}) } }])),
         detailViews: { 'native-guide': { ...originalGuide, fields: [...originalGuide.fields, { label: '寻址指引', value: target.value === undefined ? `${target.unavailable?.reason ?? '地址不可用'}\n${target.unavailable?.nextStep ?? ''}` : `本机完整地址：${target.value}\n本界面只复制地址，不代表该会话发送消息。` }, { label: '完整会话引用', value: reference }] } },
       };
     });
@@ -269,5 +276,5 @@ export function createSessionsResource(options: SessionsResourceOptions): { reso
       return { selectedId: request.target?.id, message: result.message };
     },
   };
-  return { resource, adapter };
+  return { resource: activeResource, adapter };
 }
