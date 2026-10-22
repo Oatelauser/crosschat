@@ -1,10 +1,17 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import * as fs from 'node:fs';
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { credentialRevision, starRevision } from '../src/serve/management-state.js';
 import { removeCredentialExactFor, removeStarExactFrom } from '../src/serve/registry.js';
 import type { StarRecord } from '../src/serve/registry.js';
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return { ...actual, renameSync: vi.fn(actual.renameSync) };
+});
+const actualFs = await vi.importActual<typeof import('node:fs')>('node:fs');
 
 const directories: string[] = [];
 const machine = 'a'.repeat(32);
@@ -18,7 +25,7 @@ function fixture() {
   save();
   return { directory, file, star: document.stars[0], document, save, read: () => JSON.parse(readFileSync(file, 'utf8')) };
 }
-afterEach(() => { for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true }); });
+afterEach(() => { vi.mocked(fs.renameSync).mockImplementation(actualFs.renameSync); for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true }); });
 
 describe('atomic complete management targets', () => {
   it('refuses reused credential labels and changed complete machine bindings without writing', () => {
@@ -65,5 +72,34 @@ describe('atomic complete management targets', () => {
     expect(() => removeStarExactFrom(f.file, f.star.starId!, { starRevision: 'a'.repeat(64) })).toThrow(/台账|配置|source/);
     expect(readFileSync(f.file, 'utf8')).toBe('{broken');
     expect(existsSync(`${f.file}.bak`)).toBe(false);
+  });
+
+  it('preserves the actual star deletion result when secondary node cleanup fails so broker can still revoke it', () => {
+    const f = fixture(); const nodeFile = join(f.directory, 'node.json');
+    writeFileSync(nodeFile, JSON.stringify({ brokers: [{ host: 'fixture.invalid', port: 7260, starId: f.star.starId, key: 'fixture-node-key' }] }));
+    vi.mocked(fs.renameSync).mockImplementation((source, destination) => {
+      if (String(destination) === nodeFile) throw new Error('controlled node cleanup failure');
+      actualFs.renameSync(source, destination);
+    });
+    expect(removeStarExactFrom(f.file, f.star.starId!, { starRevision: starRevision(f.star) })).toMatchObject({ kind: 'removed', cleanupFailed: true, removed: { nodes: 2, roster: 1 } });
+    expect(f.read().stars).toHaveLength(1);
+    expect(JSON.parse(readFileSync(nodeFile, 'utf8')).brokers).toHaveLength(1);
+  });
+
+  it('does not overwrite an outside marker through a preexisting fixed temporary hard link', () => {
+    const f = fixture(); const outside = join(f.directory, 'outside-marker'); writeFileSync(outside, 'keep-marker');
+    linkSync(outside, `${f.file}.tmp`);
+    const node = f.star.nodes[0];
+    removeCredentialExactFor(f.file, f.star.starId!, node.label, 'node', { credentialRevision: credentialRevision(node), machineId: machine });
+    expect(readFileSync(outside, 'utf8')).toBe('keep-marker');
+  });
+
+  it('rejects a linked parent chain before changing its actual external registry', () => {
+    const f = fixture(); const linked = join(f.directory, 'linked-parent'); const actual = join(f.directory, 'actual-parent'); mkdirSync(actual);
+    const outside = join(actual, 'broker.json'); writeFileSync(outside, JSON.stringify(f.document));
+    symlinkSync(actual, linked, process.platform === 'win32' ? 'junction' : 'dir');
+    const node = f.star.nodes[0]; const before = readFileSync(outside, 'utf8');
+    expect(() => removeCredentialExactFor(join(linked, 'broker.json'), f.star.starId!, node.label, 'node', { credentialRevision: credentialRevision(node), machineId: machine })).toThrow();
+    expect(readFileSync(outside, 'utf8')).toBe(before);
   });
 });

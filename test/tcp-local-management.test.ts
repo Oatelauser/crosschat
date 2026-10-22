@@ -39,4 +39,17 @@ describe('TUI local management ownership', () => {
     expect(await performLocalManagement({ op: 'set-showname', name: 'new-name' }, { baseDir: f.baseDir, readStatus: f.readStatus, processes: () => [], alive: () => false })).toMatchObject({ kind: 'rejected' });
     expect(readFileSync(file, 'utf8')).toBe(raw);
   });
+  it('allows adding a new star after deleting the last one left a valid empty brokers array', async () => {
+    const f = fixture(); writeFileSync(f.file, JSON.stringify({ port: 7260, stars: [] }));
+    writeFileSync(join(f.baseDir, 'tcp', 'node.json'), JSON.stringify({ brokers: [], showName: 'fixture-host' }));
+    expect(await performLocalManagement({ op: 'add-star', name: 'again' }, { baseDir: f.baseDir, readStatus: f.readStatus, processes: () => [], alive: () => false, machineId: async () => 'a'.repeat(32) })).toMatchObject({ kind: 'applied', mode: 'cold' });
+    expect(f.read().stars).toHaveLength(1);
+  });
+  it('keeps a hot explicit uncertain receipt uncertain rather than treating it as no-effect rejection', async () => {
+    const f = fixture();
+    const result = await performLocalManagement({ op: 'remove-star', starId: 'full-star', expected: { starRevision: 'a'.repeat(64) } }, { baseDir: f.baseDir, readStatus: async () => ({ state: 'running', pid: 1234, port: 7260, adminPipe: 'fixture-capability' }), processes: () => [{ pid: 1234, cmdline: 'fixture/dist/cli.js serve' }], alive: () => true,
+      transport: async () => ({ kind: 'hot', reply: { ok: false, uncertain: true, error: 'fixture-partial' } }) });
+    expect(result).toMatchObject({ kind: 'failed' });
+    expect(JSON.stringify(result)).not.toContain('fixture-partial');
+  });
 });

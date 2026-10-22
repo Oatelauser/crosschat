@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTcpManagement } from '../src/application/tcp/management.js';
 import type { TcpManagementRequest } from '../src/application/tcp/management.js';
 import type { TcpStarResult, TcpStarsResult } from '../src/application/tcp/model.js';
+import type { DiscoveryEndpoint } from '../src/application/discovery/model.js';
 
 const fullMachine = 'a'.repeat(32);
 const contextId = 'local';
@@ -136,5 +137,32 @@ describe('TCP management previews and fixed targets', () => {
     const request = { ...f.request('set-show-name', { scope: 'star', name: '本机新名' }), targetId: undefined };
     expect(await f.apply(request)).toMatchObject({ kind: 'applied', mode: 'cold', message: expect.stringMatching(/重连/) });
     expect(f.executeLocal).toHaveBeenCalledWith({ op: 'set-showname', starId: star.starId, name: '本机新名' }, request.signal);
+  });
+
+  it('uses only enumerated complete local session references for adoption, including anonymous future providers', async () => {
+    const f = fixture(); const ref = { contextId: 'local', providerId: 'futureprovider', nativeId: 'opaque/full/匿名' };
+    const capabilities = { discovery: true, delivery: false, launch: false, diagnostics: false };
+    const discovery: DiscoveryEndpoint = { execute: vi.fn(async () => ({ op: 'list' as const, providers: [{ providerId: ref.providerId, capabilities }], page: { items: [{ ref, name: null, rawStatus: null, attributes: {}, capabilities }], nextCursor: null, completeness: 'complete' as const, observedAt: 100, errors: [] } })) };
+    const membership = { listTargets: vi.fn(async () => ({ stars: [{ id: star.starId, label: 'fixture', eligible: true }], completeness: 'complete' as const, observedAt: 100, errors: [] })), check: vi.fn(async () => ({ allowed: true })), apply: vi.fn(async () => ({ kind: 'applied' as const, message: 'fixture adopted' })) };
+    const service = createTcpManagement({ baseDir: '/never-read-real-user', catalog: f.catalog, executeLocal: f.executeLocal, discovery, membership });
+    const request = { ...f.request('adopt-session'), targetId: member.id };
+    const initial = await service.preview(request); const option = initial.fields.find((field) => field.id === 'sessionRef')?.options?.[0];
+    expect(option).toMatchObject({ value: JSON.stringify(ref), label: expect.stringMatching(/匿名/) });
+    const chosen = { ...request, values: { sessionRef: option!.value } }; const preview = await service.preview(chosen);
+    expect(await service.apply({ ...chosen, expectedPreviewRevision: preview.revision })).toMatchObject({ kind: 'applied' });
+    expect(membership.apply).toHaveBeenCalledWith({ op: 'adopt', ref, starId: star.starId, signal: request.signal });
+    const forged = { ...request, values: { sessionRef: JSON.stringify({ ...ref, nativeId: member.nativeId, contextId: 'tcp:remote' }) } };
+    expect(await service.preview(forged)).toMatchObject({ enabled: false }); expect(membership.apply).toHaveBeenCalledOnce();
+  });
+
+  it('sends exact remote node revocation and preserves an explicit partial-result receipt', async () => {
+    const f = fixture(); f.current.contextId = 'tcp:configured'; f.current.star!.contextId = 'tcp:configured'; f.current.star!.role = 'star-admin';
+    f.remote.request.mockResolvedValue({ op: 'admin-op-result', id: 'controlled', ok: true, removed: true });
+    const request = { ...f.request('revoke-credential'), contextId: 'tcp:configured', targetId: credential.id, targetRevision: credential.revision };
+    expect(await f.apply(request)).toMatchObject({ kind: 'applied' });
+    expect(f.remote.request).toHaveBeenCalledWith('remove-node', { label: credential.label, expected: { credentialRevision: credential.revision, machineId: fullMachine } });
+    f.remote.request.mockResolvedValue({ op: 'admin-op-result', id: 'controlled', ok: false, uncertain: true });
+    expect(await f.apply(request)).toMatchObject({ kind: 'uncertain' });
+    expect(f.executeLocal).not.toHaveBeenCalled(); expect(f.remote.close).toHaveBeenCalled();
   });
 });
