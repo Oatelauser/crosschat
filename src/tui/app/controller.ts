@@ -41,6 +41,9 @@ interface ListState {
   selectedFacets?: Map<string, string>;
   actionAvailability?: TuiPage['actionAvailability'];
   detailViews?: TuiPage['detailViews'];
+  routeChoices?: TuiPage['routeChoices'];
+  canFollow?: boolean;
+  following?: boolean;
 }
 
 interface SavedInput {
@@ -73,7 +76,10 @@ function editEvent(key: TuiKey): EditEvent | undefined {
 }
 
 function errorText(error: unknown): string { return error instanceof Error ? error.message : String(error); }
-function routeKey(route: TuiRoute): string { return JSON.stringify([route.resourceId, route.contextId]); }
+function routeKey(route: TuiRoute): string { return JSON.stringify([route.resourceId, route.contextId, Object.entries(route.query ?? {}).sort(([left], [right]) => left.localeCompare(right))]); }
+function copyRoute(route: TuiRoute): TuiRoute {
+  return { resourceId: route.resourceId, ...(route.contextId === undefined ? {} : { contextId: route.contextId }), ...(Object.keys(route.query ?? {}).length ? { query: { ...route.query } } : {}) };
+}
 function own<T>(values: Readonly<Record<string, T>> | undefined, key: string): T | undefined {
   return values && Object.hasOwn(values, key) ? values[key] : undefined;
 }
@@ -108,6 +114,7 @@ export function createTuiController(options: TuiControllerOptions) {
   let detailCursorLine = 0;
   let detailReturnMode: 'list' | 'choice' = 'list';
   let choice: TuiSnapshot['choice'];
+  let choiceRoutes = new Map<string, TuiRoute>();
   let overlay: TuiOverlay | undefined;
   let overlayAction: TuiAction | undefined;
   let overlayOwner: ListState | undefined;
@@ -127,6 +134,9 @@ export function createTuiController(options: TuiControllerOptions) {
   let disposed = false;
   let readGeneration = 0;
   let activeRead: AbortController | undefined;
+  let activeWatch: AbortController | undefined;
+  let watchOwner: ListState | undefined;
+  let watchGeneration = 0;
   let snapshot: TuiSnapshot;
 
   function currentContext() { return contexts.find((context) => context.id === page.route.contextId); }
@@ -140,6 +150,12 @@ export function createTuiController(options: TuiControllerOptions) {
     return page.sortColumn ? rows.toSorted((left, right) => (left.cells[page.sortColumn!] ?? '').localeCompare(right.cells[page.sortColumn!] ?? '')) : rows;
   }
   function selectedRow() { return page.rows.find((row) => row.id === page.selectedId); }
+  function actionRoute(action: TuiAction, row = selectedRow()): TuiRoute | undefined {
+    const linked = own(row?.actionRoutes, action.id);
+    if (linked) return linked;
+    if (action.navigateTo) return { resourceId: action.navigateTo, contextId: page.route.contextId };
+    return row?.actionRoutes === undefined ? row?.navigate : undefined;
+  }
   function actionEntries(targetMode: TuiMode): TuiActionEntry[] {
     return options.registry.actions(page.route.resourceId, targetMode).map((action) => {
       const row = selectedRow();
@@ -159,27 +175,78 @@ export function createTuiController(options: TuiControllerOptions) {
         enabled = false; reason = '当前项目未提供此只读信息';
       }
       if (enabled && action.kind === 'filter' && !page.filters?.some((filter) => filter.id === action.filterId)) { enabled = false; reason = '当前资源未提供此筛选'; }
+      if (enabled && action.kind === 'route-choice' && !own(page.routeChoices, action.id)?.options.length) { enabled = false; reason = '当前资源没有可选择的来源'; }
+      if (enabled && action.kind === 'follow' && (!page.canFollow || !options.adapters[page.route.resourceId]?.watch)) { enabled = false; reason = '当前来源不支持跟随'; }
+      if (enabled && action.kind === 'navigate' && action.id !== 'enter-context' && !actionRoute(action, row)) { enabled = false; reason = '当前项目没有可用的关联目标'; }
       if (enabled && action.mutation && (!options.adapters[action.ownerResourceId]?.checkAction || !options.adapters[action.ownerResourceId]?.mutate)) {
         enabled = false; reason = '当前资源尚未提供权限核验与操作接口';
       }
-      return { id: action.id, shortcut: action.shortcut, label: action.label, ...availability, enabled, reason };
+      return { id: action.id, shortcut: action.shortcut, label: choice?.actionId && action.id === 'choice-apply' ? '打开来源' : action.label, ...availability, enabled, reason };
     });
   }
   function publish() {
     if (disposed) return;
+    syncWatch();
     const rows = visibleRows();
+    if (mode === 'list' && page.canFollow && page.following) page.selectedId = rows.at(-1)?.id;
     let selectedIndex = rows.findIndex((row) => row.id === page.selectedId);
     if (selectedIndex < 0) { selectedIndex = rows.length ? 0 : -1; page.selectedId = rows[0]?.id; }
     page.scrollOffset = Math.max(0, Math.min(page.scrollOffset, Math.max(0, rows.length - pageSize())));
     if (selectedIndex >= 0 && selectedIndex < page.scrollOffset) page.scrollOffset = selectedIndex;
     if (selectedIndex >= page.scrollOffset + pageSize()) page.scrollOffset = selectedIndex - pageSize() + 1;
     snapshot = {
-      route: { ...page.route }, context: currentContext(), mode, rows, selectedId: page.selectedId, selectedIndex,
+      route: copyRoute(page.route), context: currentContext(), mode, rows, selectedId: page.selectedId, selectedIndex,
       scrollOffset: page.scrollOffset, filter: page.filter, input, detail, help, overlay, choice, loading,
       filters: page.filters, selectedFacets: Object.fromEntries(page.selectedFacets ?? []), sampledAt: page.sampledAt, totalRows: page.rows.length,
+      following: page.canFollow && options.adapters[page.route.resourceId]?.watch ? page.following ?? true : undefined,
       error: page.error, notice: page.notice, completeness: page.completeness, actions: actionEntries(mode), viewport: { ...viewport },
     };
     for (const listener of listeners) listener();
+  }
+  function applyPage(next: TuiPage) {
+    const rowIds = new Set<string>();
+    for (const row of next.rows) {
+      if (!row.id || rowIds.has(row.id)) throw new Error(`资源返回重复稳定标识或空标识: ${row.id}`);
+      rowIds.add(row.id);
+    }
+    page.rows = [...next.rows]; page.completeness = next.completeness; page.notice = next.notice; page.error = undefined;
+    page.sampledAt = next.sampledAt; page.filters = next.filters;
+    page.actionAvailability = next.actionAvailability; page.detailViews = next.detailViews;
+    page.routeChoices = next.routeChoices; page.canFollow = next.canFollow;
+    if (next.canFollow) page.following ??= true;
+    page.selectedFacets ??= new Map();
+    for (const filter of page.filters ?? []) if (!page.selectedFacets.has(filter.id)) page.selectedFacets.set(filter.id, filter.defaultValue);
+  }
+  function stopWatch() {
+    const previous = activeWatch;
+    activeWatch = undefined; watchOwner = undefined; watchGeneration++;
+    previous?.abort();
+  }
+  function syncWatch() {
+    const adapter = options.adapters[page.route.resourceId];
+    const enabled = mode === 'list' && !loading && !activeRead && page.canFollow && page.following && adapter?.watch && (page.route.contextId === undefined || currentContext());
+    if (!enabled) { if (activeWatch) stopWatch(); return; }
+    if (activeWatch && watchOwner === page) return;
+    stopWatch();
+    const owner = page;
+    const controller = new AbortController();
+    const generation = watchGeneration;
+    activeWatch = controller; watchOwner = owner;
+    const current = () => !disposed && activeWatch === controller && generation === watchGeneration && owner === page && !controller.signal.aborted;
+    const finished = (error?: unknown) => {
+      if (!current()) return;
+      stopWatch(); page.following = false;
+      if (error !== undefined) page.error = errorText(error);
+      else page.notice = '观察已结束，可恢复跟随后重新读取。';
+      publish();
+    };
+    try {
+      const pending = adapter!.watch!({ context: currentContext(), route: copyRoute(page.route), signal: controller.signal }, (next) => {
+        if (!current()) return;
+        try { applyPage(next); publish(); } catch (error) { finished(error); }
+      });
+      void pending.then(() => finished(), (error: unknown) => finished(error));
+    } catch (error) { finished(error); }
   }
   function cancelRead(showNotice: boolean) {
     const previous = activeRead;
@@ -194,6 +261,7 @@ export function createTuiController(options: TuiControllerOptions) {
   }
   async function refresh(): Promise<void> {
     if (disposed) return;
+    stopWatch();
     cancelRead(false);
     const contextSource = page.route.resourceId === 'ctx' ? options.contextSource : undefined;
     if (page.route.resourceId === 'ctx' && !contextSource) { publish(); return; }
@@ -218,7 +286,7 @@ export function createTuiController(options: TuiControllerOptions) {
         ? contextSource.read(controller.signal).then((result) => ({ contexts: result.contexts, page: {
           rows: contextRows(result.contexts, result.notice), completeness: result.completeness, notice: result.notice,
         } }))
-        : adapter!.read({ context: currentContext(), signal: controller.signal }).then((result) => ({ page: result }));
+        : adapter!.read({ context: currentContext(), route: copyRoute(page.route), signal: controller.signal }).then((result) => ({ page: result }));
       const cancelled = new Promise<undefined>((resolve) => {
         const onAbort = () => resolve(undefined);
         controller.signal.addEventListener('abort', onAbort, { once: true });
@@ -227,17 +295,8 @@ export function createTuiController(options: TuiControllerOptions) {
       });
       const result = await Promise.race([pending, cancelled]);
       if (!result || disposed || generation !== readGeneration || requestPage !== page) return;
-      const rowIds = new Set<string>();
-      for (const row of result.page.rows) {
-        if (!row.id || rowIds.has(row.id)) throw new Error(`资源返回重复稳定标识或空标识: ${row.id}`);
-        rowIds.add(row.id);
-      }
       if (result.contexts !== undefined) contexts = [...result.contexts];
-      page.rows = [...result.page.rows]; page.completeness = result.page.completeness; page.notice = result.page.notice; page.error = undefined;
-      page.sampledAt = result.page.sampledAt; page.filters = result.page.filters;
-      page.actionAvailability = result.page.actionAvailability; page.detailViews = result.page.detailViews;
-      page.selectedFacets ??= new Map();
-      for (const filter of page.filters ?? []) if (!page.selectedFacets.has(filter.id)) page.selectedFacets.set(filter.id, filter.defaultValue);
+      applyPage(result.page);
     } catch (error) {
       if (!disposed && generation === readGeneration && requestPage === page && !controller.signal.aborted) {
         page.error = contextSource ? '无法读取连接配置，请检查来源和访问权限后重试。' : errorText(error); page.completeness = page.rows.length ? 'partial' : 'unavailable';
@@ -250,15 +309,16 @@ export function createTuiController(options: TuiControllerOptions) {
   function navigate(route: TuiRoute) {
     if (!options.registry.resolve(route.resourceId)) { page.notice = `未知资源: ${route.resourceId}`; publish(); return; }
     cancelRead(false);
+    stopWatch();
     cancelWork();
     if (routeKey(route) !== routeKey(page.route)) {
       history.push(page);
       const cached = pages.get(routeKey(route));
-      page = cached ?? { route: { ...route }, rows: [], filter: '', scrollOffset: 0, completeness: 'unavailable' };
+      page = cached ?? { route: copyRoute(route), rows: [], filter: '', scrollOffset: 0, completeness: 'unavailable' };
       pages.set(routeKey(route), page);
     }
-    mode = 'list'; input = undefined; savedInput = undefined; detail = undefined; help = undefined; choice = undefined;
-    publish(); void refresh();
+    mode = 'list'; input = undefined; savedInput = undefined; detail = undefined; help = undefined; choice = undefined; choiceRoutes.clear();
+    void refresh();
   }
   function back() {
     cancelWork();
@@ -268,7 +328,7 @@ export function createTuiController(options: TuiControllerOptions) {
       page.selectedFacets = new Map(page.filters.map((filter) => [filter.id, filter.defaultValue])); publish(); return;
     }
     const previous = history.pop();
-    if (previous) { cancelRead(false); page = previous; mode = 'list'; publish(); }
+    if (previous) { cancelRead(false); stopWatch(); page = previous; mode = 'list'; publish(); }
   }
   function openInput(kind: TuiInput['kind']) {
     cancelWork();
@@ -349,6 +409,8 @@ export function createTuiController(options: TuiControllerOptions) {
       detail = { ...detail, selectedIndex: lines[detailCursorLine]?.fieldIndex ?? 0 };
       ensureDetailVisible();
     } else {
+      if (page.canFollow && ['previous', 'page-up', 'first'].includes(id)) page.following = false;
+      if (page.canFollow && id === 'last' && options.adapters[page.route.resourceId]?.watch) page.following = true;
       const rows = visibleRows();
       const current = rows.findIndex((row) => row.id === page.selectedId);
       const index = id === 'first' ? 0 : id === 'last' ? rows.length - 1 : current + amount;
@@ -638,6 +700,8 @@ export function createTuiController(options: TuiControllerOptions) {
     }
     if (action.kind === 'copy') { void copy(action); return; }
     if (action.kind === 'filter') { openFacet(action); return; }
+    if (action.kind === 'route-choice') { openRouteChoice(action); return; }
+    if (action.kind === 'follow') { page.following = !page.following; publish(); return; }
     if (action.kind === 'form') { openForm({ ...action, fields: availability.fields ?? action.fields, impact: availability.impact ?? action.impact }); return; }
     if (action.kind === 'navigate') {
       const row = selectedRow();
@@ -647,8 +711,10 @@ export function createTuiController(options: TuiControllerOptions) {
           if (page.route.resourceId === 'ctx') options.onContextSelection?.(context.id);
           navigate({ resourceId: context.defaultResourceId ?? (context.kind === 'tcp' ? 'machines' : 'sessions'), contextId: context.id });
         }
-      } else if (row?.navigate) navigate(row.navigate);
-      else if (action.navigateTo) navigate({ resourceId: action.navigateTo, contextId: page.route.contextId });
+      } else {
+        const route = actionRoute(action, row);
+        if (route) navigate(route);
+      }
       return;
     }
     if (action.kind === 'detail') {
@@ -679,9 +745,17 @@ export function createTuiController(options: TuiControllerOptions) {
       if (!next) { page.notice = '当前没有可用筛选项'; publish(); return; }
       page.selectedFacets ??= new Map(); page.selectedFacets.set(filter.id, next.value); publish(); return;
     }
-    cancelWork(); mode = 'choice';
+    cancelWork(); mode = 'choice'; choiceRoutes.clear();
     const options = filter.options.some((option) => option.value === current) ? filter.options : [...filter.options, { value: current, label: current, enabled: false, reason: '此筛选值已不在当前来源中，请选择其他选项' }];
     choice = { filterId: filter.id, title: filter.label, options, selectedIndex: Math.max(0, options.findIndex((option) => option.value === current)), scrollOffset: 0 };
+    ensureChoiceVisible(); publish();
+  }
+  function openRouteChoice(action: TuiAction) {
+    const source = own(page.routeChoices, action.id);
+    if (!source?.options.length) return;
+    cancelWork(); mode = 'choice';
+    choiceRoutes = new Map(source.options.map((option) => [option.value, copyRoute(option.route)]));
+    choice = { actionId: action.id, title: source.title, options: source.options.map((option) => ({ value: option.value, label: option.label, enabled: option.enabled, reason: option.reason })), selectedIndex: Math.max(0, source.options.findIndex((option) => routeKey(option.route) === routeKey(page.route))), scrollOffset: 0 };
     ensureChoiceVisible(); publish();
   }
   function ensureChoiceVisible() {
@@ -697,7 +771,7 @@ export function createTuiController(options: TuiControllerOptions) {
     const pressed = shortcut(key);
     const action = options.registry.actions(page.route.resourceId, 'choice').find((entry) => entry.shortcut.split(' / ').includes(pressed));
     if (!action) return;
-    if (action.id === 'choice-cancel') { cancelWork(); mode = 'list'; choice = undefined; publish(); return; }
+    if (action.id === 'choice-cancel') { cancelWork(); mode = 'list'; choice = undefined; choiceRoutes.clear(); publish(); return; }
     if (action.id === 'help') { execute(action); return; }
     const option = choice.options[choice.selectedIndex];
     if (action.id === 'choice-copy') { execute(action); return; }
@@ -707,6 +781,12 @@ export function createTuiController(options: TuiControllerOptions) {
       detailReturnMode = 'choice'; detailCursorLine = 0; mode = 'detail'; publish(); return;
     }
     if (action.id === 'choice-apply' && option) {
+      if (choice.actionId) {
+        const current = own(page.routeChoices, choice.actionId)?.options.find((entry) => entry.value === option.value);
+        const expected = choiceRoutes.get(option.value);
+        if (!current || current.enabled === false || !expected || routeKey(current.route) !== routeKey(expected)) { page.notice = current?.enabled === false ? current.reason ?? '来源暂不可用' : '来源选项已变化，请重新选择'; publish(); return; }
+        navigate(copyRoute(current.route)); return;
+      }
       const filter = page.filters?.find((entry) => entry.id === choice!.filterId);
       const current = filter?.options.find((entry) => entry.value === option.value);
       if (!current || current.enabled === false) { page.notice = current?.reason ?? '筛选选项已变化，请重新选择'; publish(); return; }
@@ -724,7 +804,9 @@ export function createTuiController(options: TuiControllerOptions) {
     if (shortcut(key) === 'Ctrl+C') {
       if (mode === 'input') inputKey({ name: 'escape' });
       if (mode === 'choice') { mode = 'list'; choice = undefined; publish(); }
-      if (activeRead) cancelRead(true); else options.onExit?.();
+      if (activeRead) cancelRead(true);
+      else if (activeWatch) { page.following = false; stopWatch(); page.notice = '跟随已暂停'; publish(); }
+      else options.onExit?.();
       return;
     }
     if (mode === 'input') { inputKey(key); return; }
@@ -755,7 +837,7 @@ export function createTuiController(options: TuiControllerOptions) {
       publish();
     },
     refresh,
-    dispose: () => { if (disposed) return; cancelRead(false); cancelWork(); formController?.abort(); formGeneration++; disposed = true; listeners.clear(); },
+    dispose: () => { if (disposed) return; stopWatch(); cancelRead(false); cancelWork(); formController?.abort(); formGeneration++; disposed = true; listeners.clear(); },
   };
 }
 
