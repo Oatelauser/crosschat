@@ -10,6 +10,16 @@ import { tcpDir } from '../../serve/registry.js';
 import { connectValueOf, listServeProcesses } from './processes.js';
 import type { ProcInfo } from './processes.js';
 export interface SameStarGuardDeps { baseDir: string; listServeProcesses?: () => ProcInfo[] }
+/**
+ * 013：双开防护——`serve --connect` 起守护前扫本机进程清单（与 --stop 同一
+ * listServeProcesses：同一套身份闸门与自身 pid 排除，看见同一个世界），已有
+ * 同星节点守护活着即拒绝。同星判定与 selectConnectEntry 同解析序：双方的
+ * `--connect` 取值各自对同一份 node.json 归一到条目再比（引用相等=同星），
+ * 名字 / starId 前缀 / 裸默认腿换拼写绕不过。教学报错用活守护 cmdline 里的
+ * 原拼写——stop 是字面匹配选择器，必须教能停掉它的那个拼写。失败方向一律
+ * 放行（node.json 不可读、我的选择器解析不了、扫描抛错、对方 cmdline 解析
+ * 不出星）：探测不到=现状行为，不把用户锁死。
+ */
 export function guardSameStarDaemon(connectArg: string, deps: SameStarGuardDeps): void {
   let config: NodeConfig;
   let mine: BrokerEntry;

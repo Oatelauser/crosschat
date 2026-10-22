@@ -55,7 +55,7 @@ describe('managed local service tasks', () => {
     expect(checked.impact.join('\n')).toContain('1234');
     expect(checked.impact.join('\n')).toContain('full-star');
     expect(await f.service.execute(f.request(node, 'stop'))).toMatchObject({ state: 'ready' });
-    expect(f.stop).toHaveBeenCalledWith({ selector: 'full-star' });
+    expect(f.stop).toHaveBeenCalledWith({ selector: 'full-star', expectedPids: [1234] });
     expect(f.launch).not.toHaveBeenCalled();
   });
 
@@ -147,5 +147,17 @@ describe('managed local service tasks', () => {
     const node = (await f.rows()).items[1];
     f.stop.mockResolvedValue({ state: 'ready', events: [{ kind: 'terminated', target: 'node', pid: 5678, selector: 'full-star' }] });
     expect(await f.service.execute(f.request(node, 'stop'))).toMatchObject({ state: 'unconfirmed' });
+  });
+
+  it('keeps a live process distinct from connection readiness and rejects unrelated stale readiness snapshots', async () => {
+    const f = await fixture();
+    f.inspect.mockResolvedValue({ ...inspected, processes: [{ kind: 'node', pid: 1234, selector: 'fixture' }] });
+    const snapshot: ServiceSnapshot = { file: 'status-node-fixture.json', kind: 'node', selector: 'fixture', state: 'connecting', pid: 1234, processAlive: true, freshness: 'fresh', readiness: 'starting', lastUpdated: new Date(100).toISOString() };
+    f.statuses.push(snapshot);
+    expect((await f.rows()).items[1]).toMatchObject({ state: 'running', readiness: 'starting' });
+    snapshot.pid = 5678; snapshot.state = 'online'; snapshot.readiness = 'ready';
+    expect((await f.rows()).items[1]).toMatchObject({ state: 'running', readiness: 'unknown' });
+    snapshot.pid = 1234; snapshot.freshness = 'stale';
+    expect((await f.rows()).items[1]).toMatchObject({ readiness: 'unknown' });
   });
 });
