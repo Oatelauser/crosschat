@@ -107,6 +107,18 @@ function emptyStatus(observedAt: number, completeness: Completeness, errors: Que
   return { providers: [], connections: [], services: [], outbox: { threads: 0, items: null }, watchdog: { running: null, evidence: 'unavailable' }, lastDoctor, observedAt, completeness, errors };
 }
 
+/** Pure typed presentation shared by local and SSH diagnostic observations. */
+export function doctorObservation(result: DiagnosticResult, observedAt: number): DoctorObservation {
+  const repeated = new Map<string, number>();
+  const checks = result.groups.flatMap((group) => group.checks.map((check): DiagnosticObservation => {
+    const digest = createHash('sha256').update(JSON.stringify([group.context, check.code, check.data])).digest('hex');
+    const occurrence = repeated.get(digest) ?? 0; repeated.set(digest, occurrence + 1);
+    return { id: `diagnostic:${digest}:${occurrence}`, group: group.context.kind === 'environment' ? '环境' : group.context.kind === 'other' ? '其他' : `TCP${group.context.star ? ` / ${group.context.star}` : ''}`,
+      code: check.code, level: check.level, ...formatDiagnosticCheck(check), facts: Object.entries(check.data).map(([label, value]) => ({ label, value: typeof value === 'string' ? value : JSON.stringify(value) })) };
+  }));
+  return { checks, summary: result.summary, completeness: 'complete', observedAt, errors: [] };
+}
+
 /** Read-only per-TUI owner. Only explicit doctor reads update its in-memory report. */
 export function createLocalOverview(options: OverviewOptions): LocalOverview {
   const baseDir = join(options.home, '.crosschat');
@@ -227,14 +239,7 @@ export function createLocalOverview(options: OverviewOptions): LocalOverview {
       const work = query({ home: options.home, env: options.env, nativeEnvironment: options.nativeEnvironment ?? 'isolated', signal: request.signal, timeoutMs: options.doctorTimeoutMs ?? 30_000 });
       const result = parseDiagnosticResult(await (options.queryDoctor ? untilAborted(work, request.signal) : work));
       checkAbort(request.signal);
-      const repeated = new Map<string, number>();
-      const checks = result.groups.flatMap((group) => group.checks.map((check): DiagnosticObservation => {
-        const digest = createHash('sha256').update(JSON.stringify([group.context, check.code, check.data])).digest('hex');
-        const occurrence = repeated.get(digest) ?? 0; repeated.set(digest, occurrence + 1);
-        return { id: `diagnostic:${digest}:${occurrence}`, group: group.context.kind === 'environment' ? '环境' : group.context.kind === 'other' ? '其他' : `TCP${group.context.star ? ` / ${group.context.star}` : ''}`,
-          code: check.code, level: check.level, ...formatDiagnosticCheck(check), facts: Object.entries(check.data).map(([label, value]) => ({ label, value: typeof value === 'string' ? value : JSON.stringify(value) })) };
-      }));
-      const page: DoctorObservation = { checks, summary: result.summary, completeness: 'complete', observedAt: now(), errors: [] };
+      const page = doctorObservation(result, now());
       if (generation === doctorGeneration) lastDoctor = page;
       return page;
     } catch { return fail(request.signal?.aborted ? 'cancelled' : 'unavailable', request.signal?.aborted ? '体检已取消' : '体检未完成或返回无效结果，请检查诊断来源后重试'); }

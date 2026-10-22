@@ -11,7 +11,7 @@ import { MultichatError } from './errors.js';
 import { runSend, type SendArgs, type SendDeps } from './commands/send.js';
 import { runStatus, type StatusDeps, type StatusFilters } from './commands/status.js';
 import { runInstallSkills, type InstallSkillsArgs } from './commands/install-skills.js';
-import { runDoctor } from './commands/doctor.js';
+import { runDoctor, runDoctorDiagnostics } from './commands/doctor.js';
 import { runDiscover } from './commands/discover.js';
 import { DISCOVERY_MAX_BYTES } from './application/discovery/boundary.js';
 import { runClaudeWrapper } from './commands/claude-wrapper.js';
@@ -102,7 +102,7 @@ commands:
                             optional JSON list/detail request on stdin
                             (includes unnamed sessions and full IDs;
                             paged, no message delivery or repair)
-  doctor                    environment health check (exits 1 on any ❌)
+  doctor [--json]           environment health check (exits 1 on any ❌)
   serve [options]           run/manage the tcp broker (star topology,
                             default port ${DEFAULT_PORT}; a non-default
                             port is a hand-edited broker.json field —
@@ -245,7 +245,7 @@ commands:
                               --connect <星> / --extend-session <旧名>
 
 options:
-  --json                    single-line JSON output (send/status)
+  --json                    single-line JSON output (send/status/doctor)
   -v, --version             print version and exit
   --help | help             show this help and exit
 `;
@@ -731,10 +731,16 @@ async function main(argv: string[]): Promise<number> {
       process.stdout.write(usage);
       return 0;
     }
-    if (rest.length > 0) {
-      process.stderr.write(`crosschat: USAGE: doctor takes no options; got: ${rest.join(' ')}\n\n`);
+    const json = rest.length === 1 && rest[0] === '--json';
+    if (rest.length > 0 && !json) {
+      process.stderr.write(`crosschat: USAGE: doctor accepts only --json; got: ${rest.join(' ')}\n\n`);
       process.stderr.write(usage);
       return 1;
+    }
+    if (json) {
+      const result = runDoctorDiagnostics();
+      process.stdout.write(`${JSON.stringify(result)}\n`);
+      return result.summary.failed ? 1 : 0;
     }
     const report = runDoctor();
     process.stdout.write(`${report.output}\n`);

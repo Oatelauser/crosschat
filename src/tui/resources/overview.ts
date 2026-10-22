@@ -71,20 +71,20 @@ export function createStatusResource(options: OverviewResourceOptions): { resour
   } } };
 }
 
-function doctorPage(page: DoctorObservation): TuiPage {
+export function doctorPage(page: DoctorObservation, executionPosition = '当前本机；TUI 不自动执行处理指引'): TuiPage {
   return { rows: page.checks.map((check) => ({ id: check.id, cells: { name: check.label, group: check.group, state: `${levels[check.level]}<${check.level}>`, description: check.description },
     copyValue: check.guidance, searchText: `${check.group} ${check.code} ${check.label} ${check.level} ${check.description} ${check.guidance}`,
     detail: [{ label: '检查项', value: check.label }, { label: '分组', value: check.group }, { label: '原始检查码', value: check.code },
       { label: '结果', value: `${levels[check.level]}<${check.level}>` }, { label: '说明', value: check.description }, { label: '处理指引', value: check.guidance },
-      { label: '执行位置', value: '当前本机；TUI 不自动执行处理指引' }, { label: '采样时间', value: new Date(page.observedAt).toISOString() }, ...check.facts],
+      { label: '执行位置', value: executionPosition }, { label: '采样时间', value: new Date(page.observedAt).toISOString() }, ...check.facts],
   })), completeness: page.completeness, sampledAt: page.observedAt, detailViews: { info: info(page) },
     notice: page.summary ? `${page.summary.pass} 项通过，${page.summary.warn} 项警告，${page.summary.error} 项错误；y 复制指引，由用户执行` : '体检未完成；i 查看读取信息与下一步' };
 }
-export function createDoctorResource(options: OverviewResourceOptions): { resource: TuiResource; adapter: TuiResourceAdapter } {
-  const resource: TuiResource = { id: 'doctor', label: '体检', aliases: [], description: '按需检查与只读处理指引', columns: [
+export const doctorResource: TuiResource = { id: 'doctor', label: '体检', aliases: [], description: '按需检查与只读处理指引', columns: [
     { id: 'name', label: '检查项', width: 24, priority: 2 }, { id: 'group', label: '分组', width: 18 }, { id: 'state', label: '结果', width: 14, priority: 1 }, { id: 'description', label: '说明', width: 52 },
   ], actions: [infoAction('doctor')] };
-  return { resource, adapter: { async read(request) {
+export function createDoctorResource(options: { overview: Pick<LocalOverview, 'readDoctor'> }): { resource: TuiResource; adapter: TuiResourceAdapter } {
+  return { resource: doctorResource, adapter: { async read(request) {
     if (request.context?.kind !== 'local') return unavailable();
     return doctorPage(await options.overview.readDoctor({ contextId: request.context.id, signal: request.signal }));
   } } };

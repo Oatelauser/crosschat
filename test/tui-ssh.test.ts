@@ -82,7 +82,7 @@ describe('SSH resource presentation', () => {
     const ssh = application();
     const native: DiscoverySession = { ref: { contextId: context.id, providerId: 'future-tool', nativeId: 'same-full-id' }, name: null, rawStatus: { type: 'future-state' }, capabilities, attributes: { cwd: '/remote/完整/path' } };
     ssh.discovery.execute.mockResolvedValueOnce({ op: 'list', providers: [{ providerId: 'future-tool', capabilities }], page: { items: [native], nextCursor: 'more', completeness: 'partial', errors: [], observedAt: 30 } })
-      .mockResolvedValueOnce({ op: 'list', providers: [], page: { items: [{ ...native, ref: { ...native.ref, providerId: 'codex' }, attributes: { transport: 'desktop' } }], nextCursor: null, completeness: 'complete', errors: [], observedAt: 31 } });
+      .mockResolvedValueOnce({ op: 'list', providers: [{ providerId: 'codex', capabilities }], page: { items: [{ ...native, ref: { ...native.ref, providerId: 'codex' }, attributes: { transport: 'desktop' } }], nextCursor: null, completeness: 'complete', errors: [], observedAt: 31 } });
     const { resource, adapter } = createSshSessionsResource({ ssh });
     const page = await adapter.read({ context, signal: signal() });
     expect(page.rows).toHaveLength(2);

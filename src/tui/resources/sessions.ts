@@ -19,6 +19,8 @@ export interface SessionsResourceOptions {
   now?: () => number;
   /** Links are available only when their readonly resources are installed. */
   relatedResources?: readonly ('deliveries' | 'logs')[];
+  /** A context adapter supplies matching discovery; the default stays local-only. */
+  contextKinds?: readonly string[];
 }
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -211,7 +213,7 @@ export function createSessionsResource(options: SessionsResourceOptions): { reso
 
   const adapter: TuiResourceAdapter = {
     async read(request) {
-      if (!request.context || request.context.kind !== 'local') return page([], [], 'unavailable', now(), [sourceError(request.context?.id ?? 'unselected', '请先选择本机上下文，未执行会话扫描。', 'unsupported')], request.context?.id ?? 'unselected');
+      if (!request.context || !(options.contextKinds ?? ['local']).includes(request.context.kind)) return page([], [], 'unavailable', now(), [sourceError(request.context?.id ?? 'unselected', '所选上下文未接入此会话来源，未执行会话扫描。', 'unsupported')], request.context?.id ?? 'unselected');
       const contextId = request.context.id;
       if (request.signal.aborted) return page([], [], 'cancelled', now(), [], contextId);
       const configured = targets(contextId, request.signal);
