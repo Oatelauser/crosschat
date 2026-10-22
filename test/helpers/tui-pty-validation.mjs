@@ -55,8 +55,8 @@ try {
   await normal.send('\x1b[F', '详情终点');
   await normal.send('y', '已复制完整值');
   await normal.send('\x1b', ':sessions');
-  await normal.send('\x1b', '匿名');
-  await normal.send('\x1b[H');
+  await normal.send('\x1b', '30/30');
+  await normal.send('\x1b[H', '匿名');
   await normal.send('e', '修改显示名');
   await normal.send('\x1b[200~更名👩‍💻\x1b[201~\r', '[取消]');
   await normal.send('\t\r', 'fixture显示名已更新');

@@ -76,7 +76,7 @@ function resourceActions(id: string): TuiAction[] {
 export const defaultResources: readonly TuiResource[] = definitions.map(([id, label, aliases, description]) => ({
   id, label, aliases, description,
   columns: id === 'ctx' ? [
-    { id: 'kind', label: '类型', width: 10 }, { id: 'name', label: '连接', width: 24 }, { id: 'target', label: '目标', width: 30 },
+    { id: 'name', label: '连接', width: 24 }, { id: 'kind', label: '类型', width: 10 }, { id: 'target', label: '目标', width: 30 },
   ] : [{ id: 'name', label: '名称', width: 24 }],
   actions: resourceActions(id),
   ...(id === 'ctx' ? {} : { unavailableReason: '资源尚未启用。当前可使用连接列表和通用交互。' }),
