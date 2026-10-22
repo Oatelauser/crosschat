@@ -6,7 +6,7 @@ import {
   removeAdminKeyFor, removeNodeFor, removeStarFrom, setNameFor,
   setShowNameFor, setStarShowNameFor, tcpDir,
 } from '../../serve/registry.js';
-import type { GenAdminKeyResult, GenKeyResult, RemovedStarInfo } from '../../serve/registry.js';
+import type { CredentialRemovalExpected, GenAdminKeyResult, GenKeyResult, RemovedStarInfo, StarRemovalExpected } from '../../serve/registry.js';
 import type { AdminReply } from '../../serve/broker.js';
 import { sendAdminRequest } from './transport.js';
 import type { AdminOutcome } from './transport.js';
@@ -14,12 +14,12 @@ import type { AdminOutcome } from './transport.js';
 export type ManagementRequest =
   | { op: 'set-name'; starId: string; name: string }
   | { op: 'add-star'; name: string }
-  | { op: 'remove-star'; starId: string }
+  | { op: 'remove-star'; starId: string; expected?: StarRemovalExpected }
   | { op: 'set-showname'; starId?: string; name: string }
   | { op: 'gen-key'; starId: string; n: number; host: string; port: number }
-  | { op: 'remove-node'; starId: string; label: string }
+  | { op: 'remove-node'; starId: string; label: string; expected?: CredentialRemovalExpected }
   | { op: 'gen-admin-key'; starId: string; label: string }
-  | { op: 'remove-admin-key'; starId: string; label: string };
+  | { op: 'remove-admin-key'; starId: string; label: string; expected?: CredentialRemovalExpected };
 
 export interface ManagementDeps {
   baseDir: string;

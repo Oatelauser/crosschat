@@ -2,6 +2,8 @@ import type { ChildProcess, ForkOptions } from 'node:child_process';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { isProcessAlive } from '../../platform/process-inspector.js';
+import { DEFAULT_PORT } from '../../serve/broker.js';
+import { removeCredentialExactFor, removeStarExactFrom } from '../../serve/registry.js';
 import { addStar, generateAdminKey, generateKeys, removeAdminKey, removeNode, removeStar, renameStar, setDisplayName } from '../management/local.js';
 import type { ManagementDeps, ManagementRequest, ManagementResult } from '../management/local.js';
 import { sendAdminRequest } from '../management/transport.js';
@@ -48,9 +50,10 @@ export function isLocalManagementRequest(value: unknown): value is ManagementReq
     case 'add-star': return typeof value.name === 'string';
     case 'set-name': return typeof value.starId === 'string' && typeof value.name === 'string';
     case 'set-showname': return (value.starId === undefined || typeof value.starId === 'string') && typeof value.name === 'string';
-    case 'remove-star': return typeof value.starId === 'string';
+    case 'remove-star': return typeof value.starId === 'string' && (value.expected === undefined || (isRecord(value.expected) && typeof value.expected.starRevision === 'string'));
     case 'gen-key': return typeof value.starId === 'string' && typeof value.host === 'string' && typeof value.n === 'number' && Number.isInteger(value.n) && value.n >= 1 && value.n <= 10 && typeof value.port === 'number' && Number.isInteger(value.port) && value.port >= 1 && value.port <= 65535;
-    case 'remove-node': case 'gen-admin-key': case 'remove-admin-key': return typeof value.starId === 'string' && typeof value.label === 'string';
+    case 'gen-admin-key': return typeof value.starId === 'string' && typeof value.label === 'string';
+    case 'remove-node': case 'remove-admin-key': return typeof value.starId === 'string' && typeof value.label === 'string' && (value.expected === undefined || (isRecord(value.expected) && typeof value.expected.credentialRevision === 'string' && (value.expected.machineId === null || typeof value.expected.machineId === 'string')));
     default: return false;
   }
 }
@@ -64,16 +67,22 @@ export async function performLocalManagement(request: ManagementRequest, options
     if (request.op !== 'add-star' && request.op !== 'set-showname'
       && (!('starId' in request) || !config.broker.value?.stars.some((star) => star.starId === request.starId))) return { kind: 'rejected', error: '所选完整星 ID 不在本机台账。' };
     if (request.op === 'set-showname' && (config.node.value === null || (request.starId !== undefined && config.node.value.entries.filter((entry) => entry.starId === request.starId).length !== 1))) return { kind: 'rejected', error: '本机未配置所选星，不能修改显示名。' };
+    if (request.op === 'set-showname') {
+      const raw: unknown = JSON.parse(await readTcpText(options.baseDir, join(options.baseDir, 'tcp', 'node.json')));
+      if (!isRecord(raw) || !Array.isArray(raw.brokers)) return { kind: 'rejected', error: '当前本机配置形状不能由现有显示名写入器修改，请先核对配置。' };
+    }
     let status: unknown;
     try { status = await (options.readStatus?.() ?? readTcpText(options.baseDir, join(options.baseDir, 'tcp', 'status-broker.json')).then((text): unknown => JSON.parse(text))); }
     catch (error) {
       if (!isRecord(error) || error.code !== 'ENOENT') return failed();
     }
+    if (status !== undefined && (!isRecord(status) || !['running', 'stopped'].includes(String(status.state))
+      || typeof status.pid !== 'number' || !Number.isSafeInteger(status.pid) || status.pid <= 0)) return failed();
     const brokers = (options.processes ?? listServeProcesses)().filter((item) => !item.cmdline.includes('--connect'));
     const alive = options.alive ?? isProcessAlive;
     const hot = isRecord(status) && status.state === 'running' && typeof status.pid === 'number' && Number.isSafeInteger(status.pid) && status.pid > 0 && alive(status.pid);
     if ((brokers.length > 0 && !hot) || (hot && (!isRecord(status) || !brokers.some((item) => item.pid === status.pid)
-      || typeof status.adminPipe !== 'string' || status.adminPipe === '' || status.port !== (config.broker.value?.port ?? 7260)))) return failed();
+      || typeof status.adminPipe !== 'string' || status.adminPipe === '' || status.port !== (config.broker.value?.port ?? DEFAULT_PORT)))) return failed();
     const deps: ManagementDeps = { baseDir: options.baseDir, machineId: () => machine, hostname,
       adminTransport: async (operation) => {
         if (!hot) return { kind: 'cold' };
@@ -81,6 +90,23 @@ export async function performLocalManagement(request: ManagementRequest, options
         return result.kind === 'cold' ? { kind: 'failed', error: '已核实的热态管理连接失败，禁止直写台账。' } : result;
       } };
     const machine = request.op === 'add-star' ? fullTcpMachineId(await (options.machineId?.() ?? readMembershipMachineId())) : undefined;
+    if ((request.op === 'remove-node' || request.op === 'remove-admin-key' || request.op === 'remove-star') && request.expected !== undefined) {
+      if (hot) {
+        const outcome = await deps.adminTransport!(request);
+        if (outcome.kind !== 'hot') return failed();
+        return outcome.reply.ok ? { kind: 'applied', mode: 'hot', value: outcome.reply }
+          : { kind: 'rejected', mode: 'hot', error: 'broker 拒绝精确删除，目标或权限已变化。' };
+      }
+      const file = join(options.baseDir, 'tcp', 'broker.json');
+      if (request.op === 'remove-star') {
+        const result = removeStarExactFrom(file, request.starId, request.expected);
+        return result.kind === 'removed' ? { kind: 'applied', mode: 'cold', value: { removed: result.removed } }
+          : { kind: 'rejected', mode: 'cold', error: '完整星及其静态影响已变化，未执行删除。' };
+      }
+      const result = removeCredentialExactFor(file, request.starId, request.label, request.op === 'remove-admin-key' ? 'admin' : 'node', request.expected);
+      return result.kind === 'removed' ? { kind: 'applied', mode: 'cold', value: { removed: request.op === 'remove-admin-key' ? result.credential.label : true } }
+        : { kind: 'rejected', mode: 'cold', error: '完整凭证或机器绑定已变化，未执行撤销。' };
+    }
     switch (request.op) {
       case 'add-star': return await addStar({ name: request.name }, deps);
       case 'set-name': return await renameStar({ starId: request.starId, name: request.name }, deps);

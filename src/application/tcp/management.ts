@@ -89,7 +89,6 @@ interface Prepared {
   values: Readonly<Record<string, string>>;
 }
 class Denied extends Error {}
-const pendingExactWrite = '此删除需要 broker 原子核对目标版本；接口尚未启用，当前不能执行。';
 const secretNotice = '仅在此结果页展示新钥匙。复制后清屏；不要粘贴到聊天、普通日志或版本库。关闭后不能重新查看。';
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const uncertain = (): TcpManagementResult => ({ kind: 'uncertain', message: '修改请求未取得可核实的完成回执；可能已经生效，请刷新并核实目标，不要直接重复执行。' });
@@ -259,22 +258,36 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
             break;
           }
           case 'remove-star':
-            impact.push({ label: '将失效的节点凭证', value: String(current.credentials.filter((item) => item.kind === 'node').length) }, { label: '将失效的管理凭证', value: String(current.credentials.filter((item) => item.kind === 'admin').length) }, { label: '将移除的册位', value: String(current.members.length) });
+            impact.push({ label: '将失效的节点凭证', value: String(current.credentials.filter((item) => item.kind === 'node').length) }, { label: '将失效的管理凭证', value: String(current.credentials.filter((item) => item.kind === 'admin').length) }, { label: '将移除的册位', value: String(current.members.length) },
+              ...current.credentials.map((item) => ({ label: item.kind === 'admin' ? '将撤管理钥' : '将撤节点钥', value: `${item.label} · ${item.machineId ?? '未绑定机器'}` })),
+              ...current.members.map((item) => ({ label: '将删册位', value: `${item.machineId} · ${item.providerId ?? '未知工具'} · ${item.nativeId}` })),
+              { label: '后果', value: '立即撤销此星全部权限、断开连接并移除册位；原生会话和其他星保留。' });
             if (!owner) throw new Denied('删星仅限本机 broker 主。');
-            throw new Denied(pendingExactWrite);
+            if (request.targetId !== undefined && request.targetId !== star.id) throw new Denied('所选星行已变化，请重新选择。');
+            local = { op: 'remove-star', starId: star.starId, expected: { starRevision: star.revision } };
+            break;
           case 'remove-node': {
+            if (!owner && star.role !== 'star-admin') throw new Denied('移除节点需要本机 broker 主或当前星管理身份。');
             const machine = current.machines.find((item) => item.id === request.targetId);
             if (!machine) throw new Denied('所选机器行已不存在，请刷新后重新选择。');
             const credentials = current.credentials.filter((item) => item.kind === 'node' && item.machineId === machine.machineId);
             impact.push({ label: '完整机器', value: machine.machineId }, ...credentials.map((item) => ({ label: '将撤节点凭证', value: item.label })));
             if (credentials.length !== 1) throw new Denied('此机器对应多把或零把凭证，不能一键移除；请进入凭证列表逐把核对撤销。');
-            throw new Denied(pendingExactWrite);
+            const credential = credentials[0];
+            state = { state, credential: [credential.id, credential.revision, credential.machineId] };
+            local = { op: 'remove-node', starId: star.starId, label: credential.label, expected: { credentialRevision: credential.revision, machineId: credential.machineId } };
+            impact.push({ label: '后果', value: '立即撤销此凭证并断开其连接；册位和原生会话保留。' });
+            break;
           }
           case 'revoke-credential': {
             const credential = current.credentials.find((item) => item.id === request.targetId);
             if (!credential || (request.targetRevision !== undefined && request.targetRevision !== credential.revision)) throw new Denied('所选凭证已变化，请刷新后重新选择。');
+            if (!owner && (star.role !== 'star-admin' || credential.kind === 'admin')) throw new Denied(credential.kind === 'admin' ? '撤销星管理钥仅限本机 broker 主。' : '撤节点钥需要本机 broker 主或当前星管理身份。');
             impact.push({ label: '凭证', value: credential.label }, { label: '类型', value: credential.kind === 'admin' ? '星管理钥' : '节点钥' });
-            throw new Denied(pendingExactWrite);
+            state = { state, credential: [credential.id, credential.revision, credential.machineId] };
+            local = { op: credential.kind === 'admin' ? 'remove-admin-key' : 'remove-node', starId: star.starId, label: credential.label, expected: { credentialRevision: credential.revision, machineId: credential.machineId } };
+            impact.push({ label: '后果', value: '立即撤销此完整凭证并断开使用它的连接；其他凭证、册位和原生会话保留。' });
+            break;
           }
         }
       }
@@ -318,7 +331,7 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
       }
       let value: unknown;
       let mode: 'hot' | 'cold' | undefined;
-      if (prepared.member || (request.contextId !== 'local' && request.action === 'generate-node-key')) {
+      if (prepared.member || (request.contextId !== 'local' && (request.action === 'generate-node-key' || prepared.local?.op === 'remove-node'))) {
         const opening = (options.openRemote ?? openDefault)({ contextId: request.contextId, starId: prepared.star!.starId, identity: prepared.member ? 'member' : 'admin', signal: request.signal });
         void opening.then((late) => { if (request.signal?.aborted) late.close(); }, () => {});
         connection = await untilAborted(opening, request.signal);
@@ -331,9 +344,11 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
           if (receipt.ok && receipt.removed) return { kind: 'applied', message: '已删除所选精确册位；原生会话保留。' };
           return receipt.removed ? uncertain() : { kind: 'rejected', message: 'broker 未删除该精确册位；请刷新核对目标和权限。' };
         }
-        const receipt = await untilAborted(connection.request('gen-key', { n: Number(prepared.values.count), host: prepared.values.host }), request.signal);
+        const receipt = await untilAborted(prepared.local?.op === 'remove-node'
+          ? connection.request('remove-node', { label: prepared.local.label, expected: prepared.local.expected })
+          : connection.request('gen-key', { n: Number(prepared.values.count), host: prepared.values.host }), request.signal);
         if (!isRecord(receipt) || typeof receipt.ok !== 'boolean') return uncertain();
-        if (!receipt.ok) return { kind: 'rejected', message: 'broker 拒绝此次发钥，请刷新核对当前星管理权限和输入。' };
+        if (!receipt.ok) return { kind: 'rejected', message: 'broker 拒绝此次修改，请刷新核对当前星管理权限和完整目标。' };
         value = receipt;
         mode = 'hot';
       } else if (prepared.local) {
@@ -351,6 +366,14 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
       if (request.action === 'add-star') {
         if (!isRecord(value) || typeof value.starId !== 'string' || value.starId === '') return uncertain();
         return { kind: 'applied', mode, selectedId: value.starId, message: '新星已创建，请在星列表核对。' };
+      }
+      if (prepared.local?.op === 'remove-node' || prepared.local?.op === 'remove-admin-key') {
+        if (!isRecord(value) || (prepared.local.op === 'remove-node' ? value.removed !== true : value.removed !== prepared.local.label)) return uncertain();
+        return { kind: 'applied', mode, message: '已撤销所选精确凭证；请刷新核对连接状态。' };
+      }
+      if (prepared.local?.op === 'remove-star') {
+        if (!isRecord(value) || !isRecord(value.removed) || !Number.isInteger(value.removed.nodes) || !Number.isInteger(value.removed.roster)) return uncertain();
+        return { kind: 'applied', mode, message: '所选完整星已删除，相关权限和连接已失效。' };
       }
       return { kind: 'applied', mode, ...(request.targetId === undefined ? {} : { selectedId: request.targetId }), message: request.action === 'set-show-name'
         ? mode === 'cold' ? '本机显示名配置已保存；重连对应聚合器后生效，请刷新核对运行名称。' : '本机显示名配置已保存并请求重挂；请刷新核对运行名称。'

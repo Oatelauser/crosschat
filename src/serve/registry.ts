@@ -8,11 +8,13 @@
  * 回写共管 / name+加星=CLI / port=**手编专属**（034 起 --port 无命令——改文件
  * 重启生效）；starId 永不变（星身份锚，改名零级联）。
  */
-import { copyFileSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { closeSync, copyFileSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { MultichatError } from '../errors.js';
+import { normalizeMid } from '../platform/machine-id.js';
+import { credentialRevision, starRevision } from './management-state.js';
 
 export interface NodeEntry {
   label: string;
@@ -457,6 +459,108 @@ export function removeStarFrom(file: string, starId: string): RemovedStarInfo | 
     writeNodeJsonRaw(nodeJson, { ...nodeDoc, brokers: nodeDoc.brokers.filter((e) => e.starId !== starId) });
   }
   return removed;
+}
+
+export interface CredentialRemovalExpected { credentialRevision: string; machineId: string | null }
+export interface StarRemovalExpected { starRevision: string }
+export interface ExactManagementRejected { kind: 'rejected'; reason: 'target-changed' | 'not-found' | 'invalid-target' }
+export type ExactCredentialRemoval = { kind: 'removed'; credential: NodeEntry } | ExactManagementRejected;
+export type ExactStarRemoval = { kind: 'removed'; removed: RemovedStarInfo } | ExactManagementRejected;
+const managementRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
+const validRevision = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+const completeMachine = (value: string) => /^[a-fA-F0-9-]+$/.test(value) && normalizeMid(value).length === 32;
+function invalidManagementSource(): never { throw new Error('管理台账配置不完整或损坏；未执行精确删除。'); }
+
+/** Strict bounded reads for expected writes. Refusals must never repair or rewrite a source. */
+function readManagementJson(file: string): unknown {
+  const before = lstatSync(file, { bigint: true });
+  const limit = 2 * 1024 * 1024;
+  if (!before.isFile() || before.isSymbolicLink() || before.size > BigInt(limit)) invalidManagementSource();
+  const fd = openSync(file, 'r');
+  try {
+    const stat = fstatSync(fd, { bigint: true });
+    if (!stat.isFile() || stat.dev !== before.dev || stat.ino !== before.ino || stat.size > BigInt(limit)) invalidManagementSource();
+    const buffer = Buffer.alloc(Math.min(Number(stat.size) + 1, limit + 1));
+    const count = readSync(fd, buffer, 0, buffer.length, 0);
+    if (count > limit) invalidManagementSource();
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, count))) as unknown;
+  } catch { return invalidManagementSource(); }
+  finally { closeSync(fd); }
+}
+function readManagementBroker(file: string): BrokerFile {
+  const value = readManagementJson(file);
+  if (!managementRecord(value) || !Array.isArray(value.stars)) invalidManagementSource();
+  const ids = new Set<string>();
+  const optionalText = (record: Record<string, unknown>, fields: readonly string[]) => fields.every((field) => record[field] === undefined || typeof record[field] === 'string');
+  const stars = value.stars.map((item): StarRecord => {
+    if (!managementRecord(item) || typeof item.starId !== 'string' || !item.starId || ids.has(item.starId) || !optionalText(item, ['name'])
+      || !Array.isArray(item.nodes) || (item.roster !== undefined && !Array.isArray(item.roster))) invalidManagementSource();
+    ids.add(item.starId);
+    const labels = new Set<string>();
+    const nodes = item.nodes.map((node): NodeEntry => {
+      if (!managementRecord(node) || typeof node.label !== 'string' || !node.label || labels.has(node.label) || typeof node.addedAt !== 'string'
+        || !Number.isFinite(Date.parse(node.addedAt)) || !optionalText(node, ['key', 'adminKey', 'machineId', 'machineName'])
+        || (typeof node.key === 'string' && node.key !== '') === (typeof node.adminKey === 'string' && node.adminKey !== '')
+        || (typeof node.machineId === 'string' && node.machineId !== '' && (!completeMachine(node.machineId) || typeof node.adminKey === 'string'))) invalidManagementSource();
+      labels.add(node.label);
+      return { ...node, label: node.label, addedAt: node.addedAt,
+        ...(typeof node.key === 'string' ? { key: node.key } : {}), ...(typeof node.adminKey === 'string' ? { adminKey: node.adminKey } : {}),
+        ...(typeof node.machineId === 'string' ? { machineId: node.machineId } : {}), ...(typeof node.machineName === 'string' ? { machineName: node.machineName } : {}) };
+    });
+    const members = new Set<string>();
+    const roster = (item.roster ?? []).map((member): RosterEntry => {
+      if (!managementRecord(member) || typeof member.sessionId !== 'string' || !member.sessionId || members.has(member.sessionId)
+        || typeof member.machine !== 'string' || !completeMachine(member.machine) || !optionalText(member, ['name', 'tool', 'machineName', 'extendsName', 'extendsMachine'])
+        || (member.temporary !== undefined && typeof member.temporary !== 'boolean')) invalidManagementSource();
+      members.add(member.sessionId);
+      return { ...member, sessionId: member.sessionId, machine: member.machine,
+        ...(typeof member.name === 'string' ? { name: member.name } : {}), ...(typeof member.tool === 'string' ? { tool: member.tool } : {}),
+        ...(typeof member.machineName === 'string' ? { machineName: member.machineName } : {}), ...(typeof member.extendsName === 'string' ? { extendsName: member.extendsName } : {}),
+        ...(typeof member.extendsMachine === 'string' ? { extendsMachine: member.extendsMachine } : {}), ...(typeof member.temporary === 'boolean' ? { temporary: member.temporary } : {}) };
+    });
+    return { ...item, starId: item.starId, ...(typeof item.name === 'string' ? { name: item.name } : {}), nodes, roster };
+  });
+  return { ...value, ...(typeof value.port === 'number' ? { port: value.port } : {}), stars };
+}
+
+/** The broker receives the removed secret-bearing entry only for immediate revocation. */
+export function removeCredentialExactFor(file: string, starId: string, label: string, kind: 'node' | 'admin', expected: CredentialRemovalExpected): ExactCredentialRemoval {
+  if (!expected || !validRevision(expected.credentialRevision) || (expected.machineId !== null && (typeof expected.machineId !== 'string' || !completeMachine(expected.machineId)))) return { kind: 'rejected', reason: 'invalid-target' };
+  const doc = readManagementBroker(file);
+  const star = doc.stars.find((item) => item.starId === starId);
+  const index = star?.nodes.findIndex((item) => item.label === label) ?? -1;
+  if (!star || index < 0) return { kind: 'rejected', reason: 'not-found' };
+  const credential = star.nodes[index];
+  const actualKind = credential.adminKey ? 'admin' : 'node';
+  const binding = credential.machineId ? normalizeMid(credential.machineId) : null;
+  if (actualKind !== kind || credentialRevision(credential) !== expected.credentialRevision || binding !== expected.machineId) return { kind: 'rejected', reason: 'target-changed' };
+  star.nodes.splice(index, 1);
+  writeBrokerFile(file, doc);
+  return { kind: 'removed', credential };
+}
+
+/** Full static impact check and deletion share one synchronous fresh-source transaction. */
+export function removeStarExactFrom(file: string, starId: string, expected: StarRemovalExpected): ExactStarRemoval {
+  if (!expected || !validRevision(expected.starRevision)) return { kind: 'rejected', reason: 'invalid-target' };
+  const doc = readManagementBroker(file);
+  const index = doc.stars.findIndex((item) => item.starId === starId);
+  if (index < 0) return { kind: 'rejected', reason: 'not-found' };
+  const star = doc.stars[index];
+  if (starRevision(star) !== expected.starRevision) return { kind: 'rejected', reason: 'target-changed' };
+  let nodeDoc: NodeJsonRaw | undefined;
+  const nodeFile = nodeJsonOf(file);
+  try {
+    const value = readManagementJson(nodeFile);
+    if (!managementRecord(value) || !Array.isArray(value.brokers) || !value.brokers.every(managementRecord)) invalidManagementSource();
+    nodeDoc = { ...value, brokers: value.brokers };
+  } catch (error) {
+    if (!managementRecord(error) || error.code !== 'ENOENT') throw error;
+  }
+  const removed: RemovedStarInfo = { ...(star.name === undefined ? {} : { name: star.name }), nodes: star.nodes.length, roster: star.roster.length };
+  doc.stars.splice(index, 1);
+  writeBrokerFile(file, doc);
+  if (nodeDoc?.brokers.some((entry) => entry.starId === starId)) writeNodeJsonRaw(nodeFile, { ...nodeDoc, brokers: nodeDoc.brokers.filter((entry) => entry.starId !== starId) });
+  return { kind: 'removed', removed };
 }
 
 /**
