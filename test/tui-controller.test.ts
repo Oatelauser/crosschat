@@ -490,4 +490,29 @@ describe('TUI interaction controller', () => {
       await vi.waitFor(() => expect(mutate).toHaveBeenCalledOnce());
     } finally { controller.dispose(); }
   });
+
+  it('keeps complete help reasons and next steps reachable in a narrow terminal', async () => {
+    const { helpLines } = await import('../src/tui/app/help.js');
+    const { displayWidth } = await import('../src/tui/ui/text.js');
+    const reason = '资源尚未启用，请保留已有连接。'.repeat(12);
+    const nextStep = '请切回连接列表核对当前目标。';
+    const custom = createResourceRegistry(defaultResources.map((resource) => resource.id === 'ctx' ? { ...resource, actions: [...resource.actions, {
+      ...rename, id: 'pending', shortcut: 'x', ownerResourceId: 'ctx', enabled: false, unavailableReason: reason, nextStep,
+    }] } : resource));
+    const controller = createTuiController({ registry: custom, contexts, adapters: {} });
+    try {
+      controller.resize(24, 12); controller.handleKey({ name: '?' });
+      const entries = controller.getSnapshot().help!.entries;
+      const lines = helpLines(entries, 24);
+      expect(lines.every((line) => displayWidth(line.text) <= 24)).toBe(true);
+      expect(lines.map((line) => line.text).join('')).toContain(reason);
+      expect(lines.map((line) => line.text).join('')).toContain(nextStep);
+      controller.handleKey({ name: 'pagedown' });
+      expect(controller.getSnapshot().help?.scrollOffset).toBe(3);
+      controller.handleKey({ name: 'end' });
+      expect(controller.getSnapshot().help!.scrollOffset).toBeGreaterThan(entries.length);
+      controller.handleKey({ name: 'home' });
+      expect(controller.getSnapshot().help?.scrollOffset).toBe(0);
+    } finally { controller.dispose(); }
+  });
 });
