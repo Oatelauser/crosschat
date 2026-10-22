@@ -827,8 +827,14 @@ S → C   {"op":"connected"}          # 命中即连接绑星（发放即绑定�
 | `member-remove-exact-result` | S→C | 同 id，ok, removed:boolean, code?, error?；身份变化或目标消失返回 TARGET_CHANGED 且 removed=false；内存已修改但落盘失败返回 PERSIST_FAILED、ok=false、removed=true，调用方须显示待核实且不得自动重试 |
 | `auth-challenge` | S→C | nonce——034 管理连接挑战（一次性；防重放） |
 | `auth-proof` | C→S | proof——HMAC-SHA256(星管理钥, nonce) 的 hex（钥匙本体永不出现在任何帧里） |
-| `admin-op` | C→S | id, action, n?(gen-key), host?(gen-key), label?(remove-node)——034 星管理域：action∈{list-nodes, list-members, gen-key, remove-node}；list-stars/set-name 等本机域 op 一律 ADMIN_REQUIRED |
-| `admin-op-result` | S→C | id, ok, error?, results?(gen-key 新钥+node.json 文本——仅此路径回显钥匙), nodes?/members?（读回显**永不带钥匙**）, removed? |
+| `admin-op` | C→S | id, action, n?(gen-key), host?(gen-key), label?(remove-node), expected?——星域action∈{star-snapshot, list-nodes, list-members, gen-key, remove-node}；list-stars/set-name等本机域op一律ADMIN_REQUIRED。TUI remove-node的expected={credentialRevision,machineId:string或null}，原子核验，省略沿用原CLI行为 |
+| `admin-op-result` | S→C | id, ok, error?, uncertain?, results?(gen-key新钥+node.json文本——仅显式发钥回显秘密), nodes?/members?/snapshot?（普通读取永不带钥匙）, removed?；uncertain表示可能已有写入，须核实不得盲重试 |
+
+`star-snapshot`是本轮新增只读接口：普通成员/挑战认证星管理员只能读本星；本机管理插座以`{op:"star-snapshot",starId}`读取相同结构。返回完整starId、不可逆静态revision、role、live、nodes凭证元数据（label/kind/revision/完整machineId可选/机器名/登记时间）、machines完整机器身份与连接状态、members完整册位与在线状态；未使用钥匙不充作机器，管理钥不充作节点。不回key/adminKey，不写管理审计，载荷上限2MiB；旧list-nodes/list-members原审计保持。
+
+本机插座删星可带`expected:{starRevision}`，吊管理钥可带`expected:{credentialRevision,machineId:null}`。节点撤钥同时核对凭证版本和完整机器绑定（null表示尚未绑定），删星核对完整静态影响；核验和删除同一步，变化即拒绝。旧CLI不传expected时原选择器保持；本轮不做旧端降级。星已删除但配置收尾失败时，broker仍使对应连接失效，回执uncertain=true，不能据此认定回滚。
+
+管理审计保留既有文本、动作和频率，行尾追加`starIds=[完整ID...]`；全局显示名一次动作列全部受影响星，按星改名与撤钥仅列目标星。TUI只以完整ID判归属；旧行缺标识时明确无法准确归属，不按可复用星名猜测。
 
 每帧示例（占位值）：
 
@@ -910,7 +916,7 @@ C → file-end{id}
 
 ### 4.7 第三方实现者注意
 
-参考实现是**单 broker 星型**——多实例集群需自行解决实例间路由（哪台节点连在哪个实例）与注册表共享，本实现不含（一台机器入多颗星由节点侧承担，见 3.5）。注册表格式见 broker 机 `~/.crosschat/tcp/broker.json`（032 单文件单形状：`{port?, stars:[{starId, name?, nodes, roster:{entries}}]}`——注册表与各星星册同文件；nodes[] 内 label/key/machineId/machineName/addedAt，034 起 key 可选：星管理钥条目=label+adminKey+addedAt（无 key/machineId，与星钥同表存放）；顶层 `port` 是**手编字段**——`--port` 命令已移除，改文件重启生效）。节点侧 node.json：`{brokers:[{host,port,name(星名),starId,key,adminKey?,showName?(条目级显示名覆盖——036)}…], showName(本机全局默认显示名)}`——旧字段 alias/顶层 name 读取时自动映射；adminKey（星管理钥，与星钥同条目）可选，供远程管理写 op 走挑战应答。`nodes[].machineName` 不是权威——名字来源是各机自己的 node.json（顶层全局默认 + 条目级按星覆盖双态，036 修订 017 单一事实源；节点机经连接帧上报、broker 机经 serve 启动读回刷新；显式缺失/空则清除，roster 回退 mid8）。会话引用 mc2_ 可在尾部携带 starId（flags bit 10）——旧版解析器遇此扩展走 `INVALID_CONVERSATION_REF`+升级指引，属设计好的版本偏差路径。
+参考实现是**单 broker 星型**——多实例集群需自行解决实例间路由（哪台节点连在哪个实例）与注册表共享，本实现不含（一台机器入多颗星由节点侧承担，见 3.5）。注册表格式见 broker 机 `~/.crosschat/tcp/broker.json`（032 单文件单形状：`{port?, stars:[{starId, name?, nodes, roster:[...]}]}`——注册表与各星星册同文件；nodes[] 内 label/key/machineId/machineName/addedAt，034 起 key 可选：星管理钥条目=label+adminKey+addedAt（无 key/machineId，与星钥同表存放）；顶层 `port` 是**手编字段**——`--port` 命令已移除，改文件重启生效）。节点侧 node.json：`{brokers:[{host,port,name(星名),starId,key,adminKey?,showName?(条目级显示名覆盖——036)}…], showName(本机全局默认显示名)}`——旧字段 alias/顶层 name 读取时自动映射；adminKey（星管理钥，与星钥同条目）可选，供远程管理写 op 走挑战应答。`nodes[].machineName` 不是权威——名字来源是各机自己的 node.json（顶层全局默认 + 条目级按星覆盖双态，036 修订 017 单一事实源；节点机经连接帧上报、broker 机经 serve 启动读回刷新；显式缺失/空则清除，roster 回退 mid8）。会话引用 mc2_ 可在尾部携带 starId（flags bit 10）——旧版解析器遇此扩展走 `INVALID_CONVERSATION_REF`+升级指引，属设计好的版本偏差路径。
 
 ### 4.8 proto:3 能力协商（caps）与 attach 管道
 

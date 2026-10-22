@@ -5,9 +5,10 @@
 ## 当前授权与下一步
 
 - 用户已明确“开始实现T06”，并要求正常开发流程，不赶时间/进度。该项已于2026-10-22完成验收并删除。
-- 此前TUI资源已完成验收并删除活动项。用户现授权T11/T12并行，正常开发、不赶时间，涉及现有功能变化先确认。T14仍等待指令。
+- 各批TUI资源含TCP浏览/管理均已完成开发验收并删除活动项。当前仅T14整体最终验收等待用户指令，不自动启动；继续正常开发、不赶时间，涉及现有功能变化先确认。
 - 本轮明确批准：新增doctor --json供SSH逐项诊断；无参doctor输出/检查/严重度/退出码保持，远端失败不回落本机，不做混版降级。
 - 两项明确获批功能扩展：按完整SessionRef精确收编；broker原子核对完整ID/机器/工具的精确删册，目标变化即拒绝，保留原CLI选择器/权限，不做旧端兼容或降级。
+- TCP三项明确获批并已验收：本星只读快照、原子版本删除、审计追加完整starIds。长期合同见[TCP规格](tui-tcp-spec.md)，证据见[TCP验收](tui-tcp-validation-20261022.md)。
 - 读取顺序：本记录 → [活动任务](../wayfinder/tui-implementation-tasks.md)的当前项 → [代码规范](code-standards.md) → [外壳规格](tui-shell-spec.md)及[验收证据](tui-shell-validation-20261022.md)。
 - 暂停时停止派单、收齐所有代理状态/文件/检查，保存检查点与待办；未验收任务继续保留。
 
@@ -70,16 +71,17 @@
 - 最终Windows ConPTY四组共十二场通过，含固定目标起停/维护默认取消/实际结果、SSH匿名/失败/体检取消及三档resize，退出raw/监听/主屏/光标/括号粘贴恢复。工装使用隔离fixture，不起停真实服务或连接真实远端；真实受控扫描子树和worker IPC另由自动测试验证。
 - 各代理全部停写，root集中保存。已删除T09/T10活动行、说明和依赖，临时规格转长期规格；AGENTS/map/API/使用说明同步。仅T11/T12/T14继续等待指令。其他会话README与四份研究草稿保持原状。
 
-## T11 / T12进行中
+## TCP浏览与管理验收（2026-10-22）
 
-- 当前用户授权TCP浏览与管理，基线`393f1ad`，1546通过/11既有跳过。root唯一stage/commit；其他会话README/研究稿保持原状。
-- 规格与批准状态：[TCP本轮规格](tui-t11-t12-spec.md)。用户已分别批准只读星快照、原子版本删除、审计追加完整starId三项；旧命令选择器与原审计动作/频率/权限保持，无旧端降级。最初第二项未收到答复，单独再呈选项后已明确批准，不再等待。
-- 分工：t09_maintenance只读TCP应用/DTO及纯snapshot builder；t09_services TCP管理/原子registry helper/唯一revision helper；t10_ssh TCP资源及独立测试；root共享presentation/秘密结果态、broker/protocol胶水、composition、统一验收与文档。代理只能编辑所分配文件，RED保存后GREEN，禁真用户IO/生产服务。
-- 本轮Selected model is at capacity中断为服务容量提示；已核对三个代理仍运行并从检查点续接，没有重开任务或切模型。
-- 检查点：授权/共享RED`0f24857`，revision RED`5dda650`，应用聚合/管理RED`4eb5fd1`，资源RED`ff38e09`，共享presentation/秘密结果GREEN`bacd9cd`（49项定向通过），snapshot运输RED`bef45ef`。root已完成snapshot WS/adminPipe胶水和严格只读台账读取，受控broker/原管理回归13项通过；尚待保存GREEN与全部业务集成/ConPTY。
-- 后续检查点：snapshot GREEN`1e28a94`、应用/资源`dfe2b53`、管理`6a03aac`、poll`5bdd41a`、审计`feed51a`、读取权威`10b4409`、原子helper`12895c9/6f7fd2b`、expected运输/完成导航`71e3e00`、导入`dfa6d81`；所有批准均已记录。root默认入口已接通，最新7文件38项与noEmit通过；测试需等待页面发布而不只等mock被调用，已校正fixture时序。
-- 当前唯一未完产品片：服务代理受限管理IPC(2MiB)与新增星选中实际DTO ID，RED`191b4ba`已保存，正在GREEN。读/资源代理已完成本片并保存，额外TCP ConPTY两工装已nodecheck/lint，尚未统一build/运行；root下一步受影响回归→全量check→构建稳定后五组ConPTY、文档与队列清理。T11/T12仍进行中，未提前删除；T14不启动。
-- 配置导入属于v6已明确TUI范围，只支持当前brokers[]和完整starId、只追加新星；拒旧形状迁移/同星替换，保留原未知字段。确认revision与rename前复核可观测修改，不承诺对无锁旧writer实现跨进程绝对CAS。更多保护见配置测试；不联网、不起服务。
+- 用户授权T11/T12并行，三项既有功能扩展均先取得明确批准：本星只读快照、原子版本删除、审计追加完整starIds。旧CLI选择器和原list审计动作/频率/权限保持，无旧端降级。规格：[TCP浏览与管理](tui-tcp-spec.md)；[完整验收](tui-tcp-validation-20261022.md)。基线`393f1ad`，最终产品`f64d95b`、终端工装`2cc1aa6`。
+- stars/machines/members/keys和星/机器sessions默认接入，完整机器身份、匿名/全分页、最多三并发、局部错误、自动快照及返回定位均落地。新快照不刷审计，冷态活性保持unknown，静态完整性另供本机管理预检；执行端仍独立核实热冷。
+- 管理从资源列表确认，权限与目标重新核验，expected在同一步删除；凭证/绑定/影响变化拒绝，热失败不冷回退，无回执不盲重试，已提交取消不称回滚。专属秘密结果复制后清屏退出，普通详情/偏好/错误不留秘密；显示名只改本机，远端缺接口给SSH指引。
+- ctx已有连接入口和私密TCP配置导入完成；只接当前brokers[]及完整starId、只追加新星，拒替换/旧形状迁移。保留原字段，确认与rename前复核可观测变化，不承诺对无锁旧writer实现跨进程绝对CAS；不联网、不起服务，成功重读ctx并选择真实新增行。
+- root唯一stage/commit；t09_maintenance负责只读/导入，t09_services管理/原子helper，t10_ssh资源/终端工装，root共享展示/结果、协议、组装和统一验收。全部已停写。期间Selected model is at capacity为服务容量提示，核对代理状态后从原检查点续接，没有重开任务或切模型。
+- RED/GREEN检查点：共享`0f24857/bacd9cd`；快照`bef45ef/1e28a94`；管理/原子helper`4eb5fd1/6a03aac/095dad6/12895c9/6f7fd2b`；审计`8babcc6/feed51a`；运输/导航`71e3e00`；导入`05e14af/7d6ae2e/bc48033/dfa6d81`；默认接线`8b18e62/c88c878`；IPC/新星选择`191b4ba/3830fcd`；并发`16e21a9/e203b37`；冷态预检`ce92b66/f64d95b`。其余记录见提交历史。
+- 最终`npm run check`退出0：1647通过/11既有跳过，149文件通过/3跳过；164模块/520边，无循环或越界，lint/build通过。两项最后复核问题先RED再GREEN：可传入大于3的并发、静态冷态管理被partial误挡；最终全量覆盖修复，无跳过新增失败。
+- 最终Windows ConPTY五组共十五场通过，含TCP视图切换/完整目标、默认取消/权限、三档resize、秘密复制/关闭清屏及正常/取消/异常恢复。首轮TCP仅工装误要求清屏控制码相邻，允许ConPTY已知同步控制码后最终三场重跑通过；产品未改。终端业务/剪贴板为fixture，真实协议另在受控本机WS/adminPipe验证，不声称生产或真实远端live通过。
+- T11/T12活动行、说明与依赖已删除，临时规格转长期规格，AGENTS/map/API/协议/使用同步。其他会话README与四份研究草稿保持原状；仅T14等待用户指令，本批回归不代替该整体最终验收。
 
 ## 设计来源（原稿）
 

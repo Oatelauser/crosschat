@@ -17,6 +17,9 @@
 | TUI本机服务任务 | `src/application/services/managed.ts` | read/check/execute，稳定目标+revision、原防双开、完整PID集合核对、进程存在与实际就绪分开 |
 | TUI维护 | `src/application/maintenance/index.ts` | list/preview/execute；确认指纹、执行端重算、逐项实际结果；共享旧skills/uninstall业务而保留CLI契约 |
 | SSH上下文 | `src/application/ssh/index.ts` | 已配置别名、完整发现、单目标检测、结构化远端doctor；无本机回落、内部游标绑定配置观察 |
+| TCP浏览 | `src/application/tcp/index.ts` | 完整机器ID、册位/凭证分表、星/节点完整发现；最多三节点并发，保留局部错误、取消与范围 |
+| TCP管理任务 | `src/application/tcp/management.ts` | preview/apply绑定完整目标与确认版本；本机冷热、远程挑战权限、精确册位与一次性秘密结果 |
+| 已有TCP配置导入 | `src/application/tcp/configuration.ts` | 当前brokers[]只追加新星；确认指纹、原子替换前复核、私密输入与安全DTO；不联网或启动 |
 | 清理 | `src/application/cleanup/index.ts` | `planCleanup` 只读，`executeCleanup` 执行既定目标，保留原规则和 CLI 计数语义 |
 | 发送 | `src/application/send/index.ts`、`types.ts` | `sendMessage` 返回 typed 结果；`format.ts` 负责旧文本/JSON，TCP 本机桥直接使用结果 |
 | 成员对账 | `src/application/members/index.ts` | 有序 Provider 能力委派，保留现有活性/查名策略；unknown 不当成 absent |
@@ -65,6 +68,20 @@ TUI内部游标额外绑定本次SSH配置文件内容hash，剥去外层后才�
 删除节点和吊管理钥现按星及实际认证凭证立即撤权，包含无机器ID的瞬态sender；同机器不同凭证、其他星不受影响。明确`credential-revoked`先使连接无权处理后续帧，再清路由并断开；永久成员册保留。节点收到明确撤权后暂停该星重连和启动器自动拉起，保存无裸钥的凭证指纹暂停记录；换钥后显式重连。普通断网和一般`BAD_AUTH`不当作明确撤权。暂停记录写失败时保留暂停IPC owner，读取损坏记录报错并停止自动拉起。
 
 ## 扩展边界
+
+TCP读取通过`createTcpApplication({baseDir,...})`的readStars/readStar/readSessions提供安全DTO，完整机器身份参与内部会话contextId，名字/mid8只展示。scope members不探原生，discoverable最多三节点并发读完分页；冷态活性保持unknown，错误/取消不能冒充空或完整。远程上下文在每次请求重新核对唯一配置与握手星，不回落本机。
+
+严格验证的本机静态台账另提供`staticComplete`，允许管理预检使用静态影响，但不把partial实时快照变成完整、不把unknown活性变成下线。执行helper仍独立核实热冷路径；远端partial不可据此放行写入。
+
+新增`admin-op action=star-snapshot`和本机adminPipe同名op使用统一snapshot；成员/星管理员仅本星，broker-owner仅本机。返回完整机器ID、成员、连接和不可逆凭证/静态星revision，不返回钥匙；新读op不写管理审计，现有list读审计保持。
+
+TUI删除带expected：节点/管理钥为`{credentialRevision,machineId:string|null}`，删星为`{starRevision}`。新registry helper在同一同步新读事务核验和删除，拒绝不写/不repair；label不前缀回落，冷写保留其他静态字段，独占临时文件避免链接重定向。已删除星的后续配置清理失败保留cleanupFailed，broker仍实际断开连接，界面显示uncertain。原CLI省略expected沿用原选择器，无旧端降级。
+
+管理审计保留原文本与频率，追加`starIds=[完整ID...]`；全局显示名一行记录多星。TUI按完整ID筛选，旧行缺标识明确无法归属，不靠可复用星名猜测。发钥仅通过单次explicit秘密结果返回；普通DTO、页面缓存/偏好不存秘密。
+
+`createTcpConfiguration({baseDir})`的preview/apply只导入当前完整配置，追加不同新星并保留原字段，拒同星替换/旧形状迁移/坏文件/目录链接与硬链接。确认绑定原bytes/文件身份/私密输入，wx临时文件及rename前复核；不承诺对无锁旧writer实现跨进程绝对CAS，不触发认证、启动或自动修复。
+
+共享TUI的page.presentation声明当前列/动作，由registry核验owner后统一用于渲染、排序和帮助；page.actionRoutes支持零行导航。专属result owner只在显式生成后持有秘密，关闭取消自有复制并清屏；mutation.navigate只接受登记资源，ctx刷新权威来源后选中新对象。autoRefresh保持普通列表选择，与日志尾随分开。
 
 发送支持逐条 `SendArgs.delivery?: 'queue' | 'steer'`，默认 queue。Provider 第三参数为 `DeliveryOptions.mode`；SSH、TCP、broker 本机桥与文件通知原样传递。`SendResult.deliveryMode` 表示请求意图，与实际投递结果、历史回执分开；`deliveryModes` 能力须有对应原生验收证据，不能由 `delivery: true` 推断。
 
