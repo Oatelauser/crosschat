@@ -3,6 +3,7 @@ import type { DiscoveryEndpoint, DiscoveryProvider, DiscoveryResponse, Discovery
 import { sessionKey } from '../src/application/sessions/model.js';
 import { createSessionsResource } from '../src/tui/resources/sessions.js';
 import { createStatusRegistry } from '../src/tui/resources/status.js';
+import { resolveTargetByName } from '../src/resolve.js';
 
 const context = { id: 'local', kind: 'local', label: '本机' };
 const capabilities = { discovery: true, delivery: true, launch: false, diagnostics: false };
@@ -168,6 +169,23 @@ describe('local TUI sessions resource', () => {
     expect(page.rows[0].actionAvailability?.copy).toMatchObject({ enabled: false });
   });
 
+  it('copies reserved-looking exact names only as existing local resolver addresses', async () => {
+    const names = ['tcp:star:machine:name', 'ssh:host', 'claude/person', 'codex/person'];
+    const items = names.map((name, index) => session('claude', `native-${index}`, name));
+    const page = await read(createSessionsResource({ discovery: endpoint([response(items)]) }).adapter);
+    for (const [index, row] of page.rows.entries()) {
+      expect(row.copyValue).toBe(names[index]);
+      expect(resolveTargetByName(row.copyValue ?? '', items.map((item) => ({ sessionId: item.ref.nativeId, name: item.name ?? undefined })), [])).toMatchObject({ side: 'claude', session: { sessionId: items[index].ref.nativeId } });
+    }
+  });
+
+  it('does not present terminal control characters in names as a pasteable address', async () => {
+    const page = await read(createSessionsResource({ discovery: endpoint([response([session('claude', 'id', '名字\n\u001b[2J')])]) }).adapter);
+    expect(page.rows[0].copyValue).toBeUndefined();
+    expect(page.rows[0].actionAvailability?.copy).toMatchObject({ enabled: false });
+    expect(page.rows[0].copyValues?.ref).toContain('"nativeId": "id"');
+  });
+
   it('registers read-only native guidance with future-provider extensions and disables unsupported mutations/scope', async () => {
     const guide = vi.fn(() => ({ title: '原生工具', fields: [{ label: '下一步', value: '请回 future-tool 原生窗口。' }] }));
     const { resource, adapter } = createSessionsResource({ discovery: endpoint([response([session('future-tool', 'opaque')])]), nativeGuides: { 'future-tool': guide } });
@@ -179,5 +197,71 @@ describe('local TUI sessions resource', () => {
     expect(page.actionAvailability?.adopt).toMatchObject({ enabled: false });
     expect(page.actionAvailability?.['remove-member']).toMatchObject({ enabled: false });
     expect(page.actionAvailability?.['filter-scope']).toMatchObject({ enabled: false, nextStep: expect.any(String) });
+  });
+});
+
+function membership() {
+  return {
+    listTargets: vi.fn(async () => ({ stars: [{ id: 'star-full-one', label: '开发星', eligible: true }, { id: 'star-invalid', label: '不可用星', eligible: false, reason: '身份不完整' }], completeness: 'complete' as const, observedAt: 123, errors: [] })),
+    check: vi.fn(async () => ({ allowed: true, impact: ['只修改星册位，不终止原生工具。'] })),
+    apply: vi.fn(async () => ({ kind: 'applied' as 'applied' | 'rejected' | 'uncertain', message: '已完成' })),
+  };
+}
+
+describe('TUI session membership actions', () => {
+  it('presents configured stars as explicit options without inferring membership or connecting them', async () => {
+    const management = membership();
+    const { adapter } = createSessionsResource({ discovery: endpoint([response([session('claude', 'native-id')])]), membership: management });
+    const page = await read(adapter);
+    expect(management.check).not.toHaveBeenCalled();
+    expect(management.apply).not.toHaveBeenCalled();
+    expect(page.actionAvailability?.adopt).toMatchObject({ enabled: true, fields: [{ id: 'starId', required: true, options: expect.arrayContaining([{ value: 'star-full-one', label: '开发星', enabled: true }, { value: 'star-invalid', label: '不可用星', enabled: false, reason: '身份不完整' }]) }] });
+    expect(page.actionAvailability?.['remove-member']?.enabled).toBe(true);
+    expect(page.rows[0].cells).not.toHaveProperty('membership');
+  });
+
+  it('checks exact selected provider/native identity and star before submitting the same immutable identity', async () => {
+    const management = membership();
+    const item = session('claude', 'opaque/native/unchanged');
+    const { resource, adapter } = createSessionsResource({ discovery: endpoint([response([item])]), membership: management });
+    const page = await read(adapter);
+    const action = resource.actions.find((candidate) => candidate.id === 'adopt');
+    if (!action) throw new Error('Missing adopt action.');
+    const signal = new AbortController().signal;
+    const request = { action, target: page.rows[0], context, values: { starId: 'star-full-one' }, signal };
+    expect(await adapter.checkAction?.(request)).toMatchObject({ enabled: true, impact: expect.arrayContaining(['只修改星册位，不终止原生工具。']) });
+    expect(management.check).toHaveBeenCalledWith({ op: 'adopt', ref: item.ref, starId: 'star-full-one', signal });
+    expect(await adapter.mutate?.(request)).toMatchObject({ message: '已完成' });
+    expect(management.apply).toHaveBeenCalledWith({ op: 'adopt', ref: item.ref, starId: 'star-full-one', signal });
+  });
+
+  it('preserves fields on rejection or an uncertain acknowledgement and never reports success', async () => {
+    const management = membership();
+    management.apply.mockResolvedValueOnce({ kind: 'uncertain', message: '回执未知，请核实册位。' }).mockResolvedValueOnce({ kind: 'rejected', message: '目标已变化，拒绝删除。' });
+    const { resource, adapter } = createSessionsResource({ discovery: endpoint([response([session('codex', 'full-native')])]), membership: management });
+    const page = await read(adapter);
+    const action = resource.actions.find((candidate) => candidate.id === 'remove-member');
+    if (!action) throw new Error('Missing remove action.');
+    const request = { action, target: page.rows[0], context, values: { starId: 'star-full-one' }, signal: new AbortController().signal };
+    await expect(adapter.mutate?.(request)).rejects.toThrow('回执未知');
+    await expect(adapter.mutate?.(request)).rejects.toThrow('目标已变化');
+    expect(request.values).toEqual({ starId: 'star-full-one' });
+    expect(management.apply).toHaveBeenCalledTimes(2);
+  });
+
+  it('disables process references and rejects mismatched context/ref and unavailable star choices before mutation', async () => {
+    const management = membership();
+    const process = session('claude', '321'); process.ref.referenceKind = 'process';
+    const { resource, adapter } = createSessionsResource({ discovery: endpoint([response([process])]), membership: management });
+    const page = await read(adapter);
+    expect(page.rows[0].actionAvailability?.adopt).toMatchObject({ enabled: false });
+    expect(page.rows[0].actionAvailability?.['remove-member']).toMatchObject({ enabled: false });
+    const action = resource.actions.find((candidate) => candidate.id === 'adopt');
+    if (!action) throw new Error('Missing adopt action.');
+    const request = { action, target: page.rows[0], context: { ...context, id: 'other-local' }, values: { starId: 'star-full-one' }, signal: new AbortController().signal };
+    expect(await adapter.checkAction?.(request)).toMatchObject({ enabled: false });
+    await expect(adapter.mutate?.(request)).rejects.toThrow();
+    expect(management.check).not.toHaveBeenCalled();
+    expect(management.apply).not.toHaveBeenCalled();
   });
 });
