@@ -458,8 +458,8 @@ export function createTuiController(options: TuiControllerOptions) {
     let scrollOffset = Math.max(0, Math.min(overlay.scrollOffset ?? 0, max));
     if (!formManualScroll) {
       const focusIndex = overlay.focusIndex;
-      const index = overlay.error ? lines.findIndex((line) => line.kind === 'error')
-        : focusIndex < overlay.fields.length ? lines.findIndex((line) => line.fieldIndex === focusIndex)
+      const index = focusIndex < overlay.fields.length ? lines.findIndex((line) => line.fieldIndex === focusIndex)
+        : overlay.error ? lines.findIndex((line) => line.kind === 'error')
           : lines.findIndex((line) => line.kind === 'impact');
       if (index >= 0 && index < scrollOffset) scrollOffset = index;
       if (index >= scrollOffset + formPageSize()) scrollOffset = index - formPageSize() + 1;
