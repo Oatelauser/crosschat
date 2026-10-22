@@ -32,9 +32,9 @@ async function fixture() {
   await writeFile(join(home, '.ssh', 'config'), 'Host fixture other\n  User same-user\nHost *.wild\n');
   return home;
 }
-const response = () => ({ op: 'list', providers: [{ providerId: 'future-tool', capabilities: { discovery: true, delivery: false, launch: false, diagnostics: false } }],
+const response = (nextCursor: string | null = null) => ({ op: 'list', providers: [{ providerId: 'future-tool', capabilities: { discovery: true, delivery: false, launch: false, diagnostics: false } }],
   page: { items: [{ ref: { contextId: 'local', providerId: 'future-tool', nativeId: 'native/opaque/完整' }, name: null, rawStatus: 'idle', capabilities: { discovery: true, delivery: false, launch: false, diagnostics: false }, attributes: {} }],
-    nextCursor: null, completeness: 'complete', errors: [], observedAt: 7 } });
+    nextCursor, completeness: nextCursor === null ? 'complete' : 'partial', errors: [], observedAt: 7 } });
 const diagnostic = () => ({ groups: [{ context: { kind: 'environment' }, checks: [{ code: 'node-unsupported', level: 'error', data: { version: '20.0.0' } }] }], summary: { pass: 0, warn: 0, error: 1, failed: true } });
 
 afterEach(async () => { vi.useRealTimers(); await Promise.all(homes.splice(0).map((home) => rm(home, { recursive: true, force: true }))); });
@@ -46,6 +46,7 @@ describe('configured SSH application reads', () => {
     const listed = await application.list(new AbortController().signal);
     expect(listed.items.map((item) => item.id)).toEqual(['ssh:fixture', 'ssh:other']);
     expect(listed.items[0].identityHint).toContain('尚未核实');
+    expect(listed.items[0].attributes.configurationRevision).toMatch(/^[a-f0-9]{64}$/);
     expect(spawn).not.toHaveBeenCalled();
   });
 
@@ -212,5 +213,47 @@ describe('configured SSH application reads', () => {
     const marker = source.indexOf('20.0.0');
     child.finish(Buffer.concat([Buffer.from(source.slice(0, marker)), Buffer.from([255]), Buffer.from(source.slice(marker + 1))]), 1);
     expect(await pending).toMatchObject({ completeness: 'unavailable', result: null, errors: [expect.objectContaining({ kind: 'malformed' })] });
+  });
+
+  it('refuses a paged read after the same Host configuration changes user, then allows a fresh explicit read', async () => {
+    const home = await fixture();
+    const children = [new FakeSshChild(), new FakeSshChild()];
+    let index = 0;
+    const spawn = vi.fn(() => children[index++]);
+    const application = createSshApplication({ home, spawn });
+    const first = application.discovery.execute({ op: 'list' }, { contextId: 'ssh:fixture' });
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(1));
+    children[0].finish(JSON.stringify(response('native-next-cursor')));
+    const initial = await first;
+    if (initial.op !== 'list' || initial.page.nextCursor === null) throw new Error('Expected initial cursor');
+    await writeFile(join(home, '.ssh', 'config'), 'Host fixture other\n  User changed-user\n');
+    const cancelled = new AbortController();
+    const stopUnexpectedProcess = setTimeout(() => cancelled.abort(), 200);
+    let changed;
+    try { changed = await application.discovery.execute({ op: 'list', cursor: initial.page.nextCursor }, { contextId: 'ssh:fixture', signal: cancelled.signal }); }
+    finally { clearTimeout(stopUnexpectedProcess); }
+    expect(changed).toMatchObject({ page: { completeness: 'unavailable', items: [], errors: [expect.objectContaining({ kind: 'invalid-cursor', nextStep: expect.stringMatching(/刷新|第一页/) })] } });
+    expect(spawn).toHaveBeenCalledTimes(1);
+    const refreshed = application.discovery.execute({ op: 'list' }, { contextId: 'ssh:fixture' });
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2));
+    children[1].finish(JSON.stringify(response()));
+    expect(await refreshed).toMatchObject({ page: { completeness: 'complete' } });
+  });
+
+  it('keeps its local configuration revision out of the remote discover request while paging unchanged configuration', async () => {
+    const children = [new FakeSshChild(), new FakeSshChild()];
+    let index = 0;
+    const spawn = vi.fn(() => children[index++]);
+    const application = createSshApplication({ home: await fixture(), spawn });
+    const first = application.discovery.execute({ op: 'list', filter: { providerIds: ['future-tool'] }, limit: 3 }, { contextId: 'ssh:fixture' });
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(1));
+    children[0].finish(JSON.stringify(response('native-next-cursor')));
+    const initial = await first;
+    if (initial.op !== 'list' || initial.page.nextCursor === null) throw new Error('Expected initial cursor');
+    const next = application.discovery.execute({ op: 'list', filter: { providerIds: ['future-tool'] }, limit: 3, cursor: initial.page.nextCursor }, { contextId: 'ssh:fixture' });
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2));
+    children[1].finish(JSON.stringify(response()));
+    expect(await next).toMatchObject({ page: { completeness: 'complete' } });
+    expect(JSON.parse(children[1].input)).toEqual({ op: 'list', cursor: 'native-next-cursor', filter: { providerIds: ['future-tool'] }, limit: 3 });
   });
 });
