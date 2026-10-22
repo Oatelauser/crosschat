@@ -214,11 +214,12 @@ export function createTcpResources(options: TcpResourcesOptions): Record<Resourc
     };
     if (owner === 'machines') adapter.watch = async (request, publish) => {
       while (!request.signal.aborted) {
+        await refreshPause(request.signal);
+        if (request.signal.aborted) return;
         const page = await adapter.read(request);
         if (request.signal.aborted) return;
         publish(page);
         if (!page.autoRefresh) return;
-        await refreshPause(request.signal);
       }
     };
     return { resource, adapter };
