@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { setTimeout as pause } from 'node:timers/promises';
-import { machineId as readMachineId, normalizeMid } from '../../platform/machine-id.js';
+import { normalizeMid } from '../../platform/machine-id.js';
 import { ensureAggregator, queryAttachStatus, spawnServeDetachReal } from '../../serve/attach-client.js';
 import type { AttachPipeClient } from '../../serve/attach-client.js';
 import { parseNodeConfig } from '../../serve/node-config.js';
@@ -9,14 +9,15 @@ import type { BrokerEntry } from '../../serve/node-config.js';
 import { sanitizeTool } from '../../serve/protocol.js';
 import { tcpDir } from '../../serve/registry.js';
 import { assertNodeNotRevoked } from '../../serve/revocation.js';
-import { requestAdminOp, requestMemberRemoveExact, SenderConn } from '../../serve/via-tcp.js';
+import { requestAdminOp, requestMemberRemoveExact, selectBrokerEntry, SenderConn } from '../../serve/via-tcp.js';
 import { parseDiscoveryResponse } from '../discovery/boundary.js';
-import type { DiscoverySession } from '../discovery/model.js';
+import type { DiscoveryRequest, DiscoveryResponse, DiscoverySession } from '../discovery/model.js';
 import { checkAbort, readParsed } from '../queries/reading.js';
 import { isRecord, untilAborted } from '../sessions/reading.js';
 import { sessionKey } from '../sessions/model.js';
 import type { SourceError } from '../sessions/model.js';
 import { defaultMembershipProviders } from './providers.js';
+import { readMembershipMachineId } from './machine.js';
 import type { MembershipCheck, MembershipProvider, MembershipRequest, MembershipResult, MembershipTargets, SessionMembershipOptions, SessionMembershipService } from './types.js';
 
 export type {
@@ -86,6 +87,22 @@ export function createSessionMembershipService(options: SessionMembershipOptions
 
   const readConfig = (signal?: AbortSignal) => readParsed(configFile, (text) => parseNodeConfig(text, configFile), { signal, readText: options.readText, now: options.now });
 
+  async function readNative(request: DiscoveryRequest, parentSignal?: AbortSignal): Promise<DiscoveryResponse> {
+    const controller = new AbortController();
+    const onAbort = () => controller.abort();
+    const timer = setTimeout(onAbort, timeoutMs);
+    parentSignal?.addEventListener('abort', onAbort, { once: true });
+    if (parentSignal?.aborted) controller.abort();
+    try {
+      checkAbort(controller.signal);
+      return parseDiscoveryResponse(await untilAborted(options.discovery.execute(request, { contextId, signal: controller.signal }), controller.signal));
+    } finally {
+      clearTimeout(timer);
+      parentSignal?.removeEventListener('abort', onAbort);
+      controller.abort();
+    }
+  }
+
   async function listTargets(request: { contextId: string; signal?: AbortSignal }): Promise<MembershipTargets> {
     const observedAt = (options.now ?? Date.now)();
     if (request.contextId !== contextId) return { stars: [], completeness: 'unavailable', observedAt,
@@ -110,8 +127,8 @@ export function createSessionMembershipService(options: SessionMembershipOptions
   }
 
   async function nativeDetail(request: MembershipRequest, provider: MembershipProvider): Promise<DiscoverySession> {
-    const response = parseDiscoveryResponse(await bounded(options.discovery.execute({ op: 'detail', providerId: request.ref.providerId,
-      nativeId: request.ref.nativeId, referenceKind: request.ref.referenceKind }, { contextId, signal: request.signal }), timeoutMs, request.signal));
+    const response = await readNative({ op: 'detail', providerId: request.ref.providerId,
+      nativeId: request.ref.nativeId, referenceKind: request.ref.referenceKind }, request.signal);
     if (response.op !== 'detail' || response.detail.completeness === 'cancelled' || response.detail.completeness === 'unavailable'
       || response.detail.item === null || sessionKey(response.detail.item.ref) !== sessionKey(request.ref)) {
       throw new Rejected('无法重新确认此完整引用对应的现存本机原生会话');
@@ -121,11 +138,14 @@ export function createSessionMembershipService(options: SessionMembershipOptions
     if (!eligibility.allowed) throw new Rejected(eligibility.reason ?? '此原生会话当前不符合收编条件', eligibility.nextStep);
     for (const other of response.providers) {
       if (other.providerId === request.ref.providerId) continue;
-      const collision = parseDiscoveryResponse(await bounded(options.discovery.execute({ op: 'detail', providerId: other.providerId,
-        nativeId: request.ref.nativeId, referenceKind: 'native' }, { contextId, signal: request.signal }), timeoutMs, request.signal));
+      const collision = await readNative({ op: 'detail', providerId: other.providerId,
+        nativeId: request.ref.nativeId, referenceKind: 'native' }, request.signal);
       if (collision.op !== 'detail') throw new Rejected('无法核验其他工具的完整会话身份');
       if (collision.detail.item !== null && collision.detail.item.ref.nativeId === request.ref.nativeId) {
         throw new Rejected('此完整原生 ID 同时存在于多个工具，当前星册不能安全区分');
+      }
+      if (collision.detail.item !== null || collision.detail.completeness !== 'complete') {
+        throw new Rejected('其他工具的会话来源尚未确认完整缺席，无法排除同 ID 冲突');
       }
     }
     checkAbort(request.signal);
@@ -160,7 +180,12 @@ export function createSessionMembershipService(options: SessionMembershipOptions
     const entries = config.value.entries.filter((entry) => entry.starId === request.starId);
     if (entries.length !== 1) throw new Rejected('所选完整星 ID 缺失或对应多个配置目标，请先消歧');
     const entry = entries[0];
-    const machine = fullMachine(await untilAborted(Promise.resolve((options.machineId ?? readMachineId)()), request.signal));
+    if (request.op === 'adopt' && selectBrokerEntry(config.value.entries, request.starId, undefined) !== entry) {
+      throw new Rejected('完整星 ID 被其他配置的星名遮蔽，无法安全启动聚合器', '先消除 ~/.crosschat/tcp/node.json 中的星名与完整星 ID 冲突，再刷新');
+    }
+    const machineRead = options.machineId === undefined
+      ? readMembershipMachineId({ signal: request.signal, timeoutMs: Math.min(timeoutMs, 3_000) }) : Promise.resolve(options.machineId());
+    const machine = fullMachine(await bounded(machineRead, timeoutMs, request.signal));
     if (machine === undefined) throw new Rejected('无法核实本机完整机器身份，未发出修改请求', '检查操作系统机器标识的读取权限后重新核验');
     const item = request.op === 'adopt' ? await nativeDetail(request, provider) : undefined;
     assertNodeNotRevoked(configFile, entry);
@@ -191,6 +216,7 @@ export function createSessionMembershipService(options: SessionMembershipOptions
         if (request.op === 'remove') {
           writeIssued = true;
           const reply = await bounded(requestMemberRemoveExact(target.connection, { sessionId: request.ref.nativeId, machine: target.machine, tool: target.provider.tool }, timeoutMs), timeoutMs, request.signal);
+          if (!reply.ok && reply.removed) return { kind: 'uncertain', message: '册位内存已修改，但持久化未确认，请检查所选星并刷新核实，勿自动重试' };
           return reply.ok && reply.removed ? { kind: 'applied', message: '已从所选星精确删除该册位；原生会话不受影响' }
             : { kind: 'rejected', message: '册位身份已改变或目标已不在册，请刷新后重新确认' };
         }

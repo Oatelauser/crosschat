@@ -1111,15 +1111,17 @@ export class Broker {
    * 文件的新钥匙/新星，整写内存快照严禁）；按 starId 定位星，找不到（异常
    * 形态）按位兜底。
    */
-  private persistRoster(star: StarState): void {
+  private persistRoster(star: StarState): boolean {
     try {
       mutateBrokerFile(this.d.registryFile, (doc) => {
         const index = this.stars.indexOf(star);
         const target = doc.stars.find((s) => star.starId !== undefined && s.starId === star.starId) ?? doc.stars[index];
         if (target !== undefined) target.roster = star.roster;
       });
+      return true;
     } catch {
       this.log('roster 落盘失败（下次数变化重试）');
+      return false;
     }
   }
 
@@ -1203,7 +1205,11 @@ export class Broker {
     star.roster.splice(star.roster.indexOf(entry), 1);
     const owner = star.online.get(entry.machine);
     if (owner !== undefined && owner !== session) this.send(owner.ws, { op: 'member-remove', target: entry.sessionId });
-    this.persistRoster(star);
+    if (!this.persistRoster(star)) {
+      this.send(session.ws, { op: 'member-remove-exact-result', id: frame.id, ok: false, removed: true,
+        code: 'PERSIST_FAILED', error: '册位内存已修改，但持久化未确认，请检查星册存储并重新读取核实' });
+      return;
+    }
     this.send(session.ws, { op: 'member-remove-exact-result', id: frame.id, ok: true, removed: true });
   }
 
