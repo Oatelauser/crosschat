@@ -98,6 +98,22 @@ describe('default local and SSH resource composition', () => {
       expect(mocks.localRead).not.toHaveBeenCalled();
     } finally { controller.dispose(); }
   });
+  it('retains the actual source recovery guidance after a scoped star becomes unavailable', async () => {
+    const composed = createDefaultResources({ home: '/isolated', isolatedHome: true });
+    const context = presentContext({ id: 'tcp:fixture', kind: 'tcp', label: 'TCPfixture', target: 'fixture.invalid:7260' });
+    tcpMocks.sessions.mockResolvedValueOnce({ ...source, contextId: context.id, scope: 'members', star: null, items: [], nodes: [], completeness: 'unavailable',
+      errors: [{ source: 'selected-star', kind: 'unavailable', message: '已选择的星当前不可达', nextStep: '核对原连接凭证并重新检测' }] });
+    const controller = createTuiController({ registry: createResourceRegistry(composed.resources), contexts: [...contexts, context], initialSelectedContextId: context.id, adapters: composed.adapters });
+    try {
+      controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().rows[0]?.id).toBe(`row:${context.id}:machine`));
+      controller.handleKey({ name: 'v' });
+      await vi.waitFor(() => expect(controller.getSnapshot()).toMatchObject({ route: { resourceId: 'sessions', query: { starId: 'full-star' } }, loading: false, completeness: 'unavailable' }));
+      controller.handleKey({ name: 'i' });
+      expect(JSON.stringify(controller.getSnapshot().detail)).toContain('核对原连接凭证并重新检测');
+      expect(JSON.stringify(controller.getSnapshot().detail)).not.toContain('返回了其他连接');
+    } finally { controller.dispose(); }
+  });
   it.each(['complete', 'unknown', 'blocked'] as const)('does not recreate removed preferences after an uninstall attempt: %s', async (outcome) => {
     mocks.maintenance.mockReturnValue({ list: () => [{ id: 'uninstall-data', label: '卸载fixture', description: '固定范围', guidance: '不执行npm' }], preview: mocks.preview, execute: mocks.execute });
     mocks.preview.mockResolvedValue({ operationId: 'uninstall-data', label: '卸载fixture', observedAt: 42, fingerprint: 'f'.repeat(64), enabled: true, targets: [], effects: ['删除当前fixture数据'] });
