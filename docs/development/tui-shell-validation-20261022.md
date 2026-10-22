@@ -1,6 +1,6 @@
 # TUI外壳验收
 
-2026-10-22。用户授权任务T06，起点`f03a4ac`，最终产品验证基点`266463e`，分支`codex/core-refactor-pre-tui`。按用户要求正常开发，无时间截止；未实施后续业务资源。
+2026-10-22。用户授权任务T06，起点`f03a4ac`，最终产品验证基点`108c6c0`，分支`codex/core-refactor-pre-tui`。按用户要求正常开发，无时间截止；未实施后续业务资源。
 
 ## 交付与边界
 
@@ -14,7 +14,7 @@
 
 Windows，Node25.0.0、npm11.6.2、PowerShell7.6.5。普通检查显式移除`CROSSCHAT_LIVE`，配置/用户目录和进程均使用隔离fixture。
 
-2026-10-22 11:39:28（UTC+8）运行`npm run check`，退出0：
+2026-10-22 11:44:11（UTC+8）运行`npm run check`，退出0：
 
 - ESLint通过，新增应用/TUI代码启用类型导入和Promise规则。
 - 运行时依赖图114模块、317边，无循环或边界违反。
@@ -41,7 +41,7 @@ Windows，Node25.0.0、npm11.6.2、PowerShell7.6.5。普通检查显式移除`CR
 
 每场核对raw恢复、输入/resize/应用信号监听归还、cursor显示、bracketed paste关闭及退出alternate screen。Ink依赖restore-cursor首用会安装一个模块级退出光标guard；工装先以无业务Ink mount/unmount建立该基线，再断言TUI会话不增加残留。未删除其他owner监听或修改node_modules。
 
-最终证据目录：`%TEMP%/crosschat-tui-validation-zLKj9q/`，含三个`*-pty.jsonl`原始终端/输入日志及对应fixture JSONL。ConPTY自测还验证80×24→40×12、中文😀输入和dispose只回收自有子进程。
+最终证据目录：`%TEMP%/crosschat-tui-validation-7muc7z/`，含三个`*-pty.jsonl`原始终端/输入日志及对应fixture JSONL。ConPTY自测还验证80×24→40×12、中文😀输入和dispose只回收自有子进程。
 
 本次真实终端覆盖Windows ConPTY；未声称其他操作系统或真实SSH/TCP业务链已验收。后续资源任务继续独立验收。
 
