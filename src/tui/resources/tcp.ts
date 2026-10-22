@@ -170,7 +170,7 @@ export function createTcpResources(options: TcpResourcesOptions): Record<Resourc
           if (owner === 'sessions') {
             const result = await untilAborted(options.tcp.readSessions({ contextId, ...(query.starId ? { starId: query.starId } : {}), ...(query.machineId ? { machineId: query.machineId } : {}), scope: query.scope === 'discoverable' ? 'discoverable' : 'members', signal: request.signal }), request.signal);
             if (request.signal.aborted) return invalid(owner, 'TCP 会话读取已取消。', true);
-            if (result.contextId !== contextId || result.items.some((item) => item.contextId !== contextId) || (query.starId && result.star?.starId !== query.starId)) return invalid(owner, '会话来源返回了其他连接或星的结果，已拒绝显示。');
+            if (result.contextId !== contextId || result.items.some((item) => item.contextId !== contextId) || (result.star && query.starId && result.star.starId !== query.starId)) return invalid(owner, '会话来源返回了其他连接或星的结果，已拒绝显示。');
             if (!result.star) return { ...invalid(owner, '未取得明确的目标星；从 :stars 或 :ctx 重新选择。'), completeness: result.completeness, detailViews: { info: readInfo(result) } };
             const current = result.star;
             const entries = definitions(owner, query.machineId !== undefined);
@@ -186,7 +186,7 @@ export function createTcpResources(options: TcpResourcesOptions): Record<Resourc
           }
           const result = await untilAborted(options.tcp.readStar({ contextId, ...(query.starId ? { starId: query.starId } : {}), signal: request.signal }), request.signal);
           if (request.signal.aborted) return invalid(owner, 'TCP 读取已取消。', true);
-          if (result.contextId !== contextId || (query.starId && result.star?.starId !== query.starId)) return invalid(owner, '星来源返回了其他连接或目标，已拒绝显示。');
+          if (result.contextId !== contextId || (result.star && query.starId && result.star.starId !== query.starId)) return invalid(owner, '星来源返回了其他连接或目标，已拒绝显示。');
           if (!result.star) return { ...invalid(owner, '未取得明确的目标星；从 :stars 或 :ctx 重新选择。'), completeness: result.completeness, detailViews: { info: readInfo(result) } };
           return starPage(owner, result, contextId, local);
         } catch { return invalid(owner, request.signal.aborted ? 'TCP 读取已取消。' : 'TCP 来源未完成或结果无效；请查看连接后按 r 重试。', request.signal.aborted); }

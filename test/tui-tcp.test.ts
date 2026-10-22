@@ -49,6 +49,17 @@ function request(resource: TuiResource, page: TuiPage, actionId: string, targetI
 }
 
 describe('TCP resource lists and readonly navigation', () => {
+  it.each(['machines', 'sessions'] as const)('continues to reject an actual different star response on the scoped %s page', async (owner) => {
+    const f = fixtures();
+    const otherStar = { ...star, starId: 'another-star-full-id', name: 'foreign-star-data' };
+    f.current.star = otherStar;
+    f.sessions.star = otherStar;
+    const page = await f.resources[owner].adapter.read({ context, route: { resourceId: owner, contextId: context.id, query: { starId: star.starId } }, signal: signal() });
+    expect(page).toMatchObject({ rows: [], completeness: 'unavailable' });
+    expect(JSON.stringify(page.detailViews?.info)).toContain('其他连接');
+    expect(JSON.stringify(page)).not.toContain(otherStar.name);
+    expect(f.management.preview).not.toHaveBeenCalled();
+  });
   it('does not infer local broker authority from an unreadable star source', async () => {
     const f = fixtures();
     f.tcp.readStars.mockResolvedValueOnce({ contextId: local.id, role: null, configured: false, items: [], completeness: 'unavailable', observedAt: 1,

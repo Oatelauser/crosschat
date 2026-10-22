@@ -79,6 +79,7 @@ try {
   const content = JSON.stringify({ brokers: [{ host: 'fixture.invalid', port: 7260, starId: ready.starId, name: 'FINAL-IMPORTED-STAR', key }], fixturePreserved: true });
   await send(content);
   await send('\r', '确认提交');
+  await send('\t\r', '影响范围已更新');
   await waitEvent((event) => event.event === 'import-preview' && event.enabled);
   assert(!pty.output.includes(key) && !pty.output.includes(content), 'private form and preview never expose imported credential');
   const beforeImport = (await events()).length;
@@ -110,8 +111,8 @@ try {
   await send(escape, 'FINAL-NODE-CREDENTIAL');
   await send(escape, 'FINAL-TCP-MACHINE');
   await command('ctx', 'FINAL-IMPORTED-STAR');
-  await send(home + '\r', 'FINAL-LOCAL-SECOND');
-  assert.equal(JSON.parse((await copy('Y')).value).contextId, 'local', 'returning to local context uses local sources again');
+  await send(home + '\r', 'FINAL-LOCAL-TARGET');
+  assert.deepEqual(JSON.parse((await copy('Y')).value), ready.localRef, 'returning to local restores the earlier exact selection and filter using local sources');
   await command('ctx', 'FINAL-IMPORTED-STAR');
   await send('q');
   let timer;
