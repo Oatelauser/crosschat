@@ -43,7 +43,8 @@ Claude Code 2.1.307；临时 CLAUDE_CONFIG_DIR 和工作目录，原生 sdk-cli/
 - 新生产发现已在 CLI 默认 daemon 不可用时实际找到当前 Desktop 和 TUI，约 829ms，名称与完整 ID 正确。
 - 早期临时原生试验 FULL_BUSY_D / FULL_IDLE_E 已实际进入当前聊天，完整信封字节及按 c6 回信到 Claude 均核对；临时注入不作为最终生产安装验收。
 - 正式全局 CLI + 同步 skill：Desktop→交互 Claude turn10/c6 完整信封，Claude 实际运行 `crosschat send --conversation c6 --delivery steer` 回信 turn11，完整信封已实际出现在当前聊天，追加于原活跃轮。原始回执 unconfirmed，约 2.5 秒后原生 user 历史才落盘；原目标绑定摘要复查 confirmed，没有重发。
-- busy queue 正式来信 turn13 已 parked，原轮仍 active，后台 worker 运行，待当前轮结束后的唤醒验收。正式空闲 queue/steer 待完成，下次续接须更新这里。
+- busy queue：正式来信 turn13 在原轮 active 时 parked；原 task_complete 为 01:55:12.114Z，新 task_started 为 01:55:12.587Z，完整 user 信封 01:55:12.613Z 才进入新轮。目标 outbox 清空，原摘要复查 confirmed；Claude 01:55:38.136Z 实际收到默认 queue 的 turn14 ACK。前后元数据证据在 `crosschat-desktop-acceptance-cGO8sO/busy-queue-before.json` / `busy-queue-after.json`，当前界面也实际收到。
+- 正式空闲 queue/steer 待完成；已让原交互 Claude 执行只读等待两次 idle 后一次发送的临时脚本，下次续接须核对结果并清理脚本。
 
 ## 隔离回归与 skill
 
@@ -58,6 +59,6 @@ Claude Code 2.1.307；临时 CLAUDE_CONFIG_DIR 和工作目录，原生 sdk-cli/
 
 ## 本机安装与还原
 
-升级前旧包、三种 CLI shim、Codex/Claude 已安装 skill 已备份至临时目录 `crosschat-local-upgrade-9qTSwE`。通过检查后 npm pack 到该目录，使用精确 tgz 本机安装（不发布、忽略生命周期脚本），再执行 install-skills。包内、Codex 和 Claude 三份 skill 与项目源 SHA-256 一致，主文件约 2KB，原入口约 7.3KB。
+升级前旧包、三种 CLI shim、Codex/Claude 已安装 skill 已备份至临时目录 `crosschat-local-upgrade-9qTSwE`。通过检查后 npm pack 到该目录，使用精确 tgz 本机安装（不发布、忽略生命周期脚本），再执行 install-skills。包内、Codex 和 Claude 三份 skill 的全部八个文件与项目源 SHA-256 一致，Markdown 内链均可达；主文件约 2KB，原入口约 7.3KB。
 
 本次不修改用户 Codex/Claude 配置，不发布 npm 包，不部署远端服务。正式流程失败时使用此备份还原安装与 skill，再定位失败。
