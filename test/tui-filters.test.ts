@@ -119,6 +119,8 @@ describe('resource-neutral filters and read-only actions', () => {
       data = { ...data, rows: [], completeness: 'partial' }; await controller.refresh();
       controller.handleKey({ name: 'i' });
       expect(controller.getSnapshot().detail).toMatchObject({ title: '完整读取信息', fields: [{ value: 'third unavailable，其他来源已完成' }] });
+      clipboard.mockClear(); controller.handleKey({ name: 'y' });
+      await vi.waitFor(() => expect(clipboard).toHaveBeenCalledWith('third unavailable，其他来源已完成', expect.any(AbortSignal)));
     } finally { controller.dispose(); }
   });
 
@@ -211,6 +213,28 @@ describe('resource-neutral filters and read-only actions', () => {
       controller.handleKey({ name: 'home' }); controller.handleKey({ name: 'enter' });
       expect(controller.getSnapshot()).toMatchObject({ mode: 'list', selectedFacets: { provider: 'all' } });
       expect(controller.getSnapshot().rows.map((row) => row.id)).toEqual(['codex/opaque/named-b']);
+    } finally { controller.dispose(); }
+  });
+
+  it('rejects a confirmation whose authority removes a field instead of dropping its fixed value', async () => {
+    const adopt: TuiAction = {
+      id: 'adopt', label: '收编', shortcut: 'a', ownerResourceId: 'sessions', kind: 'form', mutation: true, selectionPolicy: 'required', returnPolicy: 'restore',
+      fields: [{ id: 'starId', label: '目标星', required: true, initialValue: 'fixed-star', options: [{ value: 'fixed-star', label: '原星' }] }],
+    };
+    let initial = true;
+    const mutate = vi.fn(async () => ({}));
+    const controller = createTuiController({ registry: registry([adopt]), contexts: [{ id: 'local', label: '本机', kind: 'local' }], adapters: { sessions: {
+      read: async () => page(), checkAction: async () => initial ? { enabled: true } : { enabled: true, fields: [] }, mutate,
+    } } });
+    try {
+      await enter(controller); controller.handleKey({ name: 'a' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.checking).toBe(false));
+      initial = false;
+      controller.handleKey({ name: 'enter' }); controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.error).toContain('字段'));
+      expect(controller.getSnapshot().overlay?.fields).toMatchObject([{ id: 'starId', value: 'fixed-star' }]);
+      expect(controller.getSnapshot().overlay?.targetId).toBe('third/opaque/anonymous');
+      expect(mutate).not.toHaveBeenCalled();
     } finally { controller.dispose(); }
   });
 });
