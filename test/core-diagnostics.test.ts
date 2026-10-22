@@ -110,6 +110,10 @@ describe('isolated cancellable diagnostics', () => {
       }).outputText;
       writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
       writeFileSync(join(dir, 'query.js'), built);
+      const modelSource = readFileSync(new URL('../src/application/diagnostics/model.ts', import.meta.url), 'utf8');
+      writeFileSync(join(dir, 'model.js'), ts.transpileModule(modelSource, {
+        compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2023 },
+      }).outputText);
       const childScript = `require('node:fs').writeFileSync(${JSON.stringify(marker)},String(process.pid));setInterval(()=>{},1000);`;
       const isolatedScript = `import {spawnSync} from 'node:child_process'; spawnSync(process.execPath,['-e',${JSON.stringify(childScript)}]);`;
       writeFileSync(join(dir, 'worker.js'), isolatedScript);

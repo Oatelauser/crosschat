@@ -174,7 +174,7 @@ describe('safe isolated diagnostics for observation pages', () => {
     expect(deps.env.FIXTURE_ENV).toBe('bound');
     expect(deps.tcpDir).toBe(join(directory, '.crosschat', 'tcp'));
     await mkdir(join(directory, '.crosschat', 'outbox'), { recursive: true });
-    await writeFile(join(directory, '.crosschat', 'outbox', 'fixture-thread.json'), JSON.stringify([{ id: 'fixture', parkedAt: now, attempts: 0 }]));
+    await writeFile(join(directory, '.crosschat', 'outbox', 'fixture-thread.json'), JSON.stringify({ items: [{ id: 'fixture', parkedAt: now, attempts: 0 }] }));
     const result = collectDoctorDiagnostics({ ...deps, resolveClaude: () => 'fixture-claude', listClaudeSessions: () => ({ sessions: [], malformed: 0 }),
       codexBin: () => { throw new Error('not installed'); }, repoSkillFiles: () => undefined, probeTcp: () => false });
     const parked = result.groups.flatMap((group) => group.checks).find((check) => check.code === 'outbox-parked');

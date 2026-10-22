@@ -197,11 +197,12 @@ export function collectDoctorDiagnostics(deps: DoctorDeps): DiagnosticResult {
   const parked = deps.listOutbox();
   if (parked.length === 0) add({ code: 'outbox-empty', data: {} });
   else {
-    const watchdog = deps.watchdogRunning?.() ?? watchdogStatus(defaultOutboxDir());
+    const outboxDir = deps.outboxDir ?? defaultOutboxDir();
+    const watchdog = deps.watchdogRunning?.() ?? watchdogStatus(outboxDir);
     const nowMs = deps.now?.() ?? Date.now();
     for (const { threadId, count, oldestParkedAt } of parked) {
       add({ code: 'outbox-parked', data: {
-        threadId, count, watchdogRunning: watchdog.running, mailboxFile: mailboxFileFor(defaultOutboxDir(), threadId),
+        threadId, count, watchdogRunning: watchdog.running, mailboxFile: mailboxFileFor(outboxDir, threadId),
         ...(oldestParkedAt === undefined ? {} : { ageMinutes: Math.max(1, Math.round((nowMs - oldestParkedAt) / 60_000)) }),
       } });
     }

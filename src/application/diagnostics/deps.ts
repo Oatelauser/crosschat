@@ -8,6 +8,7 @@ import { listClaudeSessions } from '../../claude/registry.js';
 import { resolveClaudeExe } from '../../claude/resolve-exe.js';
 import { resolveCodexExecutable } from '../../codex/transport.js';
 import { defaultOutboxDir, outboxSummary } from '../../outbox.js';
+import { watchdogStatus } from '../../watchdog.js';
 
 import type { ClaudeRegistryScan } from '../../claude/registry.js';
 
@@ -26,6 +27,7 @@ export interface DoctorDeps {
   readFile(path: string): string | undefined;
   homeDir(): string;
   listOutbox(): { threadId: string; count: number; oldestParkedAt?: number }[];
+  outboxDir?: string;
   /** Outbox watchdog probe (B12); defaults to the real lockfile check. */
   watchdogRunning?(): { running: boolean; pid?: number };
   /** Clock for parked-age display; defaults to Date.now. */
@@ -48,14 +50,17 @@ export interface DoctorDeps {
   isProcessAlive?(pid: number): boolean;
 }
 
-export function defaultDoctorDeps(): DoctorDeps {
+export function defaultDoctorDeps(options: { home?: string; env?: NodeJS.ProcessEnv } = {}): DoctorDeps {
+  const home = options.home ?? homedir();
+  const env = options.env ?? process.env;
+  const outboxDir = options.home === undefined ? defaultOutboxDir() : join(home, '.crosschat', 'outbox');
   return {
     nodeVersion: process.versions.node,
-    env: process.env,
+    env,
     resolveClaude: () => resolveClaudeExe(),
-    listClaudeSessions: () => listClaudeSessions(),
+    listClaudeSessions: () => listClaudeSessions(join(home, '.claude', 'sessions')),
     codexBin: () => resolveCodexExecutable(),
-    run: (bin, args) => spawnSync(bin, [...args], { encoding: 'utf8' }),
+    run: (bin, args) => spawnSync(bin, [...args], { encoding: 'utf8', env }),
     exists: existsSync,
     readFile: (path) => {
       try {
@@ -64,7 +69,7 @@ export function defaultDoctorDeps(): DoctorDeps {
         return undefined;
       }
     },
-    homeDir: () => homedir(),
+    homeDir: () => home,
     cliVersion: (
       JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')) as { version: string }
     ).version,
@@ -75,8 +80,10 @@ export function defaultDoctorDeps(): DoctorDeps {
         return [];
       }
     },
-    listOutbox: () => outboxSummary(defaultOutboxDir()),
-    tcpDir: join(homedir(), '.crosschat', 'tcp'),
+    listOutbox: () => outboxSummary(outboxDir),
+    outboxDir,
+    watchdogRunning: () => watchdogStatus(outboxDir),
+    tcpDir: join(home, '.crosschat', 'tcp'),
     probeTcp: (host, port) => {
       // 纯 socket connect 探活：子进程跑一段 net.connect，2s 预算内连上即达。
       const script =

@@ -1,10 +1,13 @@
 /** Per-star, per-credential pause evidence; user configuration is never changed. */
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { open, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { MultichatError } from '../errors.js';
 import { readNodeConfig } from './node-config.js';
 import type { BrokerEntry } from './node-config.js';
+import { parseNodeConfig } from './node-config.js';
+import { untilAborted } from '../application/sessions/reading.js';
 
 export interface NodeRevocation {
   starId: string;
@@ -37,6 +40,10 @@ function readMarker(file: string, entry: BrokerEntry, starId?: string): NodeRevo
     if (isMissing(error)) return undefined;
     throw unreadable();
   }
+  return parseMarker(raw, entry, starId);
+}
+
+function parseMarker(raw: unknown, entry: BrokerEntry, starId?: string): NodeRevocation | undefined {
   if (raw === null || typeof raw !== 'object'
     || !('starId' in raw) || typeof raw.starId !== 'string' || raw.starId === ''
     || !('credentialFingerprint' in raw) || raw.credentialFingerprint !== fingerprint(entry.key)
@@ -56,6 +63,56 @@ function readMarker(file: string, entry: BrokerEntry, starId?: string): NodeRevo
     reason: raw.reason,
     pausedAt: raw.pausedAt,
   };
+}
+
+export interface AsyncRevocationReadOptions {
+  signal?: AbortSignal;
+  readText?(path: string, signal?: AbortSignal): Promise<string>;
+  readDirectory?(path: string): Promise<string[]>;
+}
+
+async function boundedMarkerText(path: string, signal?: AbortSignal): Promise<string> {
+  signal?.throwIfAborted();
+  const file = await open(path, 'r');
+  try {
+    const stat = await file.stat();
+    if (!stat.isFile() || stat.size > 2 * 1024 * 1024) throw unreadable();
+    const buffer = Buffer.alloc(Math.min(stat.size + 1, 2 * 1024 * 1024 + 1));
+    const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
+    signal?.throwIfAborted();
+    if (bytesRead > 2 * 1024 * 1024) throw unreadable();
+    return buffer.subarray(0, bytesRead).toString('utf8');
+  } finally { await file.close(); }
+}
+
+/** Same credential evidence as the synchronous owner, with cancellable read-only IO. */
+export async function readNodeRevocationAsync(configFile: string, entry: BrokerEntry, options: AsyncRevocationReadOptions = {}): Promise<NodeRevocation | undefined> {
+  const read = options.readText ?? boundedMarkerText;
+  const readText = (file: string) => untilAborted(read(file, options.signal), options.signal);
+  options.signal?.throwIfAborted();
+  let starId = entry.starId;
+  if (starId === undefined) {
+    try {
+      starId = parseNodeConfig(await readText(configFile), configFile).entries.find((candidate) =>
+        candidate.host === entry.host && candidate.port === entry.port && candidate.key === entry.key)?.starId;
+    } catch { options.signal?.throwIfAborted(); }
+  }
+  const marker = async (file: string, selectedStarId?: string): Promise<NodeRevocation | undefined> => {
+    try { const input: unknown = JSON.parse(await readText(file)); return parseMarker(input, entry, selectedStarId); }
+    catch (error) { options.signal?.throwIfAborted(); if (isMissing(error)) return undefined; throw unreadable(); }
+  };
+  if (starId !== undefined) return marker(markerPath(configFile, entry, starId), starId);
+  let files: string[];
+  try { files = await untilAborted((options.readDirectory ?? readdir)(dirname(configFile)), options.signal); }
+  catch (error) { options.signal?.throwIfAborted(); if (isMissing(error)) return undefined; throw unreadable(); }
+  const prefix = `revoked-${fingerprint(entry.key)}-`;
+  for (const file of files) {
+    options.signal?.throwIfAborted();
+    if (!file.startsWith(prefix) || !/^[a-f0-9]{64}\.json$/.test(file.slice(prefix.length))) continue;
+    const value = await marker(join(dirname(configFile), file));
+    if (value !== undefined) return value;
+  }
+  return undefined;
 }
 
 /** Atomic, owner-readable evidence. Names and payloads contain no credential value. */
