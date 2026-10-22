@@ -151,6 +151,16 @@ describe('read-only local overview', () => {
     expect(JSON.stringify(failed)).not.toContain('private-token');
   });
 
+  it('forwards the native environment policy independently from the crosschat configuration HOME', async () => {
+    const queryDoctor = vi.fn(async () => report);
+    const inherited = await options({ nativeEnvironment: 'inherit', env: { CODEX_HOME: '/fixture/native-codex' }, queryDoctor });
+    await (await create(inherited)).readDoctor({ contextId: 'local' });
+    expect(queryDoctor).toHaveBeenLastCalledWith(expect.objectContaining({ home: inherited.home, nativeEnvironment: 'inherit', env: inherited.env }));
+    const isolated = await options({ queryDoctor });
+    await (await create(isolated)).readDoctor({ contextId: 'local' });
+    expect(queryDoctor).toHaveBeenLastCalledWith(expect.objectContaining({ home: isolated.home, nativeEnvironment: 'isolated' }));
+  });
+
   it('cancels an uncooperative native status source and never publishes a healthy empty replacement', async () => {
     let signal: AbortSignal | undefined;
     const config = await options({ discovery: { execute: async (_request, readOptions) => { signal = readOptions?.signal; return new Promise(() => undefined); } } });
@@ -279,6 +289,21 @@ describe('safe isolated diagnostics for observation pages', () => {
     const check = result.groups[0].checks[0];
     expect(check.code).toBe('codex-unparsed');
     expect(JSON.parse('firstLine' in check.data ? check.data.firstLine : '')).toEqual({ home: directory, profile: directory, codex: join(directory, '.codex'), fixture: 'bound' });
+  });
+
+  it('retains native data environment overrides in inherit mode while binding crosschat sources to the requested HOME', async () => {
+    const directory = await home();
+    const script = join(directory, 'inherited-native-environment.cjs');
+    await writeFile(script, `const data={firstLine:JSON.stringify({home:process.env.HOME,profile:process.env.USERPROFILE,drive:process.env.HOMEDRIVE,path:process.env.HOMEPATH,codex:process.env.CODEX_HOME,sqlite:process.env.CODEX_SQLITE_HOME,claude:process.env.CLAUDE_CONFIG_DIR,crosschat:process.env.CROSSCHAT_DIAGNOSTIC_HOME}),status:0};process.send({groups:[{context:{kind:'environment'},checks:[{code:'codex-unparsed',level:'warn',data}]}],summary:{pass:0,warn:1,error:0,failed:false}});setInterval(()=>{},1000);`);
+    const nativeHome = join(directory, 'native-home');
+    const env = { HOME: nativeHome, USERPROFILE: nativeHome, HOMEDRIVE: 'Z:', HOMEPATH: '\\fixture-native-home', CODEX_HOME: join(directory, 'native-codex'),
+      CODEX_SQLITE_HOME: join(directory, 'native-sqlite'), CLAUDE_CONFIG_DIR: join(directory, 'native-claude') };
+    const result = await queryDoctorDiagnostics({ home: directory, nativeEnvironment: 'inherit', env,
+      createProcess: (spawnOptions) => fork(script, { env: spawnOptions?.env ?? {}, stdio: ['ignore', 'ignore', 'ignore', 'ipc'], detached: process.platform !== 'win32', windowsHide: true }) });
+    const check = result.groups[0].checks[0];
+    expect(JSON.parse('firstLine' in check.data ? check.data.firstLine : '')).toEqual({
+      home: nativeHome, profile: nativeHome, drive: env.HOMEDRIVE, path: env.HOMEPATH, codex: env.CODEX_HOME, sqlite: env.CODEX_SQLITE_HOME, claude: env.CLAUDE_CONFIG_DIR, crosschat: directory,
+    });
   });
 
   it('times out and reaps the query owner instead of leaving a blocked probe alive', async () => {
