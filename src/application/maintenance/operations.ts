@@ -1,13 +1,14 @@
 import { createHash } from 'node:crypto';
-import { lstatSync, readdirSync, rmSync } from 'node:fs';
+import { closeSync, fstatSync, lstatSync, openSync, opendirSync, readSync, readdirSync, rmSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { legacyStateRoots, stateRoot } from '../../state-root.js';
 import { executeCleanup, planCleanup } from '../cleanup/index.js';
 import { defaultInstallSkillsDeps, installSkillDestination, skillDestinations } from './skills.js';
-import { removeUninstallTargets, uninstallServeRunning, uninstallTargets } from './uninstall.js';
+import { removeUninstallTargets, uninstallTargets } from './uninstall.js';
 import type { UninstallEnvironment } from './uninstall.js';
 import { isMaintenanceOperationId, MAINTENANCE_OPERATIONS } from './model.js';
 import type { MaintenanceItem, MaintenanceOperationId, MaintenancePreview, MaintenanceResult, MaintenanceTarget } from './model.js';
+import { TCP_STATUS_FRESH_MS } from '../status/status-files.js';
 
 export interface MaintenanceOperationOptions {
   home: string;
@@ -74,6 +75,79 @@ function verifyCleanupInventory(home: string, root: string): void {
   }
 }
 
+const MAX_INVENTORY_ENTRIES = 10_000;
+const MAX_COPY_DEPTH = 64;
+const MAX_STATUS_BYTES = 2 * 1024 * 1024;
+interface InventoryBudget { entries: number }
+function missing(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
+}
+/** A bounded iterator retains one directory owner and never follows directory links. */
+function directoryEntries(directory: string, budget: InventoryBudget, visit: (path: string) => void): void {
+  const handle = opendirSync(directory);
+  try {
+    for (;;) {
+      const entry = handle.readSync();
+      if (entry === null) return;
+      if (++budget.entries > MAX_INVENTORY_ENTRIES) throw new Error('Maintenance inventory exceeds its entry limit.');
+      visit(join(directory, entry.name));
+    }
+  } finally { handle.closeSync(); }
+}
+/** Verify readable ordinary files without reading skill contents or accepting hard-linked write destinations. */
+function readableFile(file: string, destination = false): void {
+  const entry = lstatSync(file, { bigint: true });
+  if (!entry.isFile() || entry.isSymbolicLink() || (destination && entry.nlink !== 1n)) throw new Error('Maintenance file is not an independent regular file.');
+  const descriptor = openSync(file, 'r');
+  try {
+    const opened = fstatSync(descriptor, { bigint: true });
+    if (!opened.isFile() || opened.ino !== entry.ino || opened.dev !== entry.dev || (destination && opened.nlink !== 1n)) throw new Error('Maintenance file identity changed.');
+  } finally { closeSync(descriptor); }
+}
+function verifySkillTree(directory: string, budget: InventoryBudget, destination = false, depth = 0): void {
+  if (depth > MAX_COPY_DEPTH) throw new Error('Maintenance copy tree exceeds its depth limit.');
+  let entry;
+  try { entry = lstatSync(directory); }
+  catch (error) { if (destination && depth === 0 && missing(error)) return; throw error; }
+  if (!entry.isDirectory() || entry.isSymbolicLink()) throw new Error('Maintenance copy tree contains a directory link or unsupported entry.');
+  directoryEntries(directory, budget, (path) => {
+    const child = lstatSync(path);
+    if (child.isSymbolicLink()) throw new Error('Maintenance copy tree contains a link.');
+    if (child.isDirectory()) verifySkillTree(path, budget, destination, depth + 1);
+    else readableFile(path, destination);
+  });
+}
+function readUninstallStatus(file: string): { state: string; lastUpdated: number } {
+  const entry = lstatSync(file, { bigint: true });
+  if (!entry.isFile() || entry.isSymbolicLink() || entry.size > BigInt(MAX_STATUS_BYTES)) throw new Error('Uninstall service status is not a bounded regular file.');
+  const descriptor = openSync(file, 'r');
+  try {
+    const opened = fstatSync(descriptor, { bigint: true });
+    if (!opened.isFile() || opened.ino !== entry.ino || opened.dev !== entry.dev || opened.size > BigInt(MAX_STATUS_BYTES)) throw new Error('Uninstall service status identity changed.');
+    const buffer = Buffer.alloc(Math.min(Number(opened.size) + 1, MAX_STATUS_BYTES + 1));
+    const bytes = readSync(descriptor, buffer, 0, buffer.length, 0);
+    if (bytes > MAX_STATUS_BYTES) throw new Error('Uninstall service status exceeds its byte limit.');
+    const value: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, bytes)));
+    if (typeof value !== 'object' || value === null || Array.isArray(value) || !('state' in value) || typeof value.state !== 'string'
+      || !('lastUpdated' in value) || typeof value.lastUpdated !== 'string' || !Number.isFinite(Date.parse(value.lastUpdated))) throw new Error('Uninstall service status is malformed.');
+    return { state: value.state, lastUpdated: Date.parse(value.lastUpdated) };
+  } finally { closeSync(descriptor); }
+}
+/** Retain the old freshness decisions, but unknown TUI sources must not authorize recursive deletion. */
+function verifyUninstallStatuses(environment: UninstallEnvironment): boolean {
+  const directory = join(environment.crosschatHome, 'tcp');
+  let running = false;
+  try {
+    directoryEntries(directory, { entries: 0 }, (file) => {
+      const name = file.slice(directory.length + 1);
+      if (name !== 'status-broker.json' && !/^status-node.*\.json$/.test(name)) return;
+      const status = readUninstallStatus(file);
+      if (environment.now() - status.lastUpdated < TCP_STATUS_FRESH_MS && (name !== 'status-broker.json' || status.state === 'running')) running = true;
+    });
+  } catch (error) { if (missing(error)) return running; throw error; }
+  return running;
+}
+
 /** Read-only preview of the current command scopes; never creates paths or repairs data. */
 export function previewMaintenance(operationId: MaintenanceOperationId, options: MaintenanceOperationOptions): MaintenancePreview {
   if (!isMaintenanceOperationId(operationId)) throw new Error('未知维护任务。');
@@ -99,9 +173,10 @@ export function previewMaintenance(operationId: MaintenanceOperationId, options:
     effects.push(`安装源：${env.source}`);
     try {
       for (const target of targets) verifyDirectoryPath(env.home, target.path);
-      const stat = lstatSync(env.source);
-      if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Invalid source');
-    } catch { enabled = false; reason = '技能安装源或目标目录不可完整核验；检查目录链接、类型及访问权限后重新预览。'; }
+      const budget = { entries: 0 };
+      verifySkillTree(env.source, budget);
+      for (const target of targets) verifySkillTree(target.path, budget, true);
+    } catch { enabled = false; reason = '技能安装源或目标子树不可完整核验；检查链接、文件类型、读取权限和目录规模后重新预览（合计至多10000项、64层）。'; }
     effects.push('不会调用npm，不会安装其他工具或修改原生聊天配置。');
   } else {
     targets = uninstallTargets(env.uninstall).map(({ path, label }) => ({ path, label, kind: 'directory' }));
@@ -114,8 +189,12 @@ export function previewMaintenance(operationId: MaintenanceOperationId, options:
       // The legacy serve guard reads tcp snapshots; verify that read path too.
       verifyDirectoryPath(env.home, join(env.uninstall.crosschatHome, 'tcp'));
     } catch { enabled = false; reason = '卸载目标目录不可完整核验；检查目录链接、类型及访问权限后重新预览。'; }
-    if (enabled && uninstallServeRunning(env.uninstall)) {
-      enabled = false; reason = 'crosschat serve 正在运行（或有新鲜节点快照）；先停止对应服务，再重新预览卸载。';
+    if (enabled) {
+      try {
+        if (verifyUninstallStatuses(env.uninstall)) {
+          enabled = false; reason = 'crosschat serve 正在运行（或有新鲜节点快照）；先停止对应服务，再重新预览卸载。';
+        }
+      } catch { enabled = false; reason = '服务状态来源不可完整核验；检查状态快照的格式、大小、链接和读取权限后重新预览卸载。'; }
     }
     effects.push('npm包尚未卸载；本任务不会执行npm。收尾命令：npm uninstall -g @oatelauser/crosschat');
     effects.push('卸载后数据、日志和技能会消失，当前TUI读取结果可能变为未配置。');
