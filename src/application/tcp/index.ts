@@ -216,6 +216,13 @@ export function createTcpApplication(options: TcpApplicationOptions): TcpApplica
     const nodes = observed.map((entry) => entry.node);
     const errors = [...page.errors, ...nodes.flatMap((node) => node.errors)];
     const items = observed.flatMap((entry) => entry.items);
+    // Discovery can be unavailable or omit a persistent session. Only an exact
+    // native member match replaces its roster projection; process references
+    // and other providers never establish that identity.
+    const discoveredMembers = new Set(items.flatMap((item) => item.member ? [item.member.id] : []));
+    for (const member of page.members) {
+      if ((fullMachine === undefined || member.machineId === fullMachine) && !discoveredMembers.has(member.id)) items.push(memberSession(member));
+    }
     const completeness = page.completeness !== 'complete' || nodes.some((node) => node.completeness !== 'complete') ? 'partial' : 'complete';
     return result(items, nodes, completeness, errors);
   }

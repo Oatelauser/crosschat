@@ -189,7 +189,8 @@ export function createSessionMembershipService(options: SessionMembershipOptions
     if (machine === undefined) throw new Rejected('无法核实本机完整机器身份，未发出修改请求', '检查操作系统机器标识的读取权限后重新核验');
     const item = request.op === 'adopt' ? await nativeDetail(request, provider) : undefined;
     assertNodeNotRevoked(configFile, entry);
-    owner.connection = await SenderConn.open(`ws://${entry.host}:${entry.port}`, entry.key, undefined, timeoutMs, request.signal);
+    const host = entry.host.includes(':') && !entry.host.startsWith('[') ? `[${entry.host}]` : entry.host;
+    owner.connection = await SenderConn.open(`ws://${host}:${entry.port}`, entry.key, undefined, timeoutMs, request.signal);
     checkAbort(request.signal);
     if (owner.connection.starId !== request.starId) throw new Rejected('实际连接的星与所选完整星 ID 不一致，已停止操作');
     const target = { entry, machine, provider, connection: owner.connection, item };

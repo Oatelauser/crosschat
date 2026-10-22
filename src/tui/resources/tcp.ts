@@ -55,8 +55,9 @@ function valid(request: TuiReadRequest, owner: ResourceId): boolean {
   return !Object.keys(query).some((key) => !allowed.includes(key)) && !Object.values(query).some((value) => !value || value.length > 65_536)
     && (query.scope === undefined || query.scope === 'members' || query.scope === 'discoverable');
 }
-function invalid(message: string, cancelled = false): TuiPage {
+function invalid(owner: ResourceId, message: string, cancelled = false): TuiPage {
   return { rows: [], completeness: cancelled ? 'cancelled' : 'unavailable', notice: message,
+    presentation: { columns: columns[owner], actions: [infoAction(owner)] },
     detailViews: { info: { title: 'TCP 读取信息', fields: [{ label: '原因', value: message }, { label: '下一步', value: '从 :ctx 或 :stars 重新选择明确的星；不会回落读取或修改其他上下文。' }] } } };
 }
 function readInfo(result: TcpReadResult, additional: readonly TuiField[] = []): TuiReadonlyView {
@@ -147,16 +148,16 @@ export function createTcpResources(options: TcpResourcesOptions): Record<Resourc
     const adapter: TuiResourceAdapter = {
       async read(request) {
         generation++; accepted = undefined;
-        if (!valid(request, owner)) return invalid('TCP 连接或资源范围无效；未执行查询。');
-        if (request.signal.aborted) return invalid('TCP 读取已取消。', true);
+        if (!valid(request, owner)) return invalid(owner, 'TCP 连接或资源范围无效；未执行查询。');
+        if (request.signal.aborted) return invalid(owner, 'TCP 读取已取消。', true);
         const contextId = request.context!.id;
         const query = request.route?.query ?? {};
         const local = request.context!.kind === 'local';
         try {
           if (owner === 'stars') {
             const result = await untilAborted(options.tcp.readStars({ contextId, signal: request.signal }), request.signal);
-            if (request.signal.aborted) return invalid('TCP 读取已取消。', true);
-            if (result.contextId !== contextId || result.items.some((item) => item.contextId !== contextId)) return invalid('星来源返回了其他连接的结果，已拒绝显示。');
+            if (request.signal.aborted) return invalid(owner, 'TCP 读取已取消。', true);
+            if (result.contextId !== contextId || result.items.some((item) => item.contextId !== contextId)) return invalid(owner, '星来源返回了其他连接的结果，已拒绝显示。');
             const entries = definitions(owner);
             return { rows: result.items.map((item) => ({ id: item.id, contextId, cells: { name: item.name ?? '未命名', starId: item.starId, nodes: item.onlineNodes === null ? '未知' : String(item.onlineNodes), health: item.health === 'reachable' ? '可读取<reachable>' : item.health === 'unavailable' ? '不可达<unavailable>' : '尚未核实<unknown>' },
               copyValue: item.starId, copyValues: { target: target(item.id, item.id, item.starId, item.revision) }, searchText: `${item.name ?? ''} ${item.starId} ${item.host} ${item.port}`,
@@ -168,9 +169,9 @@ export function createTcpResources(options: TcpResourcesOptions): Record<Resourc
           }
           if (owner === 'sessions') {
             const result = await untilAborted(options.tcp.readSessions({ contextId, ...(query.starId ? { starId: query.starId } : {}), ...(query.machineId ? { machineId: query.machineId } : {}), scope: query.scope === 'discoverable' ? 'discoverable' : 'members', signal: request.signal }), request.signal);
-            if (request.signal.aborted) return invalid('TCP 会话读取已取消。', true);
-            if (result.contextId !== contextId || result.items.some((item) => item.contextId !== contextId) || (query.starId && result.star?.starId !== query.starId)) return invalid('会话来源返回了其他连接或星的结果，已拒绝显示。');
-            if (!result.star) return { ...invalid('未取得明确的目标星；从 :stars 或 :ctx 重新选择。'), completeness: result.completeness, detailViews: { info: readInfo(result) } };
+            if (request.signal.aborted) return invalid(owner, 'TCP 会话读取已取消。', true);
+            if (result.contextId !== contextId || result.items.some((item) => item.contextId !== contextId) || (query.starId && result.star?.starId !== query.starId)) return invalid(owner, '会话来源返回了其他连接或星的结果，已拒绝显示。');
+            if (!result.star) return { ...invalid(owner, '未取得明确的目标星；从 :stars 或 :ctx 重新选择。'), completeness: result.completeness, detailViews: { info: readInfo(result) } };
             const current = result.star;
             const entries = definitions(owner, query.machineId !== undefined);
             const stateOptions = new Map<string, string>();
@@ -184,11 +185,11 @@ export function createTcpResources(options: TcpResourcesOptions): Record<Resourc
               notice: `${result.items.length} 个已读取会话（默认含匿名）；${result.scope === 'members' ? '星内成员册' : '节点可发现范围'}；星籍在线不代表原生忙闲。` };
           }
           const result = await untilAborted(options.tcp.readStar({ contextId, ...(query.starId ? { starId: query.starId } : {}), signal: request.signal }), request.signal);
-          if (request.signal.aborted) return invalid('TCP 读取已取消。', true);
-          if (result.contextId !== contextId || (query.starId && result.star?.starId !== query.starId)) return invalid('星来源返回了其他连接或目标，已拒绝显示。');
-          if (!result.star) return { ...invalid('未取得明确的目标星；从 :stars 或 :ctx 重新选择。'), completeness: result.completeness, detailViews: { info: readInfo(result) } };
+          if (request.signal.aborted) return invalid(owner, 'TCP 读取已取消。', true);
+          if (result.contextId !== contextId || (query.starId && result.star?.starId !== query.starId)) return invalid(owner, '星来源返回了其他连接或目标，已拒绝显示。');
+          if (!result.star) return { ...invalid(owner, '未取得明确的目标星；从 :stars 或 :ctx 重新选择。'), completeness: result.completeness, detailViews: { info: readInfo(result) } };
           return starPage(owner, result, contextId, local);
-        } catch { return invalid(request.signal.aborted ? 'TCP 读取已取消。' : 'TCP 来源未完成或结果无效；请查看连接后按 r 重试。', request.signal.aborted); }
+        } catch { return invalid(owner, request.signal.aborted ? 'TCP 读取已取消。' : 'TCP 来源未完成或结果无效；请查看连接后按 r 重试。', request.signal.aborted); }
       },
       async checkAction(request) {
         const turn = ++generation; accepted = undefined;
