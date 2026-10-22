@@ -16,5 +16,12 @@ export function inputKeys(input: string, key: Key): readonly TuiKey[] {
   if (special) return [{ name: special, ...modifiers }];
   if (input === '') return [];
   if (key.ctrl || key.meta || key.super || key.hyper) return [{ name: input, text: input, ...modifiers }];
-  return Array.from(segmenter.segment(input), ({ segment }) => ({ name: segment, text: segment, ...modifiers }));
+  const controls: Readonly<Record<string, string>> = {
+    '\r': 'enter', '\n': 'enter', '\r\n': 'enter', '\t': 'tab', '\b': 'backspace', '\u007f': 'backspace',
+  };
+  return Array.from(segmenter.segment(input), ({ segment }) => {
+    if (segment === '\u0003') return { name: 'c', ...modifiers, ctrl: true };
+    const name = controls[segment];
+    return name ? { name, ...modifiers } : { name: segment, text: segment, ...modifiers };
+  });
 }
