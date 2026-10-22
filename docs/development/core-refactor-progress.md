@@ -2,19 +2,19 @@
 
 更新：2026-10-22。工作分支：`codex/core-refactor-pre-tui`。起点：`dfd2362`。
 
-本页保留核心阶段及原生投递的授权/验收记录。后续TUI外壳已于2026-10-22获授权并完成验收；当前范围与下一步以[TUI续接记录](tui-progress.md)为准。
+本页保留核心阶段及原生投递的授权/验收记录。后续TUI外壳及各业务资源已于2026-10-22完成整体开发验收，见[最终验收](tui-final-validation-20261022.md)；当前范围与下一步以[TUI续接记录](tui-progress.md)为准。
 
 ## 当前授权
 
 - 用户要求按排期先完成核心改造：T01、T02、T05、T03、T04、T13。
-- 核心之后用户已单独授权TUI外壳，该项已完成开发验收；后续业务资源等待下一步指令。
+- 核心之后用户逐批授权TUI外壳、业务资源和整体最终验收，均已完成；原活动队列已删除，后续工作等待用户新指令。
 - D01/D02功能方案已由用户确认并实施验收；本次直接升级，无旧端兼容、降级或混合版本支持。
 - 验收通过后从活动队列删除任务及所有引用；保留验收事实。
 
 ## 读取顺序
 
 1. 本记录：当前状态和下一步。
-2. `docs/wayfinder/tui-implementation-tasks.md`：仅加载当前任务细节。
+2. `docs/development/tui-progress.md`：后续TUI状态、规格和最终验收入口。
 3. `docs/development/code-standards.md`：涉及代码时。
 4. `docs/research/pre-tui-architecture-audit-20261021.md`：需要背景证据时。
 

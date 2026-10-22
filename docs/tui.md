@@ -133,6 +133,8 @@ SSH发现和体检均由所选Host当前配置决定的远端用户执行。doct
 
 星默认节点列表，v切全星会话；默认范围为册内成员，b才读取节点可发现的非归档会话，包括未入册与匿名会话。每行保留所属节点，Enter下钻；按最多三节点并发读完分页，离线/单源错误保留部分结果，Esc返回保留选择和筛选。完整发现手动刷新，不在后台反复扫描原生会话。
 
+完整发现仍保留没有被原生结果精确命中的持久册位，包含离线或读取失败节点；这些行保留星籍、不虚构原生忙闲。空列表或已选星失联时，i仍能查看原因与具体下一步，不把无法读取误报为另一颗星。
+
 机器列表每两秒刷新一次只读快照，保留当前选择，实际绑定/上线后才显示机器；详情、输入、帮助、确认和秘密结果期间暂停，离开释放旧查询。Ctrl+C可暂停，r恢复。该快照不记录管理审计；原list-nodes/list-members审计保持。
 
 所有写动作先预览并重新核对。删星列完整静态影响并要求名称确认；删除使用确认版本，在broker或冷事务同一步核验。凭证替换、label复用、机器绑定变化或删星影响新增都会拒绝；不回落其他选择器，不自动重试。撤钥立即使相应既有连接失效，保留原生聊天与永久册位。多把钥匙绑定同机时，机器页不会把单次撤钥冒充移除整机，需到keys逐把确认。
@@ -156,3 +158,5 @@ SSH发现和体检均由所选Host当前配置决定的远端用户执行。doct
 `src/tui/`的展示只依赖controller快照。资源、列、动作和帮助共用登记；业务由可取消的Adapter提供，新Provider原生差异留在应用适配层。终端框架仅在 `tui` 命令动态加载。
 
 执行 `npm run check` 验证规范、依赖方向、构建和隔离测试。Windows真实终端验收另运行 `node test/helpers/tui-pty-validation.mjs`（外壳）、`node test/helpers/tui-sessions-pty-validation.mjs`（本机会话）、`node test/helpers/tui-observations-pty-validation.mjs`（观察）、`node test/helpers/tui-operations-ssh-pty-validation.mjs`（操作/SSH）与 `node test/helpers/tui-tcp-pty-validation.mjs`（TCP）。工装使用ConPTY、临时HOME、受控文件和注入的原生来源/剪贴板/操作接口；不访问真实会话、起停真实服务或连接远端。实际证据见[开发与验收记录](development/tui-progress.md)。
+
+跨资源单进程主链另运行 `node test/helpers/tui-final-pty-validation.mjs`，覆盖本机→SSH→私密TCP导入及真实ctx重读→TCP→本机返回。整体开发验收结果、修复及环境边界见[最终验收记录](development/tui-final-validation-20261022.md)。
