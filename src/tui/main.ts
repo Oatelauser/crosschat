@@ -71,13 +71,19 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
       const initial = controller.getSnapshot();
       let previousSelectedId = initial.selectedId;
       let previousContextId = initial.route.contextId;
+      let previousResourceId = initial.route.resourceId;
+      let previousMode = initial.mode;
       let selectedContextId: string | undefined;
       const unsubscribe = controller.subscribe(() => {
         const snapshot = controller.getSnapshot();
         if (snapshot.route.contextId && snapshot.route.contextId !== previousContextId) selectedContextId = snapshot.route.contextId;
-        if (snapshot.route.resourceId === 'ctx' && snapshot.selectedId !== previousSelectedId) selectedContextId = snapshot.selectedId;
-        previousSelectedId = snapshot.selectedId;
+        if (snapshot.route.resourceId === 'ctx') {
+          if (snapshot.mode === 'list' && previousMode === 'list' && previousResourceId === 'ctx' && snapshot.selectedId !== previousSelectedId) selectedContextId = snapshot.selectedId;
+          previousSelectedId = snapshot.selectedId;
+        }
         previousContextId = snapshot.route.contextId;
+        previousResourceId = snapshot.route.resourceId;
+        previousMode = snapshot.mode;
       });
       let instance: ReturnType<typeof ink.render>;
       try {

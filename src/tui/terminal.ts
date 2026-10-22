@@ -36,6 +36,7 @@ export async function runTerminalSession(options: TerminalOptions): Promise<numb
   let code: number | undefined;
   let resolveExit!: () => void;
   let restored = false;
+  let closed = false;
   const exit = new Promise<void>((resolve) => { resolveExit = resolve; });
   const finish = (result: number): void => {
     if (code !== undefined) return;
@@ -67,12 +68,21 @@ export async function runTerminalSession(options: TerminalOptions): Promise<numb
   stdin.on('error', fail);
   stdout.on('error', fail);
   try {
-    mounted = await options.mount({ signal: controller.signal, exit: stop, fail });
-    // Attach both handlers even if exit happened while mounting, avoiding a late rejection.
-    void mounted.done.then(stop, fail);
+    const mounting = Promise.resolve(options.mount({ signal: controller.signal, exit: stop, fail }));
+    void mounting.then((instance) => {
+      // Observe completion even if mount settles after this owner has already exited.
+      void instance.done.then(stop, fail);
+      if (closed) {
+        // A late instance owns only its own resources; never restore an old terminal snapshot here.
+        void Promise.resolve().then(() => instance.dispose()).catch(() => {});
+      } else {
+        mounted = instance;
+      }
+    }, fail).catch(fail);
     await exit;
   } catch { fail(); }
   finally {
+    closed = true;
     controller.abort();
     try { await mounted?.dispose(); } catch { code = 1; }
     restore();

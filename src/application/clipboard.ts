@@ -30,23 +30,27 @@ export async function copyText(value: string, options: ClipboardOptions = {}): P
       clearTimeout(timer);
       options.signal?.removeEventListener('abort', abort);
     };
-    const finish = (ok: boolean): void => {
+    const finish = (ok: boolean, closed = false): void => {
       if (settled) return;
       settled = true;
       cleanup();
-      if (ok) resolve(); else reject(new Error('无法复制到系统剪贴板，请检查剪贴板服务后重试。'));
+      if (ok) resolve();
+      else {
+        if (!closed) {
+          try { child.kill(); } catch { /* The process may have already exited. */ }
+          try { input.destroy(); } catch { /* The input may have already closed. */ }
+        }
+        reject(new Error('无法复制到系统剪贴板，请检查剪贴板服务后重试。'));
+      }
     };
     const close = (code: unknown): void => {
-      finish(code === 0);
+      finish(code === 0, true);
+      // Keep error guards through shutdown, then release every listener owned by this operation.
       child.off('error', failed);
       input.off('error', failed);
     };
     const failed = (): void => finish(false);
-    const abort = (): void => {
-      child.kill();
-      input.destroy();
-      finish(false);
-    };
+    const abort = (): void => finish(false);
     const timer = setTimeout(abort, options.timeoutMs ?? 5000);
     child.once('close', close);
     child.on('error', failed);
