@@ -15,6 +15,7 @@ import type { CollectionResult, ServiceSnapshot } from '../queries/services.js';
 import type { Completeness } from '../sessions/model.js';
 import type { OutboxMetadataResult } from './communications.js';
 import { queryOutbox, summarizeOutbox } from './communications.js';
+import { parseWatchdogEvidence } from './watchdog.js';
 import { parseDiscoveryResponse } from '../discovery/boundary.js';
 import { sessionKey } from '../sessions/model.js';
 import type { DiscoverySession } from '../discovery/model.js';
@@ -149,12 +150,7 @@ export function createLocalOverview(options: OverviewOptions): LocalOverview {
 
   async function watchdog(signal?: AbortSignal): Promise<{ value: WatchdogObservation; errors: QueryError[] }> {
     const file = join(baseDir, 'outbox', 'watchdog.lock');
-    const result = await readParsed(file, (text) => {
-      const parts = text.trim().split(/\s+/);
-      const pid = Number(parts[0]); const heartbeatAt = Number(parts[1]);
-      if (parts.length !== 2 || !Number.isSafeInteger(pid) || pid <= 0 || !Number.isFinite(heartbeatAt) || heartbeatAt < 0) throw new Error('Invalid watchdog evidence.');
-      return { pid, heartbeatAt };
-    }, { signal, readText: readMetadata, now });
+    const result = await readParsed(file, parseWatchdogEvidence, { signal, readText: readMetadata, now });
     if (result.state === 'missing') return { value: { running: false, evidence: 'missing' }, errors: [] };
     if (!result.value) return { value: { running: null, evidence: 'unavailable' }, errors: result.errors };
     const fresh = now() - result.value.heartbeatAt < 90_000;

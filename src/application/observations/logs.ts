@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises';
+import { lstat, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { communicationPairId } from './communications.js';
 import { decodeRef } from '../../ref.js';
@@ -107,6 +107,14 @@ export async function queryManagedLog(options: ManagedLogOptions): Promise<Manag
     const source = catalog.find((entry) => entry.id === (options.sourceId ?? 'send-log'));
     if (!source) return { ...empty, sources: catalog, errors: [{ source: 'logs', kind: 'unavailable', message: '此日志来源未登记', nextStep: '按 t 选择已登记的本机日志来源' }] };
     if ((options.sessionRef || options.pairId) && !source.id.startsWith('send-log')) return { ...empty, source, sources: catalog, errors: [{ source: source.path, kind: 'unavailable', message: '此来源没有可验证的会话或通信对元数据', nextStep: '切换到投递日志查看精确关联，或从 :logs 查看该来源全部内容' }] };
+    try {
+      const metadata = await lstat(source.path);
+      checkAbort(options.signal);
+      if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error('Managed log is not a regular source file');
+    } catch (error) {
+      const issue = queryError(source.path, error);
+      return { ...empty, source, sources: catalog, completeness: issue.kind === 'cancelled' ? 'cancelled' : 'unavailable', errors: [...listing.errors, issue] };
+    }
     const page = await queryLogWindow({ file: source.path, maxBytes: options.maxBytes, signal: options.signal, now: options.now, previous: options.previous?.cursor });
     checkAbort(options.signal);
     const epoch = (options.previous?.epoch ?? 0) + (page.rotated ? 1 : 0);

@@ -10,6 +10,7 @@ import { resolveCodexExecutable } from '../../codex/transport.js';
 import { defaultOutboxDir, outboxSummary } from '../../outbox.js';
 import { watchdogStatus } from '../../watchdog.js';
 import { isProcessAlive } from '../../platform/process-inspector.js';
+import { parseWatchdogEvidence } from '../observations/watchdog.js';
 
 import type { ClaudeRegistryScan } from '../../claude/registry.js';
 
@@ -82,10 +83,9 @@ function scopedOutbox(directory: string): { threadId: string; count: number; old
 function scopedWatchdog(directory: string): { running: boolean; pid?: number } {
   const text = scopedRead(join(directory, 'watchdog.lock'));
   if (text === undefined) return { running: false };
-  const fields = text.trim().split(/\s+/);
-  const pid = Number(fields[0]); const at = Number(fields[1]);
-  if (fields.length !== 2 || !Number.isSafeInteger(pid) || pid <= 0 || !Number.isFinite(at) || at < 0) throw new DoctorSourceReadError();
-  return Date.now() - at < 90_000 || isProcessAlive(pid) ? { running: true, pid } : { running: false };
+  let evidence: ReturnType<typeof parseWatchdogEvidence>;
+  try { evidence = parseWatchdogEvidence(text); } catch { throw new DoctorSourceReadError(); }
+  return Date.now() - evidence.heartbeatAt < 90_000 || isProcessAlive(evidence.pid) ? { running: true, pid: evidence.pid } : { running: false };
 }
 
 export interface DoctorDeps {
