@@ -19,7 +19,7 @@ Codex CLI 0.163.0；临时 CODEX_HOME、工作目录、独立 WebSocket app-serv
 - 忙时 queue 先由生产 adapter 在写入前返回 BUSY，再由生产 park/runWatchdog 投递。56 次尝试中 55 次仅检查忙碌，1 次 accepted；输入在原 task_complete 后才进入历史，新任务独立回复，outbox 清空。
 - 反例：直接忙时 turn/start 返回已有 activeTurnId，queue marker 被原任务消费；据此删除旧“服务端已经排队”的假设，两种 Codex 宿主统一先本地寄存。
 
-原始无密钥证据：临时目录 `crosschat-cli-live-NAKB9X/validation-summary.json`，11 个断言全部为 true，另有 `evidence.json` / `outcomes.jsonl`。受控 TUI/server 已停止，复制的 auth.json 与 WebSocket token 已精确删除。
+原始无密钥证据：临时目录 `crosschat-cli-live-NAKB9X/validation-summary.json`，11 个断言全部为 true，另有 `evidence.json` / `outcomes.jsonl`。受控 TUI/server 已停止，复制的 auth.json、WebSocket token、测试脚本和临时配置/标志已精确删除；CLI 自动生成的插件、SQLite 缓存和 rollout 留在隔离临时目录，未递归清理用户或系统目录。
 
 ## Claude 原生调度
 
@@ -44,8 +44,9 @@ Claude Code 2.1.307；临时 CLAUDE_CONFIG_DIR 和工作目录，原生 sdk-cli/
 - 早期临时原生试验 FULL_BUSY_D / FULL_IDLE_E 已实际进入当前聊天，完整信封字节及按 c6 回信到 Claude 均核对；临时注入不作为最终生产安装验收。
 - 正式全局 CLI + 同步 skill：Desktop→交互 Claude turn10/c6 完整信封，Claude 实际运行 `crosschat send --conversation c6 --delivery steer` 回信 turn11，完整信封已实际出现在当前聊天，追加于原活跃轮。原始回执 unconfirmed，约 2.5 秒后原生 user 历史才落盘；原目标绑定摘要复查 confirmed，没有重发。
 - busy queue：正式来信 turn13 在原轮 active 时 parked；原 task_complete 为 01:55:12.114Z，新 task_started 为 01:55:12.587Z，完整 user 信封 01:55:12.613Z 才进入新轮。目标 outbox 清空，原摘要复查 confirmed；Claude 01:55:38.136Z 实际收到默认 queue 的 turn14 ACK。前后元数据证据在 `crosschat-desktop-acceptance-cGO8sO/busy-queue-before.json` / `busy-queue-after.json`，当前界面也实际收到。
-- idle queue：原交互 Claude 的临时脚本从生产 adapter 于 01:58:20.855Z / 01:58:21.706Z 取得两次连续 idle，activeTurnId 均为 null；仅一次正式 CLI 发送，exit0、delivered、queued=false。turn16 完整信封实际唤醒当前聊天，root 默认 queue 回信 turn17。证据为 `crosschat-desktop-acceptance-cGO8sO/idle-queue-result.json`，历史与交互 Claude 收到 ACK 的复核另存 after 文件。
-- 最后一场 idle steer 待完成；已让原交互 Claude 执行同一临时脚本 mode steer，待当前轮完成后确认两次 idle 再发送。续接核对结果后清理脚本、移除已验收活动项并完成收尾。
+- idle queue：原交互 Claude 的临时脚本从生产 adapter 于 01:58:20.855Z / 01:58:21.706Z 取得两次连续 idle，activeTurnId 均为 null；仅一次正式 CLI 发送，exit0、delivered、queued=false。01:58:24.669Z 新 task_started，01:58:24.687Z 收到 turn16 完整信封，实际唤醒当前聊天。root 默认 queue 回信 turn17，Claude 01:58:53.646Z 实际收到；目标 outbox0，原摘要复查 confirmed。
+- idle steer：02:00:01.191Z / 02:00:02.041Z 两次连续 idle 后仅一次正式 CLI 发送，exit0、delivered、queued=false。02:00:04.865Z 新 task_started，02:00:04.880Z 收到 turn19 完整信封，实际唤醒当前聊天；root 默认 queue 回信 turn20，Claude 02:00:59.774Z 实际收到，目标 outbox0、原摘要复查 confirmed。
+- 两个直接空闲场景的 `idle-queue-result.json` / `idle-steer-result.json` 和对应 `after.json` 位于 `crosschat-desktop-acceptance-cGO8sO`。忙时和直接空闲四场均为正式全局 CLI、真实当前 Desktop 与交互 Claude，完整信封、c6 回复、实际界面和历史均已核对。临时 `idle-send.mjs` 已精确删除，仅保留验收证据。
 
 ## 隔离回归与 skill
 
@@ -62,4 +63,6 @@ Claude Code 2.1.307；临时 CLAUDE_CONFIG_DIR 和工作目录，原生 sdk-cli/
 
 升级前旧包、三种 CLI shim、Codex/Claude 已安装 skill 已备份至临时目录 `crosschat-local-upgrade-9qTSwE`。通过检查后 npm pack 到该目录，使用精确 tgz 本机安装（不发布、忽略生命周期脚本），再执行 install-skills。包内、Codex 和 Claude 三份 skill 的全部八个文件与项目源 SHA-256 一致，Markdown 内链均可达；主文件约 2KB，原入口约 7.3KB。
 
-本次不修改用户 Codex/Claude 配置，不发布 npm 包，不部署远端服务。正式流程失败时使用此备份还原安装与 skill，再定位失败。
+最终检查：本机安装的全部 200 个 dist 文件与项目构建 SHA-256 一致，当前目标 outbox 为 0，正式临时发送脚本不存在。
+
+本次不修改用户 Codex/Claude 配置，不发布 npm 包，不部署远端服务。正式流程均已通过，保留本地改动和安装；旧版备份仍可用于还原。

@@ -1,6 +1,6 @@
 # 核心改造续接记录
 
-更新：2026-10-21。工作分支：`codex/core-refactor-pre-tui`。起点：`dfd2362`。
+更新：2026-10-22。工作分支：`codex/core-refactor-pre-tui`。起点：`dfd2362`。
 
 ## 当前授权
 
@@ -28,14 +28,18 @@
 
 核心改造及D01/D02获批功能变更均已完成；所有已验收任务及其依赖引用已从活动队列删除。剩余仅TUI任务，等待用户另行确认。应用接口总览见 `docs/development/core-api.md`。
 
-### 2026-10-22 原生投递修复（进行中）
+### 2026-10-22 原生投递修复（已验收）
 
 - 用户先授权通信试验，再要求需求/设计；现明确要求向本机 Desktop 会话 `TUI`（`01a15d5d-6d04-7b11-9ccb-39611d84b68b`）咨询影响，“没问题就开工”。该会话已完成只读评估，结论为“无阻断，可按上述范围实施”；仅授权本次投递修复，不授权 TUI 页面实现。
 - 用户已确认：逐条 `--delivery queue|steer`、默认 queue，skill 必须教 AI；steer 目标空闲时直接开新轮；回复独立选择、默认 queue 不继承。用户明确要求通过当前会话使用 crosschat 与指定会话聊天时，代理代发必须显式 steer；普通自主协作沿用逐条选择。
-- 已有临时真实试验：Claude 测试会话通过 Desktop 原生 IPC 投递生产完整信封，忙时追加与连续两次 idle 后新轮唤醒均实际进入本聊天，按 `c6` 提示回信也实际进入 Claude；生产代码/配置当时未变，临时脚本已删除。证据仍在临时目录 `crosschat-full-envelope-Yn6Cvd`；本轮正式实现另需记录最终测试与三端验收。
+- 先前临时真实试验：Claude 测试会话通过 Desktop 原生 IPC 投递生产完整信封，忙时追加与连续两次 idle 后新轮唤醒均实际进入本聊天，按 `c6` 提示回信也实际进入 Claude；生产代码/配置当时未变，临时脚本已删除。原始证据保留于 `crosschat-full-envelope-Yn6Cvd`；正式实现验收如下。
 - 约束：保持同一 Codex Provider/完整 thread ID，Desktop 与 CLI 端点独立，发现与发送一起接通；只读查询不补投。模式须贯穿应用、SSH/TCP 与队列；写入不明不自动重发。回执绑定目标及本条输入，不能按复用 `c6` 或已有 turn ID 猜确认。
 - 现有短柄信封不包含完整 ref，而回执探针按完整 ref 搜索，已实证导致实际收信仍 `unconfirmed`。本轮修正首次及迟到复查，不扩改 ref/nonce 或轮次状态竞态。
-- Codex CLI、Claude 的原生模式需另做真实验证；Claude `now` 在本机源码会中断，不能直接当作追加。禁止将未验能力写成已支持。
+- Codex CLI 0.163.0 的真实 remote TUI/PTY 四场通过；实测否定旧“忙时 turn/start 会独立排队”的假设，queue 在写入前进入本机 outbox，原轮结束后 worker 才创建新任务。55 秒工具不中断，steer 在原任务生效。
+- Claude 2.1.307 的原生 SDK 调度四场通过：queue→later、steer→next，不使用会中断工具的 now。原交互「测试会话」2.1.306 与当前 Desktop 正式完整信封往返四场也通过：busy steer 可见、busy queue 原轮结束后新轮唤醒、idle queue/steer 两次 idle 后各唤醒一次；均按 c6 回信并核对 Claude 实际收到。初次回执可能迟于原生历史落盘，原摘要迟到复查均 confirmed，不重发。
+- 产品提交 `e9874f8` 的 `npm run check` 退出0：1094 通过、11 跳过（总1105），82 文件通过、3 跳过；lint、98模块/290边运行时依赖图和构建通过。普通隔离测试与原生 live 验收分开。
+- crosschat skill 已改成约2KB的必读规则/场景目录与七个章节，十案独立 forward 检查后修正导航与规则冲突；三处安装的全部八文件与源一致、内链可达。已备份旧包/skill，再由本地 tgz 安装正式 CLI 并同步双侧 skill，未改用户配置或远端服务。
+- 已移除本次完成活动项；测试脚本、受控进程及临时认证已清理，证据与还原备份保留。完整环境、边界和验收顺序见 [原生投递验收](native-delivery-validation-20261022.md)。TUI 实现仍等待用户另行确认。
 
 ### 本轮功能验收（2026-10-21 23:04，Asia/Shanghai）
 
