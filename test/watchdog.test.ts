@@ -39,6 +39,37 @@ describe('watchdogStatus', () => {
 });
 
 describe('runWatchdog', () => {
+  it('stops after an uncertain write instead of replaying or spinning forever', async () => {
+    const dir = freshDir();
+    park(dir, 'uncertain', { envelope: 'input', toName: 'target', deliveryMode: 'queue' });
+    let calls = 0;
+    let sleeps = 0;
+    await runWatchdog(dir, join(freshDir(), 'send-log.jsonl'), {
+      deliverCodex: async () => { calls++; throw new MultichatError('CODEX_WRITE_UNCERTAIN', 'unknown'); },
+      err: () => undefined,
+      sleep: async () => { if (++sleeps > 1) throw new Error('must not keep polling'); },
+    });
+    expect(calls).toBe(1);
+    expect(sleeps).toBe(0);
+  });
+
+  it('rechecks explicit queue messages promptly and preserves their mode', async () => {
+    const dir = freshDir();
+    park(dir, 'queue', { envelope: 'input', toName: 'target', deliveryMode: 'queue' });
+    const modes: unknown[] = [];
+    const sleeps: number[] = [];
+    await runWatchdog(dir, join(freshDir(), 'send-log.jsonl'), {
+      deliverCodex: async (_id, _text, _timeout, options) => {
+        modes.push(options?.mode);
+        if (modes.length === 1) throw new MultichatError('CODEX_THREAD_BUSY_TIMEOUT', 'busy');
+      },
+      err: () => undefined,
+      sleep: async (ms) => { sleeps.push(ms); },
+    });
+    expect(modes).toEqual(['queue', 'queue']);
+    expect(sleeps).toEqual([1_000]);
+  });
+
   it('drains until empty with backoff sleeps, then removes its lock', async () => {
     const dir = freshDir();
     const sendLogFile = join(freshDir(), 'send-log.jsonl');
