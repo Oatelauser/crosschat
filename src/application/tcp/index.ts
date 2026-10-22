@@ -92,21 +92,24 @@ export function createTcpApplication(options: TcpApplicationOptions): TcpApplica
   }
 
   async function observe(target: TcpResolvedTarget, request: TcpStarRequest): Promise<TcpStarResult> {
+    let invalidMetadata = false;
     try {
       const raw = await bounded(request.signal, timeoutMs, (signal) => options.readSnapshot ? options.readSnapshot(target, signal) : readTcpStarSnapshot(target, signal, { ...options, timeoutMs }));
+      invalidMetadata = true;
       const snapshot = parseStarSnapshot(raw);
       if ((request.starId !== undefined && snapshot.starId !== request.starId) || (target.starId !== undefined && snapshot.starId !== target.starId)
         || snapshot.role !== target.role || (target.kind === 'tcp' && !snapshot.live)) throw new Error('Wrong star snapshot scope');
       return project(snapshot, target);
     } catch {
       if (request.signal?.aborted) return empty(request, 'cancelled', [cancelled(request)]);
+      const kind = invalidMetadata ? 'malformed' : 'unavailable';
       if (target.kind === 'local' && target.star) {
         const result = project(buildStarSnapshot(target.star, { role: 'broker-owner', onlineMachines: new Set(), live: false }), target);
         if (result.star) result.star.health = 'unavailable';
-        result.errors.push(issue(target.star.starId ?? request.contextId, '本机 broker 实时快照不可用；仅保留静态信息，活性未知。'));
+        result.errors.push(issue(target.star.starId ?? request.contextId, '本机 broker 实时快照不可用；仅保留静态信息，活性未知。', kind));
         return result;
       }
-      return empty(request, 'unavailable', [issue(request.contextId, '无法读取所选星的有效完整快照；权限、身份或接口尚未核实。')]);
+      return empty(request, 'unavailable', [issue(request.contextId, '无法读取所选星的有效完整快照；权限、身份或接口尚未核实。', kind)]);
     }
   }
   async function resolve(request: TcpContextRequest) {

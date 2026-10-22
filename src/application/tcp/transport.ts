@@ -56,7 +56,9 @@ export async function readTcpStarSnapshot(target: TcpResolvedTarget, signal: Abo
     const file = join(options.baseDir, 'tcp', 'status-broker.json');
     const status = await readParsed(file, (raw): Record<string, unknown> => {
       const value: unknown = JSON.parse(raw);
-      if (!isRecord(value) || typeof value.state !== 'string') throw new Error('Invalid broker status');
+      if (!isRecord(value) || (value.state !== 'running' && value.state !== 'stopped')
+        || typeof value.pid !== 'number' || !Number.isSafeInteger(value.pid) || value.pid < 1
+        || typeof value.lastUpdated !== 'string' || !Number.isFinite(Date.parse(value.lastUpdated))) throw new Error('Invalid broker status');
       return value;
     }, { signal, now: options.now, readText: options.readText ?? ((path, current) => readTcpText(options.baseDir, path, current)) });
     if (status.state === 'cancelled') checkAbort(signal);
