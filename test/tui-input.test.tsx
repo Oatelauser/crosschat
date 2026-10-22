@@ -109,13 +109,13 @@ describe('Ink input batches', () => {
   });
 
   it('handles command text and Enter combined in one real useInput batch', async () => {
-    const controller = createTuiController({ registry: createResourceRegistry(), contexts: [], adapters: {} });
+    const controller = createTuiController({ registry: createResourceRegistry(), contexts: [{ id: 'local', kind: 'local', label: 'isolated local' }], adapters: {} });
     const ready = vi.fn();
     const app = render(<InputHarness controller={controller} ready={ready} />);
     try {
       await vi.waitFor(() => expect(ready).toHaveBeenCalled());
       app.stdin.write(':sessions\r');
-      await vi.waitFor(() => expect(controller.getSnapshot().route.resourceId).toBe('sessions'));
+      await vi.waitFor(() => expect(controller.getSnapshot().route).toEqual({ resourceId: 'sessions', contextId: 'local' }));
       expect(controller.getSnapshot().mode).toBe('list');
     } finally { controller.dispose(); app.unmount(); }
   });
