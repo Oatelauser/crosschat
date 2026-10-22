@@ -169,6 +169,13 @@ describe('local TUI sessions resource', () => {
     expect(page.rows[0].actionAvailability?.copy).toMatchObject({ enabled: false });
   });
 
+  it('uses a complete Codex UUID when its native name collides with another supported tool', async () => {
+    const uuid = '12345678-1234-1234-1234-123456789abc';
+    const page = await read(createSessionsResource({ discovery: endpoint([response([session('claude', 'other', '同名'), session('codex', uuid, '同名')])]) }).adapter);
+    expect(page.rows[1].copyValue).toBe(`codex/${uuid}`);
+    expect(resolveTargetByName(page.rows[1].copyValue ?? '', [{ sessionId: 'other', name: '同名' }], [{ id: uuid, name: '同名' }])).toMatchObject({ side: 'codex', thread: { id: uuid } });
+  });
+
   it('copies reserved-looking exact names only as existing local resolver addresses', async () => {
     const names = ['tcp:star:machine:name', 'ssh:host', 'claude/person', 'codex/person'];
     const items = names.map((name, index) => session('claude', `native-${index}`, name));
@@ -233,6 +240,20 @@ describe('TUI session membership actions', () => {
     expect(management.check).toHaveBeenCalledWith({ op: 'adopt', ref: item.ref, starId: 'star-full-one', signal });
     expect(await adapter.mutate?.(request)).toMatchObject({ message: '已完成' });
     expect(management.apply).toHaveBeenCalledWith({ op: 'adopt', ref: item.ref, starId: 'star-full-one', signal });
+    expect(await adapter.checkAction?.({ ...request, values: { starId: 'star-invalid' } })).toMatchObject({ enabled: false });
+    expect(management.check).toHaveBeenCalledOnce();
+  });
+
+  it('marks cancellation while waiting for target metadata instead of publishing a complete refresh', async () => {
+    const management = membership();
+    let targetStarted = false;
+    management.listTargets.mockImplementation(async () => { targetStarted = true; return new Promise(() => {}); });
+    const controller = new AbortController();
+    const pending = read(createSessionsResource({ discovery: endpoint([response([session('claude', 'one')])]), membership: management }).adapter, controller.signal);
+    await vi.waitFor(() => expect(targetStarted).toBe(true));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    controller.abort();
+    expect(await pending).toMatchObject({ completeness: 'cancelled' });
   });
 
   it('preserves fields on rejection or an uncertain acknowledgement and never reports success', async () => {
