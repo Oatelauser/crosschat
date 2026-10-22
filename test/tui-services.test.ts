@@ -32,6 +32,14 @@ describe('TUI service tasks', () => {
     expect(f.execute).not.toHaveBeenCalled();
   });
 
+  it('shows process existence and actual connection readiness in separate bounded columns', async () => {
+    const f = fixture();
+    f.read.mockResolvedValue({ items: [{ ...item, state: 'running', readiness: 'starting' }], completeness: 'complete', observedAt: 100, errors: [] });
+    const page = await f.adapter.read(request());
+    expect(f.resource.columns.find((column) => column.id === 'readiness')).toMatchObject({ label: '就绪', width: expect.any(Number) });
+    expect(page.rows[0].cells).toMatchObject({ state: '进程运行<running>', readiness: '启动中<starting>' });
+  });
+
   it('rechecks the fixed service target and keeps an unconfirmed outcome in the confirmation flow', async () => {
     const f = fixture();
     const selected = await mutation(f);
