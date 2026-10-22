@@ -80,7 +80,11 @@ function bodyLines(snapshot: TuiSnapshot, resource: TuiResource, width: number, 
     for (const row of table.rows.slice(snapshot.scrollOffset, snapshot.scrollOffset + height - 1)) {
       list.push({ text: `${row.id === snapshot.selectedId ? '› ' : '  '}${row.text}`, selected: row.id === snapshot.selectedId });
     }
-  } else list.push({ text: snapshot.loading ? '正在读取… Ctrl+C 取消' : snapshot.completeness === 'unavailable' ? '资源尚未启用 · :ctx 返回连接' : snapshot.filter ? '无匹配项 · Esc 清除筛选' : snapshot.completeness === 'partial' ? '部分结果 · 当前无可显示项' : '暂无项目', tone: 'gray' });
+  } else {
+    const filtered = Boolean(snapshot.filter) || snapshot.filters?.some((filter) => (snapshot.selectedFacets?.[filter.id] ?? filter.defaultValue) !== filter.defaultValue);
+    const unavailable = resource.unavailableReason ? '资源尚未启用 · :ctx 返回连接' : '读取不可用 · i查看读取信息 / r刷新';
+    list.push({ text: snapshot.loading ? '正在读取… Ctrl+C 取消' : snapshot.completeness === 'unavailable' ? unavailable : snapshot.completeness === 'cancelled' ? '读取已取消 · 当前结果不完整，r重新读取' : snapshot.completeness === 'partial' ? '部分结果 · 当前无可显示项，i查看读取信息' : filtered ? '无匹配项 · Esc 清除筛选' : '暂无项目', tone: 'gray' });
+  }
   if (snapshot.overlay) {
     if (!formFits(snapshot)) return [...list.slice(0, 2), { text: '请放大终端至24列×16行后编辑；Esc取消', tone: 'yellow' }];
     return [...list.slice(0, 2), ...formLines(snapshot.overlay, width, height - 2)];
@@ -115,7 +119,7 @@ export function TuiScreen({ snapshot, resource, version }: { snapshot: TuiSnapsh
   }
   const body = bodyLines(snapshot, resource, width, bodyHeight);
   while (body.length < bodyHeight) body.push({ text: '' });
-  const completeness = { complete: '完整', partial: '部分结果', unavailable: '尚未启用', cancelled: '已取消' }[snapshot.completeness];
+  const completeness = { complete: '完整', partial: '部分结果', unavailable: '不可用', cancelled: '已取消' }[snapshot.completeness];
   const footer: Line[] = [
     { text: `${snapshot.rows.length ? `${snapshot.selectedIndex + 1}/${snapshot.rows.length}` : '0项'}${snapshot.totalRows !== undefined && snapshot.totalRows !== snapshot.rows.length ? ` / 发现${snapshot.totalRows}项` : ''} · ${completeness}${snapshot.loading ? ' · 读取中' : ''}${snapshot.filter ? ` · 筛选 ${snapshot.filter}` : ''}`, tone: 'gray' },
     { text: snapshot.choice?.options[snapshot.choice.selectedIndex]?.reason ?? snapshot.error ?? snapshot.overlay?.error ?? snapshot.notice ?? '', tone: snapshot.error || snapshot.overlay?.error ? 'red' : 'yellow' },
