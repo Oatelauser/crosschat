@@ -45,6 +45,7 @@ interface ListState {
   detailViews?: TuiPage['detailViews'];
   routeChoices?: TuiPage['routeChoices'];
   canFollow?: boolean;
+  autoRefresh?: boolean;
   following?: boolean;
   registry?: ResourceRegistry;
   actionRoutes?: TuiPage['actionRoutes'];
@@ -215,6 +216,7 @@ export function createTuiController(options: TuiControllerOptions) {
       scrollOffset: page.scrollOffset, filter: page.filter, input, detail, help, overlay, choice, loading,
       filters: page.filters, selectedFacets: Object.fromEntries(page.selectedFacets ?? []), sampledAt: page.sampledAt, totalRows: page.rows.length,
       following: page.canFollow && options.adapters[page.route.resourceId]?.watch ? page.following ?? true : undefined,
+      autoRefreshing: page.autoRefresh !== undefined && options.adapters[page.route.resourceId]?.watch ? page.autoRefresh : undefined,
       error: page.error, notice: page.notice, completeness: page.completeness, actions: actionEntries(mode), viewport: { ...viewport },
       resource: pageResource(), result,
     };
@@ -232,6 +234,7 @@ export function createTuiController(options: TuiControllerOptions) {
     page.sampledAt = next.sampledAt; page.filters = next.filters;
     page.actionAvailability = next.actionAvailability; page.detailViews = next.detailViews;
     page.routeChoices = next.routeChoices; page.canFollow = next.canFollow;
+    page.autoRefresh = next.autoRefresh;
     page.registry = registry; page.actionRoutes = next.actionRoutes; page.contextSummary = next.contextSummary;
     if (next.canFollow) page.following ??= true;
     page.selectedFacets ??= new Map();
@@ -244,7 +247,7 @@ export function createTuiController(options: TuiControllerOptions) {
   }
   function syncWatch() {
     const adapter = options.adapters[page.route.resourceId];
-    const enabled = mode === 'list' && !loading && !activeRead && page.canFollow && page.following && adapter?.watch && (page.route.contextId === undefined || currentContext());
+    const enabled = mode === 'list' && !loading && !activeRead && (page.autoRefresh || page.canFollow && page.following) && adapter?.watch && (page.route.contextId === undefined || currentContext());
     if (!enabled) { if (activeWatch) stopWatch(); return; }
     if (activeWatch && watchOwner === page) return;
     stopWatch();
@@ -873,11 +876,12 @@ export function createTuiController(options: TuiControllerOptions) {
     if (mode === 'result') { resultKey(key); return; }
     if (mode === 'form') { formKey(key); return; }
     if (shortcut(key) === 'Ctrl+C') {
+      if (page.autoRefresh !== undefined) page.autoRefresh = false;
       if (page.canFollow) page.following = false;
       if (mode === 'input') inputKey({ name: 'escape' });
       if (mode === 'choice') { mode = 'list'; choice = undefined; publish(); }
       if (activeRead) cancelRead(true);
-      else if (activeWatch) { page.following = false; stopWatch(); page.notice = '跟随已暂停'; publish(); }
+      else if (activeWatch) { page.following = false; stopWatch(); page.notice = page.autoRefresh === false ? '自动刷新已暂停；r重新读取并恢复。' : '跟随已暂停'; publish(); }
       else options.onExit?.();
       return;
     }

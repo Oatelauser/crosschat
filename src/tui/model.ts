@@ -83,6 +83,8 @@ export interface TuiPage {
   detailViews?: Readonly<Record<string, TuiReadonlyView>>;
   routeChoices?: Readonly<Record<string, TuiRouteChoice>>;
   canFollow?: boolean;
+  /** Refreshes a normal resource list without log tail selection/scroll behavior. */
+  autoRefresh?: boolean;
   presentation?: TuiPagePresentation;
   actionRoutes?: Readonly<Record<string, TuiRoute>>;
   contextSummary?: { label?: string; permissionLabel?: string };
@@ -146,6 +148,7 @@ export interface TuiSnapshot {
   selectedFacets?: Readonly<Record<string, string>>;
   sampledAt?: number;
   following?: boolean;
+  autoRefreshing?: boolean;
   loading: boolean;
   totalRows?: number;
   error?: string;

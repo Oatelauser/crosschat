@@ -80,6 +80,14 @@ function groupPresence<T extends { presence: keyof typeof presenceLabels }>(item
   const order = { online: 0, offline: 1, unknown: 2 };
   return items.toSorted((left, right) => order[left.presence] - order[right.presence]);
 }
+function refreshPause(signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const finish = () => { clearTimeout(timer); signal.removeEventListener('abort', finish); resolve(); };
+    const timer = setTimeout(finish, 2000);
+    signal.addEventListener('abort', finish, { once: true });
+    if (signal.aborted) finish();
+  });
+}
 function filters(items: readonly { providerId: string | null; name: string | null }[], presence = false): TuiFilter[] {
   return [
     { id: 'provider', label: '工具', mode: 'select', defaultValue: '', options: [{ value: '', label: '所有工具' }, ...[...new Set(items.flatMap((item) => item.providerId === null ? [] : [item.providerId]))].sort().map((providerId) => ({ value: providerId, label: providerId }))] },
@@ -204,6 +212,15 @@ export function createTcpResources(options: TcpResourcesOptions): Record<Resourc
         return { selectedId: result.selectedId, message: result.secret ? '凭证已生成；请在一次性结果中分发，离开后不再回显。' : result.message, ...(result.secret ? { result: sensitiveResult(result.secret) } : {}) };
       },
     };
+    if (owner === 'machines') adapter.watch = async (request, publish) => {
+      while (!request.signal.aborted) {
+        const page = await adapter.read(request);
+        if (request.signal.aborted) return;
+        publish(page);
+        if (!page.autoRefresh) return;
+        await refreshPause(request.signal);
+      }
+    };
     return { resource, adapter };
   }
   function sessionRow(item: TcpSession, current: TcpStar, contextId: string): TuiRow {
@@ -237,7 +254,7 @@ export function createTcpResources(options: TcpResourcesOptions): Record<Resourc
     else rows = result.credentials.map((item): TuiRow => ({ id: item.id, contextId, cells: { name: item.label, kind: item.kind === 'admin' ? '星管理钥<admin>' : '节点钥匙<node>', machine: item.kind === 'admin' ? '管理权限（非机器）' : item.machineName ?? (item.machineId === null ? '尚未绑定机器' : item.machineId.slice(0, 8)), mid8: item.machineId?.slice(0, 8) ?? '—', addedAt: item.addedAt },
       copyValue: item.label, copyValues: { target: target(item.id, item.id, current.starId, item.revision) }, searchText: `${item.label} ${item.kind} ${item.machineId ?? ''} ${item.machineName ?? ''} ${item.addedAt}`,
       actionAvailability: item.kind === 'admin' && current.role !== 'broker-owner' ? { 'revoke-credential': disabled('星管理员不能撤销同侪管理钥。', '请 broker 主在本机接入凭证列表撤销该管理钥。') } : {}, detail: credentialDetails(item) }));
-    return { rows, completeness: result.completeness, sampledAt: result.observedAt, presentation: { columns: columns[owner], actions: entries }, contextSummary: { label: `${current.name ?? current.starId} (${current.starId})`, permissionLabel: roleLabels[current.role] },
+    return { rows, completeness: result.completeness, sampledAt: result.observedAt, ...(owner === 'machines' ? { autoRefresh: true } : {}), presentation: { columns: columns[owner], actions: entries }, contextSummary: { label: `${current.name ?? current.starId} (${current.starId})`, permissionLabel: roleLabels[current.role] },
       ...(owner === 'members' ? { filters: filters(result.members, true) } : {}), actionAvailability: { ...roleAvailability(current.role, entries, !!options.management, local), ...(owner === 'machines' ? { logs: disabled('TCP 节点没有提供可读取的日志来源。', '切到该节点本机或 SSH 连接查看 crosschat 日志。') } : {}) },
       actionRoutes: { sessions: route('sessions', contextId, current.starId, { scope: 'members' }), members: route('members', contextId, current.starId), keys: route('keys', contextId, current.starId) },
       detailViews: { info: readInfo(result, [{ label: '当前星', value: `${current.name ?? '未命名'} (${current.starId})` }, { label: '本次权限', value: roleLabels[current.role] }, { label: '机器与凭证', value: '已绑定机器、未使用节点钥匙与管理钥分开显示；只读页不会生成或回显秘密。' }]) },
