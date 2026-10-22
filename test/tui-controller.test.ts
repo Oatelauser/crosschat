@@ -423,4 +423,71 @@ describe('TUI interaction controller', () => {
       expect(controller.getSnapshot().rows).toEqual([third]);
     } finally { controller.dispose(); }
   });
+
+  it('applies global Ctrl+C in input and help while keeping form cancellation local', async () => {
+    for (const key of [':', '?']) {
+      const onExit = vi.fn();
+      const controller = createTuiController({ registry: registry(), contexts, adapters: {}, onExit });
+      try {
+        controller.handleKey({ name: key });
+        if (key === ':') controller.handleKey({ name: 'text', text: 'draft' });
+        controller.handleKey({ name: 'c', ctrl: true });
+        expect(onExit).toHaveBeenCalledOnce();
+        expect(controller.getSnapshot().filter).toBe('');
+      } finally { controller.dispose(); }
+    }
+    for (const key of [':', '?']) {
+      let signal: AbortSignal | undefined;
+      const onExit = vi.fn();
+      const controller = createTuiController({ registry: registry(), contexts, adapters: { sessions: { read: (request) => {
+        signal = request.signal; return new Promise<TuiPage>(() => {});
+      } } }, onExit });
+      try {
+        command(controller, 'sessions'); controller.handleKey({ name: key });
+        controller.handleKey({ name: 'c', ctrl: true });
+        expect(signal?.aborted).toBe(true);
+        expect(controller.getSnapshot()).toMatchObject({ loading: false, completeness: 'cancelled' });
+        expect(onExit).not.toHaveBeenCalled();
+      } finally { controller.dispose(); }
+    }
+  });
+
+  it('selects a created stable result after refreshing the owner list', async () => {
+    let rows: readonly TuiRow[] = [third];
+    const create: TuiAction = { ...rename, id: 'create', label: '创建测试项', shortcut: 'a', selectionPolicy: 'none', returnPolicy: 'select-result', fields: [{ id: 'name', label: '名称', required: true }] };
+    const controller = createTuiController({ registry: mutationRegistry(create), contexts, adapters: { sessions: {
+      read: async () => ({ rows, completeness: 'complete' }), checkAction: async () => ({ enabled: true }), mutate: async (request) => {
+        rows = [...rows, { id: 'new/stable/identifier', cells: { name: request.values.name } }];
+        return { selectedId: 'new/stable/identifier', message: '已创建' };
+      },
+    } } });
+    try {
+      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      controller.handleKey({ name: 'a' }); await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('form'));
+      controller.handleKey({ name: 'text', text: '新项' }); controller.handleKey({ name: 'enter' });
+      controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().notice).toBe('已创建'));
+      expect(controller.getSnapshot()).toMatchObject({ mode: 'list', selectedId: 'new/stable/identifier', selectedIndex: 1 });
+    } finally { controller.dispose(); }
+  });
+
+  it('requires a second explicit confirmation when authority reports a changed impact', async () => {
+    let impact = ['影响一项'];
+    const mutate = vi.fn(async () => ({}));
+    const controller = createTuiController({ registry: mutationRegistry({ ...rename, fields: [] }), contexts, adapters: { sessions: {
+      read: async () => ({ rows: [third], completeness: 'complete' }), checkAction: async () => ({ enabled: true, impact }), mutate,
+    } } });
+    try {
+      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      controller.handleKey({ name: 'e' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.impact).toContain('影响一项'));
+      impact = ['影响两项']; controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.error).toContain('影响范围已更新'));
+      expect(controller.getSnapshot().overlay).toMatchObject({ focusIndex: 0, phase: 'confirming' });
+      expect(controller.getSnapshot().overlay?.impact).toContain('影响两项');
+      expect(mutate).not.toHaveBeenCalled();
+      controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(mutate).toHaveBeenCalledOnce());
+    } finally { controller.dispose(); }
+  });
 });
