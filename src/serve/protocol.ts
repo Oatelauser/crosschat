@@ -387,6 +387,24 @@ export interface MemberRemoveResultFrame {
   error?: string;
 }
 
+/** 精确删册独立于 CLI 名字/前缀选择器；完整身份在 broker 一次核验。 */
+export interface MemberRemoveExactFrame {
+  op: 'member-remove-exact';
+  id: string;
+  sessionId: string;
+  machine: string;
+  tool: string;
+}
+
+export interface MemberRemoveExactResultFrame {
+  op: 'member-remove-exact-result';
+  id: string;
+  ok: boolean;
+  removed: boolean;
+  code?: string;
+  error?: string;
+}
+
 /**
  * 034 管理连接挑战（broker→客户端）：一次性 nonce，客户端以
  * auth-proof = HMAC-SHA256(星管理钥, nonce) 的 hex 应答。nonce 每连接每挑战
@@ -482,6 +500,8 @@ export type Frame =
   | MembersResultFrame
   | MemberRemoveFrame
   | MemberRemoveResultFrame
+  | MemberRemoveExactFrame
+  | MemberRemoveExactResultFrame
   | AuthChallengeFrame
   | AuthProofFrame
   | AdminOpFrame
@@ -513,6 +533,8 @@ const OPS = new Set([
   'members-result',
   'member-remove',
   'member-remove-result',
+  'member-remove-exact',
+  'member-remove-exact-result',
   'auth-challenge',
   'auth-proof',
   'admin-op',
@@ -531,6 +553,17 @@ export function parseFrame(text: string): Frame | undefined {
   const op = (obj as { op?: unknown }).op;
   if ((op === 'send' || op === 'deliver') && 'delivery' in obj && !isDeliveryMode(obj.delivery)) return undefined;
   if (op === 'credential-revoked' && !isCredentialRevoked(obj as Record<string, unknown>)) return undefined;
+  if (op === 'member-remove-exact' || op === 'member-remove-exact-result') {
+    if (!('id' in obj) || typeof obj.id !== 'string' || obj.id.length === 0 || obj.id.length > 256) return undefined;
+    if (op === 'member-remove-exact') {
+      if (!('sessionId' in obj) || typeof obj.sessionId !== 'string' || obj.sessionId.length === 0 || obj.sessionId.length > 4096) return undefined;
+      if (!('machine' in obj) || typeof obj.machine !== 'string' || obj.machine.length === 0 || obj.machine.length > 128) return undefined;
+      if (!('tool' in obj) || typeof obj.tool !== 'string' || sanitizeTool(obj.tool) !== obj.tool) return undefined;
+    } else {
+      if (!('ok' in obj) || typeof obj.ok !== 'boolean' || !('removed' in obj) || typeof obj.removed !== 'boolean') return undefined;
+      if (('code' in obj && typeof obj.code !== 'string') || ('error' in obj && typeof obj.error !== 'string')) return undefined;
+    }
+  }
   if ((op === 'discover-query' || op === 'discover-result' || op === 'discover-cancel') && !isDiscoveryEnvelope(obj as Record<string, unknown>)) return undefined;
   return typeof op === 'string' && OPS.has(op) ? (obj as Frame) : undefined;
 }

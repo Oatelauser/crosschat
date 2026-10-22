@@ -1,5 +1,5 @@
 import type {
-  TuiAction, TuiActionEntry, TuiActionRequest, TuiContext, TuiDetail, TuiInput, TuiKey, TuiMode,
+  TuiAction, TuiActionEntry, TuiActionRequest, TuiContext, TuiDetail, TuiFormField, TuiInput, TuiKey, TuiMode,
   TuiOverlay, TuiPage, TuiResourceAdapter, TuiRoute, TuiRow, TuiSnapshot,
 } from '../model.js';
 import type { ResourceRegistry } from '../resources/registry.js';
@@ -401,17 +401,14 @@ export function createTuiController(options: TuiControllerOptions) {
     const context = currentContext();
     overlayAction = action; overlayOwner = page;
     formPinnedImpact = [`上下文: ${context?.label ?? '当前连接'}${context?.target ? ` (${context.target})` : ''}`, ...(row ? [`目标: ${row.cells.name ?? row.id} (${row.id})`] : [])];
-    const fields = (action.fields ?? []).map((field) => {
-      const editor = editText({ text: '', cursor: 0 }, { type: 'insert', text: field.initialValue ?? row?.cells[field.id] ?? '' });
-      return { id: field.id, label: field.label, value: editor.text, cursor: editor.cursor, secret: field.secret };
-    });
     formKnownSecrets.clear();
-    for (const field of fields) if (field.secret && field.value) formKnownSecrets.add(field.value);
     overlay = {
       actionId: action.id, ownerResourceId: action.ownerResourceId, targetId: row?.id, contextId: page.route.contextId,
-      title: action.label, fields, focusIndex: 0, phase: fields.length ? 'editing' : 'confirming',
+      title: action.label, fields: [], focusIndex: 0, phase: 'confirming',
       impact: [...formPinnedImpact, ...(action.impact ?? [])], confirmationDefault: 'cancel', scrollOffset: 0, checking: true,
     };
+    updateFormFields(action.fields ?? []);
+    overlay = { ...overlay!, phase: overlay!.fields.length ? 'editing' : 'confirming' };
     const generation = ++formGeneration;
     const controller = new AbortController();
     formController = controller; formPending = true; checkingSubmit = false; writeIssued = false; formManualScroll = false;
@@ -421,6 +418,7 @@ export function createTuiController(options: TuiControllerOptions) {
       try {
         const result = await adapter.checkAction!(formRequest(controller.signal));
         if (disposed || generation !== formGeneration || !overlay) return;
+        if (result.fields) updateFormFields(result.fields);
         overlay = { ...overlay, impact: [...formPinnedImpact, ...(result.impact ?? action.impact ?? [])].map(formText), error: result.enabled ? undefined : formText([result.reason ?? '当前权限不允许此操作', result.nextStep].filter(Boolean).join('；')) };
         if (overlay.error) formManualScroll = false;
       } catch (error) {
@@ -438,11 +436,7 @@ export function createTuiController(options: TuiControllerOptions) {
     const owner = overlayOwner;
     const adapter = options.adapters[action.ownerResourceId];
     if (!adapter?.checkAction || !adapter.mutate) return;
-    const missing = (action.fields ?? []).find((field) => field.required && !overlay!.fields.find((value) => value.id === field.id)?.value.trim());
-    if (missing) {
-      overlay = { ...overlay, error: `请填写${missing.label}`, focusIndex: overlay.fields.findIndex((field) => field.id === missing.id), phase: 'editing' };
-      formManualScroll = false; ensureFormVisible(); publish(); return;
-    }
+    if (!validateFormValues()) { publish(); return; }
     const generation = formGeneration;
     const controller = formController;
     formPending = true; checkingSubmit = true;
@@ -450,7 +444,9 @@ export function createTuiController(options: TuiControllerOptions) {
     try {
       const permission = await adapter.checkAction(formRequest(controller.signal));
       if (disposed || generation !== formGeneration || !overlay) return;
+      if (permission.fields) updateFormFields(permission.fields);
       if (!permission.enabled) throw new Error([permission.reason ?? '当前权限不允许此操作', permission.nextStep].filter(Boolean).join('；'));
+      if (!validateFormValues()) return;
       const impact = [...formPinnedImpact, ...(permission.impact ?? action.impact ?? [])].map(formText);
       if (JSON.stringify(impact) !== JSON.stringify(overlay.impact)) {
         overlay = { ...overlay, impact, focusIndex: overlay.fields.length, phase: 'confirming', error: '影响范围已更新，请核对后再次确认。' };
@@ -493,6 +489,37 @@ export function createTuiController(options: TuiControllerOptions) {
     }
   }
   function formPageSize() { return Math.max(1, viewport.rows - 12); }
+  function updateFormFields(definitions: readonly TuiFormField[]) {
+    if (!overlay || !overlayAction) return;
+    const previous = overlay.fields;
+    const target = overlayOwner?.rows.find((row) => row.id === overlay!.targetId);
+    const fields = definitions.map((field) => {
+      const existing = previous.find((value) => value.id === field.id);
+      const candidate = existing?.value ?? field.initialValue ?? own(target?.cells, field.id) ?? field.options?.find((option) => option.enabled !== false)?.value ?? '';
+      const editor = editText({ text: '', cursor: 0 }, { type: 'insert', text: candidate });
+      const value = field.options ? candidate : editor.text;
+      if (field.secret && value) formKnownSecrets.add(value);
+      return { id: field.id, label: field.label, value, cursor: field.options ? 0 : existing?.cursor ?? editor.cursor, secret: field.secret, options: field.options?.map((option) => ({ ...option })) };
+    });
+    overlayAction = { ...overlayAction, fields: definitions };
+    const focusIndex = Math.min(overlay.focusIndex, fields.length + 1);
+    overlay = { ...overlay, fields, focusIndex, phase: focusIndex < fields.length ? 'editing' : overlay.phase };
+  }
+  function validateFormValues(): boolean {
+    if (!overlay || !overlayAction) return false;
+    for (const [index, definition] of (overlayAction.fields ?? []).entries()) {
+      const field = overlay.fields.find((value) => value.id === definition.id);
+      const value = field?.value ?? '';
+      const option = definition.options?.find((entry) => entry.value === value);
+      const error = definition.options && (!option || option.enabled === false) ? `请重新选择${definition.label}的可用选项${option?.reason ? `：${option.reason}` : ''}`
+        : definition.required && !value.trim() ? `请填写${definition.label}` : undefined;
+      if (error) {
+        overlay = { ...overlay, error: formText(error), focusIndex: index, phase: 'editing' };
+        formManualScroll = false; ensureFormVisible(); return false;
+      }
+    }
+    return true;
+  }
   function ensureFormVisible() {
     if (!overlay) return;
     const lines = formContentLines(overlay, viewport.columns);
@@ -542,6 +569,19 @@ export function createTuiController(options: TuiControllerOptions) {
         formManualScroll = false; ensureFormVisible(); publish();
       }
       return;
+    }
+    const focused = overlay.fields[overlay.focusIndex];
+    if (focused.options) {
+      const available = focused.options.filter((option) => option.enabled !== false);
+      if (!available.length || !['↑', '↓', '←', '→', 'Space', 'Home', 'End'].includes(pressed)) return;
+      const direction = ['↑', '←'].includes(pressed) ? -1 : 1;
+      const current = available.findIndex((option) => option.value === focused.value);
+      const index = pressed === 'Home' ? 0 : pressed === 'End' ? available.length - 1 : current < 0 ? (direction > 0 ? 0 : available.length - 1) : (current + direction + available.length) % available.length;
+      const value = available[index].value;
+      const fields = overlay.fields.map((field, fieldIndex) => fieldIndex === overlay!.focusIndex ? { ...field, value, cursor: 0 } : field);
+      if (focused.secret && value) formKnownSecrets.add(value);
+      overlay = { ...overlay, fields, error: undefined };
+      formManualScroll = false; ensureFormVisible(); publish(); return;
     }
     const event = editEvent(key);
     if (!event) return;
@@ -594,7 +634,7 @@ export function createTuiController(options: TuiControllerOptions) {
     }
     if (action.kind === 'copy') { void copy(action); return; }
     if (action.kind === 'filter') { openFacet(action); return; }
-    if (action.kind === 'form') { openForm(action); return; }
+    if (action.kind === 'form') { openForm({ ...action, fields: availability.fields ?? action.fields, impact: availability.impact ?? action.impact }); return; }
     if (action.kind === 'navigate') {
       const row = selectedRow();
       if (action.id === 'enter-context' && row) {
@@ -636,7 +676,8 @@ export function createTuiController(options: TuiControllerOptions) {
       page.selectedFacets ??= new Map(); page.selectedFacets.set(filter.id, next.value); publish(); return;
     }
     cancelWork(); mode = 'choice';
-    choice = { filterId: filter.id, title: filter.label, options: filter.options, selectedIndex: Math.max(0, filter.options.findIndex((option) => option.value === current)), scrollOffset: 0 };
+    const options = filter.options.some((option) => option.value === current) ? filter.options : [...filter.options, { value: current, label: current, enabled: false, reason: '此筛选值已不在当前来源中，请选择其他选项' }];
+    choice = { filterId: filter.id, title: filter.label, options, selectedIndex: Math.max(0, options.findIndex((option) => option.value === current)), scrollOffset: 0 };
     ensureChoiceVisible(); publish();
   }
   function ensureChoiceVisible() {

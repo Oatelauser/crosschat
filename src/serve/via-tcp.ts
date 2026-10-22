@@ -21,7 +21,7 @@ import type { SendArgs, SendDeps, SendResult } from '../application/send/types.j
 import { resolveDeliveryMode } from '../delivery-mode.js';
 import { formatSendResult } from '../application/send/format.js';
 import { CAP_CHALLENGE_AUTH, CAP_MULTI_STAR, encodeFrame, ERR, hasCap, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
-import type { AdminOpResultFrame, AuthChallengeFrame, ErrorFrame, FileResultFrame, Frame, InfoFrame, MemberRemoveResultFrame, ReceiptFrame, RosterMachine, StatusPayload, StatusResultFrame } from './protocol.js';
+import type { AdminOpResultFrame, AuthChallengeFrame, ErrorFrame, FileResultFrame, Frame, InfoFrame, MemberRemoveExactResultFrame, MemberRemoveResultFrame, ReceiptFrame, RosterMachine, StatusPayload, StatusResultFrame } from './protocol.js';
 import { defaultBaseDir, tcpDir } from './registry.js';
 import { formatBrokerEntry, readNodeConfig } from './node-config.js';
 import type { BrokerEntry } from './node-config.js';
@@ -603,10 +603,22 @@ export async function requestMemberRemove(
   }
 }
 
-/**
- * 034 远程管理 op 传输腿：已认证连接（星钥=成员 / 星管理钥=管理员）上一问一答
- * admin-op 帧。error 帧按码重抛（ADMIN_REQUIRED/BAD_AUTH 教学语原样直达）。
- */
+/** 精确删册在调用方拥有的连接上一问一答；取消和关闭由调用方收口。 */
+export async function requestMemberRemoveExact(
+  conn: SenderConn,
+  target: { sessionId: string; machine: string; tool: string },
+  timeoutMs = 8_000,
+): Promise<MemberRemoveExactResultFrame> {
+  const id = randomUUID();
+  await conn.send({ op: 'member-remove-exact', id, ...target });
+  const frame = await conn.waitFor((candidate) =>
+    (candidate.op === 'member-remove-exact-result' || candidate.op === 'error') && candidate.id === id, timeoutMs);
+  if (frame.op === 'error') throw new MultichatError(frame.code, frame.message);
+  if (frame.op !== 'member-remove-exact-result') throw new MultichatError('TCP_TRANSPORT_FAILED', '精确删册回执形状异常');
+  return frame;
+}
+
+/** 已认证连接上的远程管理 op；error 帧保留既有错误码。 */
 export async function requestAdminOp(
   conn: SenderConn,
   action: string,

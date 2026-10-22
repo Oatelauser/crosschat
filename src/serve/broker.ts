@@ -47,6 +47,7 @@ import type {
   StatusResultFrame,
   MemberRemoveFrame,
   MemberRemoveResultFrame,
+  MemberRemoveExactFrame,
 } from './protocol.js';
 import {
   addStarTo,
@@ -955,6 +956,10 @@ export class Broker {
       this.onMemberRemove(session, frame);
       return;
     }
+    if (frame.op === 'member-remove-exact') {
+      this.onMemberRemoveExact(session, frame);
+      return;
+    }
     // 其余帧型（info/receipt/deliver）服务端无行为
   }
 
@@ -1182,6 +1187,24 @@ export class Broker {
     if (removed.length > 0) this.persistRoster(star);
     reply(true, removed, removed.length === 0 ? `成员 ${target} 本不在册（幂等成功）` : undefined);
     this.log(`member-remove ${target}：删 ${removed.length} 条`);
+  }
+
+  private onMemberRemoveExact(session: Session, frame: MemberRemoveExactFrame): void {
+    const star = this.starOf(session);
+    if (star === undefined) return;
+    const matches = star.roster.filter((entry) => entry.sessionId === frame.sessionId);
+    const entry = matches.length === 1 ? matches[0] : undefined;
+    const machine = normalizeMid(frame.machine);
+    if (entry === undefined || !/^[0-9a-fA-F-]+$/.test(frame.machine) || machine.length !== 32 || entry.machine !== machine || entry.tool !== frame.tool) {
+      this.send(session.ws, { op: 'member-remove-exact-result', id: frame.id, ok: false, removed: false,
+        code: 'TARGET_CHANGED', error: '册位的完整会话、机器或工具身份已改变，请刷新后重新确认' });
+      return;
+    }
+    star.roster.splice(star.roster.indexOf(entry), 1);
+    const owner = star.online.get(entry.machine);
+    if (owner !== undefined && owner !== session) this.send(owner.ws, { op: 'member-remove', target: entry.sessionId });
+    this.persistRoster(star);
+    this.send(session.ws, { op: 'member-remove-exact-result', id: frame.id, ok: true, removed: true });
   }
 
   private async onConnect(session: Session, frame: ConnectFrame): Promise<void> {

@@ -3,7 +3,8 @@ import type { DiscoveryEndpoint, DiscoveryProvider, DiscoverySession } from '../
 import { sessionKey } from '../../application/sessions/model.js';
 import type { Completeness, SourceError } from '../../application/sessions/model.js';
 import { untilAborted } from '../../application/sessions/reading.js';
-import type { TuiAction, TuiActionAvailability, TuiPage, TuiReadonlyView, TuiResource, TuiResourceAdapter, TuiRow } from '../model.js';
+import type { MembershipRequest, MembershipTargets, SessionMembershipService } from '../../application/session-membership/index.js';
+import type { TuiAction, TuiActionAvailability, TuiActionRequest, TuiFormField, TuiPage, TuiReadonlyView, TuiResource, TuiResourceAdapter, TuiRow } from '../model.js';
 import { createStatusRegistry } from './status.js';
 import type { StatusRegistry } from './status.js';
 
@@ -12,6 +13,7 @@ export interface SessionsResourceOptions {
   discovery: DiscoveryEndpoint;
   statusRegistry?: StatusRegistry;
   nativeGuides?: Readonly<Record<string, NativeSessionGuide>>;
+  membership?: SessionMembershipService;
   pageSize?: number;
   now?: () => number;
 }
@@ -66,6 +68,12 @@ function unavailable(reason: string, nextStep = '请返回连接列表选择本�
 
 function json(value: unknown): string { return JSON.stringify(value, null, 2) ?? 'null'; }
 function rawFacet(value: unknown): string { return JSON.stringify(value) ?? 'null'; }
+function hasTerminalControls(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 32 || (code >= 127 && code <= 159);
+  });
+}
 function sourceError(contextId: string, message: string, kind: SourceError['kind'] = 'unavailable'): SourceError {
   return { source: { contextId, providerId: 'discovery' }, kind, message, nextStep: '检查对应工具来源后按 r 从第一页刷新。' };
 }
@@ -83,6 +91,7 @@ function address(session: DiscoverySession, items: readonly DiscoverySession[], 
   if (!session.capabilities.delivery) return { unavailable: unavailable('此会话来源未声明投递能力。', '回到原生工具操作；Y 可复制完整会话引用。') };
   if (session.ref.providerId !== 'claude' && session.ref.providerId !== 'codex') return { unavailable: unavailable('此工具尚未声明现有本机发送地址能力。', '回到原生工具操作；Y 可复制完整会话引用。') };
   if (session.name !== null && session.name !== '') {
+    if (hasTerminalControls(session.name)) return { unavailable: unavailable('会话名称包含终端控制字符，不能作为可粘贴地址。', '请在原生工具更名或核对身份；Y 可复制安全编码的完整会话引用。') };
     if (items.filter((item) => item.name === session.name).length === 1) return { value: session.name };
     return { unavailable: unavailable('发现同名会话，裸名称地址有歧义。', '在原生工具核对身份并处理重名；Y 可复制完整会话引用。') };
   }
@@ -102,11 +111,52 @@ export function createSessionsResource(options: SessionsResourceOptions): { reso
   const limit = options.pageSize ?? 100;
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) throw new Error('Session page size must be between 1 and 1000.');
 
-  function page(items: readonly DiscoverySession[], providers: readonly DiscoveryProvider[], completeness: Completeness, observedAt: number, errors: readonly SourceError[], contextId: string): TuiPage {
+  async function targets(contextId: string, signal: AbortSignal): Promise<MembershipTargets | undefined> {
+    if (!options.membership || signal.aborted) return undefined;
+    try { return await untilAborted(options.membership.listTargets({ contextId, signal }), signal); }
+    catch {
+      return { stars: [], completeness: signal.aborted ? 'cancelled' : 'unavailable', observedAt: now(), errors: signal.aborted ? [] : [sourceError(contextId, '无法读取本机已配置的目标星；未执行任何星管理请求。')] };
+    }
+  }
+
+  function membershipFields(configured: MembershipTargets): readonly TuiFormField[] {
+    const enabled = configured.stars.filter((star) => star.eligible);
+    return [{ id: 'starId', label: '目标星', required: true, initialValue: enabled.length === 1 ? enabled[0].id : '', options: [
+      ...(enabled.length === 1 ? [] : [{ value: '', label: '请选择目标星', enabled: true }]),
+      ...configured.stars.map((star) => ({ value: star.id, label: star.label, enabled: star.eligible, ...(star.reason ? { reason: star.reason } : {}) })),
+    ] }];
+  }
+
+  function membershipAvailability(configured?: MembershipTargets): TuiActionAvailability {
+    if (!options.membership) return unavailable('当前尚未提供本机册位操作能力。', '可在原生终端使用已有 crosschat serve 命令管理已知星册位。');
+    if (!configured?.stars.some((star) => star.eligible)) return unavailable('没有身份完整且可选择的已配置星。', '先核对本机 TCP 星配置；按 r 刷新，i 可查看读取原因。');
+    return { enabled: true, fields: membershipFields(configured), impact: ['只操作明确选中的星册位；不结束、删除或代替原生会话聊天。'] };
+  }
+
+  function membershipRequest(request: TuiActionRequest): MembershipRequest | undefined {
+    if (!request.context || request.context.kind !== 'local' || request.action.ownerResourceId !== 'sessions' || !['adopt', 'remove-member'].includes(request.action.id) || !request.target?.copyValues?.ref) return undefined;
+    try {
+      const ref: unknown = JSON.parse(request.target.copyValues.ref);
+      if (typeof ref !== 'object' || ref === null || Array.isArray(ref)
+        || !('contextId' in ref) || ref.contextId !== request.context.id
+        || !('providerId' in ref) || typeof ref.providerId !== 'string' || !ref.providerId
+        || !('nativeId' in ref) || typeof ref.nativeId !== 'string' || !ref.nativeId
+        || ('referenceKind' in ref && ref.referenceKind !== 'native')
+        || Object.keys(ref).some((key) => !['contextId', 'providerId', 'nativeId', 'referenceKind'].includes(key))) return undefined;
+      const exactRef = { contextId: request.context.id, providerId: ref.providerId, nativeId: ref.nativeId, ...('referenceKind' in ref ? { referenceKind: 'native' as const } : {}) };
+      if (request.target.id !== sessionKey(exactRef)) return undefined;
+      return { op: request.action.id === 'adopt' ? 'adopt' : 'remove', ref: exactRef, starId: request.values.starId ?? '', signal: request.signal };
+    } catch { return undefined; }
+  }
+
+  function page(items: readonly DiscoverySession[], providers: readonly DiscoveryProvider[], completeness: Completeness, observedAt: number, errors: readonly SourceError[], contextId: string, configured?: MembershipTargets): TuiPage {
     const rows: TuiRow[] = items.map((item) => {
       const reference = json(item.ref);
       const target = address(item, items, completeness);
-      const rowAvailability: Readonly<Record<string, TuiActionAvailability>> = target.unavailable ? { copy: target.unavailable } : {};
+      const rowAvailability: Record<string, TuiActionAvailability> = target.unavailable ? { copy: target.unavailable } : {};
+      if (item.ref.referenceKind === 'process') {
+        rowAvailability.adopt = rowAvailability['remove-member'] = unavailable('临时进程引用没有核实的原生会话 ID，不能修改星册位。', '在原生工具确认完整会话身份后刷新。');
+      }
       const originalGuide = guides.get(item.ref.providerId)?.(item) ?? { title: `${item.ref.providerId} 原生操作`, fields: [{ label: '下一步', value: `此工具未登记专用操作指引，请回到 ${item.ref.providerId} 原生界面操作。` }] };
       return {
         id: sessionKey(item.ref), contextId, cells: { name: item.name || '匿名', provider: item.ref.providerId, status: statuses.format(item.ref.providerId, item.rawStatus), id: item.ref.referenceKind === 'process' ? `PID ${item.ref.nativeId}` : item.ref.nativeId, directory: typeof item.attributes.cwd === 'string' ? item.attributes.cwd : '—' },
@@ -120,19 +170,23 @@ export function createSessionsResource(options: SessionsResourceOptions): { reso
     const providerIds = [...new Set([...providers.map((provider) => provider.providerId), ...items.map((item) => item.ref.providerId)])].sort();
     const stateOptions = new Map<string, string>();
     for (const item of items) if (!stateOptions.has(rawFacet(item.rawStatus))) stateOptions.set(rawFacet(item.rawStatus), statuses.format(item.ref.providerId, item.rawStatus));
+    const allErrors = [...errors];
+    addErrors(allErrors, configured?.errors ?? []);
+    const overall = completeness === 'complete' && configured !== undefined && configured.completeness !== 'complete' ? 'partial' : completeness;
     return {
-      rows, completeness, sampledAt: observedAt,
-      notice: `${items.length} 个可发现会话（含匿名）；${completeness === 'complete' ? '读取完整' : completeness === 'cancelled' ? '读取已取消，结果不完整' : completeness === 'unavailable' ? '来源不可用' : '部分结果'}${errors.length ? `；${errors.length} 个来源问题，按 i 查看` : ''}。`,
+      rows, completeness: overall, sampledAt: observedAt,
+      notice: `${items.length} 个可发现会话（含匿名）；${overall === 'complete' ? '读取完整' : overall === 'cancelled' ? '读取已取消，结果不完整' : overall === 'unavailable' ? '来源不可用' : '部分结果'}${allErrors.length ? `；${allErrors.length} 个来源问题，按 i 查看` : ''}。`,
       filters: [
         { id: 'provider', label: '工具', mode: 'select', defaultValue: '', options: [{ value: '', label: '所有工具' }, ...providerIds.map((providerId) => ({ value: providerId, label: providerId }))] },
         { id: 'status', label: '原生状态', mode: 'select', defaultValue: '', options: [{ value: '', label: '所有状态' }, ...[...stateOptions].map(([value, label]) => ({ value, label }))] },
         { id: 'named', label: '匿名', mode: 'toggle', defaultValue: '', options: [{ value: '', label: '所有会话（含匿名）' }, { value: 'named', label: '仅命名会话' }] },
       ],
-      actionAvailability: { adopt: unavailable('当前尚未提供本机收编能力。', '可在原生终端使用现有 crosschat serve --connect <星> --adopt <名称>。'), 'remove-member': unavailable('当前页面没有已核实的星册位身份。', '请选择星上下文后核对目标册位；删除册位不会删除原生会话。'), 'filter-scope': unavailable('本机发现没有当前星范围。', '选择 TCP 星连接后可切换星内成员与节点发现范围。') },
+      actionAvailability: { adopt: membershipAvailability(configured), 'remove-member': membershipAvailability(configured), 'filter-scope': unavailable('本机发现没有当前星范围。', '选择 TCP 星连接后可切换星内成员与节点发现范围。') },
       detailViews: { 'read-summary': { title: '会话读取信息', fields: [
-        { label: '连接上下文', value: contextId }, { label: '完整性', value: completeness }, { label: '采样时间', value: new Date(observedAt).toISOString() },
+        { label: '连接上下文', value: contextId }, { label: '完整性', value: overall }, { label: '会话发现完整性', value: completeness }, { label: '采样时间', value: new Date(observedAt).toISOString() },
         { label: '发现会话数', value: String(items.length) }, { label: 'Provider 能力', value: json(providers) },
-        { label: '来源问题与下一步', value: errors.length ? errors.map(errorText).join('\n\n') : '无来源错误。' },
+        ...(configured === undefined ? [] : [{ label: '已配置目标星（未连接核验册位）', value: json(configured.stars) }]),
+        { label: '来源问题与下一步', value: allErrors.length ? allErrors.map(errorText).join('\n\n') : '无来源错误。' },
       ] } },
     };
   }
@@ -142,6 +196,7 @@ export function createSessionsResource(options: SessionsResourceOptions): { reso
       if (!request.context || request.context.kind !== 'local') return page([], [], 'unavailable', now(), [sourceError(request.context?.id ?? 'unselected', '请先选择本机上下文，未执行会话扫描。', 'unsupported')], request.context?.id ?? 'unselected');
       const contextId = request.context.id;
       if (request.signal.aborted) return page([], [], 'cancelled', now(), [], contextId);
+      const configured = targets(contextId, request.signal);
       const items = new Map<string, DiscoverySession>();
       const providers = new Map<string, DiscoveryProvider>();
       const errors: SourceError[] = [];
@@ -177,7 +232,29 @@ export function createSessionsResource(options: SessionsResourceOptions): { reso
           break;
         }
       }
-      return page([...items.values()], [...providers.values()], completeness, observedAt, errors, contextId);
+      return page([...items.values()], [...providers.values()], completeness, observedAt, errors, contextId, await configured);
+    },
+    async checkAction(request) {
+      const exact = membershipRequest(request);
+      if (!exact || !options.membership || request.signal.aborted) return unavailable('当前目标没有可核实的本机完整会话身份。', '请回到本机会话列表刷新并重新选择。');
+      const configured = await targets(exact.ref.contextId, request.signal);
+      const availability = membershipAvailability(configured);
+      if (!availability.enabled || !configured) return availability;
+      if (!exact.starId) return availability;
+      if (!configured.stars.some((star) => star.id === exact.starId && star.eligible)) return { ...availability, enabled: false, reason: '所选星已不可用或身份发生变化。', nextStep: '核对目标星配置后重新选择。' };
+      const checked = await untilAborted(options.membership.check(exact), request.signal);
+      return { enabled: checked.allowed, fields: availability.fields, reason: checked.reason, nextStep: checked.nextStep, impact: [
+        `完整会话引用：${json(exact.ref)}`, `目标星：${configured.stars.find((star) => star.id === exact.starId)?.label ?? ''}（${exact.starId}）`, ...(checked.impact ?? []),
+      ] };
+    },
+    async mutate(request) {
+      const exact = membershipRequest(request);
+      if (!exact || !exact.starId || !options.membership || request.signal.aborted) throw new Error('目标身份或目标星无效，未执行册位操作。');
+      const configured = await targets(exact.ref.contextId, request.signal);
+      if (!configured?.stars.some((star) => star.id === exact.starId && star.eligible)) throw new Error('所选星已不可用或身份发生变化，未执行册位操作。');
+      const result = await options.membership.apply(exact);
+      if (result.kind !== 'applied') throw new Error(result.message);
+      return { selectedId: request.target?.id, message: result.message };
     },
   };
   return { resource, adapter };
