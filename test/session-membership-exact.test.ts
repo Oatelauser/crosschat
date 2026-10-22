@@ -1,7 +1,9 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Broker } from '../src/serve/broker.js';
 import { parseFrame } from '../src/serve/protocol.js';
 import { loadBrokerFile, writeBrokerFile } from '../src/serve/registry.js';
@@ -9,7 +11,7 @@ import type { RosterEntry } from '../src/serve/registry.js';
 import { SenderConn, requestMemberRemove } from '../src/serve/via-tcp.js';
 
 const cleanups: Array<() => void | Promise<void>> = [];
-afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
+afterEach(async () => { vi.restoreAllMocks(); syncBuiltinESMExports(); for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
 const machine = '11111111222233334444555555555555';
 const otherMachine = '66666666777788889999aaaaaaaaaaaa';
 const memberKey = 'a'.repeat(64);
@@ -80,5 +82,18 @@ describe('atomic exact member removal', () => {
     expect(await requestMemberRemoveExact(connection, target, 1000)).toMatchObject({ ok: false, removed: false });
     expect(await requestMemberRemove(entry, 'legacy-name', 1000)).toMatchObject({ ok: true, removed: ['legacy-name'] });
     expect(loadBrokerFile(registryFile).stars[0].roster).toEqual([]);
+  });
+
+  it('does not claim a confirmed durable removal when the atomic registry write fails', async () => {
+    const { requestMemberRemoveExact } = await import('../src/serve/via-tcp.js');
+    const { connection, registryFile } = await fixture([row(target.sessionId, 'member')]);
+    const rename = fs.renameSync;
+    vi.spyOn(fs, 'renameSync').mockImplementation((source, destination) => {
+      if (String(destination) === registryFile) throw new Error('controlled persistence failure');
+      return rename(source, destination);
+    });
+    syncBuiltinESMExports();
+    expect(await requestMemberRemoveExact(connection, target, 1000)).toMatchObject({ ok: false, removed: true, code: 'PERSIST_FAILED' });
+    expect(loadBrokerFile(registryFile).stars[0].roster).toHaveLength(1);
   });
 });

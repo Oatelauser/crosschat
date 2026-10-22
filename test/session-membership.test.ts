@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DiscoveryService } from '../src/application/discovery/service.js';
 import type { DiscoveryEndpoint, DiscoverySession } from '../src/application/discovery/model.js';
@@ -16,7 +18,7 @@ import { loadBrokerFile, writeBrokerFile } from '../src/serve/registry.js';
 import type { RosterEntry } from '../src/serve/registry.js';
 
 const cleanups: Array<() => void | Promise<void>> = [];
-afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
+afterEach(async () => { vi.restoreAllMocks(); syncBuiltinESMExports(); for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
 const machine = '11111111222233334444555555555555';
 const otherMachine = '66666666777788889999aaaaaaaaaaaa';
 const key = 'a'.repeat(64);
@@ -161,6 +163,19 @@ describe('session membership application boundary', () => {
     expect(f.spawned).toEqual([]);
   });
 
+  it('returns uncertain when the broker changed memory but could not persist exact removal', async () => {
+    const f = await fixture([member()]);
+    const app = await service(f.options);
+    const rename = fs.renameSync;
+    vi.spyOn(fs, 'renameSync').mockImplementation((source, destination) => {
+      if (String(destination) === f.registryFile) throw new Error('controlled persistence failure');
+      return rename(source, destination);
+    });
+    syncBuiltinESMExports();
+    expect(await app.apply(remove)).toMatchObject({ kind: 'uncertain' });
+    expect(loadBrokerFile(f.registryFile).stars[0].roster).toHaveLength(1);
+  });
+
   it('rejects unverified Provider, different machine, same-ID cross-Provider conflict and changed targets', async () => {
     for (const roster of [[member({ tool: undefined })], [member({ machine: otherMachine })], [member({ tool: 'codex' })]]) {
       const f = await fixture(roster);
@@ -216,6 +231,50 @@ describe('session membership application boundary', () => {
     expect(await app.check(adopt)).toMatchObject({ allowed: false, reason: expect.any(String) });
     expect(await app.apply(adopt)).toMatchObject({ kind: 'rejected' });
     expect(f.spawned).toEqual([]);
+  });
+
+  it('accepts an exact main Provider result within partial pages but requires complete absence from other Providers', async () => {
+    const f = await fixture();
+    let completeness: 'complete' | 'partial' | 'unavailable' | 'cancelled' = 'complete';
+    const discovery: DiscoveryEndpoint = { execute: async (request) => {
+      if (request.op !== 'detail') throw new Error('unexpected list');
+      const main = request.providerId === ref.providerId;
+      return { op: 'detail', providers: ['claude', 'codex'].map((providerId) => ({ providerId, capabilities })),
+        detail: { item: main ? session() : null, completeness: main ? 'partial' : completeness, errors: [], observedAt: 42 } };
+    } };
+    const app = await service({ ...f.options, discovery });
+    expect(await app.check(adopt)).toMatchObject({ allowed: true });
+    for (completeness of ['partial', 'unavailable', 'cancelled']) {
+      expect(await app.check(adopt)).toMatchObject({ allowed: false, reason: expect.any(String) });
+      expect(await app.apply(adopt)).toMatchObject({ kind: 'rejected' });
+    }
+    expect(f.spawned).toEqual([]);
+  });
+
+  it('aborts the owned native source on timeout without cancelling the parent or repeating the check', async () => {
+    const f = await fixture();
+    const controller = new AbortController();
+    let ownedSignal: AbortSignal | undefined;
+    const execute = vi.fn<DiscoveryEndpoint['execute']>(async (_request, options) => {
+      ownedSignal = options?.signal;
+      return new Promise(() => undefined);
+    });
+    const app = await service({ ...f.options, discovery: { execute }, timeoutMs: 20 });
+    expect(await app.check({ ...adopt, signal: controller.signal })).toMatchObject({ allowed: false });
+    expect(ownedSignal?.aborted).toBe(true);
+    expect(controller.signal.aborted).toBe(false);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(f.spawned).toEqual([]);
+  });
+
+  it('refuses a full star selector shadowed by another configured name before starting an aggregator', async () => {
+    const f = await fixture();
+    await writeFile(f.configFile, JSON.stringify({ brokers: [f.entry, { ...f.entry, starId: 'different-full-star', name: f.entry.starId }] }));
+    f.options.spawnServeDetach = (selector) => { f.spawned.push(selector); throw new Error('controlled spawn must not happen'); };
+    const app = await service(f.options);
+    expect(await app.apply(adopt)).toMatchObject({ kind: 'rejected' });
+    expect(f.spawned).toEqual([]);
+    expect(await app.check(adopt)).toMatchObject({ allowed: false });
   });
 
   it('adopts an anonymous full native ref through the shared aggregator and verifies broker roster authority', async () => {
