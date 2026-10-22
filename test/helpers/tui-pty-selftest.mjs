@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import console from 'node:console';
+import process from 'node:process';
 import { launchPty } from './tui-pty-driver.mjs';
 
 if (process.platform !== 'win32') throw new Error('The ConPTY self-test requires Windows.');
