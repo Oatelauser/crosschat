@@ -36,7 +36,7 @@ export interface ManagedLogOptions {
 const secretKey = /^(?:key|adminkey|auth|proof|nonce|token|peertoken|envelope|body|content|messages|adminpipe|messagingsocketpath|socketpath)$/i;
 
 /** Only these local files are selectable. A route never supplies an arbitrary path. */
-async function sources(baseDir: string, signal?: AbortSignal): Promise<ManagedLogSource[]> {
+async function sources(baseDir: string, signal?: AbortSignal): Promise<{ items: ManagedLogSource[]; errors: QueryError[] }> {
   checkAbort(signal);
   const tcp = join(baseDir, 'tcp');
   const known = [
@@ -45,12 +45,16 @@ async function sources(baseDir: string, signal?: AbortSignal): Promise<ManagedLo
     { id: 'launcher', label: '会话接入日志', path: join(tcp, 'launcher.log') },
   ];
   let names: string[];
+  const errors: QueryError[] = [];
   try { names = await readdir(tcp); }
-  catch (error) { if (!isRecord(error) || error.code !== 'ENOENT') throw error; names = []; }
+  catch (error) {
+    if (!isRecord(error) || error.code !== 'ENOENT') errors.push(queryError(tcp, error));
+    names = [];
+  }
   checkAbort(signal);
   for (const name of names.sort()) if (/^node(?:-[^/\\\0]+)?\.log(?:\.old)?$/.test(name)) known.push({ id: `node:${name}`, label: `节点日志 ${name}`, path: join(tcp, name) });
   const all = [...known, ...known.filter((source) => !source.id.endsWith('.old')).map((source) => ({ id: `${source.id}.old`, label: `${source.label}（轮转副本）`, path: `${source.path}.old` }))];
-  return [...new Map(all.map((source) => [source.id, source])).values()];
+  return { items: [...new Map(all.map((source) => [source.id, source])).values()], errors };
 }
 
 function safeLine(raw: string): string {
@@ -88,7 +92,9 @@ function matches(raw: string, options: ManagedLogOptions): boolean {
     } catch { return false; }
   }
   const identity = `${ref.providerId}:${ref.nativeId}`;
-  return entry.target === identity || (!entry.target.startsWith('via:') && from === identity);
+  // Receiver-side logs may record a remote sender with the same opaque native ID.
+  // Without a reply reference, only a direct local target proves this scope.
+  return entry.target === identity;
 }
 
 /** Bounded metadata-only log windows; no service, receipt or queue processing. */
@@ -96,14 +102,15 @@ export async function queryManagedLog(options: ManagedLogOptions): Promise<Manag
   const empty: ManagedLogResult = { items: [], source: null, sources: [], completeness: 'unavailable', observedAt: (options.now ?? Date.now)(), errors: [], bytesRead: 0, truncated: false, omittedLeadingLine: false, rotated: false };
   try {
     checkAbort(options.signal);
-    const catalog = await sources(options.baseDir, options.signal);
+    const listing = await sources(options.baseDir, options.signal);
+    const catalog = listing.items;
     const source = catalog.find((entry) => entry.id === (options.sourceId ?? 'send-log'));
     if (!source) return { ...empty, sources: catalog, errors: [{ source: 'logs', kind: 'unavailable', message: '此日志来源未登记', nextStep: '按 t 选择已登记的本机日志来源' }] };
     if ((options.sessionRef || options.pairId) && !source.id.startsWith('send-log')) return { ...empty, source, sources: catalog, errors: [{ source: source.path, kind: 'unavailable', message: '此来源没有可验证的会话或通信对元数据', nextStep: '切换到投递日志查看精确关联，或从 :logs 查看该来源全部内容' }] };
     const page = await queryLogWindow({ file: source.path, maxBytes: options.maxBytes, signal: options.signal, now: options.now, previous: options.previous?.cursor });
     checkAbort(options.signal);
     const epoch = (options.previous?.epoch ?? 0) + (page.rotated ? 1 : 0);
-    const errors: QueryError[] = [...page.errors];
+    const errors: QueryError[] = [...listing.errors, ...page.errors];
     if (page.omittedLeadingLine) errors.push({ source: source.path, kind: 'unavailable', message: '尾窗开头有一行未完整读取，已隐藏片段且不可复制', nextStep: '按 t 查看轮转来源；超出窗口的内容请在原生终端检查完整文件' });
     const rowLimit = page.entries.length > 1000;
     if (rowLimit) errors.push({ source: source.path, kind: 'unavailable', message: '只显示最近1000个完整起始行', nextStep: '筛选当前有界窗口；更早内容可在原生终端查看完整文件' });
