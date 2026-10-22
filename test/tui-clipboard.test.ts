@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { spawn as nodeSpawn } from 'node:child_process';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import { copyText } from '../src/application/clipboard.js';
@@ -58,5 +59,24 @@ describe('explicit clipboard copy', () => {
     child.emit('close', null);
     expect(kills).toBe(1);
     expect(child.stdin.destroyed).toBe(true);
+  });
+  it.skipIf(process.platform !== 'win32')('preserves complete UTF-8 stdin in Windows PowerShell without touching the real clipboard', async () => {
+    const original = '中文 👩🏽‍💻 e\u0301 $(literal) `literal`';
+    let copied = '';
+    await copyText(original, { platform: 'win32', spawn: (command, args, options) => {
+      const scriptIndex = args.indexOf('-Command') + 1;
+      const script = args[scriptIndex];
+      if (command !== 'powershell.exe' || scriptIndex === 0 || script === undefined || !script.includes('Set-Clipboard -Value ')) {
+        throw new Error('Unsupported clipboard test command');
+      }
+      // Replace the fixed clipboard call before launching, so this controlled child only reports data.
+      const safeScript = 'function Write-TestClipboard { param([string]$Value) [Console]::Write([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Value))) }; ' + script.replaceAll('Set-Clipboard -Value ', 'Write-TestClipboard -Value ');
+      const testArgs = args.map((arg, index) => index === scriptIndex ? safeScript : arg);
+      const child = nodeSpawn(command, testArgs, { ...options, stdio: ['pipe', 'pipe', 'pipe'] });
+      child.stdout?.on('data', (chunk) => { copied += String(chunk); });
+      child.stderr?.resume();
+      return child;
+    } });
+    expect(Buffer.from(copied, 'base64').toString('utf16le')).toBe(original);
   });
 });
