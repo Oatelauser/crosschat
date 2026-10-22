@@ -77,6 +77,13 @@ describe('read-only TUI communication resources', () => {
     expect(JSON.stringify(page.rows[0].detail)).toMatch(/关联.*未知|范围.*核实/);
   });
 
+  it('does not broaden a multi-pair queue into a SessionRef association when stored machine identity is unverified', async () => {
+    const mixedQueue = { ...queue, count: 3, items: [...queue.items, { ...queue.items[0], id: 'other-sender', callerKey: 'claude:neighbor-full-id' }] };
+    const page = await resources([item], [mixedQueue]).outbox.adapter.read(request());
+    expect(page.rows[0].actionAvailability?.deliveries).toMatchObject({ enabled: false, reason: expect.any(String), nextStep: expect.any(String) });
+    expect(page.rows[0].actionRoutes?.deliveries).toBeUndefined();
+  });
+
   it('rejects a route bound to a different context instead of applying a local fallback', async () => {
     const factory = resources();
     const page = await factory.deliveries.adapter.read({ ...request(), route: { resourceId: 'deliveries', contextId: 'ssh:elsewhere' } });

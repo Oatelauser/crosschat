@@ -96,7 +96,7 @@ describe('read-only communication observation queries', () => {
     expect((await queryCommunications({ baseDir, contextId: 'local' })).items[0].channel).toBe('ssh');
   });
 
-  it('attributes routed audit entries through complete refs and declares local queue targets from positive queue evidence', async () => {
+  it('attributes routed audit entries but does not equate a local queued native ID with an unverified machine in its saved ref', async () => {
     const baseDir = await fixture(); await mkdir(join(baseDir, 'conversations')); await mkdir(join(baseDir, 'outbox'));
     const routed: ConversationRef = { ...ref, f: { p: 'claude', id: 'sender-full-id', m: 'remote-sender' }, t: { p: 'codex', id: 'recipient-full-id', m: 'unknown-owner-name' }, starId: 'star-full' };
     const stored = encodeRef(routed);
@@ -106,7 +106,7 @@ describe('read-only communication observation queries', () => {
     expect(before.items[0]).toMatchObject({ status: 'parked', channel: 'tcp', localSessionRefs: [] });
     await writeFile(join(baseDir, 'outbox', 'recipient-full-id.json'), JSON.stringify({ items: [parked('local-queue-proof')] }));
     const after = await queryCommunications({ baseDir, contextId: 'local' });
-    expect(after.items[0].localSessionRefs).toEqual([{ contextId: 'local', providerId: 'codex', nativeId: 'recipient-full-id' }]);
+    expect(after.items[0].localSessionRefs).toEqual([]);
   });
 
   it('reports a bounded audit window explicitly and keeps untouched pair inventory', async () => {
