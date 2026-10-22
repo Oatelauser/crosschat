@@ -10,7 +10,7 @@ function nativeReaders(home?: string): readonly SessionReader[] {
   if (home === undefined) return [createClaudeSessionReader({}), createCodexSessionReader({})];
   const codexHome = join(home, '.codex');
   const env: NodeJS.ProcessEnv = { ...process.env, CODEX_HOME: codexHome };
-  delete env.CODEX_SQLITE_HOME;
+  for (const key of Object.keys(env)) if (key.toUpperCase() === 'CODEX_SQLITE_HOME') delete env[key];
   return [
     createClaudeSessionReader({ directory: join(home, '.claude', 'sessions') }),
     createCodexSessionReader({ codexHome, desktop: { sqliteHome: codexHome }, sessionFactory: openCodexSession({ env }) }),
