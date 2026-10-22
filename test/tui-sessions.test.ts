@@ -169,6 +169,25 @@ describe('local TUI sessions resource', () => {
     expect(page.rows[0].actionAvailability?.copy).toMatchObject({ enabled: false });
   });
 
+  it('does not publish a UUID address shadowed by case-insensitive native name prefixes', async () => {
+    const uuid = '12345678-1234-1234-1234-123456789abc';
+    const name = `CODEX/${uuid}-another-session`;
+    expect(resolveTargetByName(`codex/${uuid}`, [{ sessionId: 'other', name }], [{ id: uuid, name: null }])).toMatchObject({ side: 'claude' });
+    const page = await read(createSessionsResource({ discovery: endpoint([response([session('codex', uuid), session('claude', 'other', name)])]) }).adapter);
+    expect(page.rows[0].copyValue).toBeUndefined();
+    expect(page.rows[0].actionAvailability?.copy).toMatchObject({ enabled: false });
+  });
+
+  it('does not promise a send address outside the existing Codex CLI selection window', async () => {
+    const items = Array.from({ length: 21 }, (_, index) => session('codex', `12345678-1234-1234-1234-${String(index).padStart(12, '0')}`, index === 20 ? '扫描范围之外' : null));
+    const page = await read(createSessionsResource({ discovery: endpoint([response(items)]) }).adapter);
+    expect(page.rows).toHaveLength(21);
+    expect(page.rows[19].copyValue).toBe(`codex/${items[19].ref.nativeId}`);
+    expect(page.rows[20].copyValue).toBeUndefined();
+    expect(page.rows[20].actionAvailability?.copy).toMatchObject({ enabled: false, reason: expect.any(String) });
+    expect(page.rows[20].copyValues?.ref).toBe(JSON.stringify(items[20].ref, null, 2));
+  });
+
   it('uses a complete Codex UUID when its native name collides with another supported tool', async () => {
     const uuid = '12345678-1234-1234-1234-123456789abc';
     const page = await read(createSessionsResource({ discovery: endpoint([response([session('claude', 'other', '同名'), session('codex', uuid, '同名')])]) }).adapter);
