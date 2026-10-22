@@ -11,6 +11,7 @@
 | 远端完整只读发现 | `src/application/discovery/index.ts`、`remote-discovery/tcp.ts` | 本机/SSH/TCP共用Provider DTO，匿名、完整ID、分页、来源错误与详情；请求取消逐跳释放读取，不调用status或补投 |
 | 星、服务、文件和日志读取 | `src/application/queries/index.ts` | 脱敏台账、权威 roster 组合、快照加 PID 证据、文件元数据、有界日志；不补投、不备份或修复 |
 | 诊断 | `src/application/diagnostics/index.ts` | 检查/判定/formatter 分离；异步查询在独立进程执行，取消回收整棵探测进程树 |
+| 本机观察 | `src/application/observations/{overview,communications,logs}.ts` | 状态组合、按需诊断、通信对/队列元数据与有界日志；安全DTO、局部错误、只读无补投 |
 | 本机与远程管理 | `src/application/management/local.ts`、`remote.ts` | 稳定 starId；热/冷/拒绝/失败有结构结果，热失败不冷写；远程保留现有挑战应答与权限 |
 | 服务起停 | `src/application/services/local.ts`、`background.ts` | spawn 仅代表 starting，需匹配进程与状态文件才 ready；后台停止隔离阻塞进程扫描，保留原身份与端口闸门 |
 | 清理 | `src/application/cleanup/index.ts` | `planCleanup` 只读，`executeCleanup` 执行既定目标，保留原规则和 CLI 计数语义 |
@@ -31,6 +32,12 @@
 `queryStars` 默认只读本机脱敏台账。Context 注入现有 roster 读取能力后才能判断在线数；未注入时明确 unknown/partial，不能据静态台账推断下线。旧端没有 sessions 字段时保留机器信息并标部分结果。详见 [查询模块说明](../../src/application/queries/README.md)。
 
 日志每次重新打开文件，以文件标识及大小识别替换/截断；载荷窗口默认64KiB、最高2MiB，额外窥读一个边界字节避免误丢完整行。文件页仅列元数据，普通结果不含 key、adminKey 或管理插座地址。
+
+`queryLogWindow`返回完整起始行的字节offset、是否换行与边缘行省略标记；旧`queryLogTail`从同一读取器映射原返回形状。`queryManagedLog`限制登记来源、拒绝链接/特殊文件、隐藏已知秘密，最多显示最近1000行；来源、无损文件身份、观察代次和offset共同组成稳定行键。不能从两次采样推断未观察到的截断后增长过程。
+
+`queryCommunications({baseDir,contextId,signal})`聚合已保存通信对及最近审计；`queryOutbox`只返回安全队列元数据，未知条数用null，过大或损坏不当作空。仅复制已保存且端点匹配的完整ref，不调用短柄生成或writer；机器身份不明的同原生ID不能证明本机归属。`communicationPairId`供通信和日志复用via记录的完整ref归对。
+
+`createLocalOverview({home,discovery,...})`的`readStatus`不会运行doctor；`readDoctor`显式执行并仅缓存本TUI最近成功报告。`queryDoctorDiagnostics`提供30秒默认预算、IPC运行时校验和owner回收；显式home默认隔离原生目录，`nativeEnvironment:'inherit'`保留用户原生环境而单独绑定crosschat配置home。默认TUI使用inherit，显式隔离HOME使用isolated。旧CLI无参doctor读取和判定不变。完整合同见[观察资源规格](tui-observations-spec.md)。
 
 `createSessionMembershipService({baseDir,discovery})` 的 `baseDir` 为 `~/.crosschat`。`listTargets` 只读本机配置；`check` 只做有界身份/权限核验；`apply` 在写前重新核验。请求携带 `op:'adopt'|'remove'`、完整 `ref`、完整 `starId` 和可选 `signal`；结果为 `applied/rejected/uncertain`，不含配置凭证。工具映射和收编条件通过 `MembershipProvider` 登记，原生 ID 的跨工具冲突不得被当前星册的单 ID 键掩盖。
 
