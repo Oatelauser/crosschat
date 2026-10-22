@@ -71,6 +71,7 @@ export type { RosterEntry } from './registry.js';
 import { FILE_MAX_BYTES, FileInbox } from './file-channel.js';
 import { normalizeMid } from '../platform/machine-id.js';
 import { readSnapshotStar } from './snapshot-state.js';
+import { formatAdminAudit } from './admin-audit.js';
 import { buildStarSnapshot } from './star-snapshot.js';
 import type { StarSnapshotRole } from './star-snapshot.js';
 import { parseDiscoveryRequest, parseDiscoveryResponse } from '../application/discovery/boundary.js';
@@ -436,7 +437,7 @@ export class Broker {
           hostname: this.d.hostname(),
           port: this.port ?? DEFAULT_PORT,
         });
-        this.auditAdmin('add-star', `星 ${name}`, LOCAL);
+        this.auditAdmin('add-star', `星 ${name}`, LOCAL, [starId]);
         this.reconcileStars(); // 新星落位 + 按需播种内挂聚合器
         return { ok: true, starId, stars: this.stars.length };
       }
@@ -445,7 +446,7 @@ export class Broker {
         if (starId === undefined) return { ok: false, error: 'remove-star 缺少 starId' };
         const removed = removeStarFrom(this.d.registryFile, starId);
         if (removed === undefined) return { ok: false, error: `星 ${starId} 不在台账——crosschat serve --list 可查` };
-        this.auditAdmin('remove-star', `星 ${removed.name ?? starId}`, LOCAL);
+        this.auditAdmin('remove-star', `星 ${removed.name ?? starId}`, LOCAL, [starId]);
         await this.teardownStar(starId); // 弃状态→停聚合器→闭连接（收"星已删除"教学）
         this.writeStatus('running');
         return { ok: true, removed };
@@ -464,7 +465,7 @@ export class Broker {
           } catch (err) {
             return { ok: false, error: err instanceof Error ? err.message : String(err) };
           }
-          this.auditAdmin('set-showname', `星 ${starId} 显示名 ${name}`, LOCAL);
+          this.auditAdmin('set-showname', `星 ${starId} 显示名 ${name}`, LOCAL, [starId]);
           try {
             await this.d.stopLocalAggregator?.(starId);
           } catch {
@@ -474,7 +475,7 @@ export class Broker {
           return { ok: true };
         }
         setShowNameFor(nodeJson, name);
-        this.auditAdmin('set-showname', `显示名 ${name}`, LOCAL);
+        this.auditAdmin('set-showname', `显示名 ${name}`, LOCAL, this.stars.flatMap((star) => star.starId ? [star.starId] : []));
         for (const star of [...this.stars]) {
           if (star.starId === undefined) continue;
           try {
@@ -500,7 +501,7 @@ export class Broker {
           port: this.port ?? DEFAULT_PORT, // 热路径端口以在跑 broker 实际监听口为准
           ...(star.name === undefined ? {} : { name: star.name }),
         });
-        this.auditAdmin('gen-key', `星 ${star.name ?? starId} n=${n}`, LOCAL);
+        this.auditAdmin('gen-key', `星 ${star.name ?? starId} n=${n}`, LOCAL, [starId]);
         return { ok: true, results };
       }
       case 'set-name': {
@@ -508,7 +509,7 @@ export class Broker {
         const name = str('name');
         if (starId === undefined || name === undefined) return { ok: false, error: 'set-name 缺少 starId/name' };
         setNameFor(this.d.registryFile, starId, name);
-        this.auditAdmin('set-name', `星 ${name}`, LOCAL);
+        this.auditAdmin('set-name', `星 ${name}`, LOCAL, [starId]);
         this.reconcileStars(); // 星名刷新进内存星域 + status
         return { ok: true };
       }
@@ -518,7 +519,7 @@ export class Broker {
         const label = str('label');
         if (starId === undefined || label === undefined) return { ok: false, error: 'gen-admin-key 缺少 starId/label' };
         const result = genAdminKeyFor(this.d.registryFile, starId, label);
-        this.auditAdmin('gen-admin-key', `星 ${starId} label=${label}`, LOCAL);
+        this.auditAdmin('gen-admin-key', `星 ${starId} label=${label}`, LOCAL, [starId]);
         return { ok: true, result };
       }
       case 'remove-admin-key': {
@@ -528,7 +529,7 @@ export class Broker {
         if (starId === undefined || label === undefined) return { ok: false, error: 'remove-admin-key 缺少 starId/label' };
         const entries = loadBrokerFile(this.d.registryFile).stars.find((s) => s.starId === starId)?.nodes ?? [];
         const removed = removeAdminKeyFor(this.d.registryFile, starId, label);
-        this.auditAdmin('remove-admin-key', `星 ${starId} label=${removed ?? label}`, LOCAL);
+        this.auditAdmin('remove-admin-key', `星 ${starId} label=${removed ?? label}`, LOCAL, [starId]);
         if (removed === undefined) return { ok: false, error: `星 ${starId} 无匹配管理钥 ${label}——crosschat serve --list 可查` };
         this.revokeCredentials(starId, entries.filter((entry) => entry.label === removed));
         return { ok: true, removed };
@@ -538,7 +539,7 @@ export class Broker {
         const label = str('label');
         if (starId === undefined || label === undefined) return { ok: false, error: 'remove-node 缺少 starId/label' };
         const removed = this.removeNodeCredential(starId, label);
-        this.auditAdmin('remove-node', `星 ${starId} label=${label}`, LOCAL);
+        this.auditAdmin('remove-node', `星 ${starId} label=${label}`, LOCAL, [starId]);
         return { ok: true, removed };
       }
       default:
@@ -1416,8 +1417,8 @@ export class Broker {
    * 034 审计：管理 op 逐笔记 broker.log——来源=本机插座 | 星管理钥(label)。
    * 钥匙本体永不进日志（只记 label）。
    */
-  private auditAdmin(action: string, subject: string, source: string): void {
-    this.log(`audit admin-op ${action} ${subject} 来源=${source}`);
+  private auditAdmin(action: string, subject: string, source: string, starIds?: readonly string[]): void {
+    this.log(formatAdminAudit(action, subject, source, starIds));
   }
 
   /** 034 WS 管理 op（admin-op 帧）：矩阵闸 → 星域执行 → 审计。 */
@@ -1439,7 +1440,7 @@ export class Broker {
       return;
     }
     const starLabel = star.name ?? star.starId ?? '?';
-    const audit = (action: string): void => this.auditAdmin(action, `星 ${starLabel}`, `星管理钥(${session.adminLabel ?? '?'})`);
+    const audit = (action: string): void => this.auditAdmin(action, `星 ${starLabel}`, `星管理钥(${session.adminLabel ?? '?'})`, star.starId ? [star.starId] : []);
     switch (frame.action) {
       case 'star-snapshot': {
         try {

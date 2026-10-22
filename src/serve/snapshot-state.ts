@@ -37,6 +37,6 @@ export function readSnapshotStar(file: string, starId: string): StarRecord {
     const star: unknown = matches[0];
     if (matches.length !== 1 || !record(star) || !optionalText(star.name) || !Array.isArray(star.nodes) || !star.nodes.every(node)
       || !Array.isArray(star.roster) || !star.roster.every(member)) throw new Error('星快照目标缺失或形状无效');
-    return { starId, ...(typeof star.name === 'string' ? { name: star.name } : {}), nodes: star.nodes, roster: star.roster };
+    return { ...star, starId, ...(typeof star.name === 'string' ? { name: star.name } : {}), nodes: star.nodes, roster: star.roster };
   } finally { closeSync(fd); }
 }

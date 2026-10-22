@@ -2,6 +2,7 @@ import { lstat, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { communicationPairId } from './communications.js';
 import { decodeRef } from '../../ref.js';
+import { auditStarIds, isAdminAudit } from '../../serve/admin-audit.js';
 import { queryLogWindow } from '../queries/logs.js';
 import type { LogCursor } from '../queries/logs.js';
 import { checkAbort, isRecord, queryError } from '../queries/reading.js';
@@ -31,6 +32,8 @@ export interface ManagedLogOptions {
   sessionRef?: SessionRef;
   pairId?: string;
   contextId?: string;
+  audit?: 'admin-op';
+  starId?: string;
 }
 
 const secretKey = /^(?:key|adminkey|auth|proof|nonce|token|peertoken|envelope|body|content|messages|adminpipe|messagingsocketpath|socketpath)$/i;
@@ -75,6 +78,7 @@ function safeLine(raw: string): string {
 }
 
 function matches(raw: string, options: ManagedLogOptions): boolean {
+  if (options.audit) return isAdminAudit(raw) && (!options.starId || auditStarIds(raw)?.includes(options.starId) === true);
   if (!options.sessionRef && !options.pairId) return true;
   let entry: unknown;
   try { entry = JSON.parse(raw); } catch { return false; }
@@ -106,6 +110,10 @@ export async function queryManagedLog(options: ManagedLogOptions): Promise<Manag
     const catalog = listing.items;
     const source = catalog.find((entry) => entry.id === (options.sourceId ?? 'send-log'));
     if (!source) return { ...empty, sources: catalog, errors: [{ source: 'logs', kind: 'unavailable', message: '此日志来源未登记', nextStep: '按 t 选择已登记的本机日志来源' }] };
+    if (options.starId !== undefined && (!options.starId || options.starId.length > 1024 || options.audit !== 'admin-op')
+      || options.audit !== undefined && (options.audit !== 'admin-op' || !['broker', 'broker.old'].includes(source.id) || options.sessionRef || options.pairId)) {
+      return { ...empty, source, sources: catalog, errors: [{ source: source.path, kind: 'unavailable', message: '管理审计范围或来源无效。', nextStep: '从本机星列表重新进入该星管理审计。' }] };
+    }
     if ((options.sessionRef || options.pairId) && !source.id.startsWith('send-log')) return { ...empty, source, sources: catalog, errors: [{ source: source.path, kind: 'unavailable', message: '此来源没有可验证的会话或通信对元数据', nextStep: '切换到投递日志查看精确关联，或从 :logs 查看该来源全部内容' }] };
     try {
       const metadata = await lstat(source.path);
@@ -119,6 +127,8 @@ export async function queryManagedLog(options: ManagedLogOptions): Promise<Manag
     checkAbort(options.signal);
     const epoch = (options.previous?.epoch ?? 0) + (page.rotated ? 1 : 0);
     const errors: QueryError[] = [...listing.errors, ...page.errors];
+    const unscoped = options.starId && options.audit ? page.entries.slice(-1000).filter((entry) => isAdminAudit(entry.text) && auditStarIds(entry.text) === undefined).length : 0;
+    if (unscoped) errors.push({ source: source.path, kind: 'unavailable', message: `当前窗口有${unscoped}行旧管理审计缺少完整星标识，无法准确归属，未混入所选星。`, nextStep: '按 t 查看完整broker日志核对旧记录；名称相同不能证明属于当前星。' });
     if (page.omittedLeadingLine) errors.push({ source: source.path, kind: 'unavailable', message: '尾窗开头有一行未完整读取，已隐藏片段且不可复制', nextStep: '按 t 查看轮转来源；超出窗口的内容请在原生终端检查完整文件' });
     const rowLimit = page.entries.length > 1000;
     if (rowLimit) errors.push({ source: source.path, kind: 'unavailable', message: '只显示最近1000个完整起始行', nextStep: '筛选当前有界窗口；更早内容可在原生终端查看完整文件' });
