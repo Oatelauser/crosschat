@@ -4,17 +4,12 @@
  * attach 守连接（断线重连原样重声明，退出即 detach）、extends 四级校验接线、
  * serve --adopt 收编活进程、9b 降级告警。纯 IPC+WS+扫描，零模型调用。
  */
-import { spawn } from 'node:child_process';
-import { createConnection, type Socket } from 'node:net';
 import { homedir, hostname } from 'node:os';
-import { fileURLToPath } from 'node:url';
-import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import process from 'node:process';
 import { MultichatError } from '../errors.js';
 import { appendWithRotate } from '../log-rotate.js';
 import { CAP_SESSION_MEMBERS, hasCap } from '../serve/protocol.js';
-import type { SessionMemberDecl } from '../serve/protocol.js';
 import { attachPipePath } from '../serve/node.js';
 import { readNodeConfig } from '../serve/node-config.js';
 import type { BrokerEntry } from '../serve/node-config.js';
@@ -27,6 +22,11 @@ import { decodeRef } from '../ref.js';
 import { readSendLogTail, defaultSendLogFile } from '../send-log.js';
 import { listClaudeSessions as listClaudeSessionsReal } from '../claude/registry.js';
 import { listCodexThreads as listCodexThreadsReal } from '../codex/discovery.js';
+
+import { connectAttachPipe, ensureAggregator, queryAttachStatus, spawnServeDetachReal } from '../serve/attach-client.js';
+import type { AttachPipeClient } from '../serve/attach-client.js';
+export { connectAttachPipe, ensureAggregator, queryAttachStatus, spawnServeDetachReal } from '../serve/attach-client.js';
+export type { AttachPipeClient, AttachStatusReply } from '../serve/attach-client.js';
 
 // ---- 旗标解析（claude/codex 包装器共用；codex 无 -n） ---------------------------
 
@@ -117,16 +117,6 @@ export interface StarJoinDeps {
   aggregatorTimeoutMs?: number;
 }
 
-/** 真值依赖的自动拉聚合器腿（serve.ts 的 adopt 桥同用）。 */
-export function spawnServeDetachReal(selector: string): void {
-  const entry = process.argv[1] ?? fileURLToPath(new URL('../cli.js', import.meta.url));
-  const child = spawn(process.execPath, [realpathSync(entry), 'serve', '--connect', ...(selector === '' ? [] : [selector]), '--detach'], {
-    detached: true,
-    stdio: 'ignore',
-  });
-  child.unref();
-}
-
 export function realStarJoinDeps(): StarJoinDeps {
   return {
     tcpBaseDir: join(homedir(), '.crosschat'),
@@ -158,121 +148,6 @@ function realMachineName(): string {
     return readNodeConfig(join(tcpDir(join(homedir(), '.crosschat')), 'node.json')).showName ?? hostname();
   } catch {
     return hostname();
-  }
-}
-
-// ---- attach 管道客户端 ------------------------------------------------------------
-
-export interface AttachPipeClient {
-  /** 单帧请求/回执（换行 JSON；回执合并 status 探针字段）。 */
-  send(req: unknown): Promise<{ ok: boolean; error?: string; disconnected?: boolean } & Partial<AttachStatusReply>>;
-  /** 管道断开（聚合器停/重启）——监督循环据此重连。 */
-  waitClose(): Promise<void>;
-  close(): void;
-}
-
-/** 连 attach 管道（失败重试 retries 次每次 retryMs——聚合器上线首起管道有窗口）。 */
-export function connectAttachPipe(pipePath: string, retries = 0, retryMs = 300): Promise<AttachPipeClient> {
-  return new Promise((resolve, reject) => {
-    const tryConnect = (left: number): void => {
-      const socket: Socket = createConnection({ path: pipePath });
-      const giveUp = (err: Error): void => {
-        socket.destroy();
-        if (left <= 0) return reject(err);
-        setTimeout(() => tryConnect(left - 1), retryMs);
-      };
-      socket.once('error', giveUp);
-      socket.once('connect', () => {
-        socket.removeListener('error', giveUp);
-        let buf = '';
-        let closedResolve: (() => void) | undefined;
-        const closedPromise = new Promise<void>((r) => { closedResolve = r; });
-        const waiters: Array<(r: { ok: boolean; error?: string; disconnected?: boolean }) => void> = [];
-        const disconnected = () => ({ ok: false, error: 'attach 管道已断开，请求结果未确认', disconnected: true });
-        socket.on('data', (chunk) => {
-          buf += chunk.toString('utf8');
-          for (;;) {
-            const idx = buf.indexOf('\n');
-            if (idx < 0) break;
-            const line = buf.slice(0, idx);
-            buf = buf.slice(idx + 1);
-            if (line.trim() === '') continue;
-            const waiter = waiters.shift();
-            if (waiter !== undefined) {
-              try {
-                waiter(JSON.parse(line) as { ok: boolean; error?: string });
-              } catch {
-                waiter({ ok: false, error: 'attach 管道回执不是合法 JSON' });
-              }
-            }
-          }
-        });
-        socket.once('close', () => {
-          for (const waiter of waiters.splice(0)) waiter(disconnected());
-          closedResolve?.();
-        });
-        socket.on('error', () => socket.destroy());
-        resolve({
-          send: (req) =>
-            new Promise((res) => {
-              if (socket.destroyed || !socket.writable) return res(disconnected());
-              waiters.push((r) => res(r as { ok: boolean; error?: string } & Partial<AttachStatusReply>));
-              socket.write(`${JSON.stringify(req)}\n`);
-            }),
-          waitClose: () => closedPromise,
-          close: () => socket.destroy(),
-        });
-      });
-    };
-    tryConnect(retries);
-  });
-}
-
-/** attach 管道 status 探针回执（成员表 + broker 能力）。 */
-export interface AttachStatusReply {
-  online: boolean;
-  brokerCap: boolean;
-  members: SessionMemberDecl[];
-}
-
-export async function queryAttachStatus(pipe: AttachPipeClient): Promise<AttachStatusReply | undefined> {
-  const reply = await pipe.send({ op: 'status' });
-  return reply.ok && Array.isArray(reply.members) && typeof reply.brokerCap === 'boolean'
-    ? { online: reply.online === true, brokerCap: reply.brokerCap, members: reply.members }
-    : undefined;
-}
-
-// ---- 聚合器保障 -------------------------------------------------------------------
-
-/**
- * 确保（本机,星）聚合器在线并返回其管道连接：管道先试（聚合器在跑即直连）；
- * 不在则自动 `serve --connect <selector> --detach` 拉起（013 同星护栏在 serve
- * 侧在位——误拉会被拒，重试循环继续等真守护的管道），拉起后重试至超时。
- */
-export async function ensureAggregator(deps: StarJoinDeps, entry: BrokerEntry, selector: string): Promise<AttachPipeClient> {
-  const configFile = join(tcpDir(deps.tcpBaseDir), 'node.json');
-  assertNodeNotRevoked(configFile, entry);
-  const pipePath = attachPipePath(entry, tcpDir(deps.tcpBaseDir));
-  const timeoutMs = deps.aggregatorTimeoutMs ?? 30_000;
-  try {
-    return await connectAttachPipe(pipePath);
-  } catch {
-    assertNodeNotRevoked(configFile, entry);
-    // 不在线：自动拉起（失败不追问——可能 013 护栏拒绝=已有守护在起，重试等管道）
-    deps.spawnServeDetach(selector);
-  }
-  const deadline = (deps.now?.() ?? Date.now()) + timeoutMs;
-  for (;;) {
-    await sleep(500);
-    assertNodeNotRevoked(configFile, entry);
-    try {
-      return await connectAttachPipe(pipePath);
-    } catch {
-      if ((deps.now?.() ?? Date.now()) > deadline) {
-        const cmd = selector === '' ? 'crosschat serve --connect --detach' : `crosschat serve --connect ${selector} --detach`;
-        throw new MultichatError('NOT_READY', `星 ${entry.name ?? selector} 的聚合器未就绪（已尝试自动拉起）——手动排查：${cmd}，看日志 ~/.crosschat/tcp/node*.log`);
-      }
-    }
   }
 }
 

@@ -330,6 +330,8 @@ export class NodeClient {
   private memberTimer?: ReturnType<typeof setInterval>;
   /** 018：broker 会话级能力（info.caps 协商；false=老 broker，成员声明不发送）。 */
   private brokerSessionCap = false;
+  /** Identity belongs to one authenticated WS lifetime, never a config snapshot. */
+  private attachIdentity?: { socket: SocketLike; starId: string; machine: string };
   /** 018（9b）：降级告警只出声一次（重连老 broker 不刷屏；升级 broker 后按新能力行事）。 */
   private warnedNoCap = false;
   /** 028：对账循环重入闸（members-query 往返慢于 tick 时跳过本轮，防等待者堆积）。 */
@@ -362,6 +364,7 @@ export class NodeClient {
       return;
     }
     this.stopped = true;
+    this.attachIdentity = undefined;
     this.cancelDiscoveryReads();
     this.clearFrameWaiters(new Error('stopped'));
     try {
@@ -437,8 +440,13 @@ export class NodeClient {
     const closedPromise = new Promise<void>((resolve) => {
       closed = resolve;
     });
-    ws.once('close', () => { this.cancelDiscoveryReads(ws); closed(); });
-    ws.once('error', () => { this.cancelDiscoveryReads(ws); closed(); });
+    const onClosed = () => {
+      this.cancelDiscoveryReads(ws);
+      if (this.attachIdentity?.socket === ws) this.attachIdentity = undefined;
+      closed();
+    };
+    ws.once('close', onClosed);
+    ws.once('error', onClosed);
     ws.on('message', (data) => {
       void this.onFrame(String(data), ws);
     });
@@ -465,11 +473,12 @@ export class NodeClient {
         }
       }
       this.authenticatingSocket = ws;
+      const connectedMachine = this.d.machineId() ?? '';
       ws.send(encodeFrame({
         op: 'connect',
         proto: PROTOCOL_VERSION,
         role: 'node',
-        machineId: this.d.machineId() ?? '',
+        machineId: connectedMachine,
         auth: cfg.key,
         // 036：自报名取条目级覆盖 ?? 顶层全局（修订 017 单一事实源为双态）
         ...((cfg.showName ?? this.d.config.showName) === undefined ? {} : { name: cfg.showName ?? this.d.config.showName }),
@@ -485,6 +494,9 @@ export class NodeClient {
       // 帧补核，同 syncBrokerInfo 预检语义（不一致即 STAR_ID_MISMATCH 停机等修配置）
       if ((info as InfoFrame).starId === undefined && (verdict as ConnectedFrame).starId !== undefined) {
         this.syncBrokerInfo(verdict as ConnectedFrame);
+      }
+      if (verdict.op === 'connected' && typeof verdict.starId === 'string' && verdict.starId !== '') {
+        this.attachIdentity = { socket: ws, starId: verdict.starId, machine: connectedMachine };
       }
       everOnline = true;
       this.discoverySocket = ws;
@@ -514,6 +526,7 @@ export class NodeClient {
       if (this.ws === ws) this.ws = undefined;
       if (this.authenticatingSocket === ws) this.authenticatingSocket = undefined;
       if (this.discoverySocket === ws) this.discoverySocket = undefined;
+      if (this.attachIdentity?.socket === ws) this.attachIdentity = undefined;
     }
     return everOnline;
   }
@@ -783,7 +796,7 @@ export class NodeClient {
   /** attach IPC 单帧处理：attach/detach/sync/status，成员表变化即重播 sessions 帧。 */
   private handleAttachLine(
     line: string,
-    reply: (r: { ok: true } | { ok: true; online: boolean; brokerCap: boolean; members: SessionMemberDecl[] } | { ok: false; error: string }) => void,
+    reply: (r: { ok: true } | { ok: true; online: boolean; brokerCap: boolean; members: SessionMemberDecl[]; starId?: string; machine?: string } | { ok: false; error: string }) => void,
   ): void {
     if (this.state === 'revoked') {
       reply({ ok: false, error: '节点凭证已撤销，自动重连已暂停；换钥后显式重新连接' });
@@ -848,11 +861,14 @@ export class NodeClient {
     if (r.op === 'status') {
       // 018 批二：启动器/adopt 的只读探针——当前成员表 + broker 能力（extends
       // 校验与幂等判断的数据源；不动成员表不触发重播）
+      const online = this.state === 'online' && this.ws?.readyState === WebSocket.OPEN;
+      const identity = online && this.attachIdentity?.socket === this.ws ? this.attachIdentity : undefined;
       return reply({
         ok: true,
-        online: this.state === 'online',
+        online,
         brokerCap: this.brokerSessionCap,
         members: [...this.members.values()].map(memberToDecl),
+        ...(identity === undefined ? {} : { starId: identity.starId, machine: identity.machine }),
       });
     }
     return reply({ ok: false, error: `未知 attach 操作：${String(r.op)}` });
