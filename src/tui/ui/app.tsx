@@ -1,13 +1,14 @@
 import { Component, useEffect, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { Box, Text, useInput, usePaste, useWindowSize } from 'ink';
-import type { Key } from 'ink';
 import type { createTuiController } from '../app/controller.js';
 import { detailLines } from '../app/detail.js';
+import { helpLines } from '../app/help.js';
 import type { ResourceRegistry } from '../resources/registry.js';
-import type { TuiKey, TuiOverlay, TuiResource, TuiSnapshot } from '../model.js';
+import type { TuiOverlay, TuiResource, TuiSnapshot } from '../model.js';
 import { clipText, displayWidth, editorViewport, sanitizeTerminalText } from './text.js';
 import { formatTable } from './table.js';
+import { inputKeys } from './input.js';
 
 type Controller = ReturnType<typeof createTuiController>;
 interface Line { text: string; selected?: boolean; tone?: 'cyan' | 'yellow' | 'red' | 'gray' }
@@ -50,9 +51,9 @@ function formLines(overlay: TuiOverlay, width: number, height: number): Line[] {
 
 function bodyLines(snapshot: TuiSnapshot, resource: TuiResource, width: number, height: number): Line[] {
   if (snapshot.help) {
-    return [{ text: snapshot.help.title, tone: 'cyan' }, ...snapshot.help.entries.slice(snapshot.help.scrollOffset, snapshot.help.scrollOffset + height - 1).map((entry) => ({
-      text: `${entry.shortcut}  ${entry.label}${entry.enabled ? '' : ` · 不可用：${entry.reason ?? '暂不支持'}`}${entry.nextStep ? `；${entry.nextStep}` : ''}`,
-      tone: entry.enabled ? undefined : 'gray' as const,
+    return [{ text: `${snapshot.help.title} · 全部按键`, tone: 'cyan' }, ...helpLines(snapshot.help.entries, width).slice(snapshot.help.scrollOffset, snapshot.help.scrollOffset + height - 1).map((line) => ({
+      text: line.text,
+      tone: line.enabled ? undefined : 'gray' as const,
     }))];
   }
   if (snapshot.detail && snapshot.mode !== 'form') {
@@ -115,12 +116,6 @@ export function TuiScreen({ snapshot, resource, version }: { snapshot: TuiSnapsh
   </Box>;
 }
 
-function normalizeKey(input: string, key: Key): TuiKey {
-  const names: readonly [boolean, string][] = [[key.upArrow, 'up'], [key.downArrow, 'down'], [key.leftArrow, 'left'], [key.rightArrow, 'right'], [key.pageUp, 'pageup'], [key.pageDown, 'pagedown'], [key.home, 'home'], [key.end, 'end'], [key.return, 'enter'], [key.escape, 'escape'], [key.tab, 'tab'], [key.backspace, 'backspace'], [key.delete, 'delete']];
-  const name = names.find(([pressed]) => pressed)?.[1];
-  return { name: name ?? input, text: name ? undefined : input, ctrl: key.ctrl, shift: key.shift, alt: key.meta };
-}
-
 interface AppProps { controller: Controller; registry: ResourceRegistry; version: string; onError(error: unknown): void }
 
 // Keep exception messages and component stacks out of Ink's default error screen.
@@ -136,11 +131,17 @@ function TuiRuntime({ controller, registry, version, onError }: AppProps) {
   const size = useWindowSize();
   useEffect(() => { controller.resize(size.columns, size.rows); }, [controller, size.columns, size.rows]);
   useInput((input, key) => {
-    if (snapshot.mode === 'form' && !formFits(snapshot) && !key.escape && !(key.ctrl && input === 'c')) return;
-    try { controller.handleKey(normalizeKey(input, key)); } catch (error) { onError(error); }
+    try {
+      for (const event of inputKeys(input, key)) {
+        const current = controller.getSnapshot();
+        if (current.mode === 'form' && !formFits(current) && event.name !== 'escape' && !(event.ctrl && event.name === 'c')) continue;
+        controller.handleKey(event);
+      }
+    } catch (error) { onError(error); }
   });
   usePaste((text) => {
-    if (snapshot.mode === 'form' && !formFits(snapshot)) return;
+    const current = controller.getSnapshot();
+    if (current.mode === 'form' && !formFits(current)) return;
     try { controller.handleKey({ name: 'paste', text }); } catch (error) { onError(error); }
   });
   const resource = registry.resolve(snapshot.route.resourceId);

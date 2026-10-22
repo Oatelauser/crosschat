@@ -6,6 +6,7 @@ import type { ResourceRegistry } from '../resources/registry.js';
 import { editText } from '../ui/text.js';
 import type { EditEvent } from '../ui/text.js';
 import { detailLines } from './detail.js';
+import { helpLines } from './help.js';
 
 export interface TuiControllerOptions {
   registry: ResourceRegistry;
@@ -50,7 +51,8 @@ function shortcut(key: TuiKey): string {
 }
 
 function editEvent(key: TuiKey): EditEvent | undefined {
-  const type = ({ '←': 'left', '→': 'right', Home: 'home', End: 'end', Backspace: 'backspace', Delete: 'delete' } as const)[shortcut(key) as '←' | '→' | 'Home' | 'End' | 'Backspace' | 'Delete'];
+  const edits: Readonly<Record<string, 'left' | 'right' | 'home' | 'end' | 'backspace' | 'delete'>> = { '←': 'left', '→': 'right', Home: 'home', End: 'end', Backspace: 'backspace', Delete: 'delete' };
+  const type = edits[shortcut(key)];
   if (type) return { type };
   if (!key.ctrl && !key.alt && (key.text || key.name.length === 1)) return { type: 'insert', text: key.text ?? key.name };
   return undefined;
@@ -61,9 +63,10 @@ function routeKey(route: TuiRoute): string { return JSON.stringify([route.resour
 
 export function createTuiController(options: TuiControllerOptions) {
   const listeners = new Set<() => void>();
+  const contextLabels: Readonly<Record<string, string>> = { local: '本机', ssh: 'SSH', tcp: 'TCP' };
   const contextRows: readonly TuiRow[] = options.contexts.map((context) => ({
     id: context.id, contextId: context.id,
-    cells: { kind: ({ local: '本机', ssh: 'SSH', tcp: 'TCP' } as Record<string, string>)[context.kind] ?? context.kind, name: context.label, target: context.target ?? '', description: context.description ?? '' },
+    cells: { kind: contextLabels[context.kind] ?? context.kind, name: context.label, target: context.target ?? '', description: context.description ?? '' },
     detail: [
       { label: '类型', value: context.kind }, { label: '名称', value: context.label }, { label: '目标', value: context.target ?? '' },
       { label: '身份提示', value: context.identityHint ?? '尚未核实' },
@@ -271,7 +274,9 @@ export function createTuiController(options: TuiControllerOptions) {
   function move(id: string) {
     const amount = id === 'page-up' ? -pageSize() : id === 'page-down' ? pageSize() : id === 'previous' ? -1 : 1;
     if (mode === 'help' && help) {
-      help = { ...help, scrollOffset: Math.max(0, Math.min(help.entries.length - 1, help.scrollOffset + amount)) };
+      const max = Math.max(0, helpLines(help.entries, viewport.columns).length - pageSize());
+      const offset = id === 'first' ? 0 : id === 'last' ? max : help.scrollOffset + amount;
+      help = { ...help, scrollOffset: Math.max(0, Math.min(max, offset)) };
     } else if (mode === 'detail' && detail) {
       const lines = detailLines(detail.fields, Math.max(1, viewport.columns - 2));
       const index = id === 'first' ? 0 : id === 'last' ? lines.length - 1 : detailCursorLine + amount;
@@ -503,7 +508,7 @@ export function createTuiController(options: TuiControllerOptions) {
       const pressed = shortcut(key);
       if (pressed === 'Esc' || pressed === '?') { mode = helpReturnMode; help = undefined; publish(); return; }
       const action = options.registry.actions(page.route.resourceId, 'help').find((entry) => entry.shortcut.split(' / ').includes(pressed));
-      if (action && ['previous', 'next', 'page-up', 'page-down'].includes(action.id)) move(action.id);
+      if (action && ['previous', 'next', 'page-up', 'page-down', 'first', 'last'].includes(action.id)) move(action.id);
       return;
     }
     const pressed = shortcut(key);
@@ -516,7 +521,10 @@ export function createTuiController(options: TuiControllerOptions) {
     subscribe: (listener: () => void) => { if (!disposed) listeners.add(listener); return () => { listeners.delete(listener); }; },
     handleKey,
     resize: (columns: number, rows: number) => {
-      viewport = { columns: Math.max(1, Math.floor(columns)), rows: Math.max(1, Math.floor(rows)) }; ensureDetailVisible(); publish();
+      viewport = { columns: Math.max(1, Math.floor(columns)), rows: Math.max(1, Math.floor(rows)) };
+      ensureDetailVisible();
+      if (help) help = { ...help, scrollOffset: Math.min(help.scrollOffset, Math.max(0, helpLines(help.entries, viewport.columns).length - pageSize())) };
+      publish();
     },
     refresh,
     dispose: () => { if (disposed) return; cancelRead(false); cancelWork(); formController?.abort(); formGeneration++; disposed = true; listeners.clear(); },
