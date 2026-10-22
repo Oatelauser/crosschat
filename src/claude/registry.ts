@@ -31,7 +31,7 @@ export function defaultClaudeSessionsDir(): string {
   return join(homedir(), '.claude', 'sessions');
 }
 
-function parseEntry(text: string): ClaudeSessionEntry | undefined {
+export function parseEntry(text: string): ClaudeSessionEntry | undefined {
   let value: Record<string, unknown>;
   try {
     value = JSON.parse(text) as Record<string, unknown>;

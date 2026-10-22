@@ -36,11 +36,13 @@ function statusRows(page: StatusOverview, contextId: string): TuiRow[] {
   const connectionFields = (items: typeof ssh): TuiField[] => items.map((item) => ({ label: item.name, value: `${item.target}\n配置引用：${item.id}\n配置不代表已认证或在线` }));
   const latest = page.lastDoctor;
   const doctorState = latest?.summary ? `${latest.summary.pass} 项通过，${latest.summary.warn} 项警告，${latest.summary.error} 项错误` : '尚未体检<not_run>';
+  const configurationCount = (count: number, noun: string): string => page.completeness === 'complete'
+    ? `${count} 个${noun}` : `已观察 ${count} 条配置；完整性未知<${page.completeness}>`;
   return [
     row('sessions', '本机会话', '原生会话来源', page.providers.length ? page.providers.map((provider) => `${provider.providerId} ${provider.count}（匿名 ${provider.anonymous}）${provider.completeness === 'complete' ? '' : `；不完整<${provider.completeness}>`}`).join(' / ') : '会话来源尚无可确认结果', 'sessions',
       page.providers.map((provider) => ({ label: provider.providerId, value: `已观察 ${provider.count}；匿名 ${provider.anonymous}；完整性 ${provider.completeness}` }))),
-    row('ssh', '连接配置', 'SSH 目标', `${ssh.length} 个已配置；未执行连接检测`, 'ctx', connectionFields(ssh)),
-    row('tcp', '连接配置', 'TCP 关联配置', `${tcp.length} 个配置连接；认证与在线状态未核实`, 'ctx', connectionFields(tcp)),
+    row('ssh', '连接配置', 'SSH 目标', `${configurationCount(ssh.length, '已配置')}；未执行连接检测`, 'ctx', connectionFields(ssh)),
+    row('tcp', '连接配置', 'TCP 关联配置', `${configurationCount(tcp.length, '配置连接')}；认证与在线状态未核实`, 'ctx', connectionFields(tcp)),
     row('services', '本机服务', 'broker / 节点快照', page.services.length ? page.services.map((service) => `${(service.brokerAlias ?? service.selector) || service.kind}：${serviceState(service)}`).join(' / ') : '未观察到服务快照', 'services',
       page.services.map((service) => ({ label: service.file, value: `${serviceState(service)}\n时效 ${service.freshness}；更新时间 ${service.lastUpdated}；PID ${service.pid ?? '未提供'}；PID 活性 ${service.processAlive === undefined ? '未知' : service.processAlive}\n${service.pause?.message ?? ''}` }))),
     row('outbox', '投递', '发件箱 / 看门狗', `${page.outbox.items === null ? '条数未知<unknown>' : `${page.outbox.items} 条暂存`}；看门狗${watchdogState(page.watchdog)}`, 'outbox', [

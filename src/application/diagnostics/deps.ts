@@ -1,16 +1,92 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { closeSync, existsSync, fstatSync, lstatSync, openSync, readFileSync, readSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { listClaudeSessions } from '../../claude/registry.js';
+import { listClaudeSessions, parseEntry } from '../../claude/registry.js';
 import { resolveClaudeExe } from '../../claude/resolve-exe.js';
 import { resolveCodexExecutable } from '../../codex/transport.js';
 import { defaultOutboxDir, outboxSummary } from '../../outbox.js';
 import { watchdogStatus } from '../../watchdog.js';
+import { isProcessAlive } from '../../platform/process-inspector.js';
 
 import type { ClaudeRegistryScan } from '../../claude/registry.js';
+
+export class DoctorSourceReadError extends Error {
+  constructor() { super('Diagnostic source is unreadable, malformed or exceeds its read limit.'); this.name = 'DoctorSourceReadError'; }
+}
+const isMissing = (error: unknown): boolean => error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT';
+const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/** Scoped diagnostics run in the owned process; synchronous legacy probes stay off the UI loop. */
+function scopedRead(path: string): string | undefined {
+  let descriptor: number | undefined;
+  try {
+    const entry = lstatSync(path);
+    if (!entry.isFile() || entry.isSymbolicLink()) throw new DoctorSourceReadError();
+    descriptor = openSync(path, 'r');
+    const stat = fstatSync(descriptor);
+    if (!stat.isFile() || stat.size > 2 * 1024 * 1024) throw new DoctorSourceReadError();
+    const buffer = Buffer.alloc(Math.min(stat.size + 1, 2 * 1024 * 1024 + 1));
+    const bytes = readSync(descriptor, buffer, 0, buffer.length, 0);
+    if (bytes > 2 * 1024 * 1024) throw new DoctorSourceReadError();
+    return buffer.subarray(0, bytes).toString('utf8');
+  } catch (error) { if (isMissing(error)) return undefined; throw new DoctorSourceReadError(); }
+  finally { if (descriptor !== undefined) closeSync(descriptor); }
+}
+
+function scopedDirectory(path: string): string[] {
+  try {
+    const entry = lstatSync(path);
+    if (!entry.isDirectory() || entry.isSymbolicLink()) throw new DoctorSourceReadError();
+    const names = readdirSync(path);
+    if (names.length > 10_000) throw new DoctorSourceReadError();
+    return names;
+  } catch (error) { if (isMissing(error)) return []; throw new DoctorSourceReadError(); }
+}
+
+function scopedClaude(directory: string): ClaudeRegistryScan {
+  const scan: ClaudeRegistryScan = { sessions: [], malformed: 0 };
+  for (const file of scopedDirectory(directory)) {
+    if (!file.endsWith('.json')) continue;
+    const text = scopedRead(join(directory, file));
+    let entry: ReturnType<typeof parseEntry>;
+    try { entry = text === undefined ? undefined : parseEntry(text); } catch { entry = undefined; }
+    if (!entry) { scan.malformed++; continue; }
+    if (['interactive', 'bg'].includes(entry.kind) && isProcessAlive(entry.pid)) scan.sessions.push(entry);
+  }
+  return scan;
+}
+
+function scopedOutbox(directory: string): { threadId: string; count: number; oldestParkedAt?: number }[] {
+  const summary: { threadId: string; count: number; oldestParkedAt?: number }[] = [];
+  for (const file of scopedDirectory(directory)) {
+    if (!file.endsWith('.json')) continue;
+    const threadId = file.slice(0, -5);
+    if (!threadId || threadId === '.' || threadId === '..' || /[/\\:\0]/.test(threadId)) throw new DoctorSourceReadError();
+    const text = scopedRead(join(directory, file));
+    let input: unknown;
+    try { input = JSON.parse(text ?? ''); } catch { throw new DoctorSourceReadError(); }
+    if (!record(input) || !Array.isArray(input.items)) throw new DoctorSourceReadError();
+    let oldest = Infinity;
+    for (const item of input.items) {
+      if (!record(item) || typeof item.parkedAt !== 'number' || !Number.isFinite(item.parkedAt) || item.parkedAt < 0) throw new DoctorSourceReadError();
+      oldest = Math.min(oldest, item.parkedAt);
+    }
+    if (input.items.length) summary.push({ threadId, count: input.items.length, oldestParkedAt: oldest });
+  }
+  return summary;
+}
+
+function scopedWatchdog(directory: string): { running: boolean; pid?: number } {
+  const text = scopedRead(join(directory, 'watchdog.lock'));
+  if (text === undefined) return { running: false };
+  const fields = text.trim().split(/\s+/);
+  const pid = Number(fields[0]); const at = Number(fields[1]);
+  if (fields.length !== 2 || !Number.isSafeInteger(pid) || pid <= 0 || !Number.isFinite(at) || at < 0) throw new DoctorSourceReadError();
+  return Date.now() - at < 90_000 || isProcessAlive(pid) ? { running: true, pid } : { running: false };
+}
 
 export interface DoctorDeps {
   nodeVersion: string;
@@ -54,15 +130,17 @@ export function defaultDoctorDeps(options: { home?: string; env?: NodeJS.Process
   const home = options.home ?? homedir();
   const env = options.env ?? process.env;
   const outboxDir = options.home === undefined ? defaultOutboxDir() : join(home, '.crosschat', 'outbox');
+  const scoped = options.home !== undefined;
   return {
     nodeVersion: process.versions.node,
     env,
-    resolveClaude: () => resolveClaudeExe(),
-    listClaudeSessions: () => listClaudeSessions(join(home, '.claude', 'sessions')),
-    codexBin: () => resolveCodexExecutable(),
+    resolveClaude: () => scoped && env.CROSSCHAT_CLAUDE_BIN ? env.CROSSCHAT_CLAUDE_BIN : resolveClaudeExe(),
+    listClaudeSessions: () => scoped ? scopedClaude(join(home, '.claude', 'sessions')) : listClaudeSessions(join(home, '.claude', 'sessions')),
+    codexBin: () => scoped && env.CROSSCHAT_CODEX_BIN ? env.CROSSCHAT_CODEX_BIN : resolveCodexExecutable(),
     run: (bin, args) => spawnSync(bin, [...args], { encoding: 'utf8', env }),
     exists: existsSync,
     readFile: (path) => {
+      if (scoped) return scopedRead(path);
       try {
         return readFileSync(path, 'utf8');
       } catch {
@@ -74,15 +152,16 @@ export function defaultDoctorDeps(options: { home?: string; env?: NodeJS.Process
       JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')) as { version: string }
     ).version,
     readDir: (dir) => {
+      if (scoped) return scopedDirectory(dir);
       try {
         return readdirSync(dir);
       } catch {
         return [];
       }
     },
-    listOutbox: () => outboxSummary(outboxDir),
+    listOutbox: () => scoped ? scopedOutbox(outboxDir) : outboxSummary(outboxDir),
     outboxDir,
-    watchdogRunning: () => watchdogStatus(outboxDir),
+    watchdogRunning: () => scoped ? scopedWatchdog(outboxDir) : watchdogStatus(outboxDir),
     tcpDir: join(home, '.crosschat', 'tcp'),
     probeTcp: (host, port) => {
       // 纯 socket connect 探活：子进程跑一段 net.connect，2s 预算内连上即达。
@@ -105,12 +184,13 @@ export function defaultDoctorDeps(options: { home?: string; env?: NodeJS.Process
           for (const name of readdirSync(dir).sort()) {
             const full = join(dir, name);
             if (statSync(full).isDirectory()) walk(full, `${prefix}${name}/`);
-            else files.push({ path: `${prefix}${name}`, content: readFileSync(full, 'utf8') });
+            else files.push({ path: `${prefix}${name}`, content: scoped ? scopedRead(full) ?? '' : readFileSync(full, 'utf8') });
           }
         };
         walk(base, '');
         return files;
-      } catch {
+      } catch (error) {
+        if (error instanceof DoctorSourceReadError) throw error;
         return undefined;
       }
     },

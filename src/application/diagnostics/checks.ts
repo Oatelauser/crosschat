@@ -8,6 +8,7 @@ import { DEFAULT_PORT } from '../../serve/broker.js';
 import { isProcessAlive } from '../../platform/process-inspector.js';
 import { listNodeStatusFiles, nodeStatusSelector, TCP_STATUS_FRESH_MS } from '../status/status-files.js';
 import type { DoctorDeps } from './deps.js';
+import { DoctorSourceReadError } from './deps.js';
 import { diagnosticCheck, summarizeDiagnosticChecks } from './model.js';
 import type { DiagnosticCheckGroup, DiagnosticGroup, DiagnosticInput, DiagnosticResult } from './model.js';
 
@@ -41,7 +42,8 @@ export function collectDoctorDiagnostics(deps: DoctorDeps): DiagnosticResult {
     if (scan.sessions.length === 0) add({ code: 'claude-empty', data: { executable } });
     else add({ code: 'claude-ready', data: { executable, count: scan.sessions.length } });
     if (scan.malformed > 0) add({ code: 'claude-registry-malformed', data: { count: scan.malformed } });
-  } catch {
+  } catch (error) {
+    if (error instanceof DoctorSourceReadError) throw error;
     add({ code: 'claude-missing', data: {} });
   }
 
