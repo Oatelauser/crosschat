@@ -12,4 +12,13 @@ describe('TUI resource registry', () => {
       expect.objectContaining({ shortcut: '?', label: '全部按键' }),
     ]));
   });
+
+  it('accepts extension resources and rejects ambiguous commands and invalid terminal widths', async () => {
+    const { createResourceRegistry, defaultResources } = await import('../src/tui/resources/registry.js');
+    const extension = { id: 'third-tool', label: '第三工具', aliases: ['third'], description: '不透明第三方资源', columns: [{ id: 'native', label: '原值', width: 17 }], actions: [] };
+    const registry = createResourceRegistry([...defaultResources, extension]);
+    expect(registry.resolve('third')).toEqual(extension);
+    expect(() => createResourceRegistry([...defaultResources, { ...extension, aliases: ['sessions'] }])).toThrow();
+    expect(() => createResourceRegistry([{ ...extension, columns: [{ id: 'native', label: '原值', width: 0 }] }])).toThrow();
+  });
 });
