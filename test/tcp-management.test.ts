@@ -100,4 +100,41 @@ describe('TCP management previews and fixed targets', () => {
     expect(await f.service.preview(request)).toMatchObject({ enabled: false });
     expect(f.executeLocal).not.toHaveBeenCalled();
   });
+
+  it('removes the selected single node credential with its exact revision and complete binding', async () => {
+    const f = fixture(); f.executeLocal.mockResolvedValue({ kind: 'applied', mode: 'hot', value: { removed: true } });
+    const request = { ...f.request('remove-node'), targetId: 'machine-row-full' };
+    expect(await f.apply(request)).toMatchObject({ kind: 'applied', mode: 'hot' });
+    expect(f.executeLocal).toHaveBeenCalledWith({ op: 'remove-node', starId: star.starId, label: credential.label, expected: { credentialRevision: credential.revision, machineId: fullMachine } }, request.signal);
+    f.current.credentials.push({ ...credential, id: 'other-credential-id', label: 'node-2' });
+    expect(await f.service.preview(request)).toMatchObject({ enabled: false, reason: expect.stringMatching(/逐把/) });
+  });
+
+  it('revokes only the complete selected admin credential and treats missing deletion proof as uncertain', async () => {
+    const f = fixture();
+    const admin = { ...credential, id: 'admin-row-full', kind: 'admin' as const, label: 'admin-long', machineId: null, machineName: null };
+    f.current.credentials.push(admin); f.executeLocal.mockResolvedValue({ kind: 'applied', mode: 'hot', value: { removed: admin.label } });
+    const request = { ...f.request('revoke-credential'), targetId: admin.id, targetRevision: admin.revision };
+    expect(await f.apply(request)).toMatchObject({ kind: 'applied' });
+    expect(f.executeLocal).toHaveBeenCalledWith({ op: 'remove-admin-key', starId: star.starId, label: admin.label, expected: { credentialRevision: admin.revision, machineId: null } }, request.signal);
+    f.executeLocal.mockResolvedValue({ kind: 'applied', mode: 'hot', value: {} });
+    expect(await f.apply(request)).toMatchObject({ kind: 'uncertain' });
+  });
+
+  it('shows the complete star destruction impact and sends its exact static revision', async () => {
+    const f = fixture(); f.executeLocal.mockResolvedValue({ kind: 'applied', mode: 'hot', value: { removed: { name: star.name, nodes: 1, roster: 1 } } });
+    const request = f.request('remove-star'); const preview = await f.service.preview(request);
+    expect(preview.enabled).toBe(true);
+    expect(JSON.stringify(preview.impact)).toContain(fullMachine);
+    expect(JSON.stringify(preview.impact)).toContain(member.nativeId);
+    expect(await f.service.apply({ ...request, expectedPreviewRevision: preview.revision })).toMatchObject({ kind: 'applied' });
+    expect(f.executeLocal).toHaveBeenCalledWith({ op: 'remove-star', starId: star.starId, expected: { starRevision: star.revision } }, request.signal);
+  });
+
+  it('binds show-name without a selection to the unique proven local machine and reports cold activation honestly', async () => {
+    const f = fixture(); f.executeLocal.mockResolvedValue({ kind: 'applied', mode: 'cold', value: undefined });
+    const request = { ...f.request('set-show-name', { scope: 'star', name: '本机新名' }), targetId: undefined };
+    expect(await f.apply(request)).toMatchObject({ kind: 'applied', mode: 'cold', message: expect.stringMatching(/重连/) });
+    expect(f.executeLocal).toHaveBeenCalledWith({ op: 'set-showname', starId: star.starId, name: '本机新名' }, request.signal);
+  });
 });
