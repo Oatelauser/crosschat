@@ -11,11 +11,19 @@ import { helpLines } from './help.js';
 export interface TuiControllerOptions {
   registry: ResourceRegistry;
   contexts: readonly TuiContext[];
+  contextSource?: { initial: TuiContextPage; read(signal: AbortSignal): Promise<TuiContextPage> };
   adapters: Readonly<Record<string, TuiResourceAdapter>>;
   initialSelectedContextId?: string;
+  onContextSelection?: (id: string) => void;
   clipboard?: (text: string, signal: AbortSignal) => Promise<void>;
   onExit?: () => void;
   now?: () => number;
+}
+
+export interface TuiContextPage {
+  contexts: readonly TuiContext[];
+  completeness: TuiPage['completeness'];
+  notice?: string;
 }
 
 interface ListState {
@@ -64,19 +72,22 @@ function routeKey(route: TuiRoute): string { return JSON.stringify([route.resour
 export function createTuiController(options: TuiControllerOptions) {
   const listeners = new Set<() => void>();
   const contextLabels: Readonly<Record<string, string>> = { local: '本机', ssh: 'SSH', tcp: 'TCP' };
-  const contextRows: readonly TuiRow[] = options.contexts.map((context) => ({
+  const initialContexts = options.contextSource?.initial ?? { contexts: options.contexts, completeness: 'complete' as const };
+  let contexts = [...initialContexts.contexts];
+  function contextRows(values: readonly TuiContext[], notice?: string): readonly TuiRow[] { return values.map((context) => ({
     id: context.id, contextId: context.id,
     cells: { kind: contextLabels[context.kind] ?? context.kind, name: context.label, target: context.target ?? '', description: context.description ?? '' },
     detail: [
       { label: '类型', value: context.kind }, { label: '名称', value: context.label }, { label: '目标', value: context.target ?? '' },
       { label: '身份提示', value: context.identityHint ?? '尚未核实' },
+      ...(notice ? [{ label: '读取提示', value: notice }] : []),
     ],
     copyValue: context.target ?? context.id,
-  }));
+  })); }
   let page: ListState = {
-    route: { resourceId: 'ctx' }, rows: contextRows,
-    selectedId: contextRows.some((row) => row.id === options.initialSelectedContextId) ? options.initialSelectedContextId : contextRows[0]?.id,
-    scrollOffset: 0, filter: '', completeness: 'complete',
+    route: { resourceId: 'ctx' }, rows: contextRows(contexts, initialContexts.notice),
+    selectedId: contexts.some((context) => context.id === options.initialSelectedContextId) ? options.initialSelectedContextId : contexts[0]?.id,
+    scrollOffset: 0, filter: '', completeness: initialContexts.completeness, notice: initialContexts.notice,
   };
   const pages = new Map<string, ListState>([[routeKey(page.route), page]]);
   const history: ListState[] = [];
@@ -106,7 +117,7 @@ export function createTuiController(options: TuiControllerOptions) {
   let activeRead: AbortController | undefined;
   let snapshot: TuiSnapshot;
 
-  function currentContext() { return options.contexts.find((context) => context.id === page.route.contextId); }
+  function currentContext() { return contexts.find((context) => context.id === page.route.contextId); }
   function pageSize() { return Math.max(1, viewport.rows - 9); }
   function visibleRows(): readonly TuiRow[] {
     const query = page.filter.toLocaleLowerCase();
@@ -155,9 +166,14 @@ export function createTuiController(options: TuiControllerOptions) {
   async function refresh(): Promise<void> {
     if (disposed) return;
     cancelRead(false);
-    if (page.route.resourceId === 'ctx') { page.rows = contextRows; page.completeness = 'complete'; publish(); return; }
+    const contextSource = page.route.resourceId === 'ctx' ? options.contextSource : undefined;
+    if (page.route.resourceId === 'ctx' && !contextSource) { publish(); return; }
+    if (page.route.contextId !== undefined && !currentContext()) {
+      page.completeness = 'unavailable'; page.error = undefined;
+      page.notice = '连接配置已不存在，请返回 ctx 重新选择连接。'; publish(); return;
+    }
     const adapter = options.adapters[page.route.resourceId];
-    if (!adapter) {
+    if (!contextSource && !adapter) {
       page.rows = []; page.completeness = 'unavailable'; page.error = undefined;
       page.notice = options.registry.resolve(page.route.resourceId)?.unavailableReason ?? '资源尚未启用。';
       publish(); return;
@@ -169,7 +185,11 @@ export function createTuiController(options: TuiControllerOptions) {
     loading = true; page.error = undefined; publish();
     let removeAbort: (() => void) | undefined;
     try {
-      const pending = adapter.read({ context: currentContext(), signal: controller.signal });
+      const pending: Promise<{ page: TuiPage; contexts?: readonly TuiContext[] }> = contextSource
+        ? contextSource.read(controller.signal).then((result) => ({ contexts: result.contexts, page: {
+          rows: contextRows(result.contexts, result.notice), completeness: result.completeness, notice: result.notice,
+        } }))
+        : adapter!.read({ context: currentContext(), signal: controller.signal }).then((result) => ({ page: result }));
       const cancelled = new Promise<undefined>((resolve) => {
         const onAbort = () => resolve(undefined);
         controller.signal.addEventListener('abort', onAbort, { once: true });
@@ -179,14 +199,15 @@ export function createTuiController(options: TuiControllerOptions) {
       const result = await Promise.race([pending, cancelled]);
       if (!result || disposed || generation !== readGeneration || requestPage !== page) return;
       const rowIds = new Set<string>();
-      for (const row of result.rows) {
+      for (const row of result.page.rows) {
         if (!row.id || rowIds.has(row.id)) throw new Error(`资源返回重复稳定标识或空标识: ${row.id}`);
         rowIds.add(row.id);
       }
-      page.rows = [...result.rows]; page.completeness = result.completeness; page.notice = result.notice; page.error = undefined;
+      if (result.contexts !== undefined) contexts = [...result.contexts];
+      page.rows = [...result.page.rows]; page.completeness = result.page.completeness; page.notice = result.page.notice; page.error = undefined;
     } catch (error) {
       if (!disposed && generation === readGeneration && requestPage === page && !controller.signal.aborted) {
-        page.error = errorText(error); page.completeness = page.rows.length ? 'partial' : 'unavailable';
+        page.error = contextSource ? '无法读取连接配置，请检查来源和访问权限后重试。' : errorText(error); page.completeness = page.rows.length ? 'partial' : 'unavailable';
       }
     } finally {
       removeAbort?.();
@@ -288,6 +309,7 @@ export function createTuiController(options: TuiControllerOptions) {
       const current = rows.findIndex((row) => row.id === page.selectedId);
       const index = id === 'first' ? 0 : id === 'last' ? rows.length - 1 : current + amount;
       page.selectedId = rows[Math.max(0, Math.min(rows.length - 1, index))]?.id;
+      if (page.route.resourceId === 'ctx' && page.selectedId) options.onContextSelection?.(page.selectedId);
     }
     publish();
   }
@@ -309,8 +331,10 @@ export function createTuiController(options: TuiControllerOptions) {
     if (!overlay || !overlayAction || !overlayOwner || page !== overlayOwner || overlay.ownerResourceId !== page.route.resourceId) throw new Error('操作来源已变化，请从对应资源列表重新开始');
     const target = overlay.targetId === undefined ? undefined : overlayOwner.rows.find((row) => row.id === overlay!.targetId);
     if (overlayAction.selectionPolicy === 'required' && !target) throw new Error('目标已不存在，请取消后刷新列表');
+    const context = contexts.find((context) => context.id === overlay!.contextId);
+    if (overlay.contextId !== undefined && !context) throw new Error('连接配置已不存在，请返回 ctx 重新选择连接。');
     return {
-      action: overlayAction, target, context: options.contexts.find((context) => context.id === overlay!.contextId),
+      action: overlayAction, target, context,
       values: Object.fromEntries(overlay.fields.map((field) => [field.id, field.value])), signal,
     };
   }
@@ -395,8 +419,16 @@ export function createTuiController(options: TuiControllerOptions) {
       const completionView = viewGeneration;
       publish(); await refresh();
       if (!disposed && page === owner && completionView === viewGeneration) {
-        if (result.selectedId && action.returnPolicy === 'select-result') owner.selectedId = result.selectedId;
-        owner.notice = message; publish();
+        let notice = message;
+        if (result.selectedId && action.returnPolicy === 'select-result') {
+          if (owner.rows.some((row) => row.id === result.selectedId)) {
+            if (!visibleRows().some((row) => row.id === result.selectedId)) {
+              owner.filter = ''; notice += '；已清除筛选以显示结果。';
+            }
+            owner.selectedId = result.selectedId;
+          } else notice += '；结果不在当前列表，请刷新/调整范围核实。';
+        }
+        owner.notice = notice; publish();
       }
     } catch (error) {
       if (!disposed && generation === formGeneration && overlay) { overlay = { ...overlay, phase: 'confirming', error: formText(errorText(error)) }; publish(); }
@@ -478,8 +510,11 @@ export function createTuiController(options: TuiControllerOptions) {
     if (action.kind === 'navigate') {
       const row = selectedRow();
       if (action.id === 'enter-context' && row) {
-        const context = options.contexts.find((item) => item.id === row.contextId);
-        if (context) navigate({ resourceId: context.defaultResourceId ?? (context.kind === 'tcp' ? 'machines' : 'sessions'), contextId: context.id });
+        const context = contexts.find((item) => item.id === row.contextId);
+        if (context) {
+          if (page.route.resourceId === 'ctx') options.onContextSelection?.(context.id);
+          navigate({ resourceId: context.defaultResourceId ?? (context.kind === 'tcp' ? 'machines' : 'sessions'), contextId: context.id });
+        }
       } else if (row?.navigate) navigate(row.navigate);
       else if (action.navigateTo) navigate({ resourceId: action.navigateTo, contextId: page.route.contextId });
       return;
