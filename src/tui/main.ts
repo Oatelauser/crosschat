@@ -1,12 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 import process from 'node:process';
 import type { Writable } from 'node:stream';
 import { copyText } from '../application/clipboard.js';
 import { createTuiController } from './app/controller.js';
 import type { TuiContextPage, TuiControllerOptions } from './app/controller.js';
-import type { TuiContext, TuiResourceAdapter } from './model.js';
-import { createResourceRegistry } from './resources/registry.js';
+import type { TuiContext, TuiResource, TuiResourceAdapter } from './model.js';
+import { createResourceRegistry, defaultResources } from './resources/registry.js';
 import type { ResourceRegistry } from './resources/registry.js';
 import { runTerminalSession } from './terminal.js';
 import type { MountedTui, TerminalInput, TerminalOutput, TerminalSignals } from './terminal.js';
@@ -65,10 +66,21 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
         import('ink'), import('./ui/app.js'), import('react'), options.version ?? packageVersion(),
       ]);
       if (owner.signal.aborted) return cancelledMount();
-      const registry = options.registry ?? createResourceRegistry();
+      let sessions: { resource: TuiResource; adapter: TuiResourceAdapter } | undefined;
+      if (options.adapters === undefined) {
+        const [{ createLocalDiscoveryService }, { createSessionMembershipService }, { createSessionsResource }] = await Promise.all([
+          import('../application/discovery/local.js'), import('../application/session-membership/index.js'), import('./resources/sessions.js'),
+        ]);
+        if (owner.signal.aborted) return cancelledMount();
+        // Native environment overrides remain authoritative unless the caller supplies an isolated home.
+        const discovery = createLocalDiscoveryService(options.home === undefined ? {} : { home });
+        const membership = createSessionMembershipService({ baseDir: join(home, '.crosschat'), discovery });
+        sessions = createSessionsResource({ discovery, membership });
+      }
+      const registry = options.registry ?? createResourceRegistry(defaultResources.map((resource) => resource.id === 'sessions' && sessions ? sessions.resource : resource));
       let selectedContextId: string | undefined;
       const controller = createTuiController({
-        registry, contexts: initialContexts.contexts, adapters: options.adapters ?? {},
+        registry, contexts: initialContexts.contexts, adapters: options.adapters ?? (sessions ? { sessions: sessions.adapter } : {}),
         contextSource: options.contexts === undefined ? { initial: initialContexts, read: readContexts } : undefined,
         initialSelectedContextId: preferences.value?.selectedContextId,
         onContextSelection: (id) => { selectedContextId = id; },

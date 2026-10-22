@@ -110,7 +110,7 @@ describe('TUI lazy entry and ownership', () => {
     expect(mocks.save).not.toHaveBeenCalled();
   });
 
-  it('does not mistake returning from another resource for an explicit context selection', async () => {
+  it('remembers the context explicitly entered by a resource command without persisting unrelated row identities', async () => {
     const io = await fixture();
     const pending = runTui({ ...io, contexts: [{ id: 'fixture', kind: 'local', label: 'fixture' }] });
     await vi.waitFor(() => expect(mocks.render).toHaveBeenCalledOnce());
@@ -123,7 +123,8 @@ describe('TUI lazy entry and ownership', () => {
     expect(controller.getSnapshot().route.resourceId).toBe('ctx');
     controller.handleKey({ name: 'q' });
     expect(await pending).toBe(0);
-    expect(mocks.save).not.toHaveBeenCalled();
+    expect(mocks.save).toHaveBeenCalledOnce();
+    expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ preferences: { version: 1, selectedContextId: 'fixture' } }));
   });
 
   it('does not save context changes made only while a cancelled filter was being edited', async () => {

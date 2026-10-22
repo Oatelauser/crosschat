@@ -149,7 +149,8 @@ export function createTuiController(options: TuiControllerOptions) {
         ...(targetMode === 'list' ? own(row?.actionAvailability, action.id) : undefined),
       };
       let { reason, enabled } = availability;
-      if (enabled && action.selectionPolicy === 'required' && !selectedRow()) { enabled = false; reason = '请先选择一项'; }
+      const hasSelection = targetMode === 'detail' ? detail?.fields[detail.selectedIndex] !== undefined : row !== undefined;
+      if (enabled && action.selectionPolicy === 'required' && !hasSelection) { enabled = false; reason = '请先选择一项'; }
       if (action.kind === 'copy' && !options.clipboard) { enabled = false; reason = '当前终端未提供剪贴板'; }
       if (enabled && action.kind === 'copy' && targetMode === 'list' && (action.copyKey ? own(row?.copyValues, action.copyKey) : row?.copyValue) === undefined) {
         enabled = false; reason = '当前项目没有可复制的完整值';
@@ -444,6 +445,9 @@ export function createTuiController(options: TuiControllerOptions) {
     try {
       const permission = await adapter.checkAction(formRequest(controller.signal));
       if (disposed || generation !== formGeneration || !overlay) return;
+      if (permission.fields && (permission.fields.length !== overlay.fields.length || permission.fields.some((field) => !overlay!.fields.some((existing) => existing.id === field.id)))) {
+        throw new Error('表单字段已变化，请关闭后重新开始；已保留原输入。');
+      }
       if (permission.fields) updateFormFields(permission.fields);
       if (!permission.enabled) throw new Error([permission.reason ?? '当前权限不允许此操作', permission.nextStep].filter(Boolean).join('；'));
       if (!validateFormValues()) return;
@@ -693,11 +697,12 @@ export function createTuiController(options: TuiControllerOptions) {
     const pressed = shortcut(key);
     const action = options.registry.actions(page.route.resourceId, 'choice').find((entry) => entry.shortcut.split(' / ').includes(pressed));
     if (!action) return;
-    if (action.id === 'choice-cancel') { mode = 'list'; choice = undefined; publish(); return; }
+    if (action.id === 'choice-cancel') { cancelWork(); mode = 'list'; choice = undefined; publish(); return; }
     if (action.id === 'help') { execute(action); return; }
     const option = choice.options[choice.selectedIndex];
-    if (action.id === 'choice-copy') { void copy(action); return; }
+    if (action.id === 'choice-copy') { execute(action); return; }
     if (action.id === 'choice-detail' && option) {
+      cancelWork();
       detail = { title: choice.title, fields: [{ label: '选项', value: option.label }, { label: '值', value: option.value }, { label: '可用性', value: option.enabled === false ? option.reason ?? '暂不可用' : '可用' }], selectedIndex: 0, scrollOffset: 0, query: '' };
       detailReturnMode = 'choice'; detailCursorLine = 0; mode = 'detail'; publish(); return;
     }

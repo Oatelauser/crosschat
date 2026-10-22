@@ -93,13 +93,13 @@ function address(session: DiscoverySession, items: readonly DiscoverySession[], 
   if (session.name !== null && session.name !== '') {
     if (hasTerminalControls(session.name)) return { unavailable: unavailable('会话名称包含终端控制字符，不能作为可粘贴地址。', '请在原生工具更名或核对身份；Y 可复制安全编码的完整会话引用。') };
     if (items.filter((item) => item.name === session.name).length === 1) return { value: session.name };
-    return { unavailable: unavailable('发现同名会话，裸名称地址有歧义。', '在原生工具核对身份并处理重名；Y 可复制完整会话引用。') };
   }
   if (session.ref.providerId === 'codex' && uuid.test(session.ref.nativeId)) {
     const value = `codex/${session.ref.nativeId}`;
     if (!items.some((item) => item.name === value)) return { value };
     return { unavailable: unavailable('完整 ID 地址与另一会话精确名称冲突。', '在原生工具核对并处理冲突；Y 可复制完整会话引用。') };
   }
+  if (session.name) return { unavailable: unavailable('发现同名会话，裸名称地址有歧义。', '在原生工具核对身份并处理重名；Y 可复制完整会话引用。') };
   return { unavailable: unavailable('此匿名会话没有现有本机寻址支持。', '在原生工具确认身份与名称；Y 可复制完整会话引用。') };
 }
 
@@ -232,7 +232,8 @@ export function createSessionsResource(options: SessionsResourceOptions): { reso
           break;
         }
       }
-      return page([...items.values()], [...providers.values()], completeness, observedAt, errors, contextId, await configured);
+      const targetPage = await configured;
+      return page([...items.values()], [...providers.values()], request.signal.aborted ? 'cancelled' : completeness, observedAt, errors, contextId, targetPage);
     },
     async checkAction(request) {
       const exact = membershipRequest(request);
