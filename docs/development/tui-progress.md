@@ -77,6 +77,9 @@
 - 分工：t09_maintenance只读TCP应用/DTO及纯snapshot builder；t09_services TCP管理/原子registry helper/唯一revision helper；t10_ssh TCP资源及独立测试；root共享presentation/秘密结果态、broker/protocol胶水、composition、统一验收与文档。代理只能编辑所分配文件，RED保存后GREEN，禁真用户IO/生产服务。
 - 本轮Selected model is at capacity中断为服务容量提示；已核对三个代理仍运行并从检查点续接，没有重开任务或切模型。
 - 检查点：授权/共享RED`0f24857`，revision RED`5dda650`，应用聚合/管理RED`4eb5fd1`，资源RED`ff38e09`，共享presentation/秘密结果GREEN`bacd9cd`（49项定向通过），snapshot运输RED`bef45ef`。root已完成snapshot WS/adminPipe胶水和严格只读台账读取，受控broker/原管理回归13项通过；尚待保存GREEN与全部业务集成/ConPTY。
+- 后续检查点：snapshot GREEN`1e28a94`、应用/资源`dfe2b53`、管理`6a03aac`、poll`5bdd41a`、审计`feed51a`、读取权威`10b4409`、原子helper`12895c9/6f7fd2b`、expected运输/完成导航`71e3e00`、导入`dfa6d81`；所有批准均已记录。root默认入口已接通，最新7文件38项与noEmit通过；测试需等待页面发布而不只等mock被调用，已校正fixture时序。
+- 当前唯一未完产品片：服务代理受限管理IPC(2MiB)与新增星选中实际DTO ID，RED`191b4ba`已保存，正在GREEN。读/资源代理已完成本片并保存，额外TCP ConPTY两工装已nodecheck/lint，尚未统一build/运行；root下一步受影响回归→全量check→构建稳定后五组ConPTY、文档与队列清理。T11/T12仍进行中，未提前删除；T14不启动。
+- 配置导入属于v6已明确TUI范围，只支持当前brokers[]和完整starId、只追加新星；拒旧形状迁移/同星替换，保留原未知字段。确认revision与rename前复核可观测修改，不承诺对无锁旧writer实现跨进程绝对CAS。更多保护见配置测试；不联网、不起服务。
 
 ## 设计来源（原稿）
 
