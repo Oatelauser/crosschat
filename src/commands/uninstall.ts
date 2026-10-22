@@ -6,9 +6,7 @@
  * 时拒删（教 --stop）；无 --yes 先打将删清单请求 stdin y/n；结尾提示 npm
  * uninstall 收尾。
  */
-import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { TCP_STATUS_FRESH_MS } from './status.js';
+import { removeUninstallTargets, uninstallServeRunning, uninstallTargets } from '../application/maintenance/uninstall.js';
 
 export interface UninstallArgs {
   yes?: boolean;
@@ -29,52 +27,12 @@ export interface UninstallDeps {
   confirm(): Promise<boolean>;
 }
 
-function readStatusState(file: string): { state: string; lastUpdated: string } | undefined {
-  try {
-    return JSON.parse(readFileSync(file, 'utf8')) as { state: string; lastUpdated: string };
-  } catch {
-    return undefined;
-  }
-}
-
-/** serve 在跑检测：status-broker 或任一 status-node*.json（B2 多守护）新鲜即算（与 status 展示同款口径）。 */
-function serveRunning(deps: UninstallDeps): boolean {
-  const tcp = join(deps.crosschatHome, 'tcp');
-  const broker = readStatusState(join(tcp, 'status-broker.json'));
-  if (broker !== undefined && broker.state === 'running' && deps.now() - Date.parse(broker.lastUpdated) < TCP_STATUS_FRESH_MS) {
-    return true;
-  }
-  let nodeFiles: string[] = [];
-  try {
-    nodeFiles = readdirSync(tcp).filter((f) => /^status-node.*\.json$/.test(f));
-  } catch {
-    return false;
-  }
-  return nodeFiles.some((f) => {
-    const node = readStatusState(join(tcp, f));
-    return node !== undefined && deps.now() - Date.parse(node.lastUpdated) < TCP_STATUS_FRESH_MS;
-  });
-}
-
 export async function runUninstall(args: UninstallArgs, deps: UninstallDeps): Promise<number> {
-  if (serveRunning(deps)) {
+  if (uninstallServeRunning(deps)) {
     deps.stdout('拒绝删除：crosschat serve 正在运行（broker 或节点客户端）——先跑 crosschat serve --stop 再卸载');
     return 1;
   }
-  const items: { label: string; path: string }[] = [
-    { label: 'crosschat 配置、转发器与状态（tcp 注册表/status/log/inbox/parts + outbox/send-log/conversations/mailbox）', path: deps.crosschatHome },
-    { label: '状态目录（outbox/send-log/conversations/mailbox）', path: deps.stateRoot },
-    ...deps.legacyStateRoots.map((path) => ({ label: '旧版状态目录（014 前路径）', path })),
-    { label: 'claude 侧 skill', path: deps.skillDirs[0] ?? '' },
-    { label: 'codex 侧 skill', path: deps.skillDirs[1] ?? '' },
-  ];
-  // 014 起 stateRoot 与 crosschatHome 同根：同路径只列一次。
-  const seen = new Set<string>();
-  const deduped = items.filter((item) => {
-    if (item.path === '' || seen.has(item.path)) return false;
-    seen.add(item.path);
-    return true;
-  });
+  const deduped = uninstallTargets(deps);
   deps.stdout('将删除：');
   for (const [i, item] of deduped.entries()) deps.stdout(`  ${i + 1}. ${item.path}（${item.label}）`);
   if (args.yes !== true) {
@@ -84,18 +42,10 @@ export async function runUninstall(args: UninstallArgs, deps: UninstallDeps): Pr
       return 1;
     }
   }
-  for (const item of deduped) {
-    if (item.path !== '' && existsSync(item.path)) {
-      try {
-        rmSync(item.path, { recursive: true, force: true });
-        deps.stdout(`已删除：${item.path}`);
-      } catch {
-        deps.stdout(`删除失败（稍后手动删）：${item.path}`);
-      }
-    } else {
-      deps.stdout(`跳过（不存在）：${item.path}`);
-    }
-  }
+  removeUninstallTargets(deduped, { onItem(item) {
+    deps.stdout(item.outcome === 'deleted' ? `已删除：${item.target.path}`
+      : item.outcome === 'failed' ? `删除失败（稍后手动删）：${item.target.path}` : `跳过（不存在）：${item.target.path}`);
+  } });
   deps.stdout('收尾：npm uninstall -g @oatelauser/crosschat');
   return 0;
 }
