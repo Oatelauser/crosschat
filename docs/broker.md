@@ -823,6 +823,8 @@ S → C   {"op":"connected"}          # 命中即连接绑星（发放即绑定�
 | `members-result` | S→C | members:[{sessionId, name?, extends?}]——broker 断连后保留的最后已知名单（纯内存，broker 重启即空） |
 | `member-remove` | C→S | target（028 删册：名精确或 id 前缀 ≥8 位；星内任何机器可发——命令面 `serve --connect <星> --member-remove` 与聚合器 `--rm` 退场共用） |
 | `member-remove-result` | S→C | ok, removed:[名\|id8…], error?——幂等（零命中=ok 注明本不在册）；多名命中=拒绝列 id8 教消歧 |
+| `member-remove-exact` | C→S | id, sessionId, machine（完整 mid）, tool；星成员权限，broker 同步核对唯一完整册位，绝不回落名称/前缀 |
+| `member-remove-exact-result` | S→C | 同 id，ok, removed:boolean, code?, error?；身份变化或目标消失返回 TARGET_CHANGED 且 removed=false；内存已修改但落盘失败返回 PERSIST_FAILED、ok=false、removed=true，调用方须显示待核实且不得自动重试 |
 | `auth-challenge` | S→C | nonce——034 管理连接挑战（一次性；防重放） |
 | `auth-proof` | C→S | proof——HMAC-SHA256(星管理钥, nonce) 的 hex（钥匙本体永不出现在任何帧里） |
 | `admin-op` | C→S | id, action, n?(gen-key), host?(gen-key), label?(remove-node)——034 星管理域：action∈{list-nodes, list-members, gen-key, remove-node}；list-stars/set-name 等本机域 op 一律 ADMIN_REQUIRED |
@@ -927,7 +929,7 @@ C → file-end{id}
 | `{op:"attach", sessionId, name?, extends?}` | 声明成员（成员键=会话 ID；name/extends 禁冒号；幂等重声明=覆盖） |
 | `{op:"detach", sessionId}` | 退星（幂等：不在表内也回 ok） |
 | `{op:"sync", sessions:[…]}` | 全量对账（替换整表） |
-| `{op:"status"}` | 只读探针 → 回 `{ok, online, brokerCap, members:[…]}`（启动器 extends 校验与 adopt 幂等判断的数据源） |
+| `{op:"status"}` | 只读探针 → 回 `{ok, online, brokerCap, members:[…], starId?, machine?}`；starId/machine 仅在实际 broker 连接在线时存在，来自本次认证握手和发送的完整机器 ID，断开即清除。启动器用于 extends/幂等，精确收编还需核对所选星及权威册位 |
 
 聚合器侧语义：成员表变化即全量重播 `sessions` 帧；对账循环常态化（1.7.0）——每轮 members-query 拉册切片 + 本地验活（claude=进程扫描，codex=rollout 落盘存在）：死→上报下线（册位保留，不再除名）、册内活而未声明→自动复活；扫描同时做改名跟随（同 id 换名即更新重播）。
 

@@ -1,6 +1,6 @@
 # 核心应用接口
 
-2026-10-21。与旧 CLI 共用当前 npm 单包；没有引入 TUI 框架或 `tui` 命令。新增展示入口从应用接口取数据，不解析 CLI 输出。
+2026-10-22。CLI 与 TUI 共用当前 npm 单包；展示入口从应用接口取数据，不解析 CLI 输出。TUI 框架仅在交互入口动态加载。
 
 ## 模块入口
 
@@ -16,6 +16,7 @@
 | 清理 | `src/application/cleanup/index.ts` | `planCleanup` 只读，`executeCleanup` 执行既定目标，保留原规则和 CLI 计数语义 |
 | 发送 | `src/application/send/index.ts`、`types.ts` | `sendMessage` 返回 typed 结果；`format.ts` 负责旧文本/JSON，TCP 本机桥直接使用结果 |
 | 成员对账 | `src/application/members/index.ts` | 有序 Provider 能力委派，保留现有活性/查名策略；unknown 不当成 absent |
+| 精确册位操作 | `src/application/session-membership/index.ts` | 只读列出配置星；按完整 SessionRef 检查/收编/删册，目标变化拒绝，未确认写入不自动重试 |
 
 ## 读取与生命周期
 
@@ -30,6 +31,10 @@
 `queryStars` 默认只读本机脱敏台账。Context 注入现有 roster 读取能力后才能判断在线数；未注入时明确 unknown/partial，不能据静态台账推断下线。旧端没有 sessions 字段时保留机器信息并标部分结果。详见 [查询模块说明](../../src/application/queries/README.md)。
 
 日志每次重新打开文件，以文件标识及大小识别替换/截断；载荷窗口默认64KiB、最高2MiB，额外窥读一个边界字节避免误丢完整行。文件页仅列元数据，普通结果不含 key、adminKey 或管理插座地址。
+
+`createSessionMembershipService({baseDir,discovery})` 的 `baseDir` 为 `~/.crosschat`。`listTargets` 只读本机配置；`check` 只做有界身份/权限核验；`apply` 在写前重新核验。请求携带 `op:'adopt'|'remove'`、完整 `ref`、完整 `starId` 和可选 `signal`；结果为 `applied/rejected/uncertain`，不含配置凭证。工具映射和收编条件通过 `MembershipProvider` 登记，原生 ID 的跨工具冲突不得被当前星册的单 ID 键掩盖。
+
+收编核对最新安全发现、实际 broker 握手星及在线聚合器的完整机器/工具身份；确认中说明可能启动聚合器，明确撤权暂停不被自动绕过。attach 只发送一次，随后只读核对权威星册。精确删册采用独立 `member-remove-exact`，broker 在同一步验证完整 ID、机器和工具；原名字/前缀 CLI 分支保持。丢回执、已发写取消和内存已变但落盘失败均为待核实，不盲目重发；不增加旧端降级。
 
 ## 远端发现与撤权
 
