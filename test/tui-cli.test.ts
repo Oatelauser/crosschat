@@ -40,7 +40,11 @@ beforeEach(() => {
   mocks.list.mockResolvedValue({ items: [{ id: 'local', kind: 'local', name: '本机', target: 'fixture-host', identityHint: '本机环境', attributes: {} }], errors: [], observedAt: 1 });
   mocks.load.mockResolvedValue({ state: 'ready', value: { version: 1 }, errors: [], observedAt: 1 });
   mocks.save.mockResolvedValue({ state: 'ready', value: { version: 1 }, errors: [], observedAt: 1 });
-  mocks.render.mockImplementation(() => ({ unmount: vi.fn(), waitUntilExit: () => new Promise<void>(() => {}) }));
+  mocks.render.mockImplementation(() => {
+    let finish!: () => void;
+    const done = new Promise<void>((resolve) => { finish = resolve; });
+    return { unmount: vi.fn(() => { finish(); }), waitUntilExit: () => done };
+  });
 });
 afterEach(async () => {
   await Promise.all(homes.splice(0).map((home) => rm(home, { recursive: true, force: true })));
@@ -137,6 +141,26 @@ describe('TUI lazy entry and ownership', () => {
     controller.handleKey({ name: 'q' });
     expect(await pending).toBe(0);
     expect(mocks.save).not.toHaveBeenCalled();
+  });
+
+  it('waits for renderer teardown before completing terminal ownership and saving preferences', async () => {
+    const io = await fixture();
+    let finishCleanup!: () => void;
+    const cleanup = new Promise<void>((resolve) => { finishCleanup = resolve; });
+    const unmount = vi.fn();
+    mocks.render.mockImplementation(() => ({ unmount, waitUntilExit: () => cleanup }));
+    const pending = runTui({ ...io, contexts: [{ id: 'fixture', kind: 'local', label: 'fixture' }] });
+    await vi.waitFor(() => expect(mocks.render).toHaveBeenCalledOnce());
+    renderedController().handleKey({ name: 'enter' });
+    io.signals.emit('SIGTERM');
+    await vi.waitFor(() => expect(unmount).toHaveBeenCalledOnce());
+    const outcome = await Promise.race([pending.then(() => 'exited'), new Promise<string>((resolve) => setTimeout(() => resolve('cleaning'), 20))]);
+    const savedBeforeCleanup = mocks.save.mock.calls.length;
+    finishCleanup();
+    expect(await pending).toBe(0);
+    expect(outcome).toBe('cleaning');
+    expect(savedBeforeCleanup).toBe(0);
+    expect(mocks.save).toHaveBeenCalledOnce();
   });
 });
 

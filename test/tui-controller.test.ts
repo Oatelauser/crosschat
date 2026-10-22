@@ -63,6 +63,16 @@ describe('TUI interaction controller', () => {
     }
   });
 
+  it('filters arbitrary future context kinds without treating inherited object properties as labels', () => {
+    const controller = createTuiController({ registry: registry(), contexts: [{ id: 'opaque-context', kind: 'constructor', label: 'future' }], adapters: {} });
+    try {
+      expect(controller.getSnapshot().rows[0].cells.kind).toBe('constructor');
+      controller.handleKey({ name: '/' });
+      expect(() => controller.handleKey({ name: 'text', text: 'not-a-match' })).not.toThrow();
+      expect(controller.getSnapshot().rows).toEqual([]);
+    } finally { controller.dispose(); }
+  });
+
   it('remembers a context selection without entering it and enters local and TCP defaults only on request', async () => {
     const controller = createTuiController({ registry: registry(), contexts, initialSelectedContextId: 'tcp:orbit', adapters: {} });
     try {

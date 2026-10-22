@@ -24,7 +24,11 @@ class Output extends PassThrough { isTTY = true; columns = 80; rows = 24; }
 const homes: string[] = [];
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.render.mockImplementation(() => ({ unmount: vi.fn(), waitUntilExit: () => new Promise<void>(() => {}) }));
+  mocks.render.mockImplementation(() => {
+    let finish!: () => void;
+    const done = new Promise<void>((resolve) => { finish = resolve; });
+    return { unmount: vi.fn(() => { finish(); }), waitUntilExit: () => done };
+  });
 });
 afterEach(async () => {
   await Promise.all(homes.splice(0).map((home) => rm(home, { recursive: true, force: true })));
