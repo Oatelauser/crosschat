@@ -6,7 +6,7 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['src/application/**/*.ts', 'src/serve/node-config.ts', 'src/serve/connect-selector.ts'],
+    files: ['src/application/**/*.ts', 'src/tui/**/*.ts', 'src/tui/**/*.tsx', 'src/serve/node-config.ts', 'src/serve/connect-selector.ts'],
     languageOptions: {
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
     },

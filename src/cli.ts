@@ -47,6 +47,7 @@ const version: string = (
 const usage = `usage: crosschat <command> [options]
 
 commands:
+  tui                       open the interactive terminal interface
   send --to <name> | --conversation <ref>
                             send a message to a claude/codex session
                             (quote <name> if it contains spaces);
@@ -641,6 +642,21 @@ async function main(argv: string[]): Promise<number> {
   if (command === 'help' || command === '--help') {
     process.stdout.write(usage);
     return 0;
+  }
+  if (command === 'tui') {
+    if (rest.length === 1 && rest[0] === '--help') {
+      process.stdout.write(usage);
+      return 0;
+    }
+    if (rest.length > 0) {
+      process.stderr.write(`crosschat: USAGE: tui takes no options; got: ${rest.join(' ')}\n\n`);
+      process.stderr.write(usage);
+      return 1;
+    }
+    try {
+      const { runTui } = await import('./tui/main.js');
+      return await runTui();
+    } catch (error) { return printFailure(error); }
   }
   // Hidden maintenance entry (B12): one drain round by hand, or the watchdog
   // loop when spawned with --watch. Not in usage on purpose.
