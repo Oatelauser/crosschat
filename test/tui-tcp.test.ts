@@ -74,6 +74,16 @@ describe('TCP resource lists and readonly navigation', () => {
     expect(f.management.preview).not.toHaveBeenCalled();
   });
 
+  it('links local star audit to the exact full star and existing admin-op event stream', async () => {
+    const f = fixtures();
+    f.tcp.readStars.mockResolvedValueOnce({ contextId: local.id, role: 'broker-owner', configured: true,
+      items: [{ ...star, contextId: local.id, role: 'broker-owner' }], completeness: 'complete', observedAt: 1, errors: [] });
+    const page = await f.resources.stars.adapter.read({ context: local, route: { resourceId: 'stars', contextId: local.id }, signal: signal() });
+    expect(page.rows[0].actionRoutes?.logs).toEqual({ resourceId: 'logs', contextId: local.id, query: { source: 'broker', audit: 'admin-op', starId: star.starId } });
+    expect(page.notice).not.toContain('全部星');
+    expect(f.management.preview).not.toHaveBeenCalled();
+  });
+
   it('keeps unbound node keys and admin credentials out of machines and enables page navigation even with no machine rows', async () => {
     const f = fixtures();
     const page = await f.resources.machines.adapter.read({ context, route: { resourceId: 'machines', contextId: context.id, query: { starId: star.starId } }, signal: signal() });
