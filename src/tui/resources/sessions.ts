@@ -2,6 +2,7 @@ import { parseDiscoveryResponse } from '../../application/discovery/index.js';
 import type { DiscoveryEndpoint, DiscoveryProvider, DiscoverySession } from '../../application/discovery/index.js';
 import { sessionKey } from '../../application/sessions/model.js';
 import type { Completeness, SourceError } from '../../application/sessions/model.js';
+import { untilAborted } from '../../application/sessions/reading.js';
 import type { TuiAction, TuiActionAvailability, TuiPage, TuiReadonlyView, TuiResource, TuiResourceAdapter, TuiRow } from '../model.js';
 import { createStatusRegistry } from './status.js';
 import type { StatusRegistry } from './status.js';
@@ -79,6 +80,7 @@ function addErrors(target: SourceError[], incoming: readonly SourceError[]): voi
 function address(session: DiscoverySession, items: readonly DiscoverySession[], completeness: Completeness): { value?: string; unavailable?: TuiActionAvailability } {
   if (completeness !== 'complete') return { unavailable: unavailable('来源读取不完整，尚不能确认地址唯一。', '按 r 完整刷新；Y 可复制完整会话引用。') };
   if (session.ref.referenceKind === 'process') return { unavailable: unavailable('进程引用不能作为完整会话地址。', '在原生工具中核对会话身份；Y 可复制临时进程引用。') };
+  if (!session.capabilities.delivery) return { unavailable: unavailable('此会话来源未声明投递能力。', '回到原生工具操作；Y 可复制完整会话引用。') };
   if (session.ref.providerId !== 'claude' && session.ref.providerId !== 'codex') return { unavailable: unavailable('此工具尚未声明现有本机发送地址能力。', '回到原生工具操作；Y 可复制完整会话引用。') };
   if (session.name !== null && session.name !== '') {
     if (items.filter((item) => item.name === session.name).length === 1) return { value: session.name };
@@ -104,13 +106,14 @@ export function createSessionsResource(options: SessionsResourceOptions): { reso
     const rows: TuiRow[] = items.map((item) => {
       const reference = json(item.ref);
       const target = address(item, items, completeness);
+      const rowAvailability: Readonly<Record<string, TuiActionAvailability>> = target.unavailable ? { copy: target.unavailable } : {};
       const originalGuide = guides.get(item.ref.providerId)?.(item) ?? { title: `${item.ref.providerId} 原生操作`, fields: [{ label: '下一步', value: `此工具未登记专用操作指引，请回到 ${item.ref.providerId} 原生界面操作。` }] };
       return {
         id: sessionKey(item.ref), contextId, cells: { name: item.name || '匿名', provider: item.ref.providerId, status: statuses.format(item.ref.providerId, item.rawStatus), id: item.ref.referenceKind === 'process' ? `PID ${item.ref.nativeId}` : item.ref.nativeId, directory: typeof item.attributes.cwd === 'string' ? item.attributes.cwd : '—' },
         searchText: json(item), facets: { provider: item.ref.providerId, status: rawFacet(item.rawStatus), named: item.name ? 'named' : 'anonymous', scope: 'discovered' },
         detail: [{ label: '名称', value: item.name || '匿名' }, { label: '原生引用', value: reference }, { label: '原生状态', value: json(item.rawStatus) }, { label: '能力', value: json(item.capabilities) }, { label: '属性', value: json(item.attributes) }, { label: '采样时间', value: new Date(observedAt).toISOString() }],
         copyValues: { ref: reference }, ...(target.value === undefined ? {} : { copyValue: target.value }),
-        actionAvailability: target.unavailable ? { copy: target.unavailable } : {},
+        actionAvailability: rowAvailability,
         detailViews: { 'native-guide': { ...originalGuide, fields: [...originalGuide.fields, { label: '寻址指引', value: target.value === undefined ? `${target.unavailable?.reason ?? '地址不可用'}\n${target.unavailable?.nextStep ?? ''}` : `本机完整地址：${target.value}\n本界面只复制地址，不代表该会话发送消息。` }, { label: '完整会话引用', value: reference }] } },
       };
     });
@@ -149,7 +152,7 @@ export function createSessionsResource(options: SessionsResourceOptions): { reso
       for (;;) {
         if (request.signal.aborted) { completeness = 'cancelled'; break; }
         try {
-          const result = parseDiscoveryResponse(await options.discovery.execute({ op: 'list', ...(cursor === undefined ? {} : { cursor }), limit }, { contextId, signal: request.signal }));
+          const result = parseDiscoveryResponse(await untilAborted(options.discovery.execute({ op: 'list', ...(cursor === undefined ? {} : { cursor }), limit }, { contextId, signal: request.signal }), request.signal));
           if (result.op !== 'list' || result.page.items.some((item) => item.ref.contextId !== contextId)) throw new Error('Wrong discovery scope.');
           const current = result.page;
           observedAt = current.observedAt;
@@ -159,6 +162,7 @@ export function createSessionsResource(options: SessionsResourceOptions): { reso
           if (request.signal.aborted || current.completeness === 'cancelled') { completeness = 'cancelled'; break; }
           if (current.nextCursor === null || current.completeness === 'unavailable') {
             completeness = current.completeness === 'complete' && errors.length ? 'partial' : current.completeness;
+            if (completeness === 'unavailable' && items.size > 0) completeness = 'partial';
             break;
           }
           if (seen.has(current.nextCursor)) {
