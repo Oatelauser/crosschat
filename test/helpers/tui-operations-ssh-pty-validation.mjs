@@ -14,6 +14,7 @@ const escape = '\x1b';
 const home = '\x1b[H';
 const end = '\x1b[F';
 const down = '\x1b[B';
+const maintenanceTable = /维护任务[^\r\n]*范围[^\r\n]*最近结果/;
 async function session(name, scenario = 'keyboard') {
   const evidence = join(directory, `${name}.jsonl`);
   const pty = await launchPty({ executable: process.execPath, args: [fixture], columns: 100, rows: 28,
@@ -31,7 +32,14 @@ async function session(name, scenario = 'keyboard') {
   async function copy(key = 'y') { const mark = (await events()).length; pty.write(key); return waitEvent((event) => event.event === 'clipboard', mark); }
   async function resize(columns, rows, expected = 'crosschat') { const mark = pty.output.length; pty.resize(columns, rows); await pty.waitForOutput(expected, 10_000, mark); await waitEvent((event) => event.event === 'resize' && event.columns === columns && event.rows === rows); }
   return { pty, send, copy, resize, events, waitEvent, async finish(expectedCode) {
-    const exited = await pty.exited; assert.equal(exited.code, expectedCode); assert.equal(exited.hostCode, 0);
+    let exitTimer;
+    let exited;
+    try {
+      exited = await Promise.race([pty.exited, new Promise((_, reject) => {
+        exitTimer = globalThis.setTimeout(() => reject(new Error(`Operations fixture did not exit within 12s; evidence: ${evidence}; log: ${pty.logPath}; output tail: ${pty.output.slice(-2000)}`)), 12_000);
+      })]);
+    } finally { globalThis.clearTimeout(exitTimer); }
+    assert.equal(exited.code, expectedCode); assert.equal(exited.hostCode, 0);
     const all = await events(); const restored = all.find((event) => event.event === 'exit'); assert(restored, 'fixture reported teardown');
     assert.deepEqual(restored.after, restored.before, 'raw input and owned listeners return to the warmed baseline');
     for (const mode of ['1049', '25', '2004']) {
@@ -127,9 +135,11 @@ try {
   await normal.send(end, '模拟已删除');
   await normal.copy();
   await normal.send('a\x04\r'); // Result details remain readonly.
-  await normal.send(escape, ':maintenance');
-  await normal.send('?', '全部按键');
-  await normal.send(escape, ':maintenance');
+  // Shared route headers and footer text also appear in details/help. Wait for
+  // mode-specific bodies so queued renders cannot turn the next input into Alt+key.
+  await normal.send(escape, maintenanceTable);
+  await normal.send('?', '维护 · 全部按键');
+  await normal.send(escape, maintenanceTable);
   await normal.send('q');
   const events = await normal.finish(0);
   assert.deepEqual(events.filter((event) => event.event === 'service-effect').map(({ operation, id, revision, contextId }) => ({ operation, id, revision, contextId })), [
