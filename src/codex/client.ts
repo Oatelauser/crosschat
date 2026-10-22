@@ -81,6 +81,8 @@ export interface CodexThreadPageSession extends CodexSession {
 export interface CodexSessionOptions {
   requestTimeoutMs?: number;
   executable?: string;
+  /** Complete proxy environment for an isolated native home; defaults to process.env. Caller identity is still stripped. */
+  env?: NodeJS.ProcessEnv;
   /** Test seam: replaces spawn + ws transport with a fake channel. */
   channelFactory?: CodexChannelFactory;
   spawnProxy?: CodexProxySpawner;

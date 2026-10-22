@@ -350,6 +350,8 @@ export async function wsChannelFactory(duplex: DuplexStream): Promise<CodexMessa
 
 export interface CodexProxySessionOptions {
   executable?: string;
+  /** Complete child environment; sanitization copies it before removing caller identity. */
+  env?: NodeJS.ProcessEnv;
   channelFactory?: CodexChannelFactory;
   spawnProxy?: CodexProxySpawner;
 }
@@ -375,7 +377,7 @@ export async function openCodexProxySession(
         stdio: ['pipe', 'pipe', 'pipe'],
         shell: false,
         windowsHide: true,
-        env: sanitizeProxyEnv(process.env),
+        env: sanitizeProxyEnv(options.env ?? process.env),
       }));
   const channelFactory = options.channelFactory ?? wsChannelFactory;
 
