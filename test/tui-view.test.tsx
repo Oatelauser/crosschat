@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'ink';
 import type { TuiResource, TuiSnapshot } from '../src/tui/model.js';
-import { TuiScreen } from '../src/tui/ui/app.js';
+import { TuiApp, TuiScreen } from '../src/tui/ui/app.js';
+import { createTuiController } from '../src/tui/app/controller.js';
+import { createResourceRegistry } from '../src/tui/resources/registry.js';
 import { displayWidth } from '../src/tui/ui/text.js';
 
 const resource: TuiResource = { id: 'ctx', label: '连接上下文', aliases: [], description: '', actions: [],
@@ -50,5 +52,16 @@ describe('TUI continuous terminal layout', () => {
     state.rows = [];
     state.completeness = 'partial';
     expect(screen(state)).toContain('部分');
+  });
+  it('routes rendering failures to the owner without rendering exception contents', () => {
+    const registry = createResourceRegistry([resource]);
+    const controller = createTuiController({ registry, contexts: [], adapters: {} });
+    const failedRegistry = { ...registry, resolve: () => { throw new Error('never-show-render-secret'); } };
+    const onError = vi.fn();
+    try {
+      const output = renderToString(<TuiApp controller={controller} registry={failedRegistry} version="test" onError={onError} />);
+      expect(onError).toHaveBeenCalledOnce();
+      expect(output).not.toContain('never-show-render-secret');
+    } finally { controller.dispose(); }
   });
 });
