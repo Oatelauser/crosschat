@@ -35,13 +35,18 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.7.0",
+    "@types/react": "19.3.0",
     "@types/ws": "^8.18.2",
     "eslint": "^9.39.1",
+    "ink-testing-library": "4.0.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.1",
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "ink": "8.0.0",
+    "react": "19.3.1",
+    "string-width": "8.3.0",
     "ws": "^8.22.0"
   }
 }

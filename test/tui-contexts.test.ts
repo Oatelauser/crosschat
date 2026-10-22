@@ -66,13 +66,34 @@ describe('TUI entry contexts', () => {
     const before = await readFile(node, 'utf8');
     const result = await listTuiContexts({ home });
     const entries = result.items.filter((item) => item.kind === 'tcp');
-    expect(entries.map((item) => item.id)).toEqual(['tcp:star:star-full-one', 'tcp:star:star-full-two', `tcp:endpoint:${encodeURIComponent('[::1]:7261')}`]);
+    expect(entries.map((item) => item.id)).toEqual(['tcp:star:star-full-one:one%3A7260', 'tcp:star:star-full-two:two%3A7260', expect.stringMatching(/^tcp:endpoint:%5B%3A%3A1%5D%3A7261:[0-9a-f]{64}$/)]);
     expect(entries.map((item) => item.target)).toEqual(['one:7260', 'two:7260', '[::1]:7261']);
     expect(entries[0].attributes).toMatchObject({ starId: 'star-full-one', source: node });
     expect(JSON.stringify(result)).not.toMatch(/member-secret|admin-secret|pipe-secret|token-secret|other-member|third-member|hasAdmin|hasMember|authenticated/);
     expect(await readFile(node, 'utf8')).toBe(before);
     expect((await readdir(join(home, '.crosschat', 'tcp'))).sort()).toEqual(['node.json']);
-    await configure(home, '', [{ host: 'renamed-endpoint', port: 7262, name: 'renamed', starId: 'star-full-one', key: 'replacement-member' }]);
+    await configure(home, '', [{ host: 'one', port: 7260, name: 'renamed', starId: 'star-full-one', key: 'replacement-member' }]);
+    expect((await listTuiContexts({ home })).items.find((item) => item.kind === 'tcp')?.id).toBe(entries[0].id);
+  });
+
+  it('keeps different TCP endpoints and unknown-star credentials distinct while deduplicating exact contexts', async () => {
+    const { listTuiContexts } = await import('../src/application/contexts/index.js');
+    const { home } = await fixture();
+    await configure(home, '', [
+      { host: 'broker', port: 7260, name: 'same', key: 'secret-one' },
+      { host: 'broker', port: 7260, name: 'same', key: 'secret-two' },
+      { host: 'broker', port: 7260, name: 'duplicate', key: 'secret-one' },
+      { host: 'one', port: 7260, name: 'same', starId: 'shared-star', key: 'secret-three' },
+      { host: 'two', port: 7260, name: 'same', starId: 'shared-star', key: 'secret-four' },
+      { host: 'one', port: 7260, name: 'duplicate', starId: 'shared-star', key: 'secret-three' },
+    ]);
+    const entries = (await listTuiContexts({ home })).items.filter((item) => item.kind === 'tcp');
+    expect(entries).toHaveLength(4);
+    expect(new Set(entries.map((item) => item.id)).size).toBe(4);
+    expect(entries[0].id).not.toBe(entries[1].id);
+    expect(entries[2].id).not.toBe(entries[3].id);
+    expect(JSON.stringify(entries)).not.toContain('secret-');
+    await configure(home, '', [{ host: 'broker', port: 7260, name: 'renamed', key: 'secret-one' }]);
     expect((await listTuiContexts({ home })).items.find((item) => item.kind === 'tcp')?.id).toBe(entries[0].id);
   });
 
