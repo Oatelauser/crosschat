@@ -3,6 +3,7 @@ import type { DiscoveryEndpoint, DiscoveryProvider, DiscoverySession } from '../
 import { sessionKey } from '../../application/sessions/model.js';
 import type { Completeness, SourceError } from '../../application/sessions/model.js';
 import { untilAborted } from '../../application/sessions/reading.js';
+import { resolveTargetByName } from '../../resolve.js';
 import type { MembershipRequest, MembershipTargets, SessionMembershipService } from '../../application/session-membership/index.js';
 import type { TuiAction, TuiActionAvailability, TuiActionRequest, TuiFormField, TuiPage, TuiReadonlyView, TuiResource, TuiResourceAdapter, TuiRow } from '../model.js';
 import { createStatusRegistry } from './status.js';
@@ -90,14 +91,24 @@ function address(session: DiscoverySession, items: readonly DiscoverySession[], 
   if (session.ref.referenceKind === 'process') return { unavailable: unavailable('进程引用不能作为完整会话地址。', '在原生工具中核对会话身份；Y 可复制临时进程引用。') };
   if (!session.capabilities.delivery) return { unavailable: unavailable('此会话来源未声明投递能力。', '回到原生工具操作；Y 可复制完整会话引用。') };
   if (session.ref.providerId !== 'claude' && session.ref.providerId !== 'codex') return { unavailable: unavailable('此工具尚未声明现有本机发送地址能力。', '回到原生工具操作；Y 可复制完整会话引用。') };
+  // Discovery reads all pages, whereas the existing local send selector sees
+  // only the first 20 Codex entries in source order. Do not widen that contract.
+  if (session.ref.providerId === 'codex' && items.filter((item) => item.ref.providerId === 'codex').findIndex((item) => sessionKey(item.ref) === sessionKey(session.ref)) >= 20) {
+    return { unavailable: unavailable('此会话超出现有本机发送的 Codex 20 条选择范围。', 'Y 可复制完整会话引用；在原生工具核对目标，收编可使用精确会话引用。') };
+  }
   if (session.name !== null && session.name !== '') {
     if (hasTerminalControls(session.name)) return { unavailable: unavailable('会话名称包含终端控制字符，不能作为可粘贴地址。', '请在原生工具更名或核对身份；Y 可复制安全编码的完整会话引用。') };
     if (items.filter((item) => item.name === session.name).length === 1) return { value: session.name };
   }
   if (session.ref.providerId === 'codex' && uuid.test(session.ref.nativeId)) {
     const value = `codex/${session.ref.nativeId}`;
-    if (!items.some((item) => item.name === value)) return { value };
-    return { unavailable: unavailable('完整 ID 地址与另一会话精确名称冲突。', '在原生工具核对并处理冲突；Y 可复制完整会话引用。') };
+    try {
+      const resolved = resolveTargetByName(value,
+        items.filter((item) => item.ref.providerId === 'claude' && item.ref.referenceKind !== 'process').map((item) => ({ sessionId: item.ref.nativeId, name: item.name ?? undefined })),
+        items.filter((item) => item.ref.providerId === 'codex').map((item) => ({ id: item.ref.nativeId, name: item.name })));
+      if (resolved.side === 'codex' && resolved.thread.id === session.ref.nativeId) return { value };
+    } catch { /* Names and their prefixes precede UUID matching in the selector. */ }
+    return { unavailable: unavailable('完整 ID 地址与现有名称或名称前缀匹配冲突。', '在原生工具核对并处理冲突；Y 可复制完整会话引用。') };
   }
   if (session.name) return { unavailable: unavailable('发现同名会话，裸名称地址有歧义。', '在原生工具核对身份并处理重名；Y 可复制完整会话引用。') };
   return { unavailable: unavailable('此匿名会话没有现有本机寻址支持。', '在原生工具确认身份与名称；Y 可复制完整会话引用。') };
