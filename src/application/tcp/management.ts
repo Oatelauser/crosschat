@@ -348,6 +348,7 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
           ? connection.request('remove-node', { label: prepared.local.label, expected: prepared.local.expected })
           : connection.request('gen-key', { n: Number(prepared.values.count), host: prepared.values.host }), request.signal);
         if (!isRecord(receipt) || typeof receipt.ok !== 'boolean') return uncertain();
+        if (receipt.uncertain === true) return uncertain();
         if (!receipt.ok) return { kind: 'rejected', message: 'broker 拒绝此次修改，请刷新核对当前星管理权限和完整目标。' };
         value = receipt;
         mode = 'hot';

@@ -8,10 +8,10 @@
  * 回写共管 / name+加星=CLI / port=**手编专属**（034 起 --port 无命令——改文件
  * 重启生效）；starId 永不变（星身份锚，改名零级联）。
  */
-import { closeSync, copyFileSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync, writeFileSync } from 'node:fs';
+import { closeSync, copyFileSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { MultichatError } from '../errors.js';
 import { normalizeMid } from '../platform/machine-id.js';
 import { credentialRevision, starRevision } from './management-state.js';
@@ -465,14 +465,50 @@ export interface CredentialRemovalExpected { credentialRevision: string; machine
 export interface StarRemovalExpected { starRevision: string }
 export interface ExactManagementRejected { kind: 'rejected'; reason: 'target-changed' | 'not-found' | 'invalid-target' }
 export type ExactCredentialRemoval = { kind: 'removed'; credential: NodeEntry } | ExactManagementRejected;
-export type ExactStarRemoval = { kind: 'removed'; removed: RemovedStarInfo } | ExactManagementRejected;
+export type ExactStarRemoval = { kind: 'removed'; removed: RemovedStarInfo; cleanupFailed?: true } | ExactManagementRejected;
 const managementRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const validRevision = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 const completeMachine = (value: string) => /^[a-fA-F0-9-]+$/.test(value) && normalizeMid(value).length === 32;
 function invalidManagementSource(): never { throw new Error('管理台账配置不完整或损坏；未执行精确删除。'); }
 
+function managementParents(file: string): void {
+  let directory = dirname(resolve(file));
+  for (;;) {
+    const stat = lstatSync(directory);
+    if (!stat.isDirectory() || stat.isSymbolicLink()) invalidManagementSource();
+    const parent = dirname(directory);
+    if (parent === directory) return;
+    directory = parent;
+  }
+}
+/** Expected writes own a fresh exclusive temporary file; the legacy fixed-tmp writer is unchanged. */
+function writeManagementJson(file: string, doc: object): void {
+  managementParents(file);
+  const target = lstatSync(file, { bigint: true });
+  if (!target.isFile() || target.isSymbolicLink()) invalidManagementSource();
+  const temporary = `${file}.tui-${randomBytes(16).toString('hex')}.tmp`;
+  let descriptor: number | undefined;
+  let created = false;
+  try {
+    descriptor = openSync(temporary, 'wx', 0o600); created = true;
+    writeFileSync(descriptor, `${JSON.stringify(doc, null, 2)}\n`, 'utf8');
+    closeSync(descriptor); descriptor = undefined;
+    managementParents(file);
+    const current = lstatSync(file, { bigint: true });
+    if (!current.isFile() || current.isSymbolicLink() || current.dev !== target.dev || current.ino !== target.ino) invalidManagementSource();
+    renameSync(temporary, file); created = false;
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+    if (created) unlinkSync(temporary);
+  }
+}
+function writeManagementBroker(file: string, doc: BrokerFile): void {
+  writeManagementJson(file, { ...doc, stars: doc.stars.map((star) => ({ ...star, roster: star.roster.map(stripOnline) })) });
+}
+
 /** Strict bounded reads for expected writes. Refusals must never repair or rewrite a source. */
 function readManagementJson(file: string): unknown {
+  managementParents(file);
   const before = lstatSync(file, { bigint: true });
   const limit = 2 * 1024 * 1024;
   if (!before.isFile() || before.isSymbolicLink() || before.size > BigInt(limit)) invalidManagementSource();
@@ -480,10 +516,15 @@ function readManagementJson(file: string): unknown {
   try {
     const stat = fstatSync(fd, { bigint: true });
     if (!stat.isFile() || stat.dev !== before.dev || stat.ino !== before.ino || stat.size > BigInt(limit)) invalidManagementSource();
-    const buffer = Buffer.alloc(Math.min(Number(stat.size) + 1, limit + 1));
-    const count = readSync(fd, buffer, 0, buffer.length, 0);
-    if (count > limit) invalidManagementSource();
-    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, count))) as unknown;
+    const buffer = Buffer.alloc(limit + 1);
+    let length = 0;
+    for (;;) {
+      const count = readSync(fd, buffer, length, buffer.length - length, null);
+      if (count === 0) break;
+      length += count;
+      if (length > limit) invalidManagementSource();
+    }
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, length))) as unknown;
   } catch { return invalidManagementSource(); }
   finally { closeSync(fd); }
 }
@@ -535,7 +576,7 @@ export function removeCredentialExactFor(file: string, starId: string, label: st
   const binding = credential.machineId ? normalizeMid(credential.machineId) : null;
   if (actualKind !== kind || credentialRevision(credential) !== expected.credentialRevision || binding !== expected.machineId) return { kind: 'rejected', reason: 'target-changed' };
   star.nodes.splice(index, 1);
-  writeBrokerFile(file, doc);
+  writeManagementBroker(file, doc);
   return { kind: 'removed', credential };
 }
 
@@ -558,8 +599,11 @@ export function removeStarExactFrom(file: string, starId: string, expected: Star
   }
   const removed: RemovedStarInfo = { ...(star.name === undefined ? {} : { name: star.name }), nodes: star.nodes.length, roster: star.roster.length };
   doc.stars.splice(index, 1);
-  writeBrokerFile(file, doc);
-  if (nodeDoc?.brokers.some((entry) => entry.starId === starId)) writeNodeJsonRaw(nodeFile, { ...nodeDoc, brokers: nodeDoc.brokers.filter((entry) => entry.starId !== starId) });
+  writeManagementBroker(file, doc);
+  if (nodeDoc?.brokers.some((entry) => entry.starId === starId)) {
+    try { writeManagementJson(nodeFile, { ...nodeDoc, brokers: nodeDoc.brokers.filter((entry) => entry.starId !== starId) }); }
+    catch { return { kind: 'removed', removed, cleanupFailed: true }; }
+  }
   return { kind: 'removed', removed };
 }
 

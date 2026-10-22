@@ -63,7 +63,12 @@ export async function performLocalManagement(request: ManagementRequest, options
   try {
     const config = await readTcpConfiguration({ baseDir: options.baseDir });
     if (config.broker.value === null && config.broker.state !== 'missing') return failed();
-    if ((request.op === 'add-star' || request.op === 'set-showname') && config.node.value === null && config.node.state !== 'missing') return failed();
+    let emptyNodeConfiguration = false;
+    if (request.op === 'add-star' && config.node.state === 'malformed') {
+      const raw: unknown = JSON.parse(await readTcpText(options.baseDir, join(options.baseDir, 'tcp', 'node.json')));
+      emptyNodeConfiguration = isRecord(raw) && Array.isArray(raw.brokers) && raw.brokers.length === 0 && (raw.showName === undefined || typeof raw.showName === 'string');
+    }
+    if ((request.op === 'add-star' || request.op === 'set-showname') && config.node.value === null && config.node.state !== 'missing' && !emptyNodeConfiguration) return failed();
     if (request.op !== 'add-star' && request.op !== 'set-showname'
       && (!('starId' in request) || !config.broker.value?.stars.some((star) => star.starId === request.starId))) return { kind: 'rejected', error: '所选完整星 ID 不在本机台账。' };
     if (request.op === 'set-showname' && (config.node.value === null || (request.starId !== undefined && config.node.value.entries.filter((entry) => entry.starId === request.starId).length !== 1))) return { kind: 'rejected', error: '本机未配置所选星，不能修改显示名。' };
@@ -87,6 +92,7 @@ export async function performLocalManagement(request: ManagementRequest, options
       adminTransport: async (operation) => {
         if (!hot) return { kind: 'cold' };
         const result = await (options.transport?.(operation, status) ?? sendAdminRequest({ baseDir: options.baseDir, readStatus: () => status, isProcessAlive: alive }, operation));
+        if (result.kind === 'hot' && result.reply.uncertain === true) return { kind: 'failed', error: 'broker 未确认完整事务，结果待核实。' };
         return result.kind === 'cold' ? { kind: 'failed', error: '已核实的热态管理连接失败，禁止直写台账。' } : result;
       } };
     const machine = request.op === 'add-star' ? fullTcpMachineId(await (options.machineId?.() ?? readMembershipMachineId())) : undefined;
@@ -100,7 +106,7 @@ export async function performLocalManagement(request: ManagementRequest, options
       const file = join(options.baseDir, 'tcp', 'broker.json');
       if (request.op === 'remove-star') {
         const result = removeStarExactFrom(file, request.starId, request.expected);
-        return result.kind === 'removed' ? { kind: 'applied', mode: 'cold', value: { removed: result.removed } }
+        return result.kind === 'removed' ? result.cleanupFailed ? failed() : { kind: 'applied', mode: 'cold', value: { removed: result.removed } }
           : { kind: 'rejected', mode: 'cold', error: '完整星及其静态影响已变化，未执行删除。' };
       }
       const result = removeCredentialExactFor(file, request.starId, request.label, request.op === 'remove-admin-key' ? 'admin' : 'node', request.expected);
