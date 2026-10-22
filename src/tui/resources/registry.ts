@@ -24,6 +24,7 @@ function commonActions(resourceId: string, mode: TuiMode): TuiAction[] {
     ['input-next', '下一候选并补全', 'Tab / ↓'], ['input-previous', '上一候选并补全', 'Shift+Tab / ↑'], ['input-enter', '切资源或保留筛选', 'Enter'], ['input-cancel', '撤销输入', 'Esc'], ['interrupt', '取消读取或退出', 'Ctrl+C'],
   ] : mode === 'form' ? [
     ['field-next', '下一字段或按钮', 'Tab'], ['field-previous', '上一字段或按钮', 'Shift+Tab'], ['field-enter', '下一字段或所选按钮', 'Enter'], ['form-cancel', '取消并返回', 'Esc / Ctrl+C'],
+    ['form-page-up', '上滚确认内容', 'PgUp'], ['form-page-down', '下滚确认内容', 'PgDn'], ['form-first', '光标或内容开头', 'Home'], ['form-last', '光标或内容末尾', 'End'],
   ] : [
     ['previous', '向上滚动', '↑ / k'], ['next', '向下滚动', '↓ / j'], ['page-up', '上一页', 'PgUp'], ['page-down', '下一页', 'PgDn'], ['first', '开头', 'Home'], ['last', '末尾', 'End'], ['back', '关闭帮助', 'Esc / ?'], ['interrupt', '取消读取或退出', 'Ctrl+C'],
   ];

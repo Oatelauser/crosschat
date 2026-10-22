@@ -68,6 +68,7 @@ try {
   await normal.pty.waitForOutput('crosschat', 10_000, mark);
   await normal.send('e', '修改显示名');
   await normal.send('\x1b[200~更名👩‍💻\x1b[201~\r', '[取消]');
+  await normal.send('\x1b[F', 'IMPACT-END');
   await normal.send('\t\r', 'fixture显示名已更新');
   mark = normal.pty.output.length;
   normal.pty.resize(48, 16);

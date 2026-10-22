@@ -28,7 +28,8 @@ let rows = Array.from({ length: 30 }, (_, index) => ({
   detail: [{ label: '原始ID', value: `future/native/${index}` }, { label: '完整值', value: '长字段👩‍💻'.repeat(50) + '详情终点' }],
   copyValue: `future/native/${index}`,
 }));
-const rename = { id: 'rename', label: '修改显示名', shortcut: 'e', ownerResourceId: 'sessions', selectionPolicy: 'required', mutation: true, kind: 'form', fields: [{ id: 'name', label: '显示名', required: true }], impact: ['仅隔离fixture数据'], returnPolicy: 'restore' };
+const impact = ['仅隔离fixture数据：' + '影响项目👩‍💻'.repeat(100) + '\nIMPACT-END'];
+const rename = { id: 'rename', label: '修改显示名', shortcut: 'e', ownerResourceId: 'sessions', selectionPolicy: 'required', mutation: true, kind: 'form', fields: [{ id: 'name', label: '显示名', required: true }], impact, returnPolicy: 'restore' };
 const registry = createResourceRegistry([
   ...defaultResources.map((resource) => resource.id === 'sessions' ? { ...resource, columns: [{ id: 'name', label: '名称', width: 22 }, { id: 'provider', label: '工具', width: 18 }, { id: 'state', label: '原生状态', width: 22 }, { id: 'full', label: '完整标识', width: 30 }], actions: [rename] } : resource),
   { id: 'slow', label: '取消读取fixture', aliases: [], description: '', columns: [{ id: 'name', label: '名称', width: 20 }], actions: [] },
@@ -43,7 +44,7 @@ const code = await runTui({
   adapters: {
     sessions: {
       read: async () => ({ rows, completeness: 'complete' }),
-      checkAction: async ({ target }) => ({ enabled: Boolean(target), impact: ['仅隔离fixture数据'] }),
+      checkAction: async ({ target }) => ({ enabled: Boolean(target), impact }),
       mutate: async ({ target, values }) => {
         record({ event: 'mutate', targetId: target.id, values });
         rows = rows.map((row) => row.id === target.id ? { ...row, cells: { ...row.cells, name: values.name } } : row);

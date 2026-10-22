@@ -7,6 +7,7 @@ import { editText } from '../ui/text.js';
 import type { EditEvent } from '../ui/text.js';
 import { detailLines } from './detail.js';
 import { helpLines } from './help.js';
+import { formContentLines } from './form.js';
 
 export interface TuiControllerOptions {
   registry: ResourceRegistry;
@@ -17,7 +18,6 @@ export interface TuiControllerOptions {
   onContextSelection?: (id: string) => void;
   clipboard?: (text: string, signal: AbortSignal) => Promise<void>;
   onExit?: () => void;
-  now?: () => number;
 }
 
 export interface TuiContextPage {
@@ -104,6 +104,7 @@ export function createTuiController(options: TuiControllerOptions) {
   let formGeneration = 0;
   let formPending = false;
   let checkingSubmit = false;
+  let formManualScroll = false;
   let writeIssued = false;
   let formPinnedImpact: readonly string[] = [];
   const formKnownSecrets = new Set<string>();
@@ -343,7 +344,7 @@ export function createTuiController(options: TuiControllerOptions) {
     const uncertain = writeIssued;
     formGeneration++;
     formController?.abort(); formController = undefined;
-    formPending = false; checkingSubmit = false; writeIssued = false;
+    formPending = false; checkingSubmit = false; writeIssued = false; formManualScroll = false;
     overlay = undefined; overlayAction = undefined; overlayOwner = undefined;
     formKnownSecrets.clear();
     mode = 'list'; page.notice = uncertain ? '请求已发出，已停止等待；结果待核实。' : '已取消操作';
@@ -367,21 +368,25 @@ export function createTuiController(options: TuiControllerOptions) {
     overlay = {
       actionId: action.id, ownerResourceId: action.ownerResourceId, targetId: row?.id, contextId: page.route.contextId,
       title: action.label, fields, focusIndex: 0, phase: fields.length ? 'editing' : 'confirming',
-      impact: [...formPinnedImpact, ...(action.impact ?? [])], confirmationDefault: 'cancel',
+      impact: [...formPinnedImpact, ...(action.impact ?? [])], confirmationDefault: 'cancel', scrollOffset: 0, checking: true,
     };
     const generation = ++formGeneration;
     const controller = new AbortController();
-    formController = controller; formPending = true; checkingSubmit = false; writeIssued = false;
+    formController = controller; formPending = true; checkingSubmit = false; writeIssued = false; formManualScroll = false;
+    ensureFormVisible();
     mode = 'form'; publish();
     void (async () => {
       try {
         const result = await adapter.checkAction!(formRequest(controller.signal));
         if (disposed || generation !== formGeneration || !overlay) return;
         overlay = { ...overlay, impact: [...formPinnedImpact, ...(result.impact ?? action.impact ?? [])].map(formText), error: result.enabled ? undefined : formText([result.reason ?? '当前权限不允许此操作', result.nextStep].filter(Boolean).join('；')) };
+        if (overlay.error) formManualScroll = false;
       } catch (error) {
-        if (!disposed && generation === formGeneration && overlay) overlay = { ...overlay, error: formText(errorText(error)) };
+        if (!disposed && generation === formGeneration && overlay) { overlay = { ...overlay, error: formText(errorText(error)) }; formManualScroll = false; }
       } finally {
-        if (!disposed && generation === formGeneration) { formPending = false; publish(); }
+        if (!disposed && generation === formGeneration && overlay) {
+          formPending = false; overlay = { ...overlay, checking: false }; ensureFormVisible(); publish();
+        }
       }
     })();
   }
@@ -393,23 +398,25 @@ export function createTuiController(options: TuiControllerOptions) {
     if (!adapter?.checkAction || !adapter.mutate) return;
     const missing = (action.fields ?? []).find((field) => field.required && !overlay!.fields.find((value) => value.id === field.id)?.value.trim());
     if (missing) {
-      overlay = { ...overlay, error: `请填写${missing.label}`, focusIndex: overlay.fields.findIndex((field) => field.id === missing.id), phase: 'editing' }; publish(); return;
+      overlay = { ...overlay, error: `请填写${missing.label}`, focusIndex: overlay.fields.findIndex((field) => field.id === missing.id), phase: 'editing' };
+      formManualScroll = false; ensureFormVisible(); publish(); return;
     }
     const generation = formGeneration;
     const controller = formController;
     formPending = true; checkingSubmit = true;
-    overlay = { ...overlay, error: undefined }; publish();
+    overlay = { ...overlay, error: undefined, checking: true }; ensureFormVisible(); publish();
     try {
       const permission = await adapter.checkAction(formRequest(controller.signal));
       if (disposed || generation !== formGeneration || !overlay) return;
       if (!permission.enabled) throw new Error([permission.reason ?? '当前权限不允许此操作', permission.nextStep].filter(Boolean).join('；'));
       const impact = [...formPinnedImpact, ...(permission.impact ?? action.impact ?? [])].map(formText);
       if (JSON.stringify(impact) !== JSON.stringify(overlay.impact)) {
-        overlay = { ...overlay, impact, focusIndex: overlay.fields.length, phase: 'confirming', error: '影响范围已更新，请核对后再次确认。' }; return;
+        overlay = { ...overlay, impact, focusIndex: overlay.fields.length, phase: 'confirming', error: '影响范围已更新，请核对后再次确认。' };
+        formManualScroll = false; ensureFormVisible(); return;
       }
       const request = formRequest(controller.signal);
       writeIssued = true; checkingSubmit = false;
-      overlay = { ...overlay, phase: 'submitting' }; publish();
+      overlay = { ...overlay, phase: 'submitting', checking: false }; publish();
       const result = await adapter.mutate(request);
       if (disposed || generation !== formGeneration || !overlay || page !== owner) return;
       const message = formText(result.message ?? '操作已完成');
@@ -431,32 +438,67 @@ export function createTuiController(options: TuiControllerOptions) {
         owner.notice = notice; publish();
       }
     } catch (error) {
-      if (!disposed && generation === formGeneration && overlay) { overlay = { ...overlay, phase: 'confirming', error: formText(errorText(error)) }; publish(); }
+      if (!disposed && generation === formGeneration && overlay) {
+        overlay = { ...overlay, phase: 'confirming', error: formText(errorText(error)), checking: false };
+        formManualScroll = false; ensureFormVisible(); publish();
+      }
     } finally {
-      if (!disposed && generation === formGeneration) { formPending = false; checkingSubmit = false; writeIssued = false; publish(); }
+      if (!disposed && generation === formGeneration) {
+        formPending = false; checkingSubmit = false; writeIssued = false;
+        if (overlay) { overlay = { ...overlay, checking: false }; ensureFormVisible(); }
+        publish();
+      }
     }
+  }
+  function formPageSize() { return Math.max(1, viewport.rows - 12); }
+  function ensureFormVisible() {
+    if (!overlay) return;
+    const lines = formContentLines(overlay, viewport.columns);
+    const max = Math.max(0, lines.length - formPageSize());
+    let scrollOffset = Math.max(0, Math.min(overlay.scrollOffset ?? 0, max));
+    if (!formManualScroll) {
+      const focusIndex = overlay.focusIndex;
+      const index = overlay.error ? lines.findIndex((line) => line.kind === 'error')
+        : focusIndex < overlay.fields.length ? lines.findIndex((line) => line.fieldIndex === focusIndex)
+          : lines.findIndex((line) => line.kind === 'impact');
+      if (index >= 0 && index < scrollOffset) scrollOffset = index;
+      if (index >= scrollOffset + formPageSize()) scrollOffset = index - formPageSize() + 1;
+    }
+    overlay = { ...overlay, scrollOffset };
   }
   function formKey(key: TuiKey) {
     if (!overlay) return;
     const pressed = shortcut(key);
     if (pressed === 'Esc' || pressed === 'Ctrl+C') { cancelForm(); return; }
-    if (checkingSubmit || overlay.phase === 'submitting') return;
     const count = overlay.fields.length;
+    if (['PgUp', 'PgDn'].includes(pressed) || (overlay.focusIndex >= count && ['Home', 'End'].includes(pressed))) {
+      const max = Math.max(0, formContentLines(overlay, viewport.columns).length - formPageSize());
+      const previous = overlay.scrollOffset ?? 0;
+      const requested = pressed === 'Home' ? 0 : pressed === 'End' ? max : previous + (pressed === 'PgUp' ? -formPageSize() : formPageSize());
+      overlay = { ...overlay, scrollOffset: Math.max(0, Math.min(max, requested)) };
+      formManualScroll = true; publish(); return;
+    }
+    if (checkingSubmit || overlay.phase === 'submitting') return;
     if (pressed === 'Tab' || pressed === 'Shift+Tab') {
       const direction = pressed === 'Tab' ? 1 : -1;
       const focusIndex = (overlay.focusIndex + direction + count + 2) % (count + 2);
-      overlay = { ...overlay, focusIndex, phase: focusIndex < count ? 'editing' : 'confirming' }; publish(); return;
+      overlay = { ...overlay, focusIndex, phase: focusIndex < count ? 'editing' : 'confirming' };
+      formManualScroll = false; ensureFormVisible(); publish(); return;
     }
     if (pressed === 'Enter') {
       if (overlay.focusIndex < count) {
         const focusIndex = overlay.focusIndex + 1;
-        overlay = { ...overlay, focusIndex, phase: focusIndex < count ? 'editing' : 'confirming' }; publish();
+        overlay = { ...overlay, focusIndex, phase: focusIndex < count ? 'editing' : 'confirming' };
+        formManualScroll = false; ensureFormVisible(); publish();
       } else if (overlay.focusIndex === count) cancelForm();
       else void submitForm();
       return;
     }
     if (overlay.focusIndex >= count) {
-      if (['←', '→', 'Home', 'End'].includes(pressed)) { overlay = { ...overlay, focusIndex: pressed === '←' || pressed === 'Home' ? count : count + 1 }; publish(); }
+      if (['←', '→'].includes(pressed)) {
+        overlay = { ...overlay, focusIndex: pressed === '←' ? count : count + 1 };
+        formManualScroll = false; ensureFormVisible(); publish();
+      }
       return;
     }
     const event = editEvent(key);
@@ -465,7 +507,8 @@ export function createTuiController(options: TuiControllerOptions) {
     const editor = editText({ text: field.value, cursor: field.cursor ?? 0 }, event);
     if (field.secret && editor.text) formKnownSecrets.add(editor.text);
     const fields = overlay.fields.map((value, index) => index === overlay!.focusIndex ? { ...value, value: editor.text, cursor: editor.cursor } : value);
-    overlay = { ...overlay, fields, phase: 'editing', error: undefined }; publish();
+    overlay = { ...overlay, fields, phase: 'editing', error: undefined };
+    formManualScroll = false; ensureFormVisible(); publish();
   }
   function formText(message: string): string {
     let safe = message;
@@ -558,6 +601,7 @@ export function createTuiController(options: TuiControllerOptions) {
     resize: (columns: number, rows: number) => {
       viewport = { columns: Math.max(1, Math.floor(columns)), rows: Math.max(1, Math.floor(rows)) };
       ensureDetailVisible();
+      ensureFormVisible();
       if (help) help = { ...help, scrollOffset: Math.min(help.scrollOffset, Math.max(0, helpLines(help.entries, viewport.columns).length - pageSize())) };
       publish();
     },

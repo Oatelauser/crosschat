@@ -4,6 +4,7 @@ import { Box, Text, useInput, usePaste, useWindowSize } from 'ink';
 import type { createTuiController } from '../app/controller.js';
 import { detailLines } from '../app/detail.js';
 import { helpLines } from '../app/help.js';
+import { formContentLines } from '../app/form.js';
 import type { ResourceRegistry } from '../resources/registry.js';
 import type { TuiOverlay, TuiResource, TuiSnapshot } from '../model.js';
 import { clipText, displayWidth, editorViewport, sanitizeTerminalText } from './text.js';
@@ -29,24 +30,25 @@ function editingLine(text: string, cursor: number, width: number): string {
 }
 
 function formLines(overlay: TuiOverlay, width: number, height: number): Line[] {
-  const lines: Line[] = [{ text: `${overlay.title} · ${overlay.phase === 'submitting' ? '提交中' : overlay.phase === 'confirming' ? '确认影响' : '填写'}`, tone: 'cyan' },
-    { text: `资源 ${overlay.ownerResourceId} · 连接 ${overlay.contextId ?? '本机'} · 目标 ${overlay.targetId ?? '新增'}`, tone: 'gray' }];
-  for (const [index, field] of overlay.fields.entries()) {
+  const content = formContentLines(overlay, width);
+  const capacity = Math.max(1, height - 2);
+  const start = Math.max(0, Math.min(overlay.scrollOffset ?? 0, content.length - capacity));
+  const lines: Line[] = [{ text: `${overlay.title} · ${overlay.checking ? '核验中' : overlay.phase === 'submitting' ? '提交中' : overlay.phase === 'confirming' ? '确认影响' : '填写'} · ${start + 1}/${content.length}`, tone: 'cyan' }];
+  for (const line of content.slice(start, start + capacity)) {
+    if (line.fieldIndex === undefined) {
+      lines.push({ text: line.text, tone: line.kind === 'error' ? 'red' : line.kind === 'impact' ? 'yellow' : 'gray' });
+      continue;
+    }
+    const field = overlay.fields[line.fieldIndex];
     const prefix = `${clipText(field.label, Math.max(2, Math.floor(width / 3)))}: `;
-    const focused = overlay.focusIndex === index;
+    const focused = overlay.focusIndex === line.fieldIndex;
     const value = field.secret ? '•'.repeat(Array.from(segmenter.segment(field.value)).length) : field.value;
     const cursor = field.cursor ?? Array.from(segmenter.segment(value)).length;
     lines.push({ text: prefix + (focused && overlay.phase === 'editing' ? editingLine(value, cursor, Math.max(0, width - displayWidth(prefix))) : sanitizeTerminalText(value)), selected: focused });
   }
-  for (const impact of overlay.impact) lines.push({ text: `影响：${impact}`, tone: 'yellow' });
-  if (overlay.error) lines.push({ text: overlay.error, tone: 'red' });
-  lines.push({ text: overlay.phase === 'submitting' ? 'Esc 停止等待；已发请求结果须核实' : `${overlay.focusIndex === overlay.fields.length ? '›' : ' '} [取消]   ${overlay.focusIndex === overlay.fields.length + 1 ? '›' : ' '} [${overlay.phase === 'confirming' ? '确认提交' : '检查并继续'}]`, tone: 'cyan' });
-  if (lines.length <= height) return lines;
-  // Keep the title and controls visible while the field window follows focus.
-  const available = Math.max(0, height - 2);
-  const focusLine = overlay.focusIndex < overlay.fields.length ? overlay.focusIndex + 2 : lines.length - 2;
-  const start = Math.max(1, Math.min(focusLine - Math.floor(available / 2), lines.length - 1 - available));
-  return [lines[0], ...lines.slice(start, start + available), lines.at(-1)!].slice(0, height);
+  while (lines.length < height - 1) lines.push({ text: '' });
+  lines.push({ text: overlay.phase === 'submitting' ? 'Esc停止等待 · 结果待核实' : `${overlay.focusIndex === overlay.fields.length ? '›' : ' '}[取消]  ${overlay.focusIndex === overlay.fields.length + 1 ? '›' : ' '}[${overlay.checking ? '核验中' : '确认提交'}]`, tone: 'cyan' });
+  return lines;
 }
 
 function bodyLines(snapshot: TuiSnapshot, resource: TuiResource, width: number, height: number): Line[] {
@@ -72,8 +74,7 @@ function bodyLines(snapshot: TuiSnapshot, resource: TuiResource, width: number, 
   } else list.push({ text: snapshot.loading ? '正在读取… Ctrl+C 取消' : snapshot.completeness === 'unavailable' ? '资源尚未启用 · :ctx 返回连接' : snapshot.filter ? '无匹配项 · Esc 清除筛选' : snapshot.completeness === 'partial' ? '部分结果 · 当前无可显示项' : '暂无项目', tone: 'gray' });
   if (snapshot.overlay) {
     if (!formFits(snapshot)) return [...list.slice(0, 2), { text: '请放大终端至24列×16行后编辑；Esc取消', tone: 'yellow' }];
-    const overlayHeight = Math.min(height - 2, Math.max(5, snapshot.overlay.fields.length + snapshot.overlay.impact.length + 4));
-    return [...list.slice(0, Math.max(2, height - overlayHeight)), ...formLines(snapshot.overlay, width, overlayHeight)];
+    return [...list.slice(0, 2), ...formLines(snapshot.overlay, width, height - 2)];
   }
   return list;
 }
