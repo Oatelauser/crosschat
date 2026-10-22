@@ -1,7 +1,9 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
+import { pathToFileURL } from 'node:url';
+import ts from 'typescript';
 import { afterEach, describe, expect, it } from 'vitest';
 import { checkServiceGuard, inspectServiceProcesses } from '../src/application/services/inspection.js';
 
@@ -21,6 +23,41 @@ afterEach(async () => {
 });
 
 describe('owned service inspection and guard workers', () => {
+  it('reclaims an inspector blocked in spawnSync, including its owned probe child, before cancellation returns', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'crosschat-service-tree-')); roots.push(baseDir);
+    const marker = join(baseDir, 'probe-pid');
+    const childCode = `require('node:fs').writeFileSync(${JSON.stringify(marker)},String(process.pid));setInterval(()=>{},1000);`;
+    const blocked = `import process from 'node:process';import {spawnSync} from 'node:child_process';process.on('disconnect',()=>process.exit(0));spawnSync(process.execPath,['-e',${JSON.stringify(childCode)}]);`;
+    const source = await readFile(new URL('../src/application/services/inspection.ts', import.meta.url), 'utf8');
+    await writeFile(join(baseDir, 'package.json'), '{"type":"module"}');
+    await writeFile(join(baseDir, 'inspection.js'), ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2023 } }).outputText);
+    // The old thread owner and the new process owner run the identical controlled
+    // blocking probe. Neither file performs a real OS scan or touches user data.
+    await writeFile(join(baseDir, 'inspect-worker.js'), blocked);
+    await writeFile(join(baseDir, 'inspect-process.js'), blocked);
+    const isolated = await import(pathToFileURL(join(baseDir, 'inspection.js')).href);
+    const owner = new AbortController();
+    const pending = isolated.inspectServiceProcesses({ baseDir, signal: owner.signal });
+    let childPid: number | undefined;
+    try {
+      const deadline = Date.now() + 3000;
+      while (childPid === undefined && Date.now() < deadline) {
+        try { childPid = Number(await readFile(marker, 'utf8')); }
+        catch { await new Promise<void>((resolve) => setTimeout(resolve, 10)); }
+      }
+      expect(childPid).toBeGreaterThan(0);
+      owner.abort();
+      const outcome = await Promise.race([pending.then(() => 'released'), new Promise<string>((resolve) => setTimeout(() => resolve('still-blocked-after-200ms'), 200))]);
+      expect(outcome).toBe('released');
+      expect(() => process.kill(childPid!, 0)).toThrow();
+      expect(await pending).toMatchObject({ state: 'failed', message: expect.stringContaining('取消') });
+    } finally {
+      owner.abort();
+      if (childPid !== undefined) { try { process.kill(childPid, 'SIGKILL'); } catch { /* Already reaped by the owner. */ } }
+      await pending;
+    }
+  });
+
   it('keeps blocking inspection outside the input event loop and terminates its worker before returning', async () => {
     const options = await fixture(`const until = Date.now() + 100; while (Date.now() < until) {};
       parentPort.postMessage({ state: 'ready', processes: [{ kind: 'node', pid: 1234, selector: 'fixture' }], confirmedBrokerPids: [] }); setInterval(() => {}, 1000);`);

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { join } from 'node:path';
 import { createDefaultResources } from '../src/tui/composition.js';
 import { createTuiController } from '../src/tui/app/controller.js';
 import { createResourceRegistry } from '../src/tui/resources/registry.js';
@@ -65,6 +66,8 @@ describe('default local and SSH resource composition', () => {
     expect(serviceOptions.env.LOCALAPPDATA).not.toBe('/outside/local');
     expect(serviceOptions.env.CODEX_HOME).not.toBe('/outside/native');
     expect(mocks.maintenance.mock.calls[0][0].env.LOCALAPPDATA).not.toBe('/outside/local');
+    expect(mocks.ssh.mock.calls[0][0].configFile).toBe(join('/isolated', '.ssh', 'config'));
+    expect(mocks.ssh.mock.calls[0][0].env.HOME).toBe('/isolated');
   });
 
   it('installs local services/files/maintenance and preserves related navigation without executing a task', async () => {

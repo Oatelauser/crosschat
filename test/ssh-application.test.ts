@@ -40,6 +40,16 @@ const diagnostic = () => ({ groups: [{ context: { kind: 'environment' }, checks:
 afterEach(async () => { vi.useRealTimers(); await Promise.all(homes.splice(0).map((home) => rm(home, { recursive: true, force: true }))); });
 
 describe('configured SSH application reads', () => {
+  it('binds an explicitly isolated SSH configuration to the actual child process', async () => {
+    const home = await fixture(); const child = new FakeSshChild();
+    const spawn = vi.fn(() => child);
+    const configFile = join(home, '.ssh', 'config');
+    const application = createSshApplication({ home, configFile, env: { HOME: home, FIXTURE_ENV: 'isolated' }, spawn });
+    const pending = application.inspect({ contextId: 'ssh:fixture' });
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce());
+    child.finish(JSON.stringify(response())); await pending;
+    expect(spawn).toHaveBeenCalledWith('ssh', ['-F', configFile, '-T', '-o', 'BatchMode=yes', '--', 'fixture', 'crosschat', 'discover'], expect.objectContaining({ env: { HOME: home, FIXTURE_ENV: 'isolated' } }));
+  });
   it('lists configured aliases without executing SSH or interpreting configuration as authentication', async () => {
     const spawn = vi.fn(() => new FakeSshChild());
     const application = createSshApplication({ home: await fixture(), spawn });
