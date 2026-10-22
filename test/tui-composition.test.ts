@@ -80,6 +80,24 @@ describe('default local and SSH resource composition', () => {
       await vi.waitFor(() => expect(controller.getSnapshot().resource?.columns.some((column) => column.id === 'machine')).toBe(true));
     } finally { controller.dispose(); }
   });
+  it.each(['unavailable', 'partial', 'cancelled'] as const)('keeps empty TCP session read information accessible through the default composition: %s', async (completeness) => {
+    const composed = createDefaultResources({ home: '/isolated', isolatedHome: true });
+    const context = presentContext({ id: 'tcp:fixture', kind: 'tcp', label: 'TCPfixture', target: 'fixture.invalid:7260' });
+    tcpMocks.sessions.mockResolvedValueOnce({ ...source, contextId: context.id, scope: 'members', star: null, items: [], nodes: [], completeness,
+      errors: [{ source: 'tcp-fixture', kind: 'unavailable', message: '未取得该星快照', nextStep: '核对该星地址与凭证后重试' }] });
+    const controller = createTuiController({ registry: createResourceRegistry(composed.resources), contexts: [...contexts, context], initialSelectedContextId: context.id, adapters: composed.adapters });
+    try {
+      controller.handleKey({ name: 'enter' });
+      command(controller, 'sessions');
+      await vi.waitFor(() => expect(controller.getSnapshot()).toMatchObject({ route: { resourceId: 'sessions' }, loading: false, completeness }));
+      expect(controller.getSnapshot().rows).toEqual([]);
+      expect(controller.getSnapshot().actions.find((action) => action.shortcut === 'i')).toMatchObject({ enabled: true });
+      controller.handleKey({ name: 'i' });
+      expect(controller.getSnapshot().mode).toBe('detail');
+      expect(JSON.stringify(controller.getSnapshot().detail)).toContain('核对该星地址与凭证后重试');
+      expect(mocks.localRead).not.toHaveBeenCalled();
+    } finally { controller.dispose(); }
+  });
   it.each(['complete', 'unknown', 'blocked'] as const)('does not recreate removed preferences after an uninstall attempt: %s', async (outcome) => {
     mocks.maintenance.mockReturnValue({ list: () => [{ id: 'uninstall-data', label: '卸载fixture', description: '固定范围', guidance: '不执行npm' }], preview: mocks.preview, execute: mocks.execute });
     mocks.preview.mockResolvedValue({ operationId: 'uninstall-data', label: '卸载fixture', observedAt: 42, fingerprint: 'f'.repeat(64), enabled: true, targets: [], effects: ['删除当前fixture数据'] });

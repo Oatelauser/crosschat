@@ -137,10 +137,11 @@ describe('TCP readonly application', () => {
     const result = await app.readSessions({ contextId: tcpContextId(entry), scope: 'discoverable' });
     expect(maximum).toBe(2);
     expect(result.completeness).toBe('partial');
-    expect(result.items).toHaveLength(4);
-    expect(new Set(result.items.map((item) => item.id)).size).toBe(4);
+    expect(result.items).toHaveLength(5);
+    expect(new Set(result.items.map((item) => item.id)).size).toBe(5);
     expect(new Set(result.items.filter((item) => item.nativeId === 'opaque/full/native').map((item) => item.ref!.contextId)).size).toBe(2);
-    expect(result.items.every((item) => item.name === null && item.machineId.length === 32)).toBe(true);
+    expect(result.items.filter((item) => item.discovered).every((item) => item.name === null && item.machineId.length === 32)).toBe(true);
+    expect(result.items).toContainEqual(expect.objectContaining({ nativeId: 'old/full/native', discovered: false, rawStatus: null }));
     expect(result.items[0].rawStatus).toEqual({ type: 'pondering' });
     expect(JSON.stringify(result)).not.toContain('PRIVATE');
     expect(result.nodes).toContainEqual(expect.objectContaining({ machineId: midC, completeness: 'unavailable' }));
@@ -158,9 +159,66 @@ describe('TCP readonly application', () => {
     } }) });
     const result = await app.readSessions({ contextId: tcpContextId(entry), scope: 'discoverable' });
     expect(result.completeness).toBe('partial');
-    expect(result.items).toHaveLength(1);
+    expect(result.items).toHaveLength(2);
+    expect(result.items).toContainEqual(expect.objectContaining({ nativeId: 'old/full/native', discovered: false, rawStatus: null }));
     expect(result.errors.length).toBeGreaterThanOrEqual(2);
     expect(JSON.stringify(result.errors)).not.toContain('PRIVATE');
+  });
+
+  it('retains persistent roster entries from failed and offline machines without duplicating a discovered exact member', async () => {
+    const { createTcpApplication } = await import('../src/application/tcp/index.js');
+    const { tcpContextId } = await import('../src/application/tcp/reading.js');
+    const f = await fixture(); const state = snapshot();
+    state.machines[1].online = true;
+    state.machines.push({ machineId: midC, name: 'offline', online: false });
+    state.nodes.push({ label: 'third', kind: 'node', revision: digest, machineId: midC, machineName: 'offline', addedAt: '2026-01-01' });
+    state.members.push({ sessionId: 'offline/full/native', tool: 'third', name: 'offline-member', machine: midC, machineName: 'offline', online: false });
+    const calls: string[] = [];
+    const app = createTcpApplication({ ...f, readSnapshot: async () => state, discovery: (_target, machineId) => ({ async execute(_request, options) {
+      calls.push(machineId);
+      if (machineId === midB) throw new Error('Controlled source failure');
+      return response(options!.contextId!, ['opaque/full/native']);
+    } }) });
+    const result = await app.readSessions({ contextId: tcpContextId(entry), scope: 'discoverable' });
+    expect(result.completeness).toBe('partial');
+    expect(result.items).toHaveLength(3);
+    expect(result.items.filter((item) => item.machineId === midA)).toEqual([expect.objectContaining({ discovered: true, member: expect.objectContaining({ nativeId: 'opaque/full/native' }), rawStatus: { type: 'pondering' } })]);
+    expect(result.items.filter((item) => item.machineId !== midA)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ machineId: midB, nativeId: 'old/full/native', discovered: false, rawStatus: null, capabilities: null, presence: 'offline' }),
+      expect.objectContaining({ machineId: midC, nativeId: 'offline/full/native', discovered: false, rawStatus: null, capabilities: null, presence: 'offline' }),
+    ]));
+    expect(result.nodes.filter((node) => node.completeness === 'unavailable').map((node) => node.machineId)).toEqual(expect.arrayContaining([midB, midC]));
+    expect(calls).not.toContain(midC);
+    expect(new Set(result.items.map((item) => item.id)).size).toBe(3);
+  });
+
+  it('retains unobserved same-ID provider and process roster identities within a selected machine', async () => {
+    const { createTcpApplication } = await import('../src/application/tcp/index.js');
+    const { tcpContextId } = await import('../src/application/tcp/reading.js');
+    const f = await fixture(); const state = snapshot();
+    state.members.push({ sessionId: 'process-only', tool: 'third', name: 'persistent-session', machine: midA, machineName: 'same-name', online: true });
+    const app = createTcpApplication({ ...f, readSnapshot: async () => state, discovery: () => ({ async execute(_request, options) {
+      const result = response(options!.contextId!, ['opaque/full/native', 'process-only']);
+      if (result.op === 'list') {
+        result.page.items[0].ref.providerId = 'other';
+        result.page.items[1].ref.referenceKind = 'process';
+        result.providers.push({ providerId: 'other', capabilities });
+      }
+      return result;
+    } }) });
+    const result = await app.readSessions({ contextId: tcpContextId(entry), machineId: midA, scope: 'discoverable' });
+    expect(result.completeness).toBe('complete');
+    expect(result.items).toHaveLength(4);
+    expect(result.items.every((item) => item.machineId === midA)).toBe(true);
+    expect(result.items.filter((item) => item.nativeId === 'opaque/full/native')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ providerId: 'third', discovered: false, rawStatus: null }),
+      expect.objectContaining({ providerId: 'other', discovered: true, member: null }),
+    ]));
+    expect(result.items.filter((item) => item.nativeId === 'process-only')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ discovered: true, member: null, ref: expect.objectContaining({ referenceKind: 'process' }) }),
+      expect.objectContaining({ discovered: false, rawStatus: null, member: expect.any(Object) }),
+    ]));
+    expect(new Set(result.items.map((item) => item.id)).size).toBe(4);
   });
 
   it('cancels uncooperative discovery, discards late results and never starts the next pending node', async () => {
