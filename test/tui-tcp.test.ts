@@ -201,3 +201,53 @@ describe('TCP list-owned management and secret results', () => {
     expect(f.management.apply).toHaveBeenCalledOnce();
   });
 });
+
+describe('TCP machine binding refresh ownership', () => {
+  it('publishes newly bound machines on a bounded two-second refresh without discovering every native session', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    try {
+      const f = fixtures({ machines: [] });
+      const adapter = f.resources.machines.adapter;
+      const initial = await adapter.read({ context, route: { resourceId: 'machines', contextId: context.id, query: { starId: star.starId } }, signal: controller.signal });
+      expect(initial.rows).toEqual([]);
+      const publish = vi.fn();
+      const active = adapter.watch!({ context, route: { resourceId: 'machines', contextId: context.id, query: { starId: star.starId } }, signal: controller.signal }, publish);
+      await vi.advanceTimersByTimeAsync(0);
+      const before = f.tcp.readStar.mock.calls.length;
+      f.current.machines = [machines[0]];
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(f.tcp.readStar).toHaveBeenCalledTimes(before);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(publish).toHaveBeenLastCalledWith(expect.objectContaining({ rows: [expect.objectContaining({ id: machines[0].id, cells: expect.objectContaining({ presence: '在线<online>' }) })] }));
+      expect(f.tcp.readSessions).not.toHaveBeenCalled();
+      expect(f.management.preview).not.toHaveBeenCalled();
+      expect(f.management.apply).not.toHaveBeenCalled();
+      controller.abort();
+      await active;
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { controller.abort(); vi.useRealTimers(); }
+  });
+
+  it('keeps only one refresh read active and cancels an uncooperative read without publishing late rows or retaining timers', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    try {
+      const f = fixtures();
+      let resolve: ((value: TcpStarResult) => void) | undefined;
+      f.tcp.readStar.mockImplementationOnce(async () => new Promise<TcpStarResult>((done) => { resolve = done; }));
+      const publish = vi.fn();
+      const active = f.resources.machines.adapter.watch!({ context, route: { resourceId: 'machines', contextId: context.id, query: { starId: star.starId } }, signal: controller.signal }, publish);
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(f.tcp.readStar).toHaveBeenCalledOnce();
+      expect(f.tcp.readStar.mock.calls[0][0].signal).toBe(controller.signal);
+      expect(publish).not.toHaveBeenCalled();
+      controller.abort();
+      await active;
+      resolve!(f.current);
+      await Promise.resolve();
+      expect(publish).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { controller.abort(); vi.useRealTimers(); }
+  });
+});
