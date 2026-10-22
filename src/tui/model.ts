@@ -20,11 +20,18 @@ export interface TuiRow {
   contextId?: string;
   navigate?: TuiRoute;
   copyValue?: string;
+  copyValues?: Readonly<Record<string, string>>;
+  facets?: Readonly<Record<string, string>>;
+  actionAvailability?: Readonly<Record<string, TuiActionAvailability>>;
+  detailViews?: Readonly<Record<string, TuiReadonlyView>>;
 }
 export interface TuiColumn { id: string; label: string; width: number; priority?: number }
-export type TuiMode = 'list' | 'input' | 'detail' | 'help' | 'form';
-export interface TuiActionAvailability { enabled: boolean; reason?: string; nextStep?: string; impact?: readonly string[] }
-export interface TuiFormField { id: string; label: string; required?: boolean; secret?: boolean; initialValue?: string }
+export type TuiMode = 'list' | 'input' | 'detail' | 'help' | 'form' | 'choice';
+export interface TuiReadonlyView { title: string; fields: readonly TuiField[] }
+export interface TuiOption { value: string; label: string; enabled?: boolean; reason?: string }
+export interface TuiFilter { id: string; label: string; mode: 'select' | 'toggle'; defaultValue: string; options: readonly TuiOption[] }
+export interface TuiActionAvailability { enabled: boolean; reason?: string; nextStep?: string; impact?: readonly string[]; fields?: readonly TuiFormField[] }
+export interface TuiFormField { id: string; label: string; required?: boolean; secret?: boolean; initialValue?: string; options?: readonly TuiOption[] }
 export interface TuiAction {
   id: string;
   label: string;
@@ -33,7 +40,10 @@ export interface TuiAction {
   selectionPolicy: 'required' | 'optional' | 'none';
   capability?: string;
   mutation: boolean;
-  kind: 'detail' | 'copy' | 'navigate' | 'form' | 'command';
+  kind: 'detail' | 'copy' | 'navigate' | 'form' | 'command' | 'filter';
+  filterId?: string;
+  viewId?: string;
+  copyKey?: string;
   navigateTo?: string;
   fields?: readonly TuiFormField[];
   impact?: readonly string[];
@@ -56,6 +66,9 @@ export interface TuiPage {
   completeness: 'complete' | 'partial' | 'unavailable' | 'cancelled';
   sampledAt?: number;
   notice?: string;
+  filters?: readonly TuiFilter[];
+  actionAvailability?: Readonly<Record<string, TuiActionAvailability>>;
+  detailViews?: Readonly<Record<string, TuiReadonlyView>>;
 }
 export interface TuiActionRequest {
   action: TuiAction;
@@ -85,7 +98,7 @@ export interface TuiOverlay {
   targetId?: string;
   contextId?: string;
   title: string;
-  fields: readonly { id: string; label: string; value: string; secret?: boolean; cursor?: number }[];
+  fields: readonly { id: string; label: string; value: string; secret?: boolean; cursor?: number; options?: readonly TuiOption[] }[];
   focusIndex: number;
   scrollOffset?: number;
   checking?: boolean;
@@ -107,7 +120,12 @@ export interface TuiSnapshot {
   detail?: TuiDetail;
   help?: { title: string; entries: readonly TuiActionEntry[]; scrollOffset: number };
   overlay?: TuiOverlay;
+  choice?: { filterId: string; title: string; options: readonly TuiOption[]; selectedIndex: number; scrollOffset: number };
+  filters?: readonly TuiFilter[];
+  selectedFacets?: Readonly<Record<string, string>>;
+  sampledAt?: number;
   loading: boolean;
+  totalRows?: number;
   error?: string;
   notice?: string;
   completeness: TuiPage['completeness'];
