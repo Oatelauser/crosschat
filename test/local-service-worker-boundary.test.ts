@@ -38,6 +38,11 @@ afterEach(async () => {
 });
 
 describe('actual service worker boundaries with isolated system dependencies', () => {
+  it('bounds broker metadata reads independently of known process evidence', async () => {
+    const f = await fixture('inspect-worker');
+    await writeFile(join(f.baseDir, 'tcp', 'broker.json'), JSON.stringify({ stars: [], padding: 'x'.repeat(2 * 1024 * 1024) }));
+    expect(await run(f.path, { baseDir: f.baseDir, request: { kind: 'inspect' } })).toMatchObject({ state: 'ready', processes: expect.arrayContaining([{ kind: 'node', pid: 1234, selector: 'fixture' }]), confirmedBrokerPids: [] });
+  });
   it('retains known node processes when broker port metadata is malformed without rebuilding the registry', async () => {
     const f = await fixture('inspect-worker');
     const file = join(f.baseDir, 'tcp', 'broker.json');
