@@ -12,12 +12,13 @@ function impact(preview: MaintenancePreview): string[] {
 function resultFields(result: MaintenanceResult): TuiField[] {
   return [{ label: '最近执行结果', value: `${result.message}\n状态：${result.status}\n开始：${new Date(result.startedAt).toISOString()}\n结束：${new Date(result.finishedAt).toISOString()}` },
     ...result.items.map((item) => ({ label: `${item.outcome}：${item.path}`, value: item.message ?? item.path })),
-    { label: 'npm包', value: '未执行卸载<not-run>；如需卸载包，另行执行 npm uninstall -g @oatelauser/crosschat。' }];
+    ...(result.operationId === 'uninstall-data' ? [{ label: 'npm包', value: '未执行卸载<not-run>；如需卸载包，另行执行 npm uninstall -g @oatelauser/crosschat。' }] : [])];
 }
 /** The selected list task owns its preview and result. Details have no write actions. */
 export function createMaintenanceResource(options: MaintenanceOptions): { resource: TuiResource; adapter: TuiResourceAdapter } {
   const accepted = new Map<string, MaintenancePreview>();
   const results = new Map<string, MaintenanceResult>();
+  const uncertain = new Set<string>();
   const resource: TuiResource = { id: 'maintenance', label: '维护', aliases: ['maint'], description: '本机维护任务：先预览，再明确确认', columns: [
     { id: 'name', label: '维护任务', width: 28, priority: 100 }, { id: 'scope', label: '范围', width: 54, priority: 60 }, { id: 'state', label: '最近结果', width: 20, priority: 80 },
   ], actions: [
@@ -36,9 +37,13 @@ export function createMaintenanceResource(options: MaintenanceOptions): { resour
       const contextId = request.context.id;
       return { rows: options.maintenance.list().map((item) => {
         const result = results.get(key(contextId, item.id));
+        const unknown = uncertain.has(key(contextId, item.id));
         const detail = [{ label: '任务', value: item.label }, { label: '操作范围', value: item.description }, { label: '帮助', value: item.guidance },
-          { label: '确认规则', value: '仅从本列表发起预览；确认默认取消，提交前重新核对范围。执行后取消只能停止等待，不能保证回滚。' }, ...(result ? resultFields(result) : [])];
-        return { id: item.id, cells: { name: item.label, scope: item.description, state: result ? `${result.status === 'complete' ? '完成' : result.status === 'partial' ? '部分失败' : result.status === 'changed' ? '范围变化' : '已阻止'}<${result.status}>` : '尚未执行<not_run>' },
+          { label: '确认规则', value: '仅从本列表发起预览；确认默认取消，提交前重新核对范围。执行后取消只能停止等待，不能保证回滚。' },
+          ...(unknown ? [{ label: '最近尝试', value: '待核实<unknown>；未收到有效执行回执，可能已有部分写入。请核实目标现状；不能据此认定回滚或完成，也不会自动重试。' },
+            ...(result ? [{ label: '上次已确认结果', value: '以下是更早一次已确认的结果，不代表本次尝试。' }] : [])] : []),
+          ...(result ? resultFields(result) : [])];
+        return { id: item.id, cells: { name: item.label, scope: item.description, state: unknown ? '待核实<unknown>' : result ? `${result.status === 'complete' ? '完成' : result.status === 'partial' ? '部分失败' : result.status === 'changed' ? '范围变化' : '已阻止'}<${result.status}>` : '尚未执行<not_run>' },
           copyValue: item.guidance, searchText: `${item.id} ${item.label} ${item.description} ${item.guidance} ${result?.message ?? ''}`, detail,
           ...(result ? { detailViews: { result: { title: '维护任务实际结果', fields: resultFields(result) } } } : {}),
         };
@@ -58,8 +63,15 @@ export function createMaintenanceResource(options: MaintenanceOptions): { resour
       const preview = target ? accepted.get(target.key) : undefined;
       if (!target || !preview || request.signal.aborted) throw new Error('没有与当前任务和本机上下文匹配的已核验预览；未执行维护操作。');
       accepted.delete(target.key);
-      const result = await cancellable(options.maintenance.execute({ operationId: target.operationId, expectedFingerprint: preview.fingerprint, signal: request.signal }), request.signal);
-      if (result.operationId !== target.operationId) throw new Error('维护回执身份不符，结果待核实；请检查目标后重新预览。');
+      let result: MaintenanceResult;
+      try {
+        result = await cancellable(options.maintenance.execute({ operationId: target.operationId, expectedFingerprint: preview.fingerprint, signal: request.signal }), request.signal);
+        if (result.operationId !== target.operationId) throw new Error('Wrong maintenance task');
+      } catch {
+        uncertain.add(target.key);
+        throw new Error('维护执行未收到有效回执，结果待核实；可能已有部分写入，请核实目标后重新预览。');
+      }
+      uncertain.delete(target.key);
       results.set(target.key, result);
       if (result.status !== 'complete') throw new Error(result.message);
       return { selectedId: target.operationId, message: result.message };

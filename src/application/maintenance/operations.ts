@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, readdirSync, rmSync } from 'node:fs';
-import { isAbsolute, join, resolve } from 'node:path';
+import { lstatSync, readdirSync, rmSync } from 'node:fs';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { legacyStateRoots, stateRoot } from '../../state-root.js';
 import { executeCleanup, planCleanup } from '../cleanup/index.js';
 import { defaultInstallSkillsDeps, installSkillDestination, skillDestinations } from './skills.js';
@@ -39,13 +39,35 @@ function cleanupPlan(operationId: MaintenanceOperationId, options: MaintenanceOp
 function fingerprint(value: { operationId: MaintenanceOperationId; enabled: boolean; reason?: string; targets: MaintenanceTarget[]; effects: string[] }): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
+/** Inspect each ancestor before descending; never stat or list through a link. */
+function verifyDirectoryPath(root: string, target: string, allowFinalFile = false): void {
+  const descendant = relative(root, target);
+  if (!descendant || isAbsolute(descendant) || descendant === '..' || descendant.startsWith(`..${sep}`)) throw new Error('维护目标不在已知范围。');
+  const segments = descendant.split(sep);
+  let current = root;
+  for (const [index, segment] of segments.entries()) {
+    current = join(current, segment);
+    let stat;
+    try { stat = lstatSync(current); }
+    catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return;
+      throw error;
+    }
+    if (stat.isSymbolicLink() || (!stat.isDirectory() && !(allowFinalFile && index === segments.length - 1 && stat.isFile()))) throw new Error('维护目录不可完整核验。');
+  }
+}
 /** TUI previews fail closed when the legacy planner's skip-on-stat-error would hide candidates. */
-function verifyCleanupInventory(root: string): void {
+function verifyCleanupInventory(home: string, root: string): void {
   for (const relative of ['tcp/inbox', 'tcp/parts', 'conversations']) {
     const directory = join(root, relative);
-    if (!existsSync(directory)) continue;
-    if (!lstatSync(directory).isDirectory() || lstatSync(directory).isSymbolicLink()) throw new Error('维护目录不可完整预览。');
-    for (const name of readdirSync(directory)) {
+    verifyDirectoryPath(home, directory);
+    let names: string[];
+    try { names = readdirSync(directory); }
+    catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') continue;
+      throw error;
+    }
+    for (const name of names) {
       if (relative === 'conversations' && !name.endsWith('.json')) continue;
       lstatSync(join(directory, name));
     }
@@ -64,7 +86,7 @@ export function previewMaintenance(operationId: MaintenanceOperationId, options:
   const effects: string[] = [selected.guidance];
   if (operationId === 'cleanup' || operationId === 'cleanup-force') {
     try {
-      verifyCleanupInventory(env.uninstall.crosschatHome);
+      verifyCleanupInventory(env.home, env.uninstall.crosschatHome);
       const plan = cleanupPlan(operationId, options, env);
       targets = plan.targets.map((item) => ({ path: item.file, label: reasons[item.reason], kind: 'file', bytes: item.size, modifiedAt: item.mtime }));
       effects.push(`本次预览将删除 ${targets.length} 项；仅执行这次确认的清单。`);
@@ -76,13 +98,21 @@ export function previewMaintenance(operationId: MaintenanceOperationId, options:
     targets = skillDestinations(env.home).map((path) => ({ path, label: '覆盖安装 / 更新crosschat技能', kind: 'directory' }));
     effects.push(`安装源：${env.source}`);
     try {
+      for (const target of targets) verifyDirectoryPath(env.home, target.path);
       const stat = lstatSync(env.source);
       if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Invalid source');
-    } catch { enabled = false; reason = '安装包内技能目录不可读取；核对本机安装包后重新预览。'; }
+    } catch { enabled = false; reason = '技能安装源或目标目录不可完整核验；检查目录链接、类型及访问权限后重新预览。'; }
     effects.push('不会调用npm，不会安装其他工具或修改原生聊天配置。');
   } else {
     targets = uninstallTargets(env.uninstall).map(({ path, label }) => ({ path, label, kind: 'directory' }));
-    if (uninstallServeRunning(env.uninstall)) {
+    try {
+      for (const target of targets) {
+        const parent = target.path === join(options.env?.LOCALAPPDATA ?? '', 'crosschat') && options.env?.LOCALAPPDATA
+          ? resolve(options.env.LOCALAPPDATA) : env.home;
+        verifyDirectoryPath(parent, target.path, true);
+      }
+    } catch { enabled = false; reason = '卸载目标目录不可完整核验；检查目录链接、类型及访问权限后重新预览。'; }
+    if (enabled && uninstallServeRunning(env.uninstall)) {
       enabled = false; reason = 'crosschat serve 正在运行（或有新鲜节点快照）；先停止对应服务，再重新预览卸载。';
     }
     effects.push('npm包尚未卸载；本任务不会执行npm。收尾命令：npm uninstall -g @oatelauser/crosschat');
