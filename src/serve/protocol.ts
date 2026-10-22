@@ -436,6 +436,8 @@ export interface AdminOpFrame {
   host?: string;
   /** remove-node：目标 label。 */
   label?: string;
+  /** Optional exact TUI target. Omission preserves the existing CLI selector. */
+  expected?: import('./registry.js').CredentialRemovalExpected;
 }
 
 /** 034 list-nodes 回显行——**永不携带 key/adminKey**（发钥只走 gen-key 显式动作）。 */
@@ -464,6 +466,8 @@ export interface AdminOpResultFrame {
   id: string;
   ok: boolean;
   error?: string;
+  /** A write may have taken effect without a complete final transaction receipt. */
+  uncertain?: boolean;
   /** gen-key：新钥与 node.json 文本（发钥是显式动作——仅此路径回显钥匙）。 */
   results?: Array<{ label: string; key: string; nodeJsonContent: string }>;
   /** list-nodes 回显（无钥匙）。 */

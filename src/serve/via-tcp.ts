@@ -622,7 +622,7 @@ export async function requestMemberRemoveExact(
 export async function requestAdminOp(
   conn: SenderConn,
   action: string,
-  params: { n?: number; host?: string; label?: string } = {},
+  params: { n?: number; host?: string; label?: string; expected?: import('./registry.js').CredentialRemovalExpected } = {},
   timeoutMs = 10_000,
 ): Promise<AdminOpResultFrame> {
   const id = randomUUID();

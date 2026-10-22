@@ -72,7 +72,7 @@ export interface TuiSensitiveResult {
   copies: readonly { id: string; label: string; shortcut: string; value: string }[];
   notice?: string;
 }
-export interface TuiMutationResult { selectedId?: string; message?: string; result?: TuiSensitiveResult }
+export interface TuiMutationResult { selectedId?: string; message?: string; result?: TuiSensitiveResult; navigate?: TuiRoute }
 export interface TuiPage {
   rows: readonly TuiRow[];
   completeness: 'complete' | 'partial' | 'unavailable' | 'cancelled';

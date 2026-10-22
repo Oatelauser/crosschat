@@ -329,7 +329,7 @@ export function createTuiController(options: TuiControllerOptions) {
       if (!disposed && generation === readGeneration && requestPage === page) { activeRead = undefined; loading = false; publish(); }
     }
   }
-  function navigate(route: TuiRoute) {
+  function navigate(route: TuiRoute, load = true) {
     if (!options.registry.resolve(route.resourceId)) { page.notice = `未知资源: ${route.resourceId}`; publish(); return; }
     cancelRead(false);
     stopWatch();
@@ -341,7 +341,7 @@ export function createTuiController(options: TuiControllerOptions) {
       pages.set(routeKey(route), page);
     }
     mode = 'list'; input = undefined; savedInput = undefined; detail = undefined; help = undefined; choice = undefined; choiceRoutes.clear();
-    void refresh();
+    if (load) void refresh();
   }
   function back() {
     cancelWork();
@@ -546,6 +546,7 @@ export function createTuiController(options: TuiControllerOptions) {
       overlay = { ...overlay, phase: 'submitting', checking: false }; publish();
       const completion = await adapter.mutate(request);
       if (disposed || generation !== formGeneration || !overlay || page !== owner) return;
+      if (completion.navigate && (!options.registry.resolve(completion.navigate.resourceId) || completion.result)) throw new Error('操作已提交，但返回目标无效；请核实结果后返回连接列表。');
       const message = completion.result ? '配置已生成；请在当前结果页保存后关闭。' : formText(completion.message ?? '操作已完成');
       if (completion.result) {
         const keys = new Set<string>();
@@ -561,6 +562,20 @@ export function createTuiController(options: TuiControllerOptions) {
       if (completion.result) {
         result = { ...completion.result, fields: completion.result.fields.map((field) => ({ ...field })), copies: completion.result.copies.map((entry) => ({ ...entry })), scrollOffset: 0 };
         resultSelection = completion.selectedId; page.notice = message; mode = 'result'; publish(); return;
+      }
+      if (completion.navigate) {
+        navigate(completion.navigate, false);
+        const destination = page;
+        const generation = viewGeneration;
+        publish(); await refresh();
+        if (!disposed && destination === page && generation === viewGeneration) {
+          if (completion.selectedId && page.rows.some((row) => row.id === completion.selectedId)) {
+            page.filter = ''; page.selectedId = completion.selectedId;
+            if (page.route.resourceId === 'ctx') options.onContextSelection?.(completion.selectedId);
+          }
+          page.notice = message; publish();
+        }
+        return;
       }
       const completionView = viewGeneration;
       publish(); await refresh();

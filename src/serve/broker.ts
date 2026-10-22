@@ -58,6 +58,8 @@ import {
   removeAdminKeyFor,
   removeNodeFor,
   removeStarFrom,
+  removeCredentialExactFor,
+  removeStarExactFrom,
   sanitizeName,
   setNameFor,
   setShowNameFor,
@@ -228,6 +230,20 @@ function safeEqual(a: string, b: string): boolean {
   const bb = Buffer.from(b, 'utf8');
   // 长度不同先失败：timingSafeEqual 对不等长直接抛
   return ab.length === bb.length && timingSafeEqual(ab, bb);
+}
+
+function exactCredential(value: unknown) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value) || !('credentialRevision' in value)
+    || typeof value.credentialRevision !== 'string' || !/^[a-f0-9]{64}$/.test(value.credentialRevision)
+    || !('machineId' in value) || (value.machineId !== null && (typeof value.machineId !== 'string' || !/^[a-f0-9]{32}$/.test(value.machineId)))
+    || Object.keys(value).some((key) => !['credentialRevision', 'machineId'].includes(key))) throw new Error('精确凭证确认版本无效，请重新预览。');
+  return { credentialRevision: value.credentialRevision, machineId: value.machineId };
+}
+function exactStar(value: unknown) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value) || !('starRevision' in value)
+    || typeof value.starRevision !== 'string' || !/^[a-f0-9]{64}$/.test(value.starRevision)
+    || Object.keys(value).some((key) => key !== 'starRevision')) throw new Error('精确星确认版本无效，请重新预览。');
+  return { starRevision: value.starRevision };
 }
 
 /**
@@ -444,6 +460,18 @@ export class Broker {
       case 'remove-star': {
         const starId = str('starId');
         if (starId === undefined) return { ok: false, error: 'remove-star 缺少 starId' };
+        if (Object.hasOwn(req, 'expected')) {
+          const expected = exactStar(req.expected);
+          let outcome: ReturnType<typeof removeStarExactFrom>;
+          try { outcome = removeStarExactFrom(this.d.registryFile, starId, expected); }
+          catch { return { ok: false, uncertain: true, error: '删星未取得完整事务回执，结果待核实；不会回落或重试。' }; }
+          if (outcome.kind !== 'removed') return { ok: false, error: '星身份或完整影响清单已变化，请重新预览确认。' };
+          this.auditAdmin('remove-star', `星 ${outcome.removed.name ?? starId}`, LOCAL, [starId]);
+          try { await this.teardownStar(starId); this.writeStatus('running'); }
+          catch { return { ok: false, uncertain: true, removed: outcome.removed, error: '星已删除，连接或配置收尾未完整确认，请核实。' }; }
+          if ('cleanupFailed' in outcome && outcome.cleanupFailed) return { ok: false, uncertain: true, removed: outcome.removed, error: '星已删除并断开；本机配置清理未确认，请核实。' };
+          return { ok: true, removed: outcome.removed };
+        }
         const removed = removeStarFrom(this.d.registryFile, starId);
         if (removed === undefined) return { ok: false, error: `星 ${starId} 不在台账——crosschat serve --list 可查` };
         this.auditAdmin('remove-star', `星 ${removed.name ?? starId}`, LOCAL, [starId]);
@@ -527,6 +555,16 @@ export class Broker {
         const starId = str('starId');
         const label = str('label');
         if (starId === undefined || label === undefined) return { ok: false, error: 'remove-admin-key 缺少 starId/label' };
+        if (Object.hasOwn(req, 'expected')) {
+          const expected = exactCredential(req.expected);
+          let outcome: ReturnType<typeof removeCredentialExactFor>;
+          try { outcome = removeCredentialExactFor(this.d.registryFile, starId, label, 'admin', expected); }
+          catch { return { ok: false, uncertain: true, error: '撤钥未取得完整事务回执，结果待核实。' }; }
+          if (outcome.kind !== 'removed') return { ok: false, error: '所选管理钥已变化，请刷新后重新确认。' };
+          this.revokeCredentials(starId, [outcome.credential]);
+          this.auditAdmin('remove-admin-key', `星 ${starId} label=${label}`, LOCAL, [starId]);
+          return { ok: true, removed: label };
+        }
         const entries = loadBrokerFile(this.d.registryFile).stars.find((s) => s.starId === starId)?.nodes ?? [];
         const removed = removeAdminKeyFor(this.d.registryFile, starId, label);
         this.auditAdmin('remove-admin-key', `星 ${starId} label=${removed ?? label}`, LOCAL, [starId]);
@@ -538,6 +576,14 @@ export class Broker {
         const starId = str('starId');
         const label = str('label');
         if (starId === undefined || label === undefined) return { ok: false, error: 'remove-node 缺少 starId/label' };
+        if (Object.hasOwn(req, 'expected')) {
+          const expected = exactCredential(req.expected);
+          try {
+            const removed = this.removeNodeCredential(starId, label, expected);
+            this.auditAdmin('remove-node', `星 ${starId} label=${label}`, LOCAL, [starId]);
+            return removed ? { ok: true, removed } : { ok: false, error: '所选节点凭证或机器绑定已变化，请重新预览。' };
+          } catch { return { ok: false, uncertain: true, error: '撤节点未取得完整事务回执，结果待核实。' }; }
+        }
         const removed = this.removeNodeCredential(starId, label);
         this.auditAdmin('remove-node', `星 ${starId} label=${label}`, LOCAL, [starId]);
         return { ok: true, removed };
@@ -548,7 +594,12 @@ export class Broker {
   }
 
   /** 两个管理入口共用撤钥与在线失效，保留 registry 的精确 label/返回语义。 */
-  private removeNodeCredential(starId: string, label: string): boolean {
+  private removeNodeCredential(starId: string, label: string, expected?: ReturnType<typeof exactCredential>): boolean {
+    if (expected) {
+      const outcome = removeCredentialExactFor(this.d.registryFile, starId, label, 'node', expected);
+      if (outcome.kind !== 'removed') return false;
+      this.revokeCredentials(starId, [outcome.credential]); return true;
+    }
     const entries = loadBrokerFile(this.d.registryFile).stars.find((s) => s.starId === starId)?.nodes.filter((entry) => entry.label === label) ?? [];
     const removed = removeNodeFor(this.d.registryFile, starId, label);
     if (removed) this.revokeCredentials(starId, entries);
@@ -1504,6 +1555,15 @@ export class Broker {
       case 'remove-node': {
         if (star.starId === undefined || typeof frame.label !== 'string' || frame.label === '') {
           this.send(session.ws, { op: 'error', code: ERR.BAD_PROTO, message: 'remove-node 缺 starId/label', id: frame.id });
+          return;
+        }
+        if (Object.hasOwn(frame, 'expected')) {
+          try {
+            const expected = exactCredential(frame.expected);
+            const removed = this.removeNodeCredential(star.starId, frame.label, expected);
+            this.send(session.ws, { op: 'admin-op-result', id: frame.id, ok: removed, removed, ...(!removed ? { error: '所选节点凭证或机器绑定已变化，请重新预览。' } : {}) });
+            audit('remove-node');
+          } catch { this.send(session.ws, { op: 'admin-op-result', id: frame.id, ok: false, uncertain: true, error: '精确撤节点未取得有效回执，结果待核实。' }); }
           return;
         }
         // 管理钥条目不走本 op（管理员互吊是越权面）——吊钥仅 broker 主本机
