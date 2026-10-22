@@ -205,6 +205,19 @@ describe('session membership application boundary', () => {
     expect(f.spawned).toEqual([]);
   });
 
+  it('rejects a native ID shared by another discovered Provider rather than collapsing its identity to the wire session key', async () => {
+    const f = await fixture();
+    const discovery: DiscoveryEndpoint = { execute: async (request) => {
+      if (request.op !== 'detail') throw new Error('unexpected list');
+      return { op: 'detail', providers: ['claude', 'codex'].map((providerId) => ({ providerId, capabilities })),
+        detail: { item: session({ ref: { ...ref, providerId: request.providerId } }), completeness: 'complete', errors: [], observedAt: 42 } };
+    } };
+    const app = await service({ ...f.options, discovery });
+    expect(await app.check(adopt)).toMatchObject({ allowed: false, reason: expect.any(String) });
+    expect(await app.apply(adopt)).toMatchObject({ kind: 'rejected' });
+    expect(f.spawned).toEqual([]);
+  });
+
   it('adopts an anonymous full native ref through the shared aggregator and verifies broker roster authority', async () => {
     const f = await fixture([member({ sessionId: 'same-name-neighbor', name: 'shared' })]);
     f.options.spawnServeDetach = (selector) => { f.spawned.push(selector); void f.startNode().catch(() => undefined); };
@@ -237,6 +250,7 @@ describe('session membership application boundary', () => {
     for (const status of [
       { starId: 'other-star', machine }, { starId: 'star-a-full', machine: otherMachine },
       { starId: 'star-a-full', machine, online: false }, {},
+      { starId: 'star-a-full', machine, members: [{ sessionId: ref.nativeId, tool: 'codex' }] },
     ]) {
       const f = await fixture();
       const ipc = await attachServer(f, status);
