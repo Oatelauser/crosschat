@@ -4,6 +4,7 @@ import type { ClaudeDeliveryTarget } from '../../claude/deliver.js';
 import type { SendLogEntry } from '../../send-log.js';
 import type { SshResult } from '../../federation.js';
 import type { DeliveryMode, DeliveryOptions } from '../../delivery-mode.js';
+import type { CodexTargetDiagnosis } from '../../codex/discovery.js';
 
 export interface SendArgs {
   /** Per-message intent; omitted means queue, including conversation replies. */
@@ -37,6 +38,8 @@ export interface SendDeps {
   stdinText?: string;
   listClaudeSessions(): ClaudeRegistryScan;
   listCodexThreads(): Promise<CodexThreadSummary[]>;
+  /** Read-only explanation, used only after normal --to name resolution misses. */
+  diagnoseCodexTarget?(query: string): Promise<CodexTargetDiagnosis>;
   deliverClaude(target: ClaudeDeliveryTarget, content: string, options?: DeliveryOptions): Promise<{ status: 'delivered' }>;
   deliverCodex(threadId: string, content: string, options?: DeliveryOptions): Promise<{ status: 'accepted'; turnId: string; queued?: boolean }>;
   /** Send-log file: the rate limiter counts this pair's tail-window entries (014 evaporation). */

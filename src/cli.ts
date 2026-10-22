@@ -28,7 +28,7 @@ import { conversationSummaries } from './conversation-summary.js';
 import { codexHomeDir, listWriterLocks } from './codex/rollout-meta.js';
 import { listClaudeSessions } from './claude/registry.js';
 import { deliverToClaudeSession } from './claude/deliver.js';
-import { listCodexThreads } from './codex/discovery.js';
+import { diagnoseCodexTarget, listCodexThreads } from './codex/discovery.js';
 import { deliverToCodexThread } from './codex/deliver.js';
 import { runServe, realServeDeps, type ServeArgs } from './commands/serve.js';
 import { runClean, type CleanArgs } from './commands/clean.js';
@@ -518,6 +518,7 @@ function realSendDeps(stdinText: string | undefined): SendDeps {
     stdinText,
     listClaudeSessions: () => listClaudeSessions(),
     listCodexThreads: () => listCodexThreads(),
+    diagnoseCodexTarget: (query) => diagnoseCodexTarget(query),
     deliverClaude: (target, content, options) => deliverToClaudeSession(target, content, options),
     deliverCodex: (threadId, content, options) => deliverToCodexThread(threadId, content, options),
     sendLogFile: defaultSendLogFile(),

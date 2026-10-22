@@ -157,4 +157,12 @@ describe('read-only Desktop and CLI aggregate discovery', () => {
       listMetadata: async () => ({ data: [metadata('stale')], nextCursor: null, completeness: 'complete', observedAt: 1 }), openThread: async () => null,
     } })).rejects.toMatchObject({ code: 'CODEX_PROXY_SPAWN_FAILED' });
   });
+
+  it('keeps ordinary injected protocol-code errors unavailable in the aggregate summary', async () => {
+    const page = await listCodexThreadPage({ sessionFactory: async () => cli(), desktop: {
+      listMetadata: async () => ({ data: [metadata('native', 'worker')], nextCursor: null, completeness: 'complete', observedAt: 1 }),
+      openThread: async () => { throw Object.assign(new Error('private detail'), { code: 'CUSTOM_PROTOCOL_FAILURE' }); },
+    } });
+    expect(page).toMatchObject({ completeness: 'partial', errors: [{ source: 'desktop', kind: 'unavailable' }] });
+  });
 });

@@ -42,6 +42,19 @@ export interface CodexDiscoveryOptions {
   legacyCli?: boolean;
 }
 
+export interface CodexDiagnosticFailure {
+  stage: 'metadata' | 'owner' | 'snapshot';
+  code: string;
+  ipcStage?: 'prewrite' | 'rejected' | 'uncertain';
+}
+
+export interface CodexCandidateDiagnostic {
+  id: string;
+  name: string | null;
+  status: 'not-probed' | 'owner-missing' | 'unsupported' | 'probe-failed' | 'snapshot-failed' | 'available';
+  failure?: CodexDiagnosticFailure;
+}
+
 interface CursorState {
   stage: 'desktop' | 'cli';
   nativeCursor?: string;
@@ -123,12 +136,17 @@ function deduplicate(state: CursorState, data: CodexRawThreadSummary[]): CodexRa
   return unique;
 }
 
-async function readDesktop(rows: DesktopMetadataRow[], options: CodexDiscoveryOptions, state: CursorState): Promise<CodexRawThreadSummary[]> {
+/** Owns one bounded read-only owner/snapshot lifecycle per candidate. */
+export async function readDesktopCandidates(
+  rows: readonly DesktopMetadataRow[], options: CodexDiscoveryOptions,
+  seen: ReadonlySet<string> = new Set(),
+): Promise<{ data: CodexRawThreadSummary[]; diagnostics: CodexCandidateDiagnostic[]; issues: CodexDiscoveryIssue[] }> {
   const configuration = options.desktop ?? {};
   const concurrency = configuration.concurrency ?? 8;
   if (!Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > 32) throw malformed();
   const data: Array<CodexRawThreadSummary | undefined> = new Array(rows.length);
-  const seen = new Set(state.seen);
+  const diagnostics: Array<CodexCandidateDiagnostic | undefined> = new Array(rows.length);
+  const issues: CodexDiscoveryIssue[] = [];
   let index = 0;
   const worker = async (): Promise<void> => {
     for (;;) {
@@ -139,26 +157,43 @@ async function readDesktop(rows: DesktopMetadataRow[], options: CodexDiscoveryOp
       if (seen.has(row.id)) continue;
       const work = async (): Promise<void> => {
         let session: DesktopThreadSession | null = null;
+        let stage: 'owner' | 'snapshot' = 'owner';
         try {
           session = await (configuration.openThread ?? openDesktopThread)(row.id, { codexHome: options.codexHome, pipePath: configuration.pipePath,
             timeoutMs: configuration.probeTimeoutMs ?? 1_000, snapshotTimeoutMs: configuration.probeTimeoutMs ?? 1_000, signal: options.signal });
           checkAbort(options.signal);
-          if (session === null) return;
+          if (session === null) {
+            diagnostics[current] = { id: row.id, name: row.name, status: 'owner-missing',
+              failure: { stage, code: 'CODEX_DESKTOP_OWNER_UNAVAILABLE' } };
+            return;
+          }
+          stage = 'snapshot';
           const snapshot = await untilAborted(session.snapshot(), options.signal);
           checkAbort(options.signal);
           if (snapshot.id !== row.id || session.threadId !== row.id) throw malformed();
           data[current] = { id: row.id, name: row.name, rawStatus: snapshot.rawStatus, attributes: { cwd: row.cwd, originator: row.originator,
             source: row.source, createdAt: row.createdAtMs, updatedAt: row.updatedAtMs, transport: 'desktop', ownerId: session.ownerId } };
+          diagnostics[current] = { id: row.id, name: row.name, status: 'available' };
         } catch (error) {
           if (options.signal?.aborted) throw abortError();
-          issue(state, 'desktop', error instanceof MultichatError && error.code.includes('PROTOCOL') ? 'malformed' : 'unavailable');
+          // Preserve the existing summary contract separately from the more
+          // detailed candidate codes. A generic coded Error is unavailable.
+          const kind = error instanceof MultichatError && error.code.includes('PROTOCOL') ? 'malformed' : 'unavailable';
+          if (!issues.some((value) => value.kind === kind)) issues.push({ source: 'desktop', kind });
+          const code = record(error) && typeof error.code === 'string' && /^[A-Z][A-Z0-9_]{0,95}$/.test(error.code)
+            ? error.code : 'CODEX_DESKTOP_PROBE_FAILED';
+          const ipcStage = record(error) && (error.stage === 'prewrite' || error.stage === 'rejected' || error.stage === 'uncertain') ? error.stage : undefined;
+          diagnostics[current] = { id: row.id, name: row.name,
+            status: code === 'CODEX_DESKTOP_UNSUPPORTED' ? 'unsupported' : stage === 'snapshot' ? 'snapshot-failed' : 'probe-failed',
+            failure: { stage, code, ...(ipcStage === undefined ? {} : { ipcStage }) } };
         } finally { await session?.close().catch(() => undefined); }
       };
       await untilAborted(work(), options.signal);
     }
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, rows.length) }, worker));
-  return data.filter((item): item is CodexRawThreadSummary => item !== undefined);
+  return { data: data.filter((item): item is CodexRawThreadSummary => item !== undefined),
+    diagnostics: diagnostics.filter((item): item is CodexCandidateDiagnostic => item !== undefined), issues };
 }
 
 async function readCli(options: CodexDiscoveryOptions, state: CursorState, limit: number): Promise<{ data: CodexRawThreadSummary[]; more: boolean }> {
@@ -203,7 +238,9 @@ export async function listCodexThreadPage(options: CodexDiscoveryOptions = {}): 
       if (!Array.isArray(page.data) || page.data.length > limit) throw malformed();
       const more = nextNative(state, page.nextCursor);
       if (page.completeness === 'partial' && !more) issue(state, 'desktop', 'legacy-limit');
-      const data = deduplicate(state, await readDesktop(page.data, options, state));
+      const inspected = await readDesktopCandidates(page.data, options, new Set(state.seen));
+      for (const failure of inspected.issues) issue(state, failure.source, failure.kind);
+      const data = deduplicate(state, inspected.data);
       state.sourceRead = true;
       if (more) return finish(state, binding, data, true);
       state.stage = 'cli'; state.nativeCursor = undefined; state.sourceCursors = [];

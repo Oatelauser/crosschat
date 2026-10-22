@@ -47,6 +47,8 @@
 
 Desktop 投递绑定真实 owner，不依赖 CLI daemon；owner 绑定后的失败不改投其他通道。忙时 queue 本机寄存，空闲后交给原宿主；steer 追加当前轮，明确无活跃轮且新快照证实空闲时才允许启动新轮。写入不明不重放，outbox 持久认领与未知状态阻止并发/崩溃恢复重复发送；回执摘要绑定目标与实际完整输入。
 
+`SendDeps.diagnoseCodexTarget` 仅在普通 `--to` 解析报 `NAME_NOT_FOUND` 后提供只读补查；已命中、歧义、`targetSessionId` 和 conversation/ref 路径不变。`src/codex/discovery.ts` 的 `diagnoseCodexTarget` 遍历当前非归档 metadata，仅探测匹配候选，区分真实未找到、保存记录、歧义和来源失败；保存记录不加入可发送列表。结构结果保留 owner/snapshot/metadata 阶段与安全错误码，不携带原生错误正文；`scope: 'desktop'`、`cliStatus: 'not-checked'` 明确结果不能推断 CLI 不可达。补查不恢复原生会话、不调整既有超时、不自动发送或换路由。
+
 第三工具的读取接入实现 SessionReader，注册进 SessionCatalog；ContextReader 提供连接描述。工具能力声明与实现分开，第三测试 Provider 已验证通用筛选/详情/成员委派无需添加工具分支。
 
 真实 OpenCode/zcode 尚未接入。第三工具可复用上述发现传输，核心不按工具分支分发；投递、启动和诊断能力分别登记。原有身份/ref/origin/成员持久键尚未迁移，未来功能变化仍须用户确认；本次直接升级，不增加旧版适配。

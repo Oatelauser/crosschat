@@ -294,10 +294,18 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
     }
     // Guard above ensures exactly one of --to/--conversation; here it is --to.
     // 018：targetSessionId 在场=会话级直达投递——id 定位优先，名字解析跳过。
-    const resolved =
-      args.targetSessionId !== undefined
+    let resolved;
+    try {
+      resolved = args.targetSessionId !== undefined
         ? resolveTargetById(args.targetSessionId, scan.sessions, threads)
         : resolveTargetByName(args.to ?? '', scan.sessions, threads);
+    } catch (error) {
+      if (args.targetSessionId === undefined && error instanceof MultichatError && error.code === 'NAME_NOT_FOUND' && deps.diagnoseCodexTarget !== undefined) {
+        const diagnosis = await deps.diagnoseCodexTarget(args.to ?? '');
+        if (diagnosis.kind !== 'not-found') throw Object.assign(new MultichatError(diagnosis.code, diagnosis.message), { diagnosis });
+      }
+      throw error;
+    }
     target =
       resolved.side === 'claude'
         ? { p: 'claude', id: resolved.session.sessionId }

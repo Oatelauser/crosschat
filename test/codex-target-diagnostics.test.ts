@@ -59,6 +59,16 @@ describe('saved Codex target diagnostics', () => {
     expect(openThread).not.toHaveBeenCalled();
   });
 
+  it('keeps a valid native code from an ordinary Error in the detailed candidate diagnosis', async () => {
+    const result = await diagnoseCodexTarget('worker', { desktop: {
+      listMetadata: async () => ({ data: [row('native', 'worker')], nextCursor: null, completeness: 'complete', observedAt: 1 }),
+      openThread: async () => { throw Object.assign(new Error('PRIVATE SECRET'), { code: 'CUSTOM_PROTOCOL_FAILURE' }); },
+    } });
+    expect(result).toMatchObject({ kind: 'saved', code: 'CODEX_TARGET_PROBE_FAILED', candidates: [{ status: 'probe-failed', failure: { stage: 'owner', code: 'CUSTOM_PROTOCOL_FAILURE' } }] });
+    expect(result.message).toContain('code=CUSTOM_PROTOCOL_FAILURE');
+    expect(JSON.stringify(result)).not.toContain('SECRET');
+  });
+
   it('finds a saved target beyond the old 20-row window and probes only the matched opaque ID', async () => {
     const session = owner('native/last');
     const listMetadata = vi.fn(async ({ cursor }: { cursor?: string }) => cursor === undefined
@@ -113,5 +123,28 @@ describe('saved Codex target diagnostics', () => {
     const listMetadata = vi.fn(async () => ({ data: [], nextCursor: null, completeness: 'complete' as const, observedAt: 1 }));
     await expect(diagnoseCodexTarget('worker', { signal: controller.signal, desktop: { listMetadata, openThread: async () => null } })).rejects.toMatchObject({ name: 'AbortError' });
     expect(listMetadata).not.toHaveBeenCalled();
+  });
+
+  it('stops waiting on an injected metadata read that ignores cancellation and discards its late page', async () => {
+    const controller = new AbortController();
+    const add = vi.spyOn(controller.signal, 'addEventListener');
+    const remove = vi.spyOn(controller.signal, 'removeEventListener');
+    let finish!: (page: { data: DesktopMetadataRow[]; nextCursor: null; completeness: 'complete'; observedAt: number }) => void;
+    const listMetadata = vi.fn(() => new Promise<{ data: DesktopMetadataRow[]; nextCursor: null; completeness: 'complete'; observedAt: number }>((resolve) => { finish = resolve; }));
+    const openThread = vi.fn(async () => null);
+    const result = diagnoseCodexTarget('worker', { signal: controller.signal, desktop: { listMetadata, openThread } });
+    let cancelled = false;
+    const settled = result.catch((error: unknown) => { cancelled = error instanceof Error && error.name === 'AbortError'; });
+    controller.abort();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const cancelledBeforeLatePage = cancelled;
+    finish({ data: [row('native', 'worker')], nextCursor: null, completeness: 'complete', observedAt: 1 });
+    await settled;
+    expect(cancelledBeforeLatePage).toBe(true);
+    expect(openThread).not.toHaveBeenCalled();
+    expect(listMetadata).toHaveBeenCalledOnce();
+    const added = add.mock.calls.filter(([event]) => event === 'abort');
+    expect(added.length).toBeGreaterThan(0);
+    for (const [, listener] of added) expect(remove).toHaveBeenCalledWith('abort', listener);
   });
 });

@@ -11,6 +11,9 @@
 - 收到"文件 … 已送达"但那个路径不存在：附件超过 5 天被回收——回对端"**附件已过期，请重发 --file**"。
 - `CODEX_THREAD_LOCKED` / `CODEX_THREAD_BUSY_TIMEOUT`：目标写者占用或暂不可投递。以本次结果为准：`parked` 表示已暂存并安排自动补投，无需重发或轮询；投递失败则按报错处理。`steer` 不自动变成轮后补投。
 - `CODEX_WRITE_UNCERTAIN` / `CLAUDE_PIPE_WRITE_UNCERTAIN`：写入可能已被接受，先核对目标历史或日志，不直接重发。本机寄存项出现此状态会暂停补投，正文仍在 mailbox；核实后再决定如何接续。
+- `CODEX_DESKTOP_OWNER_UNAVAILABLE`：名称已命中保存记录，但本次未找到 Desktop owner；在桌面打开目标后再试。该结果只描述 Desktop，不能推断 CLI 也不可达。
+- `CODEX_TARGET_PROBE_FAILED` / `CODEX_DISCOVERY_UNAVAILABLE`：目标探测或记录来源读取失败，不能当作名称不存在。按报错中的 `stage` 和 `code` 排查，保留原目标与模式。
+- `CODEX_TARGET_DISCOVERY_CHANGED`：首次名单与补查期间状态发生变化，补查已能探测目标；本条仍未发送。核对目标后可重新执行原命令。
 - `CODEX_DESKTOP_UNAVAILABLE` / `CODEX_DESKTOP_TIMEOUT`：桌面通道或已绑定的 owner 不可达。确认目标桌面会话仍打开，再按错误信息处理；启动另一个 CLI daemon 不会恢复桌面 owner。
 - `CODEX_DESKTOP_UNSUPPORTED` / `CODEX_DESKTOP_PROTOCOL_ERROR` / `CODEX_DESKTOP_REQUEST_REJECTED`：当前桌面协议能力或请求不匹配，保留错误上下文排查。不要把 `steer` 改成 `queue` 来掩盖失败。
 - `OUTBOX_BUSY`：本地队列锁被占用，本条没有成功寄存；等待占用结束后再发送。`OUTBOX_FULL` 则按报错中的 mailbox 路径取回已有内容，先处理积压。
