@@ -53,6 +53,14 @@ describe('Ink input batches', () => {
     expect(inputKeys(':s', key({ eventType: 'release' }))).toEqual([]);
   });
 
+  it('recognizes control keys inside a combined ordinary input batch', () => {
+    const events = inputKeys('\r\n\n\t\b\u007f\u0003', key());
+    expect(events.map((event) => event.name)).toEqual(['enter', 'enter', 'tab', 'backspace', 'backspace', 'c']);
+    expect(events.at(-1)?.ctrl).toBe(true);
+    expect(events.slice(0, -1).every((event) => !event.ctrl)).toBe(true);
+    expect(inputKeys('ignored\r', key({ delete: true }))).toEqual([{ name: 'delete', ctrl: false, shift: false, alt: false }]);
+  });
+
   it('feeds one real useInput batch across the list and command editor modes', async () => {
     const controller = createTuiController({ registry: createResourceRegistry(), contexts: [{ id: 'fixture', kind: 'local', label: 'fixture' }], adapters: {} });
     const ready = vi.fn();
@@ -84,6 +92,31 @@ describe('Ink input batches', () => {
       app.stdin.write('\u001b[200~中👩🏽‍💻e\u0301q\u001b[201~');
       await vi.waitFor(() => expect(controller.getSnapshot().input?.editor).toEqual({ text: '中👩🏽‍💻e\u0301q', cursor: 4 }));
       expect(exit).not.toHaveBeenCalled();
+    } finally { controller.dispose(); app.unmount(); }
+  });
+
+  it('handles movement and Enter combined in one real useInput batch', async () => {
+    const controller = createTuiController({ registry: createResourceRegistry(), contexts: [
+      { id: 'local', kind: 'local', label: 'first' }, { id: 'ssh:fixture', kind: 'ssh', label: 'second' },
+    ], adapters: {} });
+    const ready = vi.fn();
+    const app = render(<InputHarness controller={controller} ready={ready} />);
+    try {
+      await vi.waitFor(() => expect(ready).toHaveBeenCalled());
+      app.stdin.write('j\r');
+      await vi.waitFor(() => expect(controller.getSnapshot().route).toEqual({ resourceId: 'sessions', contextId: 'ssh:fixture' }));
+    } finally { controller.dispose(); app.unmount(); }
+  });
+
+  it('handles command text and Enter combined in one real useInput batch', async () => {
+    const controller = createTuiController({ registry: createResourceRegistry(), contexts: [], adapters: {} });
+    const ready = vi.fn();
+    const app = render(<InputHarness controller={controller} ready={ready} />);
+    try {
+      await vi.waitFor(() => expect(ready).toHaveBeenCalled());
+      app.stdin.write(':sessions\r');
+      await vi.waitFor(() => expect(controller.getSnapshot().route.resourceId).toBe('sessions'));
+      expect(controller.getSnapshot().mode).toBe('list');
     } finally { controller.dispose(); app.unmount(); }
   });
 });
