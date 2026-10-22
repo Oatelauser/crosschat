@@ -1,7 +1,8 @@
 import { lstat, open, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { aggregateSummaries } from '../../conversation-summary.js';
-import { pairKeyOf } from '../../conversations.js';
+import { pairKeyOf, pairKeyOfEntry } from '../../conversations.js';
+import type { PairAttribution } from '../../conversations.js';
 import { decodeRef } from '../../ref.js';
 import type { ConversationRef, RefEndpoint } from '../../ref.js';
 import type { SendLogEntry } from '../../send-log.js';
@@ -204,6 +205,26 @@ function savedRef(value: string, pairId: string): ConversationRef | undefined {
   catch { return undefined; }
 }
 
+function normalizeAttribution(input: PairAttribution): PairAttribution {
+  const entry = { ...input };
+  if (entry.target.startsWith('via:')) {
+    try {
+      if (!entry.replyRef) throw new Error('Missing routed reference.');
+      const ref = decodeRef(entry.replyRef);
+      const identity = (endpoint: RefEndpoint) => endpoint.p === 'human' ? 'human' : `${endpoint.p}:${endpoint.id}`;
+      const endpoints = [identity(ref.f), identity(ref.t)];
+      if (entry.from !== undefined && endpoints.includes(entry.from)) entry.target = endpoints.find((endpoint) => endpoint !== entry.from) ?? entry.target;
+      else { delete entry.from; entry.target = ''; }
+    } catch { delete entry.from; entry.target = ''; }
+  }
+  return entry;
+}
+
+/** Shared metadata association; routed transport markers never become native session identities. */
+export function communicationPairId(entry: PairAttribution): string | undefined {
+  return pairKeyOfEntry(normalizeAttribution(entry));
+}
+
 function auditEntry(input: unknown): SendLogEntry | undefined {
   if (!isRecord(input) || typeof input.ts !== 'string' || !Number.isFinite(Date.parse(input.ts)) || typeof input.to !== 'string' || typeof input.target !== 'string'
     || (input.status !== 'delivered' && input.status !== 'queued' && input.status !== 'parked' && input.status !== 'failed')) return undefined;
@@ -212,15 +233,10 @@ function auditEntry(input: unknown): SendLogEntry | undefined {
     ...(typeof input.replyRef === 'string' ? { replyRef: input.replyRef } : {}),
     ...(typeof input.turn === 'number' && Number.isSafeInteger(input.turn) && input.turn > 0 ? { turn: input.turn } : {}),
     ...(input.receipt === 'confirmed' || input.receipt === 'unconfirmed' ? { receipt: input.receipt } : {}), ...(typeof input.code === 'string' ? { code: input.code } : {}) };
-  if (entry.target.startsWith('via:') && entry.replyRef) {
-    try {
-      const ref = decodeRef(entry.replyRef);
-      const identity = (endpoint: RefEndpoint) => endpoint.p === 'human' ? 'human' : `${endpoint.p}:${endpoint.id}`;
-      const endpoints = [identity(ref.f), identity(ref.t)];
-      if (entry.from !== undefined && endpoints.includes(entry.from)) entry.target = endpoints.find((endpoint) => endpoint !== entry.from) ?? entry.target;
-      else { delete entry.from; entry.target = ''; }
-    } catch { delete entry.from; entry.target = ''; }
-  }
+  const attributed = normalizeAttribution(entry);
+  if (attributed.from === undefined) delete entry.from;
+  else entry.from = attributed.from;
+  entry.target = attributed.target;
   return entry;
 }
 

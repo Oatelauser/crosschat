@@ -76,12 +76,14 @@ function deliveryRow(item: CommunicationSummary): TuiRow {
 function itemPair(thread: OutboxThreadMetadata, callerKey?: string): string { return [callerKey ?? 'human', `${thread.providerId}:${thread.threadId}`].sort().join('\n'); }
 function queueRow(item: OutboxThreadMetadata, scopeValue?: { pairId: string; totalCount: number | null; known: boolean }): TuiRow {
   const pairs = [...new Set(item.items.map((entry) => itemPair(item, entry.callerKey)))];
-  const query: Readonly<Record<string, string>> = scopeValue ? { pairId: scopeValue.pairId } : pairs.length === 1 ? { pairId: pairs[0] } : { sessionRef: JSON.stringify({ contextId: item.contextId, providerId: item.providerId, nativeId: item.threadId }) };
+  const pairId = scopeValue?.pairId ?? (pairs.length === 1 && item.count !== null ? pairs[0] : undefined);
+  const availability: Record<string, TuiActionAvailability> = { logs: disabled('现有看门狗没有独立日志文件。', '查看已有投递审计并核对本机滞留镜像；本界面不启动或重复投递。') };
+  if (pairId === undefined) availability.deliveries = disabled('当前队列未核实单一通信对；同名或同原生 ID 不能证明保存引用中的机器身份。', '请在投递列表选择完整通信对，再按 w 查看该对滞留；此处不扩大为会话范围。');
   const uncertain = item.items.some((entry) => entry.deliveryState === 'uncertain');
   const state = item.state !== 'ready' ? `读取不完整<${item.state}>` : uncertain ? '写入待核实<uncertain>' : item.items.some((entry) => entry.deliveryState === 'in-flight') ? '已有写入尝试<in-flight>' : '已暂存，未确认送达';
   return { id: item.id, contextId: item.contextId, cells: { name: item.toName || item.threadId, provider: item.providerId, count: item.count === null ? '未知' : String(item.count), oldest: time(item.oldestParkedAt), state }, searchText: json(item), copyValue: item.mailboxFile,
-    actionRoutes: { deliveries: { resourceId: 'deliveries', contextId: item.contextId, query } },
-    actionAvailability: { logs: disabled('现有看门狗没有独立日志文件。', '查看已有投递审计并核对本机滞留镜像；本界面不启动或重复投递。') },
+    actionRoutes: pairId === undefined ? {} : { deliveries: { resourceId: 'deliveries', contextId: item.contextId, query: { pairId } } },
+    actionAvailability: availability,
     detail: [{ label: '完整会话引用', value: json({ contextId: item.contextId, providerId: item.providerId, nativeId: item.threadId }) },
       ...(scopeValue ? [{ label: '关联范围', value: `${scopeValue.pairId}\n${scopeValue.known ? '下列条数与条目仅属此通信对。' : '关联范围尚待核实；来源读取不完整，不能确认匹配条数。'}` }, { label: '目标全部队列条数', value: scopeValue.totalCount === null ? '未知' : String(scopeValue.totalCount) }] : []),
       { label: '暂存条数', value: item.count === null ? '未知（读取不完整）' : String(item.count) }, { label: '最早暂存时间', value: time(item.oldestParkedAt) }, { label: '当前记录状态', value: state }, { label: '条目元数据', value: json(item.items) }, { label: '本机镜像路径', value: item.mailboxFile }, { label: '边界', value: '暂存不代表已送达；待核实写入不能自动重试。此处不展示消息正文、不改变原有补投规则。' }],
