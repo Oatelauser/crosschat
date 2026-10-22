@@ -36,6 +36,13 @@ function response(contextId: string, ids: string[], nextCursor: string | null = 
 }
 
 describe('TCP readonly application', () => {
+  it('caps explicit fan-out at the agreed three nodes before any IO', async () => {
+    const { createTcpApplication } = await import('../src/application/tcp/index.js');
+    const readSnapshot = vi.fn();
+    for (const concurrency of [0, 4, 16]) expect(() => createTcpApplication({ baseDir: '/never-read-user-data', concurrency, readSnapshot })).toThrow();
+    for (const concurrency of [1, 3]) expect(() => createTcpApplication({ baseDir: '/never-read-user-data', concurrency, readSnapshot })).not.toThrow();
+    expect(readSnapshot).not.toHaveBeenCalled();
+  });
   it('keeps an unconfigured local broker empty without creating data or guessing its first star', async () => {
     const { createTcpApplication } = await import('../src/application/tcp/index.js');
     const { baseDir } = await fixture();
