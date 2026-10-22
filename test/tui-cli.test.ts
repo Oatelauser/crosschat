@@ -105,6 +105,22 @@ describe('TUI lazy entry and ownership', () => {
     expect(mocks.render).not.toHaveBeenCalled();
     expect(mocks.save).not.toHaveBeenCalled();
   });
+
+  it('does not mistake returning from another resource for an explicit context selection', async () => {
+    const io = await fixture();
+    const pending = runTui({ ...io, contexts: [{ id: 'fixture', kind: 'local', label: 'fixture' }] });
+    await vi.waitFor(() => expect(mocks.render).toHaveBeenCalledOnce());
+    const controller = renderedController();
+    controller.handleKey({ name: ':' });
+    controller.handleKey({ name: 'paste', text: 'sessions' });
+    controller.handleKey({ name: 'enter' });
+    expect(controller.getSnapshot().route.resourceId).toBe('sessions');
+    controller.handleKey({ name: 'escape' });
+    expect(controller.getSnapshot().route.resourceId).toBe('ctx');
+    controller.handleKey({ name: 'q' });
+    expect(await pending).toBe(0);
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
 });
 
 describe('CLI TUI command isolation', () => {
