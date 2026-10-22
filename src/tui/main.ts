@@ -98,7 +98,7 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
           controller.dispose();
           try { instance.unmount(); await done; }
           finally {
-            if (selectedContextId) {
+            if (selectedContextId && (composition?.shouldSavePreferences() ?? true)) {
               const saved = await saveTuiPreferences({ home, preferences: { version: 1, selectedContextId } });
               if (saved.errors.length) stderr.write('最近连接选择未能保存；请检查界面偏好文件的访问权限。\n');
             }

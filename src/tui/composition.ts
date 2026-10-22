@@ -55,7 +55,7 @@ function byContext(adapters: Readonly<Record<string, TuiResourceAdapter>>): TuiR
 }
 
 /** Only constructs adapters. Each application module owns its later IO and effects. */
-export function createDefaultResources(options: { home: string; isolatedHome: boolean }): { resources: readonly TuiResource[]; adapters: Readonly<Record<string, TuiResourceAdapter>> } {
+export function createDefaultResources(options: { home: string; isolatedHome: boolean }): { resources: readonly TuiResource[]; adapters: Readonly<Record<string, TuiResourceAdapter>>; shouldSavePreferences(): boolean } {
   const { home, isolatedHome } = options;
   const baseDir = join(home, '.crosschat');
   const env = childEnvironment(home, isolatedHome);
@@ -67,6 +67,9 @@ export function createDefaultResources(options: { home: string; isolatedHome: bo
   const doctor = createDoctorResource({ overview });
   const remoteSessions = createSshSessionsResource({ ssh });
   const remoteDoctor = createSshDoctorResource({ ssh });
+  const maintenance = createLocalMaintenance({ home, env });
+  let savePreferences = true;
+  let uninstallGeneration = 0;
   const communications = createCommunicationResources({
     readCommunications: ({ contextId, signal }) => queryCommunications({ baseDir, contextId, signal }),
     readOutbox: ({ contextId, signal }) => queryOutbox({ baseDir, contextId, signal }),
@@ -78,10 +81,20 @@ export function createDefaultResources(options: { home: string; isolatedHome: bo
     createLogsResource({ read: (request) => queryManagedLog({ ...request, baseDir }) }),
     createServicesResource({ service: createLocalServices({ baseDir, env, entryPath: fileURLToPath(new URL('../cli.js', import.meta.url)) }) }),
     createFilesResource({ read: ({ signal }) => queryManagedFiles({ baseDir, signal }) }),
-    createMaintenanceResource({ maintenance: createLocalMaintenance({ home, env }) }),
+    createMaintenanceResource({ maintenance: { ...maintenance, async execute(request) {
+      if (request.operationId !== 'uninstall-data' || request.signal?.aborted) return maintenance.execute(request);
+      const before = savePreferences;
+      const generation = ++uninstallGeneration;
+      // Even a lost reply may follow successful data removal. Exit must not
+      // recreate the directory; only a confirmed zero-effect rejection restores it.
+      savePreferences = false;
+      const result = await maintenance.execute(request);
+      if (generation === uninstallGeneration && (result.status === 'blocked' || result.status === 'changed') && result.items.length === 0) savePreferences = before;
+      return result;
+    } } }),
     createSshResource({ ssh }),
   ];
   const resources = new Map(installed.map((item) => [item.resource.id, item.resource]));
   resources.set(contextsResource.id, contextsResource);
-  return { resources: defaultResources.map((resource) => resources.get(resource.id) ?? resource), adapters: Object.fromEntries(installed.map((item) => [item.resource.id, item.adapter])) };
+  return { resources: defaultResources.map((resource) => resources.get(resource.id) ?? resource), adapters: Object.fromEntries(installed.map((item) => [item.resource.id, item.adapter])), shouldSavePreferences: () => savePreferences };
 }
