@@ -13,7 +13,7 @@ import { checkAbort, isRecord } from '../queries/reading.js';
 import { untilAborted } from '../sessions/reading.js';
 import { sessionKey } from '../sessions/model.js';
 import type { SessionRef } from '../sessions/model.js';
-import type { TcpApplication, TcpStar, TcpStarResult } from './model.js';
+import type { TcpApplication, TcpReadResult, TcpRole, TcpStar, TcpStarResult } from './model.js';
 import { fullTcpMachineId, resolveTcpContext } from './reading.js';
 import { executeLocalManagement } from './local-management.js';
 import type { ManagementRequest, ManagementResult } from '../management/local.js';
@@ -98,8 +98,13 @@ function destination(host: string): boolean {
     && !['0.0.0.0', '::', '::1', 'localhost'].includes(bare) && !/^127\./.test(bare)
     && !bare.endsWith('.localhost');
 }
+function managementMetadata(current: TcpReadResult & { staticComplete?: boolean }, contextId: string, role: TcpRole | null): boolean {
+  if (current.contextId !== contextId) return false;
+  if (current.completeness === 'complete' && current.errors.length === 0) return true;
+  return contextId === 'local' && role === 'broker-owner' && current.completeness === 'partial' && current.staticComplete === true;
+}
 function selectedStar(current: TcpStarResult, request: TcpManagementRequest): TcpStar {
-  if (current.contextId !== request.contextId || current.completeness !== 'complete' || current.errors.length > 0 || current.star === null
+  if (current.star === null || !managementMetadata(current, request.contextId, current.star.role)
     || current.star.contextId !== request.contextId || current.star.starId !== request.starId) throw new Denied('当前星的完整目标和权限未能核实，请刷新后重新选择。');
   return current.star;
 }
@@ -184,7 +189,7 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
         const stars = await options.catalog.readStars({ contextId: request.contextId, signal: request.signal });
         state = stars.items.map((item) => [item.starId, item.revision]);
         fields.push({ id: 'name', label: '星名', required: true });
-        if (request.contextId !== 'local' || stars.contextId !== 'local' || stars.role !== 'broker-owner' || stars.completeness !== 'complete' || stars.errors.length > 0) throw new Denied('加星只支持已核实的本机 broker 主身份。');
+        if (request.contextId !== 'local' || stars.role !== 'broker-owner' || !managementMetadata(stars, request.contextId, stars.role)) throw new Denied('加星只支持已核实的本机 broker 主身份。');
         if (values.name !== undefined && (!STAR_NAME_RE.test(values.name) || stars.items.some((item) => item.name?.toLowerCase() === values.name.toLowerCase() || item.starId === values.name))) throw new Denied('星名须为 1–32 个字母、数字、点、下划线或短横线，并且不能与现有星冲突。');
         impact.push({ label: '操作', value: '新建星；沿用现有 broker 管理冷热路径。' });
         local = { op: 'add-star', name: values.name ?? '' };

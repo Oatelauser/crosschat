@@ -62,11 +62,15 @@ export interface TcpMember {
   addressReason?: string;
 }
 export interface TcpStarsResult extends TcpReadResult {
+  /** Validated local static metadata is independent of unavailable runtime presence. Never remote authority. */
+  staticComplete?: boolean;
   role: TcpRole | null;
   configured: boolean;
   items: TcpStar[];
 }
 export interface TcpStarResult extends TcpReadResult {
+  /** True only after complete local static structures have been validated. Runtime state may still be unknown. */
+  staticComplete?: boolean;
   star: TcpStar | null;
   machines: TcpMachine[];
   members: TcpMember[];

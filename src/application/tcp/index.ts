@@ -88,7 +88,8 @@ export function createTcpApplication(options: TcpApplicationOptions): TcpApplica
       if (address) member.address = address;
       else member.addressReason = '现有选择器不能确认无歧义的完整成员地址；请核对完整引用、机器和工具。';
     }
-    return { ...base(target, snapshot.live ? 'complete' : 'partial', snapshot.live ? [] : [issue(starId, '仅取得本机静态台账，机器与成员活性未知。', 'unavailable', '启动或核对本机 broker 后刷新；静态台账不代表下线。')]), star, machines, credentials, members };
+    return { ...base(target, snapshot.live ? 'complete' : 'partial', snapshot.live ? [] : [issue(starId, '仅取得本机静态台账，机器与成员活性未知。', 'unavailable', '启动或核对本机 broker 后刷新；静态台账不代表下线。')]),
+      ...(target.kind === 'local' && target.star !== undefined ? { staticComplete: true } : {}), star, machines, credentials, members };
   }
 
   async function observe(target: TcpResolvedTarget, request: TcpStarRequest): Promise<TcpStarResult> {
@@ -145,7 +146,9 @@ export function createTcpApplication(options: TcpApplicationOptions): TcpApplica
     const pages = await pool(context.value.broker?.stars ?? [], concurrency, request.signal, (star) => observe({ ...context.value!, starId: star.starId, star }, { ...request, starId: star.starId }));
     if (request.signal?.aborted) return { ...base(request, 'cancelled', [cancelled(request)]), configured: context.value.broker !== null, role: 'broker-owner', items: [] };
     const errors = pages.flatMap((page) => page.errors);
-    return { ...base(request, errors.length ? 'partial' : 'complete', errors), configured: context.value.broker !== null, role: 'broker-owner', items: pages.flatMap((page) => page.star ? [page.star] : []) };
+    return { ...base(request, errors.length ? 'partial' : 'complete', errors),
+      staticComplete: pages.length === (context.value.broker?.stars.length ?? 0) && pages.every((page) => page.staticComplete === true),
+      configured: context.value.broker !== null, role: 'broker-owner', items: pages.flatMap((page) => page.star ? [page.star] : []) };
   }
 
   function memberSession(member: TcpMember): TcpSession {
