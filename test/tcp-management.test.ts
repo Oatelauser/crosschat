@@ -7,7 +7,7 @@ const fullMachine = 'a'.repeat(32);
 const contextId = 'local';
 const star = { id: 'star-row-full', contextId, starId: 'full-star-id', name: 'fixture-star', revision: 'a'.repeat(64), role: 'broker-owner' as const, host: 'fixture.invalid', port: 7260, health: 'reachable' as const, onlineNodes: 1 };
 const credential = { id: 'credential-row-full', contextId, starId: star.starId, kind: 'node' as const, label: 'node-1', revision: 'b'.repeat(64), machineId: fullMachine, machineName: '本机fixture', addedAt: '2026-10-22T00:00:00.000Z' };
-const member = { id: 'member-row-full', contextId, starId: star.starId, machineId: fullMachine, machineName: '本机fixture', nativeId: 'opaque/full/会话', providerId: 'future-provider', name: null, presence: 'online' as const, temporary: false };
+const member = { id: 'member-row-full', contextId, starId: star.starId, machineId: fullMachine, machineName: '本机fixture', nativeId: 'opaque/full/会话', providerId: 'futuretool', name: null, presence: 'online' as const, temporary: false };
 const base = { contextId, completeness: 'complete' as const, observedAt: 100, errors: [] };
 function fixture() {
   const current: TcpStarResult = { ...base, star: { ...star }, machines: [{ id: 'machine-row-full', contextId, starId: star.starId, machineId: fullMachine, mid8: fullMachine.slice(0, 8), name: '本机fixture', labels: [credential.label], presence: 'online', addedAt: credential.addedAt }], members: [{ ...member }], credentials: [{ ...credential }] };
@@ -71,7 +71,9 @@ describe('TCP management previews and fixed targets', () => {
     expect(JSON.stringify({ ...result, secret: undefined })).not.toContain(key);
     expect(JSON.stringify(await f.service.preview(request))).not.toContain(key);
     f.executeLocal.mockResolvedValue({ kind: 'applied', mode: 'hot', value: { results: [{ label: 'node-2', key, nodeJsonContent: JSON.stringify({ brokers: [{ host: 'reachable.invalid', port: 7260, starId: 'different-star', key }] }) }] } });
-    expect(await f.apply(request)).toMatchObject({ kind: 'uncertain', secret: undefined });
+    const malformed = await f.apply(request);
+    expect(malformed).toMatchObject({ kind: 'uncertain' });
+    expect(malformed.secret).toBeUndefined();
   });
 
   it('requires a nonwildcard destination for new machines instead of silently copying a local bind address', async () => {
@@ -85,7 +87,7 @@ describe('TCP management previews and fixed targets', () => {
   it('uses the existing atomic member removal on its complete machine/provider/native identity and releases the connection', async () => {
     const f = fixture(); const request = { ...f.request('remove-member'), targetId: member.id };
     expect(await f.apply(request)).toMatchObject({ kind: 'applied' });
-    expect(f.remote.removeMember).toHaveBeenCalledWith({ sessionId: member.nativeId, machine: fullMachine, tool: 'future-provider' });
+    expect(f.remote.removeMember).toHaveBeenCalledWith({ sessionId: member.nativeId, machine: fullMachine, tool: 'futuretool' });
     expect(f.remote.close).toHaveBeenCalled();
     f.remote.removeMember.mockResolvedValue({ op: 'member-remove-exact-result', id: 'controlled', ok: false, removed: true, code: 'PERSIST_FAILED' });
     expect(await f.apply(request)).toMatchObject({ kind: 'uncertain' });
