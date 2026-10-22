@@ -12,7 +12,7 @@ import { Broker } from '../src/serve/broker.js';
 import { registryFileOf } from '../src/serve/registry.js';
 import { seedBroker } from './helpers/broker-seed.js';
 import type { SendFrame } from '../src/serve/protocol.js';
-import { appendSendLog, type SendLogEntry } from '../src/send-log.js';
+import { appendSendLog, createReceiptMarker, type SendLogEntry } from '../src/send-log.js';
 import type { ClaudeRegistryScan, ClaudeSessionEntry } from '../src/claude/registry.js';
 import type { CodexThreadSummary } from '../src/codex/client.js';
 
@@ -113,6 +113,15 @@ const shardRef = (state: string): string => {
 
 
 describe('runSend happy paths', () => {
+  it('delivers an exact conversation target when optional discovery is unavailable', async () => {
+    const deps = makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' });
+    deps.listCodexThreads = async () => { throw new Error('CLI daemon unavailable'); };
+    const ref = encodeRef(newConversationRef({ p: 'claude', id: 'cs-alpha' }, { p: 'codex', id: 'desktop-thread' }));
+    const result = await runSend({ conversation: ref, delivery: 'steer', bodyArg: 'exact route' }, deps);
+    expect(result).toContain('delivered');
+    expect(codexDeliveries.at(-1)?.threadId).toBe('desktop-thread');
+  });
+
   it('delivers to a claude session by name and returns a usable reply ref', async () => {
     const out = await send({ to: 'alpha', bodyArg: 'hello world' });
     expect(out).toContain('delivered to alpha (turn 1)');
@@ -507,7 +516,7 @@ describe('runSend receipt probing (B19: queued never probes)', () => {
     const out = await runSend({ to: 'workteam', bodyArg: 'straight through' }, probingDeps(false, probes));
     expect(probes).toHaveLength(1);
     expect(probes[0]![0]).toBe('team1111-aaaa');
-    expect(probes[0]![1]).toMatch(/^mc2_/);
+    expect(probes[0]![1]).toBe(createReceiptMarker('team1111-aaaa', codexDeliveries.at(-1)!.content));
     expect(out).toContain('delivered to workteam (turn 1)');
     expect(out).not.toContain('回执'); // confirmed → no caveat line
   });
