@@ -20,7 +20,8 @@
 ## 既有功能批准
 
 1. **已批准**：新增只读星快照，同一DTO供本机与WS；WS仅成员/星管理员本星，返回完整机器ID、连接、成员、安全凭证元数据/不可逆revision，不返回钥匙；新读接口不记管理审计，原list读取/审计保持。使用admin-op action=star-snapshot及adminPipe同名op，不做旧端降级。
-2. **等待选择**：TUI删节点/吊管理钥/删星新增expected版本约束，在broker/冷mutation同一步核对。目标替换、label复用或删星影响新增则拒绝；旧CLI不传保持。未批准前仅接口/测试方案，不实施此扩展。
+2. **已批准**：TUI删节点/吊管理钥/删星新增expected版本约束，在broker/冷mutation同一步核对。目标替换、label复用或删星影响新增则拒绝；旧CLI不传保持，不做旧端降级。凭证核验credentialRevision和显式machineId(null=未绑定)；删星核验完整静态starRevision。
+3. **已批准**：原管理审计行保留文字并追加完整starId作用域元数据，原动作/频率/权限保持；多星显示名动作同一行记录全部受影响星。TUI按稳定身份筛选，旧行无标识时明确无法准确归属。
 
 ## 模块与验收
 
