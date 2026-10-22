@@ -1,10 +1,11 @@
 import type {
-  TuiAction, TuiActionEntry, TuiContext, TuiDetail, TuiInput, TuiKey, TuiMode,
-  TuiPage, TuiResourceAdapter, TuiRoute, TuiRow, TuiSnapshot,
+  TuiAction, TuiActionEntry, TuiActionRequest, TuiContext, TuiDetail, TuiInput, TuiKey, TuiMode,
+  TuiOverlay, TuiPage, TuiResourceAdapter, TuiRoute, TuiRow, TuiSnapshot,
 } from '../model.js';
 import type { ResourceRegistry } from '../resources/registry.js';
 import { editText } from '../ui/text.js';
 import type { EditEvent } from '../ui/text.js';
+import { detailLines } from './detail.js';
 
 export interface TuiControllerOptions {
   registry: ResourceRegistry;
@@ -34,6 +35,7 @@ interface SavedInput {
   selectedId?: string;
   scrollOffset: number;
   detail?: TuiDetail;
+  detailCursorLine: number;
 }
 
 function shortcut(key: TuiKey): string {
@@ -61,7 +63,7 @@ export function createTuiController(options: TuiControllerOptions) {
   const listeners = new Set<() => void>();
   const contextRows: readonly TuiRow[] = options.contexts.map((context) => ({
     id: context.id, contextId: context.id,
-    cells: { kind: context.kind, name: context.label, target: context.target ?? '', description: context.description ?? '' },
+    cells: { kind: ({ local: '本机', ssh: 'SSH', tcp: 'TCP' } as Record<string, string>)[context.kind] ?? context.kind, name: context.label, target: context.target ?? '', description: context.description ?? '' },
     detail: [
       { label: '类型', value: context.kind }, { label: '名称', value: context.label }, { label: '目标', value: context.target ?? '' },
       { label: '身份提示', value: context.identityHint ?? '尚未核实' },
@@ -80,6 +82,17 @@ export function createTuiController(options: TuiControllerOptions) {
   let input: TuiInput | undefined;
   let savedInput: SavedInput | undefined;
   let detail: TuiDetail | undefined;
+  let detailCursorLine = 0;
+  let overlay: TuiOverlay | undefined;
+  let overlayAction: TuiAction | undefined;
+  let overlayOwner: ListState | undefined;
+  let formController: AbortController | undefined;
+  let formGeneration = 0;
+  let formPending = false;
+  let checkingSubmit = false;
+  let writeIssued = false;
+  let formPinnedImpact: readonly string[] = [];
+  let viewGeneration = 0;
   let help: TuiSnapshot['help'];
   let helpReturnMode: 'list' | 'detail' = 'list';
   let viewport = { columns: 80, rows: 24 };
@@ -101,8 +114,11 @@ export function createTuiController(options: TuiControllerOptions) {
     return options.registry.actions(page.route.resourceId, targetMode).map((action) => {
       let reason = action.unavailableReason;
       let enabled = action.enabled !== false;
-      if (action.selectionPolicy === 'required' && !selectedRow()) { enabled = false; reason = '请先选择一项'; }
+      if (enabled && action.selectionPolicy === 'required' && !selectedRow()) { enabled = false; reason = '请先选择一项'; }
       if (action.kind === 'copy' && !options.clipboard) { enabled = false; reason = '当前终端未提供剪贴板'; }
+      if (enabled && action.mutation && (!options.adapters[action.ownerResourceId]?.checkAction || !options.adapters[action.ownerResourceId]?.mutate)) {
+        enabled = false; reason = '当前资源尚未提供权限核验与操作接口';
+      }
       return { id: action.id, shortcut: action.shortcut, label: action.label, enabled, reason, nextStep: action.nextStep, impact: action.impact };
     });
   }
@@ -116,7 +132,7 @@ export function createTuiController(options: TuiControllerOptions) {
     if (selectedIndex >= page.scrollOffset + pageSize()) page.scrollOffset = selectedIndex - pageSize() + 1;
     snapshot = {
       route: { ...page.route }, context: currentContext(), mode, rows, selectedId: page.selectedId, selectedIndex,
-      scrollOffset: page.scrollOffset, filter: page.filter, input, detail, help, loading,
+      scrollOffset: page.scrollOffset, filter: page.filter, input, detail, help, overlay, loading,
       error: page.error, notice: page.notice, completeness: page.completeness, actions: actionEntries(mode), viewport: { ...viewport },
     };
     for (const listener of listeners) listener();
@@ -136,7 +152,7 @@ export function createTuiController(options: TuiControllerOptions) {
     const adapter = options.adapters[page.route.resourceId];
     if (!adapter) {
       page.rows = []; page.completeness = 'unavailable'; page.error = undefined;
-      page.notice = options.registry.resolve(page.route.resourceId)?.unavailableReason ?? '此资源尚未接入。';
+      page.notice = options.registry.resolve(page.route.resourceId)?.unavailableReason ?? '资源尚未启用。';
       publish(); return;
     }
     const requestPage = page;
@@ -168,6 +184,7 @@ export function createTuiController(options: TuiControllerOptions) {
   function navigate(route: TuiRoute) {
     if (!options.registry.resolve(route.resourceId)) { page.notice = `未知资源: ${route.resourceId}`; publish(); return; }
     cancelRead(false);
+    cancelWork();
     if (routeKey(route) !== routeKey(page.route)) {
       history.push(page);
       const cached = pages.get(routeKey(route));
@@ -178,13 +195,15 @@ export function createTuiController(options: TuiControllerOptions) {
     publish(); void refresh();
   }
   function back() {
+    cancelWork();
     if (mode === 'detail') { mode = 'list'; detail = undefined; publish(); return; }
     if (page.filter) { page.filter = ''; publish(); return; }
     const previous = history.pop();
     if (previous) { cancelRead(false); page = previous; mode = 'list'; publish(); }
   }
   function openInput(kind: TuiInput['kind']) {
-    savedInput = { mode: mode === 'detail' ? 'detail' : 'list', filter: page.filter, selectedId: page.selectedId, scrollOffset: page.scrollOffset, detail };
+    cancelWork();
+    savedInput = { mode: mode === 'detail' ? 'detail' : 'list', filter: page.filter, selectedId: page.selectedId, scrollOffset: page.scrollOffset, detail, detailCursorLine };
     input = { kind, editor: { text: '', cursor: 0 }, candidates: kind === 'command' ? options.registry.candidates('').map((resource) => ({ id: resource.id, label: resource.label, enabled: true, reason: resource.unavailableReason })) : [], hint: 'Enter 保留筛选' };
     mode = 'input';
     if (kind !== 'detail-search') page.filter = '';
@@ -196,7 +215,11 @@ export function createTuiController(options: TuiControllerOptions) {
       if (detail) {
         const query = input.editor.text.toLocaleLowerCase();
         const found = detail.fields.findIndex((field) => `${field.label}\n${field.value}`.toLocaleLowerCase().includes(query));
-        detail = { ...detail, query: input.editor.text, selectedIndex: found >= 0 ? found : detail.selectedIndex, scrollOffset: found >= 0 ? found : detail.scrollOffset };
+        detail = { ...detail, query: input.editor.text, selectedIndex: found >= 0 ? found : detail.selectedIndex };
+        if (found >= 0) {
+          detailCursorLine = Math.max(0, detailLines(detail.fields, Math.max(1, viewport.columns - 2)).findIndex((line) => line.fieldIndex === found));
+          ensureDetailVisible();
+        }
       }
       input = { ...input, hint: 'Enter 保留详情查找' };
     } else {
@@ -210,7 +233,7 @@ export function createTuiController(options: TuiControllerOptions) {
     if (!input) return;
     const pressed = shortcut(key);
     if (pressed === 'Esc' || pressed === 'Ctrl+C') {
-      if (savedInput) { page.filter = savedInput.filter; page.selectedId = savedInput.selectedId; page.scrollOffset = savedInput.scrollOffset; detail = savedInput.detail; mode = savedInput.mode; }
+      if (savedInput) { page.filter = savedInput.filter; page.selectedId = savedInput.selectedId; page.scrollOffset = savedInput.scrollOffset; detail = savedInput.detail; detailCursorLine = savedInput.detailCursorLine; mode = savedInput.mode; }
       input = undefined; savedInput = undefined; publish(); return;
     }
     if (pressed === 'Enter') {
@@ -241,9 +264,11 @@ export function createTuiController(options: TuiControllerOptions) {
     if (mode === 'help' && help) {
       help = { ...help, scrollOffset: Math.max(0, Math.min(help.entries.length - 1, help.scrollOffset + amount)) };
     } else if (mode === 'detail' && detail) {
-      const index = id === 'first' ? 0 : id === 'last' ? detail.fields.length - 1 : detail.selectedIndex + amount;
-      const selectedIndex = Math.max(0, Math.min(detail.fields.length - 1, index));
-      detail = { ...detail, selectedIndex, scrollOffset: selectedIndex };
+      const lines = detailLines(detail.fields, Math.max(1, viewport.columns - 2));
+      const index = id === 'first' ? 0 : id === 'last' ? lines.length - 1 : detailCursorLine + amount;
+      detailCursorLine = Math.max(0, Math.min(lines.length - 1, index));
+      detail = { ...detail, selectedIndex: lines[detailCursorLine]?.fieldIndex ?? 0 };
+      ensureDetailVisible();
     } else {
       const rows = visibleRows();
       const current = rows.findIndex((row) => row.id === page.selectedId);
@@ -252,14 +277,152 @@ export function createTuiController(options: TuiControllerOptions) {
     }
     publish();
   }
+  function ensureDetailVisible() {
+    if (!detail) return;
+    const lines = detailLines(detail.fields, Math.max(1, viewport.columns - 2));
+    detailCursorLine = Math.max(0, Math.min(detailCursorLine, Math.max(0, lines.length - 1)));
+    let scrollOffset = Math.max(0, Math.min(detail.scrollOffset, Math.max(0, lines.length - pageSize())));
+    if (detailCursorLine < scrollOffset) scrollOffset = detailCursorLine;
+    if (detailCursorLine >= scrollOffset + pageSize()) scrollOffset = detailCursorLine - pageSize() + 1;
+    detail = { ...detail, selectedIndex: lines[detailCursorLine]?.fieldIndex ?? 0, scrollOffset };
+  }
+  function cancelWork() {
+    viewGeneration++;
+    for (const controller of work) controller.abort();
+    work.clear();
+  }
+  function formRequest(signal: AbortSignal): TuiActionRequest {
+    if (!overlay || !overlayAction || !overlayOwner || page !== overlayOwner || overlay.ownerResourceId !== page.route.resourceId) throw new Error('操作来源已变化，请从对应资源列表重新开始');
+    const target = overlay.targetId === undefined ? undefined : overlayOwner.rows.find((row) => row.id === overlay!.targetId);
+    if (overlayAction.selectionPolicy === 'required' && !target) throw new Error('目标已不存在，请取消后刷新列表');
+    return {
+      action: overlayAction, target, context: options.contexts.find((context) => context.id === overlay!.contextId),
+      values: Object.fromEntries(overlay.fields.map((field) => [field.id, field.value])), signal,
+    };
+  }
+  function cancelForm() {
+    if (!overlay) return;
+    const uncertain = writeIssued;
+    formGeneration++;
+    formController?.abort(); formController = undefined;
+    formPending = false; checkingSubmit = false; writeIssued = false;
+    overlay = undefined; overlayAction = undefined; overlayOwner = undefined;
+    mode = 'list'; page.notice = uncertain ? '请求已发出，已停止等待；结果待核实。' : '已取消操作';
+    publish();
+  }
+  function openForm(action: TuiAction) {
+    if (mode !== 'list' || action.ownerResourceId !== page.route.resourceId) return;
+    const adapter = options.adapters[action.ownerResourceId];
+    if (!adapter?.checkAction || !adapter.mutate) { page.notice = '当前资源尚未提供权限核验与操作接口'; publish(); return; }
+    cancelWork();
+    const row = action.selectionPolicy === 'none' ? undefined : selectedRow();
+    const context = currentContext();
+    overlayAction = action; overlayOwner = page;
+    formPinnedImpact = [`上下文: ${context?.label ?? '当前连接'}${context?.target ? ` (${context.target})` : ''}`, ...(row ? [`目标: ${row.cells.name ?? row.id} (${row.id})`] : [])];
+    const fields = (action.fields ?? []).map((field) => {
+      const editor = editText({ text: '', cursor: 0 }, { type: 'insert', text: field.initialValue ?? row?.cells[field.id] ?? '' });
+      return { id: field.id, label: field.label, value: editor.text, cursor: editor.cursor, secret: field.secret };
+    });
+    overlay = {
+      actionId: action.id, ownerResourceId: action.ownerResourceId, targetId: row?.id, contextId: page.route.contextId,
+      title: action.label, fields, focusIndex: 0, phase: fields.length ? 'editing' : 'confirming',
+      impact: [...formPinnedImpact, ...(action.impact ?? [])], confirmationDefault: 'cancel',
+    };
+    const generation = ++formGeneration;
+    const controller = new AbortController();
+    formController = controller; formPending = true; checkingSubmit = false; writeIssued = false;
+    mode = 'form'; publish();
+    void (async () => {
+      try {
+        const result = await adapter.checkAction!(formRequest(controller.signal));
+        if (disposed || generation !== formGeneration || !overlay) return;
+        overlay = { ...overlay, impact: [...formPinnedImpact, ...(result.impact ?? action.impact ?? [])], error: result.enabled ? undefined : [result.reason ?? '当前权限不允许此操作', result.nextStep].filter(Boolean).join('；') };
+      } catch (error) {
+        if (!disposed && generation === formGeneration && overlay) overlay = { ...overlay, error: errorText(error) };
+      } finally {
+        if (!disposed && generation === formGeneration) { formPending = false; publish(); }
+      }
+    })();
+  }
+  async function submitForm(): Promise<void> {
+    if (!overlay || !overlayAction || !overlayOwner || !formController || formPending) return;
+    const action = overlayAction;
+    const owner = overlayOwner;
+    const adapter = options.adapters[action.ownerResourceId];
+    if (!adapter?.checkAction || !adapter.mutate) return;
+    const missing = (action.fields ?? []).find((field) => field.required && !overlay!.fields.find((value) => value.id === field.id)?.value.trim());
+    if (missing) {
+      overlay = { ...overlay, error: `请填写${missing.label}`, focusIndex: overlay.fields.findIndex((field) => field.id === missing.id), phase: 'editing' }; publish(); return;
+    }
+    const generation = formGeneration;
+    const controller = formController;
+    formPending = true; checkingSubmit = true;
+    overlay = { ...overlay, error: undefined }; publish();
+    try {
+      const permission = await adapter.checkAction(formRequest(controller.signal));
+      if (disposed || generation !== formGeneration || !overlay) return;
+      if (!permission.enabled) throw new Error([permission.reason ?? '当前权限不允许此操作', permission.nextStep].filter(Boolean).join('；'));
+      const impact = [...formPinnedImpact, ...(permission.impact ?? action.impact ?? [])];
+      if (JSON.stringify(impact) !== JSON.stringify(overlay.impact)) {
+        overlay = { ...overlay, impact, focusIndex: overlay.fields.length, phase: 'confirming', error: '影响范围已更新，请核对后再次确认。' }; return;
+      }
+      const request = formRequest(controller.signal);
+      writeIssued = true; checkingSubmit = false;
+      overlay = { ...overlay, phase: 'submitting' }; publish();
+      const result = await adapter.mutate(request);
+      if (disposed || generation !== formGeneration || !overlay || page !== owner) return;
+      formGeneration++; formController = undefined; formPending = false; writeIssued = false;
+      overlay = undefined; overlayAction = undefined; overlayOwner = undefined; mode = 'list';
+      if (result.selectedId && action.returnPolicy === 'select-result') owner.selectedId = result.selectedId;
+      const completionView = viewGeneration;
+      publish(); await refresh();
+      if (!disposed && page === owner && completionView === viewGeneration) { owner.notice = result.message ?? '操作已完成'; publish(); }
+    } catch (error) {
+      if (!disposed && generation === formGeneration && overlay) { overlay = { ...overlay, phase: 'confirming', error: errorText(error) }; publish(); }
+    } finally {
+      if (!disposed && generation === formGeneration) { formPending = false; checkingSubmit = false; writeIssued = false; publish(); }
+    }
+  }
+  function formKey(key: TuiKey) {
+    if (!overlay) return;
+    const pressed = shortcut(key);
+    if (pressed === 'Esc' || pressed === 'Ctrl+C') { cancelForm(); return; }
+    if (checkingSubmit || overlay.phase === 'submitting') return;
+    const count = overlay.fields.length;
+    if (pressed === 'Tab' || pressed === 'Shift+Tab') {
+      const direction = pressed === 'Tab' ? 1 : -1;
+      const focusIndex = (overlay.focusIndex + direction + count + 2) % (count + 2);
+      overlay = { ...overlay, focusIndex, phase: focusIndex < count ? 'editing' : 'confirming' }; publish(); return;
+    }
+    if (pressed === 'Enter') {
+      if (overlay.focusIndex < count) {
+        const focusIndex = overlay.focusIndex + 1;
+        overlay = { ...overlay, focusIndex, phase: focusIndex < count ? 'editing' : 'confirming' }; publish();
+      } else if (overlay.focusIndex === count) cancelForm();
+      else void submitForm();
+      return;
+    }
+    if (overlay.focusIndex >= count) {
+      if (['←', '→', 'Home', 'End'].includes(pressed)) { overlay = { ...overlay, focusIndex: pressed === '←' || pressed === 'Home' ? count : count + 1 }; publish(); }
+      return;
+    }
+    const event = editEvent(key);
+    if (!event) return;
+    const field = overlay.fields[overlay.focusIndex];
+    const editor = editText({ text: field.value, cursor: field.cursor ?? 0 }, event);
+    const fields = overlay.fields.map((value, index) => index === overlay!.focusIndex ? { ...value, value: editor.text, cursor: editor.cursor } : value);
+    overlay = { ...overlay, fields, phase: 'editing', error: undefined }; publish();
+  }
   async function copy() {
     if (!options.clipboard) return;
     const value = mode === 'detail' ? detail?.fields[detail.selectedIndex]?.value : selectedRow()?.copyValue ?? selectedRow()?.id;
     if (value === undefined) return;
     const controller = new AbortController();
+    const owner = page;
+    const generation = viewGeneration;
     work.add(controller);
-    try { await options.clipboard(value, controller.signal); if (!disposed && !controller.signal.aborted) { page.notice = '已复制完整值'; publish(); } }
-    catch (error) { if (!disposed && !controller.signal.aborted) { page.notice = `复制失败: ${errorText(error)}`; publish(); } }
+    try { await options.clipboard(value, controller.signal); if (!disposed && !controller.signal.aborted && page === owner && generation === viewGeneration) { page.notice = '已复制完整值'; publish(); } }
+    catch (error) { if (!disposed && !controller.signal.aborted && page === owner && generation === viewGeneration) { page.notice = `复制失败: ${errorText(error)}`; publish(); } }
     finally { work.delete(controller); }
   }
   function execute(action: TuiAction) {
@@ -284,6 +447,7 @@ export function createTuiController(options: TuiControllerOptions) {
       page.notice = page.sortColumn ? `按${columns.find((column) => column.id === page.sortColumn)?.label}排序` : '此资源没有可排序字段'; publish(); return;
     }
     if (action.kind === 'copy') { void copy(); return; }
+    if (action.kind === 'form') { openForm(action); return; }
     if (action.kind === 'navigate') {
       const row = selectedRow();
       if (action.id === 'enter-context' && row) {
@@ -296,7 +460,9 @@ export function createTuiController(options: TuiControllerOptions) {
     if (action.kind === 'detail') {
       const row = selectedRow();
       if (row) {
+        cancelWork();
         detail = { title: row.cells.name ?? row.id, fields: row.detail ?? Object.entries(row.cells).map(([label, value]) => ({ label, value })), selectedIndex: 0, scrollOffset: 0, query: '' };
+        detailCursorLine = 0;
         mode = 'detail'; publish();
       }
     }
@@ -304,6 +470,7 @@ export function createTuiController(options: TuiControllerOptions) {
   function handleKey(key: TuiKey) {
     if (disposed) return;
     if (mode === 'input') { inputKey(key); return; }
+    if (mode === 'form') { formKey(key); return; }
     if (key.name === 'paste') return;
     if (mode === 'help') {
       const pressed = shortcut(key);
@@ -322,10 +489,10 @@ export function createTuiController(options: TuiControllerOptions) {
     subscribe: (listener: () => void) => { if (!disposed) listeners.add(listener); return () => { listeners.delete(listener); }; },
     handleKey,
     resize: (columns: number, rows: number) => {
-      viewport = { columns: Math.max(1, Math.floor(columns)), rows: Math.max(1, Math.floor(rows)) }; publish();
+      viewport = { columns: Math.max(1, Math.floor(columns)), rows: Math.max(1, Math.floor(rows)) }; ensureDetailVisible(); publish();
     },
     refresh,
-    dispose: () => { if (disposed) return; cancelRead(false); disposed = true; for (const controller of work) controller.abort(); work.clear(); listeners.clear(); },
+    dispose: () => { if (disposed) return; cancelRead(false); cancelWork(); formController?.abort(); formGeneration++; disposed = true; listeners.clear(); },
   };
 }
 

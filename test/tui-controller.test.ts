@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { TuiAction, TuiContext, TuiPage, TuiResourceAdapter, TuiRow } from '../src/tui/model.js';
+import type { TuiAction, TuiActionRequest, TuiContext, TuiPage, TuiResourceAdapter, TuiRow } from '../src/tui/model.js';
 import { createTuiController } from '../src/tui/app/controller.js';
 import { createResourceRegistry, defaultResources } from '../src/tui/resources/registry.js';
 
@@ -70,7 +70,7 @@ describe('TUI interaction controller', () => {
       controller.handleKey({ name: 'enter' });
       expect(controller.getSnapshot().route).toEqual({ resourceId: 'machines', contextId: 'tcp:orbit' });
       expect(controller.getSnapshot().completeness).toBe('unavailable');
-      expect(controller.getSnapshot().notice).toContain('尚未接入');
+      expect(controller.getSnapshot().notice).toContain('尚未启用');
       expect(controller.getSnapshot().context?.permissionLabel).toBeUndefined();
       controller.handleKey({ name: 'escape' });
       expect(controller.getSnapshot()).toMatchObject({ route: { resourceId: 'ctx' }, selectedId: 'tcp:orbit' });
@@ -247,7 +247,7 @@ describe('TUI interaction controller', () => {
     let rows: readonly TuiRow[] = [third, other];
     let allowed = true;
     let fail = true;
-    const mutate = vi.fn(async (request) => {
+    const mutate = vi.fn(async (request: TuiActionRequest) => {
       if (fail) throw new Error('写入失败，请保留输入');
       rows = rows.map((row) => row.id === request.target?.id ? { ...row, cells: { ...row.cells, name: request.values.name } } : row);
       return { selectedId: third.id, message: '显示名已更新' };
