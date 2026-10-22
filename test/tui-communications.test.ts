@@ -59,6 +59,31 @@ describe('read-only TUI communication resources', () => {
     expect(factory.readCommunications).not.toHaveBeenCalled();
   });
 
+  it('keeps pair-scoped queue counts and related routes within the exact selected communication pair', async () => {
+    const mixedQueue = { ...queue, count: 3, items: [...queue.items, { ...queue.items[0], id: 'other-sender', callerKey: 'claude:neighbor-full-id' }] };
+    const factory = resources([item], [mixedQueue]);
+    const page = await factory.outbox.adapter.read({ ...request(), route: { resourceId: 'outbox', contextId: 'local', query: { pairId } } });
+    expect(page.rows[0].cells.count).toBe('2');
+    expect(page.rows[0].actionRoutes?.deliveries).toMatchObject({ query: { pairId } });
+    expect(JSON.stringify(page.rows[0].detail)).not.toContain('neighbor-full-id');
+    expect(JSON.stringify(page.rows[0].detail)).toContain('3');
+  });
+
+  it('retains an unknown oversized queue when its complete target matches the scoped pair instead of hiding it', async () => {
+    const factory = resources([item], [{ ...queue, count: null, items: [], oldestParkedAt: null, state: 'oversized' }]);
+    const page = await factory.outbox.adapter.read({ ...request(), route: { resourceId: 'outbox', contextId: 'local', query: { pairId } } });
+    expect(page.rows).toHaveLength(1);
+    expect(page.rows[0].cells.count).toBe('未知');
+    expect(JSON.stringify(page.rows[0].detail)).toMatch(/关联.*未知|范围.*核实/);
+  });
+
+  it('rejects a route bound to a different context instead of applying a local fallback', async () => {
+    const factory = resources();
+    const page = await factory.deliveries.adapter.read({ ...request(), route: { resourceId: 'deliveries', contextId: 'ssh:elsewhere' } });
+    expect(page.completeness).toBe('unavailable');
+    expect(factory.readCommunications).not.toHaveBeenCalled();
+  });
+
   it('keeps unknown queue counts distinct from empty and exposes partial sources even on zero matching rows', async () => {
     const factory = createCommunicationResources({
       readCommunications: async () => ({ items: [], completeness: 'partial', observedAt: 500, errors: [{ source: 'fixture/send-log', kind: 'unreadable', message: '审计来源无法读取', nextStep: '核对路径权限' }] }),
