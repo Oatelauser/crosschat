@@ -101,8 +101,13 @@ try {
   await normal.send('a\x04\r'); // Results have no list mutation dispatch.
   const clearStart = normal.pty.output.length;
   await normal.send(esc, 'NODE-LONG');
-  assert(normal.pty.output.slice(clearStart).includes('\x1b[2J\x1b[H'), 'closing a secret clears the current terminal surface');
-  assert(!normal.pty.output.slice(clearStart).includes('TCP-SYNTHETIC-SECRET-NEVER-A-REAL-KEY'), 'a normal page never redraws issued secret');
+  const afterClose = normal.pty.output.slice(clearStart);
+  const clearAt = afterClose.indexOf('\x1b[2J');
+  // ConPTY may insert synchronized-output controls between the clear and cursor-home
+  // escapes, and already queued result paints may arrive before the clear itself.
+  const clearToHome = afterClose.slice(clearAt + 4).replaceAll(`${esc}[?2026h`, '').replaceAll(`${esc}[?2026l`, '');
+  assert(clearAt >= 0 && clearToHome.startsWith(`${esc}[H`), 'closing a secret clears the current terminal surface and returns the cursor home with only known synchronization controls between');
+  assert(!afterClose.slice(clearAt).includes('TCP-SYNTHETIC-SECRET-NEVER-A-REAL-KEY'), 'a normal page never redraws issued secret after the clear');
   await normal.pty.waitForOutput('NODE-BOUND-FIXTURE', 10_000, clearStart);
   assert.equal((await normal.events()).filter((event) => event.event === 'tcp-effect' && event.action === 'generate-node-key').length, issueCount, 'result keys cannot reissue a credential');
   await normal.send(':ctx\r', 'TCP-MEMBER-FIXTURE');
