@@ -8,7 +8,7 @@ label: wayfinder:map
 
 ## Notes
 
-- 2026-10-21 TUI执行排期：[TUI活动任务](tui-implementation-tasks.md)，核心阶段已验收并删除活动项，TUI等待用户确认。应用接口见 [核心API](../development/core-api.md)，验证和续接见 [核心改造记录](../development/core-refactor-progress.md)；代码规范见 `docs/development/code-standards.md`。原有功能变更先给具体方案并等用户同意。
+- 2026-10-22 TUI外壳已验收并从[活动任务](tui-implementation-tasks.md)删除，后续业务资源等待用户指令。[使用说明](../tui.md)、[TUI续接与验收](../development/tui-progress.md)。应用接口见 [核心API](../development/core-api.md)，核心证据见 [核心改造记录](../development/core-refactor-progress.md)；代码规范见 `docs/development/code-standards.md`。原有功能变更先给具体方案并等用户同意。
 - 2026-10-02 项目更名 multichat → crosschat（双命令过渡，历史文档保留旧名）
 - 领域：本地 agent 间通信（Claude Code / Codex CLI）。借鉴 embassy 设计，不 fork（Q8c）。
 - 背景资料：
