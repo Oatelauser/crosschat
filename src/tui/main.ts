@@ -68,6 +68,7 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
         clipboard: options.clipboard ?? ((text, signal) => copyText(text, { signal })),
         onExit: owner.exit,
       });
+      controller.resize(stdout.columns ?? 80, stdout.rows ?? 24);
       const initial = controller.getSnapshot();
       let previousSelectedId = initial.selectedId;
       let previousContextId = initial.route.contextId;

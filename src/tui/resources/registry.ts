@@ -21,11 +21,11 @@ function commonActions(resourceId: string, mode: TuiMode): TuiAction[] {
     ['first', '开头', 'Home'], ['last', '末尾', 'End'], ['filter', '查找详情', '/'], ['command', '资源与筛选', ':'],
     ['back', '返回列表', 'Esc'], ['help', '全部按键', '?'], ['quit', '退出', 'q'], ['interrupt', '取消读取或退出', 'Ctrl+C'],
   ] : mode === 'input' ? [
-    ['input-next', '下一候选并补全', 'Tab / ↓'], ['input-previous', '上一候选并补全', 'Shift+Tab / ↑'], ['input-enter', '切资源或保留筛选', 'Enter'], ['input-cancel', '撤销输入', 'Esc'],
+    ['input-next', '下一候选并补全', 'Tab / ↓'], ['input-previous', '上一候选并补全', 'Shift+Tab / ↑'], ['input-enter', '切资源或保留筛选', 'Enter'], ['input-cancel', '撤销输入', 'Esc'], ['interrupt', '取消读取或退出', 'Ctrl+C'],
   ] : mode === 'form' ? [
     ['field-next', '下一字段或按钮', 'Tab'], ['field-previous', '上一字段或按钮', 'Shift+Tab'], ['field-enter', '下一字段或所选按钮', 'Enter'], ['form-cancel', '取消并返回', 'Esc / Ctrl+C'],
   ] : [
-    ['previous', '向上滚动', '↑ / k'], ['next', '向下滚动', '↓ / j'], ['page-up', '上一页', 'PgUp'], ['page-down', '下一页', 'PgDn'], ['back', '关闭帮助', 'Esc / ?'],
+    ['previous', '向上滚动', '↑ / k'], ['next', '向下滚动', '↓ / j'], ['page-up', '上一页', 'PgUp'], ['page-down', '下一页', 'PgDn'], ['first', '开头', 'Home'], ['last', '末尾', 'End'], ['back', '关闭帮助', 'Esc / ?'], ['interrupt', '取消读取或退出', 'Ctrl+C'],
   ];
   const actions = entries.map(([id, label, shortcut]) => command(id, label, shortcut, resourceId));
   if (mode === 'list' || mode === 'detail') {

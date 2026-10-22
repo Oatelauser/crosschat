@@ -12,6 +12,7 @@ import { formatTable } from './table.js';
 type Controller = ReturnType<typeof createTuiController>;
 interface Line { text: string; selected?: boolean; tone?: 'cyan' | 'yellow' | 'red' | 'gray' }
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+function formFits(snapshot: TuiSnapshot): boolean { return snapshot.viewport.columns >= 24 && snapshot.viewport.rows >= 16; }
 
 function editingLine(text: string, cursor: number, width: number): string {
   const view = editorViewport({ text, cursor }, Math.max(0, width - 1));
@@ -30,10 +31,10 @@ function formLines(overlay: TuiOverlay, width: number, height: number): Line[] {
   const lines: Line[] = [{ text: `${overlay.title} · ${overlay.phase === 'submitting' ? '提交中' : overlay.phase === 'confirming' ? '确认影响' : '填写'}`, tone: 'cyan' },
     { text: `资源 ${overlay.ownerResourceId} · 连接 ${overlay.contextId ?? '本机'} · 目标 ${overlay.targetId ?? '新增'}`, tone: 'gray' }];
   for (const [index, field] of overlay.fields.entries()) {
-    const prefix = `${field.label}: `;
+    const prefix = `${clipText(field.label, Math.max(2, Math.floor(width / 3)))}: `;
     const focused = overlay.focusIndex === index;
-    const value = field.secret ? '•'.repeat(Math.min(24, Array.from(segmenter.segment(field.value)).length)) : field.value;
-    const cursor = field.secret ? value.length : field.cursor ?? Array.from(segmenter.segment(value)).length;
+    const value = field.secret ? '•'.repeat(Array.from(segmenter.segment(field.value)).length) : field.value;
+    const cursor = field.cursor ?? Array.from(segmenter.segment(value)).length;
     lines.push({ text: prefix + (focused && overlay.phase === 'editing' ? editingLine(value, cursor, Math.max(0, width - displayWidth(prefix))) : sanitizeTerminalText(value)), selected: focused });
   }
   for (const impact of overlay.impact) lines.push({ text: `影响：${impact}`, tone: 'yellow' });
@@ -69,6 +70,7 @@ function bodyLines(snapshot: TuiSnapshot, resource: TuiResource, width: number, 
     }
   } else list.push({ text: snapshot.loading ? '正在读取… Ctrl+C 取消' : snapshot.completeness === 'unavailable' ? '资源尚未启用 · :ctx 返回连接' : snapshot.filter ? '无匹配项 · Esc 清除筛选' : snapshot.completeness === 'partial' ? '部分结果 · 当前无可显示项' : '暂无项目', tone: 'gray' });
   if (snapshot.overlay) {
+    if (!formFits(snapshot)) return [...list.slice(0, 2), { text: '请放大终端至24列×16行后编辑；Esc取消', tone: 'yellow' }];
     const overlayHeight = Math.min(height - 2, Math.max(5, snapshot.overlay.fields.length + snapshot.overlay.impact.length + 4));
     return [...list.slice(0, Math.max(2, height - overlayHeight)), ...formLines(snapshot.overlay, width, overlayHeight)];
   }
@@ -105,9 +107,9 @@ export function TuiScreen({ snapshot, resource, version }: { snapshot: TuiSnapsh
       const rank = (id: string) => priority.includes(id) ? priority.indexOf(id) : 10;
       return rank(left.id) - rank(right.id);
     }).map((action) => `${action.shortcut} ${action.label}${action.enabled ? '' : '(不可用)'}`).join('  '), tone: 'cyan' },
-    { text: snapshot.input?.hint ?? '? 全部按键  : 资源/筛选  Esc 返回  q 退出  Ctrl+C 取消读取/退出', tone: 'gray' },
+    { text: snapshot.input?.hint ?? snapshot.actions.filter((entry) => ['help', 'quit', 'back', 'interrupt', 'form-cancel', 'field-enter'].includes(entry.id)).map((entry) => `${entry.shortcut} ${entry.label}`).join('  '), tone: 'gray' },
   ];
-  const lines = height < 10 ? [{ text: '终端太小 · 请放大 · q退出', tone: 'yellow' as const }, ...top.slice(0, Math.max(0, height - 1))] : [...top, ...body.slice(0, bodyHeight), ...footer];
+  const lines = height < 10 ? [{ text: snapshot.mode === 'form' ? '请放大终端 · Esc取消' : '终端太小 · 请放大 · q退出', tone: 'yellow' as const }, ...top.slice(0, Math.max(0, height - 1))] : [...top, ...body.slice(0, bodyHeight), ...footer];
   return <Box width={width} height={height} flexDirection="column" overflow="hidden">
     {lines.slice(0, height).map((line, index) => <Box key={index} height={1} flexShrink={0} width={width}><Text wrap="truncate" color={line.tone} backgroundColor={line.selected ? 'blue' : undefined}>{clipText(line.text, width) || ' '}</Text></Box>)}
   </Box>;
@@ -133,8 +135,14 @@ function TuiRuntime({ controller, registry, version, onError }: AppProps) {
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   const size = useWindowSize();
   useEffect(() => { controller.resize(size.columns, size.rows); }, [controller, size.columns, size.rows]);
-  useInput((input, key) => { try { controller.handleKey(normalizeKey(input, key)); } catch (error) { onError(error); } });
-  usePaste((text) => { try { controller.handleKey({ name: 'paste', text }); } catch (error) { onError(error); } });
+  useInput((input, key) => {
+    if (snapshot.mode === 'form' && !formFits(snapshot) && !key.escape && !(key.ctrl && input === 'c')) return;
+    try { controller.handleKey(normalizeKey(input, key)); } catch (error) { onError(error); }
+  });
+  usePaste((text) => {
+    if (snapshot.mode === 'form' && !formFits(snapshot)) return;
+    try { controller.handleKey({ name: 'paste', text }); } catch (error) { onError(error); }
+  });
   const resource = registry.resolve(snapshot.route.resourceId);
   if (!resource) throw new Error('未登记的资源');
   return <TuiScreen snapshot={snapshot} resource={resource} version={version} />;

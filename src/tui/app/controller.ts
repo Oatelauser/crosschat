@@ -41,7 +41,7 @@ interface SavedInput {
 function shortcut(key: TuiKey): string {
   const names: Readonly<Record<string, string>> = {
     escape: 'Esc', esc: 'Esc', enter: 'Enter', return: 'Enter', up: '↑', down: '↓', left: '←', right: '→',
-    pageup: 'PgUp', pagedown: 'PgDn', home: 'Home', end: 'End', tab: 'Tab', space: 'Space', backspace: 'Backspace', delete: 'Delete',
+    pageup: 'PgUp', pagedown: 'PgDn', home: 'Home', end: 'End', tab: 'Tab', space: 'Space', ' ': 'Space', backspace: 'Backspace', delete: 'Delete',
   };
   const name = names[key.name.toLocaleLowerCase()] ?? (key.text?.length === 1 ? key.text : key.name);
   if (key.ctrl) return `Ctrl+${name.toLocaleUpperCase()}`;
@@ -241,7 +241,7 @@ export function createTuiController(options: TuiControllerOptions) {
   function inputKey(key: TuiKey) {
     if (!input) return;
     const pressed = shortcut(key);
-    if (pressed === 'Esc' || pressed === 'Ctrl+C') {
+    if (pressed === 'Esc') {
       if (savedInput) { page.filter = savedInput.filter; page.selectedId = savedInput.selectedId; page.scrollOffset = savedInput.scrollOffset; detail = savedInput.detail; detailCursorLine = savedInput.detailCursorLine; mode = savedInput.mode; }
       input = undefined; savedInput = undefined; publish(); return;
     }
@@ -387,10 +387,12 @@ export function createTuiController(options: TuiControllerOptions) {
       formGeneration++; formController = undefined; formPending = false; writeIssued = false;
       overlay = undefined; overlayAction = undefined; overlayOwner = undefined; mode = 'list';
       formKnownSecrets.clear();
-      if (result.selectedId && action.returnPolicy === 'select-result') owner.selectedId = result.selectedId;
       const completionView = viewGeneration;
       publish(); await refresh();
-      if (!disposed && page === owner && completionView === viewGeneration) { owner.notice = message; publish(); }
+      if (!disposed && page === owner && completionView === viewGeneration) {
+        if (result.selectedId && action.returnPolicy === 'select-result') owner.selectedId = result.selectedId;
+        owner.notice = message; publish();
+      }
     } catch (error) {
       if (!disposed && generation === formGeneration && overlay) { overlay = { ...overlay, phase: 'confirming', error: formText(errorText(error)) }; publish(); }
     } finally {
@@ -489,8 +491,13 @@ export function createTuiController(options: TuiControllerOptions) {
   }
   function handleKey(key: TuiKey) {
     if (disposed) return;
-    if (mode === 'input') { inputKey(key); return; }
     if (mode === 'form') { formKey(key); return; }
+    if (shortcut(key) === 'Ctrl+C') {
+      if (mode === 'input') inputKey({ name: 'escape' });
+      if (activeRead) cancelRead(true); else options.onExit?.();
+      return;
+    }
+    if (mode === 'input') { inputKey(key); return; }
     if (key.name === 'paste') return;
     if (mode === 'help') {
       const pressed = shortcut(key);
