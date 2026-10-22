@@ -10,7 +10,7 @@ export interface TuiContext {
   permissionLabel?: string;
   defaultResourceId?: string;
 }
-export interface TuiRoute { resourceId: string; contextId?: string }
+export interface TuiRoute { resourceId: string; contextId?: string; query?: Readonly<Record<string, string>> }
 export interface TuiField { label: string; value: string }
 export interface TuiRow {
   id: string;
@@ -19,6 +19,7 @@ export interface TuiRow {
   detail?: readonly TuiField[];
   contextId?: string;
   navigate?: TuiRoute;
+  actionRoutes?: Readonly<Record<string, TuiRoute>>;
   copyValue?: string;
   copyValues?: Readonly<Record<string, string>>;
   facets?: Readonly<Record<string, string>>;
@@ -29,6 +30,7 @@ export interface TuiColumn { id: string; label: string; width: number; priority?
 export type TuiMode = 'list' | 'input' | 'detail' | 'help' | 'form' | 'choice';
 export interface TuiReadonlyView { title: string; fields: readonly TuiField[] }
 export interface TuiOption { value: string; label: string; enabled?: boolean; reason?: string }
+export interface TuiRouteChoice { title: string; options: readonly (TuiOption & { route: TuiRoute })[] }
 export interface TuiFilter { id: string; label: string; mode: 'select' | 'toggle'; defaultValue: string; options: readonly TuiOption[] }
 export interface TuiActionAvailability { enabled: boolean; reason?: string; nextStep?: string; impact?: readonly string[]; fields?: readonly TuiFormField[] }
 export interface TuiFormField { id: string; label: string; required?: boolean; secret?: boolean; initialValue?: string; options?: readonly TuiOption[] }
@@ -40,7 +42,7 @@ export interface TuiAction {
   selectionPolicy: 'required' | 'optional' | 'none';
   capability?: string;
   mutation: boolean;
-  kind: 'detail' | 'copy' | 'navigate' | 'form' | 'command' | 'filter';
+  kind: 'detail' | 'copy' | 'navigate' | 'form' | 'command' | 'filter' | 'route-choice' | 'follow';
   filterId?: string;
   viewId?: string;
   copyKey?: string;
@@ -59,6 +61,7 @@ export interface TuiResource {
   description: string;
   columns: readonly TuiColumn[];
   actions: readonly TuiAction[];
+  sortable?: boolean;
   unavailableReason?: string;
 }
 export interface TuiPage {
@@ -69,6 +72,8 @@ export interface TuiPage {
   filters?: readonly TuiFilter[];
   actionAvailability?: Readonly<Record<string, TuiActionAvailability>>;
   detailViews?: Readonly<Record<string, TuiReadonlyView>>;
+  routeChoices?: Readonly<Record<string, TuiRouteChoice>>;
+  canFollow?: boolean;
 }
 export interface TuiActionRequest {
   action: TuiAction;
@@ -78,10 +83,13 @@ export interface TuiActionRequest {
   signal: AbortSignal;
 }
 export interface TuiResourceAdapter {
-  read(request: { context?: TuiContext; signal: AbortSignal }): Promise<TuiPage>;
+  read(request: TuiReadRequest): Promise<TuiPage>;
+  /** Owns its polling/IO until signal aborts; publishes complete bounded snapshots. */
+  watch?(request: TuiReadRequest, publish: (page: TuiPage) => void): Promise<void>;
   checkAction?(request: TuiActionRequest): Promise<TuiActionAvailability>;
   mutate?(request: TuiActionRequest): Promise<{ selectedId?: string; message?: string }>;
 }
+export interface TuiReadRequest { context?: TuiContext; route?: TuiRoute; signal: AbortSignal }
 export interface TuiActionEntry extends TuiActionAvailability { id: string; shortcut: string; label: string }
 export interface TuiCandidate { id: string; label: string; enabled: boolean; reason?: string }
 export interface TuiInput {
@@ -120,10 +128,11 @@ export interface TuiSnapshot {
   detail?: TuiDetail;
   help?: { title: string; entries: readonly TuiActionEntry[]; scrollOffset: number };
   overlay?: TuiOverlay;
-  choice?: { filterId: string; title: string; options: readonly TuiOption[]; selectedIndex: number; scrollOffset: number };
+  choice?: { filterId?: string; actionId?: string; title: string; options: readonly TuiOption[]; selectedIndex: number; scrollOffset: number };
   filters?: readonly TuiFilter[];
   selectedFacets?: Readonly<Record<string, string>>;
   sampledAt?: number;
+  following?: boolean;
   loading: boolean;
   totalRows?: number;
   error?: string;
