@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { nextBackoffMs, runWatchdog, watchdogStatus, WATCHDOG_BACKOFF_STEPS_MS } from '../src/watchdog.js';
-import { park } from '../src/outbox.js';
+import { drain, park } from '../src/outbox.js';
 import { MultichatError } from '../src/errors.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-watchdog-'));
@@ -39,6 +39,44 @@ describe('watchdogStatus', () => {
 });
 
 describe('runWatchdog', () => {
+  it('keeps a worker alive while another drainer owns an in-flight queue head', async () => {
+    const dir = freshDir();
+    park(dir, 'race', { envelope: 'input', toName: 'target', deliveryMode: 'queue' });
+    let release!: () => void;
+    let ready!: () => void;
+    const started = new Promise<void>((resolve) => { ready = resolve; });
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const other = drain(dir, async () => { ready(); await blocked; throw new MultichatError('CODEX_THREAD_BUSY_TIMEOUT', 'busy'); });
+    await started;
+    let delivered = 0;
+    let waited = 0;
+    await runWatchdog(dir, join(freshDir(), 'send-log.jsonl'), {
+      deliverCodex: async () => { delivered++; },
+      err: () => undefined,
+      sleep: async () => { waited++; release(); await other; },
+    });
+    release();
+    await other;
+    expect(waited).toBe(1);
+    expect(delivered).toBe(1);
+  });
+
+  it('does not replace or remove a running watchdog owner lock', async () => {
+    const dir = freshDir();
+    park(dir, 'owned', { envelope: 'input', toName: 'target' });
+    let release!: () => void;
+    let ready!: () => void;
+    const started = new Promise<void>((resolve) => { ready = resolve; });
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const sendLogFile = join(freshDir(), 'send-log.jsonl');
+    const first = runWatchdog(dir, sendLogFile, { deliverCodex: async () => { ready(); await blocked; }, err: () => undefined });
+    await started;
+    try {
+      await runWatchdog(dir, sendLogFile, { deliverCodex: async () => undefined, err: () => undefined });
+      expect(watchdogStatus(dir).running).toBe(true);
+    } finally { release(); await first; }
+  });
+
   it('stops after an uncertain write instead of replaying or spinning forever', async () => {
     const dir = freshDir();
     park(dir, 'uncertain', { envelope: 'input', toName: 'target', deliveryMode: 'queue' });
