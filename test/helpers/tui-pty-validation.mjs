@@ -58,9 +58,18 @@ try {
   await normal.send('\x1b', '30/30');
   await normal.send('\x1b[H', '匿名');
   await normal.send('e', '修改显示名');
+  let mark = normal.pty.output.length;
+  normal.pty.resize(24, 12);
+  await normal.pty.waitForOutput('请放大终端', 10_000, mark);
+  await normal.send('\x1b[200~hidden-edit-must-not-submit\x1b[201~\r\t\r');
+  await normal.send('\x1b', '已取消操作');
+  mark = normal.pty.output.length;
+  normal.pty.resize(100, 28);
+  await normal.pty.waitForOutput('crosschat', 10_000, mark);
+  await normal.send('e', '修改显示名');
   await normal.send('\x1b[200~更名👩‍💻\x1b[201~\r', '[取消]');
   await normal.send('\t\r', 'fixture显示名已更新');
-  let mark = normal.pty.output.length;
+  mark = normal.pty.output.length;
   normal.pty.resize(48, 16);
   await normal.pty.waitForOutput('crosschat', 10_000, mark);
   mark = normal.pty.output.length;
@@ -73,6 +82,7 @@ try {
   const events = await normal.finish(0);
   assert(events.some((event) => event.event === 'clipboard' && event.value.endsWith('详情终点')));
   assert(events.some((event) => event.event === 'mutate' && event.targetId === 'future/native/0' && event.values.name.includes('更名👩‍💻')));
+  assert.equal(events.filter((event) => event.event === 'mutate').length, 1, 'small form cannot submit hidden edits');
   assert(events.some((event) => event.event === 'resize' && event.columns === 48 && event.rows === 16));
   assert(events.some((event) => event.event === 'resize' && event.columns === 100 && event.rows === 28));
   assert(events.some((event) => event.event === 'read-aborted'));

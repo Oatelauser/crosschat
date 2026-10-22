@@ -1,6 +1,8 @@
 import process from 'node:process';
 import { appendFileSync } from 'node:fs';
 import { setTimeout, clearTimeout } from 'node:timers';
+import { createElement } from 'react';
+import { render, Text } from 'ink';
 import { runTui } from '../../dist/tui/main.js';
 import { createResourceRegistry, defaultResources } from '../../dist/tui/resources/registry.js';
 
@@ -8,6 +10,12 @@ import { createResourceRegistry, defaultResources } from '../../dist/tui/resourc
 const evidence = process.env.TUI_FIXTURE_EVIDENCE;
 const record = (value) => appendFileSync(evidence, JSON.stringify(value) + '\n');
 const listeners = () => Object.fromEntries(['SIGINT', 'SIGTERM', 'uncaughtException', 'unhandledRejection'].map((event) => [event, process.listenerCount(event)]));
+// restore-cursor intentionally installs one process-wide exit guard on its first hide.
+// Establish that dependency baseline without TUI owners, then detect per-session leaks.
+const warmup = render(createElement(Text, null, 'terminal fixture baseline'), { interactive: true, patchConsole: false, exitOnCtrlC: false });
+await warmup.waitUntilRenderFlush();
+warmup.unmount();
+await warmup.waitUntilExit();
 const before = { raw: process.stdin.isRaw === true, listeners: listeners(), resize: process.stdout.listenerCount('resize') };
 const contexts = [
   { id: 'local', kind: 'local', label: '本机fixture', target: 'fixture-host' },
