@@ -98,6 +98,7 @@ export function createTuiController(options: TuiControllerOptions) {
       ...(notice ? [{ label: '读取提示', value: notice }] : []),
     ],
     copyValue: context.target ?? context.id,
+    actionRoutes: context.actionRoutes, actionAvailability: context.actionAvailability, detailViews: context.detailViews,
   })); }
   let page: ListState = {
     route: { resourceId: 'ctx' }, rows: contextRows(contexts, initialContexts.notice),

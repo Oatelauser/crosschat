@@ -1,6 +1,6 @@
 /** Framework-independent UI contracts. Native tools and transports stay in application adapters. */
 export interface TuiKey { name: string; text?: string; ctrl?: boolean; shift?: boolean; alt?: boolean }
-export interface TuiContext {
+export interface TuiContext extends Pick<TuiRow, 'actionRoutes' | 'actionAvailability' | 'detailViews'> {
   id: string;
   label: string;
   kind: string;
