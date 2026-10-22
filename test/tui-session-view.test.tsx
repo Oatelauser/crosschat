@@ -17,6 +17,15 @@ function state(): TuiSnapshot {
 function screen(snapshot: TuiSnapshot) { return renderToString(<TuiScreen snapshot={snapshot} resource={resource} version="fixture" />, { columns: snapshot.viewport.columns }); }
 
 describe('local session controls presentation', () => {
+  it('makes the log following intent visible while leaving ordinary resources unchanged', () => {
+    const snapshot = state();
+    snapshot.following = true;
+    expect(screen(snapshot)).toContain('跟随中');
+    snapshot.following = false;
+    expect(screen(snapshot)).toContain('已暂停');
+    snapshot.following = undefined;
+    expect(screen(snapshot)).not.toContain('跟随中');
+  });
   it('shows active facets and sampling independently of the text filter', () => {
     const snapshot = state();
     snapshot.filters = [{ id: 'provider', label: '工具', mode: 'select', defaultValue: '', options: [{ value: '', label: '全部' }, { value: 'future', label: '未来工具' }] }];

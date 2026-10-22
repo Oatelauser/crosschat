@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
+import { encodeRef } from '../src/ref.js';
 
 const directories: string[] = [];
 afterEach(async () => { for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true }); });
@@ -12,6 +13,26 @@ async function fixture() {
 }
 
 describe('bounded observation log reads', () => {
+  it('uses the same decoded endpoint attribution as communications for routed audit records', async () => {
+    const { queryManagedLog } = await import('../src/application/observations/logs.js');
+    const { baseDir, file } = await fixture();
+    const replyRef = encodeRef({ v: 1, f: { p: 'claude', id: 'caller-full' }, t: { p: 'codex', id: 'receiver-full', m: 'remote' }, n: '0123456789abcdef', c: 1 });
+    await writeFile(file, JSON.stringify({ ts: '2026-10-22T00:00:00Z', from: 'claude:caller-full', target: 'via:tcp:star:node:receiver', to: 'receiver', replyRef, status: 'delivered' }));
+    expect((await queryManagedLog({ baseDir, pairId: 'claude:caller-full\ncodex:receiver-full' })).items).toHaveLength(1);
+    expect((await queryManagedLog({ baseDir, sessionRef: { contextId: 'local', providerId: 'codex', nativeId: 'receiver-full' } })).items).toHaveLength(0);
+  });
+  it('bounds visible row count and does not duplicate a discovered rotated node source', async () => {
+    const { queryManagedLog } = await import('../src/application/observations/logs.js');
+    const { baseDir, file } = await fixture();
+    await writeFile(file, Array.from({ length: 1200 }, (_, index) => `row-${index}\n`).join(''));
+    await writeFile(join(baseDir, 'tcp', 'node.log'), 'current\n');
+    await writeFile(join(baseDir, 'tcp', 'node.log.old'), 'old\n');
+    const page = await queryManagedLog({ baseDir });
+    expect(page.items).toHaveLength(1000);
+    expect(page.items[0].text).toBe('row-200');
+    expect(page.completeness).toBe('partial');
+    expect(page.sources.filter((source) => source.id === 'node:node.log.old')).toHaveLength(1);
+  });
   it('keeps exact byte offsets for duplicate and Unicode lines while retaining the original tail contract', async () => {
     const { queryLogWindow, queryLogTail } = await import('../src/application/queries/logs.js');
     const { file } = await fixture();
