@@ -6,6 +6,6 @@ export { queryStars } from './stars.js';
 export type { StarMachine, StarSession, StarView, StarQueryOptions } from './stars.js';
 export { queryManagedFiles } from './files.js';
 export type { ManagedFile } from './files.js';
-export { queryLogTail } from './logs.js';
-export type { LogTailResult, LogCursor } from './logs.js';
+export { queryLogTail, queryLogWindow } from './logs.js';
+export type { LogTailResult, LogCursor, LogWindowEntry, LogWindowResult } from './logs.js';
 export type { ReadResult, QueryOptions, QueryError, QueryState } from './reading.js';

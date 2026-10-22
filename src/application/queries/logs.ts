@@ -16,10 +16,22 @@ export interface LogTailResult {
   observedAt: number;
   errors: QueryError[];
 }
+export interface LogWindowEntry { offset: number; text: string; terminated: boolean }
+export interface LogWindowResult extends Omit<LogTailResult, 'lines'> {
+  entries: LogWindowEntry[];
+  omittedLeadingLine: boolean;
+}
 
 /** Payload window is at most maxBytes, plus one byte to identify a cut line. */
 export async function queryLogTail(options: QueryOptions & { file: string; maxBytes?: number; contains?: string; previous?: LogCursor }): Promise<LogTailResult> {
-  const result: LogTailResult = { state: 'ready', lines: [], bytesRead: 0, truncated: false, rotated: false, observedAt: (options.now ?? Date.now)(), errors: [] };
+  const result = await queryLogWindow(options);
+  return { state: result.state, lines: result.entries.filter((entry) => options.contains === undefined || entry.text.includes(options.contains)).map((entry) => entry.text),
+    bytesRead: result.bytesRead, truncated: result.truncated, rotated: result.rotated, cursor: result.cursor, observedAt: result.observedAt, errors: result.errors };
+}
+
+/** Complete starts retain their byte identity even when identical text repeats. */
+export async function queryLogWindow(options: QueryOptions & { file: string; maxBytes?: number; previous?: LogCursor }): Promise<LogWindowResult> {
+  const result: LogWindowResult = { state: 'ready', entries: [], omittedLeadingLine: false, bytesRead: 0, truncated: false, rotated: false, observedAt: (options.now ?? Date.now)(), errors: [] };
   const maxBytes = Number.isFinite(options.maxBytes) ? Math.min(2 * 1024 * 1024, Math.max(1, Math.floor(options.maxBytes!))) : 64 * 1024;
   let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
@@ -45,17 +57,24 @@ export async function queryLogTail(options: QueryOptions & { file: string; maxBy
     checkAbort(options.signal);
     result.bytesRead = bytesRead;
     result.truncated = start > 0;
-    // A cut UTF-8 character and line are discarded together at the bounded start.
-    let text = buffer.subarray(0, bytesRead).toString('utf8');
+    const bytes = buffer.subarray(0, bytesRead);
+    let offset = 0;
     if (startsMidLine) {
-      const boundary = text.indexOf('\n');
-      text = boundary < 0 ? '' : text.slice(boundary + 1);
+      result.omittedLeadingLine = true;
+      const boundary = bytes.indexOf(10);
+      offset = boundary < 0 ? bytes.length : boundary + 1;
     }
-    result.lines = text.split(/\r?\n/).filter((line, index, lines) => (index < lines.length - 1 || line !== '') && (options.contains === undefined || line.includes(options.contains)));
+    while (offset < bytes.length) {
+      const newline = bytes.indexOf(10, offset);
+      const end = newline < 0 ? bytes.length : newline;
+      const contentEnd = newline >= 0 && bytes[end - 1] === 13 ? end - 1 : end;
+      result.entries.push({ offset: start + offset, text: bytes.subarray(offset, contentEnd).toString('utf8'), terminated: newline >= 0 });
+      offset = newline < 0 ? bytes.length : newline + 1;
+    }
     return result;
   } catch (error) {
     const issue = queryError(options.file, error);
-    return { ...result, state: issue.kind, lines: [], errors: [issue] };
+    return { ...result, state: issue.kind, entries: [], errors: [issue] };
   } finally {
     await handle?.close();
   }
