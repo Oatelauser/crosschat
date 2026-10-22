@@ -1,4 +1,6 @@
 import type { ChildProcess, ForkOptions } from 'node:child_process';
+import { EventEmitter } from 'node:events';
+import { createConnection } from 'node:net';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { isProcessAlive } from '../../platform/process-inspector.js';
@@ -7,7 +9,7 @@ import { removeCredentialExactFor, removeStarExactFrom } from '../../serve/regis
 import { addStar, generateAdminKey, generateKeys, removeAdminKey, removeNode, removeStar, renameStar, setDisplayName } from '../management/local.js';
 import type { ManagementDeps, ManagementRequest, ManagementResult } from '../management/local.js';
 import { sendAdminRequest } from '../management/transport.js';
-import type { AdminOutcome } from '../management/transport.js';
+import type { AdminOutcome, AdminSocket } from '../management/transport.js';
 import { isRecord } from '../queries/reading.js';
 import { readMembershipMachineId } from '../session-membership/machine.js';
 import { runOwnedServiceProcess } from '../services/owned-process.js';
@@ -22,6 +24,24 @@ export interface LocalManagementOptions {
   createProcess?(entry: URL, settings: ForkOptions): ChildProcess;
 }
 const failed = (): ManagementResult<never> => ({ kind: 'failed', error: '本机管理未取得可核实的完成回执；已发生的修改不会回滚，请核实。' });
+
+/** Keep the existing transport semantics while bounding the new TUI receipt channel. */
+function connectManagementPipe(pipe: string, onConnect: () => void): AdminSocket {
+  const socket = createConnection({ path: pipe }, onConnect);
+  const channel = Object.assign(new EventEmitter(), { write: (text: string) => socket.write(text), destroy: () => socket.destroy() });
+  let received = 0;
+  let oversized = false;
+  socket.on('data', (chunk) => {
+    if (oversized) return;
+    received += chunk.length;
+    if (received > 2 * 1024 * 1024) {
+      oversized = true; socket.destroy(); channel.emit('error', new Error('本机管理回执超过读取上限。'));
+    } else channel.emit('data', chunk);
+  });
+  socket.on('error', () => channel.emit('error', new Error('本机管理连接未确认。')));
+  socket.on('close', () => channel.emit('close'));
+  return channel;
+}
 
 /** Owns all blocking OS probes and synchronous writes outside the TUI input loop. */
 export async function executeLocalManagement(request: ManagementRequest, options: LocalManagementOptions): Promise<ManagementResult<unknown>> {
@@ -91,7 +111,7 @@ export async function performLocalManagement(request: ManagementRequest, options
     const deps: ManagementDeps = { baseDir: options.baseDir, machineId: () => machine, hostname,
       adminTransport: async (operation) => {
         if (!hot) return { kind: 'cold' };
-        const result = await (options.transport?.(operation, status) ?? sendAdminRequest({ baseDir: options.baseDir, readStatus: () => status, isProcessAlive: alive }, operation));
+        const result = await (options.transport?.(operation, status) ?? sendAdminRequest({ baseDir: options.baseDir, readStatus: () => status, isProcessAlive: alive, connect: connectManagementPipe }, operation));
         if (result.kind === 'hot' && result.reply.uncertain === true) return { kind: 'failed', error: 'broker 未确认完整事务，结果待核实。' };
         return result.kind === 'cold' ? { kind: 'failed', error: '已核实的热态管理连接失败，禁止直写台账。' } : result;
       } };

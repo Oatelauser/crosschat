@@ -366,7 +366,13 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
       }
       if (request.action === 'add-star') {
         if (!isRecord(value) || typeof value.starId !== 'string' || value.starId === '') return uncertain();
-        return { kind: 'applied', mode, selectedId: value.starId, message: '新星已创建，请在星列表核对。' };
+        const starId = value.starId;
+        let selectedId: string | undefined;
+        try {
+          const created = await options.catalog.readStar({ contextId: request.contextId, starId, signal: request.signal });
+          if (created.contextId === request.contextId && created.star?.contextId === request.contextId && created.star.starId === starId) selectedId = created.star.id;
+        } catch { /* The applied receipt remains authoritative if the follow-up selection cannot be read. */ }
+        return { kind: 'applied', mode, ...(selectedId === undefined ? {} : { selectedId }), message: `新星 ${starId} 已创建，请在星列表核对。` };
       }
       if (prepared.local?.op === 'remove-node' || prepared.local?.op === 'remove-admin-key') {
         if (!isRecord(value) || (prepared.local.op === 'remove-node' ? value.removed !== true : value.removed !== prepared.local.label)) return uncertain();
