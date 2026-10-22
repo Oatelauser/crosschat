@@ -27,7 +27,7 @@ export interface TuiRow {
   detailViews?: Readonly<Record<string, TuiReadonlyView>>;
 }
 export interface TuiColumn { id: string; label: string; width: number; priority?: number }
-export type TuiMode = 'list' | 'input' | 'detail' | 'help' | 'form' | 'choice';
+export type TuiMode = 'list' | 'input' | 'detail' | 'help' | 'form' | 'choice' | 'result';
 export interface TuiReadonlyView { title: string; fields: readonly TuiField[] }
 export interface TuiOption { value: string; label: string; enabled?: boolean; reason?: string }
 export interface TuiRouteChoice { title: string; options: readonly (TuiOption & { route: TuiRoute })[] }
@@ -64,6 +64,15 @@ export interface TuiResource {
   sortable?: boolean;
   unavailableReason?: string;
 }
+export interface TuiPagePresentation { columns?: readonly TuiColumn[]; actions?: readonly TuiAction[] }
+/** Explicitly generated secrets live only in this one-time result, never in a cached resource page. */
+export interface TuiSensitiveResult {
+  title: string;
+  fields: readonly TuiField[];
+  copies: readonly { id: string; label: string; shortcut: string; value: string }[];
+  notice?: string;
+}
+export interface TuiMutationResult { selectedId?: string; message?: string; result?: TuiSensitiveResult }
 export interface TuiPage {
   rows: readonly TuiRow[];
   completeness: 'complete' | 'partial' | 'unavailable' | 'cancelled';
@@ -74,11 +83,15 @@ export interface TuiPage {
   detailViews?: Readonly<Record<string, TuiReadonlyView>>;
   routeChoices?: Readonly<Record<string, TuiRouteChoice>>;
   canFollow?: boolean;
+  presentation?: TuiPagePresentation;
+  actionRoutes?: Readonly<Record<string, TuiRoute>>;
+  contextSummary?: { label?: string; permissionLabel?: string };
 }
 export interface TuiActionRequest {
   action: TuiAction;
   target?: TuiRow;
   context?: TuiContext;
+  route?: TuiRoute;
   values: Readonly<Record<string, string>>;
   signal: AbortSignal;
 }
@@ -87,7 +100,7 @@ export interface TuiResourceAdapter {
   /** Owns its polling/IO until signal aborts; publishes complete bounded snapshots. */
   watch?(request: TuiReadRequest, publish: (page: TuiPage) => void): Promise<void>;
   checkAction?(request: TuiActionRequest): Promise<TuiActionAvailability>;
-  mutate?(request: TuiActionRequest): Promise<{ selectedId?: string; message?: string }>;
+  mutate?(request: TuiActionRequest): Promise<TuiMutationResult>;
 }
 export interface TuiReadRequest { context?: TuiContext; route?: TuiRoute; signal: AbortSignal }
 export interface TuiActionEntry extends TuiActionAvailability { id: string; shortcut: string; label: string }
@@ -140,4 +153,6 @@ export interface TuiSnapshot {
   completeness: TuiPage['completeness'];
   actions: readonly TuiActionEntry[];
   viewport: { columns: number; rows: number };
+  resource?: TuiResource;
+  result?: TuiSensitiveResult & { scrollOffset: number };
 }

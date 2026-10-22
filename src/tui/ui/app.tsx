@@ -53,6 +53,10 @@ function formLines(overlay: TuiOverlay, width: number, height: number): Line[] {
 }
 
 function bodyLines(snapshot: TuiSnapshot, resource: TuiResource, width: number, height: number): Line[] {
+  if (snapshot.result) {
+    return [{ text: `${snapshot.result.title} · 一次性结果`, tone: 'yellow' },
+      ...detailLines(snapshot.result.fields, Math.max(1, width - 2)).slice(snapshot.result.scrollOffset, snapshot.result.scrollOffset + height - 1).map((line) => ({ text: line.text }))];
+  }
   if (snapshot.help) {
     return [{ text: `${snapshot.help.title} · 全部按键`, tone: 'cyan' }, ...helpLines(snapshot.help.entries, width).slice(snapshot.help.scrollOffset, snapshot.help.scrollOffset + height - 1).map((line) => ({
       text: line.text,
@@ -122,7 +126,7 @@ export function TuiScreen({ snapshot, resource, version }: { snapshot: TuiSnapsh
   const completeness = { complete: '完整', partial: '部分结果', unavailable: '不可用', cancelled: '已取消' }[snapshot.completeness];
   const footer: Line[] = [
     { text: `${snapshot.rows.length ? `${snapshot.selectedIndex + 1}/${snapshot.rows.length}` : '0项'}${snapshot.totalRows !== undefined && snapshot.totalRows !== snapshot.rows.length ? ` / 发现${snapshot.totalRows}项` : ''} · ${completeness}${snapshot.loading ? ' · 读取中' : ''}${snapshot.filter ? ` · 筛选 ${snapshot.filter}` : ''}`, tone: 'gray' },
-    { text: snapshot.choice?.options[snapshot.choice.selectedIndex]?.reason ?? snapshot.error ?? snapshot.overlay?.error ?? snapshot.notice ?? '', tone: snapshot.error || snapshot.overlay?.error ? 'red' : 'yellow' },
+    { text: snapshot.result?.notice ?? snapshot.choice?.options[snapshot.choice.selectedIndex]?.reason ?? snapshot.error ?? snapshot.overlay?.error ?? snapshot.notice ?? '', tone: snapshot.error || snapshot.overlay?.error ? 'red' : 'yellow' },
     { text: [...snapshot.actions].sort((left, right) => {
       const priority = ['enter-context', 'detail', 'copy', 'refresh', 'sort', 'help'];
       const rank = (id: string) => priority.includes(id) ? priority.indexOf(id) : 10;
@@ -166,7 +170,7 @@ function TuiRuntime({ controller, registry, version, onError }: AppProps) {
   });
   const resource = registry.resolve(snapshot.route.resourceId);
   if (!resource) throw new Error('未登记的资源');
-  return <TuiScreen snapshot={snapshot} resource={resource} version={version} />;
+  return <TuiScreen snapshot={snapshot} resource={snapshot.resource ?? resource} version={version} />;
 }
 
 export function TuiApp(props: AppProps) {

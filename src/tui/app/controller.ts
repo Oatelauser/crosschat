@@ -2,6 +2,7 @@ import type {
   TuiAction, TuiActionEntry, TuiActionRequest, TuiContext, TuiDetail, TuiFormField, TuiInput, TuiKey, TuiMode,
   TuiOverlay, TuiPage, TuiResourceAdapter, TuiRoute, TuiRow, TuiSnapshot,
 } from '../model.js';
+import { createResourceRegistry } from '../resources/registry.js';
 import type { ResourceRegistry } from '../resources/registry.js';
 import { editText } from '../ui/text.js';
 import type { EditEvent } from '../ui/text.js';
@@ -18,6 +19,7 @@ export interface TuiControllerOptions {
   onContextSelection?: (id: string) => void;
   clipboard?: (text: string, signal: AbortSignal) => Promise<void>;
   onExit?: () => void;
+  onSensitiveClear?: () => void;
 }
 
 export interface TuiContextPage {
@@ -44,6 +46,9 @@ interface ListState {
   routeChoices?: TuiPage['routeChoices'];
   canFollow?: boolean;
   following?: boolean;
+  registry?: ResourceRegistry;
+  actionRoutes?: TuiPage['actionRoutes'];
+  contextSummary?: TuiPage['contextSummary'];
 }
 
 interface SavedInput {
@@ -139,8 +144,13 @@ export function createTuiController(options: TuiControllerOptions) {
   let watchOwner: ListState | undefined;
   let watchGeneration = 0;
   let snapshot: TuiSnapshot;
+  let result: TuiSnapshot['result'];
+  let resultSelection: string | undefined;
 
   function currentContext() { return contexts.find((context) => context.id === page.route.contextId); }
+  function pageRegistry() { return page.registry ?? options.registry; }
+  function pageResource() { return pageRegistry().resolve(page.route.resourceId); }
+  function actionsFor(targetMode: TuiMode) { return pageRegistry().actions(page.route.resourceId, targetMode); }
   function pageSize() { return Math.max(1, viewport.rows - 9); }
   function visibleRows(): readonly TuiRow[] {
     const query = page.filter.toLocaleLowerCase();
@@ -154,12 +164,16 @@ export function createTuiController(options: TuiControllerOptions) {
   function actionRoute(action: TuiAction, row = selectedRow()): TuiRoute | undefined {
     const linked = own(row?.actionRoutes, action.id);
     if (linked) return linked;
+    const pageLink = own(page.actionRoutes, action.id);
+    if (pageLink) return pageLink;
     if (row?.actionRoutes === undefined && row?.navigate) return row.navigate;
     if (action.navigateTo) return { resourceId: action.navigateTo, contextId: page.route.contextId };
     return undefined;
   }
   function actionEntries(targetMode: TuiMode): TuiActionEntry[] {
-    return options.registry.actions(page.route.resourceId, targetMode).map((action) => {
+    if (targetMode === 'result' && result) return [...actionsFor('result').map((entry) => ({ ...entry, enabled: true })),
+      ...result.copies.map((entry) => ({ id: `result-copy-${entry.id}`, label: entry.label, shortcut: entry.shortcut, enabled: options.clipboard !== undefined, reason: options.clipboard ? undefined : '当前终端未提供剪贴板' }))];
+    return actionsFor(targetMode).map((action) => {
       const row = selectedRow();
       const availability = {
         enabled: action.enabled !== false, reason: action.unavailableReason, nextStep: action.nextStep, impact: action.impact, fields: action.fields,
@@ -197,15 +211,18 @@ export function createTuiController(options: TuiControllerOptions) {
     if (selectedIndex >= 0 && selectedIndex < page.scrollOffset) page.scrollOffset = selectedIndex;
     if (selectedIndex >= page.scrollOffset + pageSize()) page.scrollOffset = selectedIndex - pageSize() + 1;
     snapshot = {
-      route: copyRoute(page.route), context: currentContext(), mode, rows, selectedId: page.selectedId, selectedIndex,
+      route: copyRoute(page.route), context: currentContext() ? { ...currentContext()!, ...page.contextSummary } : undefined, mode, rows, selectedId: page.selectedId, selectedIndex,
       scrollOffset: page.scrollOffset, filter: page.filter, input, detail, help, overlay, choice, loading,
       filters: page.filters, selectedFacets: Object.fromEntries(page.selectedFacets ?? []), sampledAt: page.sampledAt, totalRows: page.rows.length,
       following: page.canFollow && options.adapters[page.route.resourceId]?.watch ? page.following ?? true : undefined,
       error: page.error, notice: page.notice, completeness: page.completeness, actions: actionEntries(mode), viewport: { ...viewport },
+      resource: pageResource(), result,
     };
     for (const listener of listeners) listener();
   }
   function applyPage(next: TuiPage) {
+    const base = options.registry.resolve(page.route.resourceId);
+    const registry = next.presentation && base ? createResourceRegistry([{ ...base, columns: next.presentation.columns ?? base.columns, actions: next.presentation.actions ?? base.actions }]) : undefined;
     const rowIds = new Set<string>();
     for (const row of next.rows) {
       if (!row.id || rowIds.has(row.id)) throw new Error(`资源返回重复稳定标识或空标识: ${row.id}`);
@@ -215,6 +232,7 @@ export function createTuiController(options: TuiControllerOptions) {
     page.sampledAt = next.sampledAt; page.filters = next.filters;
     page.actionAvailability = next.actionAvailability; page.detailViews = next.detailViews;
     page.routeChoices = next.routeChoices; page.canFollow = next.canFollow;
+    page.registry = registry; page.actionRoutes = next.actionRoutes; page.contextSummary = next.contextSummary;
     if (next.canFollow) page.following ??= true;
     page.selectedFacets ??= new Map();
     for (const filter of page.filters ?? []) if (!page.selectedFacets.has(filter.id)) page.selectedFacets.set(filter.id, filter.defaultValue);
@@ -442,7 +460,7 @@ export function createTuiController(options: TuiControllerOptions) {
     const context = contexts.find((context) => context.id === overlay!.contextId);
     if (overlay.contextId !== undefined && !context) throw new Error('连接配置已不存在，请返回 ctx 重新选择连接。');
     return {
-      action: overlayAction, target, context,
+      action: overlayAction, target, context, route: copyRoute(overlayOwner.route),
       values: Object.fromEntries(overlay.fields.map((field) => [field.id, field.value])), signal,
     };
   }
@@ -523,22 +541,34 @@ export function createTuiController(options: TuiControllerOptions) {
       const request = formRequest(controller.signal);
       writeIssued = true; checkingSubmit = false;
       overlay = { ...overlay, phase: 'submitting', checking: false }; publish();
-      const result = await adapter.mutate(request);
+      const completion = await adapter.mutate(request);
       if (disposed || generation !== formGeneration || !overlay || page !== owner) return;
-      const message = formText(result.message ?? '操作已完成');
+      const message = completion.result ? '配置已生成；请在当前结果页保存后关闭。' : formText(completion.message ?? '操作已完成');
+      if (completion.result) {
+        const keys = new Set<string>();
+        const ids = new Set<string>();
+        for (const copy of completion.result.copies) {
+          if (!copy.id || ids.has(copy.id) || keys.has(copy.shortcut) || !/^[A-Za-z0-9]$/.test(copy.shortcut) || copy.shortcut === 'q') throw new Error('结果复制动作登记无效，请核实已生成目标。');
+          keys.add(copy.shortcut); ids.add(copy.id);
+        }
+      }
       formGeneration++; formController = undefined; formPending = false; writeIssued = false;
       overlay = undefined; overlayAction = undefined; overlayOwner = undefined; mode = 'list';
       formKnownSecrets.clear();
+      if (completion.result) {
+        result = { ...completion.result, fields: completion.result.fields.map((field) => ({ ...field })), copies: completion.result.copies.map((entry) => ({ ...entry })), scrollOffset: 0 };
+        resultSelection = completion.selectedId; page.notice = message; mode = 'result'; publish(); return;
+      }
       const completionView = viewGeneration;
       publish(); await refresh();
       if (!disposed && page === owner && completionView === viewGeneration) {
         let notice = message;
-        if (result.selectedId && action.returnPolicy === 'select-result') {
-          if (owner.rows.some((row) => row.id === result.selectedId)) {
-            if (!visibleRows().some((row) => row.id === result.selectedId)) {
+        if (completion.selectedId && action.returnPolicy === 'select-result') {
+          if (owner.rows.some((row) => row.id === completion.selectedId)) {
+            if (!visibleRows().some((row) => row.id === completion.selectedId)) {
               owner.filter = ''; notice += '；已清除筛选以显示结果。';
             }
-            owner.selectedId = result.selectedId;
+            owner.selectedId = completion.selectedId;
           } else notice += '；结果不在当前列表，请刷新/调整范围核实。';
         }
         owner.notice = notice; publish();
@@ -689,13 +719,13 @@ export function createTuiController(options: TuiControllerOptions) {
     if (action.id === 'refresh') { void refresh(); return; }
     if (action.id === 'help') {
       helpReturnMode = mode === 'detail' ? 'detail' : mode === 'choice' ? 'choice' : 'list';
-      help = { title: options.registry.resolve(page.route.resourceId)?.label ?? page.route.resourceId, entries: actionEntries(mode), scrollOffset: 0 };
+      help = { title: pageResource()?.label ?? page.route.resourceId, entries: actionEntries(mode), scrollOffset: 0 };
       mode = 'help'; publish(); return;
     }
     if (action.id === 'quit') { options.onExit?.(); return; }
     if (action.id === 'interrupt') { if (activeRead) cancelRead(true); else options.onExit?.(); return; }
     if (action.id === 'sort') {
-      const columns = options.registry.resolve(page.route.resourceId)?.columns ?? [];
+      const columns = pageResource()?.columns ?? [];
       const index = columns.findIndex((column) => column.id === page.sortColumn);
       page.sortColumn = columns[(index + 1) % columns.length]?.id;
       page.notice = page.sortColumn ? `按${columns.find((column) => column.id === page.sortColumn)?.label}排序` : '此资源没有可排序字段'; publish(); return;
@@ -800,8 +830,47 @@ export function createTuiController(options: TuiControllerOptions) {
     choice = { ...choice, selectedIndex: Math.max(0, Math.min(choice.options.length - 1, index)) };
     ensureChoiceVisible(); publish();
   }
+  function clearResult() {
+    if (!result) return;
+    result = undefined; resultSelection = undefined; cancelWork();
+    try { options.onSensitiveClear?.(); }
+    catch { page.notice = '秘密结果已关闭；终端清屏未确认，请在原生终端手动清屏。'; }
+  }
+  function closeResult(quit = false) {
+    const selectedId = resultSelection;
+    clearResult(); mode = 'list'; publish();
+    if (quit) { options.onExit?.(); return; }
+    const owner = page;
+    const generation = viewGeneration;
+    void refresh().then(() => {
+      if (disposed || owner !== page || generation !== viewGeneration || !selectedId) return;
+      if (page.rows.some((row) => row.id === selectedId)) { page.selectedId = selectedId; publish(); }
+    });
+  }
+  function resultKey(key: TuiKey) {
+    if (!result || key.name === 'paste') return;
+    const pressed = shortcut(key);
+    if (pressed === 'Esc' || pressed === 'Ctrl+C' || pressed === 'q') { closeResult(pressed === 'q'); return; }
+    const copy = result.copies.find((entry) => entry.shortcut === pressed);
+    if (copy && options.clipboard) {
+      const owner = result;
+      const controller = new AbortController(); work.add(controller);
+      void options.clipboard(copy.value, controller.signal).then(() => {
+        if (!disposed && !controller.signal.aborted && owner === result) { result = { ...result, notice: '已复制完整值；离开前请保存，系统剪贴板需自行覆盖。' }; publish(); }
+      }, () => {
+        if (!disposed && !controller.signal.aborted && owner === result) { result = { ...result, notice: '复制失败；请检查本机剪贴板后重试。' }; publish(); }
+      }).finally(() => { work.delete(controller); });
+      return;
+    }
+    const size = Math.max(1, viewport.rows - 9);
+    const max = Math.max(0, detailLines(result.fields, Math.max(1, viewport.columns - 2)).length - size);
+    const changes: Readonly<Record<string, number>> = { '↑': -1, k: -1, '↓': 1, j: 1, PgUp: -size, PgDn: size };
+    const next = pressed === 'Home' ? 0 : pressed === 'End' ? max : result.scrollOffset + (own(changes, pressed) ?? 0);
+    result = { ...result, scrollOffset: Math.max(0, Math.min(max, next)) }; publish();
+  }
   function handleKey(key: TuiKey) {
     if (disposed) return;
+    if (mode === 'result') { resultKey(key); return; }
     if (mode === 'form') { formKey(key); return; }
     if (shortcut(key) === 'Ctrl+C') {
       if (page.canFollow) page.following = false;
@@ -823,7 +892,7 @@ export function createTuiController(options: TuiControllerOptions) {
       return;
     }
     const pressed = shortcut(key);
-    const action = options.registry.actions(page.route.resourceId, mode).find((entry) => entry.shortcut.split(' / ').includes(pressed));
+    const action = actionsFor(mode).find((entry) => entry.shortcut.split(' / ').includes(pressed));
     if (action) execute(action);
   }
   publish();
@@ -840,7 +909,7 @@ export function createTuiController(options: TuiControllerOptions) {
       publish();
     },
     refresh,
-    dispose: () => { if (disposed) return; stopWatch(); cancelRead(false); cancelWork(); formController?.abort(); formGeneration++; disposed = true; listeners.clear(); },
+    dispose: () => { if (disposed) return; stopWatch(); cancelRead(false); cancelWork(); formController?.abort(); formGeneration++; clearResult(); if (snapshot.result) snapshot = { ...snapshot, result: undefined, mode: 'list' }; disposed = true; listeners.clear(); },
   };
 }
 

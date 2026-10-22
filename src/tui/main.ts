@@ -79,6 +79,10 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
         onContextSelection: (id) => { selectedContextId = id; },
         clipboard: options.clipboard ?? ((text, signal) => copyText(text, { signal })),
         onExit: owner.exit,
+        onSensitiveClear: () => {
+          instance?.clear();
+          stdout.write('\u001b[2J\u001b[H');
+        },
       });
       controller.resize(stdout.columns ?? 80, stdout.rows ?? 24);
       let instance: ReturnType<typeof ink.render>;

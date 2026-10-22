@@ -7,9 +7,9 @@ const action: TuiAction = { id: 'generate', label: '生成配置', shortcut: 'a'
 const secret = 'fixture-generated-private-key';
 const route = { resourceId: 'keys', contextId: 'local' };
 async function setup() {
-  const clipboard = vi.fn(async (_text: string, _signal: AbortSignal) => {});
+  const clipboard = vi.fn<(text: string, signal: AbortSignal) => Promise<void>>(async () => {});
   const clear = vi.fn(); const exit = vi.fn(); const reads = vi.fn(async () => ({ rows: [], completeness: 'complete' as const }));
-  const check = vi.fn(async (_request: TuiActionRequest) => ({ enabled: true, impact: ['仅生成配置，不代表机器在线'] }));
+  const check = vi.fn<(request: TuiActionRequest) => Promise<{ enabled: boolean; impact: string[] }>>(async () => ({ enabled: true, impact: ['仅生成配置，不代表机器在线'] }));
   const mutate = vi.fn(async () => ({ message: '已生成配置', result: { title: '接入配置', fields: [{ label: '配置', value: secret }], copies: [{ id: 'config', label: '复制配置', shortcut: 'y', value: secret }, { id: 'command', label: '复制指引', shortcut: 'c', value: 'fixture connect command' }] } }));
   const controller = createTuiController({ registry: createResourceRegistry(defaultResources.map((r) => r.id === 'keys' ? { ...r, actions: [action], unavailableReason: undefined } : r)), contexts: [{ id: 'local', kind: 'local', label: '本机' }], adapters: { keys: { read: reads, checkAction: check, mutate } }, clipboard, onSensitiveClear: clear, onExit: exit });
   controller.handleKey({ name: ':' }); controller.handleKey({ name: 'text', text: 'keys' }); controller.handleKey({ name: 'enter' });
