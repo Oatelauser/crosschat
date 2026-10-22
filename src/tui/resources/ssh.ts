@@ -63,11 +63,12 @@ export function createSshResource(options: SshResourceOptions): { resource: TuiR
     try {
       if (query.operation === 'check') {
         if (!request.context || request.context.kind !== 'ssh' || (request.route?.contextId !== undefined && request.route.contextId !== request.context.id)) return invalid('检测目标不是有效的所选 SSH 上下文，未执行读取。');
-        return inspectionPage(await untilAborted(options.ssh.inspect({ contextId: request.context.id, signal: request.signal }), request.signal));
+        const result = await untilAborted(options.ssh.inspect({ contextId: request.context.id, signal: request.signal }), request.signal);
+        return request.signal.aborted ? invalid('SSH 检测已取消。', true) : inspectionPage(result);
       }
       const listed = await untilAborted(options.ssh.list(request.signal), request.signal);
       if (request.signal.aborted) return invalid('SSH 列表读取已取消。', true);
-      const completeness = listed.errors.length ? 'partial' : 'complete';
+      const completeness = listed.errors.length ? listed.items.length ? 'partial' : 'unavailable' : 'complete';
       const rows: TuiRow[] = listed.items.map((item) => {
         const safe = validHost(item.target) && item.id === `ssh:${encodeURIComponent(item.target)}`;
         const availability = safe ? {} : Object.fromEntries(['sessions', 'check', 'doctor', 'copy'].map((id) => [id, disabled('Host 别名不符合现有安全执行规则。', '在原生 SSH 配置中改用字母、数字、点、下划线、连字符组成的 Host 别名。')]));
@@ -76,7 +77,7 @@ export function createSshResource(options: SshResourceOptions): { resource: TuiR
           detail: [{ label: 'Host 别名', value: item.target }, { label: '连接上下文', value: item.id }, { label: '身份提示', value: item.identityHint }, { label: '来源', value: typeof item.attributes.source === 'string' ? item.attributes.source : '~/.ssh/config' }],
           detailViews: { guide: guide(item.target) }, actionRoutes: safe ? routes(item.id) : {}, actionAvailability: availability };
       });
-      return { rows, completeness, sampledAt: listed.observedAt, notice: `${rows.length} 个已有 SSH Host；未执行网络检测。a 选择已有 Host；不改写 SSH 配置。`,
+      return { rows, completeness, sampledAt: listed.observedAt, notice: completeness === 'unavailable' ? 'SSH 配置来源不可用，尚不能确认已有 Host；i 查看原因与下一步。' : `${rows.length} 个已有 SSH Host；未执行网络检测。a 选择已有 Host；不改写 SSH 配置。`,
         routeChoices: { aliases: { title: '选择已有 SSH Host（当前配置已自动包含）', options: listed.items.map((item) => ({ value: item.id, label: `${item.name} · ${item.identityHint}`, enabled: validHost(item.target) && item.id === `ssh:${encodeURIComponent(item.target)}`, reason: 'Host 不符合现有安全别名规则', route: { resourceId: 'sessions', contextId: item.id } })) } },
         detailViews: { info: errorsInfo(completeness, listed.errors) } };
     } catch { return invalid(request.signal.aborted ? 'SSH 读取已取消。' : 'SSH 来源无法读取，请核对配置和对应接口。', request.signal.aborted); }
@@ -89,6 +90,7 @@ export function createSshDoctorResource(options: SshResourceOptions): { resource
     if (request.signal.aborted) return invalid('SSH 体检已取消。', true);
     try {
       const result = await untilAborted(options.ssh.doctor({ contextId: request.context.id, signal: request.signal }), request.signal);
+      if (request.signal.aborted) return invalid('SSH 体检已取消。', true);
       const location = `远端 SSH Host ${result.host} 的同一 SSH 用户；TUI 不自动执行处理指引`;
       const observed = result.result === null ? { checks: [], summary: null, completeness: result.completeness, observedAt: result.observedAt, errors: result.errors }
         : doctorObservation(parseDiagnosticResult(result.result), result.observedAt);

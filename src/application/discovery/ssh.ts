@@ -19,7 +19,10 @@ export interface SshDiscoveryOptions {
   timeoutMs?: number;
   spawn?: (command: string, args: string[], options: SpawnOptionsWithoutStdio) => DiscoverySshChild;
   now?: () => number;
+  /** Local transport observation only; it is never serialized into the discovery protocol. */
+  onFailure?: (reason: SshDiscoveryFailure) => void;
 }
+export type SshDiscoveryFailure = 'cancelled' | 'invalid-cursor' | 'start' | 'io' | 'oversized' | 'exit' | 'malformed' | 'timeout';
 
 export function createSshDiscoveryClient(options: SshDiscoveryOptions): DiscoveryEndpoint {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(options.host)) throw new Error('SSH discovery requires a safe configured host alias.');
@@ -36,16 +39,19 @@ export function createSshDiscoveryClient(options: SshDiscoveryOptions): Discover
   function executeSsh(request: DiscoveryRequest, execution: DiscoveryOptions): Promise<DiscoveryResponse> {
     const contextId = execution.contextId ?? `ssh:${options.host}`;
     const scope = { contextId, target: `ssh:${options.host}` };
-    const fail = (kind: Parameters<typeof discoveryFailure>[2], message: string) => discoveryFailure(request, contextId, kind, message, now());
-    if (execution.signal?.aborted) return Promise.resolve(fail('cancelled', 'SSH discovery cancelled.'));
+    const fail = (kind: Parameters<typeof discoveryFailure>[2], message: string, reason: SshDiscoveryFailure) => {
+      options.onFailure?.(reason);
+      return discoveryFailure(request, contextId, kind, message, now());
+    };
+    if (execution.signal?.aborted) return Promise.resolve(fail('cancelled', 'SSH discovery cancelled.', 'cancelled'));
     let remoteRequest: DiscoveryRequest;
     try { remoteRequest = prepareRemoteDiscoveryRequest(request, scope); }
-    catch { return Promise.resolve(fail('invalid-cursor', 'Discovery cursor does not match this SSH target and query. Refresh from the first page.')); }
+    catch { return Promise.resolve(fail('invalid-cursor', 'Discovery cursor does not match this SSH target and query. Refresh from the first page.', 'invalid-cursor')); }
     return new Promise((resolve) => {
       let child: DiscoverySshChild;
       try {
         child = (options.spawn ?? nodeSpawn)('ssh', ['-T', '-o', 'BatchMode=yes', '--', options.host, 'crosschat', 'discover'], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
-      } catch { resolve(fail('unavailable', 'SSH discovery could not start. Check the configured host.')); return; }
+      } catch { resolve(fail('unavailable', 'SSH discovery could not start. Check the configured host.', 'start')); return; }
       let finished = false;
       let bytes = 0;
       const chunks: Buffer[] = [];
@@ -74,23 +80,23 @@ export function createSshDiscoveryClient(options: SshDiscoveryOptions): Discover
         }
         resolve(result);
       };
-      const onAbort = () => finish(fail('cancelled', 'SSH discovery cancelled.'), true);
-      const onError = () => finish(fail('unavailable', 'SSH discovery failed. Check the configured host and installed crosschat command.'), true);
+      const onAbort = () => finish(fail('cancelled', 'SSH discovery cancelled.', 'cancelled'), true);
+      const onError = () => finish(fail('unavailable', 'SSH discovery failed. Check the configured host and installed crosschat command.', 'io'), true);
       const onData = (chunk: Buffer | string) => {
         const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
         bytes += buffer.length;
-        if (bytes > DISCOVERY_MAX_BYTES) { finish(fail('malformed', 'SSH discovery response exceeded its size limit.'), true); return; }
+        if (bytes > DISCOVERY_MAX_BYTES) { finish(fail('malformed', 'SSH discovery response exceeded its size limit.', 'oversized'), true); return; }
         chunks.push(buffer);
       };
       const onStderr = () => undefined;
       const onClose = (code: number | null) => {
         release();
         if (finished) return;
-        if (code !== 0) { finish(fail('unavailable', 'SSH discovery failed. Check the configured host and installed crosschat command.')); return; }
+        if (code !== 0) { finish(fail('unavailable', 'SSH discovery failed. Check the configured host and installed crosschat command.', 'exit')); return; }
         try { finish(completeRemoteDiscoveryResponse(JSON.parse(Buffer.concat(chunks).toString('utf8')), request, scope)); }
-        catch { finish(fail('malformed', 'SSH command returned invalid discovery JSON.')); }
+        catch { finish(fail('malformed', 'SSH command returned invalid discovery JSON.', 'malformed')); }
       };
-      const timer = setTimeout(() => finish(fail('unavailable', 'SSH discovery timed out.'), true), timeoutMs);
+      const timer = setTimeout(() => finish(fail('unavailable', 'SSH discovery timed out.', 'timeout'), true), timeoutMs);
       child.stdout.on('data', onData);
       child.stderr.on('data', onStderr);
       child.on('error', onError);

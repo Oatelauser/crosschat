@@ -7,6 +7,7 @@ import type { DiagnosticResult } from '../diagnostics/model.js';
 import { parseDiscoveryRequest } from '../discovery/boundary.js';
 import { createSshDiscoveryClient } from '../discovery/ssh.js';
 import type { DiscoverySshChild } from '../discovery/ssh.js';
+import type { SshDiscoveryFailure } from '../discovery/ssh.js';
 import type { DiscoveryEndpoint, DiscoveryProvider, DiscoveryRequest, DiscoveryResponse } from '../discovery/model.js';
 import { discoveryFailure } from '../discovery/service.js';
 import type { QueryError } from '../queries/reading.js';
@@ -86,15 +87,17 @@ export function createSshApplication(options: SshApplicationOptions = {}): SshAp
     let stderr = Buffer.alloc(0);
     const onStderr = (chunk: Buffer | string) => { if (stderr.length < STDERR_BYTES) stderr = Buffer.concat([stderr, Buffer.from(chunk).subarray(0, STDERR_BYTES - stderr.length)]); };
     let child: DiscoverySshChild | undefined;
+    let transportFailure: SshDiscoveryFailure | undefined;
     try {
-      const endpoint = createSshDiscoveryClient({ host: selected.connection.target, timeoutMs, now, spawn: (command, args, spawnOptions) => {
+      const endpoint = createSshDiscoveryClient({ host: selected.connection.target, timeoutMs, now, onFailure: (reason) => { transportFailure = reason; }, spawn: (command, args, spawnOptions) => {
         child = spawn(command, args, spawnOptions); child.stderr.on('data', onStderr); return child;
       } });
       const response = await endpoint.execute(request, execution);
       const result = response.op === 'list' ? response.page : response.detail;
       if (result.completeness === 'unavailable') {
         const problem = result.errors.find((error) => error.kind === 'malformed');
-        const issue = problem ? failure(contextId, '远端发现接口返回无效结果。', 'malformed', '在同一 SSH 用户下升级并核对 crosschat discover 接口；不会回退执行 status。')
+        const issue = transportFailure === 'timeout' ? failure(contextId, 'SSH 只读发现超时。')
+          : problem ? failure(contextId, '远端发现接口返回无效结果。', 'malformed', '在同一 SSH 用户下升级并核对 crosschat discover 接口；不会回退执行 status。')
           : executionFailure(contextId, stderr.toString('utf8'), null);
         result.errors = result.errors.map((error) => error.kind === 'invalid-cursor' ? error : { source: { contextId, providerId: 'ssh' }, kind: issue.kind, message: issue.message, nextStep: issue.nextStep });
       }
@@ -145,7 +148,7 @@ export function createSshApplication(options: SshApplicationOptions = {}): SshAp
         release(); if (finished) return;
         if (code !== 0 && code !== 1) { failed(executionFailure(request.contextId, stderr.toString('utf8'), code), false, code); return; }
         try {
-          const result = parseDiagnosticResult(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+          const result = parseDiagnosticResult(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks))));
           if ((code === 1) !== result.summary.failed) throw new Error('Mismatched doctor exit.');
           finish({ result, exitCode: code, completeness: 'complete', errors: [] });
         } catch { failed(failure(request.contextId, '远端体检接口返回无效结果。', 'malformed', '在同一 SSH 用户下升级并核对 crosschat doctor --json；不会解析旧文本或回退本机。'), false, code); }
