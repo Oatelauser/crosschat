@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import type { TuiOverlay } from '../src/tui/model.js';
+import { describe, expect, it, vi } from 'vitest';
+import type { TuiAction, TuiActionAvailability, TuiOverlay } from '../src/tui/model.js';
 import { displayWidth } from '../src/tui/ui/text.js';
 
 function overlay(values: Partial<TuiOverlay> = {}): TuiOverlay {
@@ -50,5 +50,118 @@ describe('complete form confirmation content', () => {
     expect(lines.find((line) => line.kind === 'field' && line.fieldIndex === 1)?.text).toContain('•');
     expect(input.fields[0].value).toBe('可横向编辑👩‍💻'.repeat(8));
     expect(input.fields[1].value).toBe('fixture-secret-value');
+  });
+
+  it('scrolls confirmation text without changing the fixed target or default button and restores field cursor keys', async () => {
+    const { createTuiController } = await import('../src/tui/app/controller.js');
+    const { createResourceRegistry, defaultResources } = await import('../src/tui/resources/registry.js');
+    const { formContentLines } = await import('../src/tui/app/form.js');
+    const action: TuiAction = {
+      id: 'rename', label: '修改显示名', shortcut: 'e', ownerResourceId: 'sessions', selectionPolicy: 'required', mutation: true,
+      kind: 'form', fields: [{ id: 'name', label: '显示名', required: true }], returnPolicy: 'restore',
+    };
+    const registry = createResourceRegistry(defaultResources.map((resource) => resource.id === 'sessions' ? { ...resource, actions: [action] } : resource));
+    const targetId = `opaque/${'very-long-target/'.repeat(12)}`;
+    const mutate = vi.fn(async () => ({}));
+    const controller = createTuiController({ registry, contexts: [{ id: 'local', label: '本机', kind: 'local' }], adapters: { sessions: {
+      read: async () => ({ rows: [{ id: targetId, cells: { name: '初始👩‍💻' } }], completeness: 'complete' }),
+      checkAction: async () => ({ enabled: true, impact: ['完整影响👩‍💻'.repeat(50)] }), mutate,
+    } } });
+    try {
+      controller.resize(30, 18); controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
+      controller.handleKey({ name: 'e' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.impact).toContain('完整影响👩‍💻'.repeat(50)));
+      const fieldLine = formContentLines(controller.getSnapshot().overlay!, 30).findIndex((line) => line.kind === 'field');
+      expect(controller.getSnapshot().overlay!.scrollOffset).toBeGreaterThan(0);
+      expect(fieldLine).toBeGreaterThanOrEqual(controller.getSnapshot().overlay!.scrollOffset!);
+      expect(fieldLine).toBeLessThan(controller.getSnapshot().overlay!.scrollOffset! + 6);
+      controller.handleKey({ name: 'enter' });
+      const before = controller.getSnapshot().overlay!;
+      expect(before).toMatchObject({ phase: 'confirming', focusIndex: 1, targetId });
+      controller.handleKey({ name: 'pagedown' });
+      expect(controller.getSnapshot().overlay!.scrollOffset).toBeGreaterThan(before.scrollOffset!);
+      controller.handleKey({ name: 'end' });
+      const end = controller.getSnapshot().overlay!;
+      expect(end.scrollOffset).toBe(formContentLines(end, 30).length - 6);
+      expect(end).toMatchObject({ focusIndex: 1, targetId, fields: [{ value: '初始👩‍💻' }] });
+      expect(mutate).not.toHaveBeenCalled();
+      controller.handleKey({ name: 'home' });
+      expect(controller.getSnapshot().overlay?.scrollOffset).toBe(0);
+      controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'tab' });
+      expect(controller.getSnapshot().overlay?.focusIndex).toBe(0);
+      const fieldOffset = controller.getSnapshot().overlay!.scrollOffset;
+      controller.handleKey({ name: 'home' });
+      expect(controller.getSnapshot().overlay?.fields[0].cursor).toBe(0);
+      controller.handleKey({ name: 'end' });
+      expect(controller.getSnapshot().overlay?.fields[0].cursor).toBe(3);
+      expect(controller.getSnapshot().overlay?.scrollOffset).toBe(fieldOffset);
+    } finally { controller.dispose(); }
+  });
+
+  it('focuses a full asynchronous error and allows scrolling to its final guidance', async () => {
+    const { createTuiController } = await import('../src/tui/app/controller.js');
+    const { createResourceRegistry, defaultResources } = await import('../src/tui/resources/registry.js');
+    const { formContentLines } = await import('../src/tui/app/form.js');
+    const action: TuiAction = {
+      id: 'remove', label: '测试移除', shortcut: 'x', ownerResourceId: 'sessions', selectionPolicy: 'required', mutation: true,
+      kind: 'form', returnPolicy: 'restore',
+    };
+    const registry = createResourceRegistry(defaultResources.map((resource) => resource.id === 'sessions' ? { ...resource, actions: [action] } : resource));
+    const failure = `未执行操作。${'请核对当前目标和权限。'.repeat(40)}末尾完整指引`;
+    const controller = createTuiController({ registry, contexts: [{ id: 'local', label: '本机', kind: 'local' }], adapters: { sessions: {
+      read: async () => ({ rows: [{ id: 'fixed-target', cells: { name: '原目标' } }], completeness: 'complete' }),
+      checkAction: async () => ({ enabled: true, impact: ['只影响当前目标'] }), mutate: async () => { throw new Error(failure); },
+    } } });
+    try {
+      controller.resize(30, 18); controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
+      controller.handleKey({ name: 'x' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.impact).toContain('只影响当前目标'));
+      controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.error).toBe(failure));
+      const failed = controller.getSnapshot().overlay!;
+      const errorLine = formContentLines(failed, 30).findIndex((line) => line.kind === 'error');
+      expect(errorLine).toBeGreaterThanOrEqual(failed.scrollOffset!);
+      expect(errorLine).toBeLessThan(failed.scrollOffset! + 6);
+      controller.handleKey({ name: 'end' });
+      const content = formContentLines(controller.getSnapshot().overlay!, 30);
+      const offset = controller.getSnapshot().overlay!.scrollOffset!;
+      expect(offset).toBe(content.length - 6);
+      expect(content.slice(offset, offset + 6).map((line) => line.text).join('')).toContain('末尾完整指引');
+      expect(controller.getSnapshot().overlay?.targetId).toBe('fixed-target');
+    } finally { controller.dispose(); }
+  });
+
+  it('exposes pending authority checks and cannot issue a write before either check finishes', async () => {
+    const { createTuiController } = await import('../src/tui/app/controller.js');
+    const { createResourceRegistry, defaultResources } = await import('../src/tui/resources/registry.js');
+    const action: TuiAction = {
+      id: 'remove', label: '测试移除', shortcut: 'x', ownerResourceId: 'sessions', selectionPolicy: 'required', mutation: true,
+      kind: 'form', returnPolicy: 'restore',
+    };
+    const registry = createResourceRegistry(defaultResources.map((resource) => resource.id === 'sessions' ? { ...resource, actions: [action] } : resource));
+    const finishes: Array<(result: TuiActionAvailability) => void> = [];
+    const mutate = vi.fn(async () => ({}));
+    const controller = createTuiController({ registry, contexts: [{ id: 'local', label: '本机', kind: 'local' }], adapters: { sessions: {
+      read: async () => ({ rows: [{ id: 'fixed-target', cells: { name: '原目标' } }], completeness: 'complete' }),
+      checkAction: () => new Promise((resolve) => { finishes.push(resolve); }), mutate,
+    } } });
+    try {
+      controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
+      controller.handleKey({ name: 'x' });
+      expect(controller.getSnapshot().overlay?.checking).toBe(true);
+      controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
+      expect(mutate).not.toHaveBeenCalled();
+      finishes[0]({ enabled: true });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.checking).toBe(false));
+      controller.handleKey({ name: 'enter' });
+      expect(controller.getSnapshot().overlay?.checking).toBe(true);
+      expect(mutate).not.toHaveBeenCalled();
+      finishes[1]({ enabled: true });
+      await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('list'));
+      expect(mutate).toHaveBeenCalledOnce();
+    } finally { controller.dispose(); }
   });
 });

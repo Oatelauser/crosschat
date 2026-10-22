@@ -87,6 +87,8 @@ export interface TuiOverlay {
   title: string;
   fields: readonly { id: string; label: string; value: string; secret?: boolean; cursor?: number }[];
   focusIndex: number;
+  scrollOffset?: number;
+  checking?: boolean;
   phase: 'editing' | 'confirming' | 'submitting';
   impact: readonly string[];
   error?: string;
