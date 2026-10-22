@@ -103,8 +103,9 @@ export async function waitForServiceReady(
     if (options.signal?.aborted) return { state: 'failed', reason: 'cancelled', pid: started.pid, error: '已停止等待服务就绪；已发出的启动请求未撤销' };
     if (!(deps.isProcessAlive ?? isProcessAlive)(started.pid)) return { state: 'failed', reason: 'process-exited', pid: started.pid, error: '服务进程已退出，未确认就绪' };
     try {
-      const value: unknown = deps.readStatus === undefined
-        ? JSON.parse(readFileSync(started.statusFile, 'utf8')) : deps.readStatus(started.statusFile);
+      const value: unknown = await (deps.readStatus === undefined
+        ? JSON.parse(readFileSync(started.statusFile, 'utf8')) : deps.readStatus(started.statusFile));
+      if (options.signal?.aborted) return { state: 'failed', reason: 'cancelled', pid: started.pid, error: '已停止等待服务就绪；已发出的启动请求未撤销' };
       if (value !== null && typeof value === 'object') {
         const status = value as Record<string, unknown>;
         if (status.pid === started.pid && status.state === (started.target === 'broker' ? 'running' : 'online') &&
