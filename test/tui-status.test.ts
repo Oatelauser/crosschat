@@ -14,4 +14,22 @@ describe('extensible native status labels', () => {
     expect(registry.format('future-provider', { type: 'pondering' })).toBe('思考中<pondering>');
     expect(registry.format('codex', 'pondering')).toBe('未识别<pondering>');
   });
+  it('keeps native unknown distinct from absence and handles native Codex object states', () => {
+    const registry = createStatusRegistry();
+    expect(registry.format('codex', undefined)).toBe('未提供<—>');
+    expect(registry.format('codex', 'unknown')).toBe('未知<unknown>');
+    expect(registry.format('codex', { type: 'notLoaded' })).toBe('未加载<notLoaded>');
+    expect(registry.format('codex', { type: 'active', activeFlags: ['waitingOnApproval'] })).toBe('等待批准<active>');
+    expect(registry.format('codex', { type: 'active', activeFlags: ['waitingOnUserInput'] })).toBe('等待输入<active>');
+    expect(registry.format('codex', { type: 'futureNativeState', key: 'must-not-print' })).toBe('未识别<futureNativeState>');
+  });
+  it('takes an isolated label snapshot and never treats inherited names as registrations', () => {
+    const labels = { third: { active: '自定义运行' } };
+    const registry = createStatusRegistry(labels);
+    labels.third.active = '后来修改';
+    expect(registry.format('third', 'active')).toBe('自定义运行<active>');
+    expect(registry.format('third', 'constructor')).toBe('未识别<constructor>');
+    expect(registry.format('constructor', 'idle')).toBe('未识别<idle>');
+    expect(createStatusRegistry().format('third', 'active')).toBe('未识别<active>');
+  });
 });
