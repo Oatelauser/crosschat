@@ -51,7 +51,10 @@ export const defaultResources: readonly TuiResource[] = definitions.map(([id, la
   columns: id === 'ctx' ? [
     { id: 'kind', label: '类型', width: 10 }, { id: 'name', label: '连接', width: 24 }, { id: 'target', label: '目标', width: 30 },
   ] : [{ id: 'name', label: '名称', width: 24 }],
-  actions: [],
+  actions: id === 'ctx' ? [
+    { ...command('detail', '只读详情', 'd', id), kind: 'detail', selectionPolicy: 'required' },
+    { ...command('enter-context', '进入连接', 'Enter', id), kind: 'navigate', selectionPolicy: 'required' },
+  ] : [],
   ...(id === 'ctx' ? {} : { unavailableReason: '此资源尚未接入。当前可使用连接列表和通用交互。' }),
 }));
 
