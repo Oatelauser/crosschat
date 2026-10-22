@@ -91,8 +91,9 @@ export function createLocalServices(options: LocalServicesOptions): LocalService
     readStatus: async (path) => JSON.parse(await readMetadata(path, signal)) as unknown,
   }, { signal }));
   const stop = options.stop ?? ((request) => stopServicesInBackground(request, { baseDir: options.baseDir }));
-  const launchRequests = new Map<string, { extraArgs: string[]; logName: string; port?: number }>();
-  const stopRequests = new Map<string, ServiceStopRequest>();
+  // Prepared operations belong to a particular observation, so concurrent reads cannot replace a confirmed plan.
+  const launchRequests = new WeakMap<LocalService, { extraArgs: string[]; logName: string; port?: number }>();
+  const stopRequests = new WeakMap<LocalService, ServiceStopRequest>();
 
   async function read(request: LocalServiceRead): Promise<CollectionResult<LocalService>> {
     const empty = (completeness: CollectionResult<LocalService>['completeness'], errors: QueryError[] = []): CollectionResult<LocalService> => ({ items: [], completeness, observedAt: now(), errors });
@@ -126,17 +127,22 @@ export function createLocalServices(options: LocalServicesOptions): LocalService
           : !processes.confirmedBrokerPids.includes(brokerProcesses[0].pid) ? denied('当前 broker PID 未通过配置端口的双重确认。') : { allowed: true, impact: brokerImpact },
         detail: [{ label: '服务范围', value: '本机 broker；内挂聚合器随其生命周期管理。' }, { label: '监听端口', value: String(port) }, { label: '托管星', value: broker.value?.stars.map((star) => `${star.name ?? '未命名'} (${star.starId ?? '未提供'})`).join('\n') || '尚无已配置星' }, { label: '快照', value: brokerSnapshot ? JSON.stringify(brokerSnapshot, null, 2) : '尚无快照' }] };
       const items: LocalService[] = [brokerRow];
-      launchRequests.set(brokerId, { extraArgs: [], logName: 'broker.log', port }); stopRequests.set(brokerId, { target: 'broker' });
+      launchRequests.set(brokerRow, { extraArgs: [], logName: 'broker.log', port }); stopRequests.set(brokerRow, { target: 'broker', expectedPids: brokerProcesses.map((item) => item.pid) });
       const nodeConfig = config.value;
       const mapped = new Set<number>();
+      const occurrences = new Map<string, number>();
       if (nodeConfig) for (const entry of nodeConfig.entries) {
-        const id = `service:node:${digest([entry.host, entry.port, entry.starId ?? null, entry.key])}`;
+        const identity = digest([entry.host, entry.port, entry.starId ?? null, entry.key]);
+        const occurrence = occurrences.get(identity) ?? 0; occurrences.set(identity, occurrence + 1);
+        const id = `service:node:${identity}${occurrence ? `:${occurrence}` : ''}`;
         const current = processes.processes.filter((item) => matches(item, entry, nodeConfig)); current.forEach((item) => mapped.add(item.pid));
         const selected = selector(entry, nodeConfig);
         const label = entry.name ?? entry.starId ?? `${entry.host}:${entry.port}`;
         const fileLabel = selected === '' ? '' : entry.name ?? selected;
-        const sourceId = fileLabel === undefined ? undefined : logSource(fileLabel);
-        const snapshot = statuses.items.find((item) => item.kind === 'node' && (item.file === `status-node${fileLabel ? `-${fileLabel}` : ''}.json`));
+        const snapshot = statuses.items.find((item) => item.kind === 'node' && current.length === 1 && item.pid === current[0].pid)
+          ?? statuses.items.find((item) => item.kind === 'node' && item.file === `status-node${fileLabel ? `-${fileLabel}` : ''}.json`);
+        const sourceId = snapshot && /^status-node(?:-.*)?\.json$/.test(snapshot.file)
+          ? `node:${snapshot.file.slice('status-'.length, -'.json'.length)}.log` : fileLabel === undefined ? undefined : logSource(fileLabel);
         const hosted = brokerProcesses.length === 1 && brokerSnapshot?.processAlive === true && brokerSnapshot.state === 'running'
           && brokerSnapshot.stars?.some((star) => entry.starId ? star.starId === entry.starId : entry.name !== undefined && star.name === entry.name);
         const uncertain = !sourcesOK || !snapshotsOK || (!current.length && !hosted && snapshot?.processAlive === true);
@@ -150,21 +156,23 @@ export function createLocalServices(options: LocalServicesOptions): LocalService
           : current.length !== 1 ? denied(current.length ? '多个守护映射到同一服务，无法安全确认唯一目标。' : '没有匹配运行进程。') : !stoppable ? denied('裸默认 --connect 只能通过旧命令停止全部节点；所选行不执行扩大范围的停机。', '需停止全部节点时，在终端核对影响后执行 crosschat serve --stop node。')
           : { allowed: true, impact: [`仅停止本机 PID ${current[0].pid} 的节点守护，原选择器 ${stoppable}。`, `目标星：${label} (${entry.starId ?? '未提供完整星标识'})；该星的本机机器连接和聚合器将停止。`, '不撤销节点钥匙、不删除星册位、不终止原生工具会话。'] };
         const revision = digest([id, entry.name, selected, current, hosted ? brokerProcesses[0].pid : null]);
-        items.push({ id, revision, kind: 'node', label, target: `${entry.host}:${entry.port}`, ...(selected === undefined ? {} : { selector: selected }), ...(current.length === 1 ? { pid: current[0].pid } : hosted ? { pid: brokerProcesses[0].pid } : {}),
+        const row: LocalService = { id, revision, kind: 'node', label, target: `${entry.host}:${entry.port}`, ...(selected === undefined ? {} : { selector: selected }), ...(current.length === 1 ? { pid: current[0].pid } : hosted ? { pid: brokerProcesses[0].pid } : {}),
           state: uncertain ? 'unknown' : current.length ? 'running' : hosted ? 'hosted' : 'not-running', ...(hosted ? { sourceId: 'broker' } : sourceId ? { sourceId } : {}), start, stop: stopping,
-          detail: [{ label: '完整星标识', value: entry.starId ?? '未提供' }, { label: '目标', value: `${entry.host}:${entry.port}` }, { label: '启动选择器', value: selected ?? '无法唯一选择' }, { label: '实际运行选择器', value: current.map((item) => `${item.selector || '(裸默认)'} · PID ${item.pid}`).join('\n') || (hosted ? 'broker 内挂聚合器' : '未发现') }, { label: '快照', value: snapshot ? JSON.stringify(snapshot, null, 2) : '尚无快照' }] });
-        if (selected !== undefined && fileLabel !== undefined && sourceId) launchRequests.set(id, { extraArgs: ['--connect', ...(selected === '' ? [] : [selected])], logName: `node${fileLabel ? `-${fileLabel}` : ''}.log` });
-        if (stoppable) stopRequests.set(id, { selector: stoppable });
+          detail: [{ label: '完整星标识', value: entry.starId ?? '未提供' }, { label: '目标', value: `${entry.host}:${entry.port}` }, { label: '启动选择器', value: selected ?? '无法唯一选择' }, { label: '实际运行选择器', value: current.map((item) => `${item.selector || '(裸默认)'} · PID ${item.pid}`).join('\n') || (hosted ? 'broker 内挂聚合器' : '未发现') }, { label: '快照', value: snapshot ? JSON.stringify(snapshot, null, 2) : '尚无快照' }] };
+        items.push(row);
+        if (selected !== undefined && fileLabel !== undefined && sourceId) launchRequests.set(row, { extraArgs: ['--connect', ...(selected === '' ? [] : [selected])], logName: `node${fileLabel ? `-${fileLabel}` : ''}.log` });
+        if (stoppable) stopRequests.set(row, { selector: stoppable, expectedPids: current.map((item) => item.pid) });
       }
       for (const process of processes.processes.filter((item) => item.kind === 'node' && !mapped.has(item.pid))) {
         const id = `service:orphan-node:${process.pid}`;
         const label = process.selector || '(裸默认节点)';
         const sameSelectors = processes.processes.filter((item) => item.kind === 'node' && item.selector === process.selector);
         const allowed = process.selector && sameSelectors.length === 1;
-        items.push({ id, revision: digest([id, process.selector]), kind: 'node', label, target: '配置归属未知', pid: process.pid, state: 'unknown', ...(process.selector ? { selector: process.selector } : {}),
+        const row: LocalService = { id, revision: digest([id, process.selector]), kind: 'node', label, target: '配置归属未知', pid: process.pid, state: 'unknown', ...(process.selector ? { selector: process.selector } : {}),
           start: denied('运行进程无法对应当前完整配置，不能启动替代服务。'), stop: allowed ? { allowed: true, impact: [`仅停止本机 PID ${process.pid} 的节点守护；原选择器 ${process.selector}。`, '配置归属未知；不终止原生工具、不修改凭证或星册。'] } : denied('选择器不明确或命中多个进程，不能执行精确停机。'),
-          detail: [{ label: '归属', value: '此进程不能对应到当前 node.json 配置；先核对原选择器和进程。' }] });
-        if (allowed) stopRequests.set(id, { selector: process.selector! });
+          detail: [{ label: '归属', value: '此进程不能对应到当前 node.json 配置；先核对原选择器和进程。' }] };
+        items.push(row);
+        if (allowed) stopRequests.set(row, { selector: process.selector!, expectedPids: [process.pid] });
       }
       return { items, completeness: errors.length ? 'partial' : 'complete', observedAt: now(), errors };
     } catch { return empty(request.signal?.aborted ? 'cancelled' : 'unavailable', request.signal?.aborted ? [] : [issue('services', '无法完成服务来源读取；没有发出起停请求。')]); }
@@ -180,6 +188,9 @@ export function createLocalServices(options: LocalServicesOptions): LocalService
     if (request.operation === 'start' && item.kind === 'node') {
       const result = await untilAborted(guard(item.selector ?? '', request.signal), request.signal);
       if (!result.allowed) return { item, check: denied(result.reason ?? '同星服务占用核验未通过。') };
+      const verified = (await read(request)).items.find((candidate) => candidate.id === request.id && candidate.revision === request.revision);
+      if (!verified || !verified.start.allowed) return { check: denied('服务配置或运行进程在核验期间已经变化，原确认目标已失效。') };
+      checkAbort(request.signal); return { item: verified, check: verified.start };
     }
     checkAbort(request.signal); return { item, check: availability };
   }
@@ -195,7 +206,7 @@ export function createLocalServices(options: LocalServicesOptions): LocalService
       if (!checked.item || !checked.check.allowed) return { state: 'failed', message: checked.check.reason ?? '服务操作不可用。', id: request.id };
       checkAbort(request.signal);
       if (request.operation === 'start') {
-        const launchRequest = launchRequests.get(request.id);
+        const launchRequest = launchRequests.get(checked.item);
         if (!launchRequest) return { state: 'failed', message: '启动目标已失效，请重新选择服务。', id: request.id };
         const started = launch(launchRequest); issued = started.state === 'starting';
         if (started.state === 'failed') return { state: 'failed', message: '后台服务未能启动，请查看服务日志和运行环境。', id: request.id };
@@ -203,11 +214,14 @@ export function createLocalServices(options: LocalServicesOptions): LocalService
         if (result.state === 'ready') return { state: 'ready', message: `服务已实际就绪，PID ${result.pid}。`, id: request.id, pid: result.pid };
         return { state: result.reason === 'process-exited' ? 'failed' : 'unconfirmed', message: result.reason === 'cancelled' ? '启动请求未撤销，已停止等待；结果待核实。' : result.reason === 'process-exited' ? '服务进程已退出，未确认就绪；请查看日志。' : '启动请求已发出，尚未确认就绪；请核对状态与日志，勿盲目重试。', id: request.id, pid: started.pid };
       }
-      const stopRequest = stopRequests.get(request.id);
+      const stopRequest = stopRequests.get(checked.item);
       if (!stopRequest) return { state: 'failed', message: '停止目标已失效，请重新选择服务。', id: request.id };
       issued = true;
       const result = await untilAborted(stop(stopRequest), request.signal);
-      const success = result.state === 'ready' && result.events.some((event) => event.kind === 'terminated');
+      const terminated = result.events.filter((event) => event.kind === 'terminated');
+      const expected = stopRequest.expectedPids ?? [];
+      const success = result.state === 'ready' && expected.length > 0 && terminated.length === expected.length
+        && terminated.every((event) => expected.includes(event.pid) && event.target === checked.item!.kind);
       return { state: success ? 'ready' : 'unconfirmed', message: success ? '已确认所选服务进程终止；原生会话未终止。' : '停机未取得完整终止回执，请核对进程和状态；不会自动重试。', id: request.id };
     } catch { return { state: issued ? 'unconfirmed' : request.signal?.aborted ? 'cancelled' : 'failed', message: issued ? '请求已发出，已停止等待；操作未撤销，结果待核实。' : request.signal?.aborted ? '已取消服务操作，尚未发出起停请求。' : '服务操作核验失败，尚未发出起停请求。', id: request.id }; }
   }

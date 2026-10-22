@@ -4,8 +4,15 @@ import type { ServiceStopRequest } from './local.js';
 
 function request(value: unknown): ServiceStopRequest {
   if (value !== null && typeof value === 'object') {
-    if ('target' in value && (value.target === 'broker' || value.target === 'node' || value.target === 'both')) return { target: value.target };
-    if ('selector' in value && typeof value.selector === 'string') return { selector: value.selector };
+    let expectedPids: number[] | undefined;
+    if ('expectedPids' in value) {
+      if (!Array.isArray(value.expectedPids) || !value.expectedPids.length || !value.expectedPids.every((pid: unknown) => typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0)
+        || new Set(value.expectedPids).size !== value.expectedPids.length) throw new Error('后台服务停机目标 PID 无效');
+      expectedPids = value.expectedPids;
+    }
+    const fixed = expectedPids === undefined ? {} : { expectedPids };
+    if ('target' in value && (value.target === 'broker' || value.target === 'node' || value.target === 'both')) return { target: value.target, ...fixed };
+    if ('selector' in value && typeof value.selector === 'string') return { selector: value.selector, ...fixed };
   }
   throw new Error('后台服务停机请求形状异常');
 }

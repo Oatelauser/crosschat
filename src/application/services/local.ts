@@ -137,7 +137,10 @@ export interface ServiceStopDeps {
   pidsOnPort?(port: number): Set<number>;
 }
 
-export type ServiceStopRequest = { target: 'broker' | 'node' | 'both' } | { selector: string };
+export type ServiceStopRequest = ({ target: 'broker' | 'node' | 'both' } | { selector: string }) & {
+  /** TUI fixed-target guard; omitted by the existing CLI. Checked against the same process scan used for termination. */
+  expectedPids?: readonly number[];
+};
 export interface ServiceStopResult {
   state: 'ready' | 'failed';
   events: ServiceStopEvent[];
@@ -165,6 +168,16 @@ export function stopServices(
   deps: ServiceStopDeps,
 ): ServiceStopResult {
   const procs = (deps.listServeProcesses ?? listServeProcesses)();
+  if (request.expectedPids !== undefined) {
+    const targets = procs.filter((item) => 'selector' in request
+      ? item.cmdline.includes('--connect') && connectValueOf(item.cmdline) === request.selector
+      : request.target === 'both' || (request.target === 'node') === item.cmdline.includes('--connect'));
+    const expected = request.expectedPids;
+    if (!expected.length || expected.some((pid) => !Number.isSafeInteger(pid) || pid <= 0) || new Set(expected).size !== expected.length
+      || targets.length !== expected.length || targets.some((item) => !expected.includes(item.pid))) {
+      return { state: 'failed', events: [], error: '服务进程目标已经变化；未发送停止信号，请刷新后重新确认。' };
+    }
+  }
   const kill = deps.killPid ?? killPid;
   const events: ServiceStopEvent[] = [];
   const terminate = (target: 'broker' | 'node', pid: number, metadata: { selector?: string; port?: number } = {}): void => {
