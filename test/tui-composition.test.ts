@@ -40,6 +40,22 @@ afterEach(() => { vi.unstubAllEnvs(); });
 function command(controller: ReturnType<typeof createTuiController>, value: string) { for (const name of `:${value}`) controller.handleKey({ name, text: name }); controller.handleKey({ name: 'enter' }); }
 
 describe('default local and SSH resource composition', () => {
+  it.each(['complete', 'unknown', 'blocked'] as const)('does not recreate removed preferences after an uninstall attempt: %s', async (outcome) => {
+    mocks.maintenance.mockReturnValue({ list: () => [{ id: 'uninstall-data', label: '卸载fixture', description: '固定范围', guidance: '不执行npm' }], preview: mocks.preview, execute: mocks.execute });
+    mocks.preview.mockResolvedValue({ operationId: 'uninstall-data', label: '卸载fixture', observedAt: 42, fingerprint: 'f'.repeat(64), enabled: true, targets: [], effects: ['删除当前fixture数据'] });
+    if (outcome === 'unknown') mocks.execute.mockRejectedValue(new Error('controlled owner failure'));
+    else mocks.execute.mockResolvedValue({ operationId: 'uninstall-data', status: outcome, startedAt: 42, finishedAt: 43, npm: 'not-run', items: [], message: 'fixture result' });
+    const composed = createDefaultResources({ home: '/isolated', isolatedHome: true });
+    expect(composed.shouldSavePreferences()).toBe(true);
+    const resource = composed.resources.find((resource) => resource.id === 'maintenance')!;
+    const adapter = composed.adapters.maintenance;
+    const signal = new AbortController().signal;
+    const page = await adapter.read({ context: contexts[0], signal });
+    const request = { context: contexts[0], signal, target: page.rows[0], values: {}, action: resource.actions.find((action) => action.id === 'execute')! };
+    await adapter.checkAction!(request);
+    await adapter.mutate!(request).catch(() => undefined);
+    expect(composed.shouldSavePreferences()).toBe(outcome === 'blocked');
+  });
   it('constructs lazily and binds explicit home child environments to the isolated scope', () => {
     vi.stubEnv('LOCALAPPDATA', '/outside/local'); vi.stubEnv('CODEX_HOME', '/outside/native');
     createDefaultResources({ home: '/isolated', isolatedHome: true });

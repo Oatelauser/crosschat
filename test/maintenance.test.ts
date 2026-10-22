@@ -2,6 +2,8 @@ import { Worker } from 'node:worker_threads';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import ts from 'typescript';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-maintenance-'));
@@ -162,6 +164,7 @@ describe('local maintenance plans and exact execution', () => {
     mkdirSync(join(cleanup.home, '.crosschat'));
     symlinkSync(outside, join(cleanup.home, '.crosschat', 'tcp'), process.platform === 'win32' ? 'junction' : 'dir');
     expect(previewMaintenance('cleanup', cleanup.options)).toMatchObject({ enabled: false });
+    expect(previewMaintenance('uninstall-data', cleanup.options)).toMatchObject({ enabled: false });
     expect(readFileSync(outsideFile, 'utf8')).toBe('outside content');
 
     const skills = fixture();
@@ -188,6 +191,38 @@ describe('local maintenance plans and exact execution', () => {
 });
 
 describe('owned maintenance worker lifecycle', () => {
+  it('runs actual plans and filesystem effects through the default built worker using only isolated fixture paths', async () => {
+    const dir = mkdtempSync(join(root, 'built-'));
+    const modules = ['application/maintenance/index.ts', 'application/maintenance/isolated.ts', 'application/maintenance/model.ts', 'application/maintenance/operations.ts',
+      'application/maintenance/skills.ts', 'application/maintenance/uninstall.ts', 'application/cleanup/index.ts', 'application/status/status-files.ts', 'serve/file-channel.ts', 'state-root.ts'];
+    writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
+    for (const module of modules) {
+      const destination = join(dir, module.replace(/\.ts$/, '.js'));
+      mkdirSync(join(destination, '..'), { recursive: true });
+      const source = readFileSync(new URL(`../src/${module}`, import.meta.url), 'utf8');
+      writeFileSync(destination, ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2023 } }).outputText);
+    }
+    const { createLocalMaintenance } = await import(pathToFileURL(join(dir, 'application/maintenance/index.js')).href);
+    const f = fixture();
+    const maintenance = createLocalMaintenance(f.options);
+    const install = await maintenance.preview({ operationId: 'install-skills' });
+    expect(existsSync(join(f.home, '.claude'))).toBe(false);
+    expect((await maintenance.execute({ operationId: 'install-skills', expectedFingerprint: install.fingerprint })).status).toBe('complete');
+    expect(readFileSync(join(f.home, '.codex', 'skills', 'crosschat', 'SKILL.md'), 'utf8')).toBe('isolated source');
+    const old = f.put('tcp/inbox/old', 9 * DAY);
+    const queue = f.put('outbox/queue.json');
+    const cleanup = await maintenance.preview({ operationId: 'cleanup' });
+    expect(existsSync(old)).toBe(true);
+    expect((await maintenance.execute({ operationId: 'cleanup', expectedFingerprint: cleanup.fingerprint })).status).toBe('complete');
+    expect(existsSync(old)).toBe(false);
+    expect(existsSync(queue)).toBe(true);
+    const uninstall = await maintenance.preview({ operationId: 'uninstall-data' });
+    expect((await maintenance.execute({ operationId: 'uninstall-data', expectedFingerprint: uninstall.fingerprint })).npm).toBe('not-run');
+    expect(existsSync(join(f.home, '.crosschat'))).toBe(false);
+    expect(existsSync(join(f.home, '.claude', 'skills', 'crosschat'))).toBe(false);
+    expect(existsSync(f.options.sourceDir)).toBe(true);
+  });
+
   it('does not start work for an already-aborted operation', async () => {
     const { createLocalMaintenance } = await import('../src/application/maintenance/index.js');
     const f = fixture();
