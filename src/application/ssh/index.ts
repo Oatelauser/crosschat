@@ -1,5 +1,6 @@
 import { spawn as nodeSpawn } from 'node:child_process';
 import type { SpawnOptionsWithoutStdio } from 'node:child_process';
+import { isAbsolute } from 'node:path';
 import { listTuiContexts } from '../contexts/index.js';
 import type { TuiConnection, TuiContextsResult } from '../contexts/index.js';
 import { parseDiagnosticResult } from '../diagnostics/query.js';
@@ -26,6 +27,9 @@ export interface SshApplication {
 }
 export interface SshApplicationOptions {
   home?: string;
+  /** Set only for an explicitly isolated context; default SSH configuration semantics stay unchanged. */
+  configFile?: string;
+  env?: NodeJS.ProcessEnv;
   readContexts?(signal?: AbortSignal): Promise<TuiContextsResult>;
   spawn?(command: string, args: string[], options: SpawnOptionsWithoutStdio): DiscoverySshChild;
   timeoutMs?: number;
@@ -53,7 +57,11 @@ export function createSshApplication(options: SshApplicationOptions = {}): SshAp
   const timeoutMs = options.timeoutMs ?? 15_000;
   const maxOutputBytes = options.maxOutputBytes ?? MAX_OUTPUT_BYTES;
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || !Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 1 || maxOutputBytes > MAX_OUTPUT_BYTES) throw new Error('Invalid SSH read bounds.');
-  const spawn = options.spawn ?? nodeSpawn;
+  if (options.configFile !== undefined && !isAbsolute(options.configFile)) throw new Error('SSH configuration needs an absolute path.');
+  const launch = options.spawn ?? nodeSpawn;
+  const spawn = (command: string, args: string[], settings: SpawnOptionsWithoutStdio): DiscoverySshChild => launch(command,
+    options.configFile === undefined ? args : ['-F', options.configFile, ...args],
+    { ...settings, ...(options.env === undefined ? {} : { env: options.env }) });
   async function list(signal?: AbortSignal): Promise<TuiContextsResult> {
     try {
       const result = await untilAborted(options.readContexts ? options.readContexts(signal) : listTuiContexts({ home: options.home, signal }), signal);

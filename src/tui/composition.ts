@@ -62,7 +62,7 @@ export function createDefaultResources(options: { home: string; isolatedHome: bo
   const discovery = createLocalDiscoveryService(isolatedHome ? { home } : {});
   const membership = createSessionMembershipService({ baseDir, discovery });
   const overview = createLocalOverview({ home, discovery, nativeEnvironment: isolatedHome ? 'isolated' : 'inherit' });
-  const ssh = createSshApplication({ home });
+  const ssh = createSshApplication({ home, ...(isolatedHome ? { configFile: join(home, '.ssh', 'config'), env } : {}) });
   const sessions = createSessionsResource({ discovery, membership, relatedResources: ['deliveries', 'logs'] });
   const doctor = createDoctorResource({ overview });
   const remoteSessions = createSshSessionsResource({ ssh });
