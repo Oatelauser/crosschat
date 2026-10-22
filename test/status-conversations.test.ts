@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { formatRelativeTime, runStatus, type StatusDeps } from '../src/commands/status.js';
 import { conversationSummaries } from '../src/conversation-summary.js';
 import { pairKeyOf } from '../src/conversations.js';
-import { appendSendLog, type SendLogEntry } from '../src/send-log.js';
+import { appendSendLog, createReceiptMarker, type SendLogEntry } from '../src/send-log.js';
 import { park } from '../src/outbox.js';
 import type { ClaudeSessionEntry } from '../src/claude/registry.js';
 import type { CodexThreadWithMeta } from '../src/codex/discovery.js';
@@ -160,11 +160,12 @@ describe('status --conversations --json', () => {
 });
 
 describe('status --conversations receipt recheck (B22)', () => {
-  it('re-probes an unconfirmed codex delivery with the row ref and flips to 已确认', async () => {
+  it('re-probes the actual recipient with the original envelope digest after the pair ref changes', async () => {
     const probes: Array<[string, string]> = [];
+    const marker = createReceiptMarker('t-9', 'full sent envelope with c6');
     const d = deps(
-      { [keyAB]: { ref: 'mc1_probe', updatedAt: NOW - 60_000 } },
-      [entry({ from: 'claude:sc-1', turn: 2, receipt: 'unconfirmed', replyRef: 'mc1_probe' })],
+      { [keyAB]: { ref: 'mc1_newer_pair_ref', updatedAt: NOW - 60_000 } },
+      [entry({ from: 'claude:sc-1', turn: 2, receipt: 'unconfirmed', replyRef: 'mc1_probe', receiptMarker: marker })],
       0,
       async (threadId, marker) => {
         probes.push([threadId, marker]);
@@ -172,19 +173,21 @@ describe('status --conversations receipt recheck (B22)', () => {
       },
     );
     const row = await firstRow(d);
-    expect(probes).toEqual([['t-9', 'mc1_probe']]); // codex endpoint of the pair, row ref as marker
+    expect(probes).toEqual([['t-9', marker]]);
     expect(row).toContain('delivered');
     expect(row).toContain('已确认');
     expect(row).not.toContain('回执未确认');
     // JSON reflects the post-recheck verdict, not the stale log value.
     const parsed = JSON.parse(await runStatus(d, true, true)) as Array<{ receipt: string }>;
     expect(parsed[0]!.receipt).toBe('confirmed');
+    expect(parsed[0]).not.toHaveProperty('receiptProbe');
+    expect(parsed[0]).not.toHaveProperty('receiptMarker');
   });
 
   it('keeps 回执未确认 when the recheck still cannot see the rollout write', async () => {
     const d = deps(
       { [keyAB]: { ref: 'mc1_slow', updatedAt: NOW - 60_000 } },
-      [entry({ from: 'claude:sc-1', turn: 1, receipt: 'unconfirmed', replyRef: 'mc1_slow' })],
+      [entry({ from: 'claude:sc-1', turn: 1, receipt: 'unconfirmed', replyRef: 'mc1_slow', receiptMarker: createReceiptMarker('t-9', 'slow envelope') })],
       0,
       async () => 'unconfirmed',
     );
@@ -234,6 +237,32 @@ describe('status --conversations receipt recheck (B22)', () => {
     expect(text).toContain('已确认');
     expect(text).not.toContain('回执未确认');
     expect(text).toContain('queued');
+  });
+
+  it('uses the last send target when both conversation endpoints are Codex', async () => {
+    const otherCodex = { p: 'codex', id: 'a-first' } as const;
+    const marker = createReceiptMarker('t-9', 'last sent envelope');
+    const probes: Array<[string, string]> = [];
+    const d = deps(
+      { [pairKeyOf(otherCodex, codexB)]: { ref: 'unrelated-pair-ref', updatedAt: NOW } },
+      [entry({ from: 'codex:a-first', receipt: 'unconfirmed', receiptMarker: marker })],
+      0,
+      async (threadId, evidence) => { probes.push([threadId, evidence]); return 'confirmed'; },
+    );
+    expect(await firstRow(d)).toContain('已确认');
+    expect(probes).toEqual([['t-9', marker]]);
+  });
+
+  it('keeps missing receipt evidence unconfirmed instead of guessing the current ref', async () => {
+    const probes: Array<[string, string]> = [];
+    const d = deps(
+      { [keyAB]: { ref: 'latest-pair-ref', updatedAt: NOW } },
+      [entry({ from: 'claude:sc-1', receipt: 'unconfirmed', replyRef: 'old-send-ref' })],
+      0,
+      async (threadId, marker) => { probes.push([threadId, marker]); return 'confirmed'; },
+    );
+    expect(await firstRow(d)).toContain('回执未确认');
+    expect(probes).toEqual([]);
   });
 });
 

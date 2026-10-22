@@ -13,6 +13,7 @@ const WHITELISTED_METHODS = new Set([
   'initialize',
   'thread/list',
   'thread/resume',
+  'thread/read',
   'turn/start',
   'turn/steer',
   'thread/unsubscribe',

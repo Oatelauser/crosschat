@@ -4,7 +4,7 @@
 
 # crosschat
 
-**让本机的 Claude Code 与 Codex CLI 互相对话** —— 无守护进程、原生投递、双向实测。
+**让本机的 Claude Code、Codex 桌面版与 Codex CLI 互相对话** —— 原生投递、跨机通信。
 
 📖 **[crosschat book](https://oatelauser.github.io/crosschat/)** —— 在线成书教程（前言与单机/ssh 两课已成，其余逐模块上线中）
 
@@ -34,12 +34,13 @@
 | Node.js | ≥ 22 | |
 | Claude Code | 任意近期版 | 接收需 `crosschat claude` 启动（工具自动注入许可） |
 | Codex CLI | ≥ 0.160 推荐 | 0.160 daemon 支持开窗投递；接收需 app-server daemon |
+| Codex 桌面版 | 提供本机原生 IPC 的版本 | 直接连接桌面会话 owner，与 CLI daemon 独立 |
 | OS | Windows（稳定）· Linux/WSL（experimental，1.3.0） | mac 未实测（unix 实现共享，理论可达） |
 
 ```bash
 npm i -g @oatelauser/crosschat --registry=https://registry.npmjs.org    # 一行安装（提供 crosschat / multichat 双命令；显式官方源，防镜像滞后装旧版）
 crosschat install-skills          # 协议教学装到两侧 agent
-codex app-server daemon start     # 仅 codex 会话参与时需要，纯 claude 互聊可跳过（干净终端启动，勿在 Claude 会话内）
+codex app-server daemon start     # 仅 Codex CLI 接收端需要；桌面版使用自己的原生通道
 ```
 
 <details><summary>从源码安装（开发者）</summary>
@@ -208,6 +209,7 @@ ssh 配置方向一句话：**每台机写自己的 `~/.ssh/config`，内容是"
 
 ```
 crosschat send --to <名字> --body "<正文>"          # 新消息（名字含空格加引号；未命名 codex 线程可用 id8 或完整 id 寻址，status 可见）
+crosschat send --to <名字> --delivery steer --body "<追加内容>" # 忙时追加当前任务，空闲时唤醒
 crosschat send --conversation <ref|c柄> --body "<正文>" # 回复（照抄信封里的命令或 delivered 行尾的 cN）
 crosschat send --via ssh:<对端hostname> --to <名/id8> --body "…"  # 跨机发送（见 📡 通信方式）
 crosschat send --via tcp:<星>:<机器>:<会话> --body "…"   # tcp 三段直达星成员（免 --to；见跨机通信手册）

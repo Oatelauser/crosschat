@@ -789,6 +789,7 @@ async function runForegroundBroker(deps: ServeDeps): Promise<number> {
           id: frame.id,
           ...(fromMachine === undefined ? {} : { fromMachine }),
           payload: frame.body,
+          ...(frame.delivery === undefined ? {} : { delivery: frame.delivery }),
           to: frame.to,
           conversation: frame.conversation,
           origin: frame.origin,

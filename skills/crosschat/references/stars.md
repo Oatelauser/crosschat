@@ -6,7 +6,7 @@
 |---|---|---|
 | `crosschat serve --detach` + `serve --add-star <星名>` | broker 机 | **起服务**（永不造星）+ **造星**（首星同此命令；热生效，加删改星免重启；零星合法） |
 | `crosschat serve --connect <星>` | node 机 | **机器接入**：节点守护（机器级收发+聚合器） |
-| `crosschat claude/codex -n <名> --connect <星>` | 会话 | **会话注册入册**（1.7.0 起默认**永久**：退出=下线，册位保留） |
+| `crosschat claude/codex -n <名> --connect <星>` | 会话 | **会话注册入册**（默认**永久**：退出=下线，册位保留） |
 | 同上 + `--rm` | 会话 | **临时**（docker --rm 语义）：退出即离册零痕迹——一次性 worker 用它 |
 
 - 造星/删星/发钥是 broker 机管理员（或持星管理钥的星管理员，`--via tcp:<星>`）的事；agent 会话侧一般只碰 `--connect`/`--rm`。
@@ -36,7 +36,7 @@
 ## 恢复配方（发给 tcp 三段地址出问题时）
 
 - 报 `SESSION_SUPERSEDED` → 对端已换轨：照报错里的接任者地址改投。
-- 报 `SESSION_OFFLINE` → 对端下线：等它 resume 复活（册位在，几分钟内事），或走 extends 接任 / id8 点对点。
+- 报 `SESSION_OFFLINE` → 对端下线：等同 id 会话 resume 后上线，或走 extends 接任 / id8 点对点。
 - 报 `SESSION_NOT_MEMBER` → 名字从未入册/已删：让对端入星或 adopt 收编。
 - 报 `MACHINE_BOUND` → 对端换机器了：原机 member-remove 后新机重新入星。
 - **引用续线不看星籍**：`--conversation` 回复走引用路由，成员在不在册都照常互通——只有**主动**三段寻址才吃上述错误。

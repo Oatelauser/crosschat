@@ -18,6 +18,7 @@ import { decodeRef } from '../ref.js';
 import { CODEX_ENDPOINT_MAX_BODY_BYTES } from '../limits.js';
 import type { SendLogEntry } from '../send-log.js';
 import type { SendArgs, SendDeps, SendResult } from '../application/send/types.js';
+import { resolveDeliveryMode } from '../delivery-mode.js';
 import { formatSendResult } from '../application/send/format.js';
 import { CAP_CHALLENGE_AUTH, CAP_MULTI_STAR, encodeFrame, ERR, hasCap, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
 import type { AdminOpResultFrame, AuthChallengeFrame, ErrorFrame, FileResultFrame, Frame, InfoFrame, MemberRemoveResultFrame, ReceiptFrame, RosterMachine, StatusPayload, StatusResultFrame } from './protocol.js';
@@ -299,6 +300,7 @@ export async function runViaTcpSend(args: SendArgs, body: string | undefined, de
 }
 
 export async function sendViaTcp(args: SendArgs, body: string | undefined, deps: SendDeps): Promise<SendResult> {
+  const deliveryMode = resolveDeliveryMode(args.delivery);
   // B1：`tcp:<选择器>:<目标>`——第一个':'前是选择器（星名/starId 前缀），其余是目标
   const { selector, target } = parseTcpViaSpec(args.via!);
   if (target === '') {
@@ -368,9 +370,9 @@ export async function sendViaTcp(args: SendArgs, body: string | undefined, deps:
       throw new MultichatError('BODY_REQUIRED', 'Message body is required: pass --body "<text>" or pipe the message on stdin.');
     }
     const out = await sendBody(conn, args, finalBody, origin, target, timeoutMs, deps, caller, logNow, logTo, transportFailure);
-    if (tmpFile === undefined) return out;
+    if (tmpFile === undefined) return { ...out, deliveryMode };
     rmSync(tmpFile, { force: true });
-    return { ...out, receipt: { ...out.receipt, file: landedPath }, automaticFile: landedPath };
+    return { ...out, receipt: { ...out.receipt, file: landedPath }, automaticFile: landedPath, deliveryMode };
   } catch (err) {
     if (tmpFile !== undefined && err instanceof Error) {
       err.message += `\n正文原文已保留: ${tmpFile}`;
@@ -458,6 +460,7 @@ async function sendBody(
     conversation: args.conversation,
     body,
     origin,
+    ...(args.delivery === undefined ? {} : { delivery: args.delivery }),
   });
   const frame = await conn
     .waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id, timeoutMs)

@@ -9,7 +9,7 @@ export function formatSendResult(result: SendResult, json = false): string {
   if (receipt.status === 'parked') {
     const location = route === undefined ? '' : `（位于 ${route.machine}）`;
     output = [
-      `已寄存给 ${to}（对方忙，未送达）。队列共 ${receipt.queue ?? 1} 条，看门狗每 0.5–5 分钟自动重试，无需手动 status。`,
+      `已寄存给 ${to}（对方忙，未送达）。队列共 ${receipt.queue ?? 1} 条，看门狗在目标空闲后自动补投，无需手动 status。`,
       `人工随时可读滞留内容: ${receipt.mailbox ?? ''}${location}`,
       handle === undefined ? `reply-ref: ${receipt.replyRef}` : `续话: ${handle}`,
     ].join('\n');

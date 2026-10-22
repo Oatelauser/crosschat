@@ -139,6 +139,7 @@ async function senderOn(url: string, auth: string): Promise<TestClient> {
 interface FakeSendCapture {
   deps: SendDeps;
   delivered: string[];
+  modes: unknown[];
   sessionNames: Map<string, string>;
 }
 
@@ -147,6 +148,7 @@ function fakeSendDeps(withSession = true): FakeSendCapture {
   const delivered: string[] = [];
   const capture: FakeSendCapture = {
     delivered,
+    modes: [],
     sessionNames: new Map(withSession ? [['sess-boss', 'boss']] : []),
     deps: {
       env: {},
@@ -158,8 +160,9 @@ function fakeSendDeps(withSession = true): FakeSendCapture {
             }
           : { sessions: [], malformed: 0 },
       listCodexThreads: async () => [],
-      deliverClaude: async (_t, content) => {
+      deliverClaude: async (_t, content, options) => {
         delivered.push(content);
+        capture.modes.push(options?.mode);
         return { status: 'delivered' };
       },
       deliverCodex: async () => ({ status: 'accepted', turnId: 't' }),
@@ -209,7 +212,7 @@ describe('node client lifecycle', () => {
     expect(await runPromise.then(() => 'done')).toBe('done');
   }, 10_000);
 
-  it('maps a deliver frame to runSend and returns a structured result through the broker', async () => {
+  it.each(['queue', 'steer'] as const)('maps a %s deliver frame to runSend and returns a structured result through the broker', async (delivery) => {
     const harness = await startBroker();
     // 036：钥匙必绑星——B1 期"注册表无 starId 也能收发"锚点随葬（starOf 兜底
     // 已删，无 id 星连接按 BAD_AUTH 拒）；ref 随 connected 回填的条目 starId 签发
@@ -220,7 +223,7 @@ describe('node client lifecycle', () => {
     void client.run();
     await client.waitForState('online');
     const sender = await senderOn(harness.url, key('n'));
-    sender.send({ op: 'send', id: 's1', targetMachine: 'node-host', to: 'boss', body: 'hello via tcp', origin: undefined });
+    sender.send({ op: 'send', id: 's1', targetMachine: 'node-host', to: 'boss', body: 'hello via tcp', origin: undefined, delivery });
     const receipt = await sender.waitFor((f) => f.op === 'receipt' && f.id === 's1');
     expect(receipt).toMatchObject({ op: 'receipt', id: 's1', status: 'delivered' });
     if (receipt.op === 'receipt') {
@@ -233,6 +236,7 @@ describe('node client lifecycle', () => {
     // 正文与 to 到达了本机 runSend（与 ssh 远端 CLI 同权）
     expect(capture.delivered.length).toBe(1);
     expect(capture.delivered[0]).toContain('hello via tcp');
+    expect(capture.modes).toEqual([delivery]);
     await client.stop();
   }, 10_000);
 
@@ -543,7 +547,7 @@ describe('B1 multi-star: delivery pipeline stamps starId into issued refs', () =
     await client.stop();
   }, 10_000);
 
-  it('broker self-delivery: the receipt ref carries the registry starId', async () => {
+  it.each(['queue', 'steer'] as const)('broker %s self-delivery: the receipt ref carries the registry starId', async (delivery) => {
     const dir = mkdtempSync(join(root, 'b1self-'));
     const registryFile = registryFileOf(dir);
     // 预留一个空闲端口写进注册表（runServe 裸跑读注册表端口）
@@ -556,6 +560,7 @@ describe('B1 multi-star: delivery pipeline stamps starId into issued refs', () =
       stars: [{ starId: STAR, nodes: [{ label: 'self', key: key('s'), machineId: 'BROKER-MID', machineName: 'broker-host', addedAt: '2026-01-01T00:00:00.000Z' }] }],
     });
     let stop: (() => void) | undefined;
+    const capture = fakeSendDeps(true);
     const deps: ServeDeps = {
       baseDir: dir,
       stdout: () => {},
@@ -568,7 +573,7 @@ describe('B1 multi-star: delivery pipeline stamps starId into issued refs', () =
       onSignal: (_sig, cb) => {
         stop = cb;
       },
-      makeSendDeps: () => fakeSendDeps(true).deps,
+      makeSendDeps: () => capture.deps,
     };
     const servePromise = runServe({}, deps);
     // broker 起监听前 sender 可能被拒——小步重试握手
@@ -581,10 +586,11 @@ describe('B1 multi-star: delivery pipeline stamps starId into issued refs', () =
       }
     }
     expect(sender).toBeDefined();
-    sender!.send({ op: 'send', id: 's1', targetMachine: 'broker-host', to: 'boss', body: 'self hello' });
+    sender!.send({ op: 'send', id: 's1', targetMachine: 'broker-host', to: 'boss', body: 'self hello', delivery });
     const receipt = await sender!.waitFor((f) => f.op === 'receipt' && f.id === 's1');
     if (receipt.op !== 'receipt') throw new Error('expected receipt');
     expect(decodeRef(receipt.replyRef ?? '').starId).toBe(STAR);
+    expect(capture.modes).toEqual([delivery]);
     expect(stop).toBeDefined();
     stop!();
     expect(await servePromise).toBe(0);

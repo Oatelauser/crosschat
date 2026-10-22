@@ -42,6 +42,17 @@ const deliveredReceipt: ResultFrame = {
 };
 
 describe('typed TCP receipt evidence', () => {
+  it.each(['queue', 'steer'] as const)('carries %s through the sender and broker local route', async (delivery) => {
+    const frames: SendFrame[] = [];
+    const harness = await startBroker(async (frame) => {
+      frames.push(frame);
+      return { ...deliveredReceipt, id: frame.id };
+    });
+    const result = await sendViaTcp({ conversation: 'mc1_x', via: 'tcp:broker-host', delivery }, 'test', makeFixture(harness).deps);
+    expect(frames).toHaveLength(1);
+    expect(frames[0]?.delivery).toBe(delivery);
+    expect(result.deliveryMode).toBe(delivery);
+  });
   it('reports queued evidence internally while preserving the delivered wire and CLI contract', async () => {
     const harness = await startBroker(async (frame) => ({
       ...deliveredReceipt, id: frame.id,
@@ -307,9 +318,11 @@ describe('send --via tcp: branch in runSend', () => {
     const inboxDir = mkdtempSync(join(root, 'inbox-'));
     const partsDir = mkdtempSync(join(root, 'parts-'));
     const bodies: string[] = [];
+    const modes: unknown[] = [];
     const h = await startBroker(
       async (frame) => {
         bodies.push(frame.body);
+        modes.push(frame.delivery);
         return { ...deliveredReceipt, id: frame.id };
       },
       { inboxDir, partsDir },
@@ -317,11 +330,12 @@ describe('send --via tcp: branch in runSend', () => {
     const fx = makeFixture(h);
     const before = new Set(msgTemps());
     const big = 'x'.repeat(1_048_577);
-    const out = await runSend({ via: 'tcp:broker-host', conversation: 'mc1_x', bodyArg: big }, fx.deps);
+    const out = await runSend({ via: 'tcp:broker-host', conversation: 'mc1_x', bodyArg: big, delivery: 'steer' }, fx.deps);
     expect(out).toContain('delivered to boss@broker-host');
     expect(out).toContain('正文超限已自动转文件通道：');
     // 投递的正文是文件通道的自动通知（带对端落地路径），不是超长原文
     expect(bodies).toHaveLength(1);
+    expect(modes).toEqual(['steer']);
     expect(bodies[0]).toContain('已送达');
     expect(bodies[0]).toContain(join(inboxDir));
     expect(bodies[0]).not.toContain(big.slice(0, 64));

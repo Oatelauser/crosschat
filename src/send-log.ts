@@ -1,5 +1,7 @@
 import { closeSync, fstatSync, mkdirSync, openSync, readSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 import { appendWithRotate } from './log-rotate.js';
 import { stateRoot } from './state-root.js';
 import { findRolloutFile } from './codex/rollout-meta.js';
@@ -41,6 +43,13 @@ export interface SendLogEntry {
   code?: string;
   /** Rollout confirmation for codex deliveries; absent = not attempted. */
   receipt?: 'confirmed' | 'unconfirmed';
+  /** Target-bound digest of the exact transmitted envelope; never stores its body. */
+  receiptMarker?: string;
+}
+
+/** Same evidence is used by the initial probe and a later status recheck. */
+export function createReceiptMarker(threadId: string, envelope: string): string {
+  return `sha256:${createHash('sha256').update(threadId).update('\0').update(envelope).digest('hex')}`;
 }
 
 export function appendSendLog(file: string, entry: SendLogEntry): void {
@@ -61,8 +70,9 @@ export interface ConfirmOpts {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Poll the recipient thread's rollout file until the marker (the unique
- * reply-ref embedded in every envelope) shows up — the receipt. The rollout
+ * Poll the recipient thread's rollout until a decoded user message has the
+ * exact target-bound envelope digest. The short reply handle is reusable and
+ * the full reply-ref is not in the transmitted envelope. The rollout
  * write can lag turn/start acceptance by a moment, hence the short retry.
  * Never throws; 'unconfirmed' means "not seen within the budget", not "lost".
  */
@@ -72,11 +82,12 @@ export async function confirmInRollout(
   marker: string,
   opts: ConfirmOpts = {},
 ): Promise<'confirmed' | 'unconfirmed'> {
+  if (!/^sha256:[0-9a-f]{64}$/.test(marker)) return 'unconfirmed';
   const tries = opts.tries ?? 5;
   const delayMs = opts.delayMs ?? 300;
   for (let attempt = 0; attempt < tries; attempt++) {
     const file = findRolloutFile(codexHome, threadId);
-    if (file !== undefined && fileContains(file, marker)) return 'confirmed';
+    if (file !== undefined && fileContainsReceipt(file, threadId, marker)) return 'confirmed';
     await sleep(delayMs);
   }
   return 'unconfirmed';
@@ -87,7 +98,7 @@ export const SEND_LOG_TAIL_LINES = 200;
 
 /**
  * Last ~maxLines entries, read backwards from the end (stat the size, then
- * 64KB chunks like fileContains below) so a large log costs a bounded read.
+ * 64KB chunks like the receipt scanner below) so a large log costs a bounded read.
  * The window's first line is dropped as a fragment when the cut landed
  * mid-line; unparsable lines are skipped — the log is best-effort anyway.
  * Missing file → empty; never throws.
@@ -132,8 +143,10 @@ export function readSendLogTail(file: string, maxLines: number = SEND_LOG_TAIL_L
   }
 }
 
-/** Chunked substring scan; carries a tail so a marker spanning chunks is found. */
-function fileContains(path: string, marker: string): boolean {
+/** Bound each decoded record while streaming; unrelated large tool output is skipped. */
+const MAX_RECEIPT_RECORD_CHARS = 4 * 1024 * 1024;
+
+function fileContainsReceipt(path: string, threadId: string, marker: string): boolean {
   let fd: number | undefined;
   try {
     fd = openSync(path, 'r');
@@ -142,17 +155,57 @@ function fileContains(path: string, marker: string): boolean {
   }
   try {
     const buf = Buffer.alloc(64 * 1024);
+    const decoder = new StringDecoder('utf8');
     let carry = '';
+    let oversized = false;
     for (;;) {
       const n = readSync(fd, buf, 0, buf.length, null);
-      if (n <= 0) return false;
-      const text = carry + buf.subarray(0, n).toString('utf8');
-      if (text.includes(marker)) return true;
-      carry = text.slice(Math.max(0, text.length - marker.length));
+      if (n <= 0) return false; // a partial final JSON line is not persisted receipt evidence
+      const text = decoder.write(buf.subarray(0, n));
+      let start = 0;
+      for (;;) {
+        const end = text.indexOf('\n', start);
+        if (end === -1) break;
+        if (!oversized && carry.length + end - start <= MAX_RECEIPT_RECORD_CHARS &&
+            lineConfirms(carry + text.slice(start, end), threadId, marker)) return true;
+        carry = '';
+        oversized = false;
+        start = end + 1;
+      }
+      if (!oversized) {
+        carry += text.slice(start);
+        if (carry.length > MAX_RECEIPT_RECORD_CHARS) {
+          carry = '';
+          oversized = true;
+        }
+      }
     }
   } catch {
     return false;
   } finally {
     closeSync(fd);
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function lineConfirms(line: string, threadId: string, marker: string): boolean {
+  let record: unknown;
+  try {
+    record = JSON.parse(line);
+  } catch {
+    return false;
+  }
+  if (!isRecord(record) || !isRecord(record.payload)) return false;
+  const payload = record.payload;
+  if (record.type === 'event_msg' && payload.type === 'user_message' && typeof payload.message === 'string') {
+    return createReceiptMarker(threadId, payload.message) === marker;
+  }
+  if (record.type !== 'response_item' || payload.type !== 'message' || payload.role !== 'user' ||
+      !Array.isArray(payload.content)) return false;
+  return payload.content.some((part: unknown) => isRecord(part) &&
+    (part.type === 'input_text' || part.type === 'text') && typeof part.text === 'string' &&
+    createReceiptMarker(threadId, part.text) === marker);
 }

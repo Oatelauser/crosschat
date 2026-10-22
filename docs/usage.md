@@ -19,7 +19,7 @@
 ### 往复规则
 
 1. 收到方看到**信封消息**（`from-name` + `turn="N"` + 回复提示）
-2. 回复 = **逐字照抄回复提示里的命令**，换掉 `<你的回复>`——引用自动轮转，无需记任何历史
+2. 回复保留提示中的命令名和路由，换掉 `<你的回复>`；正文可改走 stdin，需要即时追加时显式增加 `--delivery steer`
 3. 防失控：每对端点 30 条/60 秒限流
 
 ### 轮次与终止
@@ -28,20 +28,19 @@
 
 ## 📡 投递语义矩阵
 
-| 接收方 | 状态 | 行为 |
-|---|---|---|
-| claude（`crosschat claude` 启动） | 窗口开 | ✅ 秒达，会话内出现信封消息 |
-| claude（裸 `claude` 启动） | 任何 | ❌ 无接收许可（换 `crosschat claude` 重启） |
-| codex（daemon ≥0.160） | 窗口开/关 | ✅ 送达（headless 执行；TUI 不实时刷新，翻历史可见） |
-| codex（daemon ≥0.160） | turn 进行中（忙） | ✅ **入队即达**：`queued`（按线程串行，轮结束瞬间落历史并被处理）——与 Claude 收件箱同粒度 |
-| codex（旧 daemon ≤0.157 / `--no-daemon`） | 窗口开 | ⏳ 等待 ~10s，关窗瞬间送达；超时 `parked` 入发件箱（看门狗自动重投） |
-| codex | 排队被旧 daemon 拒绝等罕见态 | 📮 `parked` 入发件箱（新消息排队不插队），看门狗每 0.5–5 分钟自动重投 |
+每条消息支持 `--delivery queue|steer`，默认 queue；回复独立选择，不继承来信。用户明确让当前代理用 crosschat 与指定会话聊天、转达或代发时，代理必须显式用 steer。该规则也写在安装到两侧的 skill 入口。
 
-**不对称速记**：claude 收发都随意；codex 收信在 0.160+ 开窗关窗均可，关窗永远是最稳路径。
+| 接收方 | 忙时 queue | 忙时 steer | 空闲时两种模式 |
+|---|---|---|---|
+| Claude（已启用接收许可） | 原生轮后队列 | 追加当前轮，保留在途工具 | 唤醒新轮 |
+| Codex Desktop（原生 owner 可达） | 本机 outbox，等原轮结束补投 | 向当前桌面任务追加 | 原生通道启动新轮 |
+| Codex CLI（同宿主 app-server 可达） | 本机 outbox，等原轮结束补投 | 用真实 activeTurnId 追加 | 同宿主启动新轮 |
+
+Codex 忙时 `turn/start` 在实测 CLI 0.163.0 会合并进当前任务，不能当作轮后排队证据，因此 queue 在写入前寄存。显式 queue 的 worker 每秒重新检查；旧寄存记录仍沿用既有退避。写入不明的队首暂停自动补投，避免重复；正文保留在 mailbox 待核实。
 
 ## ⚠️ 边界与限制
 
 单条 ≤16KiB（`--max-body-kb` / `CROSSCHAT_MAX_BODY_KIB` 可提额；端点封顶 claude 64KiB、codex 1MiB，到顶只能落盘；tcp 形态单条同按 1MiB 预检，大内容走 `--file`——细节见[转发器手册](broker.md)）；轮次预算可设（`--max-turn` / `CROSSCHAT_MAX_TURN`，信封显示 turn="N/M"，软提醒不硬拦）；每对端点 30 条/60s；发件箱每线程 200 条（满时读 `~/.crosschat/mailbox/<线程ID>.md` 镜像取回内容，全平台同路径）；信任边界=同一系统用户（Windows 用户 / unix uid）；接收许可仅 `crosschat claude` 启动的会话。
 
-**daemon 依赖（重要）**：向 codex 会话投递走 `codex app-server proxy`，它连接**运行中的 app-server daemon** control socket。要获得完整能力（TUI 开窗可投、忙时入队），需要 `codex app-server daemon start` 且 daemon ≥0.160，TUI 用同版本 CLI 打开（0.160 起 TUI 自动附着 daemon）。daemon 未运行时投递会报 `CODEX_PROXY_SPAWN_FAILED` 并提示启动命令；旧版本 daemon 下开窗投递与忙时入队退化为「关窗投递 + 发件箱」。重启电脑后需重新 `codex app-server daemon start`。
+**原生宿主**：Desktop 使用桌面应用自己的 IPC 与 owner，不依赖 CLI daemon；另开一个 CLI daemon 不能替代当前桌面 owner。CLI 走 `codex app-server proxy`，须连接目标 CLI 所在的 app-server；默认 daemon 未运行会报 `CODEX_PROXY_SPAWN_FAILED`。已绑定 Desktop owner 后发生错误，不改投 CLI。会话等待批准时由用户处理，crosschat 不代答。
 

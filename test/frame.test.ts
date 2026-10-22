@@ -11,7 +11,7 @@ describe('encodeUserFrame', () => {
     const frame = JSON.parse(line) as Record<string, unknown>;
     expect(frame.msgV).toBe(1);
     expect(frame.type).toBe('user');
-    expect(frame.priority).toBe('next');
+    expect(frame.priority).toBe('later');
     expect(frame.message).toEqual({ role: 'user', content: 'hello world' });
     expect(typeof frame.msg_id).toBe('string');
     expect(frame.msg_id).toMatch(UUID_RE);
@@ -25,6 +25,12 @@ describe('encodeUserFrame', () => {
       (JSON.parse(encodeUserFrame('x', '11111111-2222-4333-8444-555555555555')) as { msg_id: string })
         .msg_id,
     ).toBe('11111111-2222-4333-8444-555555555555');
+  });
+
+  it('maps steering to next without using the interrupting now priority', () => {
+    const frame = JSON.parse(encodeUserFrame('current task supplement', 'fixed-id', 'steer'));
+    expect(frame.priority).toBe('next');
+    expect(frame.msg_id).toBe('fixed-id');
   });
 
   it('JSON-escapes content without breaking the single-line shape', () => {

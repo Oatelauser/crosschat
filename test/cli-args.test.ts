@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { drainOutboxAtEntry, parseSendArgs, parseStatusArgs } from '../src/cli.js';
-import { park } from '../src/outbox.js';
+import { outboxCount, park } from '../src/outbox.js';
 import { MultichatError } from '../src/errors.js';
 
 function expectUsage(fn: () => unknown, needle: string): void {
@@ -148,6 +148,19 @@ describe('drainOutboxAtEntry', () => {
       err: (line) => lines.push(line),
     }).then(() => lines);
   }
+
+  it('explicit steer skips entry draining and leaves older queue messages intact', async () => {
+    const isolated = mkdtempSync(join(outboxDir, 'steer-'));
+    park(isolated, 'older-target', { envelope: 'older', toName: 'worker' });
+    const calls: string[] = [];
+    await drainOutboxAtEntry({
+      delivery: 'steer', outboxDir: isolated, sendLogFile,
+      deliverCodex: async (threadId) => { calls.push(threadId); },
+      err: (line) => calls.push(line),
+    });
+    expect(calls).toEqual([]);
+    expect(outboxCount(isolated, 'older-target')).toBe(1);
+  });
 
   it('reports one stderr line per relieved thread, with the short drain wait', async () => {
     park(outboxDir, 't-cli-1', { envelope: 'e-1', toName: 'alpha' });

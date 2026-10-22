@@ -1,33 +1,34 @@
 import { MultichatError } from '../errors.js';
 import {
   openCodexSession,
+  normalizeThreadStatus,
   type CodexSession,
   type CodexSessionFactory,
   type CodexThreadStatus,
 } from './client.js';
 import { CodexRpcRejectedError } from './rpc.js';
+import { resolveDeliveryMode } from '../delivery-mode.js';
+import type { DeliveryMode, DeliveryOptions } from '../delivery-mode.js';
+import { DesktopIpcError, openDesktopThread } from './desktop-ipc.js';
+import type { DesktopThreadSession } from './desktop-ipc.js';
 
 /**
- * One-shot delivery of a message into a Codex thread. Every operation runs the
- * full fresh flow: spawn proxy (-> daemon control socket) -> initialize ->
- * resume -> disposition -> turn/start -> confirm inProgress -> unsubscribe ->
- * close. Busy threads no longer wait: on daemon >=0.160 a turn/start against
- * a busy thread is ACCEPTED and queued (serialized per thread; measured
- * 2026-10-03, probe thread 01a10009-b314), landing in history the moment the
- * running turn ends — inbox semantics. Polling remains only for a
- * not-yet-loaded thread and for the legacy writer-held rejection (old daemon /
- * non-attached TUI); both bail into parked (CODEX_THREAD_LOCKED /
- * CODEX_THREAD_BUSY_TIMEOUT) after a ~10s stall budget (B19) instead of 120s.
- * Approvals are never answered on the user's behalf.
+ * Deliver through the exact Desktop owner when present, otherwise the CLI
+ * app-server. Queue waits in crosschat while busy; native turn/start can append
+ * to the current task (verified with a real 0.163.0 TUI), so its acceptance is
+ * not evidence of independent queueing. Steer targets a verified active turn,
+ * or starts a new turn when idle. Unknown writes are never replayed, and
+ * approvals are never answered on the user's behalf.
  */
 
-export interface CodexDeliveryOptions {
+export interface CodexDeliveryOptions extends DeliveryOptions {
   sessionFactory?: CodexSessionFactory;
+  /** An injected CLI session disables real Desktop discovery unless this is also supplied. */
+  desktopFactory?: (threadId: string) => Promise<DesktopThreadSession | null>;
   /**
    * Stall budget for the two remaining poll loops (writer lock held, thread
    * not_loaded): default ~10s, capped at ~10s; smaller injected values (tests,
-   * drain) are honored. Busy threads never wait — daemon >=0.160 queues the
-   * turn immediately.
+   * drain) are honored. Busy queue returns immediately for the outbox worker.
    */
   busyTimeoutMs?: number;
   /** Re-resume poll interval while waiting for a writer-locked or loading thread (default 3s). */
@@ -47,6 +48,7 @@ const DEFAULT_POLL_INTERVAL_MS = 3_000;
 
 /** Server-side rejection text when a codex TUI window holds the thread writer. */
 const ACTIVE_WRITER_PATTERN = /already has an active writer/i;
+const NO_ACTIVE_TURN_PATTERN = /\bno active turn\b|\bactive turn (?:already )?(?:ended|finished)\b|\bturn is not active\b/i;
 /**
  * Server-side rejection texts when the thread does not exist (deleted or
  * archived); same evidence embassy's codex transport classifies as not_found.
@@ -64,6 +66,12 @@ export async function deliverToCodexThread(
   content: string,
   options: CodexDeliveryOptions = {},
 ): Promise<CodexDeliveryResult> {
+  const mode = resolveDeliveryMode(options.mode);
+  const desktopFactory = options.desktopFactory ?? (options.sessionFactory === undefined ? openDesktopThread : undefined);
+  if (desktopFactory !== undefined) {
+    const desktop = await desktopFactory(threadId);
+    if (desktop !== null) return deliverDesktop(desktop, content, mode);
+  }
   const stallTimeoutMs = Math.min(options.busyTimeoutMs ?? STALL_PARK_TIMEOUT_MS, STALL_PARK_TIMEOUT_MS);
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   const sessionFactory = options.sessionFactory ?? openCodexSession();
@@ -76,16 +84,14 @@ export async function deliverToCodexThread(
   }
 
   let resumed = false;
-  /** True when the turn/start below queues onto a running turn (daemon >=0.160). */
-  let queuedOnBusyThread = false;
+  let threadBusy = false;
   try {
     try {
       await session.initialize();
       const deadline = Date.now() + stallTimeoutMs;
-      // Disposition loop: idle -> proceed; busy -> proceed too (daemon
-      // >=0.160 accepts turn/start against a busy thread and serializes it —
-      // measured inbox semantics); waiting_approval -> APPROVAL_REQUIRED
-      // (never answered for the user); system_error -> fail; a TUI
+      // Disposition loop: idle -> start; busy -> steer or defer queue;
+      // waiting_approval -> APPROVAL_REQUIRED (never answered for the user);
+      // system_error -> fail; a TUI
       // active-writer rejection or not_loaded keep polling (legacy old-daemon
       // path; the server also loads asynchronously after resume).
       let writerHeld = false;
@@ -117,7 +123,7 @@ export async function deliverToCodexThread(
         if (status !== undefined) {
           resumed = true;
           if (status === 'idle' || status === 'busy') {
-            queuedOnBusyThread = status === 'busy';
+            threadBusy = status === 'busy';
             break;
           }
           if (status === 'waiting_approval') {
@@ -164,20 +170,18 @@ export async function deliverToCodexThread(
       throw protocolFailure(`codex setup (initialize/resume) failed for ${threadId}.${detail}`, err);
     }
 
+    if (mode === 'queue' && threadBusy) {
+      throw new MultichatError('CODEX_THREAD_BUSY_TIMEOUT', 'Codex thread is busy; the message must wait in the crosschat queue.');
+    }
+    if (mode === 'steer' && threadBusy) {
+      const steered = await steerCli(session, threadId, content);
+      if (steered !== undefined) return steered;
+    }
     let turn;
     try {
       turn = await session.startTurn(threadId, content);
     } catch (err) {
       if (err instanceof CodexRpcRejectedError) {
-        // An old daemon may reject a turn/start against a busy thread where
-        // 0.160+ queues it: surface as BUSY so the outbox parks it.
-        if (queuedOnBusyThread) {
-          throw new MultichatError(
-            'CODEX_THREAD_BUSY_TIMEOUT',
-            `Codex thread ${threadId} is busy and this daemon does not queue turns: ${err.message}`,
-            { cause: err },
-          );
-        }
         throw new MultichatError(
           'CODEX_TURN_REJECTED',
           `Codex rejected the turn for thread ${threadId}: ${err.message}`,
@@ -198,12 +202,75 @@ export async function deliverToCodexThread(
         `Turn for thread ${threadId} returned unexpected status: ${turn.status}.`,
       );
     }
-    return { status: 'accepted', turnId: turn.id, queued: queuedOnBusyThread };
+    return { status: 'accepted', turnId: turn.id, queued: false };
   } finally {
     if (resumed) {
       await session.unsubscribe(threadId).catch(() => undefined);
     }
     await session.close().catch(() => undefined);
+  }
+}
+
+function approvalRequired(threadId: string): MultichatError {
+  return new MultichatError('CODEX_APPROVAL_REQUIRED', `Codex thread ${threadId} is waiting for an approval; only the user can answer it.`);
+}
+
+async function deliverDesktop(session: DesktopThreadSession, content: string, mode: DeliveryMode): Promise<CodexDeliveryResult> {
+  try {
+    const snapshot = await session.snapshot();
+    const status = normalizeThreadStatus(snapshot.rawStatus);
+    if (status === 'waiting_approval') throw approvalRequired(session.threadId);
+    if (status === 'system_error') throw protocolFailure('Desktop thread is in system_error state.', undefined);
+    if (snapshot.idle && status === 'idle') return await desktopWrite(session, 'startTurn', content);
+    if (mode === 'queue') throw new MultichatError('CODEX_THREAD_BUSY_TIMEOUT', 'Desktop thread is busy; the message must wait in the crosschat queue.');
+    if (status !== 'busy' || snapshot.activeTurnId === null) throw protocolFailure('Desktop thread has no verified active turn or idle state.', undefined);
+    try { return await desktopWrite(session, 'steerTurn', content); }
+    catch (error) {
+      if (error instanceof DesktopIpcError && error.stage === 'rejected' && error.code === 'CODEX_NO_ACTIVE_TURN') {
+        const current = await session.snapshot();
+        if (current.idle && normalizeThreadStatus(current.rawStatus) === 'idle') return await desktopWrite(session, 'startTurn', content);
+      }
+      throw error;
+    }
+  } finally { await session.close().catch(() => undefined); }
+}
+
+async function desktopWrite(session: DesktopThreadSession, method: 'startTurn' | 'steerTurn', content: string): Promise<CodexDeliveryResult> {
+  try {
+    const turnId = await session[method](content);
+    if (typeof turnId !== 'string' || turnId === '') throw new Error('Missing native turn identity.');
+    return { status: 'accepted', turnId, queued: false };
+  } catch (error) {
+    if (error instanceof DesktopIpcError) throw error;
+    throw new MultichatError('CODEX_WRITE_UNCERTAIN', 'Desktop write acceptance could not be confirmed; it was not retried.', { cause: error });
+  }
+}
+
+async function readCliState(session: CodexSession, threadId: string) {
+  if (session.readThreadState === undefined) throw protocolFailure('This Codex session cannot attest the active turn for steer delivery.', undefined);
+  try { return await session.readThreadState(threadId); }
+  catch (error) { throw protocolFailure('Codex active turn could not be read before delivery.', error); }
+}
+
+/** undefined allows one start only after authoritative idle evidence. */
+async function steerCli(session: CodexSession, threadId: string, content: string): Promise<CodexDeliveryResult | undefined> {
+  const state = await readCliState(session, threadId);
+  if (state.status === 'waiting_approval') throw approvalRequired(threadId);
+  if (state.status === 'idle' && state.activeTurnId === null) return undefined;
+  if (state.status !== 'busy' || state.activeTurnId === null) throw protocolFailure('Codex thread has no verified active turn.', undefined);
+  try {
+    const turnId = await session.steerTurn(threadId, state.activeTurnId, content);
+    if (turnId !== state.activeTurnId) throw new Error('The native steer receipt did not match the expected active turn.');
+    return { status: 'accepted', turnId, queued: false };
+  } catch (error) {
+    if (error instanceof CodexRpcRejectedError) {
+      if (NO_ACTIVE_TURN_PATTERN.test(error.message)) {
+        const current = await readCliState(session, threadId);
+        if (current.status === 'idle' && current.activeTurnId === null) return undefined;
+      }
+      throw new MultichatError('CODEX_TURN_REJECTED', `Codex rejected steer for thread ${threadId}: ${error.message}`, { cause: error });
+    }
+    throw new MultichatError('CODEX_WRITE_UNCERTAIN', `Acceptance of steer for thread ${threadId} could not be confirmed.`, { cause: error });
   }
 }
 

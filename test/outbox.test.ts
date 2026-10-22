@@ -154,7 +154,7 @@ describe('drain', () => {
     ]);
   });
 
-  it('keeps items unchanged on any other delivery error', async () => {
+  it('retains uncertain writes for reconciliation without retrying them', async () => {
     const dir = freshDir();
     park(dir, 't-uncertain', { envelope: 'u-1', toName: 'alpha' }, 5_000);
     const results = await drain(dir, async () => {
@@ -163,7 +163,7 @@ describe('drain', () => {
     expect(results).toEqual([
       { threadId: 't-uncertain', toName: 'alpha', delivered: 0, remaining: 1, dropped: 0 },
     ]);
-    expect(itemsOf(dir, 't-uncertain')).toEqual([sansId('u-1', 'alpha', 5_000, 0)]);
+    expect(itemsOf(dir, 't-uncertain')).toEqual([{ ...sansId('u-1', 'alpha', 5_000, 0), deliveryState: 'uncertain' }]);
   });
 
   it('marks delivered items in the mailbox mirror', async () => {

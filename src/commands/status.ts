@@ -846,8 +846,9 @@ async function conversationsView(deps: StatusDeps, json: boolean, filters: Statu
   }
   if (json) {
     // Frozen JSON contract: exactly the eight summary fields (B22 added `receipt`);
-    // `endpoints`/`handle` are render-only (G0 柄列不进 json，完整 ref 字段不动).
-    return JSON.stringify(rows, (key, value) => (key === 'endpoints' || key === 'handle' ? undefined : value));
+    // Internal receipt evidence stays private just like endpoints/handle.
+    return JSON.stringify(rows, (key, value) =>
+      (key === 'endpoints' || key === 'handle' || key === 'receiptProbe' ? undefined : value));
   }
   const now = deps.now?.() ?? Date.now();
   const lines = ['会话:'];
@@ -895,8 +896,8 @@ async function endpointDisplayNames(deps: StatusDeps): Promise<Map<string, strin
 /**
  * One live re-probe per row that left the sender unconfirmed (B22): the
  * rollout write often lands after send's own 1.5s budget, so status is the
- * natural second look. Only delivered+unconfirmed rows whose pair has a codex
- * endpoint are probed (claude has no rollout concept); any verdict other than
+ * natural second look. Only delivered+unconfirmed rows carrying the original
+ * send's recipient and envelope digest are probed; any verdict other than
  * 'confirmed' leaves the row as it was — 'unconfirmed' means "not seen", the
  * row already says so.
  */
@@ -905,9 +906,8 @@ async function recheckReceipts(rows: ConversationSummary[], deps: StatusDeps): P
   if (confirm === undefined) return;
   for (const row of rows) {
     if (row.lastStatus !== 'delivered' || row.receipt !== 'unconfirmed') continue;
-    const codexId = row.endpoints.find((endpoint) => endpoint.startsWith('codex:'))?.slice('codex:'.length);
-    if (codexId === undefined) continue;
-    if ((await confirm(codexId, row.ref)) === 'confirmed') row.receipt = 'confirmed';
+    if (row.receiptProbe === undefined) continue;
+    if ((await confirm(row.receiptProbe.threadId, row.receiptProbe.marker)) === 'confirmed') row.receipt = 'confirmed';
   }
 }
 

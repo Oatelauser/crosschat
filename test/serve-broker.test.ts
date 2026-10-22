@@ -291,16 +291,16 @@ describe('broker send routing', () => {
     expect(message).toContain('bbbb2222');
   });
 
-  it('forwards deliver to the online node and maps its result back as receipt', async () => {
+  it.each(['queue', 'steer'] as const)('forwards %s to the online node and maps its result back as receipt', async (delivery) => {
     const { url, registryFile } = await startBroker();
     const sender = await senderOn(url, registryFile);
     seed(registryFile, [{ key: key('n'), machineId: 'm-node', machineName: 'node-host' }]);
     const node = await handshake(url, key('n'), 'm-node');
     await node.waitFor((f) => f.op === 'connected');
-    sender.send({ op: 'send', id: 's4', targetMachine: 'node-host', body: 'hello', origin: 'origin-host' });
+    sender.send({ op: 'send', id: 's4', targetMachine: 'node-host', body: 'hello', origin: 'origin-host', delivery });
     const deliver = await node.waitFor((f) => f.op === 'deliver');
     // F1：fromMachine 只取 roster 真名（sender 注册条目 machineName），不落 origin 编码/占位
-    expect(deliver).toMatchObject({ op: 'deliver', id: 's4', fromMachine: 'sender-host', payload: 'hello' });
+    expect(deliver).toMatchObject({ op: 'deliver', id: 's4', fromMachine: 'sender-host', payload: 'hello', delivery });
     node.send({ op: 'result', id: 's4', status: 'delivered', turn: '1/3' });
     const receipt = await sender.waitFor((f) => f.op === 'receipt');
     expect(receipt).toMatchObject({ op: 'receipt', id: 's4', status: 'delivered', turn: '1/3' });

@@ -16,6 +16,8 @@ import { randomBytes } from 'node:crypto';
 import { MultichatError } from './errors.js';
 import { checkSendLogRate } from './rate-limit.js';
 import { stateRoot } from './state-root.js';
+import type { DeliveryMode, DeliveryOptions } from './delivery-mode.js';
+import { isProcessAlive } from './platform/process-inspector.js';
 
 /**
  * Opportunistic outbox (B10/B11, reworked B12): when a codex delivery fails
@@ -28,7 +30,7 @@ import { stateRoot } from './state-root.js';
  * - busy/locked is a THREAD-level state: one failing attempt aborts the whole
  *   thread for this round instead of burning the budget on guaranteed failures
  *   (the old loop starved queue tails to attempts=0 for 12h).
- * - new sends join the queue instead of jumping it (enforced in send.ts).
+ * - queue sends join the FIFO; explicit steer bypasses it (enforced in send.ts).
  * - every parked/delivered/dropped item is mirrored into a human-readable
  *   mailbox file so stuck content is always readable.
  * - park/drain mutations take a per-thread lockfile so the watchdog and CLI
@@ -45,6 +47,10 @@ export interface OutboxItem {
   toName: string;
   /** Caller identity key at park time ("claude:<id>" / "codex:<id>" / "human"); rebuilds the rate-limit pair on drain. */
   callerKey?: string;
+  deliveryMode?: DeliveryMode;
+  /** A persisted claim prevents concurrent workers and crash recovery from replaying a write. */
+  deliveryState?: 'in-flight' | 'uncertain';
+  claim?: { id: string; ownerPid: number };
   parkedAt: number;
   attempts: number;
 }
@@ -67,6 +73,7 @@ export type DrainDeliverFn = (
   threadId: string,
   content: string,
   busyTimeoutMs: number,
+  options?: DeliveryOptions,
 ) => Promise<unknown>;
 
 /** Short wait for drains: opportunistic relief must not block the real command. */
@@ -88,7 +95,17 @@ export function mailboxDirFor(outboxDir: string): string {
 }
 
 export function mailboxFileFor(outboxDir: string, threadId: string): string {
-  return join(mailboxDirFor(outboxDir), `${threadId}.md`);
+  return threadPath(mailboxDirFor(outboxDir), threadId, '.md');
+}
+
+/** Native IDs stay opaque; the flat-file store accepts one path component. */
+function safeThreadComponent(threadId: unknown): threadId is string {
+  return typeof threadId === 'string' && threadId.length > 0 && threadId !== '.' && threadId !== '..' && !/[/\\:\0]/.test(threadId);
+}
+
+function threadPath(dir: string, threadId: string, suffix: string): string {
+  if (!safeThreadComponent(threadId)) throw new MultichatError('OUTBOX_INVALID_THREAD_ID', 'Outbox thread ID must be a single safe filename component.');
+  return join(dir, `${threadId}${suffix}`);
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -105,20 +122,19 @@ function isoOf(nowMs: number): string {
 export function park(
   dir: string,
   threadId: string,
-  item: Pick<OutboxItem, 'envelope' | 'toName' | 'callerKey'>,
+  item: Pick<OutboxItem, 'envelope' | 'toName' | 'callerKey' | 'deliveryMode'>,
   nowMs: number = Date.now(),
   mailboxDir: string = mailboxDirFor(dir),
 ): OutboxItem {
-  // Best-effort lock: a contended park falls through lockless (ms-scale window,
-  // same risk as pre-B12) rather than blocking the sending command.
   const locked = acquireThreadLock(dir, threadId, Date.now());
+  if (!locked) throw new MultichatError('OUTBOX_BUSY', `Outbox lock is busy for Codex thread ${threadId}; nothing was parked.`);
   try {
     const items = readItems(dir, threadId) ?? []; // missing/corrupt: self-heal as empty
     if (items.length >= OUTBOX_MAX_PER_THREAD) {
       throw new MultichatError(
         'OUTBOX_FULL',
         `Outbox full for codex thread ${threadId} (${OUTBOX_MAX_PER_THREAD} parked). ` +
-          `对方线程持续忙或已死：读 ${join(mailboxDir, `${threadId}.md`)} 取回内容，` +
+          `对方线程持续忙或已死：读 ${threadPath(mailboxDir, threadId, '.md')} 取回内容，` +
           `或确认线程仍存在后重发。`,
       );
     }
@@ -158,7 +174,8 @@ export interface DrainOpts {
  * file under the thread lock and removes exactly the delivered id, so a
  * concurrent park is never lost. A busy/locked failure aborts the thread for
  * this round (the state is thread-level); CODEX_THREAD_NOT_FOUND dead-letters
- * the whole thread; any other error skips just that item for this round.
+ * the whole thread. Unknown writes pause its FIFO for reconciliation; known
+ * prewrite errors clear the claim and may be retried by a later round.
  * Never throws (corrupt files are skipped, a missing dir is a no-op), so it
  * can run before any command without failing it.
  */
@@ -184,6 +201,7 @@ export async function drain(
   for (const file of files) {
     if (!file.endsWith('.json')) continue;
     const threadId = file.slice(0, -'.json'.length);
+    if (!safeThreadComponent(threadId)) continue;
     // Items to ignore for the rest of this round (rate-window full, unknown
     // delivery error): kept verbatim, retried by the next round.
     const skipIds = new Set<string>();
@@ -196,30 +214,50 @@ export async function drain(
         const items = readItems(dir, threadId);
         if (items === undefined || items.length === 0) return undefined;
         const item = items.find((candidate) => !skipIds.has(candidate.id));
-        return item === undefined ? undefined : { item };
+        if (item === undefined || item.deliveryState === 'uncertain') return undefined;
+        toName = item.toName;
+        if (item.deliveryState === 'in-flight') {
+          if (!isProcessAlive(item.claim?.ownerPid ?? 0)) {
+            updateClaim(dir, threadId, item.id, item.claim?.id, 'uncertain');
+            appendMailbox(mailboxDir, threadId, `> ${item.id} 投递进程已退出，写入待核实；暂停自动补投（${isoOf(now())}）\n`);
+          }
+          return undefined;
+        }
+        if (opts.sendLogFile !== undefined) {
+          try {
+            checkSendLogRate(opts.sendLogFile, item.callerKey ?? 'human', `codex:${threadId}`, now());
+          } catch (err) {
+            if (err instanceof MultichatError && err.code === 'RATE_LIMITED') {
+              skipIds.add(item.id);
+              return { limited: true as const };
+            }
+            throw err;
+          }
+        }
+        const claim = { id: genId(Date.now()), ownerPid: process.pid };
+        writeItems(dir, threadId, items.map((candidate) => candidate.id === item.id
+          ? { ...candidate, deliveryState: 'in-flight', claim } : candidate));
+        return { limited: false as const, item, claim };
       });
       if (head === undefined) break;
+      if (head.limited) continue;
       toName = head.item.toName;
-      if (opts.sendLogFile !== undefined) {
-        try {
-          checkSendLogRate(opts.sendLogFile, head.item.callerKey ?? 'human', `codex:${threadId}`, now());
-        } catch (err) {
-          if (err instanceof MultichatError && err.code === 'RATE_LIMITED') {
-            skipIds.add(head.item.id); // window full: skip this round, retry next drain
-            continue;
-          }
-          throw err;
-        }
-      }
       allowance -= 1;
       try {
-        await deliverFn(threadId, head.item.envelope, busyTimeoutMs);
+        await deliverFn(threadId, head.item.envelope, busyTimeoutMs, { mode: head.item.deliveryMode ?? 'queue' });
         delivered++;
         appendMailbox(mailboxDir, threadId, `> ${head.item.id} 送达 ${isoOf(now())}\n`);
         await withThreadLock(dir, threadId, 2_000, () => {
           removeById(dir, threadId, head.item.id);
         });
       } catch (err) {
+        if (err instanceof MultichatError && err.code.endsWith('WRITE_UNCERTAIN')) {
+          await withThreadLock(dir, threadId, 2_000, () => {
+            updateClaim(dir, threadId, head.item.id, head.claim.id, 'uncertain');
+          });
+          appendMailbox(mailboxDir, threadId, `> ${head.item.id} 写入待核实；暂停自动补投（${isoOf(now())}）\n`);
+          break;
+        }
         if (err instanceof MultichatError && err.code === 'CODEX_THREAD_NOT_FOUND') {
           // Dead letter: the thread is gone, so every parked item for it is
           // unreachable — discard all of them, not just this one.
@@ -238,10 +276,13 @@ export async function drain(
         ) {
           // Thread-level state: everything after the head would fail too.
           await withThreadLock(dir, threadId, 2_000, () => {
-            bumpAttempts(dir, threadId, head.item.id);
+            updateClaim(dir, threadId, head.item.id, head.claim.id, undefined, true);
           });
           break;
         }
+        await withThreadLock(dir, threadId, 2_000, () => {
+          updateClaim(dir, threadId, head.item.id, head.claim.id);
+        });
         skipIds.add(head.item.id); // unknown state: keep, try again next drain
       }
     }
@@ -271,6 +312,7 @@ export function outboxSummary(dir: string): { threadId: string; count: number; o
   for (const file of files) {
     if (!file.endsWith('.json')) continue;
     const threadId = file.slice(0, -'.json'.length);
+    if (!safeThreadComponent(threadId)) continue;
     const items = readItems(dir, threadId);
     if (items !== undefined && items.length > 0) {
       summary.push({
@@ -286,6 +328,25 @@ export function outboxSummary(dir: string): { threadId: string; count: number; o
 /** Queue depth for one thread (0 when nothing is parked). */
 export function outboxCount(dir: string, threadId: string): number {
   return readItems(dir, threadId)?.length ?? 0;
+}
+
+/** Uncertain heads require manual reconciliation; a worker must neither replay nor skip them. */
+export function retryableOutbox(dir: string): { pending: boolean; prompt: boolean } {
+  let files: string[];
+  try { files = readdirSync(dir); } catch { return { pending: false, prompt: false }; }
+  let pending = false;
+  let prompt = false;
+  for (const file of files) {
+    if (!file.endsWith('.json')) continue;
+    const threadId = file.slice(0, -5);
+    if (!safeThreadComponent(threadId)) continue;
+    const head = readItems(dir, threadId)?.[0];
+    if (head === undefined || head.deliveryState === 'uncertain') continue;
+    if (head.deliveryState === 'in-flight' && !isProcessAlive(head.claim?.ownerPid ?? 0)) continue;
+    pending = true;
+    prompt ||= head.deliveryMode === 'queue';
+  }
+  return { pending, prompt };
 }
 
 /**
@@ -305,6 +366,7 @@ export function outboxPairCounts(dir: string): Map<string, number> {
   for (const file of files) {
     if (!file.endsWith('.json')) continue;
     const threadId = file.slice(0, -'.json'.length);
+    if (!safeThreadComponent(threadId)) continue;
     for (const item of readItems(dir, threadId) ?? []) {
       const key = [item.callerKey ?? 'human', `codex:${threadId}`].sort().join('\n');
       counts.set(key, (counts.get(key) ?? 0) + 1);
@@ -318,16 +380,17 @@ function shortThread(threadId: string): string {
 }
 
 function threadFile(dir: string, threadId: string): string {
-  return join(dir, `${threadId}.json`);
+  return threadPath(dir, threadId, '.json');
 }
 
 function lockFile(dir: string, threadId: string): string {
-  return join(dir, `${threadId}.lock`);
+  return threadPath(dir, threadId, '.lock');
 }
 
 function readItems(dir: string, threadId: string): OutboxItem[] | undefined {
+  const file = threadFile(dir, threadId);
   try {
-    const parsed = JSON.parse(readFileSync(threadFile(dir, threadId), 'utf8')) as OutboxFile;
+    const parsed = JSON.parse(readFileSync(file, 'utf8')) as OutboxFile;
     if (!Array.isArray(parsed.items)) return undefined;
     // Pre-B12 files carry no id: synthesize a stable one from parkedAt+index.
     return parsed.items.map((item, index) =>
@@ -346,7 +409,7 @@ function writeItems(dir: string, threadId: string, items: OutboxItem[]): void {
     return;
   }
   mkdirSync(dir, { recursive: true });
-  const tmp = join(dir, `${threadId}.${process.pid}.${Date.now()}.tmp`);
+  const tmp = threadPath(dir, threadId, `.${process.pid}.${Date.now()}.tmp`);
   writeFileSync(tmp, JSON.stringify({ items } satisfies OutboxFile), 'utf8');
   renameSync(tmp, file);
 }
@@ -357,13 +420,24 @@ function removeById(dir: string, threadId: string, id: string): void {
   writeItems(dir, threadId, items.filter((item) => item.id !== id));
 }
 
-function bumpAttempts(dir: string, threadId: string, id: string): void {
+function updateClaim(
+  dir: string, threadId: string, id: string, claimId: string | undefined,
+  state?: 'uncertain', incrementAttempts = false,
+): void {
   const items = readItems(dir, threadId);
   if (items === undefined) return;
   writeItems(
     dir,
     threadId,
-    items.map((item) => (item.id === id ? { ...item, attempts: item.attempts + 1 } : item)),
+    items.map((item) => {
+      if (item.id !== id || item.claim?.id !== claimId) return item;
+      const updated = { ...item };
+      delete updated.claim;
+      delete updated.deliveryState;
+      if (state !== undefined) updated.deliveryState = state;
+      if (incrementAttempts) updated.attempts++;
+      return updated;
+    }),
   );
 }
 
@@ -374,7 +448,7 @@ function countItems(dir: string, threadId: string): number {
 function appendMailbox(mailboxDir: string, threadId: string, text: string): void {
   try {
     mkdirSync(mailboxDir, { recursive: true });
-    appendFileSync(join(mailboxDir, `${threadId}.md`), text, 'utf8');
+    appendFileSync(threadPath(mailboxDir, threadId, '.md'), text, 'utf8');
   } catch {
     // ponytail: the mirror is best-effort observability; outbox json stays authoritative.
   }
@@ -382,6 +456,7 @@ function appendMailbox(mailboxDir: string, threadId: string, text: string): void
 
 function acquireThreadLock(dir: string, threadId: string, nowMs: number): boolean {
   const file = lockFile(dir, threadId);
+  mkdirSync(dir, { recursive: true });
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const fd = openExclusive(file);
@@ -390,9 +465,9 @@ function acquireThreadLock(dir: string, threadId: string, nowMs: number): boolea
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'EEXIST') return false;
       try {
-        const [, ts] = readFileSync(file, 'utf8').trim().split(/\s+/);
+        const [pid, ts] = readFileSync(file, 'utf8').trim().split(/\s+/);
         const written = Number(ts);
-        if (Number.isFinite(written) && nowMs - written > LOCK_STALE_MS) {
+        if (Number.isFinite(written) && nowMs - written > LOCK_STALE_MS && !isProcessAlive(Number(pid))) {
           rmSync(file, { force: true }); // steal a crashed holder's lock
           continue;
         }

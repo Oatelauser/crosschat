@@ -1,10 +1,15 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { nextBackoffMs, runWatchdog, watchdogStatus, WATCHDOG_BACKOFF_STEPS_MS } from '../src/watchdog.js';
-import { drain, park } from '../src/outbox.js';
+import { drain, outboxCount, park } from '../src/outbox.js';
 import { MultichatError } from '../src/errors.js';
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return { ...actual, rmSync: vi.fn(actual.rmSync) };
+});
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-watchdog-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -39,6 +44,34 @@ describe('watchdogStatus', () => {
 });
 
 describe('runWatchdog', () => {
+  it('reclaims work parked after the empty check while its old owner lock still suppressed a new worker', async () => {
+    const dir = freshDir();
+    const original = await vi.importActual<typeof import('node:fs')>('node:fs');
+    let injected = false;
+    const delivered: string[] = [];
+    // Keep real file operations, inserting the competing park immediately
+    // before the worker releases its owner lock. No production hook is needed.
+    vi.mocked(rmSync).mockImplementation((path, options) => {
+      if (String(path) === join(dir, 'watchdog.lock') && !injected) {
+        injected = true;
+        expect(watchdogStatus(dir).running).toBe(true);
+        park(dir, 'late', { envelope: 'late queue input', toName: 'target', deliveryMode: 'queue' });
+        // spawnWatchdog would return because this owner still looks running.
+        expect(watchdogStatus(dir).running).toBe(true);
+      }
+      original.rmSync(path, options);
+    });
+    try {
+      await runWatchdog(dir, join(freshDir(), 'send-log.jsonl'), {
+        deliverCodex: async (_id, text) => { delivered.push(text); }, err: () => undefined,
+      });
+      expect(injected).toBe(true);
+      expect(delivered).toEqual(['late queue input']);
+      expect(outboxCount(dir, 'late')).toBe(0);
+      expect(watchdogStatus(dir).running).toBe(false);
+    } finally { vi.mocked(rmSync).mockImplementation(original.rmSync); }
+  });
+
   it('keeps a worker alive while another drainer owns an in-flight queue head', async () => {
     const dir = freshDir();
     park(dir, 'race', { envelope: 'input', toName: 'target', deliveryMode: 'queue' });

@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { appendSendLog, confirmInRollout, defaultSendLogFile, readSendLogTail } from '../src/send-log.js';
+import { appendSendLog, confirmInRollout, createReceiptMarker, defaultSendLogFile, readSendLogTail } from '../src/send-log.js';
 import { findRolloutFile } from '../src/codex/rollout-meta.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-sendlog-'));
@@ -54,6 +54,17 @@ describe('appendSendLog', () => {
     ]);
   });
 
+  it('persists only target-bound envelope evidence for later probes, without the message body', () => {
+    const file = join(freshDir(), 'send-log.jsonl');
+    const envelope = 'private receipt probe body 中文';
+    const receiptMarker = createReceiptMarker('t-1', envelope);
+    appendSendLog(file, { ts: '2026-10-03T06:00:00.000Z', to: 'peer', target: 'codex:t-1', status: 'delivered', receipt: 'unconfirmed', receiptMarker });
+    expect(readSendLogTail(file)[0]?.receiptMarker).toBe(receiptMarker);
+    expect(readFileSync(file, 'utf8')).not.toContain(envelope);
+    expect(receiptMarker).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(createReceiptMarker('other-target', envelope)).not.toBe(receiptMarker);
+  });
+
   it('defaultSendLogFile lives under the unified ~/.crosschat state root', () => {
     expect(defaultSendLogFile()).toMatch(/\.crosschat[\\/]send-log\.jsonl$/);
   });
@@ -78,7 +89,22 @@ describe('appendSendLog', () => {
 });
 
 describe('confirmInRollout', () => {
-  it('confirms once the marker lands in the rollout, including a late write', async () => {
+  it('confirms the actual short-handle envelope after decoding its user message JSON', async () => {
+    const home = freshDir();
+    const dayDir = join(home, 'sessions', '2026', '10', '03');
+    mkdirSync(dayDir, { recursive: true });
+    const threadId = 'aaaa1111-0000-0000-0000-000000000000';
+    const rollout = join(dayDir, `rollout-2026-10-03T05-00-00-${threadId}.jsonl`);
+    const envelope = '<cross-session-message from-name="测试" turn="2">\n<crosschat-reply-hint>crosschat send --conversation c6</crosschat-reply-hint>\n正文 "quotes" \\path 😀\n</cross-session-message>';
+    writeFileSync(rollout, `${JSON.stringify({ type: 'response_item', payload: {
+      type: 'message', role: 'user', content: [{ type: 'input_text', text: envelope }],
+    } })}\n`, 'utf8');
+    expect(await confirmInRollout(home, threadId, createReceiptMarker(threadId, envelope), {
+      tries: 1, delayMs: 0,
+    })).toBe('confirmed');
+  });
+
+  it('confirms an event user message after its late rollout write', async () => {
     const home = freshDir();
     const dayDir = join(home, 'sessions', '2026', '10', '03');
     mkdirSync(dayDir, { recursive: true });
@@ -86,12 +112,50 @@ describe('confirmInRollout', () => {
     const rollout = join(dayDir, `rollout-2026-10-03T05-00-00-${threadId}.jsonl`);
     writeFileSync(rollout, '{"payload":{"type":"session_meta"}}\n', 'utf8');
     expect(findRolloutFile(home, threadId)).toBe(rollout);
-    // The rollout write lags the turn/start acceptance: marker appears after ~2 polls.
+    const envelope = '<cross-session-message turn="3">\nlate receipt, reply using c6\n</cross-session-message>';
+    // The rollout write lags the turn/start acceptance.
     setTimeout(() => {
-      appendFileSyncUtf8(rollout, '{"payload":{"type":"message","content":[{"text":"reply-ref: mc1_marker_abc"}]}}\n');
-    }, 450);
-    const verdict = await confirmInRollout(home, threadId, 'mc1_marker_abc', { tries: 8, delayMs: 150 });
+      appendFileSyncUtf8(rollout, `${JSON.stringify({ type: 'event_msg', payload: { type: 'user_message', message: envelope } })}\n`);
+    }, 30);
+    const verdict = await confirmInRollout(home, threadId, createReceiptMarker(threadId, envelope), { tries: 8, delayMs: 20 });
     expect(verdict).toBe('confirmed');
+  });
+
+  it('does not confuse a reused handle, assistant/tool text or another recipient with the sent envelope', async () => {
+    const home = freshDir();
+    const dayDir = join(home, 'sessions', '2026', '10', '03');
+    mkdirSync(dayDir, { recursive: true });
+    const threadId = 'cccc3333-0000-0000-0000-000000000000';
+    const rollout = join(dayDir, `rollout-2026-10-03T05-00-00-${threadId}.jsonl`);
+    const envelope = '<cross-session-message turn="4">\nreply using c6\nnew body\n</cross-session-message>';
+    const marker = createReceiptMarker(threadId, envelope);
+    writeFileSync(rollout, [
+      { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: envelope.replace('new body', 'old body') }] } },
+      { type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: envelope }] } },
+      { type: 'response_item', payload: { type: 'function_call_output', output: envelope } },
+      { type: 'event_msg', payload: { type: 'agent_message', message: envelope } },
+      { type: 'turn_context', payload: { turn_id: 'same-busy-turn', marker } },
+    ].map((record) => JSON.stringify(record)).join('\n') + '\n', 'utf8');
+    expect(await confirmInRollout(home, threadId, marker, { tries: 1, delayMs: 0 })).toBe('unconfirmed');
+    appendFileSyncUtf8(rollout, `${JSON.stringify({ type: 'event_msg', payload: { type: 'user_message', message: envelope } })}\n`);
+    expect(await confirmInRollout(home, threadId, createReceiptMarker('other-target', envelope), { tries: 1, delayMs: 0 })).toBe('unconfirmed');
+  });
+
+  it('decodes user text across UTF-8 chunk boundaries and ignores partial or malformed records', async () => {
+    const home = freshDir();
+    const dayDir = join(home, 'sessions', '2026', '10', '03');
+    mkdirSync(dayDir, { recursive: true });
+    const threadId = 'dddd4444-0000-0000-0000-000000000000';
+    const rollout = join(dayDir, `rollout-2026-10-03T05-00-00-${threadId}.jsonl`);
+    const envelope = '😀中文'.repeat(9000) + '\n"quoted" \\path';
+    const record = JSON.stringify({ type: 'response_item', payload: {
+      type: 'message', role: 'user', content: [{ type: 'input_text', text: envelope }],
+    } });
+    writeFileSync(rollout, `invalid JSON\n${record}`, 'utf8');
+    const marker = createReceiptMarker(threadId, envelope);
+    expect(await confirmInRollout(home, threadId, marker, { tries: 1, delayMs: 0 })).toBe('unconfirmed');
+    appendFileSyncUtf8(rollout, '\n');
+    expect(await confirmInRollout(home, threadId, marker, { tries: 1, delayMs: 0 })).toBe('confirmed');
   });
 
   it('returns unconfirmed (never throws) when the marker never shows up', async () => {

@@ -41,6 +41,8 @@ export interface ConversationSummary {
    * the latest entry is not a delivered codex delivery (claude has no rollout).
    */
   receipt: SendLogEntry['receipt'] | null;
+  /** Exact recipient and envelope evidence of the latest send; omitted from status JSON. */
+  receiptProbe?: { threadId: string; marker: string };
   /**
    * G0 柄列：该对分片最新柄（绑定当前 ref 同 nonce 的 c<数字>）；null = 无柄
    * （显示 -）。Render support like `endpoints` — not part of the JSON contract.
@@ -102,6 +104,9 @@ export function aggregateSummaries(
         lastFrom: latest?.from ?? null,
         parked: parked.get(key) ?? 0,
         receipt: latest?.status === 'delivered' ? (latest.receipt ?? null) : null,
+        ...(typeof latest?.target === 'string' && latest.target.startsWith('codex:') && typeof latest.receiptMarker === 'string' ? {
+          receiptProbe: { threadId: latest.target.slice('codex:'.length), marker: latest.receiptMarker },
+        } : {}),
         handle: handleForRecord(ref, handles),
       };
     });

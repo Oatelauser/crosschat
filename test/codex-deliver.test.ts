@@ -108,20 +108,19 @@ describe('deliverToCodexThread', () => {
     ]);
   });
 
-  it('queues a turn immediately on a busy thread (daemon >=0.160 inbox semantics)', async () => {
+  it('defers queue on a busy thread before any write instead of appending to the current task', async () => {
     const { session, calls } = makeFakeSession({ resumeStatuses: ['busy', 'busy', 'idle'] });
-    const result = await deliverToCodexThread('t1', 'hello', {
+    await expect(deliverToCodexThread('t1', 'hello', {
       busyTimeoutMs: 1_000,
       pollIntervalMs: 5,
       sessionFactory: factoryFor(async () => session),
-    });
-    expect(result).toEqual({ status: 'accepted', turnId: 'turn-1', queued: true });
-    // No busy polling: exactly one resume, then the queued turn/start.
+    })).rejects.toMatchObject({ code: 'CODEX_THREAD_BUSY_TIMEOUT' });
+    // Return immediately for the outbox worker to retry after a task boundary.
     expect(calls.filter((c) => c.startsWith('resume:'))).toHaveLength(1);
-    expect(calls).toContain('turn/start:t1:hello');
+    expect(calls).not.toContain('turn/start:t1:hello');
   });
 
-  it('parks (CODEX_THREAD_BUSY_TIMEOUT) when an old daemon rejects the queued turn/start', async () => {
+  it('never probes busy queue acceptance with a turn/start write', async () => {
     const { session, calls } = makeFakeSession({
       resumeStatuses: ['busy'],
       turnError: new CodexRpcRejectedError(-32600, 'thread is busy'),
@@ -132,7 +131,7 @@ describe('deliverToCodexThread', () => {
         sessionFactory: factoryFor(async () => session),
       }),
     ).rejects.toMatchObject({ code: 'CODEX_THREAD_BUSY_TIMEOUT' });
-    expect(calls).toContain('turn/start:t1:hello');
+    expect(calls).not.toContain('turn/start:t1:hello');
     expect(calls).toContain('unsubscribe:t1');
     expect(calls).toContain('close');
   });
@@ -420,7 +419,7 @@ class FakeProxyChild extends EventEmitter {
   readonly stderr = new Readable({ read() { /* no proxy output */ } });
 }
 
-function makeFakeWire(): {
+function makeFakeWire(readResponse: unknown = { thread: { id: 't-read', status: { type: 'active', activeFlags: [] }, turns: [{ id: 'actual-active', status: 'inProgress', items: [{ text: 'PRIVATE BODY' }] }] } }): {
   channel: CodexMessageChannel;
   frames: Array<{ id: number; method: string; params: Record<string, unknown> }>;
 } {
@@ -432,7 +431,7 @@ function makeFakeWire(): {
       frames.push(frame);
       if (frame.id !== undefined) {
         const result =
-          frame.method === 'thread/list'
+          frame.method === 'thread/read' ? readResponse : frame.method === 'thread/list'
             ? { data: [{ id: 't-exec', name: 'execbox', status: { type: 'idle' } }] }
             : {};
         listener?.(JSON.stringify({ id: frame.id, result }));
@@ -456,6 +455,35 @@ function makeFakeWire(): {
 }
 
 describe('openCodexSession thread/list wire shape (B21: exec visibility)', () => {
+  it('reads an exact active native turn without returning history or overriding settings', async () => {
+    const { channel, frames } = makeFakeWire();
+    const session = await openCodexSession({
+      spawnProxy: () => { const child = new FakeProxyChild(); setImmediate(() => child.emit('spawn')); return child as unknown as ChildProcessWithoutNullStreams; },
+      channelFactory: async () => channel,
+    })();
+    try {
+      await session.initialize();
+      const state = await session.readThreadState?.('t-read');
+      expect(state).toEqual({ status: 'busy', activeTurnId: 'actual-active' });
+      expect(JSON.stringify(state)).not.toContain('PRIVATE BODY');
+      expect(frames.find((frame) => frame.method === 'thread/read')?.params).toEqual({ threadId: 't-read', includeTurns: true });
+      expect(frames.some((frame) => frame.method === 'turn/start' || frame.method === 'thread/resume')).toBe(false);
+    } finally { await session.close(); }
+  });
+
+  it.each([
+    { thread: { id: 'other-thread', status: { type: 'idle' }, turns: [] } },
+    { thread: { id: 't-read', status: { type: 'active' }, turns: [{ id: '', status: 'inProgress' }] } },
+    { thread: { id: 't-read', status: { type: 'active' }, turns: [{ id: 'a', status: 'inProgress' }, { id: 'b', status: 'inProgress' }] } },
+  ])('rejects mismatched or ambiguous native active-turn evidence', async (response) => {
+    const { channel } = makeFakeWire(response);
+    const session = await openCodexSession({
+      spawnProxy: () => { const child = new FakeProxyChild(); setImmediate(() => child.emit('spawn')); return child as unknown as ChildProcessWithoutNullStreams; },
+      channelFactory: async () => channel,
+    })();
+    try { await expect(session.readThreadState?.('t-read')).rejects.toMatchObject({ code: 'CODEX_PROTOCOL_ERROR' }); }
+    finally { await session.close(); }
+  });
   it('requests sourceKinds cli+vscode+exec so codex-exec threads are listed', async () => {
     const { channel, frames } = makeFakeWire();
     const session = await openCodexSession({

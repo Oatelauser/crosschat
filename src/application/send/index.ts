@@ -28,6 +28,8 @@ import { decodeOriginIdentity, isSameMachine, sendViaSsh } from '../../federatio
 import { sendViaTcp } from '../../serve/via-tcp.js';
 import { normalizeMid } from '../../platform/machine-id.js';
 import type { SendLogEntry } from '../../send-log.js';
+import { createReceiptMarker } from '../../send-log.js';
+import { resolveDeliveryMode } from '../../delivery-mode.js';
 import {
   CONVERSATION_HANDLE_RE,
   continueConversation,
@@ -150,6 +152,7 @@ async function autoViaFromRef(
 }
 
 export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendResult> {
+  const mode = resolveDeliveryMode(args.delivery);
   resolveTargetArgs(args);
   // F2：--conversation 双形态——c<数字> 本地短柄先解析成唯一完整 ref（扫全部
   // 分片；过期/撞号在此教学自纠），mc1_/mc2_ 前缀直用永续。柄不过网：跨机腿
@@ -358,7 +361,7 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
   if (deps.refStarId !== undefined && newRef.starId === undefined) {
     newRef = { ...newRef, starId: deps.refStarId };
   }
-  const finish = (result: SendResult): SendResult => collision === undefined ? result : { ...result, warning: collision };
+  const finish = (result: SendResult): SendResult => ({ ...result, deliveryMode: mode, ...(collision === undefined ? {} : { warning: collision }) });
 
   // F2：短柄寄生于会话分片（零新文件），在最终 ref（含 origin 盖章与 starId）
   // 定型后分配；状态未接线（异常路径）不分配，信封回退完整 ref。
@@ -416,6 +419,7 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
       await deps.deliverClaude(
         { pid: claudeSession.pid, messagingSocketPath: claudeSession.messagingSocketPath },
         content,
+        { mode },
       );
     } catch (err) {
       logNow({ to: toName, target: `claude:${target.id}`, status: 'failed', code: errorCode(err), turn, replyRef });
@@ -428,18 +432,24 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
 
   // Codex delivers by threadId; a missing thread surfaces as a codex adapter error.
   checkSendLogRate(deps.sendLogFile, identityKey(caller), `codex:${target.id}`, deps.now());
-  const threads = await deps.listCodexThreads();
-  const threadName = threads.find((thread) => thread.id === target.id)?.name;
+  let threadName: string | null | undefined;
+  try {
+    threadName = (await deps.listCodexThreads()).find((thread) => thread.id === target.id)?.name;
+  } catch {
+    // An exact ref already identifies the target. Optional display metadata
+    // must not make Desktop delivery depend on the separate CLI daemon.
+  }
   const toName =
     args.targetSessionId !== undefined && threadName !== undefined
       ? `codex/${threadName}`
       : (threadName ?? shortId('codex', target.id));
   const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(fromAddr === undefined ? {} : { fromAddr }), ...(handle === undefined ? {} : { handle }) });
+  const receiptMarker = createReceiptMarker(target.id, content);
   const parkNow = (): number => {
     park(
       deps.outboxDir,
       target.id,
-      { envelope: content, toName, callerKey: identityKey(caller) },
+      { envelope: content, toName, callerKey: identityKey(caller), deliveryMode: mode },
       deps.now(),
     );
     deps.spawnWatchdog?.();
@@ -449,33 +459,33 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
   // Queue discipline (B12): when older items are still parked, a fresh send
   // joins the queue instead of jumping it — order stays FIFO even though a
   // direct attempt could squeeze through an idle window the drain missed.
-  const queuedBefore = outboxCount(deps.outboxDir, target.id);
+  const queuedBefore = mode === 'queue' ? outboxCount(deps.outboxDir, target.id) : 0;
   if (queuedBefore > 0) {
     const queue = parkNow();
     return finish(parkedResult(toName, turn, replyRef, queue, mailboxPath, handle));
   }
   try {
-    const delivered = await deps.deliverCodex(target.id, content);
+    const delivered = await deps.deliverCodex(target.id, content, { mode });
     const queued = delivered.queued === true;
     // Queued sits behind the recipient's running turn: a rollout receipt is
     // structurally impossible within the probe budget, so do not even look.
-    const receipt = queued ? undefined : await deps.confirmReceipt?.(target.id, replyRef);
-    logNow({ to: toName, target: `codex:${target.id}`, status: queued ? 'queued' : 'delivered', turn, replyRef, receipt });
+    const receipt = queued ? undefined : await deps.confirmReceipt?.(target.id, receiptMarker);
+    logNow({ to: toName, target: `codex:${target.id}`, status: queued ? 'queued' : 'delivered', turn, replyRef, receipt, receiptMarker });
     if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
     return finish({ ...deliveryResult(toName, turn, replyRef, queued, handle), confirmation: receipt });
   } catch (err) {
     // Busy/locked = definitively not delivered (deliver.ts polls before giving
     // up): park the composed envelope verbatim; the watchdog retries it.
     if (
-      err instanceof MultichatError &&
+      mode === 'queue' && err instanceof MultichatError &&
       (err.code === 'CODEX_THREAD_BUSY_TIMEOUT' || err.code === 'CODEX_THREAD_LOCKED')
     ) {
       const queue = parkNow();
-      logNow({ to: toName, target: `codex:${target.id}`, status: 'parked', turn, replyRef });
+      logNow({ to: toName, target: `codex:${target.id}`, status: 'parked', turn, replyRef, receiptMarker });
       if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
       return finish(parkedResult(toName, turn, replyRef, queue, mailboxPath, handle));
     }
-    logNow({ to: toName, target: `codex:${target.id}`, status: 'failed', code: errorCode(err), turn, replyRef });
+    logNow({ to: toName, target: `codex:${target.id}`, status: 'failed', code: errorCode(err), turn, replyRef, receiptMarker });
     throw err;
   }
 }

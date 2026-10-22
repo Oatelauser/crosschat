@@ -17,6 +17,7 @@ import { DISCOVERY_MAX_BYTES } from './application/discovery/boundary.js';
 import { runClaudeWrapper } from './commands/claude-wrapper.js';
 import { runCodexWrapper } from './commands/codex-wrapper.js';
 import { defaultOutboxDir, drain } from './outbox.js';
+import type { DrainDeliverFn } from './outbox.js';
 import { legacyStateRoots, stateRoot } from './state-root.js';
 import { runWatchdog, spawnWatchdog as ensureWatchdog, watchdogStatus } from './watchdog.js';
 import { appendSendLog, confirmInRollout, defaultSendLogFile, readSendLogTail } from './send-log.js';
@@ -34,6 +35,8 @@ import { runClean, type CleanArgs } from './commands/clean.js';
 import { runUninstall, type UninstallArgs } from './commands/uninstall.js';
 import { fetchRosterFor, runViaTcpStatus } from './serve/via-tcp.js';
 import { DEFAULT_PORT } from './serve/broker.js';
+import { resolveDeliveryMode } from './delivery-mode.js';
+import type { DeliveryMode } from './delivery-mode.js';
 
 const version: string = (
   JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
@@ -50,6 +53,9 @@ commands:
                             options:
                               --body <text>        message text
                                 (default: read stdin)
+                              --delivery queue|steer
+                                queue (default): process after current work;
+                                steer: append to current work, or start if idle
                               --via ssh:<host>     send to a peer machine
                                 (host = ~/.ssh/config alias, peer
                                 resolves names on its side; session
@@ -246,7 +252,7 @@ options:
 /** Hand-rolled send arg parsing (no dependency): --to/--conversation/--body/--via/--file/--origin/--max-body-kb/--max-turn take values, --json is a flag. --origin is machine-injected (008) and stays out of usage. Raw values only — numeric validation lives in limits.ts (invalid silently degrades, ticket A). */
 export function parseSendArgs(argv: readonly string[]): SendArgs {
   const args: SendArgs = {};
-  const valueOpts = new Set(['--to', '--conversation', '--body', '--via', '--file', '--origin', '--max-body-kb', '--max-turn']);
+  const valueOpts = new Set(['--to', '--conversation', '--body', '--via', '--file', '--origin', '--max-body-kb', '--max-turn', '--delivery']);
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === undefined || !token.startsWith('--')) {
@@ -270,6 +276,7 @@ export function parseSendArgs(argv: readonly string[]): SendArgs {
     else if (name === '--origin') args.origin = value;
     else if (name === '--max-body-kb') args.maxBodyKb = value;
     else if (name === '--max-turn') args.maxTurn = value;
+    else if (name === '--delivery') args.delivery = resolveDeliveryMode(value);
     else args.bodyArg = value;
   }
   return args;
@@ -511,8 +518,8 @@ function realSendDeps(stdinText: string | undefined): SendDeps {
     stdinText,
     listClaudeSessions: () => listClaudeSessions(),
     listCodexThreads: () => listCodexThreads(),
-    deliverClaude: (target, content) => deliverToClaudeSession(target, content),
-    deliverCodex: (threadId, content) => deliverToCodexThread(threadId, content),
+    deliverClaude: (target, content, options) => deliverToClaudeSession(target, content, options),
+    deliverCodex: (threadId, content, options) => deliverToCodexThread(threadId, content, options),
     sendLogFile: defaultSendLogFile(),
     outboxDir: defaultOutboxDir(),
     now: () => Date.now(),
@@ -564,12 +571,13 @@ function realStatusDeps(): StatusDeps {
   };
 }
 
-function drainAtEntry(): Promise<void> {
+function drainAtEntry(delivery?: DeliveryMode): Promise<void> {
   return drainOutboxAtEntry({
+    delivery,
     outboxDir: defaultOutboxDir(),
     sendLogFile: defaultSendLogFile(),
-    deliverCodex: (threadId, content, busyTimeoutMs) =>
-      deliverToCodexThread(threadId, content, { busyTimeoutMs }),
+    deliverCodex: (threadId, content, busyTimeoutMs, options) =>
+      deliverToCodexThread(threadId, content, { ...options, busyTimeoutMs }),
     err: (line) => process.stderr.write(`${line}\n`),
   });
 }
@@ -584,10 +592,11 @@ function printFailure(err: unknown): number {
 }
 
 export interface DrainEntryDeps {
+  delivery?: DeliveryMode;
   outboxDir: string;
   /** Send-log file shared with send: drained re-deliveries pass the same tail-window limiter. */
   sendLogFile: string;
-  deliverCodex(threadId: string, content: string, busyTimeoutMs: number): Promise<unknown>;
+  deliverCodex: DrainDeliverFn;
   err(line: string): void;
 }
 
@@ -599,11 +608,12 @@ export interface DrainEntryDeps {
  * went through. Drain failures never fail the invoking command.
  */
 export async function drainOutboxAtEntry(deps: DrainEntryDeps): Promise<void> {
+  if (resolveDeliveryMode(deps.delivery) === 'steer') return;
   let results;
   try {
     results = await drain(
       deps.outboxDir,
-      (threadId, content, busyTimeoutMs) => deps.deliverCodex(threadId, content, busyTimeoutMs),
+      deps.deliverCodex,
       { sendLogFile: deps.sendLogFile },
     );
   } catch {
@@ -636,8 +646,8 @@ async function main(argv: string[]): Promise<number> {
   if (command === '__drain') {
     if (rest.includes('--watch')) {
       await runWatchdog(defaultOutboxDir(), defaultSendLogFile(), {
-        deliverCodex: (threadId, content, busyTimeoutMs) =>
-          deliverToCodexThread(threadId, content, { busyTimeoutMs }),
+        deliverCodex: (threadId, content, busyTimeoutMs, options) =>
+          deliverToCodexThread(threadId, content, { ...options, busyTimeoutMs }),
         err: (line) => process.stderr.write(`${line}\n`),
       });
     } else {
@@ -652,7 +662,7 @@ async function main(argv: string[]): Promise<number> {
     }
     try {
       const args = parseSendArgs(rest);
-      await drainAtEntry();
+      await drainAtEntry(args.delivery);
       // Only read stdin when --body is absent: agent harnesses often leave the
       // stdin pipe open forever, and blocking on it with --body given would hang.
       const stdinText = args.bodyArg === undefined ? await readStdinText() : undefined;

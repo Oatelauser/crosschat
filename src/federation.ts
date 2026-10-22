@@ -13,6 +13,7 @@ import {
 } from './identity.js';
 import type { ClaudeRegistryScan } from './claude/registry.js';
 import type { SendArgs, SendDeps, SendResult } from './application/send/types.js';
+import { resolveDeliveryMode } from './delivery-mode.js';
 import { formatSendResult } from './application/send/format.js';
 
 /**
@@ -172,6 +173,7 @@ export function buildSshArgv(host: string, args: SendArgs, originB64: string): s
     'crosschat',
     'send',
     ...target,
+    ...(args.delivery === undefined ? [] : ['--delivery', resolveDeliveryMode(args.delivery)]),
     '--json',
     '--origin',
     originB64,
@@ -220,6 +222,7 @@ export async function runViaSend(args: SendArgs, body: string, deps: SendDeps): 
 }
 
 export async function sendViaSsh(args: SendArgs, body: string, deps: SendDeps): Promise<SendResult> {
+  const deliveryMode = resolveDeliveryMode(args.delivery);
   const { host } = parseViaValue(args.via!);
   validateRemoteFlagValues(args);
 
@@ -304,6 +307,7 @@ export async function sendViaSsh(args: SendArgs, body: string, deps: SendDeps): 
   }
   return {
     status: receipt.status === 'queued' || (receipt as { queued?: boolean }).queued === true ? 'queued' : receipt.status,
+    deliveryMode,
     receipt: { ...receipt, via: `ssh:${host}` },
     route: { kind: 'ssh', displayTo, machine }, handle,
   };

@@ -17,7 +17,7 @@ export interface ClaudeReaderOptions {
   };
 }
 
-const capabilities: ProviderCapabilities = { discovery: true, delivery: true, launch: false, diagnostics: false };
+const capabilities: ProviderCapabilities = { discovery: true, delivery: true, deliveryModes: ['queue', 'steer'], launch: false, diagnostics: false };
 
 interface ClaudePageCursor {
   version: 1;

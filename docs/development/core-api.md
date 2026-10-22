@@ -21,7 +21,7 @@
 
 `SessionRef` 包含 contextId、providerId、nativeId；旧登记没有原生会话 ID 时，referenceKind 为 process，其他默认 native。内部键包含引用种类，显示短值不参与寻址。详情传完整 ref，不能拿截断值或名字作唯一键。
 
-分页结果的 complete 表示当前来源声明完整；partial/unavailable/cancelled 均不能显示成“没有会话”。Claude 目录清单变化会令游标失效并要求刷新；Codex 透传原生游标。新查询保持原始未知状态；旧 CLI 的20条默认和状态校验保持。当前发现范围仍是各原生来源可发现的非归档会话，未新增历史归档扫描。
+分页结果的 complete 表示当前来源声明完整；partial/unavailable/cancelled 均不能显示成“没有会话”。Claude 目录清单变化会令游标失效并要求刷新；Codex 聚合 Desktop owner 与 CLI 来源，游标绑定上下文并按完整 ID 跨页去重，保留各来源错误。新查询保持原始未知状态；旧 CLI 的20条默认和状态校验保持。当前发现范围仍是各原生来源可发现的非归档会话，未新增历史归档扫描。
 
 取消读取后丢弃迟到结果，Adapter 负责释放自己的连接、监听器和子进程。诊断查询在 finally 回收 owner 后再次检查取消。服务启动、管理和清理是写操作；停止等待不能表示回滚，超时应核实结果后再重试。旧 CLI 继续使用原同步 doctor/stop 边界；展示入口应使用异步应用接缝。
 
@@ -42,6 +42,10 @@
 删除节点和吊管理钥现按星及实际认证凭证立即撤权，包含无机器ID的瞬态sender；同机器不同凭证、其他星不受影响。明确`credential-revoked`先使连接无权处理后续帧，再清路由并断开；永久成员册保留。节点收到明确撤权后暂停该星重连和启动器自动拉起，保存无裸钥的凭证指纹暂停记录；换钥后显式重连。普通断网和一般`BAD_AUTH`不当作明确撤权。暂停记录写失败时保留暂停IPC owner，读取损坏记录报错并停止自动拉起。
 
 ## 扩展边界
+
+发送支持逐条 `SendArgs.delivery?: 'queue' | 'steer'`，默认 queue。Provider 第三参数为 `DeliveryOptions.mode`；SSH、TCP、broker 本机桥与文件通知原样传递。`SendResult.deliveryMode` 表示请求意图，与实际投递结果、历史回执分开；`deliveryModes` 能力须有对应原生验收证据，不能由 `delivery: true` 推断。
+
+Desktop 投递绑定真实 owner，不依赖 CLI daemon；owner 绑定后的失败不改投其他通道。忙时 queue 本机寄存，空闲后交给原宿主；steer 追加当前轮，明确无活跃轮且新快照证实空闲时才允许启动新轮。写入不明不重放，outbox 持久认领与未知状态阻止并发/崩溃恢复重复发送；回执摘要绑定目标与实际完整输入。
 
 第三工具的读取接入实现 SessionReader，注册进 SessionCatalog；ContextReader 提供连接描述。工具能力声明与实现分开，第三测试 Provider 已验证通用筛选/详情/成员委派无需添加工具分支。
 

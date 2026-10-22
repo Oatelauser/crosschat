@@ -3,6 +3,8 @@
  * 文本消息。B2 才有行为实现的帧（file-* 等）类型先定义全。
  */
 import type { DiscoveryRequest, DiscoveryResponse } from '../application/discovery/model.js';
+import { isDeliveryMode } from '../delivery-mode.js';
+import type { DeliveryMode } from '../delivery-mode.js';
 
 export const PROTOCOL_VERSION = 1;
 export const MAX_PAYLOAD_BYTES = 2 * 1024 * 1024;
@@ -154,6 +156,7 @@ export interface SendFrame {
   conversation?: string;
   body: string;
   origin?: string;
+  delivery?: DeliveryMode;
 }
 export interface ReceiptFrame {
   op: 'receipt';
@@ -176,6 +179,7 @@ export interface DeliverFrame {
   origin?: string;
   /** 018：会话级投递目标（三段寻址命中成员的会话 ID）——聚合器本地按它注入投递，不再经名字解析。 */
   sessionId?: string;
+  delivery?: DeliveryMode;
 }
 export interface ResultFrame {
   op: 'result';
@@ -525,6 +529,7 @@ export function parseFrame(text: string): Frame | undefined {
   }
   if (typeof obj !== 'object' || obj === null) return undefined;
   const op = (obj as { op?: unknown }).op;
+  if ((op === 'send' || op === 'deliver') && 'delivery' in obj && !isDeliveryMode(obj.delivery)) return undefined;
   if (op === 'credential-revoked' && !isCredentialRevoked(obj as Record<string, unknown>)) return undefined;
   if ((op === 'discover-query' || op === 'discover-result' || op === 'discover-cancel') && !isDiscoveryEnvelope(obj as Record<string, unknown>)) return undefined;
   return typeof op === 'string' && OPS.has(op) ? (obj as Frame) : undefined;

@@ -1,8 +1,8 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { drain, outboxCount, park } from '../src/outbox.js';
+import { drain, mailboxFileFor, outboxCount, park } from '../src/outbox.js';
 import { MultichatError } from '../src/errors.js';
 
 const directories: string[] = [];
@@ -14,6 +14,43 @@ function fixture(): string {
 afterEach(() => { for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true }); });
 
 describe('outbox delivery ownership', () => {
+  it.each(['../outside', '..\\outside', '/outside', '\\outside', 'drive:outside', 'nul\0tail', '.', '..', ''])('rejects unsafe thread path components before touching files: %j', (threadId) => {
+    const directory = fixture();
+    const outbox = join(directory, 'outbox');
+    const outsideJson = join(directory, 'outside.json');
+    const outsideMailbox = join(directory, 'outside.md');
+    writeFileSync(outsideJson, 'outside JSON sentinel');
+    writeFileSync(outsideMailbox, 'outside mailbox sentinel');
+    for (const operation of [
+      () => park(outbox, threadId, { envelope: 'must stay inside', toName: 'target' }),
+      () => outboxCount(outbox, threadId),
+      () => mailboxFileFor(outbox, threadId),
+    ]) expect(operation).toThrowError(expect.objectContaining({ code: 'OUTBOX_INVALID_THREAD_ID' }));
+    expect(readFileSync(outsideJson, 'utf8')).toBe('outside JSON sentinel');
+    expect(readFileSync(outsideMailbox, 'utf8')).toBe('outside mailbox sentinel');
+    expect(readdirSync(directory).sort()).toEqual(['outside.json', 'outside.md']);
+  });
+
+  it('keeps non-UUID names and punctuation on their unchanged filename keys', async () => {
+    const directory = fixture();
+    const threadId = 'native id_+@=..tail';
+    park(directory, threadId, { envelope: 'input', toName: 'target' });
+    expect(readdirSync(directory).filter((file) => file.endsWith('.json'))).toEqual([`${threadId}.json`]);
+    expect(mailboxFileFor(directory, threadId)).toBe(join(directory, '..', 'mailbox', `${threadId}.md`));
+    const deliver = vi.fn(async () => undefined);
+    await drain(directory, deliver);
+    expect(deliver).toHaveBeenCalledWith(threadId, 'input', expect.any(Number), { mode: 'queue' });
+    expect(readdirSync(directory).filter((file) => file.endsWith('.json'))).toEqual([]);
+  });
+
+  it('preserves a Unicode native ID in the existing filename without imposing a UUID restriction', () => {
+    const directory = fixture();
+    const threadId = '本机会话';
+    park(directory, threadId, { envelope: 'input', toName: 'target' });
+    expect(outboxCount(directory, threadId)).toBe(1);
+    expect(readFileSync(join(directory, `${threadId}.json`), 'utf8')).toContain('input');
+  });
+
   it('does not submit the same head from two concurrent drain owners', async () => {
     const directory = fixture();
     park(directory, 'thread', { envelope: 'one input', toName: 'target' });

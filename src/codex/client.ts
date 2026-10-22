@@ -22,6 +22,11 @@ export interface CodexTurn {
   status: string;
 }
 
+export interface CodexThreadState {
+  status: CodexThreadStatus;
+  activeTurnId: string | null;
+}
+
 export interface CodexThreadSummary {
   id: string;
   name: string | null;
@@ -54,6 +59,8 @@ export interface CodexSession {
   /** Additive read-only paging; optional for existing injected session adapters. */
   listThreadPage?(options: CodexThreadPageOptions): Promise<CodexThreadPage>;
   resumeThread(threadId: string): Promise<CodexThreadStatus>;
+  /** Read current native turn identity without changing the thread's settings. */
+  readThreadState?(threadId: string): Promise<CodexThreadState>;
   startTurn(threadId: string, text: string): Promise<CodexTurn>;
   steerTurn(threadId: string, expectedTurnId: string, text: string): Promise<string>;
   unsubscribe(threadId: string): Promise<void>;
@@ -224,6 +231,19 @@ export function openCodexSession(options: CodexSessionOptions = {}): () => Promi
           throw protocolError('turn/start response missing turn.');
         }
         return { id: result.turn.id, status: result.turn.status };
+      },
+      async readThreadState(threadId: string): Promise<CodexThreadState> {
+        const result = await rpc.request('thread/read', { threadId, includeTurns: true });
+        if (!isRecord(result) || !isRecord(result.thread) || result.thread.id !== threadId || !Array.isArray(result.thread.turns)) {
+          throw protocolError('thread/read response missing matching thread and turns.');
+        }
+        const active: string[] = [];
+        for (const turn of result.thread.turns) {
+          if (!isRecord(turn) || typeof turn.id !== 'string' || turn.id === '' || typeof turn.status !== 'string') throw protocolError('thread/read returned a malformed turn.');
+          if (turn.status === 'inProgress') active.push(turn.id);
+        }
+        if (active.length > 1) throw protocolError('thread/read returned multiple active turns.');
+        return { status: normalizeThreadStatus(result.thread.status), activeTurnId: active[0] ?? null };
       },
       async steerTurn(threadId: string, expectedTurnId: string, text: string): Promise<string> {
         const result = await rpc.request('turn/steer', {

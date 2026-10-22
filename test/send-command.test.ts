@@ -411,7 +411,7 @@ describe('runSend outbox parking (B10)', () => {
       failingDeps('CODEX_THREAD_BUSY_TIMEOUT', freshOutbox()),
     );
     expect(out).toContain('已寄存给 workteam（对方忙，未送达）');
-    expect(out).toContain('看门狗每 0.5–5 分钟自动重试');
+    expect(out).toContain('看门狗在目标空闲后自动补投');
     expect(out).toContain('reply-ref: mc2_');
   });
 

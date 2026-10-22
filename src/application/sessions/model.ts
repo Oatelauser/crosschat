@@ -1,3 +1,5 @@
+import type { DeliveryMode } from '../../delivery-mode.js';
+
 /** Provider and context IDs are opaque, extensible strings, never display names. */
 export interface SessionRef {
   contextId: string;
@@ -16,6 +18,8 @@ export function sessionKey(ref: SessionRef): string {
 export interface ProviderCapabilities {
   discovery: boolean;
   delivery: boolean;
+  /** Present only when the provider has verified support for these modes. */
+  deliveryModes?: readonly DeliveryMode[];
   launch: boolean;
   diagnostics: boolean;
 }

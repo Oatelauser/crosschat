@@ -1,6 +1,7 @@
 import type { Completeness, ProviderCapabilities, ReadResult, SessionRef, SourceError } from '../sessions/model.js';
 import { isRecord } from '../sessions/reading.js';
 import type { DiscoveryJson, DiscoveryProvider, DiscoveryRequest, DiscoveryResponse, DiscoverySession } from './model.js';
+import { isDeliveryMode } from '../../delivery-mode.js';
 
 export const DISCOVERY_MAX_BYTES = 2 * 1024 * 1024;
 const MAX_ARRAY_LENGTH = 2000;
@@ -90,7 +91,10 @@ function safeJson(input: unknown, budget: { nodes: number; bytes: number }, dept
 
 function capabilities(input: unknown): ProviderCapabilities {
   if (!isRecord(input) || typeof input.discovery !== 'boolean' || typeof input.delivery !== 'boolean' || typeof input.launch !== 'boolean' || typeof input.diagnostics !== 'boolean') invalid();
-  return { discovery: input.discovery, delivery: input.delivery, launch: input.launch, diagnostics: input.diagnostics };
+  const modes = input.deliveryModes;
+  if (modes !== undefined && (!Array.isArray(modes) || modes.length > 2 || !modes.every(isDeliveryMode) || new Set(modes).size !== modes.length)) invalid();
+  return { discovery: input.discovery, delivery: input.delivery, launch: input.launch, diagnostics: input.diagnostics,
+    ...(modes === undefined ? {} : { deliveryModes: modes.filter(isDeliveryMode) }) };
 }
 
 function ref(input: unknown): SessionRef {

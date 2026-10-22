@@ -4,13 +4,14 @@ import { MultichatError } from '../errors.js';
 import { encodeAuthLine, encodeUserFrame } from './frame.js';
 import { readPeerToken } from './key-file.js';
 import { defaultClaudeSessionsDir } from './registry.js';
+import type { DeliveryOptions } from '../delivery-mode.js';
 
 export interface ClaudeDeliveryTarget {
   pid: number;
   messagingSocketPath: string;
 }
 
-export interface ClaudeDeliveryOptions {
+export interface ClaudeDeliveryOptions extends DeliveryOptions {
   sessionsDir?: string;
   transport?: PipeTransport;
   /** Defaults to process.platform; injectable so both branches test on any CI. */
@@ -39,9 +40,9 @@ export async function deliverToClaudeSession(
   let lines: string[];
   if (platform === 'win32') {
     const token = readPeerToken(sessionsDir, session.pid, session.messagingSocketPath);
-    lines = [encodeAuthLine(token), encodeUserFrame(content)];
+    lines = [encodeAuthLine(token), encodeUserFrame(content, undefined, options.mode)];
   } else {
-    lines = [encodeUserFrame(content)];
+    lines = [encodeUserFrame(content, undefined, options.mode)];
   }
   const transport = options.transport ?? getPipeTransport();
   try {

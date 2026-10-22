@@ -1667,6 +1667,7 @@ export class Broker {
       id: frame.id,
       ...(sender.machineName === undefined ? {} : { fromMachine: sender.machineName }),
       payload: frame.body,
+      ...(frame.delivery === undefined ? {} : { delivery: frame.delivery }),
       to: frame.to,
       conversation: frame.conversation,
       origin: frame.origin,

@@ -39,7 +39,7 @@ function parseUserFrame(line: string) {
     msgV: 1,
     type: 'user',
     message: { role: 'user', content: 'hello unix' },
-    priority: 'next',
+    priority: 'later',
   });
   expect(frame.msg_id).not.toBe('');
 }
@@ -90,6 +90,15 @@ describe('deliverToClaudeSession platform assembly', () => {
     const lines = calls[0]!.lines;
     expect(lines).toHaveLength(1);
     parseUserFrame(lines[0]!);
+  });
+
+  it('applies steer to one delivery and leaves the next delivery queued by default', async () => {
+    const { transport, calls } = fakeTransport();
+    const target = { pid: 24900, messagingSocketPath: PIPE_17324 };
+    await deliverToClaudeSession(target, 'steering input', { platform: 'linux', sessionsDir, transport, mode: 'steer' });
+    await deliverToClaudeSession(target, 'separate follow-up', { platform: 'linux', sessionsDir, transport });
+    expect(calls.map((call) => JSON.parse(call.lines[0]!).priority)).toEqual(['next', 'later']);
+    expect(calls.map((call) => JSON.parse(call.lines[0]!).message.content)).toEqual(['steering input', 'separate follow-up']);
   });
 });
 

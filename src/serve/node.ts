@@ -70,6 +70,7 @@ export async function deliverViaRunSend(frame: DeliverFrame, deps: SendDeps): Pr
         conversation: frame.conversation,
         bodyArg: frame.payload,
         origin: frame.origin,
+        delivery: frame.delivery,
       },
       frame.fromMachine === undefined ? deps : { ...deps, fromMachine: frame.fromMachine },
     );
