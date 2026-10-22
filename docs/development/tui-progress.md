@@ -5,7 +5,7 @@
 ## 当前授权与下一步
 
 - 用户已明确“开始实现T06”，并要求正常开发流程，不赶时间/进度。该项已于2026-10-22完成验收并删除。
-- 本机会话、本机观察、本机操作与SSH已完成验收并删除活动项。T11、T12、T14仍等待指令；正常开发、不赶时间，涉及现有功能变更先确认。
+- 此前TUI资源已完成验收并删除活动项。用户现授权T11/T12并行，正常开发、不赶时间，涉及现有功能变化先确认。T14仍等待指令。
 - 本轮明确批准：新增doctor --json供SSH逐项诊断；无参doctor输出/检查/严重度/退出码保持，远端失败不回落本机，不做混版降级。
 - 两项明确获批功能扩展：按完整SessionRef精确收编；broker原子核对完整ID/机器/工具的精确删册，目标变化即拒绝，保留原CLI选择器/权限，不做旧端兼容或降级。
 - 读取顺序：本记录 → [活动任务](../wayfinder/tui-implementation-tasks.md)的当前项 → [代码规范](code-standards.md) → [外壳规格](tui-shell-spec.md)及[验收证据](tui-shell-validation-20261022.md)。
@@ -70,6 +70,13 @@
 - 最终Windows ConPTY四组共十二场通过，含固定目标起停/维护默认取消/实际结果、SSH匿名/失败/体检取消及三档resize，退出raw/监听/主屏/光标/括号粘贴恢复。工装使用隔离fixture，不起停真实服务或连接真实远端；真实受控扫描子树和worker IPC另由自动测试验证。
 - 各代理全部停写，root集中保存。已删除T09/T10活动行、说明和依赖，临时规格转长期规格；AGENTS/map/API/使用说明同步。仅T11/T12/T14继续等待指令。其他会话README与四份研究草稿保持原状。
 
-## 设计来源
+## T11 / T12进行中
+
+- 当前用户授权TCP浏览与管理，基线`393f1ad`，1546通过/11既有跳过。root唯一stage/commit；其他会话README/研究稿保持原状。
+- 规格与批准状态：[TCP本轮规格](tui-t11-t12-spec.md)。已批准只读星快照，普通成员/星管理员仅本星、完整机器ID/成员/安全凭证版本、不返回钥匙，不新增管理审计；现有list-nodes/list-members行为保持。原子版本删除方案等待第二项选择，未获批前不实施相关产品。
+- 分工：t09_maintenance只读TCP应用/DTO及纯snapshot builder；t09_services TCP管理/原子registry helper/唯一revision helper；t10_ssh TCP资源及独立测试；root共享presentation/秘密结果态、broker/protocol胶水、composition、统一验收与文档。代理只能编辑所分配文件，RED保存后GREEN，禁真用户IO/生产服务。
+- 本轮Selected model is at capacity中断为服务容量提示；已核对三个代理仍运行并从检查点续接，没有重开任务或切模型。
+
+## 设计来源（原稿）
 
 仓库外原稿：`C:/Users/yangsheng/.codex/visualizations/2026/10/21/01a15d5d-6d04-7b11-9ccb-39611d84b68b/crosschat-tui-v6-requirements.txt`、`crosschat-tui-v6-keys.txt`和49屏评审册。本轮可执行范围已提炼到长期外壳规格；无需每次重载历史稿。
