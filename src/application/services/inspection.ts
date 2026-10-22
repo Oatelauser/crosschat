@@ -1,5 +1,6 @@
-import { Worker } from 'node:worker_threads';
-import type { WorkerOptions } from 'node:worker_threads';
+import type { ChildProcess, ForkOptions } from 'node:child_process';
+import type { Worker, WorkerOptions } from 'node:worker_threads';
+import { runOwnedServiceProcess } from './owned-process.js';
 
 export interface ServiceProcess { kind: 'broker' | 'node'; pid: number; selector?: string }
 export interface ServiceInspection {
@@ -13,7 +14,10 @@ export interface ServiceInspectionOptions {
   baseDir: string;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** Thread-only fixture seam. Tasks that spawn probes require the process owner. */
   createWorker?(url: URL, options: WorkerOptions): Worker;
+  /** On POSIX, the injected child must own a detached process group and an IPC channel. */
+  createProcess?(url: URL, options: ForkOptions): ChildProcess;
 }
 type WorkRequest = { kind: 'inspect' } | { kind: 'guard'; selector: string };
 function record(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === 'object' && !Array.isArray(value); }
@@ -25,29 +29,39 @@ function inspection(value: unknown): value is ServiceInspection {
 }
 function guard(value: unknown): value is ServiceGuard { return record(value) && typeof value.allowed === 'boolean' && (value.reason === undefined || typeof value.reason === 'string'); }
 
-/** Only the inspector worker is cancelled; it owns no service-start or stop request. */
+/** Owns only the inspection tree, including blocking OS probes; actual services are never its children. */
 async function work(request: WorkRequest, options: ServiceInspectionOptions): Promise<unknown> {
   if (options.signal?.aborted) throw new Error('服务核验已取消');
   const timeoutMs = options.timeoutMs ?? 10_000;
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1) throw new Error('服务核验超时配置无效');
+  const payload = { baseDir: options.baseDir, request };
+  if (options.createWorker === undefined) return runOwnedServiceProcess(payload, {
+    entry: new URL('./inspect-process.js', import.meta.url), signal: options.signal, timeoutMs, createProcess: options.createProcess,
+  });
   let worker: Worker | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let onAbort = () => {};
+  let detach = () => {};
+  let result: unknown;
   try {
-    worker = (options.createWorker ?? ((url, settings) => new Worker(url, settings)))(new URL('./inspect-worker.js', import.meta.url), { workerData: { baseDir: options.baseDir, request } });
+    worker = options.createWorker(new URL('./inspect-worker.js', import.meta.url), { workerData: payload });
     const owned = worker;
-    return await new Promise<unknown>((resolve, reject) => {
-      const cleanup = () => { clearTimeout(timer); options.signal?.removeEventListener('abort', onAbort); owned.off('message', onMessage); owned.off('error', onError); owned.off('exit', onExit); };
-      const onMessage = (value: unknown) => { cleanup(); resolve(value); };
-      const onError = () => { cleanup(); reject(new Error('无法核验本机服务进程')); };
-      const onExit = () => { cleanup(); reject(new Error('服务核验任务未返回回执')); };
-      onAbort = () => { cleanup(); reject(new Error('服务核验已取消')); };
+    result = await new Promise<unknown>((resolve, reject) => {
+      const onMessage = (value: unknown) => { if (options.signal?.aborted) reject(new Error('服务核验已取消')); else resolve(value); };
+      const onError = () => reject(new Error('无法核验本机服务进程'));
+      const onExit = () => reject(new Error('服务核验任务未返回回执'));
+      const onAbort = () => reject(new Error('服务核验已取消'));
+      detach = () => { options.signal?.removeEventListener('abort', onAbort); owned.off('message', onMessage); owned.off('error', onError); owned.off('exit', onExit); };
       owned.once('message', onMessage); owned.once('error', onError); owned.once('exit', onExit);
       options.signal?.addEventListener('abort', onAbort, { once: true });
-      timer = setTimeout(() => { cleanup(); reject(new Error('服务核验超时')); }, timeoutMs);
+      timer = setTimeout(() => reject(new Error('服务核验超时')), timeoutMs);
       if (options.signal?.aborted) onAbort();
     });
-  } finally { clearTimeout(timer); options.signal?.removeEventListener('abort', onAbort); await worker?.terminate(); }
+  } finally {
+    clearTimeout(timer); detach();
+    await worker?.terminate();
+  }
+  if (options.signal?.aborted) throw new Error('服务核验已取消');
+  return result;
 }
 
 export async function inspectServiceProcesses(options: ServiceInspectionOptions): Promise<ServiceInspection> {
