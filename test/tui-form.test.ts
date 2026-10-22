@@ -45,7 +45,8 @@ describe('complete form confirmation content', () => {
     expect(rendered).toContain('safe-target');
     expect(rendered).toContain('核对完整影响');
     expect(rendered).toContain('未执行操作');
-    expect(rendered).not.toMatch(/\u001b|spoofed|fixture-secret-value/);
+    expect(rendered).not.toContain('\u001b');
+    expect(rendered).not.toMatch(/spoofed|fixture-secret-value/);
     expect(lines.find((line) => line.kind === 'field' && line.fieldIndex === 1)?.text).toContain('•');
     expect(input.fields[0].value).toBe('可横向编辑👩‍💻'.repeat(8));
     expect(input.fields[1].value).toBe('fixture-secret-value');

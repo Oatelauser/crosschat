@@ -85,12 +85,13 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
         controller.dispose();
         throw error;
       }
+      const done = instance.waitUntilExit().then(() => {});
       return {
-        done: instance.waitUntilExit().then(() => {}),
+        done,
         interrupt: () => controller.handleKey({ name: 'c', ctrl: true }),
         dispose: async () => {
           controller.dispose();
-          try { instance.unmount(); }
+          try { instance.unmount(); await done; }
           finally {
             if (selectedContextId) {
               const saved = await saveTuiPreferences({ home, preferences: { version: 1, selectedContextId } });

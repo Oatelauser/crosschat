@@ -71,12 +71,12 @@ function routeKey(route: TuiRoute): string { return JSON.stringify([route.resour
 
 export function createTuiController(options: TuiControllerOptions) {
   const listeners = new Set<() => void>();
-  const contextLabels: Readonly<Record<string, string>> = { local: '本机', ssh: 'SSH', tcp: 'TCP' };
+  const contextLabels = new Map<string, string>([['local', '本机'], ['ssh', 'SSH'], ['tcp', 'TCP']]);
   const initialContexts = options.contextSource?.initial ?? { contexts: options.contexts, completeness: 'complete' as const };
   let contexts = [...initialContexts.contexts];
   function contextRows(values: readonly TuiContext[], notice?: string): readonly TuiRow[] { return values.map((context) => ({
     id: context.id, contextId: context.id,
-    cells: { kind: contextLabels[context.kind] ?? context.kind, name: context.label, target: context.target ?? '', description: context.description ?? '' },
+    cells: { kind: contextLabels.get(context.kind) ?? context.kind, name: context.label, target: context.target ?? '', description: context.description ?? '' },
     detail: [
       { label: '类型', value: context.kind }, { label: '名称', value: context.label }, { label: '目标', value: context.target ?? '' },
       { label: '身份提示', value: context.identityHint ?? '尚未核实' },
