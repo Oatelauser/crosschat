@@ -54,7 +54,7 @@ export function createTcpApplication(options: TcpApplicationOptions): TcpApplica
   const now = options.now ?? Date.now;
   const timeoutMs = options.timeoutMs ?? 15_000;
   const concurrency = options.concurrency ?? 3;
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || !Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > 16) throw new Error('Invalid TCP read bounds');
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || !Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > 3) throw new Error('Invalid TCP read bounds');
   const base = (request: TcpContextRequest, completeness: TcpReadResult['completeness'], errors: QueryError[] = []): TcpReadResult => ({ contextId: request.contextId, completeness, errors, observedAt: now() });
   const empty = (request: TcpStarRequest, completeness: TcpReadResult['completeness'], errors: QueryError[] = []): TcpStarResult => ({ ...base(request, completeness, errors), star: null, machines: [], members: [], credentials: [] });
   const cancelled = (request: TcpContextRequest) => issue(request.contextId, 'TCP 读取已取消。', 'cancelled', '需要时重新读取。');
