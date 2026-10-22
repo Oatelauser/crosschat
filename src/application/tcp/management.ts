@@ -1,6 +1,8 @@
 import type { DiscoveryEndpoint } from '../discovery/model.js';
 import type { SessionMembershipService } from '../session-membership/index.js';
 import type { TcpApplication } from './model.js';
+import type { ManagementRequest, ManagementResult } from '../management/local.js';
+import type { MemberRemoveExactResultFrame } from '../../serve/protocol.js';
 
 export type TcpManagementAction = 'add-star' | 'rename-star' | 'remove-star' | 'set-show-name'
   | 'generate-node-key' | 'generate-admin-key' | 'remove-node' | 'revoke-credential' | 'remove-member' | 'adopt-session';
@@ -52,4 +54,13 @@ export interface TcpManagementOptions {
   membership?: SessionMembershipService;
   discovery?: DiscoveryEndpoint;
   now?(): number;
+  executeLocal?(request: ManagementRequest, signal?: AbortSignal): Promise<ManagementResult<unknown>>;
+  openRemote?(request: { contextId: string; starId: string; identity: 'member' | 'admin'; signal?: AbortSignal }): Promise<TcpManagementConnection>;
+  machineId?(): string | undefined | Promise<string | undefined>;
+}
+export interface TcpManagementConnection {
+  starId?: string;
+  request(action: string, params: Readonly<Record<string, unknown>>): Promise<unknown>;
+  removeMember(target: { sessionId: string; machine: string; tool: string }): Promise<MemberRemoveExactResultFrame>;
+  close(): void;
 }
