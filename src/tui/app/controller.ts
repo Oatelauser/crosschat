@@ -36,6 +36,11 @@ interface ListState {
   notice?: string;
   error?: string;
   sortColumn?: string;
+  sampledAt?: number;
+  filters?: TuiPage['filters'];
+  selectedFacets?: Map<string, string>;
+  actionAvailability?: TuiPage['actionAvailability'];
+  detailViews?: TuiPage['detailViews'];
 }
 
 interface SavedInput {
@@ -45,6 +50,7 @@ interface SavedInput {
   scrollOffset: number;
   detail?: TuiDetail;
   detailCursorLine: number;
+  contextId?: string;
 }
 
 function shortcut(key: TuiKey): string {
@@ -68,6 +74,9 @@ function editEvent(key: TuiKey): EditEvent | undefined {
 
 function errorText(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 function routeKey(route: TuiRoute): string { return JSON.stringify([route.resourceId, route.contextId]); }
+function own<T>(values: Readonly<Record<string, T>> | undefined, key: string): T | undefined {
+  return values && Object.hasOwn(values, key) ? values[key] : undefined;
+}
 
 export function createTuiController(options: TuiControllerOptions) {
   const listeners = new Set<() => void>();
@@ -97,6 +106,8 @@ export function createTuiController(options: TuiControllerOptions) {
   let savedInput: SavedInput | undefined;
   let detail: TuiDetail | undefined;
   let detailCursorLine = 0;
+  let detailReturnMode: 'list' | 'choice' = 'list';
+  let choice: TuiSnapshot['choice'];
   let overlay: TuiOverlay | undefined;
   let overlayAction: TuiAction | undefined;
   let overlayOwner: ListState | undefined;
@@ -110,7 +121,7 @@ export function createTuiController(options: TuiControllerOptions) {
   const formKnownSecrets = new Set<string>();
   let viewGeneration = 0;
   let help: TuiSnapshot['help'];
-  let helpReturnMode: 'list' | 'detail' = 'list';
+  let helpReturnMode: 'list' | 'detail' | 'choice' = 'list';
   let viewport = { columns: 80, rows: 24 };
   let loading = false;
   let disposed = false;
@@ -122,20 +133,35 @@ export function createTuiController(options: TuiControllerOptions) {
   function pageSize() { return Math.max(1, viewport.rows - 9); }
   function visibleRows(): readonly TuiRow[] {
     const query = page.filter.toLocaleLowerCase();
-    const rows = page.rows.filter((row) => [row.id, row.searchText ?? '', ...Object.values(row.cells), ...(row.detail?.flatMap((field) => [field.label, field.value]) ?? [])].some((value) => value.toLocaleLowerCase().includes(query)));
+    const rows = page.rows.filter((row) => (page.filters ?? []).every((filter) => {
+      const selected = page.selectedFacets?.get(filter.id) ?? filter.defaultValue;
+      return selected === filter.defaultValue || own(row.facets, filter.id) === selected;
+    }) && [row.id, row.searchText ?? '', ...Object.values(row.cells), ...(row.detail?.flatMap((field) => [field.label, field.value]) ?? [])].some((value) => value.toLocaleLowerCase().includes(query)));
     return page.sortColumn ? rows.toSorted((left, right) => (left.cells[page.sortColumn!] ?? '').localeCompare(right.cells[page.sortColumn!] ?? '')) : rows;
   }
   function selectedRow() { return page.rows.find((row) => row.id === page.selectedId); }
   function actionEntries(targetMode: TuiMode): TuiActionEntry[] {
     return options.registry.actions(page.route.resourceId, targetMode).map((action) => {
-      let reason = action.unavailableReason;
-      let enabled = action.enabled !== false;
+      const row = selectedRow();
+      const availability = {
+        enabled: action.enabled !== false, reason: action.unavailableReason, nextStep: action.nextStep, impact: action.impact, fields: action.fields,
+        ...(targetMode === 'list' ? own(page.actionAvailability, action.id) : undefined),
+        ...(targetMode === 'list' ? own(row?.actionAvailability, action.id) : undefined),
+      };
+      let { reason, enabled } = availability;
       if (enabled && action.selectionPolicy === 'required' && !selectedRow()) { enabled = false; reason = '请先选择一项'; }
       if (action.kind === 'copy' && !options.clipboard) { enabled = false; reason = '当前终端未提供剪贴板'; }
+      if (enabled && action.kind === 'copy' && targetMode === 'list' && (action.copyKey ? own(row?.copyValues, action.copyKey) : row?.copyValue) === undefined) {
+        enabled = false; reason = '当前项目没有可复制的完整值';
+      }
+      if (enabled && action.kind === 'detail' && action.viewId && !own(row?.detailViews, action.viewId) && !own(page.detailViews, action.viewId)) {
+        enabled = false; reason = '当前项目未提供此只读信息';
+      }
+      if (enabled && action.kind === 'filter' && !page.filters?.some((filter) => filter.id === action.filterId)) { enabled = false; reason = '当前资源未提供此筛选'; }
       if (enabled && action.mutation && (!options.adapters[action.ownerResourceId]?.checkAction || !options.adapters[action.ownerResourceId]?.mutate)) {
         enabled = false; reason = '当前资源尚未提供权限核验与操作接口';
       }
-      return { id: action.id, shortcut: action.shortcut, label: action.label, enabled, reason, nextStep: action.nextStep, impact: action.impact };
+      return { id: action.id, shortcut: action.shortcut, label: action.label, ...availability, enabled, reason };
     });
   }
   function publish() {
@@ -148,7 +174,8 @@ export function createTuiController(options: TuiControllerOptions) {
     if (selectedIndex >= page.scrollOffset + pageSize()) page.scrollOffset = selectedIndex - pageSize() + 1;
     snapshot = {
       route: { ...page.route }, context: currentContext(), mode, rows, selectedId: page.selectedId, selectedIndex,
-      scrollOffset: page.scrollOffset, filter: page.filter, input, detail, help, overlay, loading,
+      scrollOffset: page.scrollOffset, filter: page.filter, input, detail, help, overlay, choice, loading,
+      filters: page.filters, selectedFacets: Object.fromEntries(page.selectedFacets ?? []), sampledAt: page.sampledAt, totalRows: page.rows.length,
       error: page.error, notice: page.notice, completeness: page.completeness, actions: actionEntries(mode), viewport: { ...viewport },
     };
     for (const listener of listeners) listener();
@@ -206,6 +233,10 @@ export function createTuiController(options: TuiControllerOptions) {
       }
       if (result.contexts !== undefined) contexts = [...result.contexts];
       page.rows = [...result.page.rows]; page.completeness = result.page.completeness; page.notice = result.page.notice; page.error = undefined;
+      page.sampledAt = result.page.sampledAt; page.filters = result.page.filters;
+      page.actionAvailability = result.page.actionAvailability; page.detailViews = result.page.detailViews;
+      page.selectedFacets ??= new Map();
+      for (const filter of page.filters ?? []) if (!page.selectedFacets.has(filter.id)) page.selectedFacets.set(filter.id, filter.defaultValue);
     } catch (error) {
       if (!disposed && generation === readGeneration && requestPage === page && !controller.signal.aborted) {
         page.error = contextSource ? '无法读取连接配置，请检查来源和访问权限后重试。' : errorText(error); page.completeness = page.rows.length ? 'partial' : 'unavailable';
@@ -225,19 +256,25 @@ export function createTuiController(options: TuiControllerOptions) {
       page = cached ?? { route: { ...route }, rows: [], filter: '', scrollOffset: 0, completeness: 'unavailable' };
       pages.set(routeKey(route), page);
     }
-    mode = 'list'; input = undefined; savedInput = undefined; detail = undefined; help = undefined;
+    mode = 'list'; input = undefined; savedInput = undefined; detail = undefined; help = undefined; choice = undefined;
     publish(); void refresh();
   }
   function back() {
     cancelWork();
-    if (mode === 'detail') { mode = 'list'; detail = undefined; publish(); return; }
+    if (mode === 'detail') { mode = detailReturnMode; detail = undefined; publish(); return; }
     if (page.filter) { page.filter = ''; publish(); return; }
+    if (page.filters?.some((filter) => (page.selectedFacets?.get(filter.id) ?? filter.defaultValue) !== filter.defaultValue)) {
+      page.selectedFacets = new Map(page.filters.map((filter) => [filter.id, filter.defaultValue])); publish(); return;
+    }
     const previous = history.pop();
     if (previous) { cancelRead(false); page = previous; mode = 'list'; publish(); }
   }
   function openInput(kind: TuiInput['kind']) {
     cancelWork();
-    savedInput = { mode: mode === 'detail' ? 'detail' : 'list', filter: page.filter, selectedId: page.selectedId, scrollOffset: page.scrollOffset, detail, detailCursorLine };
+    savedInput = {
+      mode: mode === 'detail' ? 'detail' : 'list', filter: page.filter, selectedId: page.selectedId, scrollOffset: page.scrollOffset, detail, detailCursorLine,
+      contextId: page.route.contextId ?? (page.route.resourceId === 'ctx' ? selectedRow()?.contextId : undefined),
+    };
     input = { kind, editor: { text: '', cursor: 0 }, candidates: kind === 'command' ? options.registry.candidates('').map((resource) => ({ id: resource.id, label: resource.label, enabled: true, reason: resource.unavailableReason })) : [], hint: 'Enter 保留筛选' };
     mode = 'input';
     if (kind !== 'detail-search') page.filter = '';
@@ -273,8 +310,13 @@ export function createTuiController(options: TuiControllerOptions) {
     if (pressed === 'Enter') {
       const target = input.kind === 'command' ? (input.candidateIndex === undefined ? options.registry.resolve(input.editor.text) : options.registry.resolve(input.candidates[input.candidateIndex]?.id ?? '')) : undefined;
       if (target) {
+        const contextId = savedInput?.contextId ?? page.route.contextId;
         if (savedInput) { page.filter = savedInput.filter; page.selectedId = savedInput.selectedId; page.scrollOffset = savedInput.scrollOffset; }
-        navigate({ resourceId: target.id, ...(target.id === 'ctx' ? {} : { contextId: page.route.contextId }) });
+        if (target.id !== 'ctx' && (!contextId || !contexts.some((context) => context.id === contextId))) {
+          mode = savedInput?.mode ?? 'list'; input = undefined; savedInput = undefined; page.notice = '请先从 ctx 选择有效连接'; publish(); return;
+        }
+        if (page.route.resourceId === 'ctx' && target.id !== 'ctx' && contextId) options.onContextSelection?.(contextId);
+        navigate({ resourceId: target.id, ...(target.id === 'ctx' ? {} : { contextId }) });
       } else { mode = savedInput?.mode ?? 'list'; input = undefined; savedInput = undefined; publish(); }
       return;
     }
@@ -515,9 +557,11 @@ export function createTuiController(options: TuiControllerOptions) {
     for (const value of [...formKnownSecrets].sort((left, right) => right.length - left.length)) safe = safe.replaceAll(value, '[已隐藏]');
     return safe;
   }
-  async function copy() {
+  async function copy(action?: TuiAction) {
     if (!options.clipboard) return;
-    const value = mode === 'detail' ? detail?.fields[detail.selectedIndex]?.value : selectedRow()?.copyValue ?? selectedRow()?.id;
+    const value = mode === 'detail' ? detail?.fields[detail.selectedIndex]?.value
+      : mode === 'choice' && choice ? choice.options[choice.selectedIndex]?.value
+        : action?.copyKey ? own(selectedRow()?.copyValues, action.copyKey) : selectedRow()?.copyValue;
     if (value === undefined) return;
     const controller = new AbortController();
     const owner = page;
@@ -536,7 +580,7 @@ export function createTuiController(options: TuiControllerOptions) {
     if (action.id === 'back') { back(); return; }
     if (action.id === 'refresh') { void refresh(); return; }
     if (action.id === 'help') {
-      helpReturnMode = mode === 'detail' ? 'detail' : 'list';
+      helpReturnMode = mode === 'detail' ? 'detail' : mode === 'choice' ? 'choice' : 'list';
       help = { title: options.registry.resolve(page.route.resourceId)?.label ?? page.route.resourceId, entries: actionEntries(mode), scrollOffset: 0 };
       mode = 'help'; publish(); return;
     }
@@ -548,7 +592,8 @@ export function createTuiController(options: TuiControllerOptions) {
       page.sortColumn = columns[(index + 1) % columns.length]?.id;
       page.notice = page.sortColumn ? `按${columns.find((column) => column.id === page.sortColumn)?.label}排序` : '此资源没有可排序字段'; publish(); return;
     }
-    if (action.kind === 'copy') { void copy(); return; }
+    if (action.kind === 'copy') { void copy(action); return; }
+    if (action.kind === 'filter') { openFacet(action); return; }
     if (action.kind === 'form') { openForm(action); return; }
     if (action.kind === 'navigate') {
       const row = selectedRow();
@@ -564,23 +609,80 @@ export function createTuiController(options: TuiControllerOptions) {
     }
     if (action.kind === 'detail') {
       const row = selectedRow();
-      if (row) {
+      const view = action.viewId ? own(row?.detailViews, action.viewId) ?? own(page.detailViews, action.viewId) : undefined;
+      if (row || view) {
         cancelWork();
-        detail = { title: row.cells.name ?? row.id, fields: row.detail ?? Object.entries(row.cells).map(([label, value]) => ({ label, value })), selectedIndex: 0, scrollOffset: 0, query: '' };
+        detail = {
+          title: view?.title ?? row!.cells.name ?? row!.id,
+          fields: view?.fields ?? row!.detail ?? Object.entries(row!.cells).map(([label, value]) => ({ label, value })), selectedIndex: 0, scrollOffset: 0, query: '',
+        };
+        detailReturnMode = 'list';
         detailCursorLine = 0;
         mode = 'detail'; publish();
       }
+      return;
     }
+    page.notice = `此操作尚未接入: ${action.label}`; publish();
+  }
+  function openFacet(action: TuiAction) {
+    const filter = page.filters?.find((filter) => filter.id === action.filterId);
+    if (!filter || !filter.options.length) { page.notice = '当前没有可用筛选项'; publish(); return; }
+    const current = page.selectedFacets?.get(filter.id) ?? filter.defaultValue;
+    if (filter.mode === 'toggle') {
+      const enabled = filter.options.filter((option) => option.enabled !== false);
+      const index = enabled.findIndex((option) => option.value === current);
+      const next = enabled[(index + 1) % enabled.length];
+      if (!next) { page.notice = '当前没有可用筛选项'; publish(); return; }
+      page.selectedFacets ??= new Map(); page.selectedFacets.set(filter.id, next.value); publish(); return;
+    }
+    cancelWork(); mode = 'choice';
+    choice = { filterId: filter.id, title: filter.label, options: filter.options, selectedIndex: Math.max(0, filter.options.findIndex((option) => option.value === current)), scrollOffset: 0 };
+    ensureChoiceVisible(); publish();
+  }
+  function ensureChoiceVisible() {
+    if (!choice) return;
+    const selectedIndex = Math.max(0, Math.min(choice.selectedIndex, Math.max(0, choice.options.length - 1)));
+    let scrollOffset = Math.max(0, Math.min(choice.scrollOffset, Math.max(0, choice.options.length - pageSize())));
+    if (selectedIndex < scrollOffset) scrollOffset = selectedIndex;
+    if (selectedIndex >= scrollOffset + pageSize()) scrollOffset = selectedIndex - pageSize() + 1;
+    choice = { ...choice, selectedIndex, scrollOffset };
+  }
+  function choiceKey(key: TuiKey) {
+    if (!choice || key.name === 'paste') return;
+    const pressed = shortcut(key);
+    const action = options.registry.actions(page.route.resourceId, 'choice').find((entry) => entry.shortcut.split(' / ').includes(pressed));
+    if (!action) return;
+    if (action.id === 'choice-cancel') { mode = 'list'; choice = undefined; publish(); return; }
+    if (action.id === 'help') { execute(action); return; }
+    const option = choice.options[choice.selectedIndex];
+    if (action.id === 'choice-copy') { void copy(action); return; }
+    if (action.id === 'choice-detail' && option) {
+      detail = { title: choice.title, fields: [{ label: '选项', value: option.label }, { label: '值', value: option.value }, { label: '可用性', value: option.enabled === false ? option.reason ?? '暂不可用' : '可用' }], selectedIndex: 0, scrollOffset: 0, query: '' };
+      detailReturnMode = 'choice'; detailCursorLine = 0; mode = 'detail'; publish(); return;
+    }
+    if (action.id === 'choice-apply' && option) {
+      const filter = page.filters?.find((entry) => entry.id === choice!.filterId);
+      const current = filter?.options.find((entry) => entry.value === option.value);
+      if (!current || current.enabled === false) { page.notice = current?.reason ?? '筛选选项已变化，请重新选择'; publish(); return; }
+      page.selectedFacets ??= new Map(); page.selectedFacets.set(filter!.id, current.value);
+      mode = 'list'; choice = undefined; publish(); return;
+    }
+    const moves: Readonly<Record<string, number>> = { previous: -1, next: 1, 'page-up': -pageSize(), 'page-down': pageSize() };
+    const index = action.id === 'first' ? 0 : action.id === 'last' ? choice.options.length - 1 : choice.selectedIndex + (own(moves, action.id) ?? 0);
+    choice = { ...choice, selectedIndex: Math.max(0, Math.min(choice.options.length - 1, index)) };
+    ensureChoiceVisible(); publish();
   }
   function handleKey(key: TuiKey) {
     if (disposed) return;
     if (mode === 'form') { formKey(key); return; }
     if (shortcut(key) === 'Ctrl+C') {
       if (mode === 'input') inputKey({ name: 'escape' });
+      if (mode === 'choice') { mode = 'list'; choice = undefined; publish(); }
       if (activeRead) cancelRead(true); else options.onExit?.();
       return;
     }
     if (mode === 'input') { inputKey(key); return; }
+    if (mode === 'choice') { choiceKey(key); return; }
     if (key.name === 'paste') return;
     if (mode === 'help') {
       const pressed = shortcut(key);
@@ -602,6 +704,7 @@ export function createTuiController(options: TuiControllerOptions) {
       viewport = { columns: Math.max(1, Math.floor(columns)), rows: Math.max(1, Math.floor(rows)) };
       ensureDetailVisible();
       ensureFormVisible();
+      ensureChoiceVisible();
       if (help) help = { ...help, scrollOffset: Math.min(help.scrollOffset, Math.max(0, helpLines(help.entries, viewport.columns).length - pageSize())) };
       publish();
     },

@@ -42,9 +42,10 @@ function formLines(overlay: TuiOverlay, width: number, height: number): Line[] {
     const field = overlay.fields[line.fieldIndex];
     const prefix = `${clipText(field.label, Math.max(2, Math.floor(width / 3)))}: `;
     const focused = overlay.focusIndex === line.fieldIndex;
-    const value = field.secret ? '•'.repeat(Array.from(segmenter.segment(field.value)).length) : field.value;
+    const label = field.options?.find((option) => option.value === field.value)?.label ?? field.value;
+    const value = field.secret ? '•'.repeat(Array.from(segmenter.segment(field.value)).length) : field.options ? `‹${label}› ↑↓选择` : field.value;
     const cursor = field.cursor ?? Array.from(segmenter.segment(value)).length;
-    lines.push({ text: prefix + (focused && overlay.phase === 'editing' ? editingLine(value, cursor, Math.max(0, width - displayWidth(prefix))) : sanitizeTerminalText(value)), selected: focused });
+    lines.push({ text: prefix + (focused && overlay.phase === 'editing' && !field.options ? editingLine(value, cursor, Math.max(0, width - displayWidth(prefix))) : sanitizeTerminalText(value)), selected: focused });
   }
   while (lines.length < height - 1) lines.push({ text: '' });
   lines.push({ text: overlay.phase === 'submitting' ? 'Esc停止等待 · 结果待核实' : `${overlay.focusIndex === overlay.fields.length ? '›' : ' '}[取消]  ${overlay.focusIndex === overlay.fields.length + 1 ? '›' : ' '}[${overlay.checking ? '核验中' : '确认提交'}]`, tone: 'cyan' });
@@ -64,6 +65,14 @@ function bodyLines(snapshot: TuiSnapshot, resource: TuiResource, width: number, 
       ...detailLines(detail.fields, Math.max(1, width - 2)).slice(detail.scrollOffset, detail.scrollOffset + height - 1).map((line) => ({
         text: `${line.fieldIndex === detail.selectedIndex ? '› ' : '  '}${line.text}`, selected: line.fieldIndex === detail.selectedIndex,
       }))];
+  }
+  if (snapshot.choice) {
+    const choice = snapshot.choice;
+    return [{ text: `${choice.title} · Enter应用 / Esc撤销`, tone: 'cyan' }, ...choice.options.slice(choice.scrollOffset, choice.scrollOffset + height - 1).map((option, index) => ({
+      text: `${choice.selectedIndex === choice.scrollOffset + index ? '›' : ' '} ${option.label}${option.enabled === false ? ' (不可用)' : ''}`,
+      selected: choice.selectedIndex === choice.scrollOffset + index,
+      tone: option.enabled === false ? 'gray' as const : undefined,
+    }))];
   }
   const table = formatTable({ columns: resource.columns, rows: snapshot.rows, width: Math.max(0, width - 2) });
   const list: Line[] = [{ text: `  ${table.header}`, tone: 'cyan' }];
@@ -87,7 +96,7 @@ export function TuiScreen({ snapshot, resource, version }: { snapshot: TuiSnapsh
   const permission = snapshot.context ? snapshot.context.permissionLabel ?? (snapshot.context.kind === 'local' ? '本机用户' : '未认证') : '选择连接';
   const top: Line[] = [
     { text: `crosschat ${version} · ${snapshot.context?.label ?? 'ctx'} · 权限：${permission}`, tone: 'cyan' },
-    { text: snapshot.input ? `${snapshot.input.kind === 'command' ? ':' : '/'}${editingLine(snapshot.input.editor.text, snapshot.input.editor.cursor, width - 1)}` : `:${resource.id}  ${resource.label}${snapshot.filter ? `  /${snapshot.filter}` : ''}` },
+    { text: snapshot.input ? `${snapshot.input.kind === 'command' ? ':' : '/'}${editingLine(snapshot.input.editor.text, snapshot.input.editor.cursor, width - 1)}` : `:${resource.id}  ${resource.label}${snapshot.filter ? `  /${snapshot.filter}` : ''}${snapshot.sampledAt === undefined ? '' : ` · 采样 ${new Date(snapshot.sampledAt).toLocaleTimeString()}`}` },
   ];
   const candidates = snapshot.input?.candidates ?? [];
   const chosen = snapshot.input?.candidateIndex;
@@ -98,12 +107,18 @@ export function TuiScreen({ snapshot, resource, version }: { snapshot: TuiSnapsh
   }
   // Even a full two-line completion list must explain what Enter does.
   if (snapshot.input && candidates.length >= 2) top[3] = { ...top[3], text: `${top[3].text} · ${snapshot.input.hint}` };
+  if (!snapshot.input && snapshot.filters?.length) {
+    top[2] = { text: snapshot.filters.map((filter) => {
+      const value = snapshot.selectedFacets?.[filter.id] ?? filter.defaultValue;
+      return `${filter.label}：${filter.options.find((option) => option.value === value)?.label ?? value}`;
+    }).join('  '), tone: 'cyan' };
+  }
   const body = bodyLines(snapshot, resource, width, bodyHeight);
   while (body.length < bodyHeight) body.push({ text: '' });
   const completeness = { complete: '完整', partial: '部分结果', unavailable: '尚未启用', cancelled: '已取消' }[snapshot.completeness];
   const footer: Line[] = [
-    { text: `${snapshot.rows.length ? `${snapshot.selectedIndex + 1}/${snapshot.rows.length}` : '0项'} · ${completeness}${snapshot.loading ? ' · 读取中' : ''}${snapshot.filter ? ` · 筛选 ${snapshot.filter}` : ''}`, tone: 'gray' },
-    { text: snapshot.error ?? snapshot.overlay?.error ?? snapshot.notice ?? '', tone: snapshot.error || snapshot.overlay?.error ? 'red' : 'yellow' },
+    { text: `${snapshot.rows.length ? `${snapshot.selectedIndex + 1}/${snapshot.rows.length}` : '0项'}${snapshot.totalRows !== undefined && snapshot.totalRows !== snapshot.rows.length ? ` / 发现${snapshot.totalRows}项` : ''} · ${completeness}${snapshot.loading ? ' · 读取中' : ''}${snapshot.filter ? ` · 筛选 ${snapshot.filter}` : ''}`, tone: 'gray' },
+    { text: snapshot.choice?.options[snapshot.choice.selectedIndex]?.reason ?? snapshot.error ?? snapshot.overlay?.error ?? snapshot.notice ?? '', tone: snapshot.error || snapshot.overlay?.error ? 'red' : 'yellow' },
     { text: [...snapshot.actions].sort((left, right) => {
       const priority = ['enter-context', 'detail', 'copy', 'refresh', 'sort', 'help'];
       const rank = (id: string) => priority.includes(id) ? priority.indexOf(id) : 10;

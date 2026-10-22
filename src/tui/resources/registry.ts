@@ -25,10 +25,17 @@ function commonActions(resourceId: string, mode: TuiMode): TuiAction[] {
   ] : mode === 'form' ? [
     ['field-next', '下一字段或按钮', 'Tab'], ['field-previous', '上一字段或按钮', 'Shift+Tab'], ['field-enter', '下一字段或所选按钮', 'Enter'], ['form-cancel', '取消并返回', 'Esc / Ctrl+C'],
     ['form-page-up', '上滚确认内容', 'PgUp'], ['form-page-down', '下滚确认内容', 'PgDn'], ['form-first', '光标或内容开头', 'Home'], ['form-last', '光标或内容末尾', 'End'],
+  ] : mode === 'choice' ? [
+    ['previous', '上一选项', '↑ / k / Shift+Tab'], ['next', '下一选项', '↓ / j / Tab'], ['page-up', '上一页', 'PgUp'], ['page-down', '下一页', 'PgDn'],
+    ['first', '首项', 'Home'], ['last', '末项', 'End'], ['choice-apply', '应用筛选', 'Enter'], ['choice-cancel', '撤销选择', 'Esc'], ['choice-detail', '完整选项', 'd'], ['choice-copy', '复制完整值', 'y'], ['help', '全部按键', '?'], ['interrupt', '取消读取或退出', 'Ctrl+C'],
   ] : [
     ['previous', '向上滚动', '↑ / k'], ['next', '向下滚动', '↓ / j'], ['page-up', '上一页', 'PgUp'], ['page-down', '下一页', 'PgDn'], ['first', '开头', 'Home'], ['last', '末尾', 'End'], ['back', '关闭帮助', 'Esc / ?'], ['interrupt', '取消读取或退出', 'Ctrl+C'],
   ];
   const actions = entries.map(([id, label, shortcut]) => command(id, label, shortcut, resourceId));
+  if (mode === 'choice') {
+    const copy = actions.find((action) => action.id === 'choice-copy');
+    if (copy) copy.kind = 'copy';
+  }
   if (mode === 'list' || mode === 'detail') {
     actions.push({ ...command('copy', '复制完整值', 'y', resourceId), kind: 'copy', selectionPolicy: 'required' });
   }
