@@ -471,6 +471,41 @@ describe('TUI interaction controller', () => {
     } finally { controller.dispose(); }
   });
 
+  it('clears a blocking filter only when selecting a returned result that is present', async () => {
+    let rows: readonly TuiRow[] = [other];
+    const create: TuiAction = { ...rename, id: 'create', shortcut: 'a', selectionPolicy: 'none', returnPolicy: 'select-result', fields: [] };
+    const controller = createTuiController({ registry: mutationRegistry(create), contexts, adapters: { sessions: {
+      read: async () => ({ rows, completeness: 'complete' }), checkAction: async () => ({ enabled: true }), mutate: async () => {
+        rows = [...rows, { id: 'created', cells: { name: 'created outside filter' } }];
+        return { selectedId: 'created', message: '已创建' };
+      },
+    } } });
+    try {
+      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      controller.handleKey({ name: '/' }); controller.handleKey({ name: 'text', text: '第二项' }); controller.handleKey({ name: 'enter' });
+      controller.handleKey({ name: 'a' }); await new Promise(setImmediate);
+      controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('list'));
+      expect(controller.getSnapshot()).toMatchObject({ selectedId: 'created', filter: '' });
+      expect(controller.getSnapshot().notice).toContain('筛选');
+    } finally { controller.dispose(); }
+  });
+
+  it('keeps the prior selection and explains when a returned result is outside the refreshed page', async () => {
+    const create: TuiAction = { ...rename, id: 'create', shortcut: 'a', selectionPolicy: 'none', returnPolicy: 'select-result', fields: [] };
+    const controller = createTuiController({ registry: mutationRegistry(create), contexts, adapters: { sessions: {
+      read: async () => ({ rows: [other], completeness: 'partial' }), checkAction: async () => ({ enabled: true }), mutate: async () => ({ selectedId: 'outside-page', message: '已创建' }),
+    } } });
+    try {
+      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      controller.handleKey({ name: 'a' }); await new Promise(setImmediate);
+      controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('list'));
+      expect(controller.getSnapshot().selectedId).toBe(other.id);
+      expect(controller.getSnapshot().notice).toContain('结果不在当前列表');
+    } finally { controller.dispose(); }
+  });
+
   it('requires a second explicit confirmation when authority reports a changed impact', async () => {
     let impact = ['影响一项'];
     const mutate = vi.fn(async () => ({}));
