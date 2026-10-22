@@ -1,11 +1,13 @@
 import { mkdtemp, mkdir, rm, writeFile, rename, stat } from 'node:fs/promises';
+import fs from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { encodeRef } from '../src/ref.js';
 
 const directories: string[] = [];
-afterEach(async () => { for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true }); });
+afterEach(async () => { vi.restoreAllMocks(); syncBuiltinESMExports(); for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true }); });
 async function fixture() {
   const baseDir = await mkdtemp(join(tmpdir(), 'crosschat-observation-logs-'));
   directories.push(baseDir); await mkdir(join(baseDir, 'tcp'));
@@ -13,6 +15,20 @@ async function fixture() {
 }
 
 describe('bounded observation log reads', () => {
+  it('refuses a registered filename that is a symbolic link to an unregistered source', async () => {
+    const { queryManagedLog } = await import('../src/application/observations/logs.js');
+    const { baseDir, file } = await fixture();
+    await writeFile(file, 'must-not-read-unregistered-private-content');
+    // File symlinks need Windows privileges. Inject the lstat boundary while the
+    // backing bytes remain an isolated fixture, so this check runs everywhere.
+    const metadata = await fs.lstat(file);
+    vi.spyOn(fs, 'lstat').mockResolvedValue(Object.assign(metadata, { isSymbolicLink: () => true }));
+    syncBuiltinESMExports();
+    const page = await queryManagedLog({ baseDir });
+    expect(page).toMatchObject({ completeness: 'unavailable', items: [], bytesRead: 0 });
+    expect(page.errors.length).toBeGreaterThan(0);
+    expect(JSON.stringify(page)).not.toContain('must-not-read-unregistered-private-content');
+  });
   it('retains lossless filesystem identities for rotation on large Windows file IDs', async () => {
     const { queryLogWindow } = await import('../src/application/queries/logs.js');
     const { file } = await fixture();
