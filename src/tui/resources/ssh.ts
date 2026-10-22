@@ -26,7 +26,7 @@ function guide(host: string): TuiReadonlyView {
     { label: '当前目标', value: host }, { label: '配置来源', value: '自动读取本机 ~/.ssh/config 中明确的 Host 别名；不编辑配置，不保存密码或私钥。' },
     { label: '同一用户', value: `会话发现与 doctor 都由 SSH Host ${host} 当前配置选定的远端用户执行；不会改用本机或其他用户的数据。` },
     { label: '检测范围', value: 't 只验证一次远端只读 discover 接口；不运行有补投副作用的 status，不说明全部会话已读取，也不证明反向回程可达。' },
-    { label: '原生操作', value: `需要聊天或恢复会话时，请回到目标原生窗口；需要命令时先在原生终端用 ssh ${host} 登录同一用户，再核对目标会话。TUI 不代替任何原生会话聊天。` },
+    { label: '原生操作', value: '需要聊天或恢复会话时，请回到目标原生窗口；需要命令时先在原生终端选择此已配置 Host 登录同一用户，再核对目标会话。TUI 不代替任何原生会话聊天。' },
     { label: '回程', value: '双向通信还需对端能够通过发送方 hostname 对应的 SSH Host 免密返回；TUI 不自动探测回程。单向 NAT 情况请参阅 docs/federation.md。' },
     { label: '接口不支持', value: '在同一 SSH 用户下升级 crosschat，以支持 discover 与 doctor --json；无旧端文本降级。' },
   ] };
@@ -78,7 +78,10 @@ export function createSshResource(options: SshResourceOptions): { resource: TuiR
           detailViews: { guide: guide(item.target) }, actionRoutes: safe ? routes(item.id) : {}, actionAvailability: availability };
       });
       return { rows, completeness, sampledAt: listed.observedAt, notice: completeness === 'unavailable' ? 'SSH 配置来源不可用，尚不能确认已有 Host；i 查看原因与下一步。' : `${rows.length} 个已有 SSH Host；未执行网络检测。a 选择已有 Host；不改写 SSH 配置。`,
-        routeChoices: { aliases: { title: '选择已有 SSH Host（当前配置已自动包含）', options: listed.items.map((item) => ({ value: item.id, label: `${item.name} · ${item.identityHint}`, enabled: validHost(item.target) && item.id === `ssh:${encodeURIComponent(item.target)}`, reason: 'Host 不符合现有安全别名规则', route: { resourceId: 'sessions', contextId: item.id } })) } },
+        routeChoices: { aliases: { title: '选择已有 SSH Host（当前配置已自动包含）', options: listed.items.map((item) => {
+          const enabled = validHost(item.target) && item.id === `ssh:${encodeURIComponent(item.target)}`;
+          return { value: item.id, label: `${item.name} · ${item.identityHint}`, enabled, ...(!enabled ? { reason: 'Host 不符合现有安全别名规则' } : {}), route: { resourceId: 'sessions', contextId: item.id } };
+        }) } },
         detailViews: { info: errorsInfo(completeness, listed.errors) } };
     } catch { return invalid(request.signal.aborted ? 'SSH 读取已取消。' : 'SSH 来源无法读取，请核对配置和对应接口。', request.signal.aborted); }
   } } };
