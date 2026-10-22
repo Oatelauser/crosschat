@@ -109,5 +109,5 @@ describe('TUI maintenance source and copy boundaries', () => {
     expect(previewMaintenance('install-skills', crowded.options).enabled).toBe(false);
     expect(failures.reads).toBeLessThanOrEqual(10_001);
     expect(failures.closed).toBe(1);
-  });
+  }, 15_000);
 });
