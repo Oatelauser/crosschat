@@ -19,15 +19,16 @@ describe('local discovery composition', () => {
   it('binds source directories to an explicitly supplied home without scanning on construction', () => {
     const home = join('fixture-root', 'home');
     vi.stubEnv('CODEX_HOME', 'parent-codex-home');
-    vi.stubEnv('CODEX_SQLITE_HOME', 'parent-sqlite-home');
+    vi.stubEnv('CODEX_SQLITE_HOME', undefined);
+    vi.stubEnv('codex_sqlite_home', 'parent-mixed-case-sqlite-home');
     createLocalDiscoveryService({ home });
     expect(mocks.claude).toHaveBeenCalledWith({ directory: join(home, '.claude', 'sessions') });
     expect(mocks.codex).toHaveBeenCalledWith({ codexHome: join(home, '.codex'), desktop: { sqliteHome: join(home, '.codex') }, sessionFactory: mocks.sessionFactory });
     expect(mocks.session.mock.calls[0]?.[0].env.CODEX_HOME).toBe(join(home, '.codex'));
-    expect(Object.hasOwn(mocks.session.mock.calls[0]?.[0].env ?? {}, 'CODEX_SQLITE_HOME')).toBe(false);
+    expect(Object.keys(mocks.session.mock.calls[0]?.[0].env ?? {}).some((key) => key.toUpperCase() === 'CODEX_SQLITE_HOME')).toBe(false);
     expect(mocks.sessionFactory).not.toHaveBeenCalled();
     expect(process.env.CODEX_HOME).toBe('parent-codex-home');
-    expect(process.env.CODEX_SQLITE_HOME).toBe('parent-sqlite-home');
+    expect(process.env.codex_sqlite_home).toBe('parent-mixed-case-sqlite-home');
   });
   it('retains native environment selection when no isolated home was supplied', () => {
     vi.stubEnv('CODEX_HOME', 'parent-codex-home');
