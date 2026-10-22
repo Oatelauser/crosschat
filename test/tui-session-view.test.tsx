@@ -46,4 +46,18 @@ describe('local session controls presentation', () => {
     expect(screen(snapshot)).toContain('开发星');
     expect(screen(snapshot)).not.toContain('opaque-star-id');
   });
+  it('keeps an empty facet match distinct from an empty source and from incomplete reading', () => {
+    const snapshot = state();
+    snapshot.filters = [{ id: 'provider', label: '工具', mode: 'select', defaultValue: '', options: [{ value: '', label: '所有' }, { value: 'future', label: '未来' }] }];
+    snapshot.selectedFacets = { provider: 'future' };
+    expect(screen(snapshot)).toContain('无匹配项');
+    snapshot.completeness = 'cancelled';
+    expect(screen(snapshot)).toContain('读取已取消');
+  });
+  it('does not call an enabled resource unimplemented when its source fails', () => {
+    const snapshot = state(); snapshot.completeness = 'unavailable';
+    const output = renderToString(<TuiScreen snapshot={snapshot} resource={{ ...resource, unavailableReason: undefined }} version="fixture" />);
+    expect(output).not.toContain('尚未启用');
+    expect(output).toContain('读取不可用');
+  });
 });
