@@ -109,4 +109,37 @@ describe('bounded resource following', () => {
       expect(future.actions('future', 'detail').some((entry) => entry.id === 'sort')).toBe(false);
     } finally { controller.dispose(); }
   });
+
+  it('exits from a suspended input without starting a new observer merely to cancel it', async () => {
+    const value = fixture(); const { controller, owners, onExit } = value;
+    try {
+      await enter(value); controller.handleKey({ name: '/' });
+      expect(owners[0].request.signal.aborted).toBe(true);
+      controller.handleKey({ name: 'text', text: 'draft' });
+      controller.handleKey({ name: 'c', ctrl: true });
+      expect(onExit).toHaveBeenCalledOnce();
+      expect(owners).toHaveLength(1);
+      expect(controller.getSnapshot()).toMatchObject({ mode: 'list', filter: '' });
+    } finally { controller.dispose(); }
+  });
+
+  it('keeps following paused after cancelling an uncooperative manual read and ignores its late result', async () => {
+    const value = fixture(); const { controller, owners, read, onExit } = value;
+    let finishRead: ((page: TuiPage) => void) | undefined;
+    try {
+      await enter(value);
+      read.mockImplementationOnce(() => new Promise((resolve) => { finishRead = resolve; }));
+      const pending = controller.refresh();
+      expect(owners[0].request.signal.aborted).toBe(true);
+      expect(controller.getSnapshot().loading).toBe(true);
+      controller.handleKey({ name: 'c', ctrl: true });
+      await pending;
+      expect(controller.getSnapshot()).toMatchObject({ following: false, loading: false, completeness: 'cancelled' });
+      expect(owners).toHaveLength(1);
+      expect(onExit).not.toHaveBeenCalled();
+      finishRead?.(page('late-read'));
+      await Promise.resolve();
+      expect(controller.getSnapshot().rows.map((row) => row.id)).toEqual(['old-0', 'old-1', 'old-2']);
+    } finally { controller.dispose(); }
+  });
 });

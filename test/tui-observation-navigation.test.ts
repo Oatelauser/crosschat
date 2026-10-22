@@ -20,6 +20,18 @@ function registry() {
 }
 
 describe('observation resource routes', () => {
+  it('preserves the existing row navigation priority over a static fallback when no action routes are declared', async () => {
+    const resources = registry().resources.map((resource) => resource.id === 'sessions' ? { ...resource, actions: [{ ...action('sessions', 'legacy-navigation', 'o', 'navigate'), navigateTo: 'outbox' }] } : resource);
+    const controller = createTuiController({ registry: createResourceRegistry(resources), contexts: [context], adapters: {
+      sessions: { read: async () => ({ rows: [{ id: 'legacy-row', cells: { name: 'existing' }, navigate: { resourceId: 'deliveries', contextId: 'local' } }], completeness: 'complete' }) },
+      deliveries: { read: async () => ({ rows: [], completeness: 'complete' }) }, outbox: { read: async () => ({ rows: [], completeness: 'complete' }) },
+    } });
+    try {
+      command(controller, 'sessions'); await loaded(controller); controller.handleKey({ name: 'o' }); await loaded(controller);
+      expect(controller.getSnapshot().route).toEqual({ resourceId: 'deliveries', contextId: 'local' });
+    } finally { controller.dispose(); }
+  });
+
   it('passes isolated complete routes to readers and uses the selected action route before a row default', async () => {
     const query = { session: 'opaque/full/native-id', provider: 'future' };
     const destination: TuiRoute = { resourceId: 'deliveries', contextId: 'local', query };
