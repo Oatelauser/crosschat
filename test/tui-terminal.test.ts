@@ -112,4 +112,56 @@ describe('TUI terminal ownership', () => {
     expect(io.error()).not.toMatch(/private-rejection|cleanup-secret/);
     expect(io.signals.listenerCount('unhandledRejection')).toBe(0);
   });
+
+  it('restores promptly when exit happens during a pending mount and disposes its late result', async () => {
+    const io = fixture();
+    let releaseMount!: () => void;
+    const dispose = vi.fn();
+    const pending = runTerminalSession({ ...io, mount: async () => {
+      io.stdin.setRawMode(true);
+      await new Promise<void>((resolve) => { releaseMount = resolve; });
+      return { done: new Promise<void>(() => undefined), dispose };
+    } });
+    io.signals.emit('SIGTERM');
+    const outcome = await Promise.race([pending.then(() => 'exited'), new Promise<string>((resolve) => setTimeout(() => resolve('pending'), 30))]);
+    const rawAfterExit = io.stdin.isRaw;
+    releaseMount();
+    await pending;
+    await vi.waitFor(() => expect(dispose).toHaveBeenCalledOnce());
+    expect(outcome).toBe('exited');
+    expect(rawAfterExit).toBe(false);
+  });
+
+  it('catches late mount and disposal rejection without restoring an older terminal state over a new session', async () => {
+    const io = fixture();
+    let releaseMount!: () => void;
+    const lateDispose = vi.fn(async () => { throw new Error('late-cleanup-secret'); });
+    const first = runTerminalSession({ ...io, mount: async () => {
+      io.stdin.setRawMode(true);
+      await new Promise<void>((resolve) => { releaseMount = resolve; });
+      return { done: Promise.reject(new Error('late-render-secret')), dispose: lateDispose };
+    } });
+    io.signals.emit('SIGTERM');
+    const outcome = await Promise.race([first.then(() => 'exited'), new Promise<string>((resolve) => setTimeout(() => resolve('pending'), 30))]);
+    if (outcome !== 'exited') {
+      releaseMount();
+      await first;
+      expect(outcome).toBe('exited');
+      return;
+    }
+    let exitSecond!: () => void;
+    const second = runTerminalSession({ ...io, mount: (owner) => {
+      exitSecond = owner.exit;
+      io.stdin.setRawMode(true);
+      return { done: new Promise<void>(() => undefined), dispose: () => undefined };
+    } });
+    releaseMount();
+    await vi.waitFor(() => expect(lateDispose).toHaveBeenCalledOnce());
+    expect(io.stdin.isRaw).toBe(true);
+    expect(io.signals.listenerCount('SIGTERM')).toBe(1);
+    exitSecond();
+    expect(await second).toBe(0);
+    expect(io.stdin.isRaw).toBe(false);
+    expect(io.error()).not.toMatch(/late-cleanup-secret|late-render-secret/);
+  });
 });
