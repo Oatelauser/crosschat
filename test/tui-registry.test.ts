@@ -46,4 +46,18 @@ describe('TUI resource registry', () => {
     expect(() => createResourceRegistry([{ ...sessions, actions: [{ ...action, ownerResourceId: 'machines' }] }])).toThrow();
     expect(() => createResourceRegistry([{ ...sessions, actions: [action, { ...action, id: 'other' }] }])).toThrow();
   });
+
+  it('keeps differently named SSH contexts identifiable in a narrow terminal', async () => {
+    const { createResourceRegistry } = await import('../src/tui/resources/registry.js');
+    const { formatTable } = await import('../src/tui/ui/table.js');
+    const columns = createResourceRegistry().resolve('ctx')!.columns;
+    const table = formatTable({ columns, rows: [
+      { id: 'ssh:alpha', cells: { kind: 'SSH', name: 'alpha', target: 'alpha.example' } },
+      { id: 'ssh:beta', cells: { kind: 'SSH', name: 'beta', target: 'beta.example' } },
+    ], width: 12 });
+    expect(table.visibleColumnIds).toContain('name');
+    expect(table.rows[0].text).toContain('alpha');
+    expect(table.rows[1].text).toContain('beta');
+    expect(table.rows[0].text).not.toBe(table.rows[1].text);
+  });
 });
