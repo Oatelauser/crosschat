@@ -17,7 +17,7 @@ class FakeSshChild extends EventEmitter {
     super();
     this.stdin.on('data', (chunk: Buffer) => { this.input += chunk.toString('utf8'); });
   }
-  finish(stdout: string, code = 0, stderr = ''): void {
+  finish(stdout: string | Buffer, code = 0, stderr = ''): void {
     this.stdout.write(stdout);
     this.stderr.write(stderr);
     this.emit('close', code);
@@ -178,5 +178,39 @@ describe('configured SSH application reads', () => {
     expect(await pending).toMatchObject({ completeness: 'cancelled' });
     await closed;
     expect(child?.killed).toBe(true);
+  });
+
+  it('keeps a local transport timeout explicit in discovery without guessing from remote JSON or retrying status', async () => {
+    vi.useFakeTimers();
+    const child = new FakeSshChild();
+    const spawn = vi.fn(() => child);
+    const application = createSshApplication({ spawn, timeoutMs: 20,
+      readContexts: async () => ({ items: [{ id: 'ssh:fixture', kind: 'ssh', name: 'fixture', target: 'fixture', identityHint: '尚未核实', attributes: {} }], errors: [], observedAt: 0 }) });
+    const pending = application.inspect({ contextId: 'ssh:fixture' });
+    await vi.advanceTimersByTimeAsync(20);
+    expect(await pending).toMatchObject({ completeness: 'unavailable', errors: [expect.objectContaining({ message: expect.stringContaining('超时'), nextStep: expect.any(String) })] });
+    expect(child.kill).toHaveBeenCalled();
+    expect(spawn).toHaveBeenCalledOnce();
+  });
+
+  it('rejects configured unsafe aliases and malformed context identities before any SSH process', async () => {
+    const spawn = vi.fn(() => new FakeSshChild());
+    const application = createSshApplication({ spawn,
+      readContexts: async () => ({ items: [{ id: 'ssh:host%3Bbad', kind: 'ssh', name: 'unsafe', target: 'host;bad', identityHint: '尚未核实', attributes: {} }], errors: [], observedAt: 0 }) });
+    expect(await application.doctor({ contextId: 'ssh:host%3Bbad' })).toMatchObject({ completeness: 'unavailable', result: null });
+    expect(await application.inspect({ contextId: 'ssh:%invalid' })).toMatchObject({ completeness: 'unavailable' });
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid UTF-8 rather than replacing bytes inside otherwise valid diagnostic JSON', async () => {
+    const child = new FakeSshChild();
+    const spawn = vi.fn(() => child);
+    const application = createSshApplication({ home: await fixture(), spawn });
+    const pending = application.doctor({ contextId: 'ssh:fixture' });
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce());
+    const source = JSON.stringify(diagnostic());
+    const marker = source.indexOf('20.0.0');
+    child.finish(Buffer.concat([Buffer.from(source.slice(0, marker)), Buffer.from([255]), Buffer.from(source.slice(marker + 1))]), 1);
+    expect(await pending).toMatchObject({ completeness: 'unavailable', result: null, errors: [expect.objectContaining({ kind: 'malformed' })] });
   });
 });

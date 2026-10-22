@@ -99,4 +99,23 @@ describe('SSH resource presentation', () => {
     expect((await adapter.read({ context: { id: 'local', kind: 'local', label: '本机' }, signal: signal() })).completeness).toBe('unavailable');
     expect(ssh.discovery.execute).toHaveBeenCalledTimes(2);
   });
+
+  it('keeps unreadable SSH configuration distinct from a confirmed empty configured list', async () => {
+    const ssh = application();
+    ssh.list = vi.fn(async () => ({ items: [], observedAt: 0, errors: [{ source: '/isolated/.ssh/config', kind: 'unreadable' as const, message: '读取失败', nextStep: '核对权限' }] }));
+    const page = await createSshResource({ ssh }).adapter.read({ context, signal: signal() });
+    expect(page).toMatchObject({ completeness: 'unavailable', rows: [] });
+    expect(page.notice).not.toContain('0 个已有');
+    expect(JSON.stringify(page.detailViews)).toContain('核对权限');
+    expect(ssh.inspect).not.toHaveBeenCalled();
+  });
+
+  it('discards a doctor result when its injected reader cancels the query before publication', async () => {
+    const ssh = application();
+    const cancel = new AbortController();
+    const result = await ssh.doctor();
+    ssh.doctor = vi.fn(async () => { cancel.abort(); return result; });
+    const page = await createSshDoctorResource({ ssh }).adapter.read({ context, signal: cancel.signal });
+    expect(page).toMatchObject({ completeness: 'cancelled', rows: [] });
+  });
 });
