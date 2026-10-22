@@ -97,6 +97,23 @@ describe('read-only local overview', () => {
     expect(await readFile(lock, 'utf8')).toBe('private-token invalid heartbeat');
   });
 
+  it('reads the watchdog writer pid, heartbeat and private ownership token without exposing the token in status', async () => {
+    const config = await options();
+    const outbox = join(config.home, '.crosschat', 'outbox');
+    await mkdir(outbox, { recursive: true });
+    const token = 'b9256292-2546-4692-8a89-f84ba9fbf276';
+    const lock = join(outbox, 'watchdog.lock');
+    const content = `${process.pid} ${now} ${token}`;
+    await writeFile(lock, content);
+    const result = await (await create(config)).readStatus({ contextId: 'local' });
+    expect(result).toMatchObject({ completeness: 'complete', watchdog: {
+      running: true, evidence: 'fresh-heartbeat', pid: process.pid, heartbeatAt: now,
+    } });
+    expect(result.errors).toEqual([]);
+    expect(JSON.stringify(result)).not.toContain(token);
+    expect(await readFile(lock, 'utf8')).toBe(content);
+  });
+
   it('retains successful sources when another fails and never treats unknown queue size as zero', async () => {
     const config = await options({
       readContexts: async () => ({ items: [], observedAt: now, errors: [{ source: '/fixture/ssh', kind: 'malformed', message: '配置格式无效', nextStep: '检查 SSH 配置' }] }),
@@ -195,6 +212,25 @@ describe('safe isolated diagnostics for observation pages', () => {
     await writeFile(file, 'x'.repeat(2 * 1024 * 1024 + 1));
     expect(() => deps.listOutbox()).toThrow();
     expect(() => deps.readFile(file)).toThrow();
+  });
+
+  it('accepts the current three-field watchdog lock in scoped doctor without exposing its ownership token', async () => {
+    const directory = await home();
+    const outbox = join(directory, '.crosschat', 'outbox');
+    await mkdir(outbox, { recursive: true });
+    const token = 'c0c708fc-340f-4e5a-ab6e-c1670aa31d59';
+    const heartbeatAt = Date.now();
+    const content = `${process.pid} ${heartbeatAt} ${token}`;
+    const lock = join(outbox, 'watchdog.lock');
+    await writeFile(lock, content);
+    await writeFile(join(outbox, 'fixture-thread.json'), JSON.stringify({ items: [{ id: 'fixture', parkedAt: heartbeatAt, attempts: 0 }] }));
+    const deps = defaultDoctorDeps({ home: directory, env: {} });
+    const result = collectDoctorDiagnostics({ ...deps, resolveClaude: () => 'fixture-claude', listClaudeSessions: () => ({ sessions: [], malformed: 0 }),
+      codexBin: () => { throw new Error('not installed'); }, repoSkillFiles: () => undefined, probeTcp: () => false });
+    const parked = result.groups.flatMap((group) => group.checks).find((check) => check.code === 'outbox-parked');
+    expect(parked?.data).toMatchObject({ threadId: 'fixture-thread', count: 1, watchdogRunning: true });
+    expect(JSON.stringify(result)).not.toContain(token);
+    expect(await readFile(lock, 'utf8')).toBe(content);
   });
 
   it('uses explicit executable overrides without probing inherited native program locations', async () => {
