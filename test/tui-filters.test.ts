@@ -134,4 +134,83 @@ describe('resource-neutral filters and read-only actions', () => {
       expect(controller.getSnapshot().notice).toContain('尚未接入');
     } finally { controller.dispose(); }
   });
+
+  it('uses row-over-page action fields for enum forms, rejects arbitrary input and retains choices after write failure', async () => {
+    const adopt: TuiAction = { id: 'adopt', label: '收编所选会话', shortcut: 'a', ownerResourceId: 'sessions', kind: 'form', mutation: true, selectionPolicy: 'required', returnPolicy: 'restore', fields: [{ id: 'old', label: '旧静态字段' }] };
+    const data = page();
+    const fields = [{ id: 'starId', label: '已配置星', required: true, initialValue: 'star-one', options: [
+      { value: 'star-one', label: '第一星' }, { value: 'revoked', label: '不可用星', enabled: false, reason: '权限已撤销' }, { value: 'star-two', label: '第二星' }, { value: 'star-three', label: '第三星' },
+    ] }];
+    data.actionAvailability = { adopt: { enabled: false, reason: '当前行不可收编', nextStep: '选择可用行', fields: [{ id: 'page-old', label: '页级字段' }] } };
+    data.rows = data.rows.map((row, index) => index === 0 ? { ...row, actionAvailability: { ...row.actionAvailability, adopt: { enabled: true, fields } } } : row);
+    const checkAction = vi.fn<TuiResourceAdapter['checkAction']>(async () => ({ enabled: true }));
+    const mutate = vi.fn<TuiResourceAdapter['mutate']>(async () => { throw new Error('写入未完成，保留选择'); });
+    const controller = createTuiController({ registry: registry([adopt]), contexts: [{ id: 'local', label: '本机', kind: 'local' }], adapters: { sessions: { read: async () => data, checkAction, mutate } } });
+    try {
+      await enter(controller);
+      expect(controller.getSnapshot().actions.find((action) => action.id === 'adopt')).toMatchObject({ enabled: true, fields });
+      controller.handleKey({ name: 'a' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.checking).toBe(false));
+      expect(controller.getSnapshot().overlay?.fields).toMatchObject([{ id: 'starId', value: 'star-one', options: fields[0].options }]);
+      expect(checkAction.mock.calls[0][0].action.fields).toEqual(fields);
+      controller.handleKey({ name: 'down' }); expect(controller.getSnapshot().overlay?.fields[0].value).toBe('star-two');
+      controller.handleKey({ name: 'left' }); expect(controller.getSnapshot().overlay?.fields[0].value).toBe('star-one');
+      controller.handleKey({ name: ' ' }); expect(controller.getSnapshot().overlay?.fields[0].value).toBe('star-two');
+      controller.handleKey({ name: 'home' }); expect(controller.getSnapshot().overlay?.fields[0].value).toBe('star-one');
+      controller.handleKey({ name: 'end' }); expect(controller.getSnapshot().overlay?.fields[0].value).toBe('star-three');
+      controller.handleKey({ name: 'text', text: 'arbitrary-star' }); controller.handleKey({ name: 'paste', text: 'arbitrary-star' });
+      expect(controller.getSnapshot().overlay?.fields[0].value).toBe('star-three');
+      controller.handleKey({ name: 'up' }); controller.handleKey({ name: 'enter' }); controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.error).toContain('写入未完成'));
+      expect(mutate.mock.calls[0][0]).toMatchObject({ target: { id: 'third/opaque/anonymous' }, values: { starId: 'star-two' } });
+      expect(controller.getSnapshot().overlay?.fields[0].value).toBe('star-two');
+      controller.handleKey({ name: 'escape' }); controller.handleKey({ name: 'down' });
+      const before = checkAction.mock.calls.length;
+      controller.handleKey({ name: '?' });
+      expect(controller.getSnapshot().help?.entries.find((entry) => entry.id === 'adopt')).toMatchObject({ enabled: false, reason: '当前行不可收编' });
+      controller.handleKey({ name: 'escape' }); controller.handleKey({ name: 'a' });
+      expect(controller.getSnapshot().notice).toContain('当前行不可收编');
+      expect(checkAction.mock.calls).toHaveLength(before);
+    } finally { controller.dispose(); }
+  });
+
+  it('preserves a fixed enum value if an authority check removes that option and refuses to submit it', async () => {
+    const adopt: TuiAction = { id: 'adopt', label: '收编', shortcut: 'a', ownerResourceId: 'sessions', kind: 'form', mutation: true, selectionPolicy: 'required', returnPolicy: 'restore' };
+    const data = page();
+    data.actionAvailability = { adopt: { enabled: true, fields: [{ id: 'starId', label: '目标星', required: true, initialValue: 'fixed-star', options: [{ value: 'fixed-star', label: '原星' }, { value: 'other-star', label: '另一星' }] }] } };
+    let initial = true;
+    const mutate = vi.fn(async () => ({}));
+    const controller = createTuiController({ registry: registry([adopt]), contexts: [{ id: 'local', label: '本机', kind: 'local' }], adapters: { sessions: {
+      read: async () => data,
+      checkAction: async () => initial ? { enabled: true } : { enabled: true, fields: [{ id: 'starId', label: '目标星', required: true, options: [{ value: 'other-star', label: '另一星' }] }] }, mutate,
+    } } });
+    try {
+      await enter(controller); controller.handleKey({ name: 'a' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.checking).toBe(false));
+      initial = false;
+      controller.handleKey({ name: 'enter' }); controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().overlay?.error).toContain('选项'));
+      expect(controller.getSnapshot().overlay?.fields[0].value).toBe('fixed-star');
+      expect(mutate).not.toHaveBeenCalled();
+    } finally { controller.dispose(); }
+  });
+
+  it('keeps a disappearing facet selection explicit after refresh and lets the user return to the declared default', async () => {
+    let data = page();
+    const controller = createTuiController({ registry: registry(), contexts: [{ id: 'local', label: '本机', kind: 'local' }], adapters: { sessions: { read: async () => data } } });
+    try {
+      await enter(controller); controller.handleKey({ name: 't' }); controller.handleKey({ name: 'down' }); controller.handleKey({ name: 'enter' });
+      data = { ...data, rows: [data.rows[1]], filters: [{ ...data.filters![0], options: [data.filters![0].options[0], data.filters![0].options[2]] }], completeness: 'partial' };
+      await controller.refresh();
+      expect(controller.getSnapshot()).toMatchObject({ rows: [], selectedFacets: { provider: 'third' }, completeness: 'partial' });
+      controller.handleKey({ name: 't' });
+      const choice = controller.getSnapshot().choice!;
+      expect(choice.options[choice.selectedIndex]).toMatchObject({ value: 'third', enabled: false });
+      controller.handleKey({ name: 'enter' });
+      expect(controller.getSnapshot().mode).toBe('choice');
+      controller.handleKey({ name: 'home' }); controller.handleKey({ name: 'enter' });
+      expect(controller.getSnapshot()).toMatchObject({ mode: 'list', selectedFacets: { provider: 'all' } });
+      expect(controller.getSnapshot().rows.map((row) => row.id)).toEqual(['codex/opaque/named-b']);
+    } finally { controller.dispose(); }
+  });
 });
