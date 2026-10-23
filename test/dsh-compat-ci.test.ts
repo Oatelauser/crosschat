@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
-import { dshRegressionIdentity, hasDshRuntimeReleaseProof, parseDshNpmManifest, parsePnpmManifest, runDshBuildSequence, runDshProbeAttempt, runDshProcess, verifyNpmArtifact } from '../scripts/dsh-compat-ci.mjs';
+import { dshRegressionIdentity, hasDshRuntimeReleaseProof, parseDshNpmManifest, parsePnpmManifest, resolveDshNpmCache, runDshBuildSequence, runDshProbeAttempt, runDshProcess, verifyNpmArtifact } from '../scripts/dsh-compat-ci.mjs';
 
 const integrity = `sha512-${Buffer.alloc(64, 1).toString('base64')}`;
 const pnpmIntegrity = 'sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng==';
@@ -51,6 +51,36 @@ describe('DeepSeek Harness official npm artifact constraints', () => {
     const exact = { ...artifact(), integrity: `sha512-${createHash('sha512').update(bytes).digest('base64')}` };
     expect(verifyNpmArtifact(bytes, exact)).toBe(true);
     expect(() => verifyNpmArtifact(Buffer.from('changed'), exact)).toThrow();
+  });
+});
+
+describe('DeepSeek Harness isolated npm download cache', () => {
+  it('uses a shared run-owned default and marks an explicit existing external cache for retention', async () => {
+    await isolated(async (output) => {
+      const root = join(output, 'owned-task'); const external = join(output, 'external-npm-cache');
+      await mkdir(root); await mkdir(external);
+      expect(await resolveDshNpmCache(root)).toEqual({ path: join(root, 'npm-cache'), external: false });
+      expect(await resolveDshNpmCache(root, external)).toEqual({ path: external, external: true });
+    });
+  });
+
+  it('rejects relative paths, URLs, network paths, files and externally labelled owned paths', async () => {
+    await isolated(async (output) => {
+      const root = join(output, 'owned-task'); const file = join(output, 'cache-file');
+      await mkdir(root); await writeFile(file, 'not a directory');
+      for (const input of ['relative-npm-cache', 'https://example.org/cache', 'file:///cache', '\\\\server\\cache', file, root, join(root, 'npm-cache')]) {
+        await expect(resolveDshNpmCache(root, input)).rejects.toThrow();
+      }
+    });
+  });
+
+  it('rejects directory links and linked ancestors before using an external cache', async () => {
+    await isolated(async (output) => {
+      const root = join(output, 'owned-task'); const cache = join(output, 'actual-cache'); const link = join(output, 'cache-link');
+      await mkdir(root); await mkdir(join(cache, 'nested'), { recursive: true }); await symlink(cache, link, 'junction');
+      await expect(resolveDshNpmCache(root, link)).rejects.toThrow();
+      await expect(resolveDshNpmCache(root, join(link, 'nested'))).rejects.toThrow();
+    });
   });
 });
 

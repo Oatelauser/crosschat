@@ -23,6 +23,8 @@ const scope = { officialNpmRuntime: true, officialPluginManager: true, ordinaryW
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const message = (error) => error instanceof Error ? error.message : String(error);
 
+export async function resolveDshNpmCache() { throw new Error('Harness compatibility cache selection is not implemented'); }
+
 function semver(version) {
   if (typeof version !== 'string' || version.length > 80) return;
   const parts = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*))?$/.exec(version);
