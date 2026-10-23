@@ -33,4 +33,4 @@ libuv明确记录Unix管道路径可能被截断，见[官方pipe文档](https:/
 
 ## 当前验证状态
 
-定向真实macOS和本机全量检查已通过；标准三平台CI待PR触发后记录最终结果。临时macOS复现工作流和一次性ps诊断已移除；既有CI矩阵及macOS观察位策略保持。验收记录保留，完成后不创建或保留活动任务队列。
+定向真实macOS和本机全量检查已通过。标准三平台CI由本修复PR触发，逐提交结果保存在[CI运行记录](https://github.com/Oatelauser/crosschat/actions?query=workflow%3ACI+branch%3Acodex%2Ffix-macos-ci)，结合PR检查可核对最终提交。临时macOS复现工作流和一次性ps诊断已移除；既有CI矩阵及macOS观察位策略保持。验收记录保留，完成后不创建或保留活动任务队列。
