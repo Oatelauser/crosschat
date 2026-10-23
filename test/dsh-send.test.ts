@@ -97,6 +97,18 @@ describe('DeepSeek Harness through the application send seam', () => {
     expect(deliverDsh).not.toHaveBeenCalled();
   });
 
+  it('keeps existing explicit and unique-prefix sends usable during an unrelated Harness outage', async () => {
+    const { deps, listDshThreads } = fixture();
+    listDshThreads.mockRejectedValue(new MultichatError('DSH_UNAVAILABLE', 'Bridge unavailable.'));
+    const wired = { ...deps, listOpenCodeThreads: async () => [{ id: 'legacy-open', name: 'Legacy OpenCode', cwd: '', rawStatus: { type: 'idle' }, attributes: {} }] };
+    for (const to of ['opencode/legacy-open', 'Leg']) {
+      const sent = await sendMessage({ to, bodyArg: 'existing target' }, wired);
+      expect(decodeRef(sent.receipt.replyRef).t).toEqual({ p: 'opencode', id: 'legacy-open' });
+    }
+    expect(deps.deliverOpenCode).toHaveBeenCalledTimes(2);
+    expect(deps.deliverDsh).not.toHaveBeenCalled();
+  });
+
   it('never retries an uncertain native write or parks it in another provider', async () => {
     const { root, deps, deliverDsh } = fixture();
     deliverDsh.mockRejectedValue(new MultichatError('DSH_WRITE_UNCERTAIN', 'Native write result unknown.'));

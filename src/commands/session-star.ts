@@ -519,9 +519,12 @@ export async function runAdopt(args: AdoptArgs, deps: StarJoinDeps): Promise<num
   try { dsh = await deps.listDshThreads?.() ?? []; }
   catch (error) {
     const missing = error instanceof MultichatError && error.code === 'DSH_NOT_CONFIGURED';
-    const previousExact = sessions.some((session) => session.sessionId !== '' && session.name === args.adopt)
-      || threads.some((thread) => thread.name === args.adopt) || openCode.some((thread) => thread.name === args.adopt);
-    if (!missing && (args.adopt.startsWith('dsh/') || !previousExact)) {
+    let previousTarget = false;
+    if (!args.adopt.startsWith('dsh/')) {
+      try { resolveTargetByName(args.adopt, sessions, threads, openCode); previousTarget = true; }
+      catch { /* An unresolved or ambiguous legacy selector cannot justify ignoring this source failure. */ }
+    }
+    if (!missing && !previousTarget) {
       deps.stderr(`adopt: ${error instanceof Error ? error.message : 'DeepSeek Harness session source unavailable.'}`);
       return 1;
     }
