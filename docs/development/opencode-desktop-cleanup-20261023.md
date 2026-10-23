@@ -29,6 +29,6 @@ foreach ($testDirectory in $testDirectories) {
 }
 ```
 
-`HKCU:\Software\Classes\opencode` 安装前不存在，工具视图中仍只指向上述已卸载程序。用户执行删除后得到“找不到路径”；用户侧无需再处理不存在的 key。两边视图的差异保留在[核对记录](evidence/opencode-desktop-20261023/cleanup-review-checkpoint.json)，未推断具体原因。若用户已重新安装 OpenCode，其新的协议注册属于新安装，不应当作旧测试残留删除。
+`HKCU:\Software\Classes\opencode` 安装前不存在，工具视图中仍只指向上述已卸载程序。用户执行删除后得到“找不到路径”；2026-10-23 用户又在自己的 PowerShell 只读核对，`Test-Path` 明确返回 `False`，条件读取启动命令无输出。用户终端中该项已确认不存在，用户侧协议登记清理关闭，无需再次删除。两边视图的差异保留在[核对记录](evidence/opencode-desktop-20261023/cleanup-review-checkpoint.json)，未推断具体原因。若用户已重新安装 OpenCode，其新的协议注册属于新安装，不应当作旧测试残留删除。
 
 正式包的完整 CI 安装/卸载循环尚待独立 Windows runner 验证；本机没有用该程序绕过被拒绝的清理。准确状态见[开发验证记录](opencode-desktop-validation-20261023.md)。
