@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
@@ -31,10 +31,18 @@ afterEach(async () => {
 });
 
 function temporaryHome(): string {
-  const home = mkdtempSync(join(tmpdir(), 'crosschat-revocation-'));
+  // Keep both star labels intact within macOS's Unix socket path limit.
+  const fixtureTmpDir = process.platform === 'darwin' ? realpathSync('/tmp') : tmpdir();
+  const home = mkdtempSync(join(fixtureTmpDir, 'crosschat-revocation-'));
   cleanup.push(() => rmSync(home, { recursive: true, force: true }));
   mkdirSync(join(home, 'tcp'));
   return home;
+}
+
+function assertAttachPathFits(path: string): void {
+  if (process.platform === 'win32') return;
+  expect(Buffer.byteLength(path), `Fixture attach path exceeds the Unix socket limit: ${path}`)
+    .toBeLessThanOrEqual(process.platform === 'darwin' ? 103 : 107);
 }
 
 /** Controlled broker boundary: no real credentials, providers or native children. */
@@ -87,6 +95,7 @@ function fakeSendDeps(home: string): SendDeps {
 }
 
 function nodeClient(home: string, entry: BrokerEntry, logs: string[] = [], extra: Partial<NodeClientDeps> = {}): NodeClient {
+  assertAttachPathFits(attachPipePath(entry, join(home, 'tcp'), extra.attachLabel));
   const client = new NodeClient({
     config: { entries: [{ ...entry }] },
     configFile: join(home, 'tcp', 'node.json'),
@@ -165,6 +174,7 @@ describe('explicit credential revocation pauses this star', () => {
   it('settles an attach request when immediate revocation closes IPC before the reply', async () => {
     const home = temporaryHome();
     const path = attachPipePath({ host: 'fixture', port: 9, key: NODE_KEY, name: `${NAME_A}-close` }, join(home, 'tcp'));
+    assertAttachPathFits(path);
     const server = createServer((socket) => socket.once('data', () => socket.destroy()));
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);
@@ -344,9 +354,8 @@ describe('explicit credential revocation pauses this star', () => {
     const entryA = { host: '127.0.0.1', port: alpha.port, name: NAME_A, starId: STAR_A, key: NODE_KEY };
     const entryB = { host: '127.0.0.1', port: beta.port, name: NAME_B, starId: 'dddd11112222', key: NODE_KEY };
     writeFileSync(join(home, 'tcp', 'node.json'), JSON.stringify({ brokers: [entryA, entryB] }));
-    const nodeLogs: string[] = [];
-    const nodeA = nodeClient(home, entryA, nodeLogs);
-    const nodeB = nodeClient(home, entryB, nodeLogs);
+    const nodeA = nodeClient(home, entryA);
+    const nodeB = nodeClient(home, entryB);
     const runningA = nodeA.run();
     void nodeB.run();
     await Promise.all([nodeA.waitForState('online'), nodeB.waitForState('online')]);
@@ -369,11 +378,7 @@ describe('explicit credential revocation pauses this star', () => {
 
     await expect.poll(() => errors.some((line) => line.includes('凭证已撤销'))).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 1_100));
-    const paths = [entryA, entryB].map((entry) => {
-      const path = attachPipePath(entry, join(home, 'tcp'));
-      return { name: entry.name, path, bytes: Buffer.byteLength(path), prefix103: Buffer.from(path).subarray(0, 103).toString() };
-    });
-    expect(spawned, JSON.stringify({ paths, nodeLogs }, null, 2)).toEqual([]);
+    expect(spawned).toEqual([]);
     expect(alpha.nodes).toHaveLength(1);
     expect(beta.nodes).toHaveLength(1);
     const pipe = await ensureAggregator(deps, entryB, 'beta');

@@ -4,7 +4,7 @@
  * 路径与幂等、status 星会话视图与诊断行、9b 命令面告警、改名跟随。
  * 夹具真实平台形状：win 带杠 MachineGuid、linux 32-hex（F0 归一互认）。
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
@@ -33,7 +33,9 @@ import { runSend } from '../src/commands/send.js';
 import { runStatus, type StatusDeps } from '../src/commands/status.js';
 import { MultichatError } from '../src/errors.js';
 
-const root = mkdtempSync(join(tmpdir(), 'crosschat-session-star-'));
+// macOS's long per-user tmpdir can truncate two distinct Unix socket paths to one.
+const fixtureTmpDir = process.platform === 'darwin' ? realpathSync('/tmp') : tmpdir();
+const root = mkdtempSync(join(fixtureTmpDir, 'crosschat-session-star-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 // 真实平台形状：Windows MachineGuid 带杠 UUID / Linux /etc/machine-id 32-hex
@@ -214,6 +216,11 @@ async function startStarStar(
   ]);
   const baseDir = opts.baseDir ?? mkdtempSync(join(root, `base-${label}-`));
   const entry: BrokerEntry = { host: '127.0.0.1', port: Number(new URL(harness.url).port), name: label, key: key('n') };
+  if (process.platform !== 'win32') {
+    const path = attachPipePath(entry, join(baseDir, 'tcp'));
+    expect(Buffer.byteLength(path), `Fixture attach path exceeds the Unix socket limit: ${path}`)
+      .toBeLessThanOrEqual(process.platform === 'darwin' ? 103 : 107);
+  }
   mkdirSync(join(baseDir, 'tcp'), { recursive: true });
   writeFileSync(
     join(baseDir, 'tcp', 'node.json'),
@@ -420,39 +427,36 @@ describe('018 批二：启动器入星链路', () => {
       // 基线=旧会话；spawn 后新会话 sess-multi 出现（夹具曾把两者写反，靠旗标强塞名侥幸过——现按差分语义修正）
       shA.state.claude = [{ sessionId: 'sess-base', name: 'x', updatedAt: 1 }];
       const joiner = new StarJoiner({ deps, side: 'claude', connects: ['sl-ma', 'sl-mb'] });
-      await joiner.begin();
-      shA.state.claude = [
-        { sessionId: 'sess-base', name: 'x', updatedAt: 1 },
-        { sessionId: 'sess-multi', name: 'boss', updatedAt: 99 },
-      ];
-      shB.state.claude = shA.state.claude; // 同一物理机的同一份扫描（两星夹具共享视图）
-      const probe = async (sh: StarHarness, id: string): Promise<Frame> => {
-        const sender = await senderOn(sh.harness.url, key('s'));
-        sender.send({ op: 'send', id, targetMachine: 'win-box:boss', body: 'x' });
-        return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
-      };
-      let okA: Frame | undefined;
-      let okB: Frame | undefined;
-      for (let i = 0; i < 50; i++) {
-        if (okA === undefined) {
-          const r = await probe(shA, `ma${i}`);
-          if (r.op === 'receipt' && r.status === 'delivered') okA = r;
+      try {
+        await joiner.begin();
+        shA.state.claude = [
+          { sessionId: 'sess-base', name: 'x', updatedAt: 1 },
+          { sessionId: 'sess-multi', name: 'boss', updatedAt: 99 },
+        ];
+        shB.state.claude = shA.state.claude; // 同一物理机的同一份扫描（两星夹具共享视图）
+        const probe = async (sh: StarHarness, id: string): Promise<Frame> => {
+          const sender = await senderOn(sh.harness.url, key('s'));
+          sender.send({ op: 'send', id, targetMachine: 'win-box:boss', body: 'x' });
+          return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
+        };
+        let okA: Frame | undefined;
+        let okB: Frame | undefined;
+        for (let i = 0; i < 50; i++) {
+          if (okA === undefined) {
+            const r = await probe(shA, `ma${i}`);
+            if (r.op === 'receipt' && r.status === 'delivered') okA = r;
+          }
+          if (okB === undefined) {
+            const r = await probe(shB, `mb${i}`);
+            if (r.op === 'receipt' && r.status === 'delivered') okB = r;
+          }
+          if (okA !== undefined && okB !== undefined) break;
+          if (i === 49) throw new Error('双星 attach 未全部生效');
+          await new Promise((resolve) => setTimeout(resolve, 300));
         }
-        if (okB === undefined) {
-          const r = await probe(shB, `mb${i}`);
-          if (r.op === 'receipt' && r.status === 'delivered') okB = r;
-        }
-        if (okA !== undefined && okB !== undefined) break;
-        if (i === 49) {
-          const paths = [shA, shB].map((star) => {
-            const path = attachPipePath(star.entry, join(star.baseDir, 'tcp'));
-            return { name: star.starName, path, bytes: Buffer.byteLength(path), prefix103: Buffer.from(path).subarray(0, 103).toString() };
-          });
-          throw new Error(`双星 attach 未全部生效\n${JSON.stringify({ paths, okA, okB }, null, 2)}`);
-        }
-        await new Promise((resolve) => setTimeout(resolve, 300));
+      } finally {
+        await joiner.stop();
       }
-      await joiner.stop();
     },
     25_000,
   );
