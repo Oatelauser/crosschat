@@ -158,6 +158,11 @@ describe('DSH native bridge adapter', () => {
     await expect(getDshThread('target', { home: wrong.home })).rejects.toMatchObject({ code: 'DSH_PROTOCOL_ERROR' });
   });
 
+  it('does not coerce a structured status value into the native idle/running contract', async () => {
+    const service = await fixture({ handler: (_request, response) => reply(response, { items: [{ ...nativeThread('bad-status'), status: ['idle'] }] }) });
+    await expect(listDshThreads({ home: service.home })).rejects.toMatchObject({ code: 'DSH_PROTOCOL_ERROR' });
+  });
+
   it.each(['0.2.1-rc.2', '0.2.1-rc.10', '0.2.1', '0.2.2-alpha.1', '0.2.99+build.1'])('admits the experimental runtime window after exact owner confirmation (%s)', async (runtimeVersion) => {
     const service = await fixture({ runtimeVersion });
     await expect(listDshThreads({ home: service.home })).resolves.toHaveLength(2);
