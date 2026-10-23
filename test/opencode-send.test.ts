@@ -66,6 +66,12 @@ describe('OpenCode communication through the application seam', () => {
     await expect(sendMessage({ to: 'opencode/ses_one', bodyArg: 'once' }, deps)).rejects.toMatchObject({ code: 'OPENCODE_AUTH_REQUIRED' });
     expect(deliverOpenCode).not.toHaveBeenCalled();
   });
+  it('does not replace a missing OpenCode target with an unrelated Codex diagnosis', async () => {
+    const { deps } = fixture();
+    const diagnoseCodexTarget = vi.fn(async () => ({ kind: 'unavailable' as const, code: 'CODEX_UNAVAILABLE', message: 'Codex is unavailable.' }));
+    await expect(sendMessage({ to: 'opencode/ses_missing', bodyArg: 'once' }, { ...deps, diagnoseCodexTarget })).rejects.toMatchObject({ code: 'NAME_NOT_FOUND' });
+    expect(diagnoseCodexTarget).not.toHaveBeenCalled();
+  });
 });
 
 describe('OpenCode qualified addressing', () => {
