@@ -6,16 +6,17 @@ import { setImmediate } from 'node:timers';
 import { getDshRuntimeVersion } from '@deepseek-ai/dsh-app-boot';
 
 export const name = 'crosschat-dsh-test-driver';
-export const inject = ['agents', 'sessionController', 'webServer'];
+export const inject = ['agents', 'sessionController', 'webServer', 'pluginManager'];
 
 export async function apply(ctx, config) {
   const version = getDshRuntimeVersion();
+  const originalAgents = new Map();
   const send = (response, value, status = 200) => { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify(value)); };
   const snapshot = async (id) => {
     const agent = ctx.agents.get(id);
     if (!agent) throw new Error('Fixture session is not live');
     const inspected = await ctx.sessionController.inspect(id);
-    return { id, status: agent.status, header: inspected.meta, events: inspected.events, inbox: { nextTurn: agent.inbox.nextTurn, nextStep: agent.inbox.nextStep } };
+    return { id, sameAgent: originalAgents.get(id) === agent, status: agent.status, header: inspected.meta, events: inspected.events, inbox: { nextTurn: agent.inbox.nextTurn, nextStep: agent.inbox.nextStep } };
   };
   const server = createServer((request, response) => {
     void (async () => {
@@ -29,8 +30,14 @@ export async function apply(ctx, config) {
       const path = request.url ?? '';
       if (request.method === 'GET' && path === '/health') return send(response, { schema: 1, pid: process.pid, version, webPort: ctx.webServer.port });
       if (request.method === 'POST' && path === '/shutdown') { send(response, { accepted: true }); setImmediate(() => process.emit('SIGTERM')); return; }
+      if (request.method === 'POST' && path === '/bridge') {
+        if (body === null || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1 || typeof body.enabled !== 'boolean') return send(response, { error: 'INVALID_BRIDGE_TOGGLE' }, 400);
+        const result = await ctx.pluginManager.setBundleEnabled('@crosschat/dsh-bridge', body.enabled);
+        return send(response, { result, pid: process.pid });
+      }
       if (request.method === 'POST' && path === '/sessions') {
         const created = await ctx.sessionController.create({ cwd: config.workspace });
+        originalAgents.set(created.sessionId, ctx.agents.get(created.sessionId));
         await ctx.sessionController.rename({ sessionId: created.sessionId, title: body.title });
         await ctx.sessionController.selectModel({ sessionId: created.sessionId, provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'off' });
         return send(response, { id: created.sessionId, title: body.title });

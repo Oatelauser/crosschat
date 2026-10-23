@@ -2,11 +2,13 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { createConnection } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import process from 'node:process';
 import { clearTimeout, setTimeout } from 'node:timers';
+import { URL } from 'node:url';
 import { decodeRef } from '../dist/ref.js';
-import { createDshFixture, dshNodeCommand, dshShellCommand, pollDsh } from '../test/helpers/dsh-live-fixture.mjs';
+import { assessDshNativeIdentity, createDshFixture, dshNodeCommand, dshShellCommand, pollDsh } from '../test/helpers/dsh-live-fixture.mjs';
 
 if (process.env.CROSSCHAT_LIVE !== '1') throw new Error('CROSSCHAT_LIVE=1 is required for the isolated official Harness probe');
 const reportIndex = process.argv.indexOf('--report');
@@ -26,7 +28,6 @@ const busyRequests = [];
 const userText = (body) => (body?.messages ?? []).filter((message) => message.role === 'user').flatMap((message) => typeof message.content === 'string' ? [message.content] : (message.content ?? []).filter((item) => item.type === 'text').map((item) => item.text)).join('\n');
 const shell = (command) => ({ tool: { name: process.platform === 'win32' ? 'pwsh' : 'bash', input: { description: 'Run a fixed crosschat compatibility fixture command', command }, id: `fixture-${randomUUID()}` } });
 const text = (value) => ({ text: value });
-const strings = (value) => typeof value === 'string' ? [value] : value && typeof value === 'object' ? Object.values(value).flatMap(strings) : [];
 function respond(body) {
   const input = userText(body);
   if (input.includes(`${marker}bootstrap`) && !bootstrapTool) {
@@ -48,7 +49,7 @@ function respond(body) {
     receiverTool = true;
     return shell(dshShellCommand(['send', '--conversation', reference, '--body', `${marker}roundtrip-reply`, '--json']));
   }
-  return text(input.includes(`${marker}idle-message`) ? `${marker}idle-ACK` : `${marker}bootstrap-ACK`);
+  return text(input.includes(`${marker}after-lifecycle`) ? `${marker}lifecycle-ACK` : input.includes(`${marker}idle-message`) ? `${marker}idle-ACK` : `${marker}bootstrap-ACK`);
 }
 async function check(name, action) {
   report.check = name; const started = Date.now(); await action();
@@ -64,6 +65,22 @@ function redact(value) {
   let result = typeof value === 'string' ? value : JSON.stringify(value);
   if (fixture?.info?.token) result = result.replaceAll(fixture.info.token, '[fixture-token-redacted]');
   return result.replace(/([?&]token=)[^&\s"']+/g, '$1[redacted]').replace(/\b[a-f0-9]{64}\b/g, '[hex64-redacted]');
+}
+async function bridgeRegistration() {
+  const directory = join(fixture.env.HOME, '.crosschat', 'dsh', 'instances');
+  const records = (await readdir(directory)).filter((name) => name.endsWith('.json'));
+  assert.equal(records.length, 1, 'Exactly one owned production bridge must be registered');
+  const value = JSON.parse(await readFile(join(directory, records[0]), 'utf8'));
+  assert.equal(value.pid, fixture.pid); return value;
+}
+function portIsClosed(url) {
+  return new Promise((done, reject) => {
+    const target = new URL(url);
+    const socket = createConnection({ host: '127.0.0.1', port: Number(target.port) });
+    const timer = setTimeout(() => { socket.destroy(); reject(Object.assign(new Error('Owned bridge port probe timed out'), { category: 'infrastructure', check: 'fixture-port-probe' })); }, 2000);
+    socket.once('connect', () => { clearTimeout(timer); socket.destroy(); done(false); });
+    socket.once('error', (error) => { clearTimeout(timer); socket.destroy(); if (error.code === 'ECONNREFUSED') done(true); else reject(error); });
+  });
 }
 try {
   fixture = await createDshFixture({ runtime: process.env.DSH_RUNTIME_DIR, parentRoot: process.env.DSH_TASK_ROOT }, respond);
@@ -91,19 +108,14 @@ try {
     assert.ok(serialized.includes(sessions.idle.id) && serialized.includes(`${marker}bootstrap-ACK`));
     const outputs = JSON.stringify(fixture.model.requests);
     assert.ok(outputs.includes('tool_result'), 'A real tool result must reach the next official provider request');
-    const returnedIdentities = fixture.model.requests.flatMap((request) => (request.messages ?? []).flatMap((message) => Array.isArray(message.content) ? message.content.filter((item) => item.type === 'tool_result').flatMap(strings) : []))
-      .flatMap((value) => { try { const parsed = JSON.parse(value.trim()); return parsed && typeof parsed === 'object' && typeof parsed.session === 'string' ? [parsed] : []; } catch { return []; } });
-    assert.ok(returnedIdentities.some((identity) => identity.session === sessions.idle.id && identity.profile === 'web' && identity.dshHome === fixture.env.DSH_HOME), 'The actual native shell output must contain the exact current session, profile and Harness home');
+    const identity = assessDshNativeIdentity(fixture.model.requests, { session: sessions.idle.id, profile: 'web', dshHome: fixture.env.DSH_HOME });
+    if (!identity.ready) throw Object.assign(new Error('The actual shell output does not prove the current native Harness identity'), identity);
     assert.ok(bootstrapTool && fixture.model.requests.length >= 2 && !fixture.model.errors.length);
     report.bootstrapModelRequests = fixture.model.requests.length;
   });
   report.stage = 'contract'; report.category = 'compatibility';
   await check('authenticated-production-discovery-and-pagination', async () => {
-    const directory = join(fixture.env.HOME, '.crosschat', 'dsh', 'instances');
-    const records = (await readdir(directory)).filter((name) => name.endsWith('.json'));
-    assert.equal(records.length, 1);
-    const registration = JSON.parse(await readFile(join(directory, records[0]), 'utf8'));
-    assert.equal(registration.pid, fixture.pid);
+    const registration = await bridgeRegistration();
     assert.equal((await globalThis.fetch(`${registration.url}/v1/info`)).status, 401);
     const items = []; let cursor; let complete = false;
     for (let pageIndex = 0; pageIndex < 10; pageIndex++) {
@@ -122,6 +134,33 @@ try {
     const snapshot = JSON.stringify((await fixture.snapshot(sessions.idle.id)).events);
     assert.ok(snapshot.includes(`${marker}idle-message`) && snapshot.includes(`${marker}idle-ACK`));
     assert.ok(fixture.model.requests.some((body) => userText(body).includes(`${marker}idle-message`)));
+    report.check = 'bridge-lifecycle';
+    report.lifecycle = { status: 'failed', mechanism: 'official-plugin-manager-bundle-disable-enable' };
+    const previous = await bridgeRegistration();
+    const disabled = await fixture.controller('/bridge', { enabled: false });
+    assert.equal(disabled.result.application, 'applied', 'Official manager must apply live disable, not require restart');
+    assert.equal(disabled.pid, fixture.pid);
+    const retained = async () => {
+      for (const session of Object.values(sessions)) assert.equal((await fixture.snapshot(session.id)).sameAgent, true, 'Stopping the bridge must preserve the exact existing Agent objects');
+    };
+    await retained();
+    const remaining = (await readdir(join(fixture.env.HOME, '.crosschat', 'dsh', 'instances'))).filter((name) => name.endsWith('.json'));
+    assert.equal(remaining.length, 0, 'The disabled plugin must withdraw its own production registration');
+    assert.equal(await portIsClosed(previous.url), true, 'The previous production endpoint must close');
+    const unavailable = await fixture.cli(['send', '--to', `dsh/${sessions.idle.id}`, '--body', `${marker}must-not-arrive-while-disabled`, '--json']);
+    assert.notEqual(unavailable.code, 0); assert.equal(unavailable.timedOut, false);
+    assert.ok(!JSON.stringify((await fixture.snapshot(sessions.idle.id)).events).includes(`${marker}must-not-arrive-while-disabled`));
+    const enabled = await fixture.controller('/bridge', { enabled: true });
+    assert.equal(enabled.result.application, 'applied', 'Official manager must remount the existing installed bundle');
+    assert.equal(enabled.pid, fixture.pid); await retained();
+    const replacement = await bridgeRegistration();
+    assert.notEqual(replacement.instanceId, previous.instanceId); assert.notEqual(replacement.token, previous.token);
+    assert.equal((await globalThis.fetch(`${replacement.url}/v1/info`, { headers: { authorization: `Bearer ${previous.token}` }, signal: globalThis.AbortSignal.timeout(5000) })).status, 401, 'The remounted endpoint must reject the previous instance credential');
+    sent(await fixture.cli(['send', '--to', `dsh/${sessions.idle.id}`, '--body', `${marker}after-lifecycle`, '--json']));
+    await fixture.idle(sessions.idle.id);
+    assert.ok(JSON.stringify((await fixture.snapshot(sessions.idle.id)).events).includes(`${marker}lifecycle-ACK`), 'The same existing session must answer a fresh post-remount message');
+    report.lifecycle = { status: 'passed', mechanism: 'official-plugin-manager-bundle-disable-enable', pid: fixture.pid, retainedSessionIds: Object.values(sessions).map((session) => session.id),
+      previousInstanceId: previous.instanceId, newInstanceId: replacement.instanceId, previousPort: Number(new URL(previous.url).port), newPort: Number(new URL(replacement.url).port), previousPortClosed: true, previousCredentialRejected: true, freshAck: true };
   });
   await check('busy-native-queue-and-steer-step-boundaries', async () => {
     busyGate = new Promise((done) => { releaseBusy = done; }); busyStarted = new Promise((done) => { startBusy = done; });

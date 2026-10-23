@@ -21,7 +21,15 @@ export function classifyDshStartupFailure(evidence) {
   return { category: 'infrastructure', check: evidence.processAlive === false ? 'runtime-process' : 'runtime-readiness' };
 }
 
-export function assessDshNativeIdentity() { return { ready: false, category: 'infrastructure', check: 'model-tool-result' }; }
+export function assessDshNativeIdentity(requests, expected) {
+  const strings = (value) => typeof value === 'string' ? [value] : value && typeof value === 'object' ? Object.values(value).flatMap(strings) : [];
+  const results = requests.flatMap((request) => (request.messages ?? []).flatMap((message) => Array.isArray(message.content) ? message.content.filter((item) => item.type === 'tool_result') : []));
+  if (!results.length) return { ready: false, category: 'infrastructure', check: 'model-tool-result' };
+  const parsed = results.flatMap(strings).flatMap((value) => { try { const result = JSON.parse(value.trim()); return isRecord(result) ? [result] : []; } catch { return []; } });
+  if (!parsed.length) return { ready: false, category: 'infrastructure', check: 'native-shell-bootstrap' };
+  if (parsed.some((identity) => identity.session === expected.session && identity.profile === expected.profile && identity.dshHome === expected.dshHome)) return { ready: true };
+  return { ready: false, category: 'compatibility', check: 'native-shell-identity' };
+}
 
 export async function prepareDshProfile(root, modelURL) {
   let endpoint;
