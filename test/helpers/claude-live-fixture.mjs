@@ -46,8 +46,11 @@ export async function prepareClaudeProfile(root, modelURL) {
     NO_COLOR: '1', CI: '1',
   });
   if (process.platform === 'win32') { env.HOMEDRIVE = profile.slice(0, 2); env.HOMEPATH = profile.slice(2); }
-  await Promise.all([profile, env.CLAUDE_CONFIG_DIR, env.APPDATA, env.LOCALAPPDATA, env.TEMP, env.XDG_CONFIG_HOME, env.XDG_CACHE_HOME,
-    env.XDG_DATA_HOME, env.XDG_STATE_HOME, env.CODEX_HOME, join(root, 'workspace')].map((directory) => mkdir(directory, { recursive: true })));
+  // Settle every in-flight mkdir before a caller can remove a failed setup's owned root.
+  const directories = await Promise.allSettled([profile, env.CLAUDE_CONFIG_DIR, env.APPDATA, env.LOCALAPPDATA, env.TEMP, env.XDG_CONFIG_HOME, env.XDG_CACHE_HOME,
+    env.XDG_DATA_HOME, env.XDG_STATE_HOME, env.CODEX_HOME, join(root, 'workspace')].map(async (directory) => mkdir(directory, { recursive: true })));
+  const failure = directories.find((result) => result.status === 'rejected');
+  if (failure) throw failure.reason;
   await writeFile(env.GIT_CONFIG_GLOBAL, '');
   return env;
 }
@@ -62,6 +65,7 @@ export function runClaudeCommand(binary, args, options = {}) {
     const child = spawn(binary, args, { cwd: options.cwd ?? repositoryRoot, env: options.env, windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = ''; let stderr = ''; let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; child.kill(); }, options.timeout ?? 30000);
+    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk) => { stdout = bounded(stdout + chunk); });
     child.stderr.on('data', (chunk) => { stderr = bounded(stderr + chunk); });
     child.once('error', (error) => { clearTimeout(timer); reject(error); });
@@ -79,11 +83,10 @@ export async function createClaudeFixture(options, respond) {
   await writeFile(join(root, '.fixture-owner'), owner);
   const sessions = []; const barriers = [];
   const cleanup = { runtimeStopped: false, registrationRemoved: false, modelClosed: false, removed: false, forced: false, errors: [] };
-  const model = await createClaudeMockModel(respond);
-  const env = await prepareClaudeProfile(root, model.url);
-  const workspace = join(root, 'workspace'); const sessionsDir = join(env.CLAUDE_CONFIG_DIR, 'sessions');
-  const binary = join(env.APPDATA, 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'node_modules', '@anthropic-ai', 'claude-code-win32-x64', 'claude.exe');
-  let closing;
+  const workspace = join(root, 'workspace'); const sessionsDir = join(root, 'profile', '.claude', 'sessions');
+  const binary = join(root, 'profile', 'appdata', 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'node_modules', '@anthropic-ai', 'claude-code-win32-x64', 'claude.exe');
+  let model; let env; let closing;
+  const cleanupError = (error) => cleanup.errors.push(error instanceof Error ? error.message : String(error));
   const fixture = {
     root, env, workspace, sessionsDir, sessions, model, cleanup,
     scan: () => listClaudeSessions(sessionsDir),
@@ -105,8 +108,9 @@ export async function createClaudeFixture(options, respond) {
         child.once('close', (code, signal) => { exit = { code, signal }; done(); });
       });
       child.stdin.on('error', (error) => { if (!exit) spawnError = error; });
+      child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
       child.stdout.on('data', (chunk) => {
-        logs.stdout = bounded(logs.stdout + chunk); pending += chunk.toString('utf8');
+        logs.stdout = bounded(logs.stdout + chunk); pending += chunk;
         for (;;) {
           const index = pending.indexOf('\n'); if (index < 0) break;
           const line = pending.slice(0, index); pending = pending.slice(index + 1);
@@ -145,24 +149,35 @@ export async function createClaudeFixture(options, respond) {
     },
     close() {
       return closing ??= (async () => {
-        await Promise.all(barriers.map((barrier) => barrier.release()));
+        const releases = await Promise.allSettled(barriers.map(async (barrier) => barrier.release()));
+        for (const release of releases) if (release.status === 'rejected') cleanupError(release.reason);
         for (const session of sessions) {
-          try { await session.stop(); } catch (error) { cleanup.errors.push(error.message); }
+          try { await session.stop(); } catch (error) { cleanupError(error); }
         }
-        cleanup.runtimeStopped = sessions.every((session) => session.child.exitCode === 0 && !session.child.signalCode && (!session.entry || !alive(session.entry.pid)))
-          && barriers.every((barrier) => !barrier.pid || !alive(barrier.pid));
-        const remaining = await readdir(sessionsDir).catch((error) => { if (error.code === 'ENOENT') return []; throw error; });
-        cleanup.registrationRemoved = fixture.scan().sessions.length === 0 && !remaining.some((file) => file.endsWith('.json'));
-        try { await model.close(); cleanup.modelClosed = true; } catch (error) { cleanup.errors.push(error.message); }
+        try {
+          cleanup.runtimeStopped = sessions.every((session) => session.child.exitCode === 0 && !session.child.signalCode && (!session.entry || !alive(session.entry.pid)))
+            && barriers.every((barrier) => !barrier.pid || !alive(barrier.pid));
+        } catch (error) { cleanupError(error); }
+        try {
+          const remaining = await readdir(sessionsDir).catch((error) => { if (error.code === 'ENOENT') return []; throw error; });
+          cleanup.registrationRemoved = fixture.scan().sessions.length === 0 && !remaining.some((file) => file.endsWith('.json'));
+        } catch (error) { cleanupError(error); }
+        // The model is independently owned, even when setup or another cleanup step failed.
+        try { if (model) await model.close(); cleanup.modelClosed = true; } catch (error) { cleanupError(error); }
         if (cleanup.runtimeStopped && cleanup.registrationRemoved && cleanup.modelClosed && !cleanup.forced && !cleanup.errors.length) {
-          const target = await realpath(root); const child = relative(parent, target);
-          if (target !== root || !child || isAbsolute(child) || child === '..' || child.startsWith(`..${sep}`) || await readFile(join(root, '.fixture-owner'), 'utf8') !== owner) throw new Error('Unsafe owned Claude fixture cleanup target');
-          await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); cleanup.removed = true;
-        } else throw Object.assign(new Error('Owned Claude resources did not exit normally; fixture retained'), { cleanup });
+          try {
+            const target = await realpath(root); const child = relative(parent, target);
+            if (target !== root || !child || isAbsolute(child) || child === '..' || child.startsWith(`..${sep}`) || await readFile(join(root, '.fixture-owner'), 'utf8') !== owner) throw new Error('Unsafe owned Claude fixture cleanup target');
+            await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); cleanup.removed = true;
+          } catch (error) { cleanupError(error); }
+        }
+        if (!cleanup.removed) throw Object.assign(new Error('Owned Claude resources did not exit normally; fixture retained'), { cleanup });
       })();
     },
   };
   try {
+    model = await createClaudeMockModel(respond); fixture.model = model;
+    env = await prepareClaudeProfile(root, model.url); fixture.env = env;
     await mkdir(dirname(binary), { recursive: true }); await copyFile(options.binary, binary);
     // Windows CreateProcess needs an extended path for the user's long, retained D: test hierarchy.
     env.APPDATA = toNamespacedPath(env.APPDATA);

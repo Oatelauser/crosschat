@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -50,7 +50,7 @@ afterEach(async () => {
 });
 
 async function options() {
-  const root = await mkdtemp(join(tmpdir(), 'crosschat-claude-lifecycle-unit-')); roots.push(root);
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'crosschat-claude-lifecycle-unit-'))); roots.push(root);
   const binary = join(root, 'controlled-input.exe'); await writeFile(binary, 'Only a file-copy fixture; spawn is mocked.');
   return { binary, parentRoot: root, expectedVersion: '2.1.309' };
 }
