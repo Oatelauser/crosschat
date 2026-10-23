@@ -1,9 +1,9 @@
-import { mkdtemp, realpath, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import process from 'node:process';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createDesktopEnvironment } from './helpers/opencode-desktop-live-fixture.mjs';
+import { prepareDesktopProfile } from './helpers/opencode-desktop-live-fixture.mjs';
 import { runCommand } from './helpers/opencode-live-fixture.mjs';
 
 const roots: string[] = [];
@@ -25,7 +25,8 @@ describe('official desktop test environment', () => {
     vi.stubEnv('OPENAI_API_KEY', 'must-not-reach-upstream');
     vi.stubEnv('GITHUB_TOKEN', 'must-not-reach-upstream');
     vi.stubEnv('CODEX_THREAD_ID', 'foreign-session');
-    const env = createDesktopEnvironment(root);
+    const env = await prepareDesktopProfile(root);
+    expect(JSON.parse(await readFile(join(env.OPENCODE_DESKTOP_TEST_ROOT, 'desktop', 'opencode.settings'), 'utf8'))).toEqual({ firstLaunchOnboardingComplete: true });
     const result = await runCommand(process.execPath, ['--input-type=module', '-e', `
       import { homedir, tmpdir } from 'node:os';
       import { join } from 'node:path';
