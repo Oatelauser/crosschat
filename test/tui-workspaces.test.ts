@@ -34,7 +34,7 @@ describe('independent TUI workspaces', () => {
   });
 
   it('includes the broker local channel in TCP without changing it into a TCP key identity', async () => {
-    const read = vi.fn(async (_request: TuiReadRequest): Promise<TuiPage> => ({ rows: [], completeness: 'complete', contextSummary: { permissionLabel: 'Broker 管理者' } }));
+    const read = vi.fn(async (request: TuiReadRequest): Promise<TuiPage> => ({ rows: [], completeness: 'complete', contextSummary: { permissionLabel: request.context?.kind === 'local' ? 'Broker 管理者' : '星管理员' } }));
     const controller = createTuiController({ registry: registry(), contexts, adapters: { stars: { read } } });
     try {
       command(controller, 'tcp');

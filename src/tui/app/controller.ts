@@ -388,7 +388,12 @@ export function createTuiController(options: TuiControllerOptions) {
       page.selectedFacets = new Map(page.filters.map((filter) => [filter.id, filter.defaultValue])); publish(); return;
     }
     const previous = history.pop();
-    if (previous) { cancelRead(false); stopWatch(); page = previous; mode = 'list'; publish(); }
+    if (previous) {
+      cancelRead(false); stopWatch(); page = previous; mode = 'list';
+      const active = page.route.contextId ?? null;
+      if (active !== notifiedContext) { notifiedContext = active; options.onActiveContext?.(active); }
+      publish();
+    }
   }
   function openInput(kind: TuiInput['kind']) {
     cancelWork();
@@ -441,7 +446,10 @@ export function createTuiController(options: TuiControllerOptions) {
           navigate(lastTcpRoute && contexts.some((context) => context.id === lastTcpRoute!.contextId) ? lastTcpRoute : { resourceId: 'tcp' });
         } else if (target.id === 'local') navigate({ resourceId: 'local', contextId: 'local' });
         else if (['ctx', 'ssh', 'tcp-targets', 'connect'].includes(target.id)) navigate({ resourceId: target.id });
-        else navigate({ resourceId: target.id, contextId });
+        else {
+          const declared = [...Object.values(page.actionRoutes ?? {}), ...Object.values(selectedRow()?.actionRoutes ?? {})].find((route) => route.resourceId === target.id);
+          navigate(declared ? copyRoute(declared) : { resourceId: target.id, contextId });
+        }
       } else { mode = savedInput?.mode ?? 'list'; input = undefined; savedInput = undefined; publish(); }
       return;
     }
@@ -588,7 +596,15 @@ export function createTuiController(options: TuiControllerOptions) {
       const completion = await adapter.mutate(request);
       if (disposed || generation !== formGeneration || !overlay || page !== owner) return;
       if (completion.navigate && (!options.registry.resolve(completion.navigate.resourceId) || completion.result)) throw new Error('操作已提交，但返回目标无效；请核实结果后返回连接列表。');
-      const message = completion.result ? '配置已生成；请在当前结果页保存后关闭。' : formText(completion.message ?? '操作已完成');
+      let message = completion.result ? '配置已生成；请在当前结果页保存后关闭。' : formText(completion.message ?? '操作已完成');
+      if (completion.refreshContexts && options.contextSource) {
+        try {
+          const latest = await options.contextSource.read(controller.signal);
+          if (disposed || generation !== formGeneration || !overlay || page !== owner) return;
+          contexts = [...latest.contexts];
+          if (latest.completeness !== 'complete') message += '；配置已保存，连接目录读取不完整，请返回工作区刷新。';
+        } catch { message += '；配置已保存，连接目录刷新失败，请返回工作区刷新。'; }
+      }
       if (completion.result) {
         const keys = new Set<string>();
         const ids = new Set<string>();

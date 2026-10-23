@@ -11,35 +11,35 @@ function fixture() {
   ];
   const read = vi.fn(async () => ({ rows: [], completeness: 'complete' as const }));
   const registry = createResourceRegistry(defaultResources.map((resource) => resource.id === 'ctx' ? contextsResource : resource));
-  return { read, controller: createTuiController({ registry, contexts, adapters: { ssh: { read }, status: { read }, sessions: { read }, machines: { read }, connect: { read } } }) };
+  return { read, controller: createTuiController({ registry, contexts, adapters: { ssh: { read }, status: { read }, sessions: { read }, stars: { read }, machines: { read }, connect: { read } } }) };
 }
 
 describe('context actions use declared presentation metadata', () => {
-  it('tests only the selected SSH target and restores the source selection', async () => {
+  it('navigates only to the selected SSH target and restores the source selection', async () => {
     const { controller, read } = fixture();
     try {
-      controller.handleKey({ name: 'down' }); controller.handleKey({ name: 't' });
+      controller.handleKey({ name: 'down' }); controller.handleKey({ name: 'enter' });
       await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
-      expect(controller.getSnapshot().route).toEqual({ resourceId: 'ssh', contextId: 'ssh:fixture', query: { operation: 'check' } });
+      expect(controller.getSnapshot().route).toEqual({ resourceId: 'sessions', contextId: 'ssh:fixture' });
       controller.handleKey({ name: 'escape' });
       expect(controller.getSnapshot().selectedId).toBe('ssh:fixture');
     } finally { controller.dispose(); }
   });
 
-  it('keeps guides readonly, tests the selected TCP star and opens the existing connection chooser without a write', async () => {
+  it('keeps ctx read-only and enters the selected TCP workspace without exposing connection mutations', async () => {
     const { controller, read } = fixture();
     try {
-      controller.handleKey({ name: 'down' }); controller.handleKey({ name: 'g' });
+      controller.handleKey({ name: 'down' }); controller.handleKey({ name: 'd' });
       expect(controller.getSnapshot().mode).toBe('detail');
-      expect(JSON.stringify(controller.getSnapshot().detail)).toContain('同一');
+      expect(JSON.stringify(controller.getSnapshot().detail)).toContain('ssh');
       controller.handleKey({ name: 't' }); expect(read).not.toHaveBeenCalled();
-      controller.handleKey({ name: 'escape' }); controller.handleKey({ name: 'down' }); controller.handleKey({ name: 't' });
+      controller.handleKey({ name: 'escape' }); controller.handleKey({ name: 'down' }); controller.handleKey({ name: 'enter' });
       await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
-      expect(controller.getSnapshot().route).toEqual({ resourceId: 'machines', contextId: 'tcp:pending' });
+      expect(controller.getSnapshot().route).toEqual({ resourceId: 'stars', contextId: 'tcp:pending' });
       controller.handleKey({ name: 'escape' });
       controller.handleKey({ name: 'a' });
-      await vi.waitFor(() => expect(controller.getSnapshot().route.resourceId).toBe('connect'));
-      await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+      expect(controller.getSnapshot().route.resourceId).toBe('ctx');
+      expect(read).toHaveBeenCalledTimes(1);
     } finally { controller.dispose(); }
   });
 
@@ -48,10 +48,10 @@ describe('context actions use declared presentation metadata', () => {
     const registry = createResourceRegistry(defaultResources.map((resource) => resource.id === 'ctx' ? contextsResource : resource));
     const current = [presentContext({ id: 'ssh:new', kind: 'ssh', label: 'new', target: 'new' })];
     const read = vi.fn(async () => ({ rows: [], completeness: 'complete' as const }));
-    const active = createTuiController({ registry, contexts: [], contextSource: { initial: { contexts: [], completeness: 'complete' }, read: async () => ({ contexts: current, completeness: 'complete' }) }, adapters: { ssh: { read } } });
+    const active = createTuiController({ registry, contexts: [], contextSource: { initial: { contexts: [], completeness: 'complete' }, read: async () => ({ contexts: current, completeness: 'complete' }) }, adapters: { sessions: { read } } });
     try {
       active.handleKey({ name: 'r' }); await vi.waitFor(() => expect(active.getSnapshot().rows).toHaveLength(1));
-      active.handleKey({ name: 't' }); await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
+      active.handleKey({ name: 'enter' }); await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
       expect(active.getSnapshot().route.contextId).toBe('ssh:new');
     } finally { active.dispose(); }
   });
