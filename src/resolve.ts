@@ -32,17 +32,32 @@ export interface ResolveCodexRow {
 }
 
 export interface ResolveOpenCodeRow { id: string; name: string | null }
+export interface ResolveDshRow { id: string; name: string | null }
 
 export type ResolvedTarget =
   | { side: 'claude'; session: ResolveClaudeRow }
   | { side: 'codex'; thread: ResolveCodexRow }
-  | { side: 'opencode'; thread: ResolveOpenCodeRow };
+  | { side: 'opencode'; thread: ResolveOpenCodeRow }
+  | { side: 'dsh'; thread: ResolveDshRow };
 
 export function resolveTargetByName(
   name: string,
   sessions: readonly ResolveClaudeRow[],
   threads: readonly ResolveCodexRow[],
   openCode: readonly ResolveOpenCodeRow[] = [],
+  dsh: readonly ResolveDshRow[] = [],
+): ResolvedTarget {
+  if (name.startsWith('dsh/')) return resolveDsh(name.slice('dsh/'.length), dsh);
+  if (dsh.length > 0 && !name.startsWith('opencode/')) return resolveWithDsh(name, sessions, threads, openCode, dsh);
+  return resolveBeforeDsh(name, sessions, threads, openCode);
+}
+
+/** Existing tools retain their established selectors and diagnostics. */
+function resolveBeforeDsh(
+  name: string,
+  sessions: readonly ResolveClaudeRow[],
+  threads: readonly ResolveCodexRow[],
+  openCode: readonly ResolveOpenCodeRow[],
 ): ResolvedTarget {
   if (name.startsWith('opencode/')) return resolveOpenCode(name.slice('opencode/'.length), openCode);
   if (openCode.length === 0) return resolveLegacyByName(name, sessions, threads);
@@ -60,6 +75,46 @@ export function resolveTargetByName(
   const byId = openCode.find((row) => row.id === name);
   if (byId !== undefined) return { side: 'opencode', thread: byId };
   return resolveLegacyByName(name, sessions, threads);
+}
+
+function resolveWithDsh(name: string, sessions: readonly ResolveClaudeRow[], threads: readonly ResolveCodexRow[], openCode: readonly ResolveOpenCodeRow[], dsh: readonly ResolveDshRow[]): ResolvedTarget {
+  const previous = () => resolveBeforeDsh(name, sessions, threads, openCode);
+  const previousNames = [...sessions.filter((row) => row.sessionId !== '').map((row) => row.name), ...threads.map((row) => row.name), ...openCode.map((row) => row.name)];
+  const exact = dsh.filter((row) => row.name === name);
+  const oldExact = previousNames.filter((candidate) => candidate === name).length;
+  if (exact.length > 0) {
+    if (exact.length + oldExact > 1) throw new MultichatError('NAME_COLLISION', `Multiple agents are named ${JSON.stringify(name)}. Use dsh/<name or full session ID> for DeepSeek Harness.`);
+    return { side: 'dsh', thread: exact[0] };
+  }
+  if (oldExact > 0) return previous();
+  const lower = name.toLowerCase();
+  const prefix = lower === '' ? [] : dsh.filter((row) => row.name?.toLowerCase().startsWith(lower));
+  const oldPrefix = lower === '' ? 0 : previousNames.filter((candidate) => candidate?.toLowerCase().startsWith(lower)).length;
+  if (prefix.length > 0) {
+    if (prefix.length + oldPrefix > 1) throw new MultichatError('NAME_COLLISION', `Multiple agents match prefix ${JSON.stringify(name)}. Use dsh/<name or full session ID> for DeepSeek Harness.`);
+    return { side: 'dsh', thread: prefix[0] };
+  }
+  if (oldPrefix > 0) return previous();
+  const byId = dsh.filter((row) => row.id === name);
+  if (byId.length > 1) throw new MultichatError('NAME_COLLISION', 'The native session ID exists in multiple DeepSeek Harness instances.');
+  if (byId.length === 1) {
+    if (sessions.some((row) => row.sessionId === name) || threads.some((row) => row.id === name) || openCode.some((row) => row.id === name)) {
+      throw new MultichatError('NAME_COLLISION', 'The native session ID exists in multiple tools. Use an explicit tool-qualified target.');
+    }
+    return { side: 'dsh', thread: byId[0] };
+  }
+  return previous();
+}
+
+function resolveDsh(query: string, rows: readonly ResolveDshRow[]): ResolvedTarget {
+  const byId = rows.filter((row) => row.id === query);
+  if (byId.length > 1) throw new MultichatError('NAME_COLLISION', 'The native session ID exists in multiple DeepSeek Harness instances.');
+  if (byId.length === 1) return { side: 'dsh', thread: byId[0] };
+  const exact = rows.filter((row) => row.name === query);
+  const matches = exact.length > 0 ? exact : query !== '' ? rows.filter((row) => row.name?.toLowerCase().startsWith(query.toLowerCase()) || row.id.startsWith(query)) : [];
+  if (matches.length > 1) throw new MultichatError('NAME_COLLISION', `Multiple DeepSeek Harness sessions match ${JSON.stringify(query)}. Use the full session ID.`);
+  if (matches.length === 1) return { side: 'dsh', thread: matches[0] };
+  throw new MultichatError('NAME_NOT_FOUND', `No DeepSeek Harness session matches ${JSON.stringify(query)}. Run crosschat discover to find its full ID.`);
 }
 
 function resolveOpenCode(query: string, rows: readonly ResolveOpenCodeRow[]): ResolvedTarget {
@@ -158,7 +213,15 @@ export function resolveTargetById(
   sessions: readonly ResolveClaudeRow[],
   threads: readonly ResolveCodexRow[],
   openCode: readonly ResolveOpenCodeRow[] = [],
+  dsh: readonly ResolveDshRow[] = [],
 ): ResolvedTarget {
+  const harness = dsh.filter((row) => row.id === sessionId);
+  if (harness.length > 0) {
+    if (harness.length > 1 || sessions.some((row) => row.sessionId === sessionId) || threads.some((row) => row.id === sessionId) || openCode.some((row) => row.id === sessionId)) {
+      throw new MultichatError('NAME_COLLISION', 'The native session ID exists in multiple tools or Harness instances. Use an explicit tool-qualified target.');
+    }
+    return { side: 'dsh', thread: harness[0] };
+  }
   const native = openCode.find((row) => row.id === sessionId);
   if (native !== undefined) {
     if (sessions.some((row) => row.sessionId === sessionId) || threads.some((row) => row.id === sessionId)) throw new MultichatError('NAME_COLLISION', 'The native session ID exists in multiple tools. Use an explicit tool-qualified target.');

@@ -20,6 +20,8 @@ export const CLAUDE_ENDPOINT_MAX_BODY_BYTES = 65_536;
 export const CODEX_ENDPOINT_MAX_BODY_BYTES = 1_048_576;
 /** Initial OpenCode adapter policy, not an upstream native transport limit. */
 export const OPENCODE_ADAPTER_MAX_BODY_BYTES = 1_048_576;
+/** Initial Harness adapter policy, not an upstream native transport limit. */
+export const DSH_ADAPTER_MAX_BODY_BYTES = 1_048_576;
 
 /** 正整数解析：非数字 / NaN / 非整数 / ≤0 → undefined。send 侧静默降级；wrapper 侧直接报错（一次性人工输入）。 */
 export function parsePositiveInt(raw: string | undefined): number | undefined {
@@ -47,7 +49,7 @@ export function resolveMaxTurn(
 }
 
 /** 哪个硬顶挡下了这次发送（决定报错教学说"可提额"还是"提额无效"）。 */
-export type BodyHardCap = 'claude' | 'codex' | 'opencode' | 'ssh-precheck' | 'tcp-precheck' | 'absolute';
+export type BodyHardCap = 'claude' | 'codex' | 'opencode' | 'dsh' | 'ssh-precheck' | 'tcp-precheck' | 'absolute';
 
 /**
  * MESSAGE_TOO_LARGE 教学文案（票A）：本地变体保留分形态尾巴（单机落盘 /
@@ -76,6 +78,9 @@ export function bodyTooLargeMessage(
     if (hardCap === 'opencode') {
       return `Body is ${size} bytes; opencode 适配策略上限 1MiB——提额无效（这是一条 --via 跨机来件）。${scpDetour}`;
     }
+    if (hardCap === 'dsh') {
+      return `Body is ${size} bytes; dsh 适配策略上限 1MiB——提额无效（这是一条 --via 跨机来件）。${scpDetour}`;
+    }
     if (hardCap === 'claude' || hardCap === 'codex') {
       const fact = hardCap === 'claude' ? 'claude 端点硬顶 64KiB' : 'codex 端点硬顶 1MiB';
       return `Body is ${size} bytes; ${fact}——提额无效（这是一条 --via 跨机来件）。${scpDetour}`;
@@ -101,6 +106,8 @@ export function bodyTooLargeMessage(
         ? 'codex 端点硬顶 1MiB——提额无效，只能落盘发文件路径。'
         : hardCap === 'opencode'
           ? 'opencode 适配策略上限 1MiB——提额无效，只能落盘发文件路径。'
+          : hardCap === 'dsh'
+            ? 'dsh 适配策略上限 1MiB——提额无效，只能落盘发文件路径。'
           : hardCap === 'ssh-precheck'
             ? 'ssh 形态本地按最宽端点（codex 1MiB）预检——提额无效；远端自行复检（claude 端点更严，64KiB）。'
             : hardCap === 'tcp-precheck'

@@ -8,6 +8,7 @@ import type { RefEndpoint } from './ref.js';
  * - CLAUDE_CODE_MESSAGING_SOCKET -> match the pipe path against the registry
  * - CODEX_THREAD_ID || CODEX_SESSION_ID -> codex thread identity
  * - OPENCODE_SESSION_ID (native shell), or explicit CROSSCHAT_OPENCODE_SESSION_ID -> OpenCode session identity
+ * - DSH_SESSION_ID (native shell) -> DeepSeek Harness session identity
  * - no native identity -> human (may send, cannot receive)
  */
 
@@ -15,6 +16,7 @@ export type CallerIdentity =
   | { p: 'claude'; id: string; name?: string }
   | { p: 'codex'; id: string }
   | { p: 'opencode'; id: string }
+  | { p: 'dsh'; id: string }
   | { p: 'human' };
 
 /**
@@ -26,12 +28,14 @@ export type CallerIdentity =
  *
  * 新工具在注册表加一行并提供身份识别，其余启动器自动剥其身份环境。
  */
-export type IdentityFamily = 'claude' | 'codex' | 'opencode';
+export type IdentityFamily = 'claude' | 'codex' | 'opencode' | 'dsh';
 
 /** OpenCode's shell tool injects and overwrites this key per native session. */
 export const OPENCODE_SESSION_ID_ENV = 'OPENCODE_SESSION_ID';
 /** Explicit integration/test fallback; disagreement with the native key is rejected. */
 export const CROSSCHAT_OPENCODE_SESSION_ID_ENV = 'CROSSCHAT_OPENCODE_SESSION_ID';
+/** Harness owns this identity in each native shell tool invocation. */
+export const DSH_SESSION_ID_ENV = 'DSH_SESSION_ID';
 
 export const IDENTITY_ENV_FAMILIES: Record<IdentityFamily, readonly string[]> = {
   claude: [
@@ -41,6 +45,7 @@ export const IDENTITY_ENV_FAMILIES: Record<IdentityFamily, readonly string[]> = 
   ],
   codex: ['CODEX_THREAD_ID', 'CODEX_SESSION_ID'],
   opencode: [OPENCODE_SESSION_ID_ENV, CROSSCHAT_OPENCODE_SESSION_ID_ENV],
+  dsh: [DSH_SESSION_ID_ENV],
 };
 
 /** 复制 env 并删除给定键（不改动原对象）。 */
@@ -94,6 +99,14 @@ export function resolveCallerIdentity(
     );
   }
   const opencodeId = nativeOpenCodeId || explicitOpenCodeId;
+  const dshId = env[DSH_SESSION_ID_ENV] ?? '';
+  if (dshId !== '' && (claude !== undefined || codexId !== '' || opencodeId !== '')) {
+    throw new MultichatError(
+      'CALLER_IDENTITY_CONFLICT',
+      `Caller identity conflict: DeepSeek Harness and another native tool's identity variables are present. ` +
+        `Start the intended tool from a clean terminal or through its crosschat launcher; preserve the current native session identity.`,
+    );
+  }
   if (opencodeId !== '' && (claude !== undefined || codexId !== '')) {
     throw new MultichatError(
       'CALLER_IDENTITY_CONFLICT',
@@ -119,6 +132,7 @@ export function resolveCallerIdentity(
   if (claude !== undefined) return claude;
   if (codexId !== '') return { p: 'codex', id: codexId };
   if (opencodeId !== '') return { p: 'opencode', id: opencodeId };
+  if (dshId !== '') return { p: 'dsh', id: dshId };
   return { p: 'human' };
 }
 

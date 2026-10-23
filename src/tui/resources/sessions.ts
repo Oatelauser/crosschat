@@ -45,6 +45,12 @@ const nativeGuides: Readonly<Record<string, NativeSessionGuide>> = {
     { label: '客户端指引', value: '桌面会话请在 OpenCode 桌面打开；本批桌面接入限默认本机服务。crosschat opencode 是 CLI 启动器。' },
     { label: '恢复指引', value: '需要重新打开时，在 OpenCode 原生会话列表核对完整 ID 并选择对应会话；crosschat 不代为启动或恢复。' },
   ] }),
+  dsh: (session) => ({ title: 'DeepSeek Harness 原生操作', fields: [
+    { label: '继续聊天', value: '请返回此会话原来的 Harness Web 或桌面窗口，核对完整 ID 后继续聊天。' },
+    { label: '完整会话 ID', value: session.ref.nativeId },
+    { label: '接入范围', value: '来源是当前 profile 的 crosschat 桥；仅已有 live 根会话，不包含子会话和冷历史。' },
+    { label: '恢复指引', value: '需要重新打开时由用户在原生界面操作；crosschat 不创建或恢复替代会话。' },
+  ] }),
 };
 
 function action(id: string, label: string, shortcut: string, extra: Partial<TuiAction> = {}): TuiAction {
@@ -100,20 +106,22 @@ function address(session: DiscoverySession, items: readonly DiscoverySession[], 
   if (completeness !== 'complete') return { unavailable: unavailable('来源读取不完整，尚不能确认地址唯一。', '按 r 完整刷新；Y 可复制完整会话引用。') };
   if (session.ref.referenceKind === 'process') return { unavailable: unavailable('进程引用不能作为完整会话地址。', '在原生工具中核对会话身份；Y 可复制临时进程引用。') };
   if (!session.capabilities.delivery) return { unavailable: unavailable('此会话来源未声明投递能力。', '回到原生工具操作；Y 可复制完整会话引用。') };
-  if (!['claude', 'codex', 'opencode'].includes(session.ref.providerId)) return { unavailable: unavailable('此工具尚未声明现有本机发送地址能力。', '回到原生工具操作；Y 可复制完整会话引用。') };
+  if (!['claude', 'codex', 'opencode', 'dsh'].includes(session.ref.providerId)) return { unavailable: unavailable('此工具尚未声明现有本机发送地址能力。', '回到原生工具操作；Y 可复制完整会话引用。') };
   const matchesExactTarget = (value: string): boolean => {
     try {
       const resolved = resolveTargetByName(value,
         items.filter((item) => item.ref.providerId === 'claude' && item.ref.referenceKind !== 'process').map((item) => ({ sessionId: item.ref.nativeId, name: item.name ?? undefined })),
         items.filter((item) => item.ref.providerId === 'codex').map((item) => ({ id: item.ref.nativeId, name: item.name })),
-        items.filter((item) => item.ref.providerId === 'opencode' && item.ref.referenceKind !== 'process').map((item) => ({ id: item.ref.nativeId, name: item.name })));
+        items.filter((item) => item.ref.providerId === 'opencode' && item.ref.referenceKind !== 'process').map((item) => ({ id: item.ref.nativeId, name: item.name })),
+        items.filter((item) => item.ref.providerId === 'dsh' && item.ref.referenceKind !== 'process').map((item) => ({ id: item.ref.nativeId, name: item.name })));
       return resolved.side === session.ref.providerId && (resolved.side === 'claude' ? resolved.session.sessionId : resolved.thread.id) === session.ref.nativeId;
     } catch { return false; }
   };
-  if (session.ref.providerId === 'opencode') {
-    const value = `opencode/${session.ref.nativeId}`;
+  if (session.ref.providerId === 'opencode' || session.ref.providerId === 'dsh') {
+    const provider = session.ref.providerId === 'dsh' ? 'Harness' : 'OpenCode';
+    const value = `${session.ref.providerId}/${session.ref.nativeId}`;
     if (!hasTerminalControls(value) && matchesExactTarget(value)) return { value };
-    return { unavailable: unavailable('完整 OpenCode ID 地址与名称匹配冲突，或含终端控制字符。', '在 OpenCode 中核对完整 ID 并处理名称冲突；Y 可复制安全编码的完整会话引用。') };
+    return { unavailable: unavailable(`完整 ${provider} ID 地址与名称匹配冲突，或含终端控制字符。`, `在 ${provider} 中核对完整 ID 并处理名称冲突；Y 可复制安全编码的完整会话引用。`) };
   }
   // Discovery reads all pages, whereas the existing local send selector sees
   // only the first 20 Codex entries in source order. Do not widen that contract.

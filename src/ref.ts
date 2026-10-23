@@ -15,7 +15,7 @@ import { MultichatError } from './errors.js';
 /** human has no routable native id; native tool endpoints always carry one. */
 export type RefEndpoint =
   | { p: 'human' }
-  | { p: 'claude' | 'codex' | 'opencode'; id: string; m?: string; mid?: string };
+  | { p: 'claude' | 'codex' | 'opencode' | 'dsh'; id: string; m?: string; mid?: string };
 
 export interface ConversationRef {
   v: 1;
@@ -219,12 +219,12 @@ function decodeV2(payload: string): ConversationRef {
   // Field order mirrors encodeRef; a type-3 provider name precedes its id.
   const readId = (typeBits: number, rawBit: number): RefEndpoint => {
     if (typeBits === TYPE_CODES.human) return { p: 'human' };
-    let p: 'claude' | 'codex' | 'opencode';
+    let p: 'claude' | 'codex' | 'opencode' | 'dsh';
     if (typeBits === TYPE_CODES.claude) p = 'claude';
     else if (typeBits === TYPE_CODES.codex) p = 'codex';
     else if (typeBits === EXTENDED_TYPE_CODE) {
       const provider = cur.field().toString('utf8');
-      if (provider !== 'opencode') throw invalid('unknown extended provider', true);
+      if (provider !== 'opencode' && provider !== 'dsh') throw invalid('unknown extended provider', true);
       p = provider;
     } else {
       throw invalid(`unknown endpoint type ${typeBits}`, true);
@@ -284,7 +284,7 @@ function validateEndpoint(value: unknown, where: 'f' | 't'): RefEndpoint {
     if (ep.id !== undefined && ep.id !== null) throw invalid(`${where}: human endpoint must not carry an id`);
     return { p: 'human' };
   }
-  if ((ep.p === 'claude' || ep.p === 'codex' || ep.p === 'opencode') && typeof ep.id === 'string' && ep.id !== '') {
+  if ((ep.p === 'claude' || ep.p === 'codex' || ep.p === 'opencode' || ep.p === 'dsh') && typeof ep.id === 'string' && ep.id !== '') {
     // m is optional and mc1 JSON never carries it, but tolerate it if present.
     return ep.m === undefined || typeof ep.m !== 'string'
       ? { p: ep.p, id: ep.id }

@@ -99,6 +99,8 @@ export function encodeOrigin(identity: CallerIdentity, host: string, mid?: strin
         ? `codex/${identity.id}`
         : identity.p === 'opencode'
           ? `opencode/${encodeURIComponent(identity.id)}`
+          : identity.p === 'dsh'
+            ? `dsh/${encodeURIComponent(identity.id)}`
           : 'human';
   // B2.1：tcp 形态给 tail 加 'tcp:' 前缀（host 槽=发送方 mid8）；ssh/单机路径字节不变（零回归锚点）。
   const head = via === 'tcp' ? `tcp:${host}` : host;
@@ -159,6 +161,13 @@ export function decodeOriginIdentity(encoded: string): OriginIdentity {
     }
     if (id === '') throw new MultichatError('USAGE', '--origin OpenCode session id 为空');
     return { p: 'opencode', id, host, ...midField, ...viaField };
+  }
+  if (p === 'dsh') {
+    let id: string;
+    try { id = decodeURIComponent(rest); }
+    catch { throw new MultichatError('USAGE', '--origin DeepSeek Harness session id 编码非法'); }
+    if (id === '') throw new MultichatError('USAGE', '--origin DeepSeek Harness session id 为空');
+    return { p: 'dsh', id, host, ...midField, ...viaField };
   }
   // First '/' after the endpoint type separates the full id from the optional
   // display name; a name may itself contain '/' (B2.1 spec). Ids are
@@ -333,6 +342,7 @@ export function originDisplayName(identity: CallerIdentity): string {
   if (identity.p === 'claude') return identity.name ?? `claude/${identity.id.slice(0, 8)}`;
   if (identity.p === 'codex') return `codex/${identity.id.slice(0, 8)}`;
   if (identity.p === 'opencode') return `opencode/${identity.id.slice(0, 8)}`;
+  if (identity.p === 'dsh') return `dsh/${identity.id.slice(0, 8)}`;
   return 'human';
 }
 

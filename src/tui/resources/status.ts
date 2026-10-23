@@ -13,6 +13,7 @@ const defaultLabels: ProviderStatusLabels = {
   },
   claude: { idle: '空闲', busy: '忙碌', working: '运行中', unknown: '未知' },
   opencode: { running: '运行中', inactive: '无前台执行' },
+  dsh: { idle: '空闲', running: '运行中' },
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -17,6 +17,7 @@
   "files": [
     "dist",
     "skills",
+    "integrations/dsh",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"

@@ -6,6 +6,7 @@ import type { SshResult } from '../../federation.js';
 import type { DeliveryMode, DeliveryOptions } from '../../delivery-mode.js';
 import type { CodexTargetDiagnosis } from '../../codex/discovery.js';
 import type { OpenCodeThread } from '../../opencode/client.js';
+import type { DshThread } from '../../dsh/client.js';
 
 export interface SendArgs {
   /** Per-message intent; omitted means queue, including conversation replies. */
@@ -40,11 +41,13 @@ export interface SendDeps {
   listClaudeSessions(): ClaudeRegistryScan;
   listCodexThreads(): Promise<CodexThreadSummary[]>;
   listOpenCodeThreads?(): Promise<OpenCodeThread[]>;
+  listDshThreads?(): Promise<DshThread[]>;
   /** Read-only explanation, used only after normal --to name resolution misses. */
   diagnoseCodexTarget?(query: string): Promise<CodexTargetDiagnosis>;
   deliverClaude(target: ClaudeDeliveryTarget, content: string, options?: DeliveryOptions): Promise<{ status: 'delivered' }>;
   deliverCodex(threadId: string, content: string, options?: DeliveryOptions): Promise<{ status: 'accepted'; turnId: string; queued?: boolean }>;
   deliverOpenCode?(sessionId: string, content: string, options?: DeliveryOptions): Promise<{ status: 'accepted'; messageId: string; queued: boolean }>;
+  deliverDsh?(sessionId: string, content: string, options?: DeliveryOptions): Promise<{ status: 'accepted'; messageId: string; queued: boolean }>;
   /** Send-log file: the rate limiter counts this pair's tail-window entries (014 evaporation). */
   sendLogFile: string;
   /** Outbox root for parking busy/locked codex deliveries (~/.crosschat/outbox). */
