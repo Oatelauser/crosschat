@@ -31,8 +31,16 @@
 
 因此，即使用户已经打开真实桌面并创建会话，也不能假定普通模型 Bash 调用天然带有 `ZCODE_SESSION_ID`，更不能把同名环境变量猜作可信原生身份。
 
+用户随后回报，已在“测试会话”通过普通 Bash 执行五变量 `Boolean(process.env[k])` 诊断，结果全部 `false`，见[原样输出与证据边界](../development/evidence/zcode-20261023/desktop-bash-identity-user-report.json)。它只说明该 Bash 子进程中五个变量不存在或为空，不能检测宿主环境、trace、其它变量或其它工具入口；代理没有直接观测执行。这个结果支持当前普通 Bash 路径没有可用的已测身份变量，不代表 ZCode 没有内部会话 ID，也不代表无法设计显式身份传递。
+
 ## 对接入决定的影响
 
 用户打开真实程序使版本和拓扑有了本机证据，但没有消除两个合同缺口：已有 Desktop owner 的公开外部 attach，以及普通工具调用的可信会话身份。当前没有采用修改应用包、调试器注入、读取私有用户文件或另开 app-server 来冒充完整原生适配。
 
 后续若官方提供明确的本机 attach / Host 扩展接口，再基于真实包与本地模型 mock 做自动验收较符合低维护目标。当前静态调查不算会话发现、idle 唤醒、queue/guide 或双向聊天测试通过。
+
+## Bot Channel 的实际包补查
+
+实际 3.15.3 的静态 `host-index.js` 包含 generic Webhook Adapter、固定 provider 构造表和 `handleProviderCallbackResponse`，所以不能把“官网只公开微信/飞书”误写成产品内部没有 Webhook。所复制 main/host 文件未找到 `/api/bots` 或 `createHttpServer` 字符串；这只是静态检索结果，不证明所有启动方式永远没有该入口。结合当次进程树监听检查，仍未确认可从外部调用的现有 Desktop Webhook ingress。
+
+当前 3.16.2 固定源码另确认：Webhook 接收 `botId/userId/text` 等，按绑定 Bot 上下文的 activeTaskId 路由，未直接接受任意 `sessionId`；HTTP 路由注册在独立 server。该源码结论不作为用户 3.15.3 的实际投递验收。Hook、MCP、UI Plugin 和 Webhook 的能力/限制汇总见[决策检查点](../development/zcode-integration-checkpoint-20261023.md)。
