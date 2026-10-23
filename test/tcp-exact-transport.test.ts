@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createConnection } from 'node:net';
@@ -11,7 +11,8 @@ import { seedBroker } from './helpers/broker-seed.js';
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
 async function fixture() {
-  const dir = await mkdtemp(join(tmpdir(), 'crosschat-exact-wire-')); cleanups.push(() => rm(dir, { recursive: true, force: true }));
+  // Keep intentional linked-parent rejection separate from macOS's temp alias.
+  const dir = await realpath(await mkdtemp(join(tmpdir(), 'crosschat-exact-wire-'))); cleanups.push(() => rm(dir, { recursive: true, force: true }));
   const file = join(dir, 'broker.json'); const status = join(dir, 'status.json'); const logs: string[] = [];
   seedBroker(file, { stars: [{ starId: 'full-star', name: 'fixture', nodes: [
     { label: 'node-1', key: 'fixture-node-key', machineId: 'a'.repeat(32), addedAt: '2026-01-01' },

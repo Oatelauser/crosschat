@@ -5,6 +5,7 @@ describe('progressive typed lint rules', () => {
   const lint = new ESLint();
   const filePath = 'src/application/sessions/catalog.ts';
 
+  // The first typed lint builds a TypeScript program on cold CI runners.
   it('rejects floating promises, async void callbacks and value imports used only as types', async () => {
     const [result] = await lint.lintText([
       "import { Session } from './model.js';",
@@ -19,7 +20,7 @@ describe('progressive typed lint rules', () => {
       '@typescript-eslint/no-misused-promises',
       '@typescript-eslint/consistent-type-imports',
     ]));
-  });
+  }, 15_000);
 
   it('accepts type-only imports and deliberately handled asynchronous work', async () => {
     const [result] = await lint.lintText([
