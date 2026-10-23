@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { classifyDshStartupFailure, prepareDshProfile } from './helpers/dsh-live-fixture.mjs';
+import { assessDshNativeIdentity, classifyDshStartupFailure, prepareDshProfile } from './helpers/dsh-live-fixture.mjs';
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -58,5 +58,18 @@ describe('DSH startup failure evidence', () => {
     expect(classifyDshStartupFailure({ processAlive: true, stderr: 'crosschat-dsh-test-driver: pending - missing required service: sessionController' })).toEqual({ category: 'infrastructure', check: 'fixture-session-controller' });
     expect(classifyDshStartupFailure({ processAlive: false, stderr: '' })).toEqual({ category: 'infrastructure', check: 'runtime-process' });
     expect(classifyDshStartupFailure({ processAlive: true, stderr: 'dsh: starting web runtime' })).toEqual({ category: 'infrastructure', check: 'runtime-readiness' });
+  });
+});
+
+describe('DSH native shell identity evidence', () => {
+  const expected = { session: 'session-current-full-id', profile: 'web', dshHome: '/owned/dsh-home' };
+  const requests = (output: unknown) => [{ messages: [{ role: 'user', content: [{ type: 'tool_result', tool_use_id: 'actual-shell-call', content: JSON.stringify(output) + '\n' }] }] }];
+  it('accepts only the exact identity returned by a real tool-result shape', () => {
+    expect(assessDshNativeIdentity(requests(expected), expected)).toEqual({ ready: true });
+    expect(assessDshNativeIdentity([{ messages: [{ role: 'user', content: JSON.stringify(expected) }] }], expected)).toEqual({ ready: false, category: 'infrastructure', check: 'model-tool-result' });
+  });
+  it('reports removed or changed native DSH fields as compatibility after a successful JSON shell result', () => {
+    expect(assessDshNativeIdentity(requests({ ...expected, session: 'different-native-session' }), expected)).toEqual({ ready: false, category: 'compatibility', check: 'native-shell-identity' });
+    expect(assessDshNativeIdentity(requests({ profile: 'web', dshHome: expected.dshHome }), expected)).toEqual({ ready: false, category: 'compatibility', check: 'native-shell-identity' });
   });
 });

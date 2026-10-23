@@ -21,6 +21,8 @@ export function classifyDshStartupFailure(evidence) {
   return { category: 'infrastructure', check: evidence.processAlive === false ? 'runtime-process' : 'runtime-readiness' };
 }
 
+export function assessDshNativeIdentity() { return { ready: false, category: 'infrastructure', check: 'model-tool-result' }; }
+
 export async function prepareDshProfile(root, modelURL) {
   let endpoint;
   try { endpoint = new URL(modelURL); } catch { /* Rejected below before any writes. */ }
