@@ -2,7 +2,7 @@
 
 2026-10-23。用户在 OpenCode 桌面版开发期间要求：“把 claudecode 和 codex、codex 桌面版的维护也参考 open code 做一个 ci 验证，把这个放到任务列表里面。你现在还是按照你的开发进度来。”
 
-当前按原顺序推进 [DeepSeek Harness](dsh-validation-20261023.md)；[OpenCode 桌面版](opencode-integration-plan.md)的未完成 CI 实跑与被拒绝清理仍单独跟踪。下列事项保持后续任务，不因此展开其它工具或全平台矩阵。
+本批 [DeepSeek Harness npm/Web 开发验收](dsh-validation-20261023.md)已完成；正式 Desktop 与 GitHub 托管 runner 首轮见 C04/C05。[OpenCode 桌面版](opencode-integration-plan.md)的未完成 CI 实跑与被拒绝清理仍单独跟踪。下列事项保持后续任务，不因此展开其它工具或全平台矩阵。
 
 测试目录约定（用户 2026-10-23 明确指示）：保留 `D:\workspace\CC\multichat\node_modules\.cache\crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291` 作为后续工具测试根，各工具在其下创建独占子目录及 ownership，配置、下载缓存和临时文件均归各自子目录。正常测试安装仍卸载、进程仍退出；该总根最终由用户统一删除，不再反复请求其删除。此决定不授权清理此前归属其它任务的残留，详见[用户决定与核对](dsh-cleanup-20261023.md)。
 
