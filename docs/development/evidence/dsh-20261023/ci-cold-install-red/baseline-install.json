@@ -1,0 +1,8 @@
+{
+  "code": null,
+  "signal": null,
+  "timedOut": true,
+  "stdout": "",
+  "stderr": "npm warn Unknown env config \"enable-global-virtual-store\". This will stop working in the next major version of npm.\nnpm warn Unknown env config \"store-dir\". This will stop working in the next major version of npm.\nnpm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead\n",
+  "pid": 8900
+}
