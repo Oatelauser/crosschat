@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
@@ -59,8 +59,9 @@ describe('DeepSeek Harness isolated npm download cache', () => {
     await isolated(async (output) => {
       const root = join(output, 'owned-task'); const external = join(output, 'external-npm-cache');
       await mkdir(root); await mkdir(external);
-      expect(await resolveDshNpmCache(root)).toEqual({ path: join(root, 'npm-cache'), external: false });
-      expect(await resolveDshNpmCache(root, external)).toEqual({ path: external, external: true });
+      const selected = await resolveDshNpmCache(root);
+      expect(selected).toEqual({ path: await realpath(join(root, 'npm-cache')), external: false });
+      expect(await resolveDshNpmCache(root, external)).toEqual({ path: await realpath(external), external: true });
     });
   });
 
