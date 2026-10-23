@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { access, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import process from 'node:process';
 import { clearTimeout, setTimeout } from 'node:timers';
@@ -11,6 +12,8 @@ import { createDshMockModel } from './dsh-mock-model.mjs';
 export const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const bounded = (text) => text.slice(-128000);
+
+export function classifyDshStartupFailure() { return { category: 'infrastructure', check: 'runtime-readiness' }; }
 
 export async function prepareDshProfile(root, modelURL) {
   let endpoint;
@@ -100,7 +103,7 @@ export async function createDshFixture(options, respond) {
         ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: globalThis.AbortSignal.timeout(timeout),
       });
       const text = await response.text();
-      if (!response.ok) throw new Error(`DSH test controller ${path}: HTTP ${response.status} ${text.slice(0, 1000)}`);
+      if (!response.ok) throw Object.assign(new Error(`DSH test controller ${path}: HTTP ${response.status} ${text.slice(0, 1000)}`), { category: 'infrastructure', check: 'fixture-session-controller' });
       return text ? JSON.parse(text) : null;
     },
     async createSession(title) { return fixture.controller('/sessions', { title }); },
@@ -114,12 +117,18 @@ export async function createDshFixture(options, respond) {
         if (child && child.exitCode === null && child.signalCode === null) {
           const exited = new Promise((done) => child.once('close', done));
           try {
-            // The test controller emits SIGINT in its own process, allowing the official shutdown handler to dispose plugins on Windows.
+            // The test controller emits SIGTERM in its own process, allowing the official shutdown handler to dispose plugins on Windows.
             await fixture.controller('/shutdown', {});
             let timer;
             try { await Promise.race([exited, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Harness did not complete owned shutdown')), 15000); })]); }
             finally { clearTimeout(timer); }
-          } catch (error) { cleanup.forced = true; unsafe = true; child.kill(); failures.push(error); }
+          } catch (error) {
+            cleanup.forced = true; unsafe = true; child.kill(); failures.push(error);
+            let timer;
+            try { await Promise.race([exited, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Forced owned Harness process exit was not observed')), 5000); })]); }
+            catch (failure) { failures.push(failure); }
+            finally { clearTimeout(timer); }
+          }
         }
         cleanup.runtimeStopped = !child || child.exitCode !== null || child.signalCode !== null;
         if (child && (child.exitCode !== 0 || child.signalCode !== null)) { unsafe = true; failures.push(new Error('Harness did not exit naturally with code zero')); }
@@ -150,7 +159,11 @@ export async function createDshFixture(options, respond) {
     const manifest = JSON.parse(await readFile(join(env.DSH_HOME, 'profiles', 'web', 'package.json'), 'utf8'));
     if (!isRecord(manifest.dependencies) || !Object.hasOwn(manifest.dependencies, '@crosschat/dsh-bridge') || !manifest.dsh?.profile?.bundles?.includes('@crosschat/dsh-bridge')) throw Object.assign(new Error('Official plugin add did not select the production bridge bundle'), { check: 'official-bundle-selection', category: 'compatibility' });
     const driver = join(root, 'driver.mjs');
-    await copyFile(new URL('./dsh-runtime-driver.mjs', import.meta.url), driver);
+    // An external test file is outside the runtime package graph. Resolve the official public dependency
+    // through the actual installation, rather than altering its node_modules or adding global NODE_PATH.
+    const appBoot = pathToFileURL(createRequire(entry).resolve('@deepseek-ai/dsh-app-boot')).href;
+    const source = await readFile(new URL('./dsh-runtime-driver.mjs', import.meta.url), 'utf8');
+    await writeFile(driver, source.replace("from '@deepseek-ai/dsh-app-boot'", `from ${JSON.stringify(appBoot)}`));
     const patch = [
       { id: 'session-title-llm', disabled: true },
       { id: 'crosschat-dsh-bridge', config: { home: env.HOME } },

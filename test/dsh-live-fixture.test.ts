@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { prepareDshProfile } from './helpers/dsh-live-fixture.mjs';
+import { classifyDshStartupFailure, prepareDshProfile } from './helpers/dsh-live-fixture.mjs';
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -43,5 +43,20 @@ describe('DSH real-runtime profile isolation', () => {
     const directory = await root();
     await expect(prepareDshProfile(directory, url)).rejects.toMatchObject({ code: 'INVALID_MODEL_ENDPOINT' });
     await expect(stat(join(directory, 'dsh-home'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+});
+
+describe('DSH startup failure evidence', () => {
+  it('keeps a broken fixture import distinct from a broken production bridge import', () => {
+    const fixture = "crosschat-dsh-test-driver (file:///owned/driver.mjs): failed to import: Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@deepseek-ai/dsh-app-boot'";
+    const production = "crosschat-dsh-bridge (@crosschat/dsh-bridge): failed to import: Error: Package subpath is not defined";
+    expect(classifyDshStartupFailure({ processAlive: true, stderr: fixture })).toEqual({ category: 'infrastructure', check: 'fixture-driver-load' });
+    expect(classifyDshStartupFailure({ processAlive: true, stderr: production })).toEqual({ category: 'compatibility', check: 'production-bridge-load' });
+  });
+
+  it('treats a missing test controller as infrastructure while keeping transient process readiness inconclusive', () => {
+    expect(classifyDshStartupFailure({ processAlive: true, stderr: 'crosschat-dsh-test-driver: pending - missing required service: sessionController' })).toEqual({ category: 'infrastructure', check: 'fixture-session-controller' });
+    expect(classifyDshStartupFailure({ processAlive: false, stderr: '' })).toEqual({ category: 'infrastructure', check: 'runtime-process' });
+    expect(classifyDshStartupFailure({ processAlive: true, stderr: 'dsh: starting web runtime' })).toEqual({ category: 'infrastructure', check: 'runtime-readiness' });
   });
 });
