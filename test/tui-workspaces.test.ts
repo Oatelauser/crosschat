@@ -92,6 +92,55 @@ describe('independent TUI workspaces', () => {
       expect(controller.getSnapshot().authorization?.state).toBe('unavailable');
     } finally { controller.dispose(); }
   });
+
+  it.each(['updated', 'failed', 'cancelled'] as const)('rechecks the role when history returns to a different star (%s)', async (outcome) => {
+    const reads: string[] = [];
+    let finish: ((page: TuiPage) => void) | undefined;
+    let fail: ((error: Error) => void) | undefined;
+    const memberRows = [1, 2, 3].map((id) => ({ id: `member-${id}`, cells: { name: `same-${id}` } }));
+    const resources = defaultResources.map((resource) => resource.id === 'stars' ? { ...resource, actions: [{
+      id: 'open-star', label: '进入星', shortcut: 'Enter', kind: 'navigate' as const, ownerResourceId: 'stars',
+      selectionPolicy: 'required' as const, mutation: false, returnPolicy: 'restore' as const,
+    }] } : resource.id === 'members' ? { ...resource, actions: [{
+      id: 'manage', label: '管理', shortcut: 'e', kind: 'form' as const, ownerResourceId: 'members',
+      selectionPolicy: 'none' as const, mutation: true, returnPolicy: 'restore' as const,
+    }] } : resource);
+    const controller = createTuiController({ registry: createResourceRegistry(resources), contexts, adapters: {
+      stars: { read: async () => ({ completeness: 'complete', rows: ['a', 'b'].map((id) => ({
+        id, cells: { name: id }, navigate: { resourceId: 'members', contextId: 'local', query: { starId: id } },
+      })) }) },
+      members: {
+        read: async ({ route }) => {
+          const star = route.query?.starId ?? ''; reads.push(star);
+          if (star === 'a' && reads.filter((id) => id === 'a').length > 1) {
+            return new Promise<TuiPage>((resolve, reject) => { finish = resolve; fail = reject; });
+          }
+          return { rows: memberRows, completeness: 'complete', sampledAt: 1, contextSummary: { permissionLabel: star === 'a' ? '星管理员' : '普通成员' } };
+        },
+        checkAction: async () => ({ enabled: true }), mutate: async () => ({ status: 'success', message: '完成' }),
+      },
+    } });
+    try {
+      command(controller, 'stars'); await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
+      controller.handleKey({ name: 'enter' }); await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
+      controller.handleKey({ name: '/' }); controller.handleKey({ name: 'text', text: 'same' }); controller.handleKey({ name: 'enter' });
+      controller.handleKey({ name: 'down' });
+      command(controller, 'stars'); await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
+      controller.handleKey({ name: 'down' }); controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
+      controller.handleKey({ name: 'escape' }); await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
+      controller.handleKey({ name: 'escape' });
+      expect(controller.getSnapshot()).toMatchObject({ route: { query: { starId: 'a' } }, filter: 'same', selectedId: 'member-2', authorization: { state: 'checking' } });
+      expect(reads).toEqual(['a', 'b', 'a']);
+      expect(controller.getSnapshot().actions.find((action) => action.id === 'manage')?.enabled).toBe(false);
+      if (outcome === 'updated') finish?.({ rows: memberRows, completeness: 'complete', sampledAt: 2, contextSummary: { permissionLabel: '普通成员' } });
+      else if (outcome === 'failed') fail?.(new Error('无法重新核验'));
+      else controller.handleKey({ name: 'c', ctrl: true });
+      await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
+      expect(controller.getSnapshot()).toMatchObject({ filter: 'same', selectedId: 'member-2', authorization: { state: outcome === 'updated' ? 'verified' : 'stale' } });
+      expect(controller.getSnapshot().context?.permissionLabel).toBe(outcome === 'updated' ? '普通成员' : '星管理员');
+    } finally { controller.dispose(); }
+  });
 });
 
 describe('transient authentication prompts', () => {
