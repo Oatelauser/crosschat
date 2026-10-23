@@ -1,0 +1,48 @@
+name: DeepSeek Harness compatibility
+
+on:
+  schedule:
+    - cron: '47 3 * * 2,5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run build
+      - run: node scripts/dsh-compat-ci.mjs
+        env:
+          CROSSCHAT_LIVE: '1'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dsh-compat-win32-x64
+          path: dsh-compat-evidence/
+
+  report:
+    needs: probe
+    if: always() && !cancelled() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dsh-compat-win32-x64
+          path: evidence
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            core.notice('DSH compatibility evidence reporting is not implemented.');
