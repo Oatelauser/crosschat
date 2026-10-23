@@ -7,7 +7,7 @@
 - 使用正式 Windows x64 Claude Code CLI + 生产 crosschat wrapper / 发现 / 管道发送 / 回信；模型端为本机 HTTP Messages 脚本服务，固定假 key，不接真实模型服务。
 - 不改已有工具行为。交互 TUI、Desktop、真实 SSH/TCP，以及工具 × Linux/Windows/macOS 的 C00 矩阵均不计入本轮通过。
 - 测试总根按用户要求保留：`D:\workspace\CC\multichat\node_modules\.cache\crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291`。本工具独占 `claude-compat-20261023-b118f74c76a441009eed1e03c1a9932c`，已记录 ownership 与用户原有 Claude 的安装前基线；不运行、升级或卸载用户原有 Claude。
-- 本批直接取官方 npm 原生包并校验后隔离使用，无全局安装、自更新、PATH 或协议注册。验收结束清除本次可执行副本，D盘研究/下载/证据按既有决定保留给用户统一删除。
+- 本批直接取官方 npm 原生包并校验后隔离使用，无全局安装、自更新、PATH 或协议注册。CI 每轮隔离软件副本均已自动清除；初始引导便携副本的删除被自动审批拒绝，按用户已批准的 D盘总根统一删除约定保留。详情见文末清理结果。
 - 原生执行 job 只有 contents:read；独立报告 job 在默认分支用受信提交的 validator 审查 artifact 数据后才允许去重 Issue。不把本地脚本通过称为 GitHub Actions 已运行/启用，不为验证而创建外部 Issue。
 
 ## 已核实的正式发行与最小原生路径
@@ -27,6 +27,7 @@
 | `2bb0415` | 上述两个 target | 33/33 受控检查 GREEN，含发行物、解包、fresh report、清理所有权、模型/环境隔离和 job 权限边界；不计真实 Adapter 通过 |
 | `f863604` → `b05d86f` | `npm test -- test/claude-compat-ci.test.ts` | 15项中1项运行期 RED→15/15 GREEN：拒绝同检查既通过又失败、顺序矛盾或跳过前序检查的回归证据 |
 | `6aeca51` → `0e53369` | `npm test -- test/claude-compat-lifecycle.test.ts test/claude-compat-fixture.test.ts` | 生命周期4项实际失败→4/4通过，原工装19/19通过。初始化失败关闭模型；清理步骤失败不阻断剩余资源释放，未知状态保留 |
+| `88a737f` → `0ec8764` | `npm test -- test/claude-compat-evidence.test.ts`，再执行全部四个 Claude 工装 target | 新增5项实际 RED→GREEN；全部43项通过。只有本次原生 init / 模型 / 工具 / ACK 证据充分后才将注册或身份差异归为 compatibility，工装与清理失败仍为 infrastructure |
 
 不以固定覆盖率或用例数量代替判断。新 profile 的实际 child homedir/tmpdir、外部 URL 写入前拒绝、挂起 HTTP 响应取消，以及清理错误后的模型关闭均有受控行为检查。
 
@@ -52,6 +53,14 @@
 
 现有 Claude CLI 不支持 `--to claude/<UUID>`；工装按真实唯一完整名称发起投递，并解码回执确认精确原生 ID。退出/缺目标则用正式完整 conversation ref 精确投递并核对 TARGET_NOT_FOUND。不添加新的产品寻址语法。原生回信复制本次唯一请求信封的短柄，避免从旧历史误取 human 会话。
 
-## 下一步
+## 最终本地验收与清理
 
-完整七项探测及串行基线/候选已通过。收尾复核正在补“已证明原生就绪后注册/身份合同失配不能误归为工装错误”的回归分类门槛；随后执行仓库 `npm run check`、最终真实序列和剩余测试可执行文件清理。GitHub 托管 runner 首轮仍需工作流进入默认分支后保留实际 run 证据。当前不得宣称 C01 已完成全部验收或各平台已通过。
+失败分类修复后，最终 [第二次串行 CI](evidence/claude-code-compat-20261023/sequence-2-summary.json)再次通过：基线与当时最新候选均为 2.1.309，分别七项通过，正常 code0 / 无信号 / 无超时，两个自有 runtime、注册、模型服务、fixture 和安装目录均正常清理，compatible、notify=false。
+
+`npm run check` 退出0：ESLint、184模块 / 584边运行时依赖图（无环或越界）、TypeScript build、Vitest 全部通过。200个测试文件通过 / 3个跳过，2084项通过 / 11项跳过；新的四个 Claude 受控 target 共43项通过。真实原生兼容序列另行执行，不把旧 live suite 的跳过当作真实验证通过。已测试源 HEAD 和统计见[最终验证记录](evidence/claude-code-compat-20261023/verification.json)。
+
+只读收尾核对：本工具根下匹配到的自有 Node/Python/Claude/Bash 进程为0，用户原有 Claude 命令路径与 baseline 一致。所有 CI 安装与 live fixture 已删除。剩余初始引导便携 `claude.exe` 一份，SHA256 与下载验证时相同；尝试在核对 owner / 绝对路径 / 摘要后删除它，自动审批复核拒绝启动该操作，原因为 `blocked by policy`。未换 Node、其它 shell 或 CI 包装绕过删除；按用户既有决定保留在 D盘独占测试根，连同 tgz / 研究 / 证据由用户最后统一删除。没有本批全局安装或系统注册需要卸载，也没有卸载用户原有软件。具体路径与剩余数量见[清理记录](evidence/claude-code-compat-20261023/cleanup.json)。
+
+本批保证上述七项行为，不声称覆盖原生所有配置组合。生产 wrapper 固定 accept；直接启动原生 CLI 的 refuse，以及无/错误 peerToken 的原生负向场景尚未实跑，研究报告中的这些建议没有计为通过。交互 TUI、Desktop、模型推理质量、三平台矩阵也不在本批实际结果内。
+
+代码与本地正式验证完成；GitHub 托管 runner、定时触发、artifact 和 Issue job 的首轮仍需工作流进入默认分支后记录实际 run，见待办 C06。没有推送、发布共享 API 资料或创建外部 Issue。

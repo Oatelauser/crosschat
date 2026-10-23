@@ -106,6 +106,8 @@ stdin 使用 UTF-8 JSON Lines，首条建议提供 `uuid`、固定 session ID、
 
 ## 本轮最小端到端验收
 
+以下为研究阶段建议的检查清单；最终实际执行范围与未覆盖项见[本地验收记录](../development/claude-code-compat-validation-20261023.md)。其中第7项的原生 refuse / 无或错误 peerToken 负向场景尚未实跑，不记为通过。
+
 1. 指定版本正式包：记录 npm version、平台包 URL/integrity、本次可执行路径与 `--version`；启动前后核对不触及用户已有程序与配置。
 2. 隔离启动：两个真实 CLI 共用本次隔离 home，不用 bare；stdin 保活。由原生注册条目确认 PID、native session ID、cwd、kind、socket，且没有混入用户会话。
 3. 空闲接收：从 crosschat 生产投递路径发送带 nonce 的消息；mock 实际收到该文本，真实 CLI 完成对应轮次。
