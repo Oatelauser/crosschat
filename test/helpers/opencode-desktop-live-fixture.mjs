@@ -65,7 +65,21 @@ export async function inspectDesktopRunProcesses(root, env) {
       if (!row.ExecutablePath) continue;
       const path = row.ExecutablePath;
       // Native paths can contain 8.3 components. Canonicalize those before comparing the owned prefix.
-      const candidate = path.includes('~') || path.toLowerCase().startsWith(prefix) ? await realpath(path) : path;
+      let candidate = path;
+      if (path.includes('~') || path.toLowerCase().startsWith(prefix)) {
+        try { candidate = await realpath(path); }
+        catch (error) {
+          // CIM is a snapshot. An unrelated temporary executable may disappear before
+          // canonicalization; discard its row only after the exact PID is certainly gone.
+          let exited = false;
+          if (error?.code === 'ENOENT') {
+            try { process.kill(row.ProcessId, 0); }
+            catch (inspectionError) { exited = inspectionError?.code === 'ESRCH'; }
+          }
+          if (exited) continue;
+          throw error;
+        }
+      }
       if (!candidate.toLowerCase().startsWith(prefix)) continue;
       processes.push({ pid: row.ProcessId, parentPid: row.ParentProcessId, executablePath: candidate });
     }

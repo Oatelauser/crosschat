@@ -23,8 +23,8 @@ describe('SSH resource presentation', () => {
     const page = await adapter.read({ context: { id: 'local', kind: 'local', label: '本机' }, signal: signal() });
     expect(resource.id).toBe('ssh');
     expect(resource.actions.map((action) => action.shortcut)).toEqual(expect.arrayContaining(['Enter', 'd', 'a', 't', 'D', 'g', 'y', 'i']));
-    expect(resource.actions.every((action) => !action.mutation)).toBe(true);
-    expect(resource.actions.find((action) => action.shortcut === 'a')?.kind).toBe('route-choice');
+    expect(resource.actions.filter((action) => action.mutation).map((action) => action.id)).toEqual(['add-connection', 'edit-connection', 'remove-connection']);
+    expect(resource.actions.find((action) => action.shortcut === 'a')?.kind).toBe('form');
     expect(resource.columns.every((column) => column.width > 0)).toBe(true);
     expect(page.rows[0]).toMatchObject({ id: 'ssh:fixture', copyValue: 'fixture', actionRoutes: {
       sessions: { resourceId: 'sessions', contextId: 'ssh:fixture' }, check: { resourceId: 'ssh', contextId: 'ssh:fixture', query: { operation: 'check' } }, doctor: { resourceId: 'doctor', contextId: 'ssh:fixture' },

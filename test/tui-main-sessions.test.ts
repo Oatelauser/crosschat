@@ -42,6 +42,7 @@ describe('default local sessions wiring', () => {
       await vi.waitFor(() => expect(mocks.render).toHaveBeenCalledOnce());
       expect(mocks.execute).not.toHaveBeenCalled();
       controller().handleKey({ name: 'enter' });
+      controller().handleKey({ name: 'enter' });
       await vi.waitFor(() => expect(controller().getSnapshot().rows).toHaveLength(1));
       expect(controller().getSnapshot().rows[0].cells.name).toBe('匿名');
       expect(controller().getSnapshot().rows[0].copyValues?.ref).toContain('完整/native-id');

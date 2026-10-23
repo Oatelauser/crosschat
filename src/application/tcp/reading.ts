@@ -127,6 +127,7 @@ export async function resolveTcpContext(options: TcpConfigurationOptions & { con
   }
   if (!options.contextId.startsWith('tcp:')) return failure('unavailable', [{ source: options.contextId, kind: 'unavailable', message: '此上下文不是可核验的 TCP 连接。', nextStep: '返回连接列表选择已配置的星。' }]);
   if (configuration.node.value === null) return failure(configuration.node.state, configuration.node.errors);
+  if (configuration.node.value.entries.length === 0) return failure('missing', [{ source: 'node.json', kind: 'missing', message: '本机尚未配置 TCP 连接。', nextStep: '从连接列表添加已有星的配置，再选择明确连接。' }]);
   const entries = configuration.node.value.entries.filter((entry) => tcpContextId(entry) === options.contextId);
   if (entries.length !== 1) return failure('unavailable', [{ source: options.contextId, kind: 'unavailable', message: '所选 TCP 配置已不存在或对应多个凭证，不能确定唯一连接。', nextStep: '核对 node.json 后返回连接列表刷新；不会改用本机数据。' }]);
   const entry = entries[0];

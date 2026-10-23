@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { parseNodeConfig } from '../../serve/node-config.js';
 import { abortError, queryError, readParsed } from '../queries/reading.js';
 import type { QueryError, TextOptions } from '../queries/reading.js';
+import { sshManagedContexts, sshProfilesFile } from '../ssh/profiles.js';
 
 export { loadTuiPreferences, saveTuiPreferences } from './preferences.js';
 export type { TuiPreferences, TuiPreferencesOptions, SaveTuiPreferencesOptions } from './preferences.js';
@@ -118,6 +119,7 @@ export async function listTuiContexts(options: ListTuiContextsOptions = {}): Pro
   const results = await Promise.all([
     readParsed(ssh, (raw) => sshContexts(raw, ssh), options),
     readParsed(node, (raw) => tcpContexts(raw, node), options),
+    readParsed(sshProfilesFile(home), (raw) => sshManagedContexts(raw, home), options),
   ]);
   if (options.signal?.aborted) {
     return { items: [local], errors: [ssh, node].map((source) => queryError(source, abortError())), observedAt };

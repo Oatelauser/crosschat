@@ -9,12 +9,14 @@
  * 重启生效）；starId 永不变（星身份锚，改名零级联）。
  */
 import { closeSync, copyFileSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import type { BigIntStats } from 'node:fs';
 import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { MultichatError } from '../errors.js';
 import { normalizeMid } from '../platform/machine-id.js';
-import { credentialRevision, starRevision } from './management-state.js';
+import { credentialRevision, machineCredentialRevision, starRevision } from './management-state.js';
+import { parseNodeConfig } from './node-config.js';
 
 export interface NodeEntry {
   label: string;
@@ -462,9 +464,11 @@ export function removeStarFrom(file: string, starId: string): RemovedStarInfo | 
 }
 
 export interface CredentialRemovalExpected { credentialRevision: string; machineId: string | null }
+export interface MachineRemovalExpected { machineRevision: string }
 export interface StarRemovalExpected { starRevision: string }
 export interface ExactManagementRejected { kind: 'rejected'; reason: 'target-changed' | 'not-found' | 'invalid-target' }
 export type ExactCredentialRemoval = { kind: 'removed'; credential: NodeEntry } | ExactManagementRejected;
+export type ExactMachineRemoval = { kind: 'removed'; machineId: string; credentials: NodeEntry[] } | ExactManagementRejected;
 export type ExactStarRemoval = { kind: 'removed'; removed: RemovedStarInfo; cleanupFailed?: true } | ExactManagementRejected;
 const managementRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const validRevision = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -482,10 +486,11 @@ function managementParents(file: string): void {
   }
 }
 /** Expected writes own a fresh exclusive temporary file; the legacy fixed-tmp writer is unchanged. */
-function writeManagementJson(file: string, doc: object): void {
+function writeManagementJson(file: string, doc: object, expectedSource?: BigIntStats): void {
   managementParents(file);
   const target = lstatSync(file, { bigint: true });
   if (!target.isFile() || target.isSymbolicLink()) invalidManagementSource();
+  if (expectedSource && (target.dev !== expectedSource.dev || target.ino !== expectedSource.ino || target.size !== expectedSource.size || target.mtimeNs !== expectedSource.mtimeNs || target.ctimeNs !== expectedSource.ctimeNs)) invalidManagementSource();
   const temporary = `${file}.tui-${randomBytes(16).toString('hex')}.tmp`;
   let descriptor: number | undefined;
   let created = false;
@@ -495,15 +500,16 @@ function writeManagementJson(file: string, doc: object): void {
     closeSync(descriptor); descriptor = undefined;
     managementParents(file);
     const current = lstatSync(file, { bigint: true });
-    if (!current.isFile() || current.isSymbolicLink() || current.dev !== target.dev || current.ino !== target.ino) invalidManagementSource();
+    if (!current.isFile() || current.isSymbolicLink() || current.dev !== target.dev || current.ino !== target.ino
+      || (expectedSource && (current.size !== expectedSource.size || current.mtimeNs !== expectedSource.mtimeNs || current.ctimeNs !== expectedSource.ctimeNs))) invalidManagementSource();
     renameSync(temporary, file); created = false;
   } finally {
     if (descriptor !== undefined) closeSync(descriptor);
     if (created) unlinkSync(temporary);
   }
 }
-function writeManagementBroker(file: string, doc: BrokerFile): void {
-  writeManagementJson(file, { ...doc, stars: doc.stars.map((star) => ({ ...star, roster: star.roster.map(stripOnline) })) });
+function writeManagementBroker(file: string, doc: BrokerFile, expectedSource?: BigIntStats): void {
+  writeManagementJson(file, { ...doc, stars: doc.stars.map((star) => ({ ...star, roster: star.roster.map(stripOnline) })) }, expectedSource);
 }
 
 /** Strict bounded reads for expected writes. Refusals must never repair or rewrite a source. */
@@ -581,6 +587,39 @@ export function removeCredentialExactFor(file: string, starId: string, label: st
 }
 
 /** Full static impact check and deletion share one synchronous fresh-source transaction. */
+export function removeMachineExactFor(file: string, starId: string, machineId: string, expected: MachineRemovalExpected): ExactMachineRemoval {
+  if (!completeMachine(machineId) || !expected || !validRevision(expected.machineRevision)) return { kind: 'rejected', reason: 'invalid-target' };
+  const machine = normalizeMid(machineId);
+  const source = lstatSync(file, { bigint: true });
+  const doc = readManagementBroker(file);
+  const star = doc.stars.find((item) => item.starId === starId);
+  if (!star) return { kind: 'rejected', reason: 'not-found' };
+  const credentials = star.nodes.filter((node) => node.key !== undefined && node.machineId !== undefined && normalizeMid(node.machineId) === machine);
+  if (credentials.length === 0) return { kind: 'rejected', reason: 'not-found' };
+  const actual = machineCredentialRevision(machine, credentials.map((node) => ({ label: node.label, revision: credentialRevision(node) })));
+  if (actual !== expected.machineRevision) return { kind: 'rejected', reason: 'target-changed' };
+  const removed = new Set(credentials);
+  star.nodes = star.nodes.filter((node) => !removed.has(node));
+  writeManagementBroker(file, doc, source);
+  return { kind: 'removed', machineId: machine, credentials };
+}
+
+/** Broker receipt projection is strict and never invokes the legacy repair-on-read writer. */
+export function setMachineReportedNameFor(file: string, starId: string, machineId: string, credentialKey: string, name: string | undefined): NodeEntry[] {
+  if (!completeMachine(machineId) || (name !== undefined && sanitizeName(name) !== name)) invalidManagementSource();
+  const source = lstatSync(file, { bigint: true });
+  const doc = readManagementBroker(file);
+  const star = doc.stars.find((item) => item.starId === starId);
+  const credentials = star?.nodes.filter((node) => node.key !== undefined && normalizeMid(node.machineId ?? '') === machineId) ?? [];
+  if (!star || !credentials.some((node) => node.key === credentialKey)) throw new Error('当前在线凭证或完整机器绑定已变化。');
+  const update = (entry: { machineName?: string }) => { if (name === undefined) delete entry.machineName; else entry.machineName = name; };
+  for (const node of credentials) update(node);
+  for (const member of star.roster) if (normalizeMid(member.machine) === machineId) update(member);
+  writeManagementBroker(file, doc, source);
+  return credentials;
+}
+
+/** Full static impact check and deletion share one synchronous fresh-source transaction. */
 export function removeStarExactFrom(file: string, starId: string, expected: StarRemovalExpected): ExactStarRemoval {
   if (!expected || !validRevision(expected.starRevision)) return { kind: 'rejected', reason: 'invalid-target' };
   const doc = readManagementBroker(file);
@@ -642,6 +681,23 @@ export function setStarShowNameFor(nodeJsonFile: string, starId: string, name: s
   else hit.showName = clean;
   writeNodeJsonRaw(nodeJsonFile, doc);
   return clean;
+}
+
+/** A connected node changes only its unique current-star entry, preserving other config fields. */
+export function setConnectedNodeShowNameFor(file: string, match: { starId: string; host: string; port: number; key: string }, name: string): { showName: string; name?: string } {
+  if (name.length > 32 || (name !== '' && sanitizeName(name) !== name)) throw new Error('当前星节点名称无效。');
+  const source = lstatSync(file, { bigint: true });
+  const doc = readManagementJson(file);
+  if (!managementRecord(doc) || !Array.isArray(doc.brokers) || (doc.showName !== undefined && typeof doc.showName !== 'string')) invalidManagementSource();
+  parseNodeConfig(JSON.stringify(doc));
+  const entries = doc.brokers.filter((entry): entry is Record<string, unknown> => managementRecord(entry) && entry.starId === match.starId);
+  if (entries.length !== 1 || entries[0].host !== match.host || entries[0].port !== match.port || entries[0].key !== match.key) throw new Error('当前连接配置已变化或目标星不唯一，未修改名称。');
+  const shown = sanitizeName(name);
+  if (shown === undefined) delete entries[0].showName;
+  else entries[0].showName = shown;
+  writeManagementJson(file, doc, source);
+  const effective = shown ?? sanitizeName(doc.showName);
+  return { showName: shown ?? '', ...(effective === undefined ? {} : { name: effective }) };
 }
 
 /**

@@ -1019,12 +1019,6 @@ async function runAdoptServe(args: ServeArgs, deps: ServeDeps): Promise<number> 
     throw new MultichatError('INTERNAL', 'makeSendDeps 未接线（测试环境不支持 adopt）');
   }
   const send = deps.makeSendDeps();
-  let machineName = deps.hostname();
-  try {
-    machineName = readNodeConfig(join(tcpDir(deps.baseDir), 'node.json')).showName ?? machineName;
-  } catch {
-    // 读不出配置：hostname 兜底（仅显示用）
-  }
   return runAdopt(
     {
       connect: args.connect ?? '',
@@ -1041,7 +1035,7 @@ async function runAdoptServe(args: ServeArgs, deps: ServeDeps): Promise<number> 
       ...(send.listOpenCodeThreads === undefined ? {} : { listOpenCodeThreads: send.listOpenCodeThreads }),
       ...(send.listDshThreads === undefined ? {} : { listDshThreads: send.listDshThreads }),
       spawnServeDetach: spawnServeDetachReal,
-      machineName,
+      machineName: deps.hostname(), // runAdopt resolves the selected entry override before the global fallback.
       now: deps.now,
     },
   );

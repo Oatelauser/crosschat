@@ -59,11 +59,13 @@ describe('default local and SSH resource composition', () => {
     const controller = createTuiController({ registry: createResourceRegistry(composed.resources), contexts, adapters: composed.adapters });
     try {
       command(controller, 'stars'); await vi.waitFor(() => expect(controller.getSnapshot().rows[0]?.cells.name).toBe('完整星'));
-      controller.handleKey({ name: 'enter' }); await vi.waitFor(() => expect(controller.getSnapshot().rows[0]?.cells.name).toBe('完整节点'));
-      controller.handleKey({ name: 'v' }); await vi.waitFor(() => expect(tcpMocks.sessions).toHaveBeenCalled());
+      controller.handleKey({ name: 'enter' }); await vi.waitFor(() => expect(controller.getSnapshot().route.resourceId).toBe('members'));
+      await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
+      controller.handleKey({ name: '2' }); await vi.waitFor(() => expect(controller.getSnapshot().rows[0]?.cells.name).toBe('完整节点'));
+      controller.handleKey({ name: '3' }); await vi.waitFor(() => expect(tcpMocks.sessions).toHaveBeenCalled());
       await vi.waitFor(() => expect(controller.getSnapshot().resource?.columns.some((column) => column.id === 'machine')).toBe(true));
       expect(mocks.localRead).not.toHaveBeenCalled();
-      command(controller, 'sessions'); await vi.waitFor(() => expect(mocks.localRead).toHaveBeenCalled());
+      command(controller, 'local'); command(controller, 'sessions'); await vi.waitFor(() => expect(mocks.localRead).toHaveBeenCalled());
     } finally { controller.dispose(); }
   });
 
@@ -72,7 +74,9 @@ describe('default local and SSH resource composition', () => {
     const context = presentContext({ id: 'tcp:fixture', kind: 'tcp', label: 'TCPfixture', target: 'fixture.invalid:7260' });
     const controller = createTuiController({ registry: createResourceRegistry(composed.resources), contexts: [...contexts, context], initialSelectedContextId: context.id, adapters: composed.adapters });
     try {
-      controller.handleKey({ name: 't' });
+      controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
+      command(controller, 'machines');
       await vi.waitFor(() => expect(tcpMocks.star).toHaveBeenCalledWith(expect.objectContaining({ contextId: context.id })));
       expect(controller.getSnapshot().route.resourceId).toBe('machines');
       command(controller, 'sessions'); await vi.waitFor(() => expect(tcpMocks.sessions).toHaveBeenCalledWith(expect.objectContaining({ contextId: context.id })));
@@ -106,8 +110,10 @@ describe('default local and SSH resource composition', () => {
     const controller = createTuiController({ registry: createResourceRegistry(composed.resources), contexts: [...contexts, context], initialSelectedContextId: context.id, adapters: composed.adapters });
     try {
       controller.handleKey({ name: 'enter' });
+      await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
+      command(controller, 'machines');
       await vi.waitFor(() => expect(controller.getSnapshot().rows[0]?.id).toBe(`row:${context.id}:machine`));
-      controller.handleKey({ name: 'v' });
+      controller.handleKey({ name: '3' });
       await vi.waitFor(() => expect(controller.getSnapshot()).toMatchObject({ route: { resourceId: 'sessions', query: { starId: 'full-star' } }, loading: false, completeness: 'unavailable' }));
       controller.handleKey({ name: 'i' });
       expect(JSON.stringify(controller.getSnapshot().detail)).toContain('核对原连接凭证并重新检测');
@@ -161,7 +167,9 @@ describe('default local and SSH resource composition', () => {
     const composed = createDefaultResources({ home: '/isolated', isolatedHome: true });
     const controller = createTuiController({ registry: createResourceRegistry(composed.resources), contexts, adapters: composed.adapters });
     try {
-      controller.handleKey({ name: 'down' }); controller.handleKey({ name: 't' });
+      command(controller, 'ssh');
+      await vi.waitFor(() => expect(controller.getSnapshot().rows).toHaveLength(1));
+      controller.handleKey({ name: 't' });
       await vi.waitFor(() => expect(mocks.inspect).toHaveBeenCalledOnce());
       controller.handleKey({ name: 'escape' }); controller.handleKey({ name: 'enter' });
       await vi.waitFor(() => expect(controller.getSnapshot().rows[0]?.cells.name).toBe('匿名'));

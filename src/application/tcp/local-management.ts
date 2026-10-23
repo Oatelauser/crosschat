@@ -5,7 +5,7 @@ import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { isProcessAlive } from '../../platform/process-inspector.js';
 import { DEFAULT_PORT } from '../../serve/broker.js';
-import { removeCredentialExactFor, removeStarExactFrom } from '../../serve/registry.js';
+import { removeCredentialExactFor, removeMachineExactFor, removeStarExactFrom } from '../../serve/registry.js';
 import { addStar, generateAdminKey, generateKeys, removeAdminKey, removeNode, removeStar, renameStar, setDisplayName } from '../management/local.js';
 import type { ManagementDeps, ManagementRequest, ManagementResult } from '../management/local.js';
 import { sendAdminRequest } from '../management/transport.js';
@@ -70,6 +70,8 @@ export function isLocalManagementRequest(value: unknown): value is ManagementReq
     case 'add-star': return typeof value.name === 'string';
     case 'set-name': return typeof value.starId === 'string' && typeof value.name === 'string';
     case 'set-showname': return (value.starId === undefined || typeof value.starId === 'string') && typeof value.name === 'string';
+    case 'rename-node': return typeof value.starId === 'string' && typeof value.machineId === 'string' && fullTcpMachineId(value.machineId) === value.machineId && typeof value.name === 'string' && value.name.length <= 32;
+    case 'remove-machine': return typeof value.starId === 'string' && typeof value.machineId === 'string' && fullTcpMachineId(value.machineId) === value.machineId && isRecord(value.expected) && typeof value.expected.machineRevision === 'string' && /^[a-f0-9]{64}$/.test(value.expected.machineRevision);
     case 'remove-star': return typeof value.starId === 'string' && (value.expected === undefined || (isRecord(value.expected) && typeof value.expected.starRevision === 'string'));
     case 'gen-key': return typeof value.starId === 'string' && typeof value.host === 'string' && typeof value.n === 'number' && Number.isInteger(value.n) && value.n >= 1 && value.n <= 10 && typeof value.port === 'number' && Number.isInteger(value.port) && value.port >= 1 && value.port <= 65535;
     case 'gen-admin-key': return typeof value.starId === 'string' && typeof value.label === 'string';
@@ -116,6 +118,18 @@ export async function performLocalManagement(request: ManagementRequest, options
         return result.kind === 'cold' ? { kind: 'failed', error: '已核实的热态管理连接失败，禁止直写台账。' } : result;
       } };
     const machine = request.op === 'add-star' ? fullTcpMachineId(await (options.machineId?.() ?? readMembershipMachineId())) : undefined;
+    if (request.op === 'rename-node' || request.op === 'remove-machine') {
+      if (hot) {
+        const outcome = await deps.adminTransport!(request);
+        if (outcome.kind !== 'hot') return failed();
+        if (outcome.reply.uncertain === true) return failed();
+        return outcome.reply.ok ? { kind: 'applied', mode: 'hot', value: outcome.reply } : { kind: 'rejected', mode: 'hot', error: '目标已变化、未在线或管理请求被拒绝。' };
+      }
+      if (request.op === 'rename-node') return { kind: 'rejected', mode: 'cold', error: 'broker 未运行，不能在线核实对端保存及生效；不会冷写本机代替。' };
+      const result = removeMachineExactFor(join(options.baseDir, 'tcp', 'broker.json'), request.starId, request.machineId, request.expected);
+      return result.kind === 'removed' ? { kind: 'applied', mode: 'cold', value: { removed: true, machineId: result.machineId, removedLabels: result.credentials.map((credential) => credential.label) } }
+        : { kind: 'rejected', mode: 'cold', error: '所选机器的完整节点凭证集合已变化，未执行移除。' };
+    }
     if ((request.op === 'remove-node' || request.op === 'remove-admin-key' || request.op === 'remove-star') && request.expected !== undefined) {
       if (hot) {
         const outcome = await deps.adminTransport!(request);

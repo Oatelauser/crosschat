@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { TcpApplication, TcpCredential, TcpMachine, TcpMember, TcpSession, TcpStar, TcpStarResult, TcpSessionsResult } from '../src/application/tcp/model.js';
 import type { TcpManagement } from '../src/application/tcp/management.js';
+import type { LocalServices } from '../src/application/services/managed.js';
 import type { TuiAction, TuiActionRequest, TuiPage, TuiResource } from '../src/tui/model.js';
 import { createTcpResources } from '../src/tui/resources/tcp.js';
 
@@ -49,6 +50,71 @@ function request(resource: TuiResource, page: TuiPage, actionId: string, targetI
 }
 
 describe('TCP resource lists and readonly navigation', () => {
+  it('defaults a selected star to members and exposes three explicit star views on every internal list', async () => {
+    const f = fixtures();
+    const stars = await f.resources.stars.adapter.read({ context, route: { resourceId: 'stars', contextId: context.id }, signal: signal() });
+    expect(stars.rows[0].actionRoutes?.open).toEqual({ resourceId: 'members', contextId: context.id, query: { starId: star.starId } });
+    for (const owner of ['members', 'machines', 'sessions'] as const) {
+      const page = await f.resources[owner].adapter.read({ context, route: { resourceId: owner, contextId: context.id, query: { starId: star.starId } }, signal: signal() });
+      const registered = actions(f.resources[owner].resource, page);
+      for (const [key, resourceId] of [['1', 'members'], ['2', 'machines'], ['3', 'sessions']]) {
+        const action = registered.find((item) => item.shortcut === key);
+        expect(action?.kind).toBe('navigate');
+        expect(page.actionRoutes?.[action!.id]).toEqual({ resourceId, contextId: context.id, query: { starId: star.starId, ...(key === '3' ? { scope: 'discoverable' } : {}) } });
+      }
+    }
+  });
+
+  it('offers list-owned issuance and credential revocation without requiring navigation to keys', async () => {
+    const f = fixtures();
+    for (const owner of ['stars', 'members', 'machines', 'sessions'] as const) {
+      const page = await f.resources[owner].adapter.read({ context, route: { resourceId: owner, contextId: context.id, ...(owner === 'stars' ? {} : { query: { starId: star.starId } }) }, signal: signal() });
+      for (const [shortcut, id] of [['k', 'generate-node-key'], ['K', 'generate-admin-key'], ['x', 'revoke-credential']]) {
+        const registered = actions(f.resources[owner].resource, page).find((entry) => entry.id === id);
+        expect(registered).toMatchObject({ id, ownerResourceId: owner, kind: 'form' });
+        expect(registered?.shortcut.split(' / ')).toContain(shortcut);
+      }
+    }
+    const page = await f.resources.machines.adapter.read({ context, route: { resourceId: 'machines', contextId: context.id, query: { starId: star.starId } }, signal: signal() });
+    const selected = request(f.resources.machines.resource, page, 'revoke-credential', 0);
+    const choose = await f.resources.machines.adapter.checkAction!(selected);
+    expect(choose.fields?.find((field) => field.id === 'credentialId')?.options?.map((option) => option.value).filter(Boolean)).toEqual([credentials[0].id]);
+    expect(f.management.preview).not.toHaveBeenCalled();
+    await f.resources.machines.adapter.checkAction!({ ...selected, values: { credentialId: credentials[0].id } });
+    expect(f.management.preview).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'revoke-credential', targetId: credentials[0].id, targetRevision: credentials[0].revision, starId: star.starId }));
+  });
+
+  it('uses current-star remote node rename and accurate member action labels', async () => {
+    const f = fixtures();
+    const page = await f.resources.machines.adapter.read({ context, route: { resourceId: 'machines', contextId: context.id, query: { starId: star.starId } }, signal: signal() });
+    expect(actions(f.resources.machines.resource, page)).toContainEqual(expect.objectContaining({ id: 'rename-node', shortcut: 'e', selectionPolicy: 'required' }));
+    const rename = request(f.resources.machines.resource, page, 'rename-node', 0, { name: '本星节点名' });
+    await f.resources.machines.adapter.checkAction!(rename);
+    expect(f.management.preview).toHaveBeenCalledWith(expect.objectContaining({ action: 'rename-node', targetId: machines[0].id, starId: star.starId, values: { name: '本星节点名' } }));
+    const members = await f.resources.members.adapter.read({ context, route: { resourceId: 'members', contextId: context.id, query: { starId: star.starId } }, signal: signal() });
+    expect(actions(f.resources.members.resource, members)).toContainEqual(expect.objectContaining({ id: 'adopt-session', label: '新增成员' }));
+    expect(actions(f.resources.members.resource, members)).toContainEqual(expect.objectContaining({ id: 'remove-member', label: '删除成员' }));
+    expect(page.rows[1].actionAvailability?.['rename-node']?.enabled).toBe(false);
+  });
+
+  it('pins direct star issuance to the selected complete star and rejects foreign or replaced credential choices', async () => {
+    const f = fixtures();
+    const stars = await f.resources.stars.adapter.read({ context, route: { resourceId: 'stars', contextId: context.id }, signal: signal() });
+    const issue = request(f.resources.stars.resource, stars, 'generate-node-key', 0, { host: 'receiver.invalid', count: '1' });
+    issue.route = { resourceId: 'stars', contextId: context.id };
+    await f.resources.stars.adapter.checkAction!(issue);
+    expect(f.management.preview).toHaveBeenLastCalledWith(expect.objectContaining({ starId: star.starId, targetId: star.id, targetRevision: star.revision }));
+    const page = await f.resources.machines.adapter.read({ context, route: { resourceId: 'machines', contextId: context.id, query: { starId: star.starId } }, signal: signal() });
+    const foreign = request(f.resources.machines.resource, page, 'revoke-credential', 0, { credentialId: credentials[1].id });
+    f.management.preview.mockClear();
+    expect((await f.resources.machines.adapter.checkAction!(foreign)).enabled).toBe(false);
+    expect(f.management.preview).not.toHaveBeenCalled();
+    const own = { ...foreign, values: { credentialId: credentials[0].id } };
+    await f.resources.machines.adapter.checkAction!(own);
+    f.current.credentials = f.current.credentials.map((entry) => entry.id === credentials[0].id ? { ...entry, revision: 'replacement' } : entry);
+    await expect(f.resources.machines.adapter.mutate!(own)).rejects.toThrow(/预览|核验/);
+    expect(f.management.apply).not.toHaveBeenCalled();
+  });
   it.each(['machines', 'sessions'] as const)('continues to reject an actual different star response on the scoped %s page', async (owner) => {
     const f = fixtures();
     const otherStar = { ...star, starId: 'another-star-full-id', name: 'foreign-star-data' };
@@ -71,12 +137,12 @@ describe('TCP resource lists and readonly navigation', () => {
     expect(f.management.preview).not.toHaveBeenCalled();
   });
 
-  it('enters a star through its machine list and retains exact IDs, capped columns and authenticated role context', async () => {
+  it('enters a star through its member list and retains exact IDs, capped columns and authenticated role context', async () => {
     const f = fixtures();
     const selectedSignal = signal();
     const page = await f.resources.stars.adapter.read({ context, route: { resourceId: 'stars', contextId: context.id }, signal: selectedSignal });
     expect(f.tcp.readStars).toHaveBeenCalledExactlyOnceWith({ contextId: context.id, signal: selectedSignal });
-    expect(page.rows[0]).toMatchObject({ id: star.id, copyValue: star.starId, actionRoutes: { open: { resourceId: 'machines', contextId: context.id, query: { starId: star.starId } } } });
+    expect(page.rows[0]).toMatchObject({ id: star.id, copyValue: star.starId, actionRoutes: { open: { resourceId: 'members', contextId: context.id, query: { starId: star.starId } } } });
     expect(page.contextSummary?.permissionLabel).toContain('星管理员');
     expect(actions(f.resources.stars.resource, page).find((entry) => entry.shortcut === 'Enter')?.kind).toBe('navigate');
     expect(actions(f.resources.stars.resource, page).find((entry) => entry.shortcut === 'd')?.mutation).toBe(false);
@@ -99,8 +165,8 @@ describe('TCP resource lists and readonly navigation', () => {
     const f = fixtures();
     const page = await f.resources.machines.adapter.read({ context, route: { resourceId: 'machines', contextId: context.id, query: { starId: star.starId } }, signal: signal() });
     expect(page.rows.map((row) => row.id)).toEqual(machines.map((machine) => machine.id));
-    expect(page.rows[0]).toMatchObject({ copyValue: machines[0].machineId, cells: { mid8: '12345678' }, actionRoutes: { open: { resourceId: 'sessions', contextId: context.id, query: { starId: star.starId, machineId: machines[0].machineId, scope: 'members' } } } });
-    expect(page.actionRoutes).toMatchObject({ sessions: { resourceId: 'sessions', contextId: context.id, query: { starId: star.starId, scope: 'members' } }, members: { resourceId: 'members', contextId: context.id, query: { starId: star.starId } }, keys: { resourceId: 'keys', contextId: context.id, query: { starId: star.starId } } });
+    expect(page.rows[0]).toMatchObject({ copyValue: machines[0].machineId, cells: { mid8: '12345678' }, actionRoutes: { open: { resourceId: 'sessions', contextId: context.id, query: { starId: star.starId, machineId: machines[0].machineId, scope: 'discoverable' } } } });
+    expect(page.actionRoutes).toMatchObject({ sessions: { resourceId: 'sessions', contextId: context.id, query: { starId: star.starId, scope: 'discoverable' } }, members: { resourceId: 'members', contextId: context.id, query: { starId: star.starId } }, keys: { resourceId: 'keys', contextId: context.id, query: { starId: star.starId } } });
     expect(JSON.stringify(page.rows)).not.toContain('unused-node-key');
     expect(JSON.stringify(page.rows)).not.toContain('peer-admin');
     f.current.machines = [];
@@ -113,12 +179,12 @@ describe('TCP resource lists and readonly navigation', () => {
   it('distinguishes all-star Enter navigation from node-session detail while keeping node and native status independent', async () => {
     const f = fixtures();
     const all = await f.resources.sessions.adapter.read({ context, route: { resourceId: 'sessions', contextId: context.id, query: { starId: star.starId } }, signal: signal() });
-    expect(f.tcp.readSessions).toHaveBeenLastCalledWith({ contextId: context.id, starId: star.starId, scope: 'members', signal: expect.any(AbortSignal) });
+    expect(f.tcp.readSessions).toHaveBeenLastCalledWith({ contextId: context.id, starId: star.starId, scope: 'discoverable', signal: expect.any(AbortSignal) });
     expect(all.rows).toHaveLength(2);
     expect(all.rows[0].cells).toMatchObject({ machine: '节点一', mid8: '12345678', status: '未提供<—>' });
     expect(all.rows[1].cells.status).toBe('未提供<—>');
     expect(all.rows[1].facets).toMatchObject({ named: 'anonymous', presence: 'offline' });
-    expect(all.rows[0].actionRoutes?.open).toMatchObject({ resourceId: 'sessions', query: { starId: star.starId, machineId: machines[0].machineId, scope: 'members' } });
+    expect(all.rows[0].actionRoutes?.open).toMatchObject({ resourceId: 'sessions', query: { starId: star.starId, machineId: machines[0].machineId, scope: 'discoverable' } });
     expect(actions(f.resources.sessions.resource, all).find((entry) => entry.shortcut === 'Enter')?.kind).toBe('navigate');
     const node = await f.resources.sessions.adapter.read({ context, route: { resourceId: 'sessions', contextId: context.id, query: { starId: star.starId, machineId: machines[0].machineId, scope: 'members' } }, signal: signal() });
     expect(actions(f.resources.sessions.resource, node).find((entry) => entry.shortcut === 'Enter / d')?.kind).toBe('detail');
@@ -182,6 +248,47 @@ describe('TCP resource lists and readonly navigation', () => {
 });
 
 describe('TCP list-owned management and secret results', () => {
+  it('keeps broker lifecycle controls disabled for a remote star administrator without inspecting local services', async () => {
+    const f = fixtures();
+    const services: LocalServices = { read: vi.fn(async () => { throw new Error('must not inspect local services'); }), check: vi.fn(async () => ({ allowed: true, impact: [] })), execute: vi.fn(async () => ({ state: 'ready', message: 'must not run' })) };
+    const binding = createTcpResources({ tcp: f.tcp, management: f.management, services }).stars;
+    const selectedRoute = { resourceId: 'stars', contextId: context.id };
+    const page = await binding.adapter.read({ context, route: selectedRoute, signal: signal() });
+    expect(page.rows[0].actionAvailability?.['stop-broker']?.enabled).toBe(false);
+    const stop = actions(binding.resource, page).find((entry) => entry.id === 'stop-broker')!;
+    expect((await binding.adapter.checkAction!({ action: stop, target: page.rows[0], context, route: selectedRoute, values: {}, signal: signal() })).enabled).toBe(false);
+    expect(services.read).not.toHaveBeenCalled(); expect(services.check).not.toHaveBeenCalled(); expect(services.execute).not.toHaveBeenCalled();
+  });
+
+  it('controls the selected star broker through the exact service revision and refuses changed service plans', async () => {
+    const f = fixtures({ contextId: local.id, star: { ...star, contextId: local.id, role: 'broker-owner' } });
+    f.tcp.readStars.mockResolvedValue({ contextId: local.id, role: 'broker-owner', configured: true, items: [f.current.star!], completeness: 'complete', observedAt: 1, errors: [] });
+    let revision = 'broker-process-set-one';
+    const check = { allowed: true, impact: ['影响本机 broker 全部两颗星及其连接，不终止原生会话。'] };
+    const services: LocalServices = {
+      read: vi.fn(async () => ({ items: [{ id: 'service:broker', revision, kind: 'broker', label: 'broker', state: 'running', target: 'local:7260', start: check, stop: check, detail: [{ label: '托管星', value: 'first(full-1)\nsecond(full-2)' }] }], completeness: 'complete', observedAt: 1, errors: [] })),
+      check: vi.fn(async (request) => request.revision === revision ? check : { allowed: false, reason: '服务进程已变化', impact: [] }),
+      execute: vi.fn(async () => ({ state: 'ready', message: '已停止实际 broker' })),
+    };
+    const binding = createTcpResources({ tcp: f.tcp, management: f.management, services }).stars;
+    const selectedRoute = { resourceId: 'stars', contextId: local.id };
+    const page = await binding.adapter.read({ context: local, route: selectedRoute, signal: signal() });
+    expect(actions(binding.resource, page)).toContainEqual(expect.objectContaining({ id: 'start-broker', shortcut: 'B', ownerResourceId: 'stars' }));
+    const stop = actions(binding.resource, page).find((entry) => entry.id === 'stop-broker')!;
+    expect(stop.shortcut).toBe('Ctrl+B');
+    const selected = { action: stop, target: page.rows[0], context: local, route: selectedRoute, values: {}, signal: signal() };
+    expect((await binding.adapter.checkAction!(selected)).impact?.join(' ')).toContain('全部两颗星');
+    revision = 'replaced-broker-process';
+    await expect(binding.adapter.mutate!(selected)).rejects.toThrow(/变化|确认|核验/);
+    expect(services.execute).not.toHaveBeenCalled();
+    expect(f.management.apply).not.toHaveBeenCalled();
+    const fresh = await binding.adapter.read({ context: local, route: selectedRoute, signal: signal() });
+    const confirmed = { ...selected, target: fresh.rows[0] };
+    await binding.adapter.checkAction!(confirmed);
+    expect(await binding.adapter.mutate!(confirmed)).toMatchObject({ message: '已停止实际 broker' });
+    expect(services.execute).toHaveBeenCalledWith({ contextId: 'local', id: 'service:broker', revision, operation: 'stop', signal: selected.signal });
+  });
+
   it('previews and applies a full credential identity and revision from the fixed owner route', async () => {
     const f = fixtures();
     const page = await f.resources.keys.adapter.read({ context, route: { resourceId: 'keys', contextId: context.id, query: { starId: star.starId } }, signal: signal() });

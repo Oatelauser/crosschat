@@ -59,11 +59,13 @@ import {
   removeNodeFor,
   removeStarFrom,
   removeCredentialExactFor,
+  removeMachineExactFor,
   removeStarExactFrom,
   sanitizeName,
   setNameFor,
   setShowNameFor,
   setStarShowNameFor,
+  setMachineReportedNameFor,
   type NodeEntry,
   type RosterEntry,
 } from './registry.js';
@@ -79,6 +81,7 @@ import type { StarSnapshotRole } from './star-snapshot.js';
 import { parseDiscoveryRequest, parseDiscoveryResponse } from '../application/discovery/boundary.js';
 import type { DiscoveryEndpoint, DiscoveryRequest, DiscoveryResponse } from '../application/discovery/model.js';
 import type { DiscoverQueryFrame, DiscoverResultFrame } from './protocol.js';
+import { NodeNameChanges } from './node-naming.js';
 
 /**
  * 默认端口 7260。IANA service-names-port-numbers 核对（2026-10-10 实查）：
@@ -245,6 +248,12 @@ function exactStar(value: unknown) {
     || Object.keys(value).some((key) => key !== 'starRevision')) throw new Error('精确星确认版本无效，请重新预览。');
   return { starRevision: value.starRevision };
 }
+function exactMachine(value: unknown) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value) || !('machineRevision' in value)
+    || typeof value.machineRevision !== 'string' || !/^[a-f0-9]{64}$/.test(value.machineRevision)
+    || Object.keys(value).some((key) => key !== 'machineRevision')) throw new Error('完整机器凭证集合确认版本无效，请重新预览。');
+  return { machineRevision: value.machineRevision };
+}
 
 /**
  * 034 op×角色矩阵（表驱动）：WS 管理 op（admin-op 帧）→ 允许的连接身份。
@@ -258,6 +267,8 @@ const ADMIN_OP_MATRIX: Record<string, readonly ('member' | 'admin')[]> = {
   'list-members': ['member', 'admin'],
   'gen-key': ['admin'],
   'remove-node': ['admin'],
+  'remove-machine': ['admin'],
+  'rename-node': ['admin'],
   'list-stars': [],
   'set-name': [],
   'add-star': [],
@@ -268,6 +279,7 @@ const ADMIN_OP_MATRIX: Record<string, readonly ('member' | 'admin')[]> = {
 };
 
 export class Broker {
+  private readonly nodeNames: NodeNameChanges;
   private readonly d: Required<Omit<BrokerDeps, 'port' | 'fileInbox' | 'scanStatus' | 'discover' | 'spawnLocalAggregator' | 'stopLocalAggregator'>> & {
     port?: number;
     fileInbox?: FileInbox;
@@ -304,6 +316,7 @@ export class Broker {
   private readonly reapedSessions = new Set<Session>();
 
   constructor(deps: BrokerDeps) {
+    this.nodeNames = new NodeNameChanges(Math.min(deps.resultTimeoutMs ?? 5_000, 5_000));
     this.d = {
       heartbeatMs: 30_000,
       pongTimeoutMs: 60_000,
@@ -572,6 +585,23 @@ export class Broker {
         this.revokeCredentials(starId, entries.filter((entry) => entry.label === removed));
         return { ok: true, removed };
       }
+      case 'remove-machine': {
+        const starId = str('starId'); const machineId = str('machineId');
+        if (!starId || !machineId || !/^[a-f0-9]{32}$/.test(machineId)) return { ok: false, error: '移除机器须完整 starId/machineId。' };
+        const expected = exactMachine(req.expected);
+        try {
+          const result = this.removeMachineCredentials(starId, machineId, expected);
+          if (result.ok) this.auditAdmin('remove-machine', `星 ${starId} machine=${machineId}`, LOCAL, [starId]);
+          return result;
+        } catch { return { ok: false, uncertain: true, error: '整机移除未取得完整事务回执，请核实。' }; }
+      }
+      case 'rename-node': {
+        const starId = str('starId'); const machineId = str('machineId'); const name = str('name');
+        if (!starId || !machineId || name === undefined) return { ok: false, error: '改名须完整 starId/machineId/name。' };
+        const result = await this.renameOnlineNode(starId, machineId, name);
+        if (result.ok) this.auditAdmin('rename-node', `星 ${starId} machine=${machineId}`, LOCAL, [starId]);
+        return result;
+      }
       case 'remove-node': {
         const starId = str('starId');
         const label = str('label');
@@ -594,6 +624,34 @@ export class Broker {
   }
 
   /** 两个管理入口共用撤钥与在线失效，保留 registry 的精确 label/返回语义。 */
+  private removeMachineCredentials(starId: string, machineId: string, expected: ReturnType<typeof exactMachine>): AdminReply {
+    const result = removeMachineExactFor(this.d.registryFile, starId, machineId, expected);
+    if (result.kind !== 'removed') return { ok: false, error: '机器的完整节点凭证集合已变化，请刷新后重新确认。' };
+    this.revokeCredentials(starId, result.credentials);
+    return { ok: true, removed: true, machineId: result.machineId, removedLabels: result.credentials.map((credential) => credential.label) };
+  }
+
+  private async renameOnlineNode(starId: string, machineId: string, name: string): Promise<AdminReply> {
+    if (!/^[a-f0-9]{32}$/.test(machineId) || name.length > 32 || (name !== '' && sanitizeName(name) !== name)) return { ok: false, error: '改名目标或名称无效。' };
+    const star = this.stars.find((item) => item.starId === starId);
+    const target = star?.online.get(machineId);
+    if (!star || !target || target.revoked || target.ws.readyState !== WebSocket.OPEN) return { ok: false, error: '所选节点未在线；不会排队修改。' };
+    const reply = await this.nodeNames.request({ socket: target.ws, starId, machineId }, name, (effective) => {
+      if (star.online.get(machineId) !== target || target.revoked || this.starOf(target) !== star || target.credential?.kind !== 'node') throw new Error('Target changed');
+      const credentials = setMachineReportedNameFor(this.d.registryFile, starId, machineId, target.credential.key, effective);
+      this.applyMachineName(star, machineId, credentials.map((node) => node.key!), effective);
+      this.writeStatus('running');
+    });
+    return { ...reply };
+  }
+
+  private applyMachineName(star: StarState, machineId: string, keys: readonly string[], name: string | undefined): void {
+    const update = (entry: { machineName?: string }) => { if (name === undefined) delete entry.machineName; else entry.machineName = name; };
+    for (const member of star.roster) if (normalizeMid(member.machine) === machineId) update(member);
+    for (const session of this.sessions) if (session.starId === star.starId && session.credential?.kind === 'node' && keys.includes(session.credential.key)) update(session);
+  }
+
+  /** Two management entries share revocation, while legacy single-label semantics remain unchanged. */
   private removeNodeCredential(starId: string, label: string, expected?: ReturnType<typeof exactCredential>): boolean {
     if (expected) {
       const outcome = removeCredentialExactFor(this.d.registryFile, starId, label, 'node', expected);
@@ -701,6 +759,7 @@ export class Broker {
 
   /** 优雅退出：先停管理插座（不再受理台账写）再撤星状态、关连接、写终态。 */
   async stop(): Promise<void> {
+    this.nodeNames.stop();
     if (this.stopped) return;
     this.stopped = true;
     if (this.adminServer !== undefined) {
@@ -880,6 +939,7 @@ export class Broker {
 
   /** 关闭事件与明确撤权共用资源收尾；撤权不等待 socket close。 */
   private releaseSession(session: Session, error: { code: string; message: string }): void {
+    this.nodeNames.disconnect(session.ws);
     this.sessions.delete(session);
     this.cancelDiscoveriesFor(session, error);
     if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
@@ -941,6 +1001,11 @@ export class Broker {
     }
     if (frame.op === 'admin-op') {
       this.onAdminOpFrame(session, frame);
+      return;
+    }
+    if (frame.op === 'node-name-result') {
+      if (session.machineId !== undefined && session.starId === frame.starId && normalizeMid(session.machineId) === frame.machineId
+        && this.starOf(session)?.online.get(frame.machineId) === session) this.nodeNames.receive(session.ws, frame);
       return;
     }
     if (frame.op === 'discover-query') {
@@ -1362,20 +1427,27 @@ export class Broker {
       // 032：machineId 绑定/名字回写走 mutateBrokerFile 拼段（保住文件里在跑
       // gen-key/add-star 写进的新段落）。
       const selfName = sanitizeName(frame.name);
+      const hasName = typeof frame.name === 'string';
       const bound = entry.machineId === undefined || entry.machineId === '';
       const authKey = frame.auth;
       const starId = star.starId;
       const starIndex = this.stars.indexOf(star);
+      const matchingKeys: string[] = [];
       mutateBrokerFile(this.d.registryFile, (doc) => {
         const target = doc.stars.find((s) => starId !== undefined && s.starId === starId) ?? doc.stars[starIndex];
         const e = target?.nodes.find((n) => n.key === authKey);
         if (e !== undefined) {
           if (bound) e.machineId = mid;
-          if (selfName !== undefined) e.machineName = selfName;
+          if (hasName) {
+            const update = (value: { machineName?: string }) => { if (selfName === undefined) delete value.machineName; else value.machineName = selfName; };
+            for (const node of target!.nodes) if (node.key !== undefined && normalizeMid(node.machineId ?? '') === midNorm) { update(node); matchingKeys.push(node.key); }
+            for (const member of target!.roster) if (normalizeMid(member.machine) === midNorm) update(member);
+          }
         }
       });
       session.machineId = mid;
-      session.machineName = selfName ?? entry.machineName;
+      session.machineName = hasName ? selfName : entry.machineName;
+      if (hasName) this.applyMachineName(star, midNorm, matchingKeys, selfName);
       // F0：online 键取归一 mid——两形态互指的同机仍是同一台（顶换语义不变；星域内）
       const old = star.online.get(midNorm);
       if (old !== undefined && old !== session) {
@@ -1493,6 +1565,26 @@ export class Broker {
     const starLabel = star.name ?? star.starId ?? '?';
     const audit = (action: string): void => this.auditAdmin(action, `星 ${starLabel}`, `星管理钥(${session.adminLabel ?? '?'})`, star.starId ? [star.starId] : []);
     switch (frame.action) {
+      case 'remove-machine': {
+        if (typeof frame.machineId !== 'string' || !/^[a-f0-9]{32}$/.test(frame.machineId)) { this.send(session.ws, { op: 'admin-op-result', id: frame.id, ok: false, error: '移除机器须完整 machineId。' }); return; }
+        let expected: ReturnType<typeof exactMachine>;
+        try { expected = exactMachine(frame.expected); }
+        catch { this.send(session.ws, { op: 'admin-op-result', id: frame.id, ok: false, error: '机器凭证集合确认版本无效，请重新预览。' }); return; }
+        try {
+          const result = this.removeMachineCredentials(star.starId!, frame.machineId, expected);
+          this.send(session.ws, { op: 'admin-op-result', id: frame.id, ...result });
+          if (result.ok) audit('remove-machine');
+        } catch { this.send(session.ws, { op: 'admin-op-result', id: frame.id, ok: false, uncertain: true, error: '整机移除未取得完整事务回执，请核实。' }); }
+        return;
+      }
+      case 'rename-node': {
+        if (typeof frame.machineId !== 'string' || typeof frame.name !== 'string') { this.send(session.ws, { op: 'admin-op-result', id: frame.id, ok: false, error: '节点改名须完整 machineId/name。' }); return; }
+        void this.renameOnlineNode(star.starId!, frame.machineId, frame.name).then((result) => {
+          if (result.ok) audit('rename-node');
+          if (!session.revoked && this.sessions.has(session) && session.ws.readyState === WebSocket.OPEN) this.send(session.ws, { op: 'admin-op-result', id: frame.id, ...result });
+        }, () => { if (!session.revoked && this.sessions.has(session)) this.send(session.ws, { op: 'admin-op-result', id: frame.id, ok: false, uncertain: true, error: '对端改名结果待核实。' }); });
+        return;
+      }
       case 'star-snapshot': {
         try {
           this.send(session.ws, { op: 'admin-op-result', id: frame.id, ok: true, snapshot: this.starSnapshot(star, identity === 'admin' ? 'star-admin' : 'member') });

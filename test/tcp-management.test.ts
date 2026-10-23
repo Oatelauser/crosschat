@@ -102,13 +102,13 @@ describe('TCP management previews and fixed targets', () => {
     expect(f.executeLocal).not.toHaveBeenCalled();
   });
 
-  it('removes the selected single node credential with its exact revision and complete binding', async () => {
-    const f = fixture(); f.executeLocal.mockResolvedValue({ kind: 'applied', mode: 'hot', value: { removed: true } });
+  it('removes the selected complete machine with one or multiple bound keys using a fixed set revision', async () => {
+    const f = fixture(); f.executeLocal.mockResolvedValue({ kind: 'applied', mode: 'hot', value: { removed: true, machineId: fullMachine, removedLabels: ['node-1'] } });
     const request = { ...f.request('remove-node'), targetId: 'machine-row-full' };
     expect(await f.apply(request)).toMatchObject({ kind: 'applied', mode: 'hot' });
-    expect(f.executeLocal).toHaveBeenCalledWith({ op: 'remove-node', starId: star.starId, label: credential.label, expected: { credentialRevision: credential.revision, machineId: fullMachine } }, request.signal);
+    expect(f.executeLocal).toHaveBeenCalledWith({ op: 'remove-machine', starId: star.starId, machineId: fullMachine, expected: { machineRevision: expect.stringMatching(/^[a-f0-9]{64}$/) } }, request.signal);
     f.current.credentials.push({ ...credential, id: 'other-credential-id', label: 'node-2' });
-    expect(await f.service.preview(request)).toMatchObject({ enabled: false, reason: expect.stringMatching(/逐把/) });
+    expect(await f.service.preview(request)).toMatchObject({ enabled: true, impact: expect.arrayContaining([expect.objectContaining({ value: 'node-1' }), expect.objectContaining({ value: 'node-2' })]) });
   });
 
   it('revokes only the complete selected admin credential and treats missing deletion proof as uncertain', async () => {
