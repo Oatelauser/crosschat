@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import process from 'node:process';
 import { clearTimeout, setTimeout } from 'node:timers';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL, URL } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 import { classifyCompatibility } from './opencode-compat-report.mjs';
 
@@ -291,6 +291,11 @@ async function main() {
     }
     return archives.get(key);
   }
+  async function cleanupTaskRoot() {
+    if (installations.some((installation) => !installation.safe)) throw new Error('Native runtime release is unknown; retain the owned installation and do not start another build');
+    if (!basename(task.root).startsWith('crosschat-claude-ci-')) throw new Error('Unexpected Claude Code compatibility task root');
+    await removeClaudeOwnedPath(task.parent, task.root, task.owner);
+  }
   try {
     const pinned = JSON.parse(await readFile(new URL('./claude-compat-baseline.json', import.meta.url), 'utf8'));
     if (!record(pinned) || pinned.schema !== 1) throw new Error('Invalid pinned Claude Code baseline');
@@ -325,9 +330,7 @@ async function main() {
     if (error?.category === 'unsupported') summary.unsupportedVersion = error.version;
   } finally {
     try {
-      if (installations.some((installation) => !installation.safe)) throw new Error('Native runtime release is unknown; retain the owned installation and do not start another build');
-      if (!basename(task.root).startsWith('crosschat-claude-ci-')) throw new Error('Unexpected Claude Code compatibility task root');
-      await removeClaudeOwnedPath(task.parent, task.root, task.owner); summary.installationCleanup = 'removed';
+      await cleanupTaskRoot(); summary.installationCleanup = 'removed';
     } catch (error) {
       summary.installationCleanup = 'retained'; summary.retainedTaskRoot = task.root; summary.cleanupError = message(error); summary.classification = { kind: 'infrastructure', notify: false };
     }

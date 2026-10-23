@@ -1,0 +1,446 @@
+{
+  "schema": 1,
+  "tool": "claude-code-cli",
+  "platform": "win32",
+  "arch": "x64",
+  "builds": {
+    "baseline": {
+      "name": "@anthropic-ai/claude-code-win32-x64",
+      "version": "2.1.309",
+      "url": "https://registry.npmjs.org/@anthropic-ai/claude-code-win32-x64/-/claude-code-win32-x64-2.1.309.tgz",
+      "integrity": "sha512-b4Ju2gf1VliNsF9dONk/G1xZEW3Zg+G4TgpOS5oXPHSsMIciczcF267//7RvtjEXghflc3Lwrqe+Q4iNMf2ukQ=="
+    },
+    "candidate": {
+      "name": "@anthropic-ai/claude-code-win32-x64",
+      "version": "2.1.309",
+      "url": "https://registry.npmjs.org/@anthropic-ai/claude-code-win32-x64/-/claude-code-win32-x64-2.1.309.tgz",
+      "integrity": "sha512-b4Ju2gf1VliNsF9dONk/G1xZEW3Zg+G4TgpOS5oXPHSsMIciczcF267//7RvtjEXghflc3Lwrqe+Q4iNMf2ukQ=="
+    }
+  },
+  "scope": {
+    "officialNativeCLI": true,
+    "productionWrapper": true,
+    "scriptedLocalModel": true,
+    "streamJSON": true,
+    "interactiveTUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "installationCleanup": "removed",
+  "baseline": {
+    "schema": 1,
+    "tool": "claude-code-cli",
+    "platform": "win32",
+    "arch": "x64",
+    "runId": "ef9c4f40-5eb2-4f9a-8d09-84c193a6e674",
+    "version": "2.1.309",
+    "scope": {
+      "officialNativeCLI": true,
+      "productionWrapper": true,
+      "scriptedLocalModel": true,
+      "streamJSON": true,
+      "interactiveTUI": false,
+      "desktop": false,
+      "modelIntelligence": false
+    },
+    "startedAt": "2026-10-23T07:42:28.804Z",
+    "status": "passed",
+    "category": null,
+    "stage": "done",
+    "checks": [
+      {
+        "name": "official-wrapper-and-native-session-registration",
+        "status": "passed",
+        "elapsedMs": 1945
+      },
+      {
+        "name": "messages-model-and-native-bash-identity",
+        "status": "passed",
+        "elapsedMs": 343
+      },
+      {
+        "name": "production-discovery-and-idle-queue-steer",
+        "status": "passed",
+        "elapsedMs": 5579
+      },
+      {
+        "name": "busy-queue-step-boundary",
+        "status": "passed",
+        "elapsedMs": 2554
+      },
+      {
+        "name": "busy-steer-step-boundary",
+        "status": "passed",
+        "elapsedMs": 1776
+      },
+      {
+        "name": "native-shell-send-and-conversation-reply",
+        "status": "passed",
+        "elapsedMs": 4726
+      },
+      {
+        "name": "exit-and-missing-target-do-not-create-session",
+        "status": "passed",
+        "elapsedMs": 4285
+      }
+    ],
+    "sessions": [
+      {
+        "id": "6c882346-eb4e-4211-a923-4cbb96f4b0e7",
+        "name": "CC_CI_ef9c4f405eb24f9a8d0984c193a6e674_sender",
+        "wrapperPid": 11388,
+        "nativePid": 45596
+      },
+      {
+        "id": "3bfaf8c5-178b-400f-a1ef-37739e73357b",
+        "name": "CC_CI_ef9c4f405eb24f9a8d0984c193a6e674_receiver",
+        "wrapperPid": 2992,
+        "nativePid": 11400
+      }
+    ],
+    "nativeIdentity": {
+      "sessionsVerified": 2,
+      "actualBash": true,
+      "sessionAndSocketMatchRegistry": true,
+      "isolatedHome": true,
+      "isolatedCwd": true
+    },
+    "idleDelivery": {
+      "discoveryCount": 2,
+      "pageLimit": 1,
+      "queue": true,
+      "steer": true,
+      "deliveriesPerMode": 1
+    },
+    "queueBoundary": {
+      "nativeToolCompleted": true,
+      "gatePid": 37424,
+      "enteredAfterTool": false,
+      "afterToolSources": [],
+      "deliveryObservations": [
+        {
+          "requestIndex": 6,
+          "userContentContainsMarker": false,
+          "sources": []
+        },
+        {
+          "requestIndex": 7,
+          "userContentContainsMarker": false,
+          "sources": []
+        },
+        {
+          "requestIndex": 8,
+          "userContentContainsMarker": true,
+          "sources": [
+            {
+              "messageIndex": 12,
+              "blockIndex": 0,
+              "role": "user",
+              "blockType": "text"
+            }
+          ]
+        }
+      ],
+      "deliveryCount": 1,
+      "resultCount": 2,
+      "originalAckInQueuedHistory": true,
+      "observedResultsAtQueuedRequest": 4
+    },
+    "steerBoundary": {
+      "nativeToolCompleted": true,
+      "gatePid": 7288,
+      "enteredAfterTool": true,
+      "afterToolSources": [
+        {
+          "messageIndex": 16,
+          "blockIndex": 0,
+          "role": "user",
+          "blockType": "tool_result"
+        }
+      ],
+      "deliveryObservations": [
+        {
+          "requestIndex": 9,
+          "userContentContainsMarker": false,
+          "sources": []
+        },
+        {
+          "requestIndex": 10,
+          "userContentContainsMarker": true,
+          "sources": [
+            {
+              "messageIndex": 16,
+              "blockIndex": 0,
+              "role": "user",
+              "blockType": "tool_result"
+            }
+          ]
+        }
+      ],
+      "deliveryCount": 1,
+      "resultCount": 1
+    },
+    "roundTrip": {
+      "nativeBashCalls": 2,
+      "fullNativeIdentities": true,
+      "replyHintCopied": true,
+      "sameNonce": true,
+      "requestTurn": 1,
+      "replyTurn": 2
+    },
+    "exitBoundary": {
+      "oldNativeTargetRejected": true,
+      "missingTargetRejected": true,
+      "explicitNativeReferences": true,
+      "replacementCreated": false,
+      "remainingSessions": 1
+    },
+    "modelRequestCount": 16,
+    "nativeResults": [
+      {
+        "id": "6c882346-eb4e-4211-a923-4cbb96f4b0e7",
+        "count": 3,
+        "errors": 0
+      },
+      {
+        "id": "3bfaf8c5-178b-400f-a1ef-37739e73357b",
+        "count": 7,
+        "errors": 0
+      }
+    ],
+    "stderr": [
+      {
+        "id": "6c882346-eb4e-4211-a923-4cbb96f4b0e7",
+        "text": ""
+      },
+      {
+        "id": "3bfaf8c5-178b-400f-a1ef-37739e73357b",
+        "text": ""
+      }
+    ],
+    "cleanup": {
+      "runtimeStopped": true,
+      "registrationRemoved": true,
+      "modelClosed": true,
+      "removed": true,
+      "forced": false,
+      "errors": []
+    },
+    "finishedAt": "2026-10-23T07:42:50.926Z",
+    "process": {
+      "code": 0,
+      "signal": null,
+      "timedOut": false
+    }
+  },
+  "candidate": {
+    "schema": 1,
+    "tool": "claude-code-cli",
+    "platform": "win32",
+    "arch": "x64",
+    "runId": "89def1b0-dcc1-44cc-824b-61b0ff8abf08",
+    "version": "2.1.309",
+    "scope": {
+      "officialNativeCLI": true,
+      "productionWrapper": true,
+      "scriptedLocalModel": true,
+      "streamJSON": true,
+      "interactiveTUI": false,
+      "desktop": false,
+      "modelIntelligence": false
+    },
+    "startedAt": "2026-10-23T07:42:52.421Z",
+    "status": "passed",
+    "category": null,
+    "stage": "done",
+    "checks": [
+      {
+        "name": "official-wrapper-and-native-session-registration",
+        "status": "passed",
+        "elapsedMs": 1991
+      },
+      {
+        "name": "messages-model-and-native-bash-identity",
+        "status": "passed",
+        "elapsedMs": 325
+      },
+      {
+        "name": "production-discovery-and-idle-queue-steer",
+        "status": "passed",
+        "elapsedMs": 4874
+      },
+      {
+        "name": "busy-queue-step-boundary",
+        "status": "passed",
+        "elapsedMs": 2192
+      },
+      {
+        "name": "busy-steer-step-boundary",
+        "status": "passed",
+        "elapsedMs": 2842
+      },
+      {
+        "name": "native-shell-send-and-conversation-reply",
+        "status": "passed",
+        "elapsedMs": 4295
+      },
+      {
+        "name": "exit-and-missing-target-do-not-create-session",
+        "status": "passed",
+        "elapsedMs": 4587
+      }
+    ],
+    "sessions": [
+      {
+        "id": "8356c89b-09b5-4b19-8483-cde84e0d75a0",
+        "name": "CC_CI_89def1b0dcc144cc824b61b0ff8abf08_sender",
+        "wrapperPid": 21880,
+        "nativePid": 17124
+      },
+      {
+        "id": "e77d00c0-b74d-4159-b79a-bc95826fc89d",
+        "name": "CC_CI_89def1b0dcc144cc824b61b0ff8abf08_receiver",
+        "wrapperPid": 23776,
+        "nativePid": 39984
+      }
+    ],
+    "nativeIdentity": {
+      "sessionsVerified": 2,
+      "actualBash": true,
+      "sessionAndSocketMatchRegistry": true,
+      "isolatedHome": true,
+      "isolatedCwd": true
+    },
+    "idleDelivery": {
+      "discoveryCount": 2,
+      "pageLimit": 1,
+      "queue": true,
+      "steer": true,
+      "deliveriesPerMode": 1
+    },
+    "queueBoundary": {
+      "nativeToolCompleted": true,
+      "gatePid": 37948,
+      "enteredAfterTool": false,
+      "afterToolSources": [],
+      "deliveryObservations": [
+        {
+          "requestIndex": 6,
+          "userContentContainsMarker": false,
+          "sources": []
+        },
+        {
+          "requestIndex": 7,
+          "userContentContainsMarker": false,
+          "sources": []
+        },
+        {
+          "requestIndex": 8,
+          "userContentContainsMarker": true,
+          "sources": [
+            {
+              "messageIndex": 12,
+              "blockIndex": 0,
+              "role": "user",
+              "blockType": "text"
+            }
+          ]
+        }
+      ],
+      "deliveryCount": 1,
+      "resultCount": 2,
+      "originalAckInQueuedHistory": true,
+      "observedResultsAtQueuedRequest": 4
+    },
+    "steerBoundary": {
+      "nativeToolCompleted": true,
+      "gatePid": 33056,
+      "enteredAfterTool": true,
+      "afterToolSources": [
+        {
+          "messageIndex": 16,
+          "blockIndex": 0,
+          "role": "user",
+          "blockType": "tool_result"
+        }
+      ],
+      "deliveryObservations": [
+        {
+          "requestIndex": 9,
+          "userContentContainsMarker": false,
+          "sources": []
+        },
+        {
+          "requestIndex": 10,
+          "userContentContainsMarker": true,
+          "sources": [
+            {
+              "messageIndex": 16,
+              "blockIndex": 0,
+              "role": "user",
+              "blockType": "tool_result"
+            }
+          ]
+        }
+      ],
+      "deliveryCount": 1,
+      "resultCount": 1
+    },
+    "roundTrip": {
+      "nativeBashCalls": 2,
+      "fullNativeIdentities": true,
+      "replyHintCopied": true,
+      "sameNonce": true,
+      "requestTurn": 1,
+      "replyTurn": 2
+    },
+    "exitBoundary": {
+      "oldNativeTargetRejected": true,
+      "missingTargetRejected": true,
+      "explicitNativeReferences": true,
+      "replacementCreated": false,
+      "remainingSessions": 1
+    },
+    "modelRequestCount": 16,
+    "nativeResults": [
+      {
+        "id": "8356c89b-09b5-4b19-8483-cde84e0d75a0",
+        "count": 3,
+        "errors": 0
+      },
+      {
+        "id": "e77d00c0-b74d-4159-b79a-bc95826fc89d",
+        "count": 7,
+        "errors": 0
+      }
+    ],
+    "stderr": [
+      {
+        "id": "8356c89b-09b5-4b19-8483-cde84e0d75a0",
+        "text": ""
+      },
+      {
+        "id": "e77d00c0-b74d-4159-b79a-bc95826fc89d",
+        "text": ""
+      }
+    ],
+    "cleanup": {
+      "runtimeStopped": true,
+      "registrationRemoved": true,
+      "modelClosed": true,
+      "removed": true,
+      "forced": false,
+      "errors": []
+    },
+    "finishedAt": "2026-10-23T07:43:14.399Z",
+    "process": {
+      "code": 0,
+      "signal": null,
+      "timedOut": false
+    }
+  },
+  "classification": {
+    "kind": "compatible",
+    "notify": false
+  }
+}
