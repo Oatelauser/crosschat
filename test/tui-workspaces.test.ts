@@ -139,6 +139,7 @@ describe('independent TUI workspaces', () => {
       await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
       expect(controller.getSnapshot()).toMatchObject({ filter: 'same', selectedId: 'member-2', authorization: { state: outcome === 'updated' ? 'verified' : 'stale' } });
       expect(controller.getSnapshot().context?.permissionLabel).toBe(outcome === 'updated' ? '普通成员' : '星管理员');
+      expect(controller.getSnapshot().actions.find((action) => action.id === 'manage')?.enabled).toBe(outcome === 'updated');
     } finally { controller.dispose(); }
   });
 });

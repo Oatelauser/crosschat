@@ -29,4 +29,11 @@ describe('workspace resource action layout', () => {
     const snapshot = state(); snapshot.loading = true; snapshot.authorization = { state: 'checking' };
     expect(screen(snapshot)).toContain('正在核验');
   });
+  it('labels the cached role as previous after a failed or cancelled verification', () => {
+    const snapshot = state(); snapshot.authorization = { state: 'stale' };
+    const output = screen(snapshot);
+    expect(output).toContain('角色: 上次 Broker 管理者');
+    expect(output).toContain('上次核验');
+    expect(output).not.toContain('已核验');
+  });
 });
