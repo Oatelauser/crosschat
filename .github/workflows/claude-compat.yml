@@ -1,0 +1,92 @@
+name: Claude Code compatibility
+
+on:
+  schedule:
+    - cron: '57 3 * * 2,5'
+  workflow_dispatch:
+
+concurrency:
+  group: claude-compat-${{ github.ref }}
+  cancel-in-progress: false
+
+# The upstream executable receives no model credential or repository write permission.
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run build
+      - name: Probe pinned native baseline and official candidate serially
+        run: node scripts/claude-compat-ci.mjs
+        env:
+          CROSSCHAT_LIVE: '1'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-compat-win32-x64
+          path: claude-compat-evidence/
+          if-no-files-found: warn
+          retention-days: 21
+
+  report:
+    needs: probe
+    if: always() && !cancelled() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      # Import only this workflow commit's reviewed validator; artifacts remain untrusted data.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: trusted
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: claude-compat-win32-x64
+          path: evidence
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs/promises');
+            const path = require('node:path');
+            const { pathToFileURL } = require('node:url');
+            const { claudeRegressionIdentity } = await import(pathToFileURL(path.resolve('trusted/scripts/claude-compat-ci.mjs')).href);
+            let summary;
+            try {
+              const file = 'evidence/summary.json';
+              const metadata = await fs.stat(file);
+              if (!metadata.isFile() || metadata.size > 2 * 1024 * 1024) throw new Error('Invalid summary size');
+              summary = JSON.parse(await fs.readFile(file, 'utf8'));
+            } catch {
+              core.notice('No fresh bounded JSON summary; inspect the probe. No issue created.');
+              return;
+            }
+            // Recheck the pinned builds, independent run IDs, seven checks and complete cleanup.
+            const identity = claudeRegressionIdentity(summary);
+            if (!identity) { core.notice('Evidence does not establish a repeated compatibility regression.'); return; }
+            const issues = await github.paginate(github.rest.issues.listForRepo, { ...context.repo, state: 'all', creator: 'github-actions[bot]', per_page: 100 });
+            if (issues.some((issue) => issue.body?.includes(identity.marker))) {
+              core.notice('This candidate/check was already reported.');
+              return;
+            }
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.create({
+              ...context.repo,
+              title: identity.title,
+              body: `${identity.marker}\nPinned baseline ${identity.baselineVersion} passed all seven checks. The same official candidate failed the same compatibility check in two independent isolated runs.\n\nFailed check: \`${identity.check}\`\nStage: \`${identity.stage}\`\nCandidate SHA-512 SRI: \`${identity.integrity}\`\n\n[Inspect workflow and retained JSON evidence](${run}).\n\nScope: official Windows x64 Claude Code CLI, production crosschat wrapper and adapter, stream-json and a scripted local Messages model. No personal model key, interactive TUI, Desktop validation or model intelligence is claimed. Runtime, native registrations, model server and installation cleanup were verified. Investigate before changing support claims.`,
+            });

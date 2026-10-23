@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -29,7 +29,7 @@ const failed = (version: string, runId = randomUUID()) => ({ ...passed(version, 
   check: 'busy-queue-step-boundary', process: { code: 1, signal: null, timedOut: false } });
 
 async function isolated(work: (root: string) => Promise<void>) {
-  const root = await mkdtemp(join(tmpdir(), 'crosschat-claude-ci-test-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'crosschat-claude-ci-test-')));
   try { await work(root); } finally { await rm(root, { recursive: true, force: true }); }
 }
 
