@@ -404,9 +404,11 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
   const fromQualifier =
     caller.p === 'claude'
       ? `claude/${caller.name ?? caller.id.slice(0, 8)}`
-      : caller.p !== 'human'
-        ? `${caller.p}/${caller.id.slice(0, 8)}`
-        : undefined;
+      : caller.p === 'dsh'
+        ? `dsh/${caller.id}`
+        : caller.p !== 'human'
+          ? `${caller.p}/${caller.id.slice(0, 8)}`
+          : undefined;
   const fromAddr =
     deps.fromStarName !== undefined && fromMachine !== undefined
       ? `tcp:${deps.fromStarName}:${fromMachine}${fromQualifier === undefined ? '' : `:${fromQualifier}`}`

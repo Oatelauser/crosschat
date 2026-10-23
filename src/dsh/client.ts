@@ -1,3 +1,8 @@
+import { createHash } from 'node:crypto';
+import { dshError, isDshRecord } from './registry.js';
+import { withDshOperation } from './service.js';
+import type { DshConnection, DshOperation } from './service.js';
+
 export interface DshOptions {
   home?: string;
   instancesDir?: string;
@@ -93,7 +98,3 @@ export async function getDshThread(id: string, options: DshOptions = {}): Promis
   dshSessionPath(id);
   return withDshOperation(options, async (operation) => (await findDshTarget(id, operation))?.thread ?? null);
 }
-import { createHash } from 'node:crypto';
-import { dshError, isDshRecord } from './registry.js';
-import { withDshOperation } from './service.js';
-import type { DshConnection, DshOperation } from './service.js';

@@ -147,6 +147,17 @@ describe('DeepSeek Harness through the application send seam', () => {
     }
   });
 
+  it.each([
+    { caller: { p: 'claude' as const, id: 'claude-native-long', name: 'NamedClaude' }, qualifier: 'claude/NamedClaude' },
+    { caller: { p: 'codex' as const, id: '01a1115b-1a3c-7e71-addc-fee969078e1b' }, qualifier: 'codex/01a1115b' },
+    { caller: { p: 'opencode' as const, id: 'ses_long_native_identity' }, qualifier: 'opencode/ses_long' },
+  ])('preserves the established $caller.p sender qualifier', async ({ caller, qualifier }) => {
+    const { deps, deliverDsh } = fixture();
+    await sendMessage({ to: `dsh/${thread.id}`, bodyArg: 'previous sender', origin: encodeOrigin(caller, 'remote-host') },
+      { ...deps, fromStarName: 'fixture-star', fromMachine: 'fixture-machine' });
+    expect(deliverDsh).toHaveBeenCalledWith(thread.id, expect.stringContaining(`from-addr="tcp:fixture-star:fixture-machine:${qualifier}"`), { mode: 'queue' });
+  });
+
   it('applies a named Harness adapter cap without misreporting a Codex transport limit', async () => {
     const { deps, deliverDsh } = fixture();
     const failure = await sendMessage({ to: 'dsh/Worker', bodyArg: 'a'.repeat(1_048_577), maxBodyKb: '2048' }, deps).catch((error: unknown) => error);
