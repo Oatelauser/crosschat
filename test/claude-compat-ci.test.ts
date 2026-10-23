@@ -26,7 +26,7 @@ const passed = (version: string, runId = randomUUID()) => ({ schema: 1, tool: 'c
   status: 'passed', stage: 'done', category: null, checks: checks.map((name) => ({ name, status: 'passed', elapsedMs: 1 })), cleanup,
   process: { code: 0, signal: null, timedOut: false } });
 const failed = (version: string, runId = randomUUID()) => ({ ...passed(version, runId), status: 'failed', stage: 'contract', category: 'compatibility',
-  check: 'busy-queue-step-boundary', process: { code: 1, signal: null, timedOut: false } });
+  check: 'busy-queue-step-boundary', checks: checks.slice(0, 3).map((name) => ({ name, status: 'passed', elapsedMs: 1 })), process: { code: 1, signal: null, timedOut: false } });
 
 async function isolated(work: (root: string) => Promise<void>) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'crosschat-claude-ci-test-')));
@@ -153,6 +153,19 @@ describe('Claude Code fresh probe evidence and resource release', () => {
 });
 
 describe('Claude Code baseline/candidate lifecycle and reporting', () => {
+  it('rejects contradictions and out-of-order evidence instead of reporting a passed check as a regression', () => {
+    const baseline = passed(builds.baseline.version);
+    const candidate = failed(builds.candidate.version);
+    const retry = failed(builds.candidate.version);
+    const summary = { schema: 1, tool: 'claude-code-cli', platform: 'win32', arch: 'x64', scope, builds, installationCleanup: 'removed',
+      baseline, candidate, retry, classification: { kind: 'regression', notify: true } };
+    expect(claudeRegressionIdentity(summary)).toBeDefined();
+    for (const completed of [passed(builds.candidate.version).checks, [...candidate.checks, { name: candidate.check, status: 'passed', elapsedMs: 1 }],
+      [...candidate.checks].reverse(), candidate.checks.slice(1)]) {
+      expect(claudeRegressionIdentity({ ...summary, candidate: { ...candidate, checks: completed }, retry: { ...retry, checks: completed } })).toBeUndefined();
+    }
+  });
+
   it('removes each released build before the next and repeats the identical candidate only after a compatibility failure', async () => {
     const calls: string[] = []; const candidates: unknown[] = [];
     const summary = await runClaudeBuildSequence(builds, {
