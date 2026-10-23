@@ -53,5 +53,13 @@
     "stateAndConfigEmpty": true,
     "sourceConfirmed": true,
     "removed": false
+  },
+  "resolution": {
+    "at": "2026-10-23T02:35:44.9455097Z",
+    "userReportedComplete": true,
+    "filesystemVerifiedAbsent": true,
+    "openCodeProcesses": 0,
+    "openCodeInstallations": 0,
+    "status": "cleaned-by-user"
   }
 }
