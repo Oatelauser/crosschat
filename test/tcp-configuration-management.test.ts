@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -9,7 +9,7 @@ afterEach(async () => { for (const directory of cleanup.splice(0)) await rm(dire
 const first = { host: 'first.invalid', port: 7260, starId: 'first-star', key: 'PRIVATE-NODE-KEY', adminKey: 'PRIVATE-ADMIN-KEY', showName: 'per-star', keep: { entry: true } };
 const second = { host: 'second.invalid', port: 7261, starId: 'second-star', key: 'OTHER-PRIVATE-KEY' };
 async function fixture() {
-  const home = await mkdtemp(join(tmpdir(), 'crosschat-tcp-config-'));
+  const home = await realpath(await mkdtemp(join(tmpdir(), 'crosschat-tcp-config-')));
   cleanup.push(home);
   const baseDir = join(home, '.crosschat');
   const directory = join(baseDir, 'tcp');

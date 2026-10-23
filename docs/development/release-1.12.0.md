@@ -29,6 +29,10 @@
 
 正式发布工作树的最新构建另复跑六组 Windows ConPTY，共 16 场全部通过并恢复终端，故障注入退出码符合预期；本机原生 OpenSSH → 临时 loopback sshd 的 8 项探针全部通过。自有 SSH 服务及其已核验 Windows/WSL 认证根由既有探针 finally 收口，六组终端原始证据及 native 结果日志归档到仓库外 release 目录，不冒充生产远端或跨平台终端验收。
 
+终端归档 `terminal-evidence.zip` 为 146955 字节，SHA256 `4be77e524715032843a425ab3609f6cd860276e43a7fc16d0deec4a8d6c48a8f`，58 项逐项校验长度/SHA256/CRC 通过；原始 57 文件保留，映射与摘要在同目录的 terminal-evidence-manifest.json、terminal-validation-summary.json、terminal-evidence-validation.json 和 native-ssh-validation.json。
+
+首次线上 CI `39919295732` 的 Windows/Ubuntu 全量通过，macOS 仅新 TCP 配置夹具 7 项失败，均因读取不到目标而非业务断言差异。安全读明确拒绝任意链接祖先；夹具原先直接使用 macOS 经过系统链接的临时路径，现只把已创建测试 home 用 realpath 转为真实路径，产品链接拒绝规则及原 7 项断言保持。完整失败日志保存在仓库外 macos-ci-first.log；修正后重新执行同一全量检查。
+
 ## 清理与证据保留
 
 - 本轮开发的 23 个终端临时目录与 6 份日志，共 180 文件、5866867 原始字节，已完整压缩至 `C:/Users/yangsheng/.codex/artifacts/crosschat/tui-workspaces-20261023/validation-evidence.zip`，归档 560758 字节。
