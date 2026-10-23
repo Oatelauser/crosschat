@@ -1,5 +1,7 @@
 /** Framework-independent UI contracts. Native tools and transports stay in application adapters. */
 export interface TuiKey { name: string; text?: string; ctrl?: boolean; shift?: boolean; alt?: boolean }
+export type TuiWorkspaceId = 'local' | 'ssh' | 'tcp';
+export interface TuiPromptRequest { kind: 'secret' | 'confirm'; title: string; fields: readonly TuiField[] }
 export interface TuiContext extends Pick<TuiRow, 'actionRoutes' | 'actionAvailability' | 'detailViews'> {
   id: string;
   label: string;
@@ -27,7 +29,7 @@ export interface TuiRow {
   detailViews?: Readonly<Record<string, TuiReadonlyView>>;
 }
 export interface TuiColumn { id: string; label: string; width: number; priority?: number }
-export type TuiMode = 'list' | 'input' | 'detail' | 'help' | 'form' | 'choice' | 'result';
+export type TuiMode = 'list' | 'input' | 'detail' | 'help' | 'form' | 'choice' | 'result' | 'prompt';
 export interface TuiReadonlyView { title: string; fields: readonly TuiField[] }
 export interface TuiOption { value: string; label: string; enabled?: boolean; reason?: string }
 export interface TuiRouteChoice { title: string; options: readonly (TuiOption & { route: TuiRoute })[] }
@@ -63,6 +65,7 @@ export interface TuiResource {
   actions: readonly TuiAction[];
   sortable?: boolean;
   unavailableReason?: string;
+  workspaceIds?: readonly TuiWorkspaceId[];
 }
 export interface TuiPagePresentation { columns?: readonly TuiColumn[]; actions?: readonly TuiAction[] }
 /** Explicitly generated secrets live only in this one-time result, never in a cached resource page. */
@@ -131,6 +134,10 @@ export interface TuiOverlay {
   confirmationDefault: 'cancel';
 }
 export interface TuiSnapshot {
+  workspaceId?: TuiWorkspaceId;
+  authorization?: { state: 'verified' | 'checking' | 'stale' | 'unavailable'; checkedAt?: number };
+  /** Secret contents stay in the controller; only the masked editor is published. */
+  prompt?: TuiPromptRequest & { displayValue: string; cursor: number; accepted: boolean; scrollOffset: number };
   route: TuiRoute;
   context?: TuiContext;
   mode: TuiMode;

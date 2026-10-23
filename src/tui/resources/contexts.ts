@@ -5,13 +5,10 @@ function action(id: string, label: string, shortcut: string, kind: TuiAction['ki
 }
 
 export const contextsResource: TuiResource = {
-  id: 'ctx', label: '连接上下文', aliases: ['contexts', 'connections'], description: '选择已有连接、按需检测与同用户操作指引',
+  id: 'ctx', label: '全局看板', aliases: ['contexts', 'connections'], description: '查看目标并进入本机、SSH 或 TCP 工作区',
   columns: [{ id: 'name', label: '连接', width: 24 }, { id: 'kind', label: '类型', width: 10 }, { id: 'target', label: '目标', width: 30 }],
   actions: [
     action('enter-context', '进入连接', 'Enter', 'navigate'), action('detail', '只读连接详情', 'd', 'detail'),
-    action('choose-connection', '添加已有连接', 'a', 'navigate', { selectionPolicy: 'none', navigateTo: 'connect' }),
-    action('connection-guide', '配置与回程指引', 'g', 'detail', { viewId: 'connection-guide' }),
-    action('test-context', '检测所选连接', 't', 'navigate'),
   ],
 };
 

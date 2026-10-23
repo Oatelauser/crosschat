@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createTuiController } from '../src/tui/app/controller.js';
 import { createResourceRegistry, defaultResources } from '../src/tui/resources/registry.js';
 import { contextsResource } from '../src/tui/resources/contexts.js';
-import type { TuiContext, TuiPage } from '../src/tui/model.js';
+import type { TuiContext, TuiPage, TuiReadRequest } from '../src/tui/model.js';
 
 const contexts: TuiContext[] = [
   { id: 'local', kind: 'local', label: '本机', target: 'fixture' },
@@ -34,13 +34,14 @@ describe('independent TUI workspaces', () => {
   });
 
   it('includes the broker local channel in TCP without changing it into a TCP key identity', async () => {
-    const read = vi.fn(async (): Promise<TuiPage> => ({ rows: [], completeness: 'complete', contextSummary: { permissionLabel: 'Broker 管理者' } }));
+    const read = vi.fn(async (_request: TuiReadRequest): Promise<TuiPage> => ({ rows: [], completeness: 'complete', contextSummary: { permissionLabel: 'Broker 管理者' } }));
     const controller = createTuiController({ registry: registry(), contexts, adapters: { stars: { read } } });
     try {
       command(controller, 'tcp');
       await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
       controller.handleKey({ name: 'enter' });
       await vi.waitFor(() => expect(read).toHaveBeenCalled());
+      await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
       expect(read.mock.calls[0][0]).toMatchObject({ context: { id: 'local', kind: 'local' }, route: { resourceId: 'stars', contextId: 'local' } });
       expect(controller.getSnapshot().workspaceId).toBe('tcp');
       expect(controller.getSnapshot().context?.permissionLabel).toBe('Broker 管理者');

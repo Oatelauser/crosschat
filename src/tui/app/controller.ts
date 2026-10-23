@@ -1,6 +1,6 @@
 import type {
   TuiAction, TuiActionEntry, TuiActionRequest, TuiContext, TuiDetail, TuiFormField, TuiInput, TuiKey, TuiMode,
-  TuiOverlay, TuiPage, TuiResourceAdapter, TuiRoute, TuiRow, TuiSnapshot,
+  TuiOverlay, TuiPage, TuiResourceAdapter, TuiRoute, TuiRow, TuiSnapshot, TuiWorkspaceId, TuiPromptRequest,
 } from '../model.js';
 import { createResourceRegistry } from '../resources/registry.js';
 import type { ResourceRegistry } from '../resources/registry.js';
@@ -9,6 +9,7 @@ import type { EditEvent } from '../ui/text.js';
 import { detailLines } from './detail.js';
 import { helpLines } from './help.js';
 import { formContentLines } from './form.js';
+import { enterContextRoute, localWorkspaceRows, resourceWorkspaces, workspaceFor } from './workspaces.js';
 
 export interface TuiControllerOptions {
   registry: ResourceRegistry;
@@ -20,6 +21,7 @@ export interface TuiControllerOptions {
   clipboard?: (text: string, signal: AbortSignal) => Promise<void>;
   onExit?: () => void;
   onSensitiveClear?: () => void;
+  onActiveContext?: (id: string | null) => void;
 }
 
 export interface TuiContextPage {
@@ -29,6 +31,7 @@ export interface TuiContextPage {
 }
 
 interface ListState {
+  workspaceId?: TuiWorkspaceId;
   route: TuiRoute;
   rows: readonly TuiRow[];
   selectedId?: string;
@@ -147,6 +150,16 @@ export function createTuiController(options: TuiControllerOptions) {
   let snapshot: TuiSnapshot;
   let result: TuiSnapshot['result'];
   let resultSelection: string | undefined;
+  let lastTcpRoute: TuiRoute | undefined;
+  let notifiedContext: string | null = null;
+  let promptState: TuiSnapshot['prompt'];
+  let promptEditor = { text: '', cursor: 0 };
+  let promptFinish: ((value: string | boolean | null) => void) | undefined;
+
+  function commandCandidates(value: string) {
+    return options.registry.candidates(value).filter((resource) =>
+      ['ctx', 'local', 'ssh', 'tcp'].includes(resource.id) || !page.workspaceId || resourceWorkspaces(resource).includes(page.workspaceId));
+  }
 
   function currentContext() { return contexts.find((context) => context.id === page.route.contextId); }
   function pageRegistry() { return page.registry ?? options.registry; }
@@ -172,6 +185,10 @@ export function createTuiController(options: TuiControllerOptions) {
     return undefined;
   }
   function actionEntries(targetMode: TuiMode): TuiActionEntry[] {
+    if (targetMode === 'prompt') return [
+      { id: 'prompt-confirm', shortcut: 'Enter', label: promptState?.kind === 'confirm' ? '应用所选按钮' : '确认输入', enabled: true },
+      { id: 'prompt-cancel', shortcut: 'Esc / Ctrl+C', label: '取消认证', enabled: true },
+    ];
     if (targetMode === 'result' && result) return [...actionsFor('result').map((entry) => ({ ...entry, enabled: true })),
       ...result.copies.map((entry) => ({ id: `result-copy-${entry.id}`, label: entry.label, shortcut: entry.shortcut, enabled: options.clipboard !== undefined, reason: options.clipboard ? undefined : '当前终端未提供剪贴板' }))];
     return actionsFor(targetMode).map((action) => {
@@ -198,6 +215,7 @@ export function createTuiController(options: TuiControllerOptions) {
       if (enabled && action.mutation && (!options.adapters[action.ownerResourceId]?.checkAction || !options.adapters[action.ownerResourceId]?.mutate)) {
         enabled = false; reason = '当前资源尚未提供权限核验与操作接口';
       }
+      if (enabled && action.mutation && loading) { enabled = false; reason = '正在重新核验当前连接与权限'; }
       return { id: action.id, shortcut: action.shortcut, label: choice?.actionId && action.id === 'choice-apply' ? '打开来源' : action.label, ...availability, enabled, reason };
     });
   }
@@ -211,7 +229,13 @@ export function createTuiController(options: TuiControllerOptions) {
     page.scrollOffset = Math.max(0, Math.min(page.scrollOffset, Math.max(0, rows.length - pageSize())));
     if (selectedIndex >= 0 && selectedIndex < page.scrollOffset) page.scrollOffset = selectedIndex;
     if (selectedIndex >= page.scrollOffset + pageSize()) page.scrollOffset = selectedIndex - pageSize() + 1;
+    const permission = page.contextSummary?.permissionLabel;
+    const authorization: TuiSnapshot['authorization'] = currentContext() ? {
+      state: loading ? 'checking' : permission && !page.error && page.completeness !== 'unavailable' ? 'verified' : 'unavailable',
+      checkedAt: page.sampledAt,
+    } : undefined;
     snapshot = {
+      workspaceId: page.workspaceId, authorization, prompt: promptState,
       route: copyRoute(page.route), context: currentContext() ? { ...currentContext()!, ...page.contextSummary } : undefined, mode, rows, selectedId: page.selectedId, selectedIndex,
       scrollOffset: page.scrollOffset, filter: page.filter, input, detail, help, overlay, choice, loading,
       filters: page.filters, selectedFacets: Object.fromEntries(page.selectedFacets ?? []), sampledAt: page.sampledAt, totalRows: page.rows.length,
@@ -286,8 +310,15 @@ export function createTuiController(options: TuiControllerOptions) {
     if (disposed) return;
     stopWatch();
     cancelRead(false);
-    const contextSource = page.route.resourceId === 'ctx' ? options.contextSource : undefined;
-    if (page.route.resourceId === 'ctx' && !contextSource) { publish(); return; }
+    const catalog = page.route.resourceId === 'ctx' || page.route.resourceId === 'tcp';
+    const contextSource = catalog ? options.contextSource : undefined;
+    const catalogRows = (values: readonly TuiContext[], notice?: string) => page.route.resourceId === 'tcp'
+      ? contextRows(values.filter((context) => context.kind === 'local' || context.kind === 'tcp'), notice).map((row) => ({ ...row, navigate: { resourceId: 'stars', contextId: row.contextId }, actionRoutes: undefined }))
+      : contextRows(values, notice);
+    if (page.route.resourceId === 'local') {
+      applyPage({ rows: localWorkspaceRows(options.registry.resources), completeness: 'complete', notice: '选择本机资源；TCP 星管理请进入 :tcp。' }); publish(); return;
+    }
+    if (catalog && !contextSource) { applyPage({ rows: catalogRows(contexts), completeness: initialContexts.completeness, notice: initialContexts.notice }); publish(); return; }
     if (page.route.contextId !== undefined && !currentContext()) {
       page.completeness = 'unavailable'; page.error = undefined;
       page.notice = '连接配置已不存在，请返回 ctx 重新选择连接。'; publish(); return;
@@ -307,7 +338,7 @@ export function createTuiController(options: TuiControllerOptions) {
     try {
       const pending: Promise<{ page: TuiPage; contexts?: readonly TuiContext[] }> = contextSource
         ? contextSource.read(controller.signal).then((result) => ({ contexts: result.contexts, page: {
-          rows: contextRows(result.contexts, result.notice), completeness: result.completeness, notice: result.notice,
+          rows: catalogRows(result.contexts, result.notice), completeness: result.completeness, notice: result.notice,
         } }))
         : adapter!.read({ context: currentContext(), route: copyRoute(page.route), signal: controller.signal }).then((result) => ({ page: result }));
       const cancelled = new Promise<undefined>((resolve) => {
@@ -334,12 +365,18 @@ export function createTuiController(options: TuiControllerOptions) {
     cancelRead(false);
     stopWatch();
     cancelWork();
+    promptFinish?.(null);
+    const workspaceId = workspaceFor(options.registry.resolve(route.resourceId), contexts.find((context) => context.id === route.contextId), page.workspaceId);
     if (routeKey(route) !== routeKey(page.route)) {
       history.push(page);
       const cached = pages.get(routeKey(route));
       page = cached ?? { route: copyRoute(route), rows: [], filter: '', scrollOffset: 0, completeness: 'unavailable' };
       pages.set(routeKey(route), page);
     }
+    page.workspaceId = workspaceId;
+    if (workspaceId === 'tcp' && route.contextId && route.resourceId !== 'tcp-targets') lastTcpRoute = copyRoute(route);
+    const active = route.contextId ?? null;
+    if (active !== notifiedContext) { notifiedContext = active; options.onActiveContext?.(active); }
     mode = 'list'; input = undefined; savedInput = undefined; detail = undefined; help = undefined; choice = undefined; choiceRoutes.clear();
     if (load) void refresh();
   }
@@ -359,7 +396,7 @@ export function createTuiController(options: TuiControllerOptions) {
       mode: mode === 'detail' ? 'detail' : 'list', filter: page.filter, selectedId: page.selectedId, scrollOffset: page.scrollOffset, detail, detailCursorLine,
       contextId: page.route.contextId ?? (page.route.resourceId === 'ctx' ? selectedRow()?.contextId : undefined),
     };
-    input = { kind, editor: { text: '', cursor: 0 }, candidates: kind === 'command' ? options.registry.candidates('').map((resource) => ({ id: resource.id, label: resource.label, enabled: true, reason: resource.unavailableReason })) : [], hint: 'Enter 保留筛选' };
+    input = { kind, editor: { text: '', cursor: 0 }, candidates: kind === 'command' ? commandCandidates('').map((resource) => ({ id: resource.id, label: resource.label, enabled: true, reason: resource.unavailableReason })) : [], hint: 'Enter 保留筛选' };
     mode = 'input';
     if (kind !== 'detail-search') page.filter = '';
     publish();
@@ -396,11 +433,15 @@ export function createTuiController(options: TuiControllerOptions) {
       if (target) {
         const contextId = savedInput?.contextId ?? page.route.contextId;
         if (savedInput) { page.filter = savedInput.filter; page.selectedId = savedInput.selectedId; page.scrollOffset = savedInput.scrollOffset; }
-        if (target.id !== 'ctx' && (!contextId || !contexts.some((context) => context.id === contextId))) {
+        if (!['ctx', 'local', 'ssh', 'tcp', 'tcp-targets', 'connect'].includes(target.id) && (!contextId || !contexts.some((context) => context.id === contextId))) {
           mode = savedInput?.mode ?? 'list'; input = undefined; savedInput = undefined; page.notice = '请先从 ctx 选择有效连接'; publish(); return;
         }
         if (page.route.resourceId === 'ctx' && target.id !== 'ctx' && contextId) options.onContextSelection?.(contextId);
-        navigate({ resourceId: target.id, ...(target.id === 'ctx' ? {} : { contextId }) });
+        if (target.id === 'tcp') {
+          navigate(lastTcpRoute && contexts.some((context) => context.id === lastTcpRoute!.contextId) ? lastTcpRoute : { resourceId: 'tcp' });
+        } else if (target.id === 'local') navigate({ resourceId: 'local', contextId: 'local' });
+        else if (['ctx', 'ssh', 'tcp-targets', 'connect'].includes(target.id)) navigate({ resourceId: target.id });
+        else navigate({ resourceId: target.id, contextId });
       } else { mode = savedInput?.mode ?? 'list'; input = undefined; savedInput = undefined; publish(); }
       return;
     }
@@ -416,7 +457,7 @@ export function createTuiController(options: TuiControllerOptions) {
     const event = editEvent(key);
     if (!event) return;
     const editor = editText(input.editor, event);
-    input = { ...input, editor, candidateIndex: undefined, candidates: input.kind === 'command' ? options.registry.candidates(editor.text).map((resource) => ({ id: resource.id, label: resource.label, enabled: true, reason: resource.unavailableReason })) : [] };
+    input = { ...input, editor, candidateIndex: undefined, candidates: input.kind === 'command' ? commandCandidates(editor.text).map((resource) => ({ id: resource.id, label: resource.label, enabled: true, reason: resource.unavailableReason })) : [] };
     updateInput();
   }
   function move(id: string) {
@@ -759,7 +800,7 @@ export function createTuiController(options: TuiControllerOptions) {
         const context = contexts.find((item) => item.id === row.contextId);
         if (context) {
           if (page.route.resourceId === 'ctx') options.onContextSelection?.(context.id);
-          navigate({ resourceId: context.defaultResourceId ?? (context.kind === 'tcp' ? 'machines' : 'sessions'), contextId: context.id });
+          navigate(enterContextRoute(context));
         }
       } else {
         const route = actionRoute(action, row);
@@ -886,8 +927,49 @@ export function createTuiController(options: TuiControllerOptions) {
     const next = pressed === 'Home' ? 0 : pressed === 'End' ? max : result.scrollOffset + (own(changes, pressed) ?? 0);
     result = { ...result, scrollOffset: Math.max(0, Math.min(max, next)) }; publish();
   }
+  function prompt(request: TuiPromptRequest, signal: AbortSignal): Promise<string | boolean | null> {
+    if (disposed || signal.aborted) return Promise.resolve(null);
+    promptFinish?.(null);
+    const returnMode = mode;
+    const owner = page;
+    promptEditor = { text: '', cursor: 0 };
+    promptState = { ...request, fields: request.fields.map((field) => ({ ...field })), displayValue: '', cursor: 0, accepted: false, scrollOffset: 0 };
+    mode = 'prompt';
+    return new Promise((resolve) => {
+      const aborted = () => finish(null);
+      const finish = (value: string | boolean | null) => {
+        if (promptFinish !== finish) return;
+        signal.removeEventListener('abort', aborted);
+        promptFinish = undefined; promptState = undefined; promptEditor = { text: '', cursor: 0 };
+        if (owner === page && mode === 'prompt') mode = returnMode;
+        resolve(value); publish();
+      };
+      promptFinish = finish;
+      signal.addEventListener('abort', aborted, { once: true });
+      if (signal.aborted) finish(null); else publish();
+    });
+  }
+  function promptKey(key: TuiKey) {
+    if (!promptState) return;
+    const pressed = shortcut(key);
+    if (pressed === 'Esc' || pressed === 'Ctrl+C') { promptFinish?.(null); return; }
+    if (viewport.columns < 24 || viewport.rows < 16) return;
+    if (['PgUp', 'PgDn', '↑', '↓'].includes(pressed)) {
+      promptState = { ...promptState, scrollOffset: Math.max(0, promptState.scrollOffset + (['PgUp', '↑'].includes(pressed) ? -1 : 1)) }; publish(); return;
+    }
+    if (pressed === 'Enter') { promptFinish?.(promptState.kind === 'confirm' ? promptState.accepted : promptEditor.text); return; }
+    if (promptState.kind === 'confirm') {
+      if (['Tab', 'Shift+Tab', '←', '→', 'Space'].includes(pressed)) promptState = { ...promptState, accepted: !promptState.accepted };
+    } else {
+      const event = key.name === 'paste' && key.text ? { type: 'insert' as const, text: key.text } : editEvent(key);
+      if (event) promptEditor = editText(promptEditor, event);
+      promptState = { ...promptState, displayValue: '•'.repeat(Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(promptEditor.text)).length), cursor: promptEditor.cursor };
+    }
+    publish();
+  }
   function handleKey(key: TuiKey) {
     if (disposed) return;
+    if (mode === 'prompt') { promptKey(key); return; }
     if (mode === 'result') { resultKey(key); return; }
     if (mode === 'form') { formKey(key); return; }
     if (shortcut(key) === 'Ctrl+C') {
@@ -928,7 +1010,8 @@ export function createTuiController(options: TuiControllerOptions) {
       publish();
     },
     refresh,
-    dispose: () => { if (disposed) return; stopWatch(); cancelRead(false); cancelWork(); formController?.abort(); formGeneration++; clearResult(); if (snapshot.result) snapshot = { ...snapshot, result: undefined, mode: 'list' }; disposed = true; listeners.clear(); },
+    prompt,
+    dispose: () => { if (disposed) return; promptFinish?.(null); options.onActiveContext?.(null); stopWatch(); cancelRead(false); cancelWork(); formController?.abort(); formGeneration++; clearResult(); if (snapshot.result) snapshot = { ...snapshot, result: undefined, mode: 'list' }; disposed = true; listeners.clear(); },
   };
 }
 
