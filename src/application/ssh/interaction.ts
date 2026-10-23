@@ -21,7 +21,7 @@ function challenge(request: SshInteractionRequest): SshChallenge | null {
     if (!identity || !/Are you sure you want to continue connecting/i.test(prompt)) return null;
     return { kind: 'host-key', contextId, host, prompt, algorithm: identity[1], fingerprint: identity[2] };
   }
-  if (/^Enter passphrase for key .+:\s*$/i.test(prompt)) return { kind: 'passphrase', contextId, host, prompt };
+  if (/^Enter passphrase(?: for key .+)?:\s*$/i.test(prompt)) return { kind: 'passphrase', contextId, host, prompt };
   if (/^(?:[^\r\n]*'s )?password:\s*$/i.test(prompt)) return { kind: 'password', contextId, host, prompt };
   return null;
 }

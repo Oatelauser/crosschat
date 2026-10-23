@@ -6,6 +6,7 @@ import { PassThrough } from 'node:stream';
 import { setTimeout as delay } from 'node:timers/promises';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSshApplication } from '../src/application/ssh/index.js';
+import type { SshApplicationOptions } from '../src/application/ssh/index.js';
 
 class ControlledSsh extends EventEmitter {
   stdin = new PassThrough();
@@ -35,7 +36,7 @@ function expectNoOwnedListeners(child: ControlledSsh) {
 describe('SSH target identity and process completion', () => {
   it('keeps a managed profile distinct from an external Host with the same synthetic SSH alias', async () => {
     const home = await fixture();
-    const spawn = vi.fn((_command: string, _args: string[]) => { const child = new ControlledSsh(); queueMicrotask(() => child.complete()); return child; });
+    const spawn = vi.fn<NonNullable<SshApplicationOptions['spawn']>>(() => { const child = new ControlledSsh(); queueMicrotask(() => child.complete()); return child; });
     const application = createSshApplication({ home, spawn });
     try {
       const request = { operation: 'create' as const, profile: { name: 'Managed target', host: 'managed.example', user: 'managed-user', port: 2222 } };

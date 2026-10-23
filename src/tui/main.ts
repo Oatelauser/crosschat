@@ -5,6 +5,7 @@ import type { Writable } from 'node:stream';
 import { copyText } from '../application/clipboard.js';
 import { createTuiController } from './app/controller.js';
 import type { TuiContextPage, TuiControllerOptions, TuiController } from './app/controller.js';
+import { sshAuthenticationPrompt } from './app/authentication.js';
 import type { TuiContext, TuiResourceAdapter } from './model.js';
 import { presentContext } from './resources/contexts.js';
 import { createResourceRegistry, defaultResources } from './resources/registry.js';
@@ -71,10 +72,7 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
       const composition = options.adapters === undefined
         ? (await import('./composition.js')).createDefaultResources({ home, isolatedHome: options.home !== undefined, onChallenge: async (challenge, signal) => {
           if (!promptOwner) return null;
-          return promptOwner.prompt({ kind: challenge.kind === 'host-key' ? 'confirm' : 'secret', title: challenge.kind === 'host-key' ? '首次 SSH 主机身份确认' : challenge.kind === 'passphrase' ? 'SSH 私钥口令' : 'SSH 登录密码', fields: [
-            { label: '目标', value: challenge.host },
-            ...(challenge.kind === 'host-key' ? [{ label: '算法', value: challenge.algorithm }, { label: '完整指纹', value: challenge.fingerprint }] : [{ label: '提示', value: challenge.prompt }]),
-          ] }, signal);
+          return promptOwner.prompt(sshAuthenticationPrompt(challenge), signal);
         } }) : undefined;
       if (owner.signal.aborted) { await composition?.dispose(); return cancelledMount(); }
       const registry = options.registry ?? createResourceRegistry(composition?.resources ?? defaultResources);

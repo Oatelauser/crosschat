@@ -90,7 +90,7 @@ export interface TuiPage {
   autoRefresh?: boolean;
   presentation?: TuiPagePresentation;
   actionRoutes?: Readonly<Record<string, TuiRoute>>;
-  contextSummary?: { label?: string; permissionLabel?: string };
+  contextSummary?: { label?: string; permissionLabel?: string; permissionVerified?: boolean };
 }
 export interface TuiActionRequest {
   action: TuiAction;

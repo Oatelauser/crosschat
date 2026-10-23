@@ -248,6 +248,18 @@ describe('TCP resource lists and readonly navigation', () => {
 });
 
 describe('TCP list-owned management and secret results', () => {
+  it('keeps broker lifecycle controls disabled for a remote star administrator without inspecting local services', async () => {
+    const f = fixtures();
+    const services: LocalServices = { read: vi.fn(async () => { throw new Error('must not inspect local services'); }), check: vi.fn(async () => ({ allowed: true, impact: [] })), execute: vi.fn(async () => ({ state: 'ready', message: 'must not run' })) };
+    const binding = createTcpResources({ tcp: f.tcp, management: f.management, services }).stars;
+    const selectedRoute = { resourceId: 'stars', contextId: context.id };
+    const page = await binding.adapter.read({ context, route: selectedRoute, signal: signal() });
+    expect(page.rows[0].actionAvailability?.['stop-broker']?.enabled).toBe(false);
+    const stop = actions(binding.resource, page).find((entry) => entry.id === 'stop-broker')!;
+    expect((await binding.adapter.checkAction!({ action: stop, target: page.rows[0], context, route: selectedRoute, values: {}, signal: signal() })).enabled).toBe(false);
+    expect(services.read).not.toHaveBeenCalled(); expect(services.check).not.toHaveBeenCalled(); expect(services.execute).not.toHaveBeenCalled();
+  });
+
   it('controls the selected star broker through the exact service revision and refuses changed service plans', async () => {
     const f = fixtures({ contextId: local.id, star: { ...star, contextId: local.id, role: 'broker-owner' } });
     f.tcp.readStars.mockResolvedValue({ contextId: local.id, role: 'broker-owner', configured: true, items: [f.current.star!], completeness: 'complete', observedAt: 1, errors: [] });

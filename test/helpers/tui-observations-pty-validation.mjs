@@ -71,7 +71,7 @@ async function session(name, scenario = 'keyboard') {
 const normal = await session('observations-keyboard-resize');
 try {
   await normal.pty.waitForOutput('本机观察fixture');
-  await normal.send('\r', '观察会话fixture');
+  await normal.send('\r\r', '观察会话fixture');
   await normal.send(':status\r', ':status');
   await normal.copy();
   await normal.send('?', '全部按键');
@@ -144,7 +144,7 @@ try {
   for (const [columns, rows] of [[24, 12], [48, 16], [100, 28]]) {
     const output = normal.pty.output.length;
     normal.pty.resize(columns, rows);
-    await normal.pty.waitForOutput('crosschat', 10_000, output);
+    await normal.pty.waitForOutput('CC · 工作区', 10_000, output);
     await normal.waitEvent((event) => event.event === 'resize' && event.columns === columns && event.rows === rows);
   }
   await normal.send(':doctor\r', '读取中');

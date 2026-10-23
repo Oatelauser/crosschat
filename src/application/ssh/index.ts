@@ -14,7 +14,7 @@ import { discoveryFailure } from '../discovery/service.js';
 import type { QueryError } from '../queries/reading.js';
 import { isRecord, untilAborted } from '../sessions/reading.js';
 import type { Completeness } from '../sessions/model.js';
-import { createSshProfileConfiguration } from './profiles.js';
+import { createSshProfileConfiguration, sshContextMatchesTarget } from './profiles.js';
 import type { SshProfileConfiguration } from './profiles.js';
 import { createSshInteraction } from './interaction.js';
 import type { SshChallengeHandler } from './interaction.js';
@@ -22,6 +22,7 @@ import { createSshAskpassBridge } from './askpass.js';
 import type { SshAskpassBridge } from './askpass.js';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { observeSshChildClose } from './owned-child.js';
 
 export type { SshChallenge, SshChallengeHandler } from './interaction.js';
 export type { SshProfileConfiguration, SshProfileRequest, SshProfilePreview, SshProfileResult } from './profiles.js';
@@ -52,7 +53,6 @@ export interface SshApplicationOptions {
   onChallenge?: SshChallengeHandler;
 }
 
-const safeHost = (value: string): boolean => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value);
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 const STDERR_BYTES = 16 * 1024;
 
@@ -79,6 +79,8 @@ export function createSshApplication(options: SshApplicationOptions = {}): SshAp
   const running = new Set<{ contextId: string; abort: AbortController; done: Promise<void> }>();
   let activeContext: string | null = null;
   let disposed = false;
+  let cleanupFailed = false;
+  let disposal: Promise<void> | undefined;
   function setActiveContext(contextId: string | null): void {
     if (activeContext === contextId || disposed) return;
     for (const operation of running) if (operation.contextId !== contextId) operation.abort.abort();
@@ -140,7 +142,7 @@ export function createSshApplication(options: SshApplicationOptions = {}): SshAp
     if (request.signal?.aborted) return { errors: [failure(request.contextId, 'SSH 读取已取消。', 'cancelled')] };
     const connection = configured.items.find((item) => item.id === request.contextId);
     if (!connection) return { errors: [...configured.errors, failure(request.contextId, '所选 SSH Host 已不存在或未配置。', 'unavailable', '返回 :ctx 或 :ssh 刷新已配置 Host；不会回退读取本机。')] };
-    if (!safeHost(connection.target) || connection.id !== `ssh:${encodeURIComponent(connection.target)}`) return { errors: [failure(request.contextId, '所选 SSH Host 不符合现有安全别名规则。', 'unavailable', '在原生 SSH 配置中使用字母、数字、点、下划线、连字符组成的明确 Host 别名，然后刷新。')] };
+    if (!sshContextMatchesTarget(connection.id, connection.target) || connection.id.startsWith('ssh:profile:') !== (connection.attributes.managed === true)) return { errors: [failure(request.contextId, '所选 SSH Host 不符合现有安全别名规则。', 'unavailable', '在原生 SSH 配置中使用字母、数字、点、下划线、连字符组成的明确 Host 别名，然后刷新。')] };
     return { connection, errors: [] };
   }
   function failedDiscovery(request: DiscoveryRequest, contextId: string, errors: QueryError[]): DiscoveryResponse {
@@ -175,14 +177,15 @@ export function createSshApplication(options: SshApplicationOptions = {}): SshAp
     let transportFailure: SshDiscoveryFailure | undefined;
     try {
       connection = await transport(selected.connection, execution.signal);
-      const endpoint = createSshDiscoveryClient({ host: selected.connection.target, timeoutMs, now, onFailure: (reason) => { transportFailure = reason; }, spawn: (command, args, spawnOptions) => {
+      const endpoint = createSshDiscoveryClient({ host: selected.connection.target, timeoutMs, now, onFailure: (reason) => { transportFailure = reason; if (reason === 'cleanup') cleanupFailed = true; }, spawn: (command, args, spawnOptions) => {
         child = connection!.spawn(command, args, spawnOptions); child.stderr.on('data', onStderr); return child;
       } });
       const response = await endpoint.execute(remoteRequest, { ...execution, signal: connection.signal });
       const result = response.op === 'list' ? response.page : response.detail;
       if (result.completeness === 'unavailable') {
         const problem = result.errors.find((error) => error.kind === 'malformed');
-        const issue = transportFailure === 'timeout' ? failure(contextId, 'SSH 只读发现超时。')
+        const issue = transportFailure === 'cleanup' ? failure(contextId, 'SSH 子进程清理未能确认完成。', 'unavailable', '检查本机遗留 SSH 进程后重试；不会声称已经完整释放。')
+          : transportFailure === 'timeout' ? failure(contextId, 'SSH 只读发现超时。')
           : problem ? failure(contextId, '远端发现接口返回无效结果。', 'malformed', '在同一 SSH 用户下升级并核对 crosschat discover 接口；不会回退执行 status。')
           : executionFailure(contextId, stderr.toString('utf8'), null);
         result.errors = result.errors.map((error) => error.kind === 'invalid-cursor' ? error : { source: { contextId, providerId: 'ssh' }, kind: issue.kind, message: issue.message, nextStep: issue.nextStep });
@@ -222,6 +225,7 @@ export function createSshApplication(options: SshApplicationOptions = {}): SshAp
       let child: DiscoverySshChild;
       try { child = connection.spawn('ssh', ['-T', '-o', 'BatchMode=yes', '--', selected.connection!.target, 'crosschat', 'doctor', '--json'], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true }); }
       catch { resolve({ ...base, completeness: 'unavailable', observedAt: now(), errors: [failure(request.contextId, 'SSH 进程无法启动。')] }); return; }
+      const owner = observeSshChildClose(child);
       let finished = false;
       let bytes = 0;
       let stderr = Buffer.alloc(0);
@@ -231,8 +235,13 @@ export function createSshApplication(options: SshApplicationOptions = {}): SshAp
       const finish = (result: Omit<SshDoctorReport, 'contextId' | 'host' | 'observedAt'>, kill = false) => {
         if (finished) return;
         finished = true; cleanup();
-        if (kill) { child.kill('SIGKILL'); child.stdin.destroy(); child.stdout.destroy(); child.stderr.destroy(); }
-        resolve({ ...base, ...result, observedAt: now() });
+        if (kill) { try { child.kill('SIGKILL'); } catch { /* Only close confirms release. */ } child.stdin.destroy(); child.stdout.destroy(); child.stderr.destroy(); }
+        void owner.wait().then((closed) => {
+          release();
+          if (!closed) cleanupFailed = true;
+          resolve(closed ? { ...base, ...result, observedAt: now() }
+            : { ...base, completeness: 'unavailable', observedAt: now(), errors: [failure(request.contextId, 'SSH 体检子进程清理未能确认完成。', 'unavailable', '检查本机遗留 SSH 进程后重试；不会声称已经完整释放。')] });
+        });
       };
       const failed = (issue: QueryError, kill = false, code: number | null = null) => finish({ result: null, exitCode: code, errors: [issue], completeness: issue.kind === 'cancelled' ? 'cancelled' : 'unavailable' }, kill);
       const onAbort = () => failed(failure(request.contextId, 'SSH 体检已取消。', 'cancelled'), true);
@@ -260,11 +269,14 @@ export function createSshApplication(options: SshApplicationOptions = {}): SshAp
     }); } finally { await connection.dispose(); }
   }
   return { list, discovery, inspect, doctor, configuration,
-    setActiveContext, async dispose() {
-      if (disposed) return;
-      disposed = true; interaction.dispose();
-      const owned = [...running];
-      for (const operation of owned) operation.abort.abort();
-      await Promise.all(owned.map((operation) => operation.done));
+    setActiveContext, dispose() {
+      disposal ??= (async () => {
+        disposed = true; interaction.dispose();
+        const owned = [...running];
+        for (const operation of owned) operation.abort.abort();
+        await Promise.all(owned.map((operation) => operation.done));
+        if (cleanupFailed) throw new Error('SSH 子进程清理未能确认完成。');
+      })();
+      return disposal;
     } };
 }

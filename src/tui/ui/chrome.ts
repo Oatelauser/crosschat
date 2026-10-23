@@ -41,7 +41,7 @@ export function headerLines(snapshot: TuiSnapshot, resource: TuiResource, versio
     const value = snapshot.selectedFacets?.[filter.id] ?? filter.defaultValue;
     return `${filter.label}: ${filter.options.find((option) => option.value === value)?.label ?? value}`;
   }).join(' · ');
-  const actions = keyHints(snapshot, resource);
+  let actions = keyHints(snapshot, resource);
   const hint = (action: TuiActionEntry) => `<${action.shortcut.split(' / ')[0]}> ${action.label}${action.enabled ? '' : ' ×'}`;
   let lines: ScreenLine[];
   if (width < 72) {
@@ -57,6 +57,11 @@ export function headerLines(snapshot: TuiSnapshot, resource: TuiResource, versio
     const columns = Math.max(1, Math.floor(actionWidth / 25));
     const slot = Math.floor(actionWidth / columns);
     const height = Math.min(maxHeight, Math.max(info.length, Math.ceil(actions.length / columns)));
+    const capacity = height * columns;
+    if (actions.length > capacity) {
+      const help = actions.find((entry) => entry.id === 'help');
+      actions = [...actions.filter((entry) => entry !== help).slice(0, Math.max(0, capacity - (help ? 1 : 0))), ...(help ? [help] : [])];
+    }
     lines = Array.from({ length: height }, (_, row) => {
       const parts: NonNullable<ScreenLine['parts']>[number][] = [{ text: pad(info[row] ?? '', left) + '  ', tone: 'yellow' }];
       for (let column = 0; column < columns; column++) {

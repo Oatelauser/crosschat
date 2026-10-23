@@ -19,7 +19,13 @@ const MAX_BYTES = 256 * 1024;
 const forbiddenText = (text: string) => [...text].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127);
 const missing = (error: unknown) => isRecord(error) && error.code === 'ENOENT';
 function invalid(): never { throw new Error('Invalid managed SSH configuration.'); }
-export const sshProfileContextId = (id: string): string => `ssh:cc-${id}`;
+export const sshProfileContextId = (id: string): string => `ssh:profile:${id}`;
+/** Managed identities cannot collide with external aliases, even when their SSH argv target is identical. */
+export function sshContextMatchesTarget(id: string, target: string): boolean {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(target)) return false;
+  const managed = /^ssh:profile:([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.exec(id);
+  return managed ? target === `cc-${managed[1]}` : id === `ssh:${encodeURIComponent(target)}`;
+}
 export const sshProfilesFile = (home: string = homedir()): string => join(home, '.crosschat', 'ssh-connections.json');
 
 function string(value: unknown, max: number): value is string { return typeof value === 'string' && value.length > 0 && value.length <= max && !forbiddenText(value); }

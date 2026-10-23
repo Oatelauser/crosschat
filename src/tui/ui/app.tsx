@@ -12,6 +12,7 @@ import { formatTable } from './table.js';
 import { inputKeys } from './input.js';
 import { frameLines, headerLines } from './chrome.js';
 import type { ScreenLine } from './chrome.js';
+import { screenLayout } from '../app/layout.js';
 
 type Controller = ReturnType<typeof createTuiController>;
 type Line = ScreenLine;
@@ -114,8 +115,11 @@ function bodyLines(snapshot: TuiSnapshot, resource: TuiResource, width: number, 
 export function TuiScreen({ snapshot, resource, version }: { snapshot: TuiSnapshot; resource: TuiResource; version: string }) {
   const width = Math.max(1, snapshot.viewport.columns);
   const height = Math.max(1, snapshot.viewport.rows);
-  const top = headerLines(snapshot, resource, version, width, Math.max(3, Math.min(8, height - 9)));
-  const bodyHeight = Math.max(1, height - top.length - 3);
+  const geometry = screenLayout(snapshot.viewport, snapshot.mode, snapshot.filters, snapshot.selectedFacets);
+  const top = headerLines(snapshot, resource, version, width, geometry.headerRows);
+  while (top.length < geometry.headerRows) top.push({ text: '' });
+  top.push(...geometry.facets.map((text) => ({ text, tone: 'cyan' as const })));
+  const bodyHeight = geometry.frameRows;
   const content = bodyLines(snapshot, resource, Math.max(1, width - 2), Math.max(1, bodyHeight - 2));
   const body = frameLines(content, `${resource.label} (:${resource.id}) [${snapshot.rows.length}]${snapshot.filter ? ` /${snapshot.filter}` : ''}`, width, bodyHeight);
   const completeness = { complete: '完整', partial: '部分结果', unavailable: '不可用', cancelled: '已取消' }[snapshot.completeness];

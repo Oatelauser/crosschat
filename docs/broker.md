@@ -794,7 +794,7 @@ S → C   {"op":"connected"}          # 命中即连接绑星（发放即绑定�
 
 - **心跳**：服务端每 30s 发 ws ping，60s 无 pong 判死断开——客户端用标准 ws 库回 pong 即可，无需应用层帧
 
-### 4.2 帧表（25 型；`?`=可缺省）
+### 4.2 帧表（`?`=可缺省）
 
 | 帧 | 方向 | 字段 |
 |---|---|---|
@@ -817,6 +817,8 @@ S → C   {"op":"connected"}          # 命中即连接绑星（发放即绑定�
 | `discover-query` | 双向 | id, targetMachine, request（新只读发现：list/detail；不补投；broker转发时分配独立id） |
 | `discover-result` | 双向 | id, ok, result?（Provider/分页/完整ID/详情/来源错误）, error? |
 | `discover-cancel` | 双向 | id（仅请求owner可取消；broker向原目标传播取消） |
+| `node-name-set` | broker→已认证node | id, starId, machineId, name；仅在线修改对端当前星条目名称，不写全局默认 |
+| `node-name-result` | node→broker | id, starId, machineId, ok, saved, applied, showName?, name?, error?；严格绑定请求与实际socket，迟到或矛盾回执不作为成功 |
 | `credential-revoked` | S→C | starId, kind(node/admin), reason(node-removed/admin-key-revoked), message；先撤现有连接权限并清路由，再通知断开，不带钥匙 |
 | `sessions` | C→S（node） | sessions:[{sessionId, name?, extends?}]——全量重播：数组即该连接当前全部成员，空数组=清空；extends 旧名 string=同机 / {machine,name}=跨机 |
 | `members-query` | C→S（node） | （空）——聚合器重启后查回"我以前的成员" |
@@ -827,12 +829,14 @@ S → C   {"op":"connected"}          # 命中即连接绑星（发放即绑定�
 | `member-remove-exact-result` | S→C | 同 id，ok, removed:boolean, code?, error?；身份变化或目标消失返回 TARGET_CHANGED 且 removed=false；内存已修改但落盘失败返回 PERSIST_FAILED、ok=false、removed=true，调用方须显示待核实且不得自动重试 |
 | `auth-challenge` | S→C | nonce——034 管理连接挑战（一次性；防重放） |
 | `auth-proof` | C→S | proof——HMAC-SHA256(星管理钥, nonce) 的 hex（钥匙本体永不出现在任何帧里） |
-| `admin-op` | C→S | id, action, n?(gen-key), host?(gen-key), label?(remove-node), expected?——星域action∈{star-snapshot, list-nodes, list-members, gen-key, remove-node}；list-stars/set-name等本机域op一律ADMIN_REQUIRED。TUI remove-node的expected={credentialRevision,machineId:string或null}，原子核验，省略沿用原CLI行为 |
+| `admin-op` | C→S | id, action, n?(gen-key), host?(gen-key), label?(remove-node), machineId?(remove-machine/rename-node), name?(rename-node), expected?——星域action∈{star-snapshot, list-nodes, list-members, gen-key, remove-node, remove-machine, rename-node}；写需本星管理身份，list-stars/set-name等本机域op一律ADMIN_REQUIRED。单凭证remove-node的expected={credentialRevision,machineId:string或null}，原子核验，省略沿用原CLI行为 |
 | `admin-op-result` | S→C | id, ok, error?, uncertain?, results?(gen-key新钥+node.json文本——仅显式发钥回显秘密), nodes?/members?/snapshot?（普通读取永不带钥匙）, removed?；uncertain表示可能已有写入，须核实不得盲重试 |
 
 `star-snapshot`是本轮新增只读接口：普通成员/挑战认证星管理员只能读本星；本机管理插座以`{op:"star-snapshot",starId}`读取相同结构。返回完整starId、不可逆静态revision、role、live、nodes凭证元数据（label/kind/revision/完整machineId可选/机器名/登记时间）、machines完整机器身份与连接状态、members完整册位与在线状态；未使用钥匙不充作机器，管理钥不充作节点。不回key/adminKey，不写管理审计，载荷上限2MiB；旧list-nodes/list-members原审计保持。
 
 本机插座删星可带`expected:{starRevision}`，吊管理钥可带`expected:{credentialRevision,machineId:null}`。节点撤钥同时核对凭证版本和完整机器绑定（null表示尚未绑定），删星核对完整静态影响；核验和删除同一步，变化即拒绝。旧CLI不传expected时原选择器保持；本轮不做旧端降级。星已删除但配置收尾失败时，broker仍使对应连接失效，回执uncertain=true，不能据此认定回滚。
+
+TUI 整机删除使用 `remove-machine`，携带完整 `machineId` 与 `expected:{machineRevision}`，同一步核对并撤销当前星该机器全部已绑定节点钥，立即断开对应连接；集合变化拒绝，成员册、未绑定钥、管理钥与其他星保留。在线远程改名使用 `rename-node`，由对端保存当前 `brokers[]` 条目的 `showName` 并应用运行时名称；对端离线拒绝，缺回执或投影失败显示待核实。不新增 broker 别名、不修改其他星和全局默认。完整字段、冷热路径和失败合同见 [工作区 TCP 管理合同](development/tui-workspace-tcp-contract.md)。
 
 管理审计保留既有文本、动作和频率，行尾追加`starIds=[完整ID...]`；全局显示名一次动作列全部受影响星，按星改名与撤钥仅列目标星。TUI只以完整ID判归属；旧行缺标识时明确无法准确归属，不按可复用星名猜测。
 

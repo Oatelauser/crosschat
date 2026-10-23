@@ -24,7 +24,7 @@ describe('TUI-owned SSH connection profiles', () => {
     const preview = await application.configuration.preview(request);
     expect(preview).toMatchObject({ enabled: true, revision: 'missing' });
     const result = await application.configuration.apply({ ...request, expectedRevision: preview.revision });
-    expect(result).toMatchObject({ status: 'applied', contextId: expect.stringMatching(/^ssh:cc-/) });
+    expect(result).toMatchObject({ status: 'applied', contextId: expect.stringMatching(/^ssh:profile:/) });
     const contexts = await listTuiContexts({ home });
     expect(contexts.items.find((item) => item.id === result.contextId)).toMatchObject({ name: '开发机', kind: 'ssh', attributes: { managed: true, host: '10.0.0.8', user: 'dev', port: 2222 } });
     expect(contexts.items.find((item) => item.id === 'ssh:external')?.attributes.managed).not.toBe(true);

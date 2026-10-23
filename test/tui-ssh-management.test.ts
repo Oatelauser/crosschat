@@ -6,11 +6,11 @@ function application() {
   return {
     list: vi.fn(async () => ({ items: [
       { id: 'ssh:external', kind: 'ssh', name: 'external', target: 'external', identityHint: '外部 Host', attributes: { source: '/fixture/.ssh/config' } },
-      { id: 'ssh:cc-12345678-1234-1234-1234-123456789abc', kind: 'ssh', name: '开发机', target: 'cc-12345678-1234-1234-1234-123456789abc', identityHint: 'TUI 管理', attributes: { source: '/fixture/.crosschat/ssh-connections.json', managed: true, host: 'dev.example', user: 'dev', port: 2222, keyFile: '/fixture/key' } },
+      { id: 'ssh:profile:12345678-1234-1234-1234-123456789abc', kind: 'ssh', name: '开发机', target: 'cc-12345678-1234-1234-1234-123456789abc', identityHint: 'TUI 管理', attributes: { source: '/fixture/.crosschat/ssh-connections.json', managed: true, host: 'dev.example', user: 'dev', port: 2222, keyFile: '/fixture/key' } },
     ], errors: [], observedAt: 1 })),
     configuration: {
       preview: vi.fn(async () => ({ enabled: true, revision: 'confirmed-version', impact: ['仅修改本机受管配置'] })),
-      apply: vi.fn(async () => ({ status: 'applied', contextId: 'ssh:cc-12345678-1234-1234-1234-123456789abc', message: '已保存' })),
+      apply: vi.fn(async () => ({ status: 'applied', contextId: 'ssh:profile:12345678-1234-1234-1234-123456789abc', message: '已保存' })),
     },
   };
 }

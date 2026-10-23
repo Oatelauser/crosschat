@@ -10,6 +10,7 @@ import { detailLines } from './detail.js';
 import { helpLines } from './help.js';
 import { formContentLines } from './form.js';
 import { enterContextRoute, localWorkspaceRows, resourceWorkspaces, workspaceFor } from './workspaces.js';
+import { screenLayout } from './layout.js';
 
 export interface TuiControllerOptions {
   registry: ResourceRegistry;
@@ -114,7 +115,7 @@ export function createTuiController(options: TuiControllerOptions) {
     selectedId: contexts.some((context) => context.id === options.initialSelectedContextId) ? options.initialSelectedContextId : contexts[0]?.id,
     scrollOffset: 0, filter: '', completeness: initialContexts.completeness, notice: initialContexts.notice,
   };
-  const pages = new Map<string, ListState>([[routeKey(page.route), page]]);
+  const pages = new Map<string, ListState>([[JSON.stringify([undefined, routeKey(page.route)]), page]]);
   const history: ListState[] = [];
   const work = new Set<AbortController>();
   let mode: TuiMode = 'list';
@@ -165,7 +166,8 @@ export function createTuiController(options: TuiControllerOptions) {
   function pageRegistry() { return page.registry ?? options.registry; }
   function pageResource() { return pageRegistry().resolve(page.route.resourceId); }
   function actionsFor(targetMode: TuiMode) { return pageRegistry().actions(page.route.resourceId, targetMode); }
-  function pageSize() { return Math.max(1, viewport.rows - 9); }
+  function geometry() { return screenLayout(viewport, mode, page.filters, Object.fromEntries(page.selectedFacets ?? [])); }
+  function pageSize() { return geometry().pageRows; }
   function visibleRows(): readonly TuiRow[] {
     const query = page.filter.toLocaleLowerCase();
     const rows = page.rows.filter((row) => (page.filters ?? []).every((filter) => {
@@ -229,7 +231,7 @@ export function createTuiController(options: TuiControllerOptions) {
     page.scrollOffset = Math.max(0, Math.min(page.scrollOffset, Math.max(0, rows.length - pageSize())));
     if (selectedIndex >= 0 && selectedIndex < page.scrollOffset) page.scrollOffset = selectedIndex;
     if (selectedIndex >= page.scrollOffset + pageSize()) page.scrollOffset = selectedIndex - pageSize() + 1;
-    const permission = page.contextSummary?.permissionLabel;
+    const permission = page.contextSummary?.permissionVerified === false ? undefined : page.contextSummary?.permissionLabel;
     const authorization: TuiSnapshot['authorization'] = currentContext() ? {
       state: loading ? 'checking' : permission && !page.error && page.completeness !== 'unavailable' ? 'verified' : 'unavailable',
       checkedAt: page.sampledAt,
@@ -367,14 +369,15 @@ export function createTuiController(options: TuiControllerOptions) {
     cancelWork();
     promptFinish?.(null);
     const workspaceId = workspaceFor(options.registry.resolve(route.resourceId), contexts.find((context) => context.id === route.contextId), page.workspaceId);
-    if (routeKey(route) !== routeKey(page.route)) {
+    const cacheKey = JSON.stringify([workspaceId, routeKey(route)]);
+    if (routeKey(route) !== routeKey(page.route) || workspaceId !== page.workspaceId) {
       history.push(page);
-      const cached = pages.get(routeKey(route));
+      const cached = pages.get(cacheKey);
       page = cached ?? { route: copyRoute(route), rows: [], filter: '', scrollOffset: 0, completeness: 'unavailable' };
-      pages.set(routeKey(route), page);
+      pages.set(cacheKey, page);
     }
     page.workspaceId = workspaceId;
-    if (workspaceId === 'tcp' && route.contextId && route.resourceId !== 'tcp-targets') lastTcpRoute = copyRoute(route);
+    if (workspaceId === 'tcp' && route.contextId && route.resourceId !== 'tcp-targets') lastTcpRoute = { resourceId: 'stars', contextId: route.contextId };
     const active = route.contextId ?? null;
     if (active !== notifiedContext) { notifiedContext = active; options.onActiveContext?.(active); }
     mode = 'list'; input = undefined; savedInput = undefined; detail = undefined; help = undefined; choice = undefined; choiceRoutes.clear();
@@ -414,7 +417,7 @@ export function createTuiController(options: TuiControllerOptions) {
         const found = detail.fields.findIndex((field) => `${field.label}\n${field.value}`.toLocaleLowerCase().includes(query));
         detail = { ...detail, query: input.editor.text, selectedIndex: found >= 0 ? found : detail.selectedIndex };
         if (found >= 0) {
-          detailCursorLine = Math.max(0, detailLines(detail.fields, Math.max(1, viewport.columns - 2)).findIndex((line) => line.fieldIndex === found));
+          detailCursorLine = Math.max(0, detailLines(detail.fields, geometry().detailColumns).findIndex((line) => line.fieldIndex === found));
           ensureDetailVisible();
         }
       }
@@ -447,7 +450,7 @@ export function createTuiController(options: TuiControllerOptions) {
         } else if (target.id === 'local') navigate({ resourceId: 'local', contextId: 'local' });
         else if (['ctx', 'ssh', 'tcp-targets', 'connect'].includes(target.id)) navigate({ resourceId: target.id });
         else {
-          const declared = [...Object.values(page.actionRoutes ?? {}), ...Object.values(selectedRow()?.actionRoutes ?? {})].find((route) => route.resourceId === target.id);
+          const declared = page.workspaceId === 'tcp' ? [...Object.values(page.actionRoutes ?? {}), ...Object.values(selectedRow()?.actionRoutes ?? {})].find((route) => route.resourceId === target.id) : undefined;
           navigate(declared ? copyRoute(declared) : { resourceId: target.id, contextId });
         }
       } else { mode = savedInput?.mode ?? 'list'; input = undefined; savedInput = undefined; publish(); }
@@ -471,11 +474,11 @@ export function createTuiController(options: TuiControllerOptions) {
   function move(id: string) {
     const amount = id === 'page-up' ? -pageSize() : id === 'page-down' ? pageSize() : id === 'previous' ? -1 : 1;
     if (mode === 'help' && help) {
-      const max = Math.max(0, helpLines(help.entries, viewport.columns).length - pageSize());
+      const max = Math.max(0, helpLines(help.entries, geometry().contentColumns).length - pageSize());
       const offset = id === 'first' ? 0 : id === 'last' ? max : help.scrollOffset + amount;
       help = { ...help, scrollOffset: Math.max(0, Math.min(max, offset)) };
     } else if (mode === 'detail' && detail) {
-      const lines = detailLines(detail.fields, Math.max(1, viewport.columns - 2));
+      const lines = detailLines(detail.fields, geometry().detailColumns);
       const index = id === 'first' ? 0 : id === 'last' ? lines.length - 1 : detailCursorLine + amount;
       detailCursorLine = Math.max(0, Math.min(lines.length - 1, index));
       detail = { ...detail, selectedIndex: lines[detailCursorLine]?.fieldIndex ?? 0 };
@@ -493,7 +496,7 @@ export function createTuiController(options: TuiControllerOptions) {
   }
   function ensureDetailVisible() {
     if (!detail) return;
-    const lines = detailLines(detail.fields, Math.max(1, viewport.columns - 2));
+    const lines = detailLines(detail.fields, geometry().detailColumns);
     detailCursorLine = Math.max(0, Math.min(detailCursorLine, Math.max(0, lines.length - 1)));
     let scrollOffset = Math.max(0, Math.min(detail.scrollOffset, Math.max(0, lines.length - pageSize())));
     if (detailCursorLine < scrollOffset) scrollOffset = detailCursorLine;
@@ -661,7 +664,7 @@ export function createTuiController(options: TuiControllerOptions) {
       }
     }
   }
-  function formPageSize() { return Math.max(1, viewport.rows - 12); }
+  function formPageSize() { return geometry().formRows; }
   function updateFormFields(definitions: readonly TuiFormField[]) {
     if (!overlay || !overlayAction) return;
     const previous = overlay.fields;
@@ -695,7 +698,7 @@ export function createTuiController(options: TuiControllerOptions) {
   }
   function ensureFormVisible() {
     if (!overlay) return;
-    const lines = formContentLines(overlay, viewport.columns);
+    const lines = formContentLines(overlay, geometry().contentColumns);
     const max = Math.max(0, lines.length - formPageSize());
     let scrollOffset = Math.max(0, Math.min(overlay.scrollOffset ?? 0, max));
     if (!formManualScroll) {
@@ -714,7 +717,7 @@ export function createTuiController(options: TuiControllerOptions) {
     if (pressed === 'Esc' || pressed === 'Ctrl+C') { cancelForm(); return; }
     const count = overlay.fields.length;
     if (['PgUp', 'PgDn'].includes(pressed) || (overlay.focusIndex >= count && ['Home', 'End'].includes(pressed))) {
-      const max = Math.max(0, formContentLines(overlay, viewport.columns).length - formPageSize());
+      const max = Math.max(0, formContentLines(overlay, geometry().contentColumns).length - formPageSize());
       const previous = overlay.scrollOffset ?? 0;
       const requested = pressed === 'Home' ? 0 : pressed === 'End' ? max : previous + (pressed === 'PgUp' ? -formPageSize() : formPageSize());
       overlay = { ...overlay, scrollOffset: Math.max(0, Math.min(max, requested)) };
@@ -938,7 +941,7 @@ export function createTuiController(options: TuiControllerOptions) {
       return;
     }
     const size = Math.max(1, viewport.rows - 9);
-    const max = Math.max(0, detailLines(result.fields, Math.max(1, viewport.columns - 2)).length - size);
+    const max = Math.max(0, detailLines(result.fields, geometry().detailColumns).length - size);
     const changes: Readonly<Record<string, number>> = { '↑': -1, k: -1, '↓': 1, j: 1, PgUp: -size, PgDn: size };
     const next = pressed === 'Home' ? 0 : pressed === 'End' ? max : result.scrollOffset + (own(changes, pressed) ?? 0);
     result = { ...result, scrollOffset: Math.max(0, Math.min(max, next)) }; publish();
@@ -1022,7 +1025,7 @@ export function createTuiController(options: TuiControllerOptions) {
       ensureDetailVisible();
       ensureFormVisible();
       ensureChoiceVisible();
-      if (help) help = { ...help, scrollOffset: Math.min(help.scrollOffset, Math.max(0, helpLines(help.entries, viewport.columns).length - pageSize())) };
+      if (help) help = { ...help, scrollOffset: Math.min(help.scrollOffset, Math.max(0, helpLines(help.entries, geometry().contentColumns).length - pageSize())) };
       publish();
     },
     refresh,

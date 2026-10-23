@@ -1,5 +1,6 @@
 import type { SshApplication, SshInspection, SshProfileRequest } from '../../application/ssh/index.js';
 import type { TuiConnection } from '../../application/contexts/index.js';
+import { sshContextMatchesTarget } from '../../application/ssh/profiles.js';
 import { doctorObservation } from '../../application/observations/overview.js';
 import { parseDiagnosticResult } from '../../application/diagnostics/query.js';
 import { untilAborted } from '../../application/sessions/reading.js';
@@ -10,7 +11,6 @@ import { createSessionsResource } from './sessions.js';
 import type { SessionsResourceOptions } from './sessions.js';
 
 interface SshResourceOptions { ssh: SshApplication }
-const validHost = (host: string): boolean => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(host);
 function disabled(reason: string, nextStep = '返回 :ctx 或 :ssh 选择已配置 SSH Host；不会回退本机。'): TuiActionAvailability { return { enabled: false, reason, nextStep }; }
 function action(id: string, label: string, shortcut: string, kind: TuiAction['kind'], extra: Partial<TuiAction> = {}): TuiAction {
   return { id, label, shortcut, kind, ownerResourceId: 'ssh', selectionPolicy: 'required', mutation: false, returnPolicy: 'restore', ...extra };
@@ -105,7 +105,7 @@ export function createSshResource(options: SshResourceOptions): { resource: TuiR
       if (request.signal.aborted) return invalid('SSH 列表读取已取消。', true);
       const completeness = listed.errors.length ? listed.items.length ? 'partial' : 'unavailable' : 'complete';
       const rows: TuiRow[] = listed.items.map((item) => {
-        const safe = validHost(item.target) && item.id === `ssh:${encodeURIComponent(item.target)}`;
+        const safe = sshContextMatchesTarget(item.id, item.target);
         const managed = item.attributes.managed === true;
         const availability: Record<string, TuiActionAvailability> = safe ? {} : Object.fromEntries(['sessions', 'check', 'doctor', 'copy'].map((id) => [id, disabled('Host 别名不符合现有安全执行规则。', '在原生 SSH 配置中改用字母、数字、点、下划线、连字符组成的 Host 别名。')]));
         if (!managed) for (const id of ['edit-connection', 'remove-connection']) availability[id] = disabled('外部 SSH Host 为只读。', '在原生 SSH 配置中编辑此 Host；TUI 只修改自行创建的连接。');
@@ -118,7 +118,7 @@ export function createSshResource(options: SshResourceOptions): { resource: TuiR
       });
       return { rows, completeness, sampledAt: listed.observedAt, notice: completeness === 'unavailable' ? 'SSH 配置来源不可用，尚不能确认已有 Host；i 查看原因与下一步。' : `${rows.length} 个 SSH 目标；未执行网络检测。a 新增受管连接；外部 Host 只读。`,
         routeChoices: { aliases: { title: '选择已有 SSH Host（当前配置已自动包含）', options: listed.items.map((item) => {
-          const enabled = validHost(item.target) && item.id === `ssh:${encodeURIComponent(item.target)}`;
+          const enabled = sshContextMatchesTarget(item.id, item.target);
           return { value: item.id, label: `${item.name} · ${item.identityHint}`, enabled, ...(!enabled ? { reason: 'Host 不符合现有安全别名规则' } : {}), route: { resourceId: 'sessions', contextId: item.id } };
         }) } },
         detailViews: { info: errorsInfo(completeness, listed.errors) } };
@@ -167,7 +167,7 @@ export function createSshDoctorResource(options: SshResourceOptions): { resource
 
 function sshContext(request: TuiReadRequest): boolean {
   const context = request.context;
-  return context?.kind === 'ssh' && context.target !== undefined && validHost(context.target) && context.id === `ssh:${encodeURIComponent(context.target)}`
+  return context?.kind === 'ssh' && context.target !== undefined && sshContextMatchesTarget(context.id, context.target)
     && (request.route?.contextId === undefined || request.route.contextId === context.id) && Object.keys(request.route?.query ?? {}).length === 0;
 }
 
