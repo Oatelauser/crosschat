@@ -44,3 +44,5 @@
 ## 后续候选
 
 DeepSeek Harness 另立原生插件桥接与兼容测试范围；ZCode 先确认第三方连接已有会话的稳定入口。二者均不计入本轮 OpenCode 交付，不因安装方便就先装到用户机器上。
+
+用户另要求将 Claude Code、Codex CLI、Codex 桌面版的同类兼容验证 CI 放入后续列表，见[工具兼容 CI 待办](tool-compatibility-ci-tasks.md)。当前先按本计划完成 OpenCode 桌面版，不切换开发进度。
