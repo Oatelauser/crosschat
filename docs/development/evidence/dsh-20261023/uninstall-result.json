@@ -1,0 +1,9 @@
+{
+  "code": 0,
+  "signal": null,
+  "timedOut": false,
+  "stdout": "\nremoved 614 packages in 9s\n",
+  "stderr": "npm warn Unknown env config \"enable-global-virtual-store\". This will stop working in the next major version of npm.\nnpm warn Unknown env config \"store-dir\". This will stop working in the next major version of npm.\n",
+  "pid": 41956,
+  "at": "2026-10-23T05:29:18.627Z"
+}

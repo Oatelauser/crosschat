@@ -1,4 +1,4 @@
-# DeepSeek Harness 接入计划
+# DeepSeek Harness 接入合同
 
 2026-10-23。用户在 OpenCode 开发验证后指示“那你接着往下做，我自己会验证”，按原顺序开始 Harness。用户自行进行真实模型/从零安装使用验证；代理继续正常开发、脚本模型验收与本次测试软件清理。此前 OpenCode 剩余 CI 实跑和被自动审批拒绝的清理记录保持独立，不把用户继续开发视为接受残留。
 
@@ -24,15 +24,8 @@ loopback 随机端口、32-byte 随机 Bearer token；登记于 `~/.crosschat/ds
 
 `GET /v1/info`、`GET /v1/sessions`、`GET /v1/sessions/{id}` 只读；`POST /v1/sessions/{id}/messages` 携带 text/mode，回执确认 sessionId/messageId/mode。`followup/steer` 接收消息不代表模型已经理解或回答。桥卸载仅回收自身HTTP/登记，不销毁借用的Agent；dead PID记录只读忽略、不在发现时删除，活owner失联/损坏保持来源错误。
 
-## 活动任务
+## 开发验收
 
-| 任务 | 内容与出口 | Owner |
-| --- | --- | --- |
-| H01 桥与原生Adapter | 独立官方bundle、认证/owner/版本校验、完整发现/精确投递、取消/超时/释放。受控HTTP测试先RED后GREEN。 | harness_native_contract |
-| H02 既有公共链路 | 原生身份/ref/origin、四工具消歧、发送/短柄/预算、status与真实deps、精确收编/验活。旧工具回归及跨工具同ID保护。 | harness_repo_seams |
-| H03 本机发现与TUI | reader、默认可选来源、完整ID复制、原生指引和raw状态；不增加只读副作用。 | root |
-| H04 真实runtime与模型工装 | 官方包完整性、隔离profile、普通交互session、真实shell身份/双向回信/queue-steer/桥禁用与重载，按实际证据报告UI边界。 | harness_runtime_probe/root |
-| H05 兼容CI | 固定基线/候选复现，兼容与环境失败分开，独立低权限probe与去重issue报告；复用本地模型，不放真实key。 | harness_runtime_probe/root |
-| H06 交付与清理 | npm包检查、使用文档、卸载本次局部软件与配置、准确记录被拒绝残留；用户自行从零验证。 | root |
+本批桥、公共链路、发现/TUI、真实 npm/Web runtime、本地完整兼容编排与交付已验收，活动任务全部移除，证据见[验收记录](dsh-validation-20261023.md)。正常测试安装已卸载，C盘超时现场由用户删除；D盘测试根按用户随后明确指示保留，供后续工具测试，最终由用户统一删除，见[清理决定](dsh-cleanup-20261023.md)。
 
-root唯一stage/commit。旧README、2026-10-22未跟踪研究与其他会话草稿不纳入本批提交；真实远端验证不恢复，不在远端Linux安装Codex。已接受任务从活动列表移除，合同、授权、RED/GREEN与验收事实另档保留。
+GitHub 托管 runner 首轮/定时和实际 issue 权限转入后续 C05，Desktop 转入 C04；没有以本地结果冒充这些验收。root唯一stage/commit。旧README、2026-10-22未跟踪研究与其他会话草稿不纳入本批提交；真实远端验证不恢复，不在远端Linux安装Codex。本文件保留实施范围与合同，活动排期统一见[后续任务](tool-compatibility-ci-tasks.md)。

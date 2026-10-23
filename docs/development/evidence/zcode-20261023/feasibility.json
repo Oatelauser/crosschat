@@ -1,0 +1,28 @@
+{
+  "at": "2026-10-23T06:11:22.5318909Z",
+  "status": "contract-gaps-awaiting-scope",
+  "sourceCommit": "3c5b227649371507ddc4eb46ac5133afe6db1cab",
+  "productVersionFromOfficialMetadata": "3.16.2",
+  "actualCliVersion": null,
+  "executableDownloaded": false,
+  "softwareInstalled": false,
+  "existingUserInstallation": {
+    "displayName": "ZCode 3.15.3",
+    "displayVersion": "3.15.3",
+    "programVersion": "3.15.3.8237",
+    "path": "D:\\soft\\ZCode",
+    "ownedByThisTask": false,
+    "disposition": "leave original program, configuration and protocol untouched"
+  },
+  "softwareExecuted": false,
+  "modelCalled": false,
+  "productionCodeChanged": false,
+  "testsRun": false,
+  "commands": [],
+  "relatedProcesses": [],
+  "userZcodeHomeExists": true,
+  "userZcodeAppDataExists": true,
+  "protocolExists": true,
+  "retainedSourceRoot": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291\\zcode-20261023-c66c19af74be4408a3707cb9fffd3987",
+  "retention": "user-approved D-drive test workspace"
+}

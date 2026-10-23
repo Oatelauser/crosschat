@@ -2,7 +2,7 @@
 import { spawn } from 'node:child_process';
 import { Buffer } from 'node:buffer';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
-import { access, copyFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, copyFile, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import process from 'node:process';
@@ -23,7 +23,23 @@ const scope = { officialNpmRuntime: true, officialPluginManager: true, ordinaryW
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const message = (error) => error instanceof Error ? error.message : String(error);
 
-export async function resolveDshNpmCache() { throw new Error('Harness compatibility cache selection is not implemented'); }
+export async function resolveDshNpmCache(root, supplied) {
+  const owned = await realpath(root);
+  const external = supplied !== undefined;
+  if (external && (typeof supplied !== 'string' || !isAbsolute(supplied) || /^[a-z][a-z0-9+.-]*:\/\//i.test(supplied)
+    || /^[\\/]{2}/.test(supplied) || supplied.split(/[\\/]/).some((part) => part === '.' || part === '..'))) throw new Error('External npm cache must be an absolute local directory path');
+  const selected = external ? resolve(supplied) : join(owned, 'npm-cache');
+  if (!external) await mkdir(selected, { recursive: true });
+  for (let cursor = selected;; cursor = dirname(cursor)) {
+    const info = await lstat(cursor);
+    if (info.isSymbolicLink() || !info.isDirectory()) throw new Error('Npm cache and its ancestors must be real directories without links');
+    if (dirname(cursor) === cursor) break;
+  }
+  const path = await realpath(selected);
+  const child = relative(owned, path);
+  if (external && (!child || (!isAbsolute(child) && child !== '..' && !child.startsWith(`..${sep}`)))) throw new Error('An external cache must be outside the owned compatibility task directory');
+  return { path, external };
+}
 
 function semver(version) {
   if (typeof version !== 'string' || version.length > 80) return;
@@ -200,6 +216,7 @@ async function main() {
   const temp = await realpath(tmpdir()); const root = await realpath(await mkdtemp(join(temp, 'crosschat-dsh-ci-'))); const owner = randomUUID();
   await writeFile(join(root, '.fixture-owner'), owner);
   const installations = []; const archives = new Map();
+  let npmCache;
   let summary = { schema: 1, tool, platform: 'win32', arch: 'x64', scope, builds: {}, classification: { kind: 'infrastructure', notify: false }, installationCleanup: 'incomplete' };
   async function archive(artifact) {
     const key = createHash('sha256').update(artifact.integrity).digest('hex');
@@ -215,6 +232,7 @@ async function main() {
     await rm(await ownedChild(temp, root, owner), { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
   try {
+    npmCache = await resolveDshNpmCache(root, process.env.DSH_COMPAT_NPM_CACHE);
     const pinned = JSON.parse(await readFile(new URL('./dsh-compat-baseline.json', import.meta.url), 'utf8'));
     const builds = { baseline: parseDshNpmManifest(pinned.package, process.platform, process.arch), packageManager: parsePnpmManifest(pinned.packageManager) }; summary.builds = builds;
     builds.candidate = parseDshNpmManifest(JSON.parse((await fetchBytes('https://registry.npmjs.org/@deepseek-ai/dsh/latest', 2 * 1024 * 1024)).toString('utf8')), process.platform, process.arch);
@@ -224,12 +242,13 @@ async function main() {
         const runtime = join(root, `install-${label}`); await mkdir(runtime); await writeFile(join(runtime, '.fixture-owner'), owner);
         const installation = { root: runtime, safe: false, removed: false }; installations.push(installation);
         const env = await prepareDshProfile(runtime, 'http://127.0.0.1:1/v1');
+        env.npm_config_cache = npmCache.path;
         const [native, manager] = await Promise.all([archive(artifact), archive(builds.packageManager)]);
         await writeFile(join(runtime, 'package.json'), JSON.stringify({ name: 'crosschat-dsh-compat-fixture', version: '0.0.0', private: true,
           dependencies: { '@deepseek-ai/dsh': pathToFileURL(native).href, pnpm: pathToFileURL(manager).href } }));
         const lock = join(root, `${createHash('sha256').update(artifact.integrity).digest('hex')}.lock.json`);
         let existingLock = false; try { await copyFile(lock, join(runtime, 'package-lock.json')); existingLock = true; } catch (error) { if (error.code !== 'ENOENT') throw error; }
-        const installed = await runDshProcess(process.execPath, [npmCLI, existingLock ? 'ci' : 'install', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: runtime, env, timeout: 360000 });
+        const installed = await runDshProcess(process.execPath, [npmCLI, existingLock ? 'ci' : 'install', '--ignore-scripts', '--no-audit', '--no-fund', '--prefer-offline'], { cwd: runtime, env, timeout: 15 * 60 * 1000 });
         await writeFile(join(output, `${label}-install.json`), JSON.stringify(installed, null, 2));
         installation.safe = installed.timedOut === false && installed.signal === null && Number.isInteger(installed.code);
         if (!installation.safe || installed.code !== 0) throw new Error('Isolated npm installation failed; abnormal process release is retained for inspection');
@@ -263,6 +282,8 @@ async function main() {
     try {
       await cleanupTaskRoot(); summary.installationCleanup = 'removed';
     } catch (error) { summary.installationCleanup = 'retained'; summary.retainedTaskRoot = root; summary.cleanupError = message(error); summary.classification = { kind: 'infrastructure', notify: false }; }
+    if (npmCache) summary.npmCache = { ...npmCache, disposition: npmCache.external ? 'retained-externally'
+      : summary.installationCleanup === 'removed' ? 'removed-with-task-root' : 'retained-with-task-root' };
     await writeFile(join(output, 'summary.json'), JSON.stringify(summary, null, 2)); process.stdout.write(`${JSON.stringify(summary.classification)}\n`);
     if (summary.classification.kind !== 'compatible') process.exitCode = 1;
   }

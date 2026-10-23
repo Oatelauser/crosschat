@@ -1,0 +1,94 @@
+{
+  "at": "2026-10-23T06:25:24.6035236Z",
+  "productVersion": "3.15.3.8237",
+  "userSessionName": "测试会话",
+  "sessionNameSource": "user report; not yet matched to a native session ID",
+  "processes": [
+    {
+      "pid": 28216,
+      "parentPid": 19528,
+      "name": "ZCode.exe",
+      "requestedWorkspaceInArguments": false,
+      "stdioFlag": false,
+      "appServerArgument": false
+    },
+    {
+      "pid": 38964,
+      "parentPid": 28216,
+      "name": "ZCode.exe",
+      "requestedWorkspaceInArguments": false,
+      "stdioFlag": false,
+      "appServerArgument": false
+    },
+    {
+      "pid": 44756,
+      "parentPid": 28216,
+      "name": "ZCode.exe",
+      "requestedWorkspaceInArguments": false,
+      "stdioFlag": false,
+      "appServerArgument": false
+    },
+    {
+      "pid": 13884,
+      "parentPid": 28216,
+      "name": "ZCode.exe",
+      "requestedWorkspaceInArguments": false,
+      "stdioFlag": false,
+      "appServerArgument": false
+    },
+    {
+      "pid": 25620,
+      "parentPid": 28216,
+      "name": "ZCode.exe",
+      "requestedWorkspaceInArguments": false,
+      "stdioFlag": false,
+      "appServerArgument": false
+    },
+    {
+      "pid": 42344,
+      "parentPid": 28216,
+      "name": "ZCode.exe",
+      "requestedWorkspaceInArguments": false,
+      "stdioFlag": false,
+      "appServerArgument": false
+    },
+    {
+      "pid": 39508,
+      "parentPid": 28216,
+      "name": "ZCode.exe",
+      "requestedWorkspaceInArguments": false,
+      "stdioFlag": false,
+      "appServerArgument": false
+    },
+    {
+      "pid": 42868,
+      "parentPid": 42344,
+      "name": "ZCode.exe",
+      "requestedWorkspaceInArguments": false,
+      "stdioFlag": true,
+      "appServerArgument": true
+    },
+    {
+      "pid": 36704,
+      "parentPid": 42344,
+      "name": "ZCode.exe",
+      "requestedWorkspaceInArguments": false,
+      "stdioFlag": true,
+      "appServerArgument": true
+    },
+    {
+      "pid": 28324,
+      "parentPid": 36704,
+      "name": "ZCode.exe",
+      "requestedWorkspaceInArguments": false,
+      "stdioFlag": false,
+      "appServerArgument": false
+    }
+  ],
+  "getNetTcpStatus": "complete",
+  "getNetTcpError": null,
+  "tcpListeners": [],
+  "netstatExitCode": 0,
+  "netstatListeners": [],
+  "scope": "readonly OS process and listener metadata; no application config, credential, history or memory access"
+}
