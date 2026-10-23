@@ -134,6 +134,15 @@ describe('DeepSeek Harness existing-session adoption', () => {
     expect(fixture.errors).toContain('adopt: Bridge unavailable.');
   });
 
+  it.each(['opencode/legacy-open', 'Leg'])('preserves an existing qualified or prefix selector during an unrelated Harness outage (%s)', async (query) => {
+    const fixture = await starFixture();
+    fixture.deps.listClaudeSessions = () => ({ sessions: [{ sessionId: 'claude-native', name: 'Legacy' }] });
+    fixture.deps.listOpenCodeThreads = async () => [{ id: 'legacy-open', name: 'Open Worker', cwd: '', rawStatus: { type: 'idle' }, attributes: {} }];
+    fixture.deps.listDshThreads = async () => { throw new MultichatError('DSH_UNAVAILABLE', 'Bridge unavailable.'); };
+    expect(await runAdopt({ connect: '', adopt: query }, fixture.deps)).toBe(0);
+    expect(fixture.requests).toContainEqual(expect.objectContaining({ op: 'attach', sessionId: query.startsWith('opencode/') ? 'legacy-open' : 'claude-native' }));
+  });
+
   it('passes the Harness native source through the public serve adoption command', async () => {
     const fixture = await starFixture();
     expect(await runServe({ connect: '', adopt: 'dsh/Worker' }, { baseDir: fixture.dir, stdout: () => {}, stderr: () => {}, env: {}, version: 'fixture',
