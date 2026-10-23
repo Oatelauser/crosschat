@@ -55,6 +55,8 @@ describe('Desktop probe acknowledgement evidence', () => {
     const transcript = [user(bodyMarker), assistant(acknowledgement)];
     expect(() => assertAcknowledgedDelivery({ transcript, uiText: `${bodyMarker}\n${acknowledgement}`, bodyMarker, prefix })).not.toThrow();
     expect(() => assertAcknowledgedDelivery({ transcript, uiText: bodyMarker, bodyMarker, prefix })).toThrow();
+    expect(acknowledgement).not.toContain(bodyMarker);
+    expect(() => assertAcknowledgedDelivery({ transcript, uiText: acknowledgement, bodyMarker, prefix })).toThrow();
   });
 });
 

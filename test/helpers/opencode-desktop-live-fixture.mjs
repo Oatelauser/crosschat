@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
-import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, open, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { basename, dirname, isAbsolute, join, parse, relative, sep } from 'node:path';
 import process from 'node:process';
@@ -10,7 +10,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { URL } from 'node:url';
 import { isolatedEnvironment, repositoryRoot, runCommand } from './opencode-live-fixture.mjs';
 import { createMockModel } from './opencode-mock-model.mjs';
-import { parseDesktopServiceRegistration, probeDesktopService } from './opencode-desktop-service-probe.mjs';
+import { desktopStartupFailure, parseDesktopServiceRegistration, probeDesktopService } from './opencode-desktop-service-probe.mjs';
 
 export function createDesktopEnvironment(root) {
   const profile = join(root, 'profile');
@@ -94,18 +94,37 @@ function alive(pid) {
 }
 
 export async function collectDesktopLogs(root) {
-  const collected = {};
+  const files = {};
+  const errors = [];
+  const unavailable = (file, error) => errors.push({ path: relative(root, file), code: typeof error?.code === 'string' ? error.code : 'UNKNOWN', message: String(error?.message ?? error).slice(0, 1000) });
   const visit = async (directory, depth) => {
     if (depth > 3) return;
-    const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
+    let entries;
+    try { entries = await readdir(directory, { withFileTypes: true }); }
+    catch (error) { if (error.code !== 'ENOENT') unavailable(directory, error); return; }
     for (const entry of entries.slice(0, 20)) {
       const file = join(directory, entry.name);
       if (entry.isDirectory()) await visit(file, depth + 1);
-      else if (entry.isFile() && entry.name.endsWith('.log')) collected[relative(root, file)] = (await readFile(file, 'utf8')).slice(-64000);
+      else if (entry.isFile() && entry.name.endsWith('.log')) {
+        let handle;
+        try {
+          handle = await open(file, 'r');
+          const stat = await handle.stat();
+          const budget = 64 * 1024;
+          const buffer = Buffer.alloc(Math.min(stat.size, budget));
+          const { bytesRead } = await handle.read(buffer, 0, buffer.length, Math.max(0, stat.size - budget));
+          let start = 0;
+          // A tail may begin inside a UTF-8 character; omit its continuation bytes.
+          while (start < bytesRead && start < 3 && (buffer[start] & 0xc0) === 0x80) start++;
+          files[relative(root, file)] = buffer.subarray(start, bytesRead).toString('utf8');
+        } catch (error) { unavailable(file, error); }
+        finally { if (handle) { try { await handle.close(); } catch (error) { unavailable(file, error); } } }
+      }
     }
   };
-  await visit(join(root, 'profile', '.local', 'desktop', 'logs'), 0);
-  return collected;
+  try { await visit(join(root, 'profile', '.local', 'desktop', 'logs'), 0); }
+  catch (error) { unavailable(root, error); }
+  return { files, errors };
 }
 
 /** Official installed Electron app only. Owns one run subtree, never the installer or its registry artifacts. */
@@ -147,9 +166,11 @@ export async function createOpenCodeDesktopFixture(binary, respond, options = {}
     const result = { appPid: appChild?.pid, appStopped: !alive(appChild?.pid), forcedAppStop: false };
     if (appChild && alive(appChild.pid)) {
       if (options.closeDesktop) {
-        try { await bounded(Promise.resolve(options.closeDesktop(fixture)), 1500, 'Desktop graceful close did not finish'); }
+        // CDP commands allow 10 seconds and disconnect can take another second.
+        // Electron also needs time to finish its Windows profile/child-process shutdown.
+        try { await bounded(Promise.resolve(options.closeDesktop(fixture)), 12000, 'Desktop graceful close did not finish'); }
         catch (error) { result.gracefulCloseError = String(error); }
-        const deadline = Date.now() + 500;
+        const deadline = Date.now() + 3000;
         while (alive(appChild.pid) && Date.now() < deadline) await delay(50);
       }
       if (alive(appChild.pid)) { result.forcedAppStop = true; appChild.kill(); }
@@ -162,20 +183,23 @@ export async function createOpenCodeDesktopFixture(binary, respond, options = {}
 
   async function refreshService(started = Date.now()) {
     const serviceDeadline = started + 23000;
+    let lastError;
     while (Date.now() < serviceDeadline) {
-      if (spawnError) throw spawnError;
-      if (!alive(appChild.pid)) throw new Error('Official desktop exited before service readiness');
+      if (spawnError) throw desktopStartupFailure('service-process', 'Official desktop could not start', { cause: spawnError });
+      if (!alive(appChild.pid)) throw desktopStartupFailure('service-process', 'Official desktop exited before service readiness');
       try {
         info = await probeDesktopService(registrationFile, servicePort);
         logs.readiness = '';
         return info;
       } catch (error) {
+        lastError = error;
         const reason = error instanceof Error ? error.message : String(error);
         logs.readiness = info?.password ? reason.replaceAll(info.password, '<redacted-service-password>') : reason;
+        if (error.retry === false) throw error;
         await delay(50);
       }
     }
-    throw new Error(`Official desktop did not publish a healthy isolated service within 23 seconds: ${logs.readiness}`);
+    throw desktopStartupFailure(lastError?.check ?? 'service-readiness', `Official desktop did not publish a healthy isolated service within 23 seconds: ${logs.readiness}`, { retry: true, cause: lastError });
   }
 
   async function refreshCDP(started = Date.now()) {
@@ -306,6 +330,8 @@ export async function createOpenCodeDesktopFixture(binary, respond, options = {}
     let cleanupError;
     try { await fixture.close(); } catch (failure) { cleanupError = String(failure); }
     throw Object.assign(new Error(`Official desktop fixture startup failed: ${String(error)}`, { cause: error }), {
+      category: error.category === 'compatibility' ? 'compatibility' : 'infrastructure', stage: 'setup',
+      check: typeof error.check === 'string' ? error.check : 'service-process', retry: error.retry === true,
       evidence: { root, appPid: appChild?.pid, servicePid: info?.pid, logs, cleanup, cleanupError },
     });
   }

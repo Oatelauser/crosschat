@@ -74,7 +74,7 @@ async function readRegistration(options: OpenCodeOptions): Promise<Registration>
   } catch (error) {
     cancelled(options.signal);
     if (error instanceof MultichatError) throw error;
-    if (isRecord(error) && error.code === 'ENOENT') throw openCodeError('NOT_CONFIGURED', 'No running OpenCode service is registered. Start OpenCode CLI, then refresh.');
+    if (isRecord(error) && error.code === 'ENOENT') throw openCodeError('NOT_CONFIGURED', 'No running OpenCode service is registered. Open OpenCode CLI or Desktop, then refresh.');
     throw openCodeError('REGISTRATION_UNREADABLE', 'OpenCode service registration could not be read.');
   }
   let value: unknown;

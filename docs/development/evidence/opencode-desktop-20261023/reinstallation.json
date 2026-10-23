@@ -1,0 +1,10 @@
+{
+  "pid": 32580,
+  "code": 0,
+  "args": [
+    "/S",
+    "--no-desktop-shortcut",
+    "/D=D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-20261023-988a66bc46cd42609ca8a12db062e168\\install"
+  ],
+  "installedAt": "2026-10-23T03:45:18.339Z"
+}

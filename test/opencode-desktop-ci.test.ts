@@ -82,7 +82,8 @@ describe('OpenCode Desktop CI evidence', () => {
   it('does not uninstall or advance when an otherwise valid report lacks complete runtime-release evidence', async () => {
     for (const cleanup of [undefined, { appStopped: true, serviceStopped: true, removed: true },
       { appStopped: true, serviceStopped: false, removed: true, runProcesses: { state: 'clear' } },
-      { appStopped: true, serviceStopped: true, removed: true, runProcesses: { state: 'unknown' } }]) {
+      { appStopped: true, serviceStopped: true, removed: true, runProcesses: { state: 'unknown' } },
+      { appStopped: true, serviceStopped: true, removed: true, runProcesses: { state: 'clear' }, errors: ['cleanup was incomplete'] }]) {
       const calls: string[] = [];
       const summary = await runDesktopBuildSequence({ baseline, candidate }, {
         install: async (_artifact: unknown, label: string) => { calls.push(`install:${label}`); return { label }; },
@@ -165,6 +166,11 @@ describe('OpenCode Desktop CI probe process evidence', () => {
       });
       expect(failureWithZeroExit).toMatchObject({ status: 'failed', category: 'infrastructure' });
       expect(failureWithZeroExit.cleanup).toBeUndefined();
+      const crashed = await desktopCI.runDesktopProbeAttempt({ output, label: 'candidate', version: candidate.version }, async ({ reportPath }: { reportPath: string }) => {
+        await writeFile(reportPath, JSON.stringify(passed(candidate.version))); throw new Error('probe runner rejected after creating a report');
+      });
+      expect(crashed).toMatchObject({ status: 'failed', category: 'infrastructure' });
+      expect(crashed.cleanup).toBeUndefined();
     });
   });
 
@@ -203,7 +209,7 @@ describe('OpenCode Desktop CI probe process evidence', () => {
 describe('OpenCode Desktop isolated report job', () => {
   async function reported(summary: unknown) {
     const workflow = await readFile(new URL('../.github/workflows/opencode-compat.yml', import.meta.url), 'utf8');
-    const script = workflow.split(/          script: \|\r?\n/)[1].split(/\r?\n/).map((line) => line.replace(/^ {12}/, '')).join('\n');
+    const script = workflow.split(/ {10}script: \|\r?\n/)[1].split(/\r?\n/).map((line) => line.replace(/^ {12}/, '')).join('\n');
     const created: unknown[] = [];
     await runInNewContext(`(async () => {${script}\n})()`, {
       require: (name: string) => {

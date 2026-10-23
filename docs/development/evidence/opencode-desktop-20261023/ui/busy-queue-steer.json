@@ -1,0 +1,8 @@
+{
+  "url": "oc://renderer/index.html",
+  "title": "OpenCode",
+  "text": "W\ncrosschat_desktop_fixture_sender\nW\ncrosschat_desktop_fixture_receiver\ncrosschat_desktop_fixture_busy\nW\ncrosschat_desktop_fixture_idle\ncrosschat_desktop_fixture_busy\n11\ncrosschat_desktop_fixture_busy-start\nBuild · Scripted test model\n · \n11:51\n<cross-session-message from-name=\"human\" turn=\"2\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e991d1615ffe7zt8yScESmAUyP\">回复请运行: crosschat send --conversation c3 --body \"<你的回复>\"（长文/特殊字符走 stdin）</crosschat-reply-hint>\ncrosschat_desktop_fixture_steered\n</cross-session-message>\nBuild · Scripted test model\n · \n11:51\n工作中\n工作中\n移至背景\nCTRL\nB\n<cross-session-message from-name=\"human\" turn=\"1\"> <crosschat-reply-hint reply-as=\"opencode/ses_e991d1615ffe7zt8yScESmAUyP\">回复请运行: crosschat send --conversation c3 --body \"<你的回复>\"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint> crosschat_desktop_fixture_queued </cross-session-message>\n引导\n添加后续消息，输入 / 使用命令，输入 @ 添加上下文...\nScripted test model\nDefault",
+  "routes": {
+    "opencode.desktop.window.a2a886c9-23b0-44aa-967d-e70162704aea.last-active-url": "/server/c2lkZWNhcg/session/ses_e991d1615ffe7zt8yScESmAUyP"
+  }
+}

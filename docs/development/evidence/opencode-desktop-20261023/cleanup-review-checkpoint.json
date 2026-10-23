@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-23T03:50:55.2683149Z",
+  "protocolExistedBefore": false,
+  "protocolExistsInToolView": true,
+  "userExternalPowerShellReply": "Remove-Item reports path does not exist",
+  "protocolCleanupAutomaticReview": "blocked by policy",
+  "uiaDirectoryCleanupAutomaticReview": "blocked by policy; command rejected before execution",
+  "ownedProcesses": [],
+  "uiaDirectories": [
+    {
+      "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-uia-probe-20261023",
+      "exists": true
+    },
+    {
+      "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-uia-probe-20261023-r2",
+      "exists": true
+    },
+    {
+      "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-uia-probe-20261023-r3",
+      "exists": true
+    },
+    {
+      "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-uia-probe-20261023-r4",
+      "exists": true
+    }
+  ]
+}

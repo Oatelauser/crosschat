@@ -11,7 +11,7 @@
 - 收到"文件 … 已送达"但那个路径不存在：附件超过 5 天被回收——回对端"**附件已过期，请重发 --file**"。
 - `CODEX_THREAD_LOCKED` / `CODEX_THREAD_BUSY_TIMEOUT`：目标写者占用或暂不可投递。以本次结果为准：`parked` 表示已暂存并安排自动补投，无需重发或轮询；投递失败则按报错处理。`steer` 不自动变成轮后补投。
 - `CODEX_WRITE_UNCERTAIN` / `CLAUDE_PIPE_WRITE_UNCERTAIN` / `OPENCODE_WRITE_UNCERTAIN`：写入可能已被接受，先核对目标历史或日志，不直接重发。本机寄存项出现此状态会暂停补投，正文仍在 mailbox；核实后再决定如何接续。
-- `OPENCODE_NOT_CONFIGURED` / `OPENCODE_REGISTRATION_UNREADABLE` / `OPENCODE_REGISTRATION_MALFORMED`：核对已有 OpenCode V2 CLI 是否正在运行及配置目录是否一致，再刷新。crosschat 只发现已有服务，不自动启动或修复。
+- `OPENCODE_NOT_CONFIGURED` / `OPENCODE_REGISTRATION_UNREADABLE` / `OPENCODE_REGISTRATION_MALFORMED`：核对 OpenCode V2 CLI 或桌面默认本机服务是否正在运行及配置目录是否一致，再刷新。桌面会话在原生桌面打开；crosschat 只发现已有服务，不自动启动或修复。
 - `OPENCODE_AUTH_REQUIRED`：核对所选 OpenCode 服务的认证；显式 `CROSSCHAT_OPENCODE_TOKEN` 对应服务密码，不是模型 API key，默认服务认证从原生注册记录读取。
 - `OPENCODE_OWNER_MISMATCH`：注册记录与当前响应服务不一致；等 OpenCode 重启完成后刷新，不改投其他实例。
 - `OPENCODE_UNSUPPORTED_VERSION` / `OPENCODE_PROTOCOL_ERROR`：当前服务版本或接口不匹配，保留错误码与工具版本排查兼容性；不以新建会话绕过。

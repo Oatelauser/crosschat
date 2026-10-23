@@ -39,9 +39,10 @@ const nativeGuides: Readonly<Record<string, NativeSessionGuide>> = {
       ? `需要恢复时，由用户确认原窗口和会话状态后在终端执行：codex resume ${session.ref.nativeId}`
       : '请在原生 Codex 窗口中选择此会话。' },
   ] }),
-  opencode: (session) => ({ title: 'OpenCode CLI 原生操作', fields: [
-    { label: '继续聊天', value: '请回到此会话的 OpenCode CLI 原生窗口；TUI 不代替会话发言。' },
+  opencode: (session) => ({ title: 'OpenCode 原生操作', fields: [
+    { label: '继续聊天', value: '请返回此会话原来的 OpenCode 桌面或 CLI 窗口继续聊天。' },
     { label: '完整会话 ID', value: session.ref.nativeId },
+    { label: '客户端指引', value: '桌面会话请在 OpenCode 桌面打开；本批桌面接入限默认本机服务。crosschat opencode 是 CLI 启动器。' },
     { label: '恢复指引', value: '需要重新打开时，在 OpenCode 原生会话列表核对完整 ID 并选择对应会话；crosschat 不代为启动或恢复。' },
   ] }),
 };

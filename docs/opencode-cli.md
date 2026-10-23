@@ -1,6 +1,6 @@
 # OpenCode CLI 接入与从零验证
 
-本次适配 OpenCode **V2 CLI**，开发基线为 Windows x64 **2.1.3**。crosschat 通过 OpenCode 注册的本机服务连接已有会话，支持发现、精确投递、queue/steer、原生 shell 发信与回信、TUI 展示和入星。桌面发布包另行验证。
+本次适配 OpenCode **V2 CLI**，开发基线为 Windows x64 **2.1.3**。crosschat 通过 OpenCode 注册的本机服务连接已有会话，支持发现、精确投递、queue/steer、原生 shell 发信与回信、TUI 展示和入星。桌面正式包的独立验证与操作见[桌面指南](opencode-desktop.md)。
 
 ## 自行重新安装
 

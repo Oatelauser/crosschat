@@ -104,7 +104,7 @@ async function main() {
     await input('d', '原生引用');
     assert(ui.output.includes(session.id), 'read-only detail retains the complete real OpenCode id');
     await input('\x1b', ':sessions');
-    await input('g', 'OpenCode CLI 原生操作');
+    await input('g', 'OpenCode 原生操作');
     await input('\x1b', ':sessions');
     await input('y', '已复制完整值');
     await poll(async () => (await readFile(uiEvents, 'utf8')).includes(`opencode/${session.id}`), 'full native address copy');

@@ -1,0 +1,13 @@
+{
+  "owner": "crosschat-opencode-desktop-20261023",
+  "root": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-20261023-988a66bc46cd42609ca8a12db062e168",
+  "createdAt": "2026-10-23T02:33:53.883511Z",
+  "version": "2.1.3",
+  "sourceCommit": "37d973754ba6cc31732f93421c0c18b675841573",
+  "officialUrl": "https://opencode.ai/files/bin/2.1.3/opencode-desktop-win-x64.exe",
+  "expectedSize": 250321424,
+  "expectedSha256": "18ed79327878bd373a65e9ce96020439bd7618661a11d62046aeab53422f6912",
+  "installed": false,
+  "installRoot": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-20261023-988a66bc46cd42609ca8a12db062e168\\install",
+  "uninstallRegistry": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\d074f30d-5f88-5885-b075-be1348cc7676"
+}
