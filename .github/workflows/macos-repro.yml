@@ -21,6 +21,9 @@ jobs:
         run: npx vitest run --dir test test/session-star.test.ts test/revocation-pause.test.ts -t '多星：--connect|stops one launcher supervisor'
       - name: Sample the owned process group after timeout
         if: always()
+        run: npx vitest run --dir test test/local-service-owned-process.test.ts test/local-service-owned-stop.test.ts test/local-service-inspection.test.ts
+      - name: Repeat the real scanner timeout regression
+        if: always()
         shell: bash
         run: |
           failed=0

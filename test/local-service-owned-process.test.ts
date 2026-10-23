@@ -109,7 +109,7 @@ describe('owned POSIX process group completion', () => {
     }
   });
 
-  it('does not kill a reused group after an unreported helper exit and reports incomplete cleanup', async () => {
+  it('does not send another kill after an unreported helper exit and reports a still-visible group as incomplete cleanup', async () => {
     const fixture = ownedFixture();
     const outcome = fixture.run().catch((error: unknown) => error);
     fixture.exit();

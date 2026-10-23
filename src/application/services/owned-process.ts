@@ -59,19 +59,53 @@ export async function runOwnedServiceProcess(payload: object, options: OwnedServ
 }
 
 async function terminateOwnedTree(child: ChildProcess): Promise<void> {
-  if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
-  const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
-  if (process.platform === 'win32') {
-    const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
-    await new Promise<void>((resolve, reject) => {
-      execFile(taskkill, ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, (error) => {
-        if (error === null || child.exitCode !== null || child.signalCode !== null) resolve();
-        else reject(new OwnedServiceProcessError('cleanup'));
-      });
-    });
-  } else {
-    try { process.kill(-child.pid, 'SIGKILL'); }
-    catch { if (child.exitCode === null && child.signalCode === null) throw new OwnedServiceProcessError('cleanup'); }
+  if (child.pid === undefined) return;
+  if (process.platform !== 'win32') {
+    await terminateOwnedPosixGroup(child, child.pid);
+    return;
   }
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+  const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
+  await new Promise<void>((resolve, reject) => {
+    execFile(taskkill, ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, (error) => {
+      if (error === null || child.exitCode !== null || child.signalCode !== null) resolve();
+      else reject(new OwnedServiceProcessError('cleanup'));
+    });
+  });
   await exited;
+}
+
+function groupExists(groupId: number): boolean {
+  try { process.kill(-groupId, 0); return true; }
+  catch (error) {
+    if (error !== null && typeof error === 'object' && 'code' in error && error.code === 'ESRCH') return false;
+    throw new OwnedServiceProcessError('cleanup');
+  }
+}
+
+async function terminateOwnedPosixGroup(child: ChildProcess, groupId: number): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    // An exited owner no longer proves that this PGID is still ours. Never send
+    // another kill to it, but do not report a surviving group as released.
+    if (groupExists(groupId)) throw new OwnedServiceProcessError('cleanup');
+    return;
+  }
+  const deadline = Date.now() + 1000;
+  let ownerExited = false;
+  const onExit = () => { ownerExited = true; };
+  child.once('exit', onExit);
+  try {
+    try { process.kill(-groupId, 'SIGKILL'); }
+    catch (error) {
+      if (error === null || typeof error !== 'object' || !('code' in error) || error.code !== 'ESRCH') throw new OwnedServiceProcessError('cleanup');
+    }
+    // The owner exit event can precede the OS reaping its scanner descendants.
+    // Keep the whole cleanup bounded, including a missing owner exit event.
+    while (!ownerExited || groupExists(groupId)) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new OwnedServiceProcessError('cleanup');
+      await new Promise<void>((resolve) => setTimeout(resolve, Math.min(10, remaining)));
+    }
+  } finally { child.off('exit', onExit); }
 }
