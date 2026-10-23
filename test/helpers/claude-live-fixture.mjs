@@ -12,6 +12,37 @@ import { createClaudeMockModel } from './claude-mock-model.mjs';
 export const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const bounded = (value) => value.slice(-128000);
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/** A live owned process, correlated native init and its actual local request establish startup. */
+export function assessClaudeStartupEvidence(evidence) {
+  const id = evidence?.sessionId;
+  const initialized = typeof id === 'string' && id.length > 0 && Array.isArray(evidence.events)
+    && evidence.events.some((event) => event?.type === 'system' && event.subtype === 'init' && event.session_id === id);
+  const requested = initialized && Array.isArray(evidence.requests) && evidence.requests.some((request) => Array.isArray(request?.messages)
+    && request.messages.some((message) => message?.role === 'user' && (typeof message.content === 'string'
+      ? message.content.includes(`CC_CI_BOOTSTRAP ${id}`)
+      : Array.isArray(message.content) && message.content.some((block) => block?.type === 'text' && typeof block.text === 'string' && block.text.includes(`CC_CI_BOOTSTRAP ${id}`)))));
+  return evidence?.processAlive === true && initialized && requested && Array.isArray(evidence.modelErrors) && evidence.modelErrors.length === 0
+    ? { category: 'compatibility', stage: 'contract' } : { category: 'infrastructure', stage: 'setup' };
+}
+
+/** Identity comparisons matter only after a successful tool, parsed object and expected model ACK. */
+export function assessClaudeIdentityEvidence(evidence, expected) {
+  const invalid = { ready: false, category: 'infrastructure', stage: 'model-fixture' };
+  if (!record(expected) || typeof expected.session !== 'string' || !record(evidence?.toolResult) || evidence.toolResult.type !== 'tool_result'
+    || evidence.toolResult.is_error === true || evidence.toolResult.tool_use_id !== `cc_bootstrap_${expected.session.replaceAll('-', '')}`
+    || !record(evidence.identity) || !record(evidence.turnResult) || evidence.turnResult.type !== 'result' || evidence.turnResult.subtype !== 'success'
+    || evidence.turnResult.is_error !== false || typeof evidence.ack !== 'string' || !evidence.ack || typeof evidence.turnResult.result !== 'string'
+    || !evidence.turnResult.result.includes(evidence.ack) || !Array.isArray(evidence.modelErrors) || evidence.modelErrors.length !== 0) return invalid;
+  const samePath = (left, right) => {
+    const canonical = (value) => resolve(value.startsWith('\\\\?\\') ? value.slice(4) : value).toLowerCase();
+    return typeof left === 'string' && typeof right === 'string' && canonical(left) === canonical(right);
+  };
+  const identity = evidence.identity;
+  return identity.session === expected.session && identity.socket === expected.socket && samePath(identity.home, expected.home) && samePath(identity.cwd, expected.cwd)
+    ? { ready: true } : { ready: false, category: 'compatibility', stage: 'contract' };
+}
 
 export async function pollClaude(read, description, timeout = 30000) {
   const deadline = Date.now() + timeout;
@@ -133,7 +164,13 @@ export async function createClaudeFixture(options, respond) {
       };
       sessions.push(session);
       session.prompt(`CC_CI_BOOTSTRAP ${id}`);
-      session.entry = await pollClaude(() => { if (spawnError) throw spawnError; if (exit) throw new Error(`Owned Claude startup failed: ${logs.stderr}`); return fixture.scan().sessions.find((item) => item.sessionId === id); }, 'owned native registration', 30000);
+      try {
+        session.entry = await pollClaude(() => { if (spawnError) throw spawnError; if (exit) throw new Error(`Owned Claude startup failed: ${logs.stderr}`); return fixture.scan().sessions.find((item) => item.sessionId === id); }, 'owned native registration', 30000);
+      } catch (error) {
+        const classification = assessClaudeStartupEvidence({ processAlive: !exit && !spawnError && alive(child.pid), sessionId: id, events,
+          requests: model.requests, modelErrors: model.errors });
+        throw Object.assign(error, classification);
+      }
       return session;
     },
     async barrier(label) {

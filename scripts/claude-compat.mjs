@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import process from 'node:process';
 import { decodeRef, encodeRef, newConversationRef } from '../dist/ref.js';
 import { keyFileName } from '../dist/claude/key-file.js';
-import { claudeBashCommand, createClaudeFixture, pollClaude } from '../test/helpers/claude-live-fixture.mjs';
+import { assessClaudeIdentityEvidence, claudeBashCommand, createClaudeFixture, pollClaude } from '../test/helpers/claude-live-fixture.mjs';
 import { claudeCompatibilityScope, claudeRequiredChecks } from './claude-compat-ci.mjs';
 
 if (process.env.CROSSCHAT_LIVE !== '1') throw new Error('CROSSCHAT_LIVE=1 is required for the isolated official Claude Code probe');
@@ -236,6 +236,13 @@ try {
     sender = await fixture.start(`${marker}_sender`); receiver = await fixture.start(`${marker}_receiver`);
     await Promise.all([sender.waitResults(1), receiver.waitResults(1)]);
     for (const session of [sender, receiver]) {
+      nativeToolObject(stateFor(session.id).identityResult);
+      successfulResult(session.results()[0]);
+      assert.ok(session.results()[0].result.includes(`CC_CI_BOOTSTRAP_ACK ${session.id}`));
+    }
+    assert.equal(fixture.model.errors.length, 0);
+    report.stage = 'contract'; report.category = 'compatibility';
+    for (const session of [sender, receiver]) {
       const originalPid = session.entry.pid; let observed;
       try {
         session.entry = await pollClaude(() => {
@@ -261,12 +268,18 @@ try {
   await check(claudeRequiredChecks[1], async () => {
     await Promise.all([sender.waitResults(1), receiver.waitResults(1)]);
     for (const session of [sender, receiver]) {
+      report.stage = 'model-fixture'; report.category = 'infrastructure';
       const state = stateFor(session.id); let identity;
       try { identity = nativeToolObject(state.identityResult); }
       catch (error) {
         const output = state.identityResult ? contentText(state.identityResult.content) : '';
         report.identityOutputDiagnostic = { sessionId: session.id, prefix: redact(output.slice(0, 200)), suffix: redact(output.slice(-200)) }; throw error;
       }
+      const assessment = assessClaudeIdentityEvidence({ toolResult: state.identityResult, identity, turnResult: session.results()[0],
+        ack: `CC_CI_BOOTSTRAP_ACK ${session.id}`, modelErrors: fixture.model.errors },
+      { session: session.id, socket: session.entry.messagingSocketPath, home: fixture.env.USERPROFILE, cwd: fixture.workspace });
+      if (assessment.category === 'infrastructure') throw new Error('The real Bash tool and model bootstrap acknowledgement did not establish a valid identity test');
+      report.stage = 'contract'; report.category = 'compatibility';
       assert.equal(identity.session, session.id); assert.equal(identity.socket, session.entry.messagingSocketPath); assert.ok(samePath(identity.home, fixture.env.USERPROFILE));
       assert.ok(samePath(identity.cwd, fixture.workspace), 'The actual native Bash cwd must remain inside the owned workspace');
       successfulResult(session.results()[0]); assert.ok(session.results()[0].result.includes(`CC_CI_BOOTSTRAP_ACK ${session.id}`)); await idle(session);
@@ -326,6 +339,9 @@ try {
   });
   assert.equal(fixture.model.errors.length, 0); report.status = 'passed'; report.stage = 'done'; report.category = null; delete report.check;
 } catch (error) {
+  if (['infrastructure', 'compatibility'].includes(error?.category) && ['setup', 'model-fixture', 'contract'].includes(error?.stage)) {
+    report.category = error.category; report.stage = error.stage;
+  }
   report.error = redact(error instanceof Error ? error.message : String(error));
   if (error?.cleanup) report.cleanup = error.cleanup;
   if (error?.fixtureRoot && error.cleanup?.removed !== true) report.retainedFixtureRoot = error.fixtureRoot;
