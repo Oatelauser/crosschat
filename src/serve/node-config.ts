@@ -89,11 +89,10 @@ export function parseNodeConfig(raw: string, configFile = 'node.json'): NodeConf
     // E0 读层兼容：旧顶层 name 映射为 showName（新 showName 优先）
     const showName =
       typeof parsed.showName === 'string' ? parsed.showName : typeof parsed.name === 'string' ? parsed.name : undefined;
-    // 新形状 {brokers: [...], showName}：条目数组原样收进 entries（空数组=坏形状；
+    // 新形状 {brokers: [...], showName}：空数组明确表示尚未配置连接；
     // 顶层多余 starId 忽略——星标识只认条目/starId 槽）
     if (Array.isArray(parsed.brokers)) {
       const entries = parsed.brokers.map(parseBrokerEntry);
-      if (entries.length === 0) throw new Error('bad shape');
       return { ...(showName === undefined ? {} : { showName }), entries };
     }
     // 旧形状 {broker: {...}, key, name} → 单元素（行为与 B0 前逐字节等价）

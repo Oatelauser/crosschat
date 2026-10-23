@@ -22,7 +22,7 @@ describe('empty current-shape TCP configuration', () => {
   it('gives a deliberate unconfigured error rather than selecting an undefined default entry', () => {
     expect(() => selectConnectEntry('', { entries: [] })).toThrow(/未配置|未入|没有.*配置|没有.*连接/);
     expect(() => selectConnectEntry('missing', { entries: [] })).toThrow(/未配置|未入|没有.*配置|没有.*连接/);
-    expect(() => selectBrokerEntry([], undefined, undefined)).toThrow();
+    expect(() => selectBrokerEntry([], undefined, undefined)).toThrow(/未配置|未入|没有.*配置|没有.*连接/);
   });
 
   it('treats an empty retained node file as unconfigured data without querying another connection', async () => {

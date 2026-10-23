@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NodeNameChanges } from '../src/serve/node-naming.js';
 import { VirtualSocket } from '../src/serve/virtual-socket.js';
 import type { NodeNameResultFrame, NodeNameSetFrame } from '../src/serve/protocol.js';
+import { parseFrame } from '../src/serve/protocol.js';
 
 afterEach(() => vi.useRealTimers());
 function fixture(timeoutMs = 50) {
@@ -15,6 +16,16 @@ function fixture(timeoutMs = 50) {
   return { socket, peer, requests, owner, target, apply, reply };
 }
 describe('online peer naming request ownership', () => {
+  it('validates full targets, bounded names and explicit persistence evidence at the new frame boundary', () => {
+    const f = fixture();
+    const request = { op: 'node-name-set', id: 'fixture', starId: f.target.starId, machineId: f.target.machineId, name: 'new-name' };
+    expect(parseFrame(JSON.stringify(request))).toEqual(request);
+    for (const invalid of [{ ...request, machineId: 'abcd1234' }, { ...request, name: 'x'.repeat(33) }, { ...request, name: '\u001b[31m' }, { ...request, starId: '' }]) expect(parseFrame(JSON.stringify(invalid))).toBeUndefined();
+    const result = { op: 'node-name-result', id: 'fixture', starId: f.target.starId, machineId: f.target.machineId, ok: true, saved: true, applied: true, showName: 'new-name', name: 'new-name' };
+    expect(parseFrame(JSON.stringify(result))).toEqual(result);
+    expect(parseFrame(JSON.stringify({ ...result, saved: 'yes' }))).toBeUndefined();
+    expect(parseFrame(JSON.stringify({ ...result, name: '\u001b[31m' }))).toBeUndefined();
+  });
   it('accepts only the exact socket, full star and full machine receipt and applies it once', async () => {
     const f = fixture(); const pending = f.owner.request(f.target, 'new-name', f.apply);
     const [other] = VirtualSocket.pair();

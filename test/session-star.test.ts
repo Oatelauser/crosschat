@@ -244,7 +244,7 @@ async function startStarStar(
   sh.aggregator = (): Promise<NodeClient> =>
     new Promise<NodeClient>((resolve, reject) => {
       const client = new NodeClient({
-        config: { entries: [entry] },
+        config: { entries: [entry], showName: opts.machineName ?? 'node-host' },
         configFile: join(baseDir, 'tcp', 'node.json'),
         machineId: () => mid,
         statusFile: join(baseDir, 'tcp', `status-node-${label}.json`),
