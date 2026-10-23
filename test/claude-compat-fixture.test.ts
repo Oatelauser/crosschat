@@ -165,3 +165,31 @@ describe('Claude compatibility runtime profile isolation', () => {
     expect(await readdir(root)).toEqual([]);
   });
 });
+
+describe('Claude compatibility workflow trust boundary', () => {
+  it('keeps real upstream execution on a read-only Windows job and issue reporting on a separate trusted job', async () => {
+    const workflow = await readFile(new URL('../.github/workflows/claude-compat.yml', import.meta.url), 'utf8');
+    const probe = workflow.split('\n  probe:')[1]?.split('\n  report:')[0];
+    const report = workflow.split('\n  report:')[1];
+    expect(probe).toBeTruthy(); expect(report).toBeTruthy();
+    expect(workflow).toMatch(/^ {2}schedule:/m); expect(workflow).toMatch(/^ {2}workflow_dispatch:/m);
+    expect(workflow).not.toMatch(/pull_request|workflow_run|\bsecrets\./);
+    expect(probe).toMatch(/runs-on: windows-latest/);
+    expect(probe).toMatch(/permissions:\n {6}contents: read/);
+    expect(probe).not.toMatch(/issues: write|contents: write|matrix:|GITHUB_TOKEN|GH_TOKEN/);
+    expect(probe).toContain('node scripts/claude-compat-ci.mjs');
+    expect(probe).toMatch(/persist-credentials: false/);
+    expect(report).toMatch(/needs: probe/);
+    expect(report).toContain('github.event.repository.default_branch');
+    expect(report).toMatch(/issues: write/);
+    expect(report).not.toMatch(/node scripts\/claude-compat-ci\.mjs|npm ci|npm run/);
+    expect(report).toContain('ref: ${{ github.sha }}');
+    expect(report).toMatch(/persist-credentials: false/);
+    expect(report).toMatch(/path: trusted/);
+    expect(report).toMatch(/path: evidence/);
+    expect(report).toContain('claudeRegressionIdentity');
+    expect(report).toMatch(/trusted\/scripts\/claude-compat-ci\.mjs/);
+    expect(report).toMatch(/if \(!identity\)/);
+    expect(report).toContain('github.rest.issues.create');
+  });
+});
