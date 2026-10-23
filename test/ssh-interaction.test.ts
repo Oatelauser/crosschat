@@ -48,6 +48,15 @@ describe('SSH authentication challenges and active-context secret ownership', ()
     expect(await interaction.answer({ ...request, prompt: "root@fixture's password:" })).toBeNull();
   });
 
+  it('recognizes the native OpenSSH bare private-key passphrase prompt', async () => {
+    const onChallenge = vi.fn(async () => 'private-key-unlock');
+    const interaction = createSshInteraction({ onChallenge });
+    interaction.setActiveContext('ssh:fixture');
+    expect(await interaction.answer({ contextId: 'ssh:fixture', host: 'fixture', revision: 'one', prompt: 'Enter passphrase: ' })).toBe('private-key-unlock');
+    expect(onChallenge.mock.calls[0][0]).toMatchObject({ kind: 'passphrase' });
+    interaction.dispose();
+  });
+
   it('cancels pending interaction on a real context change and discards its late secret', async () => {
     let finish: (answer: string) => void = () => {};
     let challengeSignal: AbortSignal | undefined;
