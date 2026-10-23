@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "tool": "dsh-web-runtime",
+  "platform": "win32",
+  "arch": "x64",
+  "runId": "5a50bdb8-88fc-4f6f-9ae0-eda3ae5b3d81",
+  "version": "0.2.1-rc.2",
+  "startedAt": "2026-10-23T05:01:27.494Z",
+  "status": "failed",
+  "category": "infrastructure",
+  "stage": "setup",
+  "check": "official-bundle-installation",
+  "checks": [],
+  "scope": {
+    "officialNpmRuntime": true,
+    "officialPluginManager": true,
+    "ordinaryWebSessions": true,
+    "scriptedLocalModel": true,
+    "browserUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "error": "Timed out waiting for official Web runtime and fixture controller",
+  "cleanup": {
+    "runtimeStopped": false,
+    "registrationRemoved": false,
+    "removed": false,
+    "forced": true
+  },
+  "logs": {
+    "stdout": "dsh web: http://127.0.0.1:53781/?token=[redacted]\n",
+    "stderr": "dsh: warning: 1 entry did not activate\ncrosschat-dsh-test-driver (file:///D:/workspace/CC/multichat/node_modules/.cache/crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291/run-ZiQGxk/driver.mjs): failed to import: Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@deepseek-ai/dsh-app-boot' imported from D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291\\run-ZiQGxk\\driver.mjs\n    at Object.getPackageJSONURL (node:internal/modules/package_json_reader:316:9)\n    at packageResolve (node:internal/modules/esm/resolve:768:81)\n    at moduleResolve (node:internal/modules/esm/resolve:858:18)\n    at defaultResolve (node:internal/modules/esm/resolve:990:11)\n    at #cachedDefaultResolve (node:internal/modules/esm/loader:757:20)\n    at ModuleLoader.resolve (node:internal/modules/esm/loader:734:38)\n    at file:///D:/workspace/CC/multichat/node_modules/.cache/crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291/runtime/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js:1942:77\n    at adapted (file:///D:/workspace/CC/multichat/node_modules/.cache/crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291/runtime/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js:1855:80)\n    at file:///D:/workspace/CC/multichat/node_modules/.cache/crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291/runtime/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js:1914:19\n    at ModuleLoader.wrapped [as resolve] (file:///D:/workspace/CC/multichat/node_modules/.cache/crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291/runtime/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js:1944:71)\n"
+  },
+  "retainedFixtureRoot": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291\\run-ZiQGxk",
+  "finishedAt": "2026-10-23T05:02:28.326Z"
+}
