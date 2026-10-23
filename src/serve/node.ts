@@ -40,8 +40,9 @@ import type { CodexThreadWithMeta } from '../codex/discovery.js';
 import { createLegacyMemberProviders, readMemberSnapshot } from '../application/members/index.js';
 import type { MemberProvider, MemberProviderFactory } from '../application/members/index.js';
 import { FileInbox } from './file-channel.js';
-import { sanitizeName } from './registry.js';
+import { sanitizeName, setConnectedNodeShowNameFor } from './registry.js';
 import { PIPE_PREFIX } from '../platform/pipe-transport.js';
+import { normalizeMid } from '../platform/machine-id.js';
 import type { StatusPayload, StatusQueryFrame } from './protocol.js';
 
 import { syncNodeJsonEntry } from './node-config.js';
@@ -343,6 +344,7 @@ export class NodeClient {
 
   /** 阻塞跑直到 stop（serve --connect 前台姿态）。 */
   async run(): Promise<void> {
+    if (this.d.config.entries.length === 0) throw new MultichatError('USAGE', '本机尚未配置 TCP 连接，不能启动节点守护。');
     if (readNodeRevocation(this.d.configFile, this.d.config.entries[0]!) !== undefined) {
       this.setState('revoked');
       this.log('节点凭证已撤销，自动重连已暂停；换钥后显式重新连接');
@@ -481,7 +483,7 @@ export class NodeClient {
         machineId: connectedMachine,
         auth: cfg.key,
         // 036：自报名取条目级覆盖 ?? 顶层全局（修订 017 单一事实源为双态）
-        ...((cfg.showName ?? this.d.config.showName) === undefined ? {} : { name: cfg.showName ?? this.d.config.showName }),
+        name: cfg.showName ?? this.d.config.showName ?? '',
         // 032 非兼容升级：multi-star 能力声明是新版腿的通行证（无它即旧版被拒）
         caps: [CAP_SESSION_MEMBERS, CAP_MULTI_STAR],
       }));
@@ -555,6 +557,22 @@ export class NodeClient {
     if (this.stopped || this.ws !== socket) return;
     const frame = parseFrame(text);
     if (frame === undefined) return;
+    if (frame.op === 'node-name-set') {
+      const identity = this.attachIdentity;
+      const entry = this.d.config.entries[0];
+      if (this.state !== 'online' || !identity || identity.socket !== socket || identity.starId !== frame.starId || normalizeMid(identity.machine) !== frame.machineId || !entry || entry.starId !== frame.starId || this.authenticatingSocket !== socket) return;
+      let applied: { showName: string; name?: string };
+      try { applied = setConnectedNodeShowNameFor(this.d.configFile, { ...entry, starId: frame.starId }, frame.name); }
+      catch {
+        try { socket.send(encodeFrame({ op: 'node-name-result', id: frame.id, starId: frame.starId, machineId: frame.machineId, ok: false, saved: false, applied: false, error: '无法核实并保存当前星节点名称。' })); } catch { /* No write occurred and the broker owns the missing-receipt outcome. */ }
+        return;
+      }
+      if (applied.showName === '') { delete entry.showName; this.d.config.showName = applied.name; }
+      else entry.showName = applied.showName;
+      try { socket.send(encodeFrame({ op: 'node-name-result', id: frame.id, starId: frame.starId, machineId: frame.machineId, ok: true, saved: true, applied: true, ...applied })); }
+      catch { /* Persisted and applied: a lost reply must remain uncertain, never a false rejection. */ }
+      return;
+    }
     if (frame.op === 'credential-revoked') {
       const entry = this.d.config.entries[0]!;
       if (frame.kind !== 'node' || this.authenticatingSocket !== socket

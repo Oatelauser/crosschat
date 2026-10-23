@@ -248,6 +248,7 @@ export class SenderConn {
  * d. 裸且多条 → 教学报错：列出 星名(starId前缀)，示例 `--via tcp:<星名>:<目标>`。
  */
 export function selectBrokerEntry(entries: BrokerEntry[], selector: string | undefined, conversation: string | undefined): BrokerEntry {
+  if (entries.length === 0) throw new MultichatError('USAGE', '本机尚未配置 TCP 连接——先添加已有星的连接配置。');
   const listEntries = (): string => entries.map(formatBrokerEntry).join('、');
   if (selector !== undefined) {
     const byName = entries.find((e) => e.name === selector);
@@ -622,7 +623,7 @@ export async function requestMemberRemoveExact(
 export async function requestAdminOp(
   conn: SenderConn,
   action: string,
-  params: { n?: number; host?: string; label?: string; expected?: import('./registry.js').CredentialRemovalExpected } = {},
+  params: { n?: number; host?: string; label?: string; machineId?: string; name?: string; expected?: import('./registry.js').CredentialRemovalExpected | import('./registry.js').MachineRemovalExpected } = {},
   timeoutMs = 10_000,
 ): Promise<AdminOpResultFrame> {
   const id = randomUUID();

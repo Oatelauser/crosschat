@@ -42,7 +42,7 @@ describe('standalone node configuration', () => {
     expect(() => parseNodeConfig('{broken', 'injected-node.json')).toThrowError(
       `node.json 损坏（injected-node.json）——向管理员重新索取覆盖；${NOT_JOINED_MESSAGE}`,
     );
-    expect(() => parseNodeConfig('{"brokers":[]}')).toThrowError(
+    expect(() => parseNodeConfig('{"brokers":[null]}')).toThrowError(
       `node.json 损坏（node.json）——向管理员重新索取覆盖；${NOT_JOINED_MESSAGE}`,
     );
   });
@@ -69,7 +69,7 @@ describe('standalone node configuration', () => {
     const { root, file } = configFile();
     expect(() => readNodeConfig(file)).toThrowError(NOT_JOINED_MESSAGE);
     expect(existsSync(file)).toBe(false);
-    for (const raw of ['{broken', 'null', '{"brokers":[]}', '{"brokers":[{"host":"h","port":1.5,"key":"k"}]}']) {
+    for (const raw of ['{broken', 'null', '{"brokers":[null]}', '{"brokers":[{"host":"h","port":1.5,"key":"k"}]}']) {
       writeFileSync(file, raw);
       expect(() => readNodeConfig(file)).toThrowError(`node.json 损坏（${file}）——向管理员重新索取覆盖；${NOT_JOINED_MESSAGE}`);
       expect(readFileSync(file, 'utf8')).toBe(raw);

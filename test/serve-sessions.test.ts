@@ -479,7 +479,7 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
     const entry: BrokerEntry = { host: '127.0.0.1', port: Number(new URL(harness.url).port), name: 'broker-alias', key: key('n') };
     const capture = fakeDeps(depsOpts);
     const client = new NodeClient({
-      config: { entries: [entry] },
+      config: { entries: [entry], showName: 'node-host' },
       configFile: join(dir, 'node.json'),
       machineId: () => 'NODE-MID',
       statusFile: join(dir, 'status-node.json'),

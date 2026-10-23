@@ -9,6 +9,7 @@ import { createLocalOverview } from '../application/observations/overview.js';
 import { createLocalServices } from '../application/services/managed.js';
 import { createLocalMaintenance } from '../application/maintenance/index.js';
 import { createSshApplication } from '../application/ssh/index.js';
+import type { SshChallengeHandler } from '../application/ssh/index.js';
 import { createTcpApplication } from '../application/tcp/index.js';
 import { createTcpManagement } from '../application/tcp/management.js';
 import { createTcpConfiguration } from '../application/tcp/configuration.js';
@@ -25,7 +26,7 @@ import { createFilesResource } from './resources/files.js';
 import { createMaintenanceResource } from './resources/maintenance.js';
 import { createSshResource, createSshDoctorResource, createSshSessionsResource } from './resources/ssh.js';
 import { createTcpResources } from './resources/tcp.js';
-import { createConnectionsResource } from './resources/connections.js';
+import { createConnectionsResource, createTcpTargetsResource } from './resources/connections.js';
 
 function childEnvironment(home: string, isolated: boolean): NodeJS.ProcessEnv {
   const env = { ...process.env };
@@ -60,20 +61,21 @@ function byContext(adapters: Readonly<Record<string, TuiResourceAdapter>>): TuiR
 }
 
 /** Only constructs adapters. Each application module owns its later IO and effects. */
-export function createDefaultResources(options: { home: string; isolatedHome: boolean }): { resources: readonly TuiResource[]; adapters: Readonly<Record<string, TuiResourceAdapter>>; shouldSavePreferences(): boolean } {
+export function createDefaultResources(options: { home: string; isolatedHome: boolean; onChallenge?: SshChallengeHandler }): { resources: readonly TuiResource[]; adapters: Readonly<Record<string, TuiResourceAdapter>>; shouldSavePreferences(): boolean; setActiveContext(id: string | null): void; dispose(): Promise<void> } {
   const { home, isolatedHome } = options;
   const baseDir = join(home, '.crosschat');
   const env = childEnvironment(home, isolatedHome);
   const discovery = createLocalDiscoveryService(isolatedHome ? { home } : {});
   const membership = createSessionMembershipService({ baseDir, discovery });
   const overview = createLocalOverview({ home, discovery, nativeEnvironment: isolatedHome ? 'isolated' : 'inherit' });
-  const ssh = createSshApplication({ home, ...(isolatedHome ? { configFile: join(home, '.ssh', 'config'), env } : {}) });
+  const ssh = createSshApplication({ home, onChallenge: options.onChallenge, ...(isolatedHome ? { configFile: join(home, '.ssh', 'config'), env } : {}) });
   const sessions = createSessionsResource({ discovery, membership, relatedResources: ['deliveries', 'logs'] });
   const doctor = createDoctorResource({ overview });
   const remoteSessions = createSshSessionsResource({ ssh });
   const remoteDoctor = createSshDoctorResource({ ssh });
   const tcp = createTcpApplication({ baseDir });
-  const tcpResources = createTcpResources({ tcp, management: createTcpManagement({ baseDir, catalog: tcp, membership, discovery }) });
+  const services = createLocalServices({ baseDir, env, entryPath: fileURLToPath(new URL('../cli.js', import.meta.url)) });
+  const tcpResources = createTcpResources({ tcp, management: createTcpManagement({ baseDir, catalog: tcp, membership, discovery }), services });
   const ordinarySessions = byContext({ local: sessions.adapter, ssh: remoteSessions.adapter, tcp: tcpResources.sessions.adapter });
   const sessionAdapter = (request: TuiReadRequest | TuiActionRequest) => request.context?.kind === 'local' && request.route?.query?.starId !== undefined ? tcpResources.sessions.adapter : ordinarySessions;
   const allSessions: TuiResourceAdapter = {
@@ -93,7 +95,7 @@ export function createDefaultResources(options: { home: string; isolatedHome: bo
     { resource: doctor.resource, adapter: byContext({ local: doctor.adapter, ssh: remoteDoctor.adapter }) },
     createStatusResource({ overview }), communications.deliveries, communications.outbox,
     createLogsResource({ read: (request) => queryManagedLog({ ...request, baseDir }) }),
-    createServicesResource({ service: createLocalServices({ baseDir, env, entryPath: fileURLToPath(new URL('../cli.js', import.meta.url)) }) }),
+    createServicesResource({ service: services }),
     createFilesResource({ read: ({ signal }) => queryManagedFiles({ baseDir, signal }) }),
     createMaintenanceResource({ maintenance: { ...maintenance, async execute(request) {
       if (request.operationId !== 'uninstall-data' || request.signal?.aborted) return maintenance.execute(request);
@@ -109,8 +111,10 @@ export function createDefaultResources(options: { home: string; isolatedHome: bo
     createSshResource({ ssh }),
     tcpResources.stars, tcpResources.machines, tcpResources.members, tcpResources.keys,
     createConnectionsResource({ configuration: createTcpConfiguration({ baseDir }) }),
+    createTcpTargetsResource({ configuration: createTcpConfiguration({ baseDir }) }),
   ];
   const resources = new Map(installed.map((item) => [item.resource.id, item.resource]));
   resources.set(contextsResource.id, contextsResource);
-  return { resources: defaultResources.map((resource) => resources.get(resource.id) ?? resource), adapters: Object.fromEntries(installed.map((item) => [item.resource.id, item.adapter])), shouldSavePreferences: () => savePreferences };
+  return { resources: defaultResources.map((resource) => resources.get(resource.id) ?? resource), adapters: Object.fromEntries(installed.map((item) => [item.resource.id, item.adapter])), shouldSavePreferences: () => savePreferences,
+    setActiveContext: (id) => ssh.setActiveContext(id?.startsWith('ssh:') ? id : null), dispose: () => ssh.dispose() };
 }

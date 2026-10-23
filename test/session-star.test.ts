@@ -251,7 +251,7 @@ async function startStarStar(
   sh.aggregator = (): Promise<NodeClient> =>
     new Promise<NodeClient>((resolve, reject) => {
       const client = new NodeClient({
-        config: { entries: [entry] },
+        config: { entries: [entry], showName: opts.machineName ?? 'node-host' },
         configFile: join(baseDir, 'tcp', 'node.json'),
         machineId: () => mid,
         statusFile: join(baseDir, 'tcp', `status-node-${label}.json`),
@@ -1115,6 +1115,23 @@ describe('028 双模式与命令面', () => {
 // ---- 020 工具限定词：启动器声明与 spawn 前预警 ----------------------------------------------
 
 describe('020 工具限定词：启动器声明与 spawn 前预警', () => {
+  it('uses the selected star node-name override in launcher banners and adoption receipts', async () => {
+    const sh = await startStarStar('sl-name');
+    writeFileSync(join(sh.baseDir, 'tcp', 'node.json'), JSON.stringify({ brokers: [{ ...sh.entry, showName: 'star-specific-node' }], showName: 'global-node' }));
+    const output: string[] = [];
+    const deps = starJoinDeps(sh, { machineName: 'global-node', stdout: (line) => output.push(line) });
+    const joiner = new StarJoiner({ deps, side: 'claude', connects: ['sl-name'], spawnName: 'new-session' });
+    try {
+      await joiner.begin();
+      expect(output[0]).toContain('tcp:sl-name:star-specific-node:new-session');
+    } finally { await joiner.stop(); }
+    await sh.aggregator();
+    sh.state.claude = [{ sessionId: 'adopt-star-name', name: 'existing-session' }];
+    output.length = 0;
+    expect(await runAdopt({ connect: 'sl-name', adopt: 'existing-session' }, deps)).toBe(0);
+    expect(output).toContain('三段寻址：tcp:sl-name:star-specific-node:existing-session');
+  }, 15_000);
+
   it(
     'attach 带 tool；星内已有异工具同名成员→spawn 前打预警行；限定地址直达、裸名报碰撞列两地址',
     async () => {

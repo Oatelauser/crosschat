@@ -217,6 +217,7 @@ export async function warnIfBrokerLacksSessionCaps(entry: BrokerEntry, warn: (li
 interface StarTarget {
   entry: BrokerEntry;
   selector: string;
+  machineName: string;
 }
 
 /**
@@ -308,7 +309,8 @@ export class StarJoiner {
     }
     for (const selector of connects) {
       try {
-        this.targets.push({ ...selectConnectEntry(selector, config), selector });
+        const selected = selectConnectEntry(selector, config);
+        this.targets.push({ ...selected, selector, machineName: selected.entry.showName ?? config.showName ?? deps.machineName });
       } catch (err) {
         deps.stderr(err instanceof Error ? err.message : String(err));
       }
@@ -319,7 +321,7 @@ export class StarJoiner {
       deps.stdout(
         spawnName === undefined
           ? `入星 ${starName}（attach 自动，异常见日志）`
-          : `入星 ${starName}——会话地址 tcp:${starName}:${deps.machineName}:${spawnName}（attach 自动，异常见日志）`,
+          : `入星 ${starName}——会话地址 tcp:${starName}:${target.machineName}:${spawnName}（attach 自动，异常见日志）`,
       );
     }
   }
@@ -447,7 +449,7 @@ export class StarJoiner {
           return;
         }
         const starName = target.entry.name ?? target.selector;
-        deps.log(`已入星 ${starName}：会话可经 tcp:${starName}:${deps.machineName}:${attachName ?? sessionId.slice(0, 8)} 直达`);
+        deps.log(`已入星 ${starName}：会话可经 tcp:${starName}:${target.machineName}:${attachName ?? sessionId.slice(0, 8)} 直达`);
         // 聚合器重启/管道断——重连原样重声明；stop 时经信号即时唤醒（023：stop 落重连窗口不挂起）
         await Promise.race([pipe.waitClose(), this.stoppedSignal]);
         if (!this.stopped) assertNodeNotRevoked(join(tcpDir(deps.tcpBaseDir), 'node.json'), target.entry);
@@ -483,6 +485,7 @@ export interface AdoptArgs {
 export async function runAdopt(args: AdoptArgs, deps: StarJoinDeps): Promise<number> {
   const config = readNodeConfig(join(tcpDir(deps.tcpBaseDir), 'node.json'));
   const { entry, selector } = selectConnectEntry(args.connect, config);
+  const machineName = entry.showName ?? config.showName ?? deps.machineName;
   const sessions = deps.listClaudeSessions().sessions;
   const threads = await deps.listCodexThreads();
   let hit: { sessionId: string; name?: string; side: 'claude' | 'codex' };
@@ -541,11 +544,11 @@ export async function runAdopt(args: AdoptArgs, deps: StarJoinDeps): Promise<num
     if (alreadyMember) {
       // 已是成员 + --extend-session = 改名/换轨后的接任声明（补血统，不新建）
       deps.stdout(`会话 ${hit.name ?? hit.sessionId.slice(0, 8)} 已是星 ${starName} 成员——已补 extends ${args.extendSession} 血统`);
-      if (hit.name !== undefined) deps.stdout(`三段寻址：tcp:${starName}:${deps.machineName}:${hit.name}`);
+      if (hit.name !== undefined) deps.stdout(`三段寻址：tcp:${starName}:${machineName}:${hit.name}`);
       return 0;
     }
     deps.stdout(`已收编 ${hit.name ?? hit.sessionId.slice(0, 8)}（${hit.side}，id ${hit.sessionId.slice(0, 8)}）入星 ${starName}`);
-    if (hit.name !== undefined) deps.stdout(`三段寻址：tcp:${starName}:${deps.machineName}:${hit.name}`);
+    if (hit.name !== undefined) deps.stdout(`三段寻址：tcp:${starName}:${machineName}:${hit.name}`);
     return 0;
   } finally {
     pipe.close();

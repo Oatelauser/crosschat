@@ -23,7 +23,7 @@ describe('preference writes respect completed local data removal', () => {
   it.each([false, true])('saves only if the composition owner permits it: %s', async (canSave) => {
     const home = await mkdtemp(join(tmpdir(), 'crosschat-tui-preference-owner-')); homes.push(home);
     mocks.canSave.mockReturnValue(canSave);
-    mocks.compose.mockReturnValue({ resources: defaultResources, adapters: { sessions: { read: async () => ({ rows: [], completeness: 'complete' }) } }, shouldSavePreferences: mocks.canSave });
+    mocks.compose.mockReturnValue({ resources: defaultResources, adapters: { sessions: { read: async () => ({ rows: [], completeness: 'complete' }) } }, shouldSavePreferences: mocks.canSave, setActiveContext: vi.fn(), dispose: async () => {} });
     mocks.render.mockImplementation(() => { let close!: () => void; const done = new Promise<void>((resolve) => { close = resolve; }); return { unmount: close, waitUntilExit: () => done }; });
     const signals = new EventEmitter(); const stderr = new PassThrough(); stderr.resume();
     const active = runTui({ home, version: 'fixture', stdin: new Input(), stdout: new Output(), stderr, signals, contexts: [{ id: 'local', kind: 'local', label: '本机' }] });

@@ -32,7 +32,7 @@ function command(controller: ReturnType<typeof createTuiController>, text: strin
   controller.handleKey({ name: ':' }); controller.handleKey({ name: 'text', text }); controller.handleKey({ name: 'enter' });
 }
 async function enter(controller: ReturnType<typeof createTuiController>) {
-  controller.handleKey({ name: 'enter' }); await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
+  command(controller, 'sessions'); await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
 }
 
 describe('resource-neutral filters and read-only actions', () => {

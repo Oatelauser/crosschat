@@ -30,7 +30,7 @@ async function session(name, scenario = 'keyboard') {
   }
   async function send(input, expected) { const mark = pty.output.length; pty.write(input); if (expected) await pty.waitForOutput(expected, 10_000, mark); }
   async function copy(key = 'y') { const mark = (await events()).length; pty.write(key); return waitEvent((event) => event.event === 'clipboard', mark); }
-  async function resize(columns, rows, expected = 'crosschat') { const mark = pty.output.length; pty.resize(columns, rows); await pty.waitForOutput(expected, 10_000, mark); await waitEvent((event) => event.event === 'resize' && event.columns === columns && event.rows === rows); }
+  async function resize(columns, rows, expected = 'CC · 工作区') { const mark = pty.output.length; pty.resize(columns, rows); await pty.waitForOutput(expected, 10_000, mark); await waitEvent((event) => event.event === 'resize' && event.columns === columns && event.rows === rows); }
   return { pty, send, copy, resize, events, waitEvent, async finish(expectedCode) {
     let exitTimer;
     let exited;
@@ -57,18 +57,21 @@ const normal = await session('operations-ssh-keyboard-resize');
 try {
   await normal.pty.waitForOutput('本机操作fixture');
   const ready = await normal.waitEvent((event) => event.event === 'fixture-ready');
-  await normal.send('g', '连接配置与执行位置');
+  await normal.send('d', '只读详情');
   await normal.send(escape, ':ctx');
-  await normal.send('t', ':status');
+  await normal.send('gta');
+  assert(!(await normal.events()).some((event) => event.event === 'status-read' || event.event === 'ssh-inspect'), 'ctx remains a readonly overview and never dispatches connection operations');
+  await normal.send(':local\r', '选择本机资源');
+  await normal.send(':status\r', ':status');
   await normal.waitEvent((event) => event.event === 'status-read' && event.contextId === 'local');
-  await normal.send(':ctx\r', '本机操作fixture');
-  await normal.send(home + down + 'g', '连接配置与执行位置');
-  await normal.send(end, '失败处理');
-  await normal.send(escape, ':ctx');
+  await normal.send(':ssh\r', '已有 SSH Host');
+  await normal.send(home + 'g', 'SSH 配置与回程指引');
+  await normal.send(end, '接口不支持');
+  await normal.send(escape, ':ssh');
   await normal.send('t', '只读接口有响应');
   await normal.waitEvent((event) => event.event === 'ssh-inspect' && event.contextId === ready.remoteId);
   await normal.send(':ssh\r', '已有 SSH Host');
-  await normal.send('a', '选择已有 SSH Host');
+  await normal.send('w', '选择已有 SSH Host');
   await normal.send('d', '只读详情');
   await normal.send(escape, '选择已有 SSH Host');
   await normal.send(home + '\r', '3 个可发现会话');
@@ -97,10 +100,11 @@ try {
   await normal.send(escape, ':doctor');
   await normal.send(':ssh\r', '已有 SSH Host');
   await normal.send(home + down + 't', '检测未完成');
-  await normal.send('i', 'SSH 认证未通过 fixture');
-  await normal.send(escape, ':ssh');
+  await normal.send('i', 'SSH 读取信息');
+  await normal.send(end, 'SSH 认证未通过 fixture');
+  await normal.send(escape, /SSH Host[^\r\n]*读取状态/);
   await normal.send(':ctx\r', '本机操作fixture');
-  await normal.send(home + '\r', 'LOCAL-SESSION-FIXTURE');
+  await normal.send(home + '\r\r', 'LOCAL-SESSION-FIXTURE');
   await normal.send(':services\r', 'SERVICE-FIXTURE');
   await normal.send('d', '只读详情');
   await normal.send('a\x04');

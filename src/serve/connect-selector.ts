@@ -9,6 +9,7 @@ import type { BrokerEntry, NodeConfig } from './node-config.js';
  */
 export function selectConnectEntry(selector: string, config: NodeConfig): { entry: BrokerEntry; selector: string } {
   const entries = config.entries;
+  if (entries.length === 0) throw new MultichatError('USAGE', '本机尚未配置 TCP 连接——请先在连接列表添加已有星的配置。');
   if (selector === '') return { entry: entries[0]!, selector };
   const byName = entries.find((e) => e.name === selector);
   if (byName !== undefined) return { entry: byName, selector };

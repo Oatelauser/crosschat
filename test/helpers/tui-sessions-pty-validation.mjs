@@ -40,7 +40,7 @@ async function session(name, scenario = 'keyboard') {
 const normal = await session('sessions-keyboard-resize');
 try {
   await normal.pty.waitForOutput('本机会话fixture');
-  await normal.send('\r', '124 个可发现会话');
+  await normal.send('\r\r', '124 个可发现会话');
   await normal.send('u', '仅命名会话');
   await normal.send('u', '所有会话（含匿名）');
   await normal.send('t', 'Enter应用');
@@ -75,7 +75,7 @@ try {
   await normal.send(escape, '已取消操作');
   mark = normal.pty.output.length;
   normal.pty.resize(112, 30);
-  await normal.pty.waitForOutput('crosschat', 10_000, mark);
+  await normal.pty.waitForOutput('CC · 工作区', 10_000, mark);
   await normal.send('a', '请选择目标星');
   await normal.send(down + '\r', '[取消]');
   await normal.send('\r', '已取消操作'); // Cancel is the default button.
@@ -88,10 +88,10 @@ try {
   await normal.send('\t\r', 'fixture-remove-applied');
   mark = normal.pty.output.length;
   normal.pty.resize(48, 16);
-  await normal.pty.waitForOutput('crosschat', 10_000, mark);
+  await normal.pty.waitForOutput('CC · 工作区', 10_000, mark);
   mark = normal.pty.output.length;
   normal.pty.resize(112, 30);
-  await normal.pty.waitForOutput('crosschat', 10_000, mark);
+  await normal.pty.waitForOutput('CC · 工作区', 10_000, mark);
   await normal.send('q');
   const events = await normal.finish(0);
   const copies = events.filter((event) => event.event === 'clipboard').map((event) => JSON.parse(event.value));
@@ -107,7 +107,7 @@ try {
 const cancel = await session('sessions-cancel-read', 'cancel');
 try {
   await cancel.pty.waitForOutput('本机会话fixture');
-  await cancel.send('\r', '124 个可发现会话');
+  await cancel.send('\r\r', '124 个可发现会话');
   await cancel.send('r', '读取中');
   await cancel.send('\x03', '已取消');
   await cancel.send('q');

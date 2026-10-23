@@ -437,7 +437,31 @@ export interface AdminOpFrame {
   /** remove-node：目标 label。 */
   label?: string;
   /** Optional exact TUI target. Omission preserves the existing CLI selector. */
-  expected?: import('./registry.js').CredentialRemovalExpected;
+  expected?: import('./registry.js').CredentialRemovalExpected | import('./registry.js').MachineRemovalExpected;
+  /** Exact current-star machine target for atomic removal and online peer naming. */
+  machineId?: string;
+  name?: string;
+}
+
+/** Authenticated broker-to-node request; the node owns its fixed local configuration path. */
+export interface NodeNameSetFrame {
+  op: 'node-name-set';
+  id: string;
+  starId: string;
+  machineId: string;
+  name: string;
+}
+export interface NodeNameResultFrame {
+  op: 'node-name-result';
+  id: string;
+  starId: string;
+  machineId: string;
+  ok: boolean;
+  saved: boolean;
+  applied: boolean;
+  showName?: string;
+  name?: string;
+  error?: string;
 }
 
 /** 034 list-nodes 回显行——**永不携带 key/adminKey**（发钥只走 gen-key 显式动作）。 */
@@ -476,6 +500,14 @@ export interface AdminOpResultFrame {
   members?: AdminMemberRow[];
   /** remove-node：是否删到。 */
   removed?: boolean;
+  machineId?: string;
+  removedLabels?: string[];
+  renamed?: boolean;
+  starId?: string;
+  showName?: string;
+  name?: string;
+  saved?: boolean;
+  applied?: boolean;
   /** Approved read-only star scope. The application validates this unknown wire payload. */
   snapshot?: import('./star-snapshot.js').StarSnapshot;
 }
@@ -510,6 +542,8 @@ export type Frame =
   | MemberRemoveExactResultFrame
   | AuthChallengeFrame
   | AuthProofFrame
+  | NodeNameSetFrame
+  | NodeNameResultFrame
   | AdminOpFrame
   | AdminOpResultFrame;
 
@@ -543,6 +577,8 @@ const OPS = new Set([
   'member-remove-exact-result',
   'auth-challenge',
   'auth-proof',
+  'node-name-set',
+  'node-name-result',
   'admin-op',
   'admin-op-result',
 ]);
@@ -557,6 +593,18 @@ export function parseFrame(text: string): Frame | undefined {
   }
   if (typeof obj !== 'object' || obj === null) return undefined;
   const op = (obj as { op?: unknown }).op;
+  if (op === 'node-name-set' || op === 'node-name-result') {
+    if (!('id' in obj) || typeof obj.id !== 'string' || obj.id.length < 1 || obj.id.length > 128
+      || !('starId' in obj) || typeof obj.starId !== 'string' || obj.starId.length < 1 || obj.starId.length > 256
+      || !('machineId' in obj) || typeof obj.machineId !== 'string' || !/^[a-f0-9]{32}$/.test(obj.machineId)) return undefined;
+    if (op === 'node-name-set') {
+      if (!('name' in obj) || typeof obj.name !== 'string' || obj.name.length > 32 || [...obj.name].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) return undefined;
+    } else {
+      if (!('ok' in obj) || typeof obj.ok !== 'boolean' || !('saved' in obj) || typeof obj.saved !== 'boolean' || !('applied' in obj) || typeof obj.applied !== 'boolean') return undefined;
+      if (('showName' in obj && (typeof obj.showName !== 'string' || obj.showName.length > 32))
+        || ('name' in obj && (typeof obj.name !== 'string' || obj.name.length > 32 || [...obj.name].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127))) || ('error' in obj && typeof obj.error !== 'string')) return undefined;
+    }
+  }
   if ((op === 'send' || op === 'deliver') && 'delivery' in obj && !isDeliveryMode(obj.delivery)) return undefined;
   if (op === 'credential-revoked' && !isCredentialRevoked(obj as Record<string, unknown>)) return undefined;
   if (op === 'member-remove-exact' || op === 'member-remove-exact-result') {

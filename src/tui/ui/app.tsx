@@ -10,9 +10,12 @@ import type { TuiOverlay, TuiResource, TuiSnapshot } from '../model.js';
 import { clipText, displayWidth, editorViewport, sanitizeTerminalText } from './text.js';
 import { formatTable } from './table.js';
 import { inputKeys } from './input.js';
+import { frameLines, headerLines } from './chrome.js';
+import type { ScreenLine } from './chrome.js';
+import { screenLayout } from '../app/layout.js';
 
 type Controller = ReturnType<typeof createTuiController>;
-interface Line { text: string; selected?: boolean; tone?: 'cyan' | 'yellow' | 'red' | 'gray' }
+type Line = ScreenLine;
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 function formFits(snapshot: TuiSnapshot): boolean { return snapshot.viewport.columns >= 24 && snapshot.viewport.rows >= 16; }
 
@@ -53,6 +56,18 @@ function formLines(overlay: TuiOverlay, width: number, height: number): Line[] {
 }
 
 function bodyLines(snapshot: TuiSnapshot, resource: TuiResource, width: number, height: number): Line[] {
+  if (snapshot.prompt) {
+    const prompt = snapshot.prompt;
+    if (!formFits(snapshot)) return [{ text: '请放大终端至24列×16行后认证；Esc取消', tone: 'yellow' }];
+    const content = detailLines(prompt.fields, Math.max(1, width - 2));
+    const capacity = Math.max(1, height - 3);
+    const start = Math.min(prompt.scrollOffset, Math.max(0, content.length - capacity));
+    const lines: Line[] = [{ text: prompt.title, tone: 'cyan' }, ...content.slice(start, start + capacity).map((line) => ({ text: line.text }))];
+    while (lines.length < height - 2) lines.push({ text: '' });
+    lines.push({ text: prompt.kind === 'secret' ? `输入: ${editingLine(prompt.displayValue, prompt.cursor, Math.max(1, width - 6))}` : 'Tab 切换按钮 · PgUp/PgDn 查看完整信息', tone: 'yellow' });
+    lines.push({ text: prompt.kind === 'secret' ? 'Enter 确认 · Esc 取消' : `${prompt.accepted ? ' ' : '›'}[拒绝]  ${prompt.accepted ? '›' : ' '}[确认信任]`, tone: 'cyan' });
+    return lines;
+  }
   if (snapshot.result) {
     return [{ text: `${snapshot.result.title} · 一次性结果`, tone: 'yellow' },
       ...detailLines(snapshot.result.fields, Math.max(1, width - 2)).slice(snapshot.result.scrollOffset, snapshot.result.scrollOffset + height - 1).map((line) => ({ text: line.text }))];
@@ -100,43 +115,22 @@ function bodyLines(snapshot: TuiSnapshot, resource: TuiResource, width: number, 
 export function TuiScreen({ snapshot, resource, version }: { snapshot: TuiSnapshot; resource: TuiResource; version: string }) {
   const width = Math.max(1, snapshot.viewport.columns);
   const height = Math.max(1, snapshot.viewport.rows);
-  const bodyHeight = Math.max(1, height - 8);
-  const permission = snapshot.context ? snapshot.context.permissionLabel ?? (snapshot.context.kind === 'local' ? '本机用户' : '未认证') : '选择连接';
-  const top: Line[] = [
-    { text: `crosschat ${version} · ${snapshot.context?.label ?? 'ctx'} · 权限：${permission}`, tone: 'cyan' },
-    { text: snapshot.input ? `${snapshot.input.kind === 'command' ? ':' : '/'}${editingLine(snapshot.input.editor.text, snapshot.input.editor.cursor, width - 1)}` : `:${resource.id}  ${resource.label}${snapshot.following === undefined ? '' : snapshot.following ? ' · 跟随中' : ' · 已暂停'}${snapshot.autoRefreshing === undefined ? '' : snapshot.autoRefreshing ? ' · 自动刷新' : ' · 刷新已暂停'}${snapshot.filter ? `  /${snapshot.filter}` : ''}${snapshot.sampledAt === undefined ? '' : ` · 采样 ${new Date(snapshot.sampledAt).toLocaleTimeString()}`}` },
-  ];
-  const candidates = snapshot.input?.candidates ?? [];
-  const chosen = snapshot.input?.candidateIndex;
-  const candidateStart = chosen === undefined ? 0 : Math.max(0, chosen - 1);
-  for (let index = 0; index < 2; index++) {
-    const candidate = candidates[candidateStart + index];
-    top.push(candidate ? { text: `${chosen === candidateStart + index ? '›' : ' '} :${candidate.id}  ${candidate.label}${candidate.enabled ? '' : ` · ${candidate.reason ?? '不可用'}`}`, tone: 'cyan' } : { text: index === 0 ? snapshot.input?.hint ?? '输入 : 切换资源并筛选；/ 仅筛选当前列表' : '' , tone: 'gray' });
-  }
-  // Even a full two-line completion list must explain what Enter does.
-  if (snapshot.input && candidates.length >= 2) top[3] = { ...top[3], text: `${top[3].text} · ${snapshot.input.hint}` };
-  if (!snapshot.input && snapshot.filters?.length) {
-    top[2] = { text: snapshot.filters.map((filter) => {
-      const value = snapshot.selectedFacets?.[filter.id] ?? filter.defaultValue;
-      return `${filter.label}：${filter.options.find((option) => option.value === value)?.label ?? value}`;
-    }).join('  '), tone: 'cyan' };
-  }
-  const body = bodyLines(snapshot, resource, width, bodyHeight);
-  while (body.length < bodyHeight) body.push({ text: '' });
+  const geometry = screenLayout(snapshot.viewport, snapshot.mode, snapshot.filters, snapshot.selectedFacets);
+  const top = headerLines(snapshot, resource, version, width, geometry.headerRows);
+  while (top.length < geometry.headerRows) top.push({ text: '' });
+  top.push(...geometry.facets.map((text) => ({ text, tone: 'cyan' as const })));
+  const bodyHeight = geometry.frameRows;
+  const content = bodyLines(snapshot, resource, Math.max(1, width - 2), Math.max(1, bodyHeight - 2));
+  const body = frameLines(content, `${resource.label} (:${resource.id}) [${snapshot.rows.length}]${snapshot.filter ? ` /${snapshot.filter}` : ''}`, width, bodyHeight);
   const completeness = { complete: '完整', partial: '部分结果', unavailable: '不可用', cancelled: '已取消' }[snapshot.completeness];
   const footer: Line[] = [
-    { text: `${snapshot.rows.length ? `${snapshot.selectedIndex + 1}/${snapshot.rows.length}` : '0项'}${snapshot.totalRows !== undefined && snapshot.totalRows !== snapshot.rows.length ? ` / 发现${snapshot.totalRows}项` : ''} · ${completeness}${snapshot.loading ? ' · 读取中' : ''}${snapshot.filter ? ` · 筛选 ${snapshot.filter}` : ''}`, tone: 'gray' },
+    { text: `<${resource.id}> ${snapshot.rows.length ? `${snapshot.selectedIndex + 1}/${snapshot.rows.length}` : '0项'} · ${completeness}${snapshot.loading ? ' · 读取中' : ''}${snapshot.following === undefined ? '' : snapshot.following ? ' · 跟随中' : ' · 已暂停'}${snapshot.autoRefreshing === undefined ? '' : snapshot.autoRefreshing ? ' · 自动刷新' : ' · 刷新已暂停'}`, tone: 'cyan' },
     { text: snapshot.result?.notice ?? snapshot.choice?.options[snapshot.choice.selectedIndex]?.reason ?? snapshot.error ?? snapshot.overlay?.error ?? snapshot.notice ?? '', tone: snapshot.error || snapshot.overlay?.error ? 'red' : 'yellow' },
-    { text: [...snapshot.actions].sort((left, right) => {
-      const priority = ['enter-context', 'detail', 'copy', 'refresh', 'sort', 'help'];
-      const rank = (id: string) => priority.includes(id) ? priority.indexOf(id) : 10;
-      return rank(left.id) - rank(right.id);
-    }).map((action) => `${action.shortcut} ${action.label}${action.enabled ? '' : '(不可用)'}`).join('  '), tone: 'cyan' },
-    { text: snapshot.input?.hint ?? snapshot.actions.filter((entry) => ['help', 'quit', 'back', 'interrupt', 'form-cancel', 'field-enter'].includes(entry.id)).map((entry) => `${entry.shortcut} ${entry.label}`).join('  '), tone: 'gray' },
+    { text: snapshot.input?.hint ?? (snapshot.mode === 'prompt' ? 'Enter 确认选择 · Esc 取消认证' : snapshot.mode === 'form' ? 'Tab 切字段/按钮 · Enter 操作 · Esc 取消' : ':资源  /筛选  Esc返回  q退出'), tone: 'gray' },
   ];
   const lines = height < 10 ? [{ text: snapshot.mode === 'form' ? '请放大终端 · Esc取消' : '终端太小 · 请放大 · Ctrl+C取消/退出', tone: 'yellow' as const }, ...top.slice(0, Math.max(0, height - 1))] : [...top, ...body.slice(0, bodyHeight), ...footer];
   return <Box width={width} height={height} flexDirection="column" overflow="hidden">
-    {lines.slice(0, height).map((line, index) => <Box key={index} height={1} flexShrink={0} width={width}><Text wrap="truncate" color={line.tone} backgroundColor={line.selected ? 'blue' : undefined}>{clipText(line.text, width) || ' '}</Text></Box>)}
+    {lines.slice(0, height).map((line, index) => <Box key={index} height={1} flexShrink={0} width={width}><Text wrap="truncate" color={line.selected ? 'black' : line.tone} backgroundColor={line.selected ? 'white' : undefined}>{line.parts ? line.parts.map((part, partIndex) => <Text key={partIndex} color={part.tone}>{part.text}</Text>) : clipText(line.text, width) || ' '}</Text></Box>)}
   </Box>;
 }
 

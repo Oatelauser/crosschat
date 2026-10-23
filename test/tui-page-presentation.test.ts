@@ -9,7 +9,7 @@ function setup(initial: TuiPage) {
   let page = initial;
   const registry = createResourceRegistry(defaultResources.map((resource) => resource.id === 'sessions' ? { ...resource, actions: [], unavailableReason: undefined } : resource));
   const controller = createTuiController({ registry, contexts: [{ id: 'local', kind: 'local', label: '本机' }], adapters: { sessions: { read: async () => page }, machines: { read: async () => ({ rows: [], completeness: 'complete' }) } } });
-  controller.handleKey({ name: 'enter' });
+  controller.handleKey({ name: ':' }); controller.handleKey({ name: 'text', text: 'sessions' }); controller.handleKey({ name: 'enter' });
   return { controller, replace(next: TuiPage) { page = next; } };
 }
 const row = { id: 'opaque/session', cells: { name: '同名', machine: '完整机器名' }, detail: [{ label: 'ID', value: 'opaque/session' }], actionRoutes: { 'open-node': { resourceId: 'machines', contextId: 'local', query: { machineId: 'full-machine' } } } };

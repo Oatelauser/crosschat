@@ -17,6 +17,11 @@ export function credentialRevision(node: NodeEntry): string {
   return hash({ scope: 'crosschat-credential-v1', label: node.label, key: node.key ?? null, adminKey: node.adminKey ?? null });
 }
 
+/** Full bound-node credential set; a new, removed or replaced key invalidates a machine confirmation. */
+export function machineCredentialRevision(machineId: string, credentials: readonly { label: string; revision: string }[]): string {
+  return hash({ scope: 'crosschat-machine-credentials-v1', machineId, credentials: ordered(credentials.map(({ label, revision }) => ({ label, revision }))) });
+}
+
 /** Full static deletion impact. Presence changes and equivalent list ordering do not invalidate a preview. */
 export function starRevision(star: StarRecord): string {
   return hash({ scope: 'crosschat-star-v1', ...star, nodes: ordered(star.nodes),

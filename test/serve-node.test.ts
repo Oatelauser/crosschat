@@ -180,9 +180,9 @@ function makeNodeClient(harness: Harness, dir: string, overrides: Partial<Constr
   const inbox = mkdtempSync(join(root, 'node-'));
   const port = Number(new URL(harness.url).port);
   const configFile = join(dir, 'node.json');
-  writeFileSync(configFile, JSON.stringify({ broker: { host: '127.0.0.1', port, name: 'broker-alias' }, key: key('n') }, null, 2));
+  writeFileSync(configFile, JSON.stringify({ broker: { host: '127.0.0.1', port, name: 'broker-alias' }, key: key('n'), showName: 'node-host' }, null, 2));
   return new NodeClient({
-    config: { entries: [{ host: '127.0.0.1', port, name: 'broker-alias', key: key('n') }] },
+    config: { entries: [{ host: '127.0.0.1', port, name: 'broker-alias', key: key('n') }], showName: 'node-host' },
     configFile,
     machineId: () => 'NODE-MID',
     statusFile: join(dir, 'status-node.json'),
@@ -381,8 +381,11 @@ describe('readNodeConfig and runServe --connect', () => {
     });
   });
 
-  it('rejects an empty brokers array and entries missing key/host/integer port', () => {
+  it('accepts an empty brokers array as unconfigured and rejects entries missing key/host/integer port', () => {
     const dir = mkdtempSync(join(root, 'case-'));
+    const emptyFile = join(dir, 'empty-node.json');
+    writeFileSync(emptyFile, JSON.stringify({ brokers: [], showName: 'node-host' }));
+    expect(readNodeConfig(emptyFile)).toEqual({ entries: [], showName: 'node-host' });
     const tryRead = (content: string): unknown => {
       const file = join(dir, 'node.json');
       writeFileSync(file, content);
@@ -393,7 +396,7 @@ describe('readNodeConfig and runServe --connect', () => {
         return e;
       }
     };
-    for (const bad of ['{"brokers": []}', '{"brokers": [{"host": "h", "port": 1}]}', '{"brokers": [{"port": 1, "key": "k"}]}', '{"brokers": [{"host": "h", "key": "k", "port": 1.5}]}']) {
+    for (const bad of ['{"brokers": [{"host": "h", "port": 1}]}', '{"brokers": [{"port": 1, "key": "k"}]}', '{"brokers": [{"host": "h", "key": "k", "port": 1.5}]}']) {
       const err = tryRead(bad);
       expect(err).toBeInstanceOf(MultichatError);
       expect((err as MultichatError).message).toContain('损坏');
@@ -527,7 +530,7 @@ describe('B1 multi-star: delivery pipeline stamps starId into issued refs', () =
     const dir = mkdtempSync(join(root, 'b1-'));
     const inbox = mkdtempSync(join(root, 'node-'));
     const client = new NodeClient({
-      config: { entries: [{ host: '127.0.0.1', port: Number(new URL(harness.url).port), key: key('n'), starId: STAR }] },
+      config: { entries: [{ host: '127.0.0.1', port: Number(new URL(harness.url).port), key: key('n'), starId: STAR }], showName: 'node-host' },
       configFile: join(dir, 'node.json'),
       machineId: () => 'NODE-MID',
       statusFile: join(dir, 'status-node.json'),

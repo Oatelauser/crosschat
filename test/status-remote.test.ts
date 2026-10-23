@@ -180,7 +180,7 @@ async function senderOn(port: number, auth = key('k')): Promise<TestClient> {
 async function nodeOnline(port: number, fake: ScanFake): Promise<NodeClient> {
   const dir = mkdtempSync(join(root, 'nodehome-'));
   const client = new NodeClient({
-    config: { entries: [{ host: '127.0.0.1', port, key: key('n') }] },
+    config: { entries: [{ host: '127.0.0.1', port, key: key('n') }], showName: 'node-host' },
     configFile: join(dir, 'node.json'),
     machineId: () => NODE_MID,
     statusFile: join(dir, 'status-node.json'),

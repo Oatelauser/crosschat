@@ -101,6 +101,7 @@ describe('default local observation wiring', () => {
     try {
       await vi.waitFor(() => expect(mocks.render).toHaveBeenCalledOnce());
       controller().handleKey({ name: 'enter' });
+      controller().handleKey({ name: 'enter' });
       await vi.waitFor(() => expect(controller().getSnapshot().rows).toHaveLength(1));
       controller().handleKey({ name: 'o' });
       await vi.waitFor(() => expect(controller().getSnapshot().route.resourceId).toBe('deliveries'));

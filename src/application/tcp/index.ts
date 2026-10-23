@@ -138,7 +138,7 @@ export function createTcpApplication(options: TcpApplicationOptions): TcpApplica
   async function readStars(request: TcpContextRequest): Promise<TcpStarsResult> {
     if (request.signal?.aborted) return { ...base(request, 'cancelled', [cancelled(request)]), configured: false, role: null, items: [] };
     const context = await resolve(request);
-    if (!context.value) return { ...base(request, context.state === 'cancelled' ? 'cancelled' : 'unavailable', context.errors), configured: true, role: null, items: [] };
+    if (!context.value) return { ...base(request, context.state === 'cancelled' ? 'cancelled' : 'unavailable', context.errors), configured: context.state !== 'missing', role: null, items: [] };
     if (context.value.kind === 'tcp') {
       const page = await observe(target(context.value)!, request);
       return { ...base(request, page.completeness, page.errors), configured: true, role: page.star?.role ?? null, items: page.star ? [page.star] : [] };

@@ -69,6 +69,8 @@ TUI内部游标额外绑定本次SSH配置文件内容hash，剥去外层后才�
 
 ## 扩展边界
 
+2026-10-23 工作区改造增加 `createTcpConfiguration().list/previewChange/applyChange` 管理本机保存的 TCP 连接；移除最后一项保留顶层字段和 `brokers:[]`，不自动停止旧服务。SSH 应用新增受管配置、结构化 `onChallenge`、活动连接内存认证 owner 与异步 `dispose()`；外部 Host 只读，受管 ID 与外部别名独立。协议新增整机原子撤权和在线修改对端本星名称，旧单凭证 CLI 行为保持。详见 [已批准规格](tui-workspace-spec.md)、[TCP 合同](tui-workspace-tcp-contract.md)、[SSH 合同](tui-workspace-ssh-contract.md)。
+
 TCP读取通过`createTcpApplication({baseDir,...})`的readStars/readStar/readSessions提供安全DTO，完整机器身份参与内部会话contextId，名字/mid8只展示。scope members不探原生，discoverable最多三节点并发读完分页；冷态活性保持unknown，错误/取消不能冒充空或完整。远程上下文在每次请求重新核对唯一配置与握手星，不回落本机。
 
 严格验证的本机静态台账另提供`staticComplete`，允许管理预检使用静态影响，但不把partial实时快照变成完整、不把unknown活性变成下线。执行helper仍独立核实热冷路径；远端partial不可据此放行写入。

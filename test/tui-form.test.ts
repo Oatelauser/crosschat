@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { TuiAction, TuiActionAvailability, TuiOverlay } from '../src/tui/model.js';
 import { displayWidth } from '../src/tui/ui/text.js';
+import { screenLayout } from '../src/tui/app/layout.js';
 
 function overlay(values: Partial<TuiOverlay> = {}): TuiOverlay {
   return {
@@ -68,14 +69,15 @@ describe('complete form confirmation content', () => {
       checkAction: async () => ({ enabled: true, impact: ['完整影响👩‍💻'.repeat(50)] }), mutate,
     } } });
     try {
-      controller.resize(30, 18); controller.handleKey({ name: 'enter' });
+      controller.resize(30, 18); controller.handleKey({ name: ':' }); controller.handleKey({ name: 'text', text: 'sessions' }); controller.handleKey({ name: 'enter' });
       await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
       controller.handleKey({ name: 'e' });
       await vi.waitFor(() => expect(controller.getSnapshot().overlay?.impact).toContain('完整影响👩‍💻'.repeat(50)));
-      const fieldLine = formContentLines(controller.getSnapshot().overlay!, 30).findIndex((line) => line.kind === 'field');
+      const layout = screenLayout(controller.getSnapshot().viewport, controller.getSnapshot().mode);
+      const fieldLine = formContentLines(controller.getSnapshot().overlay!, layout.contentColumns).findIndex((line) => line.kind === 'field');
       expect(controller.getSnapshot().overlay!.scrollOffset).toBeGreaterThan(0);
       expect(fieldLine).toBeGreaterThanOrEqual(controller.getSnapshot().overlay!.scrollOffset!);
-      expect(fieldLine).toBeLessThan(controller.getSnapshot().overlay!.scrollOffset! + 6);
+      expect(fieldLine).toBeLessThan(controller.getSnapshot().overlay!.scrollOffset! + layout.formRows);
       controller.handleKey({ name: 'enter' });
       const before = controller.getSnapshot().overlay!;
       expect(before).toMatchObject({ phase: 'confirming', focusIndex: 1, targetId });
@@ -83,7 +85,7 @@ describe('complete form confirmation content', () => {
       expect(controller.getSnapshot().overlay!.scrollOffset).toBeGreaterThan(before.scrollOffset!);
       controller.handleKey({ name: 'end' });
       const end = controller.getSnapshot().overlay!;
-      expect(end.scrollOffset).toBe(formContentLines(end, 30).length - 6);
+      expect(end.scrollOffset).toBe(formContentLines(end, layout.contentColumns).length - layout.formRows);
       expect(end).toMatchObject({ focusIndex: 1, targetId, fields: [{ value: '初始👩‍💻' }] });
       expect(mutate).not.toHaveBeenCalled();
       controller.handleKey({ name: 'home' });
@@ -114,28 +116,29 @@ describe('complete form confirmation content', () => {
       checkAction: async () => ({ enabled: true, impact: ['只影响当前目标'] }), mutate: async () => { throw new Error(failure); },
     } } });
     try {
-      controller.resize(30, 18); controller.handleKey({ name: 'enter' });
+      controller.resize(30, 18); controller.handleKey({ name: ':' }); controller.handleKey({ name: 'text', text: 'sessions' }); controller.handleKey({ name: 'enter' });
       await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
       controller.handleKey({ name: 'x' });
       await vi.waitFor(() => expect(controller.getSnapshot().overlay?.impact).toContain('只影响当前目标'));
       controller.handleKey({ name: 'enter' }); controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
       await vi.waitFor(() => expect(controller.getSnapshot().overlay?.error).toBe(failure));
+      const layout = screenLayout(controller.getSnapshot().viewport, controller.getSnapshot().mode);
       const failed = controller.getSnapshot().overlay!;
-      const errorLine = formContentLines(failed, 30).findIndex((line) => line.kind === 'error');
+      const errorLine = formContentLines(failed, layout.contentColumns).findIndex((line) => line.kind === 'error');
       expect(errorLine).toBeGreaterThanOrEqual(failed.scrollOffset!);
-      expect(errorLine).toBeLessThan(failed.scrollOffset! + 6);
+      expect(errorLine).toBeLessThan(failed.scrollOffset! + layout.formRows);
       controller.handleKey({ name: 'end' });
-      const content = formContentLines(controller.getSnapshot().overlay!, 30);
+      const content = formContentLines(controller.getSnapshot().overlay!, layout.contentColumns);
       const offset = controller.getSnapshot().overlay!.scrollOffset!;
-      expect(offset).toBe(content.length - 6);
-      expect(content.slice(offset, offset + 6).map((line) => line.text).join('')).toContain('末尾完整指引');
+      expect(offset).toBe(content.length - layout.formRows);
+      expect(content.slice(offset, offset + layout.formRows).map((line) => line.text).join('')).toContain('末尾完整指引');
       expect(controller.getSnapshot().overlay?.targetId).toBe('fixed-target');
       controller.handleKey({ name: 'tab' });
       const editing = controller.getSnapshot().overlay!;
-      const fieldLine = formContentLines(editing, 30).findIndex((line) => line.kind === 'field');
+      const fieldLine = formContentLines(editing, layout.contentColumns).findIndex((line) => line.kind === 'field');
       expect(editing).toMatchObject({ focusIndex: 0, phase: 'editing', fields: [{ value: '保留输入' }] });
       expect(fieldLine).toBeGreaterThanOrEqual(editing.scrollOffset!);
-      expect(fieldLine).toBeLessThan(editing.scrollOffset! + 6);
+      expect(fieldLine).toBeLessThan(editing.scrollOffset! + layout.formRows);
     } finally { controller.dispose(); }
   });
 
@@ -154,7 +157,7 @@ describe('complete form confirmation content', () => {
       checkAction: () => new Promise((resolve) => { finishes.push(resolve); }), mutate,
     } } });
     try {
-      controller.handleKey({ name: 'enter' });
+      controller.handleKey({ name: ':' }); controller.handleKey({ name: 'text', text: 'sessions' }); controller.handleKey({ name: 'enter' });
       await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
       controller.handleKey({ name: 'x' });
       expect(controller.getSnapshot().overlay?.checking).toBe(true);

@@ -7,7 +7,7 @@ import { render, Text } from 'ink';
 import { runTui } from '../../dist/tui/main.js';
 import { createResourceRegistry, defaultResources } from '../../dist/tui/resources/registry.js';
 import { contextsResource } from '../../dist/tui/resources/contexts.js';
-import { createConnectionsResource } from '../../dist/tui/resources/connections.js';
+import { createTcpTargetsResource } from '../../dist/tui/resources/connections.js';
 import { createSessionsResource } from '../../dist/tui/resources/sessions.js';
 import { createServicesResource } from '../../dist/tui/resources/services.js';
 import { createFilesResource } from '../../dist/tui/resources/files.js';
@@ -96,6 +96,10 @@ const maintenance = {
 const star = (contextId) => ({ id: 'star:final', contextId, starId, name: 'FINAL-IMPORTED-STAR', revision: 'static-final-revision', role: 'member', host: 'fixture.invalid', port: 7260, health: 'reachable', onlineNodes: 1 });
 const member = (contextId) => ({ id: 'member:final', contextId, starId, machineId, machineName: 'FINAL-TCP-MACHINE', nativeId: 'tcp-member-opaque-id', providerId: 'codex', name: 'FINAL-TCP-MEMBER', presence: 'online', temporary: false });
 const tcp = {
+  async readStars({ contextId }) {
+    record({ event: 'tcp-stars', contextId });
+    return { ...complete, contextId, role: 'member', configured: true, items: [star(contextId)] };
+  },
   async readStar(request) {
     record({ event: 'tcp-star', contextId: request.contextId, starId: request.starId });
     return { ...complete, contextId: request.contextId, star: star(request.contextId),
@@ -115,7 +119,8 @@ const remoteSessions = createSshSessionsResource({ ssh });
 const localDoctorBinding = createDoctorResource({ overview });
 const remoteDoctor = createSshDoctorResource({ ssh });
 const configuration = createTcpConfiguration({ baseDir });
-const connection = createConnectionsResource({ configuration: {
+const connection = createTcpTargetsResource({ configuration: {
+  ...configuration,
   async preview(request) { const result = await configuration.preview(request); record({ event: 'import-preview', enabled: result.enabled, targetIds: result.targets.map((target) => target.contextId) }); return result; },
   async apply(request) {
     const result = await configuration.apply(request);

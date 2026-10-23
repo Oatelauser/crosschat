@@ -39,6 +39,23 @@ function mutationRegistry(action: TuiAction = rename) {
 }
 
 describe('TUI interaction controller', () => {
+  it('restores the original workspace when the same local resource is revisited from TCP and local workspaces', async () => {
+    const controller = createTuiController({ registry: createResourceRegistry(), contexts: [contexts[0]], adapters: { services: { read: async () => ({ rows: [other], completeness: 'complete' }) } } });
+    try {
+      command(controller, 'tcp'); await loaded(controller);
+      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      command(controller, 'services'); await loaded(controller);
+      expect(controller.getSnapshot()).toMatchObject({ route: { resourceId: 'services', contextId: 'local' }, workspaceId: 'tcp' });
+      command(controller, 'local'); await loaded(controller);
+      command(controller, 'services'); await loaded(controller);
+      expect(controller.getSnapshot().workspaceId).toBe('local');
+      controller.handleKey({ name: 'escape' });
+      expect(controller.getSnapshot().route.resourceId).toBe('local');
+      controller.handleKey({ name: 'escape' });
+      expect(controller.getSnapshot()).toMatchObject({ route: { resourceId: 'services', contextId: 'local' }, workspaceId: 'tcp' });
+    } finally { controller.dispose(); }
+  });
+
   it('starts on ctx with stable snapshots and filters its rows while offering commands', async () => {
     const { createTuiController } = await import('../src/tui/app/controller.js');
     const { createResourceRegistry } = await import('../src/tui/resources/registry.js');
@@ -78,7 +95,7 @@ describe('TUI interaction controller', () => {
     try {
       expect(controller.getSnapshot()).toMatchObject({ route: { resourceId: 'ctx' }, selectedId: 'tcp:orbit', selectedIndex: 2 });
       controller.handleKey({ name: 'enter' });
-      expect(controller.getSnapshot().route).toEqual({ resourceId: 'machines', contextId: 'tcp:orbit' });
+      expect(controller.getSnapshot().route).toEqual({ resourceId: 'stars', contextId: 'tcp:orbit' });
       expect(controller.getSnapshot().completeness).toBe('unavailable');
       expect(controller.getSnapshot().notice).toContain('尚未启用');
       expect(controller.getSnapshot().context?.permissionLabel).toBeUndefined();
@@ -86,7 +103,7 @@ describe('TUI interaction controller', () => {
       expect(controller.getSnapshot()).toMatchObject({ route: { resourceId: 'ctx' }, selectedId: 'tcp:orbit' });
       controller.handleKey({ name: 'home' });
       controller.handleKey({ name: 'enter' });
-      expect(controller.getSnapshot().route).toEqual({ resourceId: 'sessions', contextId: 'local' });
+      expect(controller.getSnapshot().route).toEqual({ resourceId: 'local', contextId: 'local' });
     } finally { controller.dispose(); }
   });
 
@@ -232,7 +249,7 @@ describe('TUI interaction controller', () => {
       read: async () => ({ rows: [third, other], completeness: 'complete' }), checkAction: async () => ({ enabled: true, impact: ['只修改显示名'] }), mutate,
     } }, onExit });
     try {
-      controller.handleKey({ name: 'enter' });
+      command(controller, 'sessions');
       await loaded(controller);
       controller.handleKey({ name: 'e' });
       await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('form'));
@@ -267,7 +284,7 @@ describe('TUI interaction controller', () => {
       checkAction: async () => allowed ? { enabled: true, impact: ['当前目标显示名'] } : { enabled: false, reason: '权限已撤销', nextStep: '请重新核实授权' }, mutate,
     } } });
     try {
-      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      command(controller, 'sessions'); await loaded(controller);
       controller.handleKey({ name: '/' }); controller.handleKey({ name: 'text', text: 'third-provider' }); controller.handleKey({ name: 'enter' });
       controller.handleKey({ name: 'e' });
       await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('form'));
@@ -297,7 +314,7 @@ describe('TUI interaction controller', () => {
       read: async () => ({ rows, completeness: 'complete' }), checkAction: async () => ({ enabled: true }), mutate,
     } } });
     try {
-      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      command(controller, 'sessions'); await loaded(controller);
       controller.handleKey({ name: 'e' }); await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('form'));
       rows = [other]; await controller.refresh();
       controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
@@ -314,7 +331,7 @@ describe('TUI interaction controller', () => {
       read: async () => ({ rows: [third], completeness: 'complete' }), checkAction: async () => ({ enabled: true }), mutate,
     } } });
     try {
-      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      command(controller, 'sessions'); await loaded(controller);
       controller.handleKey({ name: 'e' }); await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('form'));
       controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
       await vi.waitFor(() => expect(controller.getSnapshot().overlay?.phase).toBe('submitting'));
@@ -339,7 +356,7 @@ describe('TUI interaction controller', () => {
     try {
       controller.handleKey({ name: 'paste', text: 'q' });
       expect(onExit).not.toHaveBeenCalled();
-      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      command(controller, 'sessions'); await loaded(controller);
       controller.handleKey({ name: 'e' }); await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('form'));
       controller.handleKey({ name: 'home' }); controller.handleKey({ name: 'delete' });
       controller.handleKey({ name: 'paste', text: '👩‍💻é' });
@@ -380,7 +397,7 @@ describe('TUI interaction controller', () => {
       mutate: async () => { if (step === 1) throw new Error(`写入失败 ${secret}`); return { message: `已完成 ${secret}` }; },
     } } });
     try {
-      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      command(controller, 'sessions'); await loaded(controller);
       controller.handleKey({ name: 'e' });
       await vi.waitFor(() => expect(controller.getSnapshot().overlay?.error).toContain('权限拒绝'));
       expect(controller.getSnapshot().overlay?.error).not.toContain(secret);
@@ -472,7 +489,7 @@ describe('TUI interaction controller', () => {
       },
     } } });
     try {
-      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      command(controller, 'sessions'); await loaded(controller);
       controller.handleKey({ name: 'a' }); await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('form'));
       controller.handleKey({ name: 'text', text: '新项' }); controller.handleKey({ name: 'enter' });
       controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
@@ -491,7 +508,7 @@ describe('TUI interaction controller', () => {
       },
     } } });
     try {
-      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      command(controller, 'sessions'); await loaded(controller);
       controller.handleKey({ name: '/' }); controller.handleKey({ name: 'text', text: '第二项' }); controller.handleKey({ name: 'enter' });
       controller.handleKey({ name: 'a' }); await new Promise(setImmediate);
       controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
@@ -507,7 +524,7 @@ describe('TUI interaction controller', () => {
       read: async () => ({ rows: [other], completeness: 'partial' }), checkAction: async () => ({ enabled: true }), mutate: async () => ({ selectedId: 'outside-page', message: '已创建' }),
     } } });
     try {
-      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      command(controller, 'sessions'); await loaded(controller);
       controller.handleKey({ name: 'a' }); await new Promise(setImmediate);
       controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });
       await vi.waitFor(() => expect(controller.getSnapshot().mode).toBe('list'));
@@ -523,7 +540,7 @@ describe('TUI interaction controller', () => {
       read: async () => ({ rows: [third], completeness: 'complete' }), checkAction: async () => ({ enabled: true, impact }), mutate,
     } } });
     try {
-      controller.handleKey({ name: 'enter' }); await loaded(controller);
+      command(controller, 'sessions'); await loaded(controller);
       controller.handleKey({ name: 'e' });
       await vi.waitFor(() => expect(controller.getSnapshot().overlay?.impact).toContain('影响一项'));
       impact = ['影响两项']; controller.handleKey({ name: 'tab' }); controller.handleKey({ name: 'enter' });

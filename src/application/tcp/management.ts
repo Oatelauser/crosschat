@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { parseNodeConfig } from '../../serve/node-config.js';
 import { STAR_NAME_RE, sanitizeName } from '../../serve/registry.js';
+import { machineCredentialRevision } from '../../serve/management-state.js';
 import { sanitizeTool } from '../../serve/protocol.js';
 import { requestAdminOp, requestMemberRemoveExact, SenderConn } from '../../serve/via-tcp.js';
 import { parseDiscoveryResponse } from '../discovery/boundary.js';
@@ -19,7 +20,7 @@ import { executeLocalManagement } from './local-management.js';
 import type { ManagementRequest, ManagementResult } from '../management/local.js';
 import type { MemberRemoveExactResultFrame } from '../../serve/protocol.js';
 
-export type TcpManagementAction = 'add-star' | 'rename-star' | 'remove-star' | 'set-show-name'
+export type TcpManagementAction = 'add-star' | 'rename-star' | 'remove-star' | 'set-show-name' | 'rename-node'
   | 'generate-node-key' | 'generate-admin-key' | 'remove-node' | 'revoke-credential' | 'remove-member' | 'adopt-session';
 export interface TcpManagementField {
   id: string;
@@ -86,6 +87,7 @@ interface Prepared {
   local?: ManagementRequest;
   member?: { sessionId: string; machine: string; tool: string };
   adopt?: SessionRef;
+  machine?: { machineId: string; labels: string[] };
   values: Readonly<Record<string, string>>;
 }
 class Denied extends Error {}
@@ -179,6 +181,7 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
     let local: ManagementRequest | undefined;
     let member: Prepared['member'];
     let adopt: SessionRef | undefined;
+    let machine: Prepared['machine'];
     let state: unknown;
     let values = defaultValues(request);
     let reason: string | undefined;
@@ -236,6 +239,20 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
             impact.push({ label: '本机', value: own }, { label: '范围', value: values.scope === 'star' ? '仅所选星；空名清除条目覆盖，恢复全局默认。' : '本机全局默认；已有星级覆盖保留。' }, { label: '生效', value: '更新本机配置；热态请求现有聚合器重挂，冷态需重连后才更新运行显示名。' });
             break;
           }
+          case 'rename-node': {
+            const item = current.machines.find((item) => item.id === request.targetId);
+            if (!owner && star.role !== 'star-admin') throw new Denied('修改对端节点名称需要本机 broker 主或当前星管理身份。');
+            if (!item || fullTcpMachineId(item.machineId) !== item.machineId) throw new Denied('所选完整机器已变化，请重新选择。');
+            if (item.presence !== 'online') throw new Denied('对端节点未在线，不能保存并确认名称生效；不会排队或自动重试。');
+            if (Object.keys(request.values).some((key) => key !== 'name')) throw new Denied('远程改名只允许修改当前星名称，不接受全局范围。');
+            fields.push({ id: 'name', label: '当前星节点名称（留空恢复对端全局默认）', initialValue: item.name ?? '' });
+            values = { name: request.values.name ?? item.name ?? '' };
+            if (values.name.length > 32 || (values.name !== '' && sanitizeName(values.name) !== values.name)) throw new Denied('节点名称最多 32 字符，不能含控制符或前后空白。');
+            state = { state, machineId: item.machineId, name: item.name, presence: item.presence };
+            local = { op: 'rename-node', starId: star.starId, machineId: item.machineId, name: values.name };
+            impact.push({ label: '完整机器', value: item.machineId }, { label: '范围', value: '只修改对端当前星的节点名称；保留全局默认、其他星与原生会话名称。' }, { label: '完成条件', value: '对端确认保存配置并立即生效；无需重启，缺少完成回执时请先核实。' });
+            break;
+          }
           case 'remove-member': {
             const item = current.members.find((candidate) => candidate.id === request.targetId);
             if (item === undefined || !item.nativeId || fullTcpMachineId(item.machineId) !== item.machineId || item.providerId === null || sanitizeTool(item.providerId) !== item.providerId) throw new Denied('所选册位缺少可核实的完整会话、机器或工具身份，不能精确删册。');
@@ -273,17 +290,18 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
             break;
           case 'remove-node': {
             if (!owner && star.role !== 'star-admin') throw new Denied('移除节点需要本机 broker 主或当前星管理身份。');
-            const machine = current.machines.find((item) => item.id === request.targetId);
-            if (!machine) throw new Denied('所选机器行已不存在，请刷新后重新选择。');
-            const credentials = current.credentials.filter((item) => item.kind === 'node' && item.machineId === machine.machineId);
-            impact.push({ label: '完整机器', value: machine.machineId }, ...credentials.map((item) => ({ label: '将撤节点凭证', value: item.label })));
-            if (credentials.length !== 1) throw new Denied('此机器对应多把或零把凭证，不能一键移除；请进入凭证列表逐把核对撤销。');
-            const credential = credentials[0];
-            state = { state, credential: [credential.id, credential.revision, credential.machineId] };
-            local = { op: 'remove-node', starId: star.starId, label: credential.label, expected: { credentialRevision: credential.revision, machineId: credential.machineId } };
-            impact.push({ label: '后果', value: '立即撤销此凭证并断开其连接；册位和原生会话保留。' });
+            const item = current.machines.find((item) => item.id === request.targetId);
+            if (!item || fullTcpMachineId(item.machineId) !== item.machineId) throw new Denied('所选完整机器行已不存在，请刷新后重新选择。');
+            const credentials = current.credentials.filter((credential) => credential.kind === 'node' && credential.machineId === item.machineId);
+            if (credentials.length === 0) throw new Denied('此机器没有可核实的绑定节点凭证，请刷新后重新选择。');
+            const machineRevision = machineCredentialRevision(item.machineId, credentials);
+            machine = { machineId: item.machineId, labels: credentials.map((credential) => credential.label).sort() };
+            state = { state, machineId: item.machineId, machineRevision };
+            local = { op: 'remove-machine', starId: star.starId, machineId: item.machineId, expected: { machineRevision } };
+            impact.push({ label: '完整机器', value: item.machineId }, ...credentials.map((credential) => ({ label: '将撤节点凭证', value: credential.label })), { label: '后果', value: '原子撤销本星该机器全部绑定节点凭证并立即断开连接；永久成员册和原生会话保留。' });
             break;
           }
+          default: throw new Denied('未登记的管理操作，未执行修改。');
           case 'revoke-credential': {
             const credential = current.credentials.find((item) => item.id === request.targetId);
             if (!credential || (request.targetRevision !== undefined && request.targetRevision !== credential.revision)) throw new Denied('所选凭证已变化，请刷新后重新选择。');
@@ -302,7 +320,7 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
       nextStep = '刷新当前资源并核对完整目标后重新操作。';
     }
     const revision = hash([request.contextId, request.action, request.starId, request.targetId, request.targetRevision, state, values, fields, impact, reason]);
-    return { preview: { enabled: reason === undefined, ...(reason === undefined ? {} : { reason, nextStep }), revision, fields, impact }, star, local, member, adopt, values };
+    return { preview: { enabled: reason === undefined, ...(reason === undefined ? {} : { reason, nextStep }), revision, fields, impact }, star, local, member, adopt, machine, values };
   }
 
   async function openDefault(request: { contextId: string; starId: string; identity: 'member' | 'admin'; signal?: AbortSignal }): Promise<TcpManagementConnection> {
@@ -336,7 +354,7 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
       }
       let value: unknown;
       let mode: 'hot' | 'cold' | undefined;
-      if (prepared.member || (request.contextId !== 'local' && (request.action === 'generate-node-key' || prepared.local?.op === 'remove-node'))) {
+      if (prepared.member || (request.contextId !== 'local' && (request.action === 'generate-node-key' || ['remove-node', 'remove-machine', 'rename-node'].includes(prepared.local?.op ?? '')))) {
         const opening = (options.openRemote ?? openDefault)({ contextId: request.contextId, starId: prepared.star!.starId, identity: prepared.member ? 'member' : 'admin', signal: request.signal });
         void opening.then((late) => { if (request.signal?.aborted) late.close(); }, () => {});
         connection = await untilAborted(opening, request.signal);
@@ -349,9 +367,12 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
           if (receipt.ok && receipt.removed) return { kind: 'applied', message: '已删除所选精确册位；原生会话保留。' };
           return receipt.removed ? uncertain() : { kind: 'rejected', message: 'broker 未删除该精确册位；请刷新核对目标和权限。' };
         }
-        const receipt = await untilAborted(prepared.local?.op === 'remove-node'
-          ? connection.request('remove-node', { label: prepared.local.label, expected: prepared.local.expected })
-          : connection.request('gen-key', { n: Number(prepared.values.count), host: prepared.values.host }), request.signal);
+        const operation = prepared.local;
+        const response = operation?.op === 'remove-node' ? connection.request('remove-node', { label: operation.label, expected: operation.expected })
+          : operation?.op === 'remove-machine' ? connection.request('remove-machine', { machineId: operation.machineId, expected: operation.expected })
+            : operation?.op === 'rename-node' ? connection.request('rename-node', { machineId: operation.machineId, name: operation.name })
+              : connection.request('gen-key', { n: Number(prepared.values.count), host: prepared.values.host });
+        const receipt = await untilAborted(response, request.signal);
         if (!isRecord(receipt) || typeof receipt.ok !== 'boolean') return uncertain();
         if (receipt.uncertain === true) return uncertain();
         if (!receipt.ok) return { kind: 'rejected', message: 'broker 拒绝此次修改，请刷新核对当前星管理权限和完整目标。' };
@@ -382,6 +403,16 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
       if (prepared.local?.op === 'remove-node' || prepared.local?.op === 'remove-admin-key') {
         if (!isRecord(value) || (prepared.local.op === 'remove-node' ? value.removed !== true : value.removed !== prepared.local.label)) return uncertain();
         return { kind: 'applied', mode, message: '已撤销所选精确凭证；请刷新核对连接状态。' };
+      }
+      if (prepared.local?.op === 'remove-machine' && prepared.machine) {
+        if (!isRecord(value) || value.removed !== true || value.machineId !== prepared.machine.machineId || !Array.isArray(value.removedLabels)
+          || value.removedLabels.some((label) => typeof label !== 'string') || JSON.stringify([...value.removedLabels].sort()) !== JSON.stringify(prepared.machine.labels)) return uncertain();
+        return { kind: 'applied', mode, message: '已移除该星所选机器的全部绑定节点凭证并断开连接；永久成员册和原生会话保留。' };
+      }
+      if (prepared.local?.op === 'rename-node') {
+        const selected = prepared.local;
+        if (!isRecord(value) || value.renamed !== true || value.saved !== true || value.applied !== true || value.starId !== selected.starId || value.machineId !== selected.machineId || value.showName !== selected.name) return uncertain();
+        return { kind: 'applied', mode, selectedId: request.targetId, message: '对端当前星节点名称已保存并生效；其他星与全局默认保持。' };
       }
       if (prepared.local?.op === 'remove-star') {
         if (!isRecord(value) || !isRecord(value.removed) || !Number.isInteger(value.removed.nodes) || !Number.isInteger(value.removed.roster)) return uncertain();

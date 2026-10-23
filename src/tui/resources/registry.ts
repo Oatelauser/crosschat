@@ -49,6 +49,9 @@ function commonActions(resourceId: string, mode: TuiMode): TuiAction[] {
 
 const definitions: ReadonlyArray<[string, string, readonly string[], string]> = [
   ['ctx', '连接上下文', ['contexts', 'connections'], '选择本机、SSH 或 TCP 连接'],
+  ['local', '本机工作区', [], '本机会话、状态、体检与服务资源'],
+  ['tcp', 'TCP 工作区', [], '选择本机 broker 或已配置远端星连接'],
+  ['tcp-targets', 'TCP 连接配置', ['tcp-connections'], '本机保存的星连接配置'],
   ['connect', '添加已有连接', [], '选择已有SSH或导入TCP配置'],
   ['sessions', '会话', ['session'], '会话发现、筛选与只读详情'], ['ssh', 'SSH 对端', [], '已配置 SSH 对端'],
   ['stars', '星', ['star'], '当前连接可管理的星'], ['machines', '节点', ['nodes'], '星内机器'],
@@ -61,7 +64,9 @@ const definitions: ReadonlyArray<[string, string, readonly string[], string]> = 
 
 type PendingAction = readonly [shortcut: string, label: string, mutation?: boolean, kind?: TuiAction['kind']];
 const pendingActions: Readonly<Record<string, readonly PendingAction[]>> = {
-  ctx: [['a', '添加已有连接', true], ['g', '配置与回程指引'], ['t', '检测选中连接']],
+  ctx: [],
+  local: [['Enter', '进入资源', false, 'navigate']],
+  tcp: [['Enter', '进入星列表', false, 'navigate'], ['a', '连接配置', false, 'navigate']],
   sessions: [['t', '工具筛选'], ['u', '匿名筛选'], ['s', '状态筛选'], ['b', '会话范围'], ['a', '收编已有会话', true], ['Ctrl+D', '删除星册位', true], ['o', '相关投递记录'], ['g', '原生工具指引'], ['l', '相关日志']],
   stars: [['Enter', '进入星', false, 'navigate'], ['a', '新增星', true], ['e', '修改星名', true], ['Ctrl+D', '删除星', true], ['p', '接入凭证'], ['l', '管理审计']],
   machines: [['Enter', '进入节点会话', false, 'navigate'], ['v', '全星会话'], ['a', '让新机器接入', true], ['e', '修改当前机器显示名', true], ['Ctrl+D', '移除节点', true], ['m', '成员册'], ['p', '接入凭证'], ['l', '节点日志']],
@@ -74,6 +79,10 @@ const pendingActions: Readonly<Record<string, readonly PendingAction[]>> = {
 };
 
 function resourceActions(id: string): TuiAction[] {
+  if (id === 'local' || id === 'tcp') return [
+    { ...command('open', id === 'tcp' ? '进入星列表' : '进入资源', 'Enter', id), kind: 'navigate', selectionPolicy: 'required' },
+    ...(id === 'tcp' ? [{ ...command('connections', '连接配置', 'a', id), kind: 'navigate' as const, navigateTo: 'tcp-targets' }] : []),
+  ];
   const actions: TuiAction[] = (pendingActions[id] ?? []).map(([key, label, mutation = false, kind]) => ({
     ...command(`resource-${key}`, label, key, id), selectionPolicy: 'required' as const,
     mutation, kind: kind ?? (mutation ? 'form' as const : 'command' as const), enabled: false,
@@ -88,12 +97,12 @@ function resourceActions(id: string): TuiAction[] {
 
 export const defaultResources: readonly TuiResource[] = definitions.map(([id, label, aliases, description]) => ({
   id, label, aliases, description,
-  columns: id === 'ctx' ? [
+  columns: id === 'ctx' || id === 'tcp' ? [
     { id: 'name', label: '连接', width: 24 }, { id: 'kind', label: '类型', width: 10 }, { id: 'target', label: '目标', width: 30 },
-  ] : [{ id: 'name', label: '名称', width: 24 }],
+  ] : id === 'local' ? [{ id: 'name', label: '资源', width: 20 }, { id: 'command', label: '命令', width: 18 }, { id: 'description', label: '说明', width: 50 }] : [{ id: 'name', label: '名称', width: 24 }],
   actions: resourceActions(id),
   ...(id === 'logs' ? { sortable: false } : {}),
-  ...(id === 'ctx' ? {} : { unavailableReason: '资源尚未启用。当前可使用连接列表和通用交互。' }),
+  ...(['ctx', 'local', 'tcp'].includes(id) ? {} : { unavailableReason: '资源尚未启用。当前可使用连接列表和通用交互。' }),
 }));
 
 export function createResourceRegistry(resources: readonly TuiResource[] = defaultResources): ResourceRegistry {

@@ -1,0 +1,2 @@
+# Executable ESM scripts must retain their hashbang as a Unix-compatible first line.
+scripts/*.mjs text eol=lf

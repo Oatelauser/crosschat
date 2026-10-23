@@ -6,6 +6,7 @@ import { DISCOVERY_MAX_BYTES, parseDiscoveryRequest } from './boundary.js';
 import type { DiscoveryEndpoint, DiscoveryOptions, DiscoveryRequest, DiscoveryResponse } from './model.js';
 import { completeRemoteDiscoveryResponse, prepareRemoteDiscoveryRequest } from './remote.js';
 import { discoveryFailure } from './service.js';
+import { observeSshChildClose } from '../ssh/owned-child.js';
 
 export interface DiscoverySshChild extends EventEmitter {
   stdin: Writable;
@@ -22,7 +23,7 @@ export interface SshDiscoveryOptions {
   /** Local transport observation only; it is never serialized into the discovery protocol. */
   onFailure?: (reason: SshDiscoveryFailure) => void;
 }
-export type SshDiscoveryFailure = 'cancelled' | 'invalid-cursor' | 'start' | 'io' | 'oversized' | 'exit' | 'malformed' | 'timeout';
+export type SshDiscoveryFailure = 'cancelled' | 'invalid-cursor' | 'start' | 'io' | 'oversized' | 'exit' | 'malformed' | 'timeout' | 'cleanup';
 
 export function createSshDiscoveryClient(options: SshDiscoveryOptions): DiscoveryEndpoint {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(options.host)) throw new Error('SSH discovery requires a safe configured host alias.');
@@ -52,6 +53,7 @@ export function createSshDiscoveryClient(options: SshDiscoveryOptions): Discover
       try {
         child = (options.spawn ?? nodeSpawn)('ssh', ['-T', '-o', 'BatchMode=yes', '--', options.host, 'crosschat', 'discover'], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       } catch { resolve(fail('unavailable', 'SSH discovery could not start. Check the configured host.', 'start')); return; }
+      const owner = observeSshChildClose(child);
       let finished = false;
       let bytes = 0;
       const chunks: Buffer[] = [];
@@ -73,12 +75,15 @@ export function createSshDiscoveryClient(options: SshDiscoveryOptions): Discover
         finished = true;
         cleanup();
         if (kill) {
-          child.kill('SIGKILL');
+          try { child.kill('SIGKILL'); } catch { /* The bounded close receipt remains authoritative. */ }
           child.stdin.destroy();
           child.stdout.destroy();
           child.stderr.destroy();
         }
-        resolve(result);
+        void owner.wait().then((closed) => {
+          release();
+          resolve(closed ? result : fail('unavailable', 'SSH child process cleanup could not be confirmed.', 'cleanup'));
+        });
       };
       const onAbort = () => finish(fail('cancelled', 'SSH discovery cancelled.', 'cancelled'), true);
       const onError = () => finish(fail('unavailable', 'SSH discovery failed. Check the configured host and installed crosschat command.', 'io'), true);

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import type { TcpConfigurationImport } from '../../application/tcp/configuration.js';
+import type { TcpConfigurationChange, TcpConfigurationImport, TcpConfigurationItem, TcpConfigurationManager } from '../../application/tcp/configuration.js';
 import { untilAborted } from '../../application/sessions/reading.js';
+import { isRecord } from '../../application/queries/reading.js';
 import type { TuiAction, TuiActionRequest, TuiFormField, TuiPage, TuiReadRequest, TuiResource, TuiResourceAdapter, TuiRoute } from '../model.js';
 
 export interface ConnectionsResourceOptions { configuration: TcpConfigurationImport }
@@ -78,6 +79,84 @@ export function createConnectionsResource(options: ConnectionsResourceOptions): 
       if (result.status !== 'applied') throw new Error(result.message);
       if (!result.contextId || !result.targets.some((target) => target.contextId === result.contextId)) throw new Error('保存回执未提供可核实的新连接；请返回 :ctx 刷新核对。');
       return { navigate: { resourceId: 'ctx' }, selectedId: result.contextId, message: '已追加本机配置；选择新连接后可按需检测，尚未启动服务。' };
+    },
+  };
+  return { resource, adapter };
+}
+
+/** TCP workspace owns local connection configuration; ordinary pages never carry existing secrets. */
+export function createTcpTargetsResource(options: { configuration: TcpConfigurationManager }): { resource: TuiResource; adapter: TuiResourceAdapter } {
+  const owner = 'tcp-targets';
+  const operation = (id: string, label: string, shortcut: string, kind: TuiAction['kind'], selectionPolicy: TuiAction['selectionPolicy'] = 'required'): TuiAction => ({ id, label, shortcut, kind, selectionPolicy, ownerResourceId: owner, mutation: kind === 'form', returnPolicy: 'restore' });
+  const resource: TuiResource = { id: owner, label: 'TCP 连接', aliases: [], description: '本机保存的 TCP 星连接，编辑与移除只修改本机配置', columns: [
+    { id: 'name', label: '星名', width: 24, priority: 100 }, { id: 'starId', label: 'starId', width: 14, priority: 80 }, { id: 'endpoint', label: 'broker 地址', width: 32, priority: 90 },
+  ], actions: [operation('open', '进入星成员', 'Enter', 'navigate'), operation('detail', '只读连接详情', 'd', 'detail'), operation('import-connection', '导入连接', 'a', 'form', 'none'), operation('edit-connection', '编辑连接配置', 'e', 'form'), operation('remove-connection', '移除本机连接', 'Ctrl+D', 'form'),
+    { ...operation('info', '读取信息', 'i', 'detail', 'none'), viewId: 'info' }] };
+  let generation = 0;
+  let accepted: { key: string; revision: string } | undefined;
+  let items: readonly TcpConfigurationItem[] = [];
+  const valid = (request: TuiReadRequest): boolean => (!request.route || request.route.resourceId === owner) && request.route?.contextId === request.context?.id && !Object.keys(request.route?.query ?? {}).length;
+  const unreadable = (message: string, cancelled = false): TuiPage => ({ rows: [], completeness: cancelled ? 'cancelled' : 'unavailable', notice: message,
+    detailViews: { info: { title: 'TCP 配置读取信息', fields: [{ label: '原因与下一步', value: message }] } } });
+  function selected(request: TuiActionRequest): TcpConfigurationItem | undefined {
+    try {
+      const value: unknown = JSON.parse(request.target?.copyValues?.target ?? '');
+      if (!isRecord(value) || value.contextId !== request.target?.id || typeof value.revision !== 'string') return undefined;
+      return items.find((entry) => entry.contextId === value.contextId && entry.revision === value.revision);
+    } catch { return undefined; }
+  }
+  function change(request: TuiActionRequest): TcpConfigurationChange | undefined {
+    const target = selected(request);
+    if (!valid(request) || request.action.ownerResourceId !== owner || !target || !['edit-connection', 'remove-connection'].includes(request.action.id)) return undefined;
+    return { operation: request.action.id === 'edit-connection' ? 'edit' : 'remove', contextId: target.contextId, targetRevision: target.revision, values: request.values, signal: request.signal };
+  }
+  const confirmationKey = (request: TuiActionRequest): string => createHash('sha256').update(JSON.stringify([request.action.id, request.route, request.target?.id, request.target?.copyValues?.target, Object.entries(request.values).sort(([left], [right]) => left.localeCompare(right))])).digest('hex');
+  function editingFields(target?: TcpConfigurationItem): readonly TuiFormField[] {
+    return [{ id: 'host', label: 'broker 地址', required: true, initialValue: target?.host ?? '' }, { id: 'port', label: '端口', required: true, initialValue: target ? String(target.port) : '' },
+      { id: 'key', label: '节点钥匙（留空保留）', secret: true }, { id: 'adminKeyAction', label: '星管理钥', initialValue: 'keep', options: [{ value: 'keep', label: '保留原钥匙' }, { value: 'replace', label: '更换钥匙' }, { value: 'remove', label: '移除本机管理钥配置' }] }, { id: 'adminKey', label: '新管理钥（更换时填写）', secret: true }];
+  }
+  const adapter: TuiResourceAdapter = {
+    async read(request) {
+      generation++; accepted = undefined; items = [];
+      if (!valid(request)) return unreadable('TCP 连接列表范围无效；返回 TCP 工作区重新选择。');
+      try {
+        const result = await untilAborted(options.configuration.list({ signal: request.signal }), request.signal);
+        if (request.signal.aborted) return unreadable('TCP 配置读取已取消；按 r 重新读取。', true);
+        items = result.targets;
+        return { rows: items.map((entry) => ({ id: entry.contextId, cells: { name: entry.name ?? '未命名', starId: entry.starId, endpoint: `${entry.host}:${entry.port}` }, copyValue: entry.contextId, copyValues: { target: JSON.stringify({ contextId: entry.contextId, revision: entry.revision }) }, searchText: JSON.stringify([entry.name, entry.starId, entry.host, entry.port]),
+          detail: [{ label: '完整连接标识', value: entry.contextId }, { label: '完整 starId', value: entry.starId }, { label: 'broker 地址', value: `${entry.host}:${entry.port}` }, { label: '执行位置', value: '当前本机用户配置；编辑和移除不会停止服务、删除远端星或撤销钥匙。' }],
+          actionRoutes: { open: { resourceId: 'members', contextId: entry.contextId, query: { starId: entry.starId } } } })), completeness: result.completeness, sampledAt: result.observedAt,
+          contextSummary: { label: 'TCP · 本机连接配置', permissionLabel: '当前本机用户配置' }, detailViews: { info: { title: 'TCP 配置读取信息', fields: [{ label: '来源与下一步', value: result.message ?? '只读取本机 node.json；未连接或检测任何远端。' }] } },
+          notice: result.message ?? 'Enter 进入所选星；a 导入，e 编辑，Ctrl+D 仅移除本机配置，已有服务保持。' };
+      } catch { return unreadable('本机 TCP 配置读取未完成；核对来源后刷新。', request.signal.aborted); }
+    },
+    async checkAction(request) {
+      const turn = ++generation; accepted = undefined;
+      if (!valid(request) || request.action.ownerResourceId !== owner || request.signal.aborted) return { enabled: false, reason: '来源或目标无效；未保存配置。' };
+      const importing = request.action.id === 'import-connection';
+      const formFields = importing ? fields : request.action.id === 'edit-connection' ? editingFields(selected(request)) : [];
+      const chosen = importing ? undefined : change(request);
+      const content = request.values.content;
+      if (importing && (Object.keys(request.values).some((key) => key !== 'content') || !content?.trim() || Buffer.byteLength(content, 'utf8') > 1024 * 1024)) return { enabled: false, reason: '请填写现有连接 JSON（最多 1 MiB）。', fields: formFields };
+      if (!importing && !chosen) return { enabled: false, reason: '所选完整连接已变化；请刷新重新选择。', fields: formFields };
+      try {
+        const preview = await untilAborted(importing ? options.configuration.preview({ content, signal: request.signal }) : options.configuration.previewChange(chosen!), request.signal);
+        if (turn !== generation || request.signal.aborted) return { enabled: false, reason: '配置预览已取消或来源发生变化。', fields: formFields };
+        if (preview.enabled) accepted = { key: confirmationKey(request), revision: preview.revision };
+        return { enabled: preview.enabled, reason: preview.reason, fields: formFields, impact: [...preview.impact, ...preview.targets.map((entry) => `${entry.starId} · ${entry.host}:${entry.port}`)] };
+      } catch { return { enabled: false, reason: '无法安全预览配置；核对输入和本机权限后重试。', fields: formFields }; }
+    },
+    async mutate(request) {
+      const preview = accepted; accepted = undefined;
+      if (!valid(request) || request.action.ownerResourceId !== owner || request.signal.aborted || !preview || preview.key !== confirmationKey(request)) throw new Error('缺少与固定目标和输入匹配的已核验预览。');
+      const importing = request.action.id === 'import-connection';
+      const chosen = importing ? undefined : change(request);
+      if (!importing && !chosen) throw new Error('原连接目标已变化；请刷新重新核验。');
+      let result;
+      try { result = await untilAborted(importing ? options.configuration.apply({ content: request.values.content, expectedRevision: preview.revision, signal: request.signal }) : options.configuration.applyChange({ ...chosen!, expectedRevision: preview.revision }), request.signal); }
+      catch { throw new Error('配置保存未取得有效回执，结果待核实；请刷新核对，不自动重试。'); }
+      if (result.status !== 'applied') throw new Error(result.message);
+      return { ...(request.action.id === 'remove-connection' ? {} : { selectedId: result.contextId }), refreshContexts: true, message: result.message };
     },
   };
   return { resource, adapter };

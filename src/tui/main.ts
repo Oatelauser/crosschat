@@ -4,7 +4,8 @@ import process from 'node:process';
 import type { Writable } from 'node:stream';
 import { copyText } from '../application/clipboard.js';
 import { createTuiController } from './app/controller.js';
-import type { TuiContextPage, TuiControllerOptions } from './app/controller.js';
+import type { TuiContextPage, TuiControllerOptions, TuiController } from './app/controller.js';
+import { sshAuthenticationPrompt } from './app/authentication.js';
 import type { TuiContext, TuiResourceAdapter } from './model.js';
 import { presentContext } from './resources/contexts.js';
 import { createResourceRegistry, defaultResources } from './resources/registry.js';
@@ -67,9 +68,13 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
         import('ink'), import('./ui/app.js'), import('react'), options.version ?? packageVersion(),
       ]);
       if (owner.signal.aborted) return cancelledMount();
+      let promptOwner: TuiController | undefined;
       const composition = options.adapters === undefined
-        ? (await import('./composition.js')).createDefaultResources({ home, isolatedHome: options.home !== undefined }) : undefined;
-      if (owner.signal.aborted) return cancelledMount();
+        ? (await import('./composition.js')).createDefaultResources({ home, isolatedHome: options.home !== undefined, onChallenge: async (challenge, signal) => {
+          if (!promptOwner) return null;
+          return promptOwner.prompt(sshAuthenticationPrompt(challenge), signal);
+        } }) : undefined;
+      if (owner.signal.aborted) { await composition?.dispose(); return cancelledMount(); }
       const registry = options.registry ?? createResourceRegistry(composition?.resources ?? defaultResources);
       let selectedContextId: string | undefined;
       const controller = createTuiController({
@@ -77,6 +82,7 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
         contextSource: options.contexts === undefined ? { initial: initialContexts, read: readContexts } : undefined,
         initialSelectedContextId: preferences.value?.selectedContextId,
         onContextSelection: (id) => { selectedContextId = id; },
+        onActiveContext: (id) => composition?.setActiveContext(id),
         clipboard: options.clipboard ?? ((text, signal) => copyText(text, { signal })),
         onExit: owner.exit,
         onSensitiveClear: () => {
@@ -84,6 +90,7 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
           stdout.write('\u001b[2J\u001b[H');
         },
       });
+      promptOwner = controller;
       controller.resize(stdout.columns ?? 80, stdout.rows ?? 24);
       let instance: ReturnType<typeof ink.render>;
       try {
@@ -92,6 +99,7 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
         });
       } catch (error) {
         controller.dispose();
+        await composition?.dispose();
         throw error;
       }
       const done = instance.waitUntilExit().then(() => {});
@@ -102,6 +110,8 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
           controller.dispose();
           try { instance.unmount(); await done; }
           finally {
+            promptOwner = undefined;
+            await composition?.dispose();
             if (selectedContextId && (composition?.shouldSavePreferences() ?? true)) {
               const saved = await saveTuiPreferences({ home, preferences: { version: 1, selectedContextId } });
               if (saved.errors.length) stderr.write('最近连接选择未能保存；请检查界面偏好文件的访问权限。\n');
