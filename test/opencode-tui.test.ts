@@ -3,6 +3,11 @@ import type { DiscoveryEndpoint, DiscoveryResponse, DiscoverySession } from '../
 import { defaultMembershipProviders } from '../src/application/session-membership/providers.js';
 import { createSessionsResource } from '../src/tui/resources/sessions.js';
 import { createStatusRegistry } from '../src/tui/resources/status.js';
+import { listOpenCodeThreads } from '../src/opencode/client.js';
+import { MultichatError } from '../src/errors.js';
+import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const context = { id: 'local', kind: 'local', label: '本机' };
 const capabilities = { discovery: true, delivery: true, launch: false, diagnostics: false };
@@ -56,12 +61,27 @@ describe('OpenCode TUI provider integration', () => {
     expect(partial.rows[0].copyValue).toBeUndefined();
   });
 
-  it('provides native CLI guidance tied to the exact session rather than a Codex command', async () => {
+  it('guides desktop and CLI users to the native session while keeping the launcher a CLI command', async () => {
     const page = await createSessionsResource({ discovery: discovery([session('ses_full_native_id')]) }).adapter.read({ context, signal: new AbortController().signal });
     const guide = page.rows[0].detailViews?.['native-guide'];
-    expect(guide?.title).toBe('OpenCode CLI 原生操作');
+    expect(guide?.title).toBe('OpenCode 原生操作');
     expect(guide?.fields).toContainEqual({ label: '完整会话 ID', value: 'ses_full_native_id' });
+    expect(guide?.fields.find((field) => field.label === '继续聊天')?.value).toContain('桌面');
+    const clientGuide = guide?.fields.find((field) => field.label === '客户端指引')?.value;
+    expect(clientGuide).toContain('默认本机服务');
+    expect(clientGuide).toContain('crosschat opencode');
+    expect(clientGuide).toContain('CLI');
     expect(JSON.stringify(guide)).not.toMatch(/codex resume|claude --resume/);
+  });
+
+  it('does not tell desktop users to start an extra CLI when the service is absent', async () => {
+    const registrationFile = join(tmpdir(), `crosschat-desktop-guide-${randomUUID()}`, 'service.json');
+    const error = await listOpenCodeThreads({ env: {}, registrationFile }).catch((failure: unknown) => failure);
+    expect(error).toBeInstanceOf(MultichatError);
+    if (!(error instanceof MultichatError)) throw new Error('Expected a missing service error.');
+    expect(error.code).toBe('OPENCODE_NOT_CONFIGURED');
+    expect(error.message).toMatch(/Desktop|桌面/);
+    expect(error.message).not.toContain('Start OpenCode CLI,');
   });
 
   it('delegates adoption using the exact OpenCode reference and explicit star selection', async () => {
