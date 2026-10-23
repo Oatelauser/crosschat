@@ -49,6 +49,49 @@ function request(resource: TuiResource, page: TuiPage, actionId: string, targetI
 }
 
 describe('TCP resource lists and readonly navigation', () => {
+  it('defaults a selected star to members and exposes three explicit star views on every internal list', async () => {
+    const f = fixtures();
+    const stars = await f.resources.stars.adapter.read({ context, route: { resourceId: 'stars', contextId: context.id }, signal: signal() });
+    expect(stars.rows[0].actionRoutes?.open).toEqual({ resourceId: 'members', contextId: context.id, query: { starId: star.starId } });
+    for (const owner of ['members', 'machines', 'sessions'] as const) {
+      const page = await f.resources[owner].adapter.read({ context, route: { resourceId: owner, contextId: context.id, query: { starId: star.starId } }, signal: signal() });
+      const registered = actions(f.resources[owner].resource, page);
+      for (const [key, resourceId] of [['1', 'members'], ['2', 'machines'], ['3', 'sessions']]) {
+        const action = registered.find((item) => item.shortcut === key);
+        expect(action?.kind).toBe('navigate');
+        expect(page.actionRoutes?.[action!.id]).toEqual({ resourceId, contextId: context.id, query: { starId: star.starId, ...(key === '3' ? { scope: 'discoverable' } : {}) } });
+      }
+    }
+  });
+
+  it('offers list-owned issuance and credential revocation without requiring navigation to keys', async () => {
+    const f = fixtures();
+    for (const owner of ['stars', 'members', 'machines', 'sessions'] as const) {
+      const page = await f.resources[owner].adapter.read({ context, route: { resourceId: owner, contextId: context.id, ...(owner === 'stars' ? {} : { query: { starId: star.starId } }) }, signal: signal() });
+      for (const [shortcut, id] of [['k', 'generate-node-key'], ['K', 'generate-admin-key'], ['x', 'revoke-credential']]) {
+        expect(actions(f.resources[owner].resource, page)).toContainEqual(expect.objectContaining({ id, shortcut, ownerResourceId: owner, kind: 'form' }));
+      }
+    }
+    const page = await f.resources.machines.adapter.read({ context, route: { resourceId: 'machines', contextId: context.id, query: { starId: star.starId } }, signal: signal() });
+    const selected = request(f.resources.machines.resource, page, 'revoke-credential', 0);
+    const choose = await f.resources.machines.adapter.checkAction!(selected);
+    expect(choose.fields?.find((field) => field.id === 'credentialId')?.options?.map((option) => option.value)).toEqual([credentials[0].id]);
+    expect(f.management.preview).not.toHaveBeenCalled();
+    await f.resources.machines.adapter.checkAction!({ ...selected, values: { credentialId: credentials[0].id } });
+    expect(f.management.preview).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'revoke-credential', targetId: credentials[0].id, targetRevision: credentials[0].revision, starId: star.starId }));
+  });
+
+  it('uses current-star remote node rename and accurate member action labels', async () => {
+    const f = fixtures();
+    const page = await f.resources.machines.adapter.read({ context, route: { resourceId: 'machines', contextId: context.id, query: { starId: star.starId } }, signal: signal() });
+    expect(actions(f.resources.machines.resource, page)).toContainEqual(expect.objectContaining({ id: 'rename-node', shortcut: 'e', selectionPolicy: 'required' }));
+    const rename = request(f.resources.machines.resource, page, 'rename-node', 0, { name: '本星节点名' });
+    await f.resources.machines.adapter.checkAction!(rename);
+    expect(f.management.preview).toHaveBeenCalledWith(expect.objectContaining({ action: 'rename-node', targetId: machines[0].id, starId: star.starId, values: { name: '本星节点名' } }));
+    const members = await f.resources.members.adapter.read({ context, route: { resourceId: 'members', contextId: context.id, query: { starId: star.starId } }, signal: signal() });
+    expect(actions(f.resources.members.resource, members)).toContainEqual(expect.objectContaining({ id: 'adopt-session', label: '新增成员' }));
+    expect(actions(f.resources.members.resource, members)).toContainEqual(expect.objectContaining({ id: 'remove-member', label: '删除成员' }));
+  });
   it.each(['machines', 'sessions'] as const)('continues to reject an actual different star response on the scoped %s page', async (owner) => {
     const f = fixtures();
     const otherStar = { ...star, starId: 'another-star-full-id', name: 'foreign-star-data' };
