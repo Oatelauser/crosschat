@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-23T05:40:39.9797396Z",
+  "status": "manual-cleanup-required",
+  "automaticReview": "rejected",
+  "reason": "blocked by policy",
+  "attemptedAction": "PowerShell Remove-Item -LiteralPath for two exact task-owned directories",
+  "guardedCommandExecuted": false,
+  "officialNpmUninstall": "completed before rejection",
+  "retainedRoots": [
+    "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291",
+    "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-dsh-ci-HQUjru"
+  ],
+  "existingRoots": [
+    "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291",
+    "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-dsh-ci-HQUjru"
+  ],
+  "ownedCommandProcesses": [],
+  "observedPidsStillPresent": [],
+  "secondCiRootExists": false,
+  "userDshHomeExists": false,
+  "dshProtocolExists": false,
+  "globalDshCommands": [],
+  "opencodePriorCleanupUntouched": true
+}

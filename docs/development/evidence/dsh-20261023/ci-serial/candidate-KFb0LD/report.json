@@ -1,0 +1,107 @@
+{
+  "schema": 1,
+  "tool": "dsh-web-runtime",
+  "platform": "win32",
+  "arch": "x64",
+  "runId": "660150f7-b608-465f-8647-84a334eb3c0c",
+  "version": "0.2.1-rc.2",
+  "startedAt": "2026-10-23T05:37:34.397Z",
+  "status": "passed",
+  "category": null,
+  "stage": "done",
+  "checks": [
+    {
+      "name": "official-plugin-installation-and-owned-web-runtime",
+      "status": "passed",
+      "elapsedMs": 4
+    },
+    {
+      "name": "public-web-session-controller-creates-interactive-sessions",
+      "status": "passed",
+      "elapsedMs": 884
+    },
+    {
+      "name": "messages-model-and-native-shell-identity-bootstrap",
+      "status": "passed",
+      "elapsedMs": 1123
+    },
+    {
+      "name": "authenticated-production-discovery-and-pagination",
+      "status": "passed",
+      "elapsedMs": 408
+    },
+    {
+      "name": "idle-production-delivery-wakes-the-existing-session",
+      "status": "passed",
+      "elapsedMs": 4642
+    },
+    {
+      "name": "busy-native-queue-and-steer-step-boundaries",
+      "status": "passed",
+      "elapsedMs": 3339
+    },
+    {
+      "name": "native-shell-send-and-conversation-reply-have-full-session-identities",
+      "status": "passed",
+      "elapsedMs": 4126
+    },
+    {
+      "name": "missing-target-does-not-create-or-resume-a-replacement",
+      "status": "passed",
+      "elapsedMs": 504
+    }
+  ],
+  "scope": {
+    "officialNpmRuntime": true,
+    "officialPluginManager": true,
+    "ordinaryWebSessions": true,
+    "scriptedLocalModel": true,
+    "browserUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "installation": {
+    "code": 0,
+    "timedOut": false,
+    "stdout": "Progress: resolved 1, reused 0, downloaded 0, added 0\nPackages: +1\n+\nPackages are hard linked from the content-addressable store to the virtual store.\n  Content-addressable store is at: C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-dsh-ci-Y22mpv\\run-Vwq638\\pnpm-home\\store\\v11\n  Virtual store is at:             node_modules/.pnpm\nProgress: resolved 1, reused 1, downloaded 0, added 1, done\n\ndependencies:\n+ @crosschat/dsh-bridge @crosschat/dsh-bridge@file:D:/workspace/CC/multichat/integrations/dsh\n\nDone in 956ms using pnpm v11.28.5\n",
+    "stderr": "dsh: initialized profile web at C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-dsh-ci-Y22mpv\\run-Vwq638\\dsh-home\\profiles\\web\n"
+  },
+  "runtimePid": 34932,
+  "webPort": 55290,
+  "sessionIds": {
+    "idle": "session-2d16dad1-a203-45d9-bc24-d6b8ac26c885",
+    "busy": "session-7e4f3e29-acc3-4f6e-a4b3-9be4eb91323a",
+    "sender": "session-4e0a49c2-65ef-48a3-b472-a49a933560c6",
+    "receiver": "session-bea6402f-28b3-4fc5-98a8-cbdc1ee3ffb4"
+  },
+  "bootstrapModelRequests": 2,
+  "lifecycle": {
+    "status": "passed",
+    "mechanism": "official-plugin-manager-bundle-disable-enable",
+    "pid": 34932,
+    "retainedSessionIds": [
+      "session-2d16dad1-a203-45d9-bc24-d6b8ac26c885",
+      "session-7e4f3e29-acc3-4f6e-a4b3-9be4eb91323a",
+      "session-4e0a49c2-65ef-48a3-b472-a49a933560c6",
+      "session-bea6402f-28b3-4fc5-98a8-cbdc1ee3ffb4"
+    ],
+    "previousInstanceId": "0d9deeeb-d6c4-4c18-9d6f-72eecc60f810",
+    "newInstanceId": "644555de-632c-41a6-86fa-dfc988b95a5b",
+    "previousPort": 55293,
+    "newPort": 49220,
+    "previousPortClosed": true,
+    "previousCredentialRejected": true,
+    "freshAck": true
+  },
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  },
+  "logs": {
+    "stdout": "dsh web: http://127.0.0.1:55290/?token=[redacted]\n",
+    "stderr": ""
+  },
+  "finishedAt": "2026-10-23T05:38:02.930Z"
+}
