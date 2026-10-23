@@ -207,7 +207,10 @@ ssh 配置方向一句话：**每台机写自己的 `~/.ssh/config`，内容是"
 
 完整参数、启动器与环境变量说明见 [命令手册](docs/commands.md)。
 
+运行 `crosschat tui` 可从连接上下文进入本机、SSH 或 TCP 资源，使用命令补全、筛选、只读详情和列表管理操作；布局及完整按键见 [终端界面](docs/tui.md)。原生聊天仍在 Claude Code/Codex 中进行。
+
 ```
+crosschat tui                                       # 终端管理界面：本机 / SSH / TCP
 crosschat send --to <名字> --body "<正文>"          # 新消息（名字含空格加引号；未命名 codex 线程可用 id8 或完整 id 寻址，status 可见）
 crosschat send --to <名字> --delivery steer --body "<追加内容>" # 忙时追加当前任务，空闲时唤醒
 crosschat send --conversation <ref|c柄> --body "<正文>" # 回复（照抄信封里的命令或 delivered 行尾的 cN）
@@ -218,6 +221,7 @@ echo … | crosschat send --to <名字>                 # 正文走 stdin
 crosschat status [--json] [--conversations] [--stars] [--claude|--codex] [--name <子串>] [--all]   # 裸跑三段式摘要；旗标在场=明细视图（--via tcp|ssh 配 --conversations 按传输滤）
 crosschat discover                                  # 新只读JSON发现；stdin可传list/detail请求，包含匿名/完整ID/分页，不补投
 crosschat doctor                                    # 一键环境体检（有 ❌ 时退出码 1）
+crosschat doctor --json                             # 结构化体检结果（供远端及程序读取）
 crosschat serve [--add-star/--remove-star/--gen-key/--list/--connect/--detach/--stop]  # tcp 星：起服务+造星(--add-star)/机器连星·聚合器(--connect)/钥匙管理（见跨机通信手册）
 crosschat clean [--force]                           # 清 tcp 收件/断点残留（默认懒删除规则；--force 全清）
 crosschat uninstall [--yes]                         # 卸载数据面（serve 在跑拒删；结尾 npm uninstall 收尾）
