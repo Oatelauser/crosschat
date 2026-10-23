@@ -108,6 +108,7 @@ describe('TUI entry contexts', () => {
     expect(result.errors).toEqual([
       expect.objectContaining({ source: ssh, kind: 'unreadable' }),
       expect.objectContaining({ source: node, kind: 'malformed' }),
+      expect.objectContaining({ source: join(home, '.crosschat', 'ssh-connections.json'), kind: 'malformed' }),
     ]);
     expect(JSON.stringify(result)).not.toContain('secret-');
     expect(await readdir(home)).toEqual([]);
