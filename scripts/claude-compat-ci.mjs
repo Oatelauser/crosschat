@@ -173,11 +173,11 @@ function validScope(value) {
 function validReport(report, artifact, runId) {
   if (!record(report) || report.schema !== 1 || report.tool !== tool || report.platform !== 'win32' || report.arch !== 'x64'
     || report.version !== artifact.version || !uuid.test(report.runId ?? '') || (runId !== undefined && report.runId !== runId) || !validScope(report.scope)
-    || !Array.isArray(report.checks) || report.checks.some((check) => !record(check) || !claudeRequiredChecks.includes(check.name) || check.status !== 'passed' || !Number.isFinite(check.elapsedMs) || check.elapsedMs < 0)
+    || !Array.isArray(report.checks) || report.checks.some((check, index) => !record(check) || check.name !== claudeRequiredChecks[index] || check.status !== 'passed' || !Number.isFinite(check.elapsedMs) || check.elapsedMs < 0)
     || new Set(report.checks.map((check) => check.name)).size !== report.checks.length) return false;
   return report.status === 'passed' ? report.stage === 'done' && report.category === null && report.checks.length === claudeRequiredChecks.length
     : report.status === 'failed' && ['compatibility', 'infrastructure'].includes(report.category) && slug.test(report.stage ?? '') && report.stage !== 'done' && slug.test(report.check ?? '')
-      && (report.category !== 'compatibility' || claudeRequiredChecks.includes(report.check));
+      && (report.category !== 'compatibility' || claudeRequiredChecks.indexOf(report.check) === report.checks.length);
 }
 
 const normalProcess = (result) => record(result) && result.timedOut === false && result.signal === null && [0, 1].includes(result.code);
