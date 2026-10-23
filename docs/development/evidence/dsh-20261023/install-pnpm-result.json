@@ -1,0 +1,8 @@
+{
+  "kind": "install-pnpm",
+  "code": 0,
+  "timedOut": false,
+  "at": "2026-10-23T04:56:50.439Z",
+  "version": "11.28.5",
+  "integrity": "sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng=="
+}

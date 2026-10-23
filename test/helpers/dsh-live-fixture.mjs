@@ -13,7 +13,13 @@ export const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const bounded = (text) => text.slice(-128000);
 
-export function classifyDshStartupFailure() { return { category: 'infrastructure', check: 'runtime-readiness' }; }
+export function classifyDshStartupFailure(evidence) {
+  const lines = String(evidence.stderr ?? '').split(/\r?\n/);
+  if (lines.some((line) => /crosschat-dsh-bridge/.test(line) && /failed to import|failed to activate|failed to load|missing.*\bagents\b/i.test(line))) return { category: 'compatibility', check: 'production-bridge-load' };
+  if (lines.some((line) => /crosschat-dsh-test-driver/.test(line) && /missing.*(?:sessionController|webServer)/i.test(line))) return { category: 'infrastructure', check: 'fixture-session-controller' };
+  if (lines.some((line) => /crosschat-dsh-test-driver/.test(line) && /failed to import|failed to activate|failed to load/i.test(line))) return { category: 'infrastructure', check: 'fixture-driver-load' };
+  return { category: 'infrastructure', check: evidence.processAlive === false ? 'runtime-process' : 'runtime-readiness' };
+}
 
 export async function prepareDshProfile(root, modelURL) {
   let endpoint;
@@ -178,16 +184,18 @@ export async function createDshFixture(options, respond) {
     child.once('error', (error) => { spawnError = error; });
     control = await pollDsh(async () => {
       if (spawnError) throw Object.assign(spawnError, { terminal: true });
-      if (child.exitCode !== null || child.signalCode !== null) throw Object.assign(new Error(`Harness exited during startup: ${logs.stderr.slice(-5000)}`), { terminal: true });
+      const assessment = classifyDshStartupFailure({ processAlive: child.exitCode === null && child.signalCode === null, stderr: logs.stderr });
+      if (assessment.check !== 'runtime-readiness') throw Object.assign(new Error(`Harness startup check failed: ${assessment.check}`), { ...assessment, terminal: true });
       let value;
       try { value = JSON.parse(await readFile(controllerPath, 'utf8')); } catch (error) { if (error.code === 'ENOENT') return; throw error; }
-      if (!isRecord(value) || value.schema !== 1 || value.pid !== child.pid || typeof value.version !== 'string' || value.token !== token || !/^http:\/\/127\.0\.0\.1:[1-9][0-9]*$/.test(value.url)) throw Object.assign(new Error('Harness driver published an invalid ownership record'), { terminal: true, category: 'compatibility', check: 'driver-registration' });
+      if (!isRecord(value) || value.schema !== 1 || value.pid !== child.pid || typeof value.version !== 'string' || value.token !== token || !/^http:\/\/127\.0\.0\.1:[1-9][0-9]*$/.test(value.url)) throw Object.assign(new Error('Harness driver published an invalid ownership record'), { terminal: true, category: 'infrastructure', check: 'fixture-driver-registration' });
       return value;
     }, 'official Web runtime and fixture controller');
     const ready = await fixture.controller('/health');
     if (ready.pid !== child.pid || ready.version !== control.version || ready.schema !== 1) throw new Error('Harness controller health does not belong to the owned runtime');
     return fixture;
   } catch (error) {
+    if (!error.category) Object.assign(error, classifyDshStartupFailure({ processAlive: child?.exitCode === null && child?.signalCode === null, stderr: logs.stderr }));
     await fixture.close().catch((failure) => { error.cleanup = failure.message; });
     throw Object.assign(error, { logs, fixtureRoot: cleanup.removed ? undefined : root, cleanup });
   }

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import process from 'node:process';
-import { setTimeout } from 'node:timers';
+import { clearTimeout, setTimeout } from 'node:timers';
 import { decodeRef } from '../dist/ref.js';
 import { createDshFixture, dshNodeCommand, dshShellCommand, pollDsh } from '../test/helpers/dsh-live-fixture.mjs';
 
@@ -12,7 +12,9 @@ if (process.env.CROSSCHAT_LIVE !== '1') throw new Error('CROSSCHAT_LIVE=1 is req
 const reportIndex = process.argv.indexOf('--report');
 if (reportIndex < 0 || !process.argv[reportIndex + 1]) throw new Error('--report <path> is required');
 const reportPath = resolve(process.argv[reportIndex + 1]);
-const report = { schema: 1, tool: 'dsh-web-runtime', platform: process.platform, arch: process.arch, runId: randomUUID(), version: process.env.DSH_EXPECTED_VERSION ?? null,
+const runId = process.env.DSH_EXPECTED_RUN_ID ?? randomUUID();
+if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(runId)) throw new Error('DSH_EXPECTED_RUN_ID must be a UUID v4');
+const report = { schema: 1, tool: 'dsh-web-runtime', platform: process.platform, arch: process.arch, runId, version: process.env.DSH_EXPECTED_VERSION ?? null,
   startedAt: new Date().toISOString(), status: 'failed', category: 'infrastructure', stage: 'setup', check: 'official-bundle-installation', checks: [],
   scope: { officialNpmRuntime: true, officialPluginManager: true, ordinaryWebSessions: true, scriptedLocalModel: true, browserUI: false, desktop: false, modelIntelligence: false } };
 const marker = `crosschat_dsh_${report.runId.slice(0, 8)}_`;
@@ -24,6 +26,7 @@ const busyRequests = [];
 const userText = (body) => (body?.messages ?? []).filter((message) => message.role === 'user').flatMap((message) => typeof message.content === 'string' ? [message.content] : (message.content ?? []).filter((item) => item.type === 'text').map((item) => item.text)).join('\n');
 const shell = (command) => ({ tool: { name: process.platform === 'win32' ? 'pwsh' : 'bash', input: { description: 'Run a fixed crosschat compatibility fixture command', command }, id: `fixture-${randomUUID()}` } });
 const text = (value) => ({ text: value });
+const strings = (value) => typeof value === 'string' ? [value] : value && typeof value === 'object' ? Object.values(value).flatMap(strings) : [];
 function respond(body) {
   const input = userText(body);
   if (input.includes(`${marker}bootstrap`) && !bootstrapTool) {
@@ -67,28 +70,30 @@ try {
   report.version = fixture.info.version;
   if (process.env.DSH_EXPECTED_VERSION && report.version !== process.env.DSH_EXPECTED_VERSION) throw new Error('Official runtime version differs from the requested artifact');
   report.installation = fixture.installation;
-  await check('official-plugin-installation-and-owned-Web-runtime', async () => {
+  await check('official-plugin-installation-and-owned-web-runtime', async () => {
     assert.equal(fixture.installation.code, 0);
     const health = await fixture.controller('/health');
     assert.equal(health.pid, fixture.pid); assert.equal(health.version, report.version);
     assert.ok(Number.isSafeInteger(health.webPort) && health.webPort > 0, 'The actual Web Host must own a listening port');
     report.runtimePid = fixture.pid; report.webPort = health.webPort;
   });
-  report.stage = 'contract'; report.category = 'compatibility';
-  await check('public-Web-session-controller-creates-interactive-sessions', async () => {
+  report.stage = 'setup'; report.category = 'infrastructure';
+  await check('public-web-session-controller-creates-interactive-sessions', async () => {
     for (const [kind, title] of Object.entries(names)) sessions[kind] = await fixture.createSession(title);
     assert.equal(new Set(Object.values(sessions).map((session) => session.id)).size, 4);
     for (const session of Object.values(sessions)) assert.equal((await fixture.snapshot(session.id)).header.cwd, fixture.workspace);
     report.sessionIds = Object.fromEntries(Object.entries(sessions).map(([kind, session]) => [kind, session.id]));
   });
   report.stage = 'model-fixture'; report.category = 'infrastructure';
-  await check('Messages-model-and-native-shell-identity-bootstrap', async () => {
+  await check('messages-model-and-native-shell-identity-bootstrap', async () => {
     await fixture.prompt(sessions.idle.id, `${marker}bootstrap`); await fixture.idle(sessions.idle.id);
     const snapshot = await fixture.snapshot(sessions.idle.id); const serialized = JSON.stringify(snapshot.events);
     assert.ok(serialized.includes(sessions.idle.id) && serialized.includes(`${marker}bootstrap-ACK`));
     const outputs = JSON.stringify(fixture.model.requests);
     assert.ok(outputs.includes('tool_result'), 'A real tool result must reach the next official provider request');
-    assert.ok(outputs.includes('dsh-home') && outputs.includes('web'), 'The shell must expose its actual profile and Harness home');
+    const returnedIdentities = fixture.model.requests.flatMap((request) => (request.messages ?? []).flatMap((message) => Array.isArray(message.content) ? message.content.filter((item) => item.type === 'tool_result').flatMap(strings) : []))
+      .flatMap((value) => { try { const parsed = JSON.parse(value.trim()); return parsed && typeof parsed === 'object' && typeof parsed.session === 'string' ? [parsed] : []; } catch { return []; } });
+    assert.ok(returnedIdentities.some((identity) => identity.session === sessions.idle.id && identity.profile === 'web' && identity.dshHome === fixture.env.DSH_HOME), 'The actual native shell output must contain the exact current session, profile and Harness home');
     assert.ok(bootstrapTool && fixture.model.requests.length >= 2 && !fixture.model.errors.length);
     report.bootstrapModelRequests = fixture.model.requests.length;
   });
@@ -121,7 +126,9 @@ try {
   await check('busy-native-queue-and-steer-step-boundaries', async () => {
     busyGate = new Promise((done) => { releaseBusy = done; }); busyStarted = new Promise((done) => { startBusy = done; });
     await fixture.prompt(sessions.busy.id, `${marker}busy-start`);
-    await Promise.race([busyStarted, new Promise((_, reject) => setTimeout(() => reject(new Error('Busy request never reached the model fixture')), 30000).unref())]);
+    let timer;
+    try { await Promise.race([busyStarted, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Busy request never reached the model fixture')), 30000); })]); }
+    finally { clearTimeout(timer); }
     sent(await fixture.cli(['send', '--to', `dsh/${sessions.busy.id}`, '--body', `${marker}queued`, '--delivery', 'queue', '--json']));
     sent(await fixture.cli(['send', '--to', `dsh/${sessions.busy.id}`, '--body', `${marker}steered`, '--delivery', 'steer', '--json']));
     const pending = (await fixture.snapshot(sessions.busy.id)).inbox;

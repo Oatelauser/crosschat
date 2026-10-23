@@ -28,7 +28,7 @@ export async function apply(ctx, config) {
       }
       const path = request.url ?? '';
       if (request.method === 'GET' && path === '/health') return send(response, { schema: 1, pid: process.pid, version, webPort: ctx.webServer.port });
-      if (request.method === 'POST' && path === '/shutdown') { send(response, { accepted: true }); setImmediate(() => process.emit('SIGINT')); return; }
+      if (request.method === 'POST' && path === '/shutdown') { send(response, { accepted: true }); setImmediate(() => process.emit('SIGTERM')); return; }
       if (request.method === 'POST' && path === '/sessions') {
         const created = await ctx.sessionController.create({ cwd: config.workspace });
         await ctx.sessionController.rename({ sessionId: created.sessionId, title: body.title });
