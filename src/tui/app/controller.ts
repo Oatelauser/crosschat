@@ -163,6 +163,12 @@ export function createTuiController(options: TuiControllerOptions) {
   }
 
   function currentContext() { return contexts.find((context) => context.id === page.route.contextId); }
+  function authorization(): TuiSnapshot['authorization'] {
+    if (!currentContext()) return undefined;
+    const permission = page.contextSummary?.permissionVerified === false ? undefined : page.contextSummary?.permissionLabel;
+    const verified = permission && !page.error && !['unavailable', 'cancelled'].includes(page.completeness);
+    return { state: loading ? 'checking' : verified ? 'verified' : permission ? 'stale' : 'unavailable', checkedAt: page.sampledAt };
+  }
   function pageRegistry() { return page.registry ?? options.registry; }
   function pageResource() { return pageRegistry().resolve(page.route.resourceId); }
   function actionsFor(targetMode: TuiMode) { return pageRegistry().actions(page.route.resourceId, targetMode); }
@@ -218,6 +224,7 @@ export function createTuiController(options: TuiControllerOptions) {
         enabled = false; reason = '当前资源尚未提供权限核验与操作接口';
       }
       if (enabled && action.mutation && loading) { enabled = false; reason = '正在重新核验当前连接与权限'; }
+      if (enabled && action.mutation && authorization()?.state === 'stale') { enabled = false; reason = '当前仅有上次权限结果，请刷新并重新核验后操作'; }
       return { id: action.id, shortcut: action.shortcut, label: choice?.actionId && action.id === 'choice-apply' ? '打开来源' : action.label, ...availability, enabled, reason };
     });
   }
@@ -231,13 +238,8 @@ export function createTuiController(options: TuiControllerOptions) {
     page.scrollOffset = Math.max(0, Math.min(page.scrollOffset, Math.max(0, rows.length - pageSize())));
     if (selectedIndex >= 0 && selectedIndex < page.scrollOffset) page.scrollOffset = selectedIndex;
     if (selectedIndex >= page.scrollOffset + pageSize()) page.scrollOffset = selectedIndex - pageSize() + 1;
-    const permission = page.contextSummary?.permissionVerified === false ? undefined : page.contextSummary?.permissionLabel;
-    const authorization: TuiSnapshot['authorization'] = currentContext() ? {
-      state: loading ? 'checking' : permission && !page.error && page.completeness !== 'unavailable' ? 'verified' : 'unavailable',
-      checkedAt: page.sampledAt,
-    } : undefined;
     snapshot = {
-      workspaceId: page.workspaceId, authorization, prompt: promptState,
+      workspaceId: page.workspaceId, authorization: authorization(), prompt: promptState,
       route: copyRoute(page.route), context: currentContext() ? { ...currentContext()!, ...page.contextSummary } : undefined, mode, rows, selectedId: page.selectedId, selectedIndex,
       scrollOffset: page.scrollOffset, filter: page.filter, input, detail, help, overlay, choice, loading,
       filters: page.filters, selectedFacets: Object.fromEntries(page.selectedFacets ?? []), sampledAt: page.sampledAt, totalRows: page.rows.length,
@@ -395,7 +397,8 @@ export function createTuiController(options: TuiControllerOptions) {
       cancelRead(false); stopWatch(); page = previous; mode = 'list';
       const active = page.route.contextId ?? null;
       if (active !== notifiedContext) { notifiedContext = active; options.onActiveContext?.(active); }
-      publish();
+      if (page.workspaceId === 'tcp' && page.route.contextId && page.route.resourceId !== 'tcp-targets') void refresh();
+      else publish();
     }
   }
   function openInput(kind: TuiInput['kind']) {

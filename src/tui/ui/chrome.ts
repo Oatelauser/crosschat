@@ -32,7 +32,7 @@ export function headerLines(snapshot: TuiSnapshot, resource: TuiResource, versio
   const info = [
     `CC · 工作区: ${snapshot.workspaceId ? workspace[snapshot.workspaceId] : '全局看板'} · ${resource.id}`,
     `目标: ${snapshot.context?.target ?? snapshot.context?.label ?? '选择目标进入工作区'}`,
-    `角色: ${snapshot.authorization?.state === 'checking' && snapshot.context?.permissionLabel ? '上次 ' : ''}${permission}`,
+    `角色: ${['checking', 'stale'].includes(snapshot.authorization?.state ?? '') && snapshot.context?.permissionLabel ? '上次 ' : ''}${permission}`,
     `核验: ${verification}${snapshot.sampledAt ? ` · 采样 ${new Date(snapshot.sampledAt).toLocaleTimeString()}` : ''}`,
     `当前: ${snapshot.context?.label ?? resource.label}`,
     `版本: ${version}`,

@@ -117,7 +117,7 @@ describe('independent TUI workspaces', () => {
           }
           return { rows: memberRows, completeness: 'complete', sampledAt: 1, contextSummary: { permissionLabel: star === 'a' ? '星管理员' : '普通成员' } };
         },
-        checkAction: async () => ({ enabled: true }), mutate: async () => ({ status: 'success', message: '完成' }),
+        checkAction: async () => ({ enabled: true }), mutate: async () => ({ message: '完成' }),
       },
     } });
     try {
