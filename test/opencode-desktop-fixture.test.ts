@@ -29,13 +29,15 @@ afterEach(async () => {
   }
 });
 
-async function serviceFixture(status: number, body: unknown) {
+async function serviceFixture(status: number, body: unknown, bodyMode: 'json' | 'incomplete' | 'invalid' = 'json') {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'crosschat-desktop-fixture-unit-')));
   roots.push(root);
   const requests: Array<{ url: string | undefined; authorization: string | undefined }> = [];
   const server = createServer((request, response) => {
     requests.push({ url: request.url, authorization: request.headers.authorization });
     response.writeHead(status, { 'content-type': 'application/json' });
+    if (bodyMode === 'incomplete') { response.write('{'); return; }
+    if (bodyMode === 'invalid') { response.end('{'); return; }
     response.end(JSON.stringify(body));
   });
   servers.push(server);
@@ -124,6 +126,14 @@ describe('official desktop test environment', () => {
     await expect(probeDesktopService(fixture.registrationFile, fixture.port)).resolves.toMatchObject({ pid: process.pid, version: '2.1.3' });
   });
 
+  it('keeps an interrupted successful HTTP body distinct from malformed completed JSON', async () => {
+    const pending = await serviceFixture(200, null, 'incomplete');
+    await expect(probeDesktopService(pending.registrationFile, pending.port, { signal: AbortSignal.timeout(100) })).rejects.toMatchObject({ category: 'infrastructure', check: 'service-readiness', retry: true });
+    expect(pending.requests).toHaveLength(1);
+    const malformed = await serviceFixture(200, null, 'invalid');
+    await expect(probeDesktopService(malformed.registrationFile, malformed.port)).rejects.toMatchObject({ category: 'compatibility', check: 'service-info-schema', retry: false });
+  });
+
   it.skipIf(process.platform !== 'win32')('retains a locked-log diagnostic while collecting remaining logs for teardown', async () => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'crosschat-desktop-fixture-unit-')));
     roots.push(root);
@@ -132,7 +142,7 @@ describe('official desktop test environment', () => {
     await mkdir(directory, { recursive: true });
     const locked = join(directory, 'locked.log');
     await writeFile(locked, 'owned log held exclusively by the fixture');
-    await writeFile(join(directory, 'healthy.log'), 'remaining logs stay available');
+    await writeFile(join(directory, 'healthy.log'), `${'前'.repeat(100000)}\nremaining logs stay available`);
     const script = '$stream=[IO.File]::Open($env:CROSSCHAT_LOCKED_LOG,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None);try{[Console]::WriteLine("LOCK_READY");[Console]::Out.Flush();[Console]::ReadLine()|Out-Null}finally{$stream.Dispose()}';
     const child = spawn(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'), ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { env: { ...env, CROSSCHAT_LOCKED_LOG: locked }, cwd: root, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     const exited = new Promise<void>((done) => child.once('close', () => done()));
@@ -142,7 +152,9 @@ describe('official desktop test environment', () => {
       await new Promise<void>((done, reject) => { child.once('spawn', done); child.once('error', reject); });
       await poll(() => output.includes('LOCK_READY'), 'controlled exclusive log lock', 3000);
       const collected = await collectDesktopLogs(root);
-      expect(collected.files[join('profile', '.local', 'desktop', 'logs', 'healthy.log')]).toBe('remaining logs stay available');
+      const tail = collected.files[join('profile', '.local', 'desktop', 'logs', 'healthy.log')];
+      expect(tail.endsWith('\nremaining logs stay available')).toBe(true);
+      expect(Buffer.byteLength(tail, 'utf8')).toBeLessThanOrEqual(64 * 1024);
       expect(collected.errors).toEqual([expect.objectContaining({ path: join('profile', '.local', 'desktop', 'logs', 'locked.log'), code: expect.any(String) })]);
     } finally {
       child.stdin.end('\n');
