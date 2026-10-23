@@ -39,4 +39,11 @@ describe('OpenCode source composition', () => {
     const result = await createLocalDiscoveryService({ home: join('fixture', 'home') }).execute({ op: 'list', filter: { providerIds: ['opencode'] } });
     expect(result.op === 'list' && result.page.completeness).toBe('unavailable');
   });
+  it('proves absence through default detail reads when OpenCode is uninstalled', async () => {
+    const missing = { item: null, completeness: 'unavailable', observedAt: 1,
+      errors: [{ source: { contextId: 'local', providerId: 'opencode' }, kind: 'missing', message: 'No running OpenCode service is registered.' }] };
+    mocks.reader.mockReturnValue({ providerId: 'opencode', capabilities: { discovery: true, delivery: true, launch: false, diagnostics: false }, list: vi.fn(), get: async () => missing });
+    const result = await createLocalDiscoveryService({ home: join('fixture', 'home') }).execute({ op: 'detail', providerId: 'opencode', nativeId: 'legacy-native-id' });
+    expect(result.op === 'detail' && result.detail).toMatchObject({ item: null, completeness: 'complete', errors: [] });
+  });
 });
