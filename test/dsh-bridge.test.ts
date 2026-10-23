@@ -82,6 +82,16 @@ describe('DSH Host bridge', () => {
     expect(value.received).toEqual([]);
   });
 
+  it('reads the public title projection without replaying history through the snapshot getter', async () => {
+    const value = await fixture();
+    const previous = value.ctx.get;
+    Object.assign(value.ctx, { get: (key: string) => key === 'sessionProjections' ? { stateOf: () => 'Existing native title' }
+      : key === 'sessionTitle' ? { get: () => { throw new Error('Full history getter must not be used for listing'); } } : previous(key) });
+    const response = await fetch(`${value.registration.url}/v1/sessions`, { headers: value.headers });
+    expect(response.status).toBe(200);
+    expect((await response.json()).items[0].name).toBe('Existing native title');
+  });
+
   it.each(['queue', 'steer'] as const)('admits one native %s message and returns its generated identity', async (mode) => {
     const value = await fixture();
     const response = await fetch(`${value.registration.url}/v1/sessions/busy/messages`, { method: 'POST', headers: { ...value.headers, 'content-type': 'application/json' }, body: JSON.stringify({ text: 'native mock content', mode }) });

@@ -643,7 +643,7 @@ export async function drainOutboxAtEntry(deps: DrainEntryDeps): Promise<void> {
   }
 }
 
-async function main(argv: string[]): Promise<number> {
+export async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
   if (command === undefined || command === '') {
     process.stderr.write(usage);
