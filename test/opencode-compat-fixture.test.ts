@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { classifyCompatibility, parseArtifactManifest } from '../scripts/opencode-compat-report.mjs';
+import { assessStartupEvidence, classifyCompatibility, parseArtifactManifest } from '../scripts/opencode-compat-report.mjs';
 import { createMockModel, textStream, toolStream } from './helpers/opencode-mock-model.mjs';
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -31,6 +31,24 @@ describe('OpenCode compatibility evidence', () => {
     const changed = structuredClone(manifest);
     changed.metadata.files['opencode-linux-x64.tar.gz'].url = 'https://unrelated.example/tool.tar.gz';
     expect(() => parseArtifactManifest(changed, 'linux', 'x64')).toThrow();
+  });
+
+  it('distinguishes service protocol changes from process or transient readiness failures', () => {
+    const evidence = { processAlive: true, expectedPid: 123, registrationExists: true, registration: { url: 'http://127.0.0.1:12345', password: 'fixture-only', pid: 123 }, responseStatus: 200, responseBody: { version: '2.1.3', pid: 123 } };
+    expect(assessStartupEvidence(evidence)).toMatchObject({ ready: true });
+    expect(assessStartupEvidence({ ...evidence, responseStatus: 401 })).toMatchObject({ category: 'compatibility', check: 'service-authentication' });
+    expect(assessStartupEvidence({ ...evidence, responseStatus: 404 })).toMatchObject({ category: 'compatibility', check: 'service-info-route' });
+    expect(assessStartupEvidence({ ...evidence, responseBody: {} })).toMatchObject({ category: 'compatibility', check: 'service-info-schema' });
+    expect(assessStartupEvidence({ ...evidence, registration: {} })).toMatchObject({ category: 'compatibility', check: 'service-registration-schema' });
+    expect(assessStartupEvidence({ ...evidence, processAlive: false })).toMatchObject({ category: 'infrastructure', check: 'service-process' });
+    expect(assessStartupEvidence({ ...evidence, responseStatus: 503 })).toMatchObject({ category: 'infrastructure', retry: true });
+  });
+
+  it('surfaces a newly published major as an unsupported release requiring a decision', () => {
+    let error: unknown;
+    try { parseArtifactManifest({ version: '3.0.0', name: 'cli', distribution: 'opencode', metadata: { files: {} } }, 'linux', 'x64'); }
+    catch (caught) { error = caught; }
+    expect(error).toMatchObject({ category: 'unsupported', version: '3.0.0' });
   });
 });
 
