@@ -15,17 +15,6 @@ import { createLocalServices } from '../src/application/services/managed.js';
 const roots: string[] = [];
 const children: ChildProcess[] = [];
 function alive(pid: number): boolean { try { process.kill(pid, 0); return true; } catch { return false; } }
-async function processTreeDiagnostic(pids: number[]): Promise<string> {
-  if (process.platform === 'win32') return `processes still visible: ${pids.join(',')}`;
-  const observed = Date.now();
-  const samples: string[] = [];
-  for (const pause of [0, 25, 75]) {
-    if (pause > 0) await delay(pause);
-    const table = await new Promise<string>((resolve) => execFile('/bin/ps', ['-o', 'pid=,ppid=,pgid=,stat=', '-p', pids.join(',')], { timeout: 500 }, (_error, stdout) => resolve(stdout.trim() || '<no matching processes>')));
-    samples.push(`${Date.now() - observed}ms: ${table}`);
-  }
-  return `Owned stop cleanup process samples (PID PPID PGID STAT):\n${samples.join('\n')}`;
-}
 async function release(child: ChildProcess): Promise<void> {
   if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
   if (process.platform === 'win32') {
@@ -75,11 +64,7 @@ describe('TUI owned service stop process trees', () => {
     const stopping = stopServicesOwned({ selector: 'fixture', expectedPids: [1234] }, { baseDir: f.baseDir, createProcess: f.createProcess, timeoutMs: 1000 });
     const scan = await f.started();
     expect(await stopping).toMatchObject({ state: 'failed', error: expect.stringMatching(/超时|待核实/) });
-    // Capture both assertions before diagnostics; sampling must not give cleanup
-    // extra time and accidentally hide an owned scanner that outlives the result.
-    const scannerAlive = alive(scan.pid); const parentAlive = alive(scan.parentPid);
-    const diagnostic = scannerAlive || parentAlive ? await processTreeDiagnostic([scan.pid, scan.parentPid]) : undefined;
-    expect(scannerAlive, diagnostic).toBe(false); expect(parentAlive, diagnostic).toBe(false);
+    expect(alive(scan.pid)).toBe(false); expect(alive(scan.parentPid)).toBe(false);
   }, 10_000);
 
   it('does not create a stop job for an already cancelled request', async () => {
