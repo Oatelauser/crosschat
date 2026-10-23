@@ -5,12 +5,17 @@ on:
     - cron: '47 3 * * 2,5'
   workflow_dispatch:
 
+concurrency:
+  group: dsh-compat-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 jobs:
   probe:
     runs-on: windows-latest
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
@@ -28,6 +33,8 @@ jobs:
         with:
           name: dsh-compat-win32-x64
           path: dsh-compat-evidence/
+          if-no-files-found: warn
+          retention-days: 21
 
   report:
     needs: probe
@@ -45,4 +52,62 @@ jobs:
       - uses: actions/github-script@v7
         with:
           script: |
-            core.notice('DSH compatibility evidence reporting is not implemented.');
+            const fs = require('node:fs/promises');
+            let summary;
+            try { summary = JSON.parse(await fs.readFile('evidence/summary.json', 'utf8')); }
+            catch { core.notice('No fresh summary; inspect the probe failure. No issue created.'); return; }
+            const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+            const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+            const slug = /^[a-z0-9-]{1,100}$/;
+            const sri = /^sha512-[A-Za-z0-9+/]{85}[AQgw]==$/;
+            const scope = { officialNpmRuntime: true, officialPluginManager: true, ordinaryWebSessions: true, scriptedLocalModel: true, browserUI: false, desktop: false, modelIntelligence: false };
+            const checks = ['official-plugin-installation-and-owned-web-runtime', 'public-web-session-controller-creates-interactive-sessions', 'messages-model-and-native-shell-identity-bootstrap',
+              'authenticated-production-discovery-and-pagination', 'idle-production-delivery-wakes-the-existing-session', 'busy-native-queue-and-steer-step-boundaries',
+              'native-shell-send-and-conversation-reply-have-full-session-identities', 'missing-target-does-not-create-or-resume-a-replacement'];
+            function supported(version) {
+              if (typeof version !== 'string' || version.length > 80) return false;
+              const parts = /^0\.2\.([1-9][0-9]*)(?:-([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*))?$/.exec(version);
+              if (!parts || !Number.isSafeInteger(Number(parts[1]))) return false;
+              const pre = parts[2]?.split('.');
+              if (pre?.some((item) => /^[0-9]+$/.test(item) && item.length > 1 && item.startsWith('0'))) return false;
+              if (Number(parts[1]) > 1 || !pre) return true;
+              const floor = ['rc', '2'];
+              for (let i = 0; i < Math.max(pre.length, floor.length); i++) {
+                if (pre[i] === undefined) return false;
+                if (floor[i] === undefined) return true;
+                if (pre[i] === floor[i]) continue;
+                const a = /^[0-9]+$/.test(pre[i]); const b = /^[0-9]+$/.test(floor[i]);
+                if (a && b) return BigInt(pre[i]) > BigInt(floor[i]);
+                return a !== b ? !a : pre[i] > floor[i];
+              }
+              return true;
+            }
+            const scoped = (value) => record(value) && Object.entries(scope).every(([key, expected]) => value[key] === expected);
+            const released = (value) => record(value) && value.runtimeStopped === true && value.registrationRemoved === true && value.removed === true && value.forced === false
+              && (value.errors === undefined || (Array.isArray(value.errors) && value.errors.length === 0));
+            const artifact = (value) => record(value) && value.name === '@deepseek-ai/dsh' && supported(value.version) && sri.test(value.integrity ?? '')
+              && value.url === `https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-${value.version}.tgz`;
+            function report(value, build) {
+              if (!record(value) || value.schema !== 1 || value.tool !== 'dsh-web-runtime' || value.platform !== 'win32' || value.arch !== 'x64' || value.version !== build.version
+                || !uuid.test(value.runId ?? '') || !scoped(value.scope) || !released(value.cleanup) || !record(value.process) || value.process.timedOut !== false || value.process.signal !== null
+                || value.process.code !== (value.status === 'passed' ? 0 : 1) || !Array.isArray(value.checks)
+                || value.checks.some((check) => !record(check) || !checks.includes(check.name) || check.status !== 'passed' || !Number.isFinite(check.elapsedMs) || check.elapsedMs < 0)
+                || new Set(value.checks.map((check) => check.name)).size !== value.checks.length) return false;
+              return value.status === 'passed' ? value.stage === 'done' && value.category === null && value.checks.length === checks.length
+                : value.status === 'failed' && value.category === 'compatibility' && slug.test(value.stage ?? '') && value.stage !== 'done' && slug.test(value.check ?? '');
+            }
+            if (!record(summary) || summary.schema !== 1 || summary.tool !== 'dsh-web-runtime' || summary.platform !== 'win32' || summary.arch !== 'x64' || !scoped(summary.scope)
+              || summary.installationCleanup !== 'removed' || summary.classification?.kind !== 'regression' || summary.classification?.notify !== true || !record(summary.builds)) return;
+            const { baseline, candidate, retry, builds } = summary;
+            if (!artifact(builds.baseline) || !artifact(builds.candidate) || !record(builds.packageManager) || builds.packageManager.name !== 'pnpm' || builds.packageManager.version !== '11.28.5'
+              || builds.packageManager.url !== 'https://registry.npmjs.org/pnpm/-/pnpm-11.28.5.tgz'
+              || builds.packageManager.integrity !== 'sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng=='
+              || !report(baseline, builds.baseline) || !report(candidate, builds.candidate) || !report(retry, builds.candidate)
+              || baseline.status !== 'passed' || candidate.status !== 'failed' || retry.status !== 'failed'
+              || candidate.check !== retry.check || candidate.stage !== retry.stage || new Set([baseline.runId, candidate.runId, retry.runId]).size !== 3) return;
+            const marker = `<!-- dsh-compat:${candidate.version}:win32:${candidate.check} -->`;
+            const issues = await github.paginate(github.rest.issues.listForRepo, { ...context.repo, state: 'all', creator: 'github-actions[bot]', per_page: 100 });
+            if (issues.some((issue) => issue.body?.includes(marker))) { core.notice('This candidate/check was already reported.'); return; }
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.create({ ...context.repo, title: `DeepSeek Harness ${candidate.version}: ${candidate.check} compatibility regression (win32)`,
+              body: `${marker}\nPinned baseline ${baseline.version} passed all eight checks. The same official candidate failed the same compatibility check in two isolated runs with pinned package dependencies.\n\nFailed check: \`${candidate.check}\`\nCandidate SHA-512 SRI: \`${builds.candidate.integrity}\`\n\n[Inspect workflow and retained JSON evidence](${run}).\n\nScope: official npm Web runtime, plugin manager, production bridge and crosschat adapter with a scripted local model. No personal model key, browser UI, Desktop validation or model intelligence is claimed. Runtime and installation cleanup was verified. Investigate before changing support claims.` });
