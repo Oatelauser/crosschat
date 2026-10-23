@@ -59,6 +59,7 @@ describe('independent TUI workspaces', () => {
       controller.handleKey({ name: 'end' }); controller.handleKey({ name: 'enter' });
       await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
       expect(controller.getSnapshot()).toMatchObject({ workspaceId: 'tcp', route: { resourceId: 'stars', contextId: 'tcp:star:one' } });
+      command(controller, 'machines');
       command(controller, 'local');
       expect(controller.getSnapshot()).toMatchObject({ workspaceId: 'local', route: { resourceId: 'local', contextId: 'local' } });
       command(controller, 'tcp');
@@ -81,6 +82,14 @@ describe('independent TUI workspaces', () => {
       finish?.({ rows: [], completeness: 'unavailable' }); await pending;
       expect(controller.getSnapshot().authorization?.state).toBe('unavailable');
       expect(controller.getSnapshot().context?.permissionLabel).toBeUndefined();
+    } finally { controller.dispose(); }
+  });
+
+  it('does not treat an unverified permission description as authenticated authority', async () => {
+    const controller = createTuiController({ registry: registry(), contexts, adapters: { stars: { read: async () => ({ rows: [], completeness: 'partial', contextSummary: { permissionLabel: '权限尚未核实', permissionVerified: false } }) } } });
+    try {
+      command(controller, 'stars'); await vi.waitFor(() => expect(controller.getSnapshot().loading).toBe(false));
+      expect(controller.getSnapshot().authorization?.state).toBe('unavailable');
     } finally { controller.dispose(); }
   });
 });
