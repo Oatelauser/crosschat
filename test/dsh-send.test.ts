@@ -128,6 +128,25 @@ describe('DeepSeek Harness through the application send seam', () => {
     expect(deliverDsh).toHaveBeenCalledWith(thread.id, expect.stringContaining('from-machine="remote-host"'), { mode: 'queue' });
   });
 
+  it('keeps two session-prefixed native senders distinct in usable TCP from-addresses', async () => {
+    const { deps } = fixture();
+    const ids = ['session-00000000-0000-4000-8000-000000000001', 'session-00000000-0000-4000-8000-000000000002'];
+    const rows = [thread, ...ids.map((id) => ({ ...thread, id, name: null }))];
+    const deliverDsh = vi.fn<NonNullable<SendDeps['deliverDsh']>>(async () => ({ status: 'accepted', messageId: 'message', queued: false }));
+    for (const id of ids) {
+      const sent = await sendMessage({ to: `dsh/${thread.id}`, bodyArg: 'native sender' }, { ...deps, env: { DSH_SESSION_ID: id },
+        listDshThreads: async () => rows, deliverDsh, fromStarName: 'fixture-star', fromMachine: 'fixture-machine' });
+      expect(decodeRef(sent.receipt.replyRef).f).toEqual({ p: 'dsh', id });
+    }
+    const addresses = deliverDsh.mock.calls.map((call) => /from-addr="([^"]+)"/.exec(call[1])?.[1]);
+    expect(new Set(addresses).size).toBe(2);
+    for (const [index, address] of addresses.entries()) {
+      expect(address).toBe(`tcp:fixture-star:fixture-machine:dsh/${ids[index]}`);
+      const qualifier = address?.slice('tcp:fixture-star:fixture-machine:'.length) ?? '';
+      expect(resolveTargetByName(qualifier, [], [], [], rows)).toMatchObject({ side: 'dsh', thread: { id: ids[index] } });
+    }
+  });
+
   it('applies a named Harness adapter cap without misreporting a Codex transport limit', async () => {
     const { deps, deliverDsh } = fixture();
     const failure = await sendMessage({ to: 'dsh/Worker', bodyArg: 'a'.repeat(1_048_577), maxBodyKb: '2048' }, deps).catch((error: unknown) => error);
