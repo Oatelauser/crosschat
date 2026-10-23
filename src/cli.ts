@@ -19,6 +19,8 @@ import { runCodexWrapper } from './commands/codex-wrapper.js';
 import { runOpenCodeWrapper } from './commands/opencode-wrapper.js';
 import { listOpenCodeThreads } from './opencode/client.js';
 import { deliverToOpenCodeSession } from './opencode/deliver.js';
+import { listDshThreads } from './dsh/client.js';
+import { deliverToDshSession } from './dsh/deliver.js';
 import { defaultOutboxDir, drain } from './outbox.js';
 import type { DrainDeliverFn } from './outbox.js';
 import { legacyStateRoots, stateRoot } from './state-root.js';
@@ -52,7 +54,7 @@ const usage = `usage: crosschat <command> [options]
 commands:
   tui                       open the interactive terminal interface
   send --to <name> | --conversation <ref>
-                            send a message to a claude/codex/opencode session
+                            send a message to a claude/codex/opencode/dsh session
                             (quote <name> if it contains spaces);
                             options:
                               --body <text>        message text
@@ -83,7 +85,7 @@ commands:
                                 (env CROSSCHAT_MAX_TURN)
   status [--conversations]  show native session status, or per-pair
                             conversation overview with --conversations
-                              --claude | --codex | --opencode
+                              --claude | --codex | --opencode | --dsh
                                 pick one main-view section
                                 (mutually exclusive, not with --conversations)
                               --name <substr>       filter rows by display name
@@ -106,6 +108,8 @@ commands:
                             optional JSON list/detail request on stdin
                             (includes unnamed sessions and full IDs;
                             paged, no message delivery or repair)
+  dsh-bridge-path           print the packaged DeepSeek Harness bridge path;
+                            enable it in the intended native runtime explicitly
   doctor [--json]           environment health check (exits 1 on any ❌)
   serve [options]           run/manage the tcp broker (star topology,
                             default port ${DEFAULT_PORT}; a non-default
@@ -294,7 +298,7 @@ export function parseSendArgs(argv: readonly string[]): SendArgs {
 }
 
 /**
- * status accepts --json/--conversations/--stars/--claude/--codex/--opencode/--name <v>/--via <v>/--all
+ * status accepts --json/--conversations/--stars/--claude/--codex/--opencode/--dsh/--name <v>/--via <v>/--all
  * (flags at most once). Tool sections are mutually exclusive and
  * main-view only; bare --via (tcp|ssh) only combines with --conversations;
  * --via tcp:<机器> (E1) only combines with the main view (remote enumeration);
@@ -313,7 +317,7 @@ export function parseStatusArgs(argv: readonly string[]): {
   let json = false;
   let conversations = false;
   let stars = false;
-  let section: 'claude' | 'codex' | 'opencode' | undefined;
+  let section: 'claude' | 'codex' | 'opencode' | 'dsh' | undefined;
   let name: string | undefined;
   let via: 'tcp' | 'ssh' | undefined;
   let viaTarget: string | undefined;
@@ -328,6 +332,7 @@ export function parseStatusArgs(argv: readonly string[]): {
     else if (token === '--claude' && section === undefined) section = 'claude';
     else if (token === '--codex' && section === undefined) section = 'codex';
     else if (token === '--opencode' && section === undefined) section = 'opencode';
+    else if (token === '--dsh' && section === undefined) section = 'dsh';
     else if (token === '--all' && !all) all = true;
     else if (token === '--name' || token.startsWith('--name=')) {
       const value = inline ?? argv[++i];
@@ -344,12 +349,12 @@ export function parseStatusArgs(argv: readonly string[]): {
     } else {
       throw new MultichatError(
         'USAGE',
-        `status takes only --json/--conversations/--stars/--claude/--codex/--opencode/--name/--via/--all; got: ${argv.join(' ')}`,
+        `status takes only --json/--conversations/--stars/--claude/--codex/--opencode/--dsh/--name/--via/--all; got: ${argv.join(' ')}`,
       );
     }
   }
   if (section !== undefined && conversations) {
-    throw new MultichatError('USAGE', 'status: --claude/--codex/--opencode 选段不与 --conversations 组合');
+    throw new MultichatError('USAGE', 'status: --claude/--codex/--opencode/--dsh 选段不与 --conversations 组合');
   }
   if (via !== undefined && !conversations) {
     throw new MultichatError('USAGE', 'status: --via 仅与 --conversations 组合');
@@ -531,10 +536,12 @@ function realSendDeps(stdinText: string | undefined): SendDeps {
     listClaudeSessions: () => listClaudeSessions(),
     listCodexThreads: () => listCodexThreads(),
     listOpenCodeThreads: () => listOpenCodeThreads(),
+    listDshThreads: () => listDshThreads(),
     diagnoseCodexTarget: (query) => diagnoseCodexTarget(query),
     deliverClaude: (target, content, options) => deliverToClaudeSession(target, content, options),
     deliverCodex: (threadId, content, options) => deliverToCodexThread(threadId, content, options),
     deliverOpenCode: (sessionId, content, options) => deliverToOpenCodeSession(sessionId, content, options),
+    deliverDsh: (sessionId, content, options) => deliverToDshSession(sessionId, content, options),
     sendLogFile: defaultSendLogFile(),
     outboxDir: defaultOutboxDir(),
     now: () => Date.now(),
@@ -563,6 +570,7 @@ function realStatusDeps(): StatusDeps {
     listClaudeSessions: () => listClaudeSessions(),
     listCodexThreads: () => listCodexThreads(),
     listOpenCodeThreads: () => listOpenCodeThreads(),
+    listDshThreads: () => listDshThreads(),
     // 006: TUI occupancy markers come straight from the filesystem.
     listWriterLocks: () => listWriterLocks(codexHomeDir()),
     listConversations: () => conversationSummaries(),
@@ -684,6 +692,12 @@ export async function main(argv: string[]): Promise<number> {
     } else {
       await drainAtEntry();
     }
+    return 0;
+  }
+  if (command === 'dsh-bridge-path') {
+    if (rest.length === 1 && rest[0] === '--help') { process.stdout.write(usage); return 0; }
+    if (rest.length !== 0) return printFailure(new MultichatError('USAGE', 'dsh-bridge-path takes no options.'));
+    process.stdout.write(`${fileURLToPath(new URL('../integrations/dsh', import.meta.url))}\n`);
     return 0;
   }
   if (command === 'send') {

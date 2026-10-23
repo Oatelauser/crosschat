@@ -1,9 +1,11 @@
-import type { RosterMachine, SessionMemberDecl, StatusCodexRow, StatusPayload } from '../serve/protocol.js';
+import type { RosterMachine, SessionMemberDecl, StatusCodexRow, StatusDshRow, StatusPayload } from '../serve/protocol.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ClaudeRegistryScan } from '../claude/registry.js';
 import type { CodexThreadWithMeta } from '../codex/discovery.js';
 import type { OpenCodeThread } from '../opencode/client.js';
+import type { DshThread } from '../dsh/client.js';
+import { isRecord } from '../application/sessions/reading.js';
 import { pairKeyOf } from '../conversations.js';
 import type { ConversationSummary } from '../conversation-summary.js';
 import { MultichatError } from '../errors.js';
@@ -30,6 +32,7 @@ export interface StatusDeps {
   listClaudeSessions(): ClaudeRegistryScan;
   listCodexThreads(): Promise<CodexThreadWithMeta[]>;
   listOpenCodeThreads?(): Promise<OpenCodeThread[]>;
+  listDshThreads?(): Promise<DshThread[]>;
   /** Per-pair conversation rows for `status --conversations`; omitted → none. */
   listConversations?(): ConversationSummary[];
   /**
@@ -436,8 +439,8 @@ export function formatCreatedAt(iso: string | undefined): string {
 
 /** status 过滤参数（cli 层已做互斥/组合校验，这里只消费）。 */
 export interface StatusFilters {
-  /** --claude/--codex/--opencode：主视图选段。 */
-  section?: 'claude' | 'codex' | 'opencode';
+  /** --claude/--codex/--opencode/--dsh：主视图选段。 */
+  section?: 'claude' | 'codex' | 'opencode' | 'dsh';
   /** --name <子串>：按显示名大小写不敏感子串过滤（conversations 侧任一端命中即保留）。 */
   name?: string;
   /** --via tcp|ssh：--conversations 传输族过滤（本机 send-log 无跨机痕迹的对不显示）。 */
@@ -473,6 +476,31 @@ async function readOpenCodeStatus(deps: StatusDeps): Promise<OpenCodeStatusSnaps
     return { threads: [], configured: !(error instanceof MultichatError && error.code === 'OPENCODE_NOT_CONFIGURED'),
       error: error instanceof MultichatError ? `${error.code}: ${error.message}` : 'INTERNAL: OpenCode session source could not be read.' };
   }
+}
+
+interface DshStatusSnapshot { threads: DshThread[]; configured: boolean; error?: string }
+async function readDshStatus(deps: StatusDeps): Promise<DshStatusSnapshot> {
+  if (deps.listDshThreads === undefined) return { threads: [], configured: false, error: 'DeepSeek Harness session discovery is not configured.' };
+  try { return { threads: await deps.listDshThreads(), configured: true }; }
+  catch (error) {
+    return { threads: [], configured: !(error instanceof MultichatError && error.code === 'DSH_NOT_CONFIGURED'),
+      error: error instanceof MultichatError ? `${error.code}: ${error.message}` : 'INTERNAL: DeepSeek Harness session source could not be read.' };
+  }
+}
+
+/** Validate only the newly introduced section; existing wire readers stay unchanged. */
+function remoteDshStatus(source: unknown): { threads: StatusDshRow[]; error?: string } {
+  const invalid = () => ({ threads: [], error: 'DSH_PROTOCOL_ERROR: Remote DeepSeek Harness status metadata is malformed.' });
+  if (source === undefined) return { threads: [], error: 'DeepSeek Harness session source is unavailable on the remote peer.' };
+  if (isRecord(source) && typeof source.unavailable === 'string') return { threads: [], error: source.unavailable };
+  if (!Array.isArray(source)) return invalid();
+  const threads: StatusDshRow[] = [];
+  for (const row of source) {
+    if (!isRecord(row) || typeof row.id !== 'string' || row.id === '' || (row.name !== null && typeof row.name !== 'string')
+      || typeof row.cwd !== 'string' || !isRecord(row.rawStatus) || (row.rawStatus.type !== 'idle' && row.rawStatus.type !== 'running') || !isRecord(row.attributes)) return invalid();
+    threads.push({ id: row.id, name: row.name, cwd: row.cwd, rawStatus: { type: row.rawStatus.type }, attributes: row.attributes });
+  }
+  return { threads };
 }
 
 function nativeStatusText(raw: unknown): string {
@@ -520,6 +548,7 @@ export async function runStatus(
   }
   const held = deps.listWriterLocks?.() ?? new Set<string>();
   const openCode = await readOpenCodeStatus(deps);
+  const dsh = await readDshStatus(deps);
   const matches = nameMatcher(filters.name);
 
   if (json) {
@@ -580,6 +609,9 @@ export async function runStatus(
     if (includesSection(filters, 'opencode') && (filters.section === 'opencode' || openCode.threads.length > 0 || (openCode.configured && openCode.error !== undefined))) {
       out.opencode = openCode.error === undefined ? openCode.threads.filter((thread) => matches(thread.name)) : { error: openCode.error };
     }
+    if (includesSection(filters, 'dsh') && (filters.section === 'dsh' || dsh.threads.length > 0 || (dsh.configured && dsh.error !== undefined))) {
+      out.dsh = dsh.error === undefined ? dsh.threads.filter((thread) => matches(thread.name)) : { error: dsh.error };
+    }
     return JSON.stringify(out);
   }
 
@@ -636,6 +668,15 @@ export async function runStatus(
       }
     }
   }
+  if (includesSection(filters, 'dsh')) {
+    const rows = dsh.threads.filter((thread) => (filters.all || !!thread.name) && matches(thread.name));
+    if (filters.section === 'dsh' || rows.length > 0 || (dsh.configured && dsh.error !== undefined)) {
+      lines.push('dsh:');
+      if (dsh.error !== undefined) lines.push(`  unavailable (${dsh.error})`);
+      else if (rows.length === 0) lines.push('  (none)');
+      for (const thread of rows) lines.push(`  ${(thread.name ?? '(unnamed)').padEnd(24)} ${formatCwdShort(thread.cwd).padEnd(20)} ${thread.id}  ${nativeStatusText(thread.rawStatus)}`);
+    }
+  }
   lines.push(...(await tcpForwarderLines(deps.tcpDir, nowMs, deps.roster)));
   return lines.join('\n');
 }
@@ -655,6 +696,8 @@ async function summaryView(deps: StatusDeps, nowMs: number): Promise<string> {
   }
   const openCode = await readOpenCodeStatus(deps);
   const showOpenCode = openCode.threads.length > 0 || (openCode.configured && openCode.error !== undefined);
+  const dsh = await readDshStatus(deps);
+  const showDsh = dsh.threads.length > 0 || (dsh.configured && dsh.error !== undefined);
   const rows = deps.listConversations?.() ?? [];
   const lines: string[] = [];
   const parked = rows.reduce((total, row) => total + row.parked, 0);
@@ -662,6 +705,7 @@ async function summaryView(deps: StatusDeps, nowMs: number): Promise<string> {
     `本机会话: claude ${scan.sessions.length} · ` +
     (threads === undefined ? 'codex unavailable' : `codex ${threads.length}`) +
     (showOpenCode ? ` · ${openCode.error === undefined ? `opencode ${openCode.threads.length}` : 'opencode unavailable'}` : '') +
+    (showDsh ? ` · ${dsh.error === undefined ? `dsh ${dsh.threads.length}` : 'dsh unavailable'}` : '') +
     (parked > 0
       ? ` · 滞留 ${parked}${deps.watchdogRunning === undefined ? '' : `（看门狗${deps.watchdogRunning() ? '运行中' : '未运行'}）`}`
       : '');
@@ -674,6 +718,7 @@ async function summaryView(deps: StatusDeps, nowMs: number): Promise<string> {
       at: thread.meta?.createdAt ? Date.parse(thread.meta.createdAt) : undefined,
     })),
     ...openCode.threads.map((thread) => ({ side: 'opencode', name: thread.name ?? undefined, at: undefined })),
+    ...dsh.threads.map((thread) => ({ side: 'dsh', name: thread.name ?? undefined, at: undefined })),
   ]
     .filter((row) => row.name !== undefined) // 未命名默认隐藏，与明细视图同规
     .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))
@@ -682,7 +727,7 @@ async function summaryView(deps: StatusDeps, nowMs: number): Promise<string> {
     const time = row.at === undefined || Number.isNaN(row.at) ? '-' : formatRelativeTime(row.at, nowMs);
     lines.push(`  ${row.side} ${row.name}  ${time}`);
   }
-  lines.push(showOpenCode ? '（全量: --claude|--codex|--opencode|--name）' : '（全量: --claude|--codex|--name）');
+  lines.push(showDsh ? `（全量: --claude|--codex${showOpenCode ? '|--opencode' : ''}|--dsh|--name）` : showOpenCode ? '（全量: --claude|--codex|--opencode|--name）' : '（全量: --claude|--codex|--name）');
   if (deps.tcpDir !== undefined) {
     const groups = await collectStars(deps, nowMs);
     lines.push(groups.length === 0 ? 'tcp: 无' : `tcp: 共 ${groups.length} 星`);
@@ -763,6 +808,7 @@ async function remoteStatusView(deps: StatusDeps, json: boolean, filters: Status
   const matches = nameMatcher(filters.name);
   const codexRows: StatusCodexRow[] | undefined = Array.isArray(payload.codex) ? payload.codex : undefined;
   const codexUnavailable = codexRows === undefined ? (payload.codex as { unavailable: string }).unavailable : undefined;
+  const dsh = remoteDshStatus(payload.dsh);
   // 027-E 移交：远端行标注非册（裸起）——目标机星籍（roster 在线+下线切片）比对扫描行；
   // roster 不可达或机器不在任何星 = 无从判定，静默不标。
   const memberKeys = json ? undefined : await remoteMemberKeys(deps, target);
@@ -781,6 +827,9 @@ async function remoteStatusView(deps: StatusDeps, json: boolean, filters: Status
     if (includesSection(filters, 'opencode') && (filters.section === 'opencode' || payload.opencode !== undefined)) {
       out.opencode = Array.isArray(payload.opencode) ? payload.opencode.filter((row) => matches(row.name))
         : payload.opencode ?? { unavailable: 'OpenCode session source is unavailable on the remote peer.' };
+    }
+    if (includesSection(filters, 'dsh') && (filters.section === 'dsh' || payload.dsh !== undefined)) {
+      out.dsh = dsh.error === undefined ? dsh.threads.filter((row) => matches(row.name)) : { unavailable: dsh.error };
     }
     return JSON.stringify(out);
   }
@@ -834,6 +883,16 @@ async function remoteStatusView(deps: StatusDeps, json: boolean, filters: Status
         lines.push(`  ${(row.name ?? '(unnamed)').padEnd(24)} ${formatCwdShort(row.cwd).padEnd(20)} ${row.id}  ${nativeStatusText(row.rawStatus)}` +
           bareMark([...(row.name === null ? [] : [row.name, `opencode/${row.name}`]), row.id, row.id.slice(0, 8)]));
       }
+    }
+  }
+  if (includesSection(filters, 'dsh')) {
+    const rows = dsh.threads.filter((row) => (filters.all || row.name !== null) && matches(row.name));
+    if (filters.section === 'dsh' || rows.length > 0 || (payload.dsh !== undefined && dsh.error !== undefined)) {
+      lines.push('dsh:');
+      if (dsh.error !== undefined) lines.push(`  unavailable (${dsh.error})`);
+      else if (rows.length === 0) lines.push('  (none)');
+      for (const row of rows) lines.push(`  ${(row.name ?? '(unnamed)').padEnd(24)} ${formatCwdShort(row.cwd).padEnd(20)} ${row.id}  ${nativeStatusText(row.rawStatus)}` +
+        bareMark([...(row.name === null ? [] : [row.name, `dsh/${row.name}`]), row.id, row.id.slice(0, 8)]));
     }
   }
   return lines.join('\n');
@@ -962,6 +1021,9 @@ async function endpointDisplayNames(deps: StatusDeps): Promise<Map<string, strin
   } catch {
     // codex down is a valid status answer — translate the claude side only
   }
+  try {
+    for (const thread of await deps.listDshThreads?.() ?? []) add('dsh', thread.id, thread.name);
+  } catch { /* Native display metadata does not block existing conversation rows. */ }
   return names;
 }
 

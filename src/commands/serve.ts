@@ -1039,6 +1039,7 @@ async function runAdoptServe(args: ServeArgs, deps: ServeDeps): Promise<number> 
       listClaudeSessions: () => send.listClaudeSessions(),
       listCodexThreads: async () => (await send.listCodexThreads()).map((thread) => ({ id: thread.id, name: thread.name })),
       ...(send.listOpenCodeThreads === undefined ? {} : { listOpenCodeThreads: send.listOpenCodeThreads }),
+      ...(send.listDshThreads === undefined ? {} : { listDshThreads: send.listDshThreads }),
       spawnServeDetach: spawnServeDetachReal,
       machineName,
       now: deps.now,

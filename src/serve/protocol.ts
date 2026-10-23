@@ -277,8 +277,18 @@ export interface StatusOpenCodeRow {
 
 export interface StatusPayload {
   opencode?: StatusOpenCodeRow[] | { unavailable: string };
+  /** Optional live-root Harness metadata; existing sections retain their shape. */
+  dsh?: StatusDshRow[] | { unavailable: string };
   claude: StatusClaudeRow[];
   codex: StatusCodexRow[] | { unavailable: string };
+}
+
+export interface StatusDshRow {
+  name: string | null;
+  id: string;
+  cwd: string;
+  rawStatus: { type: 'idle' | 'running' };
+  attributes: Readonly<Record<string, unknown>>;
 }
 
 /** E1 远程会话枚举（票012）：请求方→broker；目标是节点时 broker 原帧转发。 */

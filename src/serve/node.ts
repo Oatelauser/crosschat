@@ -97,7 +97,7 @@ export async function deliverViaRunSend(frame: DeliverFrame, deps: SendDeps): Pr
  * 不让整次查询失败。节点守护应答与 broker 本机应答（serve 注线）共用。
  */
 export async function buildStatusPayload(
-  deps: Pick<SendDeps, 'listClaudeSessions' | 'listCodexThreads' | 'listOpenCodeThreads'>,
+  deps: Pick<SendDeps, 'listClaudeSessions' | 'listCodexThreads' | 'listOpenCodeThreads' | 'listDshThreads'>,
 ): Promise<StatusPayload> {
   const scan = deps.listClaudeSessions();
   let codex: StatusPayload['codex'];
@@ -132,6 +132,17 @@ export async function buildStatusPayload(
       }
     }
   }
+  let dsh: StatusPayload['dsh'];
+  if (deps.listDshThreads !== undefined) {
+    try {
+      const threads = await deps.listDshThreads();
+      if (threads.length > 0) dsh = threads.map(({ id, name, cwd, rawStatus, attributes }) => ({ id, name, cwd, rawStatus, attributes }));
+    } catch (error) {
+      if (!(error instanceof MultichatError && error.code === 'DSH_NOT_CONFIGURED')) {
+        dsh = { unavailable: error instanceof MultichatError ? `${error.code}: ${error.message}` : 'INTERNAL: DeepSeek Harness session source could not be read.' };
+      }
+    }
+  }
   return {
     claude: scan.sessions.map((session) => ({
       name: session.name ?? null,
@@ -142,6 +153,7 @@ export async function buildStatusPayload(
     })),
     codex,
     ...(opencode === undefined ? {} : { opencode }),
+    ...(dsh === undefined ? {} : { dsh }),
   };
 }
 
@@ -920,11 +932,17 @@ export class NodeClient {
       } else {
         const deps = this.d.makeSendDeps();
         providers = createLegacyMemberProviders({ listClaudeSessions: deps.listClaudeSessions, listCodexThreads: deps.listCodexThreads,
-          listOpenCodeThreads: deps.listOpenCodeThreads, codexHome: this.d.codexHome, now: this.d.now }, request.nativeIds);
+          listOpenCodeThreads: deps.listOpenCodeThreads, listDshThreads: deps.listDshThreads, codexHome: this.d.codexHome, now: this.d.now }, request.nativeIds);
       }
       const observations = await readMemberSnapshot(providers, request);
       const toolOf = (id: string): string | undefined =>
         observations.get(id)?.providerId;
+      // Harness cannot claim a previous tool's native ID, including old
+      // toolless roster entries. Existing three-tool reconciliation is kept.
+      const matchesTool = (id: string, expected: string | undefined): boolean => {
+        const observed = toolOf(id);
+        return observed === 'dsh' || expected === 'dsh' ? observed === expected : observed !== undefined;
+      };
       let changed = false;
       // 3) 复活：册刻活而未声明（孤儿/裸 resume 回归）——重入册并重播
       for (const decl of slice) {
@@ -932,6 +950,7 @@ export class NodeClient {
         if (this.erased.has(decl.sessionId)) continue; // --rm/管理删墓碑——删了不复活
         const aliveTool = toolOf(decl.sessionId);
         if (aliveTool === undefined) continue; // 死名不复活
+        if (!matchesTool(decl.sessionId, decl.tool)) continue;
         if (sanitizeTool(decl.tool) !== undefined && sanitizeTool(decl.tool) !== aliveTool) continue; // (tool,id) 精确匹配
         const ext =
           decl.extends === undefined
@@ -953,7 +972,7 @@ export class NodeClient {
       // 声明表为空的形态）——报 member-remove + 墓碑，零痕迹不留下线册位
       for (const decl of slice) {
         if (decl.temporary !== true || this.members.has(decl.sessionId)) continue;
-        if (toolOf(decl.sessionId) !== undefined || this.erased.has(decl.sessionId)) continue;
+        if (matchesTool(decl.sessionId, decl.tool) || this.erased.has(decl.sessionId)) continue;
         this.erased.add(decl.sessionId);
         if (this.state === 'online' && this.brokerSessionCap) {
           this.send({ op: 'member-remove', target: decl.sessionId });
@@ -963,7 +982,7 @@ export class NodeClient {
       // 4) 下线：已声明而本地查无——永久成员移出声明集（broker 册位保留，不再除名）；
       //    临时成员（029）改走 member-remove + 墓碑（异常死亡同零痕迹）
       for (const [id, entry] of [...this.members.entries()]) {
-        if (toolOf(id) !== undefined) continue;
+        if (matchesTool(id, entry.tool)) continue;
         this.members.delete(id);
         changed = true;
         if (entry.temporary === true) {

@@ -16,4 +16,9 @@ export const defaultMembershipProviders: readonly MembershipProvider[] = [
   { providerId: 'opencode', tool: 'opencode', canAdopt: (session) => session.capabilities.delivery
     ? { allowed: true }
     : { allowed: false, reason: '此 OpenCode 来源未声明原生投递能力，不能收编', nextStep: '核对 OpenCode V2 服务后刷新会话来源' } },
+  { providerId: 'dsh', tool: 'dsh', canAdopt: (session) => {
+    const state = isRecord(session.rawStatus) ? session.rawStatus.type : undefined;
+    return session.capabilities.delivery && (state === 'idle' || state === 'running') ? { allowed: true }
+      : { allowed: false, reason: '此 DeepSeek Harness 来源未核实 live root 会话的原生投递能力，不能收编', nextStep: '在原生 Harness 中核对 bridge 与会话后刷新' };
+  } },
 ];

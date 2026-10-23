@@ -24,6 +24,8 @@ import { listClaudeSessions as listClaudeSessionsReal } from '../claude/registry
 import { listCodexThreads as listCodexThreadsReal } from '../codex/discovery.js';
 import { listOpenCodeThreads as listOpenCodeThreadsReal } from '../opencode/client.js';
 import type { OpenCodeThread } from '../opencode/client.js';
+import { listDshThreads as listDshThreadsReal } from '../dsh/client.js';
+import type { DshThread } from '../dsh/client.js';
 
 import { connectAttachPipe, ensureAggregator, queryAttachStatus, spawnServeDetachReal } from '../serve/attach-client.js';
 import type { AttachPipeClient } from '../serve/attach-client.js';
@@ -109,6 +111,7 @@ export interface StarJoinDeps {
   listClaudeSessions(): { sessions: Array<{ sessionId: string; name?: string; updatedAt?: number; startedAt?: number }> };
   listCodexThreads(): Promise<Array<{ id: string; name: string | null; createdAt?: number }>>;
   listOpenCodeThreads?(): Promise<OpenCodeThread[]>;
+  listDshThreads?(): Promise<DshThread[]>;
   /** 自动拉聚合器（serve --connect <selector> --detach）；013 双开护栏在其内部在位。 */
   spawnServeDetach(selector: string): void;
   /** extends 证据源（本机 send-log 名字史）；缺省不查。 */
@@ -140,6 +143,7 @@ export function realStarJoinDeps(): StarJoinDeps {
       createdAt: thread.meta?.createdAt === undefined ? undefined : Date.parse(thread.meta.createdAt),
     })),
     listOpenCodeThreads: () => listOpenCodeThreadsReal(),
+    listDshThreads: () => listDshThreadsReal(),
     spawnServeDetach: spawnServeDetachReal,
     sendLogFile: defaultSendLogFile(),
     machineName: realMachineName(),
@@ -511,13 +515,28 @@ export async function runAdopt(args: AdoptArgs, deps: StarJoinDeps): Promise<num
       return 1;
     }
   }
-  let hit: { sessionId: string; name?: string; side: 'claude' | 'codex' | 'opencode' };
+  let dsh: DshThread[] = [];
+  try { dsh = await deps.listDshThreads?.() ?? []; }
+  catch (error) {
+    const missing = error instanceof MultichatError && error.code === 'DSH_NOT_CONFIGURED';
+    const previousExact = sessions.some((session) => session.sessionId !== '' && session.name === args.adopt)
+      || threads.some((thread) => thread.name === args.adopt) || openCode.some((thread) => thread.name === args.adopt);
+    if (!missing && (args.adopt.startsWith('dsh/') || !previousExact)) {
+      deps.stderr(`adopt: ${error instanceof Error ? error.message : 'DeepSeek Harness session source unavailable.'}`);
+      return 1;
+    }
+  }
+  let hit: { sessionId: string; name?: string; side: 'claude' | 'codex' | 'opencode' | 'dsh' };
   try {
-    const resolved = resolveTargetByName(args.adopt, sessions, threads, openCode);
+    const resolved = resolveTargetByName(args.adopt, sessions, threads, openCode, dsh);
     hit =
       resolved.side === 'claude'
         ? { sessionId: resolved.session.sessionId, ...(resolved.session.name === undefined ? {} : { name: resolved.session.name }), side: 'claude' }
         : { sessionId: resolved.thread.id, ...(resolved.thread.name === null || resolved.thread.name === '' ? {} : { name: resolved.thread.name }), side: resolved.side };
+    if (dsh.some((thread) => thread.id === hit.sessionId) && (sessions.some((session) => session.sessionId === hit.sessionId)
+      || threads.some((thread) => thread.id === hit.sessionId) || openCode.some((thread) => thread.id === hit.sessionId))) {
+      throw new MultichatError('NAME_COLLISION', 'This native session ID exists in Harness and another tool; current star membership cannot safely distinguish them.');
+    }
   } catch (err) {
     if (err instanceof MultichatError) {
       deps.stderr(`adopt: ${err.message}`);
@@ -537,6 +556,10 @@ export async function runAdopt(args: AdoptArgs, deps: StarJoinDeps): Promise<num
       return 1;
     }
     const alreadyMember = status.members.some((decl) => decl.sessionId === hit.sessionId);
+    if (status.members.some((decl) => decl.sessionId === hit.sessionId && (hit.side === 'dsh' || decl.tool === 'dsh') && decl.tool !== hit.side)) {
+      deps.stderr('adopt: 此完整会话 ID 已绑定其他工具，不能覆盖或作为幂等收编');
+      return 1;
+    }
     if (alreadyMember && args.extendSession === undefined) {
       deps.stdout(`会话 ${hit.name ?? hit.sessionId.slice(0, 8)} 已是星 ${entry.name ?? selector} 成员（幂等，无需收编）`);
       return 0;
