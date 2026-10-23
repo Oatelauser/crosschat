@@ -443,7 +443,13 @@ describe('018 批二：启动器入星链路', () => {
           if (r.op === 'receipt' && r.status === 'delivered') okB = r;
         }
         if (okA !== undefined && okB !== undefined) break;
-        if (i === 49) throw new Error('双星 attach 未全部生效');
+        if (i === 49) {
+          const paths = [shA, shB].map((star) => {
+            const path = attachPipePath(star.entry, join(star.baseDir, 'tcp'));
+            return { name: star.starName, path, bytes: Buffer.byteLength(path), prefix103: Buffer.from(path).subarray(0, 103).toString() };
+          });
+          throw new Error(`双星 attach 未全部生效\n${JSON.stringify({ paths, okA, okB }, null, 2)}`);
+        }
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
       await joiner.stop();

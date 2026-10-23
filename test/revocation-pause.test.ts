@@ -344,8 +344,9 @@ describe('explicit credential revocation pauses this star', () => {
     const entryA = { host: '127.0.0.1', port: alpha.port, name: NAME_A, starId: STAR_A, key: NODE_KEY };
     const entryB = { host: '127.0.0.1', port: beta.port, name: NAME_B, starId: 'dddd11112222', key: NODE_KEY };
     writeFileSync(join(home, 'tcp', 'node.json'), JSON.stringify({ brokers: [entryA, entryB] }));
-    const nodeA = nodeClient(home, entryA);
-    const nodeB = nodeClient(home, entryB);
+    const nodeLogs: string[] = [];
+    const nodeA = nodeClient(home, entryA, nodeLogs);
+    const nodeB = nodeClient(home, entryB, nodeLogs);
     const runningA = nodeA.run();
     void nodeB.run();
     await Promise.all([nodeA.waitForState('online'), nodeB.waitForState('online')]);
@@ -368,7 +369,11 @@ describe('explicit credential revocation pauses this star', () => {
 
     await expect.poll(() => errors.some((line) => line.includes('凭证已撤销'))).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 1_100));
-    expect(spawned).toEqual([]);
+    const paths = [entryA, entryB].map((entry) => {
+      const path = attachPipePath(entry, join(home, 'tcp'));
+      return { name: entry.name, path, bytes: Buffer.byteLength(path), prefix103: Buffer.from(path).subarray(0, 103).toString() };
+    });
+    expect(spawned, JSON.stringify({ paths, nodeLogs }, null, 2)).toEqual([]);
     expect(alpha.nodes).toHaveLength(1);
     expect(beta.nodes).toHaveLength(1);
     const pipe = await ensureAggregator(deps, entryB, 'beta');
