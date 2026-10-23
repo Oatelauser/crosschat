@@ -5,7 +5,7 @@
 ## 当前授权与下一步
 
 - 用户已明确“开始实现T06”，并要求正常开发流程，不赶时间/进度。该项已于2026-10-22完成验收并删除。
-- 各批TUI资源及T14隔离整体开发验收均已完成，最后活动清单已删除。真实SSH/TCP Linux远端补验已由用户明确暂停；下次用户要求恢复后，先读[远端补验暂停点](tui-remote-validation-checkpoint-20261022.md)。禁止在远端安装Codex，保持现有Claude Code；正常流程、不赶时间，现有功能变化先确认。
+- 各批TUI资源及T14隔离整体开发验收均已完成，最后活动清单已删除。用户于2026-10-23恢复真实SSH/TCP远端补验，剩余检查已通过；范围、环境限制及本机测试凭证清理被自动审批阻断的记录见[真实远端验收](tui-remote-validation-20261023.md)。远端临时目录/服务及隧道已清除；禁止在远端安装Codex，现有Claude Code与生产crosschat保持原状。正常流程、不赶时间，现有功能变化先确认。
 - 本轮明确批准：新增doctor --json供SSH逐项诊断；无参doctor输出/检查/严重度/退出码保持，远端失败不回落本机，不做混版降级。
 - 两项明确获批功能扩展：按完整SessionRef精确收编；broker原子核对完整ID/机器/工具的精确删册，目标变化即拒绝，保留原CLI选择器/权限，不做旧端兼容或降级。
 - TCP三项明确获批并已验收：本星只读快照、原子版本删除、审计追加完整starIds。长期合同见[TCP规格](tui-tcp-spec.md)，证据见[TCP验收](tui-tcp-validation-20261022.md)。
@@ -92,14 +92,14 @@
 - 实际协议由受控本机WS/adminPipe验证，终端业务/传输/剪贴板effects注入；没有真实远端、生产服务、macOS/Linux终端live声明。包dry-run344项，所需入口/辅助进程均包含；未部署或安装。
 - final_spec/final_standards/final_chain均已停写，root集中保存。最后活动清单及AGENTS/map/当前读取入口已清理，长期规格、批准和所有验收事实保留；无必需待确认事项或剩余活动任务，后续按用户新指令开展。
 
-## SSH/TCP真实远端补验已暂停
+## SSH/TCP真实远端补验（2026-10-22—23）
 
-- 用户先授权、后明确要求暂停并准备下次恢复。root已停止本机终端/隧道和远端自有临时服务，所有代理停写；不再继续测试。完整进度、证据与恢复步骤见[暂停点](tui-remote-validation-checkpoint-20261022.md)。登录凭证不进仓库/日志/证据，禁止安装Codex。
-- 初次只读探测：Node22.22.0、crosschat1.9.0、Claude Code2.1.304、无Codex；真实Claude登记目录当前0文件。正式TUI的SSH读取要求BatchMode公钥认证，不能交互消费密码。
-- 验收只使用临时目录当前包和测试星/服务，不升级生产；独立loopback临时sshd及自有host/client key经原22端口SSH隧道访问，不修改原authorized_keys/config或防火墙。默认SSH discover/doctor转当前包真实只读CLI，保留远端真实HOME/native来源。TCP业务状态独立baseDir，真实发现读原目录，不用假响应冒充远端。
-- 临时本机目录：`C:/Users/YANGSH~1/AppData/Local/Temp/crosschat-live-tui-82ee26d8ed/`；远端目录：`/tmp/crosschat-live-tui-_3ffdd7j/`。当前包SHA256 `198a6bbae425bcc7fd36742cd0208ef6411e46d427d48e4722b2996b25d889e4`。生产静态文件先记hash，验收后核对；只清自有进程/目录，不全局stop或还原覆盖他人变化。
-- live_plan/live_terminal均已停写。15项真实应用探针及Linux默认TUI SSH PTY通过；Windows完整主链仍有工装等待问题，失联/实际子进程取消工装尚未跑。公网高端口直连未通，本轮TCP经SSH隧道，不能混称公网直连。
-- 暂停收尾：临时TCP正常退出code0，临时sshd/隧道停止、Unix sockets剩余0；原四份静态配置hash一致、生产仍1.9.0、原常驻PID仍活、Codex仍未安装。私有目录和证据保留，不重跑已撤销凭证的写探针；恢复前新建/核验独立state。本轮产品代码未改，远端验收未完成，不删除其续接事实。
+- 2026-10-22完成15项真实应用/协议探针与Linux默认TUI SSH PTY后，按用户要求暂停并停止临时服务。历史状态保留在[暂停点](tui-remote-validation-checkpoint-20261022.md)；用户于次日明确恢复，本节以[最终远端记录](tui-remote-validation-20261023.md)为准。
+- 恢复前核对本机332个dist文件与原包哈希一致，远端生产四份静态配置哈希一致、crosschat1.9.0、Claude Code2.1.304、无Codex、真实Claude登记0文件。新建私有远端根/state/测试星，复制已验证runtime，不更新npm或重放旧写探针。
+- Windows默认TUI真实SSH/TCP只读主链、resize及正常退出恢复通过，已知接入钥/管理钥不出现在终端输出。上次失败是ctx正确保留SSH筛选，工装错误等待已隐藏TCP行；仅修工装，无产品改动。
+- 真实本机SSH子进程spawn后取消并close回收通过；停止自有broker后的真实读取和默认composition保持TCP来源、unavailable及空页i指引，三组检查通过。未冒称远端命令启动后取消、读到一半失联或写后丢回执。
+- 两轮远端临时根/状态/host和授权key均已删除，临时服务/隧道停止；生产四份配置hash一致、生产1.9.0、原常驻PID仍活、未安装Codex。公网TCP高端口仍未通；非空/匿名原生会话、原生投递和多Linux节点不在本轮live证明范围。
+- 本机脱敏证据保留，42份工装/证据文件及PTY解码输出扫描未检出已知测试钥。12份私密配置/测试key的本机删除被自动审批拒绝（仅返回blocked by policy）；文件暂留在只允许当前用户访问的私有临时目录。该清理阻断有独立回执，不宣称本机凭证已删除；没有新增功能待拍板。
 
 ## 设计来源（原稿）
 
