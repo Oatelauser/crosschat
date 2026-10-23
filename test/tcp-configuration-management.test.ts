@@ -106,4 +106,21 @@ describe('TCP local connection edit and removal', () => {
     expect(JSON.parse(await readFile(f.file, 'utf8'))).toEqual(f.original);
     expect(await readdir(f.directory)).toEqual(['node.json']);
   });
+
+  it('rejects invalid edits and cancellation without leaking replacement secrets or changing the file', async () => {
+    const f = await fixture();
+    const app = createTcpConfiguration(f);
+    const target = (await app.list()).targets[0];
+    for (const values of [{ host: 'bad host', key: 'SENSITIVE-REPLACEMENT' }, { port: '70000' }, { adminKeyAction: 'replace', adminKey: '' }, { adminKeyAction: 'unknown' }]) {
+      const preview = await app.previewChange({ operation: 'edit', contextId: target.contextId, targetRevision: target.revision, values });
+      expect(preview.enabled).toBe(false);
+      expect(JSON.stringify(preview)).not.toContain('SENSITIVE-REPLACEMENT');
+    }
+    const request = { operation: 'edit' as const, contextId: target.contextId, targetRevision: target.revision, values: { key: 'NEW-SENSITIVE-KEY' } };
+    const preview = await app.previewChange(request);
+    const owner = new AbortController(); owner.abort();
+    expect(await app.applyChange({ ...request, expectedRevision: preview.revision, signal: owner.signal })).toMatchObject({ status: 'cancelled' });
+    expect(JSON.parse(await readFile(f.file, 'utf8'))).toEqual(f.original);
+    expect(await readdir(f.directory)).toEqual(['node.json']);
+  });
 });
