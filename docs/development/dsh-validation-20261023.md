@@ -1,6 +1,6 @@
 # DeepSeek Harness 开发与验收记录
 
-2026-10-23，Asia/Shanghai。接续用户“那你接着往下做，我自己会验证”的授权，按原接入顺序实现 Harness。用户自行从零安装、使用真实模型验证；本次开发使用隔离的官方 npm runtime 与本机脚本模型，不读取或上传真实模型 key。
+2026-10-23，Asia/Shanghai。接续用户“那你接着往下做，我自己会验证”的授权，按原接入顺序实现 Harness，[实施合同](dsh-integration-contract.md)保留范围与批准决定。用户自行从零安装、使用真实模型验证；本次开发使用隔离的官方 npm runtime 与本机脚本模型，不读取或上传真实模型 key。
 
 ## 最终功能与边界
 
@@ -56,6 +56,6 @@ GitHub 托管 runner、定时触发和真实 issue 创建尚未运行；工作�
 
 功能验收使用的局部官方 npm runtime 与 pnpm 已通过 npm uninstall 正常零退出卸载，[后置检查](evidence/dsh-20261023/uninstall-postconditions.json)确认两个包目录不存在。第二轮 CI 自动清除各次安装和自己的 task root。真实用户 `.dsh`、全局 `dsh` 命令和 `dsh` protocol 注册在本批前后均不存在；预先存在的 `.agents` 保留。
 
-首轮冷安装超时现场（含部分安装文件与随后复用的下载缓存）及最初工作区测试根仍待手动删除。代理尝试以 PowerShell 对两个精确所有权目录执行 Remove-Item，自动审批复核以 `blocked by policy` 拒绝整条操作；命令没有执行。没有改用 npm、Node/.NET 或 CI wrapper 绕过。读后核对未发现相关命令进程，已观察 PID 也均不存在。见[复核记录](evidence/dsh-20261023/cleanup-review.json)和[手动清理步骤](dsh-cleanup-20261023.md)。因此本批不能宣称所有测试目录已清理。
+代理尝试以 PowerShell 对两个精确所有权目录执行 Remove-Item，自动审批复核以 `blocked by policy` 拒绝整条操作；命令没有执行，也没有改用其它程序绕过。用户随后删除 C盘超时现场，并明确决定“D盘这个我最后统一删除，你后面就可以放在这里来”。最终只读核对：两个 C盘 CI 根已不存在，D盘根按用户指示保留；正常 Harness/pnpm 包、相关命令进程、用户 `.dsh`、全局命令与 protocol 注册均不存在。D盘根今后按工具划分独立所有权子目录，最终由用户统一删除，不再作为本批待授权清理项。见[原审批记录](evidence/dsh-20261023/cleanup-review.json)、[最终核对与用户决定](evidence/dsh-20261023/cleanup.json)和[清理记录](dsh-cleanup-20261023.md)。
 
 正式 Harness Desktop 安装、UI、退出/卸载生命周期，以及 Linux/macOS 留待独立干净 runner；本批不在已发生清理审批拒绝的机器新增全局 `dsh` protocol 注册。OpenCode 未完成 CI 实跑与被拒绝清理保持其原记录；本批不把它们判为通过。Claude/Codex/Desktop 维护及工具×跨平台策略仍在[后续任务列表](tool-compatibility-ci-tasks.md)，未顺带扩大实施。
