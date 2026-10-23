@@ -1,4 +1,5 @@
 import type { CodexThreadSummary } from '../../codex/client.js';
+import type { OpenCodeThread } from '../../opencode/client.js';
 import type { SendArgs, SendDeps, SendResult } from './types.js';
 import { Buffer } from 'node:buffer';
 import { hostname as osHostname } from 'node:os';
@@ -20,6 +21,7 @@ import {
   bodyTooLargeMessage,
   CLAUDE_ENDPOINT_MAX_BODY_BYTES,
   CODEX_ENDPOINT_MAX_BODY_BYTES,
+  OPENCODE_ADAPTER_MAX_BODY_BYTES,
   MAX_BODY_KIB_CEILING,
   resolveConfiguredMaxBodyBytes,
   resolveMaxTurn,
@@ -124,7 +126,7 @@ async function autoViaFromRef(
     // B11：只认"调用者身份之外且非本机"的端点为 via 目标——跨机回复时调用者
     // 自己的端点住在对端机上，误选会两机互弹 ssh 到 120s 超时。
     const remote = [ref.f, ref.t].find(
-      (ep): ep is { p: 'claude' | 'codex'; id: string; m: string } =>
+      (ep): ep is { p: 'claude' | 'codex' | 'opencode'; id: string; m: string } =>
         !identityMatchesEndpoint(caller, ep) &&
         ep.p !== 'human' && ep.m !== undefined && !isSameMachine(ep.mid, ep.m, localMid, here),
     );
@@ -144,6 +146,7 @@ async function autoViaFromRef(
     // codex 不可达时按 claude 侧 + 调用者侧判定
   }
   const known = new Set([...envScan.sessions.map((session) => session.sessionId), ...codexIds]);
+  try { for (const thread of await deps.listOpenCodeThreads?.() ?? []) known.add(thread.id); } catch { /* Preserve independent native sources. */ }
   if ([ref.f, ref.t].some((ep) => ep.p !== 'human' && known.has(ep.id))) return args;
   throw new MultichatError(
     'USAGE',
@@ -287,20 +290,26 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
     // error instead of a transport spawn failure, and the codex-target
     // delivery path still hits the real proxy below.
     let threads: CodexThreadSummary[] = [];
+    let openCode: OpenCodeThread[] = [];
     try {
       threads = await deps.listCodexThreads();
     } catch {
       // claude-side --to names still resolvable; otherwise let resolveTargetByName report it
+    }
+    try { openCode = await deps.listOpenCodeThreads?.() ?? []; }
+    catch (error) {
+      if (args.to?.startsWith('opencode/')) throw error;
+      // An unavailable optional source must not block the other tools.
     }
     // Guard above ensures exactly one of --to/--conversation; here it is --to.
     // 018：targetSessionId 在场=会话级直达投递——id 定位优先，名字解析跳过。
     let resolved;
     try {
       resolved = args.targetSessionId !== undefined
-        ? resolveTargetById(args.targetSessionId, scan.sessions, threads)
-        : resolveTargetByName(args.to ?? '', scan.sessions, threads);
+        ? resolveTargetById(args.targetSessionId, scan.sessions, threads, openCode)
+        : resolveTargetByName(args.to ?? '', scan.sessions, threads, openCode);
     } catch (error) {
-      if (args.targetSessionId === undefined && error instanceof MultichatError && error.code === 'NAME_NOT_FOUND' && deps.diagnoseCodexTarget !== undefined) {
+      if (args.targetSessionId === undefined && !args.to?.startsWith('opencode/') && error instanceof MultichatError && error.code === 'NAME_NOT_FOUND' && deps.diagnoseCodexTarget !== undefined) {
         const diagnosis = await deps.diagnoseCodexTarget(args.to ?? '');
         if (diagnosis.kind !== 'not-found') throw Object.assign(new MultichatError(diagnosis.code, diagnosis.message), { diagnosis });
       }
@@ -309,7 +318,7 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
     target =
       resolved.side === 'claude'
         ? { p: 'claude', id: resolved.session.sessionId }
-        : { p: 'codex', id: resolved.thread.id };
+        : { p: resolved.side, id: resolved.thread.id };
     // B15: --to continues the pair's latest conversation when state is wired
     // (meaningful turn counting); absent state keeps the legacy fresh-thread
     // behavior so existing tests/embeddings stay untouched.
@@ -325,7 +334,8 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
   // 票A：端点封顶——早期检查只查了配置值，claude 端点 64KiB 更严，解析出
   // 目标后必须补检（配置再大也送不进端点）。到端点硬顶 = 提额无效，教学
   // 直接指向落盘。（信封教学行永远静态 16KiB——第六单政策，见 envelope.ts。）
-  const endpointCap = target.p === 'claude' ? CLAUDE_ENDPOINT_MAX_BODY_BYTES : CODEX_ENDPOINT_MAX_BODY_BYTES;
+  const endpointCap = target.p === 'claude' ? CLAUDE_ENDPOINT_MAX_BODY_BYTES
+    : target.p === 'opencode' ? OPENCODE_ADAPTER_MAX_BODY_BYTES : CODEX_ENDPOINT_MAX_BODY_BYTES;
   const effectiveMax = Math.min(configuredMax, endpointCap);
   if (size > effectiveMax) {
     // 远端来件同样换远端教学（第八单）：硬顶事实保留（提额无效），尾巴换
@@ -384,8 +394,8 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
   const fromQualifier =
     caller.p === 'claude'
       ? `claude/${caller.name ?? caller.id.slice(0, 8)}`
-      : caller.p === 'codex'
-        ? `codex/${caller.id.slice(0, 8)}`
+      : caller.p !== 'human'
+        ? `${caller.p}/${caller.id.slice(0, 8)}`
         : undefined;
   const fromAddr =
     deps.fromStarName !== undefined && fromMachine !== undefined
@@ -436,6 +446,22 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
     logNow({ to: toName, target: `claude:${target.id}`, status: 'delivered', turn, replyRef });
     if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
     return finish(deliveryResult(toName, turn, replyRef, false, handle));
+  }
+
+  if (target.p === 'opencode') {
+    if (deps.deliverOpenCode === undefined) throw new MultichatError('OPENCODE_NOT_CONFIGURED', 'OpenCode delivery is not available in this context.');
+    const toName = `opencode/${target.id}`;
+    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(fromAddr === undefined ? {} : { fromAddr }), ...(handle === undefined ? {} : { handle }) });
+    checkSendLogRate(deps.sendLogFile, identityKey(caller), `opencode:${target.id}`, deps.now());
+    try {
+      const result = await deps.deliverOpenCode(target.id, content, { mode });
+      logNow({ to: toName, target: `opencode:${target.id}`, status: result.queued ? 'queued' : 'delivered', turn, replyRef });
+      if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
+      return finish(deliveryResult(toName, turn, replyRef, result.queued, handle));
+    } catch (err) {
+      logNow({ to: toName, target: `opencode:${target.id}`, status: 'failed', code: errorCode(err), turn, replyRef });
+      throw err;
+    }
   }
 
   // Codex delivers by threadId; a missing thread surfaces as a codex adapter error.
@@ -548,7 +574,7 @@ function resolveFileBody(args: SendArgs, deps: SendDeps): string | undefined {
 
 function displayName(identity: CallerIdentity): string {
   if (identity.p === 'claude') return identity.name ?? shortId('claude', identity.id);
-  if (identity.p === 'codex') return shortId('codex', identity.id);
+  if (identity.p !== 'human') return shortId(identity.p, identity.id);
   return 'human';
 }
 

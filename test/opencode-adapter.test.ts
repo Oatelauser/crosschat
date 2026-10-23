@@ -16,11 +16,11 @@ function reply(response: ServerResponse, value: unknown, status = 200): void {
   response.end(JSON.stringify(value));
 }
 
-async function fixture(handler?: (request: IncomingMessage, response: ServerResponse) => void, serverInfo: unknown = { version: '2.1.3', pid: 765 }) {
+async function fixture(handler?: (request: IncomingMessage, response: ServerResponse) => void, serverInfo: unknown = { version: '2.1.3', pid: 765 }, infoStatus = 200) {
   const calls: string[] = [];
   const server = createServer((request, response) => {
     calls.push(`${request.method} ${request.url}`);
-    if (request.url === '/api/info') return reply(response, serverInfo);
+    if (request.url === '/api/info') return reply(response, serverInfo, infoStatus);
     if (request.url === '/api/session/active') return reply(response, { data: { ses_busy: { type: 'running' } } });
     if (handler) return handler(request, response);
     return reply(response, { data: [] , cursor: { next: null } });
@@ -148,6 +148,17 @@ describe('OpenCode V2 native read contract', () => {
     await expect(listOpenCodeThreads({ endpoint: { url: unsupported.url + '/not-a-service' }, env: {} })).rejects.toMatchObject({ code: 'OPENCODE_INVALID_ENDPOINT' });
   });
 
+  it.each([
+    [null, 200, 'OPENCODE_PROTOCOL_ERROR'],
+    [{ version: '1.19.3', pid: 765 }, 200, 'OPENCODE_UNSUPPORTED_VERSION'],
+    [{ version: '2.1.3', pid: '765' }, 200, 'OPENCODE_PROTOCOL_ERROR'],
+    [{ secret: 'test-private-info' }, 401, 'OPENCODE_AUTH_REQUIRED'],
+  ])('never writes when native service identity or authentication fails (%#)', async (serverInfo, status, code) => {
+    const service = await fixture(undefined, serverInfo, status);
+    await expect(deliverToOpenCodeSession('ses_one', 'message', { endpoint: { url: service.url, token: 'test-private-token' }, env: {} })).rejects.toMatchObject({ code });
+    expect(service.calls).toEqual(['GET /api/info']);
+  });
+
   it('redacts authentication, upstream response bodies and redirects from read errors', async () => {
     const service = await fixture((_request, response) => reply(response, { secret: 'test-private-upstream-response' }, 401));
     const options = { endpoint: { url: service.url, token: 'test-secret-token' }, env: {} };
@@ -166,6 +177,8 @@ describe('OpenCode V2 native read contract', () => {
     const service = await fixture();
     const controller = new AbortController(); controller.abort();
     await expect(listOpenCodeThreads({ endpoint: { url: service.url }, env: {}, signal: controller.signal })).rejects.toMatchObject({ code: 'OPENCODE_CANCELLED' });
+    expect(service.calls).toEqual([]);
+    await expect(deliverToOpenCodeSession('ses_one', 'message', { endpoint: { url: service.url }, env: {}, signal: controller.signal })).rejects.toMatchObject({ code: 'OPENCODE_CANCELLED' });
     expect(service.calls).toEqual([]);
     const stalled = await fixture(() => undefined);
     await expect(listOpenCodeThreads({ endpoint: { url: stalled.url }, env: {}, timeoutMs: 30 })).rejects.toMatchObject({ code: 'OPENCODE_TIMEOUT' });
@@ -195,6 +208,17 @@ describe('OpenCode V2 durable inbox delivery', () => {
     const disconnected = await fixture((request) => request.socket.destroy());
     await expect(deliverToOpenCodeSession('ses_one', 'message', { endpoint: { url: disconnected.url }, env: {} })).rejects.toMatchObject({ code: 'OPENCODE_WRITE_UNCERTAIN' });
     expect(disconnected.calls.filter((call) => call.startsWith('POST'))).toHaveLength(1);
+  });
+
+  it('does not follow write redirects, and treats server failures as uncertain writes', async () => {
+    const redirected = await fixture((_request, response) => {
+      response.writeHead(307, { location: 'http://127.0.0.1:1/forbidden' }); response.end();
+    });
+    await expect(deliverToOpenCodeSession('ses_one', 'message', { endpoint: { url: redirected.url, token: 'test-private-token' }, env: {} })).rejects.toMatchObject({ code: 'OPENCODE_WRITE_UNCERTAIN' });
+    expect(redirected.calls.filter((call) => call.startsWith('POST'))).toHaveLength(1);
+    const failed = await fixture((_request, response) => reply(response, { secret: 'test-private-failure' }, 500));
+    await expect(deliverToOpenCodeSession('ses_one', 'message', { endpoint: { url: failed.url }, env: {} })).rejects.toMatchObject({ code: 'OPENCODE_WRITE_UNCERTAIN' });
+    expect(failed.calls.filter((call) => call.startsWith('POST'))).toHaveLength(1);
   });
 
   it('distinguishes rejected input, missing targets, and uncertainty after a write timeout', async () => {

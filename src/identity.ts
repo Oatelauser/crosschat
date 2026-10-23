@@ -7,12 +7,14 @@ import type { RefEndpoint } from './ref.js';
  * Caller identity from environment variables (ticket 003, stateless CLI):
  * - CLAUDE_CODE_MESSAGING_SOCKET -> match the pipe path against the registry
  * - CODEX_THREAD_ID || CODEX_SESSION_ID -> codex thread identity
- * - neither -> human (may send, cannot receive)
+ * - OPENCODE_SESSION_ID (native shell), or explicit CROSSCHAT_OPENCODE_SESSION_ID -> OpenCode session identity
+ * - no native identity -> human (may send, cannot receive)
  */
 
 export type CallerIdentity =
   | { p: 'claude'; id: string; name?: string }
   | { p: 'codex'; id: string }
+  | { p: 'opencode'; id: string }
   | { p: 'human' };
 
 /**
@@ -22,12 +24,14 @@ export type CallerIdentity =
  * 清单）。启动器据此剥"另一家族"，把报错里的人工自纠机构化做掉；配置变量
  * （CODEX_HOME 等）绝不在此列。
  *
- * 扩展路径：将来不止 claude/codex 两家（如 opencode）——注册表加一行 + 写
- * 其启动器，其余启动器零改动自动剥它。resolveCallerIdentity 的第三家族
- * 识别分支不在本票：那是未来新适配器票的事（先走原生通道可行性调研，同
- * codex/claude 先例）。
+ * 新工具在注册表加一行并提供身份识别，其余启动器自动剥其身份环境。
  */
-export type IdentityFamily = 'claude' | 'codex';
+export type IdentityFamily = 'claude' | 'codex' | 'opencode';
+
+/** OpenCode's shell tool injects and overwrites this key per native session. */
+export const OPENCODE_SESSION_ID_ENV = 'OPENCODE_SESSION_ID';
+/** Explicit integration/test fallback; disagreement with the native key is rejected. */
+export const CROSSCHAT_OPENCODE_SESSION_ID_ENV = 'CROSSCHAT_OPENCODE_SESSION_ID';
 
 export const IDENTITY_ENV_FAMILIES: Record<IdentityFamily, readonly string[]> = {
   claude: [
@@ -36,6 +40,7 @@ export const IDENTITY_ENV_FAMILIES: Record<IdentityFamily, readonly string[]> = 
     'CLAUDE_CODE_SESSION_ID',
   ],
   codex: ['CODEX_THREAD_ID', 'CODEX_SESSION_ID'],
+  opencode: [OPENCODE_SESSION_ID_ENV, CROSSCHAT_OPENCODE_SESSION_ID_ENV],
 };
 
 /** 复制 env 并删除给定键（不改动原对象）。 */
@@ -57,7 +62,7 @@ export function stripOtherFamilies(env: NodeJS.ProcessEnv, own: IdentityFamily):
   return stripEnvKeys(env, otherIdentityKeys(own));
 }
 
-/** Canonical key used for rate-limit buckets ("claude:<id>" / "codex:<id>" / "human"). */
+/** Canonical key used for rate-limit buckets ("<provider>:<id>" / "human"). */
 export function identityKey(identity: { p: string; id?: string }): string {
   return identity.p === 'human' || identity.id === undefined ? identity.p : `${identity.p}:${identity.id}`;
 }
@@ -79,6 +84,24 @@ export function resolveCallerIdentity(
   const socket = env.CLAUDE_CODE_MESSAGING_SOCKET ?? '';
   const claude = socket !== '' ? claudeIdentity(socket, scan) : undefined;
   const codexId = env.CODEX_THREAD_ID || env.CODEX_SESSION_ID || '';
+  const nativeOpenCodeId = env[OPENCODE_SESSION_ID_ENV] ?? '';
+  const explicitOpenCodeId = env[CROSSCHAT_OPENCODE_SESSION_ID_ENV] ?? '';
+  if (nativeOpenCodeId !== '' && explicitOpenCodeId !== '' && nativeOpenCodeId !== explicitOpenCodeId) {
+    throw new MultichatError(
+      'CALLER_IDENTITY_CONFLICT',
+      `${OPENCODE_SESSION_ID_ENV} and ${CROSSCHAT_OPENCODE_SESSION_ID_ENV} identify different OpenCode sessions; ` +
+        `remove the stale explicit integration key and retry from the current native OpenCode shell.`,
+    );
+  }
+  const opencodeId = nativeOpenCodeId || explicitOpenCodeId;
+  if (opencodeId !== '' && (claude !== undefined || codexId !== '')) {
+    throw new MultichatError(
+      'CALLER_IDENTITY_CONFLICT',
+      `Caller identity conflict: OpenCode and another native tool's identity variables are present. ` +
+        `Start the intended tool through its crosschat launcher from a clean terminal to remove inherited foreign identities; ` +
+        `preserve that tool's current session identity.`,
+    );
+  }
   if (claude !== undefined && codexId !== '') {
     const unsetHint =
       process.platform === 'win32'
@@ -95,6 +118,7 @@ export function resolveCallerIdentity(
   }
   if (claude !== undefined) return claude;
   if (codexId !== '') return { p: 'codex', id: codexId };
+  if (opencodeId !== '') return { p: 'opencode', id: opencodeId };
   return { p: 'human' };
 }
 

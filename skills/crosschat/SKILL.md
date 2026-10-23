@@ -1,6 +1,6 @@
 ---
 name: crosschat
-description: 使用 crosschat 与本机或跨机的 Claude Code、Codex 桌面版和 Codex CLI 会话通信；收到 cross-session-message 信封需回复，或处理发送错误时使用。
+description: 使用 crosschat 与本机或跨机的 Claude Code、Codex 桌面版、Codex CLI 和 OpenCode V2 CLI 会话通信；收到 cross-session-message 信封需回复，或处理发送错误时使用。
 ---
 
 # crosschat

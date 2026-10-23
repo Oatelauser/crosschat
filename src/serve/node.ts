@@ -97,7 +97,7 @@ export async function deliverViaRunSend(frame: DeliverFrame, deps: SendDeps): Pr
  * 不让整次查询失败。节点守护应答与 broker 本机应答（serve 注线）共用。
  */
 export async function buildStatusPayload(
-  deps: Pick<SendDeps, 'listClaudeSessions' | 'listCodexThreads'>,
+  deps: Pick<SendDeps, 'listClaudeSessions' | 'listCodexThreads' | 'listOpenCodeThreads'>,
 ): Promise<StatusPayload> {
   const scan = deps.listClaudeSessions();
   let codex: StatusPayload['codex'];
@@ -121,6 +121,17 @@ export async function buildStatusPayload(
       : `INTERNAL: ${err instanceof Error ? err.message : String(err)}`;
     codex = { unavailable: message };
   }
+  let opencode: StatusPayload['opencode'];
+  if (deps.listOpenCodeThreads !== undefined) {
+    try {
+      const threads = await deps.listOpenCodeThreads();
+      if (threads.length > 0) opencode = threads.map(({ id, name, cwd, rawStatus, attributes }) => ({ id, name, cwd, rawStatus, attributes }));
+    } catch (error) {
+      if (!(error instanceof MultichatError && error.code === 'OPENCODE_NOT_CONFIGURED')) {
+        opencode = { unavailable: error instanceof MultichatError ? `${error.code}: ${error.message}` : 'INTERNAL: OpenCode session source could not be read.' };
+      }
+    }
+  }
   return {
     claude: scan.sessions.map((session) => ({
       name: session.name ?? null,
@@ -130,6 +141,7 @@ export async function buildStatusPayload(
       cwd: session.cwd ?? null,
     })),
     codex,
+    ...(opencode === undefined ? {} : { opencode }),
   };
 }
 
@@ -907,7 +919,8 @@ export class NodeClient {
         providers = this.d.memberProviders(request);
       } else {
         const deps = this.d.makeSendDeps();
-        providers = createLegacyMemberProviders({ listClaudeSessions: deps.listClaudeSessions, listCodexThreads: deps.listCodexThreads, codexHome: this.d.codexHome, now: this.d.now }, request.nativeIds);
+        providers = createLegacyMemberProviders({ listClaudeSessions: deps.listClaudeSessions, listCodexThreads: deps.listCodexThreads,
+          listOpenCodeThreads: deps.listOpenCodeThreads, codexHome: this.d.codexHome, now: this.d.now }, request.nativeIds);
       }
       const observations = await readMemberSnapshot(providers, request);
       const toolOf = (id: string): string | undefined =>

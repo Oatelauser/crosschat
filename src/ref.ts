@@ -12,10 +12,10 @@ import { MultichatError } from './errors.js';
  * payloads decode forever: old envelopes, shards and send-logs never expire.
  */
 
-/** human has no routable native id; claude/codex always carry one. */
+/** human has no routable native id; native tool endpoints always carry one. */
 export type RefEndpoint =
   | { p: 'human' }
-  | { p: 'claude' | 'codex'; id: string; m?: string; mid?: string };
+  | { p: 'claude' | 'codex' | 'opencode'; id: string; m?: string; mid?: string };
 
 export interface ConversationRef {
   v: 1;
@@ -56,8 +56,9 @@ export function nextTurnRef(ref: ConversationRef): ConversationRef {
 // flags   LEB128 varint: bits 0-1 f type | bits 2-3 t type | bit 4 f id raw |
 //         bit 5 t id raw | bit 6 f.m present | bit 7 t.m present | bit 8
 //         f.mid present | bit 9 t.mid present | bit 10 starId present
-//         (claude=0 codex=1 human=2)
-// then    f.id (16B UUID | varint-len utf8) · t.id (same)
+//         (claude=0 codex=1 human=2 extended-provider=3)
+// then    f.provider (varint-len utf8, only type 3)? · f.id (16B UUID | varint-len utf8)
+//         t.provider (same)? · t.id (same)
 //         f.m (varint-len utf8)? · t.m (varint-len utf8)?
 //         f.mid (varint-len utf8)? · t.mid (varint-len utf8)?
 //         n (varint-len hex bytes) · c (varint) · starId (varint-len utf8)?
@@ -69,7 +70,15 @@ export function nextTurnRef(ref: ConversationRef): ConversationRef {
 // Layout changes are free until mc2 ships in a npm release (v1.3.3 window).
 
 const TYPE_CODES = { claude: 0, codex: 1, human: 2 } as const;
+const EXTENDED_TYPE_CODE = 3;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function endpointTypeCode(endpoint: RefEndpoint): number {
+  if (endpoint.p === 'human' || endpoint.p === 'claude' || endpoint.p === 'codex') {
+    return TYPE_CODES[endpoint.p];
+  }
+  return EXTENDED_TYPE_CODE;
+}
 
 function writeVarint(value: number, out: number[]): void {
   let v = value;
@@ -82,13 +91,16 @@ function writeVarint(value: number, out: number[]): void {
 
 function packId(endpoint: RefEndpoint): { bytes: Buffer; raw: boolean } {
   if (endpoint.p === 'human') return { bytes: Buffer.alloc(0), raw: false };
+  // Type 3 names the provider before its id so adding a later tool does not
+  // require a new ref layout. Existing endpoint bytes stay exactly the same.
+  const prefix = endpointTypeCode(endpoint) === EXTENDED_TYPE_CODE ? packStr(endpoint.p) : Buffer.alloc(0);
   if (UUID_RE.test(endpoint.id)) {
-    return { bytes: Buffer.from(endpoint.id.replace(/-/g, ''), 'hex'), raw: false };
+    return { bytes: Buffer.concat([prefix, Buffer.from(endpoint.id.replace(/-/g, ''), 'hex')]), raw: false };
   }
   const body = Buffer.from(endpoint.id, 'utf8');
   const len: number[] = [];
   writeVarint(body.length, len);
-  return { bytes: Buffer.concat([Buffer.from(len), body]), raw: true };
+  return { bytes: Buffer.concat([prefix, Buffer.from(len), body]), raw: true };
 }
 
 function unpackUuid(bytes: Buffer): string {
@@ -126,8 +138,8 @@ export function encodeRef(ref: ConversationRef): string {
   const tmid = midOf(ref.t);
   const star = ref.starId;
   const flags =
-    TYPE_CODES[ref.f.p] |
-    (TYPE_CODES[ref.t.p] << 2) |
+    endpointTypeCode(ref.f) |
+    (endpointTypeCode(ref.t) << 2) |
     (fId.raw ? 0x10 : 0) |
     (tId.raw ? 0x20 : 0) |
     (fm !== undefined ? 0x40 : 0) |
@@ -204,13 +216,19 @@ function decodeV2(payload: string): ConversationRef {
   if (buf.length === 0) throw invalid('empty payload', true);
   const cur = new Cursor(buf);
   const flags = cur.varint();
-  // Field order must mirror encodeRef exactly: f.id, t.id, f.m, t.m, f.mid, t.mid, n, c.
-  const readId = (typeBits: number, rawBit: number): { p: 'claude' | 'codex'; id: string } | { p: 'human' } => {
+  // Field order mirrors encodeRef; a type-3 provider name precedes its id.
+  const readId = (typeBits: number, rawBit: number): RefEndpoint => {
     if (typeBits === TYPE_CODES.human) return { p: 'human' };
-    if (typeBits !== TYPE_CODES.claude && typeBits !== TYPE_CODES.codex) {
+    let p: 'claude' | 'codex' | 'opencode';
+    if (typeBits === TYPE_CODES.claude) p = 'claude';
+    else if (typeBits === TYPE_CODES.codex) p = 'codex';
+    else if (typeBits === EXTENDED_TYPE_CODE) {
+      const provider = cur.field().toString('utf8');
+      if (provider !== 'opencode') throw invalid('unknown extended provider', true);
+      p = provider;
+    } else {
       throw invalid(`unknown endpoint type ${typeBits}`, true);
     }
-    const p = typeBits === TYPE_CODES.claude ? 'claude' : 'codex';
     const id = (flags & rawBit) === 0 ? unpackUuid(cur.take(16)) : cur.field().toString('utf8');
     if (id === '') throw invalid('empty endpoint id', true);
     return { p, id };
@@ -266,7 +284,7 @@ function validateEndpoint(value: unknown, where: 'f' | 't'): RefEndpoint {
     if (ep.id !== undefined && ep.id !== null) throw invalid(`${where}: human endpoint must not carry an id`);
     return { p: 'human' };
   }
-  if ((ep.p === 'claude' || ep.p === 'codex') && typeof ep.id === 'string' && ep.id !== '') {
+  if ((ep.p === 'claude' || ep.p === 'codex' || ep.p === 'opencode') && typeof ep.id === 'string' && ep.id !== '') {
     // m is optional and mc1 JSON never carries it, but tolerate it if present.
     return ep.m === undefined || typeof ep.m !== 'string'
       ? { p: ep.p, id: ep.id }

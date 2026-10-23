@@ -16,6 +16,9 @@ import { runDiscover } from './commands/discover.js';
 import { DISCOVERY_MAX_BYTES } from './application/discovery/boundary.js';
 import { runClaudeWrapper } from './commands/claude-wrapper.js';
 import { runCodexWrapper } from './commands/codex-wrapper.js';
+import { runOpenCodeWrapper } from './commands/opencode-wrapper.js';
+import { listOpenCodeThreads } from './opencode/client.js';
+import { deliverToOpenCodeSession } from './opencode/deliver.js';
 import { defaultOutboxDir, drain } from './outbox.js';
 import type { DrainDeliverFn } from './outbox.js';
 import { legacyStateRoots, stateRoot } from './state-root.js';
@@ -49,7 +52,7 @@ const usage = `usage: crosschat <command> [options]
 commands:
   tui                       open the interactive terminal interface
   send --to <name> | --conversation <ref>
-                            send a message to a claude/codex session
+                            send a message to a claude/codex/opencode session
                             (quote <name> if it contains spaces);
                             options:
                               --body <text>        message text
@@ -78,9 +81,10 @@ commands:
                               --max-turn <N>       stamp a soft turn budget
                                 into the envelope
                                 (env CROSSCHAT_MAX_TURN)
-  status [--conversations]  show claude/codex session status, or per-pair
+  status [--conversations]  show native session status, or per-pair
                             conversation overview with --conversations
-                              --claude | --codex    pick one main-view section
+                              --claude | --codex | --opencode
+                                pick one main-view section
                                 (mutually exclusive, not with --conversations)
                               --name <substr>       filter rows by display name
                                 (case-insensitive)
@@ -243,6 +247,12 @@ commands:
                             the thread with /rename — the aggregator
                             picks it up):
                               --connect <星> / --extend-session <旧名>
+  opencode [native args]    start OpenCode V2 CLI with native arguments;
+                            configure the model in OpenCode itself
+                            (crosschat uses its registered local service)
+                            supports --max-body-kb / --max-turn and
+                            --connect <星> / --extend-session <旧名> / --rm
+                            target: --to opencode/<full-session-id or title>
 
 options:
   --json                    single-line JSON output (send/status/doctor)
@@ -284,8 +294,8 @@ export function parseSendArgs(argv: readonly string[]): SendArgs {
 }
 
 /**
- * status accepts --json/--conversations/--stars/--claude/--codex/--name <v>/--via <v>/--all
- * (flags at most once). Validation: --claude/--codex are mutually exclusive and
+ * status accepts --json/--conversations/--stars/--claude/--codex/--opencode/--name <v>/--via <v>/--all
+ * (flags at most once). Tool sections are mutually exclusive and
  * main-view only; bare --via (tcp|ssh) only combines with --conversations;
  * --via tcp:<机器> (E1) only combines with the main view (remote enumeration);
  * --stars (G0) only combines with --json (its own grouped view).
@@ -303,7 +313,7 @@ export function parseStatusArgs(argv: readonly string[]): {
   let json = false;
   let conversations = false;
   let stars = false;
-  let section: 'claude' | 'codex' | undefined;
+  let section: 'claude' | 'codex' | 'opencode' | undefined;
   let name: string | undefined;
   let via: 'tcp' | 'ssh' | undefined;
   let viaTarget: string | undefined;
@@ -317,6 +327,7 @@ export function parseStatusArgs(argv: readonly string[]): {
     else if (token === '--stars' && !stars) stars = true;
     else if (token === '--claude' && section === undefined) section = 'claude';
     else if (token === '--codex' && section === undefined) section = 'codex';
+    else if (token === '--opencode' && section === undefined) section = 'opencode';
     else if (token === '--all' && !all) all = true;
     else if (token === '--name' || token.startsWith('--name=')) {
       const value = inline ?? argv[++i];
@@ -333,12 +344,12 @@ export function parseStatusArgs(argv: readonly string[]): {
     } else {
       throw new MultichatError(
         'USAGE',
-        `status takes only --json/--conversations/--stars/--claude/--codex/--name/--via/--all; got: ${argv.join(' ')}`,
+        `status takes only --json/--conversations/--stars/--claude/--codex/--opencode/--name/--via/--all; got: ${argv.join(' ')}`,
       );
     }
   }
   if (section !== undefined && conversations) {
-    throw new MultichatError('USAGE', 'status: --claude/--codex 选段不与 --conversations 组合');
+    throw new MultichatError('USAGE', 'status: --claude/--codex/--opencode 选段不与 --conversations 组合');
   }
   if (via !== undefined && !conversations) {
     throw new MultichatError('USAGE', 'status: --via 仅与 --conversations 组合');
@@ -519,9 +530,11 @@ function realSendDeps(stdinText: string | undefined): SendDeps {
     stdinText,
     listClaudeSessions: () => listClaudeSessions(),
     listCodexThreads: () => listCodexThreads(),
+    listOpenCodeThreads: () => listOpenCodeThreads(),
     diagnoseCodexTarget: (query) => diagnoseCodexTarget(query),
     deliverClaude: (target, content, options) => deliverToClaudeSession(target, content, options),
     deliverCodex: (threadId, content, options) => deliverToCodexThread(threadId, content, options),
+    deliverOpenCode: (sessionId, content, options) => deliverToOpenCodeSession(sessionId, content, options),
     sendLogFile: defaultSendLogFile(),
     outboxDir: defaultOutboxDir(),
     now: () => Date.now(),
@@ -549,6 +562,7 @@ function realStatusDeps(): StatusDeps {
   return {
     listClaudeSessions: () => listClaudeSessions(),
     listCodexThreads: () => listCodexThreads(),
+    listOpenCodeThreads: () => listOpenCodeThreads(),
     // 006: TUI occupancy markers come straight from the filesystem.
     listWriterLocks: () => listWriterLocks(codexHomeDir()),
     listConversations: () => conversationSummaries(),
@@ -829,6 +843,10 @@ async function main(argv: string[]): Promise<number> {
     } catch (err) {
       return printFailure(err);
     }
+  }
+  if (command === 'opencode') {
+    try { return await runOpenCodeWrapper(rest); }
+    catch (err) { return printFailure(err); }
   }
   process.stderr.write(`crosschat: USAGE: unknown command: ${command}\n\n`);
   process.stderr.write(usage);

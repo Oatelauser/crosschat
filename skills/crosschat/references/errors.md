@@ -10,7 +10,12 @@
 - `ADMIN_REQUIRED`（tcp 远程管理 op）：非管理员调管理 op（普通成员发钥/删节点，或任何人远程调加删星/改星名等本机域 op）——世上不存在全能远程钥匙；找星管理员（星管理钥，`--via tcp:<星>` 写 op）或到 broker 机本机执行。
 - 收到"文件 … 已送达"但那个路径不存在：附件超过 5 天被回收——回对端"**附件已过期，请重发 --file**"。
 - `CODEX_THREAD_LOCKED` / `CODEX_THREAD_BUSY_TIMEOUT`：目标写者占用或暂不可投递。以本次结果为准：`parked` 表示已暂存并安排自动补投，无需重发或轮询；投递失败则按报错处理。`steer` 不自动变成轮后补投。
-- `CODEX_WRITE_UNCERTAIN` / `CLAUDE_PIPE_WRITE_UNCERTAIN`：写入可能已被接受，先核对目标历史或日志，不直接重发。本机寄存项出现此状态会暂停补投，正文仍在 mailbox；核实后再决定如何接续。
+- `CODEX_WRITE_UNCERTAIN` / `CLAUDE_PIPE_WRITE_UNCERTAIN` / `OPENCODE_WRITE_UNCERTAIN`：写入可能已被接受，先核对目标历史或日志，不直接重发。本机寄存项出现此状态会暂停补投，正文仍在 mailbox；核实后再决定如何接续。
+- `OPENCODE_NOT_CONFIGURED` / `OPENCODE_REGISTRATION_UNREADABLE` / `OPENCODE_REGISTRATION_MALFORMED`：核对已有 OpenCode V2 CLI 是否正在运行及配置目录是否一致，再刷新。crosschat 只发现已有服务，不自动启动或修复。
+- `OPENCODE_AUTH_REQUIRED`：核对所选 OpenCode 服务的认证；显式 `CROSSCHAT_OPENCODE_TOKEN` 对应服务密码，不是模型 API key，默认服务认证从原生注册记录读取。
+- `OPENCODE_OWNER_MISMATCH`：注册记录与当前响应服务不一致；等 OpenCode 重启完成后刷新，不改投其他实例。
+- `OPENCODE_UNSUPPORTED_VERSION` / `OPENCODE_PROTOCOL_ERROR`：当前服务版本或接口不匹配，保留错误码与工具版本排查兼容性；不以新建会话绕过。
+- `OPENCODE_SESSION_NOT_FOUND`：目标完整会话 ID 已由服务确认不存在，重新核对目标。`OPENCODE_LOCATION_NOT_FOUND` 表示工作区位置不可解析，核对对应工作区配置；两者不互相替代。
 - `CODEX_DESKTOP_OWNER_UNAVAILABLE`：名称已命中保存记录，但本次未找到 Desktop owner；在桌面打开目标后再试。该结果只描述 Desktop，不能推断 CLI 也不可达。
 - `CODEX_TARGET_PROBE_FAILED` / `CODEX_DISCOVERY_UNAVAILABLE`：目标探测或记录来源读取失败，不能当作名称不存在。按报错中的 `stage` 和 `code` 排查，保留原目标与模式。
 - `CODEX_TARGET_DISCOVERY_CHANGED`：首次名单与补查期间状态发生变化，补查已能探测目标；本条仍未发送。核对目标后可重新执行原命令。
@@ -18,5 +23,5 @@
 - `CODEX_DESKTOP_UNSUPPORTED` / `CODEX_DESKTOP_PROTOCOL_ERROR` / `CODEX_DESKTOP_REQUEST_REJECTED`：当前桌面协议能力或请求不匹配，保留错误上下文排查。不要把 `steer` 改成 `queue` 来掩盖失败。
 - `OUTBOX_BUSY`：本地队列锁被占用，本条没有成功寄存；等待占用结束后再发送。`OUTBOX_FULL` 则按报错中的 mailbox 路径取回已有内容，先处理积压。
 - `OUTBOX_INVALID_THREAD_ID`：当前原生 ID 不能安全用作本地寄存文件键。保留完整 ID 并报告适配问题，不通过截断、改写 ID 或改投其他会话绕过。
-- `CALLER_IDENTITY_CONFLICT`：同时存在 Claude 与 Codex 身份变量。先确认当前实际宿主，只在发送命令的子进程中移除另一端残留身份；保留当前会话的真实身份和原回复路由。无法确定宿主时报告冲突，不靠改名、改引用或重启其他会话绕过。
+- `CALLER_IDENTITY_CONFLICT`：多个原生工具的身份变量同时存在，或 OpenCode 的原生与显式会话 ID 不一致。先确认当前实际宿主，只在发送命令的子进程中移除其他工具或显式覆盖的残留身份；保留当前会话的真实身份和原回复路由。无法确定宿主时报告冲突，不靠改名、改引用或重启其他会话绕过。
 - 其他错误码：错误信息已写明原因与出路，按信息处理即可。

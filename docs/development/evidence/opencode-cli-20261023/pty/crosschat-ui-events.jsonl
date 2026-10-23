@@ -1,0 +1,3 @@
+{"event":"clipboard","value":"opencode/ses_e9977c3b9ffeJWh7ZQPGVNjDew"}
+{"event":"clipboard","value":"{\n  \"contextId\": \"local\",\n  \"providerId\": \"opencode\",\n  \"nativeId\": \"ses_e9977c3b9ffeJWh7ZQPGVNjDew\"\n}"}
+{"event":"exit","code":0,"before":{"raw":false,"resize":0,"listeners":{"SIGINT":1,"SIGTERM":1,"uncaughtException":0,"unhandledRejection":0}},"after":{"raw":false,"resize":0,"listeners":{"SIGINT":1,"SIGTERM":1,"uncaughtException":0,"unhandledRejection":0}}}

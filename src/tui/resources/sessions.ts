@@ -39,6 +39,11 @@ const nativeGuides: Readonly<Record<string, NativeSessionGuide>> = {
       ? `需要恢复时，由用户确认原窗口和会话状态后在终端执行：codex resume ${session.ref.nativeId}`
       : '请在原生 Codex 窗口中选择此会话。' },
   ] }),
+  opencode: (session) => ({ title: 'OpenCode CLI 原生操作', fields: [
+    { label: '继续聊天', value: '请回到此会话的 OpenCode CLI 原生窗口；TUI 不代替会话发言。' },
+    { label: '完整会话 ID', value: session.ref.nativeId },
+    { label: '恢复指引', value: '需要重新打开时，在 OpenCode 原生会话列表核对完整 ID 并选择对应会话；crosschat 不代为启动或恢复。' },
+  ] }),
 };
 
 function action(id: string, label: string, shortcut: string, extra: Partial<TuiAction> = {}): TuiAction {
@@ -94,7 +99,21 @@ function address(session: DiscoverySession, items: readonly DiscoverySession[], 
   if (completeness !== 'complete') return { unavailable: unavailable('来源读取不完整，尚不能确认地址唯一。', '按 r 完整刷新；Y 可复制完整会话引用。') };
   if (session.ref.referenceKind === 'process') return { unavailable: unavailable('进程引用不能作为完整会话地址。', '在原生工具中核对会话身份；Y 可复制临时进程引用。') };
   if (!session.capabilities.delivery) return { unavailable: unavailable('此会话来源未声明投递能力。', '回到原生工具操作；Y 可复制完整会话引用。') };
-  if (session.ref.providerId !== 'claude' && session.ref.providerId !== 'codex') return { unavailable: unavailable('此工具尚未声明现有本机发送地址能力。', '回到原生工具操作；Y 可复制完整会话引用。') };
+  if (!['claude', 'codex', 'opencode'].includes(session.ref.providerId)) return { unavailable: unavailable('此工具尚未声明现有本机发送地址能力。', '回到原生工具操作；Y 可复制完整会话引用。') };
+  const matchesExactTarget = (value: string): boolean => {
+    try {
+      const resolved = resolveTargetByName(value,
+        items.filter((item) => item.ref.providerId === 'claude' && item.ref.referenceKind !== 'process').map((item) => ({ sessionId: item.ref.nativeId, name: item.name ?? undefined })),
+        items.filter((item) => item.ref.providerId === 'codex').map((item) => ({ id: item.ref.nativeId, name: item.name })),
+        items.filter((item) => item.ref.providerId === 'opencode' && item.ref.referenceKind !== 'process').map((item) => ({ id: item.ref.nativeId, name: item.name })));
+      return resolved.side === session.ref.providerId && (resolved.side === 'claude' ? resolved.session.sessionId : resolved.thread.id) === session.ref.nativeId;
+    } catch { return false; }
+  };
+  if (session.ref.providerId === 'opencode') {
+    const value = `opencode/${session.ref.nativeId}`;
+    if (!hasTerminalControls(value) && matchesExactTarget(value)) return { value };
+    return { unavailable: unavailable('完整 OpenCode ID 地址与名称匹配冲突，或含终端控制字符。', '在 OpenCode 中核对完整 ID 并处理名称冲突；Y 可复制安全编码的完整会话引用。') };
+  }
   // Discovery reads all pages, whereas the existing local send selector sees
   // only the first 20 Codex entries in source order. Do not widen that contract.
   if (session.ref.providerId === 'codex' && items.filter((item) => item.ref.providerId === 'codex').findIndex((item) => sessionKey(item.ref) === sessionKey(session.ref)) >= 20) {
@@ -102,16 +121,11 @@ function address(session: DiscoverySession, items: readonly DiscoverySession[], 
   }
   if (session.name !== null && session.name !== '') {
     if (hasTerminalControls(session.name)) return { unavailable: unavailable('会话名称包含终端控制字符，不能作为可粘贴地址。', '请在原生工具更名或核对身份；Y 可复制安全编码的完整会话引用。') };
-    if (items.filter((item) => item.name === session.name).length === 1) return { value: session.name };
+    if (items.filter((item) => item.name === session.name).length === 1 && matchesExactTarget(session.name)) return { value: session.name };
   }
   if (session.ref.providerId === 'codex' && uuid.test(session.ref.nativeId)) {
     const value = `codex/${session.ref.nativeId}`;
-    try {
-      const resolved = resolveTargetByName(value,
-        items.filter((item) => item.ref.providerId === 'claude' && item.ref.referenceKind !== 'process').map((item) => ({ sessionId: item.ref.nativeId, name: item.name ?? undefined })),
-        items.filter((item) => item.ref.providerId === 'codex').map((item) => ({ id: item.ref.nativeId, name: item.name })));
-      if (resolved.side === 'codex' && resolved.thread.id === session.ref.nativeId) return { value };
-    } catch { /* Names and their prefixes precede UUID matching in the selector. */ }
+    if (matchesExactTarget(value)) return { value };
     return { unavailable: unavailable('完整 ID 地址与现有名称或名称前缀匹配冲突。', '在原生工具核对并处理冲突；Y 可复制完整会话引用。') };
   }
   if (session.name) return { unavailable: unavailable('发现同名会话，裸名称地址有歧义。', '在原生工具核对身份并处理重名；Y 可复制完整会话引用。') };

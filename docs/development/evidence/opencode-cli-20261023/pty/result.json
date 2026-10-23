@@ -1,0 +1,35 @@
+{
+  "tests": [
+    {
+      "name": "default CLI discovery composition reads the real OpenCode native session",
+      "passed": true
+    },
+    {
+      "name": "official OpenCode interactive session displays real crosschat input and model acknowledgment",
+      "passed": true
+    },
+    {
+      "name": "crosschat real OpenCode reader supports TUI detail, native guide and complete-address/reference copy",
+      "passed": true
+    },
+    {
+      "name": "address copied from TUI delivers through the real CLI and appears in native OpenCode",
+      "passed": true
+    },
+    {
+      "name": "crosschat real terminal exits with raw mode and owned listeners restored",
+      "passed": true
+    },
+    {
+      "name": "official OpenCode interactive terminal exits after owned Ctrl+C input",
+      "passed": true
+    }
+  ],
+  "evidence": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-opencode-20261023-f7760fd441ab47ffba88d1be752f5e93\\pty-evidence\\final",
+  "fixtureRemoved": true,
+  "fixtureRoot": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-compat-39KPBc",
+  "servicePid": 41116,
+  "version": "2.1.3",
+  "sessionId": "ses_e9977c3b9ffeJWh7ZQPGVNjDew",
+  "nativeExitCode": 0
+}

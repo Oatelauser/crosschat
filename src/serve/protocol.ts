@@ -267,7 +267,16 @@ export interface StatusCodexRow {
   originator: string | null;
 }
 /** E1 远程枚举载荷：分段镜像本地语义——codex daemon 没跑时给 unavailable 段而非整体失败。 */
+export interface StatusOpenCodeRow {
+  name: string | null;
+  id: string;
+  cwd: string;
+  rawStatus: unknown;
+  attributes: Readonly<Record<string, unknown>>;
+}
+
 export interface StatusPayload {
+  opencode?: StatusOpenCodeRow[] | { unavailable: string };
   claude: StatusClaudeRow[];
   codex: StatusCodexRow[] | { unavailable: string };
 }

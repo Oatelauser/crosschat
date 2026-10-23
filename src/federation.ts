@@ -4,6 +4,7 @@ import { Buffer } from 'node:buffer';
 import { MultichatError } from './errors.js';
 import { handleForRef, machineNameOfPair, recordConversation } from './conversations.js';
 import { decodeRef, type ConversationRef } from './ref.js';
+import type { RefEndpoint } from './ref.js';
 import { normalizeMid } from './platform/machine-id.js';
 import type { SendLogEntry } from './send-log.js';
 import {
@@ -96,7 +97,9 @@ export function encodeOrigin(identity: CallerIdentity, host: string, mid?: strin
         : `claude/${identity.id}/${identity.name}`
       : identity.p === 'codex'
         ? `codex/${identity.id}`
-        : 'human';
+        : identity.p === 'opencode'
+          ? `opencode/${encodeURIComponent(identity.id)}`
+          : 'human';
   // B2.1：tcp 形态给 tail 加 'tcp:' 前缀（host 槽=发送方 mid8）；ssh/单机路径字节不变（零回归锚点）。
   const head = via === 'tcp' ? `tcp:${host}` : host;
   const tail = mid === undefined ? head : `${head}:${Buffer.from(mid, 'utf8').toString('base64url')}`;
@@ -144,6 +147,19 @@ export function decodeOriginIdentity(encoded: string): OriginIdentity {
   }
   const p = head.slice(0, slash);
   const rest = head.slice(slash + 1);
+  const midField = mid === undefined ? {} : { mid };
+  if (p === 'opencode') {
+    let id: string;
+    try {
+      // OpenCode IDs are opaque. Encode this new provider's id independently
+      // of the legacy '/' display-name slot without changing existing origins.
+      id = decodeURIComponent(rest);
+    } catch {
+      throw new MultichatError('USAGE', '--origin OpenCode session id 编码非法');
+    }
+    if (id === '') throw new MultichatError('USAGE', '--origin OpenCode session id 为空');
+    return { p: 'opencode', id, host, ...midField, ...viaField };
+  }
   // First '/' after the endpoint type separates the full id from the optional
   // display name; a name may itself contain '/' (B2.1 spec). Ids are
   // hex/uuid-ish and never contain '/'.
@@ -151,7 +167,6 @@ export function decodeOriginIdentity(encoded: string): OriginIdentity {
   const id = nameSlash === -1 ? rest : rest.slice(0, nameSlash);
   const name = nameSlash === -1 ? undefined : rest.slice(nameSlash + 1);
   if (id === '' || name === '') throw new MultichatError('USAGE', `--origin 格式非法: ${text}`);
-  const midField = mid === undefined ? {} : { mid };
   if (p === 'claude') return name === undefined ? { p: 'claude', id, host, ...midField, ...viaField } : { p: 'claude', id, name, host, ...midField, ...viaField };
   if (p === 'codex') return { p: 'codex', id, host, ...midField, ...viaField };
   throw new MultichatError('USAGE', `--origin 端点类型非法: ${p}`);
@@ -317,6 +332,7 @@ export async function sendViaSsh(args: SendArgs, body: string, deps: SendDeps): 
 export function originDisplayName(identity: CallerIdentity): string {
   if (identity.p === 'claude') return identity.name ?? `claude/${identity.id.slice(0, 8)}`;
   if (identity.p === 'codex') return `codex/${identity.id.slice(0, 8)}`;
+  if (identity.p === 'opencode') return `opencode/${identity.id.slice(0, 8)}`;
   return 'human';
 }
 
@@ -351,7 +367,7 @@ export function machineDisplay(
     ref === undefined
       ? undefined
       : [ref.f, ref.t].find(
-          (ep): ep is { p: 'claude' | 'codex'; id: string; m?: string; mid?: string } =>
+          (ep): ep is Exclude<RefEndpoint, { p: 'human' }> =>
             ep.p !== 'human' && !isSameMachine(ep.mid, ep.m, localMid, localHost),
         );
   const mid8 = (peer !== undefined ? mid8Of(peer.mid) : undefined) ?? (midShaped ? mid8Of(target) : undefined);

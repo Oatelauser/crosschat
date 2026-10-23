@@ -1,0 +1,14 @@
+{
+  "command": "npm run check",
+  "at": "2026-10-23T10:14:49+08:00",
+  "exitCode": 0,
+  "testsPassed": 1746,
+  "testsSkipped": 11,
+  "filesPassed": 160,
+  "filesSkipped": 3,
+  "runtimeModules": 169,
+  "runtimeEdges": 539,
+  "importCycles": 0,
+  "importBoundaryViolations": 0,
+  "additionalScriptCheck": "ESLint and node --check passed; PTY script cleanup-flow lint-only fix made after successful real PTY run, without rerunning upstream binary"
+}

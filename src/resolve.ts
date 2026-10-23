@@ -31,11 +31,48 @@ export interface ResolveCodexRow {
   name: string | null;
 }
 
+export interface ResolveOpenCodeRow { id: string; name: string | null }
+
 export type ResolvedTarget =
   | { side: 'claude'; session: ResolveClaudeRow }
-  | { side: 'codex'; thread: ResolveCodexRow };
+  | { side: 'codex'; thread: ResolveCodexRow }
+  | { side: 'opencode'; thread: ResolveOpenCodeRow };
 
 export function resolveTargetByName(
+  name: string,
+  sessions: readonly ResolveClaudeRow[],
+  threads: readonly ResolveCodexRow[],
+  openCode: readonly ResolveOpenCodeRow[] = [],
+): ResolvedTarget {
+  if (name.startsWith('opencode/')) return resolveOpenCode(name.slice('opencode/'.length), openCode);
+  if (openCode.length === 0) return resolveLegacyByName(name, sessions, threads);
+  const exact = openCode.filter((row) => row.name === name);
+  const legacyExact = sessions.filter((row) => row.name === name && row.sessionId !== '').length + threads.filter((row) => row.name === name).length;
+  if (exact.length + legacyExact > 1) throw new MultichatError('NAME_COLLISION', `Multiple agents are named ${JSON.stringify(name)}. Use opencode/<name or full session ID> for OpenCode.`);
+  if (exact.length === 1) return { side: 'opencode', thread: exact[0] };
+  if (legacyExact > 0) return resolveLegacyByName(name, sessions, threads);
+  const lower = name.toLowerCase();
+  const prefix = lower === '' ? [] : openCode.filter((row) => row.name?.toLowerCase().startsWith(lower));
+  const legacyPrefix = lower === '' ? 0 : sessions.filter((row) => row.sessionId !== '' && row.name?.toLowerCase().startsWith(lower)).length + threads.filter((row) => row.name?.toLowerCase().startsWith(lower)).length;
+  if (prefix.length + legacyPrefix > 1) throw new MultichatError('NAME_COLLISION', `Multiple agents match prefix ${JSON.stringify(name)}. Use opencode/<name or full session ID> for OpenCode.`);
+  if (prefix.length === 1) return { side: 'opencode', thread: prefix[0] };
+  if (legacyPrefix > 0) return resolveLegacyByName(name, sessions, threads);
+  const byId = openCode.find((row) => row.id === name);
+  if (byId !== undefined) return { side: 'opencode', thread: byId };
+  return resolveLegacyByName(name, sessions, threads);
+}
+
+function resolveOpenCode(query: string, rows: readonly ResolveOpenCodeRow[]): ResolvedTarget {
+  const byId = rows.find((row) => row.id === query);
+  if (byId !== undefined) return { side: 'opencode', thread: byId };
+  const exact = rows.filter((row) => row.name === query);
+  const matches = exact.length > 0 ? exact : query !== '' ? rows.filter((row) => row.name?.toLowerCase().startsWith(query.toLowerCase()) || row.id.startsWith(query)) : [];
+  if (matches.length > 1) throw new MultichatError('NAME_COLLISION', `Multiple OpenCode sessions match ${JSON.stringify(query)}. Use the full session ID.`);
+  if (matches.length === 1) return { side: 'opencode', thread: matches[0] };
+  throw new MultichatError('NAME_NOT_FOUND', `No OpenCode session matches ${JSON.stringify(query)}. Run crosschat discover to find its full ID.`);
+}
+
+function resolveLegacyByName(
   name: string,
   sessions: readonly ResolveClaudeRow[],
   threads: readonly ResolveCodexRow[],
@@ -120,7 +157,13 @@ export function resolveTargetById(
   sessionId: string,
   sessions: readonly ResolveClaudeRow[],
   threads: readonly ResolveCodexRow[],
+  openCode: readonly ResolveOpenCodeRow[] = [],
 ): ResolvedTarget {
+  const native = openCode.find((row) => row.id === sessionId);
+  if (native !== undefined) {
+    if (sessions.some((row) => row.sessionId === sessionId) || threads.some((row) => row.id === sessionId)) throw new MultichatError('NAME_COLLISION', 'The native session ID exists in multiple tools. Use an explicit tool-qualified target.');
+    return { side: 'opencode', thread: native };
+  }
   const claude = sessions.find((session) => session.sessionId === sessionId);
   if (claude !== undefined) return { side: 'claude', session: claude };
   const codex = threads.find((thread) => thread.id === sessionId);

@@ -31,11 +31,10 @@ describe('OpenCode TUI provider integration', () => {
     expect(registry.format('opencode', { type: 'future-native-state' })).toBe('未识别<future-native-state>');
   });
 
-  it('does not publish an address when native ID is shadowed by another OpenCode name', async () => {
+  it('keeps full native ID addresses precise when another OpenCode session uses that ID as a name', async () => {
     const { adapter } = createSessionsResource({ discovery: discovery([session('ses_exact'), session('ses_other', 'ses_exact')]) });
     const page = await adapter.read({ context, signal: new AbortController().signal });
-    expect(page.rows[0].copyValue).toBeUndefined();
-    expect(page.rows[0].actionAvailability?.copy).toMatchObject({ enabled: false });
+    expect(page.rows[0].copyValue).toBe('opencode/ses_exact');
     expect(page.rows[1].copyValue).toBe('opencode/ses_other');
   });
 

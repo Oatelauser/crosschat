@@ -1,11 +1,14 @@
 import type { ClaudeRegistryScan } from '../../claude/registry.js';
 import type { CodexThreadSummary } from '../../codex/client.js';
 import { codexHomeDir, lookupRolloutMetas } from '../../codex/rollout-meta.js';
+import type { OpenCodeThread } from '../../opencode/client.js';
+import { MultichatError } from '../../errors.js';
 import type { MemberProvider } from './model.js';
 
 export interface LegacyMemberProviderDeps {
   listClaudeSessions(): ClaudeRegistryScan;
   listCodexThreads(): Promise<readonly CodexThreadSummary[]>;
+  listOpenCodeThreads?(): Promise<readonly OpenCodeThread[]>;
   codexHome?: string;
   lookupRolloutMetas?: typeof lookupRolloutMetas;
   now?: () => number;
@@ -37,7 +40,7 @@ export function createLegacyMemberProviders(
     })();
     return codexNames;
   };
-  return [
+  const providers: MemberProvider[] = [
     {
       providerId: 'claude',
       liveness: {
@@ -58,4 +61,35 @@ export function createLegacyMemberProviders(
       async readName({ nativeId }) { return (await readCodexNames()).get(nativeId); },
     },
   ];
+  if (deps.listOpenCodeThreads !== undefined) {
+    const list = deps.listOpenCodeThreads;
+    let snapshot: Promise<Map<string, OpenCodeThread>> | undefined;
+    const readSnapshot = (): Promise<Map<string, OpenCodeThread>> => {
+      snapshot ??= list().then((threads) => new Map(threads.map((thread) => [thread.id, thread]))).catch((error: unknown) => {
+        if (error instanceof MultichatError && error.code === 'OPENCODE_NOT_CONFIGURED') return new Map();
+        throw error;
+      });
+      return snapshot;
+    };
+    providers.push({
+      providerId: 'opencode',
+      liveness: {
+        async probe({ nativeId, contextId }) {
+          try {
+            const thread = (await readSnapshot()).get(nativeId);
+            return { nativeId, presence: thread === undefined ? 'absent' : 'present', name: thread?.name ?? null,
+              completeness: 'complete', errors: [], observedAt: now() };
+          } catch {
+            return { nativeId, presence: 'unknown', name: null, completeness: 'unavailable', observedAt: now(),
+              errors: [{ source: { contextId, providerId: 'opencode' }, kind: 'unavailable',
+                message: 'OpenCode member presence could not be checked; keep existing membership and retry.' }] };
+          }
+        },
+      },
+      async readName({ nativeId }) {
+        return (await readSnapshot()).get(nativeId)?.name ?? undefined;
+      },
+    });
+  }
+  return providers;
 }

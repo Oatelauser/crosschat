@@ -3,10 +3,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ClaudeRegistryScan } from '../claude/registry.js';
 import type { CodexThreadWithMeta } from '../codex/discovery.js';
+import type { OpenCodeThread } from '../opencode/client.js';
 import { pairKeyOf } from '../conversations.js';
 import type { ConversationSummary } from '../conversation-summary.js';
 import { MultichatError } from '../errors.js';
 import { decodeRef } from '../ref.js';
+import type { RefEndpoint } from '../ref.js';
 import { normalizeMid } from '../platform/machine-id.js';
 import type { SendLogEntry } from '../send-log.js';
 import { readNodeConfig } from '../serve/node-config.js';
@@ -27,6 +29,7 @@ export { listNodeStatusFiles, nodeStatusSelector, TCP_STATUS_FRESH_MS } from '..
 export interface StatusDeps {
   listClaudeSessions(): ClaudeRegistryScan;
   listCodexThreads(): Promise<CodexThreadWithMeta[]>;
+  listOpenCodeThreads?(): Promise<OpenCodeThread[]>;
   /** Per-pair conversation rows for `status --conversations`; omitted → none. */
   listConversations?(): ConversationSummary[];
   /**
@@ -376,6 +379,13 @@ async function collectLocalSessionNames(deps: StatusDeps): Promise<string[]> {
   } catch {
     // codex down is a valid status answer——claude 侧照给
   }
+  try {
+    for (const thread of await deps.listOpenCodeThreads?.() ?? []) {
+      if (thread.name !== null && thread.name !== '') names.push(thread.name);
+    }
+  } catch {
+    // Optional OpenCode discovery must not suppress names from other tools.
+  }
   return names;
 }
 
@@ -426,8 +436,8 @@ export function formatCreatedAt(iso: string | undefined): string {
 
 /** status 过滤参数（cli 层已做互斥/组合校验，这里只消费）。 */
 export interface StatusFilters {
-  /** --claude/--codex：主视图选段。 */
-  section?: 'claude' | 'codex';
+  /** --claude/--codex/--opencode：主视图选段。 */
+  section?: 'claude' | 'codex' | 'opencode';
   /** --name <子串>：按显示名大小写不敏感子串过滤（conversations 侧任一端命中即保留）。 */
   name?: string;
   /** --via tcp|ssh：--conversations 传输族过滤（本机 send-log 无跨机痕迹的对不显示）。 */
@@ -446,6 +456,31 @@ function nameMatcher(needle: string | undefined): (name: string | null | undefin
 /** F1 过滤抑制：任一过滤参数在场时，零行的段整段沉默（段头/占位/unavailable 横幅）——过滤语境下空段是噪音；裸输出保持原形（零回归锚点）。 */
 function anyFilter(filters: StatusFilters): boolean {
   return filters.name !== undefined || filters.section !== undefined || filters.all === true;
+}
+
+interface OpenCodeStatusSnapshot {
+  threads: OpenCodeThread[];
+  configured: boolean;
+  error?: string;
+}
+
+async function readOpenCodeStatus(deps: StatusDeps): Promise<OpenCodeStatusSnapshot> {
+  if (deps.listOpenCodeThreads === undefined) {
+    return { threads: [], configured: false, error: 'OpenCode session discovery is not configured.' };
+  }
+  try { return { threads: await deps.listOpenCodeThreads(), configured: true }; }
+  catch (error) {
+    return { threads: [], configured: !(error instanceof MultichatError && error.code === 'OPENCODE_NOT_CONFIGURED'),
+      error: error instanceof MultichatError ? `${error.code}: ${error.message}` : 'INTERNAL: OpenCode session source could not be read.' };
+  }
+}
+
+function nativeStatusText(raw: unknown): string {
+  return typeof raw === 'string' ? raw : JSON.stringify(raw) ?? 'unknown';
+}
+
+function includesSection(filters: StatusFilters, section: NonNullable<StatusFilters['section']>): boolean {
+  return filters.section === undefined || filters.section === section;
 }
 
 export async function runStatus(
@@ -484,6 +519,7 @@ export async function runStatus(
         : `INTERNAL: ${err instanceof Error ? err.message : String(err)}`;
   }
   const held = deps.listWriterLocks?.() ?? new Set<string>();
+  const openCode = await readOpenCodeStatus(deps);
   const matches = nameMatcher(filters.name);
 
   if (json) {
@@ -504,7 +540,7 @@ export async function runStatus(
         daemons: g.daemons,
       }));
     }
-    if (filters.section !== 'codex') {
+    if (includesSection(filters, 'claude')) {
       out.claude = scan.sessions.filter((session) => matches(session.name)).map((session) => ({
         name: session.name ?? null,
         kind: session.kind,
@@ -513,7 +549,7 @@ export async function runStatus(
         cwd: session.cwd ?? null,
       }));
     }
-    if (filters.section !== 'claude') {
+    if (includesSection(filters, 'codex')) {
       out.codex =
         threads === undefined
           ? { error: codexError }
@@ -541,6 +577,9 @@ export async function runStatus(
               })),
             ];
     }
+    if (includesSection(filters, 'opencode') && (filters.section === 'opencode' || openCode.threads.length > 0 || (openCode.configured && openCode.error !== undefined))) {
+      out.opencode = openCode.error === undefined ? openCode.threads.filter((thread) => matches(thread.name)) : { error: openCode.error };
+    }
     return JSON.stringify(out);
   }
 
@@ -551,7 +590,7 @@ export async function runStatus(
 
   const lines: string[] = [];
   const filtered = anyFilter(filters);
-  if (filters.section !== 'codex') {
+  if (includesSection(filters, 'claude')) {
     if (!(filtered && filters.section === undefined && claudeRows.length === 0)) {
       lines.push('claude:');
       if (claudeRows.length === 0) lines.push('  (none)');
@@ -562,7 +601,7 @@ export async function runStatus(
       }
     }
   }
-  if (filters.section !== 'claude') {
+  if (includesSection(filters, 'codex')) {
     const codexVisible = codexError === undefined && (codexRows.length > 0 || unlisted.length > 0);
     if (!(filtered && filters.section === undefined && !codexVisible)) {
       lines.push('codex:');
@@ -586,6 +625,17 @@ export async function runStatus(
       }
     }
   }
+  if (includesSection(filters, 'opencode')) {
+    const rows = openCode.threads.filter((thread) => (filters.all || !!thread.name) && matches(thread.name));
+    if (filters.section === 'opencode' || rows.length > 0 || (openCode.configured && openCode.error !== undefined)) {
+      lines.push('opencode:');
+      if (openCode.error !== undefined) lines.push(`  unavailable (${openCode.error})`);
+      else if (rows.length === 0) lines.push('  (none)');
+      for (const thread of rows) {
+        lines.push(`  ${(thread.name ?? '(unnamed)').padEnd(24)} ${formatCwdShort(thread.cwd).padEnd(20)} ${thread.id}  ${nativeStatusText(thread.rawStatus)}`);
+      }
+    }
+  }
   lines.push(...(await tcpForwarderLines(deps.tcpDir, nowMs, deps.roster)));
   return lines.join('\n');
 }
@@ -603,12 +653,15 @@ async function summaryView(deps: StatusDeps, nowMs: number): Promise<string> {
   } catch {
     threads = undefined; // codex down is a valid status answer
   }
+  const openCode = await readOpenCodeStatus(deps);
+  const showOpenCode = openCode.threads.length > 0 || (openCode.configured && openCode.error !== undefined);
   const rows = deps.listConversations?.() ?? [];
   const lines: string[] = [];
   const parked = rows.reduce((total, row) => total + row.parked, 0);
   const head =
     `本机会话: claude ${scan.sessions.length} · ` +
     (threads === undefined ? 'codex unavailable' : `codex ${threads.length}`) +
+    (showOpenCode ? ` · ${openCode.error === undefined ? `opencode ${openCode.threads.length}` : 'opencode unavailable'}` : '') +
     (parked > 0
       ? ` · 滞留 ${parked}${deps.watchdogRunning === undefined ? '' : `（看门狗${deps.watchdogRunning() ? '运行中' : '未运行'}）`}`
       : '');
@@ -620,6 +673,7 @@ async function summaryView(deps: StatusDeps, nowMs: number): Promise<string> {
       name: thread.name ?? undefined,
       at: thread.meta?.createdAt ? Date.parse(thread.meta.createdAt) : undefined,
     })),
+    ...openCode.threads.map((thread) => ({ side: 'opencode', name: thread.name ?? undefined, at: undefined })),
   ]
     .filter((row) => row.name !== undefined) // 未命名默认隐藏，与明细视图同规
     .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))
@@ -628,7 +682,7 @@ async function summaryView(deps: StatusDeps, nowMs: number): Promise<string> {
     const time = row.at === undefined || Number.isNaN(row.at) ? '-' : formatRelativeTime(row.at, nowMs);
     lines.push(`  ${row.side} ${row.name}  ${time}`);
   }
-  lines.push('（全量: --claude|--codex|--name）');
+  lines.push(showOpenCode ? '（全量: --claude|--codex|--opencode|--name）' : '（全量: --claude|--codex|--name）');
   if (deps.tcpDir !== undefined) {
     const groups = await collectStars(deps, nowMs);
     lines.push(groups.length === 0 ? 'tcp: 无' : `tcp: 共 ${groups.length} 星`);
@@ -650,7 +704,7 @@ function sshPeerLabel(row: ConversationSummary): string {
   try {
     const ref = decodeRef(row.ref);
     const remote = [ref.f, ref.t].find(
-      (ep): ep is { p: 'claude' | 'codex'; id: string; m?: string; mid?: string } => ep.p !== 'human' && ep.m !== undefined,
+      (ep): ep is Exclude<RefEndpoint, { p: 'human' }> => ep.p !== 'human' && ep.m !== undefined,
     );
     if (remote === undefined) return `${row.pair[1]}@?`;
     const idx = row.endpoints.indexOf(`${remote.p}:${remote.id}`);
@@ -718,11 +772,15 @@ async function remoteStatusView(deps: StatusDeps, json: boolean, filters: Status
   if (json) {
     // 契约同本地 json：--name 滤行、选段省键；未命名行始终在场（--all 不影响 json）
     const out: Record<string, unknown> = { via: `tcp:${target}`, machine: target };
-    if (filters.section !== 'codex') {
+    if (includesSection(filters, 'claude')) {
       out.claude = payload.claude.filter((row) => matches(row.name));
     }
-    if (filters.section !== 'claude') {
+    if (includesSection(filters, 'codex')) {
       out.codex = codexRows === undefined ? payload.codex : codexRows.filter((row) => matches(row.name));
+    }
+    if (includesSection(filters, 'opencode') && (filters.section === 'opencode' || payload.opencode !== undefined)) {
+      out.opencode = Array.isArray(payload.opencode) ? payload.opencode.filter((row) => matches(row.name))
+        : payload.opencode ?? { unavailable: 'OpenCode session source is unavailable on the remote peer.' };
     }
     return JSON.stringify(out);
   }
@@ -730,7 +788,7 @@ async function remoteStatusView(deps: StatusDeps, json: boolean, filters: Status
   const lines: string[] = [`${target} 机会话:`];
   // F1 过滤抑制同本地：过滤后零行的段（含 unavailable 横幅）整段沉默。
   const filtered = anyFilter(filters);
-  if (filters.section !== 'codex') {
+  if (includesSection(filters, 'claude')) {
     const rows = payload.claude.filter((row) => (filters.all || row.name !== null) && matches(row.name));
     if (!(filtered && rows.length === 0)) {
       lines.push('claude:');
@@ -743,7 +801,7 @@ async function remoteStatusView(deps: StatusDeps, json: boolean, filters: Status
       }
     }
   }
-  if (filters.section !== 'claude') {
+  if (includesSection(filters, 'codex')) {
     const rows = codexRows === undefined ? undefined : codexRows.filter((row) => (filters.all || row.name !== null) && matches(row.name));
     if (!(filtered && (rows === undefined || rows.length === 0))) {
       lines.push('codex:');
@@ -761,6 +819,20 @@ async function remoteStatusView(deps: StatusDeps, json: boolean, filters: Status
               bareMark([...(row.name === null ? [] : [row.name, `codex/${row.name}`]), row.id]),
           );
         }
+      }
+    }
+  }
+  if (includesSection(filters, 'opencode')) {
+    const source = payload.opencode;
+    const rows = Array.isArray(source) ? source.filter((row) => (filters.all || row.name !== null) && matches(row.name)) : [];
+    const error = source === undefined ? 'OpenCode session source is unavailable on the remote peer.' : Array.isArray(source) ? undefined : source.unavailable;
+    if (filters.section === 'opencode' || rows.length > 0 || (source !== undefined && error !== undefined)) {
+      lines.push('opencode:');
+      if (error !== undefined) lines.push(`  unavailable (${error})`);
+      else if (rows.length === 0) lines.push('  (none)');
+      for (const row of rows) {
+        lines.push(`  ${(row.name ?? '(unnamed)').padEnd(24)} ${formatCwdShort(row.cwd).padEnd(20)} ${row.id}  ${nativeStatusText(row.rawStatus)}` +
+          bareMark([...(row.name === null ? [] : [row.name, `opencode/${row.name}`]), row.id, row.id.slice(0, 8)]));
       }
     }
   }

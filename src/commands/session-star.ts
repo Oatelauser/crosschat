@@ -22,6 +22,8 @@ import { decodeRef } from '../ref.js';
 import { readSendLogTail, defaultSendLogFile } from '../send-log.js';
 import { listClaudeSessions as listClaudeSessionsReal } from '../claude/registry.js';
 import { listCodexThreads as listCodexThreadsReal } from '../codex/discovery.js';
+import { listOpenCodeThreads as listOpenCodeThreadsReal } from '../opencode/client.js';
+import type { OpenCodeThread } from '../opencode/client.js';
 
 import { connectAttachPipe, ensureAggregator, queryAttachStatus, spawnServeDetachReal } from '../serve/attach-client.js';
 import type { AttachPipeClient } from '../serve/attach-client.js';
@@ -106,6 +108,7 @@ export interface StarJoinDeps {
   log(line: string): void;
   listClaudeSessions(): { sessions: Array<{ sessionId: string; name?: string; updatedAt?: number; startedAt?: number }> };
   listCodexThreads(): Promise<Array<{ id: string; name: string | null; createdAt?: number }>>;
+  listOpenCodeThreads?(): Promise<OpenCodeThread[]>;
   /** 自动拉聚合器（serve --connect <selector> --detach）；013 双开护栏在其内部在位。 */
   spawnServeDetach(selector: string): void;
   /** extends 证据源（本机 send-log 名字史）；缺省不查。 */
@@ -136,6 +139,7 @@ export function realStarJoinDeps(): StarJoinDeps {
       name: thread.name,
       createdAt: thread.meta?.createdAt === undefined ? undefined : Date.parse(thread.meta.createdAt),
     })),
+    listOpenCodeThreads: () => listOpenCodeThreadsReal(),
     spawnServeDetach: spawnServeDetachReal,
     sendLogFile: defaultSendLogFile(),
     machineName: realMachineName(),
@@ -238,11 +242,12 @@ export class StarJoiner {
   private readonly targets: StarTarget[] = [];
   private readonly knownClaude = new Set<string>();
   private readonly knownCodex = new Set<string>();
+  private readonly knownOpenCode = new Set<string>();
 
   constructor(
     private readonly opts: {
       deps: StarJoinDeps;
-      side: 'claude' | 'codex';
+      side: 'claude' | 'codex' | 'opencode';
       connects: string[];
       extendSession?: string;
       /** spawn 时已知的会话名（claude -n 原生透传）——有则横幅打三段地址行，无名（codex/未命名）只打星名行。 */
@@ -265,6 +270,13 @@ export class StarJoiner {
       for (const thread of await this.opts.deps.listCodexThreads()) this.knownCodex.add(thread.id);
     } catch {
       // codex daemon 未起：空基线（子进程会拉起 daemon，新线程即差分命中）
+    }
+    if (this.opts.side === 'opencode') {
+      try {
+        for (const thread of await this.opts.deps.listOpenCodeThreads?.() ?? []) this.knownOpenCode.add(thread.id);
+      } catch {
+        // OpenCode may not have registered its service before this launcher starts it.
+      }
     }
     void this.run();
   }
@@ -385,12 +397,15 @@ export class StarJoiner {
             const top = fresh[0]!;
             return { sessionId: top.sessionId, ...(top.name === undefined || top.name === null ? {} : { name: top.name }) };
           }
-        } else {
+        } else if (side === 'codex') {
           const fresh = (await deps.listCodexThreads()).filter((thread) => !this.knownCodex.has(thread.id));
           if (fresh.length > 0) {
             fresh.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
             return { sessionId: fresh[0]!.id }; // codex 名字天然后置（/rename），attach 不带名，扫描回填
           }
+        } else {
+          const fresh = (await deps.listOpenCodeThreads?.() ?? []).find((thread) => !this.knownOpenCode.has(thread.id));
+          if (fresh !== undefined) return { sessionId: fresh.id, ...(fresh.name === null ? {} : { name: fresh.name }) };
         }
       } catch {
         // 扫描抖动/daemon 未起：下一轮再试
@@ -485,13 +500,24 @@ export async function runAdopt(args: AdoptArgs, deps: StarJoinDeps): Promise<num
   const { entry, selector } = selectConnectEntry(args.connect, config);
   const sessions = deps.listClaudeSessions().sessions;
   const threads = await deps.listCodexThreads();
-  let hit: { sessionId: string; name?: string; side: 'claude' | 'codex' };
+  let openCode: OpenCodeThread[] = [];
+  try { openCode = await deps.listOpenCodeThreads?.() ?? []; }
+  catch (error) {
+    const missing = error instanceof MultichatError && error.code === 'OPENCODE_NOT_CONFIGURED';
+    const legacyExact = sessions.some((session) => session.sessionId !== '' && session.name === args.adopt)
+      || threads.some((thread) => thread.name === args.adopt);
+    if (!missing && (args.adopt.startsWith('opencode/') || !legacyExact)) {
+      deps.stderr(`adopt: ${error instanceof Error ? error.message : 'OpenCode session source unavailable.'}`);
+      return 1;
+    }
+  }
+  let hit: { sessionId: string; name?: string; side: 'claude' | 'codex' | 'opencode' };
   try {
-    const resolved = resolveTargetByName(args.adopt, sessions, threads);
+    const resolved = resolveTargetByName(args.adopt, sessions, threads, openCode);
     hit =
       resolved.side === 'claude'
         ? { sessionId: resolved.session.sessionId, ...(resolved.session.name === undefined ? {} : { name: resolved.session.name }), side: 'claude' }
-        : { sessionId: resolved.thread.id, ...(resolved.thread.name === null || resolved.thread.name === '' ? {} : { name: resolved.thread.name }), side: 'codex' };
+        : { sessionId: resolved.thread.id, ...(resolved.thread.name === null || resolved.thread.name === '' ? {} : { name: resolved.thread.name }), side: resolved.side };
   } catch (err) {
     if (err instanceof MultichatError) {
       deps.stderr(`adopt: ${err.message}`);

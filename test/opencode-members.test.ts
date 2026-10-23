@@ -73,6 +73,10 @@ async function starFixture(): Promise<{ deps: StarJoinDeps; requests: AttachRequ
   const requests: AttachRequest[] = [];
   const pipe = createServer((socket) => {
     sockets.push(socket);
+    socket.on('error', (error: NodeJS.ErrnoException) => {
+      // Launcher stop closes its pipe while the fixture may finish its reply.
+      if (error.code !== 'EPIPE' && error.code !== 'ECONNRESET') throw error;
+    });
     socket.setEncoding('utf8');
     let buffer = '';
     socket.on('data', (chunk: string) => {
@@ -105,6 +109,24 @@ async function starFixture(): Promise<{ deps: StarJoinDeps; requests: AttachRequ
 }
 
 describe('OpenCode star entry', () => {
+  it('retains exact legacy adoption when a configured OpenCode source is unavailable', async () => {
+    const fixture = await starFixture();
+    fixture.deps.listClaudeSessions = () => ({ sessions: [{ sessionId: 'claude-native', name: 'Legacy' }] });
+    fixture.deps.listOpenCodeThreads = async () => { throw new MultichatError('OPENCODE_UNAVAILABLE', 'Service unavailable.'); };
+    expect(await runAdopt({ connect: '', adopt: 'Legacy' }, fixture.deps)).toBe(0);
+    expect(fixture.requests).toContainEqual({ op: 'attach', sessionId: 'claude-native', tool: 'claude', name: 'Legacy' });
+  });
+
+  it('reports native discovery failure when adopting an explicit OpenCode target', async () => {
+    const fixture = await starFixture();
+    const errors: string[] = [];
+    fixture.deps.stderr = (message) => errors.push(message);
+    fixture.deps.listOpenCodeThreads = async () => { throw new MultichatError('OPENCODE_UNAVAILABLE', 'Service unavailable.'); };
+    expect(await runAdopt({ connect: '', adopt: 'opencode/Worker' }, fixture.deps)).toBe(1);
+    expect(errors).toEqual(['adopt: Service unavailable.']);
+    expect(fixture.requests).not.toContainEqual(expect.objectContaining({ op: 'attach' }));
+  });
+
   it('adopts an existing OpenCode session with its complete native id and provider', async () => {
     const fixture = await starFixture();
     fixture.setThreads([thread]);
