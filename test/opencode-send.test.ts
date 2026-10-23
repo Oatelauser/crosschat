@@ -6,6 +6,7 @@ import { sendMessage } from '../src/application/send/index.js';
 import type { SendDeps } from '../src/application/send/types.js';
 import { decodeRef } from '../src/ref.js';
 import { resolveTargetByName } from '../src/resolve.js';
+import { MultichatError } from '../src/errors.js';
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -59,6 +60,12 @@ describe('OpenCode communication through the application seam', () => {
     await expect(sendMessage({ to: 'opencode/reviewer', bodyArg: 'once' }, deps)).rejects.toThrow('uncertain write');
     expect(deliverOpenCode).toHaveBeenCalledTimes(1);
   });
+  it('explains a configured OpenCode outage for its qualified target', async () => {
+    const { deps, deliverOpenCode } = fixture();
+    deps.listOpenCodeThreads = async () => { throw new MultichatError('OPENCODE_AUTH_REQUIRED', 'Service authentication rejected.'); };
+    await expect(sendMessage({ to: 'opencode/ses_one', bodyArg: 'once' }, deps)).rejects.toMatchObject({ code: 'OPENCODE_AUTH_REQUIRED' });
+    expect(deliverOpenCode).not.toHaveBeenCalled();
+  });
 });
 
 describe('OpenCode qualified addressing', () => {
@@ -67,5 +74,8 @@ describe('OpenCode qualified addressing', () => {
   });
   it('does not silently choose OpenCode when an exact name exists in another tool', () => {
     expect(() => resolveTargetByName('reviewer', [{ sessionId: 'claude_one', name: 'reviewer' }], [], [{ id: 'ses_one', name: 'reviewer' }])).toThrow(/reviewer/);
+  });
+  it('makes a qualified full native ID authoritative over a different session title', () => {
+    expect(resolveTargetByName('opencode/ses_one', [], [], [{ id: 'ses_one', name: 'reviewer' }, { id: 'ses_two', name: 'ses_one' }])).toMatchObject({ side: 'opencode', thread: { id: 'ses_one' } });
   });
 });

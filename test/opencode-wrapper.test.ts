@@ -18,6 +18,6 @@ describe('OpenCode native launcher', () => {
   });
   it('offers an explicit status section without changing the default selection', () => {
     expect(parseStatusArgs(['--opencode']).filters.section).toBe('opencode');
-    expect(parseStatusArgs([]).filters.section).toBeUndefined();
+    expect(parseStatusArgs([]).filters?.section).toBeUndefined();
   });
 });
