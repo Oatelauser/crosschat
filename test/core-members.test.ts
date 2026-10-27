@@ -13,6 +13,20 @@ function provider(providerId: string, presence: 'present' | 'absent' | 'unknown'
 }
 
 describe('provider member capabilities', () => {
+  it('probes a qualified native target only through its Provider and keeps same-ID endpoint observations distinct', async () => {
+    const claude = provider('claude');
+    const codex = provider('codex');
+    const targets = [{ providerId: 'codex', endpointType: 'cli', nativeId: 'same-id' },
+      { providerId: 'codex', endpointType: 'desktop', nativeId: 'same-id' }];
+    const snapshot = await readMemberSnapshot([claude, codex], Object.assign({ contextId: 'local', nativeIds: ['same-id'] }, { targets }));
+    expect(claude.liveness.probe).not.toHaveBeenCalled();
+    expect(codex.liveness.probe).toHaveBeenCalledTimes(2);
+    expect(codex.liveness.probe).toHaveBeenCalledWith({ contextId: 'local', nativeId: 'same-id', endpointType: 'cli', signal: undefined });
+    expect(codex.liveness.probe).toHaveBeenCalledWith({ contextId: 'local', nativeId: 'same-id', endpointType: 'desktop', signal: undefined });
+    expect(snapshot.get(JSON.stringify(['codex', 'cli', 'same-id']))).toMatchObject({ providerId: 'codex', endpointType: 'cli' });
+    expect(snapshot.get(JSON.stringify(['codex', 'desktop', 'same-id']))).toMatchObject({ providerId: 'codex', endpointType: 'desktop' });
+  });
+
   it('delegates native IDs and names to an arbitrary provider and preserves provider priority', async () => {
     const first = provider('thirdtool');
     const second = provider('otherprovider');
