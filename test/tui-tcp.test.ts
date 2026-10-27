@@ -50,6 +50,20 @@ function request(resource: TuiResource, page: TuiPage, actionId: string, targetI
 }
 
 describe('TCP resource lists and readonly navigation', () => {
+  it('preserves the selected delivery type in member and session views and operation preflight', async () => {
+    const f = fixtures();
+    f.current.members = ['cli', 'desktop'].map((endpointType, index) => member(index, { id: `typed-${endpointType}`, providerId: 'codex', endpointType }));
+    f.sessions.items = f.current.members.map((value, index) => session(index, { id: value.id, providerId: 'codex', endpointType: value.endpointType,
+      member: value, ref: { contextId: 'local', providerId: 'codex', nativeId: value.nativeId, endpointType: value.endpointType } }));
+    const route = { resourceId: 'sessions', contextId: context.id, query: { starId: star.starId, scope: 'discoverable' } };
+    const page = await f.resources.sessions.adapter.read({ context, route, signal: signal() });
+    expect(page.rows.map((row) => row.cells.provider)).toEqual(['codex-cli', 'codex-desktop']);
+    const selected = request(f.resources.sessions.resource, page, 'adopt-session', 1);
+    await f.resources.sessions.adapter.checkAction!(selected);
+    expect(f.management.preview).toHaveBeenCalledWith(expect.objectContaining({ sessionTarget: expect.objectContaining({ endpointType: 'desktop' }) }));
+    const members = await f.resources.members.adapter.read({ context, route: { ...route, resourceId: 'members' }, signal: signal() });
+    expect(members.rows.map((row) => row.cells.provider)).toEqual(['codex-cli', 'codex-desktop']);
+  });
   it('adopts the selected remote native session and keeps member/session lists live', async () => {
     const f = fixtures();
     f.sessions.items = [session(0, { member: null, membership: 'not-member', discovered: true })];
