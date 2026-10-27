@@ -12,6 +12,35 @@ function result(): ManagedLogResult {
 afterEach(() => vi.useRealTimers());
 
 describe('TUI log resource', () => {
+  it('preserves typed session scopes and separates follow checkpoints for equal-ID endpoints', async () => {
+    const { createLogsResource } = await import('../src/tui/resources/logs.js');
+    const read = vi.fn(async () => ({ ...result(), checkpoint: { cursor: { identity: 'fixture-log', size: 10 }, epoch: 0 } }));
+    const { adapter } = createLogsResource({ read });
+    const selected = { contextId: 'local', providerId: 'codex', nativeId: 'same-id', endpointType: 'desktop' };
+    const scoped = (endpointType: string) => ({ ...request(), route: { resourceId: 'logs', contextId: 'local',
+      query: { sessionRef: JSON.stringify({ ...selected, endpointType }) } } });
+    expect((await adapter.read(scoped('desktop'))).rows).toHaveLength(1);
+    expect((await adapter.read(scoped('cli'))).rows).toHaveLength(1);
+    await adapter.read(scoped('desktop'));
+    expect(read.mock.calls).toEqual([
+      [expect.objectContaining({ sessionRef: selected, previous: undefined })],
+      [expect.objectContaining({ sessionRef: { ...selected, endpointType: 'cli' }, previous: undefined })],
+      [expect.objectContaining({ sessionRef: selected, previous: { cursor: { identity: 'fixture-log', size: 10 }, epoch: 0 } })],
+    ]);
+  });
+
+  it('refuses a known provider/type mismatch without reading or broadening the log scope', async () => {
+    const { createLogsResource } = await import('../src/tui/resources/logs.js');
+    const read = vi.fn(async () => result());
+    const { adapter } = createLogsResource({ read });
+    for (const endpointType of ['shared', '', '../desktop', 'x'.repeat(33)]) {
+      expect((await adapter.read({ ...request(), route: { resourceId: 'logs', contextId: 'local', query: {
+        sessionRef: JSON.stringify({ contextId: 'local', providerId: 'codex', nativeId: 'id', endpointType }),
+      } } })).completeness).toBe('unavailable');
+    }
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it('registers complete readonly controls and a route chooser, keeping full details and copy values', async () => {
     const { createLogsResource } = await import('../src/tui/resources/logs.js');
     const read = vi.fn(async () => result());
