@@ -39,6 +39,35 @@ function mutationRegistry(action: TuiAction = rename) {
 }
 
 describe('TUI interaction controller', () => {
+  it('rechecks only the selected row capability, discards stale reads, and recovers without replaying writes', async () => {
+    const probes: Array<{ id: string; signal: AbortSignal; finish(value: Record<string, { enabled: boolean; reason?: string }>): void }> = [];
+    const mutate = vi.fn(async () => ({}));
+    const controller = createTuiController({ registry: mutationRegistry({ ...rename, dynamicAvailability: true }), contexts, adapters: { sessions: {
+      read: async () => ({ rows: [{ ...third }, { ...other }], completeness: 'complete' }),
+      describeActions: (request) => new Promise((finish) => probes.push({ id: request.target.id, signal: request.signal, finish })),
+      checkAction: async () => ({ enabled: true }), mutate,
+    } } });
+    try {
+      command(controller, 'sessions'); await loaded(controller);
+      await vi.waitFor(() => expect(probes).toHaveLength(1));
+      expect(controller.getSnapshot().actions.find((item) => item.id === 'rename')?.enabled).toBe(false);
+      controller.handleKey({ name: 'down' });
+      await vi.waitFor(() => expect(probes).toHaveLength(2));
+      expect(probes[0].signal.aborted).toBe(true);
+      probes[0].finish({ rename: { enabled: true } });
+      probes[1].finish({ rename: { enabled: false, reason: 'endpoint unavailable' } });
+      await vi.waitFor(() => expect(controller.getSnapshot().actions.find((item) => item.id === 'rename')?.reason).toBe('endpoint unavailable'));
+      controller.handleKey({ name: 'e' });
+      expect(controller.getSnapshot().mode).toBe('list');
+      await controller.refresh();
+      await vi.waitFor(() => expect(probes).toHaveLength(3));
+      probes[2].finish({ rename: { enabled: true } });
+      await vi.waitFor(() => expect(controller.getSnapshot().actions.find((item) => item.id === 'rename')?.enabled).toBe(true));
+      expect(mutate).not.toHaveBeenCalled();
+    } finally { controller.dispose(); }
+    expect(probes.at(-1)?.signal.aborted).toBe(true);
+  });
+
   it('restores the original workspace when the same local resource is revisited from TCP and local workspaces', async () => {
     const controller = createTuiController({ registry: createResourceRegistry(), contexts: [contexts[0]], adapters: { services: { read: async () => ({ rows: [other], completeness: 'complete' }) } } });
     try {

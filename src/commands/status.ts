@@ -347,10 +347,10 @@ async function starsText(deps: StatusDeps, nowMs: number, groups: StarGroup[]): 
       const off = m.offlineSessions!.map(
         (s) => `⚪${label}:${s.tool === undefined ? '' : `${s.tool}/`}${s.name ?? s.sessionId.slice(0, 8)}`,
       );
-      lines.push(`  下线: ${off.join('、')}（等 resume 复活；接任 --extend-session；删 --member-remove）`);
+      lines.push(`  下线: ${off.join('、')}（启动器 /resume 或 TUI 选择入星；接任 --extend-session；删 --member-remove）`);
     }
     // 诊断（场景 E 恢复指路）：会话活着但非成员且该星本机守护在线——收编命令当场打印
-    // （下线成员名也算册内名——对账循环数秒内验活复活，不再建议 adopt）
+    // 下线成员的统一恢复入口已在对应行说明，不按名字推断窗口当前选择。
     if (g.reachable && g.daemons.some((d) => d.state === 'online') && localNames.length > 0) {
       const memberNames = new Set<string>();
       for (const m of machines)

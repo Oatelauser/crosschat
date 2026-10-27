@@ -1,8 +1,10 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
 import { describe, expect, it } from 'vitest';
 import { resolveClaudeExe } from '../src/claude/resolve-exe.js';
-import { runClaudeWrapper } from '../src/commands/claude-wrapper.js';
+import { defaultClaudeWrapperDeps, runClaudeWrapper } from '../src/commands/claude-wrapper.js';
 import { MultichatError } from '../src/errors.js';
 
 const spawns: { exe: string; args: string[] }[] = [];
@@ -27,6 +29,30 @@ async function expectCode(promise: Promise<unknown>, code: string): Promise<Mult
 }
 
 describe('runClaudeWrapper', () => {
+  it('actual process spawn reports the owned PID, inherits cwd and preserves the native exit code', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'crosschat-child-pid-'));
+    const file = join(directory, 'child.json');
+    const spawned: number[] = [];
+    try {
+      const code = await defaultClaudeWrapperDeps().spawnInherit(process.execPath, [
+        '-e', 'require("node:fs").writeFileSync(process.env.CROSSCHAT_PID_FIXTURE, JSON.stringify({pid: process.pid, cwd: process.cwd()})); process.exitCode = 7;',
+      ], { CROSSCHAT_PID_FIXTURE: file }, (pid) => { spawned.push(pid); });
+      expect(code).toBe(7);
+      expect(spawned).toHaveLength(1);
+      expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ pid: spawned[0], cwd: process.cwd() });
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('failed executable spawn rejects without inventing a child PID', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'crosschat-child-missing-'));
+    const spawned: number[] = [];
+    try {
+      await expect(defaultClaudeWrapperDeps().spawnInherit(join(directory, 'missing-claude'), [], {}, (pid) => { spawned.push(pid); }))
+        .rejects.toMatchObject({ code: 'ENOENT' });
+      expect(spawned).toEqual([]);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
   it('prepends --settings {"crossSessionInbound":"accept"} and passes the rest through', async () => {
     const code = await runClaudeWrapper(['--version'], deps);
     expect(code).toBe(0);

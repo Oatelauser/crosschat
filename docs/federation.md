@@ -468,8 +468,8 @@ ssh <host> crosschat send --to <名字> --body - [其余参数透传]
 ssh 联邦与 tcp 星是**正交并存**的两条跨机通道：ssh 按机器投递（`--via ssh:<host> --to <名>`，名字在对端机解析）；tcp 星的会话投递走三段直达——会话经启动器入星后按 `<星>:<机器>:<会话>` 寻址（机器级操作——`status --via tcp:<机器>` 远程枚举与文件通道——另有保留）。两通道怎么选：对端在 tcp 星里且你要**直达某个会话**用三段；否则 ssh 照旧。日常操作五条（全量教学见[跨机通信：tcp](broker.md)）：
 
 ```bash
-# ① 入星启动（claude 带 -n；codex 无 -n，进去 /rename 即被聚合器跟随。1.7.0 起默认永久注册：
-#    退出=下线非退星，同 id resume 自动复活；一次性 worker 加 --rm，退出即离册）
+# ① 入星启动（claude 带 -n；codex 无 -n，原生 /rename 后由聚合器跟随名称。
+#    首条输入或 /resume 后入星；默认永久，退出保留册位；新临时成员加 --rm，最后窗口退出后删册）
 crosschat claude -n boss --connect cloud
 crosschat codex --connect cloud
 crosschat claude -n once-worker --connect cloud --rm
@@ -485,14 +485,16 @@ crosschat claude -n boss2 --connect cloud --extend-session boss
 crosschat status --stars
 crosschat serve --connect cloud --adopt limbo
 
-# ⑤ 看星内会话成员表（每星下按机器列成员；extends 血统一并标注；下线成员 ⚪ 行在册可复活）
+# ⑤ 看星内会话成员表（每星下按机器列成员；extends 血统一并标注；下线永久成员 ⚪ 行保留册位）
 crosschat status --stars
 
 # ⑥ 删册位（下线≠删除；幂等，自退/管理删皆可，星内任何机器可执）
 crosschat serve --connect cloud --member-remove <名|id8>
 ```
 
-错误速读：`SESSION_NOT_MEMBER`=该会话名没入星或已被 `--rm`/删除（走 ④ 收编或 ① 重起）；`SESSION_OFFLINE`=在册但下线（等 resume 复活，或 ③ 接任，或会话段投 id8 点对点——绝不静默改投）；`MACHINE_BOUND`=同 id 换机器 resume（先 ⑥ 删原册位再新机入星）；`NAME_COLLISION`=同名撞车（报错列出带工具限定词的地址，照抄即达；同工具同名时改列 id8，会话段投 `<id 前 8 位>` 短前缀）；`SESSION_SUPERSEDED`=旧名已死有接任者（报错给出接任者三段地址——带工具限定词，改投）；启动器/聚合器打"已降级机器级"=broker 机 crosschat 过旧（升级重启即恢复，机器级收发不受影响）。ssh 侧不受这些语义影响——ssh 形态永远按机器投递。
+直接运行原生工具或桌面/Web，统一在 TUI 选择具体节点会话入星；裸 `/resume` 不自动归队，永久册位保留。node 普通断网重连重播当前声明；进程重启后，仍活着的启动器重声明，没有启动器的手动成员通过 TUI 或 ④ 收编恢复。
+
+错误速读：`SESSION_NOT_MEMBER`=该会话名没入星或已被 `--rm`/删除（走 ④ 收编或 ① 启动器选择，也可 TUI 入星）；`SESSION_OFFLINE`=在册但下线（通过启动器 `/resume` 或 TUI 选择恢复，也可 ③ 接任；id8 寻址仍需成员在线）；`MACHINE_BOUND`=同 id 换机器 resume（先 ⑥ 删原册位再新机入星）；`NAME_COLLISION`=同名撞车（报错列出带工具限定词的地址，照抄即达；同工具同名时改列 id8，会话段投 `<id 前 8 位>` 短前缀）；`SESSION_SUPERSEDED`=旧名已死有接任者（报错给出接任者三段地址——带工具限定词，改投）；启动器/聚合器打"已降级机器级"=broker 机 crosschat 过旧（升级重启即恢复，机器级收发不受影响）。ssh 侧不受这些语义影响——ssh 形态永远按机器投递。
 
 ---
 

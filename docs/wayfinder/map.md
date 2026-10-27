@@ -8,6 +8,7 @@ label: wayfinder:map
 
 ## Notes
 
+- 2026-10-27 会话选择与成员管理按[最新批准](../development/session-selection-membership-design-20261026.md)统一：crosschat 启动器跟随首条输入与 `/resume`，直接原生/桌面/Web 由 TUI 选择入星；所有工具取消裸 resume 自动归队，永久册位保留。下文028等旧票描述保留为历史，不再代表当前恢复规则。[本轮验收及能力边界](../development/session-selection-membership-validation-20261026.md)保留自动检查、原生与终端证据。
 - 2026-10-22 TUI外壳及本机/SSH/TCP资源已完成整体开发验收，最后的活动清单已删除。[最终验收与环境边界](../development/tui-final-validation-20261022.md)、[使用与完整按键](../tui.md)、[TUI续接与分批证据](../development/tui-progress.md)。应用接口见[核心API](../development/core-api.md)，核心证据见[核心改造记录](../development/core-refactor-progress.md)；代码规范见 `docs/development/code-standards.md`。后续工作等待用户指令，原有功能变更先给具体方案并等用户同意。
 - 2026-10-23 用户恢复后的[真实SSH/TCP远端检查](../development/tui-remote-validation-20261023.md)通过：Windows默认TUI浏览/恢复、SSH子进程取消、停测试broker后的错误页；沿用同包的15探针和Linux PTY证据。生产未升级、未安装Codex；远端临时环境已删除。本机临时凭证清理被自动审批阻断，及公网直连/真实非空会话等未覆盖边界均在记录中，不扩称全场景通过。
 - 2026-10-02 项目更名 multichat → crosschat（双命令过渡，历史文档保留旧名）

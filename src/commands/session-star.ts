@@ -4,8 +4,10 @@
  * attach 守连接（断线重连原样重声明，退出即 detach）、extends 四级校验接线、
  * serve --adopt 收编活进程、9b 降级告警。纯 IPC+WS+扫描，零模型调用。
  */
+import { mkdirSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { homedir, hostname } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import process from 'node:process';
 import { MultichatError } from '../errors.js';
 import { appendWithRotate } from '../log-rotate.js';
@@ -20,8 +22,9 @@ import { selectConnectEntry } from '../serve/connect-selector.js';
 import { resolveTargetByName } from '../resolve.js';
 import { decodeRef } from '../ref.js';
 import { readSendLogTail, defaultSendLogFile } from '../send-log.js';
-import { listClaudeSessions as listClaudeSessionsReal } from '../claude/registry.js';
+import { defaultClaudeSessionsDir, listClaudeSessions as listClaudeSessionsReal } from '../claude/registry.js';
 import { listCodexThreads as listCodexThreadsReal } from '../codex/discovery.js';
+import { createSessionSelectionFollower } from '../application/session-selection.js';
 
 import { connectAttachPipe, ensureAggregator, queryAttachStatus, spawnServeDetachReal } from '../serve/attach-client.js';
 import type { AttachPipeClient } from '../serve/attach-client.js';
@@ -102,9 +105,9 @@ export interface StarJoinDeps {
   tcpBaseDir: string;
   stdout(line: string): void;
   stderr(line: string): void;
-  /** 021 静默纪律：spawn 后成功路径（attach 确认/断连重连提示）落日志不打控制台（真值 ~/.crosschat/tcp/launcher.log）。 */
+  /** 入星诊断日志；写失败可抛出，调用方按成功/失败场景处理。真值 ~/.crosschat/tcp/launcher.log。 */
   log(line: string): void;
-  listClaudeSessions(): { sessions: Array<{ sessionId: string; name?: string; updatedAt?: number; startedAt?: number }> };
+  listClaudeSessions(): { sessions: Array<{ sessionId: string; pid?: number; name?: string; updatedAt?: number; startedAt?: number }> };
   listCodexThreads(): Promise<Array<{ id: string; name: string | null; createdAt?: number }>>;
   /** 自动拉聚合器（serve --connect <selector> --detach）；013 双开护栏在其内部在位。 */
   spawnServeDetach(selector: string): void;
@@ -117,20 +120,23 @@ export interface StarJoinDeps {
   aggregatorTimeoutMs?: number;
 }
 
-export function realStarJoinDeps(): StarJoinDeps {
+function launcherLogFile(tcpBaseDir: string): string {
+  return resolve(tcpDir(tcpBaseDir), 'launcher.log');
+}
+
+export function realStarJoinDeps(env: NodeJS.ProcessEnv = process.env): StarJoinDeps {
+  const tcpBaseDir = join(homedir(), '.crosschat');
+  const logFile = launcherLogFile(tcpBaseDir);
   return {
-    tcpBaseDir: join(homedir(), '.crosschat'),
+    tcpBaseDir,
     stdout: (line) => process.stdout.write(`${line}\n`),
     stderr: (line) => process.stderr.write(`${line}\n`),
     // 021：TUI 接管控制台后裸 stdout 写会落进输入区——成功路径全部进日志（node 日志旁挂，带轮转）
     log: (line) => {
-      try {
-        appendWithRotate(join(tcpDir(join(homedir(), '.crosschat')), 'launcher.log'), `${new Date().toISOString()} ${line}\n`);
-      } catch {
-        // 日志尽力而为：写失败不倒守连接
-      }
+      mkdirSync(dirname(logFile), { recursive: true });
+      appendWithRotate(logFile, `${new Date().toISOString()} ${line}\n`);
     },
-    listClaudeSessions: () => listClaudeSessionsReal(),
+    listClaudeSessions: () => listClaudeSessionsReal(defaultClaudeSessionsDir(env)),
     listCodexThreads: async () => (await listCodexThreadsReal()).map((thread) => ({
       id: thread.id,
       name: thread.name,
@@ -221,14 +227,16 @@ interface StarTarget {
 }
 
 /**
- * 启动器的入星腿：spawn 后探测新会话 ID（快照差分——shortcut: 并发同侧另起
- * 会话时可能选中最新者，选错可用 serve --adopt 纠正），确保每星聚合器、四级
- * 校验（首度 attach 前一次）、attach 并守连接（管道断=聚合器重启→重连原样
- * 重声明，启动器即第三方记忆）；stop() 即 detach。021 输出纪律：横幅 spawn
- * 前同步打（报地址不预支成功），spawn 后成功路径全静默（确认/重连落日志），
- * 失败只出一行 stderr，绝不连坐子进程（会话本身不因入星失败而死）。
+ * 启动器的入星腿：Claude 按所属原生进程探测会话，其他来源按快照差分。
+ * 确保每星聚合器、四级校验（首度 attach 前一次），attach 并守连接
+ * （管道断=聚合器重启→重连原样
+ * 重声明，启动器即第三方记忆）；stop() 即 detach。正常启动不打印入星预告，
+ * 确认/重连落日志；失败写日志，并在 stderr 显示原因及完整日志路径，
+ * 绝不连坐子进程（会话本身不因入星失败而死）。
  */
 export class StarJoiner {
+  private readonly claimId = randomUUID();
+  private readonly controller = new AbortController();
   private stopped = false;
   private resolveStopped!: () => void;
   /** 023：stop 信号——与 superviseStar 的无界等待点（waitClose）race，stop 落重连窗口不挂起。 */
@@ -245,8 +253,12 @@ export class StarJoiner {
       deps: StarJoinDeps;
       side: 'claude' | 'codex';
       connects: string[];
+      /** Claude 启动器所属的原生子进程；未就绪时等待，绝不猜其他新增会话。 */
+      claudeProcessId?(): number | undefined;
+      /** Exact selection supplied by a window-owned native adapter; no global discovery. */
+      selectedSession?: { sessionId: string; name?: string };
       extendSession?: string;
-      /** spawn 时已知的会话名（claude -n 原生透传）——有则横幅打三段地址行，无名（codex/未命名）只打星名行。 */
+      /** spawn 时已知的会话名（claude -n 原生透传），用于异工具同名预警。 */
       spawnName?: string;
       /** 028 --rm：临时会话——退出即离册零痕迹（erase detach）；缺省永久注册（退出=下线，册位保留）。 */
       rm?: boolean;
@@ -257,24 +269,49 @@ export class StarJoiner {
     });
   }
 
-  /** spawn 前调用：同步解析星目标并打横幅（TUI 接管控制台前落定），快照现存会话（差分基线）。 */
+  /** spawn 前调用：解析星目标、核对同名预警；需要差分的来源单独建立基线。 */
   async begin(): Promise<void> {
-    this.resolveTargetsAndBanner();
+    this.resolveTargets();
+    if (this.targets.length === 0) return;
     await this.warnCrossToolNameCollision();
-    for (const session of this.opts.deps.listClaudeSessions().sessions) this.knownClaude.add(session.sessionId);
-    try {
-      for (const thread of await this.opts.deps.listCodexThreads()) this.knownCodex.add(thread.id);
-    } catch {
-      // codex daemon 未起：空基线（子进程会拉起 daemon，新线程即差分命中）
+    if (this.stopped) return;
+    const { deps, side, claudeProcessId } = this.opts;
+    if (this.opts.selectedSession === undefined && side === 'claude' && claudeProcessId === undefined) {
+      for (const session of deps.listClaudeSessions().sessions) this.knownClaude.add(session.sessionId);
     }
-    void this.run();
+    if (this.opts.selectedSession === undefined && side === 'codex') {
+      try {
+        for (const thread of await deps.listCodexThreads()) this.knownCodex.add(thread.id);
+      } catch {
+        // codex daemon 未起：空基线（子进程会拉起 daemon，新线程即差分命中）
+      }
+    }
+    void this.run().catch((err: unknown) => { this.reportFailure(err); });
+  }
+
+  /** 正常事件的日志写入尽力而为，不把日志故障误报为入星失败。 */
+  private log(line: string): void {
+    try { this.opts.deps.log(line); }
+    catch { /* 日志故障不终止会话或守连接。 */ }
+  }
+
+  private reportFailure(error: unknown, starName?: string): void {
+    const { deps } = this.opts;
+    const reason = error instanceof MultichatError ? `${error.code}: ${error.message}`
+      : error instanceof Error ? error.message : String(error);
+    const scope = starName === undefined ? '入星失败' : `入星 ${starName || '默认星'} 失败`;
+    const message = `${scope}：${reason}`;
+    let logStatus = '日志';
+    try { deps.log(message); }
+    catch { logStatus = '日志写入失败'; }
+    deps.stderr(`${message}；${logStatus}：${launcherLogFile(deps.tcpBaseDir)}`);
   }
 
   /**
    * 020 启动期同名预警（spawn 前打）：-n 名与星内既有成员异工具同名时打一行
    * "你的地址将是 工具/名"——把发送期碰撞提前到启动期可见。尽力而为：attach
    * 管道已在才查（聚合器不在静默跳过不延迟 spawn），status 探针 ~2s 超时上限
-   * （021 纪律：此行属 spawn 前横幅面，走 stdout）。
+   * 预警仍在 spawn 前走 stdout，不与正常入星预告混用。
    */
   private async warnCrossToolNameCollision(): Promise<void> {
     const { deps, side, spawnName } = this.opts;
@@ -296,15 +333,15 @@ export class StarJoiner {
     }
   }
 
-  /** 021：目标解析+横幅 spawn 前同步做（原先在异步 run() 里——attach 确认晚于子进程启动，横幅会落进 TUI）。 */
-  private resolveTargetsAndBanner(): void {
+  /** 目标解析在 spawn 前完成；正常启动不输出预告，配置错误直接报告。 */
+  private resolveTargets(): void {
     const { deps, connects } = this.opts;
     if (connects.length === 0) return;
     let config;
     try {
       config = readNodeConfig(join(tcpDir(deps.tcpBaseDir), 'node.json'));
     } catch (err) {
-      deps.stderr(err instanceof MultichatError ? err.message : '本机未入网（~/.crosschat/tcp/node.json 不可读）——会话照常启动，入星未生效');
+      this.reportFailure(err instanceof MultichatError ? err : '本机未入网（~/.crosschat/tcp/node.json 不可读）——会话照常启动，入星未生效');
       return;
     }
     for (const selector of connects) {
@@ -312,23 +349,14 @@ export class StarJoiner {
         const selected = selectConnectEntry(selector, config);
         this.targets.push({ ...selected, selector, machineName: selected.entry.showName ?? config.showName ?? deps.machineName });
       } catch (err) {
-        deps.stderr(err instanceof Error ? err.message : String(err));
+        this.reportFailure(err, selector);
       }
-    }
-    const { spawnName } = this.opts;
-    for (const target of this.targets) {
-      const starName = target.entry.name ?? target.selector;
-      deps.stdout(
-        spawnName === undefined
-          ? `入星 ${starName}（attach 自动，异常见日志）`
-          : `入星 ${starName}——会话地址 tcp:${starName}:${target.machineName}:${spawnName}（attach 自动，异常见日志）`,
-      );
     }
   }
 
   /**
    * 子进程退出后调用：detach（尽力而为）并收线。028 双模式：默认永久——detach
-   * 不带 erase（聚合器移出声明集=下线，broker 册位保留，同 id resume 自动复活）；
+   * 不带 erase（移出声明集=下线，永久册位保留，再次选择或显式管理恢复）；
    * --rm 临时——detach 带 erase（聚合器本地表外再报 broker 删条，退出零痕迹）。
    */
   async stop(): Promise<void> {
@@ -338,7 +366,7 @@ export class StarJoiner {
       for (const pipe of this.pipes.values()) {
         try {
           await Promise.race([
-            pipe.send({ op: 'detach', sessionId: this.sessionId, ...(this.opts.rm === true ? { erase: true } : {}) }),
+            pipe.send({ op: 'detach', sessionId: this.sessionId, claimId: this.claimId, ...(this.opts.rm === true ? { erase: true } : {}) }),
             sleep(800),
           ]);
         } catch {
@@ -347,18 +375,24 @@ export class StarJoiner {
         pipe.close();
       }
     }
+    this.controller.abort();
     await Promise.allSettled(this.supervise);
   }
 
   private async run(): Promise<void> {
-    const { deps } = this.opts;
     if (this.targets.length === 0) return;
     // 9b：broker 能力预检（每星一行；探测不到不出声——聚合器重连时另行告警）
-    for (const target of this.targets) await warnIfBrokerLacksSessionCaps(target.entry, deps.stderr);
-    const detected = await this.detectSession();
+    for (const target of this.targets) {
+      await warnIfBrokerLacksSessionCaps(target.entry, (message) => {
+        this.reportFailure(message, target.entry.name ?? target.selector);
+      });
+    }
+    const detected = this.opts.selectedSession ?? await this.detectSession();
     if (detected === undefined) {
       if (!this.stopped) {
-        deps.stderr('未探测到新会话的 ID（启动器超时/会话即退）——会话未入星；若会话仍活可 crosschat serve --connect <星> --adopt <会话名> 收编');
+        const processId = this.opts.claudeProcessId?.();
+        const subject = this.opts.claudeProcessId === undefined ? '新会话的 ID' : ` Claude 子进程 PID ${processId ?? '未知'} 的会话 ID`;
+        this.reportFailure(`未探测到${subject}（启动器超时/会话即退）——会话未入星；若会话仍活可 crosschat serve --connect <星> --adopt <会话名> 收编`);
       }
       return;
     }
@@ -371,7 +405,7 @@ export class StarJoiner {
     await Promise.allSettled(this.supervise);
   }
 
-  /** 快照差分探测子会话（claude=注册表新条目，含其当前名——-n 原生已写入；codex=新线程 id）。 */
+  /** Claude 原生进程精确匹配含恢复的已有 ID；没有进程绑定的来源沿用差分。 */
   private async detectSession(timeoutMs = 120_000): Promise<{ sessionId: string; name?: string } | undefined> {
     const { deps, side } = this.opts;
     const deadline = (deps.now?.() ?? Date.now()) + timeoutMs;
@@ -379,9 +413,12 @@ export class StarJoiner {
       if (this.stopped) return undefined;
       try {
         if (side === 'claude') {
+          const ownedPid = this.opts.claudeProcessId?.();
           const fresh = deps
             .listClaudeSessions()
-            .sessions.filter((session) => session.sessionId !== '' && !this.knownClaude.has(session.sessionId));
+            .sessions.filter((session) => session.sessionId !== '' && (this.opts.claudeProcessId === undefined
+              ? !this.knownClaude.has(session.sessionId)
+              : ownedPid !== undefined && session.pid === ownedPid));
           if (fresh.length > 0) {
             fresh.sort((a, b) => (b.updatedAt ?? b.startedAt ?? 0) - (a.updatedAt ?? a.startedAt ?? 0));
             const top = fresh[0]!;
@@ -410,11 +447,12 @@ export class StarJoiner {
     while (!this.stopped) {
       let pipe: AttachPipeClient;
       try {
-        pipe = await ensureAggregator(deps, target.entry, target.selector);
+        pipe = await ensureAggregator({ ...deps, signal: this.controller.signal }, target.entry, target.selector);
       } catch (err) {
-        deps.stderr(err instanceof Error ? err.message : String(err));
+        if (!this.stopped) this.reportFailure(err, target.entry.name ?? target.selector);
         return; // 该星放弃（其余星不受影响；会话照常）
       }
+      if (this.stopped) { pipe.close(); return; }
       this.pipes.set(target.selector, pipe);
       try {
         if (!validated) {
@@ -423,10 +461,10 @@ export class StarJoiner {
             try {
               const evidence = await checkExtendSession(deps, extendSession, target.entry);
               if (evidence === 'log') {
-                deps.log(`extends ${extendSession}：本机有该名对话史——接续登记后，投给旧名的消息将指路到新会话`);
+                this.log(`extends ${extendSession}：本机有该名对话史——接续登记后，投给旧名的消息将指路到新会话`);
               }
             } catch (err) {
-              deps.stderr(err instanceof Error ? err.message : String(err));
+              this.reportFailure(err, target.entry.name ?? target.selector);
               return; // 旧名仍是活成员：本星不 attach（去旗标重跑即解锁——失败方向不锁死）
             }
           }
@@ -434,6 +472,8 @@ export class StarJoiner {
         const reply = await pipe.send({
           op: 'attach',
           sessionId,
+          claimId: this.claimId,
+          ...(this.opts.selectedSession === undefined ? {} : { selectionOwned: true }),
           tool: side, // 020：启动器天然知道 side——同机跨工具同名消歧的声明源
           ...(attachName === undefined ? {} : { name: attachName }),
           ...(this.opts.extendSession === undefined ? {} : { extends: this.opts.extendSession }),
@@ -445,25 +485,44 @@ export class StarJoiner {
             await Promise.race([sleep(1_000), this.stoppedSignal]);
             continue;
           }
-          deps.stderr(`入星 ${target.entry.name ?? target.selector} 失败：${reply.error ?? '聚合器拒绝 attach'}`);
+          this.reportFailure(reply.error ?? '聚合器拒绝 attach', target.entry.name ?? target.selector);
           return;
         }
         const starName = target.entry.name ?? target.selector;
-        deps.log(`已入星 ${starName}：会话可经 tcp:${starName}:${target.machineName}:${attachName ?? sessionId.slice(0, 8)} 直达`);
+        this.log(`已入星 ${starName}：会话可经 tcp:${starName}:${target.machineName}:${attachName ?? sessionId.slice(0, 8)} 直达`);
         // 聚合器重启/管道断——重连原样重声明；stop 时经信号即时唤醒（023：stop 落重连窗口不挂起）
         await Promise.race([pipe.waitClose(), this.stoppedSignal]);
         if (!this.stopped) assertNodeNotRevoked(join(tcpDir(deps.tcpBaseDir), 'node.json'), target.entry);
-        if (!this.stopped) deps.log(`星 ${starName} 聚合器连接断开，重连中……`);
+        if (!this.stopped) this.log(`星 ${starName} 聚合器连接断开，重连中……`);
       } catch (err) {
-        deps.stderr(err instanceof Error ? err.message : String(err));
+        if (!this.stopped) this.reportFailure(err, target.entry.name ?? target.selector);
         return;
       } finally {
-        this.pipes.delete(target.selector);
+        if (this.pipes.get(target.selector) === pipe) this.pipes.delete(target.selector);
         pipe.close();
       }
-      await sleep(1_000);
+      await Promise.race([sleep(1_000), this.stoppedSignal]);
     }
   }
+}
+
+/** CLI/Desktop-specific adapters only publish selection; star policy stays shared here. */
+export function createStarSelectionFollower(options: ConstructorParameters<typeof StarJoiner>[0]) {
+  return createSessionSelectionFollower(async (selection, signal) => {
+    const joiner = new StarJoiner({ ...options, selectedSession: { sessionId: selection.sessionId, ...(selection.name === undefined ? {} : { name: selection.name }) } });
+    const abort = () => { void joiner.stop(); };
+    signal.addEventListener('abort', abort, { once: true });
+    if (signal.aborted) abort();
+    await joiner.begin();
+    return { close: async () => { signal.removeEventListener('abort', abort); await joiner.stop(); } };
+  }, (error) => reportLauncherFailure(options.deps, error));
+}
+
+export function reportLauncherFailure(deps: StarJoinDeps, error: unknown): void {
+  const message = `入星失败：${error instanceof Error ? error.message : String(error)}`;
+  let status = '日志';
+  try { deps.log(message); } catch { status = '日志写入失败'; }
+  deps.stderr(`${message}；${status}：${launcherLogFile(deps.tcpBaseDir)}`);
 }
 
 // ---- serve --adopt 收编 -------------------------------------------------------------

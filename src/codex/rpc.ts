@@ -14,6 +14,7 @@ const WHITELISTED_METHODS = new Set([
   'thread/list',
   'thread/resume',
   'thread/read',
+  'thread/name/set',
   'turn/start',
   'turn/steer',
   'thread/unsubscribe',

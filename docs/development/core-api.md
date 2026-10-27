@@ -24,6 +24,8 @@
 | 发送 | `src/application/send/index.ts`、`types.ts` | `sendMessage` 返回 typed 结果；`format.ts` 负责旧文本/JSON，TCP 本机桥直接使用结果 |
 | 成员对账 | `src/application/members/index.ts` | 有序 Provider 能力委派，保留现有活性/查名策略；unknown 不当成 absent |
 | 精确册位操作 | `src/application/session-membership/index.ts` | 只读列出配置星；按完整 SessionRef 检查/收编/删册，目标变化拒绝，未确认写入不自动重试 |
+| 原生选择与窗口声明 | `src/application/session-selection.ts`、`commands/session-star.ts` | 每窗口接收 empty/selected；选择代次取消旧连接，释放本窗口 claim，不猜最新历史 |
+| 逐操作原生能力 | `src/application/session-operations.ts`、`tcp/session-operations.ts` | describe/apply、完整 node/provider/native 目标、四态能力与 revision，原生写结果不明不重放 |
 
 ## 读取与生命周期
 
@@ -54,6 +56,14 @@ TUI服务任务通过`createLocalServices`绑定本机配置、状态和系统�
 收编核对最新安全发现、实际 broker 握手星及在线聚合器的完整机器/工具身份；确认中说明可能启动聚合器，明确撤权暂停不被自动绕过。attach 只发送一次，随后只读核对权威星册。精确删册采用独立 `member-remove-exact`，broker 在同一步验证完整 ID、机器和工具；原名字/前缀 CLI 分支保持。丢回执、已发写取消和内存已变但落盘失败均为待核实，不盲目重发；不增加旧端降级。
 
 ## 远端发现与撤权
+
+2026-10-26 会话成员扩展：`session-operation/result/cancel` 与只读发现分开。目标固定完整 starId、32hex machineId、providerId 和 nativeId；broker 路由给当前认证 node socket，并覆盖调用方传入的成员属性。目标 node 重新读取自己的原生来源，执行后 broker 核对声明、权威册位、改名后的名称及持久化。并发上限 broker 全局64/每调用连接8、node8；超时、断线、撤权、退出取消源读取，已发写返回 uncertain，不换 owner 或自动重试。
+
+`createNativeSessionOperations` 按稳定 providerId 注册 `NativeOperationProvider`；未注册/重复注册禁用。adopt 与 rename 独立报告 executable/unsupported/unavailable/needs-verification。可选 rename 必须提供具体 endpoint/owner/version 的 `contextKey`（可异步）、只读 probe 和 native apply；预览、确认、提交均新读，提交 revision 变化拒绝，apply 接收提交前保存的 context，再核对实际端点。写后重新读取名称与 owner，并再次 probe。默认 `createNativeOperationProviders` 已接入 Codex CLI 原生 setter，同 profile、loaded 会话与 daemon 身份均核实后开放；Claude 活窗口同步未核实，Desktop 当前协同端点没有改名能力，分别禁用并说明原因。[原生验证](native-rename-validation-20261027.md)。没有星内别名或历史文件写入替代。
+
+窗口声明以随机 claimId 绑定实际 attach socket；同 ID 多窗口共同持有，旧 socket 关闭不能释放已转移的 claim。永久/临时由每星现有册位决定，`--rm` 和重连不得改变；重复 TUI 收编临时成员不增加永久 manual claim。生命周期删册使用带 id 的 `member-remove {temporaryOnly:true}`，broker 仅接受所属认证机器的 exact 临时 ID；显式管理删册仍按完整成员身份执行，并立即移除在线路由。
+
+最终统一规则（2026-10-26 用户明确选择）：所有工具通过 crosschat 启动器当前选择重声明，或通过 TUI/显式 adopt 入星；取消裸 resume 自动归队，旧/手动册位也不从发现结果自动恢复。永久册位不删，node/broker 仅断网重连时已有内存声明重播；node 进程重启后，仍活着的启动器重连恢复当前声明，手动成员须在 TUI 明确恢复。Provider 仍负责已声明成员的活性/名称，不能从其扫描结果创造在线声明。`selectionOwned` 标明当前窗口声明对在线的所有权，随册位持久化，不改变永久/临时属性。批准记录见[会话选择方案](session-selection-membership-design-20261026.md)。
 
 `crosschat discover` 接收stdin上的单个JSON请求并输出单个JSON结果；空输入默认`{"op":"list"}`。列表支持`limit`（每Provider默认100、1—1000）、`cursor`和`filter:{providerIds?,text?}`；详情请求为`{"op":"detail","providerId":"claude","nativeId":"完整ID","referenceKind":"native"}`。结果保留Provider能力、原生状态、元数据、采样时间与每来源错误，不读取聊天正文，不回传投递插座或凭证。请求/响应最多2MiB，元数据有深度/数组/节点数量边界。
 

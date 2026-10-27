@@ -25,7 +25,7 @@ crosschat send --via tcp:<星>:<机器>:<会话> --body "跑一次构建，产�
 | **broker**（星心） | 星心机器上的常驻服务（`crosschat serve`，[1.2](#12-broker-机起服务与造星) 部署） | 星的消息中转站：管机器注册表 + 会话成员册（roster，落盘不失忆），一切跨机消息经它转发；它挂了跨机就瘫。一个 serve 进程托管多颗星（`--add-star`），全部星共用一个进程/端口 |
 | **node**（节点机） | 接入星的每台机器，凭一份 [node.json 钥匙](#131-配置连接密钥)入网 | broker 机由 serve/加星**自登记**为星内首个 node（机器级即刻可收可发），其余机器贴钥匙后 `serve --connect` 入网 |
 | **聚合器** | node 机上 `serve --connect` 起的那条常驻连接（[1.3.2](#132-启动聚合器连接星)） | 一份进程两份职责：机器级**收件** + 维护本机会话的**星籍**（N 个会话共用这一条连接，不随会话数增长） |
-| **成员**（会话册） | 经[启动器入星](#133-启动会话入星)的 claude/codex 会话 | **册+双模式**：永久（默认——退出=下线、册位保留、同 id resume 自动复活）或临时（`--rm`——退出即离册）；三段寻址 `tcp:<星>:<机器>:<会话>` 的终点 |
+| **成员**（会话册） | 经[启动器或 TUI 入星](#133-启动会话入星)的会话 | 永久成员退出后保留册位，通过启动器选择或 TUI 恢复；新临时成员（`--rm`）最后一个窗口退出后删册；三段寻址 `tcp:<星>:<机器>:<会话>` 的终点 |
 
 在此之上才是**会话**：机器连星了但会话没入星，星内依然找不到它。
 
@@ -370,32 +370,32 @@ ops-wsl   （星管理钥）       -         2026-10-20T03:11:00.000Z
 
 #### 1.3.3 启动会话（入星）
 
-三个动词各管一层：`serve --connect` = **机器接入**，启动器 `--connect` = **会话注册入册**，`--rm` = **临时修饰**。会话注册 1.7.0 起**默认永久**（破坏式变更：1.6.x 原为退出即退星）——退出只是下线，册位保留在星册（roster），同 id resume/重启自动复活。
+三个动词各管一层：`serve --connect` = **机器接入**，启动器 `--connect` = **跟随本窗口选择的会话入册**，`--rm` = **新成员的临时属性**。默认永久：退出保留册位；已有永久成员不会因本次 `--rm` 被改成临时。永久/临时逐星决定，不改变原生聊天历史。
 
 **claude 会话入星（永久注册，默认）**：
 
 1.新会话入星 = 自动启动聚合器（假设没启动） + 启动会话入册
 ```
 > crosschat claude -n <会话名> --connect <星名>     # -n 是 claude 原生命名参数，包装器只透传不认领
-入星 <星名>——会话地址 tcp:<星名>:<本机名>:<会话名>（attach 自动，异常见日志）
 ```
 隐式操作：
-- 横幅在 claude 接管屏幕**前**打印（报地址不预支成功）；启动后入星全程静默——attach 确认/断连重连提示落 `~/.crosschat/tcp/launcher.log`，失败才出一行 stderr
-- 星内已有**异工具同名**成员时，横幅后多一行预警（同样 spawn 前打）：`预警: 星内已有 codex/<会话名>，你的地址将是 claude/<会话名>（同名异工具，发送方需带工具限定词）`——把发送期碰撞提前到启动期可见；聚合器不在则静默跳过（尽力而为，不延迟启动）
-- 聚合器没跑会**自动拉起**（几秒内），不用管
+- 正常启动不输出入星预告；attach 确认/断连重连提示写入 `~/.crosschat/tcp/launcher.log`。入星失败时，终端 stderr 显示具体原因及日志文件的完整路径，同一错误也写入日志；日志无法写入时明确显示“日志写入失败”及路径。是否已入星可查看日志中的“已入星”记录或 `crosschat status --stars`
+- 星内已有**异工具同名**成员时，仍在 claude 启动前打印预警：`预警: 星内已有 codex/<会话名>，你的地址将是 claude/<会话名>（同名异工具，发送方需带工具限定词）`——把发送期碰撞提前到启动期可见；聚合器不在则静默跳过（尽力而为，不延迟启动）
+- 空白新窗口先等待；用户首条输入或确认 `/resume` 后才入星，此时按需启动聚合器
+- 同目录可同时启动多个匿名 Claude/Codex 窗口；每窗口有独立原生选择通道与声明。Claude 同时核对实际子进程 PID，Codex 跟随该窗口的成功原生请求，不从全局最新记录猜身份。Claude 的 `CLAUDE_CONFIG_DIR` 与原生进程保持一致；自定义 shell 启动脚本须用 `exec` 保留原生进程身份
 - **退出 = 下线，不是退星**：册位保留，`status --stars` 显示为下线成员（`下线: ⚪…` 行）；期间投它报 `SESSION_OFFLINE`（等上线，绝不静默改投）
-- **同 id `/resume` 或重启 = 自动复活上线**（聚合器对账循环本地验活，数秒内重入册），无需任何重新声明；会话内 `/rename` 改名 → 聚合器扫描（≤30s）自动跟随
+- **通过启动器 `/resume` 同一 ID = 按该 ID 重新上线**；取消选择不改变当前会话。原生 `/rename` 后名称仍由聚合器扫描跟随（≤30s）
 
 2.启动式的 `/resume` 恢复上下文入星（推荐——对**任何**对话都成立，无论它之前入没入过星）
 ```
-> crosschat claude --connect <星名>   # 起进程入星（此刻还没名字）
+> crosschat claude --connect <星名>   # 空白窗口等待，不先登记一个占位会话
 > /resume <会话名>                    # 进程内切对话
 ```
 隐式操作：
-- 成员资格跟着**进程的启动声明**走（声明的是启动那一刻的会话 id）；`/resume` 切对话后由**聚合器扫描跟随**（会话名 ≤30s 更新）——资格不依赖 claude 内部的会话号行为
-- ⚠️ 个别 claude 版本 resume 换号导致旧声明失配（投三段地址报 `SESSION_NOT_MEMBER`/`SESSION_OFFLINE`）：等对账循环一轮（新 id 若在册即自动复活），或同方式 3 的 `--adopt`，或退出后用本方式重进
-- **resume 进哪个对话，哪个对话即经本会话可达**——等效收编：之前从没入过星的对话，切进来就直达
-- 会话名自动跟随 resume 进来的对话名（扫描 ≤30s 更新）；退出=下线（册位保留）
+- Claude/Codex 成员资格跟随本窗口实际选择的完整原生 ID；A→B 先释放本窗口 A，再声明 B，不靠会话名变化猜 ID
+- A 是永久成员则留册下线，临时成员则在最后一个窗口释放后删册；其他窗口持有 A 时继续独立工作
+- resume 选择未入星会话时，按本次启动意图申请成员资格；直接开始新聊天则首条输入后入星。`--rm --connect <星>` 与 `--connect <星> --rm` 等效；已有永久成员优先
+- 原生选择能力不可核实时在终端显示具体原因和日志路径，原生聊天仍可打开；可通过 TUI 明确选择会话入星，不回退猜全局最新会话
 
 3.普通方式 `/resume`（裸起会话）——**注意：这种方式不做启动声明**，分情况：
 ```
@@ -405,47 +405,50 @@ ops-wsl   （星管理钥）       -         2026-10-20T03:11:00.000Z
 ```
 分情况说明：
 - resume 的是**普通对话**（从没入过星）→ 星内无人可达它，投三段地址报 `SESSION_NOT_MEMBER`（要入星走下面的 `--adopt`）
-- resume 的是**星内老对话** → 1.7.0 起**自动归队**：该会话在册（下线态），聚合器对账循环本地验活发现它活着即自动复活上线（≤30s）——册位在，裸 resume 也能回队（1.6.x 须 adopt 的痛点已由落盘册根治）
-- 等不及/没归队时补救：收编 `crosschat serve --connect <星名> --adopt <会话名>`（`status --stars` 会在诊断行直接打印这条命令，照抄即可）
+- resume 的是**星内老对话** → 永久册位仍在，但裸 resume 不自动恢复在线；所有工具统一通过带 `--connect` 的 crosschat 启动器选择，或在 TUI 明确选择该会话入星
+- 显式管理入口：在 TUI 选择该节点会话入星，或收编 `crosschat serve --connect <星名> --adopt <会话名>`（`status --stars` 会在诊断行直接打印这条命令，照抄即可）
 
-**临时会话（`--rm`，docker --rm 语义）**——一次性 worker 用它，退出即离册零痕迹：
+2026-10-26 用户选择统一入口：**所有工具均取消裸 resume 自动归队**，不要求记住各工具的特殊规则。终端经 crosschat 启动器自动跟随选择；直接原生启动、桌面/Web 均在 TUI 明确选定 node 会话入星。永久册位保留，GUI 切标签不自动收编新 ID。其他工具的原生选择适配由「多工具适配」后续实现，未接入的来源不会冒充已支持。
+
+**临时会话（`--rm`）**——一次性 worker 的新册位使用临时属性，最后一个窗口退出后删册；已有永久成员保持永久：
 
 ```
 > crosschat claude -n <一次性名> --connect <星名> --rm
-# 退出即删册位：之后按名投报 SESSION_NOT_MEMBER（与从未入册同码）
+# 新临时成员的最后一个窗口退出后删册：之后按名投报 SESSION_NOT_MEMBER
 ```
-- `--rm` 只作用于**会话册位**，不碰机器守护（聚合器生命周期独立——永久成员的复活检测依赖它活着；退机器走显式 `serve --stop`）；`serve --connect … --rm` 组合被拒绝
+- `--rm` 只作用于**会话册位**，不碰机器守护；聚合器维护当前声明及消息路由，生命周期独立，停止它使用显式 `serve --stop`。`serve --connect … --rm` 组合被拒绝
 - `--rm × --extend-session` 互斥报错（临时会话无血统可接）
+- `crosschat claude --connect <星名> --rm` 和 `crosschat claude --rm --connect <星名>` 等效；同目录并发的临时会话独立删册，退出一个不影响另一个
 
 **彻底删册位（member-remove）**——永久成员的自退/管理删（幂等，星内任何机器可执）：
 
 ```
 > crosschat serve --connect <星名> --member-remove <会话名|id8>
-# 下线≠删除：册位还在就还能复活；member-remove 才是删——之后该名投递报 SESSION_NOT_MEMBER
+# 下线保留册位，可通过启动器选择或 TUI 恢复；member-remove 删册后该名投递报 SESSION_NOT_MEMBER
 ```
 
 **codex 形态**（无 `-n`：codex 没有启动期命名参数，进去后改名，聚合器扫描自动跟随）：
 
 ```
 > crosschat codex --connect <星>
-入星 <星>（attach 自动，异常见日志）      # codex 无 -n：启动前只打星名行，地址待 /rename 后由扫描补
+# 正常启动不输出入星预告；地址待 /rename 后由扫描补
 # （codex 交互里）/rename <会话名>
 # 聚合器下一轮扫描（≤30s）即把该名挂进成员表，三段寻址生效
 ```
-（codex 同样吃双模式：默认永久注册/退出下线/同 id 复活；一次性加 `--rm`。）
+（Codex 同样默认永久、退出下线，通过启动器选择或 TUI 恢复；新临时成员加 `--rm`，已有永久属性不变。）
 
 **多星并存**（`--connect` 可重复；一台机/一个会话可同时挂多颗星）：
 
 ```
 > crosschat claude -n <会话名> --connect <星> --connect <另一星>
-# 两颗星各出一行"入星"，tcp:<星>:<本机名>:<会话名> 与 tcp:<另一星>:<本机名>:<会话名> 都直达
+# 首条输入或 /resume 后分别入星，确认写入 launcher.log；两颗星的三段地址均可直达
 ```
-（各星独立册、独立上下线；`--rm` 作用于同命令的全部 `--connect`。）
+（各星独立册、独立上下线；`--rm` 对各星的新成员生效，各星已有永久属性保持。）
 
 **验证**（两步：成员表见它；真发一条是最终裁决——本机对自己发也走全链）：
 ```
 # 期望：星下多出会话成员行——`会话: <本机名>:claude/<会话名>`（带工具前缀；老聚合器未声明 tool 时保持裸名）；
-# 退出后再看：同位置变 `下线: ⚪<本机名>:claude/<会话名>（等 resume 复活…）`
+# 永久成员退出后显示下线，提示通过启动器 /resume 或 TUI 选择入星
 > crosschat status --stars
 # 期望：`delivered to <会话名>@<本机名>(ec542c2c) (turn 1) · 续话 c1`，且该会话里收到消息
 > crosschat send --via tcp:<星>:<本机名>:<会话名> --body "联调测试"
@@ -490,7 +493,7 @@ ops-wsl   （星管理钥）       -         2026-10-20T03:11:00.000Z
 ```
 # 期望：无 ❌
 > crosschat doctor
-# 期望：已入星的活会话数秒内经恢复链自动回成员表（见 2.5；broker 与本机聚合器**都**重启过则走 2.4 adopt）
+# 期望：永久册位保留；仍活着的启动器重声明当前会话，无启动器的手动成员在 TUI 或经 2.4 adopt 恢复（见 2.5）
 > crosschat status --stars
 ```
 
@@ -550,7 +553,6 @@ crosschat send --via tcp:<星>:<机器>:<会话> --body "构建跑了吗"
 
 ```
 > crosschat claude -n boss2 --connect cloud --extend-session boss
-入星 cloud——会话地址 tcp:cloud:host-a:boss2（attach 自动，异常见日志）
 # 有对话史时日志（~/.crosschat/tcp/launcher.log）里多一行：
 #   extends boss：本机有该名对话史——接续登记后，投给旧名的消息将指路到新会话
 ```
@@ -562,7 +564,7 @@ crosschat send --via tcp:<星>:<机器>:<会话> --body "构建跑了吗"
 顺带两条自动语义（无需操作）：
 
 - **改名跟随**：claude 会话内 `/rename`，聚合器下一轮扫描（≤30s）自动更新成员表（同会话 ID 换名）；codex 同理。改名后旧名自然退位（投旧名按非成员报错）——要保留旧名可达性，用上面的接任声明
-- **双活性模型**（1.7.0：死=下线，册位保留）：claude 成员活性 = 进程在（退出即下线，同 id 重启自动复活）；codex 成员活性 = 线程在（rollout 落盘、durable——TUI 关了线程还在，resume 即复活；extends 对 codex 几乎不适用）
+- **活性与选择分开**：Provider 仍核验已声明成员的活性和名称，但不从原生发现/历史/loaded 状态恢复下线声明；此规则对所有工具和已有册位相同。永久册位保留，重新选择或显式管理后恢复在线
 
 ### 2.4 adopt 收编（会话活着但不在星里）
 
@@ -590,7 +592,7 @@ cloud ✓ 可达，2 机器在线
 
 ### 2.5 重启自愈与降级告警
 
-**恢复链**（重启自愈，一般无需人工）：聚合器重启 → 向 broker 查回本机最后已知名单 → 逐个本地验活 → 活的自动重新入册（孤儿会话自动找回，死名不复活）；broker 也重启过（双失忆）→ 恢复链空 → 走 [2.4](#24-adopt-收编会话活着但不在星里) 的 adopt（status 诊断行会把命令打印好）；启动器还活着时则连查都不用查——旗标在手，原样重声明（含 extends）。
+**恢复链**：永久册位在 broker 落盘，broker/node 重启不丢名单。普通断网重连重播 node 当前声明；node 进程重启后，仍活着的启动器重连并按当前所选 ID 重声明（含 extends），不会重挂切走的旧 ID。无启动器的手动成员统一在 TUI 精确恢复，或用 [adopt](#24-adopt-收编会话活着但不在星里) 明确管理；不从原生发现自动归队。
 
 **降级告警**：本机 crosschat 比 broker 机新（broker 还不支持会话成员）时，启动器/聚合器会在**命令行直接打一行**：
 
@@ -622,7 +624,7 @@ broker 不支持会话成员（proto:3），已降级机器级——本机会话
 
 1. （022 起无需操作——broker 进程已自动内挂本机聚合器；旧版 crosschat 的星心机才需要 `crosschat serve --connect cloud-broker --detach` 起第二个常驻）
 2. cd 到任意工作目录，跑：`crosschat claude -n cloudworker10 --connect cloud-broker`
-   → 期望一行（claude 启动前）：`入星 cloud-broker——会话地址 tcp:cloud-broker:cloud:cloudworker10（attach 自动，异常见日志）`
+   → 期望：正常启动不输出入星预告，直接进入 claude；随后用 `crosschat status --stars` 核对成员
    → 进入 claude 后随便说一句话让它活着
 
 **本机：**
@@ -663,14 +665,14 @@ broker 不支持会话成员（proto:3），已降级机器级——本机会话
 **重启自愈（云机，保持 cloudworker11 活着）：**
 
 14. `crosschat serve --stop && crosschat serve --detach`
-    → 本机 `status --stars`：cloudworker11 成员行数秒内自动回来（恢复链验活重入册）
+    → 本机 `status --stars`：永久册位保留；仍活着的启动器重声明 cloudworker11，无启动器的手动成员在 TUI 或经 adopt 恢复
 
 **热星 drill（云机 broker 在跑，加星→收→删全程免重启）：**
 
 15. `crosschat serve --add-star drill1`
     → 期望：`已加星 drill1——本 broker 现托管 2 颗星（经在跑 broker 已生效，免重启；自登记+内挂聚合器随对账落位）`——cloud-broker 星全程零感知
 16. 云机 cd 到工作目录跑：`crosschat claude -n drillworker --connect drill1`，随便说一句话让它活着
-    → 期望一行：`入星 drill1——会话地址 tcp:drill1:cloud:drillworker（attach 自动，异常见日志）`
+    → 期望：正常启动不输出入星预告，直接进入 claude
     → 云机 `status --stars`：drill1 星下出现 `会话: cloud:drillworker`
 17. 云机：`crosschat send --via tcp:drill1:cloud:drillworker --body "热星验证"`
     → 期望：`delivered to drillworker@cloud(000c6989) (turn 1)`——broker 一次都没重启
@@ -936,12 +938,12 @@ C → file-end{id}
 
 | 帧 | 语义 |
 |---|---|
-| `{op:"attach", sessionId, name?, extends?}` | 声明成员（成员键=会话 ID；name/extends 禁冒号；幂等重声明=覆盖） |
-| `{op:"detach", sessionId}` | 退星（幂等：不在表内也回 ok） |
+| `{op:"attach", sessionId, tool?, name?, extends?, temporary?, claimId?, selectionOwned?}` | 声明成员；claim 绑定该 IPC socket，既有每星属性优先；没有 claimId 表示手动声明 |
+| `{op:"detach", sessionId, claimId?, erase?}` | 释放本声明；其他窗口仍持有则保留在线，最后声明释放后永久留册下线、临时条件删册 |
 | `{op:"sync", sessions:[…]}` | 全量对账（替换整表） |
 | `{op:"status"}` | 只读探针 → 回 `{ok, online, brokerCap, members:[…], starId?, machine?}`；starId/machine 仅在实际 broker 连接在线时存在，来自本次认证握手和发送的完整机器 ID，断开即清除。启动器用于 extends/幂等，精确收编还需核对所选星及权威册位 |
 
-聚合器侧语义：成员表变化即全量重播 `sessions` 帧；对账循环常态化（1.7.0）——每轮 members-query 拉册切片 + 本地验活（claude=进程扫描，codex=rollout 落盘存在）：死→上报下线（册位保留，不再除名）、册内活而未声明→自动复活；扫描同时做改名跟随（同 id 换名即更新重播）。
+聚合器侧成员变化即重播 `sessions`；每轮 members-query 拉册切片并同步实际属性。所有成员均须启动器选择声明或显式管理，原生发现不新增/恢复声明；扫描只负责已声明成员的活性/名称及无主临时册位清理。TUI 的精确节点操作使用独立 `session-operation/result/cancel`，执行回执与权威册位/路由/持久化共同确认，协议合同见[核心接口](development/core-api.md)。
 
 </details>
 
@@ -957,7 +959,7 @@ C → file-end{id}
 | `UNKNOWN_MACHINE 注册表没有…` | 目标名/mid 没登记或抄错 | broker 机 `crosschat serve --list` 查 mid8 与名字 |
 | `MACHINE_NAME_COLLISION` | 同名机器或 mid 前缀太短 | 报错里列了 mid——改用（更长的）mid 前缀寻址 |
 | `SESSION_NOT_MEMBER 会话 X 不是星成员` | 三段寻址的会话名没入星（裸起的会话）或已被 `--rm`/member-remove 删除 | 该会话所在机用启动器入星（`crosschat claude -n <名> --connect <星>`）；会话已活着则 `crosschat serve --connect <星> --adopt <名>` 收编 |
-| `SESSION_OFFLINE 成员 X 已下线` | 永久成员退出/死亡（1.7.0：册位保留，不再除名） | 等 resume 上线（同 id 自动复活）后重发；或新会话 `--extend-session` 接任；或会话段投 `<id 前 8 位>` 点对点 |
+| `SESSION_OFFLINE 成员 X 已下线` | 永久成员退出/死亡，册位保留 | 通过 crosschat 启动器 `/resume` 或 TUI 选择该会话入星后重发；也可新会话 `--extend-session` 接任；id8 寻址同样需要成员在线 |
 | `MACHINE_BOUND 册位绑在 X` | 同 id 换机器 resume（跨机复活被拒） | 先在原机器 `serve --connect <星> --member-remove <名|id8>` 删册位，再到新机器重新入星 |
 | `SESSION_SUPERSEDED 已由 <机器>:<会话> 接续` | 旧名是死名且有接任者（--extend-session 声明过） | 照报错里的 `tcp:<星>:<机器>:<会话>` 改投接任者 |
 | `EXTENDS_CONFLICT`（启动器/adopt） | extends 旧名仍是活成员（alive-wins 下会休眠） | 先退旧会话再接续，或去掉 `--extend-session` 直接开新名 |

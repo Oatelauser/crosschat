@@ -523,6 +523,94 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
     expect(detach).toEqual({ ok: true });
   });
 
+  it('永久成员以 --rm 恢复后退出仍保留册位，再次明确选择才恢复在线', async () => {
+    const { harness, attach, capture } = await startNodeStar('permanent-rm', {
+      claude: [{ sessionId: 'permanent-a', name: 'A' }],
+    }, { memberCheckMs: 80 });
+    await attach.send({ op: 'attach', sessionId: 'permanent-a', tool: 'claude', name: 'A' });
+    await vi.waitFor(() => expect(loadBrokerFile(harness.registryFile).stars[0]?.roster).toHaveLength(1));
+    await attach.send({ op: 'detach', sessionId: 'permanent-a' });
+    await attach.send({ op: 'attach', sessionId: 'permanent-a', tool: 'claude', name: 'A', temporary: true });
+    await vi.waitFor(() => expect(loadBrokerFile(harness.registryFile).stars[0]?.roster?.[0]?.temporary).toBeUndefined());
+    await attach.send({ op: 'detach', sessionId: 'permanent-a', erase: true });
+    await vi.waitFor(() => expect(loadBrokerFile(harness.registryFile).stars[0]?.roster).toEqual([
+      expect.objectContaining({ sessionId: 'permanent-a' }),
+    ]));
+    const sender = await senderOn(harness.url, key('s'));
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    expect(await attach.send({ op: 'status' })).toMatchObject({ members: [] });
+    await attach.send({ op: 'attach', sessionId: 'permanent-a', tool: 'claude', name: 'A', temporary: true });
+    await vi.waitFor(async () => {
+      const status = await attach.send({ op: 'status' });
+      expect(status).toMatchObject({ members: [expect.objectContaining({ sessionId: 'permanent-a' })] });
+    });
+    sender.send({ op: 'send', id: 'after-rm-resume', targetMachine: 'node-host:A', body: 'still here' });
+    expect(await sender.waitFor((f) => f.op === 'receipt' && f.id === 'after-rm-resume')).toMatchObject({ status: 'delivered' });
+    expect(capture.delivered).toHaveLength(1);
+  });
+
+  it('两个窗口声明同一临时会话时，只释放退出窗口自己的声明', async () => {
+    const { harness, attach } = await startNodeStar('shared-claims', { claude: [{ sessionId: 'shared-a' }] });
+    await attach.send({ op: 'attach', sessionId: 'shared-a', tool: 'claude', temporary: true, claimId: 'window-one' });
+    await attach.send({ op: 'attach', sessionId: 'shared-a', tool: 'claude', temporary: true, claimId: 'window-two' });
+    await attach.send({ op: 'detach', sessionId: 'shared-a', erase: true, claimId: 'window-one' });
+    expect(await attach.send({ op: 'status' })).toMatchObject({ members: [expect.objectContaining({ sessionId: 'shared-a' })] });
+    await attach.send({ op: 'detach', sessionId: 'shared-a', erase: true, claimId: 'not-an-owner' });
+    expect(await attach.send({ op: 'status' })).toMatchObject({ members: [expect.objectContaining({ sessionId: 'shared-a' })] });
+    await attach.send({ op: 'detach', sessionId: 'shared-a', erase: true, claimId: 'window-two' });
+    await vi.waitFor(() => expect(loadBrokerFile(harness.registryFile).stars[0]?.roster).toHaveLength(0));
+  });
+
+  it('窗口切走永久 A 后，历史仍可发现也不会对账复活 A；重新选择才上线', async () => {
+    const history: MemberProvider = { providerId: 'codex', liveness: { probe: async ({ nativeId }) => ({ nativeId,
+      presence: 'present', name: null, completeness: 'complete', errors: [], observedAt: Date.now() }) }, readName: async () => undefined };
+    const { harness, attach } = await startNodeStar('selected-release', {}, { memberCheckMs: 40, memberProviders: () => [history] });
+    await attach.send({ op: 'attach', sessionId: 'selected-a', tool: 'codex', claimId: 'one', selectionOwned: true });
+    await vi.waitFor(() => expect(loadBrokerFile(harness.registryFile).stars[0]?.roster?.[0]).toMatchObject({ selectionOwned: true }));
+    await attach.send({ op: 'detach', sessionId: 'selected-a', claimId: 'one' });
+    await attach.send({ op: 'attach', sessionId: 'selected-b', tool: 'codex', claimId: 'one', selectionOwned: true });
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    expect(await attach.send({ op: 'status' })).toMatchObject({ members: [expect.objectContaining({ sessionId: 'selected-b' })] });
+    expect(loadBrokerFile(harness.registryFile).stars[0]?.roster).toHaveLength(2);
+    await attach.send({ op: 'attach', sessionId: 'selected-a', tool: 'codex', claimId: 'two', temporary: true });
+    expect(await attach.send({ op: 'status' })).toMatchObject({ members: expect.arrayContaining([expect.objectContaining({ sessionId: 'selected-a' })]) });
+    expect(loadBrokerFile(harness.registryFile).stars[0]?.roster?.find((item) => item.sessionId === 'selected-a')?.temporary).toBeUndefined();
+  });
+
+  it('Claude 裸 resume 统一保留离线册位，启动器明确选择后才恢复且不被 --rm 降级', async () => {
+    const native: { claude: Array<{ sessionId: string }> } = { claude: [{ sessionId: 'resume-selected' }] };
+    const { harness, attach, capture } = await startNodeStar('selected-raw-resume', native, { memberCheckMs: 40 });
+    const scans = vi.spyOn(capture.deps, 'listClaudeSessions');
+    await attach.send({ op: 'attach', sessionId: 'resume-selected', tool: 'claude', claimId: 'window', selectionOwned: true });
+    await vi.waitFor(() => expect(loadBrokerFile(harness.registryFile).stars[0]?.roster?.[0]).toMatchObject({ selectionOwned: true }));
+    native.claude = [];
+    await attach.send({ op: 'detach', sessionId: 'resume-selected', claimId: 'window' });
+    expect(await attach.send({ op: 'status' })).toMatchObject({ members: [] });
+    native.claude = [{ sessionId: 'resume-selected' }];
+    const before = scans.mock.calls.length;
+    await vi.waitFor(() => expect(scans.mock.calls.length).toBeGreaterThan(before + 2));
+    expect(await attach.send({ op: 'status' })).toMatchObject({ members: [] });
+    await attach.send({ op: 'attach', sessionId: 'resume-selected', tool: 'claude', claimId: 'new-window', selectionOwned: true, temporary: true });
+    expect(await attach.send({ op: 'status' })).toMatchObject({ members: [expect.objectContaining({ sessionId: 'resume-selected', selectionOwned: true })] });
+    expect(loadBrokerFile(harness.registryFile).stars[0]?.roster?.[0]?.temporary).toBeUndefined();
+    native.claude = [];
+    await attach.send({ op: 'detach', sessionId: 'resume-selected', claimId: 'new-window' });
+    await vi.waitFor(async () => expect(await attach.send({ op: 'status' })).toMatchObject({ members: [] }));
+    expect(loadBrokerFile(harness.registryFile).stars[0]?.roster).toHaveLength(1);
+  });
+
+  it('窗口断线只释放所属声明，旧连接关闭不能释放转移到新连接的声明', async () => {
+    const { harness, attach, entry, dir } = await startNodeStar('claim-sockets', { claude: [{ sessionId: 'shared-a' }] });
+    const second = await attachTalk(attachPipePath(entry, dir, 'claim-sockets'));
+    await attach.send({ op: 'attach', sessionId: 'shared-a', tool: 'claude', claimId: 'same', temporary: true });
+    await second.send({ op: 'attach', sessionId: 'shared-a', tool: 'claude', claimId: 'same', temporary: true });
+    attach.close();
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(await second.send({ op: 'status' })).toMatchObject({ members: [expect.objectContaining({ sessionId: 'shared-a' })] });
+    second.close();
+    await vi.waitFor(() => expect(loadBrokerFile(harness.registryFile).stars[0]?.roster).toHaveLength(0));
+  });
+
   it('028 成员表变化即重播：detach（无 erase）后三段报 SESSION_OFFLINE（册位保留）', async () => {
     const { harness, attach } = await startNodeStar('t3', { claude: [{ sessionId: 'sess-boss', name: 'boss' }] });
     await attach.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss' });
@@ -628,14 +716,17 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
     expect(receipt).toMatchObject({ status: 'delivered' });
   }, 10_000);
 
-  it('delegates revival tool and name following to a third provider capability', async () => {
+  it('delegates name following to a third provider without reviving a released manual membership', async () => {
     const probe = vi.fn(async ({ nativeId }: { nativeId: string }) => ({ nativeId, presence: 'present' as const, name: null, completeness: 'complete' as const, errors: [], observedAt: 1 }));
     const source: MemberProvider = { providerId: 'thirdtool', liveness: { probe }, readName: vi.fn(async () => 'provider-renamed') };
     const { harness, attach } = await startNodeStar('provider-third', {}, { memberCheckMs: 50, memberProviders: () => [source] });
-    await attach.send({ op: 'attach', sessionId: 'opaque-third-id', name: 'old-name' });
-    await attach.send({ op: 'detach', sessionId: 'opaque-third-id' });
+    await attach.send({ op: 'attach', sessionId: 'opaque-third-id', name: 'old-name', tool: 'thirdtool' });
     await vi.waitFor(() => expect(probe).toHaveBeenCalled(), { timeout: 2_000 });
     await vi.waitFor(() => expect(loadBrokerFile(harness.registryFile).stars[0]?.roster).toEqual([expect.objectContaining({ sessionId: 'opaque-third-id', name: 'provider-renamed', tool: 'thirdtool' })]), { timeout: 2_000 });
+    await attach.send({ op: 'detach', sessionId: 'opaque-third-id' });
+    const before = probe.mock.calls.length;
+    await vi.waitFor(() => expect(probe.mock.calls.length).toBeGreaterThan(before + 2));
+    expect(await attach.send({ op: 'status' })).toMatchObject({ members: [] });
   });
 
   it('leaves temporary members declared when provider liveness is unknown', async () => {
@@ -768,6 +859,25 @@ describe('020 broker：会话段工具限定词与收命中集', () => {
 });
 
 describe('028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove', () => {
+  it('重声明保留星端原属性；临时清理只接受归属节点的精确临时 ID', async () => {
+    const { url, registryFile } = await startBroker();
+    seed(registryFile, [{ key: key('w'), machineId: WIN_MID }, { key: key('l'), machineId: LINUX_MID }]);
+    const node = await nodeOn(url, key('w'), WIN_MID);
+    const other = await nodeOn(url, key('l'), LINUX_MID);
+    node.send(sessionsFrame([{ sessionId: 'permanent', tool: 'claude' }, { sessionId: 'temporary', tool: 'codex', temporary: true }]));
+    await vi.waitFor(() => expect(loadBrokerFile(registryFile).stars[0]?.roster).toHaveLength(2));
+    node.send(sessionsFrame([{ sessionId: 'permanent', tool: 'claude', temporary: true }, { sessionId: 'temporary', tool: 'codex' }]));
+    node.send({ op: 'member-remove', id: 'permanent-clean', target: 'permanent', temporaryOnly: true });
+    expect(await node.waitFor((f) => f.op === 'member-remove-result' && f.id === 'permanent-clean')).toMatchObject({ removed: [] });
+    other.send({ op: 'member-remove', id: 'other-clean', target: 'temporary', temporaryOnly: true });
+    expect(await other.waitFor((f) => f.op === 'member-remove-result' && f.id === 'other-clean')).toMatchObject({ removed: [] });
+    const roster = loadBrokerFile(registryFile).stars[0]?.roster;
+    expect(roster).toEqual([expect.objectContaining({ sessionId: 'permanent' }), expect.objectContaining({ sessionId: 'temporary', temporary: true })]);
+    expect(roster?.[0]?.temporary).toBeUndefined();
+    node.send({ op: 'member-remove', id: 'own-clean', target: 'temporary', temporaryOnly: true });
+    expect(await node.waitFor((f) => f.op === 'member-remove-result' && f.id === 'own-clean')).toMatchObject({ removed: ['temporar'] });
+    expect(loadBrokerFile(registryFile).stars[0]?.roster).toHaveLength(1);
+  });
   it('roster 落盘形态：条目含 tool+会话 id+名+机器+在线态；tmp 已 rename 收尾', async () => {
     const { url, registryFile } = await startBroker();
     seed(registryFile, [

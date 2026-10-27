@@ -36,6 +36,9 @@ let issuedAt = 0;
 let removed = '';
 let renamed = '';
 let previewNumber = 0;
+const membershipFixture = process.env.TUI_TCP_SCENARIO === 'membership';
+let adopted = false;
+let memberRemoved = false;
 const role = (contextId) => contextId === 'local' ? 'broker-owner' : contextId === memberId ? 'member' : 'star-admin';
 const star = (contextId) => ({ id: 'star:fixed-fixture-row', contextId, starId, name: renamed || starName, revision: `star-revision:${renamed}`, role: role(contextId), host: 'fixture.invalid', port: 7260, health: 'reachable', onlineNodes: issuedAt && Date.now() - issuedAt >= 2000 ? 3 : 2 });
 const machine = (contextId, machineId, name, presence = 'online') => ({ id: `machine:${machineId}`, contextId, starId, machineId, mid8: machineId.slice(0, 8), name, labels: [`label:${machineId}`], presence, addedAt: '2026-10-22T00:00:00Z' });
@@ -50,7 +53,8 @@ function session(contextId, index, scope) {
   const discovered = scope === 'discoverable';
   return { id: `session:${roster.machineId}`, contextId, starId, machineId: roster.machineId, mid8: roster.machineId.slice(0, 8), machineName: roster.machineName, nativeId: roster.nativeId, providerId: roster.providerId, name: roster.name,
     ref: { contextId: `tcp-node:${contextId}:${starId}:${roster.machineId}`, providerId: roster.providerId, nativeId: roster.nativeId }, rawStatus: discovered ? index ? 'pondering' : 'idle' : null,
-    capabilities: null, attributes: { cwd: `D:/fixture/远端原生目录👩‍💻/${'完整路径/'.repeat(12)}` }, member: roster, membership: 'member', presence: roster.presence, discovered,
+    capabilities: null, attributes: { cwd: `D:/fixture/远端原生目录👩‍💻/${'完整路径/'.repeat(12)}` }, member: membershipFixture && !index && (!adopted || memberRemoved) ? null : roster,
+    membership: membershipFixture && !index && (!adopted || memberRemoved) ? 'not-member' : 'member', presence: roster.presence, discovered,
     addressReason: 'fixture没有可核验原生发送地址；不伪造地址。' };
 }
 const tcp = {
@@ -58,16 +62,21 @@ const tcp = {
   async readStar(request) {
     record({ event: 'tcp-star', ...request, signal: undefined, machineIds: machines(request.contextId).map((item) => item.id) });
     if (request.signal?.aborted) return { ...complete, contextId: request.contextId, star: null, machines: [], members: [], credentials: [], completeness: 'cancelled' };
-    return { ...complete, observedAt: Date.now(), contextId: request.contextId, star: star(request.contextId), machines: machines(request.contextId), members: [member(request.contextId, 0), member(request.contextId, 1)], credentials: credentials(request.contextId) };
+    return { ...complete, observedAt: Date.now(), contextId: request.contextId, star: star(request.contextId), machines: machines(request.contextId),
+      members: [...(!membershipFixture || adopted && !memberRemoved ? [member(request.contextId, 0)] : []), member(request.contextId, 1)], credentials: credentials(request.contextId) };
   },
   async readSessions(request) {
     record({ event: 'tcp-sessions', ...request, signal: undefined });
-    return { ...complete, contextId: request.contextId, star: star(request.contextId), scope: request.scope,
+    return { ...complete, observedAt: Date.now(), contextId: request.contextId, star: star(request.contextId), scope: request.scope,
       items: [session(request.contextId, 0, request.scope), session(request.contextId, 1, request.scope)].filter((item) => !request.machineId || item.machineId === request.machineId), nodes: [] };
   },
 };
 const management = {
   async preview(request) {
+    if (request.action === 'rename-session') {
+      record({ event: 'tcp-preview', ...request, signal: undefined, allowed: false });
+      return { enabled: false, reason: 'fixture没有已验证的原生改名能力', revision: 'unsupported', fields: [], impact: [] };
+    }
     const allowed = role(request.contextId) === 'broker-owner' || role(request.contextId) === 'star-admin' && ['generate-node-key', 'remove-node', 'revoke-credential', 'remove-member', 'adopt-session'].includes(request.action);
     const fields = request.action === 'generate-node-key' ? [{ id: 'count', label: '配置份数', required: true, initialValue: '1' }, { id: 'host', label: '接收机连接地址', required: true, initialValue: 'fixture.invalid' }]
       : request.action === 'rename-star' ? [{ id: 'name', label: '新星名', required: true, initialValue: 'STAR-RENAMED-FIXTURE' }] : [];
@@ -81,6 +90,8 @@ const management = {
     if (!request.expectedPreviewRevision.startsWith('preview:')) throw new Error('fixture requires the checked preview');
     if (request.action === 'remove-node') removed = request.targetId;
     if (request.action === 'rename-star') renamed = request.values.name;
+    if (request.action === 'adopt-session') adopted = true;
+    if (request.action === 'remove-member') memberRemoved = true;
     if (request.action === 'generate-node-key') {
       issuedAt = Date.now();
       return { kind: 'applied', message: 'fixture已发配置。', mode: 'hot', secret: { kind: 'node-configs', title: 'TCP-FIXTURE-ONE-TIME-CONFIG', materials: [{ label: 'fixture-node', content: secret, connectCommand }], notice: '仅人工分发的模拟材料；Esc/Ctrl+C离开清屏。' } };

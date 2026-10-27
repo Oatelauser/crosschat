@@ -32,6 +32,26 @@ function channel() {
 }
 
 describe('Codex internal paged read contract', () => {
+  it('renames an exact thread through the native setter without resuming or creating it', async () => {
+    const fake = channel();
+    const session = await openCodexSession({ spawnProxy, channelFactory: async () => fake.channel })();
+    try {
+      const initialize = session.initialize();
+      fake.respond({ userAgent: 'codex-tui/0.163.0', codexHome: '/isolated/codex' });
+      await initialize;
+      expect(session.nativeIdentity).toEqual({ userAgent: 'codex-tui/0.163.0', codexHome: '/isolated/codex' });
+      const read = session.readThreadMetadata('exact-thread');
+      expect(fake.sent.at(-1)).toMatchObject({ method: 'thread/read', params: { threadId: 'exact-thread', includeTurns: false } });
+      fake.respond({ thread: { id: 'exact-thread', name: 'before', status: { type: 'idle' } } });
+      expect(await read).toEqual({ id: 'exact-thread', name: 'before', status: 'idle' });
+      const rename = session.renameThread('exact-thread', 'after');
+      expect(fake.sent.at(-1)).toMatchObject({ method: 'thread/name/set', params: { threadId: 'exact-thread', name: 'after' } });
+      fake.respond({});
+      await rename;
+      expect(fake.sent.map((item) => item.method)).toEqual(['initialize', 'initialized', 'thread/read', 'thread/name/set']);
+    } finally { await session.close(); }
+  });
+
   it('keeps the legacy limit-20 non-archived request and rejecting unknown status unchanged', async () => {
     const fake = channel();
     const session = await openCodexSession({ spawnProxy, channelFactory: async () => fake.channel })();

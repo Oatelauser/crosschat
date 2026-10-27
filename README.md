@@ -132,16 +132,16 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 ### 入星启动（全部形态，复制即用）
 
 ```bash
-# 新 claude 会话入星（-n 给会话名；1.7.0 起默认永久注册：退出=下线、同 id resume 自动复活；聚合器不在会自动拉起）
+# 新 claude 会话入星（-n 给会话名；默认永久；空白等待，首条输入或 /resume 后入星，按需拉起聚合器）
 crosschat claude -n <名> --connect <星>
 
-# 一次性 worker 用 --rm（docker --rm 语义：退出即离册零痕迹；--rm × --extend-session 互斥）
+# 一次性 worker 用 --rm（新成员临时，最后一个窗口退出后删册；已有永久成员不变；与 --extend-session 互斥）
 crosschat claude -n <一次性名> --connect <星> --rm
 
 # codex 形态（无 -n：进去 /rename <名>，聚合器扫描自动跟随；同样吃双模式——永久默认/--rm 临时）
 crosschat codex --connect <星>
 
-# 多星并存（--connect 可重复；各星独立册，--rm 作用于全部 --connect）
+# 多星并存（--connect 可重复；各星独立册，--rm 对各星的新成员生效）
 crosschat claude -n <名> --connect <星> --connect <另一星>
 
 # 新会话接任退休旧会话的名字血统（换轨；接任后原会话同 id 回归不夺回名字）
@@ -151,7 +151,11 @@ crosschat claude -n <新名> --connect <星> --extend-session <旧名>
 crosschat serve --connect <星> --member-remove <名|id8>
 ```
 
-启动器存活期间守连接（聚合器重启会自动重声明，含 extends）；永久成员**退出=下线不是退星**（册位保留在星册，`status --stars` 见 ⚪ 下线行，同 id `/resume`/重启数秒内自动复活；期间投递报 `SESSION_OFFLINE` 等上线，绝不静默改投）。`--extend-session` 四级校验失败方向不锁死：旧名仍是活成员 → 拒绝并指路（退旧会话或去旗标）；本机有旧名对话史 → 放行并提示；都无 → 静默放行；broker 侧同旧名先声明先得（后者收 `EXTENDS_CONFLICT` 指路，不影响入星）。
+通过 `crosschat claude/codex --connect <星>` 启动，空白窗口先等待；首条输入或确认 `/resume` 后，以本窗口所选的完整会话 ID 入星。切换 A→B 只释放本窗口的 A：永久 A 留册，临时 A 在最后一个窗口释放后删册；其他窗口独立工作。`--rm --connect <星>` 与 `--connect <星> --rm` 等效，不改变已有永久成员。
+
+直接运行原生工具、桌面/Web，统一在 TUI 选择具体节点会话入星；裸 `/resume` 不自动归队，永久册位保留。TUI 新增手动成员为永久成员。其他工具的选择适配按后续接入计划扩展。
+
+启动器存活期间守连接，聚合器重启后按当前选择重声明，含 extends。永久成员**退出=下线，册位保留**，`status --stars` 显示 ⚪ 下线行；通过启动器 `/resume` 或 TUI 明确选择恢复，期间投递报 `SESSION_OFFLINE`。`--extend-session` 四级校验失败方向不锁死：旧名仍是活成员 → 拒绝并指路（退旧会话或去旗标）；本机有旧名对话史 → 放行并提示；都无 → 静默放行；broker 侧同旧名先声明先得（后者收 `EXTENDS_CONFLICT` 指路，不影响入星）。
 
 ### 三段寻址（直达星成员）
 
@@ -165,11 +169,11 @@ crosschat send --via tcp:<星>:<机器>:<会话> --body "构建跑了吗"
 
 - 三段形态**免 `--to`**（会话段就是收件人）；回信照旧走信封 reply-hint，零配置
 - 同机 claude/codex 同名（多适配器常态）会话段带工具限定词消歧：`tcp:<星>:<机器>:claude/<名>` 与 `…:codex/<名>` 各达各的；裸名唯一照旧可用（撞名报 `NAME_COLLISION` 列全部限定地址，同工具同名改列 id8 投短前缀）
-- 非成员名 → `SESSION_NOT_MEMBER`（教学入星）；在册但下线 → `SESSION_OFFLINE`（1.7.0：等 resume 复活 / extends 接任 / id8 点对点，绝不静默改投）；死名有接任者 → `SESSION_SUPERSEDED`（报错给出接任者的三段地址——带工具限定词，改投即可）；旧名还活着 → alive-wins，照投旧会话本尊
+- 非成员名 → `SESSION_NOT_MEMBER`（教学入星）；在册但下线 → `SESSION_OFFLINE`（通过启动器 `/resume` 或 TUI 选择恢复，也可 extends 接任；id8 寻址同样需要成员在线）；死名有接任者 → `SESSION_SUPERSEDED`（报错给出接任者的三段地址——带工具限定词，改投即可）；旧名还活着 → alive-wins，照投旧会话本尊
 
 ### adopt 收编（会话活着但不在星里）
 
-三种来路：册位被 `--rm`/member-remove 删过（1.6.x 的"双端重启失忆"已由落盘星册根治——重启不再丢名单）、会话是裸起的（没经启动器）、改名后想补旧名接任。**信号**：三段投递报 `SESSION_NOT_MEMBER`，或 `crosschat status --stars` 出诊断行——诊断行**当场打印完整命令**，照抄：
+适用于裸起的会话、册位被 `--rm`/member-remove 删过、node 进程重启后没有启动器的手动成员，以及补旧名接任。重启不丢永久名单，但发现活会话不会自行恢复其在线声明。也可在 TUI 精确选择该节点会话入星。**信号**：三段投递报 `SESSION_NOT_MEMBER`/`SESSION_OFFLINE`，或 `crosschat status --stars` 出诊断行——诊断行**当场打印完整命令**，照抄：
 
 ```bash
 crosschat status --stars
@@ -186,7 +190,7 @@ crosschat serve --connect <星> --adopt <名> --extend-session <旧名>   # 已�
 
 ### 重启自愈与降级告警
 
-- **对账循环**（1.7.0 常态化）：聚合器每轮向 broker 查本机册切片 → 本地验活 → 册内活的自动复活入册（孤儿找回、裸 resume 回归同走此路）；死→上报下线（册位保留）。星册随注册表落盘（`broker.json` 单文件，各星自带 roster 段）——broker 重启也不失忆，1.6.x 的"双端重启失忆走 adopt"已根治，adopt 只剩 `--rm`/删除过的会话与裸会话需要
+- **对账循环**：聚合器查询本机册位切片，同步权威永久/临时属性，并核验已声明成员的活性与名称；发现结果不自动恢复离线声明。永久星册保存在 `broker.json`，broker/node 重启不丢名单。普通断网重连重播 node 当前内存声明；node 进程重启后，仍活着的启动器重声明当前会话，没有启动器的手动成员由 TUI 或显式 adopt 恢复
 - **降级告警**：broker 机 crosschat 是老版本时，启动器/聚合器在命令行打一行 `broker 不支持会话成员（proto:3），已降级机器级——…`。含义：机器级收发不受影响，入星类功能不生效；升级 broker 机并重启 serve 即恢复
 
 > 全链验证阶梯（三段直达 → 错误教学 → extends 接任 → adopt 收编 → 重启自愈，每步带期望输出）：[跨机通信：tcp · 2.7](docs/broker.md)
@@ -290,7 +294,9 @@ ssh: 共 2 段对话
 
 **Q：会话经常重启，名字对不上？** claude 重启后自动编号会漂移；常重启的会话进去先 `/rename` 固定一个稳定名字——名字稳定，`--to` 自动接续就不会断。
 
-**Q：`/rename` 改名后 status 里还是旧名/没有它？** 改名（claude 与 codex TUI 同理）要**再发送一条消息激活一轮**，crosschat 才看得到新名——codex 新建线程同理（零轮次不入列表）。操作顺序：`/rename 名字` → 随便发一条 → 再 `crosschat status`。
+**Q：`/rename` 改名后 status 里还是旧名/没有它？** 先刷新 `crosschat status`。Claude 名称取自活会话登记，登记未更新时可在原生会话再进行一轮后复查；Codex 名称来自实际连接的原生服务或桌面来源，需确认该来源可读。通过 crosschat TUI 的 `e` 改名会核对原生名称及星内路由更新后才报告成功，不能把各工具都归为“必须再发一条消息”。
+
+**Q：可以在 crosschat TUI 直接改名吗？** 在星的成员/会话列表按 `e`。Codex CLI 已接入原生改名，须能核实同一原生服务及已加载会话；服务协议基线为 0.163.0。Claude 的 SDK 只改持久标题，尚未确认活窗口同步；Codex 桌面版当前协同接口没有改名入口，这两类请在原生界面改名。界面按具体来源核验能力并说明原因，见[终端界面](docs/tui.md)。
 
 ## 🔧 故障恢复
 
@@ -303,7 +309,7 @@ ssh: 共 2 段对话
 | 升级 crosschat 代码后 | `npm run build`（skill 有变再 install-skills） |
 | 消息发出对方没反应 | 先 `status` 确认在线；`parked` 的等对方空闲自动补投；UNCERTAIN 类勿重发先核实 |
 | 三段寻址报 `SESSION_NOT_MEMBER` | 会话没入星（裸起的）或册位被 `--rm`/member-remove 删过 | `crosschat status --stars` 看诊断行 → 照抄 `serve --connect <星> --adopt <名>`；或经启动器重起会话 |
-| 三段寻址报 `SESSION_OFFLINE` | 永久成员下线（退出=下线非退星，1.7.0） | 等 resume 自动复活后重发；或对端 `--extend-session` 接任；或会话段投 id8 |
+| 三段寻址报 `SESSION_OFFLINE` | 永久成员下线，册位保留 | 对端通过启动器 `/resume` 或 TUI 选择会话入星后重发；也可 `--extend-session` 接任；id8 寻址仍需成员在线 |
 
 ## 📚 更多文档
 

@@ -4,6 +4,7 @@ import {
   openCodexProxySession,
   type CodexChannelFactory,
   type CodexProxySpawner,
+  type CodexProxySession,
 } from './transport.js';
 
 /**
@@ -33,6 +34,11 @@ export interface CodexThreadSummary {
   status: CodexThreadStatus;
 }
 
+export interface CodexNativeIdentity {
+  userAgent: string;
+  codexHome: string;
+}
+
 export interface CodexThreadPageOptions {
   cursor?: string;
   limit?: number;
@@ -54,6 +60,7 @@ export interface CodexThreadPage {
 }
 
 export interface CodexSession {
+  readonly nativeIdentity?: CodexNativeIdentity;
   initialize(): Promise<void>;
   listThreads(): Promise<CodexThreadSummary[]>;
   /** Additive read-only paging; optional for existing injected session adapters. */
@@ -61,6 +68,8 @@ export interface CodexSession {
   resumeThread(threadId: string): Promise<CodexThreadStatus>;
   /** Read current native turn identity without changing the thread's settings. */
   readThreadState?(threadId: string): Promise<CodexThreadState>;
+  readThreadMetadata?(threadId: string): Promise<CodexThreadSummary>;
+  renameThread?(threadId: string, name: string): Promise<void>;
   startTurn(threadId: string, text: string): Promise<CodexTurn>;
   steerTurn(threadId: string, expectedTurnId: string, text: string): Promise<string>;
   unsubscribe(threadId: string): Promise<void>;
@@ -76,6 +85,8 @@ export type CodexSessionFactory = () => Promise<CodexSession>;
 
 export interface CodexThreadPageSession extends CodexSession {
   listThreadPage(options: CodexThreadPageOptions): Promise<CodexThreadPage>;
+  readThreadMetadata(threadId: string): Promise<CodexThreadSummary>;
+  renameThread(threadId: string, name: string): Promise<void>;
 }
 
 export interface CodexSessionOptions {
@@ -143,142 +154,164 @@ export function normalizeThreadStatus(value: unknown): CodexThreadStatus {
 export function openCodexSession(options: CodexSessionOptions = {}): () => Promise<CodexThreadPageSession> {
   return async () => {
     const proxy = await openCodexProxySession(options);
-    const rpc = new CodexRpcClient(proxy.channel, options.requestTimeoutMs);
-    const input = (text: string) => [{ text, type: 'text' }];
-    const session: CodexThreadPageSession = {
-      async initialize(): Promise<void> {
-        await rpc.request('initialize', {
-          capabilities: { experimentalApi: true },
-          clientInfo: { name: 'crosschat', title: 'crosschat', version: '1.0.0' },
-        });
-        rpc.notify('initialized', {});
-      },
-      async listThreads(): Promise<CodexThreadSummary[]> {
-        // Absent sourceKinds, the server defaults to interactive-only sources
-        // (cli/vscode — app-server filters.rs INTERACTIVE_SESSION_SOURCES), so
-        // `codex exec` threads (source=exec, B19/B20 drill §5.1) would never be
-        // listed. Legal values = ThreadSourceKind enum (v2 protocol schema).
-        const result = await rpc.request('thread/list', {
-          archived: false,
-          limit: 20,
-          sortKey: 'recency_at',
-          sourceKinds: ['cli', 'vscode', 'exec'],
-          useStateDbOnly: true,
-        });
-        if (!isRecord(result) || !Array.isArray(result.data)) {
-          throw protocolError('thread/list response missing data array.');
+    return createCodexSession(proxy, options.requestTimeoutMs);
+  };
+}
+
+/** Use an already owned native endpoint; the returned session owns its connection. */
+export function createCodexSession(proxy: CodexProxySession, requestTimeoutMs?: number): CodexThreadPageSession {
+  const rpc = new CodexRpcClient(proxy.channel, requestTimeoutMs);
+  const input = (text: string) => [{ text, type: 'text' }];
+  let identity: CodexNativeIdentity | undefined;
+  const session: CodexThreadPageSession = {
+    get nativeIdentity() { return identity; },
+    async initialize(): Promise<void> {
+      const result = await rpc.request('initialize', {
+        capabilities: { experimentalApi: true },
+        clientInfo: { name: 'crosschat', title: 'crosschat', version: '1.0.0' },
+      });
+      identity = isRecord(result) && typeof result.userAgent === 'string' && typeof result.codexHome === 'string'
+        ? { userAgent: result.userAgent, codexHome: result.codexHome } : undefined;
+      rpc.notify('initialized', {});
+    },
+    async readThreadMetadata(threadId: string): Promise<CodexThreadSummary> {
+      const result = await rpc.request('thread/read', { threadId, includeTurns: false });
+      if (!isRecord(result) || !isRecord(result.thread) || result.thread.id !== threadId
+        || (result.thread.name !== null && result.thread.name !== undefined && typeof result.thread.name !== 'string')) {
+        throw protocolError('thread/read response missing matching thread metadata.');
+      }
+      return { id: threadId, name: typeof result.thread.name === 'string' ? result.thread.name : null,
+        status: normalizeThreadStatus(result.thread.status) };
+    },
+    async renameThread(threadId: string, name: string): Promise<void> {
+      const result = await rpc.request('thread/name/set', { threadId, name });
+      if (!isRecord(result)) throw protocolError('thread/name/set response malformed.');
+    },
+    async listThreads(): Promise<CodexThreadSummary[]> {
+      // Absent sourceKinds, the server defaults to interactive-only sources
+      // (cli/vscode — app-server filters.rs INTERACTIVE_SESSION_SOURCES), so
+      // `codex exec` threads (source=exec, B19/B20 drill §5.1) would never be
+      // listed. Legal values = ThreadSourceKind enum (v2 protocol schema).
+      const result = await rpc.request('thread/list', {
+        archived: false,
+        limit: 20,
+        sortKey: 'recency_at',
+        sourceKinds: ['cli', 'vscode', 'exec'],
+        useStateDbOnly: true,
+      });
+      if (!isRecord(result) || !Array.isArray(result.data)) {
+        throw protocolError('thread/list response missing data array.');
+      }
+      return result.data.map((raw) => {
+        if (!isRecord(raw) || typeof raw.id !== 'string') {
+          throw protocolError('thread/list item missing id.');
         }
-        return result.data.map((raw) => {
-          if (!isRecord(raw) || typeof raw.id !== 'string') {
-            throw protocolError('thread/list item missing id.');
-          }
+        return {
+          id: raw.id,
+          name: typeof raw.name === 'string' ? raw.name : null,
+          status: normalizeThreadStatus(raw.status),
+        };
+      });
+    },
+    async listThreadPage(page: CodexThreadPageOptions): Promise<CodexThreadPage> {
+      if (page.signal?.aborted) throw new DOMException('Codex page read cancelled.', 'AbortError');
+      const limit = page.limit ?? 100;
+      if (!Number.isSafeInteger(limit) || limit < 1) throw protocolError('thread/list page limit must be a positive integer.');
+      const result = await awaitPage(rpc.request('thread/list', {
+        archived: false,
+        limit,
+        ...(page.cursor === undefined ? {} : { cursor: page.cursor }),
+        sortKey: 'recency_at',
+        sourceKinds: ['cli', 'vscode', 'exec'],
+        useStateDbOnly: true,
+      }), page.signal);
+      if (page.signal?.aborted) throw new DOMException('Codex page read cancelled.', 'AbortError');
+      if (!isRecord(result) || !Array.isArray(result.data)) throw protocolError('thread/list response missing data array.');
+      if (result.nextCursor !== undefined && result.nextCursor !== null && typeof result.nextCursor !== 'string') throw protocolError('thread/list response has malformed cursor.');
+      return {
+        data: result.data.map((raw) => {
+          if (!isRecord(raw) || typeof raw.id !== 'string') throw protocolError('thread/list item missing id.');
           return {
             id: raw.id,
             name: typeof raw.name === 'string' ? raw.name : null,
-            status: normalizeThreadStatus(raw.status),
+            rawStatus: raw.status,
+            attributes: { cwd: raw.cwd, path: raw.path, createdAt: raw.createdAt, updatedAt: raw.updatedAt, source: raw.source, originator: raw.originator },
           };
-        });
-      },
-      async listThreadPage(page: CodexThreadPageOptions): Promise<CodexThreadPage> {
-        if (page.signal?.aborted) throw new DOMException('Codex page read cancelled.', 'AbortError');
-        const limit = page.limit ?? 100;
-        if (!Number.isSafeInteger(limit) || limit < 1) throw protocolError('thread/list page limit must be a positive integer.');
-        const result = await awaitPage(rpc.request('thread/list', {
-          archived: false,
-          limit,
-          ...(page.cursor === undefined ? {} : { cursor: page.cursor }),
-          sortKey: 'recency_at',
-          sourceKinds: ['cli', 'vscode', 'exec'],
-          useStateDbOnly: true,
-        }), page.signal);
-        if (page.signal?.aborted) throw new DOMException('Codex page read cancelled.', 'AbortError');
-        if (!isRecord(result) || !Array.isArray(result.data)) throw protocolError('thread/list response missing data array.');
-        if (result.nextCursor !== undefined && result.nextCursor !== null && typeof result.nextCursor !== 'string') throw protocolError('thread/list response has malformed cursor.');
-        return {
-          data: result.data.map((raw) => {
-            if (!isRecord(raw) || typeof raw.id !== 'string') throw protocolError('thread/list item missing id.');
-            return {
-              id: raw.id,
-              name: typeof raw.name === 'string' ? raw.name : null,
-              rawStatus: raw.status,
-              attributes: { cwd: raw.cwd, path: raw.path, createdAt: raw.createdAt, updatedAt: raw.updatedAt, source: raw.source, originator: raw.originator },
-            };
-          }),
-          nextCursor: typeof result.nextCursor === 'string' ? result.nextCursor : null,
-          completeness: result.nextCursor === undefined ? 'partial' : 'complete',
-        };
-      },
-      async resumeThread(threadId: string): Promise<CodexThreadStatus> {
-        const result = await rpc.request('thread/resume', {
-          excludeTurns: true,
-          threadId,
-        });
-        if (!isRecord(result) || !isRecord(result.thread) || result.thread.id !== threadId) {
-          throw protocolError('thread/resume response missing matching thread.');
-        }
-        return normalizeThreadStatus(result.thread.status);
-      },
-      async startTurn(threadId: string, text: string): Promise<CodexTurn> {
-        const result = await rpc.request('turn/start', {
-          input: input(text),
-          threadId,
-          turnTrigger: 'crosschat',
-        });
-        if (
-          !isRecord(result) ||
-          !isRecord(result.turn) ||
-          typeof result.turn.id !== 'string' ||
-          typeof result.turn.status !== 'string'
-        ) {
-          throw protocolError('turn/start response missing turn.');
-        }
-        return { id: result.turn.id, status: result.turn.status };
-      },
-      async readThreadState(threadId: string): Promise<CodexThreadState> {
-        const result = await rpc.request('thread/read', { threadId, includeTurns: true });
-        if (!isRecord(result) || !isRecord(result.thread) || result.thread.id !== threadId || !Array.isArray(result.thread.turns)) {
-          throw protocolError('thread/read response missing matching thread and turns.');
-        }
-        const active: string[] = [];
-        for (const turn of result.thread.turns) {
-          if (!isRecord(turn) || typeof turn.id !== 'string' || turn.id === '' || typeof turn.status !== 'string') throw protocolError('thread/read returned a malformed turn.');
-          if (turn.status === 'inProgress') active.push(turn.id);
-        }
-        if (active.length > 1) throw protocolError('thread/read returned multiple active turns.');
-        return { status: normalizeThreadStatus(result.thread.status), activeTurnId: active[0] ?? null };
-      },
-      async steerTurn(threadId: string, expectedTurnId: string, text: string): Promise<string> {
-        const result = await rpc.request('turn/steer', {
-          expectedTurnId,
-          input: input(text),
-          threadId,
-        });
-        if (!isRecord(result) || typeof result.turnId !== 'string') {
-          throw protocolError('turn/steer response missing turnId.');
-        }
-        return result.turnId;
-      },
-      async unsubscribe(threadId: string): Promise<void> {
-        await rpc.request('thread/unsubscribe', { threadId });
-      },
-      async startThread(cwd: string): Promise<string> {
-        const result = await rpc.request('thread/start', { cwd });
-        if (!isRecord(result) || !isRecord(result.thread) || typeof result.thread.id !== 'string') {
-          throw protocolError('thread/start response missing thread id.');
-        }
-        return result.thread.id;
-      },
-      async deleteThread(threadId: string): Promise<void> {
-        await rpc.request('thread/delete', { threadId });
-      },
-      notifications(): readonly CodexRpcNotification[] {
-        return rpc.notifications;
-      },
-      async close(): Promise<void> {
-        rpc.dispose();
-        await proxy.close();
-      },
-    };
-    return session;
+        }),
+        nextCursor: typeof result.nextCursor === 'string' ? result.nextCursor : null,
+        completeness: result.nextCursor === undefined ? 'partial' : 'complete',
+      };
+    },
+    async resumeThread(threadId: string): Promise<CodexThreadStatus> {
+      const result = await rpc.request('thread/resume', {
+        excludeTurns: true,
+        threadId,
+      });
+      if (!isRecord(result) || !isRecord(result.thread) || result.thread.id !== threadId) {
+        throw protocolError('thread/resume response missing matching thread.');
+      }
+      return normalizeThreadStatus(result.thread.status);
+    },
+    async startTurn(threadId: string, text: string): Promise<CodexTurn> {
+      const result = await rpc.request('turn/start', {
+        input: input(text),
+        threadId,
+        turnTrigger: 'crosschat',
+      });
+      if (
+        !isRecord(result) ||
+        !isRecord(result.turn) ||
+        typeof result.turn.id !== 'string' ||
+        typeof result.turn.status !== 'string'
+      ) {
+        throw protocolError('turn/start response missing turn.');
+      }
+      return { id: result.turn.id, status: result.turn.status };
+    },
+    async readThreadState(threadId: string): Promise<CodexThreadState> {
+      const result = await rpc.request('thread/read', { threadId, includeTurns: true });
+      if (!isRecord(result) || !isRecord(result.thread) || result.thread.id !== threadId || !Array.isArray(result.thread.turns)) {
+        throw protocolError('thread/read response missing matching thread and turns.');
+      }
+      const active: string[] = [];
+      for (const turn of result.thread.turns) {
+        if (!isRecord(turn) || typeof turn.id !== 'string' || turn.id === '' || typeof turn.status !== 'string') throw protocolError('thread/read returned a malformed turn.');
+        if (turn.status === 'inProgress') active.push(turn.id);
+      }
+      if (active.length > 1) throw protocolError('thread/read returned multiple active turns.');
+      return { status: normalizeThreadStatus(result.thread.status), activeTurnId: active[0] ?? null };
+    },
+    async steerTurn(threadId: string, expectedTurnId: string, text: string): Promise<string> {
+      const result = await rpc.request('turn/steer', {
+        expectedTurnId,
+        input: input(text),
+        threadId,
+      });
+      if (!isRecord(result) || typeof result.turnId !== 'string') {
+        throw protocolError('turn/steer response missing turnId.');
+      }
+      return result.turnId;
+    },
+    async unsubscribe(threadId: string): Promise<void> {
+      await rpc.request('thread/unsubscribe', { threadId });
+    },
+    async startThread(cwd: string): Promise<string> {
+      const result = await rpc.request('thread/start', { cwd });
+      if (!isRecord(result) || !isRecord(result.thread) || typeof result.thread.id !== 'string') {
+        throw protocolError('thread/start response missing thread id.');
+      }
+      return result.thread.id;
+    },
+    async deleteThread(threadId: string): Promise<void> {
+      await rpc.request('thread/delete', { threadId });
+    },
+    notifications(): readonly CodexRpcNotification[] {
+      return rpc.notifications;
+    },
+    async close(): Promise<void> {
+      rpc.dispose();
+      await proxy.close();
+    },
   };
+  return session;
 }

@@ -19,9 +19,11 @@ import { fullTcpMachineId, resolveTcpContext } from './reading.js';
 import { executeLocalManagement } from './local-management.js';
 import type { ManagementRequest, ManagementResult } from '../management/local.js';
 import type { MemberRemoveExactResultFrame } from '../../serve/protocol.js';
+import { createTcpSessionOperation } from './session-operations.js';
+import type { TcpSessionOperation, TcpSessionTarget } from './session-operations.js';
 
 export type TcpManagementAction = 'add-star' | 'rename-star' | 'remove-star' | 'set-show-name' | 'rename-node'
-  | 'generate-node-key' | 'generate-admin-key' | 'remove-node' | 'revoke-credential' | 'remove-member' | 'adopt-session';
+  | 'generate-node-key' | 'generate-admin-key' | 'remove-node' | 'revoke-credential' | 'remove-member' | 'adopt-session' | 'rename-session';
 export interface TcpManagementField {
   id: string;
   label: string;
@@ -35,6 +37,7 @@ export interface TcpManagementRequest {
   starId?: string;
   targetId?: string;
   targetRevision?: string;
+  sessionTarget?: Pick<TcpSessionTarget, 'machineId' | 'providerId' | 'nativeId'>;
   values: Readonly<Record<string, string>>;
   signal?: AbortSignal;
 }
@@ -73,6 +76,7 @@ export interface TcpManagementOptions {
   executeLocal?(request: ManagementRequest, signal?: AbortSignal): Promise<ManagementResult<unknown>>;
   openRemote?(request: { contextId: string; starId: string; identity: 'member' | 'admin'; signal?: AbortSignal }): Promise<TcpManagementConnection>;
   machineId?(): string | undefined | Promise<string | undefined>;
+  operateSession?: TcpSessionOperation;
 }
 export interface TcpManagementConnection {
   starId?: string;
@@ -87,6 +91,7 @@ interface Prepared {
   local?: ManagementRequest;
   member?: { sessionId: string; machine: string; tool: string };
   adopt?: SessionRef;
+  sessionOperation?: { target: TcpSessionTarget; revision: string };
   machine?: { machineId: string; labels: string[] };
   values: Readonly<Record<string, string>>;
 }
@@ -143,6 +148,7 @@ function adminSecret(value: unknown, label: string): TcpManagementSecret | undef
 
 /** Domain-only management: fixed full identities, fresh previews and owned effects. */
 export function createTcpManagement(options: TcpManagementOptions): TcpManagement {
+  const operateSession = options.operateSession ?? createTcpSessionOperation(options);
   let discovery: DiscoveryEndpoint | undefined = options.discovery;
   let membership: SessionMembershipService | undefined = options.membership;
   const nativeServices = () => {
@@ -181,6 +187,7 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
     let local: ManagementRequest | undefined;
     let member: Prepared['member'];
     let adopt: SessionRef | undefined;
+    let sessionOperation: Prepared['sessionOperation'];
     let machine: Prepared['machine'];
     let state: unknown;
     let values = defaultValues(request);
@@ -261,7 +268,26 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
             impact.push({ label: '完整会话', value: item.nativeId }, { label: '机器', value: item.machineId }, { label: '工具', value: item.providerId }, { label: '操作', value: '仅删除此精确册位；不删除原生会话、不结束原生工具。' });
             break;
           }
+          case 'rename-session':
           case 'adopt-session': {
+            if (request.sessionTarget) {
+              const selected = request.sessionTarget;
+              if (fullTcpMachineId(selected.machineId) !== selected.machineId || !selected.nativeId || sanitizeTool(selected.providerId) !== selected.providerId
+                || !current.machines.some((node) => node.machineId === selected.machineId && node.presence === 'online')) throw new Denied('所选完整节点当前不在线或原生引用无效。');
+              const target = { ...selected, contextId: request.contextId, starId: star.starId };
+              const response = await operateSession(target, { kind: 'describe' }, request.signal);
+              const operation = request.action === 'rename-session' ? 'rename' : 'adopt';
+              const description = response.description;
+              const capability = description?.actions[operation];
+              if (!description || capability?.state !== 'executable') throw new Denied(capability?.reason ?? response.result?.message ?? '所选原生操作能力尚未核实。');
+              sessionOperation = { target, revision: description.revision };
+              state = { state, target, sourceRevision: description.revision };
+              if (operation === 'rename') fields.push({ id: 'name', label: '原生会话新名称', required: true, initialValue: '' });
+              impact.push({ label: '完整节点', value: target.machineId }, { label: '工具', value: target.providerId }, { label: '完整会话', value: target.nativeId },
+                { label: '操作', value: operation === 'rename' ? '通过已验证的原生接口改名，并核实星内路由。' : '将所选节点的精确会话作为永久成员入星；已有成员属性保持。' });
+              break;
+            }
+            if (request.action === 'rename-session' || request.contextId !== 'local') throw new Denied('请在该节点的可发现会话列表选择具体会话，再执行入星或改名。');
             const services = nativeServices();
             const targets = await services.membership.listTargets({ contextId: 'local', signal: request.signal });
             const target = targets.stars.find((item) => item.id === star!.starId);
@@ -320,7 +346,7 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
       nextStep = '刷新当前资源并核对完整目标后重新操作。';
     }
     const revision = hash([request.contextId, request.action, request.starId, request.targetId, request.targetRevision, state, values, fields, impact, reason]);
-    return { preview: { enabled: reason === undefined, ...(reason === undefined ? {} : { reason, nextStep }), revision, fields, impact }, star, local, member, adopt, machine, values };
+    return { preview: { enabled: reason === undefined, ...(reason === undefined ? {} : { reason, nextStep }), revision, fields, impact }, star, local, member, adopt, sessionOperation, machine, values };
   }
 
   async function openDefault(request: { contextId: string; starId: string; identity: 'member' | 'admin'; signal?: AbortSignal }): Promise<TcpManagementConnection> {
@@ -348,6 +374,12 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
     const close = () => connection?.close();
     request.signal?.addEventListener('abort', close, { once: true });
     try {
+      if (prepared.sessionOperation) {
+        issued = true;
+        const response = await operateSession(prepared.sessionOperation.target, { kind: 'apply', operation: request.action === 'rename-session' ? 'rename' : 'adopt',
+          expectedRevision: prepared.sessionOperation.revision, ...(request.action === 'rename-session' ? { name: prepared.values.name } : {}) }, request.signal);
+        return response.result ?? uncertain();
+      }
       if (prepared.adopt && prepared.star) {
         issued = true;
         return await nativeServices().membership.apply({ op: 'adopt', ref: prepared.adopt, starId: prepared.star.starId, signal: request.signal });

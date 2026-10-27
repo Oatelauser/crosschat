@@ -4,7 +4,11 @@ import { MultichatError } from '../errors.js';
 import { resolveClaudeExe } from '../claude/resolve-exe.js';
 import { splitLauncherKnobs, validateLauncherKnob } from '../limits.js';
 import { otherIdentityKeys, stripOtherFamilies } from '../identity.js';
-import { realStarJoinDeps, splitStarLauncherArgs, StarJoinDeps, StarJoiner } from './session-star.js';
+import { realStarJoinDeps, reportLauncherFailure, splitStarLauncherArgs, createStarSelectionFollower } from './session-star.js';
+import type { StarJoinDeps } from './session-star.js';
+import { createClaudeSessionBinding } from '../claude/session-events.js';
+import type { ClaudeSessionBindingFactory } from '../claude/session-events.js';
+import type { LauncherSessionBinding } from '../application/session-selection.js';
 
 /**
  * `crosschat claude [args...]`: start the real claude CLI with
@@ -27,7 +31,7 @@ import { realStarJoinDeps, splitStarLauncherArgs, StarJoinDeps, StarJoiner } fro
 
 const INBOUND_SETTINGS = JSON.stringify({ crossSessionInbound: 'accept' });
 
-/** 021 横幅显示用：从透传参数读 claude 原生 -n/--名（只读不认领——spawn 时名可知才打三段地址行）。 */
+/** 从原生透传参数读取会话名，仅用于启动前的异工具同名预警。 */
 function claudeSpawnName(passthrough: readonly string[]): string | undefined {
   for (let i = 0; i < passthrough.length; i++) {
     const token = passthrough[i]!;
@@ -45,18 +49,20 @@ export interface ClaudeWrapperDeps {
   resolveExe(): string;
   /** Child env base（身份清洗与旋钮注入的基底）；缺省 process.env。 */
   env?: NodeJS.ProcessEnv;
-  /** Spawns interactively (stdio inherit); resolves to the child's exit code. env 缺省 = 继承 process.env（现状行为）。 */
-  spawnInherit(exe: string, args: readonly string[], env?: NodeJS.ProcessEnv): Promise<number>;
+  /** Spawns interactively; reports the actual child PID and resolves to its exit code. */
+  spawnInherit(exe: string, args: readonly string[], env?: NodeJS.ProcessEnv, onSpawn?: (pid: number) => void): Promise<number>;
   /** 018 批二：入星腿依赖（--connect 在场时使用）；缺省 realStarJoinDeps()。 */
   star?: StarJoinDeps;
+  createSessionBinding?: ClaudeSessionBindingFactory;
 }
 
 export function defaultClaudeWrapperDeps(): ClaudeWrapperDeps {
   return {
     resolveExe: () => resolveClaudeExe(),
-    spawnInherit: (exe, args, env) =>
+    spawnInherit: (exe, args, env, onSpawn) =>
       new Promise((resolve, reject) => {
         const child = spawn(exe, args, env === undefined ? { stdio: 'inherit' } : { stdio: 'inherit', env });
+        child.once('spawn', () => { if (child.pid !== undefined) onSpawn?.(child.pid); });
         child.on('error', reject);
         child.on('close', (code) => resolve(code ?? 1));
       }),
@@ -92,23 +98,33 @@ export async function runClaudeWrapper(
           'claude',
         );
   const exe = deps.resolveExe();
-  // 018 批二：--connect <星> 在场=入星启动——spawn 前快照、存活期守连接、退出即 detach；
+  // --connect 入星按本启动器的原生子进程识别，不从全局最新会话猜身份。
   // 入星任何失败只出一行 stderr，不连坐会话本身
   if (star.connects.length > 0) {
     const spawnName = claudeSpawnName(passthrough);
-    const joiner = new StarJoiner({
-      deps: deps.star ?? realStarJoinDeps(),
+    const starDeps = deps.star ?? realStarJoinDeps(parentEnv);
+    const follower = createStarSelectionFollower({
+      deps: starDeps,
       side: 'claude',
       connects: star.connects,
       ...(star.extendSession === undefined ? {} : { extendSession: star.extendSession }),
       ...(spawnName === undefined ? {} : { spawnName }),
       ...(star.rm === true ? { rm: true } : {}),
     });
-    await joiner.begin();
+    let binding: LauncherSessionBinding | undefined;
+    let nativePid: number | undefined;
     try {
-      return await deps.spawnInherit(exe, ['--settings', INBOUND_SETTINGS, ...passthrough], env);
+      try { binding = await (deps.createSessionBinding ?? createClaudeSessionBinding)({ args: passthrough, onSelection: (event) => follower.select(event),
+        onUnavailable: (error) => reportLauncherFailure(starDeps, error),
+        currentSessionId: () => {
+          if (nativePid === undefined) return undefined;
+          const matches = starDeps.listClaudeSessions().sessions.filter((session) => session.pid === nativePid);
+          return matches.length === 1 ? matches[0]!.sessionId : undefined;
+        } }); }
+      catch (error) { reportLauncherFailure(starDeps, error); }
+      return await deps.spawnInherit(exe, binding?.args ?? ['--settings', INBOUND_SETTINGS, ...passthrough], env, (pid) => { nativePid = pid; });
     } finally {
-      await joiner.stop();
+      try { await binding?.close(); } finally { await follower.close(); }
     }
   }
   return deps.spawnInherit(exe, ['--settings', INBOUND_SETTINGS, ...passthrough], env);

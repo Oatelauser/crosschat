@@ -4,6 +4,7 @@ import { createDefaultResources } from '../src/tui/composition.js';
 import { createTuiController } from '../src/tui/app/controller.js';
 import { createResourceRegistry } from '../src/tui/resources/registry.js';
 import { presentContext } from '../src/tui/resources/contexts.js';
+import type { TuiPage } from '../src/tui/model.js';
 
 const mocks = vi.hoisted(() => ({ local: vi.fn(), membership: vi.fn(), overview: vi.fn(), services: vi.fn(), maintenance: vi.fn(), ssh: vi.fn(), files: vi.fn(), localRead: vi.fn(), serviceRead: vi.fn(), preview: vi.fn(), execute: vi.fn(), remoteRead: vi.fn(), remoteDoctor: vi.fn(), inspect: vi.fn(), list: vi.fn() }));
 const tcpMocks = vi.hoisted(() => ({ create: vi.fn(), management: vi.fn(), configuration: vi.fn(), stars: vi.fn(), star: vi.fn(), sessions: vi.fn(), preview: vi.fn(), apply: vi.fn() }));
@@ -52,6 +53,35 @@ afterEach(() => { vi.unstubAllEnvs(); });
 function command(controller: ReturnType<typeof createTuiController>, value: string) { for (const name of `:${value}`) controller.handleKey({ name, text: name }); controller.handleKey({ name: 'enter' }); }
 
 describe('default local and SSH resource composition', () => {
+  it.each(['local', 'tcp'] as const)('forwards live session refresh and per-row capability recovery through the default %s composition', async (kind) => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    let watching: Promise<void> | undefined;
+    try {
+      const context = kind === 'local' ? contexts[0] : presentContext({ id: 'tcp:fixture', kind: 'tcp', label: 'fixture', target: 'fixture.invalid' });
+      const composed = createDefaultResources({ home: '/isolated', isolatedHome: true });
+      const adapter = composed.adapters.sessions;
+      const request = { context, route: { resourceId: 'sessions', contextId: context.id, query: { starId: 'full-star' } }, signal: controller.signal };
+      const page = await adapter.read(request);
+      tcpMocks.preview.mockResolvedValue({ enabled: false, reason: 'owner unavailable', fields: [], impact: [], revision: 'before' });
+      expect((await adapter.describeActions!({ ...request, target: page.rows[0] }))['rename-session'].enabled).toBe(false);
+      const originalRead = tcpMocks.sessions.getMockImplementation()!;
+      tcpMocks.sessions.mockImplementation(async (query) => {
+        const result = await originalRead(query);
+        return { ...result, items: result.items.map((item: { name: string | null }) => ({ ...item, name: 'other-client-native-title' })) };
+      });
+      const publish = vi.fn<(next: TuiPage) => void>();
+      watching = Promise.resolve(adapter.watch!(request, publish));
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(publish).toHaveBeenCalledOnce();
+      expect(publish.mock.calls[0][0].rows[0].cells.name).toBe('other-client-native-title');
+      tcpMocks.preview.mockResolvedValue({ enabled: true, fields: [], impact: [], revision: 'after' });
+      expect((await adapter.describeActions!({ ...request, target: publish.mock.calls[0][0].rows[0] }))['rename-session'].enabled).toBe(true);
+      expect(tcpMocks.apply).not.toHaveBeenCalled();
+      expect(mocks.localRead).not.toHaveBeenCalled();
+    } finally { controller.abort(); await watching; vi.useRealTimers(); }
+  });
+
   it('installs TCP adapters lazily and dispatches local star sessions separately from ordinary local sessions', async () => {
     const composed = createDefaultResources({ home: '/isolated', isolatedHome: true });
     expect(tcpMocks.create).toHaveBeenCalledWith(expect.objectContaining({ baseDir: join('/isolated', '.crosschat') }));

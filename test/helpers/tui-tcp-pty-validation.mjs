@@ -130,6 +130,38 @@ try {
   for (const [columns, rows] of [[24, 12], [48, 16], [100, 28]]) assert(all.some((event) => event.event === 'resize' && event.columns === columns && event.rows === rows));
 } finally { await normal.pty.dispose(); }
 
+const membership = await session('tcp-selected-session-membership', 'membership');
+try {
+  await membership.pty.waitForOutput('本机TCP-FIXTURE');
+  await membership.send(':stars\r', 'STAR-FIXTURE');
+  await membership.send('\r', 'NODE-SECOND-FIXTURE');
+  await membership.send('a', 'SESSION-NAMED-FIXTURE');
+  await membership.waitEvent((event) => event.event === 'tcp-preview' && event.action === 'rename-session' && !event.allowed);
+  await delay(80);
+  await membership.send('e', 'fixture没有已验证的原生改名能力');
+  assert.equal((await membership.events()).filter((event) => event.event === 'tcp-effect').length, 0);
+  await membership.send('a', '确认提交');
+  await membership.send('\r', '已取消操作');
+  assert.equal((await membership.events()).filter((event) => event.event === 'tcp-effect').length, 0);
+  await delay(80);
+  await membership.send('a', '确认提交');
+  await membership.send('\t\r', 'TCP-FIXTURE-MUTATION-CONFIRMED');
+  const adopted = await membership.waitEvent((event) => event.event === 'tcp-effect' && event.action === 'adopt-session');
+  assert.equal(adopted.sessionTarget.machineId, '12345678-first-full-machine-identity');
+  assert.equal(adopted.sessionTarget.providerId, 'codex');
+  assert.equal(adopted.sessionTarget.nativeId, 'same-native-id-on-distinct-nodes');
+  await membership.send('1', 'SESSION-NAMED-FIXTURE');
+  await membership.send(home);
+  await membership.send('\x04', '确认提交');
+  await membership.send('\t\r', 'TCP-FIXTURE-MUTATION-CONFIRMED');
+  const removed = await membership.waitEvent((event) => event.event === 'tcp-effect' && event.action === 'remove-member');
+  assert.equal(removed.targetId, 'member:fixture:12345678-first-full-machine-identity');
+  await membership.resize(48, 16); await membership.resize(100, 28);
+  await membership.send('q');
+  const all = await membership.finish(0);
+  assert.deepEqual(all.filter((event) => event.event === 'tcp-effect').map((event) => event.action), ['adopt-session', 'remove-member']);
+} finally { await membership.pty.dispose(); }
+
 const idle = await session('tcp-ctx-interrupt', 'idle');
 try {
   await idle.pty.waitForOutput('本机TCP-FIXTURE');

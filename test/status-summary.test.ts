@@ -218,7 +218,7 @@ describe('G0 status --stars 星内明细', () => {
     };
     const out = await runStatus(summaryDeps(fx), false, false, {}, undefined, true);
     expect(out).toContain('  会话: hub:claude/alive');
-    expect(out).toContain('  下线: ⚪hub:claude/boss（等 resume 复活；接任 --extend-session；删 --member-remove）');
+    expect(out).toContain('  下线: ⚪hub:claude/boss（启动器 /resume 或 TUI 选择入星；接任 --extend-session；删 --member-remove）');
     // 本机活会话 boss 与下线成员同名——对账循环会验活复活，不给 adopt 建议
     expect(out).not.toContain('建议:');
   });

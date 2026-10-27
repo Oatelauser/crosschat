@@ -54,6 +54,8 @@ export interface RosterEntry {
   extendsMachine?: string;
   /** 029 --rm 临时成员：死亡即删册零痕迹（聚合器验死报 member-remove；切片回带本位）。 */
   temporary?: boolean;
+  /** Launcher-selected presence requires an explicit current window claim. */
+  selectionOwned?: boolean;
 }
 
 /** 032：一颗星的全部数据（钥匙+成员册同文件同段）。 */
@@ -558,7 +560,8 @@ function readManagementBroker(file: string): BrokerFile {
     const roster = (item.roster ?? []).map((member): RosterEntry => {
       if (!managementRecord(member) || typeof member.sessionId !== 'string' || !member.sessionId || members.has(member.sessionId)
         || typeof member.machine !== 'string' || !completeMachine(member.machine) || !optionalText(member, ['name', 'tool', 'machineName', 'extendsName', 'extendsMachine'])
-        || (member.temporary !== undefined && typeof member.temporary !== 'boolean')) invalidManagementSource();
+        || (member.temporary !== undefined && typeof member.temporary !== 'boolean')
+        || (member.selectionOwned !== undefined && typeof member.selectionOwned !== 'boolean')) invalidManagementSource();
       members.add(member.sessionId);
       return { ...member, sessionId: member.sessionId, machine: member.machine,
         ...(typeof member.name === 'string' ? { name: member.name } : {}), ...(typeof member.tool === 'string' ? { tool: member.tool } : {}),

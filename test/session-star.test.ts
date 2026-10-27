@@ -31,6 +31,7 @@ import { parseServeArgs, parseStatusArgs } from '../src/cli.js';
 import { runServe } from '../src/commands/serve.js';
 import { runSend } from '../src/commands/send.js';
 import { runStatus, type StatusDeps } from '../src/commands/status.js';
+import { runClaudeWrapper } from '../src/commands/claude-wrapper.js';
 import { MultichatError } from '../src/errors.js';
 
 // macOS's long per-user tmpdir can truncate two distinct Unix socket paths to one.
@@ -159,9 +160,10 @@ async function senderOn(url: string, auth: string): Promise<TestClient> {
 
 /** 可变扫描夹具：launcher/聚合器两侧共用一份数据，翻转即模拟 spawn//rename。 */
 interface ScanState {
-  claude: Array<{ sessionId: string; name?: string; updatedAt?: number }>;
+  claude: Array<{ sessionId: string; name?: string; updatedAt?: number; pid?: number; cwd?: string }>;
   codex: Array<{ id: string; name: string | null }>;
   delivered: string[];
+  deliveredPids: number[];
 }
 
 function scanDeps(state: ScanState): SendDeps {
@@ -169,19 +171,21 @@ function scanDeps(state: ScanState): SendDeps {
     env: {},
     listClaudeSessions: () => ({
       sessions: state.claude.map((s, i) => ({
-        pid: 100 + i,
+        pid: s.pid ?? 100 + i,
         sessionId: s.sessionId,
         kind: 'interactive',
         ...(s.name === undefined ? {} : { name: s.name }),
         status: 'idle',
         messagingSocketPath: 'x',
+        ...(s.cwd === undefined ? {} : { cwd: s.cwd }),
         ...(s.updatedAt === undefined ? {} : { updatedAt: s.updatedAt }),
       })),
       malformed: 0,
     }),
     listCodexThreads: async () => state.codex.map((t) => ({ id: t.id, name: t.name, status: 'idle' as const })),
-    deliverClaude: async (_t, content) => {
+    deliverClaude: async (target, content) => {
       state.delivered.push(content);
+      state.deliveredPids.push(target.pid);
       return { status: 'delivered' };
     },
     deliverCodex: async () => ({ status: 'accepted', turnId: 't' }),
@@ -227,7 +231,7 @@ async function startStarStar(
     `${JSON.stringify({ brokers: [entry], showName: opts.machineName ?? 'node-host' }, null, 2)}\n`,
     'utf8',
   );
-  const state: ScanState = { claude: [], codex: [], delivered: [] };
+  const state: ScanState = { claude: [], codex: [], delivered: [], deliveredPids: [] };
   // codex 活性夹具：CODEX_THREAD 的假 rollout（CI 无 ~/.codex，活性核验必须可离线命中——
   // 否则成员首轮 tick 即被除名，名字回填永不发生；与 serve-sessions.test.ts 9a 同款）
   const codexHome = mkdtempSync(join(root, `codexhome-${label}-`));
@@ -343,6 +347,336 @@ describe('018 批二：启动器旗标解析', () => {
 // ---- 启动器链路 ---------------------------------------------------------------------
 
 describe('018 批二：启动器入星链路', () => {
+  it.each([
+    ['--resume', 'a1111111-1111-4111-8111-111111111111'],
+    ['--continue'],
+    ['--session-id', 'a1111111-1111-4111-8111-111111111111'],
+  ])('Claude 原生恢复/指定 ID 参数 %j 原样透传，按新进程识别已有 ID', async (...nativeArgs) => {
+    const sh = await startStarStar(`sl-existing-${nativeArgs[0].slice(2)}`);
+    await sh.aggregator();
+    const sessionId = 'a1111111-1111-4111-8111-111111111111';
+    sh.state.claude = [{ sessionId, pid: 71000 }];
+    let release!: () => void;
+    let didSpawn!: () => void;
+    const ready = new Promise<void>((resolve) => { didSpawn = resolve; });
+    const errors: string[] = [];
+    const run = runClaudeWrapper(['--connect', sh.starName, ...nativeArgs], {
+      resolveExe: () => 'fixture-claude', env: {},
+      star: starJoinDeps(sh, { stderr: (line) => errors.push(line) }),
+      createSessionBinding: async ({ args, onSelection }) => {
+        queueMicrotask(() => onSelection({ kind: 'selected', sessionId }));
+        return { args: ['--settings', '{"crossSessionInbound":"accept"}', ...args], close: async () => undefined };
+      },
+      spawnInherit: async (_exe: string, args: readonly string[], _env?: NodeJS.ProcessEnv, onSpawn?: (pid: number) => void) => {
+        expect(args).toEqual(['--settings', '{"crossSessionInbound":"accept"}', ...nativeArgs]);
+        onSpawn?.(71001);
+        sh.state.claude = [{ sessionId, pid: 71001 }, { sessionId: 'unrelated-newer', pid: 71002, updatedAt: 99 }];
+        didSpawn();
+        return new Promise<number>((resolve) => { release = () => resolve(0); });
+      },
+    });
+    try {
+      await ready;
+      await expect.poll(async () => (await fetchRosterFor(sh.baseDir, sh.entry))?.flatMap((m) => m.sessions ?? []).map((s) => s.sessionId), { timeout: 5_000 }).toEqual([sessionId]);
+      expect(errors).toEqual([]);
+    } finally { release?.(); await run; }
+  }, 10_000);
+
+  it('Claude 空白窗口不超时猜测其他新增会话，等待原生选择事件', async () => {
+    const sh = await startStarStar('sl-owned-pid-missing');
+    const errors: string[] = [];
+    const logs: string[] = [];
+    let release!: () => void;
+    const run = runClaudeWrapper(['--connect', sh.starName], {
+      resolveExe: () => 'fixture-claude', env: {},
+      star: starJoinDeps(sh, {
+        stderr: (line) => errors.push(line), log: (line) => logs.push(line),
+      }),
+      createSessionBinding: async ({ args, onSelection }) => {
+        onSelection({ kind: 'empty', sessionId: 'blank-owned' });
+        return { args, close: async () => undefined };
+      },
+      spawnInherit: async (_exe: string, _args: readonly string[], _env?: NodeJS.ProcessEnv, onSpawn?: (pid: number) => void) => {
+        onSpawn?.(71001);
+        sh.state.claude = [{ sessionId: 'unrelated-newer', pid: 71002 }];
+        return new Promise<number>((resolve) => { release = () => resolve(0); });
+      },
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(errors).toEqual([]);
+      expect(logs).toEqual([]);
+      expect(sh.spawnedSelectors).toEqual([]);
+    } finally { release?.(); await run; }
+  }, 10_000);
+
+  it.each([0, 1])('同目录匿名并发：精确入册、独立投递，退出第 %i 个 --rm 不影响另一会话', async (exitIndex) => {
+    const sh = await startStarStar(`sl-anon-${exitIndex}`);
+    await sh.aggregator();
+    const ids = ['a1111111-1111-4111-8111-111111111111', 'b2222222-2222-4222-8222-222222222222'];
+    const pids = [71001, 71002];
+    const errors: string[] = [];
+    let codexReads = 0;
+    let spawned = 0;
+    let bothSpawned!: () => void;
+    const ready = new Promise<void>((resolve) => { bothSpawned = resolve; });
+    const releases: Array<() => void> = [];
+    const captured: string[][] = [];
+    const selections: Array<(event: import('../src/application/session-selection.js').SessionSelectionEvent) => void> = [];
+    const runs = ids.map((_id, index) => runClaudeWrapper(
+      index === 0 ? ['--connect', sh.starName, '--rm'] : ['--rm', '--connect', sh.starName],
+      {
+        resolveExe: () => 'fixture-claude', env: {},
+        star: starJoinDeps(sh, {
+          stderr: (line) => errors.push(line),
+          listCodexThreads: async () => { codexReads++; throw new Error('Claude 不需要 Codex'); },
+        }),
+        createSessionBinding: async ({ args, onSelection }) => {
+          selections[index] = onSelection;
+          return { args: ['--settings', '{"crossSessionInbound":"accept"}', ...args], close: async () => undefined };
+        },
+        spawnInherit: async (_exe: string, args: readonly string[], _env?: NodeJS.ProcessEnv, onSpawn?: (pid: number) => void) => {
+          captured[index] = [...args];
+          onSpawn?.(pids[index]);
+          if (++spawned === 2) bothSpawned();
+          return new Promise<number>((resolve) => { releases[index] = () => resolve(0); });
+        },
+      },
+    ));
+    try {
+      await ready;
+      // 两个匿名会话同时出现、cwd 完全相同，最新者不是两个启动器的共同目标。
+      sh.state.claude = ids.map((sessionId, index) => ({ sessionId, pid: pids[index], cwd: '/same/project', updatedAt: index + 1 }));
+      selections.forEach((select, index) => select({ kind: 'selected', sessionId: ids[index] }));
+      const members = async () => (await fetchRosterFor(sh.baseDir, sh.entry))?.flatMap((machine) => machine.sessions ?? []).map((s) => s.sessionId).sort();
+      await expect.poll(members, { timeout: 5_000 }).toEqual(ids);
+      expect(codexReads).toBe(0);
+      for (const args of captured) expect(args).toEqual(['--settings', '{"crossSessionInbound":"accept"}']);
+      const sender = await senderOn(sh.harness.url, key('s'));
+      const deliver = async (index: number, requestId: string) => {
+        sender.send({ op: 'send', id: requestId, targetMachine: `node-host:claude/${ids[index]}`, body: requestId });
+        expect(await sender.waitFor((frame) => (frame.op === 'receipt' || frame.op === 'error') && frame.id === requestId))
+          .toMatchObject({ op: 'receipt', status: 'delivered' });
+        expect(sh.state.deliveredPids.at(-1)).toBe(pids[index]);
+      };
+      await deliver(0, 'anonymous-first');
+      await deliver(1, 'anonymous-second');
+      releases[exitIndex]();
+      await expect(runs[exitIndex]).resolves.toBe(0);
+      const remaining = 1 - exitIndex;
+      await expect.poll(members, { timeout: 5_000 }).toEqual([ids[remaining]]);
+      await deliver(remaining, 'anonymous-survived');
+      releases[remaining]();
+      await expect(runs[remaining]).resolves.toBe(0);
+      await expect.poll(members, { timeout: 5_000 }).toEqual([]);
+      expect(errors).toEqual([]);
+    } finally {
+      releases.forEach((release) => release());
+      await Promise.allSettled(runs);
+    }
+  }, 15_000);
+
+  it('node.json 缺失：stderr 显示原因和实际日志完整路径，错误也写日志，begin 不拒绝', async () => {
+    const baseDir = mkdtempSync(join(root, 'missing-node-'));
+    const out: string[] = [];
+    const err: string[] = [];
+    const logs: string[] = [];
+    const joiner = new StarJoiner({
+      deps: {
+        tcpBaseDir: baseDir,
+        stdout: (line) => out.push(line),
+        stderr: (line) => err.push(line),
+        log: (line) => logs.push(line),
+        listClaudeSessions: () => ({ sessions: [] }),
+        listCodexThreads: async () => [],
+        spawnServeDetach: () => { throw new Error('没有入网配置时不能拉起聚合器'); },
+        machineName: 'isolated-node',
+      },
+      side: 'claude',
+      connects: ['missing-star'],
+    });
+    try {
+      await expect(joiner.begin()).resolves.toBeUndefined();
+      expect(out).toEqual([]);
+      expect(err).toHaveLength(1);
+      expect(err[0]).toContain('node.json');
+      expect(err[0]).toContain(join(baseDir, 'tcp', 'launcher.log'));
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toContain('node.json');
+    } finally {
+      await joiner.stop();
+    }
+  });
+
+  it('星选择器错误：stderr 显示具体星名和实际日志完整路径，同一原因写入日志', async () => {
+    const sh = await startStarStar('sl-selector');
+    const out: string[] = [];
+    const err: string[] = [];
+    const logs: string[] = [];
+    const joiner = new StarJoiner({
+      deps: starJoinDeps(sh, { stdout: (line) => out.push(line), stderr: (line) => err.push(line), log: (line) => logs.push(line) }),
+      side: 'claude',
+      connects: ['wrong-star'],
+    });
+    try {
+      await expect(joiner.begin()).resolves.toBeUndefined();
+      expect(out).toEqual([]);
+      expect(err).toHaveLength(1);
+      const reason = '--connect wrong-star 与 node.json 条目的星名 sl-selector 不符';
+      expect(err[0]).toContain(reason);
+      expect(err[0]).toContain(join(sh.baseDir, 'tcp', 'launcher.log'));
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toContain(reason);
+      expect(sh.spawnedSelectors).toEqual([]);
+    } finally {
+      await joiner.stop();
+    }
+  });
+
+  it('错误日志写入抛异常：stderr 保留原错误、完整路径及写入失败状态', async () => {
+    const sh = await startStarStar('sl-log-error');
+    const err: string[] = [];
+    const joiner = new StarJoiner({
+      deps: starJoinDeps(sh, {
+        stderr: (line) => err.push(line),
+        log: () => { throw new Error('isolated log failure'); },
+      }),
+      side: 'claude',
+      connects: ['wrong-star'],
+    });
+    try {
+      await expect(joiner.begin()).resolves.toBeUndefined();
+      expect(err).toHaveLength(1);
+      expect(err[0]).toContain('--connect wrong-star');
+      expect(err[0]).toContain('日志写入失败');
+      expect(err[0]).toContain(join(sh.baseDir, 'tcp', 'launcher.log'));
+    } finally {
+      await joiner.stop();
+    }
+  });
+
+  it('新会话探测超时：明确未入星的原因、实际日志路径和错误日志，停止仍可完成', async () => {
+    const sh = await startStarStar('sl-detect-timeout');
+    let clock = 0;
+    const out: string[] = [];
+    const err: string[] = [];
+    const logs: string[] = [];
+    const joiner = new StarJoiner({
+      deps: starJoinDeps(sh, {
+        stdout: (line) => out.push(line),
+        stderr: (line) => err.push(line),
+        log: (line) => logs.push(line),
+        now: () => { clock += 120_001; return clock; },
+      }),
+      side: 'claude',
+      connects: ['sl-detect-timeout'],
+    });
+    try {
+      await joiner.begin();
+      await expect.poll(() => err[0], { timeout: 5_000 }).toContain('未探测到新会话的 ID');
+      expect(out).toEqual([]);
+      expect(err).toHaveLength(1);
+      expect(err[0]).toContain(join(sh.baseDir, 'tcp', 'launcher.log'));
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toContain('未探测到新会话的 ID');
+    } finally {
+      await joiner.stop();
+    }
+  });
+
+  it('聚合器拉起失败：保留具体异常、显示实际日志路径并写日志，会话扫描数据不受影响', async () => {
+    const sh = await startStarStar('sl-spawn-error');
+    const out: string[] = [];
+    const err: string[] = [];
+    const logs: string[] = [];
+    const joiner = new StarJoiner({
+      deps: starJoinDeps(sh, {
+        stdout: (line) => out.push(line),
+        stderr: (line) => err.push(line),
+        log: (line) => logs.push(line),
+        spawnServeDetach: () => { throw new Error('isolated aggregator spawn denied'); },
+      }),
+      side: 'claude',
+      connects: ['sl-spawn-error'],
+    });
+    try {
+      await joiner.begin();
+      sh.state.claude = [{ sessionId: 'sess-spawn-error', name: 'still-running' }];
+      await expect.poll(() => err[0], { timeout: 5_000 }).toContain('isolated aggregator spawn denied');
+      expect(out).toEqual([]);
+      expect(err).toHaveLength(1);
+      expect(err[0]).toContain(join(sh.baseDir, 'tcp', 'launcher.log'));
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toContain('isolated aggregator spawn denied');
+      expect(sh.state.claude).toEqual([{ sessionId: 'sess-spawn-error', name: 'still-running' }]);
+    } finally {
+      await joiner.stop();
+    }
+  });
+
+  it('attach 拒绝：stderr 显示聚合器返回的具体原因和日志完整路径，错误落日志并正常收线', async () => {
+    const sh = await startStarStar('sl-attach-error');
+    await sh.aggregator();
+    const out: string[] = [];
+    const err: string[] = [];
+    const logs: string[] = [];
+    const joiner = new StarJoiner({
+      deps: starJoinDeps(sh, { stdout: (line) => out.push(line), stderr: (line) => err.push(line), log: (line) => logs.push(line) }),
+      side: 'claude',
+      connects: ['sl-attach-error'],
+      rm: true,
+    });
+    try {
+      await joiner.begin();
+      sh.state.claude = [{ sessionId: 'sess-attach-error', name: 'bad:name' }];
+      const reason = '会话名 bad:name 禁含冒号';
+      await expect.poll(() => err[0], { timeout: 5_000 }).toContain(reason);
+      expect(out).toEqual([]);
+      expect(err).toHaveLength(1);
+      expect(err[0]).toContain('sl-attach-error');
+      expect(err[0]).toContain(join(sh.baseDir, 'tcp', 'launcher.log'));
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toContain(reason);
+      expect(logs.some((line) => line.includes('已入星'))).toBe(false);
+    } finally {
+      await joiner.stop();
+    }
+  });
+
+  it('成功日志写入抛异常：已入星会话仍可直达，不显示入星失败', async () => {
+    const sh = await startStarStar('sl-success-log-error');
+    await sh.aggregator();
+    const out: string[] = [];
+    const err: string[] = [];
+    let logAttempts = 0;
+    const joiner = new StarJoiner({
+      deps: starJoinDeps(sh, {
+        stdout: (line) => out.push(line),
+        stderr: (line) => err.push(line),
+        log: () => { logAttempts++; throw new Error('isolated success log failure'); },
+      }),
+      side: 'claude',
+      connects: ['sl-success-log-error'],
+    });
+    try {
+      await joiner.begin();
+      sh.state.claude = [{ sessionId: 'sess-success-log-error', name: 'still-connected' }];
+      await expect.poll(() => logAttempts, { timeout: 5_000 }).toBe(1);
+      await expect.poll(async () => {
+        const roster = await fetchRosterFor(sh.baseDir, sh.entry);
+        return roster?.some((machine) => machine.sessions?.some((session) => session.name === 'still-connected'));
+      }, { timeout: 5_000 }).toBe(true);
+      const sender = await senderOn(sh.harness.url, key('s'));
+      sender.send({ op: 'send', id: 'success-log-error', targetMachine: 'node-host:still-connected', body: 'still delivered' });
+      expect(await sender.waitFor((frame) => (frame.op === 'receipt' || frame.op === 'error') && frame.id === 'success-log-error'))
+        .toMatchObject({ op: 'receipt', status: 'delivered' });
+      expect(out).toEqual([]);
+      expect(err).toEqual([]);
+    } finally {
+      await joiner.stop();
+    }
+  });
+
   it(
     'spawn 会话→自动拉聚合器→attach→三段直达；退出即 detach',
     async () => {
@@ -358,8 +692,8 @@ describe('018 批二：启动器入星链路', () => {
         spawnName: 'boss',
       });
       await joiner.begin();
-      // 021 时序：横幅在 begin()（=spawn 前）即打印——报地址不预支"已入星"
-      expect(out).toEqual(['入星 sl-l1——会话地址 tcp:sl-l1:node-host:boss（attach 自动，异常见日志）']);
+      // 正常启动保持静默，入星成功及实际地址只记日志。
+      expect(out).toEqual([]);
       // 模拟子进程 spawn 出新会话（快照差分命中 sess-child）
       sh.state.claude = [
         { sessionId: 'sess-existing', name: 'old', updatedAt: 1 },
@@ -380,7 +714,7 @@ describe('018 批二：启动器入星链路', () => {
       expect(sh.spawnedSelectors).toEqual(['sl-l1']); // 聚合器不在→自动 serve --connect --detach
       // 021：attach 确认落日志；spawn 后成功路径控制台零输出
       expect(logs.some((l) => l.includes('已入星 sl-l1') && l.includes('tcp:sl-l1:node-host:boss'))).toBe(true);
-      expect(out).toHaveLength(1);
+      expect(out).toHaveLength(0);
       expect(err).toHaveLength(0);
       expect(sh.state.delivered.length).toBeGreaterThan(0);
       // 子进程退出 → detach（无 erase）→ 册位保留转下线（028 默认=永久注册）
@@ -409,10 +743,12 @@ describe('018 批二：启动器入星链路', () => {
         `${JSON.stringify({ brokers: [shA.entry, shB.entry], showName: 'win-box' }, null, 2)}\n`,
         'utf8',
       );
+      const out: string[] = [];
+      const err: string[] = [];
       const deps: StarJoinDeps = {
         tcpBaseDir: shA.baseDir,
-        stdout: () => {},
-        stderr: () => {},
+        stdout: (line) => out.push(line),
+        stderr: (line) => err.push(line),
         log: () => {},
         listClaudeSessions: () => scanDeps(shA.state).listClaudeSessions(),
         listCodexThreads: async () => [],
@@ -457,6 +793,8 @@ describe('018 批二：启动器入星链路', () => {
       } finally {
         await joiner.stop();
       }
+      expect(out).toEqual([]);
+      expect(err).toEqual([]);
     },
     25_000,
   );
@@ -476,7 +814,7 @@ describe('018 批二：启动器入星链路', () => {
         connects: ['sl-q1'],
       });
       await joiner.begin();
-      expect(out).toEqual(['入星 sl-q1（attach 自动，异常见日志）']); // 无 -n：spawn 前只打星名行
+      expect(out).toEqual([]); // 匿名启动也不预告成功或泛指异常日志。
       sh.state.claude = [
         { sessionId: 'sess-base', name: 'old', updatedAt: 1 },
         { sessionId: 'sess-kid', name: 'boss', updatedAt: 99 },
@@ -665,9 +1003,9 @@ describe('018 批二：extends 四级校验', () => {
 
 // ---- members-query 恢复链 -----------------------------------------------------------
 
-describe('018/028 恢复链常态化（孤儿找回/死转下线/册落盘不丢）', () => {
+describe('统一恢复入口（启动器重声明或显式管理，册落盘不丢）', () => {
   it(
-    '聚合器重启：册切片对账→活的重入册复活、死的转下线册位保留（linux 32-hex 形态）',
+    '聚合器重启保留离线册位，存活的原生会话也须明确重声明（linux 32-hex 形态）',
     async () => {
       const sh = await startStarStar('sl-r1', { mid: LINUX_MID, machineName: 'lin-box' });
       sh.state.claude = [
@@ -676,8 +1014,8 @@ describe('018/028 恢复链常态化（孤儿找回/死转下线/册落盘不丢
       ];
       const aggA = await sh.aggregator();
       const pipe = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
-      expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss' })).ok).toBe(true);
-      expect((await pipe.send({ op: 'attach', sessionId: 'sess-gone', name: 'gone' })).ok).toBe(true);
+      expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', selectionOwned: true, claimId: 'window-boss' })).ok).toBe(true);
+      expect((await pipe.send({ op: 'attach', sessionId: 'sess-gone', name: 'gone', tool: 'claude', selectionOwned: true, claimId: 'window-gone' })).ok).toBe(true);
       const sender = await senderOn(sh.harness.url, key('s'));
       const send3 = async (id: string, target: string): Promise<Frame> => {
         sender.send({ op: 'send', id, targetMachine: target, body: 'x' });
@@ -691,17 +1029,12 @@ describe('018/028 恢复链常态化（孤儿找回/死转下线/册落盘不丢
       sh.state.claude = [{ sessionId: 'sess-boss', name: 'boss' }];
       const aggB = await sh.aggregator();
       await aggB.waitForState('online');
-      // 028 常驻对账：boss 验活复活（无需重新声明）；gone 死名转下线（册位保留）
-      let bossOk = false;
-      for (let i = 0; i < 40; i++) {
-        const r = await send3(`rb${i}`, 'lin-box:boss');
-        if (r.op === 'receipt' && r.status === 'delivered') {
-          bossOk = true;
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 300));
-      }
-      expect(bossOk).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      expect(await send3('still-offline', 'lin-box:boss')).toMatchObject({ code: 'SESSION_OFFLINE' });
+      const next = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
+      clients.push(next);
+      expect((await next.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', claimId: 'new-window', selectionOwned: true })).ok).toBe(true);
+      expect(await send3('selected-again', 'lin-box:boss')).toMatchObject({ status: 'delivered' });
       const gone = await send3('r2', 'lin-box:gone');
       expect(gone).toMatchObject({ op: 'error', code: 'SESSION_OFFLINE' }); // 不再除名——下线等复活
     },
@@ -709,13 +1042,13 @@ describe('018/028 恢复链常态化（孤儿找回/死转下线/册落盘不丢
   );
 
   it(
-    '028 broker 重启册不丢（roster 落盘）：成员自动复活；册外活会话走 adopt 收编',
+    'broker/node 重启册位不丢，已有成员与新会话统一由显式 adopt 恢复',
     async () => {
       const sh = await startStarStar('sl-r2');
       sh.state.claude = [{ sessionId: 'sess-boss', name: 'boss' }];
       const aggA = await sh.aggregator();
       const pipe = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
-      expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss' })).ok).toBe(true);
+      expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', selectionOwned: true, claimId: 'window' })).ok).toBe(true);
       await aggA.stop();
       await pipe.close();
       // broker 重启——roster.json 落盘（018 双失忆边角由册根治）
@@ -735,21 +1068,16 @@ describe('018/028 恢复链常态化（孤儿找回/死转下线/册落盘不丢
       });
       brokers.push(broker2);
       await broker2.start();
-      // 新聚合器对账：boss 本地活 → 册内条目自动复活（无需 adopt/重新声明）
+      // 重启不猜窗口；永久册位保留，明确管理后才恢复路由。
       const aggC = await sh.aggregator();
       await aggC.waitForState('online');
       const sender = await senderOn(`ws://127.0.0.1:${port}`, key('s'));
-      let revived = false;
-      for (let i = 0; i < 40; i++) {
-        sender.send({ op: 'send', id: `am1${i}`, targetMachine: 'node-host:boss', body: 'x' });
-        const r = await sender.waitFor((f) => (f.op === 'error' || f.op === 'receipt') && f.id === `am1${i}`);
-        if (r.op === 'receipt' && r.status === 'delivered') {
-          revived = true;
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 300));
-      }
-      expect(revived).toBe(true); // broker 重启后册仍在——同 id 自动复活
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      sender.send({ op: 'send', id: 'am-offline', targetMachine: 'node-host:boss', body: 'x' });
+      expect(await sender.waitFor((f) => f.op === 'error' && f.id === 'am-offline')).toMatchObject({ code: 'SESSION_OFFLINE' });
+      expect(await runAdopt({ connect: 'sl-r2', adopt: 'boss' }, starJoinDeps(sh))).toBe(0);
+      sender.send({ op: 'send', id: 'am-selected', targetMachine: 'node-host:boss', body: 'x' });
+      expect(await sender.waitFor((f) => f.op === 'receipt' && f.id === 'am-selected')).toMatchObject({ status: 'delivered' });
       // 册外活进程（从未入册）仍走 adopt 收编
       sh.state.claude = [
         { sessionId: 'sess-boss', name: 'boss' },
@@ -1008,7 +1336,7 @@ describe('028 双模式与命令面', () => {
   });
 
   it(
-    '双模式集成：默认永久（退出=下线/裸 resume 同 id 复活）；--rm 零痕迹（退出册外无名）',
+    '双模式集成：永久退出留册、裸 resume 不归队、明确选择恢复；--rm 退出清册',
     async () => {
       const sh = await startStarStar('sl-dm', { memberCheckMs: 100 });
       await sh.aggregator();
@@ -1041,11 +1369,14 @@ describe('028 双模式与命令面', () => {
       await joiner1.stop();
       const off = await pollFor('node-host:boss', 'SESSION_OFFLINE', 'd2');
       expect(off.op === 'error' && off.message).toContain('resume');
-      // 裸 resume：同 id 会话回归（无启动器重声明）→ 对账循环验活自动复活
+      // 裸 resume 不重入星；通过启动器选择或明确管理统一恢复。
       sh.state.claude = [
         { sessionId: 'sess-base', name: 'old', updatedAt: 1 },
         { sessionId: 'sess-kid', name: 'boss', updatedAt: 100 },
       ];
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(await deliver('bare-not-selected', 'node-host:boss')).toMatchObject({ code: 'SESSION_OFFLINE' });
+      expect(await runAdopt({ connect: 'sl-dm', adopt: 'boss' }, starJoinDeps(sh))).toBe(0);
       await pollFor('node-host:boss', 'delivered', 'd3');
       // --rm 模式：退出即离册零痕迹——会话进程仍活也册外无名
       const joiner2 = new StarJoiner({ deps: starJoinDeps(sh), side: 'claude', connects: ['sl-dm'], spawnName: 'worker', rm: true });
@@ -1115,17 +1446,20 @@ describe('028 双模式与命令面', () => {
 // ---- 020 工具限定词：启动器声明与 spawn 前预警 ----------------------------------------------
 
 describe('020 工具限定词：启动器声明与 spawn 前预警', () => {
-  it('uses the selected star node-name override in launcher banners and adoption receipts', async () => {
+  it('uses the selected star node-name override in launcher success logs and adoption receipts', async () => {
     const sh = await startStarStar('sl-name');
     writeFileSync(join(sh.baseDir, 'tcp', 'node.json'), JSON.stringify({ brokers: [{ ...sh.entry, showName: 'star-specific-node' }], showName: 'global-node' }));
+    await sh.aggregator();
     const output: string[] = [];
-    const deps = starJoinDeps(sh, { machineName: 'global-node', stdout: (line) => output.push(line) });
+    const logs: string[] = [];
+    const deps = starJoinDeps(sh, { machineName: 'global-node', stdout: (line) => output.push(line), log: (line) => logs.push(line) });
     const joiner = new StarJoiner({ deps, side: 'claude', connects: ['sl-name'], spawnName: 'new-session' });
     try {
       await joiner.begin();
-      expect(output[0]).toContain('tcp:sl-name:star-specific-node:new-session');
+      expect(output).toEqual([]);
+      sh.state.claude = [{ sessionId: 'named-star-launcher', name: 'new-session' }];
+      await expect.poll(() => logs.join('\n'), { timeout: 5_000 }).toContain('tcp:sl-name:star-specific-node:new-session');
     } finally { await joiner.stop(); }
-    await sh.aggregator();
     sh.state.claude = [{ sessionId: 'adopt-star-name', name: 'existing-session' }];
     output.length = 0;
     expect(await runAdopt({ connect: 'sl-name', adopt: 'existing-session' }, deps)).toBe(0);
@@ -1151,9 +1485,11 @@ describe('020 工具限定词：启动器声明与 spawn 前预警', () => {
         spawnName: 'boss',
       });
       await joiner.begin(); // 差分基线=空表（预警后快照）
-      // 021 纪律：横幅 + 预警都在 spawn 前打出（out 定格于 begin 返回时）
-      expect(out[0]).toContain('入星 sl-t1');
-      expect(out.some((l) => l.startsWith('预警:') && l.includes('codex/boss') && l.includes('claude/boss'))).toBe(true);
+      // 保留实际同名预警，但不再打印入星预告。
+      expect(out).toHaveLength(1);
+      expect(out[0]).toMatch(/^预警:/);
+      expect(out[0]).toContain('codex/boss');
+      expect(out[0]).toContain('claude/boss');
       // 模拟 spawn 出新会话（claude/boss）→ attach（带 tool=claude）生效
       sh.state.claude = [{ sessionId: 'sess-new', name: 'boss', updatedAt: 99 }];
       const sender = await senderOn(sh.harness.url, key('s'));
@@ -1178,7 +1514,7 @@ describe('020 工具限定词：启动器声明与 spawn 前预警', () => {
     20_000,
   );
 
-  it('聚合器不在→预警静默跳过（begin 不炸不延迟，只有横幅行）', async () => {
+  it('聚合器不在→预警静默跳过，正常 begin 不输出入星预告', async () => {
     const sh = await startStarStar('sl-t2'); // 不拉聚合器——管道不存在
     const out: string[] = [];
     const joiner = new StarJoiner({
@@ -1187,8 +1523,11 @@ describe('020 工具限定词：启动器声明与 spawn 前预警', () => {
       connects: ['sl-t2'],
       spawnName: 'boss',
     });
-    await joiner.begin();
-    expect(out).toEqual(['入星 sl-t2——会话地址 tcp:sl-t2:node-host:boss（attach 自动，异常见日志）']);
-    await joiner.stop();
+    try {
+      await joiner.begin();
+      expect(out).toEqual([]);
+    } finally {
+      await joiner.stop();
+    }
   }, 10_000);
 });

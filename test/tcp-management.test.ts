@@ -25,6 +25,32 @@ function fixture() {
 afterEach(() => vi.restoreAllMocks());
 
 describe('TCP management previews and fixed targets', () => {
+  it('revalidates the exact selected node capability before confirmation and execution', async () => {
+    const f = fixture();
+    const sessionTarget = { machineId: fullMachine, providerId: 'futuretool', nativeId: 'remote-native-id' };
+    let revision = 'native-revision-a';
+    let renameEnabled = false;
+    const operateSession = vi.fn<import('../src/application/tcp/session-operations.js').TcpSessionOperation>(async (target, request) => ({
+      op: 'session-operation-result', id: 'fixture', ...target,
+      ...(request.kind === 'describe' ? { description: { ref: { contextId: 'local', providerId: target.providerId, nativeId: target.nativeId }, observedAt: 10, revision,
+        actions: { adopt: { state: 'executable' as const }, rename: { state: renameEnabled ? 'executable' as const : 'unsupported' as const, reason: 'No native rename endpoint' } } } }
+        : { result: { kind: 'applied' as const, message: 'Node and broker confirmed' } }),
+    }));
+    const service = createTcpManagement({ baseDir: '/never-read-real-user', catalog: f.catalog, operateSession });
+    const request = { ...f.request('adopt-session'), sessionTarget };
+    const before = await service.preview(request);
+    expect(before).toMatchObject({ enabled: true, fields: [] });
+    revision = 'owner-changed';
+    expect(await service.apply({ ...request, expectedPreviewRevision: before.revision })).toMatchObject({ kind: 'rejected' });
+    expect(operateSession.mock.calls.every((call) => call[1].kind === 'describe')).toBe(true);
+    const fresh = await service.preview(request);
+    expect(await service.apply({ ...request, expectedPreviewRevision: fresh.revision })).toMatchObject({ kind: 'applied' });
+    expect(operateSession).toHaveBeenLastCalledWith(expect.objectContaining(sessionTarget), { kind: 'apply', operation: 'adopt', expectedRevision: 'owner-changed' }, request.signal);
+    expect(await service.preview({ ...request, action: 'rename-session' })).toMatchObject({ enabled: false, reason: 'No native rename endpoint', fields: [] });
+    renameEnabled = true;
+    expect(await service.preview({ ...request, action: 'rename-session' })).toMatchObject({ enabled: true,
+      fields: [{ id: 'name', required: true, initialValue: '' }] });
+  });
   it('previews complete scoped fields and impacts without issuing management writes or revealing secrets', async () => {
     const f = fixture(); const preview = await f.service.preview(f.request('rename-star', { name: 'renamed' }));
     expect(preview).toMatchObject({ enabled: true, revision: expect.stringMatching(/^[a-f0-9]{64}$/) });

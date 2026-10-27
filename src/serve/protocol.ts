@@ -3,6 +3,8 @@
  * 文本消息。B2 才有行为实现的帧（file-* 等）类型先定义全。
  */
 import type { DiscoveryRequest, DiscoveryResponse } from '../application/discovery/model.js';
+import type { SessionOperationDescription } from '../application/session-operations.js';
+import type { MembershipResult } from '../application/session-membership/types.js';
 import { isDeliveryMode } from '../delivery-mode.js';
 import type { DeliveryMode } from '../delivery-mode.js';
 
@@ -340,6 +342,8 @@ export interface SessionMemberDecl {
    * kill 场景册位滞留下线态——drill-028 F1）。
    */
   temporary?: boolean;
+  /** Current launcher selection owns online presence; history alone cannot revive it. */
+  selectionOwned?: boolean;
 }
 
 /**
@@ -376,11 +380,15 @@ export interface MemberRemoveFrame {
   op: 'member-remove';
   /** 名字精确或会话 id 前缀（≥8 位）。 */
   target: string;
+  /** Lifecycle cleanup: exact native ID, own machine, temporary members only. */
+  temporaryOnly?: boolean;
+  id?: string;
 }
 
 /** member-remove 应答：幂等（零命中=ok 注明本不在册）；多名命中=拒绝列 id8 教消歧。 */
 export interface MemberRemoveResultFrame {
   op: 'member-remove-result';
+  id?: string;
   ok: boolean;
   /** 已删除条目的人读标识（名或 id8）。 */
   removed: string[];
@@ -395,6 +403,30 @@ export interface MemberRemoveExactFrame {
   machine: string;
   tool: string;
 }
+
+/** Separate from read-only discovery: routed to one authenticated, exact node. */
+export interface SessionOperationFrame {
+  op: 'session-operation';
+  id: string;
+  starId: string;
+  machineId: string;
+  providerId: string;
+  nativeId: string;
+  /** Broker replaces caller input with authoritative current-star membership. */
+  membership?: { temporary: boolean; selectionOwned: boolean };
+  request: { kind: 'describe' } | { kind: 'apply'; operation: 'adopt' | 'rename'; expectedRevision: string; name?: string };
+}
+export interface SessionOperationResultFrame {
+  op: 'session-operation-result';
+  id: string;
+  starId: string;
+  machineId: string;
+  providerId: string;
+  nativeId: string;
+  description?: SessionOperationDescription;
+  result?: MembershipResult;
+}
+export interface SessionOperationCancelFrame { op: 'session-operation-cancel'; id: string }
 
 export interface MemberRemoveExactResultFrame {
   op: 'member-remove-exact-result';
@@ -540,6 +572,9 @@ export type Frame =
   | MemberRemoveResultFrame
   | MemberRemoveExactFrame
   | MemberRemoveExactResultFrame
+  | SessionOperationFrame
+  | SessionOperationResultFrame
+  | SessionOperationCancelFrame
   | AuthChallengeFrame
   | AuthProofFrame
   | NodeNameSetFrame
@@ -575,6 +610,9 @@ const OPS = new Set([
   'member-remove-result',
   'member-remove-exact',
   'member-remove-exact-result',
+  'session-operation',
+  'session-operation-result',
+  'session-operation-cancel',
   'auth-challenge',
   'auth-proof',
   'node-name-set',
@@ -606,6 +644,10 @@ export function parseFrame(text: string): Frame | undefined {
     }
   }
   if ((op === 'send' || op === 'deliver') && 'delivery' in obj && !isDeliveryMode(obj.delivery)) return undefined;
+  if ((op === 'session-operation' || op === 'session-operation-result') && !validSessionOperation(obj as Record<string, unknown>)) return undefined;
+  if (op === 'session-operation-cancel' && (!('id' in obj) || typeof obj.id !== 'string' || obj.id.length === 0 || obj.id.length > 128)) return undefined;
+  if (op === 'member-remove' && (('temporaryOnly' in obj && typeof obj.temporaryOnly !== 'boolean')
+    || ('id' in obj && (typeof obj.id !== 'string' || obj.id.length === 0 || obj.id.length > 128)))) return undefined;
   if (op === 'credential-revoked' && !isCredentialRevoked(obj as Record<string, unknown>)) return undefined;
   if (op === 'member-remove-exact' || op === 'member-remove-exact-result') {
     if (!('id' in obj) || typeof obj.id !== 'string' || obj.id.length === 0 || obj.id.length > 256) return undefined;
@@ -620,6 +662,30 @@ export function parseFrame(text: string): Frame | undefined {
   }
   if ((op === 'discover-query' || op === 'discover-result' || op === 'discover-cancel') && !isDiscoveryEnvelope(obj as Record<string, unknown>)) return undefined;
   return typeof op === 'string' && OPS.has(op) ? (obj as Frame) : undefined;
+}
+
+function validSessionOperation(value: Record<string, unknown>): boolean {
+  const record = (input: unknown): input is Record<string, unknown> => input !== null && typeof input === 'object' && !Array.isArray(input);
+  const text = (input: unknown, max: number): input is string => typeof input === 'string' && input.length > 0 && input.length <= max;
+  if (!text(value.id, 128) || !text(value.starId, 256) || !text(value.machineId, 32) || !/^[a-f0-9]{32}$/.test(value.machineId)
+    || !text(value.providerId, 64) || sanitizeTool(value.providerId) !== value.providerId || !text(value.nativeId, 4096)) return false;
+  if (value.op === 'session-operation') {
+    if (value.membership !== undefined && (!record(value.membership) || typeof value.membership.temporary !== 'boolean' || typeof value.membership.selectionOwned !== 'boolean')) return false;
+    const request = value.request;
+    return record(request) && (request.kind === 'describe' || (request.kind === 'apply' && (request.operation === 'adopt' || request.operation === 'rename')
+      && text(request.expectedRevision, 128) && (request.name === undefined || (typeof request.name === 'string' && request.name.length <= 256))));
+  }
+  if ((value.description === undefined) === (value.result === undefined)) return false;
+  if (value.result !== undefined) return record(value.result) && ['applied', 'rejected', 'uncertain'].includes(String(value.result.kind)) && text(value.result.message, 4096);
+  const description = value.description;
+  if (!record(description) || !record(description.ref) || !text(description.ref.contextId, 1024) || description.ref.providerId !== value.providerId
+    || description.ref.nativeId !== value.nativeId || !Number.isFinite(description.observedAt) || typeof description.revision !== 'string'
+    || description.revision.length > 128 || !record(description.actions)) return false;
+  return ['adopt', 'rename'].every((operation) => {
+    const action = description.actions && record(description.actions) ? description.actions[operation] : undefined;
+    return record(action) && ['executable', 'unsupported', 'unavailable', 'needs-verification'].includes(String(action.state))
+      && (action.reason === undefined || text(action.reason, 4096)) && (action.nextStep === undefined || text(action.nextStep, 4096));
+  });
 }
 
 export function encodeFrame(frame: Frame): string {

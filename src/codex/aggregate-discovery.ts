@@ -205,7 +205,7 @@ async function readCli(options: CodexDiscoveryOptions, state: CursorState, limit
       await untilAborted(session.initialize(), options.signal);
       checkAbort(options.signal);
       if (options.legacyCli || session.listThreadPage === undefined) {
-        const data = (await untilAborted(session.listThreads(), options.signal)).map((thread) => ({ id: thread.id, name: thread.name, rawStatus: thread.status, attributes: {} }));
+        const data = (await untilAborted(session.listThreads(), options.signal)).map((thread) => ({ id: thread.id, name: thread.name, rawStatus: thread.status, attributes: { transport: 'cli' } }));
         issue(state, 'cli', 'legacy-limit');
         state.sourceRead = true;
         return { data, more: false };
@@ -215,7 +215,7 @@ async function readCli(options: CodexDiscoveryOptions, state: CursorState, limit
       const more = nextNative(state, page.nextCursor);
       if (page.completeness === 'partial') issue(state, 'cli', 'legacy-limit');
       state.sourceRead = true;
-      return { data: page.data, more };
+      return { data: page.data.map((thread) => ({ ...thread, attributes: { ...thread.attributes, transport: 'cli' } })), more };
     } finally { await session?.close().catch(() => undefined); }
   };
   return untilAborted(work(), options.signal);
