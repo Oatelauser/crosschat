@@ -26,6 +26,6 @@ description: 使用 crosschat 与本机或跨机的 Claude Code、Codex 桌面�
 | 正文多行、含引号或特殊字符、内容很大、发送文件 | [正文与文件](references/advanced.md) |
 | 判断 queue/steer、delivered/queued/parked 或 confirmed/unconfirmed；发送后做什么 | [投递与结果](references/delivery.md) |
 | 命令报错、身份冲突、连接失败或投递结果不明 | [错误恢复](references/errors.md) |
-| 星网络入网、成员下线、会话接任或迁移 | [星成员管理](references/stars.md) |
+| 星网络入网、成员下线、接任/迁移或 TUI 会话管理 | [星成员管理](references/stars.md) |
 
 组合场景沿用同一入口：**跨机回信先读“按信封回复”**，保留 hint 路由；特殊正文再读“正文与文件”。每次发送后按“投递与结果”处理，失败时再进入“错误恢复”。
