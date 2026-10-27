@@ -150,6 +150,27 @@ async function handshake(url: string, auth: string, machineId?: string, proto = 
 }
 
 describe('broker handshake and auth', () => {
+  it('routes same-ID endpoint members by public type address and rejects a conflicting explicit type', async () => {
+    const { url, registryFile } = await startBroker();
+    seed(registryFile, [{ key: key('a') }, { key: key('b') }]);
+    const node = await handshake(url, key('a'), 'endpoint-machine', 1, 'endpoint-host');
+    await node.waitFor((frame) => frame.op === 'connected');
+    node.send({ op: 'sessions', sessions: [{ sessionId: 'same-native-id', name: 'shared-name', tool: 'codex', endpointType: 'cli' },
+      { sessionId: 'same-native-id', name: 'shared-name', tool: 'codex', endpointType: 'desktop' }] });
+    const sender = await handshake(url, key('b'));
+    await sender.waitFor((frame) => frame.op === 'connected');
+    for (const endpointType of ['cli', 'desktop']) {
+      const id = `endpoint-${endpointType}`;
+      sender.send({ op: 'send', id, targetMachine: `endpoint-host:codex-${endpointType}/shared-name`, body: 'test' });
+      const delivered = await node.waitFor((frame) => frame.op === 'deliver' && frame.id === id, 500);
+      expect(delivered).toMatchObject({ sessionId: 'same-native-id', targetProviderId: 'codex', targetEndpointType: endpointType });
+      node.send({ op: 'result', id, status: 'delivered' });
+      await sender.waitFor((frame) => frame.op === 'receipt' && frame.id === id);
+    }
+    sender.send(Object.assign({ op: 'send' as const, id: 'conflicting-type', targetMachine: 'endpoint-host:codex-cli/shared-name', body: 'test' }, { tool: 'codex-desktop' }));
+    expect(await sender.waitFor((frame) => frame.op === 'error' && frame.id === 'conflicting-type', 500)).toMatchObject({ code: 'USAGE' });
+  });
+
   it('completes info→connect→connected and backfills machineId + self-reported name to registry', async () => {
     const { url, registryFile, statusFile } = await startBroker();
     seed(registryFile, [{ key: key('a') }]);

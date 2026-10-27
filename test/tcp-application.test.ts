@@ -36,6 +36,20 @@ function response(contextId: string, ids: string[], nextCursor: string | null = 
 }
 
 describe('TCP readonly application', () => {
+  it('preserves same-ID endpoint roster rows and exact endpoint references through snapshot projection', async () => {
+    const { createTcpApplication } = await import('../src/application/tcp/index.js');
+    const { tcpContextId } = await import('../src/application/tcp/reading.js');
+    const f = await fixture();
+    const raw = { ...snapshot(), members: ['cli', 'desktop'].map((endpointType) => ({ sessionId: 'same-native-id', tool: 'codex', endpointType, name: 'same-name', machine: midA, online: true })) };
+    const app = createTcpApplication({ ...f, readSnapshot: async () => raw });
+    const result = await app.readSessions({ contextId: tcpContextId(entry), scope: 'members' });
+    expect(result.completeness).toBe('complete');
+    expect(result.items).toHaveLength(2);
+    expect(new Set(result.items.map((item) => item.id)).size).toBe(2);
+    expect(result.items).toEqual(expect.arrayContaining(['cli', 'desktop'].map((endpointType) => expect.objectContaining({ endpointType,
+      ref: expect.objectContaining({ providerId: 'codex', nativeId: 'same-native-id', endpointType }), address: `tcp:star-a:${midA}:codex-${endpointType}/same-native-id` }))));
+  });
+
   it('caps explicit fan-out at the agreed three nodes before any IO', async () => {
     const { createTcpApplication } = await import('../src/application/tcp/index.js');
     const readSnapshot = vi.fn();
