@@ -8,7 +8,7 @@ import { mountDshBridge } from '../integrations/dsh/bridge.js';
 const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const dispose of cleanup.splice(0).reverse()) await dispose(); });
 
-async function fixture() {
+async function fixture(profileContext?: unknown) {
   const home = await mkdtemp(join(tmpdir(), 'crosschat-dsh-bridge-'));
   cleanup.push(() => rm(home, { recursive: true, force: true }));
   const received: Array<{ id: string; mode: string; message: { id: string; role: string; content: Array<{ type: string; text: string }>; source: unknown } }> = [];
@@ -23,7 +23,7 @@ async function fixture() {
   const effects: Array<() => void | Promise<void>> = [];
   const ctx = {
     agents: { get: (id: string) => agents.get(id), roots: () => [...agents.values()].filter((item) => item.id !== 'child'), list: () => [...agents.values()] },
-    get: (key: string) => key === 'workingDirectory' ? { get: () => '/current' } : key === 'sessionTitle' ? { get: () => null } : undefined,
+    get: (key: string) => key === 'profileContext' ? profileContext : key === 'workingDirectory' ? { get: () => '/current' } : key === 'sessionTitle' ? { get: () => null } : undefined,
     effect: (setup: () => () => void | Promise<void>) => { const disposer = setup(); effects.push(disposer); return disposer; },
   };
   const host = { getDshRuntimeVersion: () => '0.2.1-rc.2', createUserMessage: (input: { content: Array<{ type: string; text: string }>; source: unknown }) => Object.freeze({ ...input, id: randomUUID(), role: 'user' }) };
@@ -38,6 +38,19 @@ async function fixture() {
 }
 
 describe('DSH Host bridge', () => {
+  it.each([['desktop', 'desktop'], ['web', 'host'], ['custom-profile', 'host']])('reports the native %s profile without inferring frontend ownership', async (profile, endpointType) => {
+    const value = await fixture({ name: profile, dir: '/native-profile', installAnchor: '/native-anchor' });
+    expect(value.registration).toMatchObject({ profile, endpointType });
+    const info = await fetch(`${value.registration.url}/v1/info`, { headers: value.headers }).then((response) => response.json());
+    expect(info).toMatchObject({ profile, endpointType });
+  });
+
+  it.each([undefined, null, {}, { name: '' }, { name: 3 }])('does not invent host or Desktop type without a valid native profile (%#)', async (profile) => {
+    const value = await fixture(profile);
+    expect(value.registration).not.toHaveProperty('endpointType');
+    expect(value.registration).not.toHaveProperty('profile');
+  });
+
   it('publishes a private owned registration matching the authenticated service identity', async () => {
     const value = await fixture();
     expect(value.registration).toMatchObject({ schema: 1, protocol: 1, provider: 'dsh', instanceId: expect.any(String), pid: process.pid, runtimeVersion: '0.2.1-rc.2' });

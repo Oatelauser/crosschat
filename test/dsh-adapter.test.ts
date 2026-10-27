@@ -26,14 +26,15 @@ function nativeThread(id: string, status: 'idle' | 'running' = 'idle') {
   return { id, name: null, cwd: '/current/work', originalCwd: '/original/work', status, createdAt: 123 };
 }
 
-async function fixture(options: { home?: string; handler?: (request: IncomingMessage, response: ServerResponse) => void; info?: Record<string, unknown>; infoStatus?: number; runtimeVersion?: string } = {}) {
+async function fixture(options: { home?: string; handler?: (request: IncomingMessage, response: ServerResponse) => void; info?: Record<string, unknown>; infoStatus?: number; runtimeVersion?: string; profile?: string; endpointType?: string } = {}) {
   const home = options.home ?? await directory();
   const instancesDir = join(home, '.crosschat', 'dsh', 'instances');
   await mkdir(instancesDir, { recursive: true, mode: 0o700 });
   const instanceId = randomUUID();
   const token = 'c'.repeat(64);
   const runtimeVersion = options.runtimeVersion ?? '0.2.1-rc.2';
-  const info = { schema: 1, protocol: 1, provider: 'dsh', instanceId, pid: process.pid, runtimeVersion, ...options.info };
+  const endpoint = { ...(options.profile === undefined ? {} : { profile: options.profile }), ...(options.endpointType === undefined ? {} : { endpointType: options.endpointType }) };
+  const info = { schema: 1, protocol: 1, provider: 'dsh', instanceId, pid: process.pid, runtimeVersion, ...endpoint, ...options.info };
   const calls: string[] = [];
   const server = createServer((request, response) => {
     calls.push(`${request.method} ${request.url}`);
@@ -48,12 +49,44 @@ async function fixture(options: { home?: string; handler?: (request: IncomingMes
   cleanup.push(async () => { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); });
   const url = `http://127.0.0.1:${address.port}`;
   const file = join(instancesDir, `${instanceId}.json`);
-  const registration = { schema: 1, protocol: 1, provider: 'dsh', instanceId, pid: process.pid, url, token, runtimeVersion, createdAt: 123 };
+  const registration = { schema: 1, protocol: 1, provider: 'dsh', instanceId, pid: process.pid, url, token, runtimeVersion, createdAt: 123, ...endpoint };
   await writeFile(file, JSON.stringify(registration), { mode: 0o600 });
   return { home, instancesDir, instanceId, token, info, file, registration, calls, url };
 }
 
 describe('DSH native bridge adapter', () => {
+  it('keeps same-ID Host and Desktop sessions separate and selects type before owner ambiguity', async () => {
+    const handler = (request: IncomingMessage, response: ServerResponse) => request.method === 'POST'
+      ? reply(response, { accepted: true, sessionId: 'same', mode: 'queue', messageId: randomUUID() })
+      : reply(response, { items: [nativeThread('same')], item: nativeThread('same') });
+    const host = await fixture({ profile: 'custom', endpointType: 'host', handler });
+    const desktop = await fixture({ home: host.home, profile: 'desktop', endpointType: 'desktop', handler });
+    const options = { home: host.home, endpointType: 'desktop' };
+    expect(await listDshThreads({ home: host.home })).toMatchObject([
+      expect.objectContaining({ id: 'same', endpointType: expect.stringMatching(/^(host|desktop)$/) }),
+      expect.objectContaining({ id: 'same', endpointType: expect.stringMatching(/^(host|desktop)$/) }),
+    ]);
+    expect(await getDshThread('same', options)).toMatchObject({ id: 'same', endpointType: 'desktop' });
+    expect(await deliverToDshSession('same', 'payload', options)).toMatchObject({ status: 'accepted' });
+    expect(host.calls.some((call) => call.startsWith('POST '))).toBe(false);
+    expect(desktop.calls.filter((call) => call.startsWith('POST '))).toHaveLength(1);
+  });
+
+  it('does not reinterpret an unclassified owner as Host or fall back from an absent requested type', async () => {
+    const service = await fixture({ handler: (_request, response) => reply(response, { item: nativeThread('same'), items: [nativeThread('same')] }) });
+    const options = { home: service.home, endpointType: 'host' };
+    expect(await listDshThreads(options)).toEqual([]);
+    expect(await getDshThread('same', options)).toBeNull();
+    await expect(deliverToDshSession('same', 'payload', options)).rejects.toMatchObject({ code: 'DSH_SESSION_NOT_FOUND' });
+    expect(service.calls.some((call) => call.startsWith('POST '))).toBe(false);
+  });
+
+  it('rejects a changed native profile or endpoint type during the authenticated owner handshake', async () => {
+    const service = await fixture({ profile: 'desktop', endpointType: 'desktop', info: { profile: 'web', endpointType: 'host' } });
+    await expect(listDshThreads({ home: service.home })).rejects.toMatchObject({ code: 'DSH_OWNER_MISMATCH' });
+    expect(service.calls).toEqual(['GET /v1/info']);
+  });
+
   it('discovers authenticated live sessions under the isolated common state root without writes', async () => {
     const service = await fixture();
     const before = await readFile(service.file, 'utf8');

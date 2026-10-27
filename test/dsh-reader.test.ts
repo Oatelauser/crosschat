@@ -9,6 +9,18 @@ const thread = { id: 'native_full_ID', name: null, cwd: '/project', rawStatus: {
 const request = { contextId: 'fixture-context', limit: 2, signal: new AbortController().signal };
 
 describe('Harness session metadata adapter', () => {
+  it('preserves verified endpoint types, keeps unknown unclassified and passes exact type into native lookup', async () => {
+    native.list.mockResolvedValue({ data: [{ ...thread, endpointType: 'desktop' }, thread], nextCursor: null, completeness: 'complete' });
+    native.get.mockResolvedValue({ ...thread, endpointType: 'desktop' });
+    const reader = createDshSessionReader({ home: '/isolated' });
+    const page = await reader.list(request);
+    expect(page.items[0].ref).toMatchObject({ providerId: 'dsh', endpointType: 'desktop' });
+    expect(page.items[1].ref).not.toHaveProperty('endpointType');
+    const detailRequest = { contextId: 'local', nativeId: thread.id, endpointType: 'desktop' };
+    expect((await reader.get(detailRequest)).item?.ref).toMatchObject({ endpointType: 'desktop' });
+    expect(native.get).toHaveBeenCalledWith(thread.id, expect.objectContaining({ endpointType: 'desktop' }));
+  });
+
   it('preserves anonymous native IDs, current cwd, state and verified delivery capabilities', async () => {
     native.list.mockResolvedValue({ data: [thread], nextCursor: null, completeness: 'complete' });
     const reader = createDshSessionReader({ home: '/isolated', now: () => 123 });
