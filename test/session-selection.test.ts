@@ -2,6 +2,20 @@ import { describe, expect, it, vi } from 'vitest';
 import { createSessionSelectionFollower } from '../src/application/session-selection.js';
 
 describe('window-owned native selection membership', () => {
+  it('releases a same-ID claim before accepting a different verified endpoint', async () => {
+    const calls: string[] = [];
+    const follower = createSessionSelectionFollower(async (selection) => {
+      calls.push(`join:${selection.endpointType}`);
+      return { close: async () => { calls.push(`release:${selection.endpointType}`); } };
+    });
+    follower.select({ kind: 'selected', sessionId: 'same-id', endpointType: 'cli' });
+    await follower.idle();
+    follower.select({ kind: 'selected', sessionId: 'same-id', endpointType: 'desktop' });
+    await follower.idle();
+    expect(calls).toEqual(['join:cli', 'release:cli', 'join:desktop']);
+    await follower.close();
+  });
+
   it('waits for input, selects a resumed ID, and releases A before B without reopening stale selections', async () => {
     const calls: string[] = [];
     const follower = createSessionSelectionFollower(async (session, signal) => {
