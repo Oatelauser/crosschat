@@ -1,6 +1,8 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { Buffer } from 'node:buffer';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import process from 'node:process';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Broker } from '../src/serve/broker.js';
 import { attachPipePath, NodeClient } from '../src/serve/node.js';
@@ -16,7 +18,8 @@ const cleanups: Array<() => void | Promise<void>> = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
 const machineId = 'a'.repeat(32);
 async function fixture(rename?: 'normal' | 'lost') {
-  const dir = await mkdtemp(join(tmpdir(), 'cc-session-ops-'));
+  const fixtureTmpDir = process.platform === 'darwin' ? await realpath('/tmp') : tmpdir();
+  const dir = await mkdtemp(join(fixtureTmpDir, 'cc-session-ops-'));
   cleanups.push(() => rm(dir, { recursive: true, force: true }));
   const registryFile = join(dir, 'broker.json');
   writeBrokerFile(registryFile, { stars: [{ starId: 'star-a', name: 'alpha', nodes: [{ label: 'node', key: 'fixture-key', addedAt: '2026-10-26' }], roster: [] },
@@ -36,6 +39,11 @@ async function fixture(rename?: 'normal' | 'lost') {
       detail: { item: state.item?.ref.nativeId === request.nativeId ? state.item : null, completeness: 'complete', errors: [], observedAt: Date.now() } };
   };
   const attachLabel = dir.split(/[\\/]/).at(-1)!;
+  const attachPath = attachPipePath(entry, join(dir, 'tcp'), attachLabel);
+  if (process.platform !== 'win32') {
+    expect(Buffer.byteLength(attachPath), `Fixture attach path exceeds the Unix socket limit: ${attachPath}`)
+      .toBeLessThanOrEqual(process.platform === 'darwin' ? 103 : 107);
+  }
   const node = new NodeClient({ config: { entries: [entry] }, configFile, machineId: () => machineId,
     fileInbox: new FileInbox({ inboxDir: join(dir, 'inbox'), partsDir: join(dir, 'parts') }), now: Date.now, log: () => undefined,
     makeSendDeps: () => { throw new Error('Operations must not send messages'); }, memberProviders: () => [], memberCheckMs: 60_000,
@@ -56,7 +64,7 @@ async function fixture(rename?: 'normal' | 'lost') {
     await selected.send({ op: 'session-operation', id, starId, machineId, providerId: 'claude', nativeId, request: input });
     return selected.waitFor((frame) => (frame.op === 'session-operation-result' || frame.op === 'error') && frame.id === id, 2_000);
   };
-  return { dir, registryFile, state, request, other, node, attachPath: attachPipePath(entry, join(dir, 'tcp'), attachLabel) };
+  return { dir, registryFile, state, request, other, node, attachPath };
 }
 
 describe('exact node session operations over real broker/node transport', () => {

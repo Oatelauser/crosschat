@@ -218,7 +218,8 @@ async function startStarStar(
     { key: key('s'), machineName: 'sender-host' },
     { key: key('n'), machineId: mid, machineName: opts.machineName ?? 'node-host' },
   ]);
-  const baseDir = opts.baseDir ?? mkdtempSync(join(root, `base-${label}-`));
+  // The label already appears in the socket filename; repeating it can exceed macOS's limit.
+  const baseDir = opts.baseDir ?? mkdtempSync(join(root, 'base-'));
   const entry: BrokerEntry = { host: '127.0.0.1', port: Number(new URL(harness.url).port), name: label, key: key('n') };
   if (process.platform !== 'win32') {
     const path = attachPipePath(entry, join(baseDir, 'tcp'));

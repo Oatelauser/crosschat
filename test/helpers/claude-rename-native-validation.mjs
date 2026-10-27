@@ -8,8 +8,7 @@ import process from 'node:process';
 import console from 'node:console';
 import { listClaudeSessions } from '../../dist/claude/registry.js';
 import { resolveClaudeExe } from '../../dist/claude/resolve-exe.js';
-import { prepareClaudeProfile, runClaudeCommand } from './claude-live-fixture.mjs';
-import { createClaudeMockModel } from './claude-mock-model.mjs';
+import { prepareClaudeProfile, runClaudeCommand, createClaudeMockModel } from './native-claude-fixture.mjs';
 import { launchPty } from './tui-pty-driver.mjs';
 
 const sdk = process.env.CROSSCHAT_NATIVE_CLAUDE_SDK;

@@ -2,10 +2,12 @@
  * 018 批一：proto:3 会话级星成员——协议帧/broker 聚合/聚合器 attach 与活性。
  * 夹具用真实平台形状：win 带杠 MachineGuid、linux 32-hex（F0 归一互认）。
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { Buffer } from 'node:buffer';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createConnection, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import process from 'node:process';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket, { type RawData, WebSocketServer } from 'ws';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
@@ -24,7 +26,8 @@ import { FileInbox } from '../src/serve/file-channel.js';
 import type { SendDeps } from '../src/commands/send.js';
 import type { MemberProvider } from '../src/application/members/index.js';
 
-const root = mkdtempSync(join(tmpdir(), 'crosschat-serve-sessions-'));
+const fixtureTmpDir = process.platform === 'darwin' ? realpathSync('/tmp') : tmpdir();
+const root = mkdtempSync(join(fixtureTmpDir, 'crosschat-serve-sessions-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 // 真实平台形态：Windows MachineGuid 带杠 UUID / Linux /etc/machine-id 32-hex
@@ -474,9 +477,14 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
       { key: key('s'), machineName: 'sender-host' },
       { key: key('n'), machineId: 'NODE-MID', machineName: 'node-host' },
     ]);
-    const dir = mkdtempSync(join(root, `nd-${label}-`));
+    const dir = mkdtempSync(join(root, 'nd-'));
     const inbox = mkdtempSync(join(root, 'node-'));
     const entry: BrokerEntry = { host: '127.0.0.1', port: Number(new URL(harness.url).port), name: 'broker-alias', key: key('n') };
+    const attachPath = attachPipePath(entry, dir, label);
+    if (process.platform !== 'win32') {
+      expect(Buffer.byteLength(attachPath), `Fixture attach path exceeds the Unix socket limit: ${attachPath}`)
+        .toBeLessThanOrEqual(process.platform === 'darwin' ? 103 : 107);
+    }
     const capture = fakeDeps(depsOpts);
     const client = new NodeClient({
       config: { entries: [entry], showName: 'node-host' },
@@ -496,7 +504,7 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
     nodeClients.push(client);
     void client.run();
     await client.waitForState('online');
-    const attach = await attachTalk(attachPipePath(entry, dir, label));
+    const attach = await attachTalk(attachPath);
     return { harness, client, capture, attach, entry, dir };
   }
 

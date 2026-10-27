@@ -150,8 +150,8 @@ Provider 以稳定 `providerId` 注册适配器，不以可修改的会话名、
 
 - [Claude Hooks](https://code.claude.com/docs/en/hooks.md)、[单次 settings](https://code.claude.com/docs/en/settings.md)。
 - [Codex Hooks](https://developers.openai.com/codex/hooks)、[配置参考](https://developers.openai.com/codex/config-reference)、[App Server](https://developers.openai.com/codex/app-server)。协议具有某个方法不等于能观察任意已有窗口。
-- [OpenCode V2 调研](../research/crosschat-opencode-integration-20261022.md)、[桌面窗口与 active 的区别](../research/opencode-desktop-runtime-20261023.md)。
-- [Harness 调研](../research/crosschat-deepseek-harness-integration-20261022.md)、[固定上游 Agent API](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/core/agent/README.md)。本轮重新读取该 README，确认 create/resume 与 agent 事件依据；这些不证明 UI 当前选择。
+- OpenCode V2、桌面窗口与 active 区别的调研材料归已交接的后续适配聊天，本次发布不纳入。
+- Harness 的[固定上游 Agent API](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/core/agent/README.md)。本轮重新读取该 README，确认 create/resume 与 agent 事件依据；这些不证明 UI 当前选择。其余调研材料归后续适配聊天。
 
 ## 非侵入式改名的可行性
 
