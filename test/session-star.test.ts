@@ -1244,6 +1244,21 @@ describe('018 批二：9b 降级告警（不只日志）', () => {
 // ---- 改名跟随（裁定 1） ------------------------------------------------------------------
 
 describe('018 批二：/rename 自动跟随（claude 扫描 + codex 名字回填）', () => {
+  it('publishes the CLI launcher endpoint and uses it again when releasing its selected session', async () => {
+    const sh = await startStarStar('sl-type');
+    await sh.aggregator();
+    sh.state.claude = [{ sessionId: 'selected-cli', name: 'selected' }];
+    const joiner = new StarJoiner({ deps: starJoinDeps(sh), side: 'claude', connects: ['sl-type'],
+      selectedSession: { sessionId: 'selected-cli', name: 'selected' }, rm: true });
+    try {
+      await joiner.begin();
+      await expect.poll(async () => (await fetchRosterFor(sh.baseDir, sh.entry))?.flatMap((machine) => machine.sessions ?? []), { timeout: 3000 }).toEqual([
+        expect.objectContaining({ sessionId: 'selected-cli', tool: 'claude', endpointType: 'cli' }),
+      ]);
+    } finally { await joiner.stop(); }
+    await expect.poll(async () => (await fetchRosterFor(sh.baseDir, sh.entry))?.flatMap((machine) => machine.sessions ?? []), { timeout: 3000 }).toEqual([]);
+  });
+
   it(
     'claude 改名→成员名跟随重播；codex 未命名成员→线程表名字回填',
     async () => {
@@ -1252,8 +1267,8 @@ describe('018 批二：/rename 自动跟随（claude 扫描 + codex 名字回填
       sh.state.claude = [{ sessionId: 'sess-1', name: 'boss' }];
       sh.state.codex = [{ id: CODEX_THREAD, name: null }];
       const pipe = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
-      expect((await pipe.send({ op: 'attach', sessionId: 'sess-1', name: 'boss' })).ok).toBe(true);
-      expect((await pipe.send({ op: 'attach', sessionId: CODEX_THREAD })).ok).toBe(true); // codex 无名入星（id 先行）
+      expect((await pipe.send({ op: 'attach', sessionId: 'sess-1', name: 'boss', tool: 'claude', endpointType: 'cli' })).ok).toBe(true);
+      expect((await pipe.send({ op: 'attach', sessionId: CODEX_THREAD, tool: 'codex' })).ok).toBe(true); // legacy unknown endpoint remains unknown
       const sender = await senderOn(sh.harness.url, key('s'));
       const send3 = async (id: string, target: string): Promise<Frame> => {
         sender.send({ op: 'send', id, targetMachine: target, body: 'x' });
