@@ -97,3 +97,33 @@ describe('atomic exact member removal', () => {
     expect(loadBrokerFile(registryFile).stars[0].roster).toHaveLength(1);
   });
 });
+
+describe('endpoint domain exact member removal', () => {
+  const typedTarget = (endpointType: string) => ({ ...target, tool: 'codex', endpointType });
+  const typedRow = (endpointType: string) => Object.assign(row(target.sessionId, `same-${endpointType}`, 'codex'), { endpointType });
+
+  it('does not remove a CLI member when the requested Desktop endpoint is absent', async () => {
+    const { requestMemberRemoveExact } = await import('../src/serve/via-tcp.js');
+    const { connection, registryFile } = await fixture([typedRow('cli')]);
+    expect(await requestMemberRemoveExact(connection, typedTarget('desktop'), 1000)).toMatchObject({ ok: false, removed: false, code: 'TARGET_CHANGED' });
+    expect(loadBrokerFile(registryFile).stars[0].roster).toEqual([expect.objectContaining({ sessionId: target.sessionId, tool: 'codex', endpointType: 'cli' })]);
+  });
+
+  it('removes only the selected endpoint while preserving another endpoint with the same native ID', async () => {
+    const { requestMemberRemoveExact } = await import('../src/serve/via-tcp.js');
+    const { connection, registryFile } = await fixture([typedRow('cli'), typedRow('desktop')]);
+    expect(await requestMemberRemoveExact(connection, typedTarget('desktop'), 1000)).toMatchObject({ ok: true, removed: true });
+    expect(loadBrokerFile(registryFile).stars[0].roster).toEqual([expect.objectContaining({ sessionId: target.sessionId, tool: 'codex', endpointType: 'cli' })]);
+    expect(loadBrokerFile(registryFile).stars[1].roster).toHaveLength(1);
+  });
+
+  it('keeps an existing permanent member with unknown endpoint separate from a typed removal', async () => {
+    const { requestMemberRemoveExact } = await import('../src/serve/via-tcp.js');
+    const { connection, registryFile } = await fixture([row(target.sessionId, 'legacy-permanent', 'codex')]);
+    expect(await requestMemberRemoveExact(connection, typedTarget('cli'), 1000)).toMatchObject({ ok: false, removed: false, code: 'TARGET_CHANGED' });
+    const retained = loadBrokerFile(registryFile).stars[0].roster;
+    expect(retained).toEqual([expect.objectContaining({ sessionId: target.sessionId, tool: 'codex', name: 'legacy-permanent' })]);
+    expect(retained[0]).not.toHaveProperty('endpointType');
+    expect(retained[0].temporary).toBeUndefined();
+  });
+});
