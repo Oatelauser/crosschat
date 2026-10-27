@@ -82,6 +82,7 @@ import { parseDiscoveryRequest, parseDiscoveryResponse } from '../application/di
 import type { DiscoveryEndpoint, DiscoveryRequest, DiscoveryResponse } from '../application/discovery/model.js';
 import type { DiscoverQueryFrame, DiscoverResultFrame } from './protocol.js';
 import { NodeNameChanges } from './node-naming.js';
+import { SessionOperationRoutes } from './session-operations.js';
 
 /**
  * 默认端口 7260。IANA service-names-port-numbers 核对（2026-10-10 实查）：
@@ -280,6 +281,7 @@ const ADMIN_OP_MATRIX: Record<string, readonly ('member' | 'admin')[]> = {
 
 export class Broker {
   private readonly nodeNames: NodeNameChanges;
+  private readonly sessionOperations: SessionOperationRoutes;
   private readonly d: Required<Omit<BrokerDeps, 'port' | 'fileInbox' | 'scanStatus' | 'discover' | 'spawnLocalAggregator' | 'stopLocalAggregator'>> & {
     port?: number;
     fileInbox?: FileInbox;
@@ -317,6 +319,7 @@ export class Broker {
 
   constructor(deps: BrokerDeps) {
     this.nodeNames = new NodeNameChanges(Math.min(deps.resultTimeoutMs ?? 5_000, 5_000));
+    this.sessionOperations = new SessionOperationRoutes(Math.min(deps.resultTimeoutMs ?? 8_000, 8_000));
     this.d = {
       heartbeatMs: 30_000,
       pongTimeoutMs: 60_000,
@@ -760,6 +763,7 @@ export class Broker {
   /** 优雅退出：先停管理插座（不再受理台账写）再撤星状态、关连接、写终态。 */
   async stop(): Promise<void> {
     this.nodeNames.stop();
+    this.sessionOperations.stop();
     if (this.stopped) return;
     this.stopped = true;
     if (this.adminServer !== undefined) {
@@ -940,6 +944,7 @@ export class Broker {
   /** 关闭事件与明确撤权共用资源收尾；撤权不等待 socket close。 */
   private releaseSession(session: Session, error: { code: string; message: string }): void {
     this.nodeNames.disconnect(session.ws);
+    this.sessionOperations.disconnect(session.ws);
     this.sessions.delete(session);
     this.cancelDiscoveriesFor(session, error);
     if (session.connectTimer !== undefined) clearTimeout(session.connectTimer);
@@ -972,7 +977,7 @@ export class Broker {
           this.log(`node-down ${session.machineName ?? ''}(${session.machineId.slice(0, 8)})`);
           this.writeStatus('running');
           // 028：聚合器断连——该机在册条目全部转下线（顶换窗口里新连接已接管则跳过；
-          // 册位保留，聚合器回线后由常驻对账循环按本地验活复活）
+          // 册位保留；启动器当前声明重播或显式管理后恢复在线）
           if (star.online.get(midNorm) === undefined) this.setMachineOffline(star, midNorm);
         }
       }
@@ -1006,6 +1011,35 @@ export class Broker {
     if (frame.op === 'node-name-result') {
       if (session.machineId !== undefined && session.starId === frame.starId && normalizeMid(session.machineId) === frame.machineId
         && this.starOf(session)?.online.get(frame.machineId) === session) this.nodeNames.receive(session.ws, frame);
+      return;
+    }
+    if (frame.op === 'session-operation') {
+      const star = this.starOf(session);
+      const target = star?.online.get(frame.machineId);
+      const existing = star?.roster.find((entry) => entry.sessionId === frame.nativeId);
+      if (!star || star.starId !== frame.starId || !target || target.revoked
+        || (existing && (existing.machine !== frame.machineId || existing.tool !== frame.providerId))) {
+        this.send(session.ws, { op: 'session-operation-result', id: frame.id, starId: frame.starId, machineId: frame.machineId, providerId: frame.providerId, nativeId: frame.nativeId,
+          result: { kind: 'rejected', message: '星、节点连接或册位完整身份已变化；请刷新后重新选择。' } });
+        return;
+      }
+      this.sessionOperations.request(session.ws, target.ws, { ...frame, membership: existing
+        ? { temporary: existing.temporary === true, selectionOwned: existing.selectionOwned === true } : undefined }, (receipt) => {
+        if (receipt.result?.kind !== 'applied' || frame.request.kind !== 'apply') return receipt;
+        const actual = star.roster.find((entry) => entry.sessionId === frame.nativeId);
+        const declared = target.members?.get(frame.nativeId);
+        const confirmed = star.online.get(frame.machineId) === target && !target.revoked && actual?.machine === frame.machineId
+          && actual.tool === frame.providerId && declared?.tool === frame.providerId
+          && (frame.request.operation !== 'rename' || (actual.name === frame.request.name && declared.name === frame.request.name));
+        if (!confirmed || !this.persistRoster(star)) return { ...receipt, result: { kind: 'uncertain', message: '节点已执行，但星册持久化及当前路由尚未确认，请刷新核实。' } };
+        return { ...receipt, result: { kind: 'applied', message: frame.request.operation === 'rename' ? '原生名称及星内路由已确认更新。'
+          : actual.temporary === true ? '此会话已在星内；保留已有临时成员属性。' : '所选节点的精确会话已作为永久成员入星。' } };
+      });
+      return;
+    }
+    if (frame.op === 'session-operation-result') {
+      if (session.starId === frame.starId && session.machineId !== undefined && normalizeMid(session.machineId) === frame.machineId
+        && this.starOf(session)?.online.get(frame.machineId) === session) this.sessionOperations.receive(session.ws, frame);
       return;
     }
     if (frame.op === 'discover-query') {
@@ -1194,7 +1228,8 @@ export class Broker {
         online: true,
         ...(extendsName === undefined ? {} : { extendsName }),
         ...(extendsMachine === undefined || typeof decl.extends !== 'object' ? {} : { extendsMachine }),
-        ...(decl.temporary === true ? { temporary: true } : {}),
+        ...((existing === undefined ? decl.temporary : existing.temporary) === true ? { temporary: true } : {}),
+        ...(decl.selectionOwned === true ? { selectionOwned: true } : {}),
       };
       if (existing === undefined) {
         star.roster.push(next);
@@ -1202,12 +1237,12 @@ export class Broker {
       } else if (
         existing.name !== next.name || existing.tool !== next.tool || existing.online !== true ||
         existing.extendsName !== next.extendsName || existing.extendsMachine !== next.extendsMachine ||
-        existing.machineName !== next.machineName || existing.temporary !== next.temporary
+        existing.machineName !== next.machineName || existing.temporary !== next.temporary || existing.selectionOwned !== next.selectionOwned
       ) {
         star.roster[star.roster.indexOf(existing)] = next;
         changed = true;
       }
-      effective.push(name === undefined ? { ...decl, name: undefined } : decl);
+      effective.push({ ...decl, name, temporary: next.temporary });
     }
     // 下线：该机在册但未声明（死/退出）——册位保留，翻 offline（--rm 走 member-remove 删条）
     for (const entry of star.roster) {
@@ -1270,6 +1305,7 @@ export class Broker {
         ...(e.tool === undefined ? {} : { tool: e.tool }),
         ...(e.extendsName === undefined ? {} : { extends: e.extendsMachine === undefined ? e.extendsName : { machine: e.extendsMachine, name: e.extendsName } }),
         ...(e.temporary === true ? { temporary: true } : {}),
+        ...(e.selectionOwned === true ? { selectionOwned: true } : {}),
       }));
     const reply: MembersResultFrame = { op: 'members-result', members: slice };
     this.send(session.ws, reply);
@@ -1289,14 +1325,15 @@ export class Broker {
     // id 前缀（≥8 位 hex 形态，命令面 id8）→ 名字精确。首泳道命中即定。
     const lower = target.toLowerCase();
     const exact = star.roster.filter((e) => e.sessionId === target);
-    const hits =
+    const hits = frame.temporaryOnly === true ? exact.filter((entry) => entry.temporary === true
+      && session.machineId !== undefined && entry.machine === normalizeMid(session.machineId)) :
       exact.length > 0
         ? exact
         : target.length >= 8 && /^[0-9a-fA-F-]+$/.test(target)
           ? star.roster.filter((e) => e.sessionId.toLowerCase().startsWith(lower))
           : star.roster.filter((e) => e.name === target);
     const reply = (ok: boolean, removed: string[], error?: string): void => {
-      const res: MemberRemoveResultFrame = { op: 'member-remove-result', ok, removed, ...(error === undefined ? {} : { error }) };
+      const res: MemberRemoveResultFrame = { op: 'member-remove-result', ...(frame.id === undefined ? {} : { id: frame.id }), ok, removed, ...(error === undefined ? {} : { error }) };
       this.send(session.ws, res);
     };
     if (hits.length > 1) {
@@ -1311,6 +1348,7 @@ export class Broker {
       removed.push(entry.name ?? entry.sessionId.slice(0, 8));
       // 归属机聚合器在线则转发清本地表（否则其重播会把条目带回册——幂等无害但噪音）
       const owner = star.online.get(entry.machine);
+      owner?.members?.delete(entry.sessionId);
       if (owner !== undefined && owner !== session) this.send(owner.ws, { op: 'member-remove', target: entry.sessionId });
     }
     if (removed.length > 0) this.persistRoster(star);
@@ -1331,6 +1369,7 @@ export class Broker {
     }
     star.roster.splice(star.roster.indexOf(entry), 1);
     const owner = star.online.get(entry.machine);
+    owner?.members?.delete(entry.sessionId);
     if (owner !== undefined && owner !== session) this.send(owner.ws, { op: 'member-remove', target: entry.sessionId });
     if (!this.persistRoster(star)) {
       this.send(session.ws, { op: 'member-remove-exact-result', id: frame.id, ok: false, removed: true,
@@ -2178,7 +2217,7 @@ export class Broker {
       return {
         kind: 'error',
         code: ERR.SESSION_OFFLINE,
-        message: `成员 ${down.name ?? down.sessionId.slice(0, 8)} 已下线（册位保留）——等其 resume 上线（同 id 自动复活）或 --extend-session 接任；点对点直达其特定会话可用 id8 寻址（现也下线，上线即达）`,
+        message: `成员 ${down.name ?? down.sessionId.slice(0, 8)} 已下线（册位保留）——通过 crosschat 启动器 /resume 选择，或在 TUI 选择该会话入星；也可 --extend-session 接任；id8 寻址需该成员先上线`,
       };
     }
     return {

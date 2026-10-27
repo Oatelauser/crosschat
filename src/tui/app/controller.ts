@@ -1,6 +1,6 @@
 import type {
   TuiAction, TuiActionEntry, TuiActionRequest, TuiContext, TuiDetail, TuiFormField, TuiInput, TuiKey, TuiMode,
-  TuiOverlay, TuiPage, TuiResourceAdapter, TuiRoute, TuiRow, TuiSnapshot, TuiWorkspaceId, TuiPromptRequest,
+  TuiOverlay, TuiPage, TuiResourceAdapter, TuiRoute, TuiRow, TuiSnapshot, TuiWorkspaceId, TuiPromptRequest, TuiActionAvailability,
 } from '../model.js';
 import { createResourceRegistry } from '../resources/registry.js';
 import type { ResourceRegistry } from '../resources/registry.js';
@@ -146,6 +146,7 @@ export function createTuiController(options: TuiControllerOptions) {
   let readGeneration = 0;
   let activeRead: AbortController | undefined;
   let activeWatch: AbortController | undefined;
+  let actionRead: { owner: ListState; row: TuiRow; controller: AbortController; result?: Readonly<Record<string, TuiActionAvailability>> } | undefined;
   let watchOwner: ListState | undefined;
   let watchGeneration = 0;
   let snapshot: TuiSnapshot;
@@ -207,6 +208,12 @@ export function createTuiController(options: TuiControllerOptions) {
         ...(targetMode === 'list' ? own(row?.actionAvailability, action.id) : undefined),
       };
       let { reason, enabled } = availability;
+      if (targetMode === 'list' && enabled && action.dynamicAvailability) {
+        const current = actionRead?.owner === page && actionRead.row === row ? actionRead.result?.[action.id] : undefined;
+        enabled = current?.enabled === true;
+        reason = current?.reason ?? (current ? undefined : '正在核实所选会话的原生操作能力');
+        if (current?.nextStep) availability.nextStep = current.nextStep;
+      }
       const hasSelection = targetMode === 'detail' ? detail?.fields[detail.selectedIndex] !== undefined : row !== undefined;
       if (enabled && action.selectionPolicy === 'required' && !hasSelection) { enabled = false; reason = '请先选择一项'; }
       if (action.kind === 'copy' && !options.clipboard) { enabled = false; reason = '当前终端未提供剪贴板'; }
@@ -235,6 +242,7 @@ export function createTuiController(options: TuiControllerOptions) {
     if (mode === 'list' && page.canFollow && page.following) page.selectedId = rows.at(-1)?.id;
     let selectedIndex = rows.findIndex((row) => row.id === page.selectedId);
     if (selectedIndex < 0) { selectedIndex = rows.length ? 0 : -1; page.selectedId = rows[0]?.id; }
+    syncActionRead();
     page.scrollOffset = Math.max(0, Math.min(page.scrollOffset, Math.max(0, rows.length - pageSize())));
     if (selectedIndex >= 0 && selectedIndex < page.scrollOffset) page.scrollOffset = selectedIndex;
     if (selectedIndex >= page.scrollOffset + pageSize()) page.scrollOffset = selectedIndex - pageSize() + 1;
@@ -249,6 +257,24 @@ export function createTuiController(options: TuiControllerOptions) {
       resource: pageResource(), result,
     };
     for (const listener of listeners) listener();
+  }
+  function syncActionRead() {
+    const row = selectedRow();
+    const describe = options.adapters[page.route.resourceId]?.describeActions;
+    if (mode !== 'list' || loading || !row || !describe) { actionRead?.controller.abort(); actionRead = undefined; return; }
+    if (actionRead?.owner === page && actionRead.row === row) return;
+    actionRead?.controller.abort();
+    const read = { owner: page, row, controller: new AbortController(), result: undefined as Readonly<Record<string, TuiActionAvailability>> | undefined };
+    const context = currentContext();
+    actionRead = read;
+    void Promise.resolve().then(() => { read.controller.signal.throwIfAborted(); return describe({ context, route: copyRoute(read.owner.route), target: row, signal: read.controller.signal }); })
+      .then((result) => {
+        if (disposed || read.controller.signal.aborted || actionRead !== read) return;
+        read.result = result; publish();
+      }, () => {
+        if (disposed || read.controller.signal.aborted || actionRead !== read) return;
+        read.result = Object.fromEntries(actionsFor('list').filter((action) => action.dynamicAvailability).map((action) => [action.id, { enabled: false, reason: '原生操作能力暂不可核实，请刷新。' }])); publish();
+      });
   }
   function applyPage(next: TuiPage) {
     const base = options.registry.resolve(page.route.resourceId);
@@ -1033,7 +1059,7 @@ export function createTuiController(options: TuiControllerOptions) {
     },
     refresh,
     prompt,
-    dispose: () => { if (disposed) return; promptFinish?.(null); options.onActiveContext?.(null); stopWatch(); cancelRead(false); cancelWork(); formController?.abort(); formGeneration++; clearResult(); if (snapshot.result) snapshot = { ...snapshot, result: undefined, mode: 'list' }; disposed = true; listeners.clear(); },
+    dispose: () => { if (disposed) return; actionRead?.controller.abort(); actionRead = undefined; promptFinish?.(null); options.onActiveContext?.(null); stopWatch(); cancelRead(false); cancelWork(); formController?.abort(); formGeneration++; clearResult(); if (snapshot.result) snapshot = { ...snapshot, result: undefined, mode: 'list' }; disposed = true; listeners.clear(); },
   };
 }
 

@@ -64,7 +64,7 @@ export function createCodexSessionReader(options: CodexReaderOptions = {}): Sess
         return {
           items: page.data.map((thread) => {
             const ref = { contextId: request.contextId, providerId: 'codex', nativeId: thread.id };
-            return { ref, key: sessionKey(ref), name: thread.name, rawStatus: thread.rawStatus, capabilities, attributes: thread.attributes };
+            return { ref, key: sessionKey(ref), name: thread.name, rawStatus: thread.rawStatus, capabilities, attributes: { ...thread.attributes, transport: 'cli' } };
           }),
           nextCursor: page.nextCursor,
           completeness: partial || page.nextCursor !== null ? 'partial' : 'complete', observedAt: now(),

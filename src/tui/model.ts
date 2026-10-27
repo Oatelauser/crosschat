@@ -43,6 +43,8 @@ export interface TuiAction {
   ownerResourceId: string;
   selectionPolicy: 'required' | 'optional' | 'none';
   capability?: string;
+  /** Requires the selected row's fresh read-only action description before opening a form. */
+  dynamicAvailability?: boolean;
   mutation: boolean;
   kind: 'detail' | 'copy' | 'navigate' | 'form' | 'command' | 'filter' | 'route-choice' | 'follow';
   filterId?: string;
@@ -104,6 +106,8 @@ export interface TuiResourceAdapter {
   read(request: TuiReadRequest): Promise<TuiPage>;
   /** Owns its polling/IO until signal aborts; publishes complete bounded snapshots. */
   watch?(request: TuiReadRequest, publish: (page: TuiPage) => void): Promise<void>;
+  /** Read-only per-selection capabilities. Never shares confirmation state or writes. */
+  describeActions?(request: TuiReadRequest & { target: TuiRow }): Promise<Readonly<Record<string, TuiActionAvailability>>>;
   checkAction?(request: TuiActionRequest): Promise<TuiActionAvailability>;
   mutate?(request: TuiActionRequest): Promise<TuiMutationResult>;
 }

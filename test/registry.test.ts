@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
   findByExactName,
+  defaultClaudeSessionsDir,
   listClaudeSessions,
   type ClaudeSessionEntry,
 } from '../src/claude/registry.js';
@@ -58,6 +59,11 @@ writeEntry('1005.json', JSON.stringify({ pid: 1005, kind: 'interactive' }));
 writeEntry('1006.key', '{"peerToken":"x"}'); // key files are not registry entries
 
 describe('listClaudeSessions', () => {
+  it('resolves the native profile directory without falling back to another profile', () => {
+    expect(defaultClaudeSessionsDir({ CLAUDE_CONFIG_DIR: join(tmp, 'other-profile') }, tmp)).toBe(join(tmp, 'other-profile', 'sessions'));
+    expect(defaultClaudeSessionsDir({}, tmp)).toBe(join(tmp, '.claude', 'sessions'));
+  });
+
   it('keeps only routable kinds with live processes and counts malformed entries', () => {
     const scan = listClaudeSessions(tmp);
     expect(scan.malformed).toBe(2);

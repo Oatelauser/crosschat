@@ -3,13 +3,17 @@ import process from 'node:process';
 import { resolveCodexExecutable } from '../codex/transport.js';
 import { splitLauncherKnobs, validateLauncherKnob } from '../limits.js';
 import { otherIdentityKeys, stripOtherFamilies } from '../identity.js';
-import { realStarJoinDeps, splitStarLauncherArgs, StarJoinDeps, StarJoiner } from './session-star.js';
+import { realStarJoinDeps, reportLauncherFailure, splitStarLauncherArgs, createStarSelectionFollower } from './session-star.js';
+import type { StarJoinDeps } from './session-star.js';
+import { createCodexSessionBinding } from '../codex/session-events.js';
+import type { CodexSessionBindingFactory } from '../codex/session-events.js';
+import type { LauncherSessionBinding } from '../application/session-selection.js';
 
 /**
  * `crosschat codex [args...]`（票A 第五单）：与 crosschat claude 成对的
  * "crosschat 增强启动器"。与 claude 侧的必要性差异：codex 接收走原生
  * daemon，**无需注入任何 codex 设置**——本命令的存在意义是旋钮透传与身份
- * 清洗两个会话面增强；不管理 daemon 生命周期（原生的事）。
+ * 清洗两个会话面增强；--connect 只在已有原生组件同版本时启动 native daemon。
  *
  * 机制镜像 claude-wrapper：--max-body-kb / --max-turn 剥离、正整数快错、
  * 写进子进程环境变量；其余参数（含子命令 resume、--profile 等）一个不解析、
@@ -30,6 +34,7 @@ export interface CodexWrapperDeps {
   spawnInherit(exe: string, args: readonly string[], env?: NodeJS.ProcessEnv): Promise<number>;
   /** 018 批二：入星腿依赖（--connect 在场时使用）；缺省 realStarJoinDeps()。 */
   star?: StarJoinDeps;
+  createSessionBinding?: CodexSessionBindingFactory;
 }
 
 export function defaultCodexWrapperDeps(): CodexWrapperDeps {
@@ -67,21 +72,24 @@ export async function runCodexWrapper(
           },
           'codex',
         );
-  // 无 --settings 类注入：codex 接收靠原生 daemon，参数全部原样转发。
-  // 入星腿与 claude 同构：spawn 前快照、守连接、退出 detach；失败只出一行 stderr。
+  // --connect 使用本窗口的原生请求通道跟随选择；其余入口保持原生参数。
   if (star.connects.length > 0) {
-    const joiner = new StarJoiner({
-      deps: deps.star ?? realStarJoinDeps(),
+    const starDeps = deps.star ?? realStarJoinDeps();
+    const follower = createStarSelectionFollower({
+      deps: starDeps,
       side: 'codex',
       connects: star.connects,
       ...(star.extendSession === undefined ? {} : { extendSession: star.extendSession }),
       ...(star.rm === true ? { rm: true } : {}),
     });
-    await joiner.begin();
+    const exe = deps.resolveExe();
+    let binding: LauncherSessionBinding | undefined;
     try {
-      return await deps.spawnInherit(deps.resolveExe(), passthrough, env);
+      try { binding = await (deps.createSessionBinding ?? createCodexSessionBinding)({ exe, args: passthrough, env: env ?? parentEnv, onSelection: (event) => follower.select(event) }); }
+      catch (error) { reportLauncherFailure(starDeps, error); }
+      return await deps.spawnInherit(exe, binding?.args ?? passthrough, binding?.env ?? env);
     } finally {
-      await joiner.stop();
+      try { await binding?.close(); } finally { await follower.close(); }
     }
   }
   return deps.spawnInherit(deps.resolveExe(), passthrough, env);

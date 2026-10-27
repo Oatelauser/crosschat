@@ -14,7 +14,7 @@ import { createTcpApplication } from '../application/tcp/index.js';
 import { createTcpManagement } from '../application/tcp/management.js';
 import { createTcpConfiguration } from '../application/tcp/configuration.js';
 import { queryManagedFiles } from '../application/queries/files.js';
-import type { TuiActionRequest, TuiReadRequest, TuiResource, TuiResourceAdapter } from './model.js';
+import type { TuiActionRequest, TuiReadRequest, TuiResource, TuiResourceAdapter, TuiPage, TuiRow } from './model.js';
 import { contextsResource } from './resources/contexts.js';
 import { defaultResources } from './resources/registry.js';
 import { createSessionsResource } from './resources/sessions.js';
@@ -48,6 +48,14 @@ function byContext(adapters: Readonly<Record<string, TuiResourceAdapter>>): TuiR
       const adapter = select(request);
       return adapter ? adapter.read(request) : { rows: [], completeness: 'unavailable', notice: '此连接没有提供当前资源；返回 :ctx 选择支持的连接。' };
     },
+    ...(Object.values(adapters).some((adapter) => adapter.describeActions) ? { async describeActions(request: TuiReadRequest & { target: TuiRow }) {
+      return select(request)?.describeActions?.(request) ?? {};
+    } } : {}),
+    ...(Object.values(adapters).some((adapter) => adapter.watch) ? { async watch(request: TuiReadRequest, publish: (page: TuiPage) => void) {
+      const observe = select(request)?.watch;
+      if (!observe) throw new Error('此连接未提供当前资源的观察入口。');
+      return observe(request, publish);
+    } } : {}),
     ...(Object.values(adapters).some((adapter) => adapter.checkAction) ? { async checkAction(request: TuiActionRequest) {
       const adapter = select(request);
       return adapter?.checkAction ? adapter.checkAction(request) : { enabled: false, reason: '此连接没有提供所选操作。', nextStep: '返回操作所属的本机资源。' };
@@ -80,6 +88,8 @@ export function createDefaultResources(options: { home: string; isolatedHome: bo
   const sessionAdapter = (request: TuiReadRequest | TuiActionRequest) => request.context?.kind === 'local' && request.route?.query?.starId !== undefined ? tcpResources.sessions.adapter : ordinarySessions;
   const allSessions: TuiResourceAdapter = {
     read: (request) => sessionAdapter(request).read(request),
+    async describeActions(request) { return sessionAdapter(request).describeActions?.(request) ?? {}; },
+    async watch(request, publish) { const observe = sessionAdapter(request).watch; if (!observe) throw new Error('当前连接未提供会话观察。'); return observe(request, publish); },
     async checkAction(request) { return sessionAdapter(request).checkAction?.(request) ?? { enabled: false, reason: '当前连接未提供此会话操作。' }; },
     async mutate(request) { const apply = sessionAdapter(request).mutate; if (!apply) throw new Error('当前连接未提供此会话操作。'); return apply(request); },
   };

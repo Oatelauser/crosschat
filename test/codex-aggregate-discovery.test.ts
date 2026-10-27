@@ -45,6 +45,7 @@ describe('read-only Desktop and CLI aggregate discovery', () => {
     do {
       const page = await reader.list({ contextId: 'local', cursor, limit: 1 });
       ids.push(...page.items.map((item) => item.ref.nativeId));
+      for (const item of page.items) expect(item.attributes.transport).toBe(item.ref.nativeId === 'cli-only' ? 'cli' : 'desktop');
       expect(page.observedAt).toBe(12);
       expect(page.errors).toEqual([]);
       if (page.nextCursor === null) expect(page.completeness).toBe('complete');

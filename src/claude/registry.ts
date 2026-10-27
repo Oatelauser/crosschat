@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import process from 'node:process';
 import { MultichatError } from '../errors.js';
 import { isProcessAlive } from '../platform/process-inspector.js';
 
@@ -27,8 +28,8 @@ export interface ClaudeRegistryScan {
   malformed: number;
 }
 
-export function defaultClaudeSessionsDir(): string {
-  return join(homedir(), '.claude', 'sessions');
+export function defaultClaudeSessionsDir(env: NodeJS.ProcessEnv = process.env, home = homedir()): string {
+  return join(env.CLAUDE_CONFIG_DIR || join(home, '.claude'), 'sessions');
 }
 
 export function parseEntry(text: string): ClaudeSessionEntry | undefined {
