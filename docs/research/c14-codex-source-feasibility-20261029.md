@@ -1,16 +1,16 @@
 # C14-W01：Codex CLI/Desktop 来源关联可行性与最小探针
 
-2026-10-29（R1 返修版）。仓库 `D:/workspace/CC/multichat`，分支 `codex/core-refactor-pre-tui`。首轮基线 `3aac1c7489efca699d8e6a6dbe83e7aad1673c4c`，首轮提交 `68782c5`；R1 基线 `aa31ce08b42ac84b811003efa0975a2de556924d`（root 审计与原生采样）。本单只回答一个问题：**当前普通 shell 调用，能不能持续、准确地关联到实际执行它的 Codex CLI 或 Desktop 实例。**
+2026-10-29（R2 文档修订）。仓库 `D:/workspace/CC/multichat`，分支 `codex/core-refactor-pre-tui`。首轮基线 `3aac1c7489efca699d8e6a6dbe83e7aad1673c4c`、提交 `68782c5`；R1 基线 `aa31ce08b42ac84b811003efa0975a2de556924d`、提交 `c38a809`；R2 基线 `a8148ab51d5361ae822710672a42969d5f7e05d5`。本单只回答一个问题：**当前普通 shell 调用，能不能持续、准确地关联到实际执行它的 Codex CLI 或 Desktop 实例。**
 
-结论：**能判定"这个 shell 由哪个可执行文件派生、该文件长什么样"（候选入口），不能判定"这个 shell 一定来自 CLI 或 Desktop 入口"（已核实关联）。** 两者之间缺的是"本次调用 ↔ 执行实例"的独立证据，不是再采一次同样的环境变量。因此 `CODEX_SOURCE_ASSOCIATION_UNVERIFIED` 继续保留。
+结论：**能判定"这个 shell 由哪个可执行文件派生、该文件长什么样"（候选入口），不能判定"这个 shell 一定来自 CLI 或 Desktop 入口"（已核实关联）。** 两者之间缺的是"本次调用 ↔ 执行实例"的独立证据，不是再采一次同样的环境变量；客户端 token 到执行端环境的跨进程传递同样未证实。因此 `CODEX_SOURCE_ASSOCIATION_UNVERIFIED` 继续保留。
 
-本版修正首轮两处事实错误（默认环境过滤方向、候选形状当来源证明）和三处过强声称（实例指纹已核验、IPC 全面不可能、Linux 分支有界），并引用 root 的原生采样。**首轮报告与提交保留原样，不因返修改写。**
+本版修正首轮两处事实错误（默认环境过滤方向、候选形状当来源证明）和三处过强声称（实例指纹已核验、IPC 全面不可能、Linux 分支有界），R2 再修正一处（把 TUI 客户端 env 当成共享 owner 的执行 env）。**首轮报告与提交保留原样，不因返修改写。**
 
 ## 结论摘要
 
 | 路线 | 结论 | 证据等级 | 适用范围 | 主要失效条件 |
 |---|---|---|---|---|
-| A 受控 CLI 连接＋本次 call | 受限可行 | 源码确定 + 仓库实现已读，未做真实受控连接实测 | 仅 crosschat 自己经 `--connect` 成功建桥、且桥记录了 window→thread 的 CLI 窗口 | 桥回退原生启动；同 thread 被第二个 CLI/Desktop 打开；用户 `shell_environment_policy` 过滤掉桥凭据 |
+| A 受控 CLI 连接＋本次 call | 只证实到"窗口 token → 桥连接 → 选定 thread" | 源码确定 + 仓库实现已读，未做真实受控连接实测 | 桥能证明某个 thread 由哪个窗口选定；**不能**证明这个 shell 的执行环境带该 token | 桥回退原生启动；同 thread 被第二个 CLI/Desktop 打开；token 未跨连接到执行端 |
 | B 执行实例指纹＋进程链 | 本机 Desktop 正向可判，CLI 未采样；只能给候选 | 源码确定 + 拓扑原生验证 + root 两次 Desktop shell 原生采样 | 最近的 codex 进程形状可识别、且 pid 与创建时间齐全时 | 更近的未知 codex 执行体；共享 daemon 执行；执行体已退出；沙箱/EDR 拒绝读进程表；关键元数据缺失 |
 | C 逐调用原生 Hook | 只能补"本次调用"，补不了"哪个入口" | 源码确定（字段与环境构造），未实测 | 需要 `tool_use_id ↔ turn ↔ thread` 的逐调用登记 | Hook 未配置、迟到、或 fail-open；Hook 环境是会话快照，拿不到入口标识 |
 | D Desktop owner 对账 | 本次响应未暴露进程锚点 | 已原生验证一次 `initialize` 响应 | 无（当前观察内无法把 owner 绑到 OS 进程） | 需要更多 IPC/OS 侧观测；本单未研究私有接口 |
@@ -21,7 +21,7 @@
 
 ### 1.1 环境注入链（固定源码 `rust-v0.163.0`，commit `83086188ae0614bd882818ff1aa23f3194962012`）
 
-shell 的环境由 `populate_env(policy, thread_id)` 按序构造（`codex-rs/protocol/src/shell_environment.rs:105-175`）：
+shell 的环境由 `populate_env(policy, thread_id)` 按序构造（[`codex-rs/protocol/src/shell_environment.rs:105-175`](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/protocol/src/shell_environment.rs#L105-L175)）：
 
 1. 按 `inherit` 取初始集合（默认 `All`，第 113-132 行）；
 2. **默认排除**：仅当 `!policy.ignore_default_excludes` 时剔除 `*KEY*` / `*SECRET*` / `*TOKEN*`（第 138-146 行）；
@@ -31,9 +31,9 @@ shell 的环境由 `populate_env(policy, thread_id)` 按序构造（`codex-rs/pr
 6. 写入 `CODEX_THREAD_ID`（第 165-168 行）；
 7. 剔除不可继承变量（第 170-172 行）。
 
-**首轮在此处判反了方向。** `ignore_default_excludes` 在配置转换处默认 **true**（`codex-rs/config/src/shell_environment_policy.rs:136`：`toml.ignore_default_excludes.unwrap_or(true)`），即**默认不套用** KEY/SECRET/TOKEN 过滤；只有显式设为 `false` 才套用。root 审计同时确认 `protocol/src/config_types.rs` 的 `Default` 也是 true（该文件不在本机固定缓存中，我未直接核对）。由此：
+**首轮在此处判反了方向。** `ignore_default_excludes` 在配置转换处默认 **true**（[`codex-rs/config/src/shell_environment_policy.rs:136`](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/config/src/shell_environment_policy.rs#L136)：`toml.ignore_default_excludes.unwrap_or(true)`），即**默认不套用** KEY/SECRET/TOKEN 过滤；只有显式设为 `false` 才套用。root 审计同时确认 `protocol/src/config_types.rs` 的 `Default` 也是 true（该文件不在本机固定缓存中，我未直接核对）。由此：
 
-- 名字含 `TOKEN` 的变量（包括 crosschat 的 `CROSSCHAT_CODEX_WINDOW_TOKEN`）**默认可以到达 shell**。首轮"默认到不了、必须改用户配置"的否决撤回。
+- 执行端**已经存在**于 owner 进程环境里的变量，默认不会被这条规则删掉。这只说明"已有变量不被删"，**不能**推出"客户端进程里的 token 会出现在执行端"——两者是不同进程的环境。首轮"默认到不了、必须改用户配置"的否决撤回，但不能读成"桥凭据可达"。
 - 反过来也不能断言"一定可达"：用户若配置了 `exclude` / `include_only` / `ignore_default_excludes = false`，仍会被过滤；`include_only` 是第 5 步，**不能恢复**第 2/3 步已删的值；`set` 虽在第 4 步插入，仍可能被第 5 步 `include_only` 或第 7 步剔除。
 - 非 unified-exec 路径同样走这套策略：`codex-rs/core/src/exec_env.rs:32-37` 直接转调 `shell_environment::create_env`。
 
@@ -43,7 +43,7 @@ shell 的环境由 `populate_env(policy, thread_id)` 按序构造（`codex-rs/pr
 
 `PreToolUseRequest`（`codex-rs/hooks/src/events/pre_tool_use.rs`）字段是 `session_id / turn_id / subagent / cwd / transcript_path / model / permission_mode / tool_name / matcher_aliases / tool_use_id / tool_input`。**没有任何 CLI/Desktop 字段。**
 
-Hook 进程的环境不是继承来的：`command_runner.rs` 用 `env_clear()` 起进程，回放**会话快照**（`runtime.environment`）并过滤不可继承变量。会话快照是 `create_env` 的产物，因此按 1.1 的修正，**会话里有的变量（含桥凭据）默认也在快照里**——首轮"Hook 同样看不到被默认排除的 `*TOKEN*`"一句撤回。但这不改变结论：Hook 仍然拿不到"入口"标识，Hook 进程的祖先链与 shell 同源，多不出一个字节。
+Hook 进程的环境不是继承来的：`command_runner.rs` 用 `env_clear()` 起进程，回放**会话快照**（`runtime.environment`）并过滤不可继承变量。会话快照是 `create_env` 的产物，所以 owner 执行端环境里已有的变量默认会保留——首轮"Hook 同样看不到被默认排除的 `*TOKEN*`"一句撤回。但快照里有什么取决于 **owner 进程的环境**，与 TUI 客户端进程的 env 无关，**不能由此推出桥凭据在 Hook 环境里**。Hook 仍然拿不到"入口"标识，Hook 进程的祖先链与 shell 同源，多不出一个字节。
 
 Hook 的价值在别处：它是唯一能给出 `tool_use_id ↔ turn_id ↔ session_id` 逐调用绑定的原生面，且这些 ID 不是模型能编的。代价是可选配置，且失败可能是 `FailedContinue`（登记没成功但命令照跑）。
 
@@ -69,26 +69,20 @@ Hook 的价值在别处：它是唯一能给出 `tool_use_id ↔ turn_id ↔ ses
 
 ## 二、四条路线
 
-### A. 受控 CLI 连接＋本次 call —— 受限可行（按 1.1 修正后重新评估）
+### A. 受控 CLI 连接＋本次 call —— 只证实到桥侧
 
-crosschat 的 `--connect` 路径会起一个本地 WS 桥（`127.0.0.1:0`、Bearer 校验用 `timingSafeEqual`），在 `src/codex/session-events.ts:106-107` 给 TUI 传 `--remote <url> --remote-auth-token-env CROSSCHAT_CODEX_WINDOW_TOKEN`，并把 `CROSSCHAT_CODEX_WINDOW_TOKEN: token` **只写进被 spawn 的 TUI 子进程 env**（不写全局 `process.env`），同时拦截 `thread/start|resume|fork|turn/start` 的响应 → 桥知道"这个窗口选中了哪个 thread"。
+crosschat 的 `--connect` 路径会起一个本地 WS 桥（`127.0.0.1:0`、Bearer 校验用 `timingSafeEqual`）。代码顺序很关键（`src/codex/session-events.ts:23-34`）：
 
-按修正后的默认策略，这个 token 会随 TUI 的 `create_env` 进入它 spawn 的 shell。于是出现一条首轮被错误否决的接法：
+1. 先 `open()` 打开**共享 owner**（失败则 `startInstalledCodexOwner` 再开一次）；
+2. **之后**才生成每窗口 token（`randomBytes(32)`）；
+3. `session-events.ts:106-107` 把 `--remote <url> --remote-auth-token-env CROSSCHAT_CODEX_WINDOW_TOKEN` 与 `CROSSCHAT_CODEX_WINDOW_TOKEN: token` **只交给被 spawn 的 TUI 客户端子进程**；
+4. 桥拦截 `thread/start|resume|fork|turn/start` 的响应，得到 window→thread。
 
-1. shell 读到 `CROSSCHAT_CODEX_WINDOW_TOKEN`（每窗口一枚，只存在于该 TUI 进程树）；
-2. 桥的记录证明该 token 对应哪个窗口、该窗口选中了哪个 thread；
-3. shell 的 `CODEX_THREAD_ID` 与该窗口的 thread 一致。
+因此已证实的链条只有：**窗口 token → 桥连接（认证）→ 选定 thread**。桥对 owner 是认证与透明转发，**不是向 owner 注入 shell/Hook 环境**；token 在 owner 打开之后才生成，owner 的进程环境里没有它。
 
-这比"凭据必须改配置才能到 shell"的原判断强得多：token 是**每窗口唯一的秘密**，普通终端里的 `codex` 不会有它。但它仍然只是**下降关系**证据，不是"本次调用"证据：
+**窗口 token → 共享 owner 的 shell/Hook 环境：尚未证实，且不能由客户端 env 推出。** owner 自己派生 shell（app-server 执行路径）时，那个 shell 继承的是 owner 的环境，不是 TUI 客户端的环境。显式传递（例如让 owner 接收一个 per-window 标识并注入 shell 环境）是否可行，仍须研究其 API 与生命周期；本单不宣称不可能，也不宣称可行。
 
-- token 可继承，TUI 派生的**所有**后代都能读到，无法区分是哪一次 tool call；
-- 用户若配置了 `exclude` / `include_only` / `ignore_default_excludes = false`，token 可能被过滤——可达是默认行为，不是保证；
-- 同一 thread 被第二个 CLI/Desktop 打开后，桥的 window→thread 记录变成"曾"而不是"是"；
-- `reportLauncherFailure` 之后回退原生启动（没有桥、没有 token）；
-- 完全不覆盖用户自己在终端敲 `codex` 的 shell；
-- 代价：一个 bearer secret 出现在整棵 shell 子树的 env 里（相对现状的增量暴露是"shell 及其后代"）。
-
-**证据等级：源码确定 + 仓库实现已读；未做真实受控连接实测。** 需要一次受控 `--connect` 的 CLI shell 采样才能把"token 确实到达 shell"从源码推断升为实测。
+失效与未测：`reportLauncherFailure` 后回退原生启动（无桥）；同 thread 被第二个 CLI/Desktop 打开后窗口记录变成"曾"；`turn/steer` 不产生新窗口记录；用户自己的 `codex` shell 完全不覆盖。**证据等级：源码确定 + 仓库实现已读；未做真实受控连接实测。** 即使将来在 TUI 客户端 env 里观察到 token，也不等于执行端 shell 有 token——要证明后者，必须在 owner 派生的 shell 里直接观察。
 
 ### B. 执行实例指纹＋进程链 —— 本机 Desktop 正向可判，CLI 未采样；只能给候选
 
@@ -116,7 +110,7 @@ crosschat 的 `--connect` 路径会起一个本地 WS 桥（`127.0.0.1:0`、Bear
 
 见 1.2。它能给的：`tool_use_id`、`turn_id`、`session_id`、`cwd`、`transcript_path`。它给不了的：入口类型（没有字段，环境是会话快照，祖先链与 shell 同源）。
 
-因此 Hook 不是"来源"路线的替代，而是**"本次调用"的补强**。按 1.1 修正，Hook 的会话快照**可以**携带桥凭据——所以 A + C 组合存在一条比首轮判断更现实的路径：Hook 侧拿到 `tool_use_id`，shell 侧拿到 token 与 `CODEX_TOOL_CALL_ID`，两边是否同一个 call 仍需实测（见第五节）。它要求用户配 hooks，属于需要用户决定的事项；且 fail-open 意味着"没收到 Hook"不能当"没执行"。
+因此 Hook 不是"来源"路线的替代，而是**"本次调用"的补强**。Hook 的会话快照来自 owner 执行端，与 TUI 客户端 env 无关，**不能假设快照里有桥凭据**。它要求用户配 hooks，属于需要用户决定的事项；且 fail-open 意味着"没收到 Hook"不能当"没执行"。Hook 侧 `tool_use_id` 与 shell 侧 `CODEX_TOOL_CALL_ID` 是否同一个 call，未实测——这是当前最接近"独立关联"的候选（见第五节）。
 
 ### D. Desktop owner 对账 —— 本次响应未暴露进程锚点
 
@@ -155,28 +149,32 @@ root 原生采样（原始脱敏记录：`docs/development/evidence/c14-worker-2
 
 **这批变量是闭源 Desktop 侧的实现细节，不是契约**：它们可继承、可伪造，只能当旁证，不能当来源证据；本单不据此接产品 Provider。
 
+R1 探针返修（提交 `c38a809`）由 root 独立复跑：定向 `npx vitest run test/codex-caller-source-probe.test.ts` 为 14/14；完整 `npm run check` 在基线 `c38a809` 上为 2447 passed / 11 原有 skipped，229 files passed / 3 skipped。R2 只改本报告，未重跑这些检查。
+
 本机负样本（`probe-negative-control.json`）：非 Codex shell 里 `verdict: unknown / no-codex-ancestor`，`env: []`。
 
 未实测：CLI shell 正向采样；共享 daemon；Hook 实际触发；真实受控 `--connect` 的窗口记录；IPC owner 对账；第二 thread；同 thread 双开；Linux/macOS（本探针明确不支持）。
 
 ## 五、下一单建议
 
-**前提**：本单不批准把候选形状直接移植进生产 Provider。下一单也必须先回答"本次 call ↔ 执行实例"的独立证据问题，而不是把形状与同一环境的 thread 相交就升 `verified`。
+**前提**：本单不批准把候选形状直接移植进生产 Provider。下一单也必须先回答"本次 call ↔ 执行实例"的独立证据问题，而不是把形状与同一环境的 thread 相交就升为已识别来源。
+
+**本单与下一单的边界**：当前可实施的只有**隔离诊断/证据采集**——只输出事实（祖先链、形状、元数据是否齐全、环境摘要），最多标注 `candidate`，不返回 `identified`，不接 `providers.ts`，不触发 `service.ts` 对 `identified + sourceTool` 的自动补分类。生产接线保持**未批准**。
 
 **仍然缺什么（按可验证性排序）**：
 
-1. **执行体侧与 shell 侧是否记录同一个 call 标识。** shell 侧的 `CODEX_TOOL_CALL_ID` 与 Hook 侧的 `tool_use_id` 是否相等，未实测。若相等，就是"执行体自己的登记"对"shell 环境"的交叉验证，这才算独立；若不等，需要别的手段。
-2. **owner ↔ OS 进程绑定。** 当前 `initialize` 响应没有锚点；需要更多 IPC/OS 观测，未核实。
-3. **daemon 场景。** 同 daemon 多窗口的 shell 链不可分，需要 daemon 运行态实测。
-4. **候选形状的边界规则**（本单已给出实现与反例）：逐层扫描、遇到未知 codex 进程即停、元数据不全即 `unknown`。
+1. **本次 call ↔ 实际执行实例。** 当前所有"thread 一致"都来自同一个环境，不是独立证据。最接近的候选是 Hook 侧 `tool_use_id` 与 shell 侧 `CODEX_TOOL_CALL_ID` 是否相等——未实测。只有拿到"执行体自己登记的 call 标识"与"shell 环境里的标识"相交，才算独立。
+2. **执行实例 ↔ 入口（CLI/Desktop）。** 进程形状只说明安装布局；Desktop 侧还缺 owner↔OS 进程绑定（`initialize` 响应无锚点），CLI 侧还缺正向采样。
+3. **共享 daemon 场景。** 同 daemon 多窗口的 shell 链不可分，需要 daemon 运行态实测。
+4. **A 路线的跨进程传递。** 窗口 token 在 TUI 客户端 env 里，owner 派生 shell 时继承的是 owner 环境；显式传递是否可行需研究 owner 的 API 与生命周期。
 
-**候选实现**（下一单，需 root 批准后才动 `src/**`）：
+**因此下一单（需 root 批准）**：
 
-- 新增 `src/codex/process-ancestry.ts`：移植 `parseProcessTable` / `traceAncestry` / `classifyEntry`，保持"只报事实、失败即 `unknown`"，Windows 走 `Get-CimInstance`，其他平台 `unavailable`（不猜）。
-- 改 `src/application/caller-source/providers.ts` 的 codex 分支：只有 ①最近 codex 进程是已知执行体形状且父形状匹配；②实例元数据齐全（pid+创建时间+路径摘要）；③`CODEX_THREAD_ID` 与本次调用使用的 thread 一致；④（A 路线）桥凭据/窗口记录一致，才返回 `identified` + `scope: 'instance'`；否则原样 `unverified`，理由区分 `no-codex-ancestor` / `unrecognized-codex-executor` / `desktop-bundle-without-app-parent` / `npm-executor-without-node-parent` / `incomplete-instance-metadata` / `executor-gone` / `table-unavailable` / `platform-unsupported`。
-- 不改 `service.ts` 门禁、不改确认状态机；`scope: 'instance'` 的既有语义直接复用。
-- 验收反例：更近未知执行体 → `unknown`；`createdAt=0` → `unknown`；Desktop 里起嵌套 CLI → CLI；同 daemon 两窗口 → `unknown`；执行体退出后补采 → `unknown`；进程表读不到 → `unknown` 且不抛异常；非 Windows → `unavailable`。
-- **需要用户决定**：是否接受"来源判定依赖本机进程表"；是否推进 route C（需要配 hooks）；是否把 route A 的桥凭据接进判定（凭据会出现在 shell 子树的 env 里）。
+- 允许：新增只读证据采集器（可把本单的 `parseProcessTable` / `traceAncestry` / `classifyEntry` 移植到 `src/codex/process-ancestry.ts`，或先留在 `scripts/`），输出 `candidate` 与理由码，不参与任何判定。
+- 需要先完成的验证：①Hook `tool_use_id` ↔ `CODEX_TOOL_CALL_ID` 实测；②owner↔pid 绑定或等价的独立锚点；③daemon 运行态。
+- **不批准**：在①②③完成前，任何"形状 + 元数据 + thread + 窗口凭据即返回 `identified`"的 Provider 配方。`service.ts` 会对 `identified + sourceTool` 自动补分类，所以只删掉 "verified" 一词并不能防止误用。
+- 保留的边界规则（仅用于诊断输出）：逐层扫描、遇到未知 codex 进程即停、元数据不全即 `unknown`。
+- **需要用户决定**：是否接受"来源判定依赖本机进程表"；是否推进 route C（需要配 hooks）；是否值得研究 A 路线的显式跨进程传递（需要 owner 侧 API，成本未评估）。
 
 ## 六、探针（研究工具，不接产品路径）
 
@@ -206,12 +204,21 @@ npx vitest run test/codex-caller-source-probe.test.ts
 
 ## 九、精确源码定位
 
+固定源码一律指 commit [`83086188ae0614bd882818ff1aa23f3194962012`](https://github.com/openai/codex/tree/83086188ae0614bd882818ff1aa23f3194962012)（`rust-v0.163.0`）。
+
 | 事实 | 位置 |
 |---|---|
-| 默认排除仅在 `ignore_default_excludes=false` 时套用 | `codex-rs/protocol/src/shell_environment.rs:138-146` |
-| `ignore_default_excludes` 配置转换默认 true | `codex-rs/config/src/shell_environment_policy.rs:136` |
-| `set` 在过滤之后、`include_only` 之前 | `codex-rs/protocol/src/shell_environment.rs:153-163` |
-| `CODEX_TOOL_CALL_ID` 唯一注入点 | `codex-rs/core/src/unified_exec/process_manager.rs:1478` |
-| 非 unified-exec 路径复用同一策略 | `codex-rs/core/src/exec_env.rs:32-37` |
-| Hook 无入口字段 | `codex-rs/hooks/src/events/pre_tool_use.rs` |
-| Hook 环境为会话快照 | `codex-rs/hooks/src/engine/command_runner.rs` |
+| 默认排除仅在 `ignore_default_excludes=false` 时套用 | [`codex-rs/protocol/src/shell_environment.rs#L138-L146`](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/protocol/src/shell_environment.rs#L138-L146) |
+| `ignore_default_excludes` 配置转换默认 true | [`codex-rs/config/src/shell_environment_policy.rs#L136`](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/config/src/shell_environment_policy.rs#L136) |
+| `set` 在过滤之后、`include_only` 之前 | [`codex-rs/protocol/src/shell_environment.rs#L153-L163`](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/protocol/src/shell_environment.rs#L153-L163) |
+| `CODEX_TOOL_CALL_ID` 唯一注入点 | [`codex-rs/core/src/unified_exec/process_manager.rs#L1478`](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/core/src/unified_exec/process_manager.rs#L1478) |
+| 非 unified-exec 路径复用同一策略 | [`codex-rs/core/src/exec_env.rs#L32-L37`](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/core/src/exec_env.rs#L32-L37) |
+| Hook 无入口字段 | [`codex-rs/hooks/src/events/pre_tool_use.rs`](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/hooks/src/events/pre_tool_use.rs) |
+| Hook 环境为会话快照 | [`codex-rs/hooks/src/engine/command_runner.rs`](https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/hooks/src/engine/command_runner.rs) |
+
+本仓库实现（当前分支 `codex/core-refactor-pre-tui`）：
+
+| 事实 | 位置 |
+|---|---|
+| 先开共享 owner、后生成窗口 token | `src/codex/session-events.ts:23-34` |
+| token 只写入 TUI 客户端子进程 env | `src/codex/session-events.ts:106-107` |
