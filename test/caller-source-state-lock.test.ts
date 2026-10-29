@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import process from 'node:process';
 import { afterEach, describe, expect, it } from 'vitest';
 import ts from 'typescript';
-import { withSourceStateLock } from '../src/application/caller-source/state-lock.js';
+import { withStateLock } from '../src/state-lock.js';
 import { sourceStateDirectory } from './helpers/caller-source-directory.js';
 
 const directories: string[] = [];
@@ -16,26 +16,26 @@ async function directory(): Promise<string> {
   return result;
 }
 
-describe('caller source state OS mutex', () => {
+describe('shared state OS mutex', () => {
   it('never steals a live lock and releases it after an operation fails', async () => {
     const root = await directory();
-    await expect(withSourceStateLock(root, 'same-record', async () => {
-      expect(await withSourceStateLock(join(root, '.'), 'same-record', async () => 'must not run', 20)).toEqual({ acquired: false });
+    await expect(withStateLock(root, 'same-record', async () => {
+      expect(await withStateLock(join(root, '.'), 'same-record', async () => 'must not run', 20)).toEqual({ acquired: false });
       throw new Error('fixture-operation-failure');
     })).rejects.toThrow('fixture-operation-failure');
-    expect(await withSourceStateLock(root, 'same-record', async () => 'recovered', 100))
+    expect(await withStateLock(root, 'same-record', async () => 'recovered', 100))
       .toEqual({ acquired: true, value: 'recovered' });
   });
 
   it('automatically releases a real child process lock after that process is killed', async () => {
     const root = await directory();
     // Compile the current single-module source in memory; no stale dist or repository writes.
-    const source = await readFile(new URL('../src/application/caller-source/state-lock.ts', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/state-lock.ts', import.meta.url), 'utf8');
     const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2023 } }).outputText;
     const moduleUrl = `data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`;
     const child = spawn(process.execPath, ['--input-type=module', '-e', `
-      const { withSourceStateLock } = await import(process.argv[1]);
-      await withSourceStateLock(process.argv[2], 'held-record', async () => {
+      const { withStateLock } = await import(process.argv[1]);
+      await withStateLock(process.argv[2], 'held-record', async () => {
         process.send({ held: true });
         return new Promise(() => {});
       });
@@ -50,10 +50,10 @@ describe('caller source state OS mutex', () => {
         new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error('Lock child did not acquire its OS mutex.')), 7_000); })]);
       clearTimeout(timer);
       expect(ready[0]).toEqual({ held: true });
-      expect(await withSourceStateLock(root, 'held-record', async () => 'must not run', 20)).toEqual({ acquired: false });
+      expect(await withStateLock(root, 'held-record', async () => 'must not run', 20)).toEqual({ acquired: false });
       child.kill('SIGKILL');
       await exited;
-      expect(await withSourceStateLock(root, 'held-record', async () => 'recovered', 500))
+      expect(await withStateLock(root, 'held-record', async () => 'recovered', 500))
         .toEqual({ acquired: true, value: 'recovered' });
     } finally {
       clearTimeout(timer);

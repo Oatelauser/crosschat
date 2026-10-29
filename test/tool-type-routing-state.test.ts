@@ -96,21 +96,21 @@ describe('typed identity, pair continuity and provenance', () => {
     expect(resolveCallerIdentity({ CODEX_THREAD_ID: cli.id }, scan)).toEqual({ p: 'codex', id: cli.id });
   });
 
-  it('separates pair state and handles for two endpoint types with the same ID', () => {
+  it('separates pair state and handles for two endpoint types with the same ID', async () => {
     const file = join(freshDir(), 'conversations.json');
     const cliRef = newConversationRef(caller, cli);
     const desktopRef = newConversationRef(caller, desktop);
     expect(pairKeyOf(caller, cli)).not.toBe(pairKeyOf(caller, desktop));
-    recordConversation(file, cliRef, 1_000);
-    const cliHandle = handleForRef(file, cliRef);
-    recordConversation(file, desktopRef, 2_000);
-    const desktopHandle = handleForRef(file, desktopRef);
+    await recordConversation(file, cliRef, 1_000);
+    const cliHandle = await handleForRef(file, cliRef);
+    await recordConversation(file, desktopRef, 2_000);
+    const desktopHandle = await handleForRef(file, desktopRef);
     expect(cliHandle).not.toBe(desktopHandle);
     expect(decodeRef(resolveHandle(file, cliHandle))).toEqual(cliRef);
     expect(decodeRef(resolveHandle(file, desktopHandle))).toEqual(desktopRef);
     expect(continueConversation(file, caller, cli).ref).toEqual({ ...cliRef, c: 2 });
     expect(continueConversation(file, caller, desktop).ref).toEqual({ ...desktopRef, c: 2 });
-    expect(continueFromRef(file, cliRef).ref.t).toEqual(cli);
+    expect((await continueFromRef(file, cliRef)).ref.t).toEqual(cli);
     expect(pairKeyOfEntry({ from: identityKey(caller), target: identityKey(cli), replyRef: encodeRef(cliRef) }))
       .toBe(pairKeyOf(caller, cli));
   });
@@ -125,12 +125,12 @@ describe('typed identity, pair continuity and provenance', () => {
       .toEqual({ ...identity, host: 'aabbccdd', mid: 'machine-a', via: 'tcp' });
   });
 
-  it('does not reuse a handle when an equal nonce identifies another typed pair', () => {
+  it('does not reuse a handle when an equal nonce identifies another typed pair', async () => {
     const file = join(freshDir(), 'conversations.json');
     const cliRef = newConversationRef(caller, cli);
     const desktopRef = { ...cliRef, t: desktop };
-    const first = handleForRef(file, cliRef);
-    const second = handleForRef(file, desktopRef);
+    const first = await handleForRef(file, cliRef);
+    const second = await handleForRef(file, desktopRef);
     expect(second).not.toBe(first);
     expect(decodeRef(resolveHandle(file, first)).t).toEqual(cli);
     expect(decodeRef(resolveHandle(file, second)).t).toEqual(desktop);

@@ -38,7 +38,7 @@ describe('C14 conversation refinement', () => {
     const { file, deps, typedDeps } = fixture();
     const first = await sendMessage({ tool: 'claude', to: 'Receiver', bodyArg: 'first' }, deps);
     const original = decodeRef(first.receipt.replyRef);
-    recordConversation(file, original, 100, { peer: 'retained-machine-name' });
+    await recordConversation(file, original, 100, { peer: 'retained-machine-name' });
     const historical = encodeRef({ ...newConversationRef(original.f, original.t), c: 5 });
     const second = await sendMessage({ tool: 'claude', conversation: historical, bodyArg: 'another historical conversation' }, deps);
 
@@ -73,8 +73,8 @@ describe('C14 conversation refinement', () => {
   it('rejects a failed recipient refinement write before the selected native adapter is called', async () => {
     const { file, deps } = fixture();
     const original = { ...newConversationRef({ p: 'claude', id: 'receiver', endpointType: 'cli' }, { p: 'codex', id: 'target' }), c: 4 };
-    recordConversation(file, original, 100);
-    const handle = handleForRef(file, original);
+    await recordConversation(file, original, 100);
+    const handle = await handleForRef(file, original);
     const typed = { ...original, t: { ...original.t, endpointType: 'desktop' } };
     mkdirSync(shardPath(file, pairKeyOf(typed.f, typed.t)));
     const receiverDeps: SendDeps = { ...deps, env: { CLAUDE_CODE_MESSAGING_SOCKET: 'isolated-fake-socket' },
@@ -110,8 +110,8 @@ describe('C14 conversation refinement', () => {
     const targetHandles: string[] = [];
     for (let i = 0; i < HANDLE_MAX; i++) {
       const history = newConversationRef(typedSource, original.t);
-      targetHandles.push(handleForRef(file, history));
-      recordConversation(file, history, 200 + i);
+      targetHandles.push(await handleForRef(file, history));
+      await recordConversation(file, history, 200 + i);
     }
     const before = loadAllPairs(file)[pair]!;
     vi.mocked(deps.deliverClaude).mockClear();

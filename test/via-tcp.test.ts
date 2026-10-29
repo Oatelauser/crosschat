@@ -623,7 +623,7 @@ describe('016① 跨机回执机器段统一 name(mid8)', () => {
     const h = await startPeerBroker(realReceipt);
     const fx = realFixture(h);
     // 模拟此前跨机信封到达：from-machine 名随分片持久化（016 新字段）
-    recordConversation(fx.deps.conversationStateFile!, decodeRef(peerRef()), 1_000, { [peerMid8]: 'cloudleg' });
+    await recordConversation(fx.deps.conversationStateFile!, decodeRef(peerRef()), 1_000, { [peerMid8]: 'cloudleg' });
     const out = await runViaTcpSend({ tool: 'claude', via: `tcp:${peerMid}`, conversation: 'mc1_x' } as never, 'hello', fx.deps);
     expect(out).toContain('delivered to boss@cloudleg(ec542c2c) (turn 2)');
     // 记账 to 同格式（status --conversations 的对端名来源）

@@ -97,7 +97,7 @@ describe('typed communication observations', () => {
     const file = join(baseDir, 'conversations.json');
     for (const endpoint of [cli, desktop]) {
       const current = newConversationRef(caller, endpoint);
-      recordConversation(file, current, 1_000);
+      await recordConversation(file, current, 1_000);
       park(join(baseDir, 'outbox'), endpoint.id, { envelope: 'PRIVATE', toName: endpoint.endpointType,
         callerKey: identityKey(caller), endpointType: endpoint.endpointType });
       appendSendLog(join(baseDir, 'send-log.jsonl'), { ts: '2026-10-27T01:00:00Z', from: identityKey(caller),

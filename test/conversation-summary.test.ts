@@ -259,7 +259,7 @@ describe('conversationSummaries', () => {
     ).toEqual([]);
   });
 
-  it('aggregates per-pair shards into the same rows the legacy global file produced', () => {
+  it('aggregates per-pair shards into the same rows the legacy global file produced', async () => {
     const ref = newConversationRef(claudeA, codexB);
     const legacyDir = freshDir();
     const legacyFile = join(legacyDir, 'conversations.json');
@@ -271,7 +271,7 @@ describe('conversationSummaries', () => {
     });
     const shardDir = freshDir();
     const shardStateFile = join(shardDir, 'conversations.json');
-    recordConversation(shardStateFile, ref, 5_000); // same record, sharded
+    await recordConversation(shardStateFile, ref, 5_000); // same record, sharded
     expect(
       conversationSummaries({
         conversationsFile: shardStateFile,
@@ -282,7 +282,7 @@ describe('conversationSummaries', () => {
     expect(expected).toHaveLength(1);
   });
 
-  it('lets shards supersede legacy records while legacy still supplies unmigrated pairs', () => {
+  it('lets shards supersede legacy records while legacy still supplies unmigrated pairs', async () => {
     const dir = freshDir();
     const conversationsFile = join(dir, 'conversations.json');
     const refAB = newConversationRef(claudeA, codexB);
@@ -296,7 +296,7 @@ describe('conversationSummaries', () => {
       }),
       'utf8',
     );
-    recordConversation(conversationsFile, refAB, 9_000); // keyAB moves to a shard
+    await recordConversation(conversationsFile, refAB, 9_000); // keyAB moves to a shard
     const rows = conversationSummaries({
       conversationsFile,
       sendLogFile: join(dir, 'none.jsonl'),

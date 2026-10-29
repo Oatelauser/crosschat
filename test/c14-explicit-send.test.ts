@@ -81,8 +81,8 @@ describe('explicit recipient tool contract', () => {
   it('keeps the handle, nonce and turns when an explicit recipient tool fills an unknown endpoint', async () => {
     const file = join(mkdtempSync(join(root, 'binding-')), 'conversations.json');
     const original = { ...newConversationRef({ p: 'claude' as const, id: receiverId }, { p: 'codex' as const, id: senderId }), c: 4 };
-    recordConversation(file, original, 10);
-    const handle = handleForRef(file, original);
+    await recordConversation(file, original, 10);
+    const handle = await handleForRef(file, original);
     const dependencies = { ...deps(), env: { CLAUDE_CODE_MESSAGING_SOCKET: 'fixture-socket' }, conversationStateFile: file,
       listCodexThreads: vi.fn(async () => [{ id: senderId, name: null, status: 'idle' as const, endpointType: 'desktop' }]),
     };
@@ -109,8 +109,8 @@ describe('explicit recipient tool contract', () => {
   it('keeps the handle and latest turn when trusted source observation fills an unknown sender type', async () => {
     const file = join(mkdtempSync(join(root, 'source-binding-')), 'conversations.json');
     const original = { ...newConversationRef({ p: 'codex' as const, id: senderId }, { p: 'claude' as const, id: receiverId, endpointType: 'cli' }), c: 7 };
-    recordConversation(file, original, 10, { peer: 'kept-machine-name' });
-    const handle = handleForRef(file, original);
+    await recordConversation(file, original, 10, { peer: 'kept-machine-name' });
+    const handle = await handleForRef(file, original);
     const dependencies = { ...deps(), env: { CODEX_THREAD_ID: senderId }, conversationStateFile: file,
       enrichCallerIdentity: vi.fn(async (caller: import('../src/identity.js').CallerIdentity) => caller.p === 'codex' ? { ...caller, endpointType: 'cli' } : caller),
     };
@@ -151,8 +151,8 @@ describe('explicit recipient tool contract', () => {
       { p: 'codex', id: senderId, endpointType: 'cli', m: 'machine-a', mid: 'aaaaaaaa' },
       { p: 'codex', id: senderId, endpointType: 'desktop', m: 'machine-b', mid: 'bbbbbbbb' },
     );
-    recordConversation(file, original, 10, { aaaaaaaa: 'machine-a', bbbbbbbb: 'machine-b' });
-    const handle = handleForRef(file, original);
+    await recordConversation(file, original, 10, { aaaaaaaa: 'machine-a', bbbbbbbb: 'machine-b' });
+    const handle = await handleForRef(file, original);
     const local = endpointType === 'cli' ? original.f : original.t;
     const source = endpointType === 'cli' ? original.t : original.f;
     if (local.p === 'human' || source.p === 'human') throw new Error('Expected native endpoints');

@@ -3,6 +3,8 @@ import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 
 import { dirname, join } from 'node:path';
 import process from 'node:process';
 import { stateRoot } from './state-root.js';
+import { withStateLock } from './state-lock.js';
+import type { StateLockResult } from './state-lock.js';
 import { MultichatError } from './errors.js';
 import { identityKey } from './identity.js';
 import {
@@ -140,9 +142,8 @@ function savePair(file: string, pairKey: string, record: PairRecord): boolean {
     const dir = shardDirOf(file);
     mkdirSync(dir, { recursive: true });
     const shard = shardFileOf(file, pairKey);
-    // ponytail: no cross-process locking; same-pair millisecond races are
-    // last-write-wins — the pair's continuity lags one turn at worst, and
-    // refs are self-contained so in-flight replies are unaffected.
+    // Only reached inside withConversationLock, so no other process can
+    // interleave its own read-modify-write with this one.
     const tmp = `${shard}.${process.pid}.${Date.now()}.tmp`;
     writeFileSync(tmp, JSON.stringify({ pair: pairKey, ...record }), 'utf8');
     renameSync(tmp, shard);
@@ -249,10 +250,20 @@ function matchesEndpoints(ref: ConversationRef, a: RefEndpoint, b: RefEndpoint):
  * the passed ref, absent, a different conversation (nonce differs), or
  * endpoint-mismatched: unchanged pass-through continuation.
  */
-export function continueFromRef(
+export async function continueFromRef(
   file: string,
   ref: ConversationRef,
   original: ConversationRef = ref,
+): Promise<{ ref: ConversationRef; turn: number }> {
+  const locked = await withConversationLock(file, () => continueFromRefLocked(file, ref, original));
+  if (!locked.acquired) throw conversationStateBusy();
+  return locked.value;
+}
+
+function continueFromRefLocked(
+  file: string,
+  ref: ConversationRef,
+  original: ConversationRef,
 ): { ref: ConversationRef; turn: number } {
   ref = reconcileRefinement(file, original, ref);
   const stored = loadPair(file, pairKeyOf(ref.f, ref.t));
@@ -393,10 +404,25 @@ function mergeEndpointTypes(requested: RefEndpoint, stored: RefEndpoint): RefEnd
  * queued, or parked). `machines`（016①）= 本次跨机信封到达携带的 mid8→名
  * 条目，随本次写合并进分片（既有条目不覆盖语义外的丢失）。
  */
-export function recordConversation(
+export async function recordConversation(
   file: string,
   ref: ConversationRef,
   nowMs: number = Date.now(),
+  machines?: Record<string, string>,
+): Promise<void> {
+  // Runs after native delivered/queued/parked: a busy lock or failed write must
+  // never turn an accepted delivery into a failure, so every outcome is swallowed.
+  try {
+    await withConversationLock(file, () => { recordConversationLocked(file, ref, nowMs, machines); });
+  } catch {
+    // best-effort continuity only
+  }
+}
+
+function recordConversationLocked(
+  file: string,
+  ref: ConversationRef,
+  nowMs: number,
   machines?: Record<string, string>,
 ): void {
   const pairKey = pairKeyOf(ref.f, ref.t);
@@ -506,42 +532,86 @@ function refreshHandles(
  * its conversation line (ref/updatedAt kept verbatim) — a send that later fails
  * delivery leaves --to continuation untouched.
  */
-function attachHandle(file: string, pairKey: string, ref: ConversationRef, handle: string): void {
+function attachHandle(file: string, pairKey: string, ref: ConversationRef, handle: string): boolean {
   const existing = readShard(shardFileOf(file, pairKey));
-  savePair(file, pairKey, {
-    ref: existing?.ref ?? encodeRef(ref),
+  const encoded = encodeRef(ref);
+  const saved = savePair(file, pairKey, {
+    ref: existing?.ref ?? encoded,
     updatedAt: existing?.updatedAt ?? 0,
     handles: refreshHandles(existing?.handles, ref, handle),
     ...(existing?.machines === undefined ? {} : { machines: existing.machines }),
   });
+  // Verify the persisted shard carries this binding: an unsaved handle must
+  // never come back as usable.
+  return saved && readShard(shardFileOf(file, pairKey))?.handles?.[handle] === encoded;
+}
+
+/** One machine-wide lock per real state directory: every conversation write shares it. */
+const CONVERSATION_LOCK_KEY = 'conversation-state';
+const CONVERSATION_LOCK_TIMEOUT_MS = 1_000;
+
+/**
+ * Serialize conversation-state writes across independent CLI processes. The lock
+ * identity is the canonical shard directory (path aliases and symlinks included),
+ * and the OS releases it when a holder dies. Never held across native delivery:
+ * callers only wrap the local read-modify-write.
+ */
+async function withConversationLock<T>(file: string, work: () => T): Promise<StateLockResult<T>> {
+  const directory = shardDirOf(file);
+  mkdirSync(directory, { recursive: true });
+  return withStateLock(directory, CONVERSATION_LOCK_KEY, async () => work(), CONVERSATION_LOCK_TIMEOUT_MS);
+}
+
+function conversationStateBusy(): MultichatError {
+  return new MultichatError('CONVERSATION_STATE_BUSY', 'Conversation state is locked by another crosschat process; no message was sent. Retry the send.');
+}
+
+function conversationStateWriteFailed(): MultichatError {
+  return new MultichatError('CONVERSATION_STATE_WRITE_FAILED', 'Conversation state could not be saved; no message was sent.');
 }
 
 /**
  * The conversation's short handle: reuse the machine-wide handle already bound
  * to this nonce, else claim max+1 with CAS collision protection.
  */
-export function handleForRef(file: string, ref: ConversationRef): string {
+export async function handleForRef(file: string, ref: ConversationRef): Promise<string> {
+  const locked = await withConversationLock(file, () => handleForRefLocked(file, ref));
+  if (!locked.acquired) throw conversationStateBusy();
+  return locked.value;
+}
+
+function handleForRefLocked(file: string, ref: ConversationRef): string {
   const entries = scanHandles(file);
   const pair = pairKeyOf(ref.f, ref.t);
   const reused = entries.find((entry) => entry.nonce === ref.n && entry.pair === pair);
-  if (reused !== undefined) return reused.handle;
-  return claimHandle(file, ref, maxHandleNumber(entries) + 1);
+  if (reused !== undefined) {
+    // An already-ambiguous handle must fail here instead of feeding an ambiguous
+    // reply hint: resolveHandle lists the candidate refs, never a guessed winner.
+    resolveHandle(file, reused.handle);
+    return reused.handle;
+  }
+  return claimHandleLocked(file, ref, maxHandleNumber(entries) + 1);
 }
 
 /**
  * Claim + CAS verify + one rewrite at max+2. candidate is injectable so tests
- * can simulate a scan that raced a concurrent allocator. After the single
- * retry a still-colliding number is returned as-is — resolveHandle's ambiguity
- * error (列候选) is the safety net on consumption.
+ * can simulate a scan that raced a concurrent allocator. The retry also covers
+ * duplicates already present in a legacy shard; the lock makes new ones impossible.
  */
-export function claimHandle(file: string, ref: ConversationRef, candidate: number): string {
+export async function claimHandle(file: string, ref: ConversationRef, candidate: number): Promise<string> {
+  const locked = await withConversationLock(file, () => claimHandleLocked(file, ref, candidate));
+  if (!locked.acquired) throw conversationStateBusy();
+  return locked.value;
+}
+
+function claimHandleLocked(file: string, ref: ConversationRef, candidate: number): string {
   const pairKey = pairKeyOf(ref.f, ref.t);
   let handle = `c${candidate}`;
-  attachHandle(file, pairKey, ref, handle);
+  if (!attachHandle(file, pairKey, ref, handle)) throw conversationStateWriteFailed();
   const after = scanHandles(file);
   if (after.some((entry) => entry.handle === handle && (entry.nonce !== ref.n || entry.pair !== pairKey))) {
     handle = `c${maxHandleNumber(after) + 2}`;
-    attachHandle(file, pairKey, ref, handle);
+    if (!attachHandle(file, pairKey, ref, handle)) throw conversationStateWriteFailed();
   }
   return handle;
 }

@@ -533,8 +533,8 @@ async function sendBody(
   if (deps.conversationStateFile !== undefined && replyRef !== '') {
     try {
       const ref = decodeRef(replyRef);
-      recordConversation(deps.conversationStateFile, ref, deps.now());
-      handle = handleForRef(deps.conversationStateFile, ref);
+      await recordConversation(deps.conversationStateFile, ref, deps.now());
+      handle = await handleForRef(deps.conversationStateFile, ref);
     } catch {
       // 不可解码的 ref 不能让已送达的发送失败
     }

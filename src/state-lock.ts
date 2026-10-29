@@ -5,7 +5,7 @@ import type { Server } from 'node:net';
 import process from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
 
-export type SourceStateLockResult<T> = { acquired: true; value: T } | { acquired: false };
+export type StateLockResult<T> = { acquired: true; value: T } | { acquired: false };
 
 async function listen(server: Server, port: number): Promise<boolean> {
   return new Promise((resolve, reject) => {
@@ -22,14 +22,19 @@ async function listen(server: Server, port: number): Promise<boolean> {
   });
 }
 
-/** An OS-owned loopback listener releases the mutex even when its process dies. */
-export async function withSourceStateLock<T>(
+/**
+ * An OS-owned loopback listener releases the mutex even when its process dies,
+ * so no TTL, pid probe or stale-lock breaking is needed. The directory is
+ * canonicalized first: path aliases and symlinks share one lock identity.
+ * Callers that must not block check `acquired` and fail with their own error.
+ */
+export async function withStateLock<T>(
   directory: string,
   key: string,
   work: () => Promise<T>,
   timeoutMs = 1_000,
-): Promise<SourceStateLockResult<T>> {
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 0) throw new Error('Invalid caller source lock timeout.');
+): Promise<StateLockResult<T>> {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 0) throw new Error('Invalid state lock timeout.');
   const canonical = await realpath(directory);
   const normalized = process.platform === 'win32' ? canonical.toLowerCase() : canonical;
   const hash = createHash('sha256').update(JSON.stringify([normalized, key])).digest();

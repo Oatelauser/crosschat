@@ -560,9 +560,9 @@ describe('016① machineDisplay（显示型机器标识统一 name(mid8)）', ()
     c: 1,
   });
 
-  it('mid 寻址 + 会话分片有名（信封到达时持久化）→ name(mid8)', () => {
+  it('mid 寻址 + 会话分片有名（信封到达时持久化）→ name(mid8)', async () => {
     const file = join(tempDir(), 'conversations.json');
-    recordConversation(file, decodeRef(ref), 1_000, { ec542c2c: 'cloudleg' });
+    await recordConversation(file, decodeRef(ref), 1_000, { ec542c2c: 'cloudleg' });
     expect(machineDisplay(peerMid, ref, localMid, 'win-dev', file)).toBe('cloudleg(ec542c2c)');
   });
 

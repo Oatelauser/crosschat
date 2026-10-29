@@ -360,8 +360,8 @@ export async function sendViaSsh(args: SendArgs, body: string, deps: SendDeps): 
   if (deps.conversationStateFile !== undefined) {
     try {
       const ref = decodeRef(receipt.replyRef);
-      recordConversation(deps.conversationStateFile, ref, deps.now());
-      handle = handleForRef(deps.conversationStateFile, ref);
+      await recordConversation(deps.conversationStateFile, ref, deps.now());
+      handle = await handleForRef(deps.conversationStateFile, ref);
     } catch {
       // a non-decodable ref must never fail the already-delivered send
     }

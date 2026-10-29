@@ -3,7 +3,7 @@ import { mkdir, open, readFile, rename, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { MultichatError } from '../../errors.js';
 import { parseToolType } from '../../tool-types.js';
-import { withSourceStateLock } from './state-lock.js';
+import { withStateLock } from '../../state-lock.js';
 
 /** A Provider has already associated this invocation with this origin/instance. */
 export interface SourceContext {
@@ -98,7 +98,7 @@ async function saveRecord(record: SourceRecord, options: SourceStateOptions): Pr
 /** Serialize short local state mutations across independent CLI processes. */
 async function withRecord<T>(key: string, options: SourceStateOptions, work: () => Promise<T>): Promise<T> {
   await mkdir(options.directory, { recursive: true, mode: 0o700 });
-  const result = await withSourceStateLock(options.directory, key, work);
+  const result = await withStateLock(options.directory, key, work);
   if (!result.acquired) throw new MultichatError('SOURCE_STATE_BUSY', 'Source confirmation is temporarily busy; no new question or write was issued.');
   return result.value;
 }

@@ -358,7 +358,7 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
     const continued =
       deps.conversationStateFile === undefined
         ? { ref: nextTurnRef(boundRef), turn: boundRef.c + 1 }
-        : continueFromRef(deps.conversationStateFile, boundRef, ref);
+        : await continueFromRef(deps.conversationStateFile, boundRef, ref);
     newRef = continued.ref;
     turn = continued.turn;
   } else {
@@ -471,7 +471,7 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
   // F2：短柄寄生于会话分片（零新文件），在最终 ref（含 origin 盖章与 starId）
   // 定型后分配；状态未接线（异常路径）不分配，信封回退完整 ref。
   const handle =
-    deps.conversationStateFile === undefined ? undefined : handleForRef(deps.conversationStateFile, newRef);
+    deps.conversationStateFile === undefined ? undefined : await handleForRef(deps.conversationStateFile, newRef);
   const replyRef = encodeRef(newRef);
   const deliveryOptions = { mode, ...(target.endpointType !== undefined ? { endpointType: target.endpointType } : {}) };
   const targetKey = identityKey(target);
@@ -530,7 +530,7 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
       throw err;
     }
     logNow({ to: toName, target: targetKey, status: 'delivered', turn, replyRef });
-    if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
+    if (deps.conversationStateFile !== undefined) await recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
     return finish(deliveryResult(toName, turn, replyRef, false, handle));
   }
 
@@ -542,7 +542,7 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
     try {
       const result = await deps.deliverOpenCode(target.id, content, deliveryOptions);
       logNow({ to: toName, target: targetKey, status: result.queued ? 'queued' : 'delivered', turn, replyRef });
-      if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
+      if (deps.conversationStateFile !== undefined) await recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
       return finish(deliveryResult(toName, turn, replyRef, result.queued, handle));
     } catch (err) {
       logNow({ to: toName, target: targetKey, status: 'failed', code: errorCode(err), turn, replyRef });
@@ -558,7 +558,7 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
     try {
       const result = await deps.deliverDsh(target.id, content, deliveryOptions);
       logNow({ to: toName, target: targetKey, status: result.queued ? 'queued' : 'delivered', turn, replyRef });
-      if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
+      if (deps.conversationStateFile !== undefined) await recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
       return finish(deliveryResult(toName, turn, replyRef, result.queued, handle));
     } catch (err) {
       logNow({ to: toName, target: targetKey, status: 'failed', code: errorCode(err), turn, replyRef });
@@ -607,7 +607,7 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
     // structurally impossible within the probe budget, so do not even look.
     const receipt = queued ? undefined : await deps.confirmReceipt?.(target.id, receiptMarker, target.endpointType);
     logNow({ to: toName, target: targetKey, status: queued ? 'queued' : 'delivered', turn, replyRef, receipt, receiptMarker });
-    if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
+    if (deps.conversationStateFile !== undefined) await recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
     return finish({ ...deliveryResult(toName, turn, replyRef, queued, handle), confirmation: receipt });
   } catch (err) {
     // Busy/locked = definitively not delivered (deliver.ts polls before giving
@@ -618,7 +618,7 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
     ) {
       const queue = parkNow();
       logNow({ to: toName, target: targetKey, status: 'parked', turn, replyRef, receiptMarker });
-      if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
+      if (deps.conversationStateFile !== undefined) await recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
       return finish(parkedResult(toName, turn, replyRef, queue, mailboxPath, handle));
     }
     logNow({ to: toName, target: targetKey, status: 'failed', code: errorCode(err), turn, replyRef, receiptMarker });
