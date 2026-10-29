@@ -14,11 +14,9 @@
 
 本会话不再派发通信相关子单。用户明确将全部通信任务交给现有 Codex Desktop 会话 **Bug修复2**，由用户亲自对接；见[完整交接](communication-handoff-bugfix2-20261029.md)。W08 最新研究交付到 `1066e30`，尚未完成 root 最终验收，按真实状态随证据交接。短信封内部 subagent 已停写，确认没有任何代码/测试修改。
 
-用户随后明确要求继续对接 cworker1，并读取其回报后按原流程推进后续主计划。当前领取 **[C13-P01：Harness 生命周期方案与隔离复现](evidence/c13-worker-20261029/P01-task.md)**：仅交付技能/桥插件分工方案及现有 close 异常清理的隔离证据，先供用户讨论，不改产品代码、已有测试、默认安装目标或用户配置。root 分发/独立审查，cworker1 独占本单白名单/index；不继续来源研究或短信封实现。
+当前无实施子单。cworker1 已完成 Harness 生命周期方案/隔离复现并停写，最终交付 `727cb0a`，见[独立验收](evidence/c13-worker-20261029/P01-final-review.md)。root 已向用户提交仅桥关闭/mount异常清理及对应回归的具体范围；按用户先讨论方案的要求，产品实现尚待确认，未派单。继续由 root 分发、独立审查和验收，cworker1 执行；通信交接不转移 worker 的其余协作关系。
 
-P01 已交付 `6eb6efe`，root 独立重放确认四个正常/异常现象；[双轴审查](evidence/c13-worker-20261029/P01-review.md)要求修正草案生命周期事实、移除未要求的关闭失败重试，以及复现工装的失败判定/直接子进程收尾。当前返修 [P01-R1](evidence/c13-worker-20261029/P01-R1-task.md)，仍不改产品；具体关闭清理修复方案待用户讨论，C13 未关闭。
-
-已验收子单见[测试隔离审计](evidence/c14-worker-20261029/W00-review.md)、[协作规则审计](evidence/c14-worker-20261029/W02-review.md)、[短柄诊断验收](evidence/c14-worker-20261029/W03-final-review.md)、[短柄产品修复验收](evidence/c14-worker-20261029/W04-final-review.md)、[来源研究验收](evidence/c14-worker-20261029/W01-final-review.md)、[CLI逐调用研究验收](evidence/c14-worker-20261029/W05-final-review.md)、[既有测试等待修复](evidence/c14-worker-20261029/W06-final-review.md)及[短信封恢复研究](evidence/c14-worker-20261029/W07-final-review.md)，活动项不重复保留。root最新完整check为2503通过/11原有跳过，退出0；研究收口不代表生产来源关联或CI门禁已实现。仓库代码/skill未全局部署。历史实机短柄成因未作追认，当前构建的已证实缺陷修复按独立记录收口。
+已验收子单见[测试隔离审计](evidence/c14-worker-20261029/W00-review.md)、[协作规则审计](evidence/c14-worker-20261029/W02-review.md)、[短柄诊断验收](evidence/c14-worker-20261029/W03-final-review.md)、[短柄产品修复验收](evidence/c14-worker-20261029/W04-final-review.md)、[来源研究验收](evidence/c14-worker-20261029/W01-final-review.md)、[CLI逐调用研究验收](evidence/c14-worker-20261029/W05-final-review.md)、[既有测试等待修复](evidence/c14-worker-20261029/W06-final-review.md)、[短信封恢复研究](evidence/c14-worker-20261029/W07-final-review.md)及[Harness生命周期方案与隔离复现](evidence/c13-worker-20261029/P01-final-review.md)，活动项不重复保留。root最新完整check为2503通过/11原有跳过，退出0；研究收口不代表生产来源关联或CI门禁已实现。仓库代码/skill未全局部署。历史实机短柄成因未作追认，当前构建的已证实缺陷修复按独立记录收口。
 
 ## 后续切分原则
 
