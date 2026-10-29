@@ -58,6 +58,7 @@
 | 语法 | `node --check` 两个脚本 | 通过 |
 | 受控检查 | `node docs/development/evidence/c14-worker-20261029/W08-probe-check.mjs` | 退出 0；9/9 通过 |
 | 实例核验跨源一致 | C1 内把 `query.serverCreatedAt` 与另一次 `Win32_Process.CreationDate` 读取相比 | 逐位相等 |
+| 错误路径脱敏 | 注入 `run` 造两条故障（spawn 抛含绝对路径的错、stdout 不可解析），看 `detail` | `spawn <path> ENOENT` / `oops at <path>`，两处都不含盘符路径 |
 | 缺管道探针 | `node W08-probe.mjs --pipe <随机名> --no-table` | 退出 0；`errorKind:"absent"` |
 | 缺 `CODEX_THREAD_ID` | `node W08-probe.mjs --pipe <随机名> --no-table --owner` | 退出 0；`owner {requested:true,known:false,reason:"CODEX_THREAD_ID absent"}` |
 | 输出保护 | 对同一路径二次 `--out` | 退出 3，未覆盖 |
