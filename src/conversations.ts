@@ -101,11 +101,15 @@ function parseShard(text: string): ShardRecord | undefined {
       typeof parsed.ref === 'string' &&
       typeof parsed.updatedAt === 'number' && Number.isFinite(parsed.updatedAt)
     ) {
-      const handles = sanitizeHandles('handles' in parsed ? parsed.handles : undefined);
+      const rawHandles = 'handles' in parsed ? parsed.handles : undefined;
+      const handles = sanitizeHandles(rawHandles);
       const machines = sanitizeMachines('machines' in parsed ? parsed.machines : undefined);
       const progress = 'handleSequence' in parsed ? parsed.handleSequence : undefined;
       if (progress !== undefined && !isHandleSequence(progress)) return undefined;
-      const required = Math.max(0, ...Object.keys(handles ?? {}).map((handle) => sequenceForHandle(handle) ?? 0));
+      let required = 0;
+      if (rawHandles !== null && typeof rawHandles === 'object' && !Array.isArray(rawHandles)) {
+        for (const handle of Object.keys(rawHandles)) required = Math.max(required, sequenceForHandle(handle) ?? 0);
+      }
       if (required > (progress ?? 0)) return undefined;
       return {
         pair: parsed.pair,
@@ -177,7 +181,7 @@ export function readConversationState(file: string): ConversationState {
     if (!entry.name.endsWith('.json') || entry.isDirectory()) continue;
     if (!entry.isFile()) { complete = false; continue; }
     const shard = readConversationShard(join(shardDirOf(file), entry.name));
-    if (shard !== undefined) pairs[shard.pair] = shard;
+    if (shard !== undefined && join(shardDirOf(file), entry.name) === shardFileOf(file, shard.pair)) pairs[shard.pair] = shard;
     else complete = false;
   }
   return { pairs, complete };
@@ -360,7 +364,7 @@ function reconcileRefinement(file: string, original: ConversationRef, requested:
     ...(machines === undefined || Object.keys(machines).length === 0 ? {} : { machines }),
   });
   const persisted = readConversationShard(shardFileOf(file, pair));
-  if (!saved || persisted?.ref !== destinationRef
+  if (!saved || persisted?.ref !== destinationRef || (handleSequence !== 0 && persisted.handleSequence !== handleSequence)
     || Object.entries(handles).some(([handle, value]) => persisted.handles?.[handle] !== value)) {
     throw new MultichatError('CONVERSATION_STATE_WRITE_FAILED', 'Conversation refinement could not be saved; no message was sent. The original conversation handle remains valid.');
   }
@@ -518,6 +522,22 @@ function scanHandles(pairs: Record<string, PairRecord>): HandleEntry[] {
     }
   }
   return out;
+}
+
+/** Shared read-only selection for status: stale or ambiguous bindings are never advertised. */
+export function resolvableConversationHandles(pairs: Record<string, PairRecord>): ReadonlyMap<string, string> {
+  const grouped = new Map<string, HandleEntry[]>();
+  for (const entry of scanHandles(pairs)) {
+    const group = grouped.get(entry.handle) ?? [];
+    group.push(entry);
+    grouped.set(entry.handle, group);
+  }
+  const resolved = new Map<string, string>();
+  for (const [handle, entries] of grouped) {
+    const ref = entries.length === 1 ? entries[0]!.ref : resolveRefinementCopies(entries);
+    if (ref !== undefined) resolved.set(handle, ref);
+  }
+  return resolved;
 }
 
 /**

@@ -38,6 +38,7 @@ import { createReceiptMarker } from '../../send-log.js';
 import { resolveDeliveryMode } from '../../delivery-mode.js';
 import {
   CONVERSATION_HANDLE_RE,
+  LEGACY_CONVERSATION_HANDLE_RE,
   continueConversation,
   continueFromRef,
   handleForRef,
@@ -205,10 +206,10 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
   const selected = selectedTool(args);
   const discoverySelection = selected;
   resolveTargetArgs(args);
-  // F2：--conversation 双形态——c<数字> 本地短柄先解析成唯一完整 ref（扫全部
+  // --conversation 双形态：五字符本地短柄先解析成唯一完整 ref（扫全部
   // 分片；过期/撞号在此教学自纠），mc1_/mc2_ 前缀直用永续。柄不过网：跨机腿
   // 到这里时 conversation 已是完整 ref。
-  if (args.conversation !== undefined && CONVERSATION_HANDLE_RE.test(args.conversation)) {
+  if (args.conversation !== undefined && (CONVERSATION_HANDLE_RE.test(args.conversation) || LEGACY_CONVERSATION_HANDLE_RE.test(args.conversation))) {
     args = { ...args, conversation: resolveHandle(deps.conversationStateFile, args.conversation) };
   }
   // B2：--file 模式正文可缺省（传输完成后自动生成"已送达：<路径>"）

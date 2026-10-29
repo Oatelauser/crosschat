@@ -1,4 +1,5 @@
-import { defaultConversationsFile, loadAllPairs, pairKeyOfEntry } from './conversations.js';
+import { defaultConversationsFile, pairKeyOf, pairKeyOfEntry, readConversationState, resolvableConversationHandles } from './conversations.js';
+import type { PairRecord } from './conversations.js';
 import { defaultOutboxDir, outboxPairCounts } from './outbox.js';
 import { decodeRef } from './ref.js';
 import { type SendLogEntry, defaultSendLogFile, readSendLogTail } from './send-log.js';
@@ -8,7 +9,7 @@ import { toolTypeFor } from './tool-types.js';
 /**
  * Per-pair conversation overview rows for a future `status --conversations`
  * (status batch B0: pure data, no rendering). The conversations store
- * (B20: per-pair shards + legacy-file fallback) is the existence
+ * (per-pair shards) is the existence
  * authority — only pairs recorded there get a row — enriched with
  * the send-log tail (a bounded ~200-line window, never a full scan) and
  * per-pair outbox parked counts.
@@ -46,7 +47,7 @@ export interface ConversationSummary {
   /** Exact recipient and envelope evidence of the latest send; omitted from status JSON. */
   receiptProbe?: { threadId: string; marker: string; endpointType?: string };
   /**
-   * G0 柄列：该对分片最新柄（绑定当前 ref 同 nonce 的 c<数字>）；null = 无柄
+   * 柄列：该对分片当前可安全解析的五字符柄；null = 无柄
    * （显示 -）。Render support like `endpoints` — not part of the JSON contract.
    */
   handle: string | null;
@@ -69,19 +70,23 @@ export function defaultConversationSummaryDeps(): ConversationSummaryDeps {
 export function conversationSummaries(
   deps: ConversationSummaryDeps = defaultConversationSummaryDeps(),
 ): ConversationSummary[] {
+  const state = readConversationState(deps.conversationsFile);
   return aggregateSummaries(
-    loadAllPairs(deps.conversationsFile),
+    state.pairs,
     readSendLogTail(deps.sendLogFile),
     outboxPairCounts(deps.outboxDir),
+    state.complete,
   );
 }
 
 /** Pure three-source merge; rows ordered by updatedAt (newest first). */
 export function aggregateSummaries(
-  pairs: Record<string, { ref: string; updatedAt: number; handles?: Record<string, string> }>,
+  pairs: Record<string, PairRecord>,
   tail: SendLogEntry[],
   parked: Map<string, number>,
+  handlesAvailable = true,
 ): ConversationSummary[] {
+  const available = handlesAvailable ? resolvableConversationHandles(pairs) : new Map<string, string>();
   const byPair = new Map<string, SendLogEntry[]>();
   for (const entry of tail) {
     const key = pairKeyOfEntry(entry);
@@ -111,23 +116,27 @@ export function aggregateSummaries(
           receiptProbe: { threadId: recipient.id, marker: latest.receiptMarker,
             ...(recipient.endpointType === undefined ? {} : { endpointType: recipient.endpointType }) },
         } : {}),
-        handle: handleForRecord(ref, handles),
+        handle: handleForRecord(ref, handles, available),
       };
     });
 }
 
-/** 该对分片最新柄：handles 里绑定当前 ref 同 nonce 的 c<数字>；ref 不可解码/无匹配 → null。 */
-function handleForRecord(ref: string, handles: Record<string, string> | undefined): string | null {
+/** Only advertise a binding that the shared current-window resolver accepts. */
+function handleForRecord(ref: string, handles: Record<string, string> | undefined, available: ReadonlyMap<string, string>): string | null {
   if (handles === undefined) return null;
-  let nonce: string;
+  let current;
   try {
-    nonce = decodeRef(ref).n;
+    current = decodeRef(ref);
   } catch {
     return null;
   }
-  for (const [handle, value] of Object.entries(handles)) {
+  for (const handle of Object.keys(handles)) {
     try {
-      if (decodeRef(value).n === nonce) return handle;
+      const value = available.get(handle);
+      if (value === undefined) continue;
+      const candidate = decodeRef(value);
+      if (candidate.n === current.n && candidate.starId === current.starId
+        && pairKeyOf(candidate.f, candidate.t) === pairKeyOf(current.f, current.t)) return handle;
     } catch {
       // undecodable leftover: ignored
     }
