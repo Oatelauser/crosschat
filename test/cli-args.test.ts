@@ -1,6 +1,8 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { drainOutboxAtEntry, parseSendArgs, parseStatusArgs } from '../src/cli.js';
 import { outboxCount, park } from '../src/outbox.js';
@@ -197,5 +199,19 @@ describe('drainOutboxAtEntry', () => {
     });
     expect(lines).toEqual(['outbox: 线程 t-cli-dead 已不存在，丢弃 2 条暂存消息']);
     expect(existsSync(join(outboxDir, 't-cli-dead.json'))).toBe(false);
+  });
+});
+
+describe('usage help scope', () => {
+  const cliPath = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
+  it('describes the Claude, Codex and Harness skill scope and its roots', () => {
+    const out = spawnSync(process.execPath, [cliPath, '--help'], { encoding: 'utf8' });
+    expect(out.status).toBe(0);
+    const text = out.stdout.replace(/\s+/g, ' ');
+    expect(text).toContain('install-skills');
+    expect(text).toContain('Harness');
+    expect(text).toContain('DSH_HOME');
+    expect(text).toContain('--dir');
+    expect(text).not.toContain('both agent skills');
   });
 });

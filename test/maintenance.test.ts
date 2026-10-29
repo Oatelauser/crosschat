@@ -1,5 +1,5 @@
 import { Worker } from 'node:worker_threads';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -7,7 +7,8 @@ import ts from 'typescript';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { runInstallSkills } from '../src/commands/install-skills.js';
 
-const root = mkdtempSync(join(tmpdir(), 'crosschat-maintenance-'));
+// Real system temp root: ancestor checks must not trip on OS temp aliases such as macOS /var.
+const root = mkdtempSync(join(realpathSync(tmpdir()), 'crosschat-maintenance-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 const NOW = 1_800_000_000_000;
 const DAY = 86_400_000;
@@ -240,6 +241,45 @@ describe('local maintenance plans and exact execution', () => {
     expect(previewMaintenance('install-skills', options)).toMatchObject({ enabled: false });
     expect(previewMaintenance('uninstall-data', options)).toMatchObject({ enabled: false });
     expect(existsSync(join(outside, 'crosschat'))).toBe(true);
+    const deeper = fixture();
+    const linkedTarget = mkdtempSync(join(root, 'linked-target-dsh-'));
+    mkdirSync(join(linkedTarget, 'skills'));
+    symlinkSync(outside, join(linkedTarget, 'skills', 'crosschat'), process.platform === 'win32' ? 'junction' : 'dir');
+    const deeperOptions = { ...deeper.options, env: { DSH_HOME: linkedTarget } };
+    expect(previewMaintenance('install-skills', deeperOptions)).toMatchObject({ enabled: false });
+    expect(previewMaintenance('uninstall-data', deeperOptions)).toMatchObject({ enabled: false });
+  });
+
+  it('refuses an external Harness root that is itself a link and triggers no effects', async () => {
+    const { previewMaintenance, executeMaintenance } = await import('../src/application/maintenance/operations.js');
+    const f = fixture();
+    const actual = mkdtempSync(join(root, 'linked-root-target-'));
+    const linked = join(root, 'linked-root');
+    symlinkSync(actual, linked, process.platform === 'win32' ? 'junction' : 'dir');
+    const options = { ...f.options, env: { DSH_HOME: linked } };
+    const install = previewMaintenance('install-skills', options);
+    const uninstall = previewMaintenance('uninstall-data', options);
+    expect(install).toMatchObject({ enabled: false });
+    expect(uninstall).toMatchObject({ enabled: false });
+    const installEffect = vi.fn();
+    const remove = vi.fn();
+    expect(executeMaintenance('install-skills', install.fingerprint, { ...options, effects: { install: installEffect } }).status).toBe('blocked');
+    expect(executeMaintenance('uninstall-data', uninstall.fingerprint, { ...options, effects: { remove } }).status).toBe('blocked');
+    expect(installEffect).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    expect(existsSync(join(actual, 'skills'))).toBe(false);
+  });
+
+  it('refuses an external Harness root whose ancestor is a link', async () => {
+    const { previewMaintenance } = await import('../src/application/maintenance/operations.js');
+    const f = fixture();
+    const actual = mkdtempSync(join(root, 'linked-ancestor-target-'));
+    const linked = join(root, 'linked-ancestor');
+    symlinkSync(actual, linked, process.platform === 'win32' ? 'junction' : 'dir');
+    const options = { ...f.options, env: { DSH_HOME: join(linked, 'dsh') } };
+    expect(previewMaintenance('install-skills', options)).toMatchObject({ enabled: false });
+    expect(previewMaintenance('uninstall-data', options)).toMatchObject({ enabled: false });
+    expect(existsSync(join(actual, 'dsh'))).toBe(false);
   });
 
   it('uses one target plan for the CLI installer and the TUI preview', async () => {

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -91,6 +91,21 @@ describe('runInstallSkills', () => {
       join(root, '.codex', 'skills', 'crosschat'),
     ]);
     expect(existsSync(join(root, '.claude', 'skills', 'crosschat', 'SKILL.md'))).toBe(true);
+  });
+
+  it('writes one copy when two spellings name the same existing directory', () => {
+    const root = join(tmpRoot, 'alias-dir-root');
+    const claude = join(root, '.claude');
+    mkdirSync(join(claude, 'skills'), { recursive: true });
+    // Windows folds .CLAUDE onto .claude; elsewhere an explicit directory link has the same identity.
+    const alias = process.platform === 'win32' ? join(root, '.CLAUDE') : join(root, '.claude-alias');
+    if (process.platform !== 'win32') symlinkSync(claude, alias, 'dir');
+    const paths = runInstallSkills({}, { sourceDir: () => realSourceDir, defaultRoot: () => root, env: { DSH_HOME: alias } });
+    expect(paths).toEqual([
+      join(root, '.claude', 'skills', 'crosschat'),
+      join(root, '.codex', 'skills', 'crosschat'),
+    ]);
+    expect(readFileSync(join(claude, 'skills', 'crosschat', 'SKILL.md'), 'utf8')).toContain('crosschat');
   });
 
   it('copies the whole source directory, not just SKILL.md', () => {
