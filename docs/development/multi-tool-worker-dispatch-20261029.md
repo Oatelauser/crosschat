@@ -17,6 +17,8 @@
 
 当前实施 **[C13-I01：桥关闭及挂载失败清理](evidence/c13-worker-20261029/I01-task.md)**。用户已在方案讨论后授权开始并持续推进；本单只改已有 bridge.js 和已有测试，用户操作不变、无新增功能文件。cworker1 独占白名单/index，root 独立审查验收后继续派下一项。方案/隔离复现最终交付 `727cb0a`，见[独立验收](evidence/c13-worker-20261029/P01-final-review.md)。通信交接不转移 worker 的其余协作关系。
 
+I01首交付 `1112f82`，root定向43项通过；[双轴审查](evidence/c13-worker-20261029/I01-review.md)要求[R1](evidence/c13-worker-20261029/I01-R1-task.md)补齐只读cause保真、EEXIST临时文件归属、fixture独立server回收。全量首败49项据实保留，短柄并行线在途与5秒超时单列，不冒称全量通过。共享分支允许已协调的他方文件独立推进，各单使用显式路径commit，不覆盖他方文件归责。
+
 已验收子单见[测试隔离审计](evidence/c14-worker-20261029/W00-review.md)、[协作规则审计](evidence/c14-worker-20261029/W02-review.md)、[短柄诊断验收](evidence/c14-worker-20261029/W03-final-review.md)、[短柄产品修复验收](evidence/c14-worker-20261029/W04-final-review.md)、[来源研究验收](evidence/c14-worker-20261029/W01-final-review.md)、[CLI逐调用研究验收](evidence/c14-worker-20261029/W05-final-review.md)、[既有测试等待修复](evidence/c14-worker-20261029/W06-final-review.md)、[短信封恢复研究](evidence/c14-worker-20261029/W07-final-review.md)及[Harness生命周期方案与隔离复现](evidence/c13-worker-20261029/P01-final-review.md)，活动项不重复保留。root最新完整check为2503通过/11原有跳过，退出0；研究收口不代表生产来源关联或CI门禁已实现。仓库代码/skill未全局部署。历史实机短柄成因未作追认，当前构建的已证实缺陷修复按独立记录收口。
 
 ## 后续切分原则
