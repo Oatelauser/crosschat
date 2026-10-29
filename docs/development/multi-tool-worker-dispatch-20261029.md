@@ -17,7 +17,7 @@
 
 本会话不再派发通信相关子单。用户明确将全部通信任务交给现有 Codex Desktop 会话 **Bug修复2**，由用户亲自对接；见[完整交接](communication-handoff-bugfix2-20261029.md)。W08 最新研究交付到 `1066e30`，尚未完成 root 最终验收，按真实状态随证据交接。短信封内部 subagent 已停写，确认没有任何代码/测试修改。
 
-当前实施 [C08-I01-R1：新上下文执行包](evidence/c08-worker-20261029/I01-R1-task.md)。首交付到9df42ba，完整2537通过/11跳过、root定向64通过；[独立审查](evidence/c08-worker-20261029/I01-review.md)发现外部DSH_HOME根/祖先链接漏检、Windows同路径去重、CLI help三项，尚未验收。R1仅修上述边界及回归/证据，不新增功能文件/参数/账本。[I02 生命周期说明已最终验收](evidence/c13-worker-20261029/I02-final-review.md)，继续作为合同输入。
+当前实施 [C08-I01-R2：首次安装同目录去重](evidence/c08-worker-20261029/I01-R2-task.md)。R1到b4d6a75，完整2541通过/11跳过、root七套件84通过；[R1复审](evidence/c08-worker-20261029/I01-R1-review.md)接受外部根/祖先检查与help，仍缺全新Windows目录大小写别名去重。R2仅补这一原合同与反例，不新增功能文件/参数/账本。[I02 生命周期说明已最终验收](evidence/c13-worker-20261029/I02-final-review.md)，继续作为合同输入。
 
 I01产品首交付 `1112f82`、返修 `4f8b6c2` 已[最终验收](evidence/c13-worker-20261029/I01-final-review.md)：两轴复审和root定向80项通过；Bug修复2在包含桥R1的 `303e7ce` 完整check退出0，2527通过/11原有跳过，最多2/最少1 Vitest worker。root已核对祖先链、日志、结构结果与两种换行哈希，没有冒称独立重跑该次全量。两次首败49项、4项仍保留，不用限并发通过抹去默认并发失败。共享分支各单显式路径commit，不覆盖他方文件归责。
 
