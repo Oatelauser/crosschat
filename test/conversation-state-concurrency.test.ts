@@ -204,7 +204,8 @@ describe('conversation state cross-process writes', () => {
       const other = newConversationRef(claudeA, codexD);
       const busy = await Promise.allSettled([handleForRef(file, other), continueFromRef(file, other)]);
       expect(busy.map((outcome) => outcome.status === 'rejected' ? outcome.reason.code : 'resolved'))
-        .toEqual(['CONVERSATION_STATE_BUSY', 'CONVERSATION_STATE_BUSY']);
+        .toEqual(['resolved', 'CONVERSATION_STATE_BUSY']);
+      expect(busy[0]).toEqual({ status: 'fulfilled', value: undefined }); // optional hint falls back to full ref
       // Post-delivery accounting stays best-effort: a busy lock must not reject.
       await expect(recordConversation(file, other, 2_000)).resolves.toBeUndefined();
       expect(existsSync(shardPath(file, pairKeyOf(other.f, other.t)))).toBe(false);
@@ -218,7 +219,7 @@ describe('conversation state cross-process writes', () => {
     expect(resolveHandle(file, heldResult.handle)).toBe(encodeRef(holderRef));
     // The released lock is usable again: the pair the busy writer skipped now allocates.
     const retry = newConversationRef(claudeA, codexD);
-    await expect(handleForRef(file, retry)).resolves.toMatch(/^c\d+$/);
+    await expect(handleForRef(file, retry)).resolves.toMatch(/^c[A-Z]\d{3}$/);
   }, 60_000);
 
   it('a send that cannot take the lock delivers nothing, then succeeds once released', async () => {
@@ -296,7 +297,7 @@ describe('conversation state cross-process writes', () => {
     for (const ref of [mine, foreign]) {
       const pair = pairKeyOf(ref.f, ref.t);
       mkdirSync(dirname(shardPath(file, pair)), { recursive: true });
-      writeFileSync(shardPath(file, pair), JSON.stringify({ pair, ref: encodeRef(ref), updatedAt: 1, handles: { c1: encodeRef(ref) } }), 'utf8');
+      writeFileSync(shardPath(file, pair), JSON.stringify({ pair, ref: encodeRef(ref), updatedAt: 1, handleSequence: 1, handles: { cA000: encodeRef(ref) } }), 'utf8');
     }
     const mineShard = shardPath(file, pairKeyOf(mine.f, mine.t));
     const foreignShard = shardPath(file, pairKeyOf(foreign.f, foreign.t));
@@ -307,7 +308,7 @@ describe('conversation state cross-process writes', () => {
     await expect(handleForRef(file, mine)).resolves.toBeUndefined();
     // The colliding short handle still fails explicitly, and nothing was rewritten
     // to pick a winner: both shards stay byte-identical.
-    expect(() => resolveHandle(file, 'c1')).toThrow(/撞号/);
+    expect(() => resolveHandle(file, 'cA000')).toThrow(/撞号/);
     expect(readFileSync(foreignShard, 'utf8')).toBe(foreignBefore);
     expect(readFileSync(mineShard, 'utf8')).toBe(mineBefore);
   }, 30_000);
@@ -317,9 +318,9 @@ describe('conversation state cross-process writes', () => {
     const ref = newConversationRef(claudeA, codexB);
     const pair = pairKeyOf(ref.f, ref.t);
     mkdirSync(shardPath(file, pair), { recursive: true }); // a directory where the shard file must go
-    await expect(handleForRef(file, ref)).rejects.toMatchObject({ code: 'CONVERSATION_STATE_WRITE_FAILED' });
+    await expect(handleForRef(file, ref)).resolves.toBeUndefined();
     expect(loadAllPairs(file)[pair]?.handles).toBeUndefined();
-    expect(() => resolveHandle(file, 'c1')).toThrow(/已过期或未知/); // no handle survived the failed write
+    expect(() => resolveHandle(file, 'cA000')).toThrow(/已过期或未知/); // no handle survived the failed write
     // The failed rename must not leave this write's tmp scratch behind.
     expect(readdirSync(dirname(shardPath(file, pair))).filter((name) => name.endsWith('.tmp'))).toEqual([]);
   }, 30_000);

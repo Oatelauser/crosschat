@@ -10,6 +10,7 @@ import type { SendDeps } from '../src/application/send/types.js';
 import { continueConversation, continueFromRef, HANDLE_MAX, handleForRef, latestKnownConversationRef, loadAllPairs, machineNameOfPair, pairKeyOf, recordConversation, resolveHandle } from '../src/conversations.js';
 import { decodeRef, encodeRef, newConversationRef } from '../src/ref.js';
 import type { ConversationRef } from '../src/ref.js';
+import { writeConversationShards } from './helpers/conversation-shards.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-c14-refinement-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -178,22 +179,22 @@ describe('C14 conversation refinement', () => {
     const original: ConversationRef = { ...newConversationRef({ p: 'codex', id: 'sender', m: 'source', mid: 'aaaaaaaa' },
       { p: 'codex', id: 'recipient', endpointType: 'cli', m: 'target', mid: 'bbbbbbbb' }), starId: 'aaaaaaaaaaaa' };
     const typed = change({ ...original, f: { ...original.f, endpointType: 'cli' } });
-    writeFileSync(file, JSON.stringify({ pairs: {
-      [pairKeyOf(original.f, original.t)]: { ref: encodeRef(original), updatedAt: 100, handles: { c1: encodeRef(original) } },
-      [pairKeyOf(typed.f, typed.t)]: { ref: encodeRef(typed), updatedAt: 100, handles: { c1: encodeRef(typed) } },
-    } }));
-    expect(() => resolveHandle(file, 'c1')).toThrow(expect.objectContaining({ code: 'INVALID_CONVERSATION_REF' }));
+    writeConversationShards(file, {
+      [pairKeyOf(original.f, original.t)]: { ref: encodeRef(original), updatedAt: 100, handleSequence: 1, handles: { cA000: encodeRef(original) } },
+      [pairKeyOf(typed.f, typed.t)]: { ref: encodeRef(typed), updatedAt: 100, handleSequence: 1, handles: { cA000: encodeRef(typed) } },
+    });
+    expect(() => resolveHandle(file, 'cA000')).toThrow(expect.objectContaining({ code: 'INVALID_CONVERSATION_REF' }));
   });
 
   it('keeps known CLI and Desktop handle copies distinct even when their native IDs and nonce are identical', () => {
     const { file } = fixture();
     const cli = newConversationRef({ p: 'codex', id: 'sender', endpointType: 'cli' }, { p: 'claude', id: 'recipient', endpointType: 'cli' });
     const desktop = { ...cli, f: { ...cli.f, endpointType: 'desktop' } };
-    writeFileSync(file, JSON.stringify({ pairs: {
-      [pairKeyOf(cli.f, cli.t)]: { ref: encodeRef(cli), updatedAt: 100, handles: { c1: encodeRef(cli) } },
-      [pairKeyOf(desktop.f, desktop.t)]: { ref: encodeRef(desktop), updatedAt: 100, handles: { c1: encodeRef(desktop) } },
-    } }));
-    expect(() => resolveHandle(file, 'c1')).toThrow(expect.objectContaining({ code: 'INVALID_CONVERSATION_REF' }));
+    writeConversationShards(file, {
+      [pairKeyOf(cli.f, cli.t)]: { ref: encodeRef(cli), updatedAt: 100, handleSequence: 1, handles: { cA000: encodeRef(cli) } },
+      [pairKeyOf(desktop.f, desktop.t)]: { ref: encodeRef(desktop), updatedAt: 100, handleSequence: 1, handles: { cA000: encodeRef(desktop) } },
+    });
+    expect(() => resolveHandle(file, 'cA000')).toThrow(expect.objectContaining({ code: 'INVALID_CONVERSATION_REF' }));
     const unknown = { ...cli, f: { p: 'codex' as const, id: 'sender' } };
     expect(() => latestKnownConversationRef(file, unknown)).toThrow(expect.objectContaining({ code: 'TARGET_CONFLICT' }));
   });
@@ -204,11 +205,11 @@ describe('C14 conversation refinement', () => {
       const original = { ...newConversationRef({ p: 'codex', id: 'sender', endpointType: 'cli', m: 'source', mid: 'aaaaaaaa' },
         { p: 'codex', id: 'recipient', endpointType: 'cli', m: 'target', mid: 'bbbbbbbb' }), starId: 'aaaaaaaaaaaa' };
       const other = change(original);
-      writeFileSync(file, JSON.stringify({ pairs: {
-        firstCopy: { ref: encodeRef(original), updatedAt: 100, handles: { c1: encodeRef(original) } },
-        secondCopy: { ref: encodeRef(other), updatedAt: 100, handles: { c1: encodeRef(other) } },
-      } }));
-      expect(() => resolveHandle(file, 'c1')).toThrow(expect.objectContaining({ code: 'INVALID_CONVERSATION_REF' }));
+      writeConversationShards(file, {
+        firstCopy: { ref: encodeRef(original), updatedAt: 100, handleSequence: 1, handles: { cA000: encodeRef(original) } },
+        secondCopy: { ref: encodeRef(other), updatedAt: 100, handleSequence: 1, handles: { cA000: encodeRef(other) } },
+      });
+      expect(() => resolveHandle(file, 'cA000')).toThrow(expect.objectContaining({ code: 'INVALID_CONVERSATION_REF' }));
     });
 
   // ---- W04-R1 P1: refinement must not pick a winner for an existing collision ----
@@ -217,16 +218,16 @@ describe('C14 conversation refinement', () => {
     const { file } = fixture();
     const original = { ...newConversationRef({ p: 'codex', id: 'sender' }, { p: 'claude', id: 'receiver', endpointType: 'cli' }), c: 4 };
     await recordConversation(file, original, 100);
-    expect(await handleForRef(file, original)).toBe('c1');
+    expect(await handleForRef(file, original)).toBe('cA000');
     const typed = { ...original, f: { ...original.f, endpointType: 'cli' } };
     const typedPair = pairKeyOf(typed.f, typed.t);
     const foreign = newConversationRef(typed.f, typed.t);
     mkdirSync(dirname(shardPath(file, typedPair)), { recursive: true });
     writeFileSync(shardPath(file, typedPair),
-      JSON.stringify({ pair: typedPair, ref: encodeRef(foreign), updatedAt: 5, handles: { c1: encodeRef(foreign) } }), 'utf8');
+      JSON.stringify({ pair: typedPair, ref: encodeRef(foreign), updatedAt: 5, handleSequence: 1, handles: { cA000: encodeRef(foreign) } }), 'utf8');
     const untypedBefore = fs.readFileSync(shardPath(file, pairKeyOf(original.f, original.t)), 'utf8');
     const typedBefore = fs.readFileSync(shardPath(file, typedPair), 'utf8');
-    expect(() => resolveHandle(file, 'c1')).toThrow(/撞号/);
+    expect(() => resolveHandle(file, 'cA000')).toThrow(/撞号/);
 
     const refined = await continueFromRef(file, typed, original);
 
@@ -234,10 +235,10 @@ describe('C14 conversation refinement', () => {
     // No winner was picked and nothing was "recovered": both shards byte-identical.
     expect(fs.readFileSync(shardPath(file, typedPair), 'utf8')).toBe(typedBefore);
     expect(fs.readFileSync(shardPath(file, pairKeyOf(original.f, original.t)), 'utf8')).toBe(untypedBefore);
-    expect(() => resolveHandle(file, 'c1')).toThrow(/撞号/);
+    expect(() => resolveHandle(file, 'cA000')).toThrow(/撞号/);
     // The conversation still gets a fresh safe handle on its typed pair.
     const safe = await handleForRef(file, refined.ref);
-    expect(safe).toBe('c2');
+    expect(safe).toBe('cA001');
     expect(decodeRef(resolveHandle(file, safe!))).toMatchObject({ n: original.n, f: { endpointType: 'cli' } });
   });
 
@@ -245,25 +246,25 @@ describe('C14 conversation refinement', () => {
     const { file, deps, typedDeps } = fixture();
     const first = await sendMessage({ tool: 'claude', to: 'Receiver', bodyArg: 'first' }, deps);
     const original = decodeRef(first.receipt.replyRef);
-    expect(first.handle).toBe('c1');
+    expect(first.handle).toBe('cA000');
     const typedPair = pairKeyOf({ ...original.f, endpointType: 'cli' }, original.t);
     const foreign = newConversationRef({ ...original.f, endpointType: 'cli' }, original.t);
     mkdirSync(dirname(shardPath(file, typedPair)), { recursive: true });
     writeFileSync(shardPath(file, typedPair),
-      JSON.stringify({ pair: typedPair, ref: encodeRef(foreign), updatedAt: 5, handles: { c1: encodeRef(foreign) } }), 'utf8');
+      JSON.stringify({ pair: typedPair, ref: encodeRef(foreign), updatedAt: 5, handleSequence: 1, handles: { cA000: encodeRef(foreign) } }), 'utf8');
     vi.mocked(deps.deliverClaude).mockClear();
 
     const sent = await sendMessage({ tool: 'claude', conversation: encodeRef(original), bodyArg: 'refine and send' }, typedDeps);
 
     expect(sent.status).toBe('delivered');
     expect(deps.deliverClaude).toHaveBeenCalledTimes(1); // exactly one delivery
-    expect(sent.handle).toBe('c2'); // a safe new handle, never the colliding c1
+    expect(sent.handle).toBe('cA001'); // a safe new handle, never the colliding cA000
     expect(decodeRef(sent.receipt.replyRef)).toMatchObject({ n: original.n, f: { endpointType: 'cli' } });
-    expect(decodeRef(resolveHandle(file, 'c2'))).toMatchObject({ n: original.n });
-    expect(() => resolveHandle(file, 'c1')).toThrow(/撞号/); // conflict preserved
+    expect(decodeRef(resolveHandle(file, 'cA001'))).toMatchObject({ n: original.n });
+    expect(() => resolveHandle(file, 'cA000')).toThrow(/撞号/); // conflict preserved
     // The ambiguous short handle keeps its explicit zero-delivery rejection.
     vi.mocked(deps.deliverClaude).mockClear();
-    await expect(sendMessage({ tool: 'claude', conversation: 'c1', bodyArg: 'ambiguous short handle' }, typedDeps))
+    await expect(sendMessage({ tool: 'claude', conversation: 'cA000', bodyArg: 'ambiguous short handle' }, typedDeps))
       .rejects.toMatchObject({ code: 'INVALID_CONVERSATION_REF' });
     expect(deps.deliverClaude).not.toHaveBeenCalled();
   });
@@ -272,7 +273,7 @@ describe('C14 conversation refinement', () => {
     const { file } = fixture();
     const original = { ...newConversationRef({ p: 'codex', id: 'sender' }, { p: 'claude', id: 'receiver', endpointType: 'cli' }), c: 3 };
     await recordConversation(file, original, 100);
-    expect(await handleForRef(file, original)).toBe('c1');
+    expect(await handleForRef(file, original)).toBe('cA000');
     const typed = { ...original, f: { ...original.f, endpointType: 'cli' } };
 
     await Promise.all([
@@ -280,13 +281,13 @@ describe('C14 conversation refinement', () => {
       recordConversation(file, { ...original, c: original.c + 1 }, 200),
     ]);
 
-    // Whichever write took the lock last, c1 exists exactly once and resolves to
+    // Whichever write took the lock last, cA000 exists exactly once and resolves to
     // the typed conversation: no duplicate copy, no lost binding.
-    const hit = decodeRef(resolveHandle(file, 'c1'));
+    const hit = decodeRef(resolveHandle(file, 'cA000'));
     expect(hit).toMatchObject({ n: original.n, f: { endpointType: 'cli' } });
     const shard = loadAllPairs(file)[pairKeyOf(typed.f, typed.t)]!;
-    expect(shard.handles?.c1).toBe(encodeRef(hit));
-    expect(loadAllPairs(file)[pairKeyOf(original.f, original.t)]?.handles?.c1).toBeUndefined();
+    expect(shard.handles?.cA000).toBe(encodeRef(hit));
+    expect(loadAllPairs(file)[pairKeyOf(original.f, original.t)]?.handles?.cA000).toBeUndefined();
   });
 
   it('a delivered send stays delivered with no resend when post-delivery accounting cannot write', async () => {
@@ -305,7 +306,7 @@ describe('C14 conversation refinement', () => {
 
     expect(sent.status).toBe('delivered');
     expect(deps.deliverClaude).toHaveBeenCalledTimes(1); // no resend, no requeue
-    expect(sent.handle).toBe('c1'); // the hint handed out before delivery stays
+    expect(sent.handle).toBe('cA000'); // the hint handed out before delivery stays
     // The failed best-effort write left no scratch file behind.
     expect(fs.readdirSync(dirname(shard)).filter((name) => name.endsWith('.tmp'))).toEqual([]);
   });

@@ -8,6 +8,8 @@ import { conversationSummaries, type ConversationSummary } from '../src/conversa
 import type { ClaudeSessionEntry } from '../src/claude/registry.js';
 import type { CodexThreadWithMeta } from '../src/codex/discovery.js';
 import { encodeRef, newConversationRef } from '../src/ref.js';
+import type { PairRecord } from '../src/conversations.js';
+import { writeConversationShards } from './helpers/conversation-shards.js';
 
 const root = mkdtempSync(join(tmpdir(), 'cchat-g0sum-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -240,16 +242,10 @@ describe('G0 传输分类器（存档 ref 解码为权威）', () => {
   it('--conversations --via 走同一分类器：ssh 星 m 命中、无痕迹也对得上', async () => {
     const dir = mkdtempSync(join(root, 'case-'));
     const conversationsFile = join(dir, 'conversations.json');
-    writeFileSync(
-      conversationsFile,
-      JSON.stringify({
-        pairs: {
+    writeConversationShards(conversationsFile, {
           'claude:sc-1\ncodex:t-9': { ref: sshRef, updatedAt: NOW - 60_000 },
           'claude:sc-1\ncodex:t-2': { ref: localRef, updatedAt: NOW - 30_000 },
-        },
-      }),
-      'utf8',
-    );
+    });
     const deps: StatusDeps = {
       listClaudeSessions: () => ({ sessions: [], malformed: 0 }),
       listCodexThreads: async () => [],
@@ -267,9 +263,9 @@ describe('G0 --conversations 柄列', () => {
   function depsWith(handles: Record<string, string> | undefined): StatusDeps {
     const dir = mkdtempSync(join(root, 'case-'));
     const conversationsFile = join(dir, 'conversations.json');
-    const record: Record<string, unknown> = { ref: sshRef, updatedAt: NOW - 60_000 };
+    const record: PairRecord = { ref: sshRef, updatedAt: NOW - 60_000, handleSequence: 3 };
     if (handles !== undefined) record.handles = handles;
-    writeFileSync(conversationsFile, JSON.stringify({ pairs: { 'claude:sc-1\ncodex:t-9': record } }), 'utf8');
+    writeConversationShards(conversationsFile, { 'claude:sc-1\ncodex:t-9': record });
     return {
       listClaudeSessions: () => ({ sessions: [], malformed: 0 }),
       listCodexThreads: async () => [],
@@ -279,14 +275,14 @@ describe('G0 --conversations 柄列', () => {
   }
 
   it('有柄行尾显示 cN，无柄显示 -', async () => {
-    const withHandle = await runStatus(depsWith({ c3: sshRef }), false, true);
-    expect((withHandle.split('\n')[1] ?? '').trimEnd().endsWith('c3')).toBe(true);
+    const withHandle = await runStatus(depsWith({ cA002: sshRef }), false, true);
+    expect((withHandle.split('\n')[1] ?? '').trimEnd().endsWith('cA002')).toBe(true);
     const bare = await runStatus(depsWith(undefined), false, true);
     expect((bare.split('\n')[1] ?? '').trimEnd().endsWith('-')).toBe(true);
   });
 
   it('--json 剥离柄列、保留完整 ref 字段（八键契约不动）', async () => {
-    const parsed = JSON.parse(await runStatus(depsWith({ c3: sshRef }), true, true)) as Array<Record<string, unknown>>;
+    const parsed = JSON.parse(await runStatus(depsWith({ cA002: sshRef }), true, true)) as Array<Record<string, unknown>>;
     expect(Object.keys(parsed[0]!).sort()).toEqual([
       'lastFrom',
       'lastStatus',

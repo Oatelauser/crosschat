@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -9,6 +9,7 @@ import { appendSendLog, createReceiptMarker, type SendLogEntry } from '../src/se
 import { park } from '../src/outbox.js';
 import type { ClaudeSessionEntry } from '../src/claude/registry.js';
 import type { CodexThreadWithMeta } from '../src/codex/discovery.js';
+import { writeConversationShards } from './helpers/conversation-shards.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-statusconv-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -38,7 +39,7 @@ function deps(
   const conversationsFile = join(dir, 'conversations.json');
   const sendLogFile = join(dir, 'send-log.jsonl');
   const outboxDir = join(dir, 'outbox');
-  writeFileSync(conversationsFile, JSON.stringify({ pairs }), 'utf8');
+  writeConversationShards(conversationsFile, pairs);
   for (const e of tail) appendSendLog(sendLogFile, e);
   for (let i = 0; i < parked; i++) {
     park(outboxDir, 't-9', { envelope: `e-${i}`, toName: 'peer', callerKey: 'claude:sc-1' }, NOW - 60_000);

@@ -15,6 +15,13 @@ const pair = pairKeyOf(ref.f, ref.t);
 function parked(id: string, overrides = {}) { return { id, envelope: 'SECRET-CHAT-BODY', toName: '接收者', callerKey: 'claude:sender-full-id', parkedAt: 100, attempts: 2, deliveryMode: 'queue', ...overrides }; }
 
 describe('read-only communication observation queries', () => {
+  it('ignores the retired global conversation file instead of resurrecting cleared pairs', async () => {
+    const baseDir = await fixture();
+    await writeFile(join(baseDir, 'conversations.json'), JSON.stringify({ pairs: { [pair]: { ref: encodeRef(ref), updatedAt: 10 } } }));
+    const result = await queryCommunications({ baseDir, contextId: 'local' });
+    expect(result.items).toEqual([]);
+    expect(result.completeness).toBe('complete');
+  });
   it('treats an absent optional store as empty without creating folders, migrating or repairing', async () => {
     const baseDir = await fixture();
     expect(await queryCommunications({ baseDir, contextId: 'local' })).toMatchObject({ items: [], completeness: 'complete', errors: [] });

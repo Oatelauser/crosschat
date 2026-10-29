@@ -869,7 +869,7 @@ describe('runSend conversation short handles (F2)', () => {
   const freshState = (): string =>
     join(mkdtempSync(join(outboxDir, 'state-')), 'conversations.json');
 
-  it('照抄端到端：落信 hint 带 c1 → 按 c1 回信 → delivered；柄跨轮复用', async () => {
+  it('照抄端到端：落信 hint 带 cA000 → 按 cA000 回信 → delivered；柄跨轮复用', async () => {
     const state = freshState();
     const deps = { ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }), conversationStateFile: state };
     const first = await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'one' }, deps);
@@ -877,32 +877,32 @@ describe('runSend conversation short handles (F2)', () => {
     // 落信的 hint 只带两字符短柄，完整 ref 一个字节不出现
     const envelope = codexDeliveries.at(-1)!.content;
     const command = envelope.match(/回复请运行: (crosschat send[^\n<]+)</)![1]!;
-    expect(command).toContain('--conversation c1 ');
+    expect(command).toContain('--conversation cA000 ');
     expect(envelope).not.toMatch(REF_RE);
-    // 对端照抄命令里的 c1 回信
+    // 对端照抄命令里的 cA000 回信
     const reply = await runSend(
       { tool: 'claude', conversation: command.match(/--conversation (\S+)/)![1]!, bodyArg: 'two' },
       { ...deps, env: { CODEX_THREAD_ID: 'team1111-aaaa' } },
     );
     expect(reply).toContain('delivered to alpha (turn 2)');
     expect(claudeDeliveries.at(-1)!.content).toContain('two');
-    // 同 nonce 复用同柄：回信的 hint 仍是 c1
-    expect(claudeDeliveries.at(-1)!.content).toContain('--conversation c1 ');
+    // 同 nonce 复用同柄：回信的 hint 仍是 cA000
+    expect(claudeDeliveries.at(-1)!.content).toContain('--conversation cA000 ');
   });
 
   it('an unknown handle teaches the --to continuation with the exact wording', async () => {
     const deps = { ...makeDeps({ CODEX_THREAD_ID: 'team1111-aaaa' }), conversationStateFile: freshState() };
-    const err = await expectCode(runSend({ tool: 'claude', conversation: 'c7', bodyArg: 'h' }, deps), 'INVALID_CONVERSATION_REF');
-    expect(err.message).toContain('c7 已过期或未知');
+    const err = await expectCode(runSend({ tool: 'claude', conversation: 'cA006', bodyArg: 'h' }, deps), 'INVALID_CONVERSATION_REF');
+    expect(err.message).toContain('cA006 已过期或未知');
     expect(err.message).toContain('--to <名> --tool <收件类型> 接续或开新对话');
   });
 
   it('a handle without wired state resolves to the same teaching error (no crash)', async () => {
     const err = await expectCode(
-      send({ tool: 'claude', conversation: 'c1', bodyArg: 'h' }, { CODEX_THREAD_ID: 'team1111-aaaa' }),
+      send({ tool: 'claude', conversation: 'cA000', bodyArg: 'h' }, { CODEX_THREAD_ID: 'team1111-aaaa' }),
       'INVALID_CONVERSATION_REF',
     );
-    expect(err.message).toContain('c1 已过期或未知');
+    expect(err.message).toContain('cA000 已过期或未知');
   });
 
   it('a full mc2_ ref still routes directly (双形态永续)', async () => {
@@ -918,20 +918,17 @@ describe('runSend conversation short handles (F2)', () => {
   it('an ambiguous handle (forged same number in two shards) lists the candidate refs', async () => {
     const state = freshState();
     const deps = { ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }), conversationStateFile: state };
-    await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'one' }, deps); // c1 -> pair alpha/workteam
-    // Hand-forge a second shard holding c1 for another conversation (CAS lost twice).
-    // Filename is irrelevant to enumeration: loadAllPairs keys shards by their `pair` field.
+    await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'one' }, deps); // cA000 -> pair alpha/workteam
+    // Hand-forge a second shard holding cA000 for another conversation (CAS lost twice).
+    // Use the current shard filename contract so the collision is the only fault.
     const imposter = encodeRef(newConversationRef({ p: 'claude', id: 'cs-beta' }, { p: 'codex', id: 'other222-bbbb' }));
-    writeFileSync(
-      join(state, '..', 'conversations', 'foreign.json'),
-      JSON.stringify({ pair: 'claude:cs-beta\ncodex:other222-bbbb', ref: imposter, updatedAt: 1, handles: { c1: imposter } }),
-      'utf8',
-    );
+    const { writeConversationShards } = await import('./helpers/conversation-shards.js');
+    writeConversationShards(state, { 'claude:cs-beta\ncodex:other222-bbbb': { ref: imposter, updatedAt: 1, handleSequence: 1, handles: { cA000: imposter } } });
     const err = await expectCode(
-      runSend({ tool: 'claude', conversation: 'c1', bodyArg: 'h' }, { ...deps, env: { CODEX_THREAD_ID: 'team1111-aaaa' } }),
+      runSend({ tool: 'claude', conversation: 'cA000', bodyArg: 'h' }, { ...deps, env: { CODEX_THREAD_ID: 'team1111-aaaa' } }),
       'INVALID_CONVERSATION_REF',
     );
-    expect(err.message).toContain('c1 撞号指向多个对话');
+    expect(err.message).toContain('cA000 撞号指向多个对话');
     expect(err.message).toContain(imposter);
   });
 });

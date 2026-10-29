@@ -10,6 +10,7 @@ import { appendSendLog, type SendLogEntry } from '../src/send-log.js';
 import { MultichatError } from '../src/errors.js';
 import type { ClaudeSessionEntry } from '../src/claude/registry.js';
 import type { CodexThreadWithMeta } from '../src/codex/discovery.js';
+import { writeConversationShards } from './helpers/conversation-shards.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-status-filters-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -56,7 +57,7 @@ function convDeps(
   const dir = mkdtempSync(join(root, 'case-'));
   const conversationsFile = join(dir, 'conversations.json');
   const sendLogFile = join(dir, 'send-log.jsonl');
-  writeFileSync(conversationsFile, JSON.stringify({ pairs }), 'utf8');
+  writeConversationShards(conversationsFile, pairs);
   for (const e of tail) appendSendLog(sendLogFile, e);
   return {
     listClaudeSessions: () => ({ sessions: [], malformed: 0 }),
