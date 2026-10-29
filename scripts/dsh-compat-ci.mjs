@@ -20,6 +20,11 @@ const requiredChecks = ['official-plugin-installation-and-owned-web-runtime', 'p
   'authenticated-production-discovery-and-pagination', 'idle-production-delivery-wakes-the-existing-session', 'busy-native-queue-and-steer-step-boundaries',
   'native-shell-send-and-conversation-reply-have-full-session-identities', 'missing-target-does-not-create-or-resume-a-replacement'];
 const scope = { officialNpmRuntime: true, officialPluginManager: true, ordinaryWebSessions: true, scriptedLocalModel: true, browserUI: false, desktop: false, modelIntelligence: false };
+const desktopTool = 'dsh-desktop';
+const desktopChecks = ['formal-desktop-artifact-and-built-in-runtime-profile', 'skill-and-plugin-loading', 'desktop-ui-send-receive-and-reply',
+  'host-natural-exit', 'official-uninstall', 'bridge-registration-and-system-registration-cleanup'];
+const desktopScope = { officialDesktopArtifact: true, builtInRuntimeProfile: true, skillAndPluginLoading: true, desktopUi: true,
+  ordinaryWebSessions: false, browserUI: false, modelIntelligence: false };
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const message = (error) => error instanceof Error ? error.message : String(error);
 
@@ -128,6 +133,54 @@ export function hasDshRuntimeReleaseProof(cleanup) {
     && (cleanup.errors === undefined || (Array.isArray(cleanup.errors) && cleanup.errors.length === 0));
 }
 
+function validDesktopScope(value) { return record(value) && Object.entries(desktopScope).every(([key, expected]) => value[key] === expected); }
+
+/**
+ * The report must name this run, install, owner, artifact version/identity, one native instance and one session.
+ * Equality only proves the report agrees with the caller's record; it is neither anti-forgery nor proof of native facts.
+ */
+function validDesktopReport(report, artifact, expected) {
+  if (!record(report) || !record(expected) || report.schema !== 1 || report.tool !== desktopTool || report.platform !== 'win32' || report.arch !== 'x64'
+    || report.version !== artifact.version || report.artifactId !== artifact.integrity
+    || !uuid.test(report.runId ?? '') || (expected.runId !== undefined && report.runId !== expected.runId)
+    || !uuid.test(report.installationId ?? '') || report.installationId !== expected.installationId
+    || typeof report.owner !== 'string' || report.owner === '' || report.owner !== expected.owner
+    || !uuid.test(report.instanceId ?? '') || typeof report.sessionId !== 'string' || !/^[A-Za-z0-9._:-]{1,200}$/.test(report.sessionId)
+    || !validDesktopScope(report.scope)
+    || !Array.isArray(report.checks) || report.checks.some((check) => !record(check) || !desktopChecks.includes(check.name) || check.status !== 'passed' || !Number.isFinite(check.elapsedMs) || check.elapsedMs < 0)
+    || new Set(report.checks.map((check) => check.name)).size !== report.checks.length) return false;
+  // Every desktop area needs its own passing check, so a missing UI or uninstall record can never PASS.
+  return report.status === 'passed' ? report.stage === 'done' && report.category === null && report.checks.length === desktopChecks.length
+    : report.status === 'failed' && ['compatibility', 'infrastructure'].includes(report.category) && slug.test(report.stage ?? '') && report.stage !== 'done' && slug.test(report.check ?? '');
+}
+function desktopExpectation(installation) { return { installationId: installation?.installationId, owner: installation?.owner }; }
+function desktopFailure(version, stage, error) { return { schema: 1, tool: desktopTool, platform: 'win32', arch: 'x64', version, status: 'failed', category: 'infrastructure', stage, check: stage, error: message(error) }; }
+
+/** Desktop release needs the Host's own exit, the official uninstall and both registration cleanups; a kill is not release. */
+export function hasDesktopCleanupProof(cleanup) {
+  return record(cleanup) && cleanup.hostExited === true && cleanup.uninstalled === true && cleanup.registrationRemoved === true
+    && cleanup.systemRegistrationRemoved === true && cleanup.forced === false
+    && (cleanup.errors === undefined || (Array.isArray(cleanup.errors) && cleanup.errors.length === 0));
+}
+
+/** Every Desktop attempt owns a fresh directory and caller run ID; stale or foreign reports are never read. */
+export async function runDshDesktopAttempt({ output, label, artifact, installation }, execute) {
+  if (!['baseline', 'candidate', 'retry'].includes(label)) throw new Error('Invalid Harness desktop probe label');
+  const directory = await mkdtemp(join(output, `${label}-desktop-`));
+  const reportPath = join(directory, 'report.json'); const runId = randomUUID();
+  const expected = { runId, ...desktopExpectation(installation) };
+  let result;
+  try { result = await execute({ reportPath, runId, directory }); }
+  catch (error) { return desktopFailure(artifact.version, 'desktop-session', error); }
+  if (!normalProcess(result)) return desktopFailure(artifact.version, 'desktop-session', 'Desktop session did not exit normally; release is unknown');
+  let report;
+  try { report = JSON.parse(await readFile(reportPath, 'utf8')); }
+  catch { return desktopFailure(artifact.version, 'desktop-report', 'Desktop session did not produce a fresh valid report'); }
+  if (!validDesktopReport(report, artifact, expected) || result.code !== (report.status === 'passed' ? 0 : 1))
+    return desktopFailure(artifact.version, 'desktop-report', 'Desktop identity, evidence, scope or process exit disagrees with this attempt');
+  return { ...report, process: { code: result.code, signal: result.signal, timedOut: result.timedOut } };
+}
+
 /** Every child gets a new directory and UUID; stale PASS files are never read. */
 export async function runDshProbeAttempt({ output, label, artifact }, execute) {
   if (!['baseline', 'candidate', 'retry'].includes(label)) throw new Error('Invalid Harness probe label');
@@ -154,20 +207,21 @@ function classify(baseline, candidate, retry) {
   return { kind: 'inconclusive', notify: false };
 }
 
-export async function runDshBuildSequence(builds, operations) {
-  const summary = { schema: 1, tool, platform: 'win32', arch: 'x64', builds, scope, installationCleanup: 'incomplete' };
+/** One install, evidence and removal cycle per build; the next install waits for a proven release. */
+async function serialSequence(builds, config) {
+  const summary = { schema: 1, tool: config.tool, platform: 'win32', arch: 'x64', builds, scope: config.scope, installationCleanup: 'incomplete' };
   async function attempt(artifact, label) {
-    const installation = await operations.install(artifact, label);
+    const installation = await config.operations.install(artifact, label);
     let report;
-    try { report = await operations.probe(installation, artifact, label); }
-    catch (error) { report = infrastructure(artifact.version, 'probe-process', error); }
-    if (!validReport(report, artifact) || !processMatches(report)) report = infrastructure(artifact.version, 'probe-report', 'Fresh process/report evidence is invalid');
+    try { report = await config.operations.probe(installation, artifact, label); }
+    catch (error) { report = config.fail(artifact.version, 'process', error); }
+    if (!config.verify(report, artifact, installation)) report = config.fail(artifact.version, 'report', new Error('Fresh process/report evidence is invalid'));
     summary[label] = report;
-    if (!hasDshRuntimeReleaseProof(report.cleanup)) {
+    if (!config.released(report.cleanup)) {
       summary.retainedInstallation = { label, version: artifact.version, root: installation.root, reason: 'Owned runtime release is unknown; do not remove or start another build' };
       throw new Error(summary.retainedInstallation.reason);
     }
-    try { await operations.remove(installation, artifact, label); }
+    try { await config.operations.remove(installation, artifact, label); }
     catch (error) { summary.retainedInstallation = { label, version: artifact.version, root: installation.root, reason: message(error) }; throw error; }
     return report;
   }
@@ -180,10 +234,23 @@ export async function runDshBuildSequence(builds, operations) {
   return summary;
 }
 
-// RED scaffold: the desktop entry points borrow the web core until the desktop verification lands.
-export const hasDesktopCleanupProof = hasDshRuntimeReleaseProof;
-export const runDshDesktopAttempt = runDshProbeAttempt;
-export const runDshDesktopSequence = runDshBuildSequence;
+export function runDshBuildSequence(builds, operations) {
+  return serialSequence(builds, {
+    tool, scope, operations,
+    verify: (report, artifact) => validReport(report, artifact) && processMatches(report),
+    released: hasDshRuntimeReleaseProof,
+    fail: (version, phase, error) => infrastructure(version, phase === 'process' ? 'probe-process' : 'probe-report', error),
+  });
+}
+
+export function runDshDesktopSequence(builds, operations) {
+  return serialSequence(builds, {
+    tool: desktopTool, scope: desktopScope, operations,
+    verify: (report, artifact, installation) => validDesktopReport(report, artifact, desktopExpectation(installation)) && processMatches(report),
+    released: hasDesktopCleanupProof,
+    fail: (version, phase, error) => desktopFailure(version, phase === 'process' ? 'desktop-session' : 'desktop-report', error),
+  });
+}
 
 export function dshRegressionIdentity(summary) {
   if (!record(summary) || summary.schema !== 1 || summary.tool !== tool || summary.platform !== 'win32' || summary.arch !== 'x64' || !validScope(summary.scope)

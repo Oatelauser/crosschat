@@ -227,7 +227,7 @@ describe('DeepSeek Harness formal desktop report and lifecycle', () => {
       const incomplete = (name: string) => desktopChecks.filter((item) => item !== name).map((item) => ({ name: item, status: 'passed', elapsedMs: 1 }));
       for (const invalid of [
         { tool: 'dsh-web-runtime' }, { scope: { ...scope, desktop: true } }, { scope: { ...desktopScope, desktopUi: false } },
-        { runId: randomUUID() }, { installationId: randomUUID() }, { owner: randomUUID() }, { version: '0.2.2' },
+        { runId: randomUUID() }, { installationId: randomUUID() }, { owner: randomUUID() }, { version: '0.3.0' },
         { artifactId: `sha512-${Buffer.alloc(64, 2).toString('base64')}` }, { instanceId: 'not-a-uuid' }, { sessionId: '' },
         { checks: [] }, { checks: incomplete('desktop-ui-send-receive-and-reply') }, { checks: incomplete('official-uninstall') },
         { checks: [...desktopChecks, desktopChecks[0]].map((name) => ({ name, status: 'passed', elapsedMs: 1 })) }, { stage: 'contract' },
