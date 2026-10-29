@@ -282,6 +282,26 @@ describe('local maintenance plans and exact execution', () => {
     expect(existsSync(join(actual, 'dsh'))).toBe(false);
   });
 
+  it('plans a not-yet-created case alias once for install and uninstall', async () => {
+    const { previewMaintenance } = await import('../src/application/maintenance/operations.js');
+    const f = fixture();
+    const options = { ...f.options, env: { DSH_HOME: join(f.home, '.CLAUDE') } };
+    const install = previewMaintenance('install-skills', options);
+    const uninstall = previewMaintenance('uninstall-data', options);
+    expect(install.enabled).toBe(true);
+    expect(uninstall.enabled).toBe(true);
+    const installed = install.targets.map((item) => item.path);
+    const removed = uninstall.targets.map((item) => item.path);
+    const harness = join(f.home, '.CLAUDE', 'skills', 'crosschat');
+    expect(installed).toContain(join(f.home, '.claude', 'skills', 'crosschat'));
+    expect(installed).toContain(join(f.home, '.codex', 'skills', 'crosschat'));
+    // Windows resolves the fresh suffix case-insensitively; POSIX keeps two distinct directories.
+    expect(installed.includes(harness)).toBe(process.platform !== 'win32');
+    expect(removed.includes(harness)).toBe(process.platform !== 'win32');
+    expect(existsSync(join(f.home, '.claude'))).toBe(false);
+    expect(existsSync(join(f.home, '.CLAUDE'))).toBe(false);
+  });
+
   it('uses one target plan for the CLI installer and the TUI preview', async () => {
     const { previewMaintenance } = await import('../src/application/maintenance/operations.js');
     const f = fixture();

@@ -204,14 +204,28 @@ describe('drainOutboxAtEntry', () => {
 
 describe('usage help scope', () => {
   const cliPath = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
-  it('describes the Claude, Codex and Harness skill scope and its roots', () => {
+  function help(): string {
     const out = spawnSync(process.execPath, [cliPath, '--help'], { encoding: 'utf8' });
     expect(out.status).toBe(0);
-    const text = out.stdout.replace(/\s+/g, ' ');
-    expect(text).toContain('install-skills');
-    expect(text).toContain('Harness');
-    expect(text).toContain('DSH_HOME');
-    expect(text).toContain('--dir');
-    expect(text).not.toContain('both agent skills');
+    return out.stdout;
+  }
+  function section(text: string, command: string, next: string): string {
+    const from = text.indexOf(`\n  ${command}`);
+    const to = text.indexOf(`\n  ${next}`, from);
+    expect(from).toBeGreaterThanOrEqual(0);
+    expect(to).toBeGreaterThan(from);
+    return text.slice(from, to).replace(/\s+/g, ' ');
+  }
+  it('describes install-skills as Claude, Codex and Harness with its roots', () => {
+    const install = section(help(), 'install-skills', 'clean [--force]');
+    expect(install).toContain('Claude, Codex and Harness');
+    expect(install).toContain('DSH_HOME');
+    expect(install).toContain('--dir');
+  });
+  it('describes uninstall as removing all three skill copies', () => {
+    const uninstall = section(help(), 'uninstall [--yes]', 'claude [any native args]');
+    expect(uninstall).toContain('Claude, Codex and Harness');
+    expect(uninstall).toContain('DSH_HOME');
+    expect(uninstall).not.toContain('both agent skills');
   });
 });

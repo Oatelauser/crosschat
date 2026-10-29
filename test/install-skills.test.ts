@@ -108,6 +108,18 @@ describe('runInstallSkills', () => {
     expect(readFileSync(join(claude, 'skills', 'crosschat', 'SKILL.md'), 'utf8')).toContain('crosschat');
   });
 
+  it('installs a not-yet-created case alias once on Windows and keeps POSIX case-different directories', () => {
+    const root = join(tmpRoot, 'fresh-alias-root');
+    // Fresh home: .claude does not exist yet, so only platform path semantics can tell the spellings apart.
+    const paths = runInstallSkills({}, { sourceDir: () => realSourceDir, defaultRoot: () => root, env: { DSH_HOME: join(root, '.CLAUDE') } });
+    const claude = join(root, '.claude', 'skills', 'crosschat');
+    const codex = join(root, '.codex', 'skills', 'crosschat');
+    const harness = join(root, '.CLAUDE', 'skills', 'crosschat');
+    if (process.platform === 'win32') expect(paths).toEqual([claude, codex]);
+    else expect(paths).toEqual([claude, codex, harness]);
+    expect(readFileSync(join(claude, 'SKILL.md'), 'utf8')).toContain('crosschat');
+  });
+
   it('copies the whole source directory, not just SKILL.md', () => {
     const source = join(tmpRoot, 'fixture-source');
     mkdirSync(source);
