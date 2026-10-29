@@ -78,3 +78,36 @@ root 同时核实到运行器对任意现存 root 使用递归 mkdir 后覆盖 c
 4. **RED/GREEN 与汇报对应。** 必须覆盖真实 main 对旧同 owner 非空根的拒绝且所有文件字节不变；两个并发领取中失败者不能删赢家；本次 marker 不符不能删；畸形 input 不崩进程且服务能关；缺/错型 ID 不会相关成功；已有 evidence 时 CLI 零启动；取消/退出未核实保留根。正常完整相等、完整有效不等、首轮反例回归保持。先定向、脚本语法与 ESLint，再最终 npm run check；不改旧断言语义以掩盖失败。报告每项实际验证和未覆盖边界、所有原证据哈希、资源与临时目录情况，不用概括的“全部异常通过”代替逐项事实。
 
 结论：**R1 修复有实质进展，但 P1 目录所有权及残余边界未通过，W05 转 R2，不关闭活动项。** 短信封恢复继续另单，C14 和原工具/CI 总计划保持未完成。
+
+## R2 复审与 R3 最小收口
+
+固定范围 `dba2c45d8b90efa3141129a2bfec62c6762f5411...4c391e3fe6b77b4684f74713a6b5aeb347d08f3b`，唯一提交 `4c391e3`。P1 旧根误删、畸形请求进程崩溃、ID 强转、非连通链及已有证据提前拒绝均已有修复。root 定向复跑 W05 与 TUI 两文件 **51/51** 通过（W05 为 48），两路独立审计继续核对以下合同缺口。
+
+### Spec
+
+1. **P2：未知后代仍删根。** runProcess 的 descendantsVerified 恒 false；runCorrelation 的 settled 仅看启动器 close 等条件。root 在独占合成根用假 CLI 运行完整链，实际得到 status=complete、descendantsVerified=false、cleanup=removed；没有启动原生工具。这仍违反 R2“不能仅用启动器 close 证明所有后代退出，未核实保留根”。
+2. **P2：缺失 ID 可被另一项不等覆盖。** 一项 call ID 缺失而 thread ID 有效但不同，判定先处理 false，返回 mismatch/complete。缺失必需比较字段必须优先为 unverifiable；两个完整有效字符串的不相等仍是正常负结论。
+3. **P2：祖先链代次未核实。** 相邻 pid 连通但父进程出生晚于子进程，仍被当作同代父子；独立审计以创建时间 100/120 的子进程指向时间 200 的共同 Codex 父复现 same。需在首个代次不成立处停止，不能把 PID 重用后进程当作原父。
+4. **P2：claim 没有绑定目标根及完整 marker。** removeOwnedRoot 只比 owner/runId，不比目标根与 claim.root，也不核对 marker 的 PID/创建时间。其他根若带相同 marker，或 marker 只改部分字段，仍可授权删除；不符合 R2 的本次目录绑定及 marker 变更保留规则。
+
+### Standards
+
+独立规范复审还确认 loopback 请求未设置本工装截止、close 竞争 timer 提前关闭时不清除。root 的完整假 CLI 实验在所有工作结束后仍等待该 5 秒 timer，符合静态路径。按 R2 要求补请求截止和自身 timer/listener 收束，不扩新原生或平台功能。
+
+### TUI 失败的真实边界
+
+worker 自报完整 check 为 2494 通过/1 失败/11 跳过；补充的原终端片段表明唯一失败在 `test/tui-main-observations.test.ts:68`：vi.waitFor 默认 1000ms 内未调用 render，约 1019–1021ms 超时，并非 home/discovery 断言不同。worker 在本机两个 shell 及回退到本轮基线字节时均观察失败，但没有保存完整原始日志。root 本轮三项 TUI 全通过，首项约 755ms；独立诊断单项约 842ms 通过。故准确结论是**该等待在不同运行条件下表现不稳定，当前不能称跨环境稳定的基线故障**。W05 没改该测试和产品 TUI；不在本单悄悄调大 timeout、跳过或改断言。测试稳定性留为独立问题，最终 full check 仍如实汇报，不掩盖失败。
+
+### R3 具体裁定与任务
+
+为结束工装范围反复，本轮明确选择**未知就保留**：不要求为正常运行自动删除引入 Windows Job Object、后台进程树采样、第三方包或新平台验证。默认 descendantsVerified 仍无证据时，即使启动器正常退出也 retained/processes-unverified；返回退出 3 和保留路径，逐调用观测仍可保存为事实，不能把清理未核实叫原生“不支持”。因此该运行器当前不是可直接作为 CI 成功门禁的完整探针；这是 W05 研究工装的边界，不是取消原 CI 待办。禁止为了让测试得到 complete 硬填 verified=true。纯对账函数的完整正/负结果照常验证；受控 fixture 的目录由测试 owner 确认自己创建的所有进程退出后清理，不把 fixture 的额外知识冒充原生后代验证。
+
+正式派单给新基线，沿用 R2 白名单/单 writer/index/本地新 commit、无原生复跑及原三份证据保护。仅修以下小范围，不重写框架：
+
+1. 把后代未核实纳入根保留与退出结果；正常、非零、超时和取消都不能仅靠启动器 close 删根。默认运行器的局限写进报告复现和退出码说明；完整链测试钉住 descendantsVerified=false 时根确实保留，不再断言自动 removed。不要扩大到真实原生进程树验证。
+2. removeOwnedRoot 必须绑定本次解析后的绝对根与 claim.root，并核对本次写入的完整 marker（可保存确切字节或等价全部字段）；根不同或 marker 任何身份字段变化即拒绝，不删字节。加复制 marker 到另一自有根、只改 PID/创建时间的行为回归。
+3. 必需 ID 的 null 优先不可比较；两组有效 ID 的 mismatch 语义保持。祖先链检查父出生时间不晚于子及重复 PID/环，在首个断点截断，不扩大为防伪来源系统。补缺 call ID + thread 不同、父晚出生及循环的最小反例。
+4. 请求明确截止，未结束的本机请求有界失败并记录；请求 end/error/close 与服务关闭释放自己的 timer/listener。close timer 在关闭成功时立即清除。用受控半截请求、正常关闭及 Hook stdin 截止/超限行为验证，不靠宿主进程表或 1ms 时序。
+5. 只修当前代码及更新报告/新增 R3 检查记录，历史 R1/R2 证据和检查保留。先定向/语法/ESLint，再最终 npm run check；如 TUI 再失败，保存准确错误及环境，不修改其测试或通过重复跑抹掉首次失败。逐项回报实际结果和未覆盖范围，独立本地新提交后停写。
+
+当前结论：**R2 的 P1 已修复，其余最小合同收口转 R3；尚未验收。** 不再启动新原生采证，不将未知后代的保守处理升级为产品限制。短信封恢复与全量工具/CI 计划继续保留。
