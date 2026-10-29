@@ -77,3 +77,63 @@
 - 未验证 Host 崩溃、插件禁用、子 scope 撤销与 close 失败同时发生的组合。
 - 未验证跨进程并发 close（只覆盖同进程并发）。
 - 未安装/升级/卸载工具，未启停原生 Host/Desktop/daemon，未读写用户 profile/config/auth，未访问远端或模型，未试发消息。
+
+## 7. R1 返修（2026-10-29）
+
+派单基线 `29915a6fd907e701abab61985e24bbdacc8f1abc`；开工时 HEAD 即该提交，期间并行短柄线提交 `9816b45`（`git log 29915a6..9816b45 -- integrations/dsh/bridge.js test/dsh-bridge.test.ts` 为空，未动本单白名单）。本轮独立 commit 的父提交为 `9816b45d706aa0a5aa90ffc7c998a84f7722e6d5`。范围仍只有原桥与原测试，未新增功能文件、未改用户操作。
+
+### 7.1 三处收口
+
+| 处 | 收口方式 |
+| --- | --- |
+| cause 不可写 | `withCleanup` 改为 `try { error.cause = extra; return error } catch {}`，赋值失败即退回 `new AggregateError([error, extra], String(error?.message ?? error), { cause })`。原始错误对象、它原有的 `cause`、每条清理原因全部保留；不再出现替代 TypeError。 |
+| 临时文件归属 | 新增生命周期内布尔 `temporaryOwned`，只在 `open(temporary, 'wx', 0o600)` 成功后置真；mount catch 仅在该标记为真时 unlink。EEXIST 等 open 失败不触碰外来文件。无新文件/格式/迁移/锁。 |
+| fixture 独立收尾 | `vi.mock('node:http')` 捕获本次实际创建的每个 server，`cleanup` 里独立关闭仍在监听的 server（产品 close 提前拒绝时的兜底）；effects 清理改为逐项尝试、只汇总非预期错误；`afterEach` 收尾后再断言无 fixture listener 仍在监听。 |
+
+### 7.2 新反例先失败、修复后通过
+
+`npx vitest run test/dsh-bridge.test.ts`，产品临时还原为派单基线版本（仅此一个文件，验证后立即恢复）：
+
+| 新用例 | 基线产品观察 |
+| --- | --- |
+| 只读 cause（可扩展、`cause` 值 undefined 但不可写） | 抛 `TypeError: Cannot assign to read only property 'cause'`，原始 `link injection failed` 与清理原因全丢 |
+| EEXIST 已有 tmp | 目录从 1 个文件变 0 个：外来 tmp 被删，原字节丢失 |
+| 主因 + 自有 cause + 多条清理原因 | 基线产品上即通过（既有 cause 不覆盖逻辑本就成立），作为护栏保留 |
+
+修复后：`32 passed (32)`。期间发现并修正 fixture 自身记账：产品 close 按用例预期拒绝时，`ctx.effect` 的 disposer 会重放同一拒绝，fixture 需把它计入 `expected` 而不是当成收尾失败上报（已加一行显式登记，不靠再调一次已拒绝的 Promise 兜底，重放是产品自己注册的 disposer 行为）。
+
+### 7.3 fixture 独立 server 兜底的实际观察
+
+用 I01 之前的桥（`b1d7a4d:integrations/dsh/bridge.js`，close 首错即停）跑 release 抛错用例：
+
+- **去掉兜底**（临时环境变量开关，观察后已删，`grep -c C13_DROP_SERVER_FALLBACK` = 0）：`fixture cleanup failed: fixture left a listener bound`，且 listener 仍以 **503** 应答。
+- **保留兜底**：只剩产品行为断言失败（503 不拒绝），**没有**任何 fixture 泄漏报告——listener 由 fixture 自己关掉。
+
+两轮均即时恢复产品为修复版，最终 `32 passed (32)`。
+
+### 7.4 检查
+
+| 检查 | 命令 | 结果 |
+| --- | --- | --- |
+| JS 语法 | `node --check integrations/dsh/bridge.js` | 通过 |
+| 桥套件 | `npx vitest run test/dsh-bridge.test.ts` | 32 passed |
+| caller-source 主套件 | `npx vitest run test/caller-source-providers.test.ts` | 14 passed |
+| 其余 caller-source 回归 | confirmations / service / state-lock / codex-probe / tui-context-source | 55 passed |
+| ESLint | `npx eslint test/dsh-bridge.test.ts integrations/dsh/bridge.js` | 通过（退出 0） |
+| 空白 | `git diff --check` | 通过 |
+| 全量 | `npm run check` | 退出 1：4 failed / 2523 passed / 11 skipped（2538），首败原文见 `I01-R1-check.txt` |
+| 原证据 | `sha256sum` P01 / P01-R1 / I01-check.txt | `e7497444…` / `81d383df…` / `e5b14efe…`，均未变 |
+
+**全量 4 项失败归责**：`dsh-send`（`expected 'cA000' to match /^c\d+$/`）、`maintenance` 两条（保留规则预览数量不符、默认 worker 预览失败）、`core-code-standards`（`Test timed out in 5000ms`，本次耗时 6470ms）。全仓只有 `test/dsh-bridge.test.ts` 与 `test/caller-source-providers.test.ts` 导入 `integrations/dsh/bridge.js`，两者均通过。隔离重跑这三个文件：core-code-standards 通过（负载敏感，非产品问题），另 3 条稳定失败，属并行短柄线在途的会话别名/状态改动（工作树仍有其未 stage 的 `test/conversation-state-concurrency.test.ts`、`test/send-handle.test.ts`），本单不认领、不修改、不靠重跑抹掉首败。
+
+### 7.5 资源清理
+
+- 归责/兜底实验用的 `$TEMP/c13-i01r1-bridge-new.js` 与产品还原均已收尾，产品文件为修复版。
+- fixture 临时 home 随用例 `rm`；`%TEMP%` 无 `crosschat-dsh-bridge-*` 残留；无残留 listener（`afterEach` 断言）。
+- 未改并行线的任何文件，未 stage 其改动；未跟踪的 `docs/代码消息投递.md` 未动。
+
+### 7.6 未测边界（相对 7.1 收口）
+
+- 只读 `cause` 用 `Object.defineProperty` 合成；未覆盖 Proxy/getter 抛错等更极端的 Error 形状。
+- 未验证 EEXIST 与 `link` 失败同时发生、以及外部进程在窗口内替换 tmp 的竞态。
+- 其余同第 6 节。

@@ -18,8 +18,14 @@ const failure = (code, message, status = 500) => Object.assign(new Error(message
 function withCleanup(error, cleanup) {
   if (cleanup.length === 0) return error;
   const extra = cleanup.length === 1 ? cleanup[0] : new AggregateError(cleanup, 'Harness bridge cleanup failed.');
-  if (error?.cause === undefined && Object.isExtensible(error)) { error.cause = extra; return error; }
-  return new AggregateError([error, extra], String(error?.message ?? error), { cause: error?.cause });
+  let cause;
+  try { cause = error?.cause; } catch { cause = undefined; }
+  // A readable cause is not necessarily writable; never let that assignment
+  // replace the error it belongs to.
+  if (cause === undefined) {
+    try { error.cause = extra; return error; } catch { /* wrap instead */ }
+  }
+  return new AggregateError([error, extra], String(error?.message ?? error), { cause });
 }
 
 function send(response, value, status = 200) {
@@ -78,6 +84,8 @@ export async function mountDshBridge(ctx, host, options = {}) {
   let closed = false;
   let closing;
   let published = false;
+  // Only a temporary file this mount created itself may be removed on failure.
+  let temporaryOwned = false;
   let releaseCallerIdentity;
   let callerIdentityScope;
   const file = join(directory, `${instanceId}.json`);
@@ -208,6 +216,7 @@ export async function mountDshBridge(ctx, host, options = {}) {
       else contribute(ctx);
     }
     const handle = await open(temporary, 'wx', 0o600);
+    temporaryOwned = true;
     try { await handle.writeFile(JSON.stringify({ ...info, url, token, createdAt: Date.now() })); await handle.sync(); }
     finally { await handle.close(); }
     await link(temporary, file);
@@ -220,7 +229,9 @@ export async function mountDshBridge(ctx, host, options = {}) {
     // both still attempted, and their failures ride on its cause.
     const failures = [];
     try { await close(); } catch (failure) { failures.push(failure); }
-    try { await unlink(temporary); } catch (failure) { if (failure?.code !== 'ENOENT') failures.push(failure); }
+    if (temporaryOwned) {
+      try { await unlink(temporary); } catch (failure) { if (failure?.code !== 'ENOENT') failures.push(failure); }
+    }
     throw withCleanup(error, failures);
   }
 }
