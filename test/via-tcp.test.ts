@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,7 +11,7 @@ import { runViaTcpSend, sendViaTcp, selectBrokerEntry, tcpTimeoutMs } from '../s
 import { formatSendResult } from '../src/application/send/format.js';
 import type { BrokerEntry } from '../src/serve/node.js';
 import { decodeRef, encodeRef } from '../src/ref.js';
-import { recordConversation } from '../src/conversations.js';
+import { pairKeyOf, recordConversation } from '../src/conversations.js';
 import { runSend, type SendDeps } from '../src/commands/send.js';
 import { MultichatError } from '../src/errors.js';
 import type { SendLogEntry } from '../src/send-log.js';
@@ -628,6 +629,30 @@ describe('016① 跨机回执机器段统一 name(mid8)', () => {
     expect(out).toContain('delivered to boss@cloudleg(ec542c2c) (turn 2)');
     // 记账 to 同格式（status --conversations 的对端名来源）
     expect(fx.logs.at(-1)).toMatchObject({ to: 'boss@cloudleg(ec542c2c)', target: `via:tcp:${peerMid}` });
+  });
+
+  it('已受理回执后本地记账/短柄失败仍保留 delivered（零重发）', async () => {
+    let deliveries = 0;
+    const counting: BrokerDeps['deliverLocal'] = async (frame) => {
+      deliveries += 1;
+      return realReceipt(frame);
+    };
+    const h = await startPeerBroker(counting);
+    const fx = realFixture(h);
+    const dir = mkdtempSync(join(fx.baseDir, 'blocked-'));
+    fx.deps.conversationStateFile = join(dir, 'conversations.json');
+    // 分片路径被目录占据：回执后的本地记账与短柄分配都必须失败
+    const decoded = decodeRef(peerRef());
+    const shardDir = join(dir, 'conversations');
+    const shard = join(shardDir, `${createHash('sha256').update(pairKeyOf(decoded.f, decoded.t), 'utf8').digest('hex')}.json`);
+    mkdirSync(shard, { recursive: true });
+
+    const result = await sendViaTcp({ tool: 'claude', via: `tcp:${peerMid}`, conversation: 'mc1_x' } as never, 'hello', fx.deps);
+
+    expect(result.status).toBe('delivered'); // 远端回执不被本地失败推翻
+    expect(result.handle).toBeUndefined();
+    expect(deliveries).toBe(1); // 不补投、不重发
+    expect(readdirSync(shardDir).filter((name) => name.endsWith('.tmp'))).toEqual([]); // 无 tmp 残留
   }, 10_000);
 
   it('mid 寻址回信 + 旧状态（无名）→ 回退纯 mid8（不再裸奔完整指纹）', async () => {

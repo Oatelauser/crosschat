@@ -29,7 +29,7 @@
 | 记账 `recordConversation` | 同上 | 是（失败吞掉） |
 | `savePair` / `attachHandle` | 同上（私有） | 只在上述临界区内被调用 |
 
-其他 `src/` 内引用 conversations 目录的模块（`queries/files.ts`、`observations/communications.ts`、`maintenance/operations.ts`、`cli.ts`）均为只读展示或 cleanup 维护路径，不写分片，未纳入本单。路径别名同一锁域：锁身份先 `realpath`，junction/symlink 与真实路径落到同一端口。
+其他 `src/` 内引用 conversations 目录的模块（`queries/files.ts`、`observations/communications.ts`、`cli.ts`）为只读展示。**本单锁域只覆盖上表四个会话写 API，不覆盖并发维护删除**：`maintenance/operations.ts` 的 cleanup/force-clean 在既有合同内就明确「无传输时执行，写入中的文件可能被删」（`src/commands/clean.ts` 及代码规范保留该语义），属已裁定的维护排除边界，W04-R1 未改动 clean/force-clean 的参数、执行语义、输出或预览。路径别名同一锁域：锁身份先 `realpath`，junction/symlink 与真实路径落到同一端口。
 
 ## 三、验证
 
@@ -61,3 +61,27 @@ RED 有意义：把构建产物 `dist/conversations.js` 的 `withConversationLoc
 - 未改动 W03 脚本/结果、root 记录、总表与调度表；未安装/卸载任何软件，未接生产远端，未做真实模型调用或试发。
 - 临时进程与目录：两个 helper 子进程由测试自身等待退出并在 `afterAll` 兜底 kill；所有临时根在 `afterAll` 递归删除前核对 `crosschat-conv-lock-` 前缀（`mkdtempSync` 独占创建）；RED 探测用的 `/tmp` 手工脚本与产物备份已删除。
 - 剩余 dirty 归属：原未跟踪 `docs/代码消息投递.md` 保持不动，仍属既有工作，未 stage。
+
+## 五、W04-R1 返修（2026-10-29，第二轮）
+
+按 `W04-review.md` 完成 P1/P2 与相关缺口；开始 SHA `be41d98220e48d67f68fc40f57e625f82bcd1618`（root 审计提交），本节由第二轮本地提交交付。首轮内容一至四节保持原样，其中第二节末已按审计裁定把锁域表述收窄为「四个会话写 API + 既有维护排除边界」。
+
+**P1：细化不再替既有撞号挑赢家。** `reconcileRefinement` 迁移柄到目标分片时，目标键若已绑定**别的对话**（不同 nonce），该柄整个不迁移：目标外来绑定与旧分片副本都原样保留，撞号继续以 `INVALID_CONVERSATION_REF` 明确失败；只有键空闲或已属本对话时才迁移。旧副本清理随之只删**实际迁移过**的条目（按记录逐个跟踪），不再无条件删除同 nonce 副本。类型确认持续性、旧 ref 不能回退已知类型、成功会话行不提前推进的既有行为未动。无新存储/迁移/全局兼容方案。root 复放的缺陷我先以测试钉成 RED（细化后目标分片 c1 被当前 nonce 覆盖、两分片字节变化），修复后同测试 GREEN。
+
+**完整 ref 发送回归（root 要求的应用路径）。** 未知→类型目标存在外来同号柄时：`--conversation <完整ref>` + 明确 `--tool` 照常投递**恰好一次**到正确目标，hint 为新分配的安全柄（c2，可唯一解析回本对话）；歧义 `c1` 仍零投递拒绝并列候选。`handleForRef` 返回 `undefined` 的旧行为（3060755）保留。
+
+**tmp 残留。** `savePair` 改为写 tmp 后 `finally` 清理**本次自己**的 tmp（仅当 rename 未消费掉它），不动目标分片、不动他人文件，best-effort/前置失败语义不变。「分片路径被目录占据」用例补无 `*.tmp` 残留断言（本地、SSH、TCP 三处都有）。
+
+**P2：子进程生命周期与接线回归。**
+
+- `runChild`：独立 30s 超时（超时 kill+reject）、`error` 事件 reject、以 `close`（管道排空）结算、输出 64KiB 封顶、env 清 `CROSSCHAT_LIVE`。
+- holder 钩子（运行时生成的 preload）自带的等待改为 5s 截止，不再无限自旋；allocate helper 的屏障原本就有界。
+- `afterAll` 先 kill 全部未退子进程，再**等 close（5s 上限）**之后才递归删目录；删除前仍核对 tmpdir 直系子目录 + `crosschat-conv-lock-` 前缀。
+- 新增异常路径证据：永不释放的 holder 在截止后自行退出并完成分配；加载不到脚本的子进程非零退出不挂起。
+- 新增同 nonce 三进程并发复用（同一柄、各自 resolve 回同一完整 ref）。
+- 新增细化 vs 同 nonce 刷新竞争（`Promise.all`）：无论加锁顺序，结束态 c1 恰好一条且解析回类型化对话，旧分片无残留副本。
+- 新增本机前置锁失败零投递（holder 占锁时 `sendMessage` 报 `CONVERSATION_STATE_BUSY`、`deliverClaude` 零调用；释放后同一发送 delivered 恰好一次）。
+- 新增投递后记账失败保持 delivered（delivery 副作用把分片路径换成目录：状态仍 delivered、恰好一次投递、不补投重发、无 tmp 残留）。
+- SSH/TCP 已受理回执后本地记账+短柄双失败：`sendViaSsh`/`sendViaTcp` 状态仍 delivered、`handle` undefined、恰好一条远端腿、无 tmp 残留。
+
+**检查**（Windows 11 x64 / Node v25.0.0，最终树）：定向 11 文件 229 项通过；`npx eslint src test` 0 问题；`npm run check` 退出 0，**2433 通过 / 11 跳过**（首轮 2423/11，增量 +10 即新增项）。先 RED 后 GREEN 的记录与数量见 `W04-R1-checks.json`。

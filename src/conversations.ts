@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import process from 'node:process';
 import { stateRoot } from './state-root.js';
@@ -145,9 +145,15 @@ function savePair(file: string, pairKey: string, record: PairRecord): boolean {
     // Only reached inside withConversationLock, so no other process can
     // interleave its own read-modify-write with this one.
     const tmp = `${shard}.${process.pid}.${Date.now()}.tmp`;
-    writeFileSync(tmp, JSON.stringify({ pair: pairKey, ...record }), 'utf8');
-    renameSync(tmp, shard);
-    return true;
+    try {
+      writeFileSync(tmp, JSON.stringify({ pair: pairKey, ...record }), 'utf8');
+      renameSync(tmp, shard);
+      return true;
+    } finally {
+      // A failed rename must not leave this write's scratch file behind; only
+      // ever this process's own uniquely named tmp, never the shard itself.
+      if (existsSync(tmp)) rmSync(tmp, { force: true });
+    }
   } catch {
     // ponytail: continuity is best-effort; a lost record just starts a new thread.
     return false;
@@ -307,14 +313,23 @@ function reconcileRefinement(file: string, original: ConversationRef, requested:
   const handles: Record<string, string> = { ...existing?.handles };
   let machines = existing?.machines;
   let updatedAt = existing?.updatedAt ?? 0;
+  // Per old record: the handles actually moved into the destination shard. A
+  // number already owned by another conversation in the destination is left
+  // exactly as is on both sides — refinement never picks a winner for an
+  // existing collision, so that handle is not migrated at all.
+  const migrated = new Map<PairRecord, Set<string>>();
   for (const { record } of records) {
     if (existing === undefined) updatedAt = Math.max(updatedAt, record.updatedAt);
     machines = { ...machines, ...record.machines };
     for (const [handle, value] of Object.entries(record.handles ?? {})) {
-      if (encodedConversationMatches(value, original)) {
-        delete handles[handle];
-        handles[handle] = encodeRef(refined);
-      }
+      if (!encodedConversationMatches(value, original)) continue;
+      const current = handles[handle];
+      if (current !== undefined && !encodedConversationMatches(current, original)) continue;
+      delete handles[handle];
+      handles[handle] = encodeRef(refined);
+      const moved = migrated.get(record) ?? new Set<string>();
+      moved.add(handle);
+      migrated.set(record, moved);
     }
   }
   // Migrated handles are the most recently touched; keep the same per-shard
@@ -333,11 +348,13 @@ function reconcileRefinement(file: string, original: ConversationRef, requested:
     || Object.entries(handles).some(([handle, value]) => persisted.handles?.[handle] !== value)) {
     throw new MultichatError('CONVERSATION_STATE_WRITE_FAILED', 'Conversation refinement could not be saved; no message was sent. The original conversation handle remains valid.');
   }
-  // Remove only the migrated nonce's handle from its former pair. Other
-  // conversations and the old untyped continuity line remain intact.
+  // Remove only the handles that actually moved (never a skipped conflicting
+  // one) from their former pair. Other conversations and the old untyped
+  // continuity line remain intact.
   for (const { pair: previous, record } of changed) {
-    const remaining = Object.fromEntries(Object.entries(record.handles ?? {}).filter(([, value]) => {
-      return !encodedConversationMatches(value, original);
+    const moved = migrated.get(record) ?? new Set<string>();
+    const remaining = Object.fromEntries(Object.entries(record.handles ?? {}).filter(([handle, value]) => {
+      return !(moved.has(handle) && encodedConversationMatches(value, original));
     }));
     if (!savePair(file, previous, { ...record, handles: remaining })) {
       throw new MultichatError('CONVERSATION_STATE_WRITE_FAILED', 'Conversation refinement could not remove an old handle copy; no message was sent. The existing conversation handle remains readable.');

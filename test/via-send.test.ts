@@ -1,4 +1,5 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -12,8 +13,9 @@ import {
   type SshResult,
 } from '../src/federation.js';
 import { runSend, type SendArgs, type SendDeps } from '../src/commands/send.js';
+import { sendMessage } from '../src/application/send/index.js';
 import { decodeRef, encodeRef } from '../src/ref.js';
-import { recordConversation } from '../src/conversations.js';
+import { pairKeyOf, recordConversation } from '../src/conversations.js';
 import { parseSendArgs } from '../src/cli.js';
 import { MultichatError } from '../src/errors.js';
 import type { SendLogEntry } from '../src/send-log.js';
@@ -235,6 +237,28 @@ describe('runViaSend mapping', () => {
     const stored = JSON.parse(readFileSync(join(stateFile, '..', 'conversations', shards[0]!), 'utf8')) as { ref: string };
     expect(decodeRef(stored.ref)).toEqual(decodeRef(ref));
     expect(stored.ref.startsWith('mc2_')).toBe(true);
+  });
+
+  it('keeps a remote-accepted receipt delivered when local accounting cannot write', async () => {
+    const ref = (() => {
+      const payload = { v: 1, f: { p: 'claude', id: 'boss' }, t: { p: 'codex', id: '01a1' }, n: 'cd', c: 1 };
+      return 'mc1_' + Buffer.from(JSON.stringify(payload)).toString('base64url');
+    })();
+    sshResult = { code: 0, stdout: `{"status":"delivered","to":"worker2","turn":1,"replyRef":"${ref}"}\n`, stderr: '' };
+    const dir = tempDir();
+    const stateFile = join(dir, 'conversations.json');
+    const shardDir = join(dir, 'conversations');
+    const decoded = decodeRef(ref);
+    const shard = join(shardDir, `${createHash('sha256').update(pairKeyOf(decoded.f, decoded.t), 'utf8').digest('hex')}.json`);
+    mkdirSync(shard, { recursive: true }); // the shard path is unusable: post-receipt accounting must fail
+    const before = sshCalls.length;
+
+    const result = await sendMessage({ tool: 'codex-cli', via: 'ssh:build01', to: 'worker2', bodyArg: 'x' }, { ...makeDeps(), conversationStateFile: stateFile });
+
+    expect(result.status).toBe('delivered'); // the remote receipt is never overturned
+    expect(result.handle).toBeUndefined();
+    expect(sshCalls).toHaveLength(before + 1); // exactly one ssh leg, no resend
+    expect(readdirSync(shardDir).filter((name) => name.endsWith('.tmp'))).toEqual([]); // no scratch left
   });
 });
 

@@ -1,12 +1,14 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import process from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
+import { sendMessage } from '../src/application/send/index.js';
+import type { SendDeps } from '../src/application/send/types.js';
 import {
   continueFromRef, handleForRef, loadAllPairs, pairKeyOf, recordConversation, resolveHandle,
 } from '../src/conversations.js';
@@ -22,9 +24,14 @@ const claudeC: RefEndpoint = { p: 'claude', id: 'gamma', endpointType: 'cli' };
 const codexD: RefEndpoint = { p: 'codex', id: 'delta', endpointType: 'cli' };
 
 const roots: string[] = [];
-const children: ReturnType<typeof spawn>[] = [];
-afterAll(() => {
-  for (const child of children.splice(0)) if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+const active = new Set<ReturnType<typeof spawn>>();
+afterAll(async () => {
+  for (const child of active) if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+  // Bounded wait for pipes to drain before any directory the child writes to is removed.
+  await Promise.all([...active].map((child) => Promise.race([
+    new Promise<void>((resolve) => { if (child.closed) resolve(); else child.once('close', () => resolve()); }),
+    delay(5_000),
+  ])));
   for (const root of roots.splice(0)) {
     // Recursive delete only for a root this file created: direct child of tmpdir with our prefix.
     if (dirname(root) !== tmpdir() || !basename(root).startsWith('crosschat-conv-lock-')) {
@@ -51,23 +58,67 @@ async function waitForFile(path: string, timeoutMs = 15_000): Promise<void> {
   }
 }
 
+const CHILD_TIMEOUT_MS = 30_000;
+const CHILD_OUTPUT_LIMIT = 64 * 1024;
 interface ChildRun { code: number | null; stdout: string; stderr: string }
 function runChild(script: string, args: string[], nodeArgs: string[] = [], env: Record<string, string> = {}): Promise<ChildRun> {
   const child = spawn(process.execPath, [...nodeArgs, script, ...args], {
-    windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...env },
+    windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, CROSSCHAT_LIVE: undefined, ...env },
   });
-  children.push(child);
+  active.add(child);
   let stdout = '';
   let stderr = '';
-  child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString('utf8'); });
-  child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
-  return new Promise((resolve) => child.on('exit', (code) => resolve({ code, stdout, stderr })));
+  child.stdout.on('data', (chunk: Buffer) => { if (stdout.length < CHILD_OUTPUT_LIMIT) stdout += chunk.toString('utf8'); });
+  child.stderr.on('data', (chunk: Buffer) => { if (stderr.length < CHILD_OUTPUT_LIMIT) stderr += chunk.toString('utf8'); });
+  return new Promise<ChildRun>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error(`child did not finish within ${CHILD_TIMEOUT_MS}ms: ${script}`));
+    }, CHILD_TIMEOUT_MS);
+    const done = () => { clearTimeout(timer); active.delete(child); };
+    child.on('error', (error) => { done(); reject(error); });
+    // close, not exit: the pipes are drained, so stdout is complete.
+    child.on('close', (code) => { const run = { code, stdout, stderr }; done(); resolve(run); });
+  });
 }
 
 function parseLine<T>(run: ChildRun): T {
   const line = run.stdout.trim().split('\n').filter(Boolean).at(-1);
   if (line === undefined) throw new Error(`child printed no result (exit ${run.code}): ${run.stderr}`);
   return JSON.parse(line) as T;
+}
+
+/** The preload blocks the holder's first shard rename until release (bounded). */
+function writeHolderHook(root: string): string {
+  const hook = join(root, 'rename-hook.cjs');
+  writeFileSync(hook, `const fs = require('node:fs');
+const original = fs.renameSync;
+let blocked = false;
+fs.renameSync = function (...args) {
+  if (!blocked) {
+    blocked = true;
+    fs.writeFileSync(process.env.HOLDER_READY, 'held');
+    const wait = new Int32Array(new SharedArrayBuffer(4));
+    const deadline = Date.now() + 5_000;
+    while (!fs.existsSync(process.env.HOLDER_RELEASE) && Date.now() < deadline) Atomics.wait(wait, 0, 0, 5);
+  }
+  return original.apply(fs, args);
+};
+`, 'utf8');
+  return hook;
+}
+
+function sendDeps(root: string, file: string): SendDeps {
+  return {
+    env: { CODEX_THREAD_ID: 'delta' },
+    listClaudeSessions: () => ({ sessions: [{ pid: 1, sessionId: 'peer', kind: 'interactive', name: 'Peer', status: 'idle', messagingSocketPath: 'isolated-fake-socket' }], malformed: 0 }),
+    listCodexThreads: async () => [],
+    deliverClaude: vi.fn(async () => ({ status: 'delivered' as const })),
+    deliverCodex: vi.fn(async () => ({ status: 'accepted' as const, turnId: 'isolated-fake-turn' })),
+    sendLogFile: join(root, 'send.jsonl'), outboxDir: join(root, 'outbox'), now: () => 100,
+    conversationStateFile: file,
+  };
 }
 
 describe('conversation state cross-process writes', () => {
@@ -105,6 +156,27 @@ describe('conversation state cross-process writes', () => {
     expect(Object.values(pairs).flatMap((record) => Object.keys(record.handles ?? {}))).toHaveLength(refs.length);
   }, 60_000);
 
+  it('concurrent processes reusing one nonce all get its single handle', async () => {
+    const root = freshRoot();
+    const file = join(root, 'conversations.json');
+    const ref = newConversationRef(claudeA, codexB);
+    const go = join(root, 'go');
+    const runs = [0, 1, 2].map((index) => runChild(ALLOCATE, [
+      file, JSON.stringify(ref), join(root, `ready-${index}`), go,
+    ]));
+    for (let index = 0; index < 3; index++) await waitForFile(join(root, `ready-${index}`));
+    writeFileSync(go, 'go');
+
+    const outcomes = await Promise.all(runs);
+    const results = outcomes.map((run) => {
+      expect(run.code, run.stderr).toBe(0);
+      return parseLine<{ handle: string; resolve: { ok: boolean; ref?: string } }>(run);
+    });
+    expect(new Set(results.map((result) => result.handle)).size).toBe(1);
+    for (const result of results) expect(result.resolve).toEqual({ ok: true, ref: encodeRef(ref) });
+    expect(resolveHandle(file, results[0]!.handle)).toBe(encodeRef(ref));
+  }, 60_000);
+
   it('a live writer on an aliased path blocks every other write path until it releases', async () => {
     const root = freshRoot();
     const stateDir = join(root, 'state');
@@ -119,20 +191,7 @@ describe('conversation state cross-process writes', () => {
     const holderRef = newConversationRef(claudeA, codexB);
     const ready = join(root, 'held');
     const release = join(root, 'release');
-    const hook = join(root, 'rename-hook.cjs');
-    writeFileSync(hook, `const fs = require('node:fs');
-const original = fs.renameSync;
-let blocked = false;
-fs.renameSync = function (...args) {
-  if (!blocked) {
-    blocked = true;
-    fs.writeFileSync(process.env.HOLDER_READY, 'held');
-    const wait = new Int32Array(new SharedArrayBuffer(4));
-    while (!fs.existsSync(process.env.HOLDER_RELEASE)) Atomics.wait(wait, 0, 0, 5);
-  }
-  return original.apply(fs, args);
-};
-`, 'utf8');
+    const hook = writeHolderHook(root);
     const held = runChild(HOLDER, [join(alias, 'conversations.json'), JSON.stringify(holderRef)],
       ['--require', hook], { HOLDER_READY: ready, HOLDER_RELEASE: release });
     try {
@@ -162,6 +221,58 @@ fs.renameSync = function (...args) {
     await expect(handleForRef(file, retry)).resolves.toMatch(/^c\d+$/);
   }, 60_000);
 
+  it('a send that cannot take the lock delivers nothing, then succeeds once released', async () => {
+    const root = freshRoot();
+    const file = join(root, 'conversations.json');
+    const deps = sendDeps(root, file);
+    const holderRef = newConversationRef(claudeA, codexB);
+    const ready = join(root, 'held');
+    const release = join(root, 'release');
+    const hook = writeHolderHook(root);
+    const held = runChild(HOLDER, [file, JSON.stringify(holderRef)], ['--require', hook],
+      { HOLDER_READY: ready, HOLDER_RELEASE: release });
+    const target: RefEndpoint = { p: 'claude', id: 'peer', endpointType: 'cli' };
+    const blocked = newConversationRef({ p: 'codex', id: 'delta' }, target);
+    try {
+      await waitForFile(ready);
+      // Pre-lock failure is a structured rejection with zero native delivery.
+      await expect(sendMessage({ tool: 'claude', conversation: encodeRef(blocked), bodyArg: 'locked out' }, deps))
+        .rejects.toMatchObject({ code: 'CONVERSATION_STATE_BUSY' });
+      expect(deps.deliverClaude).not.toHaveBeenCalled();
+    } finally {
+      writeFileSync(release, 'release');
+    }
+    expect((await held).code).toBe(0);
+
+    const sent = await sendMessage({ tool: 'claude', conversation: encodeRef(blocked), bodyArg: 'lock free again' }, deps);
+    expect(sent.status).toBe('delivered');
+    expect(deps.deliverClaude).toHaveBeenCalledTimes(1);
+  }, 60_000);
+
+  it('a stuck holder still exits within its barrier deadline', async () => {
+    const root = freshRoot();
+    const file = join(root, 'conversations.json');
+    const holderRef = newConversationRef(claudeA, codexB);
+    const ready = join(root, 'held');
+    const release = join(root, 'never-written');
+    const hook = writeHolderHook(root);
+    const held = runChild(HOLDER, [file, JSON.stringify(holderRef)], ['--require', hook],
+      { HOLDER_READY: ready, HOLDER_RELEASE: release });
+
+    await waitForFile(ready);
+    // No release is ever written: the hook's own deadline must end the hold.
+    const run = await held;
+    expect(run.code, run.stderr).toBe(0);
+    const heldResult = parseLine<{ handle: string }>(run);
+    expect(resolveHandle(file, heldResult.handle)).toBe(encodeRef(holderRef));
+  }, 60_000);
+
+  it('a child that cannot load its script settles instead of hanging', async () => {
+    const run = await runChild(join(freshRoot(), 'missing-child.mjs'), []);
+    expect(run.code).not.toBe(0);
+    expect(run.stderr).not.toBe('');
+  }, 60_000);
+
   it('allocation and accounting on one pair keep both handles', async () => {
     const file = join(freshRoot(), 'conversations.json');
     const first = newConversationRef(claudeA, codexB);
@@ -174,8 +285,8 @@ fs.renameSync = function (...args) {
     await Promise.all([recordConversation(file, nextTurnRef(first), 3_000), handleForRef(file, second)]);
     const shard = loadAllPairs(file)[pairKeyOf(first.f, first.t)]!;
     expect(new Set(Object.keys(shard.handles ?? {}))).toEqual(new Set([firstHandle, secondHandle]));
-    expect(resolveHandle(file, firstHandle)).toBe(encodeRef(nextTurnRef(first)));
-    expect(resolveHandle(file, secondHandle)).toBe(encodeRef(nextTurnRef(second)));
+    expect(resolveHandle(file, firstHandle!)).toBe(encodeRef(nextTurnRef(first)));
+    expect(resolveHandle(file, secondHandle!)).toBe(encodeRef(nextTurnRef(second)));
   }, 30_000);
 
   it('an existing handle collision never becomes a hint and never blocks the full ref', async () => {
@@ -201,7 +312,7 @@ fs.renameSync = function (...args) {
     expect(readFileSync(mineShard, 'utf8')).toBe(mineBefore);
   }, 30_000);
 
-  it('a failed allocation write returns no ghost handle', async () => {
+  it('a failed allocation write returns no ghost handle and leaves no scratch', async () => {
     const file = join(freshRoot(), 'conversations.json');
     const ref = newConversationRef(claudeA, codexB);
     const pair = pairKeyOf(ref.f, ref.t);
@@ -209,6 +320,8 @@ fs.renameSync = function (...args) {
     await expect(handleForRef(file, ref)).rejects.toMatchObject({ code: 'CONVERSATION_STATE_WRITE_FAILED' });
     expect(loadAllPairs(file)[pair]?.handles).toBeUndefined();
     expect(() => resolveHandle(file, 'c1')).toThrow(/已过期或未知/); // no handle survived the failed write
+    // The failed rename must not leave this write's tmp scratch behind.
+    expect(readdirSync(dirname(shardPath(file, pair))).filter((name) => name.endsWith('.tmp'))).toEqual([]);
   }, 30_000);
 
   it('post-delivery accounting never rejects when the shard cannot be written', async () => {
@@ -216,5 +329,7 @@ fs.renameSync = function (...args) {
     const ref = newConversationRef(claudeA, codexB);
     mkdirSync(shardPath(file, pairKeyOf(ref.f, ref.t)), { recursive: true });
     await expect(recordConversation(file, ref, 1_000)).resolves.toBeUndefined();
+    // No scratch survives the swallowed write failure either.
+    expect(readdirSync(dirname(shardPath(file, pairKeyOf(ref.f, ref.t)))).filter((name) => name.endsWith('.tmp'))).toEqual([]);
   }, 30_000);
 });
