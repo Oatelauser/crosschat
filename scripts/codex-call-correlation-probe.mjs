@@ -3,10 +3,10 @@
 // that ran the same tool call — and to which executing process do the records bind?
 // Not wired into any product path; see docs/research/c14-codex-call-correlation-20261029.md.
 /* global process, Buffer, setTimeout, clearTimeout */
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { spawn, execFile } from 'node:child_process';
 import { createServer } from 'node:http';
-import { open, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { open, access, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
@@ -96,15 +96,23 @@ export function isProcessRow(row) {
     && typeof row.exeDigest === 'string';
 }
 
-// A gap breaks the chain: rows above a malformed one are unreachable, not "the rest".
-export function normalizeAncestry(chain) {
+// A chain is only usable up to the first row that is malformed or that does not
+// point at the row before it. Rows past a gap are unrelated, so they are dropped
+// rather than handed to the executor check as if the chain were connected.
+export function normalizeAncestry(chain, { expectPid = null } = {}) {
   const rows = [];
   let malformed = 0;
+  let broken = false;
   for (const row of Array.isArray(chain) ? chain : []) {
-    if (!isProcessRow(row)) { malformed += 1; break; }
+    if (!isProcessRow(row)) { malformed += 1; broken = true; break; }
+    const previous = rows[rows.length - 1];
+    if (previous && previous.ppid !== row.pid) { broken = true; break; }
     rows.push(row);
   }
-  return { rows, malformed };
+  if (rows.length > 0 && Number.isInteger(expectPid) && rows[0].pid !== expectPid) {
+    return { rows: [], malformed, broken: true };
+  }
+  return { rows, malformed, broken };
 }
 
 // Processes Codex spawns under its own name are helpers, not the executing instance.
@@ -156,6 +164,7 @@ export function commandHasTag(command, tag) {
 }
 
 const HOOK_REQUIRED = ['session_id', 'tool_use_id', 'tool_name', 'tool_input'];
+const isId = (value) => typeof value === 'string' && value.length > 0;
 
 // Parses the hook's own JSONL log. Anything that is not a well-formed PreToolUse
 // record is rejected rather than guessed at: a missing record must never look
@@ -173,13 +182,17 @@ export function parseHookLog(text, { maxRecords = CORRELATION_LIMITS.maxHookReco
     const event = value?.event ?? value;
     if (event?.hook_event_name !== 'PreToolUse') { rejected.push('not-pre-tool-use'); continue; }
     if (HOOK_REQUIRED.some((key) => event[key] === undefined || event[key] === null || event[key] === '')) { rejected.push('incomplete'); continue; }
+    // A numeric id is not a string id: coercing it would manufacture an equality
+    // that the runtime never produced.
+    if (!isId(event.session_id) || !isId(event.tool_use_id) || !isId(event.tool_name)) { rejected.push('invalid-id'); continue; }
+    if (event.turn_id !== undefined && event.turn_id !== null && !isId(event.turn_id)) { rejected.push('invalid-id'); continue; }
     const command = event.tool_input?.command;
     if (typeof command !== 'string' || !command) { rejected.push('missing-command'); continue; }
     records.push({
-      sessionId: String(event.session_id),
-      turnId: event.turn_id ? String(event.turn_id) : null,
-      toolUseId: String(event.tool_use_id),
-      toolName: String(event.tool_name),
+      sessionId: event.session_id,
+      turnId: isId(event.turn_id) ? event.turn_id : null,
+      toolUseId: event.tool_use_id,
+      toolName: event.tool_name,
       command,
       pid: Number(value.pid) || 0,
       ppid: Number(value.ppid) || 0,
@@ -200,11 +213,15 @@ export function parseShellSamples(text, { maxRecords = CORRELATION_LIMITS.maxHoo
     try { value = JSON.parse(line); } catch { rejected.push('unparseable'); continue; }
     if (!value || typeof value !== 'object') { rejected.push('not-object'); continue; }
     if (typeof value.tag !== 'string' || !value.tag) { rejected.push('missing-tag'); continue; }
+    // Present-but-wrong-type ids are rejected; absent ones stay null and make the
+    // call unverifiable instead of unequal.
+    const ids = ['threadId', 'sessionId', 'toolCallId'];
+    if (ids.some((key) => value[key] !== undefined && value[key] !== null && !isId(value[key]))) { rejected.push('invalid-id'); continue; }
     records.push({
       tag: value.tag,
-      threadId: value.threadId ?? null,
-      sessionId: value.sessionId ?? null,
-      toolCallId: value.toolCallId ?? null,
+      threadId: isId(value.threadId) ? value.threadId : null,
+      sessionId: isId(value.sessionId) ? value.sessionId : null,
+      toolCallId: isId(value.toolCallId) ? value.toolCallId : null,
       codexVersion: value.codexVersion ?? null,
       pid: Number(value.pid) || 0,
       ppid: Number(value.ppid) || 0,
@@ -215,12 +232,13 @@ export function parseShellSamples(text, { maxRecords = CORRELATION_LIMITS.maxHoo
 }
 
 const side = (record) => {
-  const chain = normalizeAncestry(record.ancestry);
+  const chain = normalizeAncestry(record.ancestry, { expectPid: record.pid });
   return {
     pid: record.pid,
     ppid: record.ppid,
     ancestry: chain.rows.map(brief),
     malformedAncestryRows: chain.malformed,
+    ancestryBroken: chain.broken,
   };
 };
 
@@ -290,14 +308,22 @@ export function correlateCalls({ hookRecords = [], shellRecords = [], plannedTag
     }
     const [hook] = hooks;
     boundHooks.add(hook);
-    const toolCallIdEqual = Boolean(shell.toolCallId) && hook.toolUseId === shell.toolCallId;
-    const threadIdEqual = Boolean(shell.threadId) && hook.sessionId === shell.threadId;
-    const sessionIdEqual = Boolean(shell.sessionId) && hook.sessionId === shell.sessionId;
-    const executor = sameExecutor(hook.ancestry, shell.ancestry);
+    // null means "cannot compare", which is not the same as "different": two valid
+    // but unequal ids are a negative result, a missing id is no result at all.
+    const toolCallIdEqual = shell.toolCallId && hook.toolUseId ? shell.toolCallId === hook.toolUseId : null;
+    const threadIdEqual = shell.threadId && hook.sessionId ? shell.threadId === hook.sessionId : null;
+    const sessionIdEqual = shell.sessionId && hook.sessionId ? shell.sessionId === hook.sessionId : null;
+    const verdict = toolCallIdEqual === false || threadIdEqual === false
+      ? 'mismatch'
+      : (toolCallIdEqual === true && threadIdEqual === true ? 'correlated' : 'unverifiable');
+    const hookChain = normalizeAncestry(hook.ancestry, { expectPid: hook.pid }).rows;
+    const shellChain = normalizeAncestry(shell.ancestry, { expectPid: shell.pid }).rows;
+    const executor = sameExecutor(hookChain, shellChain);
     calls.push({
       ...base,
       shell: shellSide,
-      verdict: toolCallIdEqual && threadIdEqual ? 'correlated' : 'mismatch',
+      verdict,
+      unverifiableReason: verdict === 'unverifiable' ? (toolCallIdEqual === null ? 'call-id-missing' : 'thread-id-missing') : null,
       toolCallIdEqual,
       threadIdEqual,
       sessionIdEqual,
@@ -311,7 +337,7 @@ export function correlateCalls({ hookRecords = [], shellRecords = [], plannedTag
       executorVerdict: executor.verdict,
       executorReason: executor.reason,
       sameExecutorInstance: executor.verdict === 'same',
-      sharedAncestor: sharedAncestor(hook.ancestry, shell.ancestry),
+      sharedAncestor: sharedAncestor(hookChain, shellChain),
     });
   }
 
@@ -385,9 +411,14 @@ export async function killOwnedTree(pid) {
   }
 }
 
-// Runs one owned child to completion, a timeout or a spawn error. The timeout path
-// kills the whole tree and still waits for `close`, so a returned result never
-// leaves a live descendant behind silently.
+const isAlive = (pid) => {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try { process.kill(pid, 0); return true; } catch { return false; }
+};
+
+// Runs one owned child to completion, a timeout, an abort or a spawn error. A
+// killed run waits for `close` and re-checks the pid it launched; deeper
+// descendants are never attributed, so `descendantsVerified` stays false.
 export async function runProcess({
   command,
   args = [],
@@ -396,12 +427,14 @@ export async function runProcess({
   timeoutMs = CORRELATION_LIMITS.runTimeoutMs,
   maxOutputBytes = CORRELATION_LIMITS.maxOutputBytes,
   killTimeoutMs = CORRELATION_LIMITS.killTimeoutMs,
+  signal = null,
   spawnProcess = spawn,
   killTree = killOwnedTree,
 }) {
   const state = {
-    pid: 0, exitCode: null, signal: null, closed: false, timedOut: false,
-    killedTree: false, leaked: false, spawnError: null, output: '', outputTruncated: false,
+    pid: 0, exitCode: null, signal: null, closed: false, timedOut: false, cancelled: false,
+    killedTree: false, leaked: false, launcherGone: null, descendantsVerified: false,
+    spawnError: null, output: '', outputTruncated: false,
   };
   let child;
   try {
@@ -433,31 +466,49 @@ export async function runProcess({
 
   let finish;
   const closed = new Promise((done) => { finish = done; });
-  child.once('error', (error) => {
+  const onError = (error) => {
     state.spawnError = state.spawnError ?? error?.code ?? 'spawn-failed';
     finish('error');
-  });
-  child.once('close', (code, signal) => {
+  };
+  const onClose = (code, sig) => {
     state.exitCode = code;
-    state.signal = signal;
+    state.signal = sig;
     state.closed = true;
     finish('close');
-  });
+  };
+  child.once('error', onError);
+  child.once('close', onClose);
 
-  let timer;
+  let resolveAbort;
+  const aborted = new Promise((done) => { resolveAbort = done; });
+  const onAbort = () => { state.cancelled = true; resolveAbort('abort'); };
+  if (signal) {
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  }
+
+  let timer = null;
   const deadline = new Promise((done) => {
     timer = setTimeout(() => { state.timedOut = true; done('timeout'); }, timeoutMs);
   });
-  const first = await Promise.race([closed, deadline]);
-  if (first === 'timeout') {
+  const first = await Promise.race([closed, deadline, aborted]);
+
+  let killTimer = null;
+  if (first === 'timeout' || first === 'abort') {
     state.killedTree = await killTree(state.pid).catch(() => false);
     const settled = await Promise.race([
       closed,
-      new Promise((done) => setTimeout(() => done('still-open'), killTimeoutMs)),
+      new Promise((done) => { killTimer = setTimeout(() => done('still-open'), killTimeoutMs); }),
     ]);
     if (settled === 'still-open') state.leaked = true;
+    state.launcherGone = !isAlive(state.pid);
   }
+
   clearTimeout(timer);
+  if (killTimer) clearTimeout(killTimer);
+  if (signal) signal.removeEventListener('abort', onAbort);
+  child.stdout?.removeListener('data', capture);
+  child.stderr?.removeListener('data', capture);
   return state;
 }
 
@@ -480,9 +531,23 @@ const MODEL_RESPONSE = (call) => {
   ];
 };
 
+// The only fields this probe consumes are `input` and `tools`; anything else is
+// ignored. A malformed shape is a capture fault, not an exception.
+export function parseModelRequest(text) {
+  let value;
+  try { value = JSON.parse(text); } catch { return { ok: false, reason: 'unparseable-request' }; }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, reason: 'invalid-request' };
+  if (value.input !== undefined && !Array.isArray(value.input)) return { ok: false, reason: 'invalid-input' };
+  if (Array.isArray(value.input) && value.input.some((item) => !item || typeof item !== 'object' || Array.isArray(item))) return { ok: false, reason: 'invalid-input' };
+  if (value.tools !== undefined && !Array.isArray(value.tools)) return { ok: false, reason: 'invalid-tools' };
+  if (Array.isArray(value.tools) && value.tools.some((tool) => !tool || typeof tool !== 'object' || Array.isArray(tool))) return { ok: false, reason: 'invalid-tools' };
+  return { ok: true, input: value.input ?? [], tools: value.tools ?? null };
+}
+
 // One loopback Responses endpoint. It answers with the next planned
 // `exec_command` call, or the final message once every call has run. Listen
-// errors, oversized bodies and request overruns are recorded, not swallowed.
+// errors, malformed requests, oversized bodies and request overruns are recorded,
+// and no callback is allowed to throw out of the server.
 export async function startMockModel(plan, {
   port = 0,
   maxRequests = CORRELATION_LIMITS.maxModelRequests,
@@ -503,20 +568,25 @@ export async function startMockModel(plan, {
       body += chunk.toString();
     });
     request.on('end', () => {
-      if (overflow) { response.writeHead(413).end(); return; }
-      state.requests += 1;
-      if (state.requests > maxRequests) { state.overLimit = true; response.writeHead(429).end(); return; }
-      let parsed = null;
-      try { parsed = JSON.parse(body); } catch { state.failures.push('unparseable-request'); }
-      if (state.toolNames.length === 0 && Array.isArray(parsed?.tools)) {
-        state.toolNames = parsed.tools.map((tool) => tool.name ?? tool.type);
+      try {
+        if (overflow) { response.writeHead(413).end(); return; }
+        state.requests += 1;
+        if (state.requests > maxRequests) { state.overLimit = true; response.writeHead(429).end(); return; }
+        const parsed = parseModelRequest(body);
+        if (!parsed.ok) { state.failures.push(parsed.reason); response.writeHead(400).end(); return; }
+        if (state.toolNames.length === 0 && parsed.tools) {
+          state.toolNames = parsed.tools.map((tool) => (typeof tool.name === 'string' ? tool.name : String(tool.type ?? 'unknown')));
+        }
+        const completed = parsed.input.filter((item) => item.type === 'function_call_output').length;
+        const call = plan[completed];
+        if (call) state.toolCalls.push('exec_command');
+        const frames = MODEL_RESPONSE(call);
+        response.writeHead(200, { 'content-type': 'text/event-stream' });
+        response.end(frames.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''));
+      } catch {
+        state.failures.push('handler-error');
+        try { response.writeHead(500).end(); } catch { /* socket already gone */ }
       }
-      const completed = (parsed?.input ?? []).filter((item) => item.type === 'function_call_output').length;
-      const call = plan[completed];
-      if (call) state.toolCalls.push('exec_command');
-      const frames = MODEL_RESPONSE(call);
-      response.writeHead(200, { 'content-type': 'text/event-stream' });
-      response.end(frames.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''));
     });
   });
 
@@ -586,6 +656,8 @@ async function resolveCodexCli() {
   return { command: process.execPath, args: [join(root, 'bin', 'codex.js')], version: packageJson.version };
 }
 
+const ROOT_OWNER = 'c14-w05-correlation-probe';
+
 // The run root must be ours before a single profile byte is written: create it
 // exclusively, or adopt an empty directory, then claim it. A non-empty directory
 // is refused untouched.
@@ -602,17 +674,49 @@ export async function prepareOwnedRoot(root) {
     const entries = await readdir(target);
     if (entries.length > 0) throw new Error(`root-not-exclusive:${target}`);
   }
-  const ownership = { owner: 'c14-w05-correlation-probe', createdAt: new Date().toISOString(), pid: process.pid };
-  await writeFile(join(target, 'ownership.json'), `${JSON.stringify(ownership)}\n`, { flag: 'wx' });
-  return { root: target, ownership };
+  // The exclusive marker write *is* the claim: a concurrent second claimant loses
+  // here and therefore gets no deletion rights over the winner's directory.
+  const runId = randomUUID();
+  const ownership = { owner: ROOT_OWNER, runId, createdAt: new Date().toISOString(), pid: process.pid };
+  try {
+    await writeFile(join(target, 'ownership.json'), `${JSON.stringify(ownership)}\n`, { flag: 'wx' });
+  } catch (error) {
+    if (error?.code === 'EEXIST') throw new Error(`root-not-exclusive:${target}`);
+    throw error;
+  }
+  return { root: target, runId, ownership };
 }
 
-// Removes a root only when it carries our ownership marker.
-export async function removeOwnedRoot(root) {
+// Deletes only the directory this run claimed. A marker from another run — even
+// one carrying the same owner string — is left in place.
+export async function removeOwnedRoot(root, claim) {
   const target = resolve(root);
+  if (!claim?.runId) throw new Error(`root-not-claimed:${target}`);
   const marker = JSON.parse(await readFile(join(target, 'ownership.json'), 'utf8'));
-  if (marker?.owner !== 'c14-w05-correlation-probe') throw new Error(`root-not-owned:${target}`);
+  if (marker?.owner !== ROOT_OWNER || marker?.runId !== claim.runId) throw new Error(`root-not-owned:${target}`);
   await rm(target, { recursive: true, force: true });
+}
+
+// A root is only deleted after the processes it held are known to have closed.
+async function settleRoot(claim, settled) {
+  if (!settled) return { status: 'retained', reason: 'processes-unverified', path: claim.root };
+  try {
+    await removeOwnedRoot(claim.root, claim);
+    return { status: 'removed', path: claim.root };
+  } catch (error) {
+    const reason = String(error?.message ?? error?.code ?? 'remove-failed').split(':')[0];
+    return { status: 'failed', reason, path: claim.root };
+  }
+}
+
+async function assertEvidenceAbsent(path) {
+  try {
+    await access(path);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return;
+    throw error;
+  }
+  throw new Error(`evidence-exists:${path}`);
 }
 
 const describeRead = (read) => ({ ok: read.ok, truncated: read.truncated, error: read.error });
@@ -629,6 +733,9 @@ export async function runCorrelation({
   limits = CORRELATION_LIMITS,
   deps = {},
 }) {
+  // An existing evidence file is refused before any CLI is started, so a refused
+  // run cannot overwrite the record it was told to keep.
+  if (evidencePath) await assertEvidenceAbsent(evidencePath);
   const owned = await prepareOwnedRoot(root);
   const paths = {
     profile: join(owned.root, 'profile'),
@@ -643,97 +750,107 @@ export async function runCorrelation({
   let live = null;
   let run = null;
   let runtime = null;
+  let cleanup = null;
 
   try {
-    await Promise.all([paths.codexHome, paths.workspace, paths.tmp].map((path) => mkdir(path, { recursive: true })));
-    const helper = join(repoRoot, 'test', 'helpers', 'codex-call-correlation-hook.mjs');
-    await writeFile(paths.sample, SHELL_SAMPLE_SOURCE(pathToFileURL(helper).href));
+    try {
+      await Promise.all([paths.codexHome, paths.workspace, paths.tmp].map((path) => mkdir(path, { recursive: true })));
+      const helper = join(repoRoot, 'test', 'helpers', 'codex-call-correlation-hook.mjs');
+      await writeFile(paths.sample, SHELL_SAMPLE_SOURCE(pathToFileURL(helper).href));
 
-    live = await startMockModel(buildPlan({ workspace: paths.workspace, outDir: owned.root, calls }), limits);
-    await writeFile(join(paths.codexHome, 'config.toml'), configToml(live.baseUrl));
-    await writeFile(join(paths.codexHome, 'hooks.json'), hooksJson(helper, paths.hookLog));
+      live = await startMockModel(buildPlan({ workspace: paths.workspace, outDir: owned.root, calls }), limits);
+      await writeFile(join(paths.codexHome, 'config.toml'), configToml(live.baseUrl));
+      await writeFile(join(paths.codexHome, 'hooks.json'), hooksJson(helper, paths.hookLog));
 
-    const target = cli ?? await resolveCodexCli();
-    runtime = { cliPackage: target.version ?? null, cliEntry: cli ? 'injected test cli' : 'npm @openai/codex/bin/codex.js' };
-    run = await runProcess({
-      command: target.command,
-      args: target.appendPromptArgs === false ? [...target.args] : [...target.args, ...CLI_ARGS, 'run the correlation samples'],
-      cwd: paths.workspace,
-      env: isolatedEnv(paths.profile, paths.codexHome, paths.tmp),
-      timeoutMs: limits.runTimeoutMs,
-      maxOutputBytes: limits.maxOutputBytes,
-      killTimeoutMs: limits.killTimeoutMs,
-      spawnProcess: deps.spawnProcess,
-      killTree: deps.killTree,
-    });
-  } catch (error) {
-    reasons.push(`init-failure:${error?.code ?? error?.message ?? 'unknown'}`);
-  } finally {
-    if (live) {
-      const closed = await live.close().catch(() => false);
-      if (!closed) reasons.push('server-close-timeout');
+      const target = cli ?? await resolveCodexCli();
+      runtime = { cliPackage: target.version ?? null, cliEntry: cli ? 'injected test cli' : 'npm @openai/codex/bin/codex.js' };
+      run = await runProcess({
+        command: target.command,
+        args: target.appendPromptArgs === false ? [...target.args] : [...target.args, ...CLI_ARGS, 'run the correlation samples'],
+        cwd: paths.workspace,
+        env: isolatedEnv(paths.profile, paths.codexHome, paths.tmp),
+        timeoutMs: limits.runTimeoutMs,
+        maxOutputBytes: limits.maxOutputBytes,
+        killTimeoutMs: limits.killTimeoutMs,
+        signal: deps.signal ?? null,
+        spawnProcess: deps.spawnProcess,
+        killTree: deps.killTree,
+      });
+    } catch (error) {
+      reasons.push(`init-failure:${error?.code ?? error?.message ?? 'unknown'}`);
+    } finally {
+      if (live) {
+        const closed = await live.close().catch(() => false);
+        if (!closed) reasons.push('server-close-timeout');
+      }
     }
-  }
 
-  if (!run) reasons.push('cli-not-run');
-  else {
-    if (run.spawnError) reasons.push(`spawn-error:${run.spawnError}`);
-    if (run.timedOut) reasons.push('cli-timeout');
-    if (run.leaked) reasons.push('cli-descendant-still-running');
-    if (run.outputTruncated) reasons.push('cli-output-truncated');
-    if (run.exitCode !== 0) reasons.push(`cli-exit:${run.exitCode}`);
-  }
-  if (live) {
-    if (live.state.overLimit) reasons.push('model-request-limit');
-    if (live.state.bodyOverflow) reasons.push('model-body-overflow');
-    for (const failure of live.state.failures) reasons.push(`model-${failure}`);
-  }
+    if (!run) reasons.push('cli-not-run');
+    else {
+      if (run.spawnError) reasons.push(`spawn-error:${run.spawnError}`);
+      if (run.timedOut) reasons.push('cli-timeout');
+      if (run.cancelled) reasons.push('cli-cancelled');
+      if (run.leaked) reasons.push('cli-descendant-still-running');
+      if (run.outputTruncated) reasons.push('cli-output-truncated');
+      if (run.exitCode !== 0) reasons.push(`cli-exit:${run.exitCode}`);
+    }
+    if (live) {
+      if (live.state.overLimit) reasons.push('model-request-limit');
+      if (live.state.bodyOverflow) reasons.push('model-body-overflow');
+      for (const failure of live.state.failures) reasons.push(`model-${failure}`);
+    }
 
-  const hookRead = await readBounded(paths.hookLog, limits.maxHookBytes);
-  reads.hookLog = describeRead(hookRead);
-  const shellReads = [];
-  for (const [index] of calls.entries()) {
-    const read = await readBounded(join(owned.root, `shell-${index + 1}.jsonl`), limits.maxSampleBytes);
-    reads[`shell-${index + 1}`] = describeRead(read);
-    if (read.ok) shellReads.push(read.text);
-  }
-  for (const [name, read] of Object.entries(reads)) {
-    if (!read.ok) reasons.push(`read-failed:${name}:${read.error}`);
-    else if (read.truncated) reasons.push(`read-truncated:${name}`);
-  }
+    const hookRead = await readBounded(paths.hookLog, limits.maxHookBytes);
+    reads.hookLog = describeRead(hookRead);
+    const shellReads = [];
+    for (const [index] of calls.entries()) {
+      const read = await readBounded(join(owned.root, `shell-${index + 1}.jsonl`), limits.maxSampleBytes);
+      reads[`shell-${index + 1}`] = describeRead(read);
+      if (read.ok) shellReads.push(read.text);
+    }
+    for (const [name, read] of Object.entries(reads)) {
+      if (!read.ok) reasons.push(`read-failed:${name}:${read.error}`);
+      else if (read.truncated) reasons.push(`read-truncated:${name}`);
+    }
 
-  const hookParse = parseHookLog(hookRead.text, { maxRecords: limits.maxHookRecords });
-  const shellParse = parseShellSamples(shellReads.join('\n'), { maxRecords: limits.maxHookRecords });
-  for (const rejected of hookParse.rejected) reasons.push(`hook-rejected:${rejected}`);
-  for (const rejected of shellParse.rejected) reasons.push(`shell-rejected:${rejected}`);
+    const hookParse = parseHookLog(hookRead.text, { maxRecords: limits.maxHookRecords });
+    const shellParse = parseShellSamples(shellReads.join('\n'), { maxRecords: limits.maxHookRecords });
+    for (const rejected of hookParse.rejected) reasons.push(`hook-rejected:${rejected}`);
+    for (const rejected of shellParse.rejected) reasons.push(`shell-rejected:${rejected}`);
 
-  const correlation = correlateCalls({ hookRecords: hookParse.records, shellRecords: shellParse.records, plannedTags: calls });
-  reasons.push(...correlation.problems);
-  for (const call of correlation.calls) {
-    if (call.verdict !== 'correlated' && call.verdict !== 'mismatch') reasons.push(`call-${call.tagDigest}:${call.verdict}`);
-  }
+    const correlation = correlateCalls({ hookRecords: hookParse.records, shellRecords: shellParse.records, plannedTags: calls });
+    reasons.push(...correlation.problems);
+    for (const call of correlation.calls) {
+      if (call.verdict !== 'correlated' && call.verdict !== 'mismatch') reasons.push(`call-${call.tagDigest}:${call.verdict}`);
+    }
 
-  const toolingFailure = !run || Boolean(run.spawnError) || run.timedOut || run.exitCode !== 0;
-  const status = reasons.length === 0 ? 'complete' : (toolingFailure ? 'tooling-failure' : 'incomplete');
-  const verdicts = correlation.calls.map((call) => call.verdict);
-  const outcome = status === 'complete'
-    ? (verdicts.every((verdict) => verdict === 'correlated') ? 'correlated' : 'mismatch')
-    : 'no-conclusion';
+    // Only a run whose process is known to have closed releases its root. A killed,
+    // aborted or leaking run keeps the directory where it is.
+    const settled = Boolean(run && run.closed && !run.leaked && !run.timedOut && !run.cancelled && !run.spawnError);
+    cleanup = await settleRoot(owned, settled);
+    if (cleanup.status !== 'removed') reasons.push(`cleanup-${cleanup.status}:${cleanup.reason ?? cleanup.path}`);
 
-  const evidence = {
-    record: 'codex-call-correlation',
-    version: 2,
-    collectedAt: new Date().toISOString(),
-    platform: process.platform,
-    node: process.version,
-    runtime: runtime ?? { cliPackage: null, cliEntry: null },
-    isolation: {
-      root: 'owned exclusive temp dir, removed after the run',
-      codexHome: 'owned temp profile, empty at start',
-      userConfigRead: false,
-      userAuthRead: false,
-      modelEndpoint: '127.0.0.1 loopback fixture',
-    },
+    const toolingFailure = !run || Boolean(run.spawnError) || run.timedOut || run.cancelled || run.exitCode !== 0;
+    const status = reasons.length === 0 ? 'complete' : (toolingFailure ? 'tooling-failure' : 'incomplete');
+    const verdicts = correlation.calls.map((call) => call.verdict);
+    const outcome = status === 'complete'
+      ? (verdicts.every((verdict) => verdict === 'correlated') ? 'correlated' : 'mismatch')
+      : 'no-conclusion';
+
+    const evidence = {
+      record: 'codex-call-correlation',
+      version: 2,
+      collectedAt: new Date().toISOString(),
+      platform: process.platform,
+      node: process.version,
+      runtime: runtime ?? { cliPackage: null, cliEntry: null },
+      isolation: {
+        root: 'owned exclusive temp dir, deleted only after the launched process closed',
+        codexHome: 'owned temp profile, empty at start',
+        userConfigRead: false,
+        userAuthRead: false,
+        modelEndpoint: '127.0.0.1 loopback fixture',
+      },
     plan: { calls: calls.map((tag) => digest(tag)), expectedCalls: calls.length, expectedHooks: calls.length },
     run: {
       status,
@@ -742,7 +859,10 @@ export async function runCorrelation({
       exitCode: run?.exitCode ?? null,
       signal: run?.signal ?? null,
       timedOut: Boolean(run?.timedOut),
+      cancelled: Boolean(run?.cancelled),
       killedTree: Boolean(run?.killedTree),
+      launcherGone: run?.launcherGone ?? null,
+      descendantsVerified: Boolean(run?.descendantsVerified),
       spawnError: run?.spawnError ?? null,
       modelRequests: live?.state.requests ?? 0,
       offeredTools: live?.state.toolNames ?? [],
@@ -752,6 +872,7 @@ export async function runCorrelation({
       rejectedHookLines: hookParse.rejected,
       rejectedShellLines: shellParse.rejected,
       reads,
+      cleanup,
     },
     calls: correlation.calls,
     orphanHooks: correlation.orphanHooks,
@@ -761,6 +882,10 @@ export async function runCorrelation({
 
   if (evidencePath) await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, { flag: 'wx' });
   return evidence;
+  } finally {
+    // An unexpected throw leaves `cleanup` unset; the root is then kept, not guessed at.
+    if (!cleanup) await settleRoot(owned, false);
+  }
 }
 
 export async function main(argv = process.argv.slice(2)) {
@@ -774,10 +899,10 @@ export async function main(argv = process.argv.slice(2)) {
   try {
     evidence = await runCorrelation({ root, repoRoot: process.cwd(), evidencePath });
   } catch (error) {
+    // No deletion here: only the run that successfully claimed the root may remove
+    // it, and it does so before returning.
     process.stderr.write(`probe failed: ${error?.message ?? error}\n`);
     return 3;
-  } finally {
-    await removeOwnedRoot(root).catch((error) => process.stderr.write(`root cleanup failed: ${error?.message ?? error}\n`));
   }
   process.stdout.write(`${JSON.stringify(evidence, null, 2)}\n`);
   // 0 means the run produced a complete correlation verdict; anything less is 3

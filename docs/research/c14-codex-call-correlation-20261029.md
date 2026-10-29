@@ -151,3 +151,31 @@ npx vitest run test/codex-call-correlation-probe.test.ts
 | 收束 | 进程正常退出，未触发超时/树杀；服务关闭有界；运行根按 ownership 删除 |
 
 这仍只是**本机 CLI 0.163.0 非交互 exec 的局部观察**，不扩到 Desktop、共享 daemon、IPC owner、双开或 `write_stdin`。
+
+## 十一、R2 返修
+
+R1 复审（同 [W05-review.md](../development/evidence/c14-worker-20261029/W05-review.md) 的"R1 复审与 R2 单任务"）在工装里复现出一个**真缺陷**和三条边界缺口。R2 只修工装与测试，**不跑原生复跑**，§三、§十 的原生观察与三份证据文件字节均未改。
+
+### 缺陷与修法
+
+1. **拒绝的旧根仍被删除（P1）。** 旧 `main` 在 `finally` 里按路径 `rm -rf`，于是"拒绝非空根"之后照样把别人的目录删了。现在：`prepareOwnedRoot` 用 `ownership.json` 的 `wx` 写作为**领取**，marker 带本进程 `runId`；`removeOwnedRoot(root, claim)` 删除前回读 marker 并要求 `owner` 与 `runId` 都相符；`main` 不再有任何按路径删除。并发领取时失败者拿不到 `claim`，因此没有删除权。领取失败、marker 中途被改、他人正在用的根，都保持字节不变。
+2. **生命周期。** `runProcess` 增加 `AbortSignal` 取消，超时与取消都走"树杀 → 等 `close` → 复查 pid"；`launcherGone` 记录启动进程是否真的消失，`descendantsVerified` 恒为 `false`——杀树成功不等于每个后代都退出。根目录只在**本进程已知关闭**时删除；超时、取消、泄漏、spawn 失败一律保留，并在 `reasons` 里写明 `cleanup-retained:processes-unverified`。定时器与监听器在每条出口上清掉。
+3. **JSON 边界与证据预检。** loopback 服务的请求体先过 `parseModelRequest`：顶层必须是对象，`input` 必须是对象数组，`tools` 必须是对象数组；畸形返回 400 并记 `model-invalid-input` / `model-invalid-tools`，回调整体包 try/catch，绝不让事件回调抛出进程。ID 只接受**非空字符串**：数字 ID 被拒（`invalid-id`），不再 `String()` 强转成"相等"。缺失 ID 与两个有效但不等是两件事：前者 `unverifiable`（`call-id-missing` / `thread-id-missing`），后者 `mismatch`。进程链要求首行就是记录自己的 pid、相邻行 `ppid` 与下一行 `pid` 相连；断链之后的行一律丢弃，不会把无关的 Codex 行当成共同实例。已有证据文件在**任何 CLI 启动之前**就被拒（`evidence-exists`），最终写入仍是排他创建。
+4. **RED/GREEN 覆盖到入口。** 新增用例覆盖真实 `main` 拒绝旧根后字节不变、并发领取失败者不能删、marker 被改不能删、畸形请求不崩且服务能关、数字/缺失 ID、断链、取消、未关闭时保留根、已有证据时根都没被创建。RED 六轮分别改回上述缺陷形态，命中 1 / 1 / 2 / 2 / 1 / 1 项失败，恢复后 48/48 通过。
+
+### 对 §五 的更正
+
+§五 成文于 R1，下面几句按 R2 现状更正（R1 的原文不再代表当前工装）：
+
+- "已有非空目录原样拒绝" → 拒绝之后**也不删除**；删除权只属于领取成功的那个运行，且删前回读 marker。
+- "malformed 行按类型丢弃，不做强转" → 还要求链是**连通的**，断链之后的行不再参与实例判定。
+- "证据文件用 `wx` 写，已存在即拒绝" → 现在在启动任何 CLI **之前**就先查，拒绝时不产生运行根。
+- "超时按 pid 树收束并等 `close`" → 等 `close` 只证明启动进程结束，**不证明后代都退出**；因此未核实的运行保留根，并把这个事实写进 `run.cleanup`。
+
+### 检查结果
+
+`node --check`、ESLint、定向 Vitest 48/48 均通过。`npm run check` 的 lint / check:imports / build 通过，测试 2494 通过 / 1 失败 / 11 跳过；唯一失败是 `test/tui-main-observations.test.ts` 的"原生环境路径"用例，**在基线 `dba2c45` 上就已失败**（把本单两个改动文件回退到基线字节后仍稳定失败），与本单无关，且不在本单白名单内，未改动。逐项记录见 [W05-R2-checks.md](evidence/c14-codex-call-20261029/W05-R2-checks.md)。
+
+### 边界
+
+本轮没有启动真实 Codex，也没有新增原生证据；§三、§十 的结论强度不变。取消、超时、并发领取都在受控子进程与临时目录上验证，真实进程树上的取消/超时仍未实测。
