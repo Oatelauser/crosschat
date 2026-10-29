@@ -17,7 +17,7 @@
 4. `src/application/caller-source/providers.ts`、`service.ts`、`confirmations.ts`、`src/identity.ts`、`src/commands/identity.ts`。
 5. `src/commands/codex-wrapper.ts`、`src/codex/launcher-owner.ts`、`session-events.ts`、`desktop-ipc.ts`、`transport.ts`、`rpc.ts`；通过 `rg --files` 核实路径，不假定有 session-bridge.ts。
 
-公共整改最终检查已通过 2416 项、11 项原有跳过；Windows ConPTY 和 Harness npm/Web 成绩不证明 Codex 新来源链已经通过。当前 Codex Provider 保持 `CODEX_SOURCE_ASSOCIATION_UNVERIFIED`；共享确认状态机通过不代表真实未知入口已允许人工确认一次长期复用。
+当前产品基线已包含W00测试隔离与W04短柄互斥修复，root最终完整检查2433项通过、11项原有跳过，证据见同目录 `W04-final-review.md`。Windows ConPTY和Harness npm/Web成绩不证明Codex新来源链已经通过。当前Codex Provider保持 `CODEX_SOURCE_ASSOCIATION_UNVERIFIED`；共享确认状态机通过不代表真实未知入口已允许人工确认一次长期复用。
 
 ## 实施步骤
 
@@ -50,7 +50,7 @@
 
 ## 完成报告（必须逐项回复 root）
 
-用仓库 `node dist/cli.js send` 回到原分发聊天，显式收件 `--tool codex-desktop`，保留原信封conversation/ref；重要状态与完成报告使用 `--delivery steer` 追加当前协作任务，不重复发送纯确认。若旧柄明确报失效/撞号，可按已核实名称 `--to 多工具适配 --tool codex-desktop` 接续。只声明有依据的结果，不把delivered当验收。报告包括：
+用仓库 `node dist/cli.js send` 回到原分发聊天，显式收件 `--tool codex-desktop`，使用正式派单给出的已核实完整typed ref（旧c14已撞号）；重要状态与完成报告使用 `--delivery steer` 追加当前协作任务，不重复发送纯确认。只有引用明确失败且原目标与收件类型已核实时，才按仓库skill恢复；写入不明不重发。只声明有依据的结果，不把delivered当验收。报告包括：
 
 1. `C14-W01`、完成／部分完成／需要决定，以及仓库路径、branch、基线 SHA、最终 SHA。
 2. 自己修改的完整文件列表、各文件目的、独立 commit SHA；无改动也明确说明。提交前后重新核对 branch/HEAD，报告剩余 dirty 的归属。
