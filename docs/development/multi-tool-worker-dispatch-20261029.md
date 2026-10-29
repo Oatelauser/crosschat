@@ -12,7 +12,9 @@
 
 ## 活动子单
 
-本会话不再派发通信相关子单。用户明确将全部通信任务交给现有 Codex Desktop 会话 **Bug修复2**，由用户亲自对接；见[完整交接](communication-handoff-bugfix2-20261029.md)。cworker1 和短信封内部 subagent 均已停写，后者确认没有任何代码/测试修改。W08 最新研究交付到 `1066e30`，尚未完成 root 最终验收，按真实状态随证据交接。
+本会话不再派发通信相关子单。用户明确将全部通信任务交给现有 Codex Desktop 会话 **Bug修复2**，由用户亲自对接；见[完整交接](communication-handoff-bugfix2-20261029.md)。W08 最新研究交付到 `1066e30`，尚未完成 root 最终验收，按真实状态随证据交接。短信封内部 subagent 已停写，确认没有任何代码/测试修改。
+
+用户随后明确要求继续对接 cworker1，并读取其回报后按原流程推进后续主计划。当前领取 **[C13-P01：Harness 生命周期方案与隔离复现](evidence/c13-worker-20261029/P01-task.md)**：仅交付技能/桥插件分工方案及现有 close 异常清理的隔离证据，先供用户讨论，不改产品代码、已有测试、默认安装目标或用户配置。root 分发/独立审查，cworker1 独占本单白名单/index；不继续来源研究或短信封实现。
 
 已验收子单见[测试隔离审计](evidence/c14-worker-20261029/W00-review.md)、[协作规则审计](evidence/c14-worker-20261029/W02-review.md)、[短柄诊断验收](evidence/c14-worker-20261029/W03-final-review.md)、[短柄产品修复验收](evidence/c14-worker-20261029/W04-final-review.md)、[来源研究验收](evidence/c14-worker-20261029/W01-final-review.md)、[CLI逐调用研究验收](evidence/c14-worker-20261029/W05-final-review.md)、[既有测试等待修复](evidence/c14-worker-20261029/W06-final-review.md)及[短信封恢复研究](evidence/c14-worker-20261029/W07-final-review.md)，活动项不重复保留。root最新完整check为2503通过/11原有跳过，退出0；研究收口不代表生产来源关联或CI门禁已实现。仓库代码/skill未全局部署。历史实机短柄成因未作追认，当前构建的已证实缺陷修复按独立记录收口。
 
