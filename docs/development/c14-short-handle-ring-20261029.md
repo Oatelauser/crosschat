@@ -21,4 +21,43 @@
 
 ## 验证记录
 
-仅使用 npm/Vitest 和隔离目录/受控本机进程；不调用真实用户发送或远端。后续补记实际 RED/GREEN、完整检查结果与边界。
+用户旅程来自本轮已批准的设计讨论：日常往返保持短柄；窗口覆盖后明确过期；清理不倒退编号；可选短柄故障不重复投递。仅使用 npm/Vitest 和隔离目录/受控本机进程，不以真实用户发送或远端操作作为验收。
+
+### RED / GREEN 检查点
+
+| 合同 | RED | GREEN | 实际结果 |
+| --- | --- | --- | --- |
+| 五字符分配、进度持久化、数字旧柄停用 | `0cb2055` | `d21fb5b` | 初始 3 项按预期失败（旧 c1、无进度、接受 c14），实现后通过，构建通过 |
+| 跨代过期、耗尽、普通清理与安全展示 | `3e0ebc7` | `b1d7a4d` | 16 项定向首次 5 失败；相同目标复跑 16 通过，构建通过 |
+| 当前分片夹具保留原有隔离、细化和投递语义 | `9f2993a` | `9816b45` | 207 项首次 205 通过/2 失败（观察页复活旧全局状态、无效细化重写他方分片）；修复后 207 全通过，构建通过 |
+| 故障单次投递及跨进程跨代 | `63eae9f` | 验证补充，无新增产品逻辑 | `npm test -- test/send-handle.test.ts test/conversation-state-concurrency.test.ts --reporter=dot`：21 项通过 |
+
+上述提交均在当前分支的本任务序列中，未改写或合并检查点历史。另有信封和摘要示例回归 3 文件/37 项通过；`npm run lint` 和 `npm run check:imports` 通过，依赖图为 203 模块/681 运行时边，无环和跨层违规。
+
+### 测试保证
+
+| 保证 | 测试 | 类型 |
+| --- | --- | --- |
+| 同一 nonce 往返复用五字符柄，无额外状态文件；LRU8 淘汰不倒退进度 | `test/conversation-handle-ring.test.ts` | 持久状态集成 |
+| cA999 后分配 cB000，旧 cA000 即使残留在分片也不能解析；cZ999 后新分配回退，现存有效柄可复用 | 同上 | 边界集成 |
+| 损坏或丢失进度时不猜编号、不覆盖状态；摘要不展示过期/歧义/不可核验柄 | 同上及 `test/conversation-summary.test.ts` | 故障与只读集成 |
+| 普通清理保留一份最高进度，force 全删后明确从 cA000 重置 | `test/conversation-handle-ring.test.ts`、`test/core-cleanup.test.ts`、`test/maintenance.test.ts` | 维护集成 |
+| 两个实际本机子进程同时跨代，各自得到 cA999/cB000 并解析回各自原 ref，旧 cA000 过期；同 nonce 并发复用及锁释放保持 | `test/conversation-state-concurrency.test.ts` | 多进程集成 |
+| 编号耗尽、损坏状态、分配写失败仍恰好投递一次，输出和信封使用相同完整 ref；旧数字参数在适配器前拒绝 | `test/send-handle.test.ts` | 应用发送集成，注入受控适配器 |
+| 类型细化保留 nonce/轮次/有效柄/最高进度；历史冲突不替任一对话选赢家，不重写无变化的他方分片 | `test/c14-conversation-refinement.test.ts`、`test/conversations.test.ts` | 引用与状态集成 |
+| 旧全局 conversations.json 不复活已删状态，查询不生成/修复状态 | `test/observation-communications.test.ts` 等 | 只读边界 |
+
+### 全量检查
+
+首轮默认并发的 `npm run check`：lint、依赖图、构建通过；测试 2520 通过/7 失败/11 原有跳过，225 文件通过/6 失败/3 跳过。3 处是本轮需更新的旧测试夹具（Harness 数字柄断言、维护分片假 JSON、隔离构建缺新依赖），已在 `888ae27` 修正并保留原行为断言；其余 4 处是标准检查、目录枚举及两个本机 SSH helper 的等待超时。未放宽断言或跳过用例。
+
+用 `--maxWorkers=2` 复跑上述失败目标（同时匹配 TUI 维护测试）：7 文件/49 项全通过。随后两次完整 `npm run check` 均退出 0：**2527 通过/11 原有跳过（总 2538），231 文件通过/3 跳过（总 234）**；lint、203 模块/681 边运行时依赖图及 TypeScript build 全通过。
+
+最终检查对应产品提交 `303e7cecfe47a67ae296eb01dee4923cc32756ab`（包含 CLI/TUI 清理帮助文案），Vitest 日志开始时间原值 `21:28:28`、耗时 127.83 秒。命令仍是 `npm run check`；本进程设置 `VITEST_MAX_FORKS=2`、`VITEST_MIN_FORKS=1`、`VITEST_MAX_THREADS=2`、`VITEST_MIN_THREADS=1`，无测试筛选、断言放宽或新增跳过。完整[原始输出](evidence/c14-short-handle-ring-20261029/final-check.txt)及[结构结果](evidence/c14-short-handle-ring-20261029/result.json)保留；短柄部分验收完成，C14 父项保持未完成。
+
+### 验证边界
+
+- 项目没有 coverage 脚本或已配置的覆盖率 provider；本记录按行为保证列证，不声称覆盖率百分比。普通测试的 11 个既有跳过不代表这些原生环境已经验证。
+- 不新增 runtime 状态文件、不恢复数字柄/旧全局文件兼容、不改来源分类；W08 仍是研究，`CODEX_SOURCE_ASSOCIATION_UNVERIFIED` 结论保留。C14 父项的来源关联等未完成工作继续保留。
+- 普通维护保留最高进度；已有维护预览/执行不新增与会话写入的并发删除合同。外部手动删除最高进度、强清和旧版本重写都可能重置命名空间，不保证这些操作前的旧短柄仍能唯一指向原对话。
+- 无发布、push、全局 CLI/skill 安装、远端试验或原生工具安装/启停。原未跟踪 `docs/代码消息投递.md` 未修改或纳入提交。
