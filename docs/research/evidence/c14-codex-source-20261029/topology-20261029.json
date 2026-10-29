@@ -1,0 +1,172 @@
+{
+  "collectedAt": "2026-10-29T06:08:46.299Z",
+  "platform": "win32",
+  "node": "v25.0.0",
+  "codexExecutors": [
+    {
+      "row": {
+        "pid": 21332,
+        "ppid": 1896,
+        "createdAt": 134376623689634060,
+        "name": "codex-windows-sandbox-service.exe",
+        "shape": "unknown",
+        "exeDigest": ""
+      },
+      "chain": [
+        {
+          "pid": 21332,
+          "name": "codex-windows-sandbox-service.exe",
+          "shape": "unknown"
+        },
+        {
+          "pid": 1896,
+          "name": "services.exe",
+          "shape": "unknown"
+        },
+        {
+          "pid": 1820,
+          "name": "wininit.exe",
+          "shape": "unknown"
+        }
+      ],
+      "stopReason": "missing-parent"
+    },
+    {
+      "row": {
+        "pid": 24716,
+        "ppid": 14368,
+        "createdAt": 134377104251445780,
+        "name": "codex.exe",
+        "shape": "desktop-bundle",
+        "exeDigest": "4ff0c97c5201"
+      },
+      "chain": [
+        {
+          "pid": 24716,
+          "name": "codex.exe",
+          "shape": "desktop-bundle"
+        },
+        {
+          "pid": 14368,
+          "name": "ChatGPT.exe",
+          "shape": "app"
+        }
+      ],
+      "stopReason": "missing-parent"
+    },
+    {
+      "row": {
+        "pid": 14720,
+        "ppid": 14368,
+        "createdAt": 134377104335929400,
+        "name": "codex-computer-use-swift.exe",
+        "shape": "other",
+        "exeDigest": "8d582d63ff12"
+      },
+      "chain": [
+        {
+          "pid": 14720,
+          "name": "codex-computer-use-swift.exe",
+          "shape": "other"
+        },
+        {
+          "pid": 14368,
+          "name": "ChatGPT.exe",
+          "shape": "app"
+        }
+      ],
+      "stopReason": "missing-parent"
+    },
+    {
+      "row": {
+        "pid": 3240,
+        "ppid": 24716,
+        "createdAt": 134377164965385700,
+        "name": "codex-code-mode-host.exe",
+        "shape": "other",
+        "exeDigest": "caee9bc31669"
+      },
+      "chain": [
+        {
+          "pid": 3240,
+          "name": "codex-code-mode-host.exe",
+          "shape": "other"
+        },
+        {
+          "pid": 24716,
+          "name": "codex.exe",
+          "shape": "desktop-bundle"
+        },
+        {
+          "pid": 14368,
+          "name": "ChatGPT.exe",
+          "shape": "app"
+        }
+      ],
+      "stopReason": "missing-parent"
+    }
+  ],
+  "daemon": {
+    "present": true,
+    "keys": [
+      "executableIdentity",
+      "pid",
+      "processStartTime"
+    ],
+    "hasProcessStartTime": true,
+    "hasExecutableIdentity": true,
+    "executableIdentityKeys": [
+      "digest",
+      "path_digest"
+    ],
+    "fileAgeHours": 121,
+    "pidAlive": false
+  },
+  "appProcessCount": 12,
+  "threads": {
+    "originators": [
+      {
+        "originator": "Codex Desktop",
+        "n": 113
+      },
+      {
+        "originator": "codex-tui",
+        "n": 52
+      },
+      {
+        "originator": "(null)",
+        "n": 26
+      },
+      {
+        "originator": "codex_exec",
+        "n": 16
+      },
+      {
+        "originator": "crosschat",
+        "n": 2
+      },
+      {
+        "originator": "codex_work_desktop",
+        "n": 2
+      }
+    ],
+    "sources": [
+      {
+        "kind": "(structured/other)",
+        "n": 118
+      },
+      {
+        "kind": "vscode",
+        "n": 46
+      },
+      {
+        "kind": "cli",
+        "n": 31
+      },
+      {
+        "kind": "exec",
+        "n": 16
+      }
+    ]
+  }
+}
