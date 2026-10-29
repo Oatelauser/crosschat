@@ -211,8 +211,12 @@ commands:
                                 daemon (default: all nodes, then
                                 the broker)
   install-skills [--dir <root>]
-                            install the agent skill into <root>/.claude and
-                            <root>/.codex (default root: home directory)
+                            install the agent skill for Claude, Codex and
+                            Harness: <root>/.claude, <root>/.codex and the
+                            Harness home (default <root>/.dsh; an absolute
+                            DSH_HOME replaces it); default root: home
+                            directory; --dir replaces the root and ignores
+                            DSH_HOME
   clean [--force]           clean tcp file-channel leftovers (inbox/parts)
                             and 30-day-stale conversation shards: default =
                             lazy rules (items older than 5 days, or inbox
@@ -221,9 +225,11 @@ commands:
                             --force deletes all these files without
                             confirmation and resets conversation handles
   uninstall [--yes]         remove crosschat data: ~/.crosschat (state
-                            included), pre-014 legacy state dirs, and both
-                            agent skills (refuses while "crosschat serve"
-                            runs; asks y/n unless --yes)
+                            included), pre-014 legacy state dirs, and the
+                            Claude, Codex and Harness skill copies (default
+                            Harness home ~/.dsh, or an absolute DSH_HOME;
+                            refuses while "crosschat serve" runs; asks y/n
+                            unless --yes)
   claude [any native args]  start the real claude CLI with inbound peer
                             messaging enabled; any native claude args
                             (e.g. -c, --model <m>, --help) pass through

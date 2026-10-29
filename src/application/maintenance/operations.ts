@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { closeSync, fstatSync, lstatSync, openSync, opendirSync, readSync, readdirSync, rmSync } from 'node:fs';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { legacyStateRoots, stateRoot } from '../../state-root.js';
 import { executeCleanup, planCleanup } from '../cleanup/index.js';
 import { defaultInstallSkillsDeps, installSkillDestination, skillPlan } from './skills.js';
@@ -57,10 +57,24 @@ function verifyDirectoryPath(root: string, target: string, allowFinalFile = fals
     if (stat.isSymbolicLink() || (!stat.isDirectory() && !(allowFinalFile && index === segments.length - 1 && stat.isFile()))) throw new Error('维护目录不可完整核验。');
   }
 }
+/** An explicit root outside the user home is verified from itself upward; a link anywhere there is not trusted. */
+function verifyExternalRoot(root: string): void {
+  let current = resolve(root);
+  for (;;) {
+    try {
+      const stat = lstatSync(current);
+      if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('维护目录不可完整核验。');
+    } catch (error) { if (!missing(error)) throw error; }
+    const parent = dirname(current);
+    if (parent === current) return;
+    current = parent;
+  }
+}
 /** A skill target is verified from the user home when it lives there; an explicit DSH_HOME may sit outside. */
 function verifySkillTarget(home: string, target: SkillTarget, allowFinalFile = false): void {
   const inside = relative(home, target.path);
   const contained = inside !== '' && !isAbsolute(inside) && inside !== '..' && !inside.startsWith(`..${sep}`);
+  if (!contained) verifyExternalRoot(target.root);
   verifyDirectoryPath(contained ? home : target.root, target.path, allowFinalFile);
 }
 /** TUI previews fail closed when the legacy planner's skip-on-stat-error would hide candidates. */
