@@ -1,0 +1,90 @@
+{
+  "generatedAt": "2026-10-29T08:45:35.164Z",
+  "node": "v25.0.0",
+  "repoRelativeDist": [
+    "dist/conversations.js",
+    "dist/ref.js",
+    "dist/envelope.js"
+  ],
+  "experiments": [
+    {
+      "id": "E1",
+      "question": "Does a historical cross-shard c14 collision leave handleForRef without a hint, and does the envelope fall back to the full ref?",
+      "pass": true,
+      "observed": {
+        "handleForRef": null,
+        "fallbackHint": "回复请运行: crosschat send --conversation mc2_NARjcy0xA3QtMQjCaxsyMfuEWQI --tool codex-cli --body \"<你的回复>\"（长文/特殊字符走 stdin）",
+        "shortHintForComparison": "回复请运行: crosschat send --conversation c15 --tool codex-cli --body \"<你的回复>\"（长文/特殊字符走 stdin）"
+      }
+    },
+    {
+      "id": "E2",
+      "question": "Is the colliding number still rejected at consumption time, listing both candidates?",
+      "pass": true,
+      "observed": {
+        "code": "INVALID_CONVERSATION_REF",
+        "message": "c14 撞号指向多个对话：mc2_NARjcy0xA3QtMQghSIikJuSA5AE mc2_NARjcy0yA3QtMgiU_9Qvv1tGNQE——用 --to <名> --tool <收件类型> 接续或开新对话"
+      }
+    },
+    {
+      "id": "E3",
+      "question": "Counterexample to \"just claim a new handle\": does claimHandle(file, ref, 15) drop the same-nonce c14 and make the foreign c14 suddenly unique?",
+      "pass": true,
+      "observed": {
+        "claimed": "c15",
+        "shardAHandlesBefore": {
+          "c14": "mc2_NARjcy0xA3QtMQi6l9JYe5tK-gE"
+        },
+        "shardAHandlesAfter": {
+          "c15": "mc2_NARjcy0xA3QtMQi6l9JYe5tK-gI"
+        },
+        "shardALineUnchanged": true,
+        "foreignShardBytesUnchanged": true,
+        "c14AfterRecovery": {
+          "resolvesToNonce": "e3253a9d6f8296c6",
+          "isForeign": true
+        },
+        "c15ResolvesToOurs": true
+      }
+    },
+    {
+      "id": "E4",
+      "question": "Would keeping both handles survive normal accounting? Does recordConversation collapse same-nonce aliases to the last one?",
+      "pass": true,
+      "observed": {
+        "handlesBefore": {
+          "c14": "mc2_NARjcy0xA3QtMQjb6Fufv-ljLQE",
+          "c15": "mc2_NARjcy0xA3QtMQjb6Fufv-ljLQE"
+        },
+        "handlesAfter": {
+          "c15": "mc2_NARjcy0xA3QtMQjb6Fufv-ljLQI"
+        },
+        "c14AfterRefresh": {
+          "resolvesToForeign": true
+        }
+      }
+    },
+    {
+      "id": "E5",
+      "question": "Is a failed allocation write atomic — old c14 copy intact, no ghost handle, no scratch?",
+      "pass": true,
+      "observed": {
+        "claimOutcome": {
+          "code": "CONVERSATION_STATE_WRITE_FAILED",
+          "message": "Conversation state could not be saved; no message was sent."
+        },
+        "shardBytesUnchanged": true,
+        "handlesAfter": {
+          "c14": "mc2_NARjcy0xA3QtMQgz-YAHPxakDQE"
+        },
+        "c14StillColliding": true,
+        "scratchLeftovers": []
+      }
+    }
+  ],
+  "cleanup": {
+    "root": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\w07-probe-1793263535112-3f9c10c3",
+    "underCache": true,
+    "removed": true
+  }
+}
