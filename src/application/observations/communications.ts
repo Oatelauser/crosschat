@@ -285,16 +285,6 @@ export async function queryCommunications(options: CommunicationQueryOptions): P
   const pairs = new Map<string, PairRecord>();
   try {
     checkAbort(options.signal);
-    const legacyFile = join(options.baseDir, 'conversations.json');
-    const legacy = await jsonFile(legacyFile, options);
-    if (legacy.error) errors.push(legacy.error);
-    if (legacy.state === 'ready') {
-      if (!isRecord(legacy.value) || !isRecord(legacy.value.pairs)) errors.push(issue(legacyFile, '通信索引缺少有效的 pairs 元数据。'));
-      else for (const [key, value] of Object.entries(legacy.value.pairs)) {
-        const parsed = pairRecord(key, value);
-        if (parsed) pairs.set(key, parsed); else errors.push(issue(legacyFile, '通信索引包含无法核验的完整通信对。'));
-      }
-    }
     const directory = join(options.baseDir, 'conversations');
     for (const name of await files(directory, options, errors)) {
       const file = join(directory, name);

@@ -358,7 +358,12 @@ function reconcileRefinement(file: string, original: ConversationRef, requested:
   // successful conversation line. Delivery records the new line afterwards.
   const destinationRef = existing?.ref ?? encoded;
   const handleSequence = highestHandleSequence([...(existing === undefined ? [] : [existing]), ...records.map(({ record }) => record)]);
-  const saved = savePair(file, pair, { ref: destinationRef, updatedAt,
+  const unchanged = existing !== undefined && existing.ref === destinationRef && existing.updatedAt === updatedAt
+    && (existing.handleSequence ?? 0) === handleSequence
+    && JSON.stringify(Object.entries(existing.handles ?? {})) === JSON.stringify(Object.entries(handles))
+    && Object.keys(existing.machines ?? {}).length === Object.keys(machines ?? {}).length
+    && Object.entries(machines ?? {}).every(([key, value]) => existing.machines?.[key] === value);
+  const saved = unchanged || savePair(file, pair, { ref: destinationRef, updatedAt,
     ...(Object.keys(handles).length ? { handles } : {}),
     ...(handleSequence === 0 ? {} : { handleSequence }),
     ...(machines === undefined || Object.keys(machines).length === 0 ? {} : { machines }),
@@ -373,6 +378,7 @@ function reconcileRefinement(file: string, original: ConversationRef, requested:
   // continuity line remain intact.
   for (const { pair: previous, record } of changed) {
     const moved = migrated.get(record) ?? new Set<string>();
+    if (moved.size === 0) continue;
     const remaining = Object.fromEntries(Object.entries(record.handles ?? {}).filter(([handle, value]) => {
       return !(moved.has(handle) && encodedConversationMatches(value, original));
     }));
