@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { runDoctor, type DoctorDeps } from '../src/commands/doctor.js';
 import type { ClaudeRegistryScan } from '../src/claude/registry.js';
@@ -19,6 +19,8 @@ function makeDeps(over: Partial<DoctorDeps> = {}): DoctorDeps {
     readFile: () => 'SKILL body',
     homeDir: () => 'C:\\home',
     listOutbox: () => [],
+    outboxDir,
+    watchdogRunning: () => ({ running: false }),
     repoSkillFiles: () => [{ path: 'SKILL.md', content: 'SKILL body' }],
     ...over,
   };
@@ -31,6 +33,11 @@ const session = {
   status: 'running',
   messagingSocketPath: 'sock-1',
 };
+
+// Synthetic outbox root: mailbox assertions go through join so they hold on every platform.
+const outboxDir = join('C:\\home', '.crosschat', 'outbox');
+const parkedThreadId = 'abcdefgh1234';
+const parkedMailbox = join(outboxDir, '..', 'mailbox', `${parkedThreadId}.md`);
 
 describe('runDoctor', () => {
   it('passes clean: only ✅ lines, no failure', () => {
@@ -199,11 +206,23 @@ describe('runDoctor', () => {
 
   it('reports parked outbox items as auto-drain pending', () => {
     const report = runDoctor(
-      makeDeps({ listOutbox: () => [{ threadId: 'abcdefgh1234', count: 3 }] }),
+      makeDeps({ listOutbox: () => [{ threadId: parkedThreadId, count: 3 }] }),
     );
     expect(report.failed).toBe(false);
     expect(report.output).toContain('⏳ 线程 abcdefgh 暂存 3 条');
     expect(report.output).toContain('看门狗未运行');
+    expect(report.output).toContain(`滞留内容: ${parkedMailbox}`);
+  });
+
+  it('shows a running watchdog through the same injected probe', () => {
+    const watchdogRunning = vi.fn(() => ({ running: true }));
+    const report = runDoctor(
+      makeDeps({ listOutbox: () => [{ threadId: parkedThreadId, count: 3 }], watchdogRunning }),
+    );
+    expect(watchdogRunning).toHaveBeenCalled();
+    expect(report.output).toContain('看门狗运行中');
+    expect(report.output).not.toContain('看门狗未运行');
+    expect(report.output).toContain(`滞留内容: ${parkedMailbox}`);
   });
 
   it('exposes exit code semantics: failed iff any ❌ was reported', () => {
