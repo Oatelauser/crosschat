@@ -216,8 +216,9 @@ commands:
                             and 30-day-stale conversation shards: default =
                             lazy rules (items older than 5 days, or inbox
                             over 512MiB oldest-first; shards untouched for
-                            30 days); --force deletes everything without
-                            confirmation
+                            30 days, keeping one numbering-progress shard);
+                            --force deletes all these files without
+                            confirmation and resets conversation handles
   uninstall [--yes]         remove crosschat data: ~/.crosschat (state
                             included), pre-014 legacy state dirs, and both
                             agent skills (refuses while "crosschat serve"
