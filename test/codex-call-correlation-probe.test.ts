@@ -1,9 +1,10 @@
 import { createServer } from 'node:http';
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CORRELATION_LIMITS,
   buildPlan,
@@ -163,6 +164,18 @@ describe('codex call correlation probe: binding', () => {
     expect(result.status).toBe('incomplete');
   });
 
+  it('keeps a missing id unverifiable even when another id is valid but different', () => {
+    // A missing required field outranks an unequal one: this is no conclusion,
+    // not a negative one.
+    const result = correlate(
+      [hookLine({ tag: 'call-1', toolUseId: 'call-1', sessionId: 'thread-abc' })],
+      [shellRecord({ tag: 'call-1', toolCallId: null, threadId: 'thread-other' })],
+      ['call-1'],
+    );
+    expect(result.calls[0]).toMatchObject({ verdict: 'unverifiable', toolCallIdEqual: null, threadIdEqual: false });
+    expect(result.status).toBe('incomplete');
+  });
+
   it('refuses a plan when one planned call never produced a shell sample', () => {
     const { hooks, shells } = bothCalls();
     const result = correlate(hooks, [shells[0]]);
@@ -294,6 +307,30 @@ describe('codex call correlation probe: executor instance', () => {
     );
     expect(result.calls[0]).toMatchObject({ executorVerdict: 'unverified', sameExecutorInstance: false });
     expect(result.calls[0].hook.ancestryBroken).toBe(true);
+  });
+
+  it('stops the chain when a parent was born after its own child', () => {
+    const child = { pid: 500, ppid: 600, createdAt: 120, name: 'node.exe', exeDigest: 'x' };
+    const laterParent = { pid: 600, ppid: 0, createdAt: 200, name: 'codex.exe', exeDigest: 'y' };
+    expect(normalizeAncestry([child, laterParent])).toEqual({ rows: [child], malformed: 0, broken: true });
+
+    // The independent repro: two children born 100/120 under a codex parent born 200.
+    const first = { pid: 500, ppid: 600, createdAt: 100, name: 'node.exe', exeDigest: 'x' };
+    const second = { pid: 501, ppid: 600, createdAt: 120, name: 'node.exe', exeDigest: 'x' };
+    const codex = { pid: 600, ppid: 0, createdAt: 200, name: 'codex.exe', exeDigest: 'y' };
+    const result = correlate(
+      [hookLine({ tag: TAGS[0], toolUseId: TAGS[0], chain: [first, codex] })],
+      [shellRecord({ tag: TAGS[0], toolCallId: TAGS[0], chain: [second, codex] })],
+      [TAGS[0]],
+    );
+    expect(result.calls[0]).toMatchObject({ verdict: 'correlated', executorVerdict: 'unverified', sameExecutorInstance: false });
+  });
+
+  it('stops the chain at a repeated pid instead of looping', () => {
+    const child = { pid: 500, ppid: 600, createdAt: 120, name: 'node.exe', exeDigest: 'x' };
+    const parent = { pid: 600, ppid: 500, createdAt: 110, name: 'codex.exe', exeDigest: 'y' };
+    const again = { pid: 500, ppid: 600, createdAt: 100, name: 'node.exe', exeDigest: 'x' };
+    expect(normalizeAncestry([child, parent, again])).toEqual({ rows: [child, parent], malformed: 0, broken: true });
   });
 
   it('leaves the instance unverified when the executable path digest is missing', () => {
@@ -429,6 +466,39 @@ describe('codex call correlation probe: loopback service', () => {
     expect(await live.close()).toBe(true);
   });
 
+  it('fails a request that never finishes on its own deadline', async () => {
+    const live = await startMockModel([], { requestTimeoutMs: 200 });
+    const { port } = new URL(live.baseUrl);
+    const socket = connect(Number(port), '127.0.0.1');
+    await new Promise((done) => socket.once('connect', done));
+    // Headers complete, body never does: the server must not wait forever.
+    socket.write('POST /v1/responses HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 100\r\n\r\n{"input":');
+    await vi.waitFor(() => expect(live.state.failures).toContain('request-timeout'), { timeout: 5000 });
+    expect(live.state.requests).toBe(0);
+    socket.destroy();
+    expect(await live.close()).toBe(true);
+  }, 20_000);
+
+  it('leaves no timer behind, so the process exits as soon as the server closes', async () => {
+    // A pending request deadline or close deadline keeps the event loop alive; the
+    // child would then outlive its 3s budget instead of exiting at once.
+    const code = [
+      `import { startMockModel } from ${JSON.stringify(new URL('../scripts/codex-call-correlation-probe.mjs', import.meta.url).href)};`,
+      'const live = await startMockModel([], { closeTimeoutMs: 5000, requestTimeoutMs: 5000 });',
+      "await fetch(live.baseUrl, { method: 'POST', body: JSON.stringify({ input: [] }) });",
+      'process.stdout.write(String(await live.close()));',
+    ].join('\n');
+    const result = await runProcess({
+      command: process.execPath,
+      args: ['--input-type=module', '-e', code],
+      timeoutMs: 3000,
+      killTimeoutMs: 2000,
+    });
+    expect(result.timedOut).toBe(false);
+    expect(result.exitCode).toBe(0);
+    expect(result.output.trim()).toBe('true');
+  }, 20_000);
+
   it('validates only the fields the probe consumes', () => {
     expect(parseModelRequest('{"input":{}}')).toEqual({ ok: false, reason: 'invalid-input' });
     expect(parseModelRequest('{"input":[1]}')).toEqual({ ok: false, reason: 'invalid-input' });
@@ -500,18 +570,40 @@ describe('codex call correlation probe: run root and main chain', () => {
     expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
     const claim = won[0].value;
 
-    await expect(removeOwnedRoot(root, { runId: 'not-the-winner' })).rejects.toThrow(/root-not-owned/);
-    expect(await readFile(join(root, 'ownership.json'), 'utf8')).toContain(claim.runId);
+    // A loser can copy the marker bytes but still owns no run id.
+    await expect(removeOwnedRoot(root, { ...claim, runId: 'not-the-winner' })).rejects.toThrow(/root-not-owned/);
+    expect(await readFile(join(root, 'ownership.json'), 'utf8')).toBe(claim.markerBytes);
     await removeOwnedRoot(root, claim);
     await expect(access(root)).rejects.toThrow();
   });
 
-  it('refuses to delete a root whose marker changed after the claim', async () => {
+  it('refuses a claim that names a different root', async () => {
     const dir = await tempDir();
     const claim = await prepareOwnedRoot(join(dir, 'owned'));
-    await writeFile(join(claim.root, 'ownership.json'), JSON.stringify({ owner: 'c14-w05-correlation-probe', runId: 'other-run' }));
-    await expect(removeOwnedRoot(claim.root, claim)).rejects.toThrow(/root-not-owned/);
-    expect(await readFile(join(claim.root, 'ownership.json'), 'utf8')).toContain('other-run');
+    const other = join(dir, 'other-owned');
+    await mkdir(other);
+    // The same marker bytes, copied into another directory this run also owns.
+    await writeFile(join(other, 'ownership.json'), claim.markerBytes);
+    await expect(removeOwnedRoot(other, claim)).rejects.toThrow(/root-not-owned:root-mismatch/);
+    expect(await readFile(join(other, 'ownership.json'), 'utf8')).toBe(claim.markerBytes);
+    // A claim re-pointed at the copy still fails: the marker names the directory it
+    // was written for, so copied bytes do not authorize another root.
+    await expect(removeOwnedRoot(other, { ...claim, root: other })).rejects.toThrow(/root-not-owned:marker-changed/);
+    expect(await readFile(join(other, 'ownership.json'), 'utf8')).toBe(claim.markerBytes);
+  });
+
+  it('refuses to delete a root whose marker changed in any field after the claim', async () => {
+    const dir = await tempDir();
+    const claim = await prepareOwnedRoot(join(dir, 'owned'));
+    const changed = `${JSON.stringify({ ...claim.ownership, pid: claim.ownership.pid + 1 })}\n`;
+    await writeFile(join(claim.root, 'ownership.json'), changed);
+    await expect(removeOwnedRoot(claim.root, claim)).rejects.toThrow(/root-not-owned:marker-changed/);
+    expect(await readFile(join(claim.root, 'ownership.json'), 'utf8')).toBe(changed);
+
+    const otherRun = `${JSON.stringify({ ...claim.ownership, runId: 'other-run' })}\n`;
+    await writeFile(join(claim.root, 'ownership.json'), otherRun);
+    await expect(removeOwnedRoot(claim.root, claim)).rejects.toThrow(/root-not-owned:marker-changed/);
+    expect(await readFile(join(claim.root, 'ownership.json'), 'utf8')).toBe(otherRun);
   });
 
   it('reports an incomplete experiment when only the first of two planned calls was captured', async () => {
@@ -520,18 +612,59 @@ describe('codex call correlation probe: run root and main chain', () => {
     expect(evidence.run.outcome).toBe('no-conclusion');
     expect(evidence.run.reasons).toContain('read-failed:shell-2:ENOENT');
     expect(evidence.calls.map((call) => call.verdict)).toEqual(['correlated', 'shell-missing']);
-    expect(evidence.run.cleanup.status).toBe('removed');
+    expect(evidence.run.cleanup.status).toBe('retained');
   });
 
-  it('reports a complete experiment when every planned call was captured', async () => {
-    const { evidence } = await fakeRun(2);
-    expect(evidence.run.status).toBe('complete');
-    expect(evidence.run.outcome).toBe('correlated');
+  it('keeps the root on a clean exit because no descendant evidence exists', async () => {
+    const { root, evidence } = await fakeRun(2);
+    // The correlation itself is still recorded as fact …
+    expect(evidence.calls.map((call) => call.verdict)).toEqual(['correlated', 'correlated']);
     expect(evidence.run.shellSamples).toBe(2);
     expect(evidence.run.hookRecords).toBe(2);
-    expect(evidence.run.cleanup.status).toBe('removed');
-    expect(evidence.calls.map((call) => call.verdict)).toEqual(['correlated', 'correlated']);
+    // … but a closed launcher proves nothing about its descendants, so the run is
+    // not complete and the directory stays where it is.
+    expect(evidence.run.exitCode).toBe(0);
+    expect(evidence.run.descendantsVerified).toBe(false);
+    expect(evidence.run.status).toBe('incomplete');
+    expect(evidence.run.outcome).toBe('no-conclusion');
+    expect(evidence.run.reasons).toContain('cleanup-retained:processes-unverified');
+    expect(evidence.run.cleanup).toMatchObject({ status: 'retained', reason: 'processes-unverified', path: root });
+    expect(await readFile(join(root, 'ownership.json'), 'utf8')).toContain('c14-w05-correlation-probe');
   });
+
+  it('keeps the root when the cli exits non-zero', async () => {
+    const dir = await tempDir();
+    const script = join(dir, 'fail.mjs');
+    await writeFile(script, 'process.exit(4);');
+    const root = join(dir, 'run-root');
+    const evidence = await runCorrelation({
+      root,
+      cli: { command: process.execPath, args: [script], appendPromptArgs: false },
+    });
+    expect(evidence.run.status).toBe('tooling-failure');
+    expect(evidence.run.reasons).toContain('cli-exit:4');
+    expect(evidence.run.cleanup.status).toBe('retained');
+    expect(await readFile(join(root, 'ownership.json'), 'utf8')).toContain('c14-w05-correlation-probe');
+  });
+
+  it('keeps the root when the run is cancelled', async () => {
+    const dir = await tempDir();
+    const script = join(dir, 'hang.mjs');
+    await writeFile(script, 'setInterval(() => {}, 1000);');
+    const root = join(dir, 'run-root');
+    const controller = new AbortController();
+    const pending = runCorrelation({
+      root,
+      cli: { command: process.execPath, args: [script], appendPromptArgs: false },
+      deps: { signal: controller.signal },
+    });
+    setTimeout(() => controller.abort(), 300);
+    const evidence = await pending;
+    expect(evidence.run.cancelled).toBe(true);
+    expect(evidence.run.reasons).toContain('cli-cancelled');
+    expect(evidence.run.cleanup.status).toBe('retained');
+    expect(await readFile(join(root, 'ownership.json'), 'utf8')).toContain('c14-w05-correlation-probe');
+  }, 20_000);
 
   it('refuses an existing evidence file before starting any cli', async () => {
     const dir = await tempDir();

@@ -127,6 +127,8 @@ npx vitest run test/codex-call-correlation-probe.test.ts
 
 退出码：`0` 只表示**采证完整**并跑出对账结论（相等或不相等都算）；`3` 表示证据不全（缺记录、重复、读取失败、截断、超限）或工装故障。**工装故障与不完整采证都不得写成"原生不支持"。**
 
+从 R3 起，**正常完整运行也返回 3**：运行根按"未知就保留"处理（§十二），`run.status` 为 `incomplete`、reason 带 `cleanup-retained:processes-unverified`，逐调用对账结论仍照常写入证据、可作事实引用。因此这个探针目前**不能直接当作 CI 成功门禁**——这是研究工装的边界，不是"原生不支持"。
+
 ## 九、清理与归属
 
 - 本单新增：本报告、`evidence/c14-codex-call-20261029/correlation-20261029.json`、探针脚本、Hook helper、fixture、测试各一份；R1 新增 `evidence/c14-codex-call-20261029/correlation-20261029-r1.json`（见 §十）。原两份证据文件字节未改。
@@ -159,7 +161,7 @@ R1 复审（同 [W05-review.md](../development/evidence/c14-worker-20261029/W05-
 ### 缺陷与修法
 
 1. **拒绝的旧根仍被删除（P1）。** 旧 `main` 在 `finally` 里按路径 `rm -rf`，于是"拒绝非空根"之后照样把别人的目录删了。现在：`prepareOwnedRoot` 用 `ownership.json` 的 `wx` 写作为**领取**，marker 带本进程 `runId`；`removeOwnedRoot(root, claim)` 删除前回读 marker 并要求 `owner` 与 `runId` 都相符；`main` 不再有任何按路径删除。并发领取时失败者拿不到 `claim`，因此没有删除权。领取失败、marker 中途被改、他人正在用的根，都保持字节不变。
-2. **生命周期。** `runProcess` 增加 `AbortSignal` 取消，超时与取消都走"树杀 → 等 `close` → 复查 pid"；`launcherGone` 记录启动进程是否真的消失，`descendantsVerified` 恒为 `false`——杀树成功不等于每个后代都退出。根目录只在**本进程已知关闭**时删除；超时、取消、泄漏、spawn 失败一律保留，并在 `reasons` 里写明 `cleanup-retained:processes-unverified`。定时器与监听器在每条出口上清掉。
+2. **生命周期。** `runProcess` 增加 `AbortSignal` 取消，超时与取消都走"树杀 → 等 `close` → 复查 pid"；`launcherGone` 记录启动进程是否真的消失，`descendantsVerified` 恒为 `false`——杀树成功不等于每个后代都退出。根目录只在**本进程已知关闭**时删除（§十二 起收紧为始终保留）；超时、取消、泄漏、spawn 失败一律保留，并在 `reasons` 里写明 `cleanup-retained:processes-unverified`。定时器与监听器在每条出口上清掉。
 3. **JSON 边界与证据预检。** loopback 服务的请求体先过 `parseModelRequest`：顶层必须是对象，`input` 必须是对象数组，`tools` 必须是对象数组；畸形返回 400 并记 `model-invalid-input` / `model-invalid-tools`，回调整体包 try/catch，绝不让事件回调抛出进程。ID 只接受**非空字符串**：数字 ID 被拒（`invalid-id`），不再 `String()` 强转成"相等"。缺失 ID 与两个有效但不等是两件事：前者 `unverifiable`（`call-id-missing` / `thread-id-missing`），后者 `mismatch`。进程链要求首行就是记录自己的 pid、相邻行 `ppid` 与下一行 `pid` 相连；断链之后的行一律丢弃，不会把无关的 Codex 行当成共同实例。已有证据文件在**任何 CLI 启动之前**就被拒（`evidence-exists`），最终写入仍是排他创建。
 4. **RED/GREEN 覆盖到入口。** 新增用例覆盖真实 `main` 拒绝旧根后字节不变、并发领取失败者不能删、marker 被改不能删、畸形请求不崩且服务能关、数字/缺失 ID、断链、取消、未关闭时保留根、已有证据时根都没被创建。RED 六轮分别改回上述缺陷形态，命中 1 / 1 / 2 / 2 / 1 / 1 项失败，恢复后 48/48 通过。
 
@@ -179,3 +181,43 @@ R1 复审（同 [W05-review.md](../development/evidence/c14-worker-20261029/W05-
 ### 边界
 
 本轮没有启动真实 Codex，也没有新增原生证据；§三、§十 的结论强度不变。取消、超时、并发领取都在受控子进程与临时目录上验证，真实进程树上的取消/超时仍未实测。
+
+## 十二、R3 最小收口
+
+R2 复审（同 [W05-review.md](../development/evidence/c14-worker-20261029/W05-review.md) 的"R2 复审与 R3 最小收口"）确认 P1 已修，但仍有四条合同缺口。R3 按**未知就保留**的口径收口，不引入 Job Object、后台进程树采样、第三方包或新平台能力；仍然不跑原生复跑，原始三份证据字节未改。
+
+### 五处修改
+
+1. **后代未核实即保留根。** `settled` 现在要求 `run.descendantsVerified === true`。这个值在本运行器里恒为 `false`（杀树成功不等于每个后代退出），所以**正常退出、非零退出、超时、取消都不再删除运行根**：`cleanup` 是 `retained / processes-unverified`，路径写进证据，`reasons` 带 `cleanup-retained:processes-unverified`，整体不是 `complete`。这是本轮明示的选择：宁可留目录，也不用启动器 `close` 冒充后代证据。
+2. **claim 绑定本次根与完整 marker。** `prepareOwnedRoot` 把解析后的绝对根写进 marker（`owner / runId / root / createdAt / pid`），并把精确字节保存在 claim 里；`removeOwnedRoot` 先比对 `claim.root` 与本次解析路径，再逐字节比对磁盘 marker，再核对全部身份字段。根不同、marker 被复制到别的目录、只改 PID 或创建时间，都拒绝删除且不动字节。
+3. **缺失 ID 优先不可比较。** 判定改为"任一必需比较字段为 `null` → `unverifiable`"，只有两组有效 ID 才可能落到 `mismatch`。所以"缺 call ID + thread 不同"不再被误判成负结论。
+4. **祖先链代次与环。** `normalizeAncestry` 除相邻 `ppid→pid` 外，还要求父进程创建时间不晚于子进程、pid 不得重复；在第一个断点截断。独立审计用"创建时间 100/120 的子进程指向时间 200 的共同 Codex 父"复现的 `same`，现在得到 `unverified`。
+5. **请求截止与定时器释放。** loopback 请求有 `requestTimeoutMs`（默认 10s）截止，半截请求返回 408 并记 `request-timeout`；`end / error / close` 与服务关闭各自清理自己的 timer 与 listener；关闭成功时立即清除关闭截止 timer。此前"所有工作结束后仍等 5 秒"的路径不再出现。
+
+### RED/GREEN
+
+把六处守卫逐个改回缺陷形态，跑同一份 56 项测试，每轮结束从备份还原并核对字节一致：
+
+| 轮次 | 改回的缺陷 | 结果 | 命中用例 |
+|---|---|---|---|
+| A 收束 | 只用启动器 `close` 判定可删 | 3 failed | 正常退出保留根、非零退出保留根、只采到 1/2 时也保留 |
+| B claim | 只比 owner/runId，不比根与字节 | 2 failed | claim 指向别的根、marker 改任一字段 |
+| C 判读 | 缺 ID 塌缩成 `mismatch` | 1 failed | 缺 call ID + thread 不同 |
+| D 链 | 只查 pid 相邻 | 2 failed | 父晚于子出生、重复 pid |
+| E 截止 | 半截请求超时后不记录 | 1 failed | 半截请求必须有界失败并留痕 |
+| F timer | 关闭截止 timer 不提前释放 | 1 failed | 子进程关服后立即退出 |
+
+### 检查结果
+
+`node --check`、ESLint、定向 Vitest **56/56** 通过。`npm run check` 的 lint / check:imports / build 通过，测试 **2501 通过 / 2 失败 / 11 跳过**，两处失败都在本单未改动的文件里：
+
+- `test/tui-main-observations.test.ts` 的"原生环境路径"用例（`vi.waitFor` 默认 1000ms 内未调用 `render`）——与 R2 记录同一条，按派单要求**没有重跑**该文件、没有改其断言或超时。
+- `test/core-diagnostics.test.ts` 的"通过默认内置隔离路径终止真实探针子进程"（`expected 'still waiting for blocking probe' to be 'AbortError'`）——该用例把 abort 结果与固定 500ms 计时器赛跑，只在整包并行负载下超时；单独运行该文件三次均 9/9 通过。
+
+两条都属**负载敏感的测试时序问题**，不是本单引入的产品回归；完整日志当时已保存，失败原文与环境摘要见 [W05-R3-checks.md](evidence/c14-codex-call-20261029/W05-R3-checks.md)。按要求没有改这两个文件，也没有用重复运行抹掉首次失败。
+
+### 边界
+
+- 正常原生运行现在**总是**以 `retained` 结束并返回 3：逐调用对账结论仍写入证据（`calls[].verdict`），但整体 `status` 不会是 `complete`。把该运行器当 CI 门禁需要另单，本单不阻塞、也不取消原 CI 待办。
+- 后代"已核实"没有任何实现路径：不引入平台级进程树证据，也不允许手填 `descendantsVerified: true`。
+- 取消、超时、半截请求都在受控子进程与 loopback 上验证；真实 Codex 进程树上的取消/超时仍未实测。

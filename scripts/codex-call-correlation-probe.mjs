@@ -23,6 +23,7 @@ export const CORRELATION_LIMITS = {
   runTimeoutMs: 180_000,
   closeTimeoutMs: 5_000,
   killTimeoutMs: 5_000,
+  requestTimeoutMs: 10_000,
   hookStdinBytes: 64 * 1024,
   hookStdinMs: 5_000,
 };
@@ -96,17 +97,23 @@ export function isProcessRow(row) {
     && typeof row.exeDigest === 'string';
 }
 
-// A chain is only usable up to the first row that is malformed or that does not
-// point at the row before it. Rows past a gap are unrelated, so they are dropped
-// rather than handed to the executor check as if the chain were connected.
+// A chain is only usable up to the first row that is malformed, that does not
+// point at the row before it, that was born after its own child, or that repeats
+// a pid. Rows past that point are unrelated, so they are dropped rather than
+// handed to the executor check as if the chain were connected.
 export function normalizeAncestry(chain, { expectPid = null } = {}) {
   const rows = [];
+  const seen = new Set();
   let malformed = 0;
   let broken = false;
   for (const row of Array.isArray(chain) ? chain : []) {
     if (!isProcessRow(row)) { malformed += 1; broken = true; break; }
     const previous = rows[rows.length - 1];
-    if (previous && previous.ppid !== row.pid) { broken = true; break; }
+    // A parent is never younger than its child; a repeated pid is a cycle or a
+    // reused pid, not the original parent.
+    if (previous && (previous.ppid !== row.pid || row.createdAt > previous.createdAt)) { broken = true; break; }
+    if (seen.has(row.pid)) { broken = true; break; }
+    seen.add(row.pid);
     rows.push(row);
   }
   if (rows.length > 0 && Number.isInteger(expectPid) && rows[0].pid !== expectPid) {
@@ -308,14 +315,15 @@ export function correlateCalls({ hookRecords = [], shellRecords = [], plannedTag
     }
     const [hook] = hooks;
     boundHooks.add(hook);
-    // null means "cannot compare", which is not the same as "different": two valid
-    // but unequal ids are a negative result, a missing id is no result at all.
+    // null means "cannot compare", which is not the same as "different": a missing
+    // required id outranks any other field, so an uncomparable call never becomes
+    // a negative conclusion.
     const toolCallIdEqual = shell.toolCallId && hook.toolUseId ? shell.toolCallId === hook.toolUseId : null;
     const threadIdEqual = shell.threadId && hook.sessionId ? shell.threadId === hook.sessionId : null;
     const sessionIdEqual = shell.sessionId && hook.sessionId ? shell.sessionId === hook.sessionId : null;
-    const verdict = toolCallIdEqual === false || threadIdEqual === false
-      ? 'mismatch'
-      : (toolCallIdEqual === true && threadIdEqual === true ? 'correlated' : 'unverifiable');
+    const verdict = toolCallIdEqual === null || threadIdEqual === null
+      ? 'unverifiable'
+      : (toolCallIdEqual && threadIdEqual ? 'correlated' : 'mismatch');
     const hookChain = normalizeAncestry(hook.ancestry, { expectPid: hook.pid }).rows;
     const shellChain = normalizeAncestry(shell.ancestry, { expectPid: shell.pid }).rows;
     const executor = sameExecutor(hookChain, shellChain);
@@ -546,12 +554,13 @@ export function parseModelRequest(text) {
 
 // One loopback Responses endpoint. It answers with the next planned
 // `exec_command` call, or the final message once every call has run. Listen
-// errors, malformed requests, oversized bodies and request overruns are recorded,
-// and no callback is allowed to throw out of the server.
+// errors, malformed requests, oversized bodies, stalled requests and request
+// overruns are recorded, and no callback is allowed to throw out of the server.
 export async function startMockModel(plan, {
   port = 0,
   maxRequests = CORRELATION_LIMITS.maxModelRequests,
   maxBodyBytes = CORRELATION_LIMITS.maxModelBodyBytes,
+  requestTimeoutMs = CORRELATION_LIMITS.requestTimeoutMs,
   closeTimeoutMs = CORRELATION_LIMITS.closeTimeoutMs,
 } = {}) {
   const state = { requests: 0, toolNames: [], toolCalls: [], bodyOverflow: 0, overLimit: false, failures: [] };
@@ -560,7 +569,36 @@ export async function startMockModel(plan, {
     let body = '';
     let bytes = 0;
     let overflow = false;
-    request.on('error', () => { state.failures.push('request-error'); });
+    let settled = false;
+    let timer = null;
+    // Every exit releases this request's own timer and listeners; a request that
+    // never ends fails on the deadline instead of holding the run open.
+    const release = () => {
+      if (timer) clearTimeout(timer);
+      request.removeAllListeners('data');
+      request.removeAllListeners('end');
+      request.removeAllListeners('error');
+      request.removeAllListeners('close');
+    };
+    timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      state.failures.push('request-timeout');
+      release();
+      try { response.writeHead(408).end(); } catch { /* socket already gone */ }
+    }, requestTimeoutMs);
+    request.on('error', () => {
+      if (settled) return;
+      settled = true;
+      state.failures.push('request-error');
+      release();
+    });
+    request.on('close', () => {
+      if (settled) return;
+      settled = true;
+      state.failures.push('request-aborted');
+      release();
+    });
     request.on('data', (chunk) => {
       if (overflow) return;
       bytes += chunk.length;
@@ -568,6 +606,9 @@ export async function startMockModel(plan, {
       body += chunk.toString();
     });
     request.on('end', () => {
+      if (settled) return;
+      settled = true;
+      release();
       try {
         if (overflow) { response.writeHead(413).end(); return; }
         state.requests += 1;
@@ -598,13 +639,18 @@ export async function startMockModel(plan, {
   return {
     baseUrl: `http://127.0.0.1:${server.address().port}/v1`,
     state,
-    // Bounded close: drop keep-alive sockets, then give the server a deadline.
+    // Bounded close: drop keep-alive sockets, then give the server a deadline. The
+    // deadline timer is released as soon as the close settles either way.
     close: async () => {
       server.closeAllConnections?.();
-      const closed = new Promise((done) => server.close(() => done('closed')));
-      const deadline = new Promise((done) => setTimeout(() => done('timeout'), closeTimeoutMs));
-      const result = await Promise.race([closed, deadline]);
-      return result === 'closed';
+      let timer = null;
+      try {
+        const closed = new Promise((done) => server.close(() => done('closed')));
+        const deadline = new Promise((done) => { timer = setTimeout(() => done('timeout'), closeTimeoutMs); });
+        return (await Promise.race([closed, deadline])) === 'closed';
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
     },
   };
 }
@@ -675,36 +721,51 @@ export async function prepareOwnedRoot(root) {
     if (entries.length > 0) throw new Error(`root-not-exclusive:${target}`);
   }
   // The exclusive marker write *is* the claim: a concurrent second claimant loses
-  // here and therefore gets no deletion rights over the winner's directory.
+  // here and therefore gets no deletion rights over the winner's directory. The
+  // marker names the directory it claims, so copied bytes do not travel with it.
   const runId = randomUUID();
-  const ownership = { owner: ROOT_OWNER, runId, createdAt: new Date().toISOString(), pid: process.pid };
+  const ownership = { owner: ROOT_OWNER, runId, root: target, createdAt: new Date().toISOString(), pid: process.pid };
+  const markerBytes = `${JSON.stringify(ownership)}\n`;
   try {
-    await writeFile(join(target, 'ownership.json'), `${JSON.stringify(ownership)}\n`, { flag: 'wx' });
+    await writeFile(join(target, 'ownership.json'), markerBytes, { flag: 'wx' });
   } catch (error) {
     if (error?.code === 'EEXIST') throw new Error(`root-not-exclusive:${target}`);
     throw error;
   }
-  return { root: target, runId, ownership };
+  return { root: target, runId, ownership, markerBytes };
 }
 
-// Deletes only the directory this run claimed. A marker from another run — even
-// one carrying the same owner string — is left in place.
+// Deletes only the directory this run claimed, and only while the marker is still
+// the exact bytes this run wrote. A different path, a copied marker or any changed
+// field leaves the directory untouched.
 export async function removeOwnedRoot(root, claim) {
   const target = resolve(root);
-  if (!claim?.runId) throw new Error(`root-not-claimed:${target}`);
-  const marker = JSON.parse(await readFile(join(target, 'ownership.json'), 'utf8'));
-  if (marker?.owner !== ROOT_OWNER || marker?.runId !== claim.runId) throw new Error(`root-not-owned:${target}`);
+  if (!claim?.runId || typeof claim.markerBytes !== 'string') throw new Error(`root-not-claimed:${target}`);
+  if (claim.root !== target) throw new Error(`root-not-owned:root-mismatch:${target}`);
+  let text;
+  try {
+    text = await readFile(join(target, 'ownership.json'), 'utf8');
+  } catch (error) {
+    throw new Error(`root-not-owned:marker-unreadable:${error?.code ?? 'error'}:${target}`);
+  }
+  if (text !== claim.markerBytes) throw new Error(`root-not-owned:marker-changed:${target}`);
+  const marker = JSON.parse(text);
+  if (marker?.owner !== ROOT_OWNER || marker.runId !== claim.runId || marker.root !== target
+    || marker.pid !== claim.ownership?.pid || marker.createdAt !== claim.ownership?.createdAt) {
+    throw new Error(`root-not-owned:marker-changed:${target}`);
+  }
   await rm(target, { recursive: true, force: true });
 }
 
 // A root is only deleted after the processes it held are known to have closed.
+// Without positive evidence that every descendant exited, the root is kept.
 async function settleRoot(claim, settled) {
   if (!settled) return { status: 'retained', reason: 'processes-unverified', path: claim.root };
   try {
     await removeOwnedRoot(claim.root, claim);
     return { status: 'removed', path: claim.root };
   } catch (error) {
-    const reason = String(error?.message ?? error?.code ?? 'remove-failed').split(':')[0];
+    const reason = String(error?.message ?? error?.code ?? 'remove-failed').split(':').slice(0, 2).join(':');
     return { status: 'failed', reason, path: claim.root };
   }
 }
@@ -824,9 +885,10 @@ export async function runCorrelation({
       if (call.verdict !== 'correlated' && call.verdict !== 'mismatch') reasons.push(`call-${call.tagDigest}:${call.verdict}`);
     }
 
-    // Only a run whose process is known to have closed releases its root. A killed,
-    // aborted or leaking run keeps the directory where it is.
-    const settled = Boolean(run && run.closed && !run.leaked && !run.timedOut && !run.cancelled && !run.spawnError);
+    // A closed launcher is not proof that every descendant exited. Without positive
+    // evidence — which this runner never has — the root is kept, even on a normal
+    // exit, so a clean run reports `retained` and exits 3 as well.
+    const settled = Boolean(run && run.closed && !run.leaked && !run.timedOut && !run.cancelled && !run.spawnError && run.descendantsVerified === true);
     cleanup = await settleRoot(owned, settled);
     if (cleanup.status !== 'removed') reasons.push(`cleanup-${cleanup.status}:${cleanup.reason ?? cleanup.path}`);
 
@@ -845,7 +907,7 @@ export async function runCorrelation({
       node: process.version,
       runtime: runtime ?? { cliPackage: null, cliEntry: null },
       isolation: {
-        root: 'owned exclusive temp dir, deleted only after the launched process closed',
+        root: 'owned exclusive temp dir, kept unless every descendant is known to have exited',
         codexHome: 'owned temp profile, empty at start',
         userConfigRead: false,
         userAuthRead: false,
