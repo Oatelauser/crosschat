@@ -14,12 +14,12 @@
 
 | 子单 | 所属总任务 | 执行者 | 内容 | 当前状态 |
 | --- | --- | --- | --- | --- |
-| C14-W06 | C14配套检查，C14仍未整体完成 | 本机 Claude `cworker1` | 仅修TUI首次render的1秒等待及诊断取消500ms race，保留所有功能/死亡断言，见[任务书](evidence/c14-worker-20261029/W06-task.md) | W05限定研究工装已验收；root最终全量2502通过/1失败/11跳过，既有隔离测试时序转本单收口；不改产品 |
+| C14-W07 | C14短信封恢复，整体仍未完成 | 本机 Claude `cworker1` | 分析新短柄恢复与旧歧义保护、LRU8/全部写路径的最小合同；隔离复现并提出具体实施单，见[任务书](evidence/c14-worker-20261029/W07-task.md) | W06已验收，root完整check2503通过/11跳过；W07本单仅研究/合成验证，不改产品/用户状态；涉及持久格式或功能变化先列明拍板 |
 
-已验收子单见[测试隔离审计](evidence/c14-worker-20261029/W00-review.md)、[协作规则审计](evidence/c14-worker-20261029/W02-review.md)、[短柄诊断验收](evidence/c14-worker-20261029/W03-final-review.md)、[短柄产品修复验收](evidence/c14-worker-20261029/W04-final-review.md)、[来源研究验收](evidence/c14-worker-20261029/W01-final-review.md)及[CLI逐调用研究验收](evidence/c14-worker-20261029/W05-final-review.md)，活动项不重复保留。root最新完整check为2502通过/1失败/11原有跳过，失败由W06处理，未宣称全量通过；研究收口不代表生产来源关联或CI门禁已实现。仓库代码/skill未全局部署。历史实机短柄成因未作追认，当前构建的已证实缺陷修复按独立记录收口。
+已验收子单见[测试隔离审计](evidence/c14-worker-20261029/W00-review.md)、[协作规则审计](evidence/c14-worker-20261029/W02-review.md)、[短柄诊断验收](evidence/c14-worker-20261029/W03-final-review.md)、[短柄产品修复验收](evidence/c14-worker-20261029/W04-final-review.md)、[来源研究验收](evidence/c14-worker-20261029/W01-final-review.md)、[CLI逐调用研究验收](evidence/c14-worker-20261029/W05-final-review.md)及[既有测试等待修复](evidence/c14-worker-20261029/W06-final-review.md)，活动项不重复保留。root最新完整check为2503通过/11原有跳过，退出0；研究收口不代表生产来源关联或CI门禁已实现。仓库代码/skill未全局部署。历史实机短柄成因未作追认，当前构建的已证实缺陷修复按独立记录收口。
 
 ## 后续切分原则
 
-先完成W06既有测试时序收口，再处理已记录的长信封恢复，随后按证据继续入口/owner采证或发独立实现单；涉及用户功能、配置要求或持久格式变动时先列影响并按既有批准边界处理。历史 c14 撞号使当前信封回退长 ref 的问题已只读证实，安全恢复新短柄独立待分单，须保留旧歧义拒绝与原路由，不将 W04/W05 验收误称已解决。OpenCode多服务来源核实另分单。C13/C04的Harness生命周期和正式Desktop仍按全量计划推进，不用它们代替C14来源接线。当前仅激活一个执行子单，不批量派发。
+当前W07先交付长信封恢复的最小可审方案与反例，随后按合同做产品单；不将 W04/W05/W06 验收误称已解决。再按证据继续入口/owner采证或发独立实现单；涉及用户功能、配置要求或持久格式变动时先列影响并按既有批准边界处理。OpenCode多服务来源核实另分单。C13/C04的Harness生命周期和正式Desktop仍按全量计划推进，不用它们代替C14来源接线。当前仅激活一个执行子单，不批量派发。
 
 全量25任务及11个CI相关索引继续由[总表](tool-compatibility-ci-tasks.md)维护；本页只管理 worker 活动子单，不重编号、不取消原 CI。

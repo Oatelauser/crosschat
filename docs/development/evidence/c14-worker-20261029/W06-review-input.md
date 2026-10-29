@@ -50,7 +50,7 @@
 | `npx eslint test/core-diagnostics.test.ts test/tui-main-observations.test.ts` | 通过 |
 | `npm run check`（本单唯一一次全量） | **退出 0**：lint、check:imports、tsc build 通过；**2503 通过 / 0 失败 / 11 跳过**（2514）；文件 230 通过 / 3 跳过。全量日志见 [W06-check-20261029.log](W06-check-20261029.log) |
 
-全量里两例实测：TUI 首例 580ms（热进程），诊断取消例 911ms——后者超过旧的 500ms race 上限，正是 W05 那次失败的直接原因；去掉 race 后同一条 `AbortError` 断言照样成立。
+全量日志记录 TUI 首例整例耗时 580ms，诊断取消例整例耗时 911ms；后者还包含转译、启动和 marker 等待，没有单独测量 abort 后的等待时长，不能拿它证明旧 500ms race 被超过。取消延迟的直接依据是任务书所引独立受控回调延迟复现：500ms 时 probe 已死亡，约 1025ms 后才交付 AbortError。本轮修改后相同的 AbortError 与实际死亡断言仍通过。
 
 负控制前后各跑一次同样两文件，恢复后均为 12/12。
 
