@@ -75,9 +75,25 @@ GREEN 后，同一组测试全部通过。
   - 同批回归（首轮已通过，非 RED）：外部 `skills/crosschat` 末段链接仍 fail closed；fixture 根改用 `realpathSync(tmpdir())` 真实临时根，避免 macOS `/var` 之类系统别名噪声。
 - GREEN 修复（最小面，无新增文件/helper/参数/依赖）：
   - `operations.ts`：新增 `verifyExternalRoot`，外部目标从 `target.root` 逐级向上核验到卷根（缺失段跳过，任何链接或非目录拒绝）；`verifySkillTarget` 只在目标位于 home 之外时调用。删除授权仍只来自 `skillPlan`，未扩到 `DSH_HOME` 或文件系统根。
-  - `skills.ts`：`skillPlan` 去重键改为“最深已存在祖先的 dev/ino + 相对后缀”，缺失或不可检视时退回 resolve 字符串；保留首现标签与 Claude→Codex→Harness 顺序。POSIX 不同大小写目录 inode 不同，不会误去重。已知限制：尚未创建的大小写变体路径只按拼写比较（代码内有 shortcut 注释）。
+  - `skills.ts`：`skillPlan` 去重键改为“最深已存在祖先的 dev/ino + 相对后缀”，缺失或不可检视时退回 resolve 字符串；保留首现标签与 Claude→Codex→Harness 顺序。POSIX 不同大小写目录 inode 不同，不会误去重。**订正（R2）**：本条写明的“尚未创建的大小写变体路径只按拼写比较”不是合同例外，R2 已按平台语义修复，见 §十。
   - `cli.ts`：`install-skills`/`uninstall` 帮助改为 Claude/Codex/Harness，写明默认 `<root>/.dsh`、绝对 `DSH_HOME`，以及 `--dir` 替换根并忽略 `DSH_HOME`；不增参数。
 - 定向验证：install-skills、uninstall、maintenance、maintenance-boundaries、tui-composition、tui-maintenance、cli-args 七套件 **84/84 通过**（max2/min1）。
 - 完整检查：GREEN 工作树上一次 `npm run check`，`VITEST_MAX_FORKS=2`、`VITEST_MIN_FORKS=1`、`VITEST_MAX_THREADS=2`、`VITEST_MIN_THREADS=1`；完整 stdout/stderr 与真实退出码见 `I01-R1-check.txt`（357 行）。结果 **退出码 0**：lint 无输出，导入图 203 模块/682 边无违规，`tsc` 通过，231 文件通过/3 跳过，**2541 项通过/11 跳过**（较首轮 +4，即本轮新增）。跳过仍为 `test/live/*` 既有实网用例。
-- 未测/边界：维护级“同一目录只删一次”在 Windows 大小写别名上成立；POSIX 没有“同一目录的两种非链接拼写”，故去重由计划层（`runInstallSkills` 返回值）跨平台证明，安装与卸载都消费同一计划。尚未创建的 Windows 大小写变体路径仍会计划两次（shortcut 注释）。未运行真实安装/卸载，未验证正式 Harness 加载。
+- 未测/边界：维护级“同一目录只删一次”在 Windows 大小写别名上成立；POSIX 没有“同一目录的两种非链接拼写”，故去重由计划层（`runInstallSkills` 返回值）跨平台证明，安装与卸载都消费同一计划。**订正（R2）**：首轮遗留的“尚未创建的 Windows 大小写变体仍会计划两次”已在 R2 修复（§十）。未运行真实安装/卸载，未验证正式 Harness 加载。
 - 清理：全部 fixture 位于本次独占临时目录并随用例清理；未写用户 `.claude`/`.codex`/`.dsh`，未跑 npm 安装/卸载或 `dsh plugin`；未 push、未 amend。
+
+## 十、R2 执行证据（2026-10-29）
+
+- 基线：`1c9ed33`（派单基线），开工 HEAD 一致；工作区仅原未跟踪 `docs/代码消息投递.md`（未动、未 stage）。
+- RED `2c35e02`（仅测试，3 文件）。全新 fixture（home 内尚无 `.claude`，`DSH_HOME=<home>/.CLAUDE`）实测失败原因：
+  - `install-skills.test.ts`「installs a not-yet-created case alias once on Windows and keeps POSIX case-different directories」：`runInstallSkills` 返回 3 个目标（Windows 期望 2）。
+  - `maintenance.test.ts`「plans a not-yet-created case alias once for install and uninstall」：TUI 安装计划仍含 `.CLAUDE` 别名目标（Windows 期望缺省）。
+  - `cli-args.test.ts`：help 用例按命令段收窄为 install-skills / uninstall 两段各自切片断言；产品 help 未再改，RED 时即通过。
+- GREEN（仅 `skills.ts`）：`targetKey` 在“最深已存在祖先 dev/ino”之后，对尚未创建的后缀按平台语义归一——win32 折叠大小写，POSIX 保持原样。已能核实为不同实例的目录仍由各自 dev/ino 区分，不会因拼写类似被合并；首现标签与 Claude→Codex→Harness 顺序不变；上一轮披露限制的 shortcut 注释已随修复删除。
+- 逐项保证：安装前计划（`skillPlan`/preview targets）、首次安装返回目标（`runInstallSkills` 返回值）、对应 TUI 计划、匹配卸载目标在 Windows 下均只出现一次；POSIX 大小写不同目录仍计划/安装/卸载三次；默认三目标与“已存在同目录”身份去重不回退（既有用例继续通过）。
+- 定向验证：install-skills、uninstall、maintenance、maintenance-boundaries、tui-composition、tui-maintenance、cli-args 七套件 **87/87 通过**。
+- 完整检查：`I01-R2-check.txt`（769 行）按同一环境变量执行两次完整 `npm run check`：
+  - 第一次：**退出码 1**，2543 通过/1 失败/11 跳过。失败为 `test/conversations.test.ts`「016① … recordConversation 写入 mid8→名」；`recordConversation` 按设计吞掉锁超时，满载下偶发，该文件单独运行 26/26 通过，本单产品改动仅 `skills.ts`、不在其依赖路径，判为既有负载敏感而非本单回归。首败原样保留。
+  - 第二次（追加写入同一日志，未覆盖首败）：**退出码 0**；lint 无输出，导入图 203 模块/682 边无违规，`tsc` 通过，231 文件通过/3 跳过，**2544 项通过/11 跳过**（较 R1 +3，即本轮新增用例）。
+- 未测：三平台 CI 未跑；未运行真实安装/卸载，未验证正式 Harness 加载；POSIX 分支只以同一用例的非 Windows 断言表达，本机（Windows）未执行该分支。
+- 清理：fixture 全为本次独占临时目录并随用例清理；未写用户 `.claude`/`.codex`/`.dsh`，未跑 npm 安装/卸载或 `dsh plugin`；未 push、未 amend。

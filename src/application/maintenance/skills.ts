@@ -18,14 +18,18 @@ function harnessHome(root: string, env: { DSH_HOME?: string }): string {
   if (!isAbsolute(value)) throw new Error(`DSH_HOME 必须是绝对路径：${value}`);
   return resolve(value);
 }
-/** Key by the verified identity of the deepest existing ancestor so case-folded spellings of one directory collapse. */
+/** Key by the verified identity of the deepest existing ancestor; a missing suffix follows platform case semantics. */
 function targetKey(path: string): string {
   let current = resolve(path);
   const suffix: string[] = [];
   for (;;) {
     try {
       const stat = statSync(current, { bigint: true });
-      if (stat.ino !== 0n) return `${stat.dev}:${stat.ino}:${suffix.join('/')}`;
+      if (stat.ino !== 0n) {
+        const rest = suffix.join('/');
+        // Windows resolves not-yet-created names case-insensitively; POSIX keeps distinct spellings apart.
+        return `${stat.dev}:${stat.ino}:${process.platform === 'win32' ? rest.toLowerCase() : rest}`;
+      }
       break;
     } catch { /* uninspectable here: keep walking up to an inspectable ancestor */ }
     const parent = dirname(current);
@@ -33,7 +37,6 @@ function targetKey(path: string): string {
     suffix.unshift(basename(current));
     current = parent;
   }
-  // shortcut: a not-yet-created path is deduped by spelling only, so a fresh Windows .CLAUDE plans twice.
   return `path:${resolve(path)}`;
 }
 /** Ordered Claude, Codex, then Harness plan shared by install/update, CLI uninstall and TUI maintenance. */
