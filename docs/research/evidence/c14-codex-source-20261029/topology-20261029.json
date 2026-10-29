@@ -2,6 +2,7 @@
   "collectedAt": "2026-10-29T06:08:46.299Z",
   "platform": "win32",
   "node": "v25.0.0",
+  "scope": "One process-table snapshot of installed executors, their ancestry, and the thread/daemon records on disk. No Codex shell was spawned for this file, so it is install-layout and process-topology evidence only, not shell-sampling evidence; no CLI shell positive sample was captured here.",
   "codexExecutors": [
     {
       "row": {

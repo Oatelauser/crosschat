@@ -1,17 +1,18 @@
 // Read-only research probe for C14-W01: which Codex entry (CLI or Desktop)
 // actually spawned the shell that runs this process. Emits redacted JSON only.
 // Not wired into any product path; see docs/research/c14-codex-source-feasibility-20261029.md.
+/* global process */
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { readdir, readFile, readlink } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
 export const PROBE_LIMITS = { maxDepth: 12, tableTimeoutMs: 10_000, maxTableBytes: 4 * 1024 * 1024 };
 
 const digest = (value, length) => createHash('sha256').update(String(value ?? '')).digest('hex').slice(0, length);
 
-// Codex's default shell_environment_policy excludes these name patterns.
-const DEFAULT_EXCLUDE = /KEY|SECRET|TOKEN/i;
+// Codex can filter these names, but only when ignore_default_excludes is false;
+// the setting defaults to true, so a match here is not an exclusion verdict.
+const DEFAULT_EXCLUDE_PATTERN = /KEY|SECRET|TOKEN/i;
 
 export function pathShape(path) {
   const p = String(path ?? '').replace(/\\/g, '/').toLowerCase();
@@ -36,7 +37,7 @@ export function redactEnv(env = process.env) {
       name,
       length: String(env[name] ?? '').length,
       digest: digest(env[name], 8),
-      defaultExcluded: DEFAULT_EXCLUDE.test(name),
+      matchesDefaultExcludePattern: DEFAULT_EXCLUDE_PATTERN.test(name),
     }));
 }
 
@@ -50,10 +51,11 @@ export function parseProcessTable(text) {
     if (!Number.isInteger(pid) || pid <= 0) continue;
     if (!Number.isInteger(ppid) || ppid < 0) continue;
     const exe = cols[4] ?? '';
+    const created = Number(cols[2]);
     table.set(pid, {
       pid,
       ppid,
-      createdAt: Number(cols[2]) || 0,
+      createdAt: Number.isFinite(created) && created > 0 ? created : 0,
       name: cols[3] || '',
       shape: pathShape(exe),
       exeDigest: exe ? digest(exe, 12) : '',
@@ -86,23 +88,41 @@ export function traceAncestry(startPid, table, limit = PROBE_LIMITS.maxDepth) {
 
 const isExecutor = (row) => row.shape === 'desktop-bundle' || row.shape === 'npm-native';
 const isWrapper = (row) => row.shape === 'command-runner' || row.shape === 'sandbox-setup';
+const isCodexLike = (row) => /^codex([-_.]|$)/i.test(row.name ?? '');
 const brief = (row) => (row ? { pid: row.pid, name: row.name, shape: row.shape, createdAt: row.createdAt, exeDigest: row.exeDigest } : null);
+// A pid+path digest only says what was observed; it does not authenticate the file.
+const completeInstance = (executor, parent) => Boolean(executor.createdAt && executor.exeDigest && parent?.createdAt && parent?.exeDigest);
 
-export function classifyEntry(chain) {
-  const index = chain.findIndex((row, i) => i > 0 && isExecutor(row));
-  if (index < 0) return { entry: 'unknown', basis: 'no-codex-ancestor' };
+function classifyExecutor(chain, index) {
   const executor = chain[index];
   // Codex may interpose its own command runner between the executor and the shell.
   const parent = chain.slice(index + 1).find((row) => !isWrapper(row));
   const detail = { executor: brief(executor), parent: brief(parent) };
-  if (executor.shape === 'desktop-bundle') {
-    return parent?.shape === 'app'
-      ? { entry: 'desktop', basis: 'desktop-bundle-under-app', ...detail }
-      : { entry: 'unknown', basis: 'desktop-bundle-without-app-parent', ...detail };
+  const [entry, basis] = executor.shape === 'desktop-bundle'
+    ? parent?.shape === 'app'
+      ? ['desktop', 'desktop-bundle-under-app']
+      : ['unknown', 'desktop-bundle-without-app-parent']
+    : parent?.shape === 'node'
+      ? ['cli', 'npm-executor-under-node-launcher']
+      : ['unknown', 'npm-executor-without-node-parent'];
+  // A shape-only match is a candidate: without pid+creation time it cannot pin the instance.
+  if (entry !== 'unknown' && !completeInstance(executor, parent)) {
+    return { entry: 'unknown', basis: 'incomplete-instance-metadata', ...detail };
   }
-  return parent?.shape === 'node'
-    ? { entry: 'cli', basis: 'npm-executor-under-node-launcher', ...detail }
-    : { entry: 'unknown', basis: 'npm-executor-without-node-parent', ...detail };
+  return { entry, basis, ...detail };
+}
+
+export function classifyEntry(chain) {
+  // Walk outward from the shell. The nearest codex process decides: a known
+  // executor is classified, an unrecognized one stops the walk, so a nearer
+  // unknown executor is never skipped in favour of a farther known ancestor.
+  for (let index = 1; index < chain.length; index += 1) {
+    const row = chain[index];
+    if (isWrapper(row)) continue;
+    if (isExecutor(row)) return classifyExecutor(chain, index);
+    if (isCodexLike(row)) return { entry: 'unknown', basis: 'unrecognized-codex-executor', candidate: brief(row) };
+  }
+  return { entry: 'unknown', basis: 'no-codex-ancestor' };
 }
 
 const WINDOWS_QUERY = [
@@ -124,51 +144,19 @@ function defaultRun(command, args, timeoutMs) {
   });
 }
 
-async function posixTable() {
-  const table = new Map();
-  for (const entry of await readdir('/proc')) {
-    if (!/^\d+$/.test(entry)) continue;
-    let stat;
-    try {
-      stat = await readFile(`/proc/${entry}/stat`, 'utf8');
-    } catch {
-      continue;
-    }
-    const close = stat.lastIndexOf(')');
-    if (close < 0) continue;
-    const fields = stat.slice(close + 2).split(' ');
-    let exe = '';
-    try {
-      exe = await readlink(`/proc/${entry}/exe`);
-    } catch {
-      // kernel threads and other users' processes are unreadable
-    }
-    table.set(Number(entry), {
-      pid: Number(entry),
-      ppid: Number(fields[1]) || 0,
-      createdAt: Number(fields[19]) || 0,
-      name: stat.slice(stat.indexOf('(') + 1, close),
-      shape: pathShape(exe),
-      exeDigest: exe ? digest(exe, 12) : '',
-    });
-  }
-  return table;
-}
-
+// Windows-only research probe. Linux/macOS are reported unsupported rather than
+// scanned; this does not change product platform support.
 export async function readProcessTable({ run = defaultRun, timeoutMs = PROBE_LIMITS.tableTimeoutMs, platform = process.platform } = {}) {
-  if (platform === 'linux') {
-    try {
-      return { ok: true, table: await posixTable() };
-    } catch (error) {
-      return { ok: false, reason: 'table-unreadable', detail: String(error?.message ?? error) };
-    }
-  }
   if (platform !== 'win32') return { ok: false, reason: 'platform-unsupported' };
   try {
     const text = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_QUERY], timeoutMs);
     return { ok: true, table: parseProcessTable(text) };
   } catch (error) {
-    const reason = error?.killed || error?.code === 'ETIMEDOUT' ? 'table-timeout' : 'table-unreadable';
+    const reason = error?.killed || error?.code === 'ETIMEDOUT'
+      ? 'table-timeout'
+      : error?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+        ? 'table-too-large'
+        : 'table-unreadable';
     return { ok: false, reason, detail: String(error?.message ?? error) };
   }
 }
@@ -197,5 +185,7 @@ export async function main() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  await main();
+  const report = await main();
+  // Exit 0 means a table was read; unavailable is a diagnostic result, not success.
+  if (report.unavailable) process.exitCode = 2;
 }

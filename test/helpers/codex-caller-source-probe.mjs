@@ -5,6 +5,7 @@ export const NPM_EXE =
   'C:/Users/u/AppData/Roaming/npm/node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe';
 export const COMMAND_RUNNER = `${NPM_EXE.replace(/bin[\\/]codex\.exe$/, '')}codex-resources/codex-command-runner.exe`;
 export const NODE_EXE = 'C:/Program Files/nodejs/node.exe';
+export const PORTABLE_EXE = 'D:/portable/codex.exe';
 export const CHATGPT_EXE = 'C:/Program Files/WindowsApps/OpenAI.Codex/ChatGPT.exe';
 export const BASH_EXE = 'C:/Program Files/Git/bin/bash.exe';
 
@@ -31,6 +32,30 @@ export function desktopChain({ executorPid = 300, probePid = 100 } = {}) {
     [executorPid, 400, 4800, 'codex.exe', DESKTOP_EXE],
     [400, 600, 4700, 'ChatGPT.exe', CHATGPT_EXE],
     [600, 0, 4500, 'explorer.exe', 'C:/Windows/explorer.exe'],
+  ]);
+}
+
+// A nearer, unrecognized codex.exe sits between the shell and a farther known
+// Desktop bundle; the walk must stop at the nearer one.
+export function portableChain({ probePid = 100 } = {}) {
+  return tableText([
+    [probePid, 200, 5000, 'node.exe', NODE_EXE],
+    [200, 300, 4900, 'pwsh.exe', 'C:/Program Files/PowerShell/7/pwsh.exe'],
+    [300, 400, 4800, 'codex.exe', PORTABLE_EXE],
+    [400, 500, 4700, 'pwsh.exe', 'C:/Program Files/PowerShell/7/pwsh.exe'],
+    [500, 600, 4600, 'codex.exe', DESKTOP_EXE],
+    [600, 0, 4500, 'ChatGPT.exe', CHATGPT_EXE],
+  ]);
+}
+
+// Codex and its parent app report no creation time: the shape is readable but
+// the instance cannot be pinned, so the verdict must stay unknown.
+export function missingMetadataChain({ probePid = 100 } = {}) {
+  return tableText([
+    [probePid, 200, 5000, 'node.exe', NODE_EXE],
+    [200, 300, 4900, 'pwsh.exe', 'C:/Program Files/PowerShell/7/pwsh.exe'],
+    [300, 400, 0, 'codex.exe', DESKTOP_EXE],
+    [400, 0, 0, 'ChatGPT.exe', CHATGPT_EXE],
   ]);
 }
 

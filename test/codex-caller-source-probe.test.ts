@@ -9,7 +9,18 @@ import {
   redactEnv,
   traceAncestry,
 } from '../scripts/codex-caller-source-probe.mjs';
-import { COMMAND_RUNNER, DESKTOP_EXE, NPM_EXE, cliChain, desktopChain, tableText, wrappedCliChain } from './helpers/codex-caller-source-probe.mjs';
+import {
+  COMMAND_RUNNER,
+  DESKTOP_EXE,
+  NODE_EXE,
+  NPM_EXE,
+  cliChain,
+  desktopChain,
+  missingMetadataChain,
+  portableChain,
+  tableText,
+  wrappedCliChain,
+} from './helpers/codex-caller-source-probe.mjs';
 
 const trace = (text, startPid = 100) => traceAncestry(startPid, parseProcessTable(text));
 
@@ -26,15 +37,50 @@ describe('codex caller source probe', () => {
     const serialized = JSON.stringify(out);
     expect(serialized).not.toContain('019a-secret-thread');
     expect(serialized).not.toContain('a'.repeat(64));
-    // Codex's default shell_environment_policy strips *TOKEN* before a shell sees it.
-    expect(out.find((entry) => entry.name === 'CROSSCHAT_CODEX_WINDOW_TOKEN')).toMatchObject({ defaultExcluded: true, length: 64 });
-    expect(out.find((entry) => entry.name === 'CODEX_THREAD_ID')).toMatchObject({ defaultExcluded: false });
+    // This only records that the name matches the pattern Codex's opt-in filter
+    // removes; the filter is off unless ignore_default_excludes is set to false.
+    expect(out.find((entry) => entry.name === 'CROSSCHAT_CODEX_WINDOW_TOKEN')).toMatchObject({
+      matchesDefaultExcludePattern: true,
+      length: 64,
+    });
+    expect(out.find((entry) => entry.name === 'CODEX_THREAD_ID')).toMatchObject({ matchesDefaultExcludePattern: false });
   });
 
   it('drops malformed process rows instead of inventing parents', () => {
     const table = parseProcessTable(['garbage', '0\t1\t1\tnode.exe\t', '12\tnope\t1\tnode.exe\t', '13\t1\t5\tbash.exe\t/bin/bash', ''].join('\n'));
     expect([...table.keys()]).toEqual([13]);
     expect(table.get(13)).toMatchObject({ ppid: 1, name: 'bash.exe', shape: 'shell' });
+  });
+
+  it('drops unusable creation times instead of treating them as real', () => {
+    const table = parseProcessTable(
+      tableText([
+        [10, 0, 'Infinity', 'a.exe', ''],
+        [11, 0, 'NaN', 'b.exe', ''],
+        [12, 0, '134377278198597070', 'c.exe', ''],
+      ]),
+    );
+    expect(table.get(10).createdAt).toBe(0);
+    expect(table.get(11).createdAt).toBe(0);
+    expect(table.get(12).createdAt).toBe(134377278198597070);
+  });
+
+  it('never skips a nearer unrecognized codex executor for a farther known one', () => {
+    const { chain } = trace(portableChain());
+    expect(classifyEntry(chain)).toMatchObject({
+      entry: 'unknown',
+      basis: 'unrecognized-codex-executor',
+      candidate: { pid: 300, name: 'codex.exe' },
+    });
+  });
+
+  it('refuses to name an entry when the instance metadata is incomplete', () => {
+    const { chain } = trace(missingMetadataChain());
+    expect(classifyEntry(chain)).toMatchObject({
+      entry: 'unknown',
+      basis: 'incomplete-instance-metadata',
+      executor: { pid: 300, shape: 'desktop-bundle' },
+    });
   });
 
   it('stops at a missing parent rather than guessing the entry', () => {
@@ -79,14 +125,38 @@ describe('codex caller source probe', () => {
     expect(classifyEntry(chain)).toMatchObject({ entry: 'cli', parent: { shape: 'node' } });
   });
 
-  it('reports an unreadable table instead of a verdict, and never emits absolute paths', async () => {
+  it('reports why a table is unavailable instead of emitting a verdict', async () => {
     const timeout = Object.assign(new Error('killed'), { killed: true });
     await expect(readProcessTable({ run: () => Promise.reject(timeout), platform: 'win32' })).resolves.toMatchObject({
       ok: false,
       reason: 'table-timeout',
     });
+    const tooLarge = Object.assign(new Error('maxBuffer'), { code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' });
+    await expect(readProcessTable({ run: () => Promise.reject(tooLarge), platform: 'win32' })).resolves.toMatchObject({
+      ok: false,
+      reason: 'table-too-large',
+    });
+    await expect(readProcessTable({ run: () => Promise.reject(new Error('denied')), platform: 'win32' })).resolves.toMatchObject({
+      ok: false,
+      reason: 'table-unreadable',
+    });
+    // Windows-only research probe: other platforms are unsupported, not scanned.
+    await expect(readProcessTable({ platform: 'linux' })).resolves.toMatchObject({ ok: false, reason: 'platform-unsupported' });
     await expect(readProcessTable({ platform: 'darwin' })).resolves.toMatchObject({ ok: false, reason: 'platform-unsupported' });
+  });
 
+  it('passes the caller timeout to the process-table command', async () => {
+    const seen: { command?: string; timeoutMs?: number } = {};
+    const run = (command: string, _args: string[], timeoutMs: number) => {
+      seen.command = command;
+      seen.timeoutMs = timeoutMs;
+      return Promise.resolve('');
+    };
+    await readProcessTable({ run, timeoutMs: 250 });
+    expect(seen).toEqual({ command: 'powershell.exe', timeoutMs: 250 });
+  });
+
+  it('reports an unreadable table instead of a verdict, and never emits absolute paths', async () => {
     const report = collectReport({ env: { CODEX_THREAD_ID: 'tid' }, startPid: 100, table: parseProcessTable(cliChain()) });
     expect(report.verdict.entry).toBe('cli');
     const serialized = JSON.stringify(report);
@@ -95,17 +165,10 @@ describe('codex caller source probe', () => {
     expect(serialized).not.toContain('tid');
   });
 
-  it('finishes a real process-table read even when the timeout is impossible to meet', async () => {
-    const started = Date.now();
-    const result = await readProcessTable({ timeoutMs: 1 });
-    expect(Date.now() - started).toBeLessThan(PROBE_LIMITS.tableTimeoutMs);
-    if (process.platform === 'win32') expect(result).toMatchObject({ ok: false, reason: 'table-timeout' });
-  });
-
-  it('classifies this machine without claiming a Codex entry it cannot see', () => {
-    const shape = pathShape(process.execPath);
-    expect(shape).toBe('node');
+  it('classifies the documented install layouts from paths alone', () => {
     expect(pathShape(DESKTOP_EXE)).toBe('desktop-bundle');
     expect(pathShape(NPM_EXE)).toBe('npm-native');
+    expect(pathShape(NODE_EXE)).toBe('node');
+    expect(pathShape('D:/portable/codex.exe')).toBe('other');
   });
 });

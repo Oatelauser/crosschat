@@ -1,0 +1,20 @@
+connected
+{
+ "stage": "response",
+ "topKeys": [
+  "type",
+  "requestId",
+  "resultType",
+  "method",
+  "handledByClientId",
+  "result"
+ ],
+ "resultKeys": [
+  "clientId"
+ ],
+ "result": {
+  "clientId": "8feff53d-1e37-4b15-a4b7-882ed7833f9e"
+ },
+ "resultType": "success",
+ "handledMatchesSelf": true
+}
