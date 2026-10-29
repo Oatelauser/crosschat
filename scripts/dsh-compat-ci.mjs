@@ -180,6 +180,11 @@ export async function runDshBuildSequence(builds, operations) {
   return summary;
 }
 
+// RED scaffold: the desktop entry points borrow the web core until the desktop verification lands.
+export const hasDesktopCleanupProof = hasDshRuntimeReleaseProof;
+export const runDshDesktopAttempt = runDshProbeAttempt;
+export const runDshDesktopSequence = runDshBuildSequence;
+
 export function dshRegressionIdentity(summary) {
   if (!record(summary) || summary.schema !== 1 || summary.tool !== tool || summary.platform !== 'win32' || summary.arch !== 'x64' || !validScope(summary.scope)
     || summary.installationCleanup !== 'removed' || summary.classification?.kind !== 'regression' || summary.classification?.notify !== true || !record(summary.builds)) return;
