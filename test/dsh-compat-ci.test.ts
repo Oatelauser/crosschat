@@ -383,7 +383,7 @@ describe('DeepSeek Harness formal desktop report and lifecycle', () => {
 
   it('keeps the desktop summary out of the web reporter', async () => {
     const summary = await runDshDesktopSequence(builds, {
-      install: async (_build: unknown, _label: string) => ({ ...owned, installationId: randomUUID() }),
+      install: async () => ({ ...owned, installationId: randomUUID() }),
       probe: async (installation: { installationId: string; owner: string }, build: typeof builds.baseline, _label: string, context?: { runId: string }) => build.version === builds.baseline.version
         ? bound(build, installation, context?.runId ?? randomUUID())
         : { ...bound(build, installation, context?.runId ?? randomUUID()), status: 'failed', stage: 'contract', check: 'native-queue', category: 'compatibility', process: { code: 1, signal: null, timedOut: false, truncated: false } },

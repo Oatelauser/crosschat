@@ -2,7 +2,7 @@
 import { spawn } from 'node:child_process';
 import { Buffer } from 'node:buffer';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
-import { access, copyFile, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, copyFile, lstat, mkdir, mkdtemp, open, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import process from 'node:process';
@@ -25,6 +25,8 @@ const desktopChecks = ['formal-desktop-artifact-and-built-in-runtime-profile', '
   'host-natural-exit', 'official-uninstall', 'bridge-registration-and-system-registration-cleanup'];
 const desktopScope = { officialDesktopArtifact: true, builtInRuntimeProfile: true, skillAndPluginLoading: true, desktopUi: true,
   ordinaryWebSessions: false, browserUI: false, modelIntelligence: false };
+const desktopReportMaxBytes = 1024 * 1024;
+const desktopSessionId = /^[A-Za-z0-9._:-]{1,200}$/;
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const message = (error) => error instanceof Error ? error.message : String(error);
 
@@ -134,27 +136,73 @@ export function hasDshRuntimeReleaseProof(cleanup) {
 }
 
 function validDesktopScope(value) { return record(value) && Object.entries(desktopScope).every(([key, expected]) => value[key] === expected); }
+function knownDesktopArtifact(artifact) {
+  return record(artifact) && typeof artifact.version === 'string' && artifact.version !== '' && typeof artifact.integrity === 'string' && sri.test(artifact.integrity);
+}
+
+function desktopBinding(installation, runId) {
+  if (!uuid.test(runId ?? '') || !uuid.test(installation?.installationId ?? '') || typeof installation?.owner !== 'string' || installation.owner === '') return;
+  return { runId, installationId: installation.installationId, owner: installation.owner };
+}
 
 /**
- * The report must name this run, install, owner, artifact version/identity, one native instance and one session.
- * Equality only proves the report agrees with the caller's record; it is neither anti-forgery nor proof of native facts.
+ * The caller's own record of this run, install, owner, native instance and session. The launch record comes from the
+ * launch step, never from the report: equality only proves agreement with the caller, not native facts or intent.
+ */
+function desktopExpectation(installation, launch, runId) {
+  const binding = desktopBinding(installation, runId);
+  return binding && uuid.test(launch?.instanceId ?? '') && typeof launch.sessionId === 'string' && desktopSessionId.test(launch.sessionId)
+    ? { ...binding, instanceId: launch.instanceId, sessionId: launch.sessionId } : undefined;
+}
+
+/**
+ * Every bound field must be present with the expected type before it is compared, so two missing values never match.
+ * A PASS also needs complete, affirmative cleanup; unknown cleanup is never "proven released".
  */
 function validDesktopReport(report, artifact, expected) {
-  if (!record(report) || !record(expected) || report.schema !== 1 || report.tool !== desktopTool || report.platform !== 'win32' || report.arch !== 'x64'
-    || report.version !== artifact.version || report.artifactId !== artifact.integrity
-    || !uuid.test(report.runId ?? '') || (expected.runId !== undefined && report.runId !== expected.runId)
-    || !uuid.test(report.installationId ?? '') || report.installationId !== expected.installationId
-    || typeof report.owner !== 'string' || report.owner === '' || report.owner !== expected.owner
-    || !uuid.test(report.instanceId ?? '') || typeof report.sessionId !== 'string' || !/^[A-Za-z0-9._:-]{1,200}$/.test(report.sessionId)
+  if (!record(report) || !knownDesktopArtifact(artifact) || !record(expected)
+    || report.schema !== 1 || report.tool !== desktopTool || report.platform !== 'win32' || report.arch !== 'x64'
+    || report.version !== artifact.version || typeof report.artifactId !== 'string' || !sri.test(report.artifactId) || report.artifactId !== artifact.integrity
+    || report.runId !== expected.runId || report.installationId !== expected.installationId || report.owner !== expected.owner
+    || !uuid.test(report.instanceId ?? '') || (expected.instanceId !== undefined && report.instanceId !== expected.instanceId)
+    || typeof report.sessionId !== 'string' || !desktopSessionId.test(report.sessionId) || (expected.sessionId !== undefined && report.sessionId !== expected.sessionId)
     || !validDesktopScope(report.scope)
     || !Array.isArray(report.checks) || report.checks.some((check) => !record(check) || !desktopChecks.includes(check.name) || check.status !== 'passed' || !Number.isFinite(check.elapsedMs) || check.elapsedMs < 0)
     || new Set(report.checks.map((check) => check.name)).size !== report.checks.length) return false;
   // Every desktop area needs its own passing check, so a missing UI or uninstall record can never PASS.
-  return report.status === 'passed' ? report.stage === 'done' && report.category === null && report.checks.length === desktopChecks.length
+  return report.status === 'passed' ? report.stage === 'done' && report.category === null && report.checks.length === desktopChecks.length && hasDesktopCleanupProof(report.cleanup)
     : report.status === 'failed' && ['compatibility', 'infrastructure'].includes(report.category) && slug.test(report.stage ?? '') && report.stage !== 'done' && slug.test(report.check ?? '');
 }
-function desktopExpectation(installation) { return { installationId: installation?.installationId, owner: installation?.owner }; }
 function desktopFailure(version, stage, error) { return { schema: 1, tool: desktopTool, platform: 'win32', arch: 'x64', version, status: 'failed', category: 'infrastructure', stage, check: stage, error: message(error) }; }
+function intactProcess(result) { return normalProcess(result) && result.truncated === false; }
+function desktopProcessMatches(report) { return intactProcess(report.process) && report.process.code === (report.status === 'passed' ? 0 : 1); }
+
+/** The report is read against a byte budget before parsing; the open handle keeps growth after the pre-check bounded too. */
+async function readDesktopReport(path) {
+  const known = await lstat(path);
+  if (known.isSymbolicLink() || !known.isFile() || known.size > desktopReportMaxBytes) throw new Error('Desktop report must be a plain file within its byte budget');
+  const handle = await open(path, 'r');
+  try {
+    if (!(await handle.stat()).isFile()) throw new Error('Desktop report must be a plain file');
+    const parts = []; let total = 0;
+    for (let size = Math.min(64 * 1024, desktopReportMaxBytes + 1); size > 0; size = Math.min(64 * 1024, desktopReportMaxBytes + 1 - total)) {
+      const chunk = Buffer.allocUnsafe(size);
+      const { bytesRead } = await handle.read(chunk, 0, size, null);
+      if (bytesRead === 0) break;
+      parts.push(chunk.subarray(0, bytesRead)); total += bytesRead;
+      if (total > desktopReportMaxBytes) throw new Error('Desktop report exceeds its byte budget');
+    }
+    return JSON.parse(Buffer.concat(parts, total).toString('utf8'));
+  } finally { await handle.close(); }
+}
+
+/** A failed install that still names the root, installation and owner it created keeps that ownership; less than that is honestly unknown. */
+function desktopPartialInstallation(error) {
+  const installation = error?.installation;
+  if (!record(installation) || typeof installation.root !== 'string' || !isAbsolute(installation.root)
+    || !uuid.test(installation.installationId ?? '') || typeof installation.owner !== 'string' || installation.owner === '') return;
+  return { root: installation.root, installationId: installation.installationId, owner: installation.owner };
+}
 
 /** Desktop release needs the Host's own exit, the official uninstall and both registration cleanups; a kill is not release. */
 export function hasDesktopCleanupProof(cleanup) {
@@ -163,22 +211,23 @@ export function hasDesktopCleanupProof(cleanup) {
     && (cleanup.errors === undefined || (Array.isArray(cleanup.errors) && cleanup.errors.length === 0));
 }
 
-/** Every Desktop attempt owns a fresh directory and caller run ID; stale or foreign reports are never read. */
-export async function runDshDesktopAttempt({ output, label, artifact, installation }, execute) {
+/** Every Desktop attempt owns a fresh directory, run ID and caller launch record; stale or foreign reports are never read. */
+export async function runDshDesktopAttempt({ output, label, artifact, installation, launch, runId = randomUUID() }, execute) {
   if (!['baseline', 'candidate', 'retry'].includes(label)) throw new Error('Invalid Harness desktop probe label');
+  const expected = knownDesktopArtifact(artifact) ? desktopExpectation(installation, launch, runId) : undefined;
+  if (!expected) throw new Error('Desktop attempt needs a known artifact identity, installation, run ID, caller instance and session');
   const directory = await mkdtemp(join(output, `${label}-desktop-`));
-  const reportPath = join(directory, 'report.json'); const runId = randomUUID();
-  const expected = { runId, ...desktopExpectation(installation) };
+  const reportPath = join(directory, 'report.json');
   let result;
   try { result = await execute({ reportPath, runId, directory }); }
   catch (error) { return desktopFailure(artifact.version, 'desktop-session', error); }
-  if (!normalProcess(result)) return desktopFailure(artifact.version, 'desktop-session', 'Desktop session did not exit normally; release is unknown');
+  if (!intactProcess(result)) return desktopFailure(artifact.version, 'desktop-session', 'Desktop session did not exit normally with complete output; release is unknown');
   let report;
-  try { report = JSON.parse(await readFile(reportPath, 'utf8')); }
+  try { report = await readDesktopReport(reportPath); }
   catch { return desktopFailure(artifact.version, 'desktop-report', 'Desktop session did not produce a fresh valid report'); }
   if (!validDesktopReport(report, artifact, expected) || result.code !== (report.status === 'passed' ? 0 : 1))
     return desktopFailure(artifact.version, 'desktop-report', 'Desktop identity, evidence, scope or process exit disagrees with this attempt');
-  return { ...report, process: { code: result.code, signal: result.signal, timedOut: result.timedOut } };
+  return { ...report, process: { code: result.code, signal: result.signal, timedOut: false, truncated: false } };
 }
 
 /** Every child gets a new directory and UUID; stale PASS files are never read. */
@@ -211,11 +260,19 @@ function classify(baseline, candidate, retry) {
 async function serialSequence(builds, config) {
   const summary = { schema: 1, tool: config.tool, platform: 'win32', arch: 'x64', builds, scope: config.scope, installationCleanup: 'incomplete' };
   async function attempt(artifact, label) {
-    const installation = await config.operations.install(artifact, label);
+    let installation;
+    try { installation = await config.operations.install(artifact, label); }
+    catch (error) {
+      // A structured partial install keeps the ownership it created; an unstructured throw stays honestly unknown.
+      const partial = config.partialInstallation?.(error);
+      if (partial) summary.retainedInstallation = { label, version: artifact.version, ...partial, reason: message(error) };
+      throw error;
+    }
+    const context = config.context?.();
     let report;
-    try { report = await config.operations.probe(installation, artifact, label); }
+    try { report = await config.operations.probe(installation, artifact, label, context); }
     catch (error) { report = config.fail(artifact.version, 'process', error); }
-    if (!config.verify(report, artifact, installation)) report = config.fail(artifact.version, 'report', new Error('Fresh process/report evidence is invalid'));
+    if (!config.verify(report, artifact, installation, context)) report = config.fail(artifact.version, 'report', new Error('Fresh process/report evidence is invalid'));
     summary[label] = report;
     if (!config.released(report.cleanup)) {
       summary.retainedInstallation = { label, version: artifact.version, root: installation.root, reason: 'Owned runtime release is unknown; do not remove or start another build' };
@@ -244,9 +301,19 @@ export function runDshBuildSequence(builds, operations) {
 }
 
 export function runDshDesktopSequence(builds, operations) {
+  const installations = new Set(); const instances = new Set();
   return serialSequence(builds, {
     tool: desktopTool, scope: desktopScope, operations,
-    verify: (report, artifact, installation) => validDesktopReport(report, artifact, desktopExpectation(installation)) && processMatches(report),
+    // The sequence mints the run identity it hands to the attempt it uses; the launch record stays with the runner.
+    context: () => ({ runId: randomUUID() }),
+    partialInstallation: desktopPartialInstallation,
+    verify: (report, artifact, installation, context) => {
+      const expected = desktopBinding(installation, context?.runId);
+      if (!expected || installations.has(expected.installationId) || instances.has(report?.instanceId)
+        || !validDesktopReport(report, artifact, expected) || !desktopProcessMatches(report)) return false;
+      installations.add(expected.installationId); instances.add(report.instanceId);
+      return true;
+    },
     released: hasDesktopCleanupProof,
     fail: (version, phase, error) => desktopFailure(version, phase === 'process' ? 'desktop-session' : 'desktop-report', error),
   });
