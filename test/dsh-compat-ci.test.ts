@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -204,21 +205,40 @@ describe('DeepSeek Harness formal desktop report and lifecycle', () => {
     'host-natural-exit', 'official-uninstall', 'bridge-registration-and-system-registration-cleanup'];
   const desktopCleanup = { hostExited: true, uninstalled: true, registrationRemoved: true, systemRegistrationRemoved: true, forced: false };
   const owner = randomUUID();
+  const launch = { instanceId: randomUUID(), sessionId: 'native-session-1' };
   const owned = { installationId: randomUUID(), owner, root: 'owned-desktop' };
-  const desktopPassed = (version = builds.baseline.version, runId = randomUUID()) => ({ schema: 1, tool: 'dsh-desktop', platform: 'win32', arch: 'x64',
-    runId, version, artifactId: integrity, installationId: owned.installationId, owner, instanceId: randomUUID(), sessionId: 'native-session-1',
+  const exited = { code: 0, signal: null, timedOut: false, truncated: false };
+  const desktopPassed = (version = builds.baseline.version, runId = randomUUID(), extra: Record<string, unknown> = {}) => ({ schema: 1, tool: 'dsh-desktop', platform: 'win32', arch: 'x64',
+    runId, version, artifactId: integrity, installationId: owned.installationId, owner, instanceId: launch.instanceId, sessionId: launch.sessionId,
     status: 'passed', stage: 'done', category: null, checks: desktopChecks.map((name) => ({ name, status: 'passed', elapsedMs: 1 })),
-    scope: desktopScope, cleanup: desktopCleanup, process: { code: 0, signal: null, timedOut: false } });
+    scope: desktopScope, cleanup: desktopCleanup, process: exited, ...extra });
+  // A sequence-side report must carry the installation and run identity the sequence handed to the probe, plus its own native instance.
+  const bound = (build: { version: string }, installation: { installationId: string; owner: string }, runId: string, extra: Record<string, unknown> = {}) =>
+    desktopPassed(build.version, runId, { installationId: installation.installationId, owner: installation.owner, instanceId: randomUUID(), ...extra });
 
   it('accepts a fresh desktop report bound to this install, native instance, session and artifact', async () => {
     await isolated(async (output) => {
-      const result = await runDshDesktopAttempt({ output, label: 'baseline', artifact: builds.baseline, installation: owned },
+      const result = await runDshDesktopAttempt({ output, label: 'baseline', artifact: builds.baseline, installation: owned, launch },
         async ({ reportPath, runId }: { reportPath: string; runId: string }) => {
-          await writeFile(reportPath, JSON.stringify(desktopPassed(builds.baseline.version, runId)));
-          return { code: 0, signal: null, timedOut: false };
+          await writeFile(reportPath, JSON.stringify(desktopPassed(builds.baseline.version, runId))); return exited;
         });
       expect(result).toMatchObject({ status: 'passed', stage: 'done', category: null });
+      expect(result.process).toEqual(exited);
       expect(hasDesktopCleanupProof(result.cleanup)).toBe(true);
+    });
+  });
+
+  it('binds the report to the caller launch instead of the report claim', async () => {
+    await isolated(async (output) => {
+      for (const foreign of [{ instanceId: randomUUID() }, { sessionId: 'native-session-2' }]) {
+        const result = await runDshDesktopAttempt({ output, label: 'candidate', artifact: builds.candidate, installation: owned, launch },
+          async ({ reportPath, runId }: { reportPath: string; runId: string }) => {
+            await writeFile(reportPath, JSON.stringify(desktopPassed(builds.candidate.version, runId, foreign))); return exited;
+          });
+        expect(result).toMatchObject({ status: 'failed', category: 'infrastructure' });
+      }
+      // Without a caller launch record a report could vouch for itself, so the attempt refuses to start.
+      await expect(runDshDesktopAttempt({ output, label: 'baseline', artifact: builds.baseline, installation: owned }, async () => exited)).rejects.toThrow();
     });
   });
 
@@ -231,11 +251,11 @@ describe('DeepSeek Harness formal desktop report and lifecycle', () => {
         { artifactId: `sha512-${Buffer.alloc(64, 2).toString('base64')}` }, { instanceId: 'not-a-uuid' }, { sessionId: '' },
         { checks: [] }, { checks: incomplete('desktop-ui-send-receive-and-reply') }, { checks: incomplete('official-uninstall') },
         { checks: [...desktopChecks, desktopChecks[0]].map((name) => ({ name, status: 'passed', elapsedMs: 1 })) }, { stage: 'contract' },
+        { cleanup: undefined },
       ]) {
-        const result = await runDshDesktopAttempt({ output, label: 'candidate', artifact: builds.candidate, installation: owned },
+        const result = await runDshDesktopAttempt({ output, label: 'candidate', artifact: builds.candidate, installation: owned, launch },
           async ({ reportPath, runId }: { reportPath: string; runId: string }) => {
-            await writeFile(reportPath, JSON.stringify({ ...desktopPassed(builds.candidate.version, runId), ...invalid }));
-            return { code: 0, signal: null, timedOut: false };
+            await writeFile(reportPath, JSON.stringify(desktopPassed(builds.candidate.version, runId, invalid))); return exited;
           });
         // A report without the desktop UI or official-uninstall evidence can never PASS.
         expect(result).toMatchObject({ status: 'failed', category: 'infrastructure', stage: 'desktop-report' });
@@ -247,41 +267,67 @@ describe('DeepSeek Harness formal desktop report and lifecycle', () => {
   it('ignores reports outside the exclusive attempt location and never reuses an earlier report', async () => {
     await isolated(async (output) => {
       await writeFile(join(output, 'report.json'), JSON.stringify(desktopPassed()));
-      const ignored = await runDshDesktopAttempt({ output, label: 'baseline', artifact: builds.baseline, installation: owned },
-        async () => ({ code: 0, signal: null, timedOut: false }));
+      const ignored = await runDshDesktopAttempt({ output, label: 'baseline', artifact: builds.baseline, installation: owned, launch },
+        async () => exited);
       expect(ignored).toMatchObject({ status: 'failed', category: 'infrastructure' });
 
-      const truncated = await runDshDesktopAttempt({ output, label: 'baseline', artifact: builds.baseline, installation: owned },
+      const truncated = await runDshDesktopAttempt({ output, label: 'baseline', artifact: builds.baseline, installation: owned, launch },
         async ({ reportPath }: { reportPath: string }) => {
-          await writeFile(reportPath, '{"schema":1,"tool":"dsh-desktop"'); return { code: 0, signal: null, timedOut: false };
+          await writeFile(reportPath, '{"schema":1,"tool":"dsh-desktop"'); return exited;
         });
       expect(truncated).toMatchObject({ status: 'failed', category: 'infrastructure' });
 
       const paths: string[] = []; let first: unknown;
-      const accepted = await runDshDesktopAttempt({ output, label: 'candidate', artifact: builds.candidate, installation: owned },
+      const accepted = await runDshDesktopAttempt({ output, label: 'candidate', artifact: builds.candidate, installation: owned, launch },
         async ({ reportPath, runId }: { reportPath: string; runId: string }) => {
           paths.push(reportPath); first = desktopPassed(builds.candidate.version, runId);
-          await writeFile(reportPath, JSON.stringify(first)); return { code: 0, signal: null, timedOut: false };
+          await writeFile(reportPath, JSON.stringify(first)); return exited;
         });
-      const reused = await runDshDesktopAttempt({ output, label: 'candidate', artifact: builds.candidate, installation: owned },
+      const reused = await runDshDesktopAttempt({ output, label: 'candidate', artifact: builds.candidate, installation: owned, launch },
         async ({ reportPath }: { reportPath: string }) => {
-          paths.push(reportPath); await writeFile(reportPath, JSON.stringify(first)); return { code: 0, signal: null, timedOut: false };
+          paths.push(reportPath); await writeFile(reportPath, JSON.stringify(first)); return exited;
         });
       expect(accepted.status).toBe('passed'); expect(paths[0]).not.toBe(paths[1]);
       expect(reused).toMatchObject({ status: 'failed', category: 'infrastructure' }); expect(reused.cleanup).toBeUndefined();
     });
   });
 
-  it('keeps release unknown when the desktop session times out, is killed, disagrees or throws', async () => {
+  it('rejects a well formed report above the read budget and keeps release unknown', async () => {
     await isolated(async (output) => {
-      for (const process of [{ code: null, signal: null, timedOut: true }, { code: 0, signal: 'SIGKILL', timedOut: false }, { code: 1, signal: null, timedOut: false }]) {
-        const result = await runDshDesktopAttempt({ output, label: 'baseline', artifact: builds.baseline, installation: owned },
+      const result = await runDshDesktopAttempt({ output, label: 'baseline', artifact: builds.baseline, installation: owned, launch },
+        async ({ reportPath, runId }: { reportPath: string; runId: string }) => {
+          await writeFile(reportPath, JSON.stringify(desktopPassed(builds.baseline.version, runId, { padding: 'x'.repeat(2 * 1024 * 1024) })));
+          return exited;
+        });
+      expect(result).toMatchObject({ status: 'failed', category: 'infrastructure' }); expect(result.cleanup).toBeUndefined();
+    });
+  });
+
+  it('never binds two missing artifact identities', async () => {
+    await isolated(async (output) => {
+      const write = (omit: boolean) => async ({ reportPath, runId }: { reportPath: string; runId: string }) => {
+        const report: Record<string, unknown> = { ...desktopPassed(builds.baseline.version, runId) };
+        if (omit) delete report.artifactId;
+        await writeFile(reportPath, JSON.stringify(report)); return exited;
+      };
+      // A caller record without a real version and SRI is not a binding at all.
+      await expect(runDshDesktopAttempt({ output, label: 'baseline', artifact: { version: builds.baseline.version }, installation: owned, launch }, write(true))).rejects.toThrow();
+      const result = await runDshDesktopAttempt({ output, label: 'baseline', artifact: builds.baseline, installation: owned, launch }, write(true));
+      expect(result).toMatchObject({ status: 'failed', category: 'infrastructure' }); expect(result.cleanup).toBeUndefined();
+    });
+  });
+
+  it('keeps release unknown when the session times out, is killed, truncates output or disagrees', async () => {
+    await isolated(async (output) => {
+      for (const process of [{ code: null, signal: null, timedOut: true, truncated: false }, { code: 0, signal: 'SIGKILL', timedOut: false, truncated: false },
+        { code: 0, signal: null, timedOut: false, truncated: true }, { code: 0, signal: null, timedOut: false }, { code: 1, signal: null, timedOut: false, truncated: false }]) {
+        const result = await runDshDesktopAttempt({ output, label: 'baseline', artifact: builds.baseline, installation: owned, launch },
           async ({ reportPath, runId }: { reportPath: string; runId: string }) => {
             await writeFile(reportPath, JSON.stringify(desktopPassed(builds.baseline.version, runId))); return process;
           });
         expect(result).toMatchObject({ status: 'failed', category: 'infrastructure' }); expect(result.cleanup).toBeUndefined();
       }
-      const crashed = await runDshDesktopAttempt({ output, label: 'baseline', artifact: builds.baseline, installation: owned },
+      const crashed = await runDshDesktopAttempt({ output, label: 'baseline', artifact: builds.baseline, installation: owned, launch },
         async () => { throw new Error('desktop driver crashed'); });
       expect(crashed).toMatchObject({ status: 'failed', category: 'infrastructure' }); expect(crashed.cleanup).toBeUndefined();
     });
@@ -294,34 +340,68 @@ describe('DeepSeek Harness formal desktop report and lifecycle', () => {
       { ...desktopCleanup, errors: ['bridge still registered'] }]) expect(hasDesktopCleanupProof(value)).toBe(false);
   });
 
-  it('installs the candidate only after the released desktop baseline and stays out of the web reporter', async () => {
+  it('installs the candidate only after a released baseline bound to this run', async () => {
     const calls: string[] = [];
     const summary = await runDshDesktopSequence(builds, {
-      install: async (_build: unknown, label: string) => { calls.push(`install:${label}`); return { ...owned, root: `owned-${label}` }; },
-      probe: async (_installation: unknown, build: typeof builds.baseline, label: string) => { calls.push(`probe:${label}`); return desktopPassed(build.version); },
+      install: async (_build: unknown, label: string) => { calls.push(`install:${label}`); return { ...owned, installationId: randomUUID(), root: `owned-${label}` }; },
+      probe: async (installation: { installationId: string; owner: string }, build: typeof builds.baseline, label: string, context?: { runId: string }) => {
+        calls.push(`probe:${label}`); return bound(build, installation, context?.runId ?? randomUUID());
+      },
       remove: async (_installation: unknown, _build: unknown, label: string) => { calls.push(`remove:${label}`); },
     });
     expect(calls).toEqual(['install:baseline', 'probe:baseline', 'remove:baseline', 'install:candidate', 'probe:candidate', 'remove:candidate']);
     expect(summary).toMatchObject({ tool: 'dsh-desktop', installationCleanup: 'removed', classification: { kind: 'compatible' } });
     expect(summary.scope).toEqual(desktopScope);
 
-    const regression = await runDshDesktopSequence(builds, {
-      install: async () => ({ ...owned }), probe: async (_installation: unknown, build: typeof builds.baseline) => build.version === builds.baseline.version
-        ? desktopPassed(build.version) : { ...desktopPassed(build.version), status: 'failed', stage: 'contract', check: 'native-queue', category: 'compatibility', process: { code: 1, signal: null, timedOut: false } },
+    // A same-version report left under this install is stale: the sequence must hand the run identity to the attempt it uses.
+    const stale: string[] = [];
+    const ignored = await runDshDesktopSequence(builds, {
+      install: async (_build: unknown, label: string) => { stale.push(`install:${label}`); return { ...owned, installationId: randomUUID() }; },
+      probe: async (installation: { installationId: string; owner: string }, build: typeof builds.baseline, label: string) => {
+        stale.push(`probe:${label}`); return bound(build, installation, randomUUID());
+      },
+      remove: async () => { stale.push('remove'); },
+    });
+    expect(stale).toEqual(['install:baseline', 'probe:baseline']);
+    expect(ignored.retainedInstallation).toBeDefined();
+    expect(ignored.classification).toEqual({ kind: 'infrastructure', notify: false });
+  });
+
+  it('refuses to reuse an installation identity across attempts', async () => {
+    const shared = randomUUID(); const calls: string[] = [];
+    const summary = await runDshDesktopSequence(builds, {
+      install: async (_build: unknown, label: string) => { calls.push(`install:${label}`); return { ...owned, installationId: shared, root: `owned-${label}` }; },
+      probe: async (installation: { installationId: string; owner: string }, build: typeof builds.baseline, label: string, context?: { runId: string }) => {
+        calls.push(`probe:${label}`); return bound(build, installation, context?.runId ?? randomUUID());
+      },
+      remove: async (_installation: unknown, _build: unknown, label: string) => { calls.push(`remove:${label}`); },
+    });
+    expect(calls).toEqual(['install:baseline', 'probe:baseline', 'remove:baseline', 'install:candidate', 'probe:candidate']);
+    expect(summary.retainedInstallation).toMatchObject({ label: 'candidate' });
+    expect(summary.classification).toEqual({ kind: 'infrastructure', notify: false });
+  });
+
+  it('keeps the desktop summary out of the web reporter', async () => {
+    const summary = await runDshDesktopSequence(builds, {
+      install: async (_build: unknown, _label: string) => ({ ...owned, installationId: randomUUID() }),
+      probe: async (installation: { installationId: string; owner: string }, build: typeof builds.baseline, _label: string, context?: { runId: string }) => build.version === builds.baseline.version
+        ? bound(build, installation, context?.runId ?? randomUUID())
+        : { ...bound(build, installation, context?.runId ?? randomUUID()), status: 'failed', stage: 'contract', check: 'native-queue', category: 'compatibility', process: { code: 1, signal: null, timedOut: false, truncated: false } },
       remove: async () => {},
     });
-    expect(regression.classification).toEqual({ kind: 'regression', notify: true });
-    expect(dshRegressionIdentity(regression)).toBeUndefined();
+    expect(summary.classification).toEqual({ kind: 'regression', notify: true });
+    expect(dshRegressionIdentity(summary)).toBeUndefined();
   });
 
   it('retains the first desktop installation and stops when release is unverified', async () => {
-    for (const report of [{ ...desktopPassed(), cleanup: { ...desktopCleanup, systemRegistrationRemoved: false } },
-      { ...desktopPassed(), cleanup: { ...desktopCleanup, forced: true } },
-      { ...desktopPassed(), process: { code: null, signal: null, timedOut: true } }]) {
+    for (const extra of [{ cleanup: { ...desktopCleanup, systemRegistrationRemoved: false } }, { cleanup: { ...desktopCleanup, forced: true } },
+      { cleanup: undefined }, { process: { code: null, signal: null, timedOut: true, truncated: false } }]) {
       const calls: string[] = [];
       const summary = await runDshDesktopSequence(builds, {
-        install: async (_build: unknown, label: string) => { calls.push(label); return { ...owned, root: 'owned-retained' }; },
-        probe: async () => report, remove: async () => { calls.push('remove'); },
+        install: async (_build: unknown, label: string) => { calls.push(label); return { ...owned, installationId: randomUUID(), root: 'owned-retained' }; },
+        probe: async (installation: { installationId: string; owner: string }, build: typeof builds.baseline, _label: string, context?: { runId: string }) =>
+          bound(build, installation, context?.runId ?? randomUUID(), extra),
+        remove: async () => { calls.push('remove'); },
       });
       expect(calls).toEqual(['baseline']); expect(summary.retainedInstallation).toBeDefined();
       expect(summary.classification).toEqual({ kind: 'infrastructure', notify: false });
@@ -331,7 +411,7 @@ describe('DeepSeek Harness formal desktop report and lifecycle', () => {
   it('never closes blindly after a thrown desktop operation and keeps ownership when the close fails', async () => {
     const crashed: string[] = [];
     const crashedSummary = await runDshDesktopSequence(builds, {
-      install: async (_build: unknown, label: string) => { crashed.push(label); return { ...owned }; },
+      install: async (_build: unknown, label: string) => { crashed.push(label); return { ...owned, installationId: randomUUID() }; },
       probe: async () => { throw new Error('desktop driver crashed'); },
       remove: async () => { crashed.push('remove'); },
     });
@@ -339,8 +419,10 @@ describe('DeepSeek Harness formal desktop report and lifecycle', () => {
 
     const refused: string[] = [];
     const refusedSummary = await runDshDesktopSequence(builds, {
-      install: async (_build: unknown, label: string) => { refused.push(`install:${label}`); return { ...owned }; },
-      probe: async (_installation: unknown, build: typeof builds.baseline, label: string) => { refused.push(`probe:${label}`); return desktopPassed(build.version); },
+      install: async (_build: unknown, label: string) => { refused.push(`install:${label}`); return { ...owned, installationId: randomUUID() }; },
+      probe: async (installation: { installationId: string; owner: string }, build: typeof builds.baseline, label: string, context?: { runId: string }) => {
+        refused.push(`probe:${label}`); return bound(build, installation, context?.runId ?? randomUUID());
+      },
       remove: async (_installation: unknown, _build: unknown, label: string) => { refused.push(`remove:${label}`); throw new Error('Official uninstall refused'); },
     });
     expect(refused).toEqual(['install:baseline', 'probe:baseline', 'remove:baseline']);
@@ -350,6 +432,22 @@ describe('DeepSeek Harness formal desktop report and lifecycle', () => {
     const failed = await runDshDesktopSequence(builds, { install: async () => { throw new Error('Desktop install failed'); }, probe: async () => undefined, remove: async () => {} });
     expect(failed.classification).toEqual({ kind: 'infrastructure', notify: false });
     expect(failed.retainedInstallation).toBeUndefined();
+  });
+
+  it('keeps the owned root of a partially created installation that throws', async () => {
+    await isolated(async (output) => {
+      const root = join(output, 'owned-partial'); await mkdir(root); await writeFile(join(root, '.fixture-owner'), 'marker');
+      const partial = { root, installationId: randomUUID(), owner: randomUUID() }; const calls: string[] = [];
+      const summary = await runDshDesktopSequence(builds, {
+        install: async () => { calls.push('install'); throw Object.assign(new Error('Installer exited 1'), { installation: partial }); },
+        probe: async () => { calls.push('probe'); },
+        remove: async () => { calls.push('remove'); },
+      });
+      expect(calls).toEqual(['install']);
+      expect(summary.retainedInstallation).toMatchObject({ label: 'baseline', root, installationId: partial.installationId, owner: partial.owner, reason: 'Installer exited 1' });
+      expect(summary.classification).toEqual({ kind: 'infrastructure', notify: false });
+      expect(existsSync(join(root, '.fixture-owner'))).toBe(true);
+    });
   });
 
   it('keeps the web entry closed to desktop reports and the desktop entry closed to web reports', async () => {
@@ -362,7 +460,7 @@ describe('DeepSeek Harness formal desktop report and lifecycle', () => {
 
     const desktopCalls: string[] = [];
     const desktop = await runDshDesktopSequence(builds, {
-      install: async (_build: unknown, label: string) => { desktopCalls.push(label); return { ...owned }; },
+      install: async (_build: unknown, label: string) => { desktopCalls.push(label); return { ...owned, installationId: randomUUID() }; },
       probe: async (_installation: unknown, build: typeof builds.baseline) => passed(build.version), remove: async () => { desktopCalls.push('remove'); },
     });
     expect(desktopCalls).toEqual(['baseline']); expect(desktop.retainedInstallation).toBeDefined();
