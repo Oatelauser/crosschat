@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import { afterAll, describe, expect, it, vi } from 'vitest';
+import { runInstallSkills } from '../src/commands/install-skills.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-maintenance-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -101,18 +102,20 @@ describe('local maintenance plans and exact execution', () => {
     expect(existsSync(queue)).toBe(true);
   });
 
-  it('skill installation previews both existing destinations and retains the original overwrite behavior', async () => {
+  it('skill installation previews the three destinations and retains the original overwrite behavior', async () => {
     const { previewMaintenance, executeMaintenance } = await import('../src/application/maintenance/operations.js');
     const f = fixture();
     const first = join(f.home, '.claude', 'skills', 'crosschat');
     mkdirSync(first, { recursive: true });
     writeFileSync(join(first, 'SKILL.md'), 'older');
     const preview = previewMaintenance('install-skills', f.options);
-    expect(preview.targets.map((item) => item.path)).toEqual([first, join(f.home, '.codex', 'skills', 'crosschat')]);
+    expect(preview.targets.map((item) => item.path)).toEqual([
+      first, join(f.home, '.codex', 'skills', 'crosschat'), join(f.home, '.dsh', 'skills', 'crosschat'),
+    ]);
     expect(readFileSync(join(first, 'SKILL.md'), 'utf8')).toBe('older');
     const result = executeMaintenance('install-skills', preview.fingerprint, f.options);
     expect(result.status).toBe('complete');
-    expect(result.items.map((item) => item.outcome)).toEqual(['installed', 'installed']);
+    expect(result.items.map((item) => item.outcome)).toEqual(['installed', 'installed', 'installed']);
     for (const item of result.items) expect(readFileSync(join(item.path, 'SKILL.md'), 'utf8')).toBe('isolated source');
   });
 
@@ -143,14 +146,14 @@ describe('local maintenance plans and exact execution', () => {
     mkdirSync(denied, { recursive: true });
     const preview = previewMaintenance('uninstall-data', f.options);
     expect(preview.targets.map((item) => item.path)).toEqual([
-      join(f.home, '.crosschat'), legacy, denied, join(f.home, '.codex', 'skills', 'crosschat'),
+      join(f.home, '.crosschat'), legacy, denied, join(f.home, '.codex', 'skills', 'crosschat'), join(f.home, '.dsh', 'skills', 'crosschat'),
     ]);
     const result = executeMaintenance('uninstall-data', preview.fingerprint, { ...f.options, effects: { remove: (file, recursive) => {
       if (file === denied) throw new Error('denied');
       rmSync(file, { recursive, force: true });
     } } });
     expect(result.status).toBe('partial');
-    expect(result.items.map((item) => item.outcome)).toEqual(['deleted', 'deleted', 'failed', 'skipped']);
+    expect(result.items.map((item) => item.outcome)).toEqual(['deleted', 'deleted', 'failed', 'skipped', 'skipped']);
     expect(result.npm).toBe('not-run');
     expect(result.message).toContain('npm uninstall -g @oatelauser/crosschat');
     expect(existsSync(denied)).toBe(true);
@@ -192,6 +195,60 @@ describe('local maintenance plans and exact execution', () => {
     expect(result.items[1].message).toContain('尚未尝试');
     expect(JSON.stringify(result)).not.toContain('sensitive');
   });
+
+  it('installs and removes an explicit Harness home that sits outside the user home', async () => {
+    const { previewMaintenance, executeMaintenance } = await import('../src/application/maintenance/operations.js');
+    const f = fixture();
+    const dshHome = mkdtempSync(join(root, 'external-dsh-'));
+    const options = { ...f.options, env: { DSH_HOME: dshHome } };
+    const install = previewMaintenance('install-skills', options);
+    expect(install.enabled).toBe(true);
+    expect(install.targets.map((item) => item.path)[2]).toBe(join(dshHome, 'skills', 'crosschat'));
+    expect(executeMaintenance('install-skills', install.fingerprint, options).status).toBe('complete');
+    expect(readFileSync(join(dshHome, 'skills', 'crosschat', 'SKILL.md'), 'utf8')).toBe('isolated source');
+    expect(existsSync(join(f.home, '.dsh'))).toBe(false);
+    const uninstall = previewMaintenance('uninstall-data', options);
+    expect(uninstall.enabled).toBe(true);
+    expect(uninstall.targets.map((item) => item.path)).toContain(join(dshHome, 'skills', 'crosschat'));
+    expect(executeMaintenance('uninstall-data', uninstall.fingerprint, options).status).toBe('complete');
+    expect(existsSync(join(dshHome, 'skills', 'crosschat'))).toBe(false);
+    expect(existsSync(join(dshHome, 'skills'))).toBe(true);
+    expect(existsSync(dshHome)).toBe(true);
+  });
+
+  it('rejects a relative DSH_HOME with its concrete value without breaking unrelated cleanup plans', async () => {
+    const { previewMaintenance } = await import('../src/application/maintenance/operations.js');
+    const f = fixture();
+    const options = { ...f.options, env: { DSH_HOME: 'relative-dsh' } };
+    const skills = previewMaintenance('install-skills', options);
+    expect(skills.enabled).toBe(false);
+    expect(skills.reason).toContain('relative-dsh');
+    expect(previewMaintenance('uninstall-data', options).enabled).toBe(false);
+    expect(previewMaintenance('cleanup', options).enabled).toBe(true);
+    expect(existsSync(join(f.home, '.claude'))).toBe(false);
+  });
+
+  it('fails closed when the external Harness skills path is a link', async () => {
+    const { previewMaintenance } = await import('../src/application/maintenance/operations.js');
+    const f = fixture();
+    const dshHome = mkdtempSync(join(root, 'linked-dsh-'));
+    const outside = mkdtempSync(join(root, 'outside-dsh-'));
+    mkdirSync(join(outside, 'crosschat'));
+    symlinkSync(outside, join(dshHome, 'skills'), process.platform === 'win32' ? 'junction' : 'dir');
+    const options = { ...f.options, env: { DSH_HOME: dshHome } };
+    expect(previewMaintenance('install-skills', options)).toMatchObject({ enabled: false });
+    expect(previewMaintenance('uninstall-data', options)).toMatchObject({ enabled: false });
+    expect(existsSync(join(outside, 'crosschat'))).toBe(true);
+  });
+
+  it('uses one target plan for the CLI installer and the TUI preview', async () => {
+    const { previewMaintenance } = await import('../src/application/maintenance/operations.js');
+    const f = fixture();
+    const dshHome = mkdtempSync(join(root, 'parity-dsh-'));
+    const env = { DSH_HOME: dshHome };
+    const cli = runInstallSkills({}, { sourceDir: () => f.options.sourceDir, defaultRoot: () => f.home, env });
+    expect(previewMaintenance('install-skills', { ...f.options, env }).targets.map((item) => item.path)).toEqual(cli);
+  });
 });
 
 describe('owned maintenance worker lifecycle', () => {
@@ -209,11 +266,14 @@ describe('owned maintenance worker lifecycle', () => {
     }
     const { createLocalMaintenance } = await import(pathToFileURL(join(dir, 'application/maintenance/index.js')).href);
     const f = fixture();
-    const maintenance = createLocalMaintenance(f.options);
+    const dshHome = join(f.home, 'custom-dsh');
+    const maintenance = createLocalMaintenance({ ...f.options, env: { DSH_HOME: dshHome } });
     const install = await maintenance.preview({ operationId: 'install-skills' });
     expect(existsSync(join(f.home, '.claude'))).toBe(false);
     expect((await maintenance.execute({ operationId: 'install-skills', expectedFingerprint: install.fingerprint })).status).toBe('complete');
     expect(readFileSync(join(f.home, '.codex', 'skills', 'crosschat', 'SKILL.md'), 'utf8')).toBe('isolated source');
+    expect(readFileSync(join(dshHome, 'skills', 'crosschat', 'SKILL.md'), 'utf8')).toBe('isolated source');
+    expect(existsSync(join(f.home, '.dsh'))).toBe(false);
     const old = f.put('tcp/inbox/old', 9 * DAY);
     const queue = f.put('outbox/queue.json');
     const cleanup = await maintenance.preview({ operationId: 'cleanup' });
@@ -225,6 +285,7 @@ describe('owned maintenance worker lifecycle', () => {
     expect((await maintenance.execute({ operationId: 'uninstall-data', expectedFingerprint: uninstall.fingerprint })).npm).toBe('not-run');
     expect(existsSync(join(f.home, '.crosschat'))).toBe(false);
     expect(existsSync(join(f.home, '.claude', 'skills', 'crosschat'))).toBe(false);
+    expect(existsSync(join(dshHome, 'skills', 'crosschat'))).toBe(false);
     expect(existsSync(f.options.sourceDir)).toBe(true);
   });
 
