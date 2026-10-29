@@ -42,7 +42,7 @@ export interface EnvelopeInput {
    */
   fromMachine?: string;
   /**
-   * F2：本地会话短柄（c<数字>）——hint 用两字符柄替代完整 ref（生成与消费
+   * 本地会话短柄（cA000～cZ999）——hint 用五字符柄替代完整 ref（生成与消费
    * 同机同版本）。缺省（状态未接线等异常路径）回退完整 ref，保底不断。
    */
   handle?: string;
@@ -82,7 +82,7 @@ export function composeEnvelope(input: EnvelopeInput): string {
   // 信封瘦身 A+：ref 自包含路由（端点带 m/mid，tcp 会话尾部带 starId），回信
   // 命令不再搬 --via，也不在属性里重复 conversation——conversation 标识全信
   // 封只出现这一次；缺 --via 的回路由执行侧按 ref 自动选路（send.ts autoViaFromRef）。
-  // F2：标识优先用两字符短柄（消灭 LLM 手抄百字符 ref 这一最脆弱环节），
+  // 标识优先用当前有效的五字符短柄，减少手抄完整 ref 的错误，
   // 柄缺席回退完整 ref。
   const conversationArg = input.handle ?? input.ref;
   // 024 方案5：括注内建管道教学——协议纪律要求收件方照抄 hint，只给 inline

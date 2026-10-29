@@ -103,7 +103,7 @@ mac：unix 实现共享，理论可达、未实测。
 👤 用户[boss -> worker]   用 crosschat（先 status 确认名字）给 claude 会话「worker」下发任务：给我回复你好的消息。
 🤖 worker 收到            📨 来自另一会话的消息:
                           <cross-session-message from-name="boss" turn="1" from-tool="claude">
-                          回复请运行: crosschat send --conversation c3 --tool claude --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
+                          回复请运行: crosschat send --conversation cA014 --tool claude --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
                           给我回复你好的消息
 🤖 worker[worker -> boss] 你好
 🤖 boss 收到              📨 你好（turn 2）
@@ -119,7 +119,7 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 👤 用户[boss -> beta2]    用 crosschat 走 ssh 跨机给 yangwsl 机器的会话「beta2」问好，要求对方回复。
 🤖 beta2 收到             📨 来自另一会话的消息:
                           <cross-session-message from-name="boss@win" turn="1" from-tool="claude">
-                          回复请运行: crosschat send --conversation c3 --tool claude --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
+                          回复请运行: crosschat send --conversation cA014 --tool claude --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
                           你好 beta2，这是跨机问候
 🤖 beta2[beta2 -> boss]   收到！跨机闭环成立
 🤖 boss 收到              📨 收到！跨机闭环成立（turn 2，自动经 ssh 回到 win）
@@ -135,7 +135,7 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 👤 用户[boss -> worker2]  用 crosschat 走 tcp 跨机给 host-b 机器的 claude 会话「worker2」发任务，要求它跑一次构建并回报结果。
 🤖 worker2 收到            📨 来自另一会话的消息:
                           <cross-session-message from-name="boss" turn="1" from-tool="claude">
-                          回复请运行: crosschat send --conversation c3 --tool claude --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
+                          回复请运行: crosschat send --conversation cA014 --tool claude --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
                           …跑一次构建并回报结果…
 🤖 worker2[worker2 -> boss] 构建完成，产物清单见下一条
 🤖 boss 收到               📨 构建完成，产物清单见下一条（turn 2，自动经 broker 跨机回来）
@@ -267,7 +267,9 @@ ssh: 共 2 段对话
 （明细: --conversations --via ssh）
 ```
 
-发送输出三种状态：`delivered`（已投递）/ `queued`（已交对端 codex 队列待消费，轮末处理——**对方回信到来即证明已处理**，勿发消息追问）/ `parked`（对方忙，已入发件箱，看门狗自动重投；输出含队列深度与 mailbox 镜像路径）/ 错误码（见排障）。人眼输出行尾附 `· 续话 cN`——本地会话短柄；接续仍须 `crosschat send --conversation cN --tool <收件类型>`。`status --conversations` 的末条状态是**本机发送账本视角**（对端回信不产生本机账目），`queued` 为终态。
+发送输出三种状态：`delivered`（已投递）/ `queued`（已交对端 codex 队列待消费，轮末处理——**对方回信到来即证明已处理**，勿发消息追问）/ `parked`（对方忙，已入发件箱，看门狗自动重投；输出含队列深度与 mailbox 镜像路径）/ 错误码（见排障）。人眼输出行尾附 `· 续话 cA014`——本地会话短柄；接续仍须 `crosschat send --conversation cA014 --tool <收件类型>`。`status --conversations` 的末条状态是**本机发送账本视角**（对端回信不产生本机账目），`queued` 为终态。
+
+短柄固定五字符，按 `cA000`～`cA999`、`cB000`…`cZ999` 分配；同一对话往返复用。最近 1000 次分配以外的柄过期，每对端点保留最多 8 柄；编号耗尽或状态读写失败时使用完整会话引用。旧数字柄（如 `c14`、`c0014`）已停用。普通清理保留编号进度，强制清理/手动删状态会重置并可能重号；重置后用原完整引用或核实目标后用 `--to` 接续。
 
 `status --conversations` 另看对话总览：每对端点的最近方向、相对时间、轮次、末条状态、滞留数与行尾续话柄（与 `--json` 组合输出同结构数组）。
 

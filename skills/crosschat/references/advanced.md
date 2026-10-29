@@ -7,7 +7,7 @@
 Bash 用带引号的 heredoc：
 
 ```bash
-cat <<'EOF' | crosschat send --conversation c3 --tool codex-cli --delivery steer
+cat <<'EOF' | crosschat send --conversation cA014 --tool codex-cli --delivery steer
 价格 $100、命令 `uptime`、"双引号" ——逐字发送
 EOF
 ```
@@ -17,7 +17,7 @@ PowerShell 用单引号 here-string：
 ```powershell
 @'
 价格 $100、命令 `dir`、"双引号" ——逐字发送
-'@ | crosschat send --conversation c3 --tool codex-cli --delivery steer
+'@ | crosschat send --conversation cA014 --tool codex-cli --delivery steer
 ```
 
 结束标记须独占一行；PowerShell 的 `'@` 顶格书写。

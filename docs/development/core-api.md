@@ -102,7 +102,9 @@ C14 的所有应用发送入口及 CLI 都校验 `SendArgs.tool`，缺少/未知
 
 `SendDeps.enrichCallerIdentity` 是可选来源观察接缝，仅补充可靠来源 endpointType，不改变原生 provider/ID。Q8 保留：调用者原生 ID 匹配引用、收件端明确时，来源未知或来源探测暂不可用仍可回信，不引入来源候选 owner 自证。普通 Codex shell 的来源仍可能 pending，具体无法关联入口与人工确认范围须先获用户审阅；当前真实组合未启用通用兜底询问。
 
-信封分别传 `fromTool` 与 `replyTool`：前者反映本次观察，未知为 pending；后者可使用引用内已固定的返回端点生成完整 `--conversation ... --tool ...` hint。返回端未知时不生成缺 tool 命令。`from-addr` 使用完整原生 ID，不夹工具前缀。引用未知类型经选择和核验补齐时保留 cN、nonce、机器名及连续轮次，旧未知引用不能覆盖已确认类型；同 ID 不同实际端点继续独立通信、册位和队列。TUI 的 `y` 从这些事实复制完整发送命令，不自动发送。
+信封分别传 `fromTool` 与 `replyTool`：前者反映本次观察，未知为 pending；后者可使用引用内已固定的返回端点生成完整 `--conversation ... --tool ...` hint。返回端未知时不生成缺 tool 命令。`from-addr` 使用完整原生 ID，不夹工具前缀。引用未知类型经选择和核验补齐时保留有效五字符短柄、nonce、机器名及连续轮次，旧未知引用不能覆盖已确认类型；同 ID 不同实际端点继续独立通信、册位和队列。TUI 的 `y` 从这些事实复制完整发送命令，不自动发送。
+
+`PairRecord.handleSequence` 保存本分片提交过的最高机器级分配序号（1～26000），与 `handles` 原子写入并在刷新/细化时保留。`readConversationState` 返回分片及完整性；不完整时短柄分配/展示停用，完整 ref 发送保留。`handleForRef` / `claimHandle` 的可选失败返回 `undefined`，调用方回退完整引用；`resolveHandle` 拒绝旧数字柄、过期、歧义或不可核验状态。`cA000`～`cZ999` 的有效窗口、清理与重置合同见[批准规格](c14-short-handle-ring-20261029.md)。
 
 Desktop 投递绑定真实 owner，不依赖 CLI daemon；owner 绑定后的失败不改投其他通道。忙时 queue 本机寄存，空闲后交给原宿主；steer 追加当前轮，明确无活跃轮且新快照证实空闲时才允许启动新轮。写入不明不重放，outbox 持久认领与未知状态阻止并发/崩溃恢复重复发送；回执摘要绑定目标与实际完整输入。
 
