@@ -19,7 +19,8 @@
   "vitestStartTimeVerbatim": "21:28:28",
   "durationSeconds": 127.83,
   "rawOutput": "final-check.txt",
-  "rawOutputSha256": "43f80ccc4353949bcb0cfd0731a8f20280cda43703a61205087dd73e65c2b903",
+  "rawOutputWindowsSha256": "43f80ccc4353949bcb0cfd0731a8f20280cda43703a61205087dd73e65c2b903",
+  "rawOutputCommittedLfSha256": "1629c155c89c93c9386288870dc9ed3f964a07d65ac6cf4f66a2480859ec323c",
   "coverage": "No configured coverage script or provider; behavioral guarantees are indexed in the specification.",
   "validationIsolation": "Temporary fixtures and controlled local processes/adapters; no real user delivery or remote acceptance tests."
 }
