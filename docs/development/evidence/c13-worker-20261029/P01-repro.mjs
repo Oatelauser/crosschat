@@ -136,11 +136,22 @@ function runChild(scenario, home) {
       try { observed = line === undefined ? undefined : JSON.parse(line.slice(7)); } catch { observed = undefined; }
       settle({ childExit: code, killedFor, closeUnconfirmed, errors, stdoutTruncated, stderrTruncated, stdoutBytes, stderrBytes, observed, stderr: stderr.trim().slice(0, 400) });
     };
+    // The child may still be alive here. Release only the handles this parent
+    // holds and stop waiting; that is not a claim that the process exited.
+    const releaseChild = () => {
+      for (const stream of [child.stdout, child.stderr]) {
+        if (stream === null || stream === undefined) continue;
+        stream.removeAllListeners('data');
+        stream.on('error', () => {});
+        stream.destroy();
+      }
+      child.unref();
+    };
     // Once the child was killed or failed to spawn, wait for its own close only
     // for a bounded time; an unconfirmed exit stops the run and keeps the root.
     const awaitClose = () => {
       if (deadline !== undefined) return;
-      deadline = setTimeout(() => { closeUnconfirmed = true; settleOnce(null); }, LIMITS.closeMs);
+      deadline = setTimeout(() => { closeUnconfirmed = true; settleOnce(null); releaseChild(); }, LIMITS.closeMs);
     };
     const kill = (reason) => { if (killedFor !== null) return; killedFor = reason; child.kill(); awaitClose(); };
     const hardTimer = setTimeout(() => kill('timeout'), LIMITS.childMs);

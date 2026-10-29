@@ -98,7 +98,7 @@
 
 - 每场只接受：子进程退出 0、未超时、未截断、RESULT 可解析且字段齐全、场景名匹配、退出后端口被拒。**只有 `ECONNREFUSED` 算确认关闭**；缺 URL 或未探测记 `confirmedClosed:false`，超时/其它网络错误保留未核实。
 - 采证失败写入 `problems`，与"无复现"（`notReproduced`）分开；任一非空退出 1。
-- 子进程输出按字节封顶（stdout 64KiB / stderr 16KiB）并记录超限；`error` 只记录，收束仍等 `close`；超时/超限 kill 后给 5s close 截止，未确认就停止后续场景、保留临时根，在 `cleanup.retained/root` 报告，父 finally 不删根。
+- 子进程输出按字节封顶（stdout 64KiB / stderr 16KiB）并记录超限；`error` 只记录，收束仍等 `close`；超时/超限 kill 后给 5s close 截止，未确认就停止后续场景、保留临时根，在 `cleanup.retained/root` 报告，父 finally 不删根。截止分支还会摘掉父进程自己的 `data` 监听、销毁 stdout/stderr 管道并 `unref` 本次子进程，避免父脚本被未确认的子进程句柄挂住；这只释放父侧句柄，**不表示进程已退出**。
 - 只管理本次直接启动、不生后代的 node 子进程；继续清 `CROSSCHAT_LIVE`，不做宿主扫描/杀树，不引入 W05 框架。
 
 ### 7.4 本轮运行
@@ -116,3 +116,9 @@
 | 差异 | `git diff --check` | 通过 |
 
 采证失败反例的做法：把脚本复制到自己的临时目录（`%TEMP%/c13-p01-r1-negative/`），子进程的相对 import 因路径变化找不到 `integrations/dsh/bridge.js`，四个子进程都以退出码 1 结束且没有 RESULT。工具没有把它当成功：`verdicts` 四场全是 `evidence-failure`，`problems` 逐条列出"child exited 1 / no parsable RESULT line / port release not confirmed"，退出 1。反例目录用完即删，`%TEMP%` 无残留。
+
+### 7.5 未确认 close 分支的句柄释放（R1 补充，基线 `06cbcad575e2cf512dd7ccb0d2067fcd0d0143ff`）
+
+`runChild` 的 5s 截止分支原来只 `settleOnce(null)`。若 `kill` 没有让子进程退出，child 与 stdout/stderr 管道仍持有事件循环引用，父脚本会挂住。现在该分支在标记 `closeUnconfirmed`、保留根之外，还会摘掉父进程自己的 `data` 监听、销毁 stdout/stderr 管道并 `child.unref()`。它只释放父侧句柄，**不声称进程已退出**；不删保留根，不加杀树/宿主扫描/重试框架，正常 `close` 结算与输出上限不变。
+
+这条分支本轮没有实触发（四场都在截止前正常 close），属**静态修正**；能实际观察到的仍是正常四场复现。补充后复跑 `node P01-repro.mjs`：退出 0，四场 `reproduced`，`problems:[]`、`notReproduced:[]`、`cleanup.removed:true`；`node --check` 与 `git diff --check` 通过。原两份结果 JSON 未改。
