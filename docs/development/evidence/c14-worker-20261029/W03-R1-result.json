@@ -1,0 +1,845 @@
+{
+  "ticket": "C14-W03-R1",
+  "generatedAt": "2026-10-29T04:14:42.387Z",
+  "baseline": {
+    "head": "fc67602a8624bff266b283c35cb5411adce715a1",
+    "node": "v25.0.0",
+    "platform": "win32",
+    "arch": "x64",
+    "repo": "D:\\workspace\\CC\\multichat",
+    "buildNote": "npm run build exit 0 at 2026-10-29T12:14:41+08:00",
+    "modules": [
+      {
+        "file": "D:\\workspace\\CC\\multichat\\dist\\conversations.js",
+        "sha256": "85307671f28a281a873bcb476ad13410ac89e67875ed92a02aeaf263c29e8b67",
+        "bytes": 22484,
+        "mtime": "2026-10-29T04:12:41.766Z"
+      },
+      {
+        "file": "D:\\workspace\\CC\\multichat\\dist\\ref.js",
+        "sha256": "4e9f77e5e7a88e315edb7e8a33f0a5f8452fe0e5dd12a7527b4e7b8125187819",
+        "bytes": 13136,
+        "mtime": "2026-10-29T04:12:41.757Z"
+      },
+      {
+        "file": "D:\\workspace\\CC\\multichat\\src\\conversations.ts",
+        "sha256": "1d26abf2f2b3210333800f69ecf96ffb658d7139cba690b8c27914f7c8932504",
+        "bytes": 24103,
+        "mtime": "2026-10-28T08:34:11.600Z"
+      },
+      {
+        "file": "D:\\workspace\\CC\\multichat\\src\\ref.ts",
+        "sha256": "a7216d182725d12b5979e228cdf83f8719b19b2c642565f74757d8c812480fb8",
+        "bytes": 14199,
+        "mtime": "2026-10-27T09:23:10.524Z"
+      }
+    ]
+  },
+  "scenario": {
+    "candidate": 1,
+    "repeats": 5,
+    "barrierSteps": 2,
+    "barrierTimeoutMs": 15000,
+    "workerTimeoutMs": 30000,
+    "barrier": "CJS preload wraps fs.renameSync: r1 = both first shard writes visible before either scan; pre2 = both retry writes withheld until both callers computed max+2; post2 = both retry writes visible before either caller resolves; a timeout throws and fails the worker",
+    "pinnedShape": "the barrier is pinned to the current two-shard-write allocation shape; a fixed allocator with a different shape trips the missing-signal/write-count checks instead of passing silently",
+    "endpoints": "synthetic ids (w03-claude-a/b, w03-codex-a/b); no real state, no network, no messages sent",
+    "validity": "non-zero exit, spawn error, timeout, missing/invalid result, truncated output, unexpected shard shape, missing barrier signal or a non-collision resolve error marks the run a malfunction (non-zero exit), never \"not reproduced\""
+  },
+  "concurrentRuns": [
+    {
+      "repeat": 1,
+      "scenario": "concurrent",
+      "tempRoot": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-w03-NXTWBF",
+      "cleaned": true,
+      "problems": [],
+      "workers": [
+        {
+          "id": "a",
+          "exit": 0,
+          "signal": null,
+          "timedOut": false,
+          "result": {
+            "id": "a",
+            "handle": "c3",
+            "nonce": "c6dd426c038707d4",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIxt1CbAOHB9QB",
+            "renames": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIxt1CbAOHB9QB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII-_Rvhsfe28sB——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          },
+          "outputTruncated": false,
+          "stdoutTail": "{\"id\":\"a\",\"handle\":\"c3\",\"nonce\":\"c6dd426c038707d4\",\"ref\":\"mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIxt1CbAOHB9QB\",\"renames\":2,\"resolve\":{\"ok\":false,\"code\":\"INVALID_CONVERSATION_REF\",\"message\":\"c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIxt1CbAOHB9QB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII-_Rvhsfe28sB——用 --to <名> --tool <收件类型> 接续或开新对话\"}}\n",
+          "stderrTail": ""
+        },
+        {
+          "id": "b",
+          "exit": 0,
+          "signal": null,
+          "timedOut": false,
+          "result": {
+            "id": "b",
+            "handle": "c3",
+            "nonce": "fbf46f86c7dedbcb",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII-_Rvhsfe28sB",
+            "renames": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIxt1CbAOHB9QB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII-_Rvhsfe28sB——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          },
+          "outputTruncated": false,
+          "stdoutTail": "{\"id\":\"b\",\"handle\":\"c3\",\"nonce\":\"fbf46f86c7dedbcb\",\"ref\":\"mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII-_Rvhsfe28sB\",\"renames\":2,\"resolve\":{\"ok\":false,\"code\":\"INVALID_CONVERSATION_REF\",\"message\":\"c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIxt1CbAOHB9QB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII-_Rvhsfe28sB——用 --to <名> --tool <收件类型> 接续或开新对话\"}}\n",
+          "stderrTail": ""
+        }
+      ],
+      "barrierFlags": [
+        "post2-a",
+        "post2-b",
+        "pre2-a",
+        "pre2-b",
+        "r1-a",
+        "r1-b"
+      ],
+      "shards": [
+        {
+          "shard": "8cd07bfa22815dd88d2894cb83777260daf6b6af920c0da3bfd23d656956a80f.json",
+          "handles": {
+            "c3": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIxt1CbAOHB9QB"
+          }
+        },
+        {
+          "shard": "ebb3ed55dafb8f15206b2fbeee965d788dcbe893e56bf71907df4a0f85dad696.json",
+          "handles": {
+            "c3": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII-_Rvhsfe28sB"
+          }
+        }
+      ],
+      "afterResolve": [],
+      "verdict": {
+        "valid": true,
+        "reproduced": true,
+        "problems": [],
+        "outcomes": [
+          {
+            "id": "a",
+            "handle": "c3",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIxt1CbAOHB9QB",
+            "renames": 2,
+            "verdict": "collision",
+            "shardHits": 2,
+            "distinctRefs": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIxt1CbAOHB9QB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII-_Rvhsfe28sB——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          },
+          {
+            "id": "b",
+            "handle": "c3",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII-_Rvhsfe28sB",
+            "renames": 2,
+            "verdict": "collision",
+            "shardHits": 2,
+            "distinctRefs": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIxt1CbAOHB9QB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII-_Rvhsfe28sB——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          }
+        ],
+        "duplicates": [
+          {
+            "handle": "c3",
+            "shards": [
+              "8cd07bfa22815dd88d2894cb83777260daf6b6af920c0da3bfd23d656956a80f.json",
+              "ebb3ed55dafb8f15206b2fbeee965d788dcbe893e56bf71907df4a0f85dad696.json"
+            ],
+            "refs": [
+              "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIxt1CbAOHB9QB",
+              "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII-_Rvhsfe28sB"
+            ]
+          }
+        ],
+        "barrierTimeouts": []
+      }
+    },
+    {
+      "repeat": 2,
+      "scenario": "concurrent",
+      "tempRoot": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-w03-37574Q",
+      "cleaned": true,
+      "problems": [],
+      "workers": [
+        {
+          "id": "a",
+          "exit": 0,
+          "signal": null,
+          "timedOut": false,
+          "result": {
+            "id": "a",
+            "handle": "c3",
+            "nonce": "daf344e34e3b2a61",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI2vNE4047KmEB",
+            "renames": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI2vNE4047KmEB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII4Av11YOEUTwB——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          },
+          "outputTruncated": false,
+          "stdoutTail": "{\"id\":\"a\",\"handle\":\"c3\",\"nonce\":\"daf344e34e3b2a61\",\"ref\":\"mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI2vNE4047KmEB\",\"renames\":2,\"resolve\":{\"ok\":false,\"code\":\"INVALID_CONVERSATION_REF\",\"message\":\"c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI2vNE4047KmEB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII4Av11YOEUTwB——用 --to <名> --tool <收件类型> 接续或开新对话\"}}\n",
+          "stderrTail": ""
+        },
+        {
+          "id": "b",
+          "exit": 0,
+          "signal": null,
+          "timedOut": false,
+          "result": {
+            "id": "b",
+            "handle": "c3",
+            "nonce": "e00bf5d58384513c",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII4Av11YOEUTwB",
+            "renames": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI2vNE4047KmEB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII4Av11YOEUTwB——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          },
+          "outputTruncated": false,
+          "stdoutTail": "{\"id\":\"b\",\"handle\":\"c3\",\"nonce\":\"e00bf5d58384513c\",\"ref\":\"mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII4Av11YOEUTwB\",\"renames\":2,\"resolve\":{\"ok\":false,\"code\":\"INVALID_CONVERSATION_REF\",\"message\":\"c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI2vNE4047KmEB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII4Av11YOEUTwB——用 --to <名> --tool <收件类型> 接续或开新对话\"}}\n",
+          "stderrTail": ""
+        }
+      ],
+      "barrierFlags": [
+        "post2-a",
+        "post2-b",
+        "pre2-a",
+        "pre2-b",
+        "r1-a",
+        "r1-b"
+      ],
+      "shards": [
+        {
+          "shard": "8cd07bfa22815dd88d2894cb83777260daf6b6af920c0da3bfd23d656956a80f.json",
+          "handles": {
+            "c3": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI2vNE4047KmEB"
+          }
+        },
+        {
+          "shard": "ebb3ed55dafb8f15206b2fbeee965d788dcbe893e56bf71907df4a0f85dad696.json",
+          "handles": {
+            "c3": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII4Av11YOEUTwB"
+          }
+        }
+      ],
+      "afterResolve": [],
+      "verdict": {
+        "valid": true,
+        "reproduced": true,
+        "problems": [],
+        "outcomes": [
+          {
+            "id": "a",
+            "handle": "c3",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI2vNE4047KmEB",
+            "renames": 2,
+            "verdict": "collision",
+            "shardHits": 2,
+            "distinctRefs": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI2vNE4047KmEB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII4Av11YOEUTwB——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          },
+          {
+            "id": "b",
+            "handle": "c3",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII4Av11YOEUTwB",
+            "renames": 2,
+            "verdict": "collision",
+            "shardHits": 2,
+            "distinctRefs": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI2vNE4047KmEB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII4Av11YOEUTwB——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          }
+        ],
+        "duplicates": [
+          {
+            "handle": "c3",
+            "shards": [
+              "8cd07bfa22815dd88d2894cb83777260daf6b6af920c0da3bfd23d656956a80f.json",
+              "ebb3ed55dafb8f15206b2fbeee965d788dcbe893e56bf71907df4a0f85dad696.json"
+            ],
+            "refs": [
+              "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI2vNE4047KmEB",
+              "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII4Av11YOEUTwB"
+            ]
+          }
+        ],
+        "barrierTimeouts": []
+      }
+    },
+    {
+      "repeat": 3,
+      "scenario": "concurrent",
+      "tempRoot": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-w03-g81qt1",
+      "cleaned": true,
+      "problems": [],
+      "workers": [
+        {
+          "id": "a",
+          "exit": 0,
+          "signal": null,
+          "timedOut": false,
+          "result": {
+            "id": "a",
+            "handle": "c3",
+            "nonce": "7c0616d298c79b8a",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIfAYW0pjHm4oB",
+            "renames": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIfAYW0pjHm4oB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIqtZs6tmlhO0B——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          },
+          "outputTruncated": false,
+          "stdoutTail": "{\"id\":\"a\",\"handle\":\"c3\",\"nonce\":\"7c0616d298c79b8a\",\"ref\":\"mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIfAYW0pjHm4oB\",\"renames\":2,\"resolve\":{\"ok\":false,\"code\":\"INVALID_CONVERSATION_REF\",\"message\":\"c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIfAYW0pjHm4oB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIqtZs6tmlhO0B——用 --to <名> --tool <收件类型> 接续或开新对话\"}}\n",
+          "stderrTail": ""
+        },
+        {
+          "id": "b",
+          "exit": 0,
+          "signal": null,
+          "timedOut": false,
+          "result": {
+            "id": "b",
+            "handle": "c3",
+            "nonce": "aad66cead9a584ed",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIqtZs6tmlhO0B",
+            "renames": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIfAYW0pjHm4oB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIqtZs6tmlhO0B——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          },
+          "outputTruncated": false,
+          "stdoutTail": "{\"id\":\"b\",\"handle\":\"c3\",\"nonce\":\"aad66cead9a584ed\",\"ref\":\"mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIqtZs6tmlhO0B\",\"renames\":2,\"resolve\":{\"ok\":false,\"code\":\"INVALID_CONVERSATION_REF\",\"message\":\"c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIfAYW0pjHm4oB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIqtZs6tmlhO0B——用 --to <名> --tool <收件类型> 接续或开新对话\"}}\n",
+          "stderrTail": ""
+        }
+      ],
+      "barrierFlags": [
+        "post2-a",
+        "post2-b",
+        "pre2-a",
+        "pre2-b",
+        "r1-a",
+        "r1-b"
+      ],
+      "shards": [
+        {
+          "shard": "8cd07bfa22815dd88d2894cb83777260daf6b6af920c0da3bfd23d656956a80f.json",
+          "handles": {
+            "c3": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIfAYW0pjHm4oB"
+          }
+        },
+        {
+          "shard": "ebb3ed55dafb8f15206b2fbeee965d788dcbe893e56bf71907df4a0f85dad696.json",
+          "handles": {
+            "c3": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIqtZs6tmlhO0B"
+          }
+        }
+      ],
+      "afterResolve": [],
+      "verdict": {
+        "valid": true,
+        "reproduced": true,
+        "problems": [],
+        "outcomes": [
+          {
+            "id": "a",
+            "handle": "c3",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIfAYW0pjHm4oB",
+            "renames": 2,
+            "verdict": "collision",
+            "shardHits": 2,
+            "distinctRefs": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIfAYW0pjHm4oB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIqtZs6tmlhO0B——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          },
+          {
+            "id": "b",
+            "handle": "c3",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIqtZs6tmlhO0B",
+            "renames": 2,
+            "verdict": "collision",
+            "shardHits": 2,
+            "distinctRefs": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIfAYW0pjHm4oB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIqtZs6tmlhO0B——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          }
+        ],
+        "duplicates": [
+          {
+            "handle": "c3",
+            "shards": [
+              "8cd07bfa22815dd88d2894cb83777260daf6b6af920c0da3bfd23d656956a80f.json",
+              "ebb3ed55dafb8f15206b2fbeee965d788dcbe893e56bf71907df4a0f85dad696.json"
+            ],
+            "refs": [
+              "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIfAYW0pjHm4oB",
+              "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIqtZs6tmlhO0B"
+            ]
+          }
+        ],
+        "barrierTimeouts": []
+      }
+    },
+    {
+      "repeat": 4,
+      "scenario": "concurrent",
+      "tempRoot": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-w03-NKtuzg",
+      "cleaned": true,
+      "problems": [],
+      "workers": [
+        {
+          "id": "a",
+          "exit": 0,
+          "signal": null,
+          "timedOut": false,
+          "result": {
+            "id": "a",
+            "handle": "c3",
+            "nonce": "6703f737c1fc0052",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIZwP3N8H8AFIB",
+            "renames": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIZwP3N8H8AFIB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIeyJuAKpRggUB——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          },
+          "outputTruncated": false,
+          "stdoutTail": "{\"id\":\"a\",\"handle\":\"c3\",\"nonce\":\"6703f737c1fc0052\",\"ref\":\"mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIZwP3N8H8AFIB\",\"renames\":2,\"resolve\":{\"ok\":false,\"code\":\"INVALID_CONVERSATION_REF\",\"message\":\"c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIZwP3N8H8AFIB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIeyJuAKpRggUB——用 --to <名> --tool <收件类型> 接续或开新对话\"}}\n",
+          "stderrTail": ""
+        },
+        {
+          "id": "b",
+          "exit": 0,
+          "signal": null,
+          "timedOut": false,
+          "result": {
+            "id": "b",
+            "handle": "c3",
+            "nonce": "7b226e00aa518205",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIeyJuAKpRggUB",
+            "renames": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIZwP3N8H8AFIB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIeyJuAKpRggUB——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          },
+          "outputTruncated": false,
+          "stdoutTail": "{\"id\":\"b\",\"handle\":\"c3\",\"nonce\":\"7b226e00aa518205\",\"ref\":\"mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIeyJuAKpRggUB\",\"renames\":2,\"resolve\":{\"ok\":false,\"code\":\"INVALID_CONVERSATION_REF\",\"message\":\"c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIZwP3N8H8AFIB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIeyJuAKpRggUB——用 --to <名> --tool <收件类型> 接续或开新对话\"}}\n",
+          "stderrTail": ""
+        }
+      ],
+      "barrierFlags": [
+        "post2-a",
+        "post2-b",
+        "pre2-a",
+        "pre2-b",
+        "r1-a",
+        "r1-b"
+      ],
+      "shards": [
+        {
+          "shard": "8cd07bfa22815dd88d2894cb83777260daf6b6af920c0da3bfd23d656956a80f.json",
+          "handles": {
+            "c3": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIZwP3N8H8AFIB"
+          }
+        },
+        {
+          "shard": "ebb3ed55dafb8f15206b2fbeee965d788dcbe893e56bf71907df4a0f85dad696.json",
+          "handles": {
+            "c3": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIeyJuAKpRggUB"
+          }
+        }
+      ],
+      "afterResolve": [],
+      "verdict": {
+        "valid": true,
+        "reproduced": true,
+        "problems": [],
+        "outcomes": [
+          {
+            "id": "a",
+            "handle": "c3",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIZwP3N8H8AFIB",
+            "renames": 2,
+            "verdict": "collision",
+            "shardHits": 2,
+            "distinctRefs": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIZwP3N8H8AFIB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIeyJuAKpRggUB——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          },
+          {
+            "id": "b",
+            "handle": "c3",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIeyJuAKpRggUB",
+            "renames": 2,
+            "verdict": "collision",
+            "shardHits": 2,
+            "distinctRefs": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIZwP3N8H8AFIB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIeyJuAKpRggUB——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          }
+        ],
+        "duplicates": [
+          {
+            "handle": "c3",
+            "shards": [
+              "8cd07bfa22815dd88d2894cb83777260daf6b6af920c0da3bfd23d656956a80f.json",
+              "ebb3ed55dafb8f15206b2fbeee965d788dcbe893e56bf71907df4a0f85dad696.json"
+            ],
+            "refs": [
+              "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIZwP3N8H8AFIB",
+              "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIeyJuAKpRggUB"
+            ]
+          }
+        ],
+        "barrierTimeouts": []
+      }
+    },
+    {
+      "repeat": 5,
+      "scenario": "concurrent",
+      "tempRoot": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-w03-j5JMBM",
+      "cleaned": true,
+      "problems": [],
+      "workers": [
+        {
+          "id": "a",
+          "exit": 0,
+          "signal": null,
+          "timedOut": false,
+          "result": {
+            "id": "a",
+            "handle": "c3",
+            "nonce": "e363557e7d293d36",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI42NVfn0pPTYB",
+            "renames": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI42NVfn0pPTYB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIKV2uCpwmL2UB——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          },
+          "outputTruncated": false,
+          "stdoutTail": "{\"id\":\"a\",\"handle\":\"c3\",\"nonce\":\"e363557e7d293d36\",\"ref\":\"mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI42NVfn0pPTYB\",\"renames\":2,\"resolve\":{\"ok\":false,\"code\":\"INVALID_CONVERSATION_REF\",\"message\":\"c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI42NVfn0pPTYB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIKV2uCpwmL2UB——用 --to <名> --tool <收件类型> 接续或开新对话\"}}\n",
+          "stderrTail": ""
+        },
+        {
+          "id": "b",
+          "exit": 0,
+          "signal": null,
+          "timedOut": false,
+          "result": {
+            "id": "b",
+            "handle": "c3",
+            "nonce": "295dae0a9c262f65",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIKV2uCpwmL2UB",
+            "renames": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI42NVfn0pPTYB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIKV2uCpwmL2UB——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          },
+          "outputTruncated": false,
+          "stdoutTail": "{\"id\":\"b\",\"handle\":\"c3\",\"nonce\":\"295dae0a9c262f65\",\"ref\":\"mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIKV2uCpwmL2UB\",\"renames\":2,\"resolve\":{\"ok\":false,\"code\":\"INVALID_CONVERSATION_REF\",\"message\":\"c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI42NVfn0pPTYB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIKV2uCpwmL2UB——用 --to <名> --tool <收件类型> 接续或开新对话\"}}\n",
+          "stderrTail": ""
+        }
+      ],
+      "barrierFlags": [
+        "post2-a",
+        "post2-b",
+        "pre2-a",
+        "pre2-b",
+        "r1-a",
+        "r1-b"
+      ],
+      "shards": [
+        {
+          "shard": "8cd07bfa22815dd88d2894cb83777260daf6b6af920c0da3bfd23d656956a80f.json",
+          "handles": {
+            "c3": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI42NVfn0pPTYB"
+          }
+        },
+        {
+          "shard": "ebb3ed55dafb8f15206b2fbeee965d788dcbe893e56bf71907df4a0f85dad696.json",
+          "handles": {
+            "c3": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIKV2uCpwmL2UB"
+          }
+        }
+      ],
+      "afterResolve": [],
+      "verdict": {
+        "valid": true,
+        "reproduced": true,
+        "problems": [],
+        "outcomes": [
+          {
+            "id": "a",
+            "handle": "c3",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI42NVfn0pPTYB",
+            "renames": 2,
+            "verdict": "collision",
+            "shardHits": 2,
+            "distinctRefs": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI42NVfn0pPTYB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIKV2uCpwmL2UB——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          },
+          {
+            "id": "b",
+            "handle": "c3",
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIKV2uCpwmL2UB",
+            "renames": 2,
+            "verdict": "collision",
+            "shardHits": 2,
+            "distinctRefs": 2,
+            "resolve": {
+              "ok": false,
+              "code": "INVALID_CONVERSATION_REF",
+              "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI42NVfn0pPTYB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIKV2uCpwmL2UB——用 --to <名> --tool <收件类型> 接续或开新对话"
+            }
+          }
+        ],
+        "duplicates": [
+          {
+            "handle": "c3",
+            "shards": [
+              "8cd07bfa22815dd88d2894cb83777260daf6b6af920c0da3bfd23d656956a80f.json",
+              "ebb3ed55dafb8f15206b2fbeee965d788dcbe893e56bf71907df4a0f85dad696.json"
+            ],
+            "refs": [
+              "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI42NVfn0pPTYB",
+              "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIKV2uCpwmL2UB"
+            ]
+          }
+        ],
+        "barrierTimeouts": []
+      }
+    }
+  ],
+  "controlEmpty": {
+    "scenario": "control-empty",
+    "tempRoot": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-w03-8bO6ii",
+    "cleaned": true,
+    "problems": [],
+    "workers": [
+      {
+        "id": "solo",
+        "exit": 0,
+        "signal": null,
+        "timedOut": false,
+        "result": {
+          "id": "solo",
+          "handle": "c1",
+          "nonce": "b9bce17fe813c5e5",
+          "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIubzhf-gTxeUB",
+          "renames": 0,
+          "resolve": {
+            "ok": true,
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIubzhf-gTxeUB"
+          }
+        },
+        "outputTruncated": false,
+        "stdoutTail": "{\"id\":\"solo\",\"handle\":\"c1\",\"nonce\":\"b9bce17fe813c5e5\",\"ref\":\"mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIubzhf-gTxeUB\",\"renames\":0,\"resolve\":{\"ok\":true,\"ref\":\"mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIubzhf-gTxeUB\"}}\n",
+        "stderrTail": ""
+      }
+    ],
+    "barrierFlags": [],
+    "shards": [
+      {
+        "shard": "8cd07bfa22815dd88d2894cb83777260daf6b6af920c0da3bfd23d656956a80f.json",
+        "handles": {
+          "c1": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIubzhf-gTxeUB"
+        }
+      }
+    ],
+    "afterResolve": [],
+    "verdict": {
+      "valid": true,
+      "reproduced": false,
+      "problems": [],
+      "outcomes": [
+        {
+          "id": "solo",
+          "handle": "c1",
+          "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIubzhf-gTxeUB",
+          "renames": 0,
+          "verdict": "own",
+          "shardHits": 1,
+          "distinctRefs": 1,
+          "resolve": {
+            "ok": true,
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIubzhf-gTxeUB"
+          }
+        }
+      ],
+      "duplicates": [],
+      "barrierTimeouts": []
+    }
+  },
+  "controlExisting": {
+    "scenario": "control-existing",
+    "tempRoot": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-w03-9EzSC7",
+    "cleaned": true,
+    "problems": [],
+    "workers": [
+      {
+        "id": "s1",
+        "exit": 0,
+        "signal": null,
+        "timedOut": false,
+        "result": {
+          "id": "s1",
+          "handle": "c1",
+          "nonce": "a9874ff41d2a3530",
+          "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIqYdP9B0qNTAB",
+          "renames": 0,
+          "resolve": {
+            "ok": true,
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIqYdP9B0qNTAB"
+          }
+        },
+        "outputTruncated": false,
+        "stdoutTail": "{\"id\":\"s1\",\"handle\":\"c1\",\"nonce\":\"a9874ff41d2a3530\",\"ref\":\"mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIqYdP9B0qNTAB\",\"renames\":0,\"resolve\":{\"ok\":true,\"ref\":\"mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIqYdP9B0qNTAB\"}}\n",
+        "stderrTail": ""
+      },
+      {
+        "id": "s2",
+        "exit": 0,
+        "signal": null,
+        "timedOut": false,
+        "result": {
+          "id": "s2",
+          "handle": "c3",
+          "nonce": "f39052639b49fef0",
+          "ref": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII85BSY5tJ_vAB",
+          "renames": 0,
+          "resolve": {
+            "ok": true,
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII85BSY5tJ_vAB"
+          }
+        },
+        "outputTruncated": false,
+        "stdoutTail": "{\"id\":\"s2\",\"handle\":\"c3\",\"nonce\":\"f39052639b49fef0\",\"ref\":\"mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII85BSY5tJ_vAB\",\"renames\":0,\"resolve\":{\"ok\":true,\"ref\":\"mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII85BSY5tJ_vAB\"}}\n",
+        "stderrTail": ""
+      }
+    ],
+    "barrierFlags": [],
+    "shards": [
+      {
+        "shard": "8cd07bfa22815dd88d2894cb83777260daf6b6af920c0da3bfd23d656956a80f.json",
+        "handles": {
+          "c1": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIqYdP9B0qNTAB"
+        }
+      },
+      {
+        "shard": "ebb3ed55dafb8f15206b2fbeee965d788dcbe893e56bf71907df4a0f85dad696.json",
+        "handles": {
+          "c3": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII85BSY5tJ_vAB"
+        }
+      }
+    ],
+    "afterResolve": [
+      {
+        "handle": "c1",
+        "expectedRef": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIqYdP9B0qNTAB",
+        "ok": true,
+        "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIqYdP9B0qNTAB"
+      },
+      {
+        "handle": "c3",
+        "expectedRef": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII85BSY5tJ_vAB",
+        "ok": true,
+        "ref": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII85BSY5tJ_vAB"
+      }
+    ],
+    "verdict": {
+      "valid": true,
+      "reproduced": false,
+      "problems": [],
+      "outcomes": [
+        {
+          "id": "s1",
+          "handle": "c1",
+          "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIqYdP9B0qNTAB",
+          "renames": 0,
+          "verdict": "own",
+          "shardHits": 1,
+          "distinctRefs": 1,
+          "resolve": {
+            "ok": true,
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIqYdP9B0qNTAB"
+          }
+        },
+        {
+          "id": "s2",
+          "handle": "c3",
+          "ref": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII85BSY5tJ_vAB",
+          "renames": 0,
+          "verdict": "own",
+          "shardHits": 1,
+          "distinctRefs": 1,
+          "resolve": {
+            "ok": true,
+            "ref": "mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII85BSY5tJ_vAB"
+          }
+        }
+      ],
+      "duplicates": [],
+      "barrierTimeouts": []
+    }
+  },
+  "summary": {
+    "validRuns": 7,
+    "reproducedRuns": 5,
+    "collisions": 10,
+    "mismatches": 0,
+    "malfunctions": 0
+  }
+}
