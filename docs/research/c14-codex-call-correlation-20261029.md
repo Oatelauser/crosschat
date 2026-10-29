@@ -36,10 +36,12 @@
 |---|---|---|---|
 | Hook `tool_use_id` 摘要 | `86694b834b22` | `efd6100a41ec` | **逐调用变化** |
 | shell `CODEX_TOOL_CALL_ID` 摘要 | `86694b834b22` | `efd6100a41ec` | 与 Hook **完整值相等** |
-| Hook `session_id` / shell `CODEX_THREAD_ID` | 相同（`2586146cfbb5`） | 相同（`2586146cfbb5`） | **同运行内稳定** |
+| Hook `session_id` / shell `CODEX_THREAD_ID` | 相同（`8d464f7f8d01`） | 相同（`8d464f7f8d01`） | **同运行内稳定** |
 | shell `CODEX_SESSION_ID` | 与 thread 相同 | 与 thread 相同 | root thread 下两者一致 |
-| Hook `turn_id` 摘要 | `1c8981e41a12` | `1c8981e41a12` | 同 turn 内稳定 |
+| Hook `turn_id` 摘要 | `71f6c0145c4c` | `71f6c0145c4c` | 同 turn 内稳定 |
 | 共享执行实例 | `codex.exe` pid 2380 | 同一 pid + 同一创建时间 | **同一实例** |
+
+上表 thread/turn 摘要取自保存的第二次运行文件。首次运行是另一次原生启动，thread/turn 是另一组值（当时只在终端打印，未落盘），因此**不能**把首次运行的值填进这张表；见 §五 的元数据更正。
 
 进程链（脱敏，两链在 `codex.exe` 相交）：
 
@@ -48,7 +50,7 @@ shell: node.exe ← powershell.exe ← codex.exe(2380) ← node.exe(启动器)
 hook : node.exe ← powershell.exe ← codex.exe(2380) ← node.exe(启动器)
 ```
 
-两次运行（`run1`、`run2`）结论一致：两次调用都 `correlated`，即 `toolCallIdEqual` 与 `threadIdEqual` 同时为真。
+worker 当时做了两次原生运行，两次结论一致（两次调用都 `correlated`）。但**只有第二次运行的结构化证据被保存**；首次运行没有落盘记录，root 审计也无法从文件复核它，所以本报告只把第二次运行当作可复核证据，不把"两次运行"写成已保存的两份样本。
 
 **对账方式**：模型给出两次带唯一标记的 `exec_command`；Hook 记录把标记原样带进 `tool_input.command`；shell 侧把同一标记作为参数写出。核对时**先按标记把 Hook 记录与 shell 记录一一绑定**（缺记录→`hook-missing`，重复记录→`ambiguous`，均不通过），再在内存里逐字比较完整 `tool_use_id` 与完整 `CODEX_TOOL_CALL_ID`。落盘证据只有散列、长度与相等布尔值。
 
@@ -62,18 +64,38 @@ hook : node.exe ← powershell.exe ← codex.exe(2380) ← node.exe(启动器)
 
 1. **call id 由 fixture 模型给出**。有意义的不是值，而是同一个值从模型 → 运行时 → Hook 输入 → shell 环境原样贯通。
 2. **环境变量不是防伪造证据**。`CODEX_TOOL_CALL_ID` 由运行时在 spawn 时写入，任何进程都可以自行覆盖同名变量。所以本单证明的是"原生运行时在 Hook 与 shell 两侧给出同一个调用标识"，不是"这个 shell 可信"。要防伪造仍需进程/连接侧的独立锚点。
-3. **本单只走 `exec_command` 一条路径**。模型本次只被提供 `exec_command`，非统一 exec 的普通 `shell` 工具路径、`write_stdin` 复用、子 agent、fork/resume 均未测。
+3. **本单只走 `exec_command` 一条路径**。模型本次被提供 9 个工具（见 §三 首段），但只**实际调用**了 `exec_command`；非统一 exec 的普通 `shell` 工具路径、`write_stdin` 复用、子 agent、fork/resume 均未测。
 
 未测清单：Desktop Hook；共享 daemon；CLI/Desktop 同 thread 双开；IPC owner 对账；`write_stdin`；第二 thread；子 agent；Linux/macOS；长驻进程内的 call id 是否被复用。
 
 ## 五、工装与 RED/GREEN
 
-- `scripts/codex-call-correlation-probe.mjs`：只读研究探针，不接产品路径。纯函数负责解析 Hook JSONL、解析 shell 样本、按标记绑定并逐字比对、取两条进程链的最近共同祖先（必须 pid **且** 创建时间相同）；运行器负责独占 profile、loopback 模型、启动 CLI、超时收束、关闭服务。
-- `test/helpers/codex-call-correlation-hook.mjs`：最小 `PreToolUse` Hook + shell 采样器；Hook 失败时记 stderr 并退出 0，不阻断工具调用。
-- `test/helpers/codex-call-correlation-fixture.mjs`：合成记录，测试不启子进程、不读宿主进程表。
-- `test/codex-call-correlation-probe.test.ts`：13 项，全部使用受控输入。
+- `scripts/codex-call-correlation-probe.mjs`：只读研究探针，不接产品路径。
+  - 绑定：按本次**明确计划**逐项核对；tag 必须作为完整词元精确匹配（`call_w05_1` 不匹配 `call_w05_10`），每条 Hook/shell 记录**最多消费一次**；缺失、重复、重叠、计划外记录都记入 `problems`，运行判为不完整。
+  - 实例对账：两侧各自取**最近**的 Codex 执行进程，要求 pid、创建时间、可执行路径摘要三者相符才报 `same`；只共享启动器时报 `different`（启动器单列为共同祖先）；证据不足报 `unverified`。malformed 行按类型丢弃，不做强转。
+  - 采证完整性：每个计划内文件单独读取，区分"不可读 / 截断 / 完整"；Hook 拒绝行、shell 拒绝行、模型请求超限都进入整体状态。**完整采证下的不相等仍是有效结论**（`status: complete`、`outcome: mismatch`），只有证据不全或工装故障才退出 3。
+  - 生命周期：自有子进程超时按 pid 树收束并等 `close`；spawn error、输出字节上限、`taskkill` 失败都记录；loopback 服务处理 listen 失败、请求体超限、请求次数超限，关闭有截止。
+  - 目录：运行根先排他创建/认领并写 ownership，已有非空目录原样拒绝；证据文件用 `wx` 写，已存在即拒绝。
+- `test/helpers/codex-call-correlation-hook.mjs`：最小 `PreToolUse` Hook + shell 采样器。只投影允许字段（session/turn/tool_use_id/tool_name/command），不落 `transcript_path`、`cwd`、`model`、`permission_mode`；stdin 有截止和字节上限；Hook 失败时记 stderr 并退出 0，不阻断工具调用。
+- `test/helpers/codex-call-correlation-fixture.mjs`：合成记录，测试不读宿主进程表。
+- `test/codex-call-correlation-probe.test.ts`：38 项。纯函数用合成记录；生命周期用**自有受控子进程**（正常退出、非零、超时且带孙进程、输出上限、spawn error）；服务用本机 loopback（端口占用、请求超限、请求体超限、关闭）；入口链路用注入的假 CLI 走完整 `runCorrelation`，不启原生 Codex。
 
-RED/GREEN：先跑绿（13/13），再把两处守卫临时去掉——`toolCallIdEqual && threadIdEqual` 的判定，以及"无 Hook 记录即 `hook-missing`"的分支——重跑得到 **2 failed / 11 passed**，恰好是"错误 ID 不被接受""缺 Hook 不被接受"两项失败；恢复后重新 13/13 通过。错误 ID、缺失记录、重复记录、无对应 shell 均不会被当成关联成功。
+RED/GREEN（三处守卫逐个改回缺陷形态，跑同一份测试）：
+
+| 轮次 | 临时改回的缺陷 | 结果 | 命中的用例 |
+|---|---|---|---|
+| A | tag 用子串匹配 | 1 failed / 37 passed | tag 精确匹配 |
+| B | 共享祖先即判同一执行实例 | 4 failed / 34 passed | 共享启动器、最近执行体缺失、malformed 不强转、路径摘要缺失 |
+| C | 读取失败当空文件 + 结论性不参与整体状态 | 4 failed / 34 passed | 缺第二份 shell、缺 Hook、读取三态、**假 CLI 只产出 1/2 的完整链路** |
+
+恢复后 38/38 通过。C 轮正是 root 复现的反例：旧实现会以退出 0 报告"一个 correlated"，现在必须报不完整。
+
+**元数据更正**（原文件字节保持不变）：
+
+- 保存的 `correlation-20261029.json` 的 `collection.note` 写成"call ids and thread ids were chosen by the loopback fixture model"。事实是**只有 call id 由模型给出**；thread/turn/session 由 Codex 运行时分配，脚本从未让模型指定它们。该字段在旧版证据里，按 R1 约束不修改原文件，以本说明为准。
+- 同一字段的 `runs: 2` 表示 worker 当时运行了两次，不表示保存了两份样本。
+- §三 的 thread/turn 摘要已按保存文件核对为 `8d464f7f8d01` / `71f6c0145c4c`；此前版本误填了首次运行（未保存）的值。
+- offered/used tools：9 个工具是**提供**，`exec_command` 是**实际调用**。
 
 ## 六、仍未闭合的环节
 
@@ -103,11 +125,29 @@ node scripts/codex-call-correlation-probe.mjs --root D:/cc-own-c14w05-runN --evi
 npx vitest run test/codex-call-correlation-probe.test.ts
 ```
 
-退出码：`0` 表示跑出对账结论（相等或不相等都算），`3` 表示工装故障（未产生结论）。**工装故障不得写成"原生不支持"。**
+退出码：`0` 只表示**采证完整**并跑出对账结论（相等或不相等都算）；`3` 表示证据不全（缺记录、重复、读取失败、截断、超限）或工装故障。**工装故障与不完整采证都不得写成"原生不支持"。**
 
 ## 九、清理与归属
 
-- 本单新增：本报告、`evidence/c14-codex-call-20261029/correlation-20261029.json`、探针脚本、Hook helper、fixture、测试各一份。
+- 本单新增：本报告、`evidence/c14-codex-call-20261029/correlation-20261029.json`、探针脚本、Hook helper、fixture、测试各一份；R1 新增 `evidence/c14-codex-call-20261029/correlation-20261029-r1.json`（见 §十）。原两份证据文件字节未改。
 - 未改 `src/**`、已验收的 W01 研究与 root 记录、skill/总表、用户配置；未安装/卸载/启停用户软件；未连生产远端；未读取用户 auth/config/会话。
-- 临时根 `D:/cc-own-c14w05-a1`、`D:/cc-own-c14w05-run1`、`D:/cc-own-c14w05-run2` 均为本单自有，结束前已停止自有进程并核对绝对路径与归属后删除；其他既有目录（如 `D:/cc-own-cztKHB`）未触碰。
+- 临时根 `D:/cc-own-c14w05-a1`、`D:/cc-own-c14w05-run1`、`D:/cc-own-c14w05-run2`、`D:/cc-own-c14w05-r1` 均为本单自有，结束前已停止自有进程并核对绝对路径与归属后删除；其他既有目录（如 `D:/cc-own-cztKHB`）未触碰。
 - 原未跟踪 `docs/代码消息投递.md` 保持原样，未 stage。
+
+## 十、R1 返修与原生复跑
+
+首轮审计（`docs/development/evidence/c14-worker-20261029/W05-review.md`）指出五项 Spec 与三项 Standards 缺口，均属研究工装，不否定 §三 的局部原生观察。R1 的修法与验证见 §五。
+
+修完后用同一台机器、同一已安装 CLI（`0.163.0`）、同一隔离方式复跑一次原生实验，新证据单独落盘为 `evidence/c14-codex-call-20261029/correlation-20261029-r1.json`（SHA256 `868c8a507acceab694c5f116fbbe3254cf15e2677d98468b1e6f50c5b6967779`），**不覆盖**首轮两份文件：
+
+| 项 | 复跑结果 |
+|---|---|
+| 整体状态 | `complete`，`outcome: correlated`，无 reasons，退出 0 |
+| 计划 / 实采 | 计划 2 次，shell 2 份、Hook 2 条，拒绝行 0，读取全部 `ok` 且未截断 |
+| 调用 ID | 两次都完整值相等（`toolCallIdEqual`、`threadIdEqual`、`sessionIdEqual` 均真） |
+| 执行实例 | 两侧最近 Codex 进程一致：`codex.exe` pid 17712 + 创建时间 + 路径摘要，`executorVerdict: same` |
+| 共同祖先 | 同为该 `codex.exe`；更外层的 `node.exe` 启动器单列为祖先，未当作执行实例 |
+| 模型请求 | 3 次；提供 9 个工具，实际调用只有 `exec_command` |
+| 收束 | 进程正常退出，未触发超时/树杀；服务关闭有界；运行根按 ownership 删除 |
+
+这仍只是**本机 CLI 0.163.0 非交互 exec 的局部观察**，不扩到 Desktop、共享 daemon、IPC owner、双开或 `write_stdin`。

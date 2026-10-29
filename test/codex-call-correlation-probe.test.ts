@@ -1,25 +1,59 @@
-import { describe, expect, it } from 'vitest';
+import { createServer } from 'node:http';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   CORRELATION_LIMITS,
   buildPlan,
+  commandHasTag,
   correlateCalls,
   isolatedEnv,
+  killOwnedTree,
+  main,
+  normalizeAncestry,
   parseHookLog,
   parseShellSamples,
+  prepareOwnedRoot,
+  readBounded,
   redact,
-  sharedExecutor,
+  removeOwnedRoot,
+  runCorrelation,
+  runProcess,
+  sameExecutor,
+  sharedAncestor,
+  startMockModel,
 } from '../scripts/codex-call-correlation-probe.mjs';
-import { ancestry, EXECUTOR, hookLine, shellRecord } from './helpers/codex-call-correlation-fixture.mjs';
+import { projectHookEvent } from './helpers/codex-call-correlation-hook.mjs';
+import { ancestry, EXECUTOR, hookLine, LAUNCHER, shellRecord } from './helpers/codex-call-correlation-fixture.mjs';
 
 const hookLog = (...lines) => lines.join('\n');
 const shellLog = (...lines) => lines.join('\n');
+const TAGS = ['call_w05_1', 'call_w05_2'];
 
-const correlate = (hooks, shells) => correlateCalls({
+const correlate = (hooks, shells, plannedTags = TAGS) => correlateCalls({
   hookRecords: parseHookLog(hookLog(...hooks)).records,
-  shellRecords: parseShellSamples(shellLog(...shells)),
+  shellRecords: parseShellSamples(shellLog(...shells)).records,
+  plannedTags,
 });
 
-describe('codex call correlation probe', () => {
+const bothCalls = () => ({
+  hooks: [hookLine({ tag: TAGS[0], toolUseId: TAGS[0] }), hookLine({ tag: TAGS[1], toolUseId: TAGS[1] })],
+  shells: [shellRecord({ tag: TAGS[0], toolCallId: TAGS[0] }), shellRecord({ tag: TAGS[1], toolCallId: TAGS[1] })],
+});
+
+const temporary = [];
+const tempDir = async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'c14w05-test-'));
+  temporary.push(dir);
+  return dir;
+};
+
+afterEach(async () => {
+  while (temporary.length > 0) await rm(temporary.pop(), { recursive: true, force: true });
+});
+
+describe('codex call correlation probe: records', () => {
   it('redacts identifiers and marks an absent one instead of hashing an empty string', () => {
     expect(redact('call_w05_1')).toEqual({ present: true, length: 10, sha256: expect.stringMatching(/^[0-9a-f]{12}$/) });
     expect(redact('')).toEqual({ present: false });
@@ -33,10 +67,11 @@ describe('codex call correlation probe', () => {
       JSON.stringify({ event: { hook_event_name: 'PostToolUse', session_id: 's', tool_use_id: 'c', tool_name: 'Bash', tool_input: { command: 'x' } } }),
       JSON.stringify({ event: { hook_event_name: 'PreToolUse', session_id: 's', tool_name: 'Bash', tool_input: { command: 'x' } } }),
       JSON.stringify({ event: { hook_event_name: 'PreToolUse', session_id: 's', tool_use_id: 'c', tool_name: 'Bash', tool_input: {} } }),
+      JSON.stringify({ error: 'deadline', event: null }),
     ));
     expect(parsed.records).toHaveLength(1);
     expect(parsed.records[0]).toMatchObject({ toolUseId: 'call_w05_1', toolName: 'Bash', turnId: 'turn-abc' });
-    expect(parsed.rejected).toEqual(['unparseable', 'not-pre-tool-use', 'incomplete', 'missing-command']);
+    expect(parsed.rejected).toEqual(['unparseable', 'not-pre-tool-use', 'incomplete', 'missing-command', 'hook-error']);
   });
 
   it('stops reading hook records at the configured limit', () => {
@@ -46,76 +81,357 @@ describe('codex call correlation probe', () => {
     expect(parsed.rejected).toEqual(['record-limit']);
   });
 
-  it('drops shell samples that cannot be bound to a tag', () => {
+  it('reports shell samples that cannot be bound to a tag instead of dropping them silently', () => {
     const parsed = parseShellSamples(shellLog(
       shellRecord({ tag: 'call-1', toolCallId: 'call_w05_1' }),
       JSON.stringify({ threadId: 'no-tag' }),
       '{"broken":',
     ));
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0]).toMatchObject({ tag: 'call-1', toolCallId: 'call_w05_1', codexVersion: '0.163.0' });
+    expect(parsed.records).toHaveLength(1);
+    expect(parsed.records[0]).toMatchObject({ tag: 'call-1', toolCallId: 'call_w05_1', codexVersion: '0.163.0' });
+    expect(parsed.rejected).toEqual(['missing-tag', 'unparseable']);
   });
 
-  it('correlates a hook record with the shell of the same call', () => {
-    const result = correlate(
-      [hookLine({ tag: 'call-1', toolUseId: 'call_w05_1' })],
-      [shellRecord({ tag: 'call-1', toolCallId: 'call_w05_1' })],
-    );
-    expect(result.calls[0]).toMatchObject({ verdict: 'correlated', toolCallIdEqual: true, threadIdEqual: true, sessionIdEqual: true, sameExecutorInstance: true });
+  it('projects the hook event down to the fields the probe may keep', () => {
+    const projected = projectHookEvent({
+      hook_event_name: 'PreToolUse', session_id: 's', turn_id: 't', tool_use_id: 'c', tool_name: 'Bash',
+      tool_input: { command: 'node x "tag"', other: 'dropped' },
+      transcript_path: 'D:/secret/rollout.jsonl', cwd: 'D:/secret', model: 'm', permission_mode: 'bypassPermissions',
+    });
+    expect(projected).toEqual({
+      hook_event_name: 'PreToolUse', session_id: 's', turn_id: 't', tool_use_id: 'c', tool_name: 'Bash',
+      tool_input: { command: 'node x "tag"' },
+    });
+    expect(JSON.stringify(projected)).not.toContain('secret');
+  });
+});
+
+describe('codex call correlation probe: binding', () => {
+  it('correlates two planned calls that each have one hook and one shell', () => {
+    const { hooks, shells } = bothCalls();
+    const result = correlate(hooks, shells);
+    expect(result.status).toBe('complete');
+    expect(result.problems).toEqual([]);
+    expect(result.calls.map((call) => call.verdict)).toEqual(['correlated', 'correlated']);
+    expect(result.calls[0]).toMatchObject({ toolCallIdEqual: true, threadIdEqual: true, sessionIdEqual: true, sameExecutorInstance: true });
     expect(result.orphanHooks).toEqual([]);
+    expect(result.unusedShells).toEqual([]);
   });
 
-  it('does not accept a hook whose tool_use_id differs from the shell call id', () => {
-    const result = correlate(
-      [hookLine({ tag: 'call-1', toolUseId: 'call_other' })],
-      [shellRecord({ tag: 'call-1', toolCallId: 'call_w05_1' })],
-    );
-    expect(result.calls[0]).toMatchObject({ verdict: 'mismatch', toolCallIdEqual: false });
+  it('keeps a complete but unequal run as a valid result, not a tooling failure', () => {
+    const { hooks, shells } = bothCalls();
+    const result = correlate([hooks[0], hookLine({ tag: TAGS[1], toolUseId: 'call_other' })], shells);
+    expect(result.status).toBe('complete');
+    expect(result.calls.map((call) => call.verdict)).toEqual(['correlated', 'mismatch']);
+  });
+
+  it('refuses a plan when one planned call never produced a shell sample', () => {
+    const { hooks, shells } = bothCalls();
+    const result = correlate(hooks, [shells[0]]);
+    expect(result.status).toBe('incomplete');
+    expect(result.calls.map((call) => call.verdict)).toEqual(['correlated', 'shell-missing']);
   });
 
   it('does not accept a call whose hook record never arrived', () => {
-    const result = correlate(
-      [hookLine({ tag: 'call-1', toolUseId: 'call_w05_1' })],
-      [shellRecord({ tag: 'call-1', toolCallId: 'call_w05_1' }), shellRecord({ tag: 'call-2', toolCallId: 'call_w05_2' })],
-    );
+    const { hooks, shells } = bothCalls();
+    const result = correlate([hooks[0]], shells);
+    expect(result.status).toBe('incomplete');
     expect(result.calls.map((call) => call.verdict)).toEqual(['correlated', 'hook-missing']);
     expect(result.calls[1].hook).toBeNull();
   });
 
   it('refuses to pick between duplicate hook records for one call', () => {
-    const result = correlate(
-      [hookLine({ tag: 'call-1', toolUseId: 'call_w05_1' }), hookLine({ tag: 'call-1', toolUseId: 'call_w05_1', pid: 999 })],
-      [shellRecord({ tag: 'call-1', toolCallId: 'call_w05_1' })],
-    );
+    const { hooks, shells } = bothCalls();
+    const result = correlate([hooks[0], hookLine({ tag: TAGS[0], toolUseId: TAGS[0], pid: 999 }), hooks[1]], shells);
+    expect(result.status).toBe('incomplete');
     expect(result.calls[0]).toMatchObject({ verdict: 'ambiguous', hook: null, candidates: 2 });
+    expect(result.problems).toContain(`duplicate-hook:${redact(TAGS[0]).sha256}:2`);
   });
 
-  it('reports a hook that has no matching shell sample', () => {
-    const result = correlate([hookLine({ tag: 'call-9', toolUseId: 'call_w05_9' })], []);
-    expect(result.calls).toEqual([]);
-    expect(result.orphanHooks).toEqual([{ commandDigest: expect.stringMatching(/^[0-9a-f]{12}$/), toolUseId: expect.objectContaining({ present: true }), verdict: 'shell-missing' }]);
+  it('never lets one hook record prove two shell samples of the same tag', () => {
+    const result = correlate(
+      [hookLine({ tag: TAGS[0], toolUseId: TAGS[0] })],
+      [shellRecord({ tag: TAGS[0], toolCallId: TAGS[0] }), shellRecord({ tag: TAGS[0], toolCallId: TAGS[0], pid: 41041 })],
+      [TAGS[0]],
+    );
+    expect(result.status).toBe('incomplete');
+    expect(result.calls.map((call) => call.verdict)).toEqual(['ambiguous-shell']);
+    expect(result.calls.some((call) => call.verdict === 'correlated')).toBe(false);
+    expect(result.problems).toContain(`duplicate-shell:${redact(TAGS[0]).sha256}:2`);
+    expect(result.orphanHooks).toHaveLength(1);
+  });
+
+  it('matches tags exactly, so a longer tag never binds to a shorter one', () => {
+    expect(commandHasTag('node x.mjs "call_w05_10"', 'call_w05_1')).toBe(false);
+    expect(commandHasTag('node x.mjs "call_w05_1"', 'call_w05_1')).toBe(true);
+    const result = correlate([hookLine({ tag: 'call_w05_10', toolUseId: 'call_w05_1' })], [shellRecord({ tag: 'call_w05_1', toolCallId: 'call_w05_1' })], ['call_w05_1']);
+    expect(result.calls[0].verdict).toBe('hook-missing');
+  });
+
+  it('rejects a hook command that carries two planned tags', () => {
+    const command = `node x.mjs "${TAGS[0]}" "${TAGS[1]}"`;
+    const result = correlate(
+      [hookLine({ tag: TAGS[0], toolUseId: TAGS[0], command })],
+      [shellRecord({ tag: TAGS[0], toolCallId: TAGS[0] }), shellRecord({ tag: TAGS[1], toolCallId: TAGS[1] })],
+    );
+    expect(result.status).toBe('incomplete');
+    expect(result.problems).toEqual([`overlapping-hook:${redact(command).sha256}`]);
+  });
+
+  it('rejects records outside the plan', () => {
+    const { hooks, shells } = bothCalls();
+    const result = correlate(
+      [...hooks, hookLine({ tag: 'call_w05_9', toolUseId: 'call_w05_9' })],
+      [...shells, shellRecord({ tag: 'call_w05_9', toolCallId: 'call_w05_9' })],
+    );
+    expect(result.status).toBe('incomplete');
+    expect(result.problems).toContain(`unplanned-hook:${redact('node shell-sample.mjs out.jsonl "call_w05_9"').sha256}`);
+    expect(result.problems).toContain(`unplanned-shell:${redact('call_w05_9').sha256}`);
+  });
+
+  it('requires an explicit plan', () => {
+    expect(() => correlateCalls({ hookRecords: [], shellRecords: [] })).toThrow(/planned call tags/);
   });
 
   it('never writes a full native identifier into the evidence shape', () => {
-    const result = correlate(
-      [hookLine({ tag: 'call-1', toolUseId: 'call_w05_1' })],
-      [shellRecord({ tag: 'call-1', toolCallId: 'call_w05_1' })],
-    );
-    const serialized = JSON.stringify(result);
-    expect(serialized).not.toContain('call_w05_1');
+    const { hooks, shells } = bothCalls();
+    const serialized = JSON.stringify(correlate(hooks, shells));
+    expect(serialized).not.toContain(TAGS[0]);
     expect(serialized).not.toContain('thread-abc');
     expect(serialized).not.toContain('turn-abc');
   });
+});
 
-  it('anchors two records only on a shared pid and creation time', () => {
-    expect(sharedExecutor(ancestry(13480), ancestry(41040))).toEqual({ pid: EXECUTOR.pid, name: EXECUTOR.name, createdAt: EXECUTOR.createdAt, exeDigest: EXECUTOR.exeDigest });
-    // Same pid, later creation time: a reused pid is a different process.
-    // (FILETIME is read as a double, so the offset has to exceed its precision.)
-    expect(sharedExecutor([{ ...EXECUTOR }], [{ ...EXECUTOR, createdAt: EXECUTOR.createdAt + 1024 }])).toBeNull();
-    expect(sharedExecutor([{ ...EXECUTOR, createdAt: 0 }], [{ ...EXECUTOR, createdAt: 0 }])).toBeNull();
-    expect(sharedExecutor(ancestry(13480), [{ pid: 999, createdAt: 1, name: 'other.exe', exeDigest: '' }])).toBeNull();
+describe('codex call correlation probe: executor instance', () => {
+  it('reports the same executor when both chains reach the same Codex process', () => {
+    expect(sameExecutor(ancestry(13480), ancestry(41040))).toMatchObject({ verdict: 'same', reason: null });
+    expect(sharedAncestor(ancestry(13480), ancestry(41040))).toEqual({ pid: EXECUTOR.pid, name: EXECUTOR.name, createdAt: EXECUTOR.createdAt, exeDigest: EXECUTOR.exeDigest });
   });
 
+  it('does not call a shared launcher the same executing instance', () => {
+    // Two chains through *different* codex.exe processes that only meet at node.exe.
+    const other = { ...EXECUTOR, pid: 50120, createdAt: EXECUTOR.createdAt + 4096 };
+    const result = correlate(
+      [hookLine({ tag: TAGS[0], toolUseId: TAGS[0] })],
+      [shellRecord({ tag: TAGS[0], toolCallId: TAGS[0], chain: ancestry(41040, { executor: other }) })],
+      [TAGS[0]],
+    );
+    expect(result.calls[0]).toMatchObject({ verdict: 'correlated', executorVerdict: 'different', sameExecutorInstance: false });
+    expect(result.calls[0].sharedAncestor).toEqual({ pid: LAUNCHER.pid, name: LAUNCHER.name, createdAt: LAUNCHER.createdAt, exeDigest: LAUNCHER.exeDigest });
+  });
+
+  it('leaves the instance unverified when a nearer Codex process cannot be identified', () => {
+    const shellChain = ancestry(41040).filter((row) => row.name !== EXECUTOR.name);
+    const result = correlate(
+      [hookLine({ tag: TAGS[0], toolUseId: TAGS[0] })],
+      [shellRecord({ tag: TAGS[0], toolCallId: TAGS[0], chain: shellChain })],
+      [TAGS[0]],
+    );
+    expect(result.calls[0]).toMatchObject({ verdict: 'correlated', executorVerdict: 'unverified', sameExecutorInstance: false });
+  });
+
+  it('does not coerce a malformed ancestry row into a valid identity', () => {
+    const chain = [{ ...EXECUTOR, pid: '34784' }, { ...LAUNCHER }];
+    expect(normalizeAncestry(chain)).toEqual({ rows: [], malformed: 1 });
+    const result = correlate(
+      [hookLine({ tag: TAGS[0], toolUseId: TAGS[0], chain })],
+      [shellRecord({ tag: TAGS[0], toolCallId: TAGS[0] })],
+      [TAGS[0]],
+    );
+    expect(result.calls[0]).toMatchObject({ executorVerdict: 'unverified', sameExecutorInstance: false });
+    expect(result.calls[0].hook.malformedAncestryRows).toBe(1);
+  });
+
+  it('leaves the instance unverified when the executable path digest is missing', () => {
+    expect(sameExecutor([{ ...EXECUTOR, exeDigest: '' }], [EXECUTOR])).toMatchObject({ verdict: 'unverified', reason: 'path-digest-missing' });
+    expect(sameExecutor([EXECUTOR], [EXECUTOR])).toMatchObject({ verdict: 'same' });
+  });
+});
+
+describe('codex call correlation probe: bounded reads and processes', () => {
+  it('separates a missing file, an exact-size file and an oversized one', async () => {
+    const dir = await tempDir();
+    const missing = await readBounded(join(dir, 'absent.jsonl'), 16);
+    expect(missing).toMatchObject({ ok: false, text: '', truncated: false });
+    expect(missing.error).toBe('ENOENT');
+
+    await writeFile(join(dir, 'exact.jsonl'), '0123456789abcdef');
+    expect(await readBounded(join(dir, 'exact.jsonl'), 16)).toMatchObject({ ok: true, truncated: false });
+
+    await writeFile(join(dir, 'big.jsonl'), '0123456789abcdefg');
+    const big = await readBounded(join(dir, 'big.jsonl'), 16);
+    expect(big).toMatchObject({ ok: true, truncated: true, text: '0123456789abcdef' });
+  });
+
+  it('returns the exit code of a child that finished', async () => {
+    const ok = await runProcess({ command: process.execPath, args: ['-e', 'process.exit(0)'] });
+    expect(ok).toMatchObject({ exitCode: 0, timedOut: false, spawnError: null, closed: true });
+    const bad = await runProcess({ command: process.execPath, args: ['-e', 'process.exit(4)'] });
+    expect(bad).toMatchObject({ exitCode: 4, timedOut: false });
+  });
+
+  it('reports a spawn error instead of throwing', async () => {
+    const result = await runProcess({ command: 'c14-w05-no-such-binary', args: [] });
+    expect(result.spawnError).toBeTruthy();
+    expect(result.closed).toBe(false);
+  });
+
+  it('caps child output by bytes and flags the cut', async () => {
+    const result = await runProcess({ command: process.execPath, args: ['-e', "process.stdout.write('x'.repeat(5000))"], maxOutputBytes: 100 });
+    expect(result.output).toHaveLength(100);
+    expect(result.outputTruncated).toBe(true);
+  });
+
+  it('kills a timed-out child together with its descendant and waits for close', async () => {
+    const script = [
+      "const { spawn } = require('node:child_process');",
+      "const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });",
+      'process.stdout.write(String(child.pid));',
+      'setInterval(() => {}, 1000);',
+    ].join('');
+    const result = await runProcess({ command: process.execPath, args: ['-e', script], timeoutMs: 1500, killTimeoutMs: 5000 });
+    expect(result.timedOut).toBe(true);
+    expect(result.killedTree).toBe(true);
+    expect(result.closed).toBe(true);
+    expect(result.leaked).toBe(false);
+
+    const grandchild = Number(result.output);
+    expect(grandchild).toBeGreaterThan(0);
+    let alive = true;
+    for (let attempt = 0; attempt < 40 && alive; attempt += 1) {
+      await new Promise((done) => setTimeout(done, 50));
+      try { process.kill(grandchild, 0); } catch { alive = false; }
+    }
+    expect(alive).toBe(false);
+  }, 20_000);
+
+  it('never kills a process it was not given', async () => {
+    expect(await killOwnedTree(0)).toBe(false);
+    expect(await killOwnedTree(-1)).toBe(false);
+    expect(await killOwnedTree(Number.NaN)).toBe(false);
+  });
+});
+
+describe('codex call correlation probe: loopback service', () => {
+  it('fails to start when the port is already taken', async () => {
+    const blocker = createServer();
+    await new Promise((done) => blocker.listen(0, '127.0.0.1', done));
+    const { port } = blocker.address();
+    try {
+      await expect(startMockModel([], { port })).rejects.toThrow(/loopback-listen-failed/);
+    } finally {
+      await new Promise((done) => blocker.close(done));
+    }
+  });
+
+  it('serves the planned calls, reports an overrun and closes', async () => {
+    const live = await startMockModel([{ callId: 'call_w05_1', arguments: { cmd: 'x' } }], { maxRequests: 1 });
+    const post = () => fetch(live.baseUrl, { method: 'POST', body: JSON.stringify({ tools: [{ name: 'exec_command' }], input: [] }) });
+    const first = await post();
+    expect(first.status).toBe(200);
+    expect(await first.text()).toContain('exec_command');
+    const second = await post();
+    expect(second.status).toBe(429);
+    expect(live.state.overLimit).toBe(true);
+    expect(live.state.toolCalls).toEqual(['exec_command']);
+    expect(await live.close()).toBe(true);
+  });
+
+  it('rejects an oversized request body and still closes', async () => {
+    const live = await startMockModel([], { maxBodyBytes: 8 });
+    const response = await fetch(live.baseUrl, { method: 'POST', body: 'x'.repeat(64) });
+    expect(response.status).toBe(413);
+    expect(live.state.bodyOverflow).toBe(1);
+    expect(await live.close()).toBe(true);
+  });
+});
+
+describe('codex call correlation probe: run root and main chain', () => {
+  const FAKE_CLI = [
+    "import { appendFileSync } from 'node:fs';",
+    "import { join } from 'node:path';",
+    'const root = process.argv[2];',
+    'const count = Number(process.argv[3]);',
+    'for (let n = 1; n <= count; n += 1) {',
+    "  const tag = 'call_w05_' + n;",
+    "  appendFileSync(join(root, 'shell-' + n + '.jsonl'), JSON.stringify({ tag, threadId: 'thread-abc', sessionId: 'thread-abc', toolCallId: tag, codexVersion: '0.163.0', pid: 1000 + n, ppid: 900, ancestry: [] }) + '\\n');",
+    "  appendFileSync(join(root, 'hook.jsonl'), JSON.stringify({ pid: 2000 + n, ppid: 900, ancestry: [], error: null, event: { hook_event_name: 'PreToolUse', session_id: 'thread-abc', turn_id: 'turn-abc', tool_use_id: tag, tool_name: 'Bash', tool_input: { command: 'node x.mjs \"' + tag + '\"' } } }) + '\\n');",
+    '}',
+    'process.exit(0);',
+  ].join('\n');
+
+  const fakeRun = async (count, { evidencePath } = {}) => {
+    const dir = await tempDir();
+    const script = join(dir, 'fake-cli.mjs');
+    await writeFile(script, FAKE_CLI);
+    const root = join(dir, 'run-root');
+    const evidence = await runCorrelation({
+      root,
+      evidencePath,
+      cli: { command: process.execPath, args: [script, root, String(count)], appendPromptArgs: false },
+    });
+    return { dir, root, evidence };
+  };
+
+  it('refuses a root that already holds foreign files, without touching them', async () => {
+    const dir = await tempDir();
+    const root = join(dir, 'occupied');
+    await mkdir(root);
+    await writeFile(join(root, 'keep.txt'), 'original');
+    await expect(prepareOwnedRoot(root)).rejects.toThrow(/root-not-exclusive/);
+    expect(await readFile(join(root, 'keep.txt'), 'utf8')).toBe('original');
+  });
+
+  it('removes a root only when it carries our ownership marker', async () => {
+    const dir = await tempDir();
+    const owned = await prepareOwnedRoot(join(dir, 'owned'));
+    expect(owned.ownership.owner).toBe('c14-w05-correlation-probe');
+    await removeOwnedRoot(owned.root);
+
+    const foreign = join(dir, 'foreign');
+    await mkdir(foreign);
+    await writeFile(join(foreign, 'ownership.json'), JSON.stringify({ owner: 'someone-else' }));
+    await expect(removeOwnedRoot(foreign)).rejects.toThrow(/root-not-owned/);
+  });
+
+  it('reports an incomplete experiment when only the first of two planned calls was captured', async () => {
+    const { evidence } = await fakeRun(1);
+    expect(evidence.run.status).toBe('incomplete');
+    expect(evidence.run.outcome).toBe('no-conclusion');
+    expect(evidence.run.reasons).toContain('read-failed:shell-2:ENOENT');
+    expect(evidence.calls.map((call) => call.verdict)).toEqual(['correlated', 'shell-missing']);
+  });
+
+  it('reports a complete experiment when every planned call was captured', async () => {
+    const { evidence } = await fakeRun(2);
+    expect(evidence.run.status).toBe('complete');
+    expect(evidence.run.outcome).toBe('correlated');
+    expect(evidence.run.shellSamples).toBe(2);
+    expect(evidence.run.hookRecords).toBe(2);
+    expect(evidence.calls.map((call) => call.verdict)).toEqual(['correlated', 'correlated']);
+  });
+
+  it('never overwrites an existing evidence file', async () => {
+    const dir = await tempDir();
+    const evidencePath = join(dir, 'evidence.json');
+    await writeFile(evidencePath, '{"previous":true}\n');
+    const script = join(dir, 'fake-cli.mjs');
+    await writeFile(script, FAKE_CLI);
+    const root = join(dir, 'run-root');
+    await expect(runCorrelation({
+      root,
+      evidencePath,
+      cli: { command: process.execPath, args: [script, root, '2'], appendPromptArgs: false },
+    })).rejects.toThrow(/EEXIST/);
+    expect(await readFile(evidencePath, 'utf8')).toBe('{"previous":true}\n');
+  });
+
+  it('prints usage and exits 1 without a root', async () => {
+    expect(await main([])).toBe(1);
+  });
+});
+
+describe('codex call correlation probe: plan and environment', () => {
   it('builds exec_command calls that carry the tag the hook will see', () => {
     const plan = buildPlan({ workspace: 'D:/tmp/workspace', outDir: 'D:/tmp/root', calls: ['call_w05_1'] });
     expect(plan[0].callId).toBe('call_w05_1');

@@ -1,32 +1,72 @@
-// Minimal PreToolUse hook and shell sampler for the C14-W05 research probe.
-// Both write one bounded JSON line; nothing here is imported by product code.
-/* global process */
+// Minimal PreToolUse hook + shell sampler for the C14-W05 correlation probe.
+// The hook records only the fields the probe is allowed to keep, never the whole
+// event, and never blocks the tool call: failures are logged and the hook exits 0.
+/* global process, setTimeout, clearTimeout */
 import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { readAncestry, CORRELATION_LIMITS } from '../../scripts/codex-call-correlation-probe.mjs';
 
-const MAX_STDIN_BYTES = 1024 * 1024;
+// Everything the probe needs from the hook event, and nothing else. Paths, model
+// and permission mode stay out of the record.
+export function projectHookEvent(event) {
+  if (!event || typeof event !== 'object') return null;
+  const command = event.tool_input?.command;
+  return {
+    hook_event_name: event.hook_event_name ?? null,
+    session_id: event.session_id ?? null,
+    turn_id: event.turn_id ?? null,
+    tool_use_id: event.tool_use_id ?? null,
+    tool_name: event.tool_name ?? null,
+    tool_input: typeof command === 'string' ? { command } : null,
+  };
+}
 
-function readStdin() {
+// Bounded and deadlined: a hook that never sees EOF still finishes in time, and
+// an oversized payload is cut off rather than buffered without limit.
+export function readHookStdin(stream = process.stdin, {
+  maxBytes = CORRELATION_LIMITS.hookStdinBytes,
+  deadlineMs = CORRELATION_LIMITS.hookStdinMs,
+} = {}) {
   return new Promise((resolve) => {
-    let raw = '';
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk) => { if (raw.length < MAX_STDIN_BYTES) raw += chunk; });
-    process.stdin.on('end', () => resolve(raw));
-    process.stdin.on('error', () => resolve(raw));
+    let bytes = 0;
+    let text = '';
+    let settled = false;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      stream.pause?.();
+      stream.removeAllListeners?.('data');
+      resolve({ text, error });
+    };
+    const timer = setTimeout(() => finish('deadline'), deadlineMs);
+    stream.on('data', (chunk) => {
+      if (bytes + chunk.length > maxBytes) { finish('too-large'); return; }
+      bytes += chunk.length;
+      text += chunk.toString();
+    });
+    stream.once('end', () => finish(null));
+    stream.once('error', () => finish('stdin-error'));
   });
 }
 
-// The hook only records the native fields this ticket allows plus where it ran.
-export async function collectHookRecord(logPath) {
-  const raw = await readStdin();
+export async function collectHookRecord(logPath, { stream = process.stdin } = {}) {
+  const input = await readHookStdin(stream);
+  let error = input.error;
   let event = null;
-  try { event = JSON.parse(raw); } catch { event = null; }
+  if (!error) {
+    try { event = JSON.parse(input.text); } catch { error = 'unparseable'; }
+  }
   const ancestry = await readAncestry(process.pid);
-  appendFileSync(logPath, `${JSON.stringify({ pid: process.pid, ppid: process.ppid, ancestry, event })}\n`);
+  appendFileSync(logPath, `${JSON.stringify({
+    pid: process.pid,
+    ppid: process.ppid,
+    ancestry,
+    error,
+    event: projectHookEvent(event),
+  })}\n`);
 }
 
-// The ordinary shell records the same native ids from its environment.
 export async function collectShellSample(outPath, tag) {
   const ancestry = await readAncestry(process.pid);
   appendFileSync(outPath, `${JSON.stringify({
@@ -44,7 +84,6 @@ export async function collectShellSample(outPath, tag) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  // A failing hook must not break the tool call: log nothing and exit 0.
   try {
     await collectHookRecord(process.argv[2]);
   } catch (error) {
@@ -52,5 +91,3 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
   process.exitCode = 0;
 }
-
-export { CORRELATION_LIMITS };
