@@ -37,7 +37,7 @@
     "multiProcessUnique": "6 allocators (3 on one pair, 3 pairs across 3 more) -> 6 distinct handles, each resolveHandle returns its own full ref",
     "lockDiscipline": "holder blocked inside a real allocation's rename (alias/junction path) -> handleForRef and continueFromRef both CONVERSATION_STATE_BUSY, recordConversation resolves, no shard written; after release the holder's handle resolves and a new allocation succeeds",
     "samePairAccounting": "allocation + recordConversation keep both handles",
-    "existingCollision": "c1 in two shards with different nonces -> handleForRef rejects INVALID_CONVERSATION_REF and both shard files stay byte-identical",
+    "existingCollision": "c1 in two shards with different nonces -> handleForRef resolves undefined (no ambiguous hint, send unaffected), resolveHandle('c1') still rejects INVALID_CONVERSATION_REF with candidates, both shard files stay byte-identical (no winner chosen, no historical repair)",
     "ghostHandle": "shard path occupied by a directory -> CONVERSATION_STATE_WRITE_FAILED, no handles persisted, c1 unresolvable",
     "postDeliveryFailure": "recordConversation resolves even when the shard cannot be written"
   },

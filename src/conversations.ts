@@ -572,25 +572,33 @@ function conversationStateWriteFailed(): MultichatError {
 
 /**
  * The conversation's short handle: reuse the machine-wide handle already bound
- * to this nonce, else claim max+1 with CAS collision protection.
+ * to this nonce, else claim max+1 with CAS collision protection. A handle that
+ * is already shared with another conversation is never returned as a hint —
+ * the caller's full ref still sends, it just gets no short handle.
  */
-export async function handleForRef(file: string, ref: ConversationRef): Promise<string> {
+export async function handleForRef(file: string, ref: ConversationRef): Promise<string | undefined> {
   const locked = await withConversationLock(file, () => handleForRefLocked(file, ref));
   if (!locked.acquired) throw conversationStateBusy();
   return locked.value;
 }
 
-function handleForRefLocked(file: string, ref: ConversationRef): string {
+function handleForRefLocked(file: string, ref: ConversationRef): string | undefined {
   const entries = scanHandles(file);
   const pair = pairKeyOf(ref.f, ref.t);
-  const reused = entries.find((entry) => entry.nonce === ref.n && entry.pair === pair);
-  if (reused !== undefined) {
-    // An already-ambiguous handle must fail here instead of feeding an ambiguous
-    // reply hint: resolveHandle lists the candidate refs, never a guessed winner.
-    resolveHandle(file, reused.handle);
-    return reused.handle;
+  const mine = entries.filter((entry) => entry.nonce === ref.n && entry.pair === pair);
+  if (mine.length === 0) return claimHandleLocked(file, ref, maxHandleNumber(entries) + 1);
+  // 撞号 already in the user's state: reusing that number would hand out an
+  // ambiguous reply hint, and rewriting it would pick a winner for two real
+  // conversations. Omit the hint and leave the historical state untouched.
+  return mine.find((entry) => resolvesToNonce(file, entry.handle, ref.n))?.handle;
+}
+
+function resolvesToNonce(file: string, handle: string, nonce: string): boolean {
+  try {
+    return decodeRef(resolveHandle(file, handle)).n === nonce;
+  } catch {
+    return false; // 撞号 or expired: never handed out as a hint
   }
-  return claimHandleLocked(file, ref, maxHandleNumber(entries) + 1);
 }
 
 /**

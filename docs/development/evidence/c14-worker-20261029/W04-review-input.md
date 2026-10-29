@@ -10,12 +10,14 @@
 
 四处行为细节：
 
-1. **复用路径也核实**。`handleForRef` 命中同 nonce 同 pair 的既有柄时先 `resolveHandle`，既有撞号当场以 `INVALID_CONVERSATION_REF` 报错并列出候选，不再发出歧义 hint；同 nonce 的合法细化副本仍走原 `resolveRefinementCopies` 合并规则，正常旧轮次不会被判成另一对话。
+1. **复用路径也核实，但不猜选也不修历史**。`handleForRef` 只复用能唯一解析回本对话的既有柄；已与别的 nonce 撞号的柄绝不作为 hint 返回，也**不重写**（重写等于替两个真实对话挑赢家）。此时本次发送照常进行、只是不带短柄，`--conversation cN` 仍以 `INVALID_CONVERSATION_REF` 明确列出候选——「完整 ref 恢复途径」保留。同 nonce 的合法细化副本仍走原 `resolveRefinementCopies` 合并规则，正常旧轮次不会被判成另一对话。
+
+   > 实测触发：本单第一次回报时，真实本机状态里该会话的柄 c14 已与另一对话撞号，最初的实现（复用即 `resolveHandle` 报错）把这次发送直接打成了失败——这正是「不得破坏既有功能」。因此改为「不发 hint、不改历史、照常投递」，`--conversation` 用完整 ref 时不再因历史撞号拒发。
 2. **不造幽灵柄**。`attachHandle` 在 `savePair` 返回真之后回读分片核对绑定，未落盘或未核实一律 `CONVERSATION_STATE_WRITE_FAILED`，不返回可用柄；失败发生在投递之前。
 3. **锁不可用即结构化失败**。分配/细化在 1 秒内拿不到锁抛新增的 `CONVERSATION_STATE_BUSY`（措辞沿用「no message was sent. Retry the send.」范式），不静默降级。
 4. **投递后记账仍是 best-effort**。`recordConversation` 捕获全部失败（锁忙、写失败）后正常 resolve；`federation.ts`、`serve/via-tcp.ts` 的 await 都在既有 try/catch 内，已受理/已送达状态不会被记账失败推翻，也不触发补投。
 
-公开签名由同步改为 Promise：`handleForRef`、`claimHandle`、`continueFromRef`、`recordConversation`。`latestKnownConversationRef`、`resolveHandle`、`loadAllPairs` 等只读查询保持同步且不取写锁。所有调用点（`src/application/send/index.ts` 5 处记账 + 接续/分配、`federation.ts`、`via-tcp.ts`）与测试调用已完整 await；`rg` 复查 `src/`、`test/` 无遗漏的裸调用。
+公开签名由同步改为 Promise：`handleForRef`（返回 `Promise<string | undefined>`，历史撞号时不给 hint）、`claimHandle`、`continueFromRef`、`recordConversation`。`latestKnownConversationRef`、`resolveHandle`、`loadAllPairs` 等只读查询保持同步且不取写锁。所有调用点（`src/application/send/index.ts` 5 处记账 + 接续/分配、`federation.ts`、`via-tcp.ts`）与测试调用已完整 await；`rg` 复查 `src/`、`test/` 无遗漏的裸调用。投递侧 `handle` 本就是可缺省字段，无需改投递逻辑。
 
 ## 二、锁域与写路径清单
 
@@ -36,7 +38,7 @@
 - **多进程真实竞争**：6 个独立进程（3 个同 pair 不同 nonce，另 3 个各占不同 pair）在屏障后同时分配 → 6 个柄互不相同，逐个 `resolveHandle` 回各自完整 ref，分片合计 6 个柄。
 - **写路径服从同一互斥**：holder 在别名路径（junction）的真实分配临界区内被阻塞时，`handleForRef` 与 `continueFromRef` 都得到 `CONVERSATION_STATE_BUSY`，`recordConversation` 正常 resolve 且该 pair 分片始终不存在（未写、无幽灵柄）；期间 `resolveHandle` 只读可用；释放后 holder 的柄可解析、新的分配成功。此项同时证明别名与真实路径共用一把锁。
 - **同 pair 分配与记账并发**：两柄都在，记账后各自解析到自己的最新轮次。
-- **既有撞号明确失败**：两分片各含 c1（不同 nonce）→ `handleForRef` 报 `INVALID_CONVERSATION_REF`，两份分片字节前后一致（没有按时间/顺序挑赢家，也没有顺手改写）。
+- **既有撞号**：两分片各含 c1（不同 nonce）→ `handleForRef` 返回 `undefined`（不给歧义 hint，发送照常），`resolveHandle('c1')` 仍报 `INVALID_CONVERSATION_REF` 并列出候选，两份分片字节前后一致（没有按时间/顺序挑赢家，也没有顺手改写）。
 - **写失败无幽灵柄**：分片路径被目录占据 → `CONVERSATION_STATE_WRITE_FAILED`，无 handles 落盘，c1 不可解析。
 - **投递后记账**：同一写失败场景下 `recordConversation` 正常 resolve（不把已受理改成失败）。
 

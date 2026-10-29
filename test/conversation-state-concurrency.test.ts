@@ -178,7 +178,7 @@ fs.renameSync = function (...args) {
     expect(resolveHandle(file, secondHandle)).toBe(encodeRef(nextTurnRef(second)));
   }, 30_000);
 
-  it('an existing handle collision fails explicitly instead of picking a winner', async () => {
+  it('an existing handle collision never becomes a hint and never blocks the full ref', async () => {
     const file = join(freshRoot(), 'conversations.json');
     const mine = newConversationRef(claudeA, codexB);
     const foreign = newConversationRef(claudeC, codexD);
@@ -187,12 +187,18 @@ fs.renameSync = function (...args) {
       mkdirSync(dirname(shardPath(file, pair)), { recursive: true });
       writeFileSync(shardPath(file, pair), JSON.stringify({ pair, ref: encodeRef(ref), updatedAt: 1, handles: { c1: encodeRef(ref) } }), 'utf8');
     }
-    const before = [shardPath(file, pairKeyOf(mine.f, mine.t)), shardPath(file, pairKeyOf(foreign.f, foreign.t))]
-      .map((path) => readFileSync(path, 'utf8'));
+    const mineShard = shardPath(file, pairKeyOf(mine.f, mine.t));
+    const foreignShard = shardPath(file, pairKeyOf(foreign.f, foreign.t));
+    const foreignBefore = readFileSync(foreignShard, 'utf8');
+    const mineBefore = readFileSync(mineShard, 'utf8');
 
-    await expect(handleForRef(file, mine)).rejects.toMatchObject({ code: 'INVALID_CONVERSATION_REF' });
-    expect([shardPath(file, pairKeyOf(mine.f, mine.t)), shardPath(file, pairKeyOf(foreign.f, foreign.t))]
-      .map((path) => readFileSync(path, 'utf8'))).toEqual(before);
+    // The full ref the caller passed still sends — without an ambiguous hint.
+    await expect(handleForRef(file, mine)).resolves.toBeUndefined();
+    // The colliding short handle still fails explicitly, and nothing was rewritten
+    // to pick a winner: both shards stay byte-identical.
+    expect(() => resolveHandle(file, 'c1')).toThrow(/撞号/);
+    expect(readFileSync(foreignShard, 'utf8')).toBe(foreignBefore);
+    expect(readFileSync(mineShard, 'utf8')).toBe(mineBefore);
   }, 30_000);
 
   it('a failed allocation write returns no ghost handle', async () => {
