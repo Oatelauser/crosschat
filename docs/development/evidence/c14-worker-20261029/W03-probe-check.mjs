@@ -38,9 +38,8 @@ function leftovers() {
   catch { return []; }
 }
 
-const originalHash = sha256Of(ORIGINAL_EVIDENCE);
-
 try {
+  const originalHash = sha256Of(ORIGINAL_EVIDENCE);
   mkdirSync(tempBase, { recursive: true });
 
   // 1. Normal deterministic replay: valid experiment, controls healthy, roots cleaned.
@@ -52,12 +51,19 @@ try {
   check('normal: existing-handle control valid', normal.summary?.controlExisting?.valid === true, JSON.stringify(normal.summary?.controlExisting?.problems));
   check('normal: roots cleaned', leftovers().length === 0, leftovers().join(','));
 
-  // 2. Init failure after mkdtemp: a file where the state root's parent should be.
-  const blocked = join(base, 'blocked');
-  writeFileSync(blocked, 'not a directory', 'utf8');
-  const initFail = runProbe([], { W03_REPEATS: '1', W03_STATE_ROOT: join(blocked, 'state') });
+  // 2. Init failure after mkdtemp: a regular file at this scenario's own state path.
+  const initFail = runProbe([], { W03_REPEATS: '1', W03_FAIL_INIT: '1' });
   check('init failure: non-zero exit', initFail.code !== 0 && initFail.code !== null, `exit ${initFail.code}`);
   check('init failure: roots cleaned', leftovers().length === 0, leftovers().join(','));
+
+  const foreign = join(base, 'outside-scenario');
+  mkdirSync(foreign, { recursive: true });
+  const sentinel = join(foreign, 'keep.txt');
+  writeFileSync(sentinel, 'unchanged', 'utf8');
+  const foreignRoot = runProbe([], { W03_REPEATS: '1', W03_STATE_ROOT: foreign });
+  check('foreign state: non-zero exit', foreignRoot.code === 1, `exit ${foreignRoot.code}`);
+  check('foreign state: no writes', readdirSync(foreign).length === 1 && readFileSync(sentinel, 'utf8') === 'unchanged');
+  check('foreign state: scenario roots cleaned', leftovers().length === 0, leftovers().join(','));
 
   // 3. Subprocess run failure: repo without dist, so the worker import fails.
   const noDist = join(base, 'no-dist');
@@ -67,7 +73,7 @@ try {
   check('worker run failure: malfunction recorded', (noDistRun.summary?.malfunctions ?? 0) > 0, String(noDistRun.summary?.malfunctions));
   check('worker run failure: roots cleaned', leftovers().length === 0, leftovers().join(','));
 
-  // 4. Spawn/start failure: the worker script does not exist.
+  // 4. Node starts, but loading the absent worker script fails (not spawn's error event).
   const missing = runProbe([], { W03_REPEATS: '1', W03_WORKER: join(base, 'missing-worker.mjs') });
   check('missing worker: non-zero exit', missing.code !== 0 && missing.code !== null, `exit ${missing.code}`);
   check('missing worker: roots cleaned', leftovers().length === 0, leftovers().join(','));
@@ -81,8 +87,21 @@ try {
     `reproduced=${garbage.summary?.reproducedRuns} malfunctions=${garbage.summary?.malfunctions}`);
   check('invalid result: roots cleaned', leftovers().length === 0, leftovers().join(','));
 
-  // 6. Barrier timeout must abort the experiment, not continue on another interleaving.
-  const barrier = runProbe([], { W03_REPEATS: '1', W03_BARRIER_TIMEOUT_MS: '1' }, 60_000);
+  // A wrong full ref must make the actual probe fail, including its concurrent branch.
+  const wrongWorker = join(base, 'wrong-worker.mjs');
+  const workerText = readFileSync(join(HERE, 'W03-worker.mjs'), 'utf8');
+  const marker = '  emit({ id, handle, nonce: ref.n, ref: ownRef, renames: globalThis.__w03Renames ?? 0, resolve }, 0);';
+  if (!workerText.includes(marker)) throw new Error('Worker result boundary changed; update the controlled wrong-mapping fixture');
+  writeFileSync(wrongWorker, workerText.replace(marker,
+    "  if (process.env.W03_PEER_ID !== 'none') resolve = { ok: true, ref: 'controlled-other-ref' };\n" + marker), 'utf8');
+  const wrongMapping = runProbe([], { W03_REPEATS: '1', W03_WORKER: wrongWorker });
+  check('wrong mapping: exit 1', wrongMapping.code === 1, `exit ${wrongMapping.code}`);
+  check('wrong mapping: counted as malfunction', wrongMapping.summary?.mismatches === 2 && (wrongMapping.summary?.malfunctions ?? 0) >= 2);
+  check('wrong mapping: not counted as reproduced', wrongMapping.summary?.reproducedRuns === 0);
+  check('wrong mapping: roots cleaned', leftovers().length === 0, leftovers().join(','));
+
+  // 6. Suppress a required signal permanently; startup scheduling cannot avoid timeout.
+  const barrier = runProbe([], { W03_REPEATS: '1', W03_BARRIER_TIMEOUT_MS: '25', W03_SUPPRESS_BARRIER_SIGNAL: 'r1-b' }, 60_000);
   check('barrier timeout: non-zero exit', barrier.code !== 0 && barrier.code !== null, `exit ${barrier.code}`);
   check('barrier timeout: recorded as timeout', (barrier.summary?.barrierTimeouts ?? 0) > 0, String(barrier.summary?.barrierTimeouts));
   check('barrier timeout: not counted as reproduced', (barrier.summary?.reproducedRuns ?? 0) === 0, String(barrier.summary?.reproducedRuns));
@@ -119,6 +138,7 @@ try {
   check('lib: expired handle is not a collision', resolveVerdict({ ok: false, code: 'INVALID_CONVERSATION_REF', message: 'c1 已过期或未知' }, 'R') === 'error');
   check('lib: foreign root is not deletable', ownedTempRoot(join(base, 'not-ours')) === false);
 } finally {
+  if (!ownedTempRoot(base)) throw new Error('Refusing to clean a foreign check root');
   rmSync(base, { recursive: true, force: true });
 }
 

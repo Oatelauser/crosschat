@@ -11,7 +11,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawn, execFileSync } from 'node:child_process';
 import {
-  duplicatesOf, fileStat, handleIndex, ownedTempRoot, readShardHandles, resolveVerdict, sha256Of, tailBuffer,
+  duplicatesOf, fileStat, handleIndex, isInside, ownedTempRoot, readShardHandles, resolveVerdict, sha256Of, tailBuffer,
 } from './W03-probe-lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -41,7 +41,10 @@ const timeoutMs = Number(process.env.W03_BARRIER_TIMEOUT_MS || '15000');
 const origRename = fs.renameSync;
 const flag = function (kind, who) { return path.join(barrier, kind + '-' + who); };
 const sleep = function (ms) { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); };
-function signal(kind) { fs.writeFileSync(flag(kind, id), '1'); }
+function signal(kind) {
+  if (process.env.W03_SUPPRESS_BARRIER_SIGNAL === kind + '-' + id) return;
+  fs.writeFileSync(flag(kind, id), '1');
+}
 function waitPeer(kind) {
   const start = Date.now();
   while (!fs.existsSync(flag(kind, peer))) {
@@ -181,9 +184,11 @@ function workerOk(record) {
 async function execute(scenario, root, record, track) {
   const barrier = join(root, 'barrier');
   const stateRoot = process.env.W03_STATE_ROOT ?? join(root, 'state');
+  if (!isInside(stateRoot, root)) throw new Error('State root must stay inside this scenario root');
   const stateFile = join(stateRoot, 'conversations.json');
   const shardDir = join(stateRoot, 'conversations');
   mkdirSync(barrier, { recursive: true });
+  if (process.env.W03_FAIL_INIT === '1') writeFileSync(stateRoot, 'controlled initialization failure', 'utf8');
   mkdirSync(stateRoot, { recursive: true });
   writeFileSync(join(root, 'hook.cjs'), HOOK, 'utf8');
 
@@ -288,6 +293,7 @@ function evaluate(record) {
       resolve: worker.result.resolve,
     });
     if (verdict === 'error') problems.push(`${worker.id}: resolve 失败且非撞号 ${worker.result.resolve?.code}: ${worker.result.resolve?.message}`);
+    if (verdict === 'other') problems.push(`${worker.id}: resolve 返回其他会话的完整 ref`);
     if (verdict === 'collision' && distinctRefs < 2) problems.push(`${worker.id}: 报撞号但分片中无重复（${worker.result.handle} 命中 ${distinctRefs} 个 ref）`);
     if (hits.length === 0) problems.push(`${worker.id}: 返回柄未落进任何分片（${worker.result.handle}）`);
   }
