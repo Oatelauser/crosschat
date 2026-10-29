@@ -4,6 +4,7 @@
 
 ## 当前合同
 
+- 2026-10-29 用户新增持续推进授权：开始下一项，完成一项后由 root 继续派发、审查和验收，直到用户人为喊停或出现必须拍板事项；不再因每张普通实现单重复询问。**涉及用户操作必须变更，或功能需要新增文件，必须先等用户决定。** 常规修复限已明确范围；不得把持续授权扩成自动安装、改配置、增命令/功能文件或扩大删除范围。开发任务/审查证据不作为功能文件使用。
 - 共用仓库 `D:/workspace/CC/multichat`，branch `codex/core-refactor-pre-tui`；逐单同步基线 SHA，开始和结束都核对真实 branch/HEAD。
 - root 已建立本地基线：测试隔离修复 `381c5e5`，C14公共整改 `0f146c00db013178069ad41bd8b84222b26045ac`；最终完整检查2417通过/11原有跳过。未获单独领取的原文件保持；共用 Git index 只交一个 owner，禁止全仓 stage 或相互切分支。
 - 每单明确文件白名单、研究/实现范围、步骤、验证、结果报告和清理；worker 可以切换任务，但需把续接状态写入本单报告，不能只留在聊天记忆。
@@ -14,7 +15,7 @@
 
 本会话不再派发通信相关子单。用户明确将全部通信任务交给现有 Codex Desktop 会话 **Bug修复2**，由用户亲自对接；见[完整交接](communication-handoff-bugfix2-20261029.md)。W08 最新研究交付到 `1066e30`，尚未完成 root 最终验收，按真实状态随证据交接。短信封内部 subagent 已停写，确认没有任何代码/测试修改。
 
-当前无实施子单。cworker1 已完成 Harness 生命周期方案/隔离复现并停写，最终交付 `727cb0a`，见[独立验收](evidence/c13-worker-20261029/P01-final-review.md)。root 已向用户提交仅桥关闭/mount异常清理及对应回归的具体范围；按用户先讨论方案的要求，产品实现尚待确认，未派单。继续由 root 分发、独立审查和验收，cworker1 执行；通信交接不转移 worker 的其余协作关系。
+当前实施 **[C13-I01：桥关闭及挂载失败清理](evidence/c13-worker-20261029/I01-task.md)**。用户已在方案讨论后授权开始并持续推进；本单只改已有 bridge.js 和已有测试，用户操作不变、无新增功能文件。cworker1 独占白名单/index，root 独立审查验收后继续派下一项。方案/隔离复现最终交付 `727cb0a`，见[独立验收](evidence/c13-worker-20261029/P01-final-review.md)。通信交接不转移 worker 的其余协作关系。
 
 已验收子单见[测试隔离审计](evidence/c14-worker-20261029/W00-review.md)、[协作规则审计](evidence/c14-worker-20261029/W02-review.md)、[短柄诊断验收](evidence/c14-worker-20261029/W03-final-review.md)、[短柄产品修复验收](evidence/c14-worker-20261029/W04-final-review.md)、[来源研究验收](evidence/c14-worker-20261029/W01-final-review.md)、[CLI逐调用研究验收](evidence/c14-worker-20261029/W05-final-review.md)、[既有测试等待修复](evidence/c14-worker-20261029/W06-final-review.md)、[短信封恢复研究](evidence/c14-worker-20261029/W07-final-review.md)及[Harness生命周期方案与隔离复现](evidence/c13-worker-20261029/P01-final-review.md)，活动项不重复保留。root最新完整check为2503通过/11原有跳过，退出0；研究收口不代表生产来源关联或CI门禁已实现。仓库代码/skill未全局部署。历史实机短柄成因未作追认，当前构建的已证实缺陷修复按独立记录收口。
 
