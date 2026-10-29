@@ -14,7 +14,7 @@
 
 | 子单 | 所属总任务 | 执行者 | 内容 | 当前状态 |
 | --- | --- | --- | --- | --- |
-| C14-W01 | C14，仍未整体完成 | 本机 Claude `cworker1` | Codex CLI/Desktop 来源关联的可行性及最小探针，见[任务书](evidence/c14-worker-20261029/W01-task.md)；不改产品默认路径 | 优先故障已验收，本轮正式恢复派发；核对新基线后独占本单写入/index，必要root探针明确申请，不空等 |
+| C14-W01 | C14，仍未整体完成 | 本机 Claude `cworker1` | Codex CLI/Desktop 来源关联的可行性及最小探针，见[任务书](evidence/c14-worker-20261029/W01-task.md)；不改产品默认路径 | 部分交付68782c5，root已补两次真实Desktop采样；按[首轮审计与R1任务](evidence/c14-worker-20261029/W01-review.md)修正环境默认值、候选误分类、证据边界及探针/单测隔离，尚未验收 |
 
 已验收子单见[测试隔离审计](evidence/c14-worker-20261029/W00-review.md)、[协作规则审计](evidence/c14-worker-20261029/W02-review.md)、[短柄诊断验收](evidence/c14-worker-20261029/W03-final-review.md)及[短柄产品修复验收](evidence/c14-worker-20261029/W04-final-review.md)，活动项不重复保留。root最新完整check为2433通过/11原有跳过；仓库代码/skill未全局部署。历史实机短柄成因未作追认，当前构建的已证实缺陷修复按独立记录收口。
 

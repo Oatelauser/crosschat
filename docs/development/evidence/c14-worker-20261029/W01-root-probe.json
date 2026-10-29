@@ -1,0 +1,360 @@
+{
+  "task": "C14-W01",
+  "kind": "root-native-desktop-sampling",
+  "branch": "codex/core-refactor-pre-tui",
+  "reviewedCommit": "68782c5f5e8867fd3b6a7b6f571daea05364f9b6",
+  "probeSha256": "0d1e76aed2a4f84df1092ffb33284ff0ba9e2ca8f2cf0ab1626c46824c9d62ba",
+  "invocation": "node D:/workspace/CC/multichat/scripts/codex-caller-source-probe.mjs",
+  "runner": {
+    "host": "Codex Desktop",
+    "shell": "PowerShell",
+    "login": false,
+    "node": "v25.0.0",
+    "platform": "win32",
+    "runtimeVersion": "0.165.0-alpha.1.2",
+    "versionCheck": "CODEX_VERSION and existing CODEX_APP_RUNTIME_CLI_PATH --version agree"
+  },
+  "observations": [
+    {
+      "sample": 1,
+      "exitCode": 0,
+      "stdout": {
+        "probe": "codex-caller-source",
+        "version": 1,
+        "platform": "win32",
+        "env": [
+          {
+            "name": "CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS",
+            "length": 1,
+            "digest": "6b86b273",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_APP_RUNTIME_CLI_PATH",
+            "length": 76,
+            "digest": "4ff0c97c",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_APP_TOOLS_PIPE_PATH",
+            "length": 61,
+            "digest": "8623362c",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_CI",
+            "length": 1,
+            "digest": "6b86b273",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_INTERNAL_ORIGINATOR_OVERRIDE",
+            "length": 13,
+            "digest": "c94007aa",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_MCP_NODE_PATH",
+            "length": 93,
+            "digest": "f6695575",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_PERMISSION_PROFILE",
+            "length": 19,
+            "digest": "2eb344d4",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_SAGE_BACKFILL_TRACKER_TAB_REUSE",
+            "length": 1,
+            "digest": "6b86b273",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_SESSION_ID",
+            "length": 36,
+            "digest": "165ee6b0",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_SHELL",
+            "length": 1,
+            "digest": "6b86b273",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_TASK_WORKSPACE_VERIFYING_IDENTITY",
+            "length": 60,
+            "digest": "ab2b9f9f",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_TECTONIC_PATH",
+            "length": 111,
+            "digest": "46bb202a",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_THREAD_ID",
+            "length": 36,
+            "digest": "165ee6b0",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_TOOL_CALL_ID",
+            "length": 41,
+            "digest": "d186a709",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_VERSION",
+            "length": 17,
+            "digest": "19077538",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_WINDOWS_SANDBOX_PACKAGE_FAMILY",
+            "length": 26,
+            "digest": "ed97d15b",
+            "defaultExcluded": false
+          }
+        ],
+        "ancestry": [
+          {
+            "pid": 2236,
+            "ppid": 19412,
+            "createdAt": 134377278198597070,
+            "name": "node.exe",
+            "shape": "node",
+            "exeDigest": "1e9d7fdac6b0"
+          },
+          {
+            "pid": 19412,
+            "ppid": 24716,
+            "createdAt": 134377278195544930,
+            "name": "pwsh.exe",
+            "shape": "shell",
+            "exeDigest": "866b72c4c34a"
+          },
+          {
+            "pid": 24716,
+            "ppid": 14368,
+            "createdAt": 134377104251445780,
+            "name": "codex.exe",
+            "shape": "desktop-bundle",
+            "exeDigest": "4ff0c97c5201"
+          },
+          {
+            "pid": 14368,
+            "ppid": 37344,
+            "createdAt": 134377103343007550,
+            "name": "ChatGPT.exe",
+            "shape": "app",
+            "exeDigest": "c183109d3295"
+          }
+        ],
+        "stopReason": "missing-parent",
+        "verdict": {
+          "entry": "desktop",
+          "basis": "desktop-bundle-under-app",
+          "executor": {
+            "pid": 24716,
+            "name": "codex.exe",
+            "shape": "desktop-bundle",
+            "createdAt": 134377104251445780,
+            "exeDigest": "4ff0c97c5201"
+          },
+          "parent": {
+            "pid": 14368,
+            "name": "ChatGPT.exe",
+            "shape": "app",
+            "createdAt": 134377103343007550,
+            "exeDigest": "c183109d3295"
+          }
+        },
+        "limits": {
+          "maxDepth": 12,
+          "tableTimeoutMs": 10000,
+          "maxTableBytes": 4194304
+        }
+      }
+    },
+    {
+      "sample": 2,
+      "exitCode": 0,
+      "stdout": {
+        "probe": "codex-caller-source",
+        "version": 1,
+        "platform": "win32",
+        "env": [
+          {
+            "name": "CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS",
+            "length": 1,
+            "digest": "6b86b273",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_APP_RUNTIME_CLI_PATH",
+            "length": 76,
+            "digest": "4ff0c97c",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_APP_TOOLS_PIPE_PATH",
+            "length": 61,
+            "digest": "8623362c",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_CI",
+            "length": 1,
+            "digest": "6b86b273",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_INTERNAL_ORIGINATOR_OVERRIDE",
+            "length": 13,
+            "digest": "c94007aa",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_MCP_NODE_PATH",
+            "length": 93,
+            "digest": "f6695575",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_PERMISSION_PROFILE",
+            "length": 19,
+            "digest": "2eb344d4",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_SAGE_BACKFILL_TRACKER_TAB_REUSE",
+            "length": 1,
+            "digest": "6b86b273",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_SESSION_ID",
+            "length": 36,
+            "digest": "165ee6b0",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_SHELL",
+            "length": 1,
+            "digest": "6b86b273",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_TASK_WORKSPACE_VERIFYING_IDENTITY",
+            "length": 60,
+            "digest": "ab2b9f9f",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_TECTONIC_PATH",
+            "length": 111,
+            "digest": "46bb202a",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_THREAD_ID",
+            "length": 36,
+            "digest": "165ee6b0",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_TOOL_CALL_ID",
+            "length": 41,
+            "digest": "88204fb1",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_VERSION",
+            "length": 17,
+            "digest": "19077538",
+            "defaultExcluded": false
+          },
+          {
+            "name": "CODEX_WINDOWS_SANDBOX_PACKAGE_FAMILY",
+            "length": 26,
+            "digest": "ed97d15b",
+            "defaultExcluded": false
+          }
+        ],
+        "ancestry": [
+          {
+            "pid": 18132,
+            "ppid": 30152,
+            "createdAt": 134377278512941780,
+            "name": "node.exe",
+            "shape": "node",
+            "exeDigest": "1e9d7fdac6b0"
+          },
+          {
+            "pid": 30152,
+            "ppid": 24716,
+            "createdAt": 134377278510260340,
+            "name": "pwsh.exe",
+            "shape": "shell",
+            "exeDigest": "866b72c4c34a"
+          },
+          {
+            "pid": 24716,
+            "ppid": 14368,
+            "createdAt": 134377104251445780,
+            "name": "codex.exe",
+            "shape": "desktop-bundle",
+            "exeDigest": "4ff0c97c5201"
+          },
+          {
+            "pid": 14368,
+            "ppid": 37344,
+            "createdAt": 134377103343007550,
+            "name": "ChatGPT.exe",
+            "shape": "app",
+            "exeDigest": "c183109d3295"
+          }
+        ],
+        "stopReason": "missing-parent",
+        "verdict": {
+          "entry": "desktop",
+          "basis": "desktop-bundle-under-app",
+          "executor": {
+            "pid": 24716,
+            "name": "codex.exe",
+            "shape": "desktop-bundle",
+            "createdAt": 134377104251445780,
+            "exeDigest": "4ff0c97c5201"
+          },
+          "parent": {
+            "pid": 14368,
+            "name": "ChatGPT.exe",
+            "shape": "app",
+            "createdAt": 134377103343007550,
+            "exeDigest": "c183109d3295"
+          }
+        },
+        "limits": {
+          "maxDepth": 12,
+          "tableTimeoutMs": 10000,
+          "maxTableBytes": 4194304
+        }
+      }
+    }
+  ],
+  "scope": "Two separate ordinary exec_command calls from the same root Desktop thread. No custom environment was injected.",
+  "untested": [
+    "Desktop IPC owner to OS process binding",
+    "native CLI shell",
+    "a second thread",
+    "same thread open in CLI and Desktop",
+    "shared daemon",
+    "Linux",
+    "macOS"
+  ],
+  "interpretation": "Native process ancestry and redacted environment observations only; the probe verdict is a candidate heuristic and does not establish verified invocation provenance."
+}
