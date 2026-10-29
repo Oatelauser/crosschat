@@ -34,7 +34,7 @@ Harness 这条线上其实有**四种不同归属的东西**，以前常被混�
 | 安装 | 用户跑原生 `dsh plugin --profile <p> add "file:<bridge 目录>"`；Desktop 用自己的 `resources/runtime/cli/bin/dsh.cmd` | 指定 profile（web / desktop） | 只读 `dsh-bridge-path` 给目录；**不校验装到了哪个 profile**，装错是静默失败 | `docs/deepseek-harness.md` §安装桥；`dsh-integration-contract.md:9` |
 | 加载 | Harness 在该 profile 的 Host 进程里 `apply()` | 进程内 | `mountDshBridge` 起监听 + 写登记；登记绑定 pid/instanceId/runtimeVersion | `integrations/dsh/index.js`、`bridge.js` |
 | 更新 | 用户按新目录重新添加 | 指定 profile | 路径变化后旧 `file:` 引用失效，**无失效诊断**；路径是否变化取决于安装方式。原生 remove 语法已核实：`dsh plugin --profile web remove @crosschat/dsh-bridge`（`plugin` 必填 `--profile`，其余透传 pnpm）；没有依据把"先 remove 再 add"定为必需顺序 | 缺口，归 C10 诊断；[args.ts:194–201](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/apps/cli/src/args.ts#L194-L201)；`docs/deepseek-harness.md` §更新与移除 |
-| 禁用（同一 Host 内） | 用户或 Harness 在运行中的 Host 里禁用插件 | 进程内 | 正常触发插件 disposer → 登记的 `ctx.effect` 调 `close()` → 释放自身监听与登记，**不等于 dead PID**；close 自身失败也不再泄漏（I01/R1 逐项清理） | `bridge.js`；[third-live.json](evidence/dsh-20261023/third-live.json)（Web 实测禁用/启用）；正式 Desktop 未测 |
+| 禁用（同一 Host 内） | 用户或 Harness 在运行中的 Host 里禁用插件 | 进程内 | 正常触发插件 disposer → 登记的 `ctx.effect` 调 `close()` → 释放自身监听与登记，**不等于 dead PID**；release/dispose 失败不再跳过后续 socket/登记清理，清理自身失败仍报告（I01/R1） | `bridge.js`；[third-live.json](evidence/dsh-20261023/third-live.json)（Web 实测禁用/启用）；正式 Desktop 未测 |
 | 子 scope 撤销 | Harness 撤销 `shellEnv` 等子 scope | 进程内 | 只撤身份贡献（`releaseCallerIdentity` / scope dispose），**HTTP 监听保留**、桥继续服务；与插件禁用、Host 退出是不同生命周期 | `bridge.js` |
 | Host 进程退出 / 崩溃 | 用户关闭 Host，或 Host 崩溃 | 进程内 + `~/.crosschat` | 没有 disposer 执行时，登记留在磁盘成为 dead pid；发现侧只读忽略、不删；下次启动产生新 instanceId | `dsh-integration-contract.md:25` |
 | 移除 | 用户从 Harness 移除插件（指南要求卸载 crosschat 前先移除 bundle；命令见上） | 进程内 + `~/.crosschat` | 移除走同一条 `close()`；**这条路径的缺陷已由 I01/R1 修复，见 §三、§四**。退出 Host 之后再做 CLI 配置操作，不会回头触发运行中进程的 close | `P01-R1-result.json`；I01/R1 |
@@ -68,7 +68,7 @@ npm/Web 与正式 Desktop 不互相冒充：上表里所有"未测"都是指正�
 
 ## 四、实现事实（I01 / I01-R1，已提交）
 
-**状态**：I01 提交 `1112f82`，返修 R1 提交 `4f8b6c2`（父 `63eae9f`）；root 定向复审通过，两独立审查的 P2 已全部收口（`docs/development/evidence/c13-worker-20261029/I01-review.md`、`I01-R1-review.md`）。整仓全量仍按真实状态待集成，不记作 I01 最终全量验收。
+**状态**：I01 提交 `1112f82`，返修 R1 提交 `4f8b6c2`（父 `63eae9f`）；root 定向复审与最终验收通过（`docs/development/evidence/c13-worker-20261029/I01-review.md`、`I01-R1-review.md`、`I01-final-review.md`）。整仓 `npm run check` 由 Bug修复2 在验证提交 `303e7ce` 执行并退出 0（2527 通过 / 11 原有跳过，最多 2 / 最少 1 个 Vitest worker），本单未重跑。
 
 **范围**：只改 `integrations/dsh/bridge.js` 的 `close()` 与 mount catch，加 `test/dsh-bridge.test.ts` 用例；未动协议、路由、登记格式、发现侧、CLI，未新增功能文件或改变用户操作。
 
@@ -80,7 +80,7 @@ npm/Web 与正式 Desktop 不互相冒充：上表里所有"未测"都是指正�
 6. 重复/并发关闭返回同一个 closing Promise，不重复释放；没有失败重试或逐资源状态机。
 7. 测试 fixture 独立收尾：逐项尝试全部清理，并用 `vi.mock('node:http')` 独立持有本次实际创建的 server，产品 close 提前拒绝时也能关闭 listener；预期注入错误不掩盖其它异常。
 
-**验证**：`test/dsh-bridge.test.ts` 32 项、caller-source 相关 14 + 55 项通过，语法与相关 ESLint 通过。两次 `npm run check` 的全量首败分别保存为 `I01-check.txt`、`I01-R1-check.txt`，失败均落在并行短柄线在途文件或负载敏感超时，没有一个导入桥。**边界**：合成 ctx/host，不是正式 Harness/Desktop 进程内重放。
+**验证**：`test/dsh-bridge.test.ts` 32 项、caller-source 相关 14 + 55 项通过，语法与相关 ESLint 通过；root 另独立跑 5 个定向套件共 80 项通过。派单时点的两次全量首败保留为 `I01-check.txt`、`I01-R1-check.txt`，失败均落在并行短柄线在途文件或负载敏感超时，没有一个导入桥；集成后的整仓结果另见 `I01-final-review.md`。**边界**：合成 ctx/host，不是正式 Harness/Desktop 进程内重放。
 
 ## 五、待用户决定（均未批准）
 
@@ -95,4 +95,4 @@ npm/Web 与正式 Desktop 不互相冒充：上表里所有"未测"都是指正�
 
 ## 六、依赖边界
 
-C08 消费"技能目标 / 插件引用 / 运行时登记"三者分开的目标与归属；C04 消费正式 Desktop 包的安装、UI、退出与官方卸载验证；C11/C12 消费 CI。**I01/R1 的 close 修复已在合成 ctx 上验证并通过定向复审，但不能关闭 C13**：Desktop 未验、升级换路径后无失效诊断、诊断未接；整仓全量仍待并行短柄线集成，本方案不宣称全仓通过。
+C08 消费"技能目标 / 插件引用 / 运行时登记"三者分开的目标与归属；C04 消费正式 Desktop 包的安装、UI、退出与官方卸载验证；C11/C12 消费 CI。**I01/R1 的 close 修复已在合成 ctx 上验证并通过最终验收，但不能关闭 C13**：Desktop 未验、升级换路径后无失效诊断、诊断未接；整仓全量已在验证提交 `303e7ce` 由 Bug修复2 执行通过（2527 通过 / 11 原有跳过，见 `I01-final-review.md`），本方案未重跑。

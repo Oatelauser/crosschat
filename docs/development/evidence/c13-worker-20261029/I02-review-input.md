@@ -28,7 +28,7 @@
 | 子 scope 撤销只撤身份贡献、HTTP 保留 | `integrations/dsh/bridge.js:183–217` 的 `contribute`/`release` 与既有用例 | 一致 |
 | 死 PID 登记只读忽略、不删除 | `dsh-integration-contract.md:25` 与发现侧实现 | 一致 |
 | `install-skills` 只写 `.claude`/`.codex` | `src/application/maintenance/skills.ts` 的 `skillDestinations` | 一致 |
-| 桥登记 home 与 `DSH_HOME` 无关 | `integrations/dsh/index.js` 以 `config` 调 `mountDshBridge`，未传 `home`；`bridge.js` 取 `options.home ?? homedir()` | 登记固定在用户主目录 |
+| 桥登记位置 | `integrations/dsh/index.js` 以 `config` 调 `mountDshBridge`（显式 `home` 原样传入）；`bridge.js` 取 `options.home ?? homedir()` | 默认用户主目录，不随 `DSH_HOME` 迁移，显式 `home` 生效；首轮此处推断错误，见 §7.2 |
 
 ## 3. 与任务要求的映射
 
@@ -42,7 +42,7 @@
 | 路径变化才重新添加 | 指南"更新与移除"；方案 §二 更新行 |
 | 卸载前移除 bundle 的准确命令 | 指南"更新与移除"；契约第 2 段 |
 | 不强加 remove→add 顺序、不造新必需检查 | 指南"更新与移除"；方案 §二 更新行、§五 |
-| I01 实现事实与全量待集成分开 | 方案 §四；契约"证据边界"段；指南未宣称整仓通过 |
+| I01 实现事实与集成事实分开 | 方案 §四；契约"证据边界"段；指南未宣称整仓通过 |
 | 不给固定 permalink 之外的推断 | 全部外部事实均附 `687f282e…` permalink 或本仓证据文件 |
 
 用户操作变化：**无**。新增内容都是既有步骤（安装、按新目录重新添加、卸载前移除 bundle、手工复制 skill）的准确化，未新增命令、默认 profile/home、自动调用或 install-skills 扩大写入。
@@ -68,3 +68,25 @@
 ## 6. 下一张真正需要用户决定的最窄事项
 
 **C08：是否让 `install-skills` 写入 Harness 的 skill 目录**（现只写 `.claude`/`.codex`）。它改变用户可见的默认写入范围，需要用户拍板；其余生命周期事项都是既有手工步骤的说明，不需要新授权。
+
+## 7. R1 返修（2026-10-29）
+
+派单基线 `fc138755a6159464cbe212aaad3cfc38002ace52`；开工时 HEAD 即该提交，本轮独立 commit 的父提交为该 SHA。范围仍为原四份文档，未改产品/测试/通信段/旧证据。
+
+### 7.1 四项收口
+
+| 审查项 | 收口方式 |
+| --- | --- |
+| 重启被写成必需步骤（Standards P2） | 指南改为以 `application/warnings` 为准，仅当结果指明未应用或需要重启时才重启该 profile；不再要求所有安装都重启。 |
+| Web 移除前退出被立为必需（Spec P2） | 删除统一的"先完全退出"要求，只保留移除命令；Desktop 保留原有离线管理前提（先初始化、完整退出）。 |
+| 登记位置写死为固定主目录（Spec P2） | 指南与合同改为"默认用户主目录、不随 `DSH_HOME` 迁移；插件配置的显式 `home` 经 `index.js` 原样传入，桥取 `options.home ?? homedir()`"。不新增配置教学或要求用户设置 home。 |
+| "close 自身失败也不再泄漏"超出证据（Standards P2） | 方案改为"release/dispose 失败不再跳过后续 socket/登记清理；清理自身失败仍报告"，不扩大为无条件释放保证。 |
+| 全量仍待集成与事实不符 | 方案 §四/§六、契约证据边界改为引用 `I01-final-review.md`：全量由 Bug修复2 在验证提交 `303e7ce` 执行，2527 通过 / 11 原有跳过，最多 2 / 最少 1 个 Vitest worker；本单未重跑。派单时点的两次首败与历史记录未改。 |
+
+### 7.2 首轮事实错误订正
+
+首轮 §2 写"`index.js` 未传 `home`，故登记固定在用户主目录"，把"默认值"误当成"固定值"。实际 `index.js` 把插件 `config` 原样作为 options 传入，`bridge.js` 使用 `options.home ?? homedir()`：默认是用户主目录、不随 `DSH_HOME` 迁移，但已有的显式 `home` 仍然生效。该行已订正，指南与合同同步。
+
+### 7.3 检查与边界
+
+`git diff --check` 通过；相对链接与固定 permalink 未变（本轮未新增外链）。未跑产品全量或新探针，未重跑 I01 定向套件；集成结果引用 root 记录，不冒称本单执行。未测边界同 §5。
