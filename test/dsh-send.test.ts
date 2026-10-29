@@ -84,7 +84,7 @@ describe('DeepSeek Harness through the application send seam', () => {
     const wired = { ...deps, conversationStateFile: join(root, 'conversations.json') };
     const first = await sendMessage({ to: 'Worker', tool: 'dsh', bodyArg: 'first' }, wired);
     const second = await sendMessage({ to: thread.id, tool: 'dsh', bodyArg: 'second' }, wired);
-    expect(first.handle).toMatch(/^c\d+$/);
+    expect(first.handle).toMatch(/^c[A-Z]\d{3}$/);
     expect(second.handle).toBe(first.handle);
     expect(decodeRef(second.receipt.replyRef)).toMatchObject({ n: decodeRef(first.receipt.replyRef).n, c: 2 });
   });

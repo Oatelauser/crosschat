@@ -874,7 +874,7 @@ describe('runSend conversation short handles (F2)', () => {
     const deps = { ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }), conversationStateFile: state };
     const first = await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'one' }, deps);
     expect(first).toContain('delivered to workteam (turn 1)');
-    // 落信的 hint 只带两字符短柄，完整 ref 一个字节不出现
+    // 落信的 hint 只带五字符短柄，完整 ref 一个字节不出现
     const envelope = codexDeliveries.at(-1)!.content;
     const command = envelope.match(/回复请运行: (crosschat send[^\n<]+)</)![1]!;
     expect(command).toContain('--conversation cA000 ');

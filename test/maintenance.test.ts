@@ -34,6 +34,9 @@ describe('local maintenance plans and exact execution', () => {
     const expired = f.put('tcp/inbox/old', 6 * DAY);
     const fresh = f.put('tcp/parts/fresh', 4 * DAY);
     const shard = f.put('conversations/old.json', 31 * DAY);
+    const shardContents = JSON.stringify({ pair: 'old-pair', ref: 'mc2_fixture', updatedAt: NOW - 31 * DAY });
+    writeFileSync(shard, shardContents);
+    utimesSync(shard, new Date(NOW - 31 * DAY), new Date(NOW - 31 * DAY));
     const temporary = f.put('conversations/old.json.tmp', 90 * DAY);
     const ignored = f.put('outbox/parked.json', 90 * DAY);
     const preview = previewMaintenance('cleanup', f.options);
@@ -41,7 +44,8 @@ describe('local maintenance plans and exact execution', () => {
     expect(preview.enabled).toBe(true);
     expect(preview.targets.map((item) => item.path)).toEqual([expired, shard]);
     expect(preview.effects.join('\n')).toContain('30');
-    for (const file of [expired, fresh, shard, temporary, ignored]) expect(readFileSync(file, 'utf8')).toBe('fixture');
+    for (const file of [expired, fresh, temporary, ignored]) expect(readFileSync(file, 'utf8')).toBe('fixture');
+    expect(readFileSync(shard, 'utf8')).toBe(shardContents);
     expect(existsSync(join(f.home, '.claude'))).toBe(false);
   });
 
@@ -194,7 +198,8 @@ describe('owned maintenance worker lifecycle', () => {
   it('runs actual plans and filesystem effects through the default built worker using only isolated fixture paths', async () => {
     const dir = mkdtempSync(join(root, 'built-'));
     const modules = ['application/maintenance/index.ts', 'application/maintenance/isolated.ts', 'application/maintenance/model.ts', 'application/maintenance/operations.ts',
-      'application/maintenance/skills.ts', 'application/maintenance/uninstall.ts', 'application/cleanup/index.ts', 'application/status/status-files.ts', 'serve/file-channel.ts', 'state-root.ts'];
+      'application/maintenance/skills.ts', 'application/maintenance/uninstall.ts', 'application/cleanup/index.ts', 'application/status/status-files.ts', 'serve/file-channel.ts', 'state-root.ts',
+      'conversations.ts', 'conversation-handles.ts', 'state-lock.ts', 'identity.ts', 'ref.ts', 'tool-types.ts', 'errors.ts'];
     writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
     for (const module of modules) {
       const destination = join(dir, module.replace(/\.ts$/, '.js'));
