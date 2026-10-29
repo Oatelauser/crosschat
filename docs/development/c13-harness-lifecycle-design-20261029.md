@@ -9,7 +9,7 @@
 Harness 这条线上其实有**四种不同归属的东西**，以前常被混成一句"装桥"：
 
 1. **crosschat npm 包**：`dist/`、`skills/`、`integrations/dsh` 随包发布（`package.json` 的 `files`）。升级 crosschat **可能**改变 bridge 的安装绝对路径——指南的措辞是"升级改变了安装路径时"（`docs/deepseek-harness.md` §安装桥），不是每次升级都变；是否变化取决于安装方式，未逐种核实。
-2. **skill 副本**：用户手工把 `skills/crosschat` 复制到 `<Harness home>/skills/crosschat`（默认 `~/.dsh`，自定义 `DSH_HOME` 以实际为准）或项目 `.agents/skills/crosschat`。`install-skills` 只写 `.claude`/`.codex`（`src/application/maintenance/skills.ts` 的 `skillDestinations`），**不碰 Harness**。
+2. **skill 副本**：由 `install-skills`、TUI 维护和 `uninstall` 共用的目标计划覆盖维护，写入 Claude、Codex 和 Harness 三处（`src/application/maintenance/skills.ts` 的 `skillPlan`，C08-I01）；Harness 目标为 `<DSH_HOME>/skills/crosschat`，未设置或为空时为 `<home>/.dsh/skills/crosschat`。项目 `.agents/skills/crosschat` 与历史自定义副本仍需手工维护，crosschat 不扫描。
 3. **原生插件引用**：Harness 自己记在所选 profile 的插件配置里，指向 `file:<bridge 目录>`。crosschat 只读提供路径（`crosschat dsh-bridge-path`），不写 Harness 配置。
 4. **运行时登记**：桥在自己的 Host 进程里监听 `127.0.0.1` 随机端口，把 `~/.crosschat/dsh/instances/<uuid>.json`（schema/protocol=1、pid、instanceId、runtimeVersion、url、token）写出来。这是**唯一由 crosschat 拥有的运行时文件**。
 
@@ -21,11 +21,11 @@ Harness 这条线上其实有**四种不同归属的东西**，以前常被混�
 
 | 阶段 | 谁操作 | 作用目标 | 现状 / 缺口 | 证据 |
 | --- | --- | --- | --- | --- |
-| 安装 | 用户手工复制整个 `skills/crosschat` | Harness home 的 `skills/crosschat`（默认 `~/.dsh`，`DSH_HOME` 以实际为准）或项目 `.agents/skills/crosschat` | crosschat 侧无写入；不校验目标是否正确 | `docs/deepseek-harness.md` §让 Agent 使用 crosschat |
+| 安装 | `crosschat install-skills` / TUI 维护 | Claude、Codex、Harness 的 `skills/crosschat`（Harness 默认 `<home>/.dsh`，`DSH_HOME` 以实际为准）；项目 `.agents/skills/crosschat` 仍手工 | 共用同一目标计划，完整复制含 `references`；`--dir` 只在显式根内写 `.claude/.codex/.dsh` | C08-I01；`docs/deepseek-harness.md` §让 Agent 使用 crosschat |
 | 加载 | Harness | 同上 | 不参与、不校验加载结果 | 未测（本机无正式 Desktop） |
-| 更新 | 用户手工重新复制 | 同上 | 无脚本、无校验。`install-skills` 的 `cpSync` 只写 `.claude`/`.codex`，**不能当作这条手工流程的执行证据**；手工复制是否残留源已删除文件未核实 | `src/application/maintenance/skills.ts`（仅证明不写 Harness）；`docs/development/dsh-integration-contract.md:9` |
+| 更新 | `install-skills` / TUI 维护覆盖复制 | 同上 | 幂等覆盖，保留额外旧文件；不扫描历史自定义副本 | C08-I01；`src/application/maintenance/skills.ts` |
 | 禁用 / 重新启用 | 用户移动或删除目录 | 同上 | crosschat 无状态，无需重连 | — |
-| 移除 | 用户删除目录 | 同上 | crosschat 不感知；与 npm 包卸载无联动 | — |
+| 移除 | `crosschat uninstall` / TUI 维护 | 同上（只删当前计划的 `skills/crosschat`） | 不删 Harness home、`skills` 父目录、插件配置或聊天；与 npm 包卸载无联动 | C08-I01；`src/application/maintenance/uninstall.ts` |
 
 ### Host bridge
 
@@ -91,7 +91,7 @@ npm/Web 与正式 Desktop 不互相冒充：上表里所有"未测"都是指正�
 | 新增 `crosschat dsh install/update/remove` 自动命令 | **不建议** | 原生 `dsh plugin` 已是官方入口，且 Desktop 与 npm 是两套 CLI；crosschat 再包一层会与官方语义漂移，装错 profile 仍然静默 |
 | 为桥设默认 profile | **不设**，必须显式指定 | Desktop profile 只能由 Desktop 自己的 CLI 管理，默认值会把"装错地方"变成默认行为 |
 | 卸载时自动调用原生管理器 | **不调用**，只给命令与诊断 | 会改用户原生配置，且 npm 与 Desktop 是两套 CLI、各管各的 profile；两套都有 `plugin ... remove`（固定提交核实），但自动化仍需替用户选 profile、并在退出后执行，做不做由用户决定 |
-| 技能是否纳入 `install-skills` 的 Harness 写入 | **已允许新增skill，按 A 默认方案实施 C08-I01** | 用户已知默认第三目标会复制技能文件；仍不自动安装原生工具或桥 |
+| 技能是否纳入 `install-skills` 的 Harness 写入 | **已允许新增skill，按 A 默认方案实施（C08-I01 已提交）** | 用户已知默认第三目标会复制技能文件；仍不自动安装原生工具或桥 |
 
 现有手工流程（复制 skill、`dsh plugin add`）不需要用户再批准，本单只是把它写清。
 
@@ -105,6 +105,8 @@ I02 已通过[最终验收](evidence/c13-worker-20261029/I02-final-review.md)，
 | 显式选择 Harness | 无参数仍只写现有两侧；用户显式选 Harness 后才安装/更新其 skill，卸载范围同样明确选择 | 避免扩大无参数写入范围，但需要批准选择入口的用户操作；具体参数随该选择写定 |
 
 实施复用现有维护模块，CLI/TUI 使用同一目标计划；不新增持久追踪文件，不自动调用 Harness 插件管理器。技能目录之外的原生配置、插件引用、聊天不纳入技能删除。C08-I01明确：显式 `--dir` 三目标均在其根内并忽略宿主DSH_HOME；普通环境尊重当前DSH_HOME；更新保留现有覆盖复制、不清额外文件；不扫描历史环境/项目或追踪旧自定义副本。其余C08合同继续保留，不由本次例外推定全部批准或完成。
+
+C08-I01 实现事实：`skillPlan` 统一产出 Claude、Codex、Harness 三个目标（Harness 默认 `<home>/.dsh/skills/crosschat`，非空相对 `DSH_HOME` 在各入口以具体路径拒绝，`--dir` 与显式 TUI 隔离 home 不读宿主 `DSH_HOME`）；CLI 安装/卸载与 TUI 维护、worker 环境 DTO 使用同一计划，卸载只删当前计划的 `skills/crosschat`。TDD RED/GREEN 提交与最终检查见本单 review-input。
 
 ## 六、依赖边界
 

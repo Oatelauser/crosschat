@@ -11,6 +11,7 @@ import { MultichatError } from './errors.js';
 import { runSend, type SendArgs, type SendDeps } from './commands/send.js';
 import { runStatus, type StatusDeps, type StatusFilters } from './commands/status.js';
 import { runInstallSkills, type InstallSkillsArgs } from './commands/install-skills.js';
+import { skillPlan } from './application/maintenance/skills.js';
 import { runDoctor, runDoctorDiagnostics } from './commands/doctor.js';
 import { runDiscover } from './commands/discover.js';
 import { DISCOVERY_MAX_BYTES } from './application/discovery/boundary.js';
@@ -858,7 +859,7 @@ export async function main(argv: string[]): Promise<number> {
         crosschatHome: join(home, '.crosschat'),
         stateRoot: stateRoot(),
         legacyStateRoots: legacyStateRoots(),
-        skillDirs: [join(home, '.claude', 'skills', 'crosschat'), join(home, '.codex', 'skills', 'crosschat')],
+        skills: skillPlan(home, { DSH_HOME: process.env.DSH_HOME }),
         now: () => Date.now(),
         stdout: (line) => process.stdout.write(`${line}\n`),
         confirm: () =>

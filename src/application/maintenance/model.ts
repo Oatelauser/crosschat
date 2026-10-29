@@ -2,8 +2,8 @@
 export const MAINTENANCE_OPERATIONS = [
   { id: 'cleanup', label: '按保留规则清理', description: '清理过期收件、断点与会话分片，保留短柄编号进度', guidance: '预览后清理超过5天的收件/断点、超容量收件和30天未更新的JSON会话分片；保留一份最高编号进度分片，无法核验进度时保留全部分片；不清理outbox、mailbox或日志。' },
   { id: 'cleanup-force', label: '强制清理收件与断点', description: '删除全部收件、断点和JSON会话分片，重置短柄编号', guidance: '预览后删除全部inbox、parts及JSON会话分片，重置短柄编号；旧信封短柄可能重号，请用原完整引用或核实目标后按名称/完整ID接续。不删除临时分片、outbox、mailbox或日志。传输中的文件也可能被删，请先停止传输。' },
-  { id: 'install-skills', label: '安装 / 更新技能', description: '覆盖安装包内的crosschat技能至两个现有目标', guidance: '将本安装包的skills/crosschat覆盖复制到当前本机用户的.claude和.codex技能目录；保留旧命令的先后顺序，前项失败则停止。' },
-  { id: 'uninstall-data', label: '卸载本机数据与技能', description: '删除原卸载命令的数据/技能范围，不卸载npm包', guidance: '删除当前用户.crosschat、旧版状态目录和Claude/Codex的crosschat技能；新鲜服务状态阻止卸载。npm包不会自动删除，需另行执行npm uninstall -g @oatelauser/crosschat。' },
+  { id: 'install-skills', label: '安装 / 更新技能', description: '覆盖安装包内的crosschat技能至三个现有目标', guidance: '将本安装包的skills/crosschat覆盖复制到当前本机用户的.claude、.codex和Harness技能目录（默认~/.dsh，有DSH_HOME时以该绝对路径为准）；保留旧命令的先后顺序，前项失败则停止。' },
+  { id: 'uninstall-data', label: '卸载本机数据与技能', description: '删除原卸载命令的数据/技能范围，不卸载npm包', guidance: '删除当前用户.crosschat、旧版状态目录和Claude/Codex/Harness的crosschat技能；新鲜服务状态阻止卸载。npm包不会自动删除，需另行执行npm uninstall -g @oatelauser/crosschat。' },
 ] as const;
 export type MaintenanceOperationId = typeof MAINTENANCE_OPERATIONS[number]['id'];
 export interface MaintenanceOperation { id: MaintenanceOperationId; label: string; description: string; guidance: string }

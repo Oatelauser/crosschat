@@ -32,7 +32,7 @@ dsh plugin --profile web remove @crosschat/dsh-bridge
 
 ## 让 Agent 使用 crosschat
 
-把 crosschat 包中的完整 `skills/crosschat` 目录复制到 `<Harness home>/skills/crosschat`，或项目的 `.agents/skills/crosschat`。保留 `references` 子目录。桥目录的 `../../skills/crosschat` 是该 skill 的随包位置；Harness home 默认为用户的 `.dsh`，使用自定义 `DSH_HOME` 时以实际目录为准。现有 `crosschat install-skills` 只写 `.claude`/`.codex`，没有 Harness 写入行为，这份副本要手工复制和维护。
+把 crosschat 包中的完整 `skills/crosschat` 目录复制到 `<Harness home>/skills/crosschat`，或项目的 `.agents/skills/crosschat`。保留 `references` 子目录。桥目录的 `../../skills/crosschat` 是该 skill 的随包位置；Harness home 默认为用户的 `.dsh`，使用自定义 `DSH_HOME` 时以实际目录为准。`crosschat install-skills` 现在把同一份技能覆盖安装到 Claude、Codex 和 Harness 三个目标（Harness 为 `<DSH_HOME>/skills/crosschat`，未设置或为空时 `<home>/.dsh/skills/crosschat`；`DSH_HOME` 必须是绝对路径）。项目内的 `.agents/skills/crosschat` 仍需手工复制，crosschat 不扫描项目或历史副本。
 
 在 Harness 原生窗口打开目标会话，使其成为 live root Agent，再检查：
 
@@ -48,7 +48,7 @@ crosschat send --to "dsh/<完整会话ID>" --delivery steer --body "用户让我
 
 ## 运行与维护
 
-四类东西分开归属：crosschat npm 包（含桥目录与 skill 源）、复制进 Harness 的 skill 副本、所选 profile 里的插件引用、桥运行时登记。crosschat 只写最后一项；登记默认在用户主目录的 `~/.crosschat/dsh/instances`，不随 Harness 的 `DSH_HOME` 迁移，插件配置里已有的显式 `home` 会原样传给桥（`options.home ?? homedir()`）；skill 副本由用户手工复制，`crosschat install-skills` 仍只写 `.claude`/`.codex`；插件引用由 Harness 自己的插件管理器写进 profile。
+四类东西分开归属：crosschat npm 包（含桥目录与 skill 源）、复制进 Harness 的 skill 副本、所选 profile 里的插件引用、桥运行时登记。crosschat 只写最后一项和技能副本；登记默认在用户主目录的 `~/.crosschat/dsh/instances`，不随 Harness 的 `DSH_HOME` 迁移，插件配置里已有的显式 `home` 会原样传给桥（`options.home ?? homedir()`）；skill 副本由 `crosschat install-skills`、TUI 维护和 `crosschat uninstall` 共用同一目标计划覆盖安装或移除（Claude、Codex、Harness 三处，项目 `.agents/skills` 不在其中），插件引用由 Harness 自己的插件管理器写进 profile。
 
 插件与桥在 Host 进程内运行，几种情况要分清：同一 Host 内禁用插件会走桥的 disposer，撤销它自己的 listener 和登记；重新启用会生成新的实例登记，旧凭据随之失效；只撤销 `shellEnv` 子 scope 时仅撤身份贡献，HTTP 仍继续服务；Host 崩溃可能留下死 PID 登记，发现侧只读忽略、不删除，下次启动写新实例。禁用/启用的实测见[第三轮真实通过](development/evidence/dsh-20261023/third-live.json)，覆盖范围仅官方 npm Web runtime。Web 与 Desktop 的 profile 和插件管理器各归各的，不互相代管。
 

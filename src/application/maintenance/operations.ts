@@ -3,7 +3,8 @@ import { closeSync, fstatSync, lstatSync, openSync, opendirSync, readSync, readd
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { legacyStateRoots, stateRoot } from '../../state-root.js';
 import { executeCleanup, planCleanup } from '../cleanup/index.js';
-import { defaultInstallSkillsDeps, installSkillDestination, skillDestinations } from './skills.js';
+import { defaultInstallSkillsDeps, installSkillDestination, skillPlan } from './skills.js';
+import type { SkillTarget } from './skills.js';
 import { removeUninstallTargets, uninstallTargets } from './uninstall.js';
 import type { UninstallEnvironment } from './uninstall.js';
 import { isMaintenanceOperationId, MAINTENANCE_OPERATIONS } from './model.js';
@@ -25,8 +26,7 @@ function environment(options: MaintenanceOperationOptions): Environment {
   const source = options.sourceDir ?? defaultInstallSkillsDeps().sourceDir();
   if (!isAbsolute(source)) throw new Error('技能安装源必须为绝对路径。');
   const legacy = legacyStateRoots(home, options.env ?? {}).map((file) => resolve(file));
-  return { home, source: resolve(source), uninstall: { crosschatHome: stateRoot(home), stateRoot: stateRoot(home), legacyStateRoots: legacy,
-    skillDirs: skillDestinations(home), now: options.now ?? Date.now } };
+  return { home, source: resolve(source), uninstall: { crosschatHome: stateRoot(home), stateRoot: stateRoot(home), legacyStateRoots: legacy, now: options.now ?? Date.now } };
 }
 function operation(operationId: MaintenanceOperationId) {
   const value = MAINTENANCE_OPERATIONS.find((item) => item.id === operationId);
@@ -40,7 +40,7 @@ function cleanupPlan(operationId: MaintenanceOperationId, options: MaintenanceOp
 function fingerprint(value: { operationId: MaintenanceOperationId; enabled: boolean; reason?: string; targets: MaintenanceTarget[]; effects: string[] }): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
-/** Inspect each ancestor before descending; never stat or list through a link. */
+/** Verify each ancestor before descending; never stat or list through a link. */
 function verifyDirectoryPath(root: string, target: string, allowFinalFile = false): void {
   const descendant = relative(root, target);
   if (!descendant || isAbsolute(descendant) || descendant === '..' || descendant.startsWith(`..${sep}`)) throw new Error('维护目标不在已知范围。');
@@ -56,6 +56,12 @@ function verifyDirectoryPath(root: string, target: string, allowFinalFile = fals
     }
     if (stat.isSymbolicLink() || (!stat.isDirectory() && !(allowFinalFile && index === segments.length - 1 && stat.isFile()))) throw new Error('维护目录不可完整核验。');
   }
+}
+/** A skill target is verified from the user home when it lives there; an explicit DSH_HOME may sit outside. */
+function verifySkillTarget(home: string, target: SkillTarget, allowFinalFile = false): void {
+  const inside = relative(home, target.path);
+  const contained = inside !== '' && !isAbsolute(inside) && inside !== '..' && !inside.startsWith(`..${sep}`);
+  verifyDirectoryPath(contained ? home : target.root, target.path, allowFinalFile);
 }
 /** TUI previews fail closed when the legacy planner's skip-on-stat-error would hide candidates. */
 function verifyCleanupInventory(home: string, root: string): void {
@@ -169,26 +175,37 @@ export function previewMaintenance(operationId: MaintenanceOperationId, options:
       enabled = false; reason = '无法完整读取清理范围；检查目录类型、文件元数据和访问权限后重新预览。';
     }
   } else if (operationId === 'install-skills') {
-    targets = skillDestinations(env.home).map((path) => ({ path, label: '覆盖安装 / 更新crosschat技能', kind: 'directory' }));
-    effects.push(`安装源：${env.source}`);
-    try {
-      for (const target of targets) verifyDirectoryPath(env.home, target.path);
-      const budget = { entries: 0 };
-      verifySkillTree(env.source, budget);
-      for (const target of targets) verifySkillTree(target.path, budget, true);
-    } catch { enabled = false; reason = '技能安装源或目标子树不可完整核验；检查链接、文件类型、读取权限和目录规模后重新预览（合计至多10000项、64层）。'; }
-    effects.push('不会调用npm，不会安装其他工具或修改原生聊天配置。');
+    let plan: SkillTarget[] = [];
+    try { plan = skillPlan(env.home, options.env ?? {}); }
+    catch (error) { enabled = false; reason = error instanceof Error ? error.message : '技能目标无效。'; }
+    if (enabled) {
+      targets = plan.map((target) => ({ path: target.path, label: target.label, kind: 'directory' }));
+      effects.push(`安装源：${env.source}`);
+      try {
+        for (const target of plan) verifySkillTarget(env.home, target);
+        const budget = { entries: 0 };
+        verifySkillTree(env.source, budget);
+        for (const target of plan) verifySkillTree(target.path, budget, true);
+      } catch { enabled = false; reason = '技能安装源或目标子树不可完整核验；检查链接、文件类型、读取权限和目录规模后重新预览（合计至多10000项、64层）。'; }
+      effects.push('不会调用npm，不会安装其他工具或修改原生聊天配置。');
+    }
   } else {
-    targets = uninstallTargets(env.uninstall).map(({ path, label }) => ({ path, label, kind: 'directory' }));
-    try {
-      for (const target of targets) {
-        const parent = options.env?.LOCALAPPDATA && target.path === resolve(join(options.env.LOCALAPPDATA, 'crosschat'))
-          ? resolve(options.env.LOCALAPPDATA) : env.home;
-        verifyDirectoryPath(parent, target.path, true);
-      }
-      // The legacy serve guard reads tcp snapshots; verify that read path too.
-      verifyDirectoryPath(env.home, join(env.uninstall.crosschatHome, 'tcp'));
-    } catch { enabled = false; reason = '卸载目标目录不可完整核验；检查目录链接、类型及访问权限后重新预览。'; }
+    let skills: SkillTarget[] = [];
+    try { skills = skillPlan(env.home, options.env ?? {}); }
+    catch (error) { enabled = false; reason = error instanceof Error ? error.message : '技能目标无效。'; }
+    if (enabled) {
+      targets = uninstallTargets(env.uninstall, skills).map(({ path, label }) => ({ path, label, kind: 'directory' }));
+      const localAppData = options.env?.LOCALAPPDATA === undefined ? undefined : resolve(options.env.LOCALAPPDATA);
+      try {
+        for (const target of targets) {
+          const skill = skills.find((item) => resolve(item.path) === resolve(target.path));
+          if (skill !== undefined) verifySkillTarget(env.home, skill, true);
+          else verifyDirectoryPath(localAppData !== undefined && target.path === join(localAppData, 'crosschat') ? localAppData : env.home, target.path, true);
+        }
+        // The legacy serve guard reads tcp snapshots; verify that read path too.
+        verifyDirectoryPath(env.home, join(env.uninstall.crosschatHome, 'tcp'));
+      } catch { enabled = false; reason = '卸载目标目录不可完整核验；检查目录链接、类型及访问权限后重新预览。'; }
+    }
     if (enabled) {
       try {
         if (verifyUninstallStatuses(env.uninstall)) {
@@ -229,7 +246,7 @@ export function executeMaintenance(operationId: MaintenanceOperationId, expected
     }
   } else {
     // Exact generated scope is checked before any recursive removal.
-    const allowed = new Set(uninstallTargets(env.uninstall).map((target) => resolve(target.path)));
+    const allowed = new Set(uninstallTargets(env.uninstall, skillPlan(env.home, options.env ?? {})).map((target) => resolve(target.path)));
     const actual = removeUninstallTargets(preview.targets.map(({ path, label }) => ({ path, label })), { remove: (file, recursive) => {
       if (!allowed.has(resolve(file))) throw new Error('Unconfirmed uninstall target');
       (options.effects?.remove ?? ((path: string, recurse: boolean) => rmSync(path, { recursive: recurse, force: true })))(file, recursive);

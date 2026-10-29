@@ -191,8 +191,9 @@ describe('local maintenance plans and exact execution', () => {
     const result = executeMaintenance('install-skills', preview.fingerprint, { ...f.options, effects: { install } });
     expect(install).toHaveBeenCalledOnce();
     expect(result.status).toBe('partial');
-    expect(result.items.map((item) => item.outcome)).toEqual(['failed', 'skipped']);
+    expect(result.items.map((item) => item.outcome)).toEqual(['failed', 'skipped', 'skipped']);
     expect(result.items[1].message).toContain('尚未尝试');
+    expect(result.items[2].message).toContain('尚未尝试');
     expect(JSON.stringify(result)).not.toContain('sensitive');
   });
 

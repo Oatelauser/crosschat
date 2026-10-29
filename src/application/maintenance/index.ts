@@ -10,7 +10,7 @@ export interface MaintenanceTask {
   operationId: MaintenanceOperationId;
   home: string;
   sourceDir: string;
-  env: { LOCALAPPDATA?: string };
+  env: { LOCALAPPDATA?: string; DSH_HOME?: string };
   expectedFingerprint?: string;
   observedAt: number;
 }
@@ -32,10 +32,12 @@ function parseTask(value: unknown): MaintenanceTask {
     || !('env' in value) || typeof value.env !== 'object' || value.env === null || Array.isArray(value.env)) throw new Error('Invalid maintenance task');
   const local = 'LOCALAPPDATA' in value.env ? value.env.LOCALAPPDATA : undefined;
   if (local !== undefined && (typeof local !== 'string' || (local !== '' && !isAbsolute(local)))) throw new Error('Invalid maintenance environment');
+  const dshHome = 'DSH_HOME' in value.env ? value.env.DSH_HOME : undefined;
+  if (dshHome !== undefined && typeof dshHome !== 'string') throw new Error('Invalid maintenance environment');
   const expected = 'expectedFingerprint' in value ? value.expectedFingerprint : undefined;
   if (value.kind === 'execute' && (typeof expected !== 'string' || !/^[a-f0-9]{64}$/.test(expected))) throw new Error('Invalid maintenance confirmation');
   return { kind: value.kind, operationId: value.operationId, home: value.home, sourceDir: value.sourceDir, observedAt: value.observedAt,
-    env: { ...(local === undefined ? {} : { LOCALAPPDATA: local }) }, ...(typeof expected === 'string' ? { expectedFingerprint: expected } : {}) };
+    env: { ...(local === undefined ? {} : { LOCALAPPDATA: local }), ...(dshHome === undefined ? {} : { DSH_HOME: dshHome }) }, ...(typeof expected === 'string' ? { expectedFingerprint: expected } : {}) };
 }
 export { parseTask as parseMaintenanceTask };
 
@@ -44,7 +46,7 @@ export function createLocalMaintenance(options: MaintenanceOptions): LocalMainte
   const run = async (kind: MaintenanceTask['kind'], operationId: MaintenanceOperationId, signal?: AbortSignal, expectedFingerprint?: string): Promise<unknown> => {
     if (signal?.aborted) throw cancelled();
     const task = parseTask({ kind, operationId, home: options.home, sourceDir: options.sourceDir ?? defaultInstallSkillsDeps().sourceDir(),
-      env: { LOCALAPPDATA: options.env?.LOCALAPPDATA }, observedAt: (options.now ?? Date.now)(), expectedFingerprint });
+      env: { LOCALAPPDATA: options.env?.LOCALAPPDATA, DSH_HOME: options.env?.DSH_HOME }, observedAt: (options.now ?? Date.now)(), expectedFingerprint });
     const worker = options.createWorker?.(task) ?? new Worker(new URL('./isolated.js', import.meta.url), { workerData: task });
     let timer: ReturnType<typeof setTimeout> | undefined;
     let detach = () => {};

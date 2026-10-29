@@ -59,7 +59,7 @@
 
 ```bash
 npm i -g @oatelauser/crosschat --registry=https://registry.npmjs.org    # 一行安装（提供 crosschat / multichat 双命令；显式官方源，防镜像滞后装旧版）
-crosschat install-skills          # 协议教学装到两侧 agent
+crosschat install-skills          # 协议教学装到 Claude/Codex/Harness 技能目录
 codex app-server daemon start     # 仅 Codex CLI 接收端需要；桌面版使用自己的原生通道
 ```
 
