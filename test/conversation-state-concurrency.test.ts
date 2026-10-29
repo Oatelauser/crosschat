@@ -10,7 +10,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import { sendMessage } from '../src/application/send/index.js';
 import type { SendDeps } from '../src/application/send/types.js';
 import {
-  continueFromRef, handleForRef, loadAllPairs, pairKeyOf, recordConversation, resolveHandle,
+  claimHandle, continueFromRef, handleForRef, loadAllPairs, pairKeyOf, recordConversation, resolveHandle,
 } from '../src/conversations.js';
 import { encodeRef, newConversationRef, nextTurnRef } from '../src/ref.js';
 import type { ConversationRef, RefEndpoint } from '../src/ref.js';
@@ -122,6 +122,31 @@ function sendDeps(root: string, file: string): SendDeps {
 }
 
 describe('conversation state cross-process writes', () => {
+  it('concurrent allocators cross generations without sharing a slot or reviving the expired token', async () => {
+    const root = freshRoot();
+    const file = join(root, 'conversations.json');
+    const oldest = newConversationRef(claudeA, codexB);
+    expect(await handleForRef(file, oldest)).toBe('cA000');
+    expect(await claimHandle(file, newConversationRef(claudeC, codexD), 999)).toBe('cA998');
+    const refs = [newConversationRef(claudeA, codexD), newConversationRef(claudeC, codexB)];
+    const go = join(root, 'go');
+    const runs = refs.map((ref, index) => runChild(ALLOCATE, [file, JSON.stringify(ref), join(root, `ready-${index}`), go]));
+    for (let index = 0; index < refs.length; index++) await waitForFile(join(root, `ready-${index}`));
+    writeFileSync(go, 'go');
+    const outcomes = await Promise.all(runs);
+    const handles = outcomes.map((run, index) => {
+      expect(run.code, run.stderr).toBe(0);
+      const result = parseLine<{ handle: string; resolve: { ok: boolean; ref?: string } }>(run);
+      expect(result.resolve).toEqual({ ok: true, ref: encodeRef(refs[index]!) });
+      expect(resolveHandle(file, result.handle)).toBe(encodeRef(refs[index]!));
+      return result.handle;
+    });
+    expect(new Set(handles)).toEqual(new Set(['cA999', 'cB000']));
+    expect(() => resolveHandle(file, 'cA000')).toThrow(/已过期或未知/);
+    // Expiry follows machine progress even while the original binding remains in its shard.
+    expect(loadAllPairs(file)[pairKeyOf(oldest.f, oldest.t)]?.handles?.cA000).toBe(encodeRef(oldest));
+  }, 60_000);
+
   it('independent processes allocating at once never share a handle and each resolves to its own ref', async () => {
     const root = freshRoot();
     const file = join(root, 'conversations.json');

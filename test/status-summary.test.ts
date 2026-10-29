@@ -47,7 +47,7 @@ const convRow = (fields: Partial<ConversationSummary>): ConversationSummary => (
   lastFrom: 'claude:sc-1',
   parked: 0,
   receipt: null,
-  handle: 'c3',
+  handle: 'cA014',
   ...fields,
 });
 
@@ -274,7 +274,7 @@ describe('G0 --conversations 柄列', () => {
     };
   }
 
-  it('有柄行尾显示 cN，无柄显示 -', async () => {
+  it('有柄行尾显示五字符柄，无柄显示 -', async () => {
     const withHandle = await runStatus(depsWith({ cA002: sshRef }), false, true);
     expect((withHandle.split('\n')[1] ?? '').trimEnd().endsWith('cA002')).toBe(true);
     const bare = await runStatus(depsWith(undefined), false, true);
@@ -303,7 +303,7 @@ describe('G0 人眼零长引用红线', () => {
 
   it('三段式/--stars/--conversations/旗标明细/send 人眼输出全无 30+ 连续 base64', async () => {
     const outputs: string[] = [
-      await runStatus(summaryDeps({ claude: [claudeEntry('sc-1', 'Mapper', NOW - 60_000)], rows: [convRow({ handle: 'c3' })] }), false),
+      await runStatus(summaryDeps({ claude: [claudeEntry('sc-1', 'Mapper', NOW - 60_000)], rows: [convRow({ handle: 'cA014' })] }), false),
       await runStatus(summaryDeps(), false, false, {}, undefined, true),
       await runStatus(summaryDeps(), false, true),
       await runStatus(summaryDeps(), false, false, { section: 'claude' }),

@@ -133,12 +133,12 @@ describe('composeEnvelope limit teaching + turn budget (票A)', () => {
 });
 
 describe('composeEnvelope short handle (F2 会话短柄)', () => {
-  it('carries the two-char handle in the hint and drops the full ref entirely', () => {
-    const out = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc2_VERYLONGREF', body: 'x', handle: 'c3' });
+  it('carries the five-character handle in the hint and drops the full ref entirely', () => {
+    const out = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc2_VERYLONGREF', body: 'x', handle: 'cA014' });
     expect(out).toBe(
       '<cross-session-message from-name="a" turn="1" from-tool="pending">\n' +
         '<crosschat-reply-hint reply-as="b">' +
-        '回复请运行: crosschat send --conversation c3 --tool claude --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>\n' +
+        '回复请运行: crosschat send --conversation cA014 --tool claude --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>\n' +
         'x\n' +
         '</cross-session-message>',
     );
