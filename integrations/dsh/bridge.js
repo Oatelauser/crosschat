@@ -13,6 +13,15 @@ const MAX_JSON_BYTES = 6 * MAX_TEXT_BYTES + 2048;
 const isRecord = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 const failure = (code, message, status = 500) => Object.assign(new Error(message), { code: `DSH_${code}`, status });
 
+// The error that caused a failure stays the reason; cleanup failures ride on its
+// cause instead of replacing it.
+function withCleanup(error, cleanup) {
+  if (cleanup.length === 0) return error;
+  const extra = cleanup.length === 1 ? cleanup[0] : new AggregateError(cleanup, 'Harness bridge cleanup failed.');
+  if (error?.cause === undefined && Object.isExtensible(error)) { error.cause = extra; return error; }
+  return new AggregateError([error, extra], String(error?.message ?? error), { cause: error?.cause });
+}
+
 function send(response, value, status = 200) {
   if (response.destroyed) return;
   response.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
@@ -132,13 +141,22 @@ export async function mountDshBridge(ctx, host, options = {}) {
   server.keepAliveTimeout = 1000;
   const close = () => closing ??= (async () => {
     closed = true;
-    releaseCallerIdentity?.();
+    // Each release is independent: one failure never skips the rest, and every
+    // failure is reported once all of them were attempted.
+    const failures = [];
+    const attempt = async (step) => { try { await step(); } catch (error) { failures.push(error); } };
+    const release = releaseCallerIdentity;
     releaseCallerIdentity = undefined;
-    await callerIdentityScope?.dispose();
-    const stopped = new Promise((resolve) => server.close(() => resolve()));
-    server.closeAllConnections();
-    await stopped;
-    if (published) {
+    await attempt(() => release?.());
+    await attempt(() => callerIdentityScope?.dispose());
+    await attempt(async () => {
+      const stopped = new Promise((resolve) => server.close(() => resolve()));
+      server.closeAllConnections();
+      await stopped;
+    });
+    // Only after the socket is gone, and only this instance's own record.
+    await attempt(async () => {
+      if (!published) return;
       // Never remove a replacement record, or any other plugin's registration.
       try {
         const details = await lstat(file);
@@ -146,7 +164,8 @@ export async function mountDshBridge(ctx, host, options = {}) {
         const current = JSON.parse(await readFile(file, 'utf8'));
         if (current?.instanceId === instanceId && current?.token === token && current?.pid === process.pid) await unlink(file);
       } catch (error) { if (error?.code !== 'ENOENT') throw error; }
-    }
+    });
+    if (failures.length > 0) throw withCleanup(failures[0], failures.slice(1));
   })();
   try {
     await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
@@ -197,8 +216,11 @@ export async function mountDshBridge(ctx, host, options = {}) {
     ctx.effect(() => close);
     return { close };
   } catch (error) {
-    await close();
-    await unlink(temporary).catch((error) => { if (error?.code !== 'ENOENT') throw error; });
-    throw error;
+    // The mount failure stays the reason: close and the temporary registration are
+    // both still attempted, and their failures ride on its cause.
+    const failures = [];
+    try { await close(); } catch (failure) { failures.push(failure); }
+    try { await unlink(temporary); } catch (failure) { if (failure?.code !== 'ENOENT') failures.push(failure); }
+    throw withCleanup(error, failures);
   }
 }

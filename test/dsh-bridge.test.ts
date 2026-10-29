@@ -1,14 +1,44 @@
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountDshBridge } from '../integrations/dsh/bridge.js';
 
-const cleanup: Array<() => Promise<void>> = [];
-afterEach(async () => { for (const dispose of cleanup.splice(0).reverse()) await dispose(); });
+// Controlled native-capability failure: the temporary registration is on disk but
+// linking it into place fails, which is the one mount step that leaves a real
+// temporary file behind for the mount catch to remove.
+const boundary = vi.hoisted(() => ({ failLink: false, linkSourceBytes: 0 }));
+vi.mock('node:fs/promises', async (original) => {
+  const actual = await original<typeof import('node:fs/promises')>();
+  return { ...actual, link: async (...args: Parameters<typeof actual.link>) => {
+    if (boundary.failLink) {
+      boundary.failLink = false;
+      boundary.linkSourceBytes = (await actual.stat(args[0])).size;
+      throw new Error('link injection failed');
+    }
+    return actual.link(...args);
+  } };
+});
 
-async function fixture(profileContext?: unknown, withShellEnv = false, dynamicShellEnv = false) {
+const cleanup: Array<() => Promise<void>> = [];
+// A memoized rejected close hands the same injected error back to whoever asks.
+const expected: unknown[] = [];
+// Every fixture-owned release is attempted; an injected failure must not skip the
+// remaining cleanup of the temporary root.
+afterEach(async () => {
+  const failures: unknown[] = [];
+  for (const dispose of cleanup.splice(0).reverse()) {
+    try { await dispose(); } catch (error) { if (!expected.includes(error)) failures.push(error); }
+  }
+  expected.length = 0;
+  if (failures.length > 0) throw new AggregateError(failures, `fixture cleanup failed: ${failures.map((error) => String((error as Error)?.message ?? error)).join('; ')}`);
+});
+beforeEach(() => { boundary.failLink = false; boundary.linkSourceBytes = 0; });
+
+type Faults = { releaseThrows?: boolean; disposeRejects?: boolean };
+
+async function environment(profileContext?: unknown, withShellEnv = false, dynamicShellEnv = false, faults: Faults = {}) {
   const home = await mkdtemp(join(tmpdir(), 'crosschat-dsh-bridge-'));
   cleanup.push(() => rm(home, { recursive: true, force: true }));
   const received: Array<{ id: string; mode: string; message: { id: string; role: string; content: Array<{ type: string; text: string }>; source: unknown } }> = [];
@@ -23,11 +53,17 @@ async function fixture(profileContext?: unknown, withShellEnv = false, dynamicSh
   const effects: Array<() => void | Promise<void>> = [];
   type Contributor = { name: string; variables: Record<string, { description: string }>; resolve: (execution: { agent?: unknown }) => Record<string, string> };
   const contributors = new Map<string, Contributor>();
+  const stats = { releases: 0 };
   let shellEnvAvailable = withShellEnv;
   const shellEnv = { register: (contributor: Contributor) => {
     if (contributors.has(contributor.name)) throw new Error('Duplicate contributor');
     contributors.set(contributor.name, contributor);
-    return () => { contributors.delete(contributor.name); };
+    let pending = faults.releaseThrows === true;
+    return () => {
+      contributors.delete(contributor.name);
+      stats.releases += 1;
+      if (pending) { pending = false; const error = new Error('contributor release failed'); expected.push(error); throw error; }
+    };
   } };
   // Cordis' public ctx.inject contract reruns a child scope after a dependency
   // appears or changes, disposing that scope when the dependency disappears.
@@ -60,8 +96,10 @@ async function fixture(profileContext?: unknown, withShellEnv = false, dynamicSh
       bindings.push(binding);
       if (shellEnvAvailable) void activate(binding);
       let disposed = false;
+      let rejected = false;
       const dispose = async () => {
         if (disposed) return;
+        if (faults.disposeRejects === true && !rejected) { rejected = true; const error = new Error('scope dispose rejected'); expected.push(error); throw error; }
         disposed = true;
         bindings.splice(bindings.indexOf(binding), 1);
         for (const release of binding.effects.splice(0).reverse()) await release();
@@ -71,14 +109,20 @@ async function fixture(profileContext?: unknown, withShellEnv = false, dynamicSh
     } } : {}),
   };
   const host = { getDshRuntimeVersion: () => '0.2.1-rc.2', createUserMessage: (input: { content: Array<{ type: string; text: string }>; source: unknown }) => Object.freeze({ ...input, id: randomUUID(), role: 'user' }) };
-  const bridge = await mountDshBridge(ctx, host, { home });
-  cleanup.push(async () => { for (const dispose of effects.reverse()) await dispose(); });
   const dir = join(home, '.crosschat', 'dsh', 'instances');
-  const [filename] = await readdir(dir);
-  const file = join(dir, filename);
+  // The fixture owns its effects even when the mount itself fails.
+  cleanup.push(async () => { for (const dispose of effects.reverse()) await dispose(); });
+  return { home, dir, received, agents, agent, effects, ctx, host, contributors, setShellEnv, stats };
+}
+
+async function fixture(profileContext?: unknown, withShellEnv = false, dynamicShellEnv = false, faults: Faults = {}) {
+  const value = await environment(profileContext, withShellEnv, dynamicShellEnv, faults);
+  const bridge = await mountDshBridge(value.ctx, value.host, { home: value.home });
+  const [filename] = await readdir(value.dir);
+  const file = join(value.dir, filename);
   const registration = JSON.parse(await readFile(file, 'utf8'));
   const headers = { authorization: `Bearer ${registration.token}` };
-  return { home, dir, file, registration, headers, bridge, received, agents, agent, effects, ctx, host, contributors, setShellEnv };
+  return { ...value, file, registration, headers, bridge };
 }
 
 describe('DSH Host bridge', () => {
@@ -252,6 +296,69 @@ describe('DSH Host bridge', () => {
     await expect(fetch(`${value.registration.url}/v1/info`, { headers: value.headers })).rejects.toThrow();
     expect(value.agents.size).toBe(2);
     await second.close();
+    expect(await readdir(value.dir)).toEqual([]);
+  });
+
+  it('still stops the listener and removes its own registration when the contributor release fails', async () => {
+    const value = await fixture({ name: 'web', dir: '/native-profile' }, true, false, { releaseThrows: true });
+    await expect(value.bridge.close()).rejects.toThrow('contributor release failed');
+    await expect(fetch(`${value.registration.url}/v1/info`, { headers: value.headers })).rejects.toThrow();
+    expect(await readdir(value.dir)).toEqual([]);
+    expect(value.contributors.size).toBe(0);
+    expect(value.agents.size).toBe(2);
+  });
+
+  it('still stops the listener and removes its own registration when the dependency scope disposal rejects', async () => {
+    const value = await fixture({ name: 'web', dir: '/native-profile' }, true, true, { disposeRejects: true });
+    await expect(value.bridge.close()).rejects.toThrow('scope dispose rejected');
+    await expect(fetch(`${value.registration.url}/v1/info`, { headers: value.headers })).rejects.toThrow();
+    expect(await readdir(value.dir)).toEqual([]);
+    expect(value.contributors.size).toBe(0);
+    expect(value.agents.size).toBe(2);
+  });
+
+  it('shares one closing attempt between concurrent closes without releasing twice', async () => {
+    const value = await fixture({ name: 'web', dir: '/native-profile' }, true);
+    const first = value.bridge.close();
+    const second = value.bridge.close();
+    expect(second).toBe(first);
+    await first;
+    expect(value.stats.releases).toBe(1);
+    expect(await readdir(value.dir)).toEqual([]);
+  });
+
+  it('closes through the plugin effect that owns the bridge', async () => {
+    const value = await fixture();
+    const dispose = value.effects.at(-1);
+    expect(dispose).toBeTypeOf('function');
+    await dispose?.();
+    await expect(fetch(`${value.registration.url}/v1/info`, { headers: value.headers })).rejects.toThrow();
+    expect(await readdir(value.dir)).toEqual([]);
+  });
+
+  it('leaves a replacement registration, other instances and borrowed agents untouched while closing', async () => {
+    const value = await fixture();
+    const second = await mountDshBridge(value.ctx, value.host, { home: value.home });
+    const replacement = { ...value.registration, token: 'f'.repeat(64) };
+    await writeFile(value.file, JSON.stringify(replacement));
+    await value.bridge.close();
+    // The replacement record and the second bridge's registration both survive.
+    expect(await readdir(value.dir)).toHaveLength(2);
+    expect(JSON.parse(await readFile(value.file, 'utf8')).token).toBe(replacement.token);
+    expect(value.agents.size).toBe(2);
+    await second.close();
+    expect(await readdir(value.dir)).toHaveLength(1);
+  });
+
+  it('keeps the mount failure as the reason and removes the temporary registration it left behind', async () => {
+    const value = await environment({ name: 'web', dir: '/native-profile' }, true, false, { releaseThrows: true });
+    boundary.failLink = true;
+    const failure = await mountDshBridge(value.ctx, value.host, { home: value.home }).then(() => undefined, (error: unknown) => error);
+    // The mount really did leave a written temporary file behind before failing.
+    expect(boundary.linkSourceBytes).toBeGreaterThan(0);
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toBe('link injection failed');
+    expect((failure as Error & { cause?: Error }).cause?.message).toBe('contributor release failed');
     expect(await readdir(value.dir)).toEqual([]);
   });
 });
