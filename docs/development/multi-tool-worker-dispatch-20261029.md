@@ -17,7 +17,7 @@
 
 本会话不再派发通信相关子单。用户明确将全部通信任务交给现有 Codex Desktop 会话 **Bug修复2**，由用户亲自对接；见[完整交接](communication-handoff-bugfix2-20261029.md)。W08 最新研究交付到 `1066e30`，尚未完成 root 最终验收，按真实状态随证据交接。短信封内部 subagent 已停写，确认没有任何代码/测试修改。
 
-当前实施 [C04-I01：正式 Desktop 报告与生命周期编排](evidence/c04-worker-20261029/I01-task.md)。仅复用既有 `dsh-compat-ci.mjs` 与对应测试，开发独立报告核验与离线串行核心；Web默认入口及范围保持，不新增功能文件、不在本机安装桌面或触发托管。真实Desktop driver/runner/原生验收尚未实现，不以离线通过关闭C04。
+当前实施 [C04-I01-R1：绑定、读取预算与部分安装归属](evidence/c04-worker-20261029/I01-R1-task.md)。首交付到5d4ba3b，完整2553/11、root定向23通过，但[独立审查](evidence/c04-worker-20261029/I01-review.md)仍发现实例/会话/运行绑定、完整字段/截断/读取预算与部分安装失败归属缺口，尚未验收。R1只修原两个功能文件及证据；Web默认入口及范围保持，不新增功能文件、不在本机安装桌面或触发托管。真实Desktop driver/runner/原生验收尚未实现，不以离线通过关闭C04。
 
 [C08-I01 默认 Harness 技能维护已最终验收](evidence/c08-worker-20261029/I01-final-review.md)：最终产品 `a77a39b`，两轴复审通过，root 七套件87项通过；worker完整check第二次2544通过/11原有跳过，最多2/最少1 worker。首次全量的machines断言失败仍完整保留，根因未确认；不以随后通过替代根因证据。I01/R1/R2移出活动子单，原任务书仅作批准证据。[I02 生命周期说明已最终验收](evidence/c13-worker-20261029/I02-final-review.md)，继续作为合同输入。新增功能文件或用户必需操作仍须先决定。
 
