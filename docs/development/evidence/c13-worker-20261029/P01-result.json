@@ -1,0 +1,122 @@
+{
+  "probe": "c13-harness-lifecycle-close-repro",
+  "version": 1,
+  "generatedAt": "2026-10-29T09:54:13.622Z",
+  "node": "v25.0.0",
+  "platform": "win32",
+  "baseline": "b062c3e450794523c3633ef013481158e057b4d9",
+  "scope": "synthetic ctx/host in an exclusive temp home; no native Harness, no message delivery",
+  "limits": {
+    "childMs": 20000,
+    "probeMs": 3000,
+    "stdoutBytes": 65536
+  },
+  "runs": [
+    {
+      "scenario": "control",
+      "childExit": 0,
+      "timedOut": false,
+      "mountError": null,
+      "registrationPublished": true,
+      "closeRejected": false,
+      "closeError": null,
+      "sameSettledPromise": true,
+      "listenerWhileProcessAlive": {
+        "answered": false,
+        "error": "ECONNREFUSED"
+      },
+      "registrationStillPresent": false,
+      "registrationFilesAfterExit": 0,
+      "listenerAfterChildExit": {
+        "answered": false,
+        "error": "ECONNREFUSED"
+      },
+      "stderr": null
+    },
+    {
+      "scenario": "release-throws",
+      "childExit": 0,
+      "timedOut": false,
+      "mountError": null,
+      "registrationPublished": true,
+      "closeRejected": true,
+      "closeError": {
+        "name": "Error",
+        "message": "contributor release failed"
+      },
+      "sameSettledPromise": true,
+      "listenerWhileProcessAlive": {
+        "answered": true,
+        "status": 503
+      },
+      "registrationStillPresent": true,
+      "registrationFilesAfterExit": 1,
+      "listenerAfterChildExit": {
+        "answered": false,
+        "error": "ECONNREFUSED"
+      },
+      "stderr": null
+    },
+    {
+      "scenario": "scope-dispose-rejects",
+      "childExit": 0,
+      "timedOut": false,
+      "mountError": null,
+      "registrationPublished": true,
+      "closeRejected": true,
+      "closeError": {
+        "name": "Error",
+        "message": "scope dispose failed"
+      },
+      "sameSettledPromise": true,
+      "listenerWhileProcessAlive": {
+        "answered": true,
+        "status": 503
+      },
+      "registrationStillPresent": true,
+      "registrationFilesAfterExit": 1,
+      "listenerAfterChildExit": {
+        "answered": false,
+        "error": "ECONNREFUSED"
+      },
+      "stderr": null
+    },
+    {
+      "scenario": "mount-catch",
+      "childExit": 0,
+      "timedOut": false,
+      "mountError": {
+        "name": "Error",
+        "message": "scope dispose failed"
+      },
+      "registrationPublished": true,
+      "closeRejected": false,
+      "closeError": null,
+      "sameSettledPromise": false,
+      "listenerWhileProcessAlive": {
+        "answered": true,
+        "status": 503
+      },
+      "registrationStillPresent": true,
+      "registrationFilesAfterExit": 1,
+      "listenerAfterChildExit": {
+        "answered": false,
+        "error": "ECONNREFUSED"
+      },
+      "stderr": null
+    }
+  ],
+  "summary": {
+    "controlClosedCleanly": true,
+    "releaseFailureLeaksListener": true,
+    "disposeFailureLeaksListener": true,
+    "mountCatchReplacesOriginalError": true,
+    "closeIsMemoized": true,
+    "childExitReclaimsListener": true
+  },
+  "cleanup": {
+    "created": true,
+    "removed": true
+  },
+  "wrote": true
+}
