@@ -93,7 +93,7 @@ GREEN 后，同一组测试全部通过。
 - 逐项保证：安装前计划（`skillPlan`/preview targets）、首次安装返回目标（`runInstallSkills` 返回值）、对应 TUI 计划、匹配卸载目标在 Windows 下均只出现一次；POSIX 大小写不同目录仍计划/安装/卸载三次；默认三目标与“已存在同目录”身份去重不回退（既有用例继续通过）。
 - 定向验证：install-skills、uninstall、maintenance、maintenance-boundaries、tui-composition、tui-maintenance、cli-args 七套件 **87/87 通过**。
 - 完整检查：`I01-R2-check.txt`（769 行）按同一环境变量执行两次完整 `npm run check`：
-  - 第一次：**退出码 1**，2543 通过/1 失败/11 跳过。失败为 `test/conversations.test.ts`「016① … recordConversation 写入 mid8→名」；`recordConversation` 按设计吞掉锁超时，满载下偶发，该文件单独运行 26/26 通过，本单产品改动仅 `skills.ts`、不在其依赖路径，判为既有负载敏感而非本单回归。首败原样保留。
+  - 第一次：**退出码 1**，2543 通过/1 失败/11 跳过。失败为 `test/conversations.test.ts`「016① … recordConversation 写入 mid8→名」，machines 查询期望 `cloudleg`、实际 `undefined`。随后该文件单独运行 26/26 通过，第二次全量亦通过；这些结果不能证明首次失败由锁超时或负载引起，**根因尚未确认**。当前未发现与本轮唯一产品改动 `skills.ts` 的直接依赖关系，不据此宣称已排除回归。首败原样保留；通信实现仍归 Bug修复2，本单未改。
   - 第二次（追加写入同一日志，未覆盖首败）：**退出码 0**；lint 无输出，导入图 203 模块/682 边无违规，`tsc` 通过，231 文件通过/3 跳过，**2544 项通过/11 跳过**（较 R1 +3，即本轮新增用例）。
 - 未测：三平台 CI 未跑；未运行真实安装/卸载，未验证正式 Harness 加载；POSIX 分支只以同一用例的非 Windows 断言表达，本机（Windows）未执行该分支。
 - 清理：fixture 全为本次独占临时目录并随用例清理；未写用户 `.claude`/`.codex`/`.dsh`，未跑 npm 安装/卸载或 `dsh plugin`；未 push、未 amend。

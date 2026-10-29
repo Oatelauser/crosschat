@@ -91,13 +91,13 @@ npm/Web 与正式 Desktop 不互相冒充：上表里所有"未测"都是指正�
 | 新增 `crosschat dsh install/update/remove` 自动命令 | **不建议** | 原生 `dsh plugin` 已是官方入口，且 Desktop 与 npm 是两套 CLI；crosschat 再包一层会与官方语义漂移，装错 profile 仍然静默 |
 | 为桥设默认 profile | **不设**，必须显式指定 | Desktop profile 只能由 Desktop 自己的 CLI 管理，默认值会把"装错地方"变成默认行为 |
 | 卸载时自动调用原生管理器 | **不调用**，只给命令与诊断 | 会改用户原生配置，且 npm 与 Desktop 是两套 CLI、各管各的 profile；两套都有 `plugin ... remove`（固定提交核实），但自动化仍需替用户选 profile、并在退出后执行，做不做由用户决定 |
-| 技能是否纳入 `install-skills` 的 Harness 写入 | **已允许新增skill，按 A 默认方案实施（C08-I01 已提交）** | 用户已知默认第三目标会复制技能文件；仍不自动安装原生工具或桥 |
+| 技能是否纳入 `install-skills` 的 Harness 写入 | **已允许新增skill，A 默认方案 C08-I01 已最终验收** | 用户已知默认第三目标会复制技能文件；仍不自动安装原生工具或桥 |
 
 现有手工流程（复制 skill、`dsh plugin add`）不需要用户再批准，本单只是把它写清。
 
 ### C08 写入范围选择记录
 
-I02 已通过[最终验收](evidence/c13-worker-20261029/I02-final-review.md)，可消费上述合同。讨论时 `install-skills` 写 Claude/Codex 两个目录，OpenCode 复用 Claude 目录，Harness 手工复制。用户现允许新增skill，root按已解释的 A 默认方案派发[C08-I01](evidence/c08-worker-20261029/I01-task.md)；下面保留两种方式的影响记录，B未选用，实施完成前不声称已接通。
+I02 已通过[最终验收](evidence/c13-worker-20261029/I02-final-review.md)，可消费上述合同。讨论时 `install-skills` 写 Claude/Codex 两个目录，OpenCode 复用 Claude 目录，Harness 手工复制。用户随后允许新增skill，A 默认方案已由 [C08-I01 最终验收](evidence/c08-worker-20261029/I01-final-review.md)收口；下面保留当时两种方式的影响记录，B未选用。
 
 | 选择 | 用户可见行为 | 影响 |
 | --- | --- | --- |
@@ -106,7 +106,7 @@ I02 已通过[最终验收](evidence/c13-worker-20261029/I02-final-review.md)，
 
 实施复用现有维护模块，CLI/TUI 使用同一目标计划；不新增持久追踪文件，不自动调用 Harness 插件管理器。技能目录之外的原生配置、插件引用、聊天不纳入技能删除。C08-I01明确：显式 `--dir` 三目标均在其根内并忽略宿主DSH_HOME；普通环境尊重当前DSH_HOME；更新保留现有覆盖复制、不清额外文件；不扫描历史环境/项目或追踪旧自定义副本。其余C08合同继续保留，不由本次例外推定全部批准或完成。
 
-C08-I01 实现事实：`skillPlan` 统一产出 Claude、Codex、Harness 三个目标（Harness 默认 `<home>/.dsh/skills/crosschat`，非空相对 `DSH_HOME` 在各入口以具体路径拒绝，`--dir` 与显式 TUI 隔离 home 不读宿主 `DSH_HOME`）；CLI 安装/卸载与 TUI 维护、worker 环境 DTO 使用同一计划，卸载只删当前计划的 `skills/crosschat`。TDD RED/GREEN 提交与最终检查见本单 review-input。
+C08-I01 实现事实：`skillPlan` 统一产出 Claude、Codex、Harness 三个目标（Harness 默认 `<home>/.dsh/skills/crosschat`，非空相对 `DSH_HOME` 在各入口以具体路径拒绝，`--dir` 与显式 TUI 隔离 home 不读宿主 `DSH_HOME`）；CLI 安装/卸载与 TUI 维护、worker 环境 DTO 使用同一计划，卸载只删当前计划的 `skills/crosschat`。Windows 首次安装及已有同目录的大小写别名去重已补齐。产品 `a77a39b`、root定向87通过、worker完整check第二次2544/11与首次失败边界见 [C08-I01最终验收](evidence/c08-worker-20261029/I01-final-review.md)。
 
 ## 六、依赖边界
 
