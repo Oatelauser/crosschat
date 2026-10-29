@@ -2,6 +2,8 @@
 
 2026-10-29（UTC+8）。C14-W07 研究单 + W07-R1 返修。起始 `58508d6a78865e884df684092da9979351683f68`（首轮），返修基线 `572280dd69e391c5d850401adb9a7a59208d24d8`，branch `codex/core-refactor-pre-tui`。本单不改产品、不碰用户状态、不试发；不追认真实历史 c14 由哪次竞争产生。**首轮“别名式恢复 + 不改 LRU8 + 旧号不动”可闭环的结论已被 root 审计推翻，本稿撤回该结论。**
 
+root 验收补记：用户随后明确不新增短柄落盘文件，以避免运维压力。下文 4.1 的新增独立账本文件路线不采用，保留仅为研究溯源，不再是待批准建议；该决定不自动批准其它候选或修改既有分片字段。研究验收与最新边界见 [W07-final-review.md](../development/evidence/c14-worker-20261029/W07-final-review.md)。
+
 ## 一、结论先行
 
 1. 用户看到的“hint 又变成长 mc2”已复现：历史 c14 在两个分片里各绑一个不同 nonce 时，`handleForRef` 返回 `undefined`，`composeEnvelope` 回退完整 ref（E1）。
