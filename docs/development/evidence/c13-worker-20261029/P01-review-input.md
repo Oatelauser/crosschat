@@ -73,3 +73,46 @@
 5. mount 失败时先留住原始错误，清理完再抛原始错误（清理错误挂 `cause`），不再被 close 错误顶替。
 
 验收用现有 `fixture()` 扩展，跑 `npx vitest run test/dsh-bridge.test.ts` 与 caller-source 用例，产品基线不变。**不做**：自动安装/更新/禁用/移除命令、默认 profile、卸载时调用原生管理器、Desktop 正式包验证——这几项要么属 C08/C10/C04，要么需用户拍板（见方案 §五）。
+
+## 7. R1 返修（基线 `2c4d48d0e31f0958b51a3a8b18fc41bcf261a779`）
+
+按 root 审查（`P01-review.md`）只收口草案事实、下一单范围、复现采证有效性三件事。不改产品、不改已有测试、不改原 `P01-result.json`（SHA256 仍为 `e7497444e6dff4cef9cfb07c188ff0851216e84d43e854bafddc9a31a7100b97`）。
+
+### 7.1 草案事实修订
+
+| 原表述 | 修订后 |
+| --- | --- |
+| 升级 crosschat 会换掉 bridge 绝对路径 | **可能**改变，取决于安装方式；指南措辞是"升级改变了安装路径时" |
+| 手工 skill 更新沿用 `cpSync` 行为 | 手工复制没有脚本；`install-skills` 的 `cpSync` 只写 `.claude`/`.codex`，不能当作该流程的执行证据；手工复制是否残留源已删文件未核实 |
+| 禁用插件 / Host 重启 → 旧登记变 dead pid | 拆成三种生命周期：同 Host 内禁用 → disposer → `close()` 释放自身登记；子 scope 撤销 → 只撤身份贡献、HTTP 保留；Host 退出/崩溃 → 无 disposer 才留 dead pid 登记 |
+| `dsh plugin remove` + 先移除再添加 | 准确 remove 语法与顺序无固定依据，标**待核验**；退出 Host 后的 CLI 操作不会回头触发运行中进程的 close |
+| 卸载时自动调原生管理器"无法可靠实现" | 降级：没有固定依据，不作为结论，由用户决定 |
+
+### 7.2 下一单范围
+
+- 删除"失败后重试"和逐资源 done 状态；保留同一 closing Promise：首次逐项独立清理、全部尝试完再报告错误；重复/并发 close 返回同一 promise、不重复释放。
+- 明确"同一 Host 内释放失败"与子 scope 撤销、Host 重启是不同生命周期，后者不在本单行为内。
+- 验收改为"既有用例无回归 + 新增四条通过"；旧的 2503 不是"必须不变"的门槛。
+
+### 7.3 复现工具采证门禁
+
+- 每场只接受：子进程退出 0、未超时、未截断、RESULT 可解析且字段齐全、场景名匹配、退出后端口被拒。**只有 `ECONNREFUSED` 算确认关闭**；缺 URL 或未探测记 `confirmedClosed:false`，超时/其它网络错误保留未核实。
+- 采证失败写入 `problems`，与"无复现"（`notReproduced`）分开；任一非空退出 1。
+- 子进程输出按字节封顶（stdout 64KiB / stderr 16KiB）并记录超限；`error` 只记录，收束仍等 `close`；超时/超限 kill 后给 5s close 截止，未确认就停止后续场景、保留临时根，在 `cleanup.retained/root` 报告，父 finally 不删根。
+- 只管理本次直接启动、不生后代的 node 子进程；继续清 `CROSSCHAT_LIVE`，不做宿主扫描/杀树，不引入 W05 框架。
+
+### 7.4 本轮运行
+
+| 检查 | 命令 | 结果 |
+| --- | --- | --- |
+| 语法 | `node --check P01-repro.mjs` | 通过 |
+| 默认正常复现 | `node P01-repro.mjs` | 退出 0；四场 `reproduced`，`problems:[]`、`notReproduced:[]`、`cleanup.removed:true` |
+| 结果落盘 | `node P01-repro.mjs --out P01-R1-result.json` | 退出 0，`wrote:true` |
+| 覆盖保护 | 同路径再跑 | 退出 3，字节未变 |
+| 采证失败反例 | 自有副本（子进程 import 缺失） | 退出 1；四场 `evidence-failure`；`problems` 12 条；`notReproduced:[]` |
+| 原证据 | `sha256sum P01-result.json` | `e7497444…`，未变 |
+| 新结果 | `sha256sum P01-R1-result.json` | `81d383dfdc91fa188f32c8fd102ea75ce3730950411701a3f2edb9e23911d6f3` |
+| 临时残留 | `%TEMP%/c13-p01-*`、反例副本目录 | none（副本目录已删） |
+| 差异 | `git diff --check` | 通过 |
+
+采证失败反例的做法：把脚本复制到自己的临时目录（`%TEMP%/c13-p01-r1-negative/`），子进程的相对 import 因路径变化找不到 `integrations/dsh/bridge.js`，四个子进程都以退出码 1 结束且没有 RESULT。工具没有把它当成功：`verdicts` 四场全是 `evidence-failure`，`problems` 逐条列出"child exited 1 / no parsable RESULT line / port release not confirmed"，退出 1。反例目录用完即删，`%TEMP%` 无残留。

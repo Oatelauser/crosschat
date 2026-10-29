@@ -1,0 +1,170 @@
+{
+  "probe": "c13-harness-lifecycle-close-repro",
+  "version": 2,
+  "generatedAt": "2026-10-29T10:01:59.027Z",
+  "node": "v25.0.0",
+  "platform": "win32",
+  "baseline": "2c4d48d0e31f0958b51a3a8b18fc41bcf261a779",
+  "scope": "synthetic ctx/host in an exclusive temp home; no native Harness, no message delivery",
+  "limits": {
+    "childMs": 20000,
+    "closeMs": 5000,
+    "probeMs": 3000,
+    "stdoutBytes": 65536,
+    "stderrBytes": 16384
+  },
+  "runs": [
+    {
+      "scenario": "control",
+      "verdict": "reproduced",
+      "childExit": 0,
+      "killedFor": null,
+      "closeUnconfirmed": false,
+      "childErrors": [],
+      "stdoutBytes": 303,
+      "stderrBytes": 0,
+      "stdoutTruncated": false,
+      "stderrTruncated": false,
+      "mountError": null,
+      "registrationPublished": true,
+      "closeOutcome": "resolved",
+      "closeError": null,
+      "sameSettledPromise": true,
+      "listenerWhileProcessAlive": {
+        "answered": false,
+        "code": "ECONNREFUSED",
+        "confirmedClosed": true
+      },
+      "registrationStillPresent": false,
+      "registrationFilesAfterExit": 0,
+      "listenerAfterChildExit": {
+        "answered": false,
+        "code": "ECONNREFUSED",
+        "confirmedClosed": true
+      },
+      "problems": [],
+      "mismatches": [],
+      "stderr": null
+    },
+    {
+      "scenario": "release-throws",
+      "verdict": "reproduced",
+      "childExit": 0,
+      "killedFor": null,
+      "closeUnconfirmed": false,
+      "childErrors": [],
+      "stdoutBytes": 351,
+      "stderrBytes": 0,
+      "stdoutTruncated": false,
+      "stderrTruncated": false,
+      "mountError": null,
+      "registrationPublished": true,
+      "closeOutcome": "rejected",
+      "closeError": {
+        "name": "Error",
+        "message": "contributor release failed"
+      },
+      "sameSettledPromise": true,
+      "listenerWhileProcessAlive": {
+        "answered": true,
+        "status": 503,
+        "confirmedClosed": false
+      },
+      "registrationStillPresent": true,
+      "registrationFilesAfterExit": 1,
+      "listenerAfterChildExit": {
+        "answered": false,
+        "code": "ECONNREFUSED",
+        "confirmedClosed": true
+      },
+      "problems": [],
+      "mismatches": [],
+      "stderr": null
+    },
+    {
+      "scenario": "scope-dispose-rejects",
+      "verdict": "reproduced",
+      "childExit": 0,
+      "killedFor": null,
+      "closeUnconfirmed": false,
+      "childErrors": [],
+      "stdoutBytes": 352,
+      "stderrBytes": 0,
+      "stdoutTruncated": false,
+      "stderrTruncated": false,
+      "mountError": null,
+      "registrationPublished": true,
+      "closeOutcome": "rejected",
+      "closeError": {
+        "name": "Error",
+        "message": "scope dispose failed"
+      },
+      "sameSettledPromise": true,
+      "listenerWhileProcessAlive": {
+        "answered": true,
+        "status": 503,
+        "confirmedClosed": false
+      },
+      "registrationStillPresent": true,
+      "registrationFilesAfterExit": 1,
+      "listenerAfterChildExit": {
+        "answered": false,
+        "code": "ECONNREFUSED",
+        "confirmedClosed": true
+      },
+      "problems": [],
+      "mismatches": [],
+      "stderr": null
+    },
+    {
+      "scenario": "mount-catch",
+      "verdict": "reproduced",
+      "childExit": 0,
+      "killedFor": null,
+      "closeUnconfirmed": false,
+      "childErrors": [],
+      "stdoutBytes": 345,
+      "stderrBytes": 0,
+      "stdoutTruncated": false,
+      "stderrTruncated": false,
+      "mountError": {
+        "name": "Error",
+        "message": "scope dispose failed"
+      },
+      "registrationPublished": true,
+      "closeOutcome": "not-called",
+      "closeError": null,
+      "sameSettledPromise": false,
+      "listenerWhileProcessAlive": {
+        "answered": true,
+        "status": 503,
+        "confirmedClosed": false
+      },
+      "registrationStillPresent": true,
+      "registrationFilesAfterExit": 1,
+      "listenerAfterChildExit": {
+        "answered": false,
+        "code": "ECONNREFUSED",
+        "confirmedClosed": true
+      },
+      "problems": [],
+      "mismatches": [],
+      "stderr": null
+    }
+  ],
+  "verdicts": {
+    "control": "reproduced",
+    "release-throws": "reproduced",
+    "scope-dispose-rejects": "reproduced",
+    "mount-catch": "reproduced"
+  },
+  "problems": [],
+  "notReproduced": [],
+  "cleanup": {
+    "created": true,
+    "removed": true,
+    "retained": false,
+    "root": null
+  },
+  "wrote": true
+}
