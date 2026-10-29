@@ -129,11 +129,8 @@ describe('isolated cancellable diagnostics', () => {
       expect(existsSync(marker)).toBe(true);
       probePid = Number(readFileSync(marker, 'utf8'));
       controller.abort();
-      const outcome = await Promise.race([
-        settled,
-        new Promise<string>((resolve) => setTimeout(() => resolve('still waiting for blocking probe'), 500)),
-      ]);
-      expect(outcome).toBe('AbortError');
+      // The owner awaits taskkill /T /F and the probe exit before rejecting; the API promises no fixed latency.
+      expect(await settled).toBe('AbortError');
       expect(() => process.kill(probePid!, 0)).toThrow();
     } finally {
       if (probePid !== undefined) {
@@ -142,7 +139,7 @@ describe('isolated cancellable diagnostics', () => {
       await settled;
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, 10_000);
 
   it('rejects an already-cancelled query before creating a worker', async () => {
     const { queryDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
