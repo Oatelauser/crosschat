@@ -35,16 +35,24 @@ export function sameInstance(left, right) {
 
 /**
  * Relate a pipe server pid to this process using one process-table snapshot.
- * A pid present in the live ancestor chain is the same live process: two live
- * processes cannot share a pid, and a named-pipe server dies with its process.
- * A shared ancestor is a common origin only — never the same instance.
+ * The instance is confirmed only when the pid and the creation time sampled
+ * during the pipe query match the same table row: a bare pid is not a
+ * generation check, and missing metadata is unverifiable rather than assumed.
+ * Inside one live snapshot a pid in the ancestor chain is the same live
+ * process — two live processes cannot share a pid, and a named-pipe server
+ * dies with its process. A shared ancestor is a common origin only.
  */
-export function compareAnchors({ serverPid, selfPid, table }) {
+export function compareAnchors({ serverPid, serverCreatedAt, selfPid, table }) {
   if (!Number.isInteger(serverPid) || serverPid <= 0) return { relation: 'unverifiable', reasons: ['no-server-pid'] };
   const self = traceAncestry(selfPid, table);
   const server = table.get(serverPid);
-  const detail = { serverPid, server: brief(server), selfChain: self.chain.map(brief), selfStopReason: self.stopReason };
+  const instance = sameInstance({ pid: serverPid, createdAt: serverCreatedAt }, server);
+  const detail = { serverPid, serverCreatedAt: serverCreatedAt ?? null, instance, server: brief(server), selfChain: self.chain.map(brief), selfStopReason: self.stopReason };
   if (server === undefined) return { relation: 'unverifiable', reasons: ['server-pid-not-in-process-table'], ...detail };
+  if (instance.same !== true) {
+    const reason = instance.reason === 'pid-reused' ? 'pid-reused-between-pipe-query-and-process-table' : 'server-instance-metadata-incomplete';
+    return { relation: 'unverifiable', reasons: [reason], ...detail };
+  }
   if (serverPid === selfPid) return { relation: 'same-process', reasons: [], ...detail };
   const depth = self.chain.findIndex((row) => row.pid === serverPid);
   if (depth >= 0) return { relation: 'server-is-ancestor', depth, reasons: [], ...detail };
@@ -108,30 +116,42 @@ public static class W08Pipe {
 }
 '@
 $full = [string]::Concat([char]92, [char]92, '.', [char]92, 'pipe', [char]92, $args[0])
-[W08Pipe]::Query($full, [int]$args[1])
+$result = [W08Pipe]::Query($full, [int]$args[1]) | ConvertFrom-Json
+# The creation time is sampled right after the pid, through the same source the
+# ancestor table uses, so the two values stay exactly comparable.
+if ($result.ok -eq $true) {
+  $created = $null
+  try {
+    $row = Get-CimInstance Win32_Process -Filter ("ProcessId=" + $result.serverPid)
+    if ($null -ne $row) { $created = $row.CreationDate.ToFileTimeUtc() }
+  } catch { }
+  $result | Add-Member -NotePropertyName serverCreatedAt -NotePropertyValue $created -Force
+}
+$result | ConvertTo-Json -Compress
 `;
 
-function defaultRun(scriptPath, pipeName, connectTimeoutMs, timeoutMs) {
+function defaultRun(scriptPath, pipeName, connectTimeoutMs, timeoutMs, tempRoot) {
   return new Promise((resolve_, reject) => {
     execFile(
       'powershell.exe',
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, pipeName, String(connectTimeoutMs)],
-      { timeout: timeoutMs, maxBuffer: 256 * 1024, windowsHide: true, encoding: 'utf8' },
+      // Add-Type compiles through TEMP; point it at this run's own root.
+      { timeout: timeoutMs, maxBuffer: 256 * 1024, windowsHide: true, encoding: 'utf8', env: { ...process.env, TEMP: tempRoot, TMP: tempRoot } },
       (error, stdout) => (error ? reject(error) : resolve_(stdout)),
     );
   });
 }
 
 /** Read the pid of the process that created the pipe server instance. */
-export async function queryPipeServer({ pipeName, scriptPath, run = defaultRun, connectTimeoutMs = PROBE_LIMITS.connectTimeoutMs, timeoutMs = PROBE_LIMITS.psTimeoutMs }) {
+export async function queryPipeServer({ pipeName, scriptPath, tempRoot, run = defaultRun, connectTimeoutMs = PROBE_LIMITS.connectTimeoutMs, timeoutMs = PROBE_LIMITS.psTimeoutMs }) {
   let stdout;
-  try { stdout = await run(scriptPath, pipeName, connectTimeoutMs, timeoutMs); }
+  try { stdout = await run(scriptPath, pipeName, connectTimeoutMs, timeoutMs, tempRoot); }
   catch (error) {
     const timedOut = error?.killed === true || error?.code === 'ETIMEDOUT';
-    return { ok: false, stage: 'spawn', errorKind: timedOut ? 'probe-timeout' : 'probe-failed', detail: String(error?.message ?? error).slice(0, 200) };
+    return { ok: false, stage: 'spawn', errorKind: timedOut ? 'probe-timeout' : 'probe-failed', detail: redactMessage(error?.message) };
   }
   try { return JSON.parse(stdout); }
-  catch { return { ok: false, stage: 'parse', errorKind: 'unparsable-output', detail: String(stdout).slice(0, 200) }; }
+  catch { return { ok: false, stage: 'parse', errorKind: 'unparsable-output', detail: redactMessage(stdout) }; }
 }
 
 /** Keep native error text from carrying absolute paths into the report. */
@@ -180,7 +200,7 @@ async function main() {
     const scriptPath = join(tempRoot, 'pipe-pid.ps1');
     writeFileSync(scriptPath, PIPE_SCRIPT, 'utf8');
 
-    const query = await queryPipeServer({ pipeName, scriptPath });
+    const query = await queryPipeServer({ pipeName, scriptPath, tempRoot });
     report.pipes.push({ label: 'codex-ipc', pipe: { name: pipeName }, query });
 
     if (flag('--owner')) report.owner = await readOwner({ pipeName, threadId: process.env.CODEX_THREAD_ID });
@@ -189,7 +209,7 @@ async function main() {
       const read = await readProcessTable({ timeoutMs: PROBE_LIMITS.tableTimeoutMs });
       report.processTable = { ok: read.ok, ...(read.ok ? {} : { reason: read.reason }) };
       if (read.ok) {
-        const anchor = compareAnchors({ serverPid: query.serverPid, selfPid: process.pid, table: read.table });
+        const anchor = compareAnchors({ serverPid: query.serverPid, serverCreatedAt: query.serverCreatedAt, selfPid: process.pid, table: read.table });
         report.self.chain = anchor.selfChain;
         report.self.stopReason = anchor.selfStopReason;
         report.pipes[0].anchor = anchor;
@@ -199,9 +219,10 @@ async function main() {
     const relation = report.pipes[0].anchor?.relation ?? 'unverified-without-process-table';
     report.conclusion = {
       osServerRelation: relation,
+      instanceVerified: report.pipes[0].anchor?.instance?.same === true,
       logicalOwnerSeparateNamespace: report.owner?.known === true ? report.owner.osPidEquivalent === false : null,
       productStatusUnchanged: 'CODEX_SOURCE_ASSOCIATION_UNVERIFIED',
-      note: 'The pipe server pid is independent OS evidence. When the pipe is a shared hub it does not identify the logical owner, and a tools-pipe path inherited through the environment does not prove this call used it.',
+      note: 'serverCreatedAt is sampled from the same source the ancestor table uses (Win32_Process CreationDate) right after the server pid is read, so the two values stay exactly comparable; the relation is reported only when that pid plus creation time pair matches the same process-table row. A bare pid is not a generation check, and missing creation time is unverifiable. Shortcut: the sampling happens after CloseHandle, so a process that dies and has its pid reused inside that window would be read as the new instance; upgrade if that becomes reachable. The pipe server pid is independent OS evidence: when the pipe is a shared hub it does not identify the logical owner, and a tools-pipe path inherited through the environment does not prove this call used it.',
     };
   } catch (error) {
     report.error = { name: error?.name, message: redactMessage(error?.message) };

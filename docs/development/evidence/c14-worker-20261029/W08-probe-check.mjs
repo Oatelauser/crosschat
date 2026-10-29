@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { compareAnchors, pipeNameOf, sameInstance } from './W08-probe.mjs';
 
@@ -20,7 +20,13 @@ const runProbe = (args, timeoutMs = 30_000, env = {}) => new Promise((resolve) =
     (error, stdout, stderr) => resolve({ code: typeof error?.code === 'number' ? error.code : 0, stdout, stderr }));
 });
 const json = (run) => { try { return JSON.parse(run.stdout); } catch { return undefined; } };
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const wait = (ms) => new Promise((resolve_) => setTimeout(resolve_, ms));
+/** Kill our own child and wait for its own exit, so nothing outlives the check. */
+const stopChild = (child) => new Promise((resolve_) => {
+  if (child.exitCode !== null || child.signalCode !== null) { resolve_(); return; }
+  child.once('close', () => resolve_());
+  child.kill();
+});
 
 function listenPipe(name) {
   return new Promise((resolve, reject) => {
@@ -38,6 +44,16 @@ function listenPipe(name) {
       stats,
       close: () => new Promise((done) => { for (const socket of sockets) socket.destroy(); server.close(() => done()); }),
     }));
+  });
+}
+
+/** Creation time of one pid, read the same way the ancestor table reads it.
+ *  Used only for this process's own row, never for the user's process table. */
+function creationTimeOf(pid) {
+  return new Promise((resolve_) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CreationDate.ToFileTimeUtc()`],
+      { timeout: 10_000, encoding: 'utf8', windowsHide: true },
+      (error, stdout) => resolve_(error ? undefined : stdout.trim()));
   });
 }
 
@@ -131,13 +147,20 @@ async function main() {
 
   const suffix = `${process.pid}-${Date.now().toString(36)}`;
 
-  await recordAsync('C1', 'Does the probe return the pid of the process that created the live pipe server?', async () => {
+  await recordAsync('C1', 'Does the probe return the pid and creation time of the process that created the live pipe server, comparable with the ancestor table?', async () => {
     const live = await listenPipe(`w08-check-live-${suffix}`);
     try {
       const run = await runProbe(['--pipe', `w08-check-live-${suffix}`, '--no-table']);
       const report = json(run);
       const query = report?.pipes?.[0]?.query;
-      return { observed: { exitCode: run.code, query, expectedPid: process.pid, cleanup: report?.cleanup }, pass: run.code === 0 && query?.ok === true && query.serverPid === process.pid };
+      const createdAt = query?.serverCreatedAt;
+      // Both sources read the same FILETIME through a double, so they must agree exactly.
+      const cimCreatedAt = await creationTimeOf(process.pid);
+      return {
+        observed: { exitCode: run.code, query, expectedPid: process.pid, cimCreatedAt, agreesWithAncestorTable: cimCreatedAt !== undefined && Number(cimCreatedAt) === createdAt, cleanup: report?.cleanup },
+        pass: run.code === 0 && query?.ok === true && query.serverPid === process.pid
+          && Number.isInteger(createdAt) && createdAt > 0 && cimCreatedAt !== undefined && Number(cimCreatedAt) === createdAt,
+      };
     } finally { await live.close(); }
   });
 
@@ -170,7 +193,7 @@ async function main() {
       return { observed: { taken: true, elapsedMs: Date.now() - started, exitCode: run.code, query }, pass: query?.ok === false && query?.errorKind === 'timeout' && query?.nativeError === 121 };
     } finally {
       taken?.destroy();
-      busy.child.kill();
+      await stopChild(busy.child);
     }
   });
 
@@ -188,20 +211,24 @@ async function main() {
     return { observed, pass };
   });
 
-  record('C6', 'Does an OS anchor distinguish same instance, shared ancestor only, unrelated and unverifiable?', () => {
+  record('C6', 'Does an OS anchor require a confirmed instance, then distinguish ancestor, shared ancestor, unrelated and unverifiable?', () => {
     const ancestor = new Map([[300, row(300, 200, 30)], [200, row(200, 0, 20)]]);
     const shared = new Map([[300, row(300, 200, 30)], [200, row(200, 900, 20)], [900, row(900, 0, 10)], [100, row(100, 900, 15)]]);
     const unrelated = new Map([[300, row(300, 200, 30)], [200, row(200, 0, 20)], [555, row(555, 556, 25)], [556, row(556, 0, 12)]]);
     const observed = {
-      sameProcess: compareAnchors({ serverPid: 300, selfPid: 300, table: ancestor }).relation,
-      ancestor: compareAnchors({ serverPid: 200, selfPid: 300, table: ancestor }),
-      sharedOnly: compareAnchors({ serverPid: 100, selfPid: 300, table: shared }).relation,
-      unrelated: compareAnchors({ serverPid: 555, selfPid: 300, table: unrelated }).relation,
-      absentPid: compareAnchors({ serverPid: 999, selfPid: 300, table: ancestor }),
+      sameProcess: compareAnchors({ serverPid: 300, serverCreatedAt: 30, selfPid: 300, table: ancestor }).relation,
+      ancestor: compareAnchors({ serverPid: 200, serverCreatedAt: 20, selfPid: 300, table: ancestor }),
+      sharedOnly: compareAnchors({ serverPid: 100, serverCreatedAt: 15, selfPid: 300, table: shared }).relation,
+      unrelated: compareAnchors({ serverPid: 555, serverCreatedAt: 25, selfPid: 300, table: unrelated }).relation,
+      reusedPid: compareAnchors({ serverPid: 200, serverCreatedAt: 21, selfPid: 300, table: ancestor }),
+      noCreationTime: compareAnchors({ serverPid: 200, selfPid: 300, table: ancestor }),
+      absentPid: compareAnchors({ serverPid: 999, serverCreatedAt: 99, selfPid: 300, table: ancestor }),
       noPid: compareAnchors({ serverPid: undefined, selfPid: 300, table: ancestor }).relation,
     };
     const pass = observed.sameProcess === 'same-process' && observed.ancestor.relation === 'server-is-ancestor' && observed.ancestor.depth === 1
       && observed.sharedOnly === 'shared-ancestor-only' && observed.unrelated === 'unrelated'
+      && observed.reusedPid.relation === 'unverifiable' && observed.reusedPid.reasons[0] === 'pid-reused-between-pipe-query-and-process-table'
+      && observed.noCreationTime.relation === 'unverifiable' && observed.noCreationTime.reasons[0] === 'server-instance-metadata-incomplete'
       && observed.absentPid.relation === 'unverifiable' && observed.absentPid.reasons[0] === 'server-pid-not-in-process-table'
       && observed.noPid === 'unverifiable';
     return { observed, pass };
@@ -214,8 +241,12 @@ async function main() {
       writeFileSync(existing, 'sentinel-bytes', 'utf8');
       const run = await runProbe(['--pipe', `w08-check-refuse-${suffix}`, '--no-table', '--out', existing]);
       const bytes = readFileSync(existing, 'utf8');
-      return { observed: { exitCode: run.code, bytesUnchanged: bytes === 'sentinel-bytes', report: json(run) }, pass: run.code === 3 && bytes === 'sentinel-bytes' };
-    } finally { rmSync(root, { recursive: true, force: true }); }
+      const owned = resolve(join(root, '..')) === resolve(tmpdir()) && /^w08-check-/.test(basename(root));
+      if (owned) rmSync(root, { recursive: true, force: true });
+      return { observed: { exitCode: run.code, bytesUnchanged: bytes === 'sentinel-bytes', ownedRootRemoved: owned && !existsSync(root), report: json(run) }, pass: run.code === 3 && bytes === 'sentinel-bytes' && owned };
+    } finally {
+      if (existsSync(root) && resolve(join(root, '..')) === resolve(tmpdir()) && /^w08-check-/.test(basename(root))) rmSync(root, { recursive: true, force: true });
+    }
   });
 
   record('C8', 'Does a pipe path reduce to the pipe name?', () => {
