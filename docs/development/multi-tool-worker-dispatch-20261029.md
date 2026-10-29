@@ -14,12 +14,12 @@
 
 | 子单 | 所属总任务 | 执行者 | 内容 | 当前状态 |
 | --- | --- | --- | --- | --- |
-| C14-W05 | C14，仍未整体完成 | 本机 Claude `cworker1` | 已有正式CLI＋本机mock＋独占profile验证Hook与普通shell的原生调用ID关联，见[任务书](evidence/c14-worker-20261029/W05-task.md)；不接产品Provider | W01研究已验收，继续最窄原生采证；核对正式派单新基线后独占本单写入/index，未验证的owner/Desktop/daemon边界不升格 |
+| C14-W05-R1 | C14，仍未整体完成 | 本机 Claude `cworker1` | 保留 W05 CLI 原生局部观察，修研究工装的采证完整性、一一绑定、执行实例及异常资源收束，见[原任务书](evidence/c14-worker-20261029/W05-task.md)和[审计/返修要求](evidence/c14-worker-20261029/W05-review.md)；不接产品Provider | 首轮未验收；核对正式派单新基线后独占本单写入/index，原始采证保留，缺失/损坏不能冒充完整结论 |
 
 已验收子单见[测试隔离审计](evidence/c14-worker-20261029/W00-review.md)、[协作规则审计](evidence/c14-worker-20261029/W02-review.md)、[短柄诊断验收](evidence/c14-worker-20261029/W03-final-review.md)、[短柄产品修复验收](evidence/c14-worker-20261029/W04-final-review.md)及[来源研究验收](evidence/c14-worker-20261029/W01-final-review.md)，活动项不重复保留。root最新完整check为2447通过/11原有跳过；代码检查及研究收口不代表生产来源关联已实现。仓库代码/skill未全局部署。历史实机短柄成因未作追认，当前构建的已证实缺陷修复按独立记录收口。
 
 ## 后续切分原则
 
-先完成W05原生逐调用最小对账，按证据继续入口/owner采证或发独立实现单；涉及用户功能、配置要求或持久格式变动时先列影响并按既有批准边界处理。OpenCode多服务来源核实另分单。C13/C04的Harness生命周期和正式Desktop仍按全量计划推进，不用它们代替C14来源接线。当前仅激活一个执行子单，不批量派发。
+先完成W05-R1工装与证据返修，按证据继续入口/owner采证或发独立实现单；涉及用户功能、配置要求或持久格式变动时先列影响并按既有批准边界处理。历史 c14 撞号使当前信封回退长 ref 的问题已只读证实，安全恢复新短柄独立待分单，须保留旧歧义拒绝与原路由，不混入 W05，不将 W04 验收误称已解决。OpenCode多服务来源核实另分单。C13/C04的Harness生命周期和正式Desktop仍按全量计划推进，不用它们代替C14来源接线。当前仅激活一个执行子单，不批量派发。
 
 全量25任务及11个CI相关索引继续由[总表](tool-compatibility-ci-tasks.md)维护；本页只管理 worker 活动子单，不重编号、不取消原 CI。
