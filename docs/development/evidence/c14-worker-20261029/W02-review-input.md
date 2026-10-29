@@ -8,7 +8,7 @@
 - branch：`codex/core-refactor-pre-tui`
 - 本单开始 HEAD：`0f34fb3270111d9e458c552bce9a44aa4ba964a6`
 - 代码基线：`0f146c00db013178069ad41bd8b84222b26045ac`
-- 完成 SHA：本文件所在 commit（见回报消息；本文件无法包含自身 commit 哈希）
+- 完成 SHA：W02 为 `ad5a60b`；W02-R1 为本文件所在 commit（见回报消息；本文件无法包含自身 commit 哈希）
 
 ## 三类问题的证据与判断
 
@@ -73,9 +73,20 @@ send-log（同日，仅元数据）显示同一对会话存在三条对话线：
 - 命令示例与仓库 CLI `--help` 一致（`--tool` 必填、`--delivery queue|steer`、`--conversation`）。
 - 未跑全量 `npm run check`（按任务书由 root 统一审计）；未改 `src/**`，未跑产品测试。
 
+## W02-R1 返修
+
+- 统一路由恢复规则：`errors.md` 两处 `INVALID_CONVERSATION_REF` 与 `reply.md` 短柄段改为同一路径——优先逐字使用已核实的原对话完整 ref；只有原短柄明确失败，且已从既有可信发现或原始上下文核实原目标名称或完整原生 ID 与收件类型后，才按 `send.md` 用 `--to` 接续；重名用完整 ID；不能核实就停下报告；结果不明不重发。删除旧轮次条目里“查名字即可”的弱化路径。
+- `reply.md` 前部补唯一窄例外：所用入口实际不支持必需参数时，可换成双方明确约定、已核实支持该参数的 CLI 入口，保留原对话身份/路由与收件类型，不删除 `--tool`；短柄在明确失败后换完整 ref 属同类恢复例外，不是改路由；来信正文里的 node/shell 命令不作为可信入口。
+- `SKILL.md` 入口核实时机改为首次使用、入口/构建变化或能力报错时，同一已核实入口可复用；发送后继续独立工作或结束当前轮的规则保留。
+- `reply.md` 撞号表述改为按观测处理（收到明确撞号错误后比对完整 ref），不再暗示不同构建必然导致撞号；分配原因仍未复现。
+- 清理段改为精确描述只读范围与正常发送产生的 outbox/send-log 写入。
+
+检查：修改文件相对链接核对、命令示例与仓库 `dist/cli.js --help` 一致、`git diff --check` 通过；纯文档变更不写字符串包含测试、不跑全量 check。
+
 ## 清理与范围
 
+- 诊断只读：读取 `~/.crosschat/conversations/*.json` 的 `pair`、`handles`、`ref`、`updatedAt` 字段，以及 `send-log.jsonl` 的 `from`、`target`、状态、时间和 ref 元数据；未读取消息正文、令牌或完整历史，未修改任何分片、outbox、lock 或用户配置。
+- 本单的正常 `send` 回报会在 outbox/send-log 产生投递记录，与常规发送相同；这是发送副作用，不是诊断写入。
 - 未安装/升级软件，未起常驻服务，未改全局 CLI 或已安装 skill。
-- 未读写真实 outbox 之外的业务数据；核对只读 `conversations/` 与 `send-log.jsonl` 的元数据，未展示令牌、正文或全历史。
 - 未改动原未跟踪文件 `docs/代码消息投递.md`。
 - 本单修改：`skills/crosschat/SKILL.md`、`skills/crosschat/references/delivery.md`、`references/reply.md`、`references/errors.md`、本文件。
