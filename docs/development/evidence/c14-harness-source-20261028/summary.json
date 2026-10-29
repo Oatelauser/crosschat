@@ -1,0 +1,175 @@
+{
+  "schema": 1,
+  "tool": "dsh-web-runtime",
+  "platform": "win32",
+  "arch": "x64",
+  "builds": {
+    "baseline": {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.2",
+      "url": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.2.tgz",
+      "integrity": "sha512-tvY+yhfKRifthbqPe/OK0AYxM5ZkvqfYq/jMYgJcEUxiRRL1Vwra3Ti5TB6AXgSWQdiPHYh/Vp6SJa9yHwMNuw=="
+    },
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.28.5",
+      "url": "https://registry.npmjs.org/pnpm/-/pnpm-11.28.5.tgz",
+      "integrity": "sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng=="
+    },
+    "candidate": {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.2",
+      "url": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.2.tgz",
+      "integrity": "sha512-tvY+yhfKRifthbqPe/OK0AYxM5ZkvqfYq/jMYgJcEUxiRRL1Vwra3Ti5TB6AXgSWQdiPHYh/Vp6SJa9yHwMNuw=="
+    }
+  },
+  "scope": {
+    "officialNpmRuntime": true,
+    "officialPluginManager": true,
+    "ordinaryWebSessions": true,
+    "scriptedLocalModel": true,
+    "browserUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "installationCleanup": "removed",
+  "baseline": {
+    "schema": 1,
+    "tool": "dsh-web-runtime",
+    "platform": "win32",
+    "arch": "x64",
+    "runId": "200c3478-6346-47dd-be06-19d487193a2a",
+    "version": "0.2.1-rc.2",
+    "startedAt": "2026-10-28T07:58:43.090Z",
+    "status": "failed",
+    "category": "compatibility",
+    "stage": "model-fixture",
+    "check": "native-shell-caller-source",
+    "checks": [
+      {
+        "name": "official-plugin-installation-and-owned-web-runtime",
+        "status": "passed",
+        "elapsedMs": 5
+      },
+      {
+        "name": "public-web-session-controller-creates-interactive-sessions",
+        "status": "passed",
+        "elapsedMs": 416
+      }
+    ],
+    "scope": {
+      "officialNpmRuntime": true,
+      "officialPluginManager": true,
+      "ordinaryWebSessions": true,
+      "scriptedLocalModel": true,
+      "browserUI": false,
+      "desktop": false,
+      "modelIntelligence": false
+    },
+    "installation": {
+      "code": 0,
+      "timedOut": false,
+      "stdout": "Progress: resolved 1, reused 0, downloaded 0, added 0\nPackages: +1\n+\nPackages are hard linked from the content-addressable store to the virtual store.\n  Content-addressable store is at: D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-c14-native-dsh-20261028\\crosschat-dsh-ci-YqUJOM\\run-xChINA\\pnpm-home\\store\\v11\n  Virtual store is at:             node_modules/.pnpm\nProgress: resolved 1, reused 1, downloaded 0, added 1, done\n\ndependencies:\n+ @crosschat/dsh-bridge @crosschat/dsh-bridge@file:../../../../../../../../integrations/dsh\n\nDone in 696ms using pnpm v11.28.5\n",
+      "stderr": "dsh: initialized profile web at D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-c14-native-dsh-20261028\\crosschat-dsh-ci-YqUJOM\\run-xChINA\\dsh-home\\profiles\\web\n"
+    },
+    "runtimePid": 8148,
+    "webPort": 64078,
+    "sessionIds": {
+      "idle": "session-c3371d39-26b4-403d-bd98-161fa22e9cd8",
+      "busy": "session-28834e97-396b-4cb1-bcea-b7c168fb6ca9",
+      "sender": "session-be279a2c-be55-4d9b-930d-5c50d4b476c8",
+      "receiver": "session-22b30047-3996-447c-ab99-126a0977f40d"
+    },
+    "error": "The native shellEnv contribution did not verify the current Harness instance; no source identity was injected",
+    "cleanup": {
+      "runtimeStopped": true,
+      "registrationRemoved": true,
+      "removed": true,
+      "forced": false
+    },
+    "logs": {
+      "stdout": "dsh web: http://127.0.0.1:64078/?token=[redacted]\n",
+      "stderr": ""
+    },
+    "finishedAt": "2026-10-28T07:58:51.791Z",
+    "process": {
+      "code": 1,
+      "signal": null,
+      "timedOut": false
+    }
+  },
+  "candidate": {
+    "schema": 1,
+    "tool": "dsh-web-runtime",
+    "platform": "win32",
+    "arch": "x64",
+    "runId": "3ab9f51b-9c70-4d70-ba90-0f96f35e329d",
+    "version": "0.2.1-rc.2",
+    "startedAt": "2026-10-28T07:59:50.812Z",
+    "status": "failed",
+    "category": "compatibility",
+    "stage": "model-fixture",
+    "check": "native-shell-caller-source",
+    "checks": [
+      {
+        "name": "official-plugin-installation-and-owned-web-runtime",
+        "status": "passed",
+        "elapsedMs": 4
+      },
+      {
+        "name": "public-web-session-controller-creates-interactive-sessions",
+        "status": "passed",
+        "elapsedMs": 418
+      }
+    ],
+    "scope": {
+      "officialNpmRuntime": true,
+      "officialPluginManager": true,
+      "ordinaryWebSessions": true,
+      "scriptedLocalModel": true,
+      "browserUI": false,
+      "desktop": false,
+      "modelIntelligence": false
+    },
+    "installation": {
+      "code": 0,
+      "timedOut": false,
+      "stdout": "Progress: resolved 1, reused 0, downloaded 0, added 0\nPackages: +1\n+\nPackages are hard linked from the content-addressable store to the virtual store.\n  Content-addressable store is at: D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-c14-native-dsh-20261028\\crosschat-dsh-ci-YqUJOM\\run-CA7uIv\\pnpm-home\\store\\v11\n  Virtual store is at:             node_modules/.pnpm\nProgress: resolved 1, reused 1, downloaded 0, added 1, done\n\ndependencies:\n+ @crosschat/dsh-bridge @crosschat/dsh-bridge@file:../../../../../../../../integrations/dsh\n\nDone in 867ms using pnpm v11.28.5\n",
+      "stderr": "dsh: initialized profile web at D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-c14-native-dsh-20261028\\crosschat-dsh-ci-YqUJOM\\run-CA7uIv\\dsh-home\\profiles\\web\n"
+    },
+    "runtimePid": 41140,
+    "webPort": 58174,
+    "sessionIds": {
+      "idle": "session-84af7d15-5dc4-4262-8b05-c1ff6af1852e",
+      "busy": "session-6c4086e5-4f62-460d-8c78-77f9a1926a1d",
+      "sender": "session-bdd55f10-bcb0-4375-b767-54fc01a936e2",
+      "receiver": "session-50f387fb-6982-41d5-8b3d-14f091e6b74d"
+    },
+    "error": "The native shellEnv contribution did not verify the current Harness instance; no source identity was injected",
+    "cleanup": {
+      "runtimeStopped": true,
+      "registrationRemoved": true,
+      "removed": true,
+      "forced": false
+    },
+    "logs": {
+      "stdout": "dsh web: http://127.0.0.1:58174/?token=[redacted]\n",
+      "stderr": ""
+    },
+    "finishedAt": "2026-10-28T08:00:01.761Z",
+    "process": {
+      "code": 1,
+      "signal": null,
+      "timedOut": false
+    }
+  },
+  "classification": {
+    "kind": "baseline-failed",
+    "notify": false
+  },
+  "npmCache": {
+    "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-c14-native-dsh-20261028\\crosschat-dsh-ci-YqUJOM\\npm-cache",
+    "external": false,
+    "disposition": "removed-with-task-root"
+  }
+}

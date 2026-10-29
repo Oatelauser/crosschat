@@ -45,11 +45,14 @@ export interface SendLogEntry {
   receipt?: 'confirmed' | 'unconfirmed';
   /** Target-bound digest of the exact transmitted envelope; never stores its body. */
   receiptMarker?: string;
+  /** Verified recipient endpoint used when this outcome was produced. */
+  endpointType?: string;
 }
 
 /** Same evidence is used by the initial probe and a later status recheck. */
-export function createReceiptMarker(threadId: string, envelope: string): string {
-  return `sha256:${createHash('sha256').update(threadId).update('\0').update(envelope).digest('hex')}`;
+export function createReceiptMarker(threadId: string, envelope: string, endpointType?: string): string {
+  const target = endpointType === undefined ? threadId : JSON.stringify(['codex', endpointType, threadId]);
+  return `sha256:${createHash('sha256').update(target).update('\0').update(envelope).digest('hex')}`;
 }
 
 export function appendSendLog(file: string, entry: SendLogEntry): void {
@@ -81,13 +84,14 @@ export async function confirmInRollout(
   threadId: string,
   marker: string,
   opts: ConfirmOpts = {},
+  endpointType?: string,
 ): Promise<'confirmed' | 'unconfirmed'> {
   if (!/^sha256:[0-9a-f]{64}$/.test(marker)) return 'unconfirmed';
   const tries = opts.tries ?? 5;
   const delayMs = opts.delayMs ?? 300;
   for (let attempt = 0; attempt < tries; attempt++) {
     const file = findRolloutFile(codexHome, threadId);
-    if (file !== undefined && fileContainsReceipt(file, threadId, marker)) return 'confirmed';
+    if (file !== undefined && fileContainsReceipt(file, threadId, marker, endpointType)) return 'confirmed';
     await sleep(delayMs);
   }
   return 'unconfirmed';
@@ -146,7 +150,7 @@ export function readSendLogTail(file: string, maxLines: number = SEND_LOG_TAIL_L
 /** Bound each decoded record while streaming; unrelated large tool output is skipped. */
 const MAX_RECEIPT_RECORD_CHARS = 4 * 1024 * 1024;
 
-function fileContainsReceipt(path: string, threadId: string, marker: string): boolean {
+function fileContainsReceipt(path: string, threadId: string, marker: string, endpointType?: string): boolean {
   let fd: number | undefined;
   try {
     fd = openSync(path, 'r');
@@ -167,7 +171,7 @@ function fileContainsReceipt(path: string, threadId: string, marker: string): bo
         const end = text.indexOf('\n', start);
         if (end === -1) break;
         if (!oversized && carry.length + end - start <= MAX_RECEIPT_RECORD_CHARS &&
-            lineConfirms(carry + text.slice(start, end), threadId, marker)) return true;
+            lineConfirms(carry + text.slice(start, end), threadId, marker, endpointType)) return true;
         carry = '';
         oversized = false;
         start = end + 1;
@@ -191,7 +195,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function lineConfirms(line: string, threadId: string, marker: string): boolean {
+function lineConfirms(line: string, threadId: string, marker: string, endpointType?: string): boolean {
   let record: unknown;
   try {
     record = JSON.parse(line);
@@ -201,11 +205,11 @@ function lineConfirms(line: string, threadId: string, marker: string): boolean {
   if (!isRecord(record) || !isRecord(record.payload)) return false;
   const payload = record.payload;
   if (record.type === 'event_msg' && payload.type === 'user_message' && typeof payload.message === 'string') {
-    return createReceiptMarker(threadId, payload.message) === marker;
+    return createReceiptMarker(threadId, payload.message, endpointType) === marker;
   }
   if (record.type !== 'response_item' || payload.type !== 'message' || payload.role !== 'user' ||
       !Array.isArray(payload.content)) return false;
   return payload.content.some((part: unknown) => isRecord(part) &&
     (part.type === 'input_text' || part.type === 'text') && typeof part.text === 'string' &&
-    createReceiptMarker(threadId, part.text) === marker);
+    createReceiptMarker(threadId, part.text, endpointType) === marker);
 }

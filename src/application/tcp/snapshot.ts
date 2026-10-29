@@ -1,6 +1,7 @@
 import { fullTcpMachineId } from './reading.js';
 import { isRecord } from '../queries/reading.js';
 import type { StarSnapshot, StarSnapshotMachine, StarSnapshotMember, StarSnapshotNode } from '../../serve/star-snapshot.js';
+import { isEndpointTypeFor, nativeTargetKey } from '../../tool-types.js';
 
 const text = (value: unknown): value is string => typeof value === 'string' && value.length <= 65_536;
 const revision = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -36,11 +37,13 @@ export function parseStarSnapshot(input: unknown): StarSnapshot {
     if (!isRecord(value) || !text(value.sessionId) || !value.sessionId || typeof value.online !== 'boolean'
       || !['name', 'tool', 'machineName', 'extendsName', 'extendsMachine'].every((key) => value[key] === undefined || text(value[key]))
       || (value.temporary !== undefined && typeof value.temporary !== 'boolean')) invalid();
+    if (value.endpointType !== undefined && (typeof value.tool !== 'string' || !isEndpointTypeFor(value.tool, value.endpointType))) invalid();
     return { sessionId: value.sessionId, machine: machine(value.machine), online: value.online,
       ...(typeof value.name === 'string' ? { name: value.name } : {}), ...(typeof value.tool === 'string' ? { tool: value.tool } : {}),
+      ...(typeof value.endpointType === 'string' ? { endpointType: value.endpointType } : {}),
       ...(typeof value.machineName === 'string' ? { machineName: value.machineName } : {}), ...(typeof value.extendsName === 'string' ? { extendsName: value.extendsName } : {}),
       ...(typeof value.extendsMachine === 'string' ? { extendsMachine: value.extendsMachine } : {}), ...(typeof value.temporary === 'boolean' ? { temporary: value.temporary } : {}) };
   });
-  if (new Set(members.map((item) => item.sessionId)).size !== members.length) invalid();
+  if (new Set(members.map((item) => nativeTargetKey({ providerId: item.tool ?? '', nativeId: item.sessionId, endpointType: item.endpointType }))).size !== members.length) invalid();
   return { starId: input.starId, ...(input.name === undefined ? {} : { name: input.name }), revision: input.revision, role: input.role, live: input.live, nodes, machines, members };
 }

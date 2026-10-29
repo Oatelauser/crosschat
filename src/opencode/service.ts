@@ -20,6 +20,7 @@ export interface OpenCodeOptions {
 }
 
 interface Registration {
+  id?: string;
   url: string;
   pid: number;
   password?: string;
@@ -27,6 +28,7 @@ interface Registration {
 }
 
 export interface OpenCodeConnection {
+  serviceIdentity?: { registrationId?: string; pid: number; version: string; url: string };
   request(path: string, body?: unknown): Promise<unknown>;
 }
 
@@ -83,10 +85,11 @@ async function readRegistration(options: OpenCodeOptions): Promise<Registration>
   if (text.length > 64 * 1024 || !isRecord(value) || typeof value.url !== 'string'
     || typeof value.pid !== 'number' || !Number.isInteger(value.pid) || value.pid <= 0
     || (value.version !== undefined && typeof value.version !== 'string')
-    || (value.password !== undefined && typeof value.password !== 'string')) {
+    || (value.password !== undefined && typeof value.password !== 'string')
+    || (value.id !== undefined && (typeof value.id !== 'string' || value.id === ''))) {
     throw openCodeError('REGISTRATION_MALFORMED', 'OpenCode service registration has invalid fields.');
   }
-  return { url: value.url, pid: value.pid, password: value.password, version: value.version };
+  return { id: value.id, url: value.url, pid: value.pid, password: value.password, version: value.version };
 }
 
 async function responseJson(response: Response): Promise<unknown> {
@@ -190,5 +193,7 @@ export async function connectOpenCode(options: OpenCodeOptions = {}): Promise<Op
   if (registration !== undefined && (registration.pid !== info.pid || (registration.version !== undefined && registration.version !== info.version))) {
     throw openCodeError('OWNER_MISMATCH', 'OpenCode registration no longer matches the responding service. Refresh after OpenCode has finished restarting.');
   }
+  connection.serviceIdentity = { ...(registration?.id === undefined ? {} : { registrationId: registration.id }),
+    pid: info.pid, version: info.version, url: base.origin };
   return connection;
 }

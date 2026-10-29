@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import { MultichatError } from './errors.js';
+import { isEndpointTypeFor } from './tool-types.js';
 
 /**
  * Self-contained conversation reference (ticket 003): both endpoints' native
@@ -15,7 +16,7 @@ import { MultichatError } from './errors.js';
 /** human has no routable native id; native tool endpoints always carry one. */
 export type RefEndpoint =
   | { p: 'human' }
-  | { p: 'claude' | 'codex' | 'opencode' | 'dsh'; id: string; m?: string; mid?: string };
+  | { p: 'claude' | 'codex' | 'opencode' | 'dsh'; id: string; m?: string; mid?: string; endpointType?: string };
 
 export interface ConversationRef {
   v: 1;
@@ -55,13 +56,15 @@ export function nextTurnRef(ref: ConversationRef): ConversationRef {
 // ---- mc2 binary layout (008 B2 design §6 + B10 mid) ------------------------
 // flags   LEB128 varint: bits 0-1 f type | bits 2-3 t type | bit 4 f id raw |
 //         bit 5 t id raw | bit 6 f.m present | bit 7 t.m present | bit 8
-//         f.mid present | bit 9 t.mid present | bit 10 starId present
+//         f.mid present | bit 9 t.mid present | bit 10 starId present |
+//         bit 11 f.endpointType present | bit 12 t.endpointType present
 //         (claude=0 codex=1 human=2 extended-provider=3)
 // then    f.provider (varint-len utf8, only type 3)? · f.id (16B UUID | varint-len utf8)
 //         t.provider (same)? · t.id (same)
 //         f.m (varint-len utf8)? · t.m (varint-len utf8)?
 //         f.mid (varint-len utf8)? · t.mid (varint-len utf8)?
 //         n (varint-len hex bytes) · c (varint) · starId (varint-len utf8)?
+//         f.endpointType (bounded varint-len utf8)? · t.endpointType (same)?
 // B1: starId 追加在 c 之后——旧版解析器读完 c 即校验 done()，见到这段字节
 // 走 'trailing bytes'+升级教学。这是设计好的版本偏差路径，不是 bug。
 // Lengths are LEB128 varints so nothing has a hidden ceiling; a dashed
@@ -128,6 +131,11 @@ function packHex(value: string): Buffer {
 }
 
 export function encodeRef(ref: ConversationRef): string {
+  const typeOf = (ep: RefEndpoint): string | undefined => {
+    if (ep.p === 'human' || ep.endpointType === undefined) return undefined;
+    if (!isEndpointTypeFor(ep.p, ep.endpointType)) throw invalid('unsupported endpoint type');
+    return ep.endpointType;
+  };
   const mOf = (ep: RefEndpoint): string | undefined => (ep.p === 'human' ? undefined : ep.m);
   const midOf = (ep: RefEndpoint): string | undefined => (ep.p === 'human' ? undefined : ep.mid);
   const fId = packId(ref.f);
@@ -137,6 +145,8 @@ export function encodeRef(ref: ConversationRef): string {
   const fmid = midOf(ref.f);
   const tmid = midOf(ref.t);
   const star = ref.starId;
+  const ftype = typeOf(ref.f);
+  const ttype = typeOf(ref.t);
   const flags =
     endpointTypeCode(ref.f) |
     (endpointTypeCode(ref.t) << 2) |
@@ -146,7 +156,9 @@ export function encodeRef(ref: ConversationRef): string {
     (tm !== undefined ? 0x80 : 0) |
     (fmid !== undefined ? 0x100 : 0) |
     (tmid !== undefined ? 0x200 : 0) |
-    (star !== undefined ? 0x400 : 0);
+    (star !== undefined ? 0x400 : 0) |
+    (ftype !== undefined ? 0x800 : 0) |
+    (ttype !== undefined ? 0x1000 : 0);
   const flagBytes: number[] = [];
   writeVarint(flags, flagBytes);
   const parts: Buffer[] = [Buffer.from(flagBytes), fId.bytes, tId.bytes];
@@ -159,6 +171,8 @@ export function encodeRef(ref: ConversationRef): string {
   writeVarint(ref.c, turn);
   parts.push(Buffer.from(turn));
   if (star !== undefined) parts.push(packStr(star)); // B1：starId 段在 c 之后（见上方布局注释）
+  if (ftype !== undefined) parts.push(packStr(ftype));
+  if (ttype !== undefined) parts.push(packStr(ttype));
   return REF_PREFIX_V2 + Buffer.concat(parts).toString('base64url');
 }
 
@@ -198,8 +212,10 @@ class Cursor {
       if (shift > 35) throw invalid('varint overflow', true);
     }
   }
-  field(): Buffer {
-    return this.take(this.varint());
+  field(maxBytes?: number): Buffer {
+    const length = this.varint();
+    if (maxBytes !== undefined && length > maxBytes) throw invalid('field exceeds limit', true);
+    return this.take(length);
   }
   done(): boolean {
     return this.at === this.buf.length;
@@ -216,6 +232,7 @@ function decodeV2(payload: string): ConversationRef {
   if (buf.length === 0) throw invalid('empty payload', true);
   const cur = new Cursor(buf);
   const flags = cur.varint();
+  if (flags > 0x1fff) throw invalid('unknown endpoint flags', true);
   // Field order mirrors encodeRef; a type-3 provider name precedes its id.
   const readId = (typeBits: number, rawBit: number): RefEndpoint => {
     if (typeBits === TYPE_CODES.human) return { p: 'human' };
@@ -248,8 +265,16 @@ function decodeV2(payload: string): ConversationRef {
   if (!Number.isInteger(c) || c < 1) throw invalid('bad turn counter', true);
   // B1：bit 10 置位 → c 之后读 starId（varint-len utf8）；未置位则旧载荷行为不变
   const starId = (flags & 0x400) === 0 ? undefined : cur.field().toString('utf8');
+  const readType = (endpoint: RefEndpoint, flag: number): RefEndpoint => {
+    if ((flags & flag) === 0) return endpoint;
+    const endpointType = cur.field(32).toString('utf8');
+    if (endpoint.p === 'human' || !isEndpointTypeFor(endpoint.p, endpointType)) throw invalid('unsupported endpoint type', true);
+    return { ...endpoint, endpointType };
+  };
+  const typedF = readType(f, 0x800);
+  const typedT = readType(t, 0x1000);
   if (!cur.done()) throw invalid('trailing bytes', true);
-  return { v: 1, f, t, n, c, ...(starId === undefined ? {} : { starId }) };
+  return { v: 1, f: typedF, t: typedT, n, c, ...(starId === undefined ? {} : { starId }) };
 }
 
 function decodeV1(payload: string): ConversationRef {
@@ -282,13 +307,17 @@ function validateEndpoint(value: unknown, where: 'f' | 't'): RefEndpoint {
   const ep = value as Record<string, unknown>;
   if (ep.p === 'human') {
     if (ep.id !== undefined && ep.id !== null) throw invalid(`${where}: human endpoint must not carry an id`);
+    if (ep.endpointType !== undefined) throw invalid(`${where}: human endpoint must not carry an endpoint type`);
     return { p: 'human' };
   }
   if ((ep.p === 'claude' || ep.p === 'codex' || ep.p === 'opencode' || ep.p === 'dsh') && typeof ep.id === 'string' && ep.id !== '') {
+    if (ep.endpointType !== undefined && !isEndpointTypeFor(ep.p, ep.endpointType)) throw invalid(`${where}: unsupported endpoint type`);
     // m is optional and mc1 JSON never carries it, but tolerate it if present.
-    return ep.m === undefined || typeof ep.m !== 'string'
-      ? { p: ep.p, id: ep.id }
-      : { p: ep.p, id: ep.id, m: ep.m };
+    return {
+      p: ep.p, id: ep.id,
+      ...(typeof ep.m === 'string' ? { m: ep.m } : {}),
+      ...(typeof ep.endpointType === 'string' ? { endpointType: ep.endpointType } : {}),
+    };
   }
   throw invalid(`${where}: unknown side or missing id`);
 }

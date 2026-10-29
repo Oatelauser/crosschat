@@ -53,6 +53,7 @@ export interface TcpMember {
   machineName: string | null;
   nativeId: string;
   providerId: string | null;
+  endpointType?: string;
   name: string | null;
   presence: TcpPresence;
   temporary: boolean;
@@ -86,6 +87,7 @@ export interface TcpSession {
   machineName: string | null;
   nativeId: string;
   providerId: string | null;
+  endpointType?: string;
   name: string | null;
   ref: SessionRef | null;
   rawStatus: DiscoveryJson;

@@ -35,11 +35,14 @@ describe('DeepSeek Harness native caller identity', () => {
   });
 
   it.each(['claude', 'codex', 'opencode'] as const)('strips Harness identity from the %s launcher and preserves configuration', async (family) => {
-    const parent = { DSH_SESSION_ID: 'parent-harness', DSH_HOME: 'profile-home', DSH_PROFILE: 'profile-name', DSH_PROFILE_DIR: 'profile-directory' };
+    const parent = { DSH_SESSION_ID: 'parent-harness', DSH_CROSSCHAT_INSTANCE_ID: 'bridge-instance', DSH_CROSSCHAT_HOME: 'crosschat-state-home',
+      DSH_HOME: 'profile-home', DSH_PROFILE: 'profile-name', DSH_PROFILE_DIR: 'profile-directory' };
     const spawnInherit = vi.fn<(exe: string, args: readonly string[], env?: NodeJS.ProcessEnv) => Promise<number>>(async () => 0);
     const deps = { resolveExe: () => 'native-tool', env: parent, spawnInherit };
     const launch = { claude: runClaudeWrapper, codex: runCodexWrapper, opencode: runOpenCodeWrapper }[family];
     expect(otherIdentityKeys(family)).toContain('DSH_SESSION_ID');
+    expect(otherIdentityKeys(family)).toContain('DSH_CROSSCHAT_INSTANCE_ID');
+    expect(otherIdentityKeys(family)).toContain('DSH_CROSSCHAT_HOME');
     await launch(['--version'], deps);
     expect(spawnInherit).toHaveBeenCalledTimes(1);
     expect(spawnInherit.mock.calls[0][2]).toEqual({ DSH_HOME: 'profile-home', DSH_PROFILE: 'profile-name', DSH_PROFILE_DIR: 'profile-directory' });

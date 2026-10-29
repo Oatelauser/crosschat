@@ -9,6 +9,7 @@ import type { TuiAction, TuiActionAvailability, TuiActionRequest, TuiField, TuiF
 import { doctorPage, doctorResource } from './overview.js';
 import { createSessionsResource } from './sessions.js';
 import type { SessionsResourceOptions } from './sessions.js';
+import { formatSendCommand } from '../send-command.js';
 
 interface SshResourceOptions { ssh: SshApplication }
 function disabled(reason: string, nextStep = '返回 :ctx 或 :ssh 选择已配置 SSH Host；不会回退本机。'): TuiActionAvailability { return { enabled: false, reason, nextStep }; }
@@ -186,10 +187,11 @@ export function createSshSessionsResource(options: SshResourceOptions & Pick<Ses
     return { ...page, actionAvailability: { ...page.actionAvailability, adopt: localOnly, 'remove-member': localOnly, deliveries: localOnly, logs: localOnly,
       'filter-scope': disabled('SSH 发现没有可核验的当前星成员范围。', '本页展示此 SSH 用户可发现的会话；TCP 星范围在对应 TCP 上下文查看。') },
       rows: page.rows.map((row) => {
-        const address = row.copyValue;
+        const nativeId = row.copyValues?.nativeId;
+        const tool = row.copyValues?.tool;
         let copyValue: string | undefined;
-        if (!managed && address && /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(address)) {
-          try { validateRemoteFlagValues({ to: address }); copyValue = `crosschat send --via ssh:${host} --to ${address}`; } catch { /* Existing remote selector cannot accept this address. */ }
+        if (!managed && row.copyValue && nativeId && tool) {
+          try { validateRemoteFlagValues({ to: nativeId, tool }); copyValue = formatSendCommand({ via: `ssh:${host}`, to: nativeId, tool }); } catch { /* The remote selector must accept the exact native ID. */ }
         }
         const original = row.detailViews?.['native-guide'];
         const fields = (original?.fields ?? []).filter((field) => field.label !== '寻址指引');

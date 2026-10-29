@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -8,8 +8,9 @@ import { endpointOfIdentity, identityKey, identityMatchesEndpoint, resolveCaller
 import { continueConversation, continueFromRef, handleForRef, pairKeyOf, pairKeyOfEntry, recordConversation, resolveHandle } from '../src/conversations.js';
 import { buildSshArgv, decodeOriginIdentity, encodeOrigin, validateRemoteFlagValues } from '../src/federation.js';
 import { drain, mailboxFileFor, outboxCount, outboxPairCounts, outboxSummary, park, retryableOutbox } from '../src/outbox.js';
-import { createReceiptMarker } from '../src/send-log.js';
+import { appendSendLog, confirmInRollout, createReceiptMarker } from '../src/send-log.js';
 import { MultichatError } from '../src/errors.js';
+import { RATE_LIMIT_MAX } from '../src/rate-limit.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-c14-route-state-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -74,6 +75,12 @@ describe('typed conversation endpoint codec', () => {
     expect(() => decodeRef(`mc2_${Buffer.concat([header, bytes.subarray(1), Buffer.from([7, 99])]).toString('base64url')}`))
       .toThrow(expect.objectContaining({ code: 'INVALID_CONVERSATION_REF' }));
   });
+
+  it('rejects endpoint types attached to a human in legacy JSON refs', () => {
+    const legacyRef = { ...newConversationRef({ p: 'human' }, cli), f: { p: 'human', endpointType: 'cli' } };
+    const legacy = `mc1_${Buffer.from(JSON.stringify(legacyRef)).toString('base64url')}`;
+    expect(() => decodeRef(legacy)).toThrow(expect.objectContaining({ code: 'INVALID_CONVERSATION_REF' }));
+  });
 });
 
 describe('typed identity, pair continuity and provenance', () => {
@@ -108,10 +115,25 @@ describe('typed identity, pair continuity and provenance', () => {
       .toBe(pairKeyOf(caller, cli));
   });
 
-  it.each([cli, desktop])('keeps endpoint type through both SSH and TCP origin codecs: %j', (identity) => {
+  it.each([cli, desktop, { ...caller, name: 'sender/name@雪' },
+    { p: 'opencode' as const, id: 'opaque/session@雪', endpointType: 'shared' },
+    { p: 'dsh' as const, id: 'harness/host@雪', endpointType: 'host' },
+    { p: 'dsh' as const, id: 'harness/desktop@雪', endpointType: 'desktop' },
+  ])('keeps endpoint type through both SSH and TCP origin codecs: %j', (identity) => {
     expect(decodeOriginIdentity(encodeOrigin(identity, 'host-a', 'machine-a'))).toEqual({ ...identity, host: 'host-a', mid: 'machine-a' });
     expect(decodeOriginIdentity(encodeOrigin(identity, 'aabbccdd', 'machine-a', 'tcp')))
       .toEqual({ ...identity, host: 'aabbccdd', mid: 'machine-a', via: 'tcp' });
+  });
+
+  it('does not reuse a handle when an equal nonce identifies another typed pair', () => {
+    const file = join(freshDir(), 'conversations.json');
+    const cliRef = newConversationRef(caller, cli);
+    const desktopRef = { ...cliRef, t: desktop };
+    const first = handleForRef(file, cliRef);
+    const second = handleForRef(file, desktopRef);
+    expect(second).not.toBe(first);
+    expect(decodeRef(resolveHandle(file, first)).t).toEqual(cli);
+    expect(decodeRef(resolveHandle(file, second)).t).toEqual(desktop);
   });
 
   it('passes an explicit tool type to the authoritative SSH command', () => {
@@ -154,7 +176,7 @@ describe('typed delayed delivery state', () => {
     expect(seen).toHaveLength(2);
   });
 
-  it('uses typed endpoint attribution for queue counters and rate windows', () => {
+  it('uses typed endpoint attribution for queue counters', () => {
     const dir = freshDir();
     park(dir, cli.id, { envelope: 'cli-envelope', toName: 'peer', callerKey: identityKey(caller), endpointType: 'cli' }, 1_000);
     park(dir, cli.id, { envelope: 'desktop-envelope', toName: 'peer', callerKey: identityKey(caller), endpointType: 'desktop' }, 2_000);
@@ -167,9 +189,51 @@ describe('typed delayed delivery state', () => {
     expect(counts.get(pairKeyOf(caller, desktop))).toBe(1);
   });
 
+  it('keeps a full CLI rate window from blocking a Desktop queue with the same native ID', async () => {
+    const dir = freshDir();
+    const sendLogFile = join(freshDir(), 'send-log.jsonl');
+    const from = identityKey(caller);
+    park(dir, cli.id, { envelope: 'cli-envelope', toName: 'CLI', callerKey: from, endpointType: 'cli' }, 1_000);
+    park(dir, desktop.id, { envelope: 'desktop-envelope', toName: 'Desktop', callerKey: from, endpointType: 'desktop' }, 1_000);
+    for (let index = 0; index < RATE_LIMIT_MAX; index++) appendSendLog(sendLogFile, {
+      ts: new Date(5_000).toISOString(), from, target: identityKey(cli), to: 'CLI', status: 'delivered',
+    });
+    const attempted: unknown[] = [];
+    await drain(dir, async (_id, content, _timeout, options) => { attempted.push([content, options?.endpointType]); },
+      { sendLogFile, now: () => 6_000 });
+    expect(attempted).toEqual([['desktop-envelope', 'desktop']]);
+    expect(outboxCount(dir, cli.id, 'cli')).toBe(1);
+    expect(outboxCount(dir, desktop.id, 'desktop')).toBe(0);
+  });
+
+  it('skips malformed persisted queues before claiming or delivering them', async () => {
+    const dir = freshDir();
+    writeFileSync(join(dir, `${cli.id}.json`), JSON.stringify({ items: [{
+      id: 'corrupt', envelope: 'must not send', toName: 42, parkedAt: 1_000, attempts: 0,
+    }] }));
+    const seen: string[] = [];
+    expect(outboxSummary(dir)).toEqual([]);
+    expect(await drain(dir, async (_id, content) => { seen.push(content); })).toEqual([]);
+    expect(seen).toEqual([]);
+  });
+
   it('binds receipts to the requested endpoint type while preserving legacy markers', () => {
     const legacy = createReceiptMarker(cli.id, 'same-envelope');
     expect(createReceiptMarker(cli.id, 'same-envelope', 'cli')).not.toBe(legacy);
     expect(createReceiptMarker(cli.id, 'same-envelope', 'cli')).not.toBe(createReceiptMarker(cli.id, 'same-envelope', 'desktop'));
+  });
+
+  it('confirms a typed receipt only for the originally requested endpoint', async () => {
+    const home = freshDir();
+    const day = join(home, 'sessions', '2026', '10', '27');
+    const id = 'aaaa1111-0000-0000-0000-000000000000';
+    mkdirSync(day, { recursive: true });
+    writeFileSync(join(day, `rollout-2026-10-27T05-00-00-${id}.jsonl`), `${JSON.stringify({
+      type: 'event_msg', payload: { type: 'user_message', message: 'typed receipt' },
+    })}\n`);
+    const marker = createReceiptMarker(id, 'typed receipt', 'cli');
+    expect(await confirmInRollout(home, id, marker, { tries: 1, delayMs: 0 }, 'cli')).toBe('confirmed');
+    expect(await confirmInRollout(home, id, marker, { tries: 1, delayMs: 0 }, 'desktop')).toBe('unconfirmed');
+    expect(await confirmInRollout(home, id, marker, { tries: 1, delayMs: 0 })).toBe('unconfirmed');
   });
 });

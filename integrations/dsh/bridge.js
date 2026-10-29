@@ -48,6 +48,17 @@ export async function mountDshBridge(ctx, host, options = {}) {
   const tokenBytes = Buffer.from(`Bearer ${token}`);
   const runtimeVersion = host.getDshRuntimeVersion();
   if (typeof runtimeVersion !== 'string' || runtimeVersion === '') throw failure('PROTOCOL_ERROR', 'Harness runtime did not identify its version.');
+  // This public boot context describes the Host domain, never the attached UI.
+  const profileContext = ctx.get('profileContext');
+  const profile = isRecord(profileContext) && typeof profileContext.name === 'string'
+    && profileContext.name.trim() !== '' && profileContext.name.length <= 256 ? profileContext.name : undefined;
+  const endpoint = profile === undefined ? {} : { profile, endpointType: profile === 'desktop' ? 'desktop' : 'host' };
+  const shellEnv = ctx.get('shellEnv');
+  const profileDir = isRecord(profileContext) && typeof profileContext.dir === 'string' && isAbsolute(profileContext.dir) ? profileContext.dir : undefined;
+  // This is schema support, not a claim that a shell has received a contribution.
+  // Only the current native shell's managed marker can establish that association.
+  const callerIdentity = (typeof ctx.inject === 'function' || typeof shellEnv?.register === 'function') && profile !== undefined && profileDir !== undefined
+    ? { schema: 1, profileDir } : undefined;
   const directory = join(home, '.crosschat', 'dsh', 'instances');
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const dirInfo = await lstat(directory);
@@ -58,9 +69,12 @@ export async function mountDshBridge(ctx, host, options = {}) {
   let closed = false;
   let closing;
   let published = false;
+  let releaseCallerIdentity;
+  let callerIdentityScope;
   const file = join(directory, `${instanceId}.json`);
   const temporary = join(directory, `${instanceId}.tmp`);
-  const info = { schema: 1, protocol: 1, provider: 'dsh', instanceId, pid: process.pid, runtimeVersion };
+  const info = { schema: 1, protocol: 1, provider: 'dsh', instanceId, pid: process.pid, runtimeVersion, ...endpoint,
+    ...(callerIdentity === undefined ? {} : { callerIdentity }) };
   const roots = () => {
     const agents = ctx.agents.roots();
     if (!Array.isArray(agents)) throw failure('PROTOCOL_ERROR', 'Harness live root registry is unavailable.');
@@ -118,6 +132,9 @@ export async function mountDshBridge(ctx, host, options = {}) {
   server.keepAliveTimeout = 1000;
   const close = () => closing ??= (async () => {
     closed = true;
+    releaseCallerIdentity?.();
+    releaseCallerIdentity = undefined;
+    await callerIdentityScope?.dispose();
     const stopped = new Promise((resolve) => server.close(() => resolve()));
     server.closeAllConnections();
     await stopped;
@@ -136,6 +153,41 @@ export async function mountDshBridge(ctx, host, options = {}) {
     const address = server.address();
     if (address === null || typeof address === 'string') throw failure('UNAVAILABLE', 'Harness bridge did not acquire a loopback port.');
     url = `http://127.0.0.1:${address.port}`;
+    if (callerIdentity !== undefined) {
+      const contribute = (scope) => {
+        if (closed) return;
+        const service = scope.get('shellEnv');
+        if (typeof service?.register !== 'function') return;
+        let active = true;
+        const unregister = service.register({
+          name: 'crosschat-source',
+          variables: {
+            DSH_CROSSCHAT_INSTANCE_ID: { description: 'Crosschat bridge instance serving this native root execution.' },
+            DSH_CROSSCHAT_HOME: { description: 'Crosschat state home for the current native bridge instance.' },
+          },
+          resolve(execution) {
+            const agent = execution.agent;
+            const id = agent?.session?.header?.id;
+            // The registry rebuilds this namespace for each actual tool call.
+            // Old scopes and same-ID replacement agents cannot supply a marker.
+            if (!active || closed || typeof id !== 'string' || root(id) !== agent) return {};
+            return { DSH_CROSSCHAT_INSTANCE_ID: instanceId, DSH_CROSSCHAT_HOME: home };
+          },
+        });
+        const release = () => {
+          if (!active) return;
+          active = false;
+          unregister();
+          if (releaseCallerIdentity === release) releaseCallerIdentity = undefined;
+        };
+        releaseCallerIdentity = release;
+        scope.effect(() => release);
+      };
+      // A child dependency scope follows late registration and replacement without
+      // restarting the receiving bridge. ctx.get() alone is only a boot-time read.
+      if (typeof ctx.inject === 'function') callerIdentityScope = ctx.inject(['shellEnv'], contribute);
+      else contribute(ctx);
+    }
     const handle = await open(temporary, 'wx', 0o600);
     try { await handle.writeFile(JSON.stringify({ ...info, url, token, createdAt: Date.now() })); await handle.sync(); }
     finally { await handle.close(); }

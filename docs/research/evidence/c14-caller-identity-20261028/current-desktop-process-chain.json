@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "observedAtUtc": "2026-10-28T03:26:38.6781024Z",
+  "method": "Read-only Get-CimInstance Win32_Process for this exec shell and its existing ancestor chain; environment key presence only",
+  "scope": "One current Windows Codex Desktop exec invocation; no native software installed, launched for testing, or modified",
+  "redaction": "User profile, local app data, and WindowsApps package suffix replaced with placeholders; no environment values or command lines recorded",
+  "identityKeyPresence": {
+    "CODEX_THREAD_ID": true,
+    "CODEX_SESSION_ID": true,
+    "CODEX_INTERNAL_ORIGINATOR_OVERRIDE": true,
+    "CODEX_HOME": false,
+    "CROSSCHAT_CODEX_WINDOW_TOKEN": false,
+    "CLAUDE_CODE_MESSAGING_SOCKET": false,
+    "OPENCODE_SESSION_ID": false,
+    "DSH_SESSION_ID": false,
+    "DSH_PROFILE": false,
+    "DSH_HOME": false
+  },
+  "ancestorChain": [
+    {
+      "pid": 26264,
+      "parentPid": 24664,
+      "name": "pwsh.exe",
+      "executablePath": "%USERPROFILE%/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell/pwsh.exe",
+      "createdAtUtc": "2026-10-28T03:26:37.5102230Z"
+    },
+    {
+      "pid": 24664,
+      "parentPid": 17020,
+      "name": "codex.exe",
+      "executablePath": "%LOCALAPPDATA%/OpenAI/Codex/bin/2993767bd1dfb009/codex.exe",
+      "createdAtUtc": "2026-10-28T01:11:14.2140410Z"
+    },
+    {
+      "pid": 17020,
+      "parentPid": 32292,
+      "name": "ChatGPT.exe",
+      "executablePath": "%ProgramFiles%/WindowsApps/OpenAI.Codex_26.1021.3705.0_x64__<package>/app/ChatGPT.exe",
+      "createdAtUtc": "2026-10-28T01:11:11.3029830Z"
+    }
+  ],
+  "limits": [
+    "A Desktop ancestor is evidence of this observed process chain, not a general proof that every descendant is a Desktop invocation; nested CLI needs separate handling",
+    "No claim that native session IDs were correlated to a specific Desktop owner or shell turn",
+    "No multi-round, resume, restart, Linux, macOS, or independent Codex CLI acceptance performed"
+  ]
+}

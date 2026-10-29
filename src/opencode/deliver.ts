@@ -9,6 +9,7 @@ export type OpenCodeDeliveryResult = { status: 'accepted'; messageId: string; qu
 
 /** Native durable inbox admission; acceptance does not claim model execution or a reply. */
 export async function deliverToOpenCodeSession(id: string, content: string, options: OpenCodeDeliveryOptions = {}): Promise<OpenCodeDeliveryResult> {
+  if (options.endpointType !== undefined && options.endpointType !== 'shared') throw openCodeError('INPUT_REJECTED', 'OpenCode uses a shared native service; the requested endpoint type is not supported.');
   const path = `${openCodeSessionPath(id)}/prompt`;
   const delivery = resolveDeliveryMode(options.mode);
   const connection = await connectOpenCode(options);

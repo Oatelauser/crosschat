@@ -1,0 +1,60 @@
+{
+  "recordedAt": "2026-10-28T01:26:53.148Z",
+  "platform": "win32",
+  "node": "v25.0.0",
+  "source": "Windows ConPTY; final built TUI, synthetic application inputs; no native tools or remote hosts",
+  "directory": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\c14-tui-20261028\\run-Iastf6",
+  "temporaryRootRemoved": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-c14-tui-2RGLtx",
+  "distHashes": {
+    "tui/main.js": "598c907b0240ce45218bee905376b4aba1b3a047f9cbf088f70de2477ecc4fb0",
+    "tui/resources/sessions.js": "c377c32e2a58960bd059db9ab79afd65580249b573e46665b20e602e34aaa627",
+    "tui/resources/tcp.js": "40fef21a3eceffc638790fffbd6d3e539ac4f6760ebacee0c30da7fe6acd2aa9",
+    "tool-types.js": "6189f7c1302579cae70907de99626fd7c462c2030ce95c41c98f9ef7b14d91ae"
+  },
+  "results": [
+    {
+      "name": "local-and-tcp-types",
+      "code": 0,
+      "terminalRestored": true,
+      "checks": {
+        "sameProviderAndNativeId": true,
+        "localAndTcpTypedCopies": true,
+        "localAndTcpToolFilters": true,
+        "reorderedRefreshPreservesSelection": true,
+        "resize": [
+          [
+            48,
+            16
+          ],
+          [
+            140,
+            32
+          ]
+        ],
+        "normalExit": true
+      },
+      "evidence": "local-and-tcp-types.jsonl",
+      "pty": "local-and-tcp-types-pty.jsonl"
+    },
+    {
+      "name": "ctrl-c",
+      "code": 0,
+      "terminalRestored": true,
+      "checks": {
+        "interruptOnTypedSessionList": true
+      },
+      "evidence": "ctrl-c.jsonl",
+      "pty": "ctrl-c-pty.jsonl"
+    },
+    {
+      "name": "exception",
+      "code": 1,
+      "terminalRestored": true,
+      "checks": {
+        "expectedInjectedFailure": true
+      },
+      "evidence": "exception.jsonl",
+      "pty": "exception-pty.jsonl"
+    }
+  ]
+}

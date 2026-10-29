@@ -9,6 +9,8 @@ description: 使用 crosschat 与本机或跨机的 Claude Code、Codex CLI/桌�
 
 ## 每次通信必读
 
+- 每次 `send` 都填写收件端 `--tool`，包括 `--conversation` 回信。优先照用程序生成的 reply hint 或 TUI `y` 复制的完整命令，只替换正文。
+- `send --tool` 表示收件端；自身原生身份和工具类型由程序识别。保留真实原生身份；仅按程序返回的确认流程处理无法自动分类的来源，详见 [错误恢复](references/errors.md)。
 - 普通自主协作默认 `queue`；需要追加对方当前任务时显式 `--delivery steer`。
 - **当前用户明确让你用 crosschat 与指定会话聊天、转达或代发时，必须显式 `--delivery steer`。**
 - 每条消息独立选择，回复默认 `queue`，不继承来信模式。两种模式在目标空闲时都会唤醒。

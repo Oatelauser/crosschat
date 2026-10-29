@@ -10,6 +10,7 @@ import { DiscoveryService } from '../src/application/discovery/service.js';
 import type { DiscoveryEndpoint, DiscoverySession } from '../src/application/discovery/model.js';
 import type { SessionRef } from '../src/application/sessions/model.js';
 import type { SessionMembershipOptions } from '../src/application/session-membership/index.js';
+import type { SendDeps } from '../src/application/send/types.js';
 import { Broker } from '../src/serve/broker.js';
 import { attachPipePath, NodeClient } from '../src/serve/node.js';
 import { connectAttachPipe } from '../src/commands/session-star.js';
@@ -63,12 +64,12 @@ async function fixture(roster: RosterEntry[] = [], initial = session()) {
   const spawned: string[] = [];
   const options: SessionMembershipOptions = { baseDir, discovery: { execute }, machineId: () => machine, timeoutMs: 300,
     spawnServeDetach: (selector) => spawned.push(selector), aggregatorTimeoutMs: 1000 };
-  const startNode = async () => {
+  const startNode = async (listCodexThreads?: SendDeps['listCodexThreads']) => {
     const node = new NodeClient({ config: { entries: [entry] }, configFile, machineId: () => machine, now: Date.now, log: () => undefined,
       fileInbox: new FileInbox({ inboxDir: join(baseDir, 'inbox'), partsDir: join(baseDir, 'parts') }), codexHome: join(baseDir, 'empty-codex'), memberCheckMs: 60_000,
       makeSendDeps: () => ({ env: {},
         listClaudeSessions: () => ({ sessions: state.item === null ? [] : [{ pid: 123, sessionId: state.item.ref.nativeId, kind: 'interactive', status: 'idle', messagingSocketPath: 'fixture' }], malformed: 0 }),
-        listCodexThreads: async () => [], deliverClaude: async () => ({ status: 'delivered' }), deliverCodex: async () => ({ status: 'accepted', turnId: 'unused' }),
+        listCodexThreads: listCodexThreads ?? (async () => []), deliverClaude: async () => ({ status: 'delivered' }), deliverCodex: async () => ({ status: 'accepted', turnId: 'unused' }),
         sendLogFile: join(baseDir, 'send-log.jsonl'), outboxDir: join(baseDir, 'outbox'), now: Date.now }),
     });
     cleanups.push(() => node.stop());
@@ -289,6 +290,28 @@ describe('session membership application boundary', () => {
     f.state.item = session({ ref: { ...ref, nativeId: 'other-complete-id' }, name: 'shared' });
     expect(await app.apply({ ...adopt, ref: f.state.item.ref })).toMatchObject({ kind: 'applied' });
     expect(loadBrokerFile(f.registryFile).stars[0].roster.map((entry) => entry.sessionId)).toEqual(expect.arrayContaining([ref.nativeId, 'other-complete-id']));
+  });
+
+  it('adopts and removes a typed Codex member without overwriting the same native ID on another endpoint', async () => {
+    const cliRef: SessionRef = { ...ref, providerId: 'codex', endpointType: 'cli' };
+    const desktopRef: SessionRef = { ...cliRef, endpointType: 'desktop' };
+    const desktopMember = member({ tool: 'codex', endpointType: 'desktop', name: 'Desktop title', temporary: true });
+    const f = await fixture([desktopMember], session({ ref: cliRef, name: 'CLI title' }));
+    const listCodexThreads: SendDeps['listCodexThreads'] = async (options) => [
+      { id: cliRef.nativeId, endpointType: 'cli', name: 'CLI title', status: 'idle' },
+      { id: desktopRef.nativeId, endpointType: 'desktop', name: 'Desktop title', status: 'idle' },
+    ].filter((thread) => options?.endpointType === undefined || thread.endpointType === options.endpointType);
+    f.options.spawnServeDetach = (selector) => { f.spawned.push(selector); void f.startNode(listCodexThreads).catch(() => undefined); };
+    const app = await service(f.options);
+    const request = { ...adopt, ref: cliRef };
+    expect(await app.apply(request)).toMatchObject({ kind: 'applied' });
+    expect(f.execute).toHaveBeenCalledWith(expect.objectContaining({ op: 'detail', nativeId: cliRef.nativeId, endpointType: 'cli' }), expect.anything());
+    const roster = loadBrokerFile(f.registryFile).stars[0].roster;
+    expect(roster).toHaveLength(2);
+    expect(roster.find((entry) => entry.endpointType === 'cli')).toMatchObject({ sessionId: cliRef.nativeId, tool: 'codex', machine, name: 'CLI title' });
+    expect(roster.find((entry) => entry.endpointType === 'desktop')).toEqual(desktopMember);
+    expect(await app.apply({ ...request, op: 'remove' })).toMatchObject({ kind: 'applied' });
+    expect(loadBrokerFile(f.registryFile).stars[0].roster).toEqual([desktopMember]);
   });
 
   it('gets authenticated aggregator identity from status and clears it when its broker connection closes', async () => {

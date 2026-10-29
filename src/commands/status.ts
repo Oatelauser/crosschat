@@ -18,6 +18,8 @@ import type { BrokerEntry } from '../serve/node-config.js';
 import type { NodeStatusFile } from '../serve/node.js';
 import { readNodeRevocation } from '../serve/revocation.js';
 import { listNodeStatusFiles, nodeStatusSelector, TCP_STATUS_FRESH_MS } from '../application/status/status-files.js';
+import { identityKey } from '../identity.js';
+import { toolTypeFor } from '../tool-types.js';
 export { listNodeStatusFiles, nodeStatusSelector, TCP_STATUS_FRESH_MS } from '../application/status/status-files.js';
 
 /**
@@ -40,7 +42,7 @@ export interface StatusDeps {
    * left the sender "unconfirmed" get one bounded recheck here. Injected with a
    * small poll budget (cli wires 2 tries × 200ms) so status never slows down.
    */
-  confirmReceipt?(threadId: string, marker: string): Promise<'confirmed' | 'unconfirmed'>;
+  confirmReceipt?(threadId: string, marker: string, endpointType?: string): Promise<'confirmed' | 'unconfirmed'>;
   /** Clock for the conversations view's relative times; omitted → Date.now(). */
   now?(): number;
   /**
@@ -752,7 +754,7 @@ function sshPeerLabel(row: ConversationSummary): string {
       (ep): ep is Exclude<RefEndpoint, { p: 'human' }> => ep.p !== 'human' && ep.m !== undefined,
     );
     if (remote === undefined) return `${row.pair[1]}@?`;
-    const idx = row.endpoints.indexOf(`${remote.p}:${remote.id}`);
+    const idx = row.endpoints.indexOf(identityKey(remote));
     // 016① 显示型机器标识：name(mid8)；旧 ref 无 mid 只显名字。
     const mid8 = remote.mid !== undefined ? normalizeMid(remote.mid).slice(0, 8) : '';
     const machine = `${remote.m}${mid8.length < 8 ? '' : `(${mid8})`}`;
@@ -1008,21 +1010,29 @@ async function conversationsView(deps: StatusDeps, json: boolean, filters: Statu
  */
 async function endpointDisplayNames(deps: StatusDeps): Promise<Map<string, string>> {
   const names = new Map<string, string>();
-  const add = (prefix: string, id: string, name: string | null | undefined) => {
+  const add = (prefix: string, id: string, name: string | null | undefined, endpointType?: string) => {
     if (name === undefined || name === null || name === '') return;
     names.set(`${prefix}:${id}`, name);
     names.set(`${prefix}/${id.slice(0, 8)}`, name);
+    if (endpointType !== undefined) {
+      names.set(identityKey({ p: prefix, id, endpointType }), name);
+      const tool = toolTypeFor(prefix, endpointType) ?? `${prefix}/${endpointType}`;
+      names.set(`${tool}/${id.slice(0, 8)}`, name);
+    }
   };
   for (const session of deps.listClaudeSessions().sessions) {
-    if (session.sessionId !== '') add('claude', session.sessionId, session.name);
+    if (session.sessionId !== '') add('claude', session.sessionId, session.name, 'cli');
   }
   try {
-    for (const thread of await deps.listCodexThreads()) add('codex', thread.id, thread.name);
+    for (const thread of await deps.listCodexThreads()) add('codex', thread.id, thread.name, thread.endpointType);
   } catch {
     // codex down is a valid status answer — translate the claude side only
   }
   try {
-    for (const thread of await deps.listDshThreads?.() ?? []) add('dsh', thread.id, thread.name);
+    for (const thread of await deps.listOpenCodeThreads?.() ?? []) add('opencode', thread.id, thread.name, thread.endpointType);
+  } catch { /* Native display metadata does not block existing conversation rows. */ }
+  try {
+    for (const thread of await deps.listDshThreads?.() ?? []) add('dsh', thread.id, thread.name, thread.endpointType);
   } catch { /* Native display metadata does not block existing conversation rows. */ }
   return names;
 }
@@ -1041,7 +1051,7 @@ async function recheckReceipts(rows: ConversationSummary[], deps: StatusDeps): P
   for (const row of rows) {
     if (row.lastStatus !== 'delivered' || row.receipt !== 'unconfirmed') continue;
     if (row.receiptProbe === undefined) continue;
-    if ((await confirm(row.receiptProbe.threadId, row.receiptProbe.marker)) === 'confirmed') row.receipt = 'confirmed';
+    if ((await confirm(row.receiptProbe.threadId, row.receiptProbe.marker, row.receiptProbe.endpointType)) === 'confirmed') row.receipt = 'confirmed';
   }
 }
 

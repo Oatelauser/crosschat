@@ -5,6 +5,7 @@ export type { OpenCodeOptions, OpenCodeEndpoint } from './service.js';
 
 export interface OpenCodeThread {
   id: string;
+  endpointType?: string;
   name: string | null;
   cwd: string;
   rawStatus: unknown;
@@ -29,7 +30,7 @@ function thread(value: unknown, active: Record<string, unknown>): OpenCodeThread
     throw openCodeError('PROTOCOL_ERROR', 'OpenCode session response has invalid fields.');
   }
   return {
-    id: value.id, name: value.title || null, cwd: value.location.directory,
+    id: value.id, endpointType: 'shared', name: value.title || null, cwd: value.location.directory,
     rawStatus: Object.hasOwn(active, value.id) ? active[value.id] : { type: 'inactive' },
     attributes: { location: { directory: value.location.directory }, ...(typeof value.projectID === 'string' ? { projectID: value.projectID } : {}), ...(typeof value.parentID === 'string' ? { parentID: value.parentID } : {}) },
   };

@@ -2,12 +2,12 @@
 
 ## 多行或特殊字符
 
-正文含 `$`、反引号、引号等字符或较长时，省略 `--body`，通过 stdin 传入。按主文件规则决定是否保留示例中的 `--delivery steer`；`--to`、`--conversation` 和跨机地址沿用已确认的路由。
+正文含 `$`、反引号、引号等字符或较长时，省略 `--body`，通过 stdin 传入。按主文件规则决定是否保留示例中的 `--delivery steer`；`--to`、`--conversation`、收件 `--tool` 和跨机地址沿用已确认的命令。
 
 Bash 用带引号的 heredoc：
 
 ```bash
-cat <<'EOF' | crosschat send --conversation c3 --delivery steer
+cat <<'EOF' | crosschat send --conversation c3 --tool codex-cli --delivery steer
 价格 $100、命令 `uptime`、"双引号" ——逐字发送
 EOF
 ```
@@ -17,7 +17,7 @@ PowerShell 用单引号 here-string：
 ```powershell
 @'
 价格 $100、命令 `dir`、"双引号" ——逐字发送
-'@ | crosschat send --conversation c3 --delivery steer
+'@ | crosschat send --conversation c3 --tool codex-cli --delivery steer
 ```
 
 结束标记须独占一行；PowerShell 的 `'@` 顶格书写。
@@ -37,7 +37,7 @@ PowerShell 用单引号 here-string：
 
 ## 文件通道
 
-- 发文件（**tcp 专属**）：`crosschat send --via tcp:<星>:<机器>:<工具>/<会话> --file <路径>`，正文自动生成“文件 … 已送达”；按主文件模式规则增加 `--delivery steer`。机器级地址也可用 `tcp:<机器名/mid8>`。
+- 发文件（**tcp 专属**）：`crosschat send --via tcp:<星>:<机器>:<完整会话ID> --tool <收件类型> --file <路径>`，正文自动生成“文件 … 已送达”；按主文件模式规则增加 `--delivery steer`。
 - 单机把文件路径作为正文发送，或用 ReadAllText/cat 发送文件内容，不能使用 TCP 文件通道。
 - 接收方读到的路径在**对端机器**本地；附件超过 **5 天**被回收——收到"已送达"但路径不存在时，回对端"附件已过期，请重发 --file"。
 - tcp 腿正文超限自动走此通道（≤64MiB），发送方无需改命令。

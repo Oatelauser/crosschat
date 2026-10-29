@@ -1,10 +1,10 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { aggregateSummaries } from '../src/conversation-summary.js';
 import { pairKeyOf, recordConversation } from '../src/conversations.js';
-import { identityKey } from '../src/identity.js';
+import { identityKey, parseIdentityKey } from '../src/identity.js';
 import { encodeRef, newConversationRef } from '../src/ref.js';
 import { park, mailboxFileFor } from '../src/outbox.js';
 import { appendSendLog, createReceiptMarker } from '../src/send-log.js';
@@ -24,6 +24,17 @@ const stored = encodeRef(ref);
 const pairs = { [pair]: { ref: stored, updatedAt: 1_000 } };
 
 describe('typed communication observations', () => {
+  it('parses registered typed and legacy identities without guessing unknown types', () => {
+    expect(parseIdentityKey(identityKey(desktop))).toEqual(desktop);
+    expect(parseIdentityKey('codex:opaque:full-id')).toEqual({ p: 'codex', id: 'opaque:full-id' });
+    expect(parseIdentityKey('human')).toEqual({ p: 'human' });
+    expect(parseIdentityKey('["third-provider","editor","opaque/id"]'))
+      .toEqual({ p: 'third-provider', endpointType: 'editor', id: 'opaque/id' });
+    for (const value of ['["codex","shared","same-id"]', '["human","cli","id"]', '["codex","cli"]', '[not-json', 'codex:']) {
+      expect(parseIdentityKey(value)).toBeUndefined();
+    }
+  });
+
   it('carries exact receipt evidence into the later status confirmation', async () => {
     const marker = createReceiptMarker(desktop.id, 'envelope', desktop.endpointType);
     const rows = aggregateSummaries(pairs, [{ ts: '2026-10-27T01:00:00Z', from: identityKey(caller), target: identityKey(desktop),
@@ -64,6 +75,21 @@ describe('typed communication observations', () => {
     ]));
     expect(summarizeOutbox(result.items)).toEqual({ threads: 2, items: 2 });
     expect(JSON.stringify(result)).not.toContain('PRIVATE');
+  });
+
+  it('refuses a typed store whose parent directory is a link to another source', async () => {
+    const baseDir = fixture();
+    const foreign = fixture();
+    mkdirSync(join(baseDir, 'outbox'));
+    mkdirSync(join(foreign, 'cli'));
+    writeFileSync(join(foreign, 'cli', 'foreign-id.json'), JSON.stringify({ items: [{
+      id: 'foreign', toName: 'PRIVATE FOREIGN NAME', endpointType: 'cli', parkedAt: 1_000, attempts: 0,
+    }] }));
+    symlinkSync(foreign, join(baseDir, 'outbox', 'types'), process.platform === 'win32' ? 'junction' : 'dir');
+    const result = await queryOutbox({ baseDir, contextId: 'local' });
+    expect(result.items).toEqual([]);
+    expect(result.errors).toHaveLength(1);
+    expect(JSON.stringify(result)).not.toContain('PRIVATE FOREIGN NAME');
   });
 
   it('keeps typed queue counts, routed audit attribution and local session links separate', async () => {

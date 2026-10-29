@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { replySendArgs } from '../test/helpers/compat-reply.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { access, mkdir, writeFile } from 'node:fs/promises';
@@ -101,7 +102,7 @@ function respond(body, context) {
   if (scenario.kind === 'roundtrip-send') {
     if (!scenario.toolIssued && text.includes(scenario.start)) {
       scenario.toolIssued = true;
-      return bash(fixture.shell(['send', '--to', receiver.name, '--body', scenario.requestBody, '--json']), scenario.toolId);
+      return bash(fixture.shell(['send', '--tool', 'claude', '--to', receiver.name, '--body', scenario.requestBody, '--json']), scenario.toolId);
     }
     const result = results.find((item) => item.tool_use_id === scenario.toolId);
     if (result && !scenario.receiptResult) { scenario.receiptResult = result; return answer(`${marker}_REQUEST_SENT`); }
@@ -113,10 +114,10 @@ function respond(body, context) {
       scenario.incomingSeen = true;
       const envelope = [...text.matchAll(/<cross-session-message\b[^>]*>[\s\S]*?<\/cross-session-message>/g)]
         .map((match) => match[0]).find((value) => value.includes(scenario.requestBody));
-      scenario.reference = envelope?.match(/--conversation\s+(mc[12]_[A-Za-z0-9_-]+|c[1-9][0-9]*)/)?.[1];
-      if (!scenario.reference) return answer('CC_CI_MISSING_REPLY_HINT');
+      const reply = replySendArgs(envelope, { tool: 'claude', requestBody: scenario.requestBody, body: scenario.replyBody });
+      scenario.reference = reply[2];
       scenario.toolIssued = true;
-      return bash(fixture.shell(['send', '--conversation', scenario.reference, '--body', scenario.replyBody, '--json']), scenario.toolId);
+      return bash(fixture.shell(reply), scenario.toolId);
     }
     const result = results.find((item) => item.tool_use_id === scenario.toolId);
     if (result) scenario.receiptResult = result;
@@ -205,7 +206,7 @@ async function busy(mode) {
   stateFor(receiver.id).scenario = scenario;
   receiver.prompt(scenario.start); await gate.waitReady();
   assert.equal(fixture.scan().sessions.find((item) => item.sessionId === receiver.id)?.status, 'busy');
-  sent(await fixture.cli(['send', '--to', receiver.name, '--body', scenario.body, '--delivery', mode, '--json']), receiver.id);
+  sent(await fixture.cli(['send', '--tool', 'claude', '--to', receiver.name, '--body', scenario.body, '--delivery', mode, '--json']), receiver.id);
   assert.equal(receiver.results().length, before, 'The original tool must still be running when delivery is submitted');
   await gate.release(); await receiver.waitResults(before + 1);
   const boundary = { nativeToolCompleted: false, gatePid: gate.pid, enteredAfterTool: scenario.afterTool?.sawDelivery ?? null,
@@ -293,7 +294,7 @@ try {
     for (const mode of ['queue', 'steer']) {
       await idle(receiver); const before = receiver.results().length;
       const scenario = { kind: 'idle', body: `${marker}_IDLE_${mode}`, ack: `${marker}_IDLE_${mode}_ACK` }; stateFor(receiver.id).scenario = scenario;
-      sent(await fixture.cli(['send', '--to', receiver.name, '--body', scenario.body, '--delivery', mode, '--json']), receiver.id);
+      sent(await fixture.cli(['send', '--tool', 'claude', '--to', receiver.name, '--body', scenario.body, '--delivery', mode, '--json']), receiver.id);
       await receiver.waitResults(before + 1); await idle(receiver); assert.equal(receiver.results().length, before + 1);
       successfulResult(receiver.results()[before]); assert.ok(receiver.results()[before].result.includes(`${scenario.ack} received`));
       assert.ok(stateFor(receiver.id).requests.some((request) => request.text.includes(scenario.body))); stateFor(receiver.id).scenario = undefined;
@@ -328,8 +329,8 @@ try {
     await receiver.stop(); assert.equal(fixture.scan().sessions.some((item) => item.sessionId === receiver.id), false);
     const before = fixture.model.requests.length;
     for (const id of [receiver.id, randomUUID()]) {
-      const reference = encodeRef(newConversationRef({ p: 'human' }, { p: 'claude', id }));
-      const result = await fixture.cli(['send', '--conversation', reference, '--body', `${marker}_MUST_NOT_ARRIVE`, '--json']);
+      const reference = encodeRef(newConversationRef({ p: 'human' }, { p: 'claude', id, endpointType: 'cli' }));
+      const result = await fixture.cli(['send', '--tool', 'claude', '--conversation', reference, '--body', `${marker}_MUST_NOT_ARRIVE`, '--json']);
       assert.notEqual(result.code, 0); assert.equal(result.timedOut, false); assert.equal(result.signal, null);
       assert.ok(result.stderr.includes('TARGET_NOT_FOUND'), 'A complete native reference must fail because that exact session is unavailable');
     }

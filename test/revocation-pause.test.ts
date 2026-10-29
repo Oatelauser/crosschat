@@ -45,7 +45,7 @@ async function controlledBroker(rejectNodes = false, options: { starId?: string;
   if (address === null || typeof address === 'string') throw new Error('missing fixture port');
   const nodes: WebSocket[] = [];
   server.on('connection', (socket) => {
-    socket.send(JSON.stringify({ op: 'info', proto: 1, server: 'test', caps: ['multi-star', 'session-members'] }));
+    socket.send(JSON.stringify({ op: 'info', proto: 1, server: 'test', caps: ['multi-star', 'session-members', 'endpoint-types-v1'] }));
     socket.on('message', (data) => {
       const raw: unknown = JSON.parse(String(data));
       if (raw === null || typeof raw !== 'object' || !('op' in raw) || raw.op !== 'connect') return;

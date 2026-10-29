@@ -65,7 +65,7 @@ export class SessionCatalog {
     const { sources } = state;
     const work = Promise.all(sources.map(async ({ reader, cursor }) => {
       try {
-        return await reader.list({ contextId: request.contextId, cursor, limit: request.limit, signal: request.signal });
+        return await reader.list({ contextId: request.contextId, endpointType: request.endpointType, cursor, limit: request.limit, signal: request.signal });
       } catch {
         return errorPage({ source: { contextId: request.contextId, providerId: reader.providerId }, kind: 'unavailable', message: 'Session source could not be read.', nextStep: 'Check the source connection and retry.' }, this.now());
       }
@@ -80,10 +80,11 @@ export class SessionCatalog {
     const pending = pages.flatMap((page, index) => page.nextCursor === null ? [] : [{ providerId: sources[index].reader.providerId, cursor: page.nextCursor }]);
     const errors = [...state.errors, ...pages.flatMap((page) => page.errors)];
     const incomplete = state.incomplete || errors.length > 0 || pages.some((page) => page.completeness !== 'complete' && page.nextCursor === null);
-    const items = pages.flatMap((page) => page.items).filter((item) => matches(item, request.filter));
+    const items = pages.flatMap((page) => page.items).filter((item) =>
+      (request.endpointType === undefined || item.ref.endpointType === request.endpointType) && matches(item, request.filter));
     return {
       items,
-      nextCursor: pending.length === 0 ? null : Buffer.from(JSON.stringify({ contextId: request.contextId, filterKey: filterKey(request.filter), pending, errors, incomplete })).toString('base64url'),
+      nextCursor: pending.length === 0 ? null : Buffer.from(JSON.stringify({ contextId: request.contextId, endpointType: request.endpointType, filterKey: filterKey(request.filter), pending, errors, incomplete })).toString('base64url'),
       completeness: !incomplete && pages.every((page) => page.completeness === 'complete') ? 'complete'
         : pages.length > 0 && pages.every((page) => page.completeness === 'unavailable') ? 'unavailable'
           : pages.some((page) => page.completeness === 'cancelled') ? 'cancelled' : 'partial',
@@ -96,8 +97,15 @@ export class SessionCatalog {
     const reader = this.readers.get(ref.providerId);
     if (reader === undefined) return this.detailPage(errorPage({ source: ref, kind: 'unsupported', message: 'Session provider is not available in this context.' }, this.now()));
     try {
-      const result = await untilAborted(reader.get({ contextId: ref.contextId, nativeId: ref.nativeId, referenceKind: ref.referenceKind, signal: options.signal }), options.signal);
-      return options.signal?.aborted ? this.detailPage(cancelledPage(ref.contextId, ref.providerId, this.now())) : result;
+      const result = await untilAborted(reader.get({ contextId: ref.contextId, nativeId: ref.nativeId, endpointType: ref.endpointType, referenceKind: ref.referenceKind, signal: options.signal }), options.signal);
+      if (options.signal?.aborted) return this.detailPage(cancelledPage(ref.contextId, ref.providerId, this.now()));
+      const actual = result.item?.ref;
+      if (actual !== undefined && (actual.contextId !== ref.contextId || actual.providerId !== ref.providerId || actual.nativeId !== ref.nativeId ||
+        (ref.endpointType !== undefined && actual.endpointType !== ref.endpointType) ||
+        (actual.referenceKind ?? 'native') !== (ref.referenceKind ?? 'native'))) {
+        return this.detailPage(errorPage({ source: ref, kind: 'malformed', message: 'Session source returned a different detail reference.' }, this.now()));
+      }
+      return result;
     } catch {
       return this.detailPage(options.signal?.aborted ? cancelledPage(ref.contextId, ref.providerId, this.now()) : errorPage({ source: ref, kind: 'unavailable', message: 'Session detail could not be read.' }, this.now()));
     }
@@ -110,7 +118,7 @@ export class SessionCatalog {
   private sources(request: SessionQuery): QueryState {
     if (request.cursor === undefined) return { sources: [...this.readers.values()].filter((reader) => request.filter?.providerIds === undefined || request.filter.providerIds.includes(reader.providerId)).map((reader) => ({ reader })), errors: [], incomplete: false };
     const value: unknown = JSON.parse(Buffer.from(request.cursor, 'base64url').toString('utf8'));
-    if (!isRecord(value) || value.contextId !== request.contextId || value.filterKey !== filterKey(request.filter) || !Array.isArray(value.pending) || !Array.isArray(value.errors) || typeof value.incomplete !== 'boolean') throw new Error('Invalid cursor');
+    if (!isRecord(value) || value.contextId !== request.contextId || value.endpointType !== request.endpointType || value.filterKey !== filterKey(request.filter) || !Array.isArray(value.pending) || !Array.isArray(value.errors) || typeof value.incomplete !== 'boolean') throw new Error('Invalid cursor');
     const errors = value.errors.map((error) => cursorError(error, request.contextId));
     const pending: CursorSource[] = [];
     for (const entry of value.pending) {

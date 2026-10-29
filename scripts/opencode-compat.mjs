@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { replySendArgs } from '../test/helpers/compat-reply.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -49,13 +50,12 @@ function respond(body) {
   }
   if (text.includes(`${marker}begin-roundtrip`) && !senderToolEmitted) {
     senderToolEmitted = true;
-    return shell(crosschatShell(['send', '--to', `opencode/${names.receiver}`, '--body', `${marker}roundtrip-request`, '--json']));
+    return shell(crosschatShell(['send', '--tool', 'opencode', '--to', names.receiver, '--body', `${marker}roundtrip-request`, '--json']));
   }
   if (text.includes(`${marker}roundtrip-request`) && !text.includes(`${marker}roundtrip-reply`) && !replyToolEmitted) {
-    const reference = text.match(/--conversation\s+(\S+)/)?.[1];
-    assert.ok(reference, 'Incoming envelope must teach a reply route');
+    const reply = replySendArgs(text, { tool: 'opencode', requestBody: `${marker}roundtrip-request`, body: `${marker}roundtrip-reply` });
     replyToolEmitted = true;
-    return shell(crosschatShell(['send', '--conversation', reference, '--body', `${marker}roundtrip-reply`, '--json']));
+    return shell(crosschatShell(reply));
   }
   return textStream(`${marker}accepted`);
 }
@@ -112,7 +112,7 @@ try {
     for (const session of Object.values(sessions)) assert.ok(items.some((item) => item.ref.providerId === 'opencode' && item.ref.nativeId === session.id && item.name === session.title), `Real session ${session.id} must be discoverable`);
   });
   await check('idle-delivery-and-model-wakeup', async () => {
-    sent(await fixture.cli(['send', '--to', `opencode/${names.idle}`, '--body', `${marker}idle-message`, '--json']));
+    sent(await fixture.cli(['send', '--tool', 'opencode', '--to', names.idle, '--body', `${marker}idle-message`, '--json']));
     await fixture.idle(sessions.idle.id);
     const transcript = await fixture.transcript(sessions.idle.id);
     assert.ok(JSON.stringify(transcript).includes(`${marker}idle-message`));
@@ -124,9 +124,9 @@ try {
     busyStarted = new Promise((done) => { startBusy = done; });
     await fixture.prompt(sessions.busy.id, `${marker}busy-start`);
     await Promise.race([busyStarted, new Promise((_, reject) => setTimeout(() => reject(new Error('Busy model request did not start')), 30000).unref())]);
-    const queued = sent(await fixture.cli(['send', '--to', `opencode/${names.busy}`, '--body', `${marker}queued`, '--delivery', 'queue', '--json']));
+    const queued = sent(await fixture.cli(['send', '--tool', 'opencode', '--to', names.busy, '--body', `${marker}queued`, '--delivery', 'queue', '--json']));
     assert.equal(queued.queued, true, 'Busy native queue must carry the queued delivery flag');
-    sent(await fixture.cli(['send', '--to', `opencode/${names.busy}`, '--body', `${marker}steered`, '--delivery', 'steer', '--json']));
+    sent(await fixture.cli(['send', '--tool', 'opencode', '--to', names.busy, '--body', `${marker}steered`, '--delivery', 'steer', '--json']));
     const inbox = await fixture.api(`/api/session/${sessions.busy.id}/inbox`);
     assert.ok(inbox.data.some((item) => JSON.stringify(item).includes(`${marker}queued`) && item.delivery === 'queue'));
     assert.ok(inbox.data.some((item) => JSON.stringify(item).includes(`${marker}steered`) && item.delivery === 'steer'));
@@ -145,20 +145,20 @@ try {
     await poll(async () => JSON.stringify(await fixture.transcript(sessions.sender.id)).includes(`${marker}roundtrip-reply`), 'native OpenCode shell round-trip reply', 60000);
     await Promise.all([fixture.idle(sessions.sender.id), fixture.idle(sessions.receiver.id)]);
     const received = JSON.stringify(await fixture.transcript(sessions.receiver.id));
-    assert.ok(received.includes(`opencode/${sessions.sender.id.slice(0, 8)}`), 'Sender must be the actual OpenCode session, not human');
+    assert.ok(received.includes(sessions.sender.id.slice(0, 8)), 'Sender must be the actual OpenCode session, not human');
     assert.ok(senderToolEmitted && replyToolEmitted);
   });
   await check('service-restart-preserves-exact-session', async () => {
     const previous = fixture.pid;
     await fixture.restart();
     assert.notEqual(fixture.pid, previous);
-    const receipt = sent(await fixture.cli(['send', '--to', `opencode/${sessions.idle.id}`, '--body', `${marker}after-restart`, '--json']));
+    const receipt = sent(await fixture.cli(['send', '--tool', 'opencode', '--to', sessions.idle.id, '--body', `${marker}after-restart`, '--json']));
     assert.ok(receipt.to.includes(sessions.idle.id));
     await fixture.idle(sessions.idle.id);
     assert.ok(JSON.stringify(await fixture.transcript(sessions.idle.id)).includes(`${marker}after-restart`));
   });
   await check('missing-target-is-explicit', async () => {
-    const result = await fixture.cli(['send', '--to', 'opencode/crosschat-fixture-does-not-exist', '--body', 'must not create a replacement session', '--json']);
+    const result = await fixture.cli(['send', '--tool', 'opencode', '--to', 'crosschat-fixture-does-not-exist', '--body', 'must not create a replacement session', '--json']);
     assert.notEqual(result.code, 0);
     assert.ok(!result.timedOut);
     const listed = await fixture.api('/api/session');

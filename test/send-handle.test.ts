@@ -15,7 +15,7 @@ const sessions: ClaudeSessionEntry[] = [
   { pid: 101, sessionId: 'cs-alpha', kind: 'interactive', name: 'alpha', status: 'idle', messagingSocketPath: 'sock-alpha' },
 ];
 const scan: ClaudeRegistryScan = { sessions, malformed: 0 };
-const threads: CodexThreadSummary[] = [{ id: 'team1111-aaaa', name: 'workteam', status: 'idle' }];
+const threads: CodexThreadSummary[] = [{ id: 'team1111-aaaa', name: 'workteam', status: 'idle', endpointType: 'cli' }];
 
 function makeDeps(stateFile: string | undefined, overrides: Partial<SendDeps> = {}): SendDeps {
   return {
@@ -36,14 +36,14 @@ const freshState = (): string => join(mkdtempSync(join(root, 'state-')), 'conver
 
 describe('G0 send 输出换柄（长引用退场）', () => {
   it('delivered 行尾追加 · 续话 c1，不再有 reply-ref 行', async () => {
-    const out = await runSend({ to: 'workteam', bodyArg: 'hello' }, makeDeps(freshState()));
+    const out = await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'hello' }, makeDeps(freshState()));
     expect(out).toBe('delivered to workteam (turn 1) · 续话 c1');
     expect(out).not.toContain('reply-ref');
   });
 
   it('parked 同样分配：寄存输出第三行为 续话: cN', async () => {
     const out = await runSend(
-      { to: 'workteam', bodyArg: 'stuck' },
+      { tool: 'codex-cli', to: 'workteam', bodyArg: 'stuck' },
       makeDeps(freshState(), {
         outboxDir: join(mkdtempSync(join(root, 'box-')), 'outbox'),
         deliverCodex: async () => {
@@ -57,7 +57,7 @@ describe('G0 send 输出换柄（长引用退场）', () => {
   });
 
   it('--json 的 replyRef 保留完整 ref（且无 reply-ref 行混入）', async () => {
-    const out = await runSend({ to: 'workteam', bodyArg: 'hello', json: true }, makeDeps(freshState()));
+    const out = await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'hello', json: true }, makeDeps(freshState()));
     expect(out).not.toContain('\n');
     const parsed = JSON.parse(out) as { status: string; turn: number; replyRef: string };
     expect(parsed.status).toBe('delivered');
@@ -66,15 +66,15 @@ describe('G0 send 输出换柄（长引用退场）', () => {
   });
 
   it('状态未接线（异常路径）回退完整 reply-ref 行，续话不断', async () => {
-    const out = await runSend({ to: 'workteam', bodyArg: 'hello' }, makeDeps(undefined));
+    const out = await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'hello' }, makeDeps(undefined));
     expect(out).toMatch(/^delivered to workteam \(turn 1\)\nreply-ref: mc2_[A-Za-z0-9_-]+$/);
   });
 
   it('续话柄真的可续：--conversation c1 第二发 turn 递增', async () => {
     const state = freshState();
     const deps = makeDeps(state);
-    await runSend({ to: 'workteam', bodyArg: 'one' }, deps);
-    const second = await runSend({ conversation: 'c1', bodyArg: 'two' }, deps);
+    await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'one' }, deps);
+    const second = await runSend({ tool: 'codex-cli', conversation: 'c1', bodyArg: 'two' }, deps);
     expect(second).toContain('delivered to workteam (turn 2) · 续话 c1');
   });
 });
@@ -92,7 +92,7 @@ describe('G0 via 腿输出换柄', () => {
         stderr: '',
       }),
     });
-    const out = await runViaSend({ via: 'ssh:build01', to: 'worker2' }, '干活', deps);
+    const out = await runViaSend({ tool: 'codex-cli', via: 'ssh:build01', to: 'worker2' }, '干活', deps);
     expect(out).toBe('delivered to worker2@build01 (turn 3) · 续话 c1');
   });
 });

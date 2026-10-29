@@ -12,6 +12,8 @@ import {
 import { encodeFrame, parseFrame, type Frame } from '../src/serve/protocol.js';
 import { loadBrokerFile, registryFileOf, writeBrokerFile, type NodeEntry } from '../src/serve/registry.js';
 import { seedBroker } from './helpers/broker-seed.js';
+import { encodeOrigin } from '../src/federation.js';
+import { encodeRef, newConversationRef } from '../src/ref.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-serve-broker-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -132,7 +134,7 @@ class TestClient {
   }
 }
 
-async function handshake(url: string, auth: string, machineId?: string, proto = 1, name?: string): Promise<TestClient> {
+async function handshake(url: string, auth: string, machineId?: string, proto = 1, name?: string, caps: string[] = ['multi-star', 'endpoint-types-v1']): Promise<TestClient> {
   const client = new TestClient(url);
   await client.opened();
   const info = await client.waitFor((f) => f.op === 'info');
@@ -144,13 +146,101 @@ async function handshake(url: string, auth: string, machineId?: string, proto = 
     machineId,
     auth,
     ...(name === undefined ? {} : { name }),
-    caps: ['multi-star'],
+    caps,
   });
   return client;
 }
 
 describe('broker handshake and auth', () => {
-  it('routes same-ID endpoint members by public type address and rejects a conflicting explicit type', async () => {
+  it.each(['deadbeef-0000-0000-0000-000000000000', 'deadbeef', 'shared-member'])('keeps another endpoint when typed member removal has no match: %s', async (target) => {
+    const { url, registryFile } = await startBroker();
+    seed(registryFile, [{ key: key('a') }, { key: key('b') }]);
+    const node = await handshake(url, key('a'), 'target-machine', 1, 'target-host');
+    await node.waitFor((frame) => frame.op === 'connected');
+    node.send({ op: 'sessions', sessions: [{ sessionId: 'deadbeef-0000-0000-0000-000000000000', name: 'shared-member', tool: 'codex', endpointType: 'desktop' }] });
+    const sender = await handshake(url, key('b'));
+    await sender.waitFor((frame) => frame.op === 'connected');
+    sender.send({ op: 'member-remove', id: 'typed-remove', target, tool: 'codex', endpointType: 'cli' });
+    expect(await sender.waitFor((frame) => frame.op === 'member-remove-result' && frame.id === 'typed-remove')).toMatchObject({ ok: true, removed: [] });
+    expect(loadBrokerFile(registryFile).stars[0]!.roster).toMatchObject([{ sessionId: 'deadbeef-0000-0000-0000-000000000000', endpointType: 'desktop' }]);
+  });
+
+  it.each(['deadbeef-0000-0000-0000-000000000000', 'deadbeef', 'shared-member'])('removes only the selected endpoint through every member selector: %s', async (target) => {
+    const { url, registryFile } = await startBroker();
+    seed(registryFile, [{ key: key('a') }, { key: key('b') }]);
+    const node = await handshake(url, key('a'), 'target-machine', 1, 'target-host');
+    await node.waitFor((frame) => frame.op === 'connected');
+    node.send({ op: 'sessions', sessions: [
+      { sessionId: 'deadbeef-0000-0000-0000-000000000000', name: 'shared-member', tool: 'codex', endpointType: 'cli' },
+      { sessionId: 'deadbeef-0000-0000-0000-000000000000', name: 'shared-member', tool: 'codex', endpointType: 'desktop' },
+    ] });
+    const sender = await handshake(url, key('b'));
+    await sender.waitFor((frame) => frame.op === 'connected');
+    sender.send({ op: 'member-remove', id: 'typed-remove', target, tool: 'codex', endpointType: 'cli' });
+    expect(await sender.waitFor((frame) => frame.op === 'member-remove-result' && frame.id === 'typed-remove')).toMatchObject({ ok: true, removed: ['shared-member'] });
+    expect(loadBrokerFile(registryFile).stars[0]!.roster).toMatchObject([{ sessionId: 'deadbeef-0000-0000-0000-000000000000', endpointType: 'desktop' }]);
+  });
+
+  it.each([
+    { conversation: encodeRef(newConversationRef({ p: 'codex', id: 'initiator', endpointType: 'cli' }, { p: 'codex', id: 'recipient' })) },
+    { conversation: encodeRef(newConversationRef({ p: 'codex', id: 'initiator' }, { p: 'codex', id: 'recipient', endpointType: 'desktop' })) },
+    { origin: encodeOrigin({ p: 'codex', id: 'initiator', endpointType: 'cli' }, 'sender-machine') },
+  ])('requires endpoint capability on the destination for typed conversation/origin: %j', async (identity) => {
+    const { url, registryFile } = await startBroker();
+    seed(registryFile, [{ key: key('a') }, { key: key('b') }]);
+    const node = await handshake(url, key('a'), 'target-machine', 1, 'target-host', ['multi-star']);
+    await node.waitFor((frame) => frame.op === 'connected');
+    const forwarded: Frame[] = [];
+    node.ws.on('message', (data) => {
+      const frame = parseFrame(data.toString());
+      if (frame?.op === 'deliver') {
+        forwarded.push(frame);
+        node.send({ op: 'result', id: frame.id, status: 'delivered' });
+      }
+    });
+    const sender = await handshake(url, key('b'));
+    await sender.waitFor((frame) => frame.op === 'connected');
+    sender.send({ op: 'send', tool: 'codex-cli', id: 'typed-send', targetMachine: 'target-host', body: 'test', ...identity });
+    expect(await sender.waitFor((frame) => (frame.op === 'error' || frame.op === 'receipt') && frame.id === 'typed-send')).toMatchObject({ op: 'error', code: 'BAD_PROTO' });
+    expect(forwarded).toEqual([]);
+  });
+
+  it.each([
+    { conversation: encodeRef(newConversationRef({ p: 'codex', id: 'initiator', endpointType: 'cli' }, { p: 'codex', id: 'recipient' })) },
+    { conversation: encodeRef(newConversationRef({ p: 'codex', id: 'initiator' }, { p: 'codex', id: 'recipient', endpointType: 'desktop' })) },
+    { origin: encodeOrigin({ p: 'codex', id: 'initiator', endpointType: 'cli' }, 'sender-machine') },
+  ])('preserves typed conversation/origin for a capable destination: %j', async (identity) => {
+    const { url, registryFile } = await startBroker();
+    seed(registryFile, [{ key: key('a') }, { key: key('b') }]);
+    const node = await handshake(url, key('a'), 'target-machine', 1, 'target-host');
+    await node.waitFor((frame) => frame.op === 'connected');
+    const sender = await handshake(url, key('b'));
+    await sender.waitFor((frame) => frame.op === 'connected');
+    sender.send({ op: 'send', tool: 'codex-cli', id: 'typed-send', targetMachine: 'target-host', body: 'test', ...identity });
+    expect(await node.waitFor((frame) => frame.op === 'deliver' && frame.id === 'typed-send')).toMatchObject(identity);
+    node.send({ op: 'result', id: 'typed-send', status: 'delivered' });
+    expect(await sender.waitFor((frame) => frame.op === 'receipt' && frame.id === 'typed-send')).toMatchObject({ status: 'delivered' });
+  });
+
+  it.each([undefined, 'desktop'])('rejects detail results that lose or change a requested CLI endpoint: %s', async (endpointType) => {
+    const capabilities = { discovery: true, delivery: true, launch: false, diagnostics: false };
+    const { url, registryFile } = await startBroker({ discover: async () => ({
+      op: 'detail', providers: [{ providerId: 'codex', capabilities }],
+      detail: { completeness: 'complete', errors: [], observedAt: 1, item: {
+        ref: { contextId: 'local', providerId: 'codex', nativeId: 'same-native-id', ...(endpointType === undefined ? {} : { endpointType }) },
+        name: 'session', rawStatus: { type: 'idle' }, capabilities, attributes: {},
+      } },
+    }) });
+    seed(registryFile, [{ key: key('a'), machineId: 'BROKER-MID', machineName: 'broker-host' }]);
+    const sender = await handshake(url, key('a'));
+    await sender.waitFor((frame) => frame.op === 'connected');
+    sender.send({ op: 'discover-query', id: 'typed-detail', targetMachine: 'broker-host', request: {
+      op: 'detail', providerId: 'codex', nativeId: 'same-native-id', endpointType: 'cli',
+    } });
+    expect(await sender.waitFor((frame) => (frame.op === 'error' || frame.op === 'discover-result') && frame.id === 'typed-detail')).toMatchObject({ op: 'error', code: 'BAD_PROTO' });
+  });
+
+  it('routes same-ID endpoint members by explicit public tool and keeps slash names literal', async () => {
     const { url, registryFile } = await startBroker();
     seed(registryFile, [{ key: key('a') }, { key: key('b') }]);
     const node = await handshake(url, key('a'), 'endpoint-machine', 1, 'endpoint-host');
@@ -161,14 +251,14 @@ describe('broker handshake and auth', () => {
     await sender.waitFor((frame) => frame.op === 'connected');
     for (const endpointType of ['cli', 'desktop']) {
       const id = `endpoint-${endpointType}`;
-      sender.send({ op: 'send', id, targetMachine: `endpoint-host:codex-${endpointType}/shared-name`, body: 'test' });
+      sender.send({ op: 'send', tool: `codex-${endpointType}`, id, targetMachine: 'endpoint-host:shared-name', body: 'test' });
       const delivered = await node.waitFor((frame) => frame.op === 'deliver' && frame.id === id, 500);
       expect(delivered).toMatchObject({ sessionId: 'same-native-id', targetProviderId: 'codex', targetEndpointType: endpointType });
       node.send({ op: 'result', id, status: 'delivered' });
       await sender.waitFor((frame) => frame.op === 'receipt' && frame.id === id);
     }
-    sender.send(Object.assign({ op: 'send' as const, id: 'conflicting-type', targetMachine: 'endpoint-host:codex-cli/shared-name', body: 'test' }, { tool: 'codex-desktop' }));
-    expect(await sender.waitFor((frame) => frame.op === 'error' && frame.id === 'conflicting-type', 500)).toMatchObject({ code: 'USAGE' });
+    sender.send({ op: 'send', id: 'literal-path', targetMachine: 'endpoint-host:codex-cli/shared-name', body: 'test', tool: 'codex-desktop' });
+    expect(await sender.waitFor((frame) => frame.op === 'error' && frame.id === 'literal-path', 500)).toMatchObject({ code: 'SESSION_NOT_MEMBER' });
   });
 
   it('completes info→connect→connected and backfills machineId + self-reported name to registry', async () => {
@@ -270,7 +360,7 @@ describe('broker send routing', () => {
     const sender = new TestClient(url);
     await sender.opened();
     await sender.waitFor((f) => f.op === 'info');
-    sender.send({ op: 'connect', proto: 1, role: 'sender', auth: key('s'), caps: ['multi-star'] });
+    sender.send({ op: 'connect', proto: 1, role: 'sender', auth: key('s'), caps: ['multi-star', 'endpoint-types-v1'] });
     await sender.waitFor((f) => f.op === 'connected');
     return sender;
   }
@@ -278,7 +368,7 @@ describe('broker send routing', () => {
   it('answers UNKNOWN_MACHINE for an unregistered name', async () => {
     const { url, registryFile } = await startBroker();
     const sender = await senderOn(url, registryFile);
-    sender.send({ op: 'send', id: 's1', targetMachine: 'nope', body: 'hi' });
+    sender.send({ op: 'send', tool: 'claude', id: 's1', targetMachine: 'nope', body: 'hi' });
     const err = await sender.waitFor((f) => f.op === 'error');
     expect(err.op === 'error' && err.code).toBe('UNKNOWN_MACHINE');
     expect(err.op === 'error' && err.id).toBe('s1');
@@ -288,7 +378,7 @@ describe('broker send routing', () => {
     const { url, registryFile } = await startBroker();
     const sender = await senderOn(url, registryFile);
     seed(registryFile, [{ key: key('z'), machineId: 'm-gone', machineName: 'gone-host' }]);
-    sender.send({ op: 'send', id: 's2', targetMachine: 'gone-host', body: 'hi' });
+    sender.send({ op: 'send', tool: 'claude', id: 's2', targetMachine: 'gone-host', body: 'hi' });
     const err = await sender.waitFor((f) => f.op === 'error');
     expect(err.op === 'error' && err.code).toBe('PEER_OFFLINE');
   });
@@ -304,7 +394,7 @@ describe('broker send routing', () => {
     await dupA.waitFor((f) => f.op === 'connected');
     const dupB = await handshake(url, key('d'), 'bbbb2222-x');
     await dupB.waitFor((f) => f.op === 'connected');
-    sender.send({ op: 'send', id: 's3', targetMachine: 'dup-host', body: 'hi' });
+    sender.send({ op: 'send', tool: 'claude', id: 's3', targetMachine: 'dup-host', body: 'hi' });
     const err = await sender.waitFor((f) => f.op === 'error');
     expect(err.op === 'error' && err.code).toBe('MACHINE_NAME_COLLISION');
     const message = err.op === 'error' ? err.message : '';
@@ -318,7 +408,7 @@ describe('broker send routing', () => {
     seed(registryFile, [{ key: key('n'), machineId: 'm-node', machineName: 'node-host' }]);
     const node = await handshake(url, key('n'), 'm-node');
     await node.waitFor((f) => f.op === 'connected');
-    sender.send({ op: 'send', id: 's4', targetMachine: 'node-host', body: 'hello', origin: 'origin-host', delivery });
+    sender.send({ op: 'send', tool: 'claude', id: 's4', targetMachine: 'node-host', body: 'hello', origin: 'origin-host', delivery });
     const deliver = await node.waitFor((f) => f.op === 'deliver');
     // F1：fromMachine 只取 roster 真名（sender 注册条目 machineName），不落 origin 编码/占位
     expect(deliver).toMatchObject({ op: 'deliver', id: 's4', fromMachine: 'sender-host', payload: 'hello', delivery });
@@ -331,7 +421,7 @@ describe('broker send routing', () => {
     const { url, registryFile } = await startBroker();
     const sender = await senderOn(url, registryFile);
     seed(registryFile, [{ key: key('b'), machineId: 'BROKER-MID', machineName: 'self-host' }]);
-    sender.send({ op: 'send', id: 's5', targetMachine: 'self-host', body: 'hi' });
+    sender.send({ op: 'send', tool: 'claude', id: 's5', targetMachine: 'self-host', body: 'hi' });
     const err = await sender.waitFor((f) => f.op === 'error');
     expect(err.op === 'error' && err.code).toBe('NOT_READY');
   });
@@ -342,7 +432,7 @@ describe('broker send routing', () => {
     seed(registryFile, [{ key: key('n'), machineId: 'm-node2', machineName: 'node2-host' }]);
     const node = await handshake(url, key('n'), 'm-node2');
     await node.waitFor((f) => f.op === 'connected');
-    sender.send({ op: 'send', id: 's6', targetMachine: 'node2-host', body: 'hi' });
+    sender.send({ op: 'send', tool: 'claude', id: 's6', targetMachine: 'node2-host', body: 'hi' });
     await node.waitFor((f) => f.op === 'deliver');
     node.ws.close();
     const err = await sender.waitFor((f) => f.op === 'error');

@@ -4,13 +4,15 @@ import { aggregateSummaries } from '../../conversation-summary.js';
 import { pairKeyOf, pairKeyOfEntry } from '../../conversations.js';
 import type { PairAttribution } from '../../conversations.js';
 import { decodeRef } from '../../ref.js';
-import type { ConversationRef, RefEndpoint } from '../../ref.js';
+import type { ConversationRef } from '../../ref.js';
 import type { SendLogEntry } from '../../send-log.js';
 import { queryLogTail } from '../queries/logs.js';
 import type { CollectionResult } from '../queries/services.js';
 import { checkAbort, isRecord, queryError } from '../queries/reading.js';
 import type { QueryError, QueryOptions } from '../queries/reading.js';
 import type { SessionRef } from '../sessions/model.js';
+import { identityKey } from '../../identity.js';
+import { isEndpointTypeFor, TOOL_TYPES } from '../../tool-types.js';
 
 export interface CommunicationQueryOptions extends QueryOptions {
   baseDir: string;
@@ -32,6 +34,7 @@ export interface OutboxItemMetadata {
   callerKey?: string;
   deliveryMode?: string;
   deliveryState?: string;
+  endpointType?: string;
 }
 
 export interface OutboxThreadMetadata {
@@ -39,6 +42,7 @@ export interface OutboxThreadMetadata {
   contextId: string;
   providerId: string;
   threadId: string;
+  endpointType?: string;
   toName: string | null;
   /** null means the source could not be counted; it never means an empty queue. */
   count: number | null;
@@ -125,11 +129,23 @@ async function jsonFile(file: string, options: CommunicationQueryOptions): Promi
   } finally { await handle?.close(); }
 }
 
-async function files(directory: string, options: CommunicationQueryOptions, errors: QueryError[]): Promise<string[]> {
+async function ordinaryDirectory(directory: string, options: CommunicationQueryOptions, errors: QueryError[]): Promise<boolean> {
   try {
     checkAbort(options.signal);
     const stat = await lstat(directory);
-    if (!stat.isDirectory() || stat.isSymbolicLink()) { errors.push(issue(directory, '来源目录不是普通目录，不读取链接或特殊文件。', 'unavailable')); return []; }
+    if (!stat.isDirectory() || stat.isSymbolicLink()) { errors.push(issue(directory, '来源目录不是普通目录，不读取链接或特殊文件。', 'unavailable')); return false; }
+    return true;
+  } catch (error) {
+    checkAbort(options.signal);
+    const errorIssue = queryError(directory, error);
+    if (errorIssue.kind !== 'missing') errors.push(errorIssue);
+    return false;
+  }
+}
+
+async function files(directory: string, options: CommunicationQueryOptions, errors: QueryError[]): Promise<string[]> {
+  try {
+    if (!await ordinaryDirectory(directory, options, errors)) return [];
     const entries = await readdir(directory, { withFileTypes: true });
     checkAbort(options.signal);
     return entries.filter((entry) => entry.name.endsWith('.json')).map((entry) => entry.name).sort();
@@ -147,27 +163,38 @@ function queueItem(input: unknown): OutboxItemMetadata | undefined {
     || typeof input.attempts !== 'number' || !Number.isSafeInteger(input.attempts) || input.attempts < 0
     || (input.callerKey !== undefined && typeof input.callerKey !== 'string')
     || (input.deliveryMode !== undefined && typeof input.deliveryMode !== 'string')
-    || (input.deliveryState !== undefined && typeof input.deliveryState !== 'string')) return undefined;
+    || (input.deliveryState !== undefined && typeof input.deliveryState !== 'string')
+    || (input.endpointType !== undefined && !isEndpointTypeFor('codex', input.endpointType))) return undefined;
   return { id: input.id, toName: input.toName, parkedAt: input.parkedAt, attempts: input.attempts,
     ...(typeof input.callerKey === 'string' ? { callerKey: input.callerKey } : {}),
     ...(typeof input.deliveryMode === 'string' ? { deliveryMode: input.deliveryMode } : {}),
-    ...(typeof input.deliveryState === 'string' ? { deliveryState: input.deliveryState } : {}) };
+    ...(typeof input.deliveryState === 'string' ? { deliveryState: input.deliveryState } : {}),
+    ...(typeof input.endpointType === 'string' ? { endpointType: input.endpointType } : {}) };
 }
 
 /** Queue observation never claims items, probes workers, parses envelopes or initiates delivery. */
 export async function queryOutbox(options: CommunicationQueryOptions): Promise<OutboxMetadataResult> {
   const observedAt = (options.now ?? Date.now)();
-  const directory = join(options.baseDir, 'outbox');
+  const rootDirectory = join(options.baseDir, 'outbox');
   const items: OutboxThreadMetadata[] = [];
   const errors: QueryError[] = [];
   try {
-    for (const name of await files(directory, options, errors)) {
+    if (!await ordinaryDirectory(rootDirectory, options, errors)) return complete(items, errors, observedAt);
+    const scopes: Array<{ directory: string; endpointType?: string }> = [{ directory: rootDirectory }];
+    if (await ordinaryDirectory(join(rootDirectory, 'types'), options, errors)) {
+      scopes.push(...TOOL_TYPES.filter((tool) => tool.providerId === 'codex').map((tool) => ({
+        directory: join(rootDirectory, 'types', tool.endpointType), endpointType: tool.endpointType,
+      })));
+    }
+    for (const { directory, endpointType } of scopes) for (const name of await files(directory, options, errors)) {
       checkAbort(options.signal);
       const threadId = name.slice(0, -5);
       if (!threadId || threadId === '.' || threadId === '..' || /[/\\:]/.test(threadId)) { errors.push(issue(join(directory, name), '滞留文件名不能表示安全的完整线程 ID。')); continue; }
       const read = await jsonFile(join(directory, name), options);
-      const metadata: OutboxThreadMetadata = { id: JSON.stringify([options.contextId, 'codex', threadId]), contextId: options.contextId, providerId: 'codex', threadId,
-        toName: null, count: null, oldestParkedAt: null, mailboxFile: join(options.baseDir, 'mailbox', `${threadId}.md`), state: read.state === 'ready' || read.state === 'missing' ? 'unreadable' : read.state, items: [] };
+      const metadata: OutboxThreadMetadata = { id: JSON.stringify([options.contextId, 'codex', threadId, ...(endpointType === undefined ? [] : [endpointType])]), contextId: options.contextId, providerId: 'codex', threadId,
+        ...(endpointType === undefined ? {} : { endpointType }),
+        toName: null, count: null, oldestParkedAt: null, mailboxFile: endpointType === undefined ? join(options.baseDir, 'mailbox', `${threadId}.md`)
+          : join(options.baseDir, 'mailbox', 'types', endpointType, `${threadId}.md`), state: read.state === 'ready' || read.state === 'missing' ? 'unreadable' : read.state, items: [] };
       if (read.error) errors.push(read.error);
       if (read.state === 'missing') errors.push(issue(join(directory, name), '滞留来源在读取前消失，请刷新核实。', 'unavailable'));
       if (read.state === 'ready') {
@@ -175,7 +202,8 @@ export async function queryOutbox(options: CommunicationQueryOptions): Promise<O
           metadata.state = 'malformed'; errors.push(issue(join(directory, name), '滞留来源缺少有效的条目列表。'));
         } else {
           metadata.items = read.value.items.flatMap((input: unknown) => { const value = queueItem(input); return value ? [value] : []; });
-          if (metadata.items.length !== read.value.items.length || new Set(metadata.items.map((entry) => entry.id)).size !== metadata.items.length) {
+          if (metadata.items.length !== read.value.items.length || metadata.items.some((entry) => entry.endpointType !== endpointType)
+            || new Set(metadata.items.map((entry) => entry.id)).size !== metadata.items.length) {
             metadata.state = 'malformed'; errors.push(issue(join(directory, name), '滞留条目元数据不完整或 ID 重复，条数未知。'));
           } else { metadata.state = 'ready'; metadata.count = metadata.items.length; }
           metadata.toName = metadata.items.at(-1)?.toName ?? null;
@@ -186,7 +214,7 @@ export async function queryOutbox(options: CommunicationQueryOptions): Promise<O
     }
     checkAbort(options.signal);
     return complete(items, errors, observedAt);
-  } catch (error) { return options.signal?.aborted ? cancelled(directory, observedAt) : complete(items, [...errors, queryError(directory, error)], observedAt); }
+  } catch (error) { return options.signal?.aborted ? cancelled(rootDirectory, observedAt) : complete(items, [...errors, queryError(rootDirectory, error)], observedAt); }
 }
 
 export function summarizeOutbox(items: readonly OutboxThreadMetadata[]): OutboxCounts {
@@ -211,8 +239,7 @@ function normalizeAttribution(input: PairAttribution): PairAttribution {
     try {
       if (!entry.replyRef) throw new Error('Missing routed reference.');
       const ref = decodeRef(entry.replyRef);
-      const identity = (endpoint: RefEndpoint) => endpoint.p === 'human' ? 'human' : `${endpoint.p}:${endpoint.id}`;
-      const endpoints = [identity(ref.f), identity(ref.t)];
+      const endpoints = [identityKey(ref.f), identityKey(ref.t)];
       if (entry.from !== undefined && endpoints.includes(entry.from)) entry.target = endpoints.find((endpoint) => endpoint !== entry.from) ?? entry.target;
       else { delete entry.from; entry.target = ''; }
     } catch { delete entry.from; entry.target = ''; }
@@ -246,7 +273,8 @@ function localRefs(ref: ConversationRef | undefined, options: CommunicationQuery
     if (endpoint.p === 'human') return [];
     const local = endpoint.mid !== undefined ? options.localMachineId !== undefined && endpoint.mid === options.localMachineId
       : endpoint.m !== undefined ? options.localHostname !== undefined && endpoint.m === options.localHostname : true;
-    return local ? [{ contextId: options.contextId, providerId: endpoint.p, nativeId: endpoint.id }] : [];
+    return local ? [{ contextId: options.contextId, providerId: endpoint.p, nativeId: endpoint.id,
+      ...(endpoint.endpointType === undefined ? {} : { endpointType: endpoint.endpointType }) }] : [];
   });
 }
 
@@ -293,7 +321,7 @@ export async function queryCommunications(options: CommunicationQueryOptions): P
     errors.push(...outbox.errors);
     const parked = new Map<string, number>();
     for (const thread of outbox.items) for (const item of thread.items) {
-      const pairId = [item.callerKey ?? 'human', `codex:${thread.threadId}`].sort().join('\n');
+      const pairId = [item.callerKey ?? 'human', identityKey({ p: thread.providerId, id: thread.threadId, endpointType: thread.endpointType })].sort().join('\n');
       parked.set(pairId, (parked.get(pairId) ?? 0) + 1);
     }
     const unknownQueue = outbox.completeness !== 'complete' || outbox.items.some((item) => item.count === null);

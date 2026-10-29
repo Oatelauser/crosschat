@@ -244,7 +244,7 @@ describe('conversation short handles (F2)', () => {
   });
 
   it('resolveHandle: unknown handle teaches --to; a forged collision lists candidates', () => {
-    expect(() => resolveHandle(freshFile(), 'c7')).toThrow(/c7 已过期或未知——用 --to <名> 接续或开新对话/);
+    expect(() => resolveHandle(freshFile(), 'c7')).toThrow(/c7 已过期或未知——用 --to <名> --tool <收件类型> 接续或开新对话/);
     expect(() => resolveHandle(undefined, 'c7')).toThrow(/已过期或未知/);
     const file = freshFile();
     handleForRef(file, newConversationRef(claudeA, codexB)); // c1 lives in pair A/B's shard

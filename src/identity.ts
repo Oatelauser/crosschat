@@ -2,6 +2,7 @@ import process from 'node:process';
 import { MultichatError } from './errors.js';
 import type { ClaudeRegistryScan } from './claude/registry.js';
 import type { RefEndpoint } from './ref.js';
+import { isEndpointTypeFor, nativeTargetKey } from './tool-types.js';
 
 /**
  * Caller identity from environment variables (ticket 003, stateless CLI):
@@ -13,10 +14,10 @@ import type { RefEndpoint } from './ref.js';
  */
 
 export type CallerIdentity =
-  | { p: 'claude'; id: string; name?: string }
-  | { p: 'codex'; id: string }
-  | { p: 'opencode'; id: string }
-  | { p: 'dsh'; id: string }
+  | { p: 'claude'; id: string; name?: string; endpointType?: string }
+  | { p: 'codex'; id: string; endpointType?: string }
+  | { p: 'opencode'; id: string; endpointType?: string }
+  | { p: 'dsh'; id: string; endpointType?: string }
   | { p: 'human' };
 
 /**
@@ -36,6 +37,9 @@ export const OPENCODE_SESSION_ID_ENV = 'OPENCODE_SESSION_ID';
 export const CROSSCHAT_OPENCODE_SESSION_ID_ENV = 'CROSSCHAT_OPENCODE_SESSION_ID';
 /** Harness owns this identity in each native shell tool invocation. */
 export const DSH_SESSION_ID_ENV = 'DSH_SESSION_ID';
+/** Managed by the existing Harness bridge's per-execution shell contributor. */
+export const DSH_CROSSCHAT_INSTANCE_ID_ENV = 'DSH_CROSSCHAT_INSTANCE_ID';
+export const DSH_CROSSCHAT_HOME_ENV = 'DSH_CROSSCHAT_HOME';
 
 export const IDENTITY_ENV_FAMILIES: Record<IdentityFamily, readonly string[]> = {
   claude: [
@@ -45,7 +49,7 @@ export const IDENTITY_ENV_FAMILIES: Record<IdentityFamily, readonly string[]> = 
   ],
   codex: ['CODEX_THREAD_ID', 'CODEX_SESSION_ID'],
   opencode: [OPENCODE_SESSION_ID_ENV, CROSSCHAT_OPENCODE_SESSION_ID_ENV],
-  dsh: [DSH_SESSION_ID_ENV],
+  dsh: [DSH_SESSION_ID_ENV, DSH_CROSSCHAT_INSTANCE_ID_ENV, DSH_CROSSCHAT_HOME_ENV],
 };
 
 /** 复制 env 并删除给定键（不改动原对象）。 */
@@ -67,19 +71,45 @@ export function stripOtherFamilies(env: NodeJS.ProcessEnv, own: IdentityFamily):
   return stripEnvKeys(env, otherIdentityKeys(own));
 }
 
-/** Canonical key used for rate-limit buckets ("<provider>:<id>" / "human"). */
-export function identityKey(identity: { p: string; id?: string }): string {
-  return identity.p === 'human' || identity.id === undefined ? identity.p : `${identity.p}:${identity.id}`;
+/** Typed identity buckets stay separate; unknown types preserve existing persisted keys. */
+export function identityKey(identity: { p: string; id?: string; endpointType?: string }): string {
+  if (identity.p === 'human' || identity.id === undefined) return identity.p;
+  return identity.endpointType === undefined ? `${identity.p}:${identity.id}`
+    : nativeTargetKey({ providerId: identity.p, nativeId: identity.id, endpointType: identity.endpointType });
+}
+
+export interface ParsedIdentityKey { p: string; id?: string; endpointType?: string }
+
+/** Decode persisted identity keys without assigning an endpoint to an older unknown source. */
+export function parseIdentityKey(key: string): ParsedIdentityKey | undefined {
+  if (key === 'human') return { p: 'human' };
+  if (key.startsWith('[')) {
+    let value: unknown;
+    try { value = JSON.parse(key); } catch { return undefined; }
+    if (!Array.isArray(value) || value.length !== 3) return undefined;
+    const [p, endpointType, id] = value;
+    if (typeof p !== 'string' || p === '' || p === 'human' || typeof id !== 'string' || id === '' ||
+      !isEndpointTypeFor(p, endpointType)) return undefined;
+    return { p, id, endpointType };
+  }
+  const separator = key.indexOf(':');
+  if (separator < 1 || separator === key.length - 1) return undefined;
+  const p = key.slice(0, separator);
+  return p === 'human' ? undefined : { p, id: key.slice(separator + 1) };
 }
 
 export function endpointOfIdentity(identity: CallerIdentity): RefEndpoint {
-  return identity.p === 'human' ? { p: 'human' } : { p: identity.p, id: identity.id };
+  return identity.p === 'human' ? { p: 'human' } : {
+    p: identity.p, id: identity.id,
+    ...(identity.endpointType === undefined ? {} : { endpointType: identity.endpointType }),
+  };
 }
 
 export function identityMatchesEndpoint(identity: CallerIdentity, endpoint: RefEndpoint): boolean {
   if (endpoint.p === 'human') return identity.p === 'human';
   if (identity.p === 'human') return false;
-  return identity.p === endpoint.p && identity.id === endpoint.id;
+  return identity.p === endpoint.p && identity.id === endpoint.id &&
+    (identity.endpointType === undefined || endpoint.endpointType === undefined || identity.endpointType === endpoint.endpointType);
 }
 
 export function resolveCallerIdentity(

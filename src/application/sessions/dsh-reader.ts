@@ -9,7 +9,7 @@ const capabilities: ProviderCapabilities = { discovery: true, delivery: true, de
 export interface DshReaderOptions extends DshOptions { now?: () => number }
 
 function session(thread: DshThread, contextId: string): Session {
-  const ref = { contextId, providerId: 'dsh', nativeId: thread.id };
+  const ref = { contextId, providerId: 'dsh', nativeId: thread.id, ...(thread.endpointType === undefined ? {} : { endpointType: thread.endpointType }) };
   return { ref, key: sessionKey(ref), name: thread.name, rawStatus: thread.rawStatus, capabilities,
     attributes: { ...thread.attributes, cwd: thread.cwd } };
 }
@@ -35,7 +35,8 @@ export function createDshSessionReader(options: DshReaderOptions = {}): SessionR
       const signal = request.signal ?? options.signal;
       if (signal?.aborted) return cancelledPage(request.contextId, 'dsh', now());
       try {
-        const page = await listDshThreadPage({ ...options, signal, cursor: request.cursor, limit: request.limit });
+        const page = await listDshThreadPage({ ...options, signal, cursor: request.cursor, limit: request.limit,
+          ...(request.endpointType === undefined ? {} : { endpointType: request.endpointType }) });
         return { items: page.data.map((item) => session(item, request.contextId)), nextCursor: page.nextCursor,
           completeness: page.completeness, observedAt: now(), errors: [] };
       } catch (error) {
@@ -48,7 +49,8 @@ export function createDshSessionReader(options: DshReaderOptions = {}): SessionR
       if (signal?.aborted) return { ...cancelledPage(request.contextId, 'dsh', now()), item: null };
       if (request.referenceKind === 'process') return { item: null, completeness: 'complete', observedAt: now(), errors: [] };
       try {
-        const item = await getDshThread(request.nativeId, { ...options, signal });
+        const item = await getDshThread(request.nativeId, { ...options, signal,
+          ...(request.endpointType === undefined ? {} : { endpointType: request.endpointType }) });
         return { item: item === null ? null : session(item, request.contextId), completeness: 'complete', observedAt: now(), errors: [] };
       } catch (error) {
         if (signal?.aborted) return { ...cancelledPage(request.contextId, 'dsh', now()), item: null };

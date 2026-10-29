@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { getOpenCodeThread, listOpenCodeThreadPage, listOpenCodeThreads } from '../src/opencode/client.js';
 import { deliverToOpenCodeSession } from '../src/opencode/deliver.js';
 import { createOpenCodeSessionReader } from '../src/application/sessions/opencode-reader.js';
+import { connectOpenCode } from '../src/opencode/service.js';
 
 const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => { await Promise.all(cleanup.splice(0).reverse().map((dispose) => dispose())); });
@@ -43,6 +44,22 @@ async function directory() {
 }
 
 describe('OpenCode V2 native read contract', () => {
+  it('retains the native registration instance id without treating it as shell provenance', async () => {
+    const path = await directory();
+    const service = await fixture();
+    const file = join(path, 'service.json');
+    await writeFile(file, JSON.stringify({ id: 'native-service-instance', version: '2.1.3', url: service.url, pid: 765 }));
+    const connection = await connectOpenCode({ registrationFile: file, env: {} });
+    expect(connection.serviceIdentity).toEqual({ registrationId: 'native-service-instance', pid: 765, version: '2.1.3', url: service.url });
+  });
+
+  it('rejects an unsupported frontend type before connecting to the shared service', async () => {
+    const service = await fixture((_request, response) => reply(response, { data: { id: 'receipt', sessionID: 'same', type: 'user', delivery: 'queue' } }));
+    const options = { endpoint: { url: service.url }, env: {}, endpointType: 'desktop' };
+    await expect(deliverToOpenCodeSession('same', 'payload', options)).rejects.toMatchObject({ code: 'OPENCODE_INPUT_REJECTED' });
+    expect(service.calls).toEqual([]);
+  });
+
   it('reads all opaque pages, preserves anonymous sessions and native running state', async () => {
     const service = await fixture((request, response) => {
       const url = new URL(request.url ?? '', 'http://fixture');
@@ -53,7 +70,7 @@ describe('OpenCode V2 native read contract', () => {
     const options = { endpoint: { url: service.url }, env: {} };
     const threads = await listOpenCodeThreads(options);
     expect(threads).toHaveLength(2);
-    expect(threads[0]).toMatchObject({ id: 'ses_one', name: null, cwd: '/isolated/work' });
+    expect(threads[0]).toMatchObject({ id: 'ses_one', endpointType: 'shared', name: null, cwd: '/isolated/work' });
     expect(threads[1]).toMatchObject({ id: 'ses_busy', name: 'Working', rawStatus: { type: 'running' } });
     expect(service.calls.every((call) => call.startsWith('GET '))).toBe(true);
   });

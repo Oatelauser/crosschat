@@ -34,9 +34,11 @@ describe('C14 precise tool selection', () => {
     expect(resolveTargetById(id, [], [desktop, cli], [], [], { providerId: 'codex', endpointType: 'cli' }))
       .toMatchObject({ side: 'codex', thread: cli });
   });
-  it('supports a qualified address and rejects a missing selected endpoint', () => {
-    expect(resolveTargetByName('codex-desktop/Worker', [], [desktop, cli])).toMatchObject({ side: 'codex', thread: desktop });
-    expect(() => resolveTargetByName('codex-cli/Worker', [], [desktop]))
+  it('treats former qualifiers literally and rejects an unavailable explicitly selected endpoint', () => {
+    const named = { ...desktop, name: 'codex-cli/Worker' };
+    expect(resolveTargetByName('codex-cli/Worker', [], [named, cli], [], [], { providerId: 'codex', endpointType: 'desktop' }))
+      .toMatchObject({ side: 'codex', thread: named });
+    expect(() => resolveTargetByName('Worker', [], [desktop], [], [], { providerId: 'codex', endpointType: 'cli' }))
       .toThrow(expect.objectContaining({ code: 'NAME_NOT_FOUND' }));
   });
   it('does not turn unknown transport metadata into a verified CLI target', () => {
@@ -62,7 +64,7 @@ describe('C14 precise tool selection', () => {
   });
   it('retains injected type and provider restrictions even when to is only a display hint', async () => {
     const { deps, deliverCodex } = fixture();
-    const sent = await sendMessage({ to: 'display-only', targetSessionId: id, targetProviderId: 'codex', targetEndpointType: 'cli', bodyArg: 'once' }, deps);
+    const sent = await sendMessage({ tool: 'codex-cli', to: 'display-only', targetSessionId: id, targetProviderId: 'codex', targetEndpointType: 'cli', bodyArg: 'once' }, deps);
     expect(deliverCodex).toHaveBeenCalledWith(id, expect.any(String), { mode: 'queue', endpointType: 'cli' });
     expect(decodeRef(sent.receipt.replyRef).t).toMatchObject({ endpointType: 'cli' });
   });

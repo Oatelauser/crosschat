@@ -48,7 +48,7 @@ class Client {
       c.ws.once('error', reject);
     });
     await c.waitFor((f) => f.op === 'info');
-    c.send({ op: 'connect', proto: 1, role: opts.role, ...(opts.machineId === undefined ? {} : { machineId: opts.machineId }), auth, ...(opts.name === undefined ? {} : { name: opts.name }), caps: ['multi-star'] });
+    c.send({ op: 'connect', proto: 1, role: opts.role, ...(opts.machineId === undefined ? {} : { machineId: opts.machineId }), auth, ...(opts.name === undefined ? {} : { name: opts.name }), caps: ['multi-star', 'endpoint-types-v1'] });
     await c.waitFor((f) => f.op === 'connected');
     return c;
   }
@@ -127,9 +127,9 @@ describe('B2.1 dual-track addressing', () => {
     const alpha = await Client.connect(h.url, key('k0'), { role: 'node', machineId: 'aaaa00001111' });
     const beta = await Client.connect(h.url, key('k1'), { role: 'node', machineId: 'bbbb00002222' });
     const sender = await senderOn(h);
-    sender.send({ op: 'send', id: 'm1', targetMachine: 'aaaa0000', body: 'by-mid8' });
-    sender.send({ op: 'send', id: 'm2', targetMachine: 'beta', body: 'by-name' });
-    sender.send({ op: 'send', id: 'm3', targetMachine: 'node-2', body: 'by-label' });
+    sender.send({ tool: 'claude', op: 'send', id: 'm1', targetMachine: 'aaaa0000', body: 'by-mid8' });
+    sender.send({ tool: 'claude', op: 'send', id: 'm2', targetMachine: 'beta', body: 'by-name' });
+    sender.send({ tool: 'claude', op: 'send', id: 'm3', targetMachine: 'node-2', body: 'by-label' });
     const d1 = await alpha.waitFor((f) => f.op === 'deliver' && f.id === 'm1');
     expect(d1.op === 'deliver' && d1.payload).toBe('by-mid8');
     const d2 = await beta.waitFor((f) => f.op === 'deliver' && f.id === 'm2');
@@ -147,7 +147,7 @@ describe('B2.1 dual-track addressing', () => {
       },
     });
     const sender = await senderOn(h);
-    sender.send({ op: 'send', id: 's1', targetMachine: 'a1b2c3d4', body: 'to-self-by-mid' });
+    sender.send({ tool: 'claude', op: 'send', id: 's1', targetMachine: 'a1b2c3d4', body: 'to-self-by-mid' });
     const receipt = await sender.waitFor((f) => f.op === 'receipt' && f.id === 's1');
     expect(receipt.op === 'receipt' && receipt.status).toBe('delivered');
     expect(local).toEqual(['to-self-by-mid']);
@@ -159,7 +159,7 @@ describe('B2.1 dual-track addressing', () => {
       { machineId: 'aaaa0000bb22', machineName: 'beta' },
     ]);
     const sender = await senderOn(h);
-    sender.send({ op: 'send', id: 'x', targetMachine: 'aaaa0000', body: '?' });
+    sender.send({ tool: 'claude', op: 'send', id: 'x', targetMachine: 'aaaa0000', body: '?' });
     const err = await sender.waitFor((f) => f.op === 'error');
     expect(err.op === 'error' && err.code).toBe('MACHINE_NAME_COLLISION');
     const message = err.op === 'error' ? err.message : '';
@@ -174,7 +174,7 @@ describe('B2.1 dual-track addressing', () => {
       { machineId: 'dddd00002222', machineName: 'dup' },
     ]);
     const sender = await senderOn(h);
-    sender.send({ op: 'send', id: 'x', targetMachine: 'dup', body: '?' });
+    sender.send({ tool: 'claude', op: 'send', id: 'x', targetMachine: 'dup', body: '?' });
     const err = await sender.waitFor((f) => f.op === 'error');
     expect(err.op === 'error' && err.code).toBe('MACHINE_NAME_COLLISION');
     const message = err.op === 'error' ? err.message : '';
@@ -208,7 +208,7 @@ describe('B2.1 self-reported name lifecycle', () => {
     const renamed = await Client.connect(h.url, key('k0'), { role: 'node', machineId: 'ffff00001111', name: 'alpha-2' });
     node.ws.close();
     const sender = await senderOn(h);
-    sender.send({ op: 'send', id: 'r1', targetMachine: 'ffff0000', body: 'after-rename' });
+    sender.send({ tool: 'claude', op: 'send', id: 'r1', targetMachine: 'ffff0000', body: 'after-rename' });
     const d = await renamed.waitFor((f) => f.op === 'deliver' && f.id === 'r1');
     expect(d.op === 'deliver' && d.payload).toBe('after-rename');
   }, 10_000);
@@ -272,9 +272,9 @@ describe('B2.1 reply loop closure', () => {
   });
 
   it('envelope: one unified reply command for every transport (A+ 瘦身)', () => {
-    const base = { fromName: 'boss', toName: 'beta', turn: 2, ref: 'mc2_x', body: 'hi' };
+    const base = { fromName: 'boss', fromTool: 'claude', toName: 'beta', turn: 2, ref: 'mc2_x', body: 'hi' };
     const out = composeEnvelope(base);
-    expect(out).toContain('crosschat send --conversation mc2_x --body "<你的回复>"');
+    expect(out).toContain('crosschat send --conversation mc2_x --tool claude --body "<你的回复>"');
     expect(out).not.toContain('--via');
     expect(out).not.toContain('tcp:');
     expect(out).not.toContain('ssh:');
@@ -300,12 +300,13 @@ describe('B2.1 reply loop closure', () => {
       hostname: () => 'node-b',
       machineId: () => 'bbbb0000ef',
     };
-    const origin = encodeOrigin({ p: 'codex', id: '01a1115b-1a3c-7e71-addc-fee969078e1b' }, 'aaaa0000', 'aaaa0000ef12', 'tcp');
-    const out = await runSend({ to: 'boss', bodyArg: 'hello', origin }, deps);
+    const origin = encodeOrigin({ p: 'codex', id: '01a1115b-1a3c-7e71-addc-fee969078e1b', endpointType: 'cli' }, 'aaaa0000', 'aaaa0000ef12', 'tcp');
+    const out = await runSend({ tool: 'claude', to: 'boss', bodyArg: 'hello', origin }, deps);
     expect(out).toContain('delivered to boss');
     // A+：回信命令不带 --via——路由由执行侧按 ref 自动补（send.ts autoViaFromRef）
     expect(envelopes[0]).not.toContain('--via');
     expect(envelopes[0]).toContain('crosschat send --conversation mc2_');
+    expect(envelopes[0]).toContain('--tool codex-cli --body');
   });
 
   it('pickAutoVia three branches: ssh alias wins byte-identically, tcp when a usable entry exists, else ssh', () => {
@@ -508,7 +509,7 @@ describe('017 showName 单一事实源（ensureSelfEntries 启动刷新 machineN
     expect(ensureSelfEntries(deps, h.registryFile, port)).toEqual([]);
     expect(loadBrokerFile(h.registryFile).stars[0]!.nodes[0]!.machineName).toBe('cloud');
     const sender = await senderOn(h);
-    sender.send({ op: 'send', id: 'n1', targetMachine: 'cloud', body: 'by-new-name' });
+    sender.send({ tool: 'claude', op: 'send', id: 'n1', targetMachine: 'cloud', body: 'by-new-name' });
     const receipt = await sender.waitFor((f) => f.op === 'receipt' && f.id === 'n1');
     expect(receipt.op === 'receipt' && receipt.status).toBe('delivered');
     expect(local).toEqual(['by-new-name']);
@@ -520,7 +521,7 @@ describe('B3.1 drill fixes', () => {
     return {
       env: {},
       listClaudeSessions: () => ({ sessions: [], malformed: 0 }),
-      listCodexThreads: async () => [{ id: 'b0ss0000-aaaa', name: 'boss', status: 'idle' }],
+      listCodexThreads: async () => [{ id: 'b0ss0000-aaaa', name: 'boss', status: 'idle', endpointType: 'cli' }],
       deliverClaude: async () => ({ status: 'delivered' }),
       deliverCodex: async () => ({ status: 'accepted', turnId: 't', ...(over.queued === true ? { queued: true } : {}) }),
       ...(over.receipt === undefined ? {} : { confirmReceipt: async () => over.receipt }),
@@ -531,7 +532,7 @@ describe('B3.1 drill fixes', () => {
   }
 
   it('bug1: json output stays pure JSON when codex queues (node bridge can parse it)', async () => {
-    const out = await runSend({ to: 'boss', bodyArg: 'x', json: true }, codexSendDeps({ queued: true }));
+    const out = await runSend({ tool: 'codex-cli', to: 'boss', bodyArg: 'x', json: true }, codexSendDeps({ queued: true }));
     const parsed = JSON.parse(out) as { status: string; queued?: boolean };
     expect(parsed.status).toBe('delivered');
     expect(parsed.queued).toBe(true);
@@ -539,7 +540,7 @@ describe('B3.1 drill fixes', () => {
   });
 
   it('bug1: json output stays pure JSON when the rollout receipt is unconfirmed', async () => {
-    const out = await runSend({ to: 'boss', bodyArg: 'x', json: true }, codexSendDeps({ receipt: 'unconfirmed' }));
+    const out = await runSend({ tool: 'codex-cli', to: 'boss', bodyArg: 'x', json: true }, codexSendDeps({ receipt: 'unconfirmed' }));
     expect(() => JSON.parse(out)).not.toThrow();
     expect(out).not.toContain('回执:');
   });
@@ -551,7 +552,7 @@ describe('B3.1 drill fixes', () => {
     const h = await startHarness([{ machineId: 'a1b2c3d40000', machineName: 'hub' }], {
       deliverLocal: (frame, fromMachine) =>
         deliverViaRunSend(
-          { op: 'deliver', id: frame.id, ...(fromMachine === undefined ? {} : { fromMachine }), payload: frame.body, to: frame.to, conversation: frame.conversation, origin: frame.origin },
+          { op: 'deliver', id: frame.id, ...(fromMachine === undefined ? {} : { fromMachine }), payload: frame.body, to: frame.to, conversation: frame.conversation, origin: frame.origin, tool: frame.tool },
           nodeDeps,
         ),
       fileInbox: new FileInbox({ inboxDir, partsDir }),
@@ -562,9 +563,9 @@ describe('B3.1 drill fixes', () => {
     const file = join(home, 'drill-a.txt');
     writeFileSync(file, 'payload');
     // 019 后机器级消息腿走 --conversation：human→codex 真实 ref（接收腿 runSend 按 ref 续话）
-    const convRef = encodeRef({ v: 1, f: { p: 'human' }, t: { p: 'codex', id: 'b0ss0000-aaaa' }, n: 'a1b2c3d4', c: 1 });
+    const convRef = encodeRef({ v: 1, f: { p: 'human' }, t: { p: 'codex', id: 'b0ss0000-aaaa', endpointType: 'cli' }, n: 'a1b2c3d4', c: 1 });
     const out = await runViaTcpSend(
-      { via: 'tcp:hub', conversation: convRef, fileArg: file, bodyArg: 'drill-a 附件测试' },
+      { tool: 'codex-cli', via: 'tcp:hub', conversation: convRef, fileArg: file, bodyArg: 'drill-a 附件测试' },
       'drill-a 附件测试',
       { ...nodeDeps, tcpBaseDir: home, hostname: () => 'ci-machine', machineId: () => 'cccc00001111' },
     );
@@ -592,7 +593,7 @@ describe('B3.1 drill fixes', () => {
       now: () => Date.now(),
     };
     const origin = encodeOrigin({ p: 'claude', id: 'sender-s9', name: 'wsl-boss' }, 'aaaa0000', 'aaaa0000ef', 'tcp');
-    const out = await runSend({ to: 'target-name', bodyArg: 'hi', origin }, deps);
+    const out = await runSend({ tool: 'claude', to: 'target-name', bodyArg: 'hi', origin }, deps);
     expect(out).toContain('delivered to target-name');
     expect(envelopes[0]).toContain('from-name="wsl-boss"');
     expect(envelopes[0]).not.toContain('from-name="target-name"');

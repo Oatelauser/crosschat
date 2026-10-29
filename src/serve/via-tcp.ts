@@ -11,6 +11,7 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { Buffer } from 'node:buffer';
 import { WebSocket } from 'ws';
 import { MultichatError } from '../errors.js';
+import { parseToolType } from '../tool-types.js';
 import { encodeOrigin, machineDisplay, originDisplayName } from '../federation.js';
 import { identityKey, resolveCallerIdentity, type CallerIdentity } from '../identity.js';
 import { handleForRef, recordConversation } from '../conversations.js';
@@ -20,7 +21,8 @@ import type { SendLogEntry } from '../send-log.js';
 import type { SendArgs, SendDeps, SendResult } from '../application/send/types.js';
 import { resolveDeliveryMode } from '../delivery-mode.js';
 import { formatSendResult } from '../application/send/format.js';
-import { CAP_CHALLENGE_AUTH, CAP_MULTI_STAR, encodeFrame, ERR, hasCap, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
+import { CAP_CHALLENGE_AUTH, CAP_ENDPOINT_TYPES, CAP_MULTI_STAR, encodeFrame, ERR, hasCap, MAX_PAYLOAD_BYTES, parseFrame, PROTOCOL_VERSION } from './protocol.js';
+import { sendRequiresEndpointTypes } from './endpoint-identity.js';
 import type { AdminOpResultFrame, AuthChallengeFrame, ErrorFrame, FileResultFrame, Frame, InfoFrame, MemberRemoveExactResultFrame, MemberRemoveResultFrame, ReceiptFrame, RosterMachine, StatusPayload, StatusResultFrame } from './protocol.js';
 import { defaultBaseDir, tcpDir } from './registry.js';
 import { formatBrokerEntry, readNodeConfig } from './node-config.js';
@@ -57,6 +59,7 @@ export class SenderConn {
   private readonly consumed = new WeakSet<Frame>();
   private closed = false;
   private connectedStarId: string | undefined;
+  private peerCaps: readonly string[] = [];
 
   get starId(): string | undefined { return this.connectedStarId; }
 
@@ -125,8 +128,9 @@ export class SenderConn {
       if (info.op !== 'info' || info.proto !== PROTOCOL_VERSION) {
         throw new Error(`broker 协议不匹配（期望 ${PROTOCOL_VERSION}）`);
       }
+      conn.peerCaps = info.caps;
       // 032 非兼容升级：sender 腿同样声明 multi-star 能力（新版通行证，无它即被拒）
-      conn.send({ op: 'connect', proto: PROTOCOL_VERSION, role: 'sender', machineId, auth, caps: [CAP_MULTI_STAR] });
+      conn.send({ op: 'connect', proto: PROTOCOL_VERSION, role: 'sender', machineId, auth, caps: [CAP_MULTI_STAR, CAP_ENDPOINT_TYPES] });
       const verdict = await conn.waitFor((f) => f.op === 'connected' || f.op === 'error', timeoutMs);
       if (verdict.op === 'error') {
         throw new MultichatError('TCP_TRANSPORT_FAILED', `broker 拒绝连接：${(verdict as ErrorFrame).code} ${(verdict as ErrorFrame).message}——核对 ~/.crosschat/tcp/node.json 与 broker 注册表`);
@@ -165,7 +169,8 @@ export class SenderConn {
           'broker 未声明挑战应答能力（challenge-auth 缺席——版本过旧或能力被剥除）——绝不发送星管理钥（无降级路径）；升级 broker 机 crosschat 后重试',
         );
       }
-      conn.send({ op: 'connect', proto: PROTOCOL_VERSION, role: 'sender', admin: true, caps: [CAP_MULTI_STAR, CAP_CHALLENGE_AUTH] });
+      conn.peerCaps = info.caps;
+      conn.send({ op: 'connect', proto: PROTOCOL_VERSION, role: 'sender', admin: true, caps: [CAP_MULTI_STAR, CAP_CHALLENGE_AUTH, CAP_ENDPOINT_TYPES] });
       const challenge = await conn.waitFor((f) => f.op === 'auth-challenge' || f.op === 'error', timeoutMs);
       if (challenge.op === 'error') {
         throw new MultichatError('TCP_TRANSPORT_FAILED', `broker 拒绝管理连接：${(challenge as ErrorFrame).code} ${(challenge as ErrorFrame).message}`);
@@ -188,6 +193,9 @@ export class SenderConn {
   }
 
   send(frame: Frame): Promise<void> {
+    const typed = (frame.op === 'member-remove-exact' || frame.op === 'session-operation' || frame.op === 'member-remove') && frame.endpointType !== undefined;
+    const typedSend = frame.op === 'send' && sendRequiresEndpointTypes(frame);
+    if ((typed || typedSend) && !this.peerCaps.includes(CAP_ENDPOINT_TYPES)) return Promise.reject(new MultichatError('BAD_PROTO', 'broker 未声明端点类型能力，已拒绝类型化写入；升级两端 crosschat 后重试'));
     return new Promise((resolve) => {
       if (this.ws.readyState === WebSocket.OPEN) this.ws.send(encodeFrame(frame), () => resolve());
       else resolve();
@@ -301,6 +309,9 @@ export async function runViaTcpSend(args: SendArgs, body: string | undefined, de
 }
 
 export async function sendViaTcp(args: SendArgs, body: string | undefined, deps: SendDeps): Promise<SendResult> {
+  if (args.tool === undefined || parseToolType(args.tool) === undefined) {
+    throw new MultichatError('USAGE', 'send requires a registered --tool <recipient type>, including TCP conversation replies.');
+  }
   const deliveryMode = resolveDeliveryMode(args.delivery);
   // B1：`tcp:<选择器>:<目标>`——第一个':'前是选择器（星名/starId 前缀），其余是目标
   const { selector, target } = parseTcpViaSpec(args.via!);
@@ -320,7 +331,8 @@ export async function sendViaTcp(args: SendArgs, body: string | undefined, deps:
   const timeoutMs = tcpTimeoutMs(deps.env);
 
   const scan = deps.listClaudeSessions();
-  const caller = resolveCallerIdentity(deps.env, scan);
+  const nativeCaller = resolveCallerIdentity(deps.env, scan);
+  const caller = deps.enrichCallerIdentity === undefined ? nativeCaller : await deps.enrichCallerIdentity(nativeCaller);
   // B2.1：origin host 槽盖 mid8 并带 tcp 标记——对端 ref 端点 m=mid8，机器改名免疫；
   // 无 machine-id 时退回 hostname（降级：回信按 ssh 语义拼接）。
   const localMid = deps.machineId?.();
@@ -461,6 +473,7 @@ async function sendBody(
     conversation: args.conversation,
     body,
     origin,
+    ...(args.tool === undefined ? {} : { tool: args.tool }),
     ...(args.delivery === undefined ? {} : { delivery: args.delivery }),
   });
   const frame = await conn
@@ -607,7 +620,7 @@ export async function requestMemberRemove(
 /** 精确删册在调用方拥有的连接上一问一答；取消和关闭由调用方收口。 */
 export async function requestMemberRemoveExact(
   conn: SenderConn,
-  target: { sessionId: string; machine: string; tool: string },
+  target: { sessionId: string; machine: string; tool: string; endpointType?: string },
   timeoutMs = 8_000,
 ): Promise<MemberRemoveExactResultFrame> {
   const id = randomUUID();

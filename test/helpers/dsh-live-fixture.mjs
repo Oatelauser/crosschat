@@ -21,14 +21,55 @@ export function classifyDshStartupFailure(evidence) {
   return { category: 'infrastructure', check: evidence.processAlive === false ? 'runtime-process' : 'runtime-readiness' };
 }
 
-export function assessDshNativeIdentity(requests, expected) {
+function readDshNativeIdentity(requests, expected) {
   const strings = (value) => typeof value === 'string' ? [value] : value && typeof value === 'object' ? Object.values(value).flatMap(strings) : [];
   const results = requests.flatMap((request) => (request.messages ?? []).flatMap((message) => Array.isArray(message.content) ? message.content.filter((item) => item.type === 'tool_result') : []));
   if (!results.length) return { ready: false, category: 'infrastructure', check: 'model-tool-result' };
   const parsed = results.flatMap(strings).flatMap((value) => { try { const result = JSON.parse(value.trim()); return isRecord(result) ? [result] : []; } catch { return []; } });
   if (!parsed.length) return { ready: false, category: 'infrastructure', check: 'native-shell-bootstrap' };
-  if (parsed.some((identity) => identity.session === expected.session && identity.profile === expected.profile && identity.dshHome === expected.dshHome)) return { ready: true };
+  const identities = parsed.filter((identity) => identity.session === expected.session && identity.profile === expected.profile && identity.dshHome === expected.dshHome);
+  if (identities.length) return { ready: true, identities };
   return { ready: false, category: 'compatibility', check: 'native-shell-identity' };
+}
+
+export function assessDshNativeIdentity(requests, expected) {
+  const observed = readDshNativeIdentity(requests, expected);
+  return observed.ready ? { ready: true } : observed;
+}
+
+/** Native shellEnv must prove the live instance; an absent contribution remains a capability failure. */
+export function assessDshCallerSourceIdentity(requests, expected) {
+  const observed = readDshNativeIdentity(requests, expected);
+  if (!observed.ready) return observed;
+  for (const identity of observed.identities) {
+    const source = identity.callerSource;
+    if (identity.callerSourceExit !== 0 || !isRecord(source) || source.status !== 'identified' || source.sourceTool !== 'dsh'
+      || source.basis !== 'native' || source.association !== 'verified' || source.scope !== 'instance' || source.shouldAsk !== false
+      || source.context !== undefined || source.promptClaim !== undefined || source.confirmationCommand !== undefined) continue;
+    return { ready: true, source: { status: source.status, sourceTool: source.sourceTool, basis: source.basis,
+      association: source.association, scope: source.scope, shouldAsk: source.shouldAsk } };
+  }
+  return { ready: false, category: 'compatibility', check: 'native-shell-caller-source' };
+}
+
+/** Deliberately omit paths, native IDs, tokens, fingerprints and free-form error text. */
+export function diagnoseDshCallerSource(requests, expected) {
+  const observed = readDshNativeIdentity(requests, expected);
+  if (!observed.ready) return { nativeIdentityMatched: false };
+  const identity = observed.identities.at(-1);
+  const source = {};
+  for (const [key, allowed] of Object.entries({ status: ['identified', 'confirmed', 'human', 'unresolved', 'unavailable', 'review-required', 'conflict', 'confirmation-required'],
+    sourceTool: ['dsh', 'dsh-desktop'], basis: ['native', 'user'], association: ['verified', 'unavailable'], scope: ['origin', 'instance'] })) {
+    if (allowed.includes(identity.callerSource?.[key])) source[key] = identity.callerSource[key];
+  }
+  const code = identity.callerSource?.code;
+  if (typeof code === 'string' && /^(?:DSH_|SOURCE_|CALLER_SOURCE_)[A-Z_]{1,70}$/.test(code)) source.code = code;
+  if (typeof identity.callerSource?.shouldAsk === 'boolean') source.shouldAsk = identity.callerSource.shouldAsk;
+  const input = {};
+  for (const key of ['shellFlagExpected', 'instanceMarkerValid', 'stateHomeAbsolute', 'profileDirAbsolute']) {
+    if (typeof identity.callerSourceInput?.[key] === 'boolean') input[key] = identity.callerSourceInput[key];
+  }
+  return { nativeIdentityMatched: true, sourceExit: Number.isSafeInteger(identity.callerSourceExit) ? identity.callerSourceExit : null, source, input };
 }
 
 export async function prepareDshProfile(root, modelURL) {
@@ -90,6 +131,24 @@ export function dshNodeCommand(args) {
 }
 
 export function dshShellCommand(args) { return dshNodeCommand([join(repositoryRoot, 'dist', 'cli.js'), ...args]); }
+
+/** Runs inside the ordinary native Bash/pwsh tool, inheriting its actual bridge contribution unchanged. */
+export function dshIdentityBootstrapCommand() {
+  return dshNodeCommand(['--input-type=module', '-e', `
+    import {spawnSync} from 'node:child_process';
+    import {isAbsolute} from 'node:path';
+    const result = spawnSync(process.execPath, [${JSON.stringify(join(repositoryRoot, 'dist', 'cli.js'))}, 'identity'],
+      {encoding:'utf8', timeout:15000, windowsHide:true});
+    let callerSource = null;
+    try { callerSource = JSON.parse(result.stdout); } catch {}
+    console.log(JSON.stringify({session:process.env.DSH_SESSION_ID, profile:process.env.DSH_PROFILE,
+      dshHome:process.env.DSH_HOME, callerSourceExit:result.status, callerSource,
+      callerSourceInput:{shellFlagExpected:process.env.DSH_SHELL === '1',
+        instanceMarkerValid:/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(process.env.DSH_CROSSCHAT_INSTANCE_ID ?? ''),
+        stateHomeAbsolute:isAbsolute(process.env.DSH_CROSSCHAT_HOME ?? ''),
+        profileDirAbsolute:isAbsolute(process.env.DSH_PROFILE_DIR ?? '')}}));
+  `]);
+}
 
 /** Requires an already installed official npm runtime; this function never downloads or globally installs software. */
 export async function createDshFixture(options, respond) {

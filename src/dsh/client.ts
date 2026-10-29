@@ -2,8 +2,12 @@ import { createHash } from 'node:crypto';
 import { dshError, isDshRecord } from './registry.js';
 import { withDshOperation } from './service.js';
 import type { DshConnection, DshOperation } from './service.js';
+import { nativeTargetKey } from '../tool-types.js';
 
 export interface DshOptions {
+  /** Exact bridge selected by the native per-execution contributor, never a candidate guess. */
+  instanceId?: string;
+  endpointType?: string;
   home?: string;
   instancesDir?: string;
   signal?: AbortSignal;
@@ -12,6 +16,7 @@ export interface DshOptions {
 
 export interface DshThread {
   id: string;
+  endpointType?: string;
   name: string | null;
   cwd: string;
   rawStatus: { type: 'idle' | 'running' };
@@ -33,9 +38,11 @@ function thread(value: unknown, connection: DshConnection): DshThread {
     || typeof value.createdAt !== 'number' || !Number.isSafeInteger(value.createdAt) || value.createdAt < 0) {
     throw dshError('PROTOCOL_ERROR', 'Harness bridge returned malformed root session fields.');
   }
-  return { id: value.id, name: typeof value.name === 'string' && value.name !== '' ? value.name : null,
+  return { id: value.id, ...(connection.registration.endpointType === undefined ? {} : { endpointType: connection.registration.endpointType }),
+    name: typeof value.name === 'string' && value.name !== '' ? value.name : null,
     cwd: typeof value.cwd === 'string' ? value.cwd : '', rawStatus: { type: value.status },
     attributes: { instanceId: connection.registration.instanceId, runtimeVersion: connection.registration.runtimeVersion,
+      ...(connection.registration.profile === undefined ? {} : { profile: connection.registration.profile }),
       scope: 'live-root-agents', currentCwd: value.cwd, originalCwd: value.originalCwd, createdAt: value.createdAt } };
 }
 
@@ -47,8 +54,9 @@ async function allThreads(operation: DshOperation): Promise<DshThread[]> {
     if (!isDshRecord(response) || !Array.isArray(response.items)) throw dshError('PROTOCOL_ERROR', 'Harness bridge returned a malformed root-session list.');
     for (const item of response.items) {
       const current = thread(item, connection);
-      if (ids.has(current.id)) throw dshError('AMBIGUOUS_SESSION', 'The same native Harness session ID is live in multiple source entries; no instance was selected.');
-      ids.add(current.id); result.push(current);
+      const key = nativeTargetKey({ providerId: 'dsh', nativeId: current.id, endpointType: current.endpointType });
+      if (ids.has(key)) throw dshError('AMBIGUOUS_SESSION', 'The same native Harness session ID and endpoint type are live in multiple source entries; no instance was selected.');
+      ids.add(key); result.push(current);
     }
   }
   return result;
@@ -70,7 +78,8 @@ export async function listDshThreadPage(options: DshPageOptions = {}): Promise<D
     } catch { throw dshError('INVALID_CURSOR', 'Harness page cursor is invalid. Refresh the session source.'); }
   }
   const items = await listDshThreads(options);
-  const membership = createHash('sha256').update(JSON.stringify(items.map((item) => [item.attributes.instanceId, item.id]))).digest('hex');
+  const membership = createHash('sha256').update(JSON.stringify([options.endpointType ?? null,
+    items.map((item) => [item.attributes.instanceId, item.endpointType ?? null, item.id])])).digest('hex');
   if (cursor !== undefined && (cursor.membership !== membership || cursor.offset >= items.length)) throw dshError('INVALID_CURSOR', 'Harness source membership changed; refresh before paging.');
   const offset = cursor?.offset ?? 0;
   const next = offset + limit;
@@ -79,10 +88,11 @@ export async function listDshThreadPage(options: DshPageOptions = {}): Promise<D
 }
 
 /** Exact lookup across every live instance: never picks an ambiguous writer. */
-export async function findDshTarget(id: string, operation: DshOperation): Promise<{ connection: DshConnection; thread: DshThread } | null> {
+export async function findDshTarget(id: string, operation: DshOperation, endpointType?: string): Promise<{ connection: DshConnection; thread: DshThread } | null> {
   const path = dshSessionPath(id);
   let target: { connection: DshConnection; thread: DshThread } | null = null;
   for (const connection of await operation.connections()) {
+    if (endpointType !== undefined && connection.registration.endpointType !== endpointType) continue;
     const response = await connection.request(path);
     if (!isDshRecord(response) || !Object.hasOwn(response, 'item')) throw dshError('PROTOCOL_ERROR', 'Harness bridge returned a malformed exact-session response.');
     if (response.item === null) continue;
@@ -96,5 +106,5 @@ export async function findDshTarget(id: string, operation: DshOperation): Promis
 
 export async function getDshThread(id: string, options: DshOptions = {}): Promise<DshThread | null> {
   dshSessionPath(id);
-  return withDshOperation(options, async (operation) => (await findDshTarget(id, operation))?.thread ?? null);
+  return withDshOperation(options, async (operation) => (await findDshTarget(id, operation, options.endpointType))?.thread ?? null);
 }

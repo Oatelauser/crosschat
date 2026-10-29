@@ -13,12 +13,34 @@ export interface DshRegistration {
   url: string;
   token: string;
   runtimeVersion: string;
+  profile?: string;
+  endpointType?: string;
+  callerIdentity?: { schema: 1; profileDir: string };
   createdAt: number;
 }
 
 export const DSH_INSTANCE_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 export function isDshRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 export function dshError(code: string, message: string): MultichatError { return new MultichatError(`DSH_${code}`, message); }
+/** Missing boot context stays unknown; only a paired native profile/type is an attestation. */
+export function dshEndpointMetadata(value: Record<string, unknown>, code = 'PROTOCOL_ERROR'): { profile?: string; endpointType?: string } {
+  if (value.profile === undefined && value.endpointType === undefined) return {};
+  if (typeof value.profile !== 'string' || value.profile.trim() === '' || value.profile.length > 256
+    || value.endpointType !== (value.profile === 'desktop' ? 'desktop' : 'host')) {
+    throw dshError(code, 'Harness native profile and endpoint type are inconsistent.');
+  }
+  return { profile: value.profile, endpointType: value.profile === 'desktop' ? 'desktop' : 'host' };
+}
+
+/** Optional source association is advertised only by bridges with the public shell contributor. */
+export function dshCallerMetadata(value: Record<string, unknown>, code = 'PROTOCOL_ERROR'): { callerIdentity?: { schema: 1; profileDir: string } } {
+  if (value.callerIdentity === undefined) return {};
+  const context = value.callerIdentity;
+  if (!isDshRecord(context) || context.schema !== 1 || typeof context.profileDir !== 'string' || !isAbsolute(context.profileDir)) {
+    throw dshError(code, 'Harness caller association metadata is malformed.');
+  }
+  return { callerIdentity: { schema: 1, profileDir: context.profileDir } };
+}
 export function dshInstancesDirectory(options: DshOptions = {}): string {
   const directory = options.instancesDir ?? join(stateRoot(options.home), 'dsh', 'instances');
   if (!isAbsolute(directory)) throw dshError('REGISTRATION_MALFORMED', 'Harness instance directory must be absolute.');
@@ -46,6 +68,7 @@ function ownerIsAlive(pid: number): boolean {
 
 /** Read-only: expired registrations are retained, never repaired or removed. */
 export async function readDshRegistrations(options: DshOptions, signal: AbortSignal): Promise<DshRegistration[]> {
+  if (options.instanceId !== undefined && !DSH_INSTANCE_ID.test(options.instanceId)) throw dshError('INPUT_REJECTED', 'Harness source instance identity is malformed.');
   const directory = dshInstancesDirectory(options);
   assertDshActive(signal);
   let files: string[];
@@ -60,6 +83,7 @@ export async function readDshRegistrations(options: DshOptions, signal: AbortSig
     throw dshError('REGISTRATION_UNREADABLE', 'Harness instance directory could not be read.');
   }
   if (files.length > 100) throw dshError('REGISTRATION_MALFORMED', 'Harness instance directory exceeds the bounded record count.');
+  if (options.instanceId !== undefined) files = files.filter((file) => file === `${options.instanceId}.json`);
   const registrations: DshRegistration[] = [];
   for (const file of files) {
     assertDshActive(signal);
@@ -86,9 +110,11 @@ export async function readDshRegistrations(options: DshOptions, signal: AbortSig
       throw dshError('REGISTRATION_MALFORMED', 'Harness registration has invalid identity or credential fields.');
     }
     if (value.protocol !== 1) throw dshError('UNSUPPORTED_PROTOCOL', 'Harness bridge protocol is not supported.');
+    const endpoint = dshEndpointMetadata(value, 'REGISTRATION_MALFORMED');
+    const caller = dshCallerMetadata(value, 'REGISTRATION_MALFORMED');
     validateDshEndpoint(value.url);
     if (ownerIsAlive(value.pid)) registrations.push({ schema: 1, protocol: 1, provider: 'dsh', instanceId: value.instanceId,
-      pid: value.pid, url: value.url, token: value.token, runtimeVersion: value.runtimeVersion, createdAt: value.createdAt });
+      pid: value.pid, url: value.url, token: value.token, runtimeVersion: value.runtimeVersion, createdAt: value.createdAt, ...endpoint, ...caller });
   }
   if (registrations.length === 0) throw dshError('NOT_CONFIGURED', 'No live Harness bridge is registered. Open Harness with the crosschat Host bundle enabled, then refresh.');
   return registrations;

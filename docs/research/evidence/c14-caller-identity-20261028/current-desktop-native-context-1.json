@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "observedAtUtc": "2026-10-28T03:40:32.0333434Z",
+  "scope": "Current Windows Codex Desktop exec invocation; key presence and SHA256 prefixes only",
+  "keys": [
+    {
+      "key": "CODEX_THREAD_ID",
+      "present": true,
+      "fingerprint": "165ee6b0cc533c14"
+    },
+    {
+      "key": "CODEX_SESSION_ID",
+      "present": true,
+      "fingerprint": "165ee6b0cc533c14"
+    },
+    {
+      "key": "CODEX_TOOL_CALL_ID",
+      "present": true,
+      "fingerprint": "f0ff9ace935e677b"
+    },
+    {
+      "key": "CODEX_TURN_ID",
+      "present": false,
+      "fingerprint": null
+    }
+  ]
+}

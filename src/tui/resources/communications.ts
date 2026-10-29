@@ -4,6 +4,8 @@ import type { QueryError } from '../../application/queries/reading.js';
 import { sessionKey } from '../../application/sessions/model.js';
 import type { SessionRef } from '../../application/sessions/model.js';
 import type { TuiAction, TuiActionAvailability, TuiPage, TuiReadRequest, TuiResource, TuiResourceAdapter, TuiRow } from '../model.js';
+import { identityKey } from '../../identity.js';
+import { isEndpointTypeFor, toolTypeFor } from '../../tool-types.js';
 
 export interface CommunicationResourceOptions {
   readCommunications(request: { contextId: string; signal: AbortSignal }): Promise<CommunicationsResult>;
@@ -45,8 +47,11 @@ function scope(request: TuiReadRequest): Scope | undefined {
       const ref: unknown = JSON.parse(query.sessionRef);
       if (typeof ref !== 'object' || ref === null || Array.isArray(ref) || !('contextId' in ref) || ref.contextId !== request.context.id
         || !('providerId' in ref) || typeof ref.providerId !== 'string' || !ref.providerId || !('nativeId' in ref) || typeof ref.nativeId !== 'string' || !ref.nativeId
-        || ('referenceKind' in ref && ref.referenceKind !== 'native') || Object.keys(ref).some((key) => !['contextId', 'providerId', 'nativeId', 'referenceKind'].includes(key))) return undefined;
-      session = { contextId: request.context.id, providerId: ref.providerId, nativeId: ref.nativeId };
+        || ('referenceKind' in ref && ref.referenceKind !== 'native')
+        || ('endpointType' in ref && !isEndpointTypeFor(ref.providerId, ref.endpointType))
+        || Object.keys(ref).some((key) => !['contextId', 'providerId', 'nativeId', 'endpointType', 'referenceKind'].includes(key))) return undefined;
+      session = { contextId: request.context.id, providerId: ref.providerId, nativeId: ref.nativeId,
+        ...('endpointType' in ref && typeof ref.endpointType === 'string' ? { endpointType: ref.endpointType } : {}) };
     } catch { return undefined; }
   }
   if (query?.pairId !== undefined && (query.pairId.split('\n').length !== 2 || query.pairId.split('\n').some((identity) => !identity))) return undefined;
@@ -73,7 +78,14 @@ function deliveryRow(item: CommunicationSummary): TuiRow {
     detail: [{ label: '通信对完整标识', value: item.pairId }, { label: '完整端点', value: json(item.endpoints) }, { label: '通道', value: channels[item.channel] }, { label: '投递状态', value: status }, { label: '回执原值', value: item.receipt ?? '未记录' }, { label: '已保存续话引用', value: item.ref ?? '没有可核验引用' }, { label: '暂存条数', value: item.parked === null ? '未知（读取不完整）' : String(item.parked) }, { label: '记录时间', value: time(item.updatedAt) }, { label: '边界', value: '只展示传输元数据，不代表任务完成，不代替任何原生会话聊天。' }],
   };
 }
-function itemPair(thread: OutboxThreadMetadata, callerKey?: string): string { return [callerKey ?? 'human', `${thread.providerId}:${thread.threadId}`].sort().join('\n'); }
+function queueRef(thread: OutboxThreadMetadata): SessionRef {
+  return { contextId: thread.contextId, providerId: thread.providerId, nativeId: thread.threadId,
+    ...(thread.endpointType === undefined ? {} : { endpointType: thread.endpointType }) };
+}
+function queueIdentity(thread: OutboxThreadMetadata): string {
+  return identityKey({ p: thread.providerId, id: thread.threadId, endpointType: thread.endpointType });
+}
+function itemPair(thread: OutboxThreadMetadata, callerKey?: string): string { return [callerKey ?? 'human', queueIdentity(thread)].sort().join('\n'); }
 function queueRow(item: OutboxThreadMetadata, scopeValue?: { pairId: string; totalCount: number | null; known: boolean }): TuiRow {
   const pairs = [...new Set(item.items.map((entry) => itemPair(item, entry.callerKey)))];
   const pairId = scopeValue?.pairId ?? (pairs.length === 1 && item.count !== null ? pairs[0] : undefined);
@@ -81,10 +93,11 @@ function queueRow(item: OutboxThreadMetadata, scopeValue?: { pairId: string; tot
   if (pairId === undefined) availability.deliveries = disabled('当前队列未核实单一通信对；同名或同原生 ID 不能证明保存引用中的机器身份。', '请在投递列表选择完整通信对，再按 w 查看该对滞留；此处不扩大为会话范围。');
   const uncertain = item.items.some((entry) => entry.deliveryState === 'uncertain');
   const state = item.state !== 'ready' ? `读取不完整<${item.state}>` : uncertain ? '写入待核实<uncertain>' : item.items.some((entry) => entry.deliveryState === 'in-flight') ? '已有写入尝试<in-flight>' : '已暂存，未确认送达';
-  return { id: item.id, contextId: item.contextId, cells: { name: item.toName || item.threadId, provider: item.providerId, count: item.count === null ? '未知' : String(item.count), oldest: time(item.oldestParkedAt), state }, searchText: json(item), copyValue: item.mailboxFile,
+  const ref = queueRef(item);
+  return { id: item.id, contextId: item.contextId, cells: { name: item.toName || item.threadId, provider: toolTypeFor(item.providerId, item.endpointType) ?? item.providerId, count: item.count === null ? '未知' : String(item.count), oldest: time(item.oldestParkedAt), state }, searchText: json(item), copyValue: item.mailboxFile, copyValues: { ref: JSON.stringify(ref) },
     actionRoutes: pairId === undefined ? {} : { deliveries: { resourceId: 'deliveries', contextId: item.contextId, query: { pairId } } },
     actionAvailability: availability,
-    detail: [{ label: '完整会话引用', value: json({ contextId: item.contextId, providerId: item.providerId, nativeId: item.threadId }) },
+    detail: [{ label: '完整会话引用', value: json(ref) },
       ...(scopeValue ? [{ label: '关联范围', value: `${scopeValue.pairId}\n${scopeValue.known ? '下列条数与条目仅属此通信对。' : '关联范围尚待核实；来源读取不完整，不能确认匹配条数。'}` }, { label: '目标全部队列条数', value: scopeValue.totalCount === null ? '未知' : String(scopeValue.totalCount) }] : []),
       { label: '暂存条数', value: item.count === null ? '未知（读取不完整）' : String(item.count) }, { label: '最早暂存时间', value: time(item.oldestParkedAt) }, { label: '当前记录状态', value: state }, { label: '条目元数据', value: json(item.items) }, { label: '本机镜像路径', value: item.mailboxFile }, { label: '边界', value: '暂存不代表已送达；待核实写入不能自动重试。此处不展示消息正文、不改变原有补投规则。' }],
   };
@@ -112,10 +125,10 @@ export function createCommunicationResources(options: CommunicationResourceOptio
       const result = await cancellable(options.readOutbox({ contextId: request.context.id, signal: request.signal }), request.signal);
       if (request.signal.aborted) return failure('读取已取消。', 'cancelled');
       const rows = result.items.flatMap((item): TuiRow[] => {
-        if (item.contextId !== request.context!.id || (scoped.session && sessionKey({ contextId: item.contextId, providerId: item.providerId, nativeId: item.threadId }) !== sessionKey(scoped.session))) return [];
+        if (item.contextId !== request.context!.id || (scoped.session && sessionKey(queueRef(item)) !== sessionKey(scoped.session))) return [];
         if (scoped.pairId === undefined) return [queueRow(item)];
         const matching = item.items.filter((entry) => itemPair(item, entry.callerKey) === scoped.pairId);
-        const matchesTarget = scoped.pairId.split('\n').includes(`${item.providerId}:${item.threadId}`);
+        const matchesTarget = scoped.pairId.split('\n').includes(queueIdentity(item));
         if (!matching.length && !(item.count === null && matchesTarget)) return [];
         const subset = { ...item, items: matching, count: item.count === null ? null : matching.length,
           toName: matching.at(-1)?.toName ?? null, oldestParkedAt: item.count === null || !matching.length ? null : Math.min(...matching.map((entry) => entry.parkedAt)) };

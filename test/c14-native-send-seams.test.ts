@@ -7,7 +7,8 @@ import type { SendDeps } from '../src/application/send/types.js';
 import { listCodexThreads } from '../src/codex/discovery.js';
 import type { CodexSession } from '../src/codex/client.js';
 import type { DesktopThreadSession } from '../src/codex/desktop-ipc.js';
-import { decodeRef } from '../src/ref.js';
+import { decodeRef, encodeRef, newConversationRef } from '../src/ref.js';
+import { decodeOriginIdentity, encodeOrigin } from '../src/federation.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-c14-native-send-seams-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -37,6 +38,117 @@ function deps(): SendDeps {
 }
 
 describe('C14 native discovery and reply integration seams', () => {
+  it.each([
+    { types: ['cli', 'desktop'] },
+    { types: ['desktop'] },
+    { types: [undefined] },
+    { types: [] },
+  ])('permits Q8 replies without turning recipient-list evidence into a source-owner gate: $types', async ({ types }) => {
+    const scan = { sessions: [{ pid: 11, sessionId: 'claude-receiver', kind: 'interactive', name: 'Receiver', status: 'idle', messagingSocketPath: 'fixture-socket' }], malformed: 0 };
+    const dependencies = { ...deps(), env: { CODEX_THREAD_ID: cliId }, listClaudeSessions: () => scan,
+      listCodexThreads: vi.fn(async () => types.map((endpointType) => ({ id: cliId, name: null, status: 'idle' as const, endpointType }))),
+    };
+    const conversation = encodeRef(newConversationRef({ p: 'codex', id: cliId, endpointType: 'cli' }, { p: 'claude', id: 'claude-receiver', endpointType: 'cli' }));
+    await sendMessage({ tool: 'claude', conversation, bodyArg: 'typed continuation' }, dependencies);
+    expect(dependencies.listCodexThreads).not.toHaveBeenCalled();
+    expect(dependencies.deliverClaude).toHaveBeenCalledOnce();
+    expect(dependencies.deliverCodex).not.toHaveBeenCalled();
+  });
+
+  it('uses the fixed return endpoint without claiming the observed source type is known', async () => {
+    const scan = { sessions: [{ pid: 11, sessionId: 'claude-receiver', kind: 'interactive', name: 'Receiver', status: 'idle', messagingSocketPath: 'fixture-socket' }], malformed: 0 };
+    const list = vi.fn(async () => [{ id: cliId, name: null, status: 'idle' as const, endpointType: 'cli' }]);
+    const dependencies = { ...deps(), env: { CODEX_THREAD_ID: cliId }, listClaudeSessions: () => scan, listCodexThreads: list };
+    const conversation = encodeRef(newConversationRef({ p: 'codex', id: cliId, endpointType: 'cli' }, { p: 'claude', id: 'claude-receiver', endpointType: 'cli' }));
+    const result = await sendMessage({ tool: 'claude', conversation, bodyArg: 'typed continuation' }, dependencies);
+    expect(list).not.toHaveBeenCalled();
+    expect(dependencies.deliverClaude).toHaveBeenCalledWith(expect.anything(), expect.stringContaining('from-tool="pending"'), expect.anything());
+    expect(dependencies.deliverClaude).toHaveBeenCalledWith(expect.anything(), expect.stringContaining('--tool codex-cli'), expect.anything());
+    expect(decodeRef(result.receipt.replyRef).f).toMatchObject({ p: 'codex', id: cliId, endpointType: 'cli' });
+    expect(dependencies.deliverClaude).toHaveBeenCalledOnce();
+  });
+
+  it('permits a native-ID-matched reply when optional source metadata is unavailable', async () => {
+    const scan = { sessions: [{ pid: 11, sessionId: 'claude-receiver', kind: 'interactive', name: 'Receiver', status: 'idle', messagingSocketPath: 'fixture-socket' }], malformed: 0 };
+    const dependencies = { ...deps(), env: { CODEX_THREAD_ID: cliId }, listClaudeSessions: () => scan,
+      listCodexThreads: vi.fn(async () => { throw new Error('native source incomplete'); }),
+    };
+    const conversation = encodeRef(newConversationRef({ p: 'codex', id: cliId, endpointType: 'cli' }, { p: 'claude', id: 'claude-receiver', endpointType: 'cli' }));
+    await sendMessage({ tool: 'claude', conversation, bodyArg: 'typed continuation' }, dependencies);
+    expect(dependencies.listCodexThreads).not.toHaveBeenCalled();
+    expect(dependencies.deliverClaude).toHaveBeenCalledOnce();
+  });
+
+  it('dispatches a native-ID-matched SSH reply without requiring source candidate attestation', async () => {
+    const conversation = encodeRef(newConversationRef({ p: 'codex', id: cliId, endpointType: 'cli' }, { p: 'claude', id: 'remote-receiver', endpointType: 'cli' }));
+    const dependencies = { ...deps(), env: { CODEX_THREAD_ID: cliId },
+      listCodexThreads: vi.fn(async () => { throw new Error('not a source-owner proof'); }),
+      sshExec: vi.fn(async () => ({ code: 0, stdout: JSON.stringify({ status: 'delivered', to: 'receiver', turn: 2, replyRef: conversation }), stderr: '' })),
+    };
+    await sendMessage({ tool: 'claude', conversation, via: 'ssh:fixture', bodyArg: 'typed continuation' }, dependencies);
+    expect(dependencies.sshExec).toHaveBeenCalledOnce();
+    expect(dependencies.listCodexThreads).not.toHaveBeenCalled();
+  });
+
+  it('reaches normal TCP configuration validation without requiring a source candidate view', async () => {
+    const dependencies = { ...deps(), env: { CODEX_THREAD_ID: cliId }, tcpBaseDir: root,
+      listCodexThreads: vi.fn(async () => { throw new Error('not a source-owner proof'); }),
+    };
+    const conversation = encodeRef(newConversationRef({ p: 'codex', id: cliId, endpointType: 'cli' }, { p: 'claude', id: 'remote-receiver', endpointType: 'cli' }));
+    await expect(sendMessage({ tool: 'claude', conversation, via: 'tcp:fixture', bodyArg: 'typed continuation' }, dependencies))
+      .rejects.toThrow('本机未入网');
+    expect(dependencies.listCodexThreads).not.toHaveBeenCalled();
+  });
+
+  it('retains an unknown sender type in the outbound origin without inferring it from candidates', async () => {
+    const conversation = encodeRef(newConversationRef({ p: 'codex', id: cliId, endpointType: 'cli' }, { p: 'claude', id: 'remote-receiver', endpointType: 'cli' }));
+    let sentOrigin: string | undefined;
+    const dependencies = { ...deps(), env: { CODEX_THREAD_ID: cliId },
+      listCodexThreads: async () => [{ id: cliId, name: null, status: 'idle' as const, endpointType: 'cli' }],
+      sshExec: vi.fn(async (argv: readonly string[]) => {
+        sentOrigin = argv[argv.indexOf('--origin') + 1];
+        return { code: 0, stdout: JSON.stringify({ status: 'delivered', to: 'receiver', turn: 2, replyRef: conversation }), stderr: '' };
+      }),
+    };
+    await sendMessage({ tool: 'claude', conversation, via: 'ssh:fixture', bodyArg: 'typed continuation' }, dependencies);
+    expect(sentOrigin).toBeDefined();
+    expect(decodeOriginIdentity(sentOrigin!)).toMatchObject({ p: 'codex', id: cliId });
+    expect(decodeOriginIdentity(sentOrigin!)).not.toHaveProperty('endpointType');
+  });
+
+  it('never queries destination-local native candidates to validate a remote typed origin', async () => {
+    const scan = { sessions: [{ pid: 11, sessionId: 'claude-receiver', kind: 'interactive', name: 'Receiver', status: 'idle', messagingSocketPath: 'fixture-socket' }], malformed: 0 };
+    const dependencies = { ...deps(), listClaudeSessions: () => scan,
+      listCodexThreads: vi.fn(async () => { throw new Error('remote sender is not a local candidate'); }),
+    };
+    const conversation = encodeRef(newConversationRef({ p: 'codex', id: cliId, endpointType: 'cli' }, { p: 'claude', id: 'claude-receiver', endpointType: 'cli' }));
+    const origin = encodeOrigin({ p: 'codex', id: cliId, endpointType: 'cli' }, 'remote-node', 'remote-mid');
+    await sendMessage({ tool: 'claude', conversation, origin, bodyArg: 'typed arrival' }, dependencies);
+    expect(dependencies.listCodexThreads).not.toHaveBeenCalled();
+    expect(dependencies.deliverClaude).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the Harness type independent from the copyable full sender ID', async () => {
+    const scan = { sessions: [{ pid: 11, sessionId: 'claude-receiver', kind: 'interactive', name: 'Receiver', status: 'idle', messagingSocketPath: 'fixture-socket' }], malformed: 0 };
+    const dependencies = { ...deps(), listClaudeSessions: () => scan, fromMachine: 'remote-node', fromStarName: 'fixture-star' };
+    const origin = encodeOrigin({ p: 'dsh', id: 'session-same', endpointType: 'host' }, 'remote-node', 'remote-mid', 'tcp');
+    await sendMessage({ tool: 'claude', to: 'Receiver', origin, bodyArg: 'typed arrival' }, dependencies);
+    expect(dependencies.deliverClaude).toHaveBeenCalledWith(expect.anything(),
+      expect.stringContaining('from-addr="tcp:fixture-star:remote-node:session-same"'), expect.anything());
+  });
+
+  it('permits a native-ID-matched Harness reply without listing source endpoints', async () => {
+    const scan = { sessions: [{ pid: 11, sessionId: 'claude-receiver', kind: 'interactive', name: 'Receiver', status: 'idle', messagingSocketPath: 'fixture-socket' }], malformed: 0 };
+    const listDshThreads = vi.fn(async () => ['host', 'desktop'].map((endpointType) => ({
+      id: 'session-same', name: null, endpointType, cwd: '/fixture', rawStatus: { type: 'idle' as const }, attributes: {},
+    })));
+    const dependencies = { ...deps(), env: { DSH_SESSION_ID: 'session-same' }, listClaudeSessions: () => scan, listDshThreads };
+    const conversation = encodeRef(newConversationRef({ p: 'dsh', id: 'session-same', endpointType: 'host' }, { p: 'claude', id: 'claude-receiver' }));
+    await sendMessage({ tool: 'claude', conversation, bodyArg: 'typed continuation' }, dependencies);
+    expect(listDshThreads).not.toHaveBeenCalled();
+    expect(dependencies.deliverClaude).toHaveBeenCalledOnce();
+  });
+
   it('resolves an explicitly selected CLI target even when Desktop fills the legacy first twenty entries', async () => {
     const session = cli();
     const listMetadata = vi.fn(async () => ({ data: Array.from({ length: 20 }, (_, index) => ({
@@ -64,7 +176,7 @@ describe('C14 native discovery and reply integration seams', () => {
     expect(decodeRef(sent.receipt.replyRef).f).toEqual({ p: 'codex', id: cliId });
     await expect(sendMessage({ conversation: sent.receipt.replyRef, bodyArg: 'reply' }, {
       ...dependencies, env: { CLAUDE_CODE_MESSAGING_SOCKET: 'fixture-socket' },
-    })).rejects.toMatchObject({ code: 'TARGET_TYPE_REQUIRED' });
+    })).rejects.toMatchObject({ code: 'USAGE' });
     expect(dependencies.deliverCodex).not.toHaveBeenCalled();
 
     const reply = await sendMessage({ tool: 'codex-cli', conversation: sent.receipt.replyRef, bodyArg: 'reply' }, {

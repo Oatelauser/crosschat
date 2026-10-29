@@ -28,6 +28,8 @@ export function completeRemoteDiscoveryResponse(input: unknown, request: Discove
   }
   if (request.op !== 'detail') throw new Error('Invalid detail request.');
   const item = response.detail.item;
-  if (item !== null && (item.ref.providerId !== request.providerId || item.ref.nativeId !== request.nativeId || (item.ref.referenceKind ?? 'native') !== (request.referenceKind ?? 'native'))) throw new Error('Discovery response returned a different session.');
+  if (item !== null && (item.ref.providerId !== request.providerId || item.ref.nativeId !== request.nativeId ||
+    (request.endpointType !== undefined && item.ref.endpointType !== request.endpointType) ||
+    (item.ref.referenceKind ?? 'native') !== (request.referenceKind ?? 'native'))) throw new Error('Discovery response returned a different session.');
   return parseDiscoveryResponse({ ...response, detail: { ...response.detail, errors, item: item === null ? null : rebind(item) } });
 }

@@ -12,7 +12,7 @@ function deps(queued = false): SendDeps {
   return {
     env: {},
     listClaudeSessions: () => ({ sessions: [], malformed: 0 }),
-    listCodexThreads: async () => [{ id: '01234567-0000-4000-8000-000000000000', name: 'worker', status: 'idle' }],
+    listCodexThreads: async () => [{ id: '01234567-0000-4000-8000-000000000000', name: 'worker', status: 'idle', endpointType: 'cli' }],
     deliverClaude: async () => ({ status: 'delivered' }),
     deliverCodex: async () => ({ status: 'accepted', turnId: 'turn-1', queued }),
     confirmReceipt: async () => 'unconfirmed',
@@ -25,7 +25,7 @@ describe('typed send application', () => {
     const { sendMessage } = await import('../src/application/send/index.js');
     const { formatSendResult } = await import('../src/application/send/format.js');
     const probe = vi.fn(async () => 'confirmed' as const);
-    const result = await sendMessage({ to: 'worker', bodyArg: 'test' }, { ...deps(true), confirmReceipt: probe });
+    const result = await sendMessage({ to: 'worker', tool: 'codex-cli', bodyArg: 'test' }, { ...deps(true), confirmReceipt: probe });
     expect(result.status).toBe('queued');
     expect(result.receipt).toMatchObject({ status: 'delivered', queued: true, to: 'worker', turn: 1 });
     expect(probe).not.toHaveBeenCalled();
@@ -37,7 +37,7 @@ describe('typed send application', () => {
   it('keeps unconfirmed receipt evidence separate from legacy JSON and releases no delivery ownership', async () => {
     const { sendMessage } = await import('../src/application/send/index.js');
     const { formatSendResult } = await import('../src/application/send/format.js');
-    const result = await sendMessage({ to: 'worker', bodyArg: 'test' }, deps());
+    const result = await sendMessage({ to: 'worker', tool: 'codex-cli', bodyArg: 'test' }, deps());
     expect(result).toMatchObject({ status: 'delivered', confirmation: 'unconfirmed' });
     expect(formatSendResult(result)).toContain('回执: 暂未在对方会话记录中确认');
     expect(JSON.parse(formatSendResult(result, true))).not.toHaveProperty('confirmation');
@@ -46,10 +46,10 @@ describe('typed send application', () => {
   it('maps typed receipt into the unchanged TCP result fields and preserves error codes', async () => {
     const { sendMessage } = await import('../src/application/send/index.js');
     expect(sendMessage).toBeTypeOf('function');
-    const result = await deliverViaRunSend({ op: 'deliver', id: 'wire-1', to: 'worker', payload: 'test', origin: undefined }, deps(true));
+    const result = await deliverViaRunSend({ op: 'deliver', id: 'wire-1', to: 'worker', tool: 'codex-cli', payload: 'test', origin: undefined }, deps(true));
     expect(result).toMatchObject({ op: 'result', id: 'wire-1', status: 'delivered', turn: '1' });
     expect(JSON.parse(result.output ?? '')).toMatchObject({ status: 'delivered', queued: true });
-    const failure = await deliverViaRunSend({ op: 'deliver', id: 'wire-2', to: 'worker', payload: 'test', origin: undefined }, {
+    const failure = await deliverViaRunSend({ op: 'deliver', id: 'wire-2', to: 'worker', tool: 'codex-cli', payload: 'test', origin: undefined }, {
       ...deps(), deliverCodex: async () => { throw new MultichatError('CODEX_APPROVAL_REQUIRED', 'needs native approval'); },
     });
     expect(failure).toMatchObject({ status: 'error', code: 'CODEX_APPROVAL_REQUIRED', message: 'needs native approval' });
@@ -58,7 +58,7 @@ describe('typed send application', () => {
   it('exposes structured SSH metadata while preserving the remote JSON contract', async () => {
     const { sendMessage } = await import('../src/application/send/index.js');
     const { formatSendResult } = await import('../src/application/send/format.js');
-    const result = await sendMessage({ to: 'worker', bodyArg: 'test', via: 'ssh:fixture' }, {
+    const result = await sendMessage({ to: 'worker', tool: 'codex-cli', bodyArg: 'test', via: 'ssh:fixture' }, {
       ...deps(), sshExec: async () => ({ code: 0, stdout: JSON.stringify({ status: 'queued', to: 'worker', turn: 7, replyRef: 'legacy-ref', extra: 'keep' }), stderr: '' }),
     });
     expect(result).toMatchObject({ status: 'queued', receipt: { turn: 7, via: 'ssh:fixture', extra: 'keep' } });

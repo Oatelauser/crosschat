@@ -17,6 +17,7 @@ import { isRecord, untilAborted } from '../sessions/reading.js';
 import { sessionKey } from '../sessions/model.js';
 import type { SourceError } from '../sessions/model.js';
 import { defaultMembershipProviders } from './providers.js';
+import { isEndpointTypeFor, nativeTargetKey } from '../../tool-types.js';
 import { readMembershipMachineId } from './machine.js';
 import type { MembershipCheck, MembershipProvider, MembershipRequest, MembershipResult, MembershipTargets, SessionMembershipOptions, SessionMembershipService } from './types.js';
 
@@ -35,7 +36,7 @@ class Rejected extends Error {
 }
 
 interface Owner { connection?: SenderConn; pipe?: AttachPipeClient }
-interface ExactMember { sessionId: string; machine: string; tool?: string }
+interface ExactMember { sessionId: string; machine: string; tool?: string; endpointType?: string }
 interface Target { entry: BrokerEntry; machine: string; provider: MembershipProvider; connection: SenderConn; item?: DiscoverySession }
 
 function fullMachine(value: unknown): string | undefined {
@@ -66,7 +67,8 @@ function rejected(error: unknown, signal?: AbortSignal): MembershipCheck {
 }
 
 function assertRoster(request: MembershipRequest, target: Pick<Target, 'machine' | 'provider'>, members: readonly ExactMember[]): void {
-  const matches = members.filter((member) => member.sessionId === request.ref.nativeId);
+  const matches = members.filter((member) => member.sessionId === request.ref.nativeId && member.endpointType === request.ref.endpointType
+    && (request.ref.endpointType === undefined || member.tool === target.provider.tool));
   if (matches.length > 1) throw new Rejected('完整会话 ID 命中多个册位，不能安全确认目标');
   const member = matches[0];
   if (member === undefined) {
@@ -128,7 +130,7 @@ export function createSessionMembershipService(options: SessionMembershipOptions
 
   async function nativeDetail(request: MembershipRequest, provider: MembershipProvider): Promise<DiscoverySession> {
     const response = await readNative({ op: 'detail', providerId: request.ref.providerId,
-      nativeId: request.ref.nativeId, referenceKind: request.ref.referenceKind }, request.signal);
+      nativeId: request.ref.nativeId, endpointType: request.ref.endpointType, referenceKind: request.ref.referenceKind }, request.signal);
     if (response.op !== 'detail' || response.detail.completeness === 'cancelled' || response.detail.completeness === 'unavailable'
       || response.detail.item === null || sessionKey(response.detail.item.ref) !== sessionKey(request.ref)) {
       throw new Rejected('无法重新确认此完整引用对应的现存本机原生会话');
@@ -136,13 +138,15 @@ export function createSessionMembershipService(options: SessionMembershipOptions
     const item = response.detail.item;
     const eligibility = provider.canAdopt(item);
     if (!eligibility.allowed) throw new Rejected(eligibility.reason ?? '此原生会话当前不符合收编条件', eligibility.nextStep);
-    for (const other of response.providers) {
+    // Old untyped callers retain their conservative collision checks; a verified
+    // endpoint is independently identified by Provider + type + complete ID.
+    if (request.ref.endpointType === undefined) for (const other of response.providers) {
       if (other.providerId === request.ref.providerId) continue;
       const collision = await readNative({ op: 'detail', providerId: other.providerId,
         nativeId: request.ref.nativeId, referenceKind: 'native' }, request.signal);
       if (collision.op !== 'detail') throw new Rejected('无法核验其他工具的完整会话身份');
       if (collision.detail.item !== null && collision.detail.item.ref.nativeId === request.ref.nativeId) {
-        throw new Rejected('此完整原生 ID 同时存在于多个工具，当前星册不能安全区分');
+        throw new Rejected('此完整原生 ID 同时存在于多个工具，端点身份尚未核实');
       }
       if (collision.detail.item !== null || collision.detail.completeness !== 'complete') {
         throw new Rejected('其他工具的会话来源尚未确认完整缺席，无法排除同 ID 冲突');
@@ -158,10 +162,12 @@ export function createSessionMembershipService(options: SessionMembershipOptions
     if (!isRecord(reply) || reply.ok !== true || !Array.isArray(reply.members)) throw new Rejected('无法读取所选星的完整册位或没有读取权限');
     return reply.members.map((item): ExactMember => {
       if (!isRecord(item) || typeof item.sessionId !== 'string' || item.sessionId === '' || fullMachine(item.machine) === undefined
-        || (item.tool !== undefined && (typeof item.tool !== 'string' || sanitizeTool(item.tool) !== item.tool))) {
+        || (item.tool !== undefined && (typeof item.tool !== 'string' || sanitizeTool(item.tool) !== item.tool))
+        || (item.endpointType !== undefined && (typeof item.tool !== 'string' || !isEndpointTypeFor(item.tool, item.endpointType)))) {
         throw new Rejected('所选星的册位身份格式不完整，不能安全修改');
       }
-      return { sessionId: item.sessionId, machine: fullMachine(item.machine)!, ...(typeof item.tool === 'string' ? { tool: item.tool } : {}) };
+      return { sessionId: item.sessionId, machine: fullMachine(item.machine)!, ...(typeof item.tool === 'string' ? { tool: item.tool } : {}),
+        ...(typeof item.endpointType === 'string' ? { endpointType: item.endpointType } : {}) };
     });
   }
 
@@ -170,6 +176,7 @@ export function createSessionMembershipService(options: SessionMembershipOptions
     const ref = request.ref;
     if ((request.op !== 'adopt' && request.op !== 'remove') || !isRecord(ref) || ref.contextId !== contextId
       || typeof ref.providerId !== 'string' || ref.providerId === '' || typeof ref.nativeId !== 'string' || ref.nativeId === ''
+      || (ref.endpointType !== undefined && !isEndpointTypeFor(ref.providerId, ref.endpointType))
       || (ref.referenceKind !== undefined && ref.referenceKind !== 'native')) throw new Rejected('仅可操作本机完整原生会话引用，临时进程引用不能入册或删册');
     const handlers = providers.filter((provider) => provider.providerId === ref.providerId);
     const provider = handlers.length === 1 ? handlers[0] : undefined;
@@ -216,7 +223,8 @@ export function createSessionMembershipService(options: SessionMembershipOptions
         checkAbort(request.signal);
         if (request.op === 'remove') {
           writeIssued = true;
-          const reply = await bounded(requestMemberRemoveExact(target.connection, { sessionId: request.ref.nativeId, machine: target.machine, tool: target.provider.tool }, timeoutMs), timeoutMs, request.signal);
+          const reply = await bounded(requestMemberRemoveExact(target.connection, { sessionId: request.ref.nativeId, machine: target.machine, tool: target.provider.tool,
+            endpointType: request.ref.endpointType }, timeoutMs), timeoutMs, request.signal);
           if (!reply.ok && reply.removed) return { kind: 'uncertain', message: '册位内存已修改，但持久化未确认，请检查所选星并刷新核实，勿自动重试' };
           return reply.ok && reply.removed ? { kind: 'applied', message: '已从所选星精确删除该册位；原生会话不受影响' }
             : { kind: 'rejected', message: '册位身份已改变或目标已不在册，请刷新后重新确认' };
@@ -228,7 +236,9 @@ export function createSessionMembershipService(options: SessionMembershipOptions
         if (status === undefined || !status.online || !status.brokerCap || status.starId !== request.starId || fullMachine(status.machine) !== target.machine) {
           throw new Rejected('聚合器离线或无法核实所选星与本机完整身份，未发送收编请求');
         }
-        const existing = status.members.filter((member) => member.sessionId === request.ref.nativeId);
+        const existing = status.members.filter((member) => request.ref.endpointType === undefined
+          ? member.sessionId === request.ref.nativeId && member.endpointType === undefined
+          : nativeTargetKey({ providerId: member.tool ?? '', nativeId: member.sessionId, endpointType: member.endpointType }) === nativeTargetKey(request.ref));
         if (existing.length > 1 || (existing.length === 1 && existing[0].tool !== target.provider.tool)) {
           throw new Rejected('聚合器中此完整 ID 的工具身份冲突或不明，未发送收编请求');
         }
@@ -237,13 +247,14 @@ export function createSessionMembershipService(options: SessionMembershipOptions
         checkAbort(request.signal);
         writeIssued = true;
         const reply = await bounded(owner.pipe.send({ op: 'attach', sessionId: request.ref.nativeId, tool: target.provider.tool,
+          endpointType: request.ref.endpointType,
           ...(item.name === null || item.name === '' ? {} : { name: item.name }) }), timeoutMs, request.signal);
         if (!reply.ok) return reply.disconnected || reply.unconfirmed ? { kind: 'uncertain', message: '收编请求已发出但未获有效回执，请刷新星册核实，勿自动重试' }
           : { kind: 'rejected', message: '聚合器拒绝收编，请核对原生会话和所选星后重新确认' };
         const deadline = Date.now() + timeoutMs;
         for (;;) {
           const members = await readMembers(target.connection, request.signal, Math.max(1, deadline - Date.now()));
-          const exact = members.filter((member) => member.sessionId === request.ref.nativeId);
+          const exact = members.filter((member) => member.sessionId === request.ref.nativeId && member.tool === target.provider.tool && member.endpointType === request.ref.endpointType);
           if (exact.length === 1 && exact[0].machine === target.machine && exact[0].tool === target.provider.tool) {
             return { kind: 'applied', message: '所选星已确认该完整会话入册' };
           }

@@ -3,7 +3,7 @@ import type { ProviderCapabilities, ReadResult, SessionRef } from '../sessions/m
 
 export type DiscoveryRequest =
   | { op: 'list'; cursor?: string; limit?: number; filter?: SessionFilter }
-  | { op: 'detail'; providerId: string; nativeId: string; referenceKind?: 'native' | 'process' };
+  | { op: 'detail'; providerId: string; nativeId: string; endpointType?: string; referenceKind?: 'native' | 'process' };
 
 export type DiscoveryJson = null | boolean | number | string | DiscoveryJson[] | { [key: string]: DiscoveryJson };
 

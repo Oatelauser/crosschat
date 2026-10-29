@@ -12,7 +12,7 @@ export interface OpenCodeReaderOptions extends OpenCodeOptions {
 }
 
 function session(thread: OpenCodeThread, contextId: string): Session {
-  const ref = { contextId, providerId: 'opencode', nativeId: thread.id };
+  const ref = { contextId, providerId: 'opencode', endpointType: 'shared', nativeId: thread.id };
   return { ref, key: sessionKey(ref), name: thread.name, rawStatus: thread.rawStatus, capabilities, attributes: { ...thread.attributes, cwd: thread.cwd } };
 }
 
@@ -35,6 +35,7 @@ export function createOpenCodeSessionReader(options: OpenCodeReaderOptions = {})
     async list(request) {
       const signal = request.signal ?? options.signal;
       if (signal?.aborted) return cancelledPage(request.contextId, 'opencode', now());
+      if (request.endpointType !== undefined && request.endpointType !== 'shared') return { items: [], nextCursor: null, completeness: 'complete', observedAt: now(), errors: [] };
       try {
         const page = await listOpenCodeThreadPage({ ...options, signal, cursor: request.cursor, limit: request.limit });
         return { items: page.data.map((item) => session(item, request.contextId)), nextCursor: page.nextCursor,
@@ -47,6 +48,7 @@ export function createOpenCodeSessionReader(options: OpenCodeReaderOptions = {})
     async get(request) {
       const signal = request.signal ?? options.signal;
       if (signal?.aborted) return { ...cancelledPage(request.contextId, 'opencode', now()), item: null };
+      if (request.endpointType !== undefined && request.endpointType !== 'shared') return { item: null, completeness: 'complete', observedAt: now(), errors: [] };
       if (request.referenceKind === 'process') return { item: null, completeness: 'complete', observedAt: now(), errors: [] };
       try {
         const item = await getOpenCodeThread(request.nativeId, { ...options, signal });

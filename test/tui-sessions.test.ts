@@ -3,7 +3,6 @@ import type { DiscoveryEndpoint, DiscoveryProvider, DiscoveryResponse, Discovery
 import { sessionKey } from '../src/application/sessions/model.js';
 import { createSessionsResource } from '../src/tui/resources/sessions.js';
 import { createStatusRegistry } from '../src/tui/resources/status.js';
-import { resolveTargetByName } from '../src/resolve.js';
 
 const context = { id: 'local', kind: 'local', label: '本机' };
 const capabilities = { discovery: true, delivery: true, launch: false, diagnostics: false };
@@ -140,24 +139,29 @@ describe('local TUI sessions resource', () => {
     expect(service.execute).not.toHaveBeenCalled();
   });
 
-  it('copies only unambiguous supported full addresses and always provides a distinct full reference', async () => {
-    const uuid = '12345678-1234-1234-1234-123456789abc';
-    const items = [session('claude', 'named', '唯一名称'), session('claude', 'a', '重名'), session('codex', 'b', '重名'), session('claude', 'anonymous'), session('codex', uuid), session('future-tool', 'opaque/123', '未来工具')];
+  it('copies full send commands with explicit recipient types and preserves the separate structured reference', async () => {
+    const items = [
+      { ...session('claude', 'named', '重名'), ref: { contextId: 'local', providerId: 'claude', nativeId: 'named', endpointType: 'cli' } },
+      { ...session('codex', 'same/id', '重名'), ref: { contextId: 'local', providerId: 'codex', nativeId: 'same/id', endpointType: 'desktop' } },
+      session('codex', 'unconfirmed', '已知名字但类型未知'), session('future-tool', 'opaque/123', '未来工具'),
+    ];
     const { resource, adapter } = createSessionsResource({ discovery: endpoint([response(items)]) });
     const page = await read(adapter);
-    expect(page.rows[0].copyValue).toBe('唯一名称');
-    expect(page.rows[4].copyValue).toBe(`codex/${uuid}`);
-    for (const index of [1, 2, 3, 5]) {
+    expect(page.rows[0].copyValue).toBe('crosschat send --to named --tool claude --body "<正文>"');
+    expect(page.rows[1].copyValue).toBe('crosschat send --to same/id --tool codex-desktop --body "<正文>"');
+    for (const index of [2, 3]) {
       expect(page.rows[index].copyValue).toBeUndefined();
       expect(page.rows[index].actionAvailability?.copy).toMatchObject({ enabled: false, reason: expect.any(String), nextStep: expect.any(String) });
-      expect(page.rows[index].copyValues?.ref).toBe(JSON.stringify(items[index].ref, null, 2));
     }
+    for (const [index, row] of page.rows.entries()) expect(row.copyValues?.ref).toBe(JSON.stringify(items[index].ref, null, 2));
+    expect(resource.actions).toContainEqual(expect.objectContaining({ shortcut: 'y', label: '复制发送命令', kind: 'copy' }));
     expect(resource.actions).toContainEqual(expect.objectContaining({ shortcut: 'Y', kind: 'copy', copyKey: 'ref' }));
   });
 
-  it('does not publish a UUID address shadowed by an exact session name or partial discovery', async () => {
-    const uuid = '12345678-1234-1234-1234-123456789abc';
-    const { adapter } = createSessionsResource({ discovery: endpoint([response([session('codex', uuid), session('claude', 'other', `codex/${uuid}`)]), response([session('claude', 'named', '可见名字')], { completeness: 'partial' })]) });
+  it('requires a complete source and never copies a process reference as a send command', async () => {
+    const native = { ...session('claude', 'full'), ref: { contextId: 'local', providerId: 'claude', nativeId: 'full', endpointType: 'cli' } };
+    const process = { ...native, ref: { ...native.ref, referenceKind: 'process' as const } };
+    const { adapter } = createSessionsResource({ discovery: endpoint([response([native], { completeness: 'partial' }), response([process])]) });
     expect((await read(adapter)).rows[0].copyValue).toBeUndefined();
     expect((await read(adapter)).rows[0].copyValue).toBeUndefined();
   });
@@ -169,47 +173,30 @@ describe('local TUI sessions resource', () => {
     expect(page.rows[0].actionAvailability?.copy).toMatchObject({ enabled: false });
   });
 
-  it('does not publish a UUID address shadowed by case-insensitive native name prefixes', async () => {
-    const uuid = '12345678-1234-1234-1234-123456789abc';
-    const name = `CODEX/${uuid}-another-session`;
-    expect(resolveTargetByName(`codex/${uuid}`, [{ sessionId: 'other', name }], [{ id: uuid, name: null }])).toMatchObject({ side: 'claude' });
-    const page = await read(createSessionsResource({ discovery: endpoint([response([session('codex', uuid), session('claude', 'other', name)])]) }).adapter);
-    expect(page.rows[0].copyValue).toBeUndefined();
-    expect(page.rows[0].actionAvailability?.copy).toMatchObject({ enabled: false });
-  });
-
-  it('does not promise a send address outside the existing Codex CLI selection window', async () => {
-    const items = Array.from({ length: 21 }, (_, index) => session('codex', `12345678-1234-1234-1234-${String(index).padStart(12, '0')}`, index === 20 ? '扫描范围之外' : null));
+  it('uses complete typed IDs without depending on the old untyped discovery selection window', async () => {
+    const items = Array.from({ length: 21 }, (_, index) => ({ ...session('codex', `full-${index}`, null), ref: { contextId: 'local', providerId: 'codex', nativeId: `full-${index}`, endpointType: 'cli' } }));
     const page = await read(createSessionsResource({ discovery: endpoint([response(items)]) }).adapter);
     expect(page.rows).toHaveLength(21);
-    expect(page.rows[19].copyValue).toBe(`codex/${items[19].ref.nativeId}`);
-    expect(page.rows[20].copyValue).toBeUndefined();
-    expect(page.rows[20].actionAvailability?.copy).toMatchObject({ enabled: false, reason: expect.any(String) });
+    expect(page.rows[19].copyValue).toBe('crosschat send --to full-19 --tool codex-cli --body "<正文>"');
+    expect(page.rows[20].copyValue).toBe('crosschat send --to full-20 --tool codex-cli --body "<正文>"');
     expect(page.rows[20].copyValues?.ref).toBe(JSON.stringify(items[20].ref, null, 2));
   });
 
-  it('uses a complete Codex UUID when its native name collides with another supported tool', async () => {
-    const uuid = '12345678-1234-1234-1234-123456789abc';
-    const page = await read(createSessionsResource({ discovery: endpoint([response([session('claude', 'other', '同名'), session('codex', uuid, '同名')])]) }).adapter);
-    expect(page.rows[1].copyValue).toBe(`codex/${uuid}`);
-    expect(resolveTargetByName(page.rows[1].copyValue ?? '', [{ sessionId: 'other', name: '同名' }], [{ id: uuid, name: '同名' }])).toMatchObject({ side: 'codex', thread: { id: uuid } });
-  });
-
-  it('copies reserved-looking exact names only as existing local resolver addresses', async () => {
-    const names = ['tcp:star:machine:name', 'ssh:host', 'claude/person', 'codex/person'];
-    const items = names.map((name, index) => session('claude', `native-${index}`, name));
+  it('copies complete native IDs even when names contain route-like text or terminal controls', async () => {
+    const names = ['tcp:star:machine:name', 'ssh:host', 'claude/person', '名字\n\u001b[2J'];
+    const items = names.map((name, index) => ({ ...session('claude', `native-${index}`, name), ref: { contextId: 'local', providerId: 'claude', nativeId: `native-${index}`, endpointType: 'cli' } }));
     const page = await read(createSessionsResource({ discovery: endpoint([response(items)]) }).adapter);
     for (const [index, row] of page.rows.entries()) {
-      expect(row.copyValue).toBe(names[index]);
-      expect(resolveTargetByName(row.copyValue ?? '', items.map((item) => ({ sessionId: item.ref.nativeId, name: item.name ?? undefined })), [])).toMatchObject({ side: 'claude', session: { sessionId: items[index].ref.nativeId } });
+      expect(row.copyValue).toBe(`crosschat send --to native-${index} --tool claude --body "<正文>"`);
     }
   });
 
-  it('does not present terminal control characters in names as a pasteable address', async () => {
-    const page = await read(createSessionsResource({ discovery: endpoint([response([session('claude', 'id', '名字\n\u001b[2J')])]) }).adapter);
+  it('never copies native IDs with terminal controls and keeps their structured reference available', async () => {
+    const item = { ...session('claude', 'id\n\u001b[2J'), ref: { contextId: 'local', providerId: 'claude', nativeId: 'id\n\u001b[2J', endpointType: 'cli' } };
+    const page = await read(createSessionsResource({ discovery: endpoint([response([item])]) }).adapter);
     expect(page.rows[0].copyValue).toBeUndefined();
     expect(page.rows[0].actionAvailability?.copy).toMatchObject({ enabled: false });
-    expect(page.rows[0].copyValues?.ref).toContain('"nativeId": "id"');
+    expect(page.rows[0].copyValues?.ref).toBe(JSON.stringify(item.ref, null, 2));
   });
 
   it('registers read-only native guidance with future-provider extensions and disables unsupported mutations/scope', async () => {

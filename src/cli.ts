@@ -42,6 +42,11 @@ import { fetchRosterFor, runViaTcpStatus } from './serve/via-tcp.js';
 import { DEFAULT_PORT } from './serve/broker.js';
 import { resolveDeliveryMode } from './delivery-mode.js';
 import type { DeliveryMode } from './delivery-mode.js';
+import { parseToolType, TOOL_TYPES } from './tool-types.js';
+import { resolveCallerIdentity } from './identity.js';
+import { probeCallerSource } from './application/caller-source/providers.js';
+import { enrichCallerSource } from './application/caller-source/service.js';
+import { runIdentity } from './commands/identity.js';
 
 const version: string = (
   JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
@@ -53,10 +58,13 @@ const usage = `usage: crosschat <command> [options]
 
 commands:
   tui                       open the interactive terminal interface
-  send --to <name> | --conversation <ref>
+  send --tool <type> (--to <name-or-ID> | --conversation <ref>)
                             send a message to a claude/codex/opencode/dsh session
                             (quote <name> if it contains spaces);
                             options:
+                              --tool <type>        required recipient delivery type
+                                (${TOOL_TYPES.map((tool) => tool.id).join(', ')})
+                                use with --to <name or full ID>, or --conversation
                               --body <text>        message text
                                 (default: read stdin)
                               --delivery queue|steer
@@ -108,6 +116,10 @@ commands:
                             optional JSON list/detail request on stdin
                             (includes unnamed sessions and full IDs;
                             paged, no message delivery or repair)
+  identity                  inspect this native caller's source classification (JSON);
+                            automatic detection first; entry limitations need review
+  identity confirm --tool <self type> --context <generated reference>
+                            save a requested source classification, not a recipient
   dsh-bridge-path           print the packaged DeepSeek Harness bridge path;
                             enable it in the intended native runtime explicitly
   doctor [--json]           environment health check (exits 1 on any ❌)
@@ -256,7 +268,7 @@ commands:
                             (crosschat uses its registered local service)
                             supports --max-body-kb / --max-turn and
                             --connect <星> / --extend-session <旧名> / --rm
-                            target: --to opencode/<full-session-id or title>
+                            target: --to <full-session-id or title> --tool opencode
 
 options:
   --json                    single-line JSON output (send/status/doctor)
@@ -267,7 +279,7 @@ options:
 /** Hand-rolled send arg parsing (no dependency): --to/--conversation/--body/--via/--file/--origin/--max-body-kb/--max-turn take values, --json is a flag. --origin is machine-injected (008) and stays out of usage. Raw values only — numeric validation lives in limits.ts (invalid silently degrades, ticket A). */
 export function parseSendArgs(argv: readonly string[]): SendArgs {
   const args: SendArgs = {};
-  const valueOpts = new Set(['--to', '--conversation', '--body', '--via', '--file', '--origin', '--max-body-kb', '--max-turn', '--delivery']);
+  const valueOpts = new Set(['--tool', '--to', '--conversation', '--body', '--via', '--file', '--origin', '--max-body-kb', '--max-turn', '--delivery']);
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === undefined || !token.startsWith('--')) {
@@ -284,7 +296,8 @@ export function parseSendArgs(argv: readonly string[]): SendArgs {
     if (!valueOpts.has(name)) throw new MultichatError('USAGE', `send: unknown option: ${name}`);
     const value = inline !== undefined ? inline : argv[++i];
     if (value === undefined) throw new MultichatError('USAGE', `send: ${name} requires a value`);
-    if (name === '--to') args.to = value;
+    if (name === '--tool') args.tool = value;
+    else if (name === '--to') args.to = value;
     else if (name === '--conversation') args.conversation = value;
     else if (name === '--via') args.via = value;
     else if (name === '--file') args.fileArg = value;
@@ -294,6 +307,8 @@ export function parseSendArgs(argv: readonly string[]): SendArgs {
     else if (name === '--delivery') args.delivery = resolveDeliveryMode(value);
     else args.bodyArg = value;
   }
+  if (args.tool === undefined) throw new MultichatError('USAGE', 'send requires --tool <recipient type>, including --conversation replies.');
+  if (parseToolType(args.tool) === undefined) throw new MultichatError('USAGE', `Unknown --tool type. Use ${TOOL_TYPES.map((tool) => tool.id).join(', ')}.`);
   return args;
 }
 
@@ -532,11 +547,15 @@ function readStdinText(options: { maxBytes?: number; signal?: AbortSignal } = {}
 function realSendDeps(stdinText: string | undefined): SendDeps {
   return {
     env: process.env,
+    enrichCallerIdentity: (caller) => enrichCallerSource(caller, {
+      directory: join(stateRoot(), 'caller-sources'),
+      probe: (nativeCaller) => probeCallerSource(nativeCaller),
+    }),
     stdinText,
     listClaudeSessions: () => listClaudeSessions(),
-    listCodexThreads: () => listCodexThreads(),
+    listCodexThreads: (options) => listCodexThreads(options),
     listOpenCodeThreads: () => listOpenCodeThreads(),
-    listDshThreads: () => listDshThreads(),
+    listDshThreads: (options) => listDshThreads(options),
     diagnoseCodexTarget: (query) => diagnoseCodexTarget(query),
     deliverClaude: (target, content, options) => deliverToClaudeSession(target, content, options),
     deliverCodex: (threadId, content, options) => deliverToCodexThread(threadId, content, options),
@@ -547,7 +566,7 @@ function realSendDeps(stdinText: string | undefined): SendDeps {
     now: () => Date.now(),
     spawnWatchdog: () => ensureWatchdog(defaultOutboxDir()),
     appendLog: (entry) => appendSendLog(defaultSendLogFile(), entry),
-    confirmReceipt: (threadId, marker) => confirmInRollout(codexHomeDir(), threadId, marker),
+    confirmReceipt: (threadId, marker, endpointType) => confirmInRollout(codexHomeDir(), threadId, marker, {}, endpointType),
     conversationStateFile: defaultConversationsFile(),
     // Federation (008/B1): real transport + machine name for --origin.
     sshExec: (argv, input, timeoutMs) => defaultSshExec(argv, input, timeoutMs),
@@ -576,8 +595,8 @@ function realStatusDeps(): StatusDeps {
     listConversations: () => conversationSummaries(),
     // B22: bounded recheck budget (2 polls × 200ms per unconfirmed row) so the
     // conversations view stays snappy while catching slow rollout flushes.
-    confirmReceipt: (threadId, marker) =>
-      confirmInRollout(codexHomeDir(), threadId, marker, { tries: 2, delayMs: 200 }),
+    confirmReceipt: (threadId, marker, endpointType) =>
+      confirmInRollout(codexHomeDir(), threadId, marker, { tries: 2, delayMs: 200 }, endpointType),
     // B2: tcp forwarder status files live under ~/.crosschat/tcp.
     tcpDir: join(homedir(), '.crosschat', 'tcp'),
     // B2.1：成员机在线表——有 node.json 才拉（broker 机 status-broker.json 新鲜时不会走到）。
@@ -693,6 +712,18 @@ export async function main(argv: string[]): Promise<number> {
       await drainAtEntry();
     }
     return 0;
+  }
+  if (command === 'identity') {
+    if (rest.length === 1 && rest[0] === '--help') { process.stdout.write(usage); return 0; }
+    try {
+      const output = await runIdentity(rest, {
+        directory: join(stateRoot(), 'caller-sources'),
+        resolveCaller: () => resolveCallerIdentity(process.env, listClaudeSessions()),
+        probe: (caller) => probeCallerSource(caller),
+      });
+      process.stdout.write(`${JSON.stringify(output)}\n`);
+      return 0;
+    } catch (error) { return printFailure(error); }
   }
   if (command === 'dsh-bridge-path') {
     if (rest.length === 1 && rest[0] === '--help') { process.stdout.write(usage); return 0; }

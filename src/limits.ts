@@ -73,7 +73,7 @@ export function bodyTooLargeMessage(
   // 本机 /tmp → --via 发对端本地路径。
   const scpDetour =
     '大内容走 scp 旁路：发送方先落盘，scp <文件> <接收方>:/tmp/<文件名>，' +
-    '再 crosschat send --via ssh:<接收方> … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）。';
+    '再 crosschat send --via ssh:<接收方> --tool <收件类型> … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）。';
   if (remote) {
     if (hardCap === 'opencode') {
       return `Body is ${size} bytes; opencode 适配策略上限 1MiB——提额无效（这是一条 --via 跨机来件）。${scpDetour}`;
@@ -95,7 +95,7 @@ export function bodyTooLargeMessage(
     via === undefined
       ? 'Write the content to a file and send the path instead.'
       : via.startsWith('ssh:')
-        ? `跨机大内容（ssh 形态）：先 scp <文件> ${via.slice(4)}:/tmp/<文件名>，再 crosschat send --via ${via} … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）`
+        ? `跨机大内容（ssh 形态）：先 scp <文件> ${via.slice(4)}:/tmp/<文件名>，再 crosschat send --via ${via} --tool <收件类型> … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）`
         : via.startsWith('tcp:')
           ? `跨机大内容（tcp 形态）：改用 --file <路径> 发送文件（自动分块传输，上限 64MiB），正文只发说明或路径。`
           : '该传输形态的大内容通道未定义——ssh 形态支持 scp 旁路（见文档），或压缩/分段后重试。';

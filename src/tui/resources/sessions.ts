@@ -3,7 +3,8 @@ import type { DiscoveryEndpoint, DiscoveryProvider, DiscoverySession } from '../
 import { sessionKey } from '../../application/sessions/model.js';
 import type { Completeness, SourceError } from '../../application/sessions/model.js';
 import { untilAborted } from '../../application/sessions/reading.js';
-import { resolveTargetByName } from '../../resolve.js';
+import { isEndpointTypeFor, toolTypeFor } from '../../tool-types.js';
+import { formatSendCommand } from '../send-command.js';
 import type { MembershipRequest, MembershipTargets, SessionMembershipService } from '../../application/session-membership/index.js';
 import type { TuiAction, TuiActionAvailability, TuiActionRequest, TuiFormField, TuiPage, TuiReadonlyView, TuiResource, TuiResourceAdapter, TuiRow } from '../model.js';
 import { createStatusRegistry } from './status.js';
@@ -73,6 +74,7 @@ const resource: TuiResource = {
     action('remove-member', '删除星册位', 'Ctrl+D', { kind: 'form', mutation: true }),
     action('native-guide', '原生工具指引', 'g', { kind: 'detail', viewId: 'native-guide' }),
     action('read-summary', '读取信息', 'i', { kind: 'detail', viewId: 'read-summary', selectionPolicy: 'none' }),
+    action('copy', '复制发送命令', 'y', { kind: 'copy' }),
     action('copy-ref', '复制完整会话引用', 'Y', { kind: 'copy', copyKey: 'ref' }),
     action('deliveries', '相关投递记录', 'o', { enabled: false, unavailableReason: '相关投递记录尚未接入。', nextStep: '可在原生会话使用 crosschat status 查看已知投递元数据。' }),
     action('logs', '相关日志', 'l', { enabled: false, unavailableReason: '会话相关日志尚未接入。', nextStep: '可在原生终端查看 crosschat 日志。' }),
@@ -102,43 +104,16 @@ function addErrors(target: SourceError[], incoming: readonly SourceError[]): voi
   for (const error of incoming) if (!seen.has(JSON.stringify(error))) { target.push(error); seen.add(JSON.stringify(error)); }
 }
 
-function address(session: DiscoverySession, items: readonly DiscoverySession[], completeness: Completeness): { value?: string; unavailable?: TuiActionAvailability } {
+function address(session: DiscoverySession, items: readonly DiscoverySession[], completeness: Completeness): { value?: string; tool?: string; unavailable?: TuiActionAvailability } {
   if (completeness !== 'complete') return { unavailable: unavailable('来源读取不完整，尚不能确认地址唯一。', '按 r 完整刷新；Y 可复制完整会话引用。') };
   if (session.ref.referenceKind === 'process') return { unavailable: unavailable('进程引用不能作为完整会话地址。', '在原生工具中核对会话身份；Y 可复制临时进程引用。') };
   if (!session.capabilities.delivery) return { unavailable: unavailable('此会话来源未声明投递能力。', '回到原生工具操作；Y 可复制完整会话引用。') };
-  if (!['claude', 'codex', 'opencode', 'dsh'].includes(session.ref.providerId)) return { unavailable: unavailable('此工具尚未声明现有本机发送地址能力。', '回到原生工具操作；Y 可复制完整会话引用。') };
-  const matchesExactTarget = (value: string): boolean => {
-    try {
-      const resolved = resolveTargetByName(value,
-        items.filter((item) => item.ref.providerId === 'claude' && item.ref.referenceKind !== 'process').map((item) => ({ sessionId: item.ref.nativeId, name: item.name ?? undefined })),
-        items.filter((item) => item.ref.providerId === 'codex').map((item) => ({ id: item.ref.nativeId, name: item.name })),
-        items.filter((item) => item.ref.providerId === 'opencode' && item.ref.referenceKind !== 'process').map((item) => ({ id: item.ref.nativeId, name: item.name })),
-        items.filter((item) => item.ref.providerId === 'dsh' && item.ref.referenceKind !== 'process').map((item) => ({ id: item.ref.nativeId, name: item.name })));
-      return resolved.side === session.ref.providerId && (resolved.side === 'claude' ? resolved.session.sessionId : resolved.thread.id) === session.ref.nativeId;
-    } catch { return false; }
-  };
-  if (session.ref.providerId === 'opencode' || session.ref.providerId === 'dsh') {
-    const provider = session.ref.providerId === 'dsh' ? 'Harness' : 'OpenCode';
-    const value = `${session.ref.providerId}/${session.ref.nativeId}`;
-    if (!hasTerminalControls(value) && matchesExactTarget(value)) return { value };
-    return { unavailable: unavailable(`完整 ${provider} ID 地址与名称匹配冲突，或含终端控制字符。`, `在 ${provider} 中核对完整 ID 并处理名称冲突；Y 可复制安全编码的完整会话引用。`) };
-  }
-  // Discovery reads all pages, whereas the existing local send selector sees
-  // only the first 20 Codex entries in source order. Do not widen that contract.
-  if (session.ref.providerId === 'codex' && items.filter((item) => item.ref.providerId === 'codex').findIndex((item) => sessionKey(item.ref) === sessionKey(session.ref)) >= 20) {
-    return { unavailable: unavailable('此会话超出现有本机发送的 Codex 20 条选择范围。', 'Y 可复制完整会话引用；在原生工具核对目标，收编可使用精确会话引用。') };
-  }
-  if (session.name !== null && session.name !== '') {
-    if (hasTerminalControls(session.name)) return { unavailable: unavailable('会话名称包含终端控制字符，不能作为可粘贴地址。', '请在原生工具更名或核对身份；Y 可复制安全编码的完整会话引用。') };
-    if (items.filter((item) => item.name === session.name).length === 1 && matchesExactTarget(session.name)) return { value: session.name };
-  }
-  if (session.ref.providerId === 'codex' && uuid.test(session.ref.nativeId)) {
-    const value = `codex/${session.ref.nativeId}`;
-    if (matchesExactTarget(value)) return { value };
-    return { unavailable: unavailable('完整 ID 地址与现有名称或名称前缀匹配冲突。', '在原生工具核对并处理冲突；Y 可复制完整会话引用。') };
-  }
-  if (session.name) return { unavailable: unavailable('发现同名会话，裸名称地址有歧义。', '在原生工具核对身份并处理重名；Y 可复制完整会话引用。') };
-  return { unavailable: unavailable('此匿名会话没有现有本机寻址支持。', '在原生工具确认身份与名称；Y 可复制完整会话引用。') };
+  const tool = toolTypeFor(session.ref.providerId, session.ref.endpointType);
+  if (tool === undefined) return { unavailable: unavailable('此来源的收件工具类型尚未核实，不能生成完整发送命令。', '核对原生入口后刷新；Y 仍可复制完整会话引用。') };
+  if (hasTerminalControls(session.ref.nativeId)) return { unavailable: unavailable('原生 ID 包含终端控制字符，不能复制为发送命令。', 'Y 可复制安全编码的完整会话引用。') };
+  const duplicates = items.filter((item) => item.ref.providerId === session.ref.providerId && item.ref.nativeId === session.ref.nativeId && item.ref.endpointType === session.ref.endpointType);
+  if (duplicates.length !== 1) return { unavailable: unavailable('同一投递类型存在多个原生 owner，无法确认唯一目标。', '在原生工具核对 owner 后刷新。') };
+  return { tool, value: formatSendCommand({ tool, to: session.ref.nativeId }) };
 }
 
 /** Read-only discovery DTOs become UI data; provider and context execution stays outside the page. */
@@ -183,8 +158,9 @@ export function createSessionsResource(options: SessionsResourceOptions): { reso
         || !('providerId' in ref) || typeof ref.providerId !== 'string' || !ref.providerId
         || !('nativeId' in ref) || typeof ref.nativeId !== 'string' || !ref.nativeId
         || ('referenceKind' in ref && ref.referenceKind !== 'native')
-        || Object.keys(ref).some((key) => !['contextId', 'providerId', 'nativeId', 'referenceKind'].includes(key))) return undefined;
-      const exactRef = { contextId: request.context.id, providerId: ref.providerId, nativeId: ref.nativeId, ...('referenceKind' in ref ? { referenceKind: 'native' as const } : {}) };
+        || ('endpointType' in ref && !isEndpointTypeFor(ref.providerId, ref.endpointType))
+        || Object.keys(ref).some((key) => !['contextId', 'providerId', 'nativeId', 'referenceKind', 'endpointType'].includes(key))) return undefined;
+      const exactRef = { contextId: request.context.id, providerId: ref.providerId, nativeId: ref.nativeId, ...('referenceKind' in ref ? { referenceKind: 'native' as const } : {}), ...('endpointType' in ref && typeof ref.endpointType === 'string' ? { endpointType: ref.endpointType } : {}) };
       if (request.target.id !== sessionKey(exactRef)) return undefined;
       return { op: request.action.id === 'adopt' ? 'adopt' : 'remove', ref: exactRef, starId: request.values.starId ?? '', signal: request.signal };
     } catch { return undefined; }
@@ -201,16 +177,16 @@ export function createSessionsResource(options: SessionsResourceOptions): { reso
       }
       const originalGuide = guides.get(item.ref.providerId)?.(item) ?? { title: `${item.ref.providerId} 原生操作`, fields: [{ label: '下一步', value: `此工具未登记专用操作指引，请回到 ${item.ref.providerId} 原生界面操作。` }] };
       return {
-        id: sessionKey(item.ref), contextId, cells: { name: item.name || '匿名', provider: item.ref.providerId, status: statuses.format(item.ref.providerId, item.rawStatus), id: item.ref.referenceKind === 'process' ? `PID ${item.ref.nativeId}` : item.ref.nativeId, directory: typeof item.attributes.cwd === 'string' ? item.attributes.cwd : '—' },
-        searchText: json(item), facets: { provider: item.ref.providerId, status: rawFacet(item.rawStatus), named: item.name ? 'named' : 'anonymous', scope: 'discovered' },
+        id: sessionKey(item.ref), contextId, cells: { name: item.name || '匿名', provider: toolTypeFor(item.ref.providerId, item.ref.endpointType) ?? item.ref.providerId, status: statuses.format(item.ref.providerId, item.rawStatus), id: item.ref.referenceKind === 'process' ? `PID ${item.ref.nativeId}` : item.ref.nativeId, directory: typeof item.attributes.cwd === 'string' ? item.attributes.cwd : '—' },
+        searchText: json(item), facets: { provider: toolTypeFor(item.ref.providerId, item.ref.endpointType) ?? item.ref.providerId, status: rawFacet(item.rawStatus), named: item.name ? 'named' : 'anonymous', scope: 'discovered' },
         detail: [{ label: '名称', value: item.name || '匿名' }, { label: '原生引用', value: reference }, { label: '原生状态', value: json(item.rawStatus) }, { label: '能力', value: json(item.capabilities) }, { label: '属性', value: json(item.attributes) }, { label: '采样时间', value: new Date(observedAt).toISOString() }],
-        copyValues: { ref: reference }, ...(target.value === undefined ? {} : { copyValue: target.value }),
+        copyValues: { ref: reference, ...(target.value === undefined || target.tool === undefined ? {} : { nativeId: item.ref.nativeId, tool: target.tool }) }, ...(target.value === undefined ? {} : { copyValue: target.value }),
         actionAvailability: rowAvailability,
         actionRoutes: item.ref.referenceKind === 'process' ? undefined : Object.fromEntries([...related].map((id) => [id, { resourceId: id, contextId, query: { sessionRef: reference, ...(id === 'logs' ? { source: 'send-log' } : {}) } }])),
-        detailViews: { 'native-guide': { ...originalGuide, fields: [...originalGuide.fields, { label: '寻址指引', value: target.value === undefined ? `${target.unavailable?.reason ?? '地址不可用'}\n${target.unavailable?.nextStep ?? ''}` : `本机完整地址：${target.value}\n本界面只复制地址，不代表该会话发送消息。` }, { label: '完整会话引用', value: reference }] } },
+        detailViews: { 'native-guide': { ...originalGuide, fields: [...originalGuide.fields, { label: '寻址指引', value: target.value === undefined ? `${target.unavailable?.reason ?? '命令不可用'}\n${target.unavailable?.nextStep ?? ''}` : `发送命令模板：${target.value}\n替换正文后交给agent执行；本界面只复制，不发送消息。` }, { label: '完整会话引用', value: reference }] } },
       };
     });
-    const providerIds = [...new Set([...providers.map((provider) => provider.providerId), ...items.map((item) => item.ref.providerId)])].sort();
+    const providerIds = [...new Set([...providers.map((provider) => provider.providerId), ...items.map((item) => toolTypeFor(item.ref.providerId, item.ref.endpointType) ?? item.ref.providerId)])].sort();
     const stateOptions = new Map<string, string>();
     for (const item of items) if (!stateOptions.has(rawFacet(item.rawStatus))) stateOptions.set(rawFacet(item.rawStatus), statuses.format(item.ref.providerId, item.rawStatus));
     const allErrors = [...errors];

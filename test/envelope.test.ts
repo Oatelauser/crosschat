@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { composeEnvelope, FROM_NAME_MAX_CODEPOINTS } from '../src/envelope.js';
+import { composeEnvelope as compose, FROM_NAME_MAX_CODEPOINTS, type EnvelopeInput } from '../src/envelope.js';
+
+// These formatting fixtures have a verified reply recipient but no source classification.
+const composeEnvelope = (input: EnvelopeInput) => compose({ replyTool: 'claude', ...input });
 
 describe('composeEnvelope', () => {
   it('produces the golden envelope shape', () => {
@@ -11,9 +14,9 @@ describe('composeEnvelope', () => {
       body: '你好，请查收',
     });
     expect(out).toBe(
-      '<cross-session-message from-name="alpha" turn="2">\n' +
+      '<cross-session-message from-name="alpha" turn="2" from-tool="pending">\n' +
         '<crosschat-reply-hint reply-as="workteam">' +
-        '回复请运行: crosschat send --conversation mc1_ABC --body "<你的回复>"（长文/特殊字符走 stdin）</crosschat-reply-hint>\n' +
+        '回复请运行: crosschat send --conversation mc1_ABC --tool claude --body "<你的回复>"（长文/特殊字符走 stdin）</crosschat-reply-hint>\n' +
         '你好，请查收\n' +
         '</cross-session-message>',
     );
@@ -36,7 +39,7 @@ describe('composeEnvelope', () => {
     expect(body).toContain('<\\/cross-session-message');
     expect(body).not.toMatch(/<(\/)?(cross-session-message|multichat-|crosschat-)/);
     // The envelope's own framing is untouched.
-    expect(lines[0]).toBe('<cross-session-message from-name="a" turn="1">');
+    expect(lines[0]).toBe('<cross-session-message from-name="a" turn="1" from-tool="pending">');
     expect(lines.at(-1)).toBe('</cross-session-message>');
   });
 
@@ -44,7 +47,7 @@ describe('composeEnvelope', () => {
     const longName = 'n'.repeat(FROM_NAME_MAX_CODEPOINTS + 1);
     const out = composeEnvelope({ fromName: longName, toName: 'b', turn: 1, ref: 'mc1_R', body: 'x' });
     expect(out).toContain(
-      `from-name="${'n'.repeat(FROM_NAME_MAX_CODEPOINTS)}" turn="1" from-alias="${longName}"`,
+      `from-name="${'n'.repeat(FROM_NAME_MAX_CODEPOINTS)}" turn="1" from-tool="pending" from-alias="${longName}"`,
     );
   });
 
@@ -56,7 +59,7 @@ describe('composeEnvelope', () => {
       ref: 'mc1_R',
       body: 'x',
     });
-    expect(exact).toContain(`from-name="${'好'.repeat(FROM_NAME_MAX_CODEPOINTS)}" turn="1">\n`);
+    expect(exact).toContain(`from-name="${'好'.repeat(FROM_NAME_MAX_CODEPOINTS)}" turn="1" from-tool="pending">\n`);
     expect(exact).not.toContain('from-alias');
     const over = composeEnvelope({
       fromName: '好'.repeat(FROM_NAME_MAX_CODEPOINTS + 1),
@@ -82,14 +85,14 @@ describe('composeEnvelope reply-hint slimming (信封瘦身 A+)', () => {
     expect(out.match(/mc2_R/g)).toHaveLength(1);
     expect(out).not.toContain('conversation=');
     const hint = out.match(/<crosschat-reply-hint[^>]*>([\s\S]*?)<\/crosschat-reply-hint>/)![1]!;
-    expect(hint).toBe('回复请运行: crosschat send --conversation mc2_R --body "<你的回复>"（长文/特殊字符走 stdin）');
+    expect(hint).toBe('回复请运行: crosschat send --conversation mc2_R --tool claude --body "<你的回复>"（长文/特殊字符走 stdin）');
   });
 
   it('never renders --via: single-machine, ssh-origin and tcp-origin sends share one command', () => {
     for (const fromName of ['a', 'claude/boss@build01', 'claude/boss@abcd1234']) {
       const out = composeEnvelope({ fromName, toName: 'b', turn: 1, ref: 'mc2_R', body: 'x' });
       expect(out).not.toContain('--via');
-      expect(out).toContain('crosschat send --conversation mc2_R --body "<你的回复>"');
+      expect(out).toContain('crosschat send --conversation mc2_R --tool claude --body "<你的回复>"');
     }
   });
 });
@@ -99,14 +102,14 @@ describe('composeEnvelope limit teaching + turn budget (票A)', () => {
     const out = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc1_R', body: 'x' });
     expect(out).not.toContain('新话题');
     expect(out).not.toContain('16KiB');
-    expect(out).not.toContain('--to');
+    expect(out).not.toMatch(/--to(?:\s|$)/);
   });
 
   it('keeps multi-line long bodies verbatim between the hint and the closing tag', () => {
     const long = Array.from({ length: 50 }, (_, i) => `line ${i + 1} ${'z'.repeat(100)}`).join('\n');
     const out = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc1_R', body: long });
     const lines = out.split('\n');
-    expect(lines[0]).toBe('<cross-session-message from-name="a" turn="1">');
+    expect(lines[0]).toBe('<cross-session-message from-name="a" turn="1" from-tool="pending">');
     expect(lines.at(-1)).toBe('</cross-session-message>');
     expect(lines.slice(2, -1).join('\n')).toBe(long);
   });
@@ -119,13 +122,13 @@ describe('composeEnvelope limit teaching + turn budget (票A)', () => {
 
   it('merges the budget into turn (13/40) when set; bare number when not', () => {
     const withBudget = composeEnvelope({ fromName: 'a', toName: 'b', turn: 13, ref: 'mc1_R', body: 'x', turnBudget: 40 });
-    expect(withBudget).toContain('from-name="a" turn="13/40">');
+    expect(withBudget).toContain('from-name="a" turn="13/40" from-tool="pending">');
     expect(withBudget).not.toContain('budget='); // 独立属性形态已废弃（修订三）
     const without = composeEnvelope({ fromName: 'a', toName: 'b', turn: 13, ref: 'mc1_R', body: 'x' });
-    expect(without).toContain('from-name="a" turn="13">');
+    expect(without).toContain('from-name="a" turn="13" from-tool="pending">');
     expect(without).not.toContain('budget');
     const over = composeEnvelope({ fromName: 'a', toName: 'b', turn: 41, ref: 'mc1_R', body: 'x', turnBudget: 40 });
-    expect(over).toContain('turn="41/40">'); // 软提醒不硬拦：超预算照发照显
+    expect(over).toContain('turn="41/40" from-tool="pending">'); // 软提醒不硬拦：超预算照发照显
   });
 });
 
@@ -133,9 +136,9 @@ describe('composeEnvelope short handle (F2 会话短柄)', () => {
   it('carries the two-char handle in the hint and drops the full ref entirely', () => {
     const out = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc2_VERYLONGREF', body: 'x', handle: 'c3' });
     expect(out).toBe(
-      '<cross-session-message from-name="a" turn="1">\n' +
+      '<cross-session-message from-name="a" turn="1" from-tool="pending">\n' +
         '<crosschat-reply-hint reply-as="b">' +
-        '回复请运行: crosschat send --conversation c3 --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>\n' +
+        '回复请运行: crosschat send --conversation c3 --tool claude --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>\n' +
         'x\n' +
         '</cross-session-message>',
     );
@@ -144,17 +147,17 @@ describe('composeEnvelope short handle (F2 会话短柄)', () => {
 
   it('falls back to the full ref when no handle is given (异常路径保底不断)', () => {
     const out = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc1_ABC', body: 'x' });
-    expect(out).toContain('回复请运行: crosschat send --conversation mc1_ABC --body "<你的回复>"');
+    expect(out).toContain('回复请运行: crosschat send --conversation mc1_ABC --tool claude --body "<你的回复>"');
   });
 });
 
 describe('composeEnvelope from-machine（F1 跨机坐标，三态精确串）', () => {
-  it('renders from-machine after turn when a true machine name is given', () => {
+  it('renders from-machine after source type when a true machine name is given', () => {
     const out = composeEnvelope({ fromName: 'alpha', toName: 'workteam', turn: 2, ref: 'mc1_ABC', body: 'hi', fromMachine: 'win-dev' });
     expect(out).toBe(
-      '<cross-session-message from-name="alpha" turn="2" from-machine="win-dev">\n' +
+      '<cross-session-message from-name="alpha" turn="2" from-tool="pending" from-machine="win-dev">\n' +
         '<crosschat-reply-hint reply-as="workteam">' +
-        '回复请运行: crosschat send --conversation mc1_ABC --body "<你的回复>"（长文/特殊字符走 stdin）</crosschat-reply-hint>\n' +
+        '回复请运行: crosschat send --conversation mc1_ABC --tool claude --body "<你的回复>"（长文/特殊字符走 stdin）</crosschat-reply-hint>\n' +
         'hi\n' +
         '</cross-session-message>',
     );
@@ -162,14 +165,14 @@ describe('composeEnvelope from-machine（F1 跨机坐标，三态精确串）', 
 
   it('omits the attribute entirely for single-machine sends (undefined)', () => {
     const out = composeEnvelope({ fromName: 'alpha', toName: 'b', turn: 1, ref: 'mc1_R', body: 'x' });
-    expect(out).toContain('from-name="alpha" turn="1">\n');
+    expect(out).toContain('from-name="alpha" turn="1" from-tool="pending">\n');
     expect(out).not.toContain('from-machine');
   });
 
   it('coexists with turn budget and alias, and escapes attribute metacharacters', () => {
     const longName = 'm'.repeat(70);
     const out = composeEnvelope({ fromName: longName, toName: 'b', turn: 3, ref: 'mc1_R', body: 'x', turnBudget: 40, fromMachine: 'win"dev&1' });
-    expect(out).toContain(`turn="3/40" from-machine="win&quot;dev&amp;1" from-alias="${longName}">`);
+    expect(out).toContain(`turn="3/40" from-tool="pending" from-machine="win&quot;dev&amp;1" from-alias="${longName}">`);
   });
 });
 
@@ -195,7 +198,7 @@ describe('composeEnvelope 管道括注 + 正向坐标（024 方案5/方案3 + 03
     }
   });
 
-  it('renders from-addr (正向三段坐标 tcp:<星>:<机器>:<工具>/<会话>) after from-machine', () => {
+  it('renders the pure tcp:<star>:<machine>:<nativeId> from-addr after from-machine', () => {
     const out = composeEnvelope({
       fromName: 'claude/bob',
       toName: 'b',
@@ -203,9 +206,9 @@ describe('composeEnvelope 管道括注 + 正向坐标（024 方案5/方案3 + 03
       ref: 'mc2_R',
       body: 'x',
       fromMachine: 'win-dev',
-      fromAddr: 'tcp:mystar:win-dev:claude/bob',
+      fromAddr: 'tcp:mystar:win-dev:native-bob-id',
     });
-    expect(out).toContain('from-machine="win-dev" from-addr="tcp:mystar:win-dev:claude/bob">');
+    expect(out).toContain('from-machine="win-dev" from-addr="tcp:mystar:win-dev:native-bob-id">');
     // 属性元字符照常转义（星/机器/会话名都进属性值）
     const esc = composeEnvelope({ fromName: 'a', toName: 'b', turn: 1, ref: 'mc1_R', body: 'x', fromAddr: 'tcp:s:win"dev&1' });
     expect(esc).toContain('from-addr="tcp:s:win&quot;dev&amp;1"');

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { replySendArgs } from '../test/helpers/compat-reply.mjs';
 import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
@@ -74,13 +75,12 @@ function respond(body) {
   }
   if (text.includes(`${marker}begin-roundtrip`) && !senderToolEmitted) {
     senderToolEmitted = true;
-    return shell(crosschatShell(['send', '--to', `opencode/${sessions.receiver.id}`, '--body', `${marker}roundtrip-request`, '--json']));
+    return shell(crosschatShell(['send', '--tool', 'opencode', '--to', sessions.receiver.id, '--body', `${marker}roundtrip-request`, '--json']));
   }
   if (text.includes(`${marker}roundtrip-request`) && !text.includes(`${marker}roundtrip-reply`) && !replyToolEmitted) {
-    const reference = text.match(/--conversation\s+(\S+)/)?.[1];
-    assert.ok(reference, 'Incoming envelope must teach its native conversation reply route');
+    const reply = replySendArgs(text, { tool: 'opencode', requestBody: `${marker}roundtrip-request`, body: `${marker}roundtrip-reply` });
     replyToolEmitted = true;
-    return shell(crosschatShell(['send', '--conversation', reference, '--body', `${marker}roundtrip-reply`, '--json']));
+    return shell(crosschatShell(reply));
   }
   return textStream(scriptedAcknowledgement(body, marker));
 }
@@ -223,7 +223,7 @@ function completedShellRefs(transcript) {
   })).filter(Boolean);
 }
 async function sendExact(kind, body, extra = []) {
-  const receipt = sent(await fixture.cli(['send', '--to', `opencode/${sessions[kind].id}`, '--body', body, ...extra, '--json']));
+  const receipt = sent(await fixture.cli(['send', '--tool', 'opencode', '--to', sessions[kind].id, '--body', body, ...extra, '--json']));
   assert.ok(receipt.to.includes(sessions[kind].id), 'Receipt must preserve the full native target ID');
   return receipt;
 }
@@ -390,7 +390,7 @@ try {
     return { restart, originalId, receipt, proof, evidence: await acknowledgedDelivery('idle', `${marker}after-desktop-reopen`, 'desktop-reopened') };
   });
   await check('missing-target-does-not-create-session', 'contract', 'compatibility', async () => {
-    const result = await fixture.cli(['send', '--to', 'opencode/crosschat-desktop-fixture-does-not-exist', '--body', 'must not create a replacement native session', '--json']);
+    const result = await fixture.cli(['send', '--tool', 'opencode', '--to', 'crosschat-desktop-fixture-does-not-exist', '--body', 'must not create a replacement native session', '--json']);
     assert.notEqual(result.code, 0);
     assert.equal(result.timedOut, false);
     const listed = await fixture.api('/api/session');

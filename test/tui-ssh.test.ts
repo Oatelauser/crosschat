@@ -36,17 +36,13 @@ describe('SSH resource presentation', () => {
     expect(page.routeChoices?.aliases.options).toContainEqual(expect.objectContaining({ value: 'ssh:fixture', route: { resourceId: 'sessions', contextId: 'ssh:fixture' } }));
   });
 
-  it('copies a verified existing SSH addressing command, while ambiguous and shell-sensitive targets remain unavailable', async () => {
+  it('copies SSH send templates with the complete native ID and explicit tool even when names are ambiguous', async () => {
     const ssh = application();
     const names = ['safe-name', 'same', 'same', 'name$(unsafe)', 'two words'];
-    const items: DiscoverySession[] = names.map((name, index) => ({ ref: { contextId: context.id, providerId: 'claude', nativeId: `full-${index}` }, name, rawStatus: 'idle', capabilities, attributes: {} }));
+    const items: DiscoverySession[] = names.map((name, index) => ({ ref: { contextId: context.id, providerId: 'claude', nativeId: `full-${index}`, endpointType: 'cli' }, name, rawStatus: 'idle', capabilities, attributes: {} }));
     ssh.discovery.execute.mockResolvedValueOnce({ op: 'list', providers: [{ providerId: 'claude', capabilities }], page: { items, nextCursor: null, completeness: 'complete', errors: [], observedAt: 0 } });
     const page = await createSshSessionsResource({ ssh }).adapter.read({ context, signal: signal() });
-    expect(page.rows[0].copyValue).toBe('crosschat send --via ssh:fixture --to safe-name');
-    for (const row of page.rows.slice(1)) {
-      expect(row.copyValue).toBeUndefined();
-      expect(row.actionAvailability?.copy?.enabled).toBe(false);
-    }
+    for (const [index, row] of page.rows.entries()) expect(row.copyValue).toBe(`crosschat send --via ssh:fixture --to full-${index} --tool claude --body "<正文>"`);
   });
 
   it('checks only the selected SSH context on explicit check route and preserves scoped failure guidance', async () => {

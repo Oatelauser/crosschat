@@ -30,6 +30,7 @@ export interface CodexThreadState {
 
 export interface CodexThreadSummary {
   id: string;
+  endpointType?: string;
   name: string | null;
   status: CodexThreadStatus;
 }
@@ -47,6 +48,7 @@ export interface CodexThreadPageOptions {
 
 export interface CodexRawThreadSummary {
   id: string;
+  endpointType?: string;
   name: string | null;
   rawStatus: unknown;
   attributes: Readonly<Record<string, unknown>>;
@@ -180,7 +182,7 @@ export function createCodexSession(proxy: CodexProxySession, requestTimeoutMs?: 
         || (result.thread.name !== null && result.thread.name !== undefined && typeof result.thread.name !== 'string')) {
         throw protocolError('thread/read response missing matching thread metadata.');
       }
-      return { id: threadId, name: typeof result.thread.name === 'string' ? result.thread.name : null,
+      return { id: threadId, endpointType: 'cli', name: typeof result.thread.name === 'string' ? result.thread.name : null,
         status: normalizeThreadStatus(result.thread.status) };
     },
     async renameThread(threadId: string, name: string): Promise<void> {
@@ -208,6 +210,7 @@ export function createCodexSession(proxy: CodexProxySession, requestTimeoutMs?: 
         }
         return {
           id: raw.id,
+          endpointType: 'cli',
           name: typeof raw.name === 'string' ? raw.name : null,
           status: normalizeThreadStatus(raw.status),
         };
@@ -233,6 +236,7 @@ export function createCodexSession(proxy: CodexProxySession, requestTimeoutMs?: 
           if (!isRecord(raw) || typeof raw.id !== 'string') throw protocolError('thread/list item missing id.');
           return {
             id: raw.id,
+            endpointType: 'cli',
             name: typeof raw.name === 'string' ? raw.name : null,
             rawStatus: raw.status,
             attributes: { cwd: raw.cwd, path: raw.path, createdAt: raw.createdAt, updatedAt: raw.updatedAt, source: raw.source, originator: raw.originator },

@@ -16,7 +16,7 @@ import { main, parseStatusArgs } from '../src/cli.js';
 let output: string[];
 beforeEach(() => {
   mocks.home = mkdtempSync(join(tmpdir(), 'crosschat-dsh-cli-'));
-  mocks.list.mockReset().mockResolvedValue([{ id: 'native-session', name: 'Worker', cwd: '', rawStatus: { type: 'idle' }, attributes: {} }]);
+  mocks.list.mockReset().mockResolvedValue([{ id: 'native-session', endpointType: 'host', name: 'Worker', cwd: '', rawStatus: { type: 'idle' }, attributes: {} }]);
   mocks.deliver.mockReset().mockResolvedValue({ status: 'accepted', messageId: 'message-one', queued: false });
   output = [];
   vi.spyOn(process.stdout, 'write').mockImplementation((value) => { output.push(String(value)); return true; });
@@ -39,8 +39,8 @@ describe('DeepSeek Harness CLI composition', () => {
   });
 
   it('connects real send dependencies to Harness delivery with an explicit mode', async () => {
-    expect(await main(['send', '--to', 'dsh/native-session', '--delivery', 'steer', '--body', 'hello'])).toBe(0);
-    expect(mocks.deliver).toHaveBeenCalledWith('native-session', expect.stringContaining('hello'), { mode: 'steer' });
+    expect(await main(['send', '--to', 'native-session', '--tool', 'dsh', '--delivery', 'steer', '--body', 'hello'])).toBe(0);
+    expect(mocks.deliver).toHaveBeenCalledWith('native-session', expect.stringContaining('hello'), { mode: 'steer', endpointType: 'host' });
   });
 
   it('prints the packaged bridge path without reading native state or writing configuration', async () => {

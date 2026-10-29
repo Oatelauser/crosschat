@@ -17,6 +17,7 @@ export interface StarSnapshotMember {
   machine: string;
   name?: string;
   tool?: string;
+  endpointType?: string;
   machineName?: string;
   online: boolean;
   extendsName?: string;
@@ -49,6 +50,7 @@ export function buildStarSnapshot(star: StarRecord, options: { role: StarSnapsho
   });
   const members = star.roster.map((member): StarSnapshotMember => ({ sessionId: member.sessionId, machine: normalizeMid(member.machine), online: member.online === true,
     ...(member.name === undefined ? {} : { name: member.name }), ...(member.tool === undefined ? {} : { tool: member.tool }),
+    ...(member.endpointType === undefined ? {} : { endpointType: member.endpointType }),
     ...(member.machineName === undefined ? {} : { machineName: member.machineName }), ...(member.extendsName === undefined ? {} : { extendsName: member.extendsName }),
     ...(member.extendsMachine === undefined ? {} : { extendsMachine: member.extendsMachine }), ...(member.temporary === undefined ? {} : { temporary: member.temporary }) }));
   return { starId: star.starId, ...(star.name === undefined ? {} : { name: star.name }), revision: starRevision(star), role: options.role,

@@ -16,6 +16,7 @@ import type { ClaudeRegistryScan } from './claude/registry.js';
 import type { SendArgs, SendDeps, SendResult } from './application/send/types.js';
 import { resolveDeliveryMode } from './delivery-mode.js';
 import { formatSendResult } from './application/send/format.js';
+import { parseToolType, toolTypeFor } from './tool-types.js';
 
 /**
  * Federation v1 (ticket 008, batch B1): `--via ssh:<host>` turns the local
@@ -66,6 +67,9 @@ export function parseViaValue(value: string): { transport: 'ssh'; host: string }
 
 /** Values that will become part of the remote command line (design §2 whitelist). */
 export function validateRemoteFlagValues(args: SendArgs): void {
+  if (args.tool === undefined || parseToolType(args.tool) === undefined) {
+    throw new MultichatError('USAGE', `跨机 --tool 值非法: ${args.tool}`);
+  }
   if (args.to !== undefined) {
     // No whitespace, no cmd/PowerShell metachars, no leading dash. Names with
     // spaces stay single-machine; cross-machine addressing uses id8/ref.
@@ -83,6 +87,7 @@ export function validateRemoteFlagValues(args: SendArgs): void {
 
 /**
  * `<p>/<full id>[/<display name>]@<hostname>[:<mid-b64u>]`, base64url-whole.
+ * Typed senders use `tool:<registered selector>/<encoded id>[/<encoded name>]`.
  * The FULL id is what makes the origin endpoint routable in refs (B2.1);
  * the display name is optional and may contain spaces/unicode/@/'/' (F1 —
  * never parsed beyond its slot). The optional mid (B10 machine-id) rides
@@ -90,8 +95,14 @@ export function validateRemoteFlagValues(args: SendArgs): void {
  * hostnames never contain ':' so the tail split is unambiguous.
  */
 export function encodeOrigin(identity: CallerIdentity, host: string, mid?: string, via?: 'ssh' | 'tcp'): string {
+  const tool = identity.p === 'human' || identity.endpointType === undefined ? undefined : toolTypeFor(identity.p, identity.endpointType);
+  if (identity.p !== 'human' && identity.endpointType !== undefined && tool === undefined) {
+    throw new MultichatError('USAGE', '--origin 端点工具类型未注册');
+  }
   const who =
-    identity.p === 'claude'
+    identity.p !== 'human' && tool !== undefined
+      ? `tool:${tool}/${encodeURIComponent(identity.id)}${identity.p === 'claude' && identity.name !== undefined ? `/${encodeURIComponent(identity.name)}` : ''}`
+      : identity.p === 'claude'
       ? identity.name === undefined
         ? `claude/${identity.id}`
         : `claude/${identity.id}/${identity.name}`
@@ -150,6 +161,30 @@ export function decodeOriginIdentity(encoded: string): OriginIdentity {
   const p = head.slice(0, slash);
   const rest = head.slice(slash + 1);
   const midField = mid === undefined ? {} : { mid };
+  if (p.startsWith('tool:')) {
+    const tool = parseToolType(p.slice(5));
+    if (tool === undefined) {
+      throw new MultichatError('USAGE', '--origin 端点工具类型未注册');
+    }
+    const parts = rest.split('/');
+    let id: string;
+    let name: string | undefined;
+    try {
+      id = decodeURIComponent(parts[0]!);
+      name = parts[1] === undefined ? undefined : decodeURIComponent(parts[1]);
+    } catch {
+      throw new MultichatError('USAGE', '--origin 端点身份编码非法');
+    }
+    if (id === '' || name === '' || parts.length > 2 || (name !== undefined && tool.providerId !== 'claude')) {
+      throw new MultichatError('USAGE', '--origin 端点身份格式非法');
+    }
+    const providerId = tool.providerId;
+    if (providerId !== 'claude' && providerId !== 'codex' && providerId !== 'opencode' && providerId !== 'dsh') {
+      throw new MultichatError('USAGE', '--origin 端点工具类型未注册');
+    }
+    return { p: providerId, id, endpointType: tool.endpointType, host, ...midField, ...viaField,
+      ...(name === undefined ? {} : { name }) };
+  }
   if (p === 'opencode') {
     let id: string;
     try {
@@ -197,6 +232,7 @@ export function buildSshArgv(host: string, args: SendArgs, originB64: string): s
     'crosschat',
     'send',
     ...target,
+    ...(args.tool === undefined ? [] : ['--tool', args.tool]),
     ...(args.delivery === undefined ? [] : ['--delivery', resolveDeliveryMode(args.delivery)]),
     '--json',
     '--origin',
@@ -251,7 +287,8 @@ export async function sendViaSsh(args: SendArgs, body: string, deps: SendDeps): 
   validateRemoteFlagValues(args);
 
   const scan: ClaudeRegistryScan = deps.listClaudeSessions();
-  const caller = resolveCallerIdentity(deps.env, scan);
+  const nativeCaller = resolveCallerIdentity(deps.env, scan);
+  const caller = deps.enrichCallerIdentity === undefined ? nativeCaller : await deps.enrichCallerIdentity(nativeCaller);
   const origin = encodeOrigin(caller, deps.hostname?.() ?? osHostname(), deps.machineId?.());
   const argv = buildSshArgv(host, args, origin);
   const envTimeout = Number(deps.env.CROSSCHAT_SSH_TIMEOUT_MS);

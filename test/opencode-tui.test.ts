@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 const context = { id: 'local', kind: 'local', label: '本机' };
 const capabilities = { discovery: true, delivery: true, launch: false, diagnostics: false };
 function session(id: string, name: string | null = null, providerId = 'opencode'): DiscoverySession {
-  return { ref: { contextId: 'local', providerId, nativeId: id }, name, rawStatus: { type: 'inactive' }, capabilities, attributes: { cwd: '/isolated/project' } };
+  return { ref: { contextId: 'local', providerId, nativeId: id, endpointType: providerId === 'opencode' ? 'shared' : 'cli' }, name, rawStatus: { type: 'inactive' }, capabilities, attributes: { cwd: '/isolated/project' } };
 }
 function discovery(items: DiscoverySession[], completeness: 'complete' | 'partial' = 'complete'): DiscoveryEndpoint {
   const response: DiscoveryResponse = { op: 'list', providers: [...new Set(items.map((item) => item.ref.providerId))].map((providerId) => ({ providerId, capabilities })), page: { items, completeness, nextCursor: null, errors: [], observedAt: 123 } };
@@ -20,11 +20,15 @@ function discovery(items: DiscoverySession[], completeness: 'complete' | 'partia
 }
 
 describe('OpenCode TUI provider integration', () => {
-  it('copies provider-qualified full native IDs for named and anonymous sessions', async () => {
+  it('copies full send commands with native IDs and explicit tools for named and anonymous sessions', async () => {
     const items = [session('ses_anonymous'), session('ses_named', '共享名'), session('other', '共享名', 'claude')];
     const { adapter } = createSessionsResource({ discovery: discovery(items) });
     const page = await adapter.read({ context, signal: new AbortController().signal });
-    expect(page.rows.slice(0, 2).map((row) => row.copyValue)).toEqual(['opencode/ses_anonymous', 'opencode/ses_named']);
+    expect(page.rows.slice(0, 2).map((row) => row.copyValue)).toEqual([
+      'crosschat send --to ses_anonymous --tool opencode --body "<正文>"',
+      'crosschat send --to ses_named --tool opencode --body "<正文>"',
+    ]);
+    expect(page.rows.slice(0, 2).map((row) => row.copyValues?.nativeId)).toEqual(['ses_anonymous', 'ses_named']);
     expect(page.rows[0].copyValues?.ref).toBe(JSON.stringify(items[0].ref, null, 2));
     expect(page.filters?.find((filter) => filter.id === 'provider')?.options).toContainEqual(expect.objectContaining({ value: 'opencode' }));
   });
@@ -39,16 +43,17 @@ describe('OpenCode TUI provider integration', () => {
   it('keeps full native ID addresses precise when another OpenCode session uses that ID as a name', async () => {
     const { adapter } = createSessionsResource({ discovery: discovery([session('ses_exact'), session('ses_other', 'ses_exact')]) });
     const page = await adapter.read({ context, signal: new AbortController().signal });
-    expect(page.rows[0].copyValue).toBe('opencode/ses_exact');
-    expect(page.rows[1].copyValue).toBe('opencode/ses_other');
+    expect(page.rows[0].copyValue).toBe('crosschat send --to ses_exact --tool opencode --body "<正文>"');
+    expect(page.rows[1].copyValue).toBe('crosschat send --to ses_other --tool opencode --body "<正文>"');
   });
 
-  it('does not offer legacy names or UUIDs that now resolve to an OpenCode session', async () => {
+  it('copies exact IDs without interpreting another session name as a tool qualifier', async () => {
     const uuid = '12345678-1234-1234-1234-123456789abc';
     const items = [session(uuid, null, 'codex'), session('ses_target', `codex/${uuid}`), session('claude-session', 'opencode/ses_target', 'claude')];
     const page = await createSessionsResource({ discovery: discovery(items) }).adapter.read({ context, signal: new AbortController().signal });
-    expect(page.rows[0].copyValue).toBeUndefined();
-    expect(page.rows[2].copyValue).toBeUndefined();
+    expect(page.rows[0].copyValue).toBe(`crosschat send --to ${uuid} --tool codex-cli --body "<正文>"`);
+    expect(page.rows[2].copyValue).toBe('crosschat send --to claude-session --tool claude --body "<正文>"');
+    expect(page.rows.map((row) => row.copyValues?.nativeId)).toEqual([uuid, 'ses_target', 'claude-session']);
   });
 
   it('keeps process-only, readonly, partial and terminal-control IDs out of pasteable addresses', async () => {

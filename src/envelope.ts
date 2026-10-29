@@ -1,3 +1,5 @@
+import { parseToolType } from './tool-types.js';
+
 /**
  * Broker-owned message envelope (tickets 003/004): structural provenance
  * framing plus an inline reply tutorial, so the protocol teaches itself
@@ -21,6 +23,10 @@ const RESERVED_TAG_PATTERN = /<(?=\/?(?:cross-session-message|multichat-[a-z0-9-
 export interface EnvelopeInput {
   /** Sender display name (claude session name, codex/<id8>, or "human"). */
   fromName: string;
+  /** Current sender classification; absent means the native identity is known but its entry type is pending. */
+  fromTool?: string;
+  /** Confirmed reply recipient type. A fixed ref may supply it while current fromTool remains pending. */
+  replyTool?: string;
   /** Recipient display name, shown as reply-as. */
   toName: string;
   /** Turn number of this message (>= 1). */
@@ -41,7 +47,7 @@ export interface EnvelopeInput {
    */
   handle?: string;
   /**
-   * 024 方案3：正向三段坐标 tcp:<星>:<机器>:<工具>/<会话>（human 无会话段，
+   * 正向坐标 tcp:<星>:<机器>:<完整会话ID>，类型由独立from-tool承载（human无会话段，
    * 降为机器级 tcp:<星>:<机器>）——tcp 跨机投递时与 from-machine 同现，收件
    * 方一眼看清对端在哪台机哪个形态。星段是本腿经由星：022 多星下任一可达星
    * 皆可为发起坐标，此值不暗示唯一。ssh（无星概念）与单机/无名缺省不出现。
@@ -66,6 +72,8 @@ export function composeEnvelope(input: EnvelopeInput): string {
   // 轮次预算合并进 turn 属性（turn="13/40"，斜杠后为预算轮数）——软提醒不
   // 硬拦（41/40 照发照显），未设预算时 turn 保持纯数字（字节零回归锚点）。
   const turnAttr = input.turnBudget === undefined ? `${input.turn}` : `${input.turn}/${input.turnBudget}`;
+  const fromTool = parseToolType(input.fromTool ?? '')?.id ?? 'pending';
+  const replyTool = parseToolType(input.replyTool ?? input.fromTool ?? '')?.id;
   // F1：from-machine 只在跨机投递且有真名时出现（无名瞬态发送方整体省略）。
   const machineAttr = input.fromMachine === undefined ? '' : ` from-machine="${escapeAttr(input.fromMachine)}"`;
   // 024 方案3：正向坐标属性与 from-machine 同现（坐标含星/会话，机器名单独
@@ -87,10 +95,13 @@ export function composeEnvelope(input: EnvelopeInput): string {
     input.turn === 1
       ? '（长正文/含敏感字符可省 --body 改管道喂 stdin）'
       : '（长文/特殊字符走 stdin）';
+  const replyHint = replyTool === undefined
+    ? `回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 ${escapeAttr(conversationArg)}；核实目标类型后使用该引用回复。`
+    : `回复请运行: crosschat send --conversation ${conversationArg} --tool ${replyTool} --body "<你的回复>"${pipeTeaching}`;
   return (
-    `<cross-session-message from-name="${escapeAttr(fromName)}" turn="${turnAttr}"${machineAttr}${addrAttr}${aliasAttr}>\n` +
+    `<cross-session-message from-name="${escapeAttr(fromName)}" turn="${turnAttr}" from-tool="${fromTool}"${machineAttr}${addrAttr}${aliasAttr}>\n` +
     `<crosschat-reply-hint reply-as="${escapeAttr(input.toName)}">` +
-    `回复请运行: crosschat send --conversation ${conversationArg} --body "<你的回复>"${pipeTeaching}</crosschat-reply-hint>\n` +
+    `${replyHint}</crosschat-reply-hint>\n` +
     `${body}\n` +
     `</cross-session-message>`
   );

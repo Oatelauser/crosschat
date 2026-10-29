@@ -21,7 +21,7 @@ describe('name-miss diagnostic classification', () => {
       code: 'CODEX_DESKTOP_OWNER_UNAVAILABLE', message: 'Saved target: stage=owner code=CODEX_DESKTOP_OWNER_UNAVAILABLE; CLI未复核。',
       candidates: [{ id: 'native', name: 'worker', status: 'owner-missing' as const, failure: { stage: 'owner' as const, code: 'CODEX_DESKTOP_OWNER_UNAVAILABLE' } }], errors: [] };
     const diagnose = vi.fn(async () => diagnosis);
-    await expect(sendMessage({ to: 'worker', bodyArg: 'input' }, { ...base, diagnoseCodexTarget: diagnose })).rejects.toMatchObject({ code: diagnosis.code, message: diagnosis.message, diagnosis });
+    await expect(sendMessage({ to: 'worker', tool: 'codex-desktop', bodyArg: 'input' }, { ...base, diagnoseCodexTarget: diagnose })).rejects.toMatchObject({ code: diagnosis.code, message: diagnosis.message, diagnosis });
     expect(diagnose).toHaveBeenCalledWith('worker');
     expect(base.deliverCodex).not.toHaveBeenCalled();
     expect(base.deliverClaude).not.toHaveBeenCalled();
@@ -29,14 +29,14 @@ describe('name-miss diagnostic classification', () => {
 
   it('keeps true NAME_NOT_FOUND after a complete diagnostic miss', async () => {
     const diagnose = vi.fn(async () => ({ kind: 'not-found' as const, scope: 'desktop' as const, cliStatus: 'not-checked' as const, candidates: [], errors: [] }));
-    await expect(sendMessage({ to: 'absent', bodyArg: 'input' }, { ...deps(), diagnoseCodexTarget: diagnose })).rejects.toMatchObject({ code: 'NAME_NOT_FOUND' });
+    await expect(sendMessage({ to: 'absent', tool: 'codex-desktop', bodyArg: 'input' }, { ...deps(), diagnoseCodexTarget: diagnose })).rejects.toMatchObject({ code: 'NAME_NOT_FOUND' });
     expect(diagnose).toHaveBeenCalledOnce();
   });
 
   it('does not run diagnostics for a live Claude name when Codex discovery failed', async () => {
     const diagnose = vi.fn(async () => { throw new Error('must not run'); });
     const base = deps();
-    const result = await sendMessage({ to: 'live', bodyArg: 'input' }, { ...base, diagnoseCodexTarget: diagnose,
+    const result = await sendMessage({ to: 'live', tool: 'claude', bodyArg: 'input' }, { ...base, diagnoseCodexTarget: diagnose,
       listClaudeSessions: () => ({ sessions: [{ sessionId: 'claude-native', name: 'live', pid: 100, kind: 'interactive' as const, status: 'idle', messagingSocketPath: 'fixture' }], malformed: 0 }),
       listCodexThreads: async () => { throw new MultichatError('CODEX_PROXY_SPAWN_FAILED', 'CLI down'); },
     });
@@ -47,8 +47,8 @@ describe('name-miss diagnostic classification', () => {
 
   it('preserves existing live prefix ambiguity without probing saved records', async () => {
     const diagnose = vi.fn(async () => { throw new Error('must not run'); });
-    await expect(sendMessage({ to: 'wor', bodyArg: 'input' }, { ...deps(), diagnoseCodexTarget: diagnose,
-      listCodexThreads: async () => [{ id: 'a', name: 'worker-a', status: 'idle' }, { id: 'b', name: 'worker-b', status: 'idle' }],
+    await expect(sendMessage({ to: 'wor', tool: 'codex-cli', bodyArg: 'input' }, { ...deps(), diagnoseCodexTarget: diagnose,
+      listCodexThreads: async () => [{ id: 'a', name: 'worker-a', status: 'idle', endpointType: 'cli' }, { id: 'b', name: 'worker-b', status: 'idle', endpointType: 'cli' }],
     })).rejects.toMatchObject({ code: 'NAME_COLLISION' });
     expect(diagnose).not.toHaveBeenCalled();
   });
@@ -56,8 +56,8 @@ describe('name-miss diagnostic classification', () => {
   it('leaves a live Codex send on its existing direct path', async () => {
     const diagnose = vi.fn(async () => { throw new Error('must not run'); });
     const base = deps();
-    const result = await sendMessage({ to: 'worker', bodyArg: 'input' }, { ...base, diagnoseCodexTarget: diagnose,
-      listCodexThreads: async () => [{ id: 'native', name: 'worker', status: 'idle' }],
+    const result = await sendMessage({ to: 'worker', tool: 'codex-cli', bodyArg: 'input' }, { ...base, diagnoseCodexTarget: diagnose,
+      listCodexThreads: async () => [{ id: 'native', name: 'worker', status: 'idle', endpointType: 'cli' }],
     });
     expect(result.status).toBe('delivered');
     expect(diagnose).not.toHaveBeenCalled();
@@ -66,7 +66,7 @@ describe('name-miss diagnostic classification', () => {
 
   it('does not probe a targetSessionId lookup failure as a name', async () => {
     const diagnose = vi.fn(async () => { throw new Error('must not run'); });
-    await expect(sendMessage({ to: 'placeholder', targetSessionId: 'missing-id', bodyArg: 'input' }, { ...deps(), diagnoseCodexTarget: diagnose })).rejects.toMatchObject({ code: 'TARGET_NOT_FOUND' });
+    await expect(sendMessage({ to: 'placeholder', tool: 'codex-cli', targetSessionId: 'missing-id', bodyArg: 'input' }, { ...deps(), diagnoseCodexTarget: diagnose })).rejects.toMatchObject({ code: 'TARGET_NOT_FOUND' });
     expect(diagnose).not.toHaveBeenCalled();
   });
 });

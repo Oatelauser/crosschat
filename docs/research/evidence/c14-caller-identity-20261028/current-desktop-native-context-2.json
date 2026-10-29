@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "observedAtUtc": "2026-10-28T03:42:00.5019472Z",
+  "scope": "Second separate functions exec invocation in the same Windows Desktop agent turn; not a multi-turn or restart test",
+  "keys": [
+    {
+      "key": "CODEX_THREAD_ID",
+      "present": true,
+      "fingerprint": "165ee6b0cc533c14"
+    },
+    {
+      "key": "CODEX_SESSION_ID",
+      "present": true,
+      "fingerprint": "165ee6b0cc533c14"
+    },
+    {
+      "key": "CODEX_TOOL_CALL_ID",
+      "present": true,
+      "fingerprint": "e7831dbead3a1a1e"
+    },
+    {
+      "key": "CODEX_TURN_ID",
+      "present": false,
+      "fingerprint": null
+    }
+  ]
+}

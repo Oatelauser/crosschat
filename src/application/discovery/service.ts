@@ -26,7 +26,7 @@ export class DiscoveryService implements DiscoveryEndpoint {
     const signal = options.signal;
     const response = request.op === 'list'
       ? { op: 'list', providers: this.providers, page: await this.catalog.query({ contextId, cursor: request.cursor, limit: request.limit ?? 100, filter: request.filter, signal }) }
-      : { op: 'detail', providers: this.providers, detail: await this.catalog.detail({ contextId, providerId: request.providerId, nativeId: request.nativeId, referenceKind: request.referenceKind }, { signal }) };
+      : { op: 'detail', providers: this.providers, detail: await this.catalog.detail({ contextId, providerId: request.providerId, nativeId: request.nativeId, endpointType: request.endpointType, referenceKind: request.referenceKind }, { signal }) };
     try { return parseDiscoveryResponse(response); }
     catch { return discoveryFailure(request, contextId, 'malformed', 'Session source returned invalid discovery metadata.', this.now()); }
   }
@@ -51,7 +51,9 @@ export class DiscoveryService implements DiscoveryEndpoint {
           const response = parseDiscoveryResponse({ op: 'detail', providers, detail });
           if (response.op !== 'detail') throw new Error('Invalid source operation.');
           const item = response.detail.item;
-          if (item !== null && (item.ref.contextId !== request.contextId || item.ref.nativeId !== request.nativeId || (item.ref.referenceKind ?? 'native') !== (request.referenceKind ?? 'native'))) throw new Error('Invalid detail reference.');
+          if (item !== null && (item.ref.contextId !== request.contextId || item.ref.nativeId !== request.nativeId ||
+            (request.endpointType !== undefined && item.ref.endpointType !== request.endpointType) ||
+            (item.ref.referenceKind ?? 'native') !== (request.referenceKind ?? 'native'))) throw new Error('Invalid detail reference.');
           return { ...response.detail, item: item === null ? null : { ...item, key: sessionKey(item.ref) } };
         } catch {
           const page = malformed(request.contextId);

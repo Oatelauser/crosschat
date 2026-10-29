@@ -39,7 +39,11 @@ describe('C14 typed discovery and TUI', () => {
     expect(page.rows).toHaveLength(2);
     expect(page.rows.map((row) => row.id)).toEqual([sessionKey(item('cli').ref), sessionKey(item('desktop').ref)]);
     expect(page.rows.map((row) => row.cells.provider)).toEqual(['codex-cli', 'codex-desktop']);
-    expect(page.rows.map((row) => row.copyValue)).toEqual([`codex-cli/${id}`, `codex-desktop/${id}`]);
+    expect(page.rows.map((row) => row.copyValue)).toEqual([
+      `crosschat send --to ${id} --tool codex-cli --body "<正文>"`,
+      `crosschat send --to ${id} --tool codex-desktop --body "<正文>"`,
+    ]);
+    expect(page.rows.map((row) => row.copyValues?.nativeId)).toEqual([id, id]);
     expect(page.filters?.find((filter) => filter.id === 'provider')?.options.map((option) => option.value)).toEqual(['', 'codex', 'codex-cli', 'codex-desktop']);
   });
 });

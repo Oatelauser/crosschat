@@ -1,7 +1,8 @@
 import { MultichatError } from '../errors.js';
-import { dshError, isDshRecord, readDshRegistrations } from './registry.js';
+import { dshCallerMetadata, dshEndpointMetadata, dshError, isDshRecord, readDshRegistrations } from './registry.js';
 import type { DshRegistration } from './registry.js';
 import type { DshOptions } from './client.js';
+import { isEndpointTypeFor } from '../tool-types.js';
 
 export interface DshConnection { registration: DshRegistration; request(path: string, body?: unknown): Promise<unknown> }
 export interface DshOperation { connections(): Promise<DshConnection[]>; check(): void }
@@ -44,6 +45,7 @@ async function boundedJson(response: Response): Promise<unknown> {
 /** One shared deadline covers discovery, all handshakes, target lookup and admission. */
 export async function withDshOperation<T>(options: DshOptions, use: (operation: DshOperation) => Promise<T>): Promise<T> {
   if (options.signal?.aborted) throw dshError('CANCELLED', 'Harness operation cancelled before I/O.');
+  if (options.endpointType !== undefined && !isEndpointTypeFor('dsh', options.endpointType)) throw dshError('INPUT_REJECTED', 'This Harness endpoint type is not supported.');
   const timeoutMs = options.timeoutMs ?? 5000;
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw dshError('INPUT_REJECTED', 'Harness operation timeout must be positive.');
   const controller = new AbortController();
@@ -57,7 +59,8 @@ export async function withDshOperation<T>(options: DshOptions, use: (operation: 
   };
   let connections: Promise<DshConnection[]> | undefined;
   const connect = async (): Promise<DshConnection[]> => {
-    const registrations = await readDshRegistrations(options, controller.signal);
+    const registrations = (await readDshRegistrations(options, controller.signal))
+      .filter((registration) => options.endpointType === undefined || registration.endpointType === options.endpointType);
     const results: DshConnection[] = [];
     for (const registration of registrations) {
       check();
@@ -103,7 +106,11 @@ export async function withDshOperation<T>(options: DshOptions, use: (operation: 
         throw dshError('PROTOCOL_ERROR', 'Harness bridge identity response is malformed.');
       }
       if (info.protocol !== 1) throw dshError('UNSUPPORTED_PROTOCOL', 'Harness bridge protocol is not supported.');
-      if (info.pid !== registration.pid || info.instanceId !== registration.instanceId || info.runtimeVersion !== registration.runtimeVersion) {
+      const endpoint = dshEndpointMetadata(info);
+      const caller = dshCallerMetadata(info);
+      if (info.pid !== registration.pid || info.instanceId !== registration.instanceId || info.runtimeVersion !== registration.runtimeVersion
+        || endpoint.profile !== registration.profile || endpoint.endpointType !== registration.endpointType
+        || caller.callerIdentity?.profileDir !== registration.callerIdentity?.profileDir) {
         throw dshError('OWNER_MISMATCH', 'Harness instance registration no longer matches the responding owner. Refresh after Harness restarts.');
       }
       if (!supportsDshVersion(info.runtimeVersion)) throw dshError('UNSUPPORTED_VERSION', 'Harness runtime is outside the experimental >=0.2.1-rc.2 <0.3.0-0 support window.');

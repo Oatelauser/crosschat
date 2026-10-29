@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { assessDshNativeIdentity, classifyDshStartupFailure, prepareDshProfile } from './helpers/dsh-live-fixture.mjs';
+import { assessDshCallerSourceIdentity, assessDshNativeIdentity, classifyDshStartupFailure, diagnoseDshCallerSource, prepareDshProfile } from './helpers/dsh-live-fixture.mjs';
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -71,5 +71,44 @@ describe('DSH native shell identity evidence', () => {
   it('reports removed or changed native DSH fields as compatibility after a successful JSON shell result', () => {
     expect(assessDshNativeIdentity(requests({ ...expected, session: 'different-native-session' }), expected)).toEqual({ ready: false, category: 'compatibility', check: 'native-shell-identity' });
     expect(assessDshNativeIdentity(requests({ profile: 'web', dshHome: expected.dshHome }), expected)).toEqual({ ready: false, category: 'compatibility', check: 'native-shell-identity' });
+  });
+
+  const source = { status: 'identified', sourceTool: 'dsh', basis: 'native', association: 'verified', scope: 'instance', shouldAsk: false };
+  it('requires the real native shell and read-only identity observation in the same tool result', () => {
+    const observed = { ...expected, callerSourceExit: 0, callerSource: source };
+    expect(assessDshCallerSourceIdentity(requests(observed), expected)).toEqual({ ready: true, source });
+    expect(assessDshCallerSourceIdentity(requests({ ...observed, session: 'other' }), expected)).toMatchObject({ ready: false, category: 'compatibility' });
+  });
+
+  it.each([
+    undefined,
+    { ...source, sourceTool: 'dsh-desktop' },
+    { ...source, basis: 'user', status: 'confirmed' },
+    { ...source, association: 'unavailable' },
+    { ...source, scope: 'origin' },
+    { ...source, shouldAsk: true, context: 'manual-confirmation-context' },
+  ])('does not manufacture the missing native shellEnv source association: %j', (callerSource) => {
+    expect(assessDshCallerSourceIdentity(requests({ ...expected, callerSourceExit: 0, callerSource }), expected)).toEqual({
+      ready: false, category: 'compatibility', check: 'native-shell-caller-source',
+    });
+  });
+
+  it('distinguishes a broken shell JSON bootstrap from an unavailable native source probe', () => {
+    expect(assessDshCallerSourceIdentity([], expected)).toMatchObject({ ready: false, category: 'infrastructure', check: 'model-tool-result' });
+    expect(assessDshCallerSourceIdentity(requests({ ...expected, callerSourceExit: 1, callerSource: source }), expected)).toMatchObject({
+      ready: false, category: 'compatibility', check: 'native-shell-caller-source',
+    });
+  });
+
+  it('retains structured source failures and presence facts without token, directory or free-form values', () => {
+    const observed = { ...expected, callerSourceExit: 0,
+      callerSource: { status: 'unresolved', association: 'unavailable', code: 'DSH_SOURCE_ASSOCIATION_UNAVAILABLE',
+        reason: '/private/profile secret-token', token: 'secret-token', sourceDomain: '/private/profile' },
+      callerSourceInput: { shellFlagExpected: true, instanceMarkerValid: false, stateHomeAbsolute: false, profileDirAbsolute: true,
+        token: 'secret-token', profileDir: '/private/profile' } };
+    expect(diagnoseDshCallerSource(requests(observed), expected)).toEqual({ nativeIdentityMatched: true, sourceExit: 0,
+      source: { status: 'unresolved', association: 'unavailable', code: 'DSH_SOURCE_ASSOCIATION_UNAVAILABLE' },
+      input: { shellFlagExpected: true, instanceMarkerValid: false, stateHomeAbsolute: false, profileDirAbsolute: true } });
+    expect(JSON.stringify(diagnoseDshCallerSource(requests(observed), expected))).not.toMatch(/private|secret-token|sourceDomain/);
   });
 });

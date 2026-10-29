@@ -87,6 +87,26 @@ describe('DSH native bridge adapter', () => {
     expect(service.calls).toEqual(['GET /v1/info']);
   });
 
+  it('rejects caller-association metadata changed by the responding owner', async () => {
+    const service = await fixture({ profile: 'web', endpointType: 'host', info: { callerIdentity: { schema: 1, profileDir: '/different-native-profile' } } });
+    await expect(listDshThreads({ home: service.home })).rejects.toMatchObject({ code: 'DSH_OWNER_MISMATCH' });
+    expect(service.calls).toEqual(['GET /v1/info']);
+  });
+
+  it('does not probe an unrelated type and still rejects duplicate owners within the selected type', async () => {
+    const handler = (_request: IncomingMessage, response: ServerResponse) => reply(response, { item: nativeThread('same'), items: [nativeThread('same')] });
+    const host = await fixture({ profile: 'web', endpointType: 'host', handler });
+    const unrelated = await fixture({ home: host.home, profile: 'desktop', endpointType: 'desktop', infoStatus: 503 });
+    const options = { home: host.home, endpointType: 'host' };
+    expect(await getDshThread('same', options)).toMatchObject({ endpointType: 'host' });
+    expect(unrelated.calls).toEqual([]);
+    const second = await fixture({ home: host.home, profile: 'custom', endpointType: 'host', handler });
+    await expect(listDshThreads(options)).rejects.toMatchObject({ code: 'DSH_AMBIGUOUS_SESSION' });
+    await expect(getDshThread('same', options)).rejects.toMatchObject({ code: 'DSH_AMBIGUOUS_SESSION' });
+    await expect(deliverToDshSession('same', 'payload', options)).rejects.toMatchObject({ code: 'DSH_AMBIGUOUS_SESSION' });
+    expect([...host.calls, ...second.calls].some((call) => call.startsWith('POST '))).toBe(false);
+  });
+
   it('discovers authenticated live sessions under the isolated common state root without writes', async () => {
     const service = await fixture();
     const before = await readFile(service.file, 'utf8');

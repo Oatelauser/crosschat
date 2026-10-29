@@ -43,7 +43,7 @@ describe('Codex internal paged read contract', () => {
       const read = session.readThreadMetadata('exact-thread');
       expect(fake.sent.at(-1)).toMatchObject({ method: 'thread/read', params: { threadId: 'exact-thread', includeTurns: false } });
       fake.respond({ thread: { id: 'exact-thread', name: 'before', status: { type: 'idle' } } });
-      expect(await read).toEqual({ id: 'exact-thread', name: 'before', status: 'idle' });
+      expect(await read).toEqual({ id: 'exact-thread', endpointType: 'cli', name: 'before', status: 'idle' });
       const rename = session.renameThread('exact-thread', 'after');
       expect(fake.sent.at(-1)).toMatchObject({ method: 'thread/name/set', params: { threadId: 'exact-thread', name: 'after' } });
       fake.respond({});

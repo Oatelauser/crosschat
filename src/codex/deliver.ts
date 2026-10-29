@@ -11,6 +11,7 @@ import { resolveDeliveryMode } from '../delivery-mode.js';
 import type { DeliveryMode, DeliveryOptions } from '../delivery-mode.js';
 import { DesktopIpcError, openDesktopThread } from './desktop-ipc.js';
 import type { DesktopThreadSession } from './desktop-ipc.js';
+import { isEndpointTypeFor } from '../tool-types.js';
 
 /**
  * Deliver through the exact Desktop owner when present, otherwise the CLI
@@ -66,12 +67,15 @@ export async function deliverToCodexThread(
   content: string,
   options: CodexDeliveryOptions = {},
 ): Promise<CodexDeliveryResult> {
+  if (options.endpointType !== undefined && !isEndpointTypeFor('codex', options.endpointType)) throw new MultichatError('CODEX_ENDPOINT_TYPE_UNSUPPORTED', 'This Codex endpoint type is not supported; no message was sent.');
   const mode = resolveDeliveryMode(options.mode);
-  const desktopFactory = options.desktopFactory ?? (options.sessionFactory === undefined ? openDesktopThread : undefined);
+  const desktopFactory = options.endpointType === 'cli' ? undefined
+    : options.desktopFactory ?? (options.sessionFactory === undefined ? openDesktopThread : undefined);
   if (desktopFactory !== undefined) {
     const desktop = await desktopFactory(threadId);
     if (desktop !== null) return deliverDesktop(desktop, content, mode);
   }
+  if (options.endpointType === 'desktop') throw new MultichatError('CODEX_DESKTOP_OWNER_UNAVAILABLE', 'The requested Codex Desktop owner is not available; no CLI fallback was attempted.');
   const stallTimeoutMs = Math.min(options.busyTimeoutMs ?? STALL_PARK_TIMEOUT_MS, STALL_PARK_TIMEOUT_MS);
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
   const sessionFactory = options.sessionFactory ?? openCodexSession();

@@ -8,7 +8,7 @@ import { mountDshBridge } from '../integrations/dsh/bridge.js';
 const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const dispose of cleanup.splice(0).reverse()) await dispose(); });
 
-async function fixture(profileContext?: unknown) {
+async function fixture(profileContext?: unknown, withShellEnv = false, dynamicShellEnv = false) {
   const home = await mkdtemp(join(tmpdir(), 'crosschat-dsh-bridge-'));
   cleanup.push(() => rm(home, { recursive: true, force: true }));
   const received: Array<{ id: string; mode: string; message: { id: string; role: string; content: Array<{ type: string; text: string }>; source: unknown } }> = [];
@@ -21,10 +21,54 @@ async function fixture(profileContext?: unknown) {
   agents.set('root/+?雪', agent('root/+?雪'));
   agents.set('busy', agent('busy', 'running'));
   const effects: Array<() => void | Promise<void>> = [];
+  type Contributor = { name: string; variables: Record<string, { description: string }>; resolve: (execution: { agent?: unknown }) => Record<string, string> };
+  const contributors = new Map<string, Contributor>();
+  let shellEnvAvailable = withShellEnv;
+  const shellEnv = { register: (contributor: Contributor) => {
+    if (contributors.has(contributor.name)) throw new Error('Duplicate contributor');
+    contributors.set(contributor.name, contributor);
+    return () => { contributors.delete(contributor.name); };
+  } };
+  // Cordis' public ctx.inject contract reruns a child scope after a dependency
+  // appears or changes, disposing that scope when the dependency disappears.
+  // Fixed native contract: 687f282e8625c6b8d11ff58211a90524be2e4317,
+  // docs/cordis-api/registry.md and packages/shell/shell-env/src/index.ts.
+  const bindings: Array<{ callback: (scope: unknown) => unknown; effects: Array<() => void | Promise<void>> }> = [];
+  const activate = async (binding: typeof bindings[number]) => {
+    const service = { register: (contributor: Contributor) => {
+      const dispose = shellEnv.register(contributor);
+      binding.effects.push(dispose);
+      return dispose;
+    } };
+    await binding.callback({
+      get: (key: string) => key === 'shellEnv' ? service : ctx.get(key),
+      shellEnv: service,
+      effect: (setup: () => () => void | Promise<void>) => { const dispose = setup(); binding.effects.push(dispose); return dispose; },
+    });
+  };
+  const setShellEnv = async (available: boolean) => {
+    for (const binding of bindings) for (const dispose of binding.effects.splice(0).reverse()) await dispose();
+    shellEnvAvailable = available;
+    if (available) for (const binding of bindings) await activate(binding);
+  };
   const ctx = {
     agents: { get: (id: string) => agents.get(id), roots: () => [...agents.values()].filter((item) => item.id !== 'child'), list: () => [...agents.values()] },
-    get: (key: string) => key === 'profileContext' ? profileContext : key === 'workingDirectory' ? { get: () => '/current' } : key === 'sessionTitle' ? { get: () => null } : undefined,
+    get: (key: string) => key === 'shellEnv' && shellEnvAvailable ? shellEnv : key === 'profileContext' ? profileContext : key === 'workingDirectory' ? { get: () => '/current' } : key === 'sessionTitle' ? { get: () => null } : undefined,
     effect: (setup: () => () => void | Promise<void>) => { const disposer = setup(); effects.push(disposer); return disposer; },
+    ...(dynamicShellEnv ? { inject: (_dependencies: string[], callback: (scope: unknown) => unknown) => {
+      const binding = { callback, effects: [] };
+      bindings.push(binding);
+      if (shellEnvAvailable) void activate(binding);
+      let disposed = false;
+      const dispose = async () => {
+        if (disposed) return;
+        disposed = true;
+        bindings.splice(bindings.indexOf(binding), 1);
+        for (const release of binding.effects.splice(0).reverse()) await release();
+      };
+      effects.push(dispose);
+      return { dispose };
+    } } : {}),
   };
   const host = { getDshRuntimeVersion: () => '0.2.1-rc.2', createUserMessage: (input: { content: Array<{ type: string; text: string }>; source: unknown }) => Object.freeze({ ...input, id: randomUUID(), role: 'user' }) };
   const bridge = await mountDshBridge(ctx, host, { home });
@@ -34,10 +78,66 @@ async function fixture(profileContext?: unknown) {
   const file = join(dir, filename);
   const registration = JSON.parse(await readFile(file, 'utf8'));
   const headers = { authorization: `Bearer ${registration.token}` };
-  return { home, dir, file, registration, headers, bridge, received, agents, agent, effects, ctx, host };
+  return { home, dir, file, registration, headers, bridge, received, agents, agent, effects, ctx, host, contributors, setShellEnv };
 }
 
 describe('DSH Host bridge', () => {
+  it('binds a late native shell service, releases unloaded ownership and binds its replacement', async () => {
+    const value = await fixture({ name: 'web', dir: '/native-profile' }, false, true);
+    const collect = () => Object.assign({ DSH_SHELL: '1', DSH_SESSION_ID: 'busy' },
+      ...[...value.contributors.values()].map((contributor) => contributor.resolve({ agent: value.agents.get('busy') })));
+    expect(collect()).not.toHaveProperty('DSH_CROSSCHAT_INSTANCE_ID');
+    await value.setShellEnv(true);
+    expect(collect()).toMatchObject({ DSH_CROSSCHAT_INSTANCE_ID: value.registration.instanceId, DSH_CROSSCHAT_HOME: value.home });
+    expect(value.contributors.size).toBe(1);
+    await value.setShellEnv(false);
+    expect(collect()).not.toHaveProperty('DSH_CROSSCHAT_INSTANCE_ID');
+    expect((await fetch(`${value.registration.url}/v1/info`, { headers: value.headers })).status).toBe(200);
+    await value.setShellEnv(true);
+    expect(collect()).toMatchObject({ DSH_CROSSCHAT_INSTANCE_ID: value.registration.instanceId });
+    expect(value.contributors.size).toBe(1);
+    await value.bridge.close();
+    expect(collect()).not.toHaveProperty('DSH_CROSSCHAT_INSTANCE_ID');
+  });
+
+  it('does not retain a source contribution after the native shell service unloads', async () => {
+    const value = await fixture({ name: 'web', dir: '/native-profile' }, true, true);
+    expect(value.contributors.size).toBe(1);
+    const contributor = [...value.contributors.values()][0];
+    await value.setShellEnv(false);
+    expect(value.contributors.size).toBe(0);
+    expect(contributor.resolve({ agent: value.agents.get('busy') })).toEqual({});
+    expect((await fetch(`${value.registration.url}/v1/sessions`, { headers: value.headers })).status).toBe(200);
+    await value.bridge.close();
+    await value.setShellEnv(true);
+    expect(value.contributors.size).toBe(0);
+  });
+
+  it('contributes this bridge instance only to the actual live root execution and releases it on close', async () => {
+    const value = await fixture({ name: 'web', dir: '/native-profile' }, true);
+    expect(value.registration.callerIdentity).toEqual({ schema: 1, profileDir: '/native-profile' });
+    expect(value.contributors.size).toBe(1);
+    const contributor = [...value.contributors.values()][0];
+    expect(Object.keys(contributor.variables).sort()).toEqual(['DSH_CROSSCHAT_HOME', 'DSH_CROSSCHAT_INSTANCE_ID']);
+    expect(contributor.resolve({ agent: value.agents.get('busy') })).toEqual({
+      DSH_CROSSCHAT_INSTANCE_ID: value.registration.instanceId, DSH_CROSSCHAT_HOME: value.home,
+    });
+    expect(contributor.resolve({})).toEqual({});
+    expect(contributor.resolve({ agent: value.agent('busy') })).toEqual({});
+    const current = value.agents.get('busy');
+    value.agents.delete('busy');
+    expect(contributor.resolve({ agent: current })).toEqual({});
+    await value.bridge.close();
+    expect(value.contributors.size).toBe(0);
+    expect(contributor.resolve({ agent: value.agents.get('root/+?雪') })).toEqual({});
+  });
+
+  it('does not advertise caller association without the public per-execution shell service', async () => {
+    const value = await fixture({ name: 'web', dir: '/native-profile' });
+    expect(value.registration).not.toHaveProperty('callerIdentity');
+    expect(value.contributors.size).toBe(0);
+  });
+
   it.each([['desktop', 'desktop'], ['web', 'host'], ['custom-profile', 'host']])('reports the native %s profile without inferring frontend ownership', async (profile, endpointType) => {
     const value = await fixture({ name: profile, dir: '/native-profile', installAnchor: '/native-anchor' });
     expect(value.registration).toMatchObject({ profile, endpointType });

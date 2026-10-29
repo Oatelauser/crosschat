@@ -82,7 +82,7 @@ describe('TCP complete read-only discovery', () => {
       expect(result.page.completeness).toBe(cursor === undefined ? 'complete' : 'partial');
     } while (cursor !== undefined);
     expect(new Set(ids).size).toBe(100);
-    const detail = await remote.execute({ op: 'detail', providerId: 'claude', nativeId: ids[99]! });
+    const detail = await remote.execute({ op: 'detail', providerId: 'claude', nativeId: ids[99]!, endpointType: 'cli' });
     expect(detail).toMatchObject({ op: 'detail', detail: { completeness: 'complete', item: { ref: { nativeId: ids[99] }, attributes: { cwd: '/fixture/project' } } } });
   });
 

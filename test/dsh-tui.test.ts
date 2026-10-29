@@ -6,17 +6,22 @@ import { createStatusRegistry } from '../src/tui/resources/status.js';
 const context = { id: 'local', kind: 'local', label: '本机' };
 const capabilities = { discovery: true, delivery: true, launch: false, diagnostics: false };
 function session(id: string, name: string | null = null, providerId = 'dsh'): DiscoverySession {
-  return { ref: { contextId: 'local', providerId, nativeId: id }, name, rawStatus: { type: 'idle' }, capabilities, attributes: {} };
+  return { ref: { contextId: 'local', providerId, nativeId: id, endpointType: providerId === 'dsh' ? 'host' : 'shared' }, name, rawStatus: { type: 'idle' }, capabilities, attributes: {} };
 }
 function discovery(items: DiscoverySession[]): DiscoveryEndpoint {
   return { execute: async () => ({ op: 'list', providers: [...new Set(items.map((item) => item.ref.providerId))].map((providerId) => ({ providerId, capabilities })),
     page: { items, completeness: 'complete', nextCursor: null, errors: [], observedAt: 1 } }) };
 }
 describe('Harness native session TUI', () => {
-  it('copies exact qualified IDs even when another tool or name shares the same value', async () => {
+  it('copies full commands with exact IDs and explicit tools even when another tool or name shares the same value', async () => {
     const items = [session('native_full_id'), session('other', 'native_full_id'), session('native_full_id', null, 'opencode')];
     const page = await createSessionsResource({ discovery: discovery(items) }).adapter.read({ context, signal: new AbortController().signal });
-    expect(page.rows.map((row) => row.copyValue)).toEqual(['dsh/native_full_id', 'dsh/other', 'opencode/native_full_id']);
+    expect(page.rows.map((row) => row.copyValue)).toEqual([
+      'crosschat send --to native_full_id --tool dsh --body "<正文>"',
+      'crosschat send --to other --tool dsh --body "<正文>"',
+      'crosschat send --to native_full_id --tool opencode --body "<正文>"',
+    ]);
+    expect(page.rows.map((row) => row.copyValues?.nativeId)).toEqual(['native_full_id', 'other', 'native_full_id']);
   });
   it('guides the user to the original Harness UI without offering an unrelated SDK resume', async () => {
     const page = await createSessionsResource({ discovery: discovery([session('native_full_id')]) }).adapter.read({ context, signal: new AbortController().signal });

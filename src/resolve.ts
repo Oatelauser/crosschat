@@ -1,4 +1,6 @@
 import { MultichatError } from './errors.js';
+import { parseToolType, endpointConstraintMatches } from './tool-types.js';
+import type { EndpointConstraint } from './tool-types.js';
 
 /**
  * `--to <name>` resolution (ticket 003): exact match on the claude registry
@@ -23,16 +25,18 @@ export interface ResolveClaudeRow {
   sessionId: string;
   name?: string;
   pid?: number;
+  endpointType?: string;
 }
 
 /** 名字判定所需的最小 codex 侧行形状（真实线程行天然满足）。 */
 export interface ResolveCodexRow {
   id: string;
   name: string | null;
+  endpointType?: string;
 }
 
-export interface ResolveOpenCodeRow { id: string; name: string | null }
-export interface ResolveDshRow { id: string; name: string | null }
+export interface ResolveOpenCodeRow { id: string; name: string | null; endpointType?: string }
+export interface ResolveDshRow { id: string; name: string | null; endpointType?: string }
 
 export type ResolvedTarget =
   | { side: 'claude'; session: ResolveClaudeRow }
@@ -46,7 +50,17 @@ export function resolveTargetByName(
   threads: readonly ResolveCodexRow[],
   openCode: readonly ResolveOpenCodeRow[] = [],
   dsh: readonly ResolveDshRow[] = [],
+  selected?: EndpointConstraint,
 ): ResolvedTarget {
+  // send supplies an explicit type: the complete name/ID remains opaque,
+  // including a leading string which happens to look like a former qualifier.
+  if (selected !== undefined) return resolveSelected(name, sessions, threads, openCode, dsh, selected);
+  const literalName = selected === undefined && (sessions.some((row) => row.name === name && row.sessionId !== '') || threads.some((row) => row.name === name) || openCode.some((row) => row.name === name) || dsh.some((row) => row.name === name));
+  const qualified = name.startsWith('claude/') && literalName ? undefined : qualifiedToolTarget(name);
+  if (qualified !== undefined) {
+    if (selected !== undefined && !endpointConstraintMatches(qualified.tool, selected)) throw new MultichatError('TARGET_CONFLICT', 'The --tool selector and qualified target specify different delivery types.');
+    return resolveSelected(qualified.query, sessions, threads, openCode, dsh, qualified.tool);
+  }
   if (name.startsWith('dsh/')) return resolveDsh(name.slice('dsh/'.length), dsh);
   if (dsh.length > 0 && !name.startsWith('opencode/')) return resolveWithDsh(name, sessions, threads, openCode, dsh);
   return resolveBeforeDsh(name, sessions, threads, openCode);
@@ -184,8 +198,11 @@ function resolveLegacyByName(
   if (idMatch !== null) {
     const id = idMatch[1];
     if (id.length === 36) {
-      const thread = threads.find((candidate) => candidate.id === id);
-      if (thread !== undefined) return { side: 'codex', thread };
+      const matches = threads.filter((candidate) => candidate.id === id);
+      if (matches.length > 1) {
+        throw new MultichatError('NAME_COLLISION', `The native ID ${id} has multiple delivery endpoints. Select --tool codex-cli or --tool codex-desktop.`);
+      }
+      if (matches.length === 1) return { side: 'codex', thread: matches[0] };
     } else {
       const prefixed = threads.filter((candidate) => candidate.id.startsWith(id));
       if (prefixed.length === 1) return { side: 'codex', thread: prefixed[0] };
@@ -214,7 +231,9 @@ export function resolveTargetById(
   threads: readonly ResolveCodexRow[],
   openCode: readonly ResolveOpenCodeRow[] = [],
   dsh: readonly ResolveDshRow[] = [],
+  selected?: EndpointConstraint,
 ): ResolvedTarget {
+  if (selected !== undefined) return resolveSelected(sessionId, sessions, threads, openCode, dsh, selected, true);
   const harness = dsh.filter((row) => row.id === sessionId);
   if (harness.length > 0) {
     if (harness.length > 1 || sessions.some((row) => row.sessionId === sessionId) || threads.some((row) => row.id === sessionId) || openCode.some((row) => row.id === sessionId)) {
@@ -229,12 +248,49 @@ export function resolveTargetById(
   }
   const claude = sessions.find((session) => session.sessionId === sessionId);
   if (claude !== undefined) return { side: 'claude', session: claude };
-  const codex = threads.find((thread) => thread.id === sessionId);
+  const codexMatches = threads.filter((thread) => thread.id === sessionId);
+  if (codexMatches.length > 1) throw new MultichatError('NAME_COLLISION', 'The native ID has multiple delivery types. Select --tool codex-cli or codex-desktop.');
+  const codex = codexMatches[0];
   if (codex !== undefined) return { side: 'codex', thread: codex };
   throw new MultichatError(
     'TARGET_NOT_FOUND',
     `会话 ${sessionId.slice(0, 8)} 不在本机（claude 进程退出或 codex 线程不存在）——成员可能刚被聚合器除名，稍后重试或改用名字投递（027：三段旧名重投 --via tcp:<星>:<机器>:<名>；有 extends 接任者将报 SESSION_SUPERSEDED 指路）`,
   );
+}
+
+/** Legacy family qualifiers keep their existing meaning; new type qualifiers are strict. */
+export function qualifiedToolTarget(value: string): { tool: EndpointConstraint; query: string } | undefined {
+  const split = value.indexOf('/');
+  if (split < 0) return undefined;
+  const name = value.slice(0, split);
+  if (name === 'opencode' || name === 'dsh' || name === 'codex') return undefined;
+  const tool = parseToolType(name);
+  return tool === undefined ? undefined : { tool, query: value.slice(split + 1) };
+}
+
+function resolveSelected(query: string, sessions: readonly ResolveClaudeRow[], threads: readonly ResolveCodexRow[], openCode: readonly ResolveOpenCodeRow[], dsh: readonly ResolveDshRow[], selected: EndpointConstraint, exactId = false): ResolvedTarget {
+  const candidates: ResolvedTarget[] = [
+    ...sessions.filter((row) => row.sessionId !== '').map((session): ResolvedTarget => ({ side: 'claude', session })),
+    ...threads.map((thread): ResolvedTarget => ({ side: 'codex', thread })),
+    ...openCode.map((thread): ResolvedTarget => ({ side: 'opencode', thread })),
+    ...dsh.map((thread): ResolvedTarget => ({ side: 'dsh', thread })),
+  ].filter((target) => {
+    const row = target.side === 'claude' ? target.session : target.thread;
+    // Claude and OpenCode each have one supported native communication domain.
+    const endpointType = row.endpointType ?? (target.side === 'claude' ? 'cli' : target.side === 'opencode' ? 'shared' : undefined);
+    return endpointConstraintMatches({ providerId: target.side, endpointType }, selected);
+  });
+  const idOf = (target: ResolvedTarget) => target.side === 'claude' ? target.session.sessionId : target.thread.id;
+  const nameOf = (target: ResolvedTarget) => target.side === 'claude' ? target.session.name : target.thread.name;
+  const byId = candidates.filter((target) => idOf(target) === query);
+  const byName = candidates.filter((target) => nameOf(target) === query);
+  // Full native IDs copied by TUI must not be shadowed by another session's name.
+  const exact = exactId ? byId : byId.length ? byId : byName;
+  const matches = exact.length || exactId ? exact : query === '' ? [] : candidates.filter((target) => idOf(target).startsWith(query) || nameOf(target)?.toLowerCase().startsWith(query.toLowerCase()));
+  if (matches.length > 1) throw new MultichatError('NAME_COLLISION', `Multiple ${selected.providerId} targets match ${JSON.stringify(query)} within the selected delivery type. Use the full native ID.`);
+  if (matches.length === 1) return matches[0];
+  const available = candidates.map((target) => `${JSON.stringify(nameOf(target) ?? '(unnamed)')} (${idOf(target)})`).join(', ');
+  throw new MultichatError(exactId ? 'TARGET_NOT_FOUND' : 'NAME_NOT_FOUND', `No verified ${selected.providerId}${selected.endpointType === undefined ? '' : ` ${selected.endpointType}`} target matches ${JSON.stringify(query)}. Available in this type: ${available || '(none)'}. Run crosschat discover to inspect the native delivery type.`);
 }
 
 function describeAvailableNames(

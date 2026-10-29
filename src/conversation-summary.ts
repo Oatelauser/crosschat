@@ -2,6 +2,8 @@ import { defaultConversationsFile, loadAllPairs, pairKeyOfEntry } from './conver
 import { defaultOutboxDir, outboxPairCounts } from './outbox.js';
 import { decodeRef } from './ref.js';
 import { type SendLogEntry, defaultSendLogFile, readSendLogTail } from './send-log.js';
+import { parseIdentityKey } from './identity.js';
+import { toolTypeFor } from './tool-types.js';
 
 /**
  * Per-pair conversation overview rows for a future `status --conversations`
@@ -42,7 +44,7 @@ export interface ConversationSummary {
    */
   receipt: SendLogEntry['receipt'] | null;
   /** Exact recipient and envelope evidence of the latest send; omitted from status JSON. */
-  receiptProbe?: { threadId: string; marker: string };
+  receiptProbe?: { threadId: string; marker: string; endpointType?: string };
   /**
    * G0 柄列：该对分片最新柄（绑定当前 ref 同 nonce 的 c<数字>）；null = 无柄
    * （显示 -）。Render support like `endpoints` — not part of the JSON contract.
@@ -93,6 +95,7 @@ export function aggregateSummaries(
     .map(([key, { ref, updatedAt, handles }]) => {
       const entries = byPair.get(key) ?? [];
       const latest = latestByTs(entries);
+      const recipient = latest === undefined ? undefined : parseIdentityKey(latest.target);
       const [a = '', b = ''] = key.split('\n');
       return {
         pair: namesOf(key, entries),
@@ -104,8 +107,9 @@ export function aggregateSummaries(
         lastFrom: latest?.from ?? null,
         parked: parked.get(key) ?? 0,
         receipt: latest?.status === 'delivered' ? (latest.receipt ?? null) : null,
-        ...(typeof latest?.target === 'string' && latest.target.startsWith('codex:') && typeof latest.receiptMarker === 'string' ? {
-          receiptProbe: { threadId: latest.target.slice('codex:'.length), marker: latest.receiptMarker },
+        ...(recipient?.p === 'codex' && recipient.id !== undefined && typeof latest?.receiptMarker === 'string' ? {
+          receiptProbe: { threadId: recipient.id, marker: latest.receiptMarker,
+            ...(recipient.endpointType === undefined ? {} : { endpointType: recipient.endpointType }) },
         } : {}),
         handle: handleForRecord(ref, handles),
       };
@@ -186,7 +190,9 @@ function nameOf(endpoint: string, entries: SendLogEntry[]): string {
 
 /** `claude:<id>` → `claude/<id8>`; `human` stays `human`. */
 function shortEndpoint(endpoint: string): string {
-  const sep = endpoint.indexOf(':');
-  if (sep === -1) return endpoint;
-  return `${endpoint.slice(0, sep)}/${endpoint.slice(sep + 1, sep + 9)}`;
+  const identity = parseIdentityKey(endpoint);
+  if (identity?.id === undefined) return endpoint;
+  const tool = toolTypeFor(identity.p, identity.endpointType)
+    ?? (identity.endpointType === undefined ? identity.p : `${identity.p}/${identity.endpointType}`);
+  return `${tool}/${identity.id.slice(0, 8)}`;
 }

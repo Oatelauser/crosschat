@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import process from 'node:process';
 import { stateRoot } from './state-root.js';
 import { MultichatError } from './errors.js';
+import { identityKey } from './identity.js';
 import {
   decodeRef,
   encodeRef,
@@ -134,7 +135,7 @@ function loadPair(file: string, pairKey: string): PairRecord | undefined {
   return loadLegacyPairs(file)[pairKey];
 }
 
-function savePair(file: string, pairKey: string, record: PairRecord): void {
+function savePair(file: string, pairKey: string, record: PairRecord): boolean {
   try {
     const dir = shardDirOf(file);
     mkdirSync(dir, { recursive: true });
@@ -145,8 +146,10 @@ function savePair(file: string, pairKey: string, record: PairRecord): void {
     const tmp = `${shard}.${process.pid}.${Date.now()}.tmp`;
     writeFileSync(tmp, JSON.stringify({ pair: pairKey, ...record }), 'utf8');
     renameSync(tmp, shard);
+    return true;
   } catch {
     // ponytail: continuity is best-effort; a lost record just starts a new thread.
+    return false;
   }
 }
 
@@ -168,7 +171,7 @@ export function loadAllPairs(file: string): Record<string, PairRecord> {
 }
 
 function endpointKey(endpoint: RefEndpoint): string {
-  return endpoint.p === 'human' ? 'human' : `${endpoint.p}:${endpoint.id}`;
+  return identityKey(endpoint);
 }
 
 /** Unordered pair key: (A→B) and (B→A) map to the same conversation. */
@@ -249,7 +252,9 @@ function matchesEndpoints(ref: ConversationRef, a: RefEndpoint, b: RefEndpoint):
 export function continueFromRef(
   file: string,
   ref: ConversationRef,
+  original: ConversationRef = ref,
 ): { ref: ConversationRef; turn: number } {
+  ref = reconcileRefinement(file, original, ref);
   const stored = loadPair(file, pairKeyOf(ref.f, ref.t));
   if (stored !== undefined) {
     try {
@@ -263,6 +268,124 @@ export function continueFromRef(
     }
   }
   return { ref: nextTurnRef(ref), turn: ref.c + 1 };
+}
+
+/**
+ * Filling an unknown endpoint changes its pair key, not its conversation.
+ * Keep the nonce's handle and latest turn while rejecting stale unknown refs
+ * which try to replace a type already established by an earlier continuation.
+ */
+function reconcileRefinement(file: string, original: ConversationRef, requested: ConversationRef): ConversationRef {
+  const unknown = (endpoint: RefEndpoint) => endpoint.p !== 'human' && endpoint.endpointType === undefined;
+  const originalHasUnknownType = unknown(original.f) || unknown(original.t);
+  const records = matchingConversationRecords(file, original);
+  let refined = requested;
+  for (const { refs } of records) {
+    for (const ref of refs) {
+      refined = { ...refined,
+        f: mergeEndpointTypes(refined.f, ref.f), t: mergeEndpointTypes(refined.t, ref.t),
+        c: Math.max(refined.c, ref.c),
+      };
+    }
+  }
+  const pair = pairKeyOf(refined.f, refined.t);
+  const changed = records.filter((entry) => entry.pair !== pair
+    && (originalHasUnknownType || Object.values(entry.record.handles ?? {}).some((value) => encodedConversationMatches(value, original))));
+  if (changed.length === 0) return refined;
+  const existing = loadPair(file, pair);
+  const handles: Record<string, string> = { ...existing?.handles };
+  let machines = existing?.machines;
+  let updatedAt = existing?.updatedAt ?? 0;
+  for (const { record } of records) {
+    if (existing === undefined) updatedAt = Math.max(updatedAt, record.updatedAt);
+    machines = { ...machines, ...record.machines };
+    for (const [handle, value] of Object.entries(record.handles ?? {})) {
+      if (encodedConversationMatches(value, original)) {
+        delete handles[handle];
+        handles[handle] = encodeRef(refined);
+      }
+    }
+  }
+  // Migrated handles are the most recently touched; keep the same per-shard
+  // bound before delivery, including when delivery later fails.
+  for (const handle of Object.keys(handles).slice(0, -HANDLE_MAX)) delete handles[handle];
+  const encoded = encodeRef(refined);
+  // Like handle allocation, refinement does not advance an existing pair's
+  // successful conversation line. Delivery records the new line afterwards.
+  const destinationRef = existing?.ref ?? encoded;
+  const saved = savePair(file, pair, { ref: destinationRef, updatedAt,
+    ...(Object.keys(handles).length ? { handles } : {}),
+    ...(machines === undefined || Object.keys(machines).length === 0 ? {} : { machines }),
+  });
+  const persisted = readShard(shardFileOf(file, pair));
+  if (!saved || persisted?.ref !== destinationRef
+    || Object.entries(handles).some(([handle, value]) => persisted.handles?.[handle] !== value)) {
+    throw new MultichatError('CONVERSATION_STATE_WRITE_FAILED', 'Conversation refinement could not be saved; no message was sent. The original conversation handle remains valid.');
+  }
+  // Remove only the migrated nonce's handle from its former pair. Other
+  // conversations and the old untyped continuity line remain intact.
+  for (const { pair: previous, record } of changed) {
+    const remaining = Object.fromEntries(Object.entries(record.handles ?? {}).filter(([, value]) => {
+      return !encodedConversationMatches(value, original);
+    }));
+    if (!savePair(file, previous, { ...record, handles: remaining })) {
+      throw new MultichatError('CONVERSATION_STATE_WRITE_FAILED', 'Conversation refinement could not remove an old handle copy; no message was sent. The existing conversation handle remains readable.');
+    }
+  }
+  return refined;
+}
+
+/** Read an already established type before checking an explicitly selected recipient. */
+export function latestKnownConversationRef(file: string, original: ConversationRef): ConversationRef {
+  let known = original;
+  for (const { refs } of matchingConversationRecords(file, original)) {
+    for (const stored of refs) {
+      known = { ...known, f: mergeEndpointTypes(known.f, stored.f), t: mergeEndpointTypes(known.t, stored.t), c: Math.max(known.c, stored.c) };
+    }
+  }
+  return known;
+}
+
+function matchingConversationRecords(file: string, original: ConversationRef): { pair: string; record: PairRecord; refs: ConversationRef[] }[] {
+  return Object.entries(loadAllPairs(file)).flatMap(([pair, record]) => {
+    const refs: ConversationRef[] = [];
+    for (const encoded of [record.ref, ...Object.values(record.handles ?? {})]) {
+      try {
+        const ref = decodeRef(encoded);
+        if (conversationRefMatches(ref, original)) refs.push(ref);
+      } catch { /* Corrupt continuity never supplies a type. */ }
+    }
+    return refs.length === 0 ? [] : [{ pair, record, refs }];
+  });
+}
+
+function conversationRefMatches(stored: ConversationRef, original: ConversationRef): boolean {
+  return stored.n === original.n && stored.starId === original.starId
+    && nativeEndpointMatches(stored.f, original.f) && nativeEndpointMatches(stored.t, original.t);
+}
+
+function encodedConversationMatches(encoded: string, original: ConversationRef): boolean {
+  try { return conversationRefMatches(decodeRef(encoded), original); }
+  catch { return false; }
+}
+
+function nativeEndpointMatches(left: RefEndpoint, right: RefEndpoint): boolean {
+  return nativeEndpointContextMatches(left, right)
+    && (right.p === 'human' || left.p === 'human' || right.endpointType === undefined || left.endpointType === undefined || left.endpointType === right.endpointType);
+}
+
+function nativeEndpointContextMatches(left: RefEndpoint, right: RefEndpoint): boolean {
+  if (left.p === 'human' || right.p === 'human') return left.p === right.p;
+  return left.p === right.p && left.id === right.id
+    && left.m === right.m && left.mid === right.mid;
+}
+
+function mergeEndpointTypes(requested: RefEndpoint, stored: RefEndpoint): RefEndpoint {
+  if (requested.p === 'human' || stored.p === 'human') return requested;
+  if (requested.endpointType !== undefined && stored.endpointType !== undefined && requested.endpointType !== stored.endpointType) {
+    throw new MultichatError('TARGET_CONFLICT', 'This conversation already has a confirmed delivery type; an older untyped reference cannot replace it.');
+  }
+  return { ...stored, ...requested, ...(stored.endpointType === undefined ? {} : { endpointType: stored.endpointType }) };
 }
 
 /**
@@ -313,6 +436,7 @@ export const HANDLE_MAX = 8;
 interface HandleEntry {
   handle: string;
   nonce: string;
+  pair: string;
   ref: string;
   turn: number;
 }
@@ -325,7 +449,7 @@ function scanHandles(file: string): HandleEntry[] {
       if (!CONVERSATION_HANDLE_RE.test(handle)) continue;
       try {
         const decoded = decodeRef(ref);
-        out.push({ handle, nonce: decoded.n, ref, turn: decoded.c });
+        out.push({ handle, nonce: decoded.n, pair: pairKeyOf(decoded.f, decoded.t), ref, turn: decoded.c });
       } catch {
         // undecodable leftover: ignored
       }
@@ -388,6 +512,7 @@ function attachHandle(file: string, pairKey: string, ref: ConversationRef, handl
     ref: existing?.ref ?? encodeRef(ref),
     updatedAt: existing?.updatedAt ?? 0,
     handles: refreshHandles(existing?.handles, ref, handle),
+    ...(existing?.machines === undefined ? {} : { machines: existing.machines }),
   });
 }
 
@@ -397,7 +522,8 @@ function attachHandle(file: string, pairKey: string, ref: ConversationRef, handl
  */
 export function handleForRef(file: string, ref: ConversationRef): string {
   const entries = scanHandles(file);
-  const reused = entries.find((entry) => entry.nonce === ref.n);
+  const pair = pairKeyOf(ref.f, ref.t);
+  const reused = entries.find((entry) => entry.nonce === ref.n && entry.pair === pair);
   if (reused !== undefined) return reused.handle;
   return claimHandle(file, ref, maxHandleNumber(entries) + 1);
 }
@@ -413,7 +539,7 @@ export function claimHandle(file: string, ref: ConversationRef, candidate: numbe
   let handle = `c${candidate}`;
   attachHandle(file, pairKey, ref, handle);
   const after = scanHandles(file);
-  if (after.some((entry) => entry.handle === handle && entry.nonce !== ref.n)) {
+  if (after.some((entry) => entry.handle === handle && (entry.nonce !== ref.n || entry.pair !== pairKey))) {
     handle = `c${maxHandleNumber(after) + 2}`;
     attachHandle(file, pairKey, ref, handle);
   }
@@ -429,11 +555,28 @@ export function resolveHandle(file: string | undefined, handle: string): string 
   const hits = (file === undefined ? [] : scanHandles(file))
     .filter((entry) => entry.handle === handle)
     .sort((a, b) => b.turn - a.turn); // same nonce twice: newest ref wins
-  if (hits.length > 0 && hits.every((entry) => entry.nonce === hits[0]!.nonce)) return hits[0]!.ref;
-  const teach = '——用 --to <名> 接续或开新对话';
+  if (hits.length === 1) return hits[0]!.ref;
+  const refined = resolveRefinementCopies(hits);
+  if (refined !== undefined) return refined;
+  const teach = '——用 --to <名> --tool <收件类型> 接续或开新对话';
   if (hits.length === 0) {
     throw new MultichatError('INVALID_CONVERSATION_REF', `${handle} 已过期或未知${teach}`);
   }
   const candidates = [...new Set(hits.map((entry) => entry.ref))].join(' ');
   throw new MultichatError('INVALID_CONVERSATION_REF', `${handle} 撞号指向多个对话：${candidates}${teach}`);
+}
+
+/** A failed old-shard cleanup may leave only compatible untyped/typed copies. */
+function resolveRefinementCopies(entries: readonly HandleEntry[]): string | undefined {
+  if (entries.length === 0) return undefined;
+  let known = decodeRef(entries[0]!.ref);
+  for (const entry of entries.slice(1)) {
+    const ref = decodeRef(entry.ref);
+    if (ref.n !== known.n || ref.starId !== known.starId
+      || !nativeEndpointContextMatches(ref.f, known.f) || !nativeEndpointContextMatches(ref.t, known.t)) return undefined;
+    try {
+      known = { ...known, f: mergeEndpointTypes(known.f, ref.f), t: mergeEndpointTypes(known.t, ref.t), c: Math.max(known.c, ref.c) };
+    } catch { return undefined; /* Different known endpoints still constitute a collision. */ }
+  }
+  return encodeRef(known);
 }

@@ -14,18 +14,38 @@
 
 ---
 
+所有 `crosschat send` 都须带收件类型 `--tool`，包括按信封回信和文件发送。CLI/Desktop 使用不同通信端点时，分别选择 `codex-cli`、`codex-desktop`；类型与会话名称/完整 ID 分开填写。各工具类型、OpenCode共享服务及Harness验证范围见[工具类型与寻址](docs/tool-types.md)。
+
 ## ✨ 为什么用 crosschat
 
 装完即用：让 agent 会话像同事一样互发消息——同机直连、跨机走 ssh。
 
 - **原生消息投递** —— 消息直注运行中的会话，像收到一条用户消息；零轮询
 - **跨机聊天** —— `--via ssh:对端` 直发另一台机器（win ↔ linux 互聊），回复自动回来；不装服务，密钥即全部配置
-- **无感式回复** —— 每条消息信封自带回复命令，对方 agent 照抄即回；协议教学随 skill 内建，题词只写任务
+- **按信封回复** —— 返回端点已核实时，信封自带完整回复命令，对方 agent 照抄即回；来源待核实时如实提示
 - **忙时不丢** —— 对方忙就进发件箱，看门狗自动重投，你不用重发
 - **无守护进程** —— 整条工具是一支无状态 CLI，没有后台进程和端口要看护
 - **同用户信任边界** —— 通道按系统用户隔离，只授予你启动的会话
 
 > 灵感与部分模块实现来自 [embassy](https://github.com/YuanpingSong/embassy)（macOS-only，MIT）——crosschat 是它的 Windows 原生、无守护进程重实现（1.3.0 起亦支持 Linux/WSL，experimental）。
+
+## 🤝 支持的工具
+
+以下三种工具已完成原生对接，并通过两两之间的完整双向发信、按信封回信验收。
+
+| 工具 | 发送 | 接收 | 接收条件 |
+|---|---|---|---|
+| Claude Code | ✅ | ✅ | 使用 `crosschat claude` 启动会话 |
+| Codex CLI | ✅ | ✅ | 本机 app-server daemon 已启动，目标 CLI 会话正在运行 |
+| Codex 桌面版 | ✅ | ✅ | 桌面版提供本机原生 IPC，目标会话已加载并持有 owner；不依赖 CLI daemon |
+
+三者均支持逐条选择投递模式：默认 `queue`，忙时等当前任务结束后处理；显式 `--delivery steer`，忙时追加当前任务。目标空闲时，两种模式都会唤醒新一轮。
+
+本次实测 Codex CLI 0.163.0、daemon 0.160.0、Claude Code 2.1.306（交互会话）及 2.1.307（原生调度）。完整过程见[三方互通验收](docs/development/three-way-roundtrip-validation-20261022.md)与[原生投递验收](docs/development/native-delivery-validation-20261022.md)。
+
+上述记录验证原生投递通道。本轮 C14 正在接入显式工具类型与来源识别，隔离回归不代表各工具、正式 Desktop 和三平台均已重新验收。普通 Codex shell 的来源类型目前可能为 `pending`：已有引用的收件端明确、原生 ID 匹配时仍能正常回信；首次发信若返回端类型未知，程序不会生成缺少 `--tool` 的可执行回信命令。具体来源缺口与人工确认方案先由用户审阅，当前未开放通用兜底询问。
+
+其他具备 shell 的 agent 可调用 crosschat 命令发送消息；原生接收需另行适配和验收。
 
 ## 🧰 安装
 
@@ -77,14 +97,14 @@ mac：unix 实现共享，理论可达、未实测。
 
 ### 单机：boss 给 worker 派一句活
 
-准备：终端 A 跑 `crosschat claude`，进去后 `/rename worker`；终端 B 开一个 codex 窗口当 boss。然后整个过程：
+准备：终端 A 跑 `crosschat claude`，进去后 `/rename worker`；终端 B 跑 `crosschat claude -n boss`。以下示例使用能核实来源类型的 Claude Code 作为 boss；其他工具的来源状态见[工具类型与寻址](docs/tool-types.md)。然后整个过程：
 
 ```
 👤 用户[boss -> worker]   用 crosschat（先 status 确认名字）给 claude 会话「worker」下发任务：给我回复你好的消息。
 🤖 worker 收到            📨 来自另一会话的消息:
-                          <cross-session-message from-name="codex/01a…" turn="1">
+                          <cross-session-message from-name="boss" turn="1" from-tool="claude">
+                          回复请运行: crosschat send --conversation c3 --tool claude --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
                           给我回复你好的消息
-                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
 🤖 worker[worker -> boss] 你好
 🤖 boss 收到              📨 你好（turn 2）
 ```
@@ -98,9 +118,9 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 ```
 👤 用户[boss -> beta2]    用 crosschat 走 ssh 跨机给 yangwsl 机器的会话「beta2」问好，要求对方回复。
 🤖 beta2 收到             📨 来自另一会话的消息:
-                          <cross-session-message from-name="codex/boss@win" turn="1">
+                          <cross-session-message from-name="boss@win" turn="1" from-tool="claude">
+                          回复请运行: crosschat send --conversation c3 --tool claude --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
                           你好 beta2，这是跨机问候
-                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
 🤖 beta2[beta2 -> boss]   收到！跨机闭环成立
 🤖 boss 收到              📨 收到！跨机闭环成立（turn 2，自动经 ssh 回到 win）
 ```
@@ -114,14 +134,14 @@ worker 零配置、没学过任何协议——信封说怎么回就怎么回。
 ```
 👤 用户[boss -> worker2]  用 crosschat 走 tcp 跨机给 host-b 机器的 claude 会话「worker2」发任务，要求它跑一次构建并回报结果。
 🤖 worker2 收到            📨 来自另一会话的消息:
-                          <cross-session-message from-name="boss" turn="1">
+                          <cross-session-message from-name="boss" turn="1" from-tool="claude">
+                          回复请运行: crosschat send --conversation c3 --tool claude --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
                           …跑一次构建并回报结果…
-                          回复请运行: crosschat send --conversation c3 --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）
 🤖 worker2[worker2 -> boss] 构建完成，产物清单见下一条
 🤖 boss 收到               📨 构建完成，产物清单见下一条（turn 2，自动经 broker 跨机回来）
 ```
 
-与 ssh 跨机同构：题词里多了「走 tcp 跨机」四个字；agent 组装三段寻址（`tcp:<星>:<机器>:<会话>`），回信命令由引用自动路由（不带 `--via`），worker2 零配置照抄即回；另支持 `--file` 文件通道与 CI 零进程直发（见跨机通信手册）。
+与 ssh 跨机同构：agent 组装 `--via tcp:<星>:<机器>:<会话> --tool <收件类型>`，回信命令保留收件类型并由引用自动路由（不带 `--via`），worker2 照抄即可；另支持 `--file` 文件通道与 CI 零进程直发（见跨机通信手册）。
 
 ## ⭐ 会话入星与三段寻址（tcp 星成员 · proto:3）
 
@@ -160,16 +180,16 @@ crosschat serve --connect <星> --member-remove <名|id8>
 ### 三段寻址（直达星成员）
 
 ```
-crosschat send --via tcp:<星>:<机器>:<会话> --body "构建跑了吗"
-                      │     │      │      └ 会话名（星成员名，禁冒号；同名撞车时可带工具限定词 <工具>/<会话名>）
+crosschat send --via tcp:<星>:<机器>:<会话> --tool <收件类型> --body "构建跑了吗"
+                      │     │      │      └ 会话名或完整原生 ID（会话名禁冒号；工具类型独立填写）
                       │     │      └──────── 机器名或 mid8
                       │     └─────────────── 星名
                       └───────────────────── tcp 通道
 ```
 
-- 三段形态**免 `--to`**（会话段就是收件人）；回信照旧走信封 reply-hint，零配置
-- 同机 claude/codex 同名（多适配器常态）会话段带工具限定词消歧：`tcp:<星>:<机器>:claude/<名>` 与 `…:codex/<名>` 各达各的；裸名唯一照旧可用（撞名报 `NAME_COLLISION` 列全部限定地址，同工具同名改列 id8 投短前缀）
-- 非成员名 → `SESSION_NOT_MEMBER`（教学入星）；在册但下线 → `SESSION_OFFLINE`（通过启动器 `/resume` 或 TUI 选择恢复，也可 extends 接任；id8 寻址同样需要成员在线）；死名有接任者 → `SESSION_SUPERSEDED`（报错给出接任者的三段地址——带工具限定词，改投即可）；旧名还活着 → alive-wins，照投旧会话本尊
+- 三段形态**免 `--to`、必填 `--tool`**（会话段就是收件人）；回信照抄信封中的完整 reply-hint
+- 同机同名按 `--tool claude`、`--tool codex-cli`、`--tool codex-desktop` 等选择；所选类型内仍重名时用完整原生 ID。完整 ID 优先于另一会话的同形名称。`<工具>/<会话>` 不再作发送选型语法，斜杠属于名称/ID 原值
+- 非成员名 → `SESSION_NOT_MEMBER`（教学入星）；在册但下线 → `SESSION_OFFLINE`（通过启动器 `/resume` 或 TUI 选择恢复，也可 extends 接任）；死名有接任者 → `SESSION_SUPERSEDED`（报错给出接任者的完整 ID 地址和独立 `--tool`，改投即可）；旧名还活着 → alive-wins，照投旧会话本尊
 
 ### adopt 收编（会话活着但不在星里）
 
@@ -199,7 +219,7 @@ crosschat serve --connect <星> --adopt <名> --extend-session <旧名>   # 已�
 
 | 方式 | 一句话 | 状态 | 深入 |
 |---|---|---|---|
-| **单机会话** | 同机 agent 互发，`--to <名字>` 即起对话，忙时自动入队/发件箱 | ✅ v1.0 | [使用手册](docs/usage.md)：发起方式 / 投递语义 / 底层命令 / 边界 |
+| **单机会话** | 同机 agent 互发，`--to <名字> --tool <收件类型>` 起对话，忙时自动入队/发件箱 | ✅ v1.0 | [使用手册](docs/usage.md)：发起方式 / 投递语义 / 底层命令 / 边界 |
 | **跨机联邦 · ssh** | 加 `--via ssh:<对端hostname>`，消息经 ssh 落到对端机器，回复自动回来 | ✅ v1.3.3 | [联邦手册](docs/federation.md)：环境搭建（按 OS）/ 跨机聊天 / 底层实现 / CLI 契约 |
 | **跨机联邦 · tcp** | `crosschat serve --detach` 起服务 + `serve --add-star <星名>` 造星（热生效），机器 `serve --connect <星> --detach` 连星（1.6.0 起兼任聚合器），会话入星后三段寻址 `--via tcp:<星>:<机器>:<会话>` 直达；`--file` 文件通道 | ✅ v1.6.0 | [跨机通信：tcp](docs/broker.md)：环境搭建 / 日常使用 / 底层实现 / 协议参考 / 排障 |
 | **会话级星成员 · proto:3** | 启动器入星（`crosschat claude/codex --connect <星>`）+ 三段寻址（`--via tcp:<星>:<机器>:<会话>`）+ extends 换轨接任 + adopt 收编 | ✅ 018 | 本页[会话入星章](#-会话入星与三段寻址tcp-星成员--proto3)；验证阶梯与全量细则 [跨机通信：tcp](docs/broker.md) |
@@ -212,13 +232,13 @@ ssh 配置方向一句话：**每台机写自己的 `~/.ssh/config`，内容是"
 完整参数、启动器与环境变量说明见 [命令手册](docs/commands.md)。
 
 ```
-crosschat send --to <名字> --body "<正文>"          # 新消息（名字含空格加引号；未命名 codex 线程可用 id8 或完整 id 寻址，status 可见）
-crosschat send --to <名字> --delivery steer --body "<追加内容>" # 忙时追加当前任务，空闲时唤醒
-crosschat send --conversation <ref|c柄> --body "<正文>" # 回复（照抄信封里的命令或 delivered 行尾的 cN）
-crosschat send --via ssh:<对端hostname> --to <名/id8> --body "…"  # 跨机发送（见 📡 通信方式）
-crosschat send --via tcp:<星>:<机器>:<会话> --body "…"   # tcp 三段直达星成员（免 --to；见跨机通信手册）
-crosschat send --via tcp:<机器名/mid8> --to <名> --file <路径>  # tcp 文件通道（机器级；正文自动生成"已送达"）
-echo … | crosschat send --to <名字>                 # 正文走 stdin
+crosschat send --to <名字或完整ID> --tool <收件类型> --body "<正文>" # 新消息（目标有空格或特殊字符时按 shell 规则引用）
+crosschat send --to <名字或完整ID> --tool <收件类型> --delivery steer --body "<追加内容>" # 忙时追加当前任务，空闲时唤醒
+crosschat send --conversation <ref|c柄> --tool <收件类型> --body "<正文>" # 回复（照抄信封里的完整命令）
+crosschat send --via ssh:<对端hostname> --to <名或完整ID> --tool <收件类型> --body "…" # 跨机发送
+crosschat send --via tcp:<星>:<机器>:<会话> --tool <收件类型> --body "…" # tcp 三段直达星成员（免 --to）
+crosschat send --via tcp:<星>:<机器>:<会话> --tool <收件类型> --file <路径> # tcp 文件与会话通知；正文自动生成"已送达"
+echo … | crosschat send --to <名字或完整ID> --tool <收件类型> # 正文走 stdin
 crosschat status [--json] [--conversations] [--stars] [--claude|--codex] [--name <子串>] [--all]   # 裸跑三段式摘要；旗标在场=明细视图（--via tcp|ssh 配 --conversations 按传输滤）
 crosschat discover                                  # 新只读JSON发现；stdin可传list/detail请求，包含匿名/完整ID/分页，不补投
 crosschat doctor                                    # 一键环境体检（有 ❌ 时退出码 1）
@@ -247,7 +267,7 @@ ssh: 共 2 段对话
 （明细: --conversations --via ssh）
 ```
 
-发送输出三种状态：`delivered`（已投递）/ `queued`（已交对端 codex 队列待消费，轮末处理——**对方回信到来即证明已处理**，勿发消息追问）/ `parked`（对方忙，已入发件箱，看门狗自动重投；输出含队列深度与 mailbox 镜像路径）/ 错误码（见排障）。人眼输出行尾附 `· 续话 cN`——本地会话短柄，`crosschat send --conversation cN` 即接续。`status --conversations` 的末条状态是**本机发送账本视角**（对端回信不产生本机账目），`queued` 为终态。
+发送输出三种状态：`delivered`（已投递）/ `queued`（已交对端 codex 队列待消费，轮末处理——**对方回信到来即证明已处理**，勿发消息追问）/ `parked`（对方忙，已入发件箱，看门狗自动重投；输出含队列深度与 mailbox 镜像路径）/ 错误码（见排障）。人眼输出行尾附 `· 续话 cN`——本地会话短柄；接续仍须 `crosschat send --conversation cN --tool <收件类型>`。`status --conversations` 的末条状态是**本机发送账本视角**（对端回信不产生本机账目），`queued` 为终态。
 
 `status --conversations` 另看对话总览：每对端点的最近方向、相对时间、轮次、末条状态、滞留数与行尾续话柄（与 `--json` 组合输出同结构数组）。
 
@@ -257,7 +277,7 @@ ssh: 共 2 段对话
 
 | 错误码 | 含义与动作 |
 |---|---|
-| `NAME_NOT_FOUND` / `NAME_COLLISION` | 名字不对/重名——错误信息已列可用名；重名改用 id8 寻址 |
+| `NAME_NOT_FOUND` / `NAME_COLLISION` | 所选工具类型内未找到/重名——核对 `--tool`，同类型重名改用完整原生 ID |
 | `MESSAGE_TOO_LARGE` | 单条超上限（默认 16KiB；`--max-body-kb` / `CROSSCHAT_MAX_BODY_KIB` 可提额，claude 端点封顶 64KiB、codex 1MiB，到顶只能落盘）——按提示走落盘路径（跨机 scp 见联邦手册） |
 | `RATE_LIMITED` | 30 条/60s 限流——等待或收尾 |
 | `TARGET_*` / `BODY_*` / `USAGE` | 参数错误——按提示改 |
@@ -282,13 +302,13 @@ ssh: 共 2 段对话
 
 **Q：`codex queue` 能用吗？** 仅当 TUI 附着 daemon（0.160+）时会被消费；旧形态下是黑洞，故 crosschat 不依赖它。
 
-**Q：人能发消息吗？** 能（`--to`），身份 human，单向不能被回复。
+**Q：人能发消息吗？** 能（`--to <目标> --tool <收件类型>`），身份 human，单向不能被回复。
 
 **Q：消息历史在哪看？** claude 侧=会话 transcript；codex 侧=开窗 resume 线程。
 
 **Q：跨机怎么看不到对端的会话？** `status` 只列**本机**会话；跨机看对端用 `ssh <对端> crosschat status`。
 
-**Q：会话经常重启，名字对不上？** claude 重启后自动编号会漂移；常重启的会话进去先 `/rename` 固定一个稳定名字——名字稳定，`--to` 自动接续就不会断。
+**Q：会话经常重启，名字对不上？** claude 重启后自动编号会漂移；常重启的会话进去先 `/rename` 固定一个稳定名字，同一端点用 `--to <名字> --tool <收件类型>` 接续。
 
 **Q：`/rename` 改名后 status 里还是旧名/没有它？** 先刷新 `crosschat status`。Claude 名称取自活会话登记，登记未更新时可在原生会话再进行一轮后复查；Codex 名称来自实际连接的原生服务或桌面来源，需确认该来源可读。通过 crosschat TUI 的 `e` 改名会核对原生名称及星内路由更新后才报告成功，不能把各工具都归为“必须再发一条消息”。
 
@@ -322,19 +342,11 @@ ssh: 共 2 段对话
 | [实测研究报告](docs/research/) | embassy 源码分析、两侧通道验证、0.160 inject_items 实验 |
 | [联调实证记录](docs/drill-reports/) | 历次联调与验收实测报告（联邦连通性 / 现场反馈 / 手册冷走） |
 
-## 🤝 Agent 兼容性
-
-| Agent | 发送 | 接收 | 实测版本 |
-|---|---|---|---|
-| Claude Code | ✅ | ✅（需 `crosschat claude` 启动） | 2.1.287 |
-| Codex CLI | ✅ | ✅（需 daemon；0.160+ 开窗可收） | 0.159.3 / 0.160.0 |
-| 任意有 shell 的 agent | ✅（装 skill 后） | 🔜 按适配器扩展（GLM 等） | 路线图 |
-
 ## 🗺️ 路线图
 
 **计划中**
 - [x] 📡 两段式会话投递退役（[019](docs/wayfinder/tickets/019-ambient-session-delivery-retirement.md)：`--via tcp:<机器> --to <会话名>` 改报错教学，机器级操作保留——文档已先行 proto:3-only 口径）
-- [x] ⭐ 三段寻址工具限定词（[020](docs/wayfinder/tickets/020-session-address-tool-qualifier.md)：会话段可选 `工具/名`——同机跨工具同名消歧，裸名唯一零破坏；收命中集碰撞报错列限定地址（同工具同名/老聚合器列 id8 教短前缀）；sessionId/id8 短前缀寻址；extends 血统按工具各归各；启动期同名异工具预警（spawn 前）；status --stars/回执/指路显示带 tool）
+- [x] ⭐ 历史工具限定词方案（[020](docs/wayfinder/tickets/020-session-address-tool-qualifier.md)）；公开 send 选型现已由 C14 替换为独立必填 `--tool`，`工具/名` 按名称原值处理。内部显示与管理选择器的保留范围见[工具类型](docs/tool-types.md)
 - [ ] 🐧 mac 平台适配（unix 代码路径已共享，待实机验证；CI mac 观察位已挂）
 - [ ] 📦 常驻 broker 增强（忙时持久队列、异步回执、投递状态机——embassy 完整集对齐；tcp 星型直连传输已落地，见跨机通信手册）
 - [ ] 🖼️ TUI 看板与服务安装（开机自启）

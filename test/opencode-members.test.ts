@@ -62,7 +62,7 @@ describe('OpenCode member liveness', () => {
   });
 });
 
-interface AttachRequest { op: string; sessionId?: string; tool?: string; name?: string }
+interface AttachRequest { op: string; sessionId?: string; tool?: string; endpointType?: string; name?: string }
 
 async function starFixture(): Promise<{ deps: StarJoinDeps; requests: AttachRequest[]; setThreads(threads: OpenCodeThread[]): void }> {
   const dir = mkdtempSync(join(tmpdir(), 'crosschat-opencode-members-'));
@@ -90,6 +90,7 @@ async function starFixture(): Promise<{ deps: StarJoinDeps; requests: AttachRequ
         const request: AttachRequest = { op: raw.op };
         if ('sessionId' in raw && typeof raw.sessionId === 'string') request.sessionId = raw.sessionId;
         if ('tool' in raw && typeof raw.tool === 'string') request.tool = raw.tool;
+        if ('endpointType' in raw && typeof raw.endpointType === 'string') request.endpointType = raw.endpointType;
         if ('name' in raw && typeof raw.name === 'string') request.name = raw.name;
         requests.push(request);
         socket.write(JSON.stringify(request.op === 'status' ? { ok: true, online: true, brokerCap: true, members: [] } : { ok: true }) + '\n');
@@ -114,7 +115,7 @@ describe('OpenCode star entry', () => {
     fixture.deps.listClaudeSessions = () => ({ sessions: [{ sessionId: 'claude-native', name: 'Legacy' }] });
     fixture.deps.listOpenCodeThreads = async () => { throw new MultichatError('OPENCODE_UNAVAILABLE', 'Service unavailable.'); };
     expect(await runAdopt({ connect: '', adopt: 'Legacy' }, fixture.deps)).toBe(0);
-    expect(fixture.requests).toContainEqual({ op: 'attach', sessionId: 'claude-native', tool: 'claude', name: 'Legacy' });
+    expect(fixture.requests).toContainEqual({ op: 'attach', sessionId: 'claude-native', tool: 'claude', endpointType: 'cli', name: 'Legacy' });
   });
 
   it('reports native discovery failure when adopting an explicit OpenCode target', async () => {
@@ -131,7 +132,7 @@ describe('OpenCode star entry', () => {
     const fixture = await starFixture();
     fixture.setThreads([thread]);
     expect(await runAdopt({ connect: '', adopt: 'opencode/Worker' }, fixture.deps)).toBe(0);
-    expect(fixture.requests).toContainEqual({ op: 'attach', sessionId: thread.id, tool: 'opencode', name: 'Worker' });
+    expect(fixture.requests).toContainEqual({ op: 'attach', sessionId: thread.id, tool: 'opencode', endpointType: 'shared', name: 'Worker' });
   });
 
   it('discovers a newly started OpenCode session and detaches it after the launcher exits', async () => {
@@ -141,8 +142,8 @@ describe('OpenCode star entry', () => {
     try {
       await joiner.begin();
       fixture.setThreads([thread, { ...thread, id: 'ses_existing', name: 'Existing' }]);
-      await vi.waitFor(() => expect(fixture.requests).toContainEqual({ op: 'attach', sessionId: thread.id, tool: 'opencode', name: 'Worker' }), { timeout: 3000, interval: 20 });
+      await vi.waitFor(() => expect(fixture.requests).toContainEqual({ op: 'attach', sessionId: thread.id, tool: 'opencode', endpointType: 'shared', name: 'Worker' }), { timeout: 3000, interval: 20 });
     } finally { await joiner.stop(); }
-    expect(fixture.requests).toContainEqual({ op: 'detach', sessionId: thread.id });
+    expect(fixture.requests).toContainEqual({ op: 'detach', sessionId: thread.id, tool: 'opencode', endpointType: 'shared' });
   });
 });

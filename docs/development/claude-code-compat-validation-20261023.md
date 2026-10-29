@@ -55,6 +55,8 @@
 
 ## 最终本地验收与清理
 
+后续清理状态更新（2026-10-23 17:01，Asia/Shanghai）：用户要求核对临时文件，[只读复核](evidence/tool-integration-cleanup-20261023.json)确认 D盘总根已不存在，因此下文历史记载的初始引导便携 exe、tgz 及其临时研究/证据副本已不在该位置；Temp 下 `crosschat-*` 文件和目录均为0。旧清理 JSON 和拒绝回执保持原样，仓库内的脱敏验收证据保留。本次没有再次执行删除或运行工具。
+
 失败分类修复后，最终 [第二次串行 CI](evidence/claude-code-compat-20261023/sequence-2-summary.json)再次通过：基线与当时最新候选均为 2.1.309，分别七项通过，正常 code0 / 无信号 / 无超时，两个自有 runtime、注册、模型服务、fixture 和安装目录均正常清理，compatible、notify=false。
 
 `npm run check` 退出0：ESLint、184模块 / 584边运行时依赖图（无环或越界）、TypeScript build、Vitest 全部通过。200个测试文件通过 / 3个跳过，2084项通过 / 11项跳过；新的四个 Claude 受控 target 共43项通过。真实原生兼容序列另行执行，不把旧 live suite 的跳过当作真实验证通过。已测试源 HEAD 和统计见[最终验证记录](evidence/claude-code-compat-20261023/verification.json)。

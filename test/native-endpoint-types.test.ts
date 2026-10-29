@@ -88,6 +88,19 @@ describe('native endpoint identity', () => {
     expect(sessionFactory).not.toHaveBeenCalled();
   });
 
+  it('rejects an unknown Codex endpoint type before querying or writing to either transport', async () => {
+    const sessionFactory = vi.fn(async () => cli()); const desktopFactory = vi.fn(async () => desktop());
+    const options = { endpointType: 'unknown', sessionFactory, desktopFactory };
+    await expect(deliverToCodexThread('same', 'payload', options)).rejects.toMatchObject({ code: 'CODEX_ENDPOINT_TYPE_UNSUPPORTED' });
+    expect(sessionFactory).not.toHaveBeenCalled(); expect(desktopFactory).not.toHaveBeenCalled();
+  });
+
+  it('binds native cursors to the selected endpoint type', async () => {
+    const options = sources();
+    const page = await listCodexThreadPage(options);
+    await expect(listCodexThreadPage({ ...options, endpointType: 'cli', cursor: page.nextCursor ?? undefined })).rejects.toMatchObject({ code: 'CODEX_DISCOVERY_INVALID_CURSOR' });
+  });
+
   it('declares the verified Claude CLI endpoint and rejects a mismatched typed detail', async () => {
     const reader = createClaudeSessionReader({ directory: '/isolated-fixture', isProcessAlive: () => true,
       io: { readDirectory: async () => ['one.json'], readText: async () => JSON.stringify({ pid: 7, sessionId: 'same', kind: 'interactive', messagingSocketPath: 'fixture/socket' }) } });

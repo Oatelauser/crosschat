@@ -17,6 +17,8 @@ import {
   type CallerIdentity,
 } from '../../identity.js';
 import { resolveTargetById, resolveTargetByName } from '../../resolve.js';
+import { endpointConstraintMatches, isEndpointTypeFor, parseToolType, toolTypeFor, TOOL_TYPES } from '../../tool-types.js';
+import type { EndpointConstraint } from '../../tool-types.js';
 import { composeEnvelope } from '../../envelope.js';
 import {
   bodyTooLargeMessage,
@@ -39,6 +41,7 @@ import {
   continueConversation,
   continueFromRef,
   handleForRef,
+  latestKnownConversationRef,
   recordConversation,
   resolveHandle,
 } from '../../conversations.js';
@@ -88,6 +91,41 @@ function sshConfigHasAlias(text: string | undefined, alias: string): boolean {
   return false;
 }
 
+/** Preserve native-ID matching; use source coordinates only to disambiguate both endpoints. */
+function conversationSides(
+  ref: ConversationRef,
+  caller: CallerIdentity,
+  selected: EndpointConstraint,
+  sourceHost: string,
+  sourceMid: string | undefined,
+): { asFrom: boolean; asTo: boolean } {
+  let asFrom = identityMatchesEndpoint(caller, ref.f);
+  let asTo = identityMatchesEndpoint(caller, ref.t);
+  if (asFrom && asTo) {
+    const machineMatch = (endpoint: RefEndpoint): number => {
+      if (endpoint.p === 'human') return 0;
+      if (endpoint.mid !== undefined && sourceMid !== undefined) return endpoint.mid === sourceMid ? 2 : 0;
+      return endpoint.m === sourceHost ? 1 : 0;
+    };
+    const fromMachine = machineMatch(ref.f);
+    const toMachine = machineMatch(ref.t);
+    if (fromMachine !== toMachine) {
+      asFrom = fromMachine > toMachine;
+      asTo = toMachine > fromMachine;
+    }
+  }
+  if (asFrom && asTo && ref.f.p !== 'human' && ref.t.p !== 'human' && ref.f.endpointType !== ref.t.endpointType) {
+    const receives = (endpoint: RefEndpoint): boolean => endpoint.p !== 'human'
+      && endpointConstraintMatches({ providerId: endpoint.p, endpointType: endpoint.endpointType }, selected);
+    const fromReceives = receives(ref.f);
+    const toReceives = receives(ref.t);
+    if (fromReceives === toReceives) throw new MultichatError('CALLER_IDENTITY_UNRESOLVED', 'This native ID appears at both conversation endpoints and the recipient type does not identify one recipient.');
+    asFrom = toReceives;
+    asTo = fromReceives;
+  }
+  return { asFrom, asTo };
+}
+
 /**
  * 信封瘦身 A+ 的执行侧自动选路（--conversation 且无 --via）：
  * a. ref 带 starId（tcp 会话）→ 固定走 tcp，targetMachine=对端端点的 mid
@@ -106,6 +144,7 @@ async function autoViaFromRef(
   ref: ConversationRef,
   here: string,
   localMid: string | undefined,
+  selected: EndpointConstraint,
 ): Promise<SendArgs> {
   const isLocal = (ep: RefEndpoint): boolean =>
     ep.p !== 'human' && isSameMachine(ep.mid, ep.m, localMid, here);
@@ -124,12 +163,16 @@ async function autoViaFromRef(
   try {
     const envCaller = resolveCallerIdentity(deps.env, envScan);
     // B3.1 bug2：origin 在场即权威——远端来件的发送方身份不走本进程环境残留。
-    const caller = args.origin !== undefined ? decodeOriginIdentity(args.origin) : envCaller;
+    const origin = args.origin !== undefined ? decodeOriginIdentity(args.origin) : undefined;
+    const caller = origin ?? envCaller;
+    const endpoints = [ref.f, ref.t];
+    const { asFrom, asTo } = conversationSides(ref, caller, selected, origin?.host ?? here, origin === undefined ? localMid : origin.mid);
+    const recipient = asFrom === asTo ? undefined : asFrom ? ref.t : ref.f;
     // B11：只认"调用者身份之外且非本机"的端点为 via 目标——跨机回复时调用者
     // 自己的端点住在对端机上，误选会两机互弹 ssh 到 120s 超时。
-    const remote = [ref.f, ref.t].find(
+    const remote = endpoints.find(
       (ep): ep is { p: 'claude' | 'codex' | 'opencode' | 'dsh'; id: string; m: string } =>
-        !identityMatchesEndpoint(caller, ep) &&
+        (recipient === undefined ? !identityMatchesEndpoint(caller, ep) : ep === recipient) &&
         ep.p !== 'human' && ep.m !== undefined && !isSameMachine(ep.mid, ep.m, localMid, here),
     );
     if (remote !== undefined) return { ...args, via: pickAutoVia(remote.m, deps) };
@@ -159,6 +202,8 @@ async function autoViaFromRef(
 
 export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendResult> {
   const mode = resolveDeliveryMode(args.delivery);
+  const selected = selectedTool(args);
+  const discoverySelection = selected;
   resolveTargetArgs(args);
   // F2：--conversation 双形态——c<数字> 本地短柄先解析成唯一完整 ref（扫全部
   // 分片；过期/撞号在此教学自纠），mc1_/mc2_ 前缀直用永续。柄不过网：跨机腿
@@ -188,7 +233,10 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
     } catch {
       // invalid ref: the main path reports it
     }
-    if (ref !== undefined) args = await autoViaFromRef(args, deps, ref, here, localMid);
+    if (ref !== undefined) {
+      if (deps.conversationStateFile !== undefined) ref = latestKnownConversationRef(deps.conversationStateFile, ref);
+      args = await autoViaFromRef(args, deps, ref, here, localMid, selected);
+    }
   }
 
   // D0：配置值检查在路由定型后执行（autoVia 可能补挂 via）。tcp 形态的尺寸
@@ -234,7 +282,9 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
   const messageText = body as string;
 
   const scan = deps.listClaudeSessions();
-  const envCaller = resolveCallerIdentity(deps.env, scan);
+  const nativeCaller = resolveCallerIdentity(deps.env, scan);
+  const envCaller = args.origin === undefined && deps.enrichCallerIdentity !== undefined
+    ? await deps.enrichCallerIdentity(nativeCaller) : nativeCaller;
   // Federation (008 D5): an incoming remote send carries --origin — injected by
   // the sending machine's CLI — and that identity is authoritative. B3.1 bug2:
   // it must win over ANY ambient env identity, not just human shells — the
@@ -243,6 +293,10 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
   // session.
   const origin = args.origin !== undefined ? decodeOriginIdentity(args.origin) : undefined;
   const caller: CallerIdentity = origin ?? envCaller;
+  const here = deps.hostname?.() ?? osHostname();
+  const localMid = deps.machineId?.();
+  const sourceHost = origin?.host ?? here;
+  const sourceMid = origin === undefined ? localMid : origin.mid;
   // F1 跨机会话信封坐标：发送方机器名——tcp 腿取管线透传的 roster 真名，
   // ssh 腿取 origin 机器段（origin.via='tcp' 时 host 槽是 mid8，不是名字，
   // 不用）；单机与无名瞬态发送方均 undefined → 信封整个省略属性。
@@ -258,17 +312,20 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
   let target: RefEndpoint;
   let newRef: ConversationRef;
   let turn: number;
+  let callerIsFrom: boolean;
+  let replyThreads: CodexThreadSummary[] | undefined;
   if (args.conversation !== undefined) {
-    const ref = decodeRef(args.conversation);
-    const asFrom = identityMatchesEndpoint(caller, ref.f);
-    const asTo = identityMatchesEndpoint(caller, ref.t);
+    const decoded = decodeRef(args.conversation);
+    const ref = deps.conversationStateFile === undefined ? decoded : latestKnownConversationRef(deps.conversationStateFile, decoded);
+    const { asFrom, asTo } = conversationSides(ref, caller, selected, sourceHost, sourceMid);
     if (!asFrom && !asTo) {
       throw new MultichatError(
         'CALLER_NOT_IN_CONVERSATION',
         `Caller (${identityKey(caller)}) is not an endpoint of this conversation. ` +
-          '手里的 ref 可能抄漏或已过期——改用 --to <名字> 自动接续该端对最新对话。',
+          '手里的 ref 可能抄漏或已过期——改用 --to <名字> --tool <收件类型> 自动接续该端对最新对话。',
       );
     }
+    callerIsFrom = asFrom;
     target = asFrom ? ref.t : ref.f;
     if (target.p === 'human') {
       throw new MultichatError(
@@ -276,14 +333,32 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
         'This conversation was started by a human; there is no agent session to deliver a reply to.',
       );
     }
+    let boundRef = ref;
+    if (selected.providerId !== target.p || target.endpointType !== undefined && !endpointConstraintMatches({ providerId: target.p, endpointType: target.endpointType }, selected)) {
+      throw new MultichatError('TARGET_CONFLICT', 'The selected tool type does not match the conversation recipient.');
+    }
+    if (target.endpointType === undefined && selected.endpointType !== undefined) {
+      const codex = target.p === 'codex' ? await deps.listCodexThreads({ endpointType: selected.endpointType, complete: true }) : [];
+      const dsh = target.p === 'dsh' ? await deps.listDshThreads?.({ endpointType: selected.endpointType }) ?? [] : [];
+      const openCode = target.p === 'opencode' ? await deps.listOpenCodeThreads?.() ?? [] : [];
+      resolveTargetById(target.id, scan.sessions, codex, openCode, dsh, selected);
+      target = { ...target, endpointType: selected.endpointType };
+      boundRef = { ...boundRef, ...(asFrom ? { t: target } : { f: target }) };
+      if (target.p === 'codex') replyThreads = codex;
+    }
+    const sender = asFrom ? boundRef.f : boundRef.t;
+    if (caller.p !== 'human' && caller.endpointType !== undefined && sender.p !== 'human' && sender.endpointType === undefined) {
+      const typedSender = { ...sender, endpointType: caller.endpointType };
+      boundRef = { ...boundRef, ...(asFrom ? { f: typedSender } : { t: typedSender }) };
+    }
     // B22: the reply-hint ref is a snapshot of send time; when the pair's
     // stored line has already moved at or past it (late reply, parallel
     // senders from one old base), the stored line wins — no turn collisions.
     // Unwired state keeps the exact legacy nextTurnRef behavior.
     const continued =
       deps.conversationStateFile === undefined
-        ? { ref: nextTurnRef(ref), turn: ref.c + 1 }
-        : continueFromRef(deps.conversationStateFile, ref);
+        ? { ref: nextTurnRef(boundRef), turn: boundRef.c + 1 }
+        : continueFromRef(deps.conversationStateFile, boundRef, ref);
     newRef = continued.ref;
     turn = continued.turn;
   } else {
@@ -296,18 +371,19 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
     let openCode: OpenCodeThread[] = [];
     let dsh: DshThread[] = [];
     try {
-      threads = await deps.listCodexThreads();
-    } catch {
+      threads = await deps.listCodexThreads(discoverySelection?.providerId === 'codex' ? { endpointType: discoverySelection.endpointType, complete: true } : undefined);
+    } catch (error) {
+      if (selected.providerId === 'codex') throw error;
       // claude-side --to names still resolvable; otherwise let resolveTargetByName report it
     }
     try { openCode = await deps.listOpenCodeThreads?.() ?? []; }
     catch (error) {
-      if (args.to?.startsWith('opencode/')) throw error;
+      if (selected.providerId === 'opencode') throw error;
       // An unavailable optional source must not block the other tools.
     }
-    try { dsh = await deps.listDshThreads?.() ?? []; }
+    try { dsh = await deps.listDshThreads?.(discoverySelection?.providerId === 'dsh' ? { endpointType: discoverySelection.endpointType } : undefined) ?? []; }
     catch (error) {
-      if (args.to?.startsWith('dsh/')) throw error;
+      if (discoverySelection.providerId === 'dsh') throw error;
       // Existing tools remain independent of this optional native source.
     }
     // Guard above ensures exactly one of --to/--conversation; here it is --to.
@@ -315,10 +391,10 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
     let resolved;
     try {
       resolved = args.targetSessionId !== undefined
-        ? resolveTargetById(args.targetSessionId, scan.sessions, threads, openCode, dsh)
-        : resolveTargetByName(args.to ?? '', scan.sessions, threads, openCode, dsh);
+        ? resolveTargetById(args.targetSessionId, scan.sessions, threads, openCode, dsh, selected)
+        : resolveTargetByName(args.to ?? '', scan.sessions, threads, openCode, dsh, selected);
     } catch (error) {
-      if (args.targetSessionId === undefined && !args.to?.startsWith('opencode/') && !args.to?.startsWith('dsh/') && error instanceof MultichatError && error.code === 'NAME_NOT_FOUND' && deps.diagnoseCodexTarget !== undefined) {
+      if (selected.providerId === 'codex' && args.targetSessionId === undefined && error instanceof MultichatError && error.code === 'NAME_NOT_FOUND' && deps.diagnoseCodexTarget !== undefined) {
         const diagnosis = await deps.diagnoseCodexTarget(args.to ?? '');
         if (diagnosis.kind !== 'not-found') throw Object.assign(new MultichatError(diagnosis.code, diagnosis.message), { diagnosis });
       }
@@ -328,6 +404,9 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
       resolved.side === 'claude'
         ? { p: 'claude', id: resolved.session.sessionId }
         : { p: resolved.side, id: resolved.thread.id };
+    const row = resolved.side === 'claude' ? resolved.session : resolved.thread;
+    const endpointType = row.endpointType ?? selected.endpointType;
+    if (endpointType !== undefined) target = { ...target, endpointType };
     // B15: --to continues the pair's latest conversation when state is wired
     // (meaningful turn counting); absent state keeps the legacy fresh-thread
     // behavior so existing tests/embeddings stay untouched.
@@ -338,6 +417,7 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
         : continueConversation(deps.conversationStateFile, callerEndpoint, target);
     newRef = continued.ref;
     turn = continued.turn;
+    callerIsFrom = conversationSides(newRef, caller, selected, sourceHost, sourceMid).asFrom;
   }
 
   // 票A：端点封顶——早期检查只查了配置值，claude 端点 64KiB 更严，解析出
@@ -360,16 +440,13 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
   // stamps both endpoints with their machines — m (hostname) routes the return
   // --via, mid (machine-id) decides "same machine" so hostname collisions
   // cannot fake a local conversation. Local sends stamp nothing (no m = local).
-  const here = deps.hostname?.() ?? osHostname();
-  const localMid = deps.machineId?.();
   if (origin !== undefined) {
-    const fIsCaller = identityMatchesEndpoint(caller, newRef.f);
     const stamp = (ep: RefEndpoint, m: string, mid: string | undefined): RefEndpoint =>
       ep.p === 'human' ? ep : { ...ep, m, ...(mid === undefined ? {} : { mid }) };
     newRef = {
       ...newRef,
-      f: stamp(newRef.f, fIsCaller ? origin.host : here, fIsCaller ? origin.mid : localMid),
-      t: stamp(newRef.t, fIsCaller ? here : origin.host, fIsCaller ? localMid : origin.mid),
+      f: stamp(newRef.f, callerIsFrom ? origin.host : here, callerIsFrom ? origin.mid : localMid),
+      t: stamp(newRef.t, callerIsFrom ? here : origin.host, callerIsFrom ? localMid : origin.mid),
     };
   }
   // B10 collision warning: the ssh peer's hostname equals ours but its
@@ -396,19 +473,16 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
   const handle =
     deps.conversationStateFile === undefined ? undefined : handleForRef(deps.conversationStateFile, newRef);
   const replyRef = encodeRef(newRef);
+  const deliveryOptions = { mode, ...(target.endpointType !== undefined ? { endpointType: target.endpointType } : {}) };
+  const targetKey = identityKey(target);
+  const targetTool = toolTypeFor(target.p, target.endpointType) ?? target.p;
   const fromName = displayName(caller);
-  // 024 方案3：tcp 跨机信封正向三段坐标 tcp:<星>:<机器>:<工具>/<会话>——工具/
-  // 会话段与 020 限定词语法对齐（claude/<名>、codex/<id8>，human 无会话段降为
-  // 机器级）。星段=本腿经由星（022 多星下任一可达星皆可为发起坐标，不暗示
-  // 唯一）；ssh 腿无星概念、单机/无名发送方缺省 → from-addr 整个不出现。
-  const fromQualifier =
-    caller.p === 'claude'
-      ? `claude/${caller.name ?? caller.id.slice(0, 8)}`
-      : caller.p === 'dsh'
-        ? `dsh/${caller.id}`
-        : caller.p !== 'human'
-          ? `${caller.p}/${caller.id.slice(0, 8)}`
-          : undefined;
+  // Address and type are independent. Full native IDs remain opaque and
+  // routable even when a name happens to resemble a former tool qualifier.
+  const fromTool = caller.p === 'human' ? undefined : toolTypeFor(caller.p, caller.endpointType);
+  const senderEndpoint = callerIsFrom ? newRef.f : newRef.t;
+  const replyTool = fromTool ?? (senderEndpoint.p === 'human' ? undefined : toolTypeFor(senderEndpoint.p, senderEndpoint.endpointType));
+  const fromQualifier = caller.p === 'human' ? undefined : caller.id;
   const fromAddr =
     deps.fromStarName !== undefined && fromMachine !== undefined
       ? `tcp:${deps.fromStarName}:${fromMachine}${fromQualifier === undefined ? '' : `:${fromQualifier}`}`
@@ -427,76 +501,76 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
       // ssh/单机对话保持原教学。
       const tcpAddr =
         deps.fromStarName !== undefined && (target.m ?? '') !== ''
-          ? `tcp:${deps.fromStarName}:${target.m}:${target.id.slice(0, 8)}`
+          ? `tcp:${deps.fromStarName}:${target.m}:${target.id}`
           : undefined;
       throw new MultichatError(
         'TARGET_NOT_FOUND',
         `Claude session ${target.id} is not currently routable (process exited or unregistered). ` +
           (tcpAddr !== undefined
-            ? `对端会话可能已重启——点对点直达可照抄：crosschat send --via ${tcpAddr} --body "…"；按对端名三段重投（名见来信信封 from-name）则在被接任时获 SESSION_SUPERSEDED 指路。`
-            : '对端会话可能已重启——改用 --to <名字> 自动接续该端对最新对话（--to 同名即续，无需换名）。' +
+            ? `对端会话可能已重启——点对点直达可照抄：crosschat send --via ${tcpAddr} --tool ${targetTool} --body "…"；按对端名三段重投（名见来信信封 from-name）则在被接任时获 SESSION_SUPERSEDED 指路。`
+            : '对端会话可能已重启——改用 --to <名字> --tool <收件类型> 自动接续该端对最新对话（--to 同名即续，无需换名）。' +
               'status 只列本机会话；跨机对端用 ssh <对端> crosschat status 查。'),
       );
     }
-    checkSendLogRate(deps.sendLogFile, identityKey(caller), `claude:${target.id}`, deps.now());
+    checkSendLogRate(deps.sendLogFile, identityKey(caller), targetKey, deps.now());
     // 020：三段直达（targetSessionId 在场）的回执显示带工具限定词——跨工具同名时发送面认得出谁收到
     const toName =
       args.targetSessionId !== undefined && claudeSession.name !== undefined
         ? `claude/${claudeSession.name}`
         : (claudeSession.name ?? shortId('claude', claudeSession.sessionId));
-    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(fromAddr === undefined ? {} : { fromAddr }), ...(handle === undefined ? {} : { handle }) });
+    const content = composeEnvelope({ fromName, fromTool, replyTool, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(fromAddr === undefined ? {} : { fromAddr }), ...(handle === undefined ? {} : { handle }) });
     try {
       await deps.deliverClaude(
         { pid: claudeSession.pid, messagingSocketPath: claudeSession.messagingSocketPath },
         content,
-        { mode },
+        deliveryOptions,
       );
     } catch (err) {
-      logNow({ to: toName, target: `claude:${target.id}`, status: 'failed', code: errorCode(err), turn, replyRef });
+      logNow({ to: toName, target: targetKey, status: 'failed', code: errorCode(err), turn, replyRef });
       throw err;
     }
-    logNow({ to: toName, target: `claude:${target.id}`, status: 'delivered', turn, replyRef });
+    logNow({ to: toName, target: targetKey, status: 'delivered', turn, replyRef });
     if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
     return finish(deliveryResult(toName, turn, replyRef, false, handle));
   }
 
   if (target.p === 'opencode') {
     if (deps.deliverOpenCode === undefined) throw new MultichatError('OPENCODE_NOT_CONFIGURED', 'OpenCode delivery is not available in this context.');
-    const toName = `opencode/${target.id}`;
-    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(fromAddr === undefined ? {} : { fromAddr }), ...(handle === undefined ? {} : { handle }) });
-    checkSendLogRate(deps.sendLogFile, identityKey(caller), `opencode:${target.id}`, deps.now());
+    const toName = `${targetTool}/${target.id}`;
+    const content = composeEnvelope({ fromName, fromTool, replyTool, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(fromAddr === undefined ? {} : { fromAddr }), ...(handle === undefined ? {} : { handle }) });
+    checkSendLogRate(deps.sendLogFile, identityKey(caller), targetKey, deps.now());
     try {
-      const result = await deps.deliverOpenCode(target.id, content, { mode });
-      logNow({ to: toName, target: `opencode:${target.id}`, status: result.queued ? 'queued' : 'delivered', turn, replyRef });
+      const result = await deps.deliverOpenCode(target.id, content, deliveryOptions);
+      logNow({ to: toName, target: targetKey, status: result.queued ? 'queued' : 'delivered', turn, replyRef });
       if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
       return finish(deliveryResult(toName, turn, replyRef, result.queued, handle));
     } catch (err) {
-      logNow({ to: toName, target: `opencode:${target.id}`, status: 'failed', code: errorCode(err), turn, replyRef });
+      logNow({ to: toName, target: targetKey, status: 'failed', code: errorCode(err), turn, replyRef });
       throw err;
     }
   }
 
   if (target.p === 'dsh') {
     if (deps.deliverDsh === undefined) throw new MultichatError('DSH_NOT_CONFIGURED', 'DeepSeek Harness delivery is not available in this context.');
-    const toName = `dsh/${target.id}`;
-    const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(fromAddr === undefined ? {} : { fromAddr }), ...(handle === undefined ? {} : { handle }) });
-    checkSendLogRate(deps.sendLogFile, identityKey(caller), `dsh:${target.id}`, deps.now());
+    const toName = `${targetTool}/${target.id}`;
+    const content = composeEnvelope({ fromName, fromTool, replyTool, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(fromAddr === undefined ? {} : { fromAddr }), ...(handle === undefined ? {} : { handle }) });
+    checkSendLogRate(deps.sendLogFile, identityKey(caller), targetKey, deps.now());
     try {
-      const result = await deps.deliverDsh(target.id, content, { mode });
-      logNow({ to: toName, target: `dsh:${target.id}`, status: result.queued ? 'queued' : 'delivered', turn, replyRef });
+      const result = await deps.deliverDsh(target.id, content, deliveryOptions);
+      logNow({ to: toName, target: targetKey, status: result.queued ? 'queued' : 'delivered', turn, replyRef });
       if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
       return finish(deliveryResult(toName, turn, replyRef, result.queued, handle));
     } catch (err) {
-      logNow({ to: toName, target: `dsh:${target.id}`, status: 'failed', code: errorCode(err), turn, replyRef });
+      logNow({ to: toName, target: targetKey, status: 'failed', code: errorCode(err), turn, replyRef });
       throw err;
     }
   }
 
   // Codex delivers by threadId; a missing thread surfaces as a codex adapter error.
-  checkSendLogRate(deps.sendLogFile, identityKey(caller), `codex:${target.id}`, deps.now());
+  checkSendLogRate(deps.sendLogFile, identityKey(caller), targetKey, deps.now());
   let threadName: string | null | undefined;
   try {
-    threadName = (await deps.listCodexThreads()).find((thread) => thread.id === target.id)?.name;
+    threadName = (replyThreads ?? await deps.listCodexThreads(target.endpointType === undefined ? undefined : { endpointType: target.endpointType, complete: true })).find((thread) => thread.id === target.id && (target.endpointType === undefined || thread.endpointType === target.endpointType))?.name;
   } catch {
     // An exact ref already identifies the target. Optional display metadata
     // must not make Desktop delivery depend on the separate CLI daemon.
@@ -505,34 +579,34 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
     args.targetSessionId !== undefined && threadName !== undefined
       ? `codex/${threadName}`
       : (threadName ?? shortId('codex', target.id));
-  const content = composeEnvelope({ fromName, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(fromAddr === undefined ? {} : { fromAddr }), ...(handle === undefined ? {} : { handle }) });
-  const receiptMarker = createReceiptMarker(target.id, content);
+  const content = composeEnvelope({ fromName, fromTool, replyTool, toName, turn, ref: replyRef, body: messageText, turnBudget, ...(fromMachine === undefined ? {} : { fromMachine }), ...(fromAddr === undefined ? {} : { fromAddr }), ...(handle === undefined ? {} : { handle }) });
+  const receiptMarker = createReceiptMarker(target.id, content, target.endpointType);
   const parkNow = (): number => {
     park(
       deps.outboxDir,
       target.id,
-      { envelope: content, toName, callerKey: identityKey(caller), deliveryMode: mode },
+      { envelope: content, toName, callerKey: identityKey(caller), deliveryMode: mode, ...(target.endpointType === undefined ? {} : { endpointType: target.endpointType }) },
       deps.now(),
     );
     deps.spawnWatchdog?.();
-    return outboxCount(deps.outboxDir, target.id);
+    return outboxCount(deps.outboxDir, target.id, target.endpointType);
   };
-  const mailboxPath = mailboxFileFor(deps.outboxDir, target.id);
+  const mailboxPath = mailboxFileFor(deps.outboxDir, target.id, target.endpointType);
   // Queue discipline (B12): when older items are still parked, a fresh send
   // joins the queue instead of jumping it — order stays FIFO even though a
   // direct attempt could squeeze through an idle window the drain missed.
-  const queuedBefore = mode === 'queue' ? outboxCount(deps.outboxDir, target.id) : 0;
+  const queuedBefore = mode === 'queue' ? outboxCount(deps.outboxDir, target.id, target.endpointType) : 0;
   if (queuedBefore > 0) {
     const queue = parkNow();
     return finish(parkedResult(toName, turn, replyRef, queue, mailboxPath, handle));
   }
   try {
-    const delivered = await deps.deliverCodex(target.id, content, { mode });
+    const delivered = await deps.deliverCodex(target.id, content, deliveryOptions);
     const queued = delivered.queued === true;
     // Queued sits behind the recipient's running turn: a rollout receipt is
     // structurally impossible within the probe budget, so do not even look.
-    const receipt = queued ? undefined : await deps.confirmReceipt?.(target.id, receiptMarker);
-    logNow({ to: toName, target: `codex:${target.id}`, status: queued ? 'queued' : 'delivered', turn, replyRef, receipt, receiptMarker });
+    const receipt = queued ? undefined : await deps.confirmReceipt?.(target.id, receiptMarker, target.endpointType);
+    logNow({ to: toName, target: targetKey, status: queued ? 'queued' : 'delivered', turn, replyRef, receipt, receiptMarker });
     if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
     return finish({ ...deliveryResult(toName, turn, replyRef, queued, handle), confirmation: receipt });
   } catch (err) {
@@ -543,13 +617,23 @@ export async function sendMessage(args: SendArgs, deps: SendDeps): Promise<SendR
       (err.code === 'CODEX_THREAD_BUSY_TIMEOUT' || err.code === 'CODEX_THREAD_LOCKED')
     ) {
       const queue = parkNow();
-      logNow({ to: toName, target: `codex:${target.id}`, status: 'parked', turn, replyRef, receiptMarker });
+      logNow({ to: toName, target: targetKey, status: 'parked', turn, replyRef, receiptMarker });
       if (deps.conversationStateFile !== undefined) recordConversation(deps.conversationStateFile, newRef, deps.now(), arrivalMachines);
       return finish(parkedResult(toName, turn, replyRef, queue, mailboxPath, handle));
     }
-    logNow({ to: toName, target: `codex:${target.id}`, status: 'failed', code: errorCode(err), turn, replyRef, receiptMarker });
+    logNow({ to: toName, target: targetKey, status: 'failed', code: errorCode(err), turn, replyRef, receiptMarker });
     throw err;
   }
+}
+
+function selectedTool(args: SendArgs): EndpointConstraint {
+  if (args.tool === undefined) throw new MultichatError('USAGE', 'send requires --tool <recipient type>, including --conversation replies. Copy the complete reply hint or TUI send command.');
+  const selected = parseToolType(args.tool);
+  if (selected === undefined) throw new MultichatError('USAGE', `Unknown --tool type. Use ${TOOL_TYPES.map((tool) => tool.id).join(', ')}.`);
+  if (args.targetEndpointType !== undefined && (args.targetProviderId === undefined || !isEndpointTypeFor(args.targetProviderId, args.targetEndpointType))) throw new MultichatError('USAGE', 'Invalid injected target delivery type.');
+  const injected = args.targetProviderId === undefined ? undefined : { providerId: args.targetProviderId, endpointType: args.targetEndpointType };
+  if (selected !== undefined && injected !== undefined && !endpointConstraintMatches(selected, injected)) throw new MultichatError('TARGET_CONFLICT', 'The selected tool differs from the exact native target.');
+  return selected;
 }
 
 function logEntry(
