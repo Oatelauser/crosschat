@@ -82,27 +82,29 @@ npm/Web 与正式 Desktop 不互相冒充：上表里所有"未测"都是指正�
 
 **验证**：`test/dsh-bridge.test.ts` 32 项、caller-source 相关 14 + 55 项通过，语法与相关 ESLint 通过；root 另独立跑 5 个定向套件共 80 项通过。派单时点的两次全量首败保留为 `I01-check.txt`、`I01-R1-check.txt`，失败均落在并行短柄线在途文件或负载敏感超时，没有一个导入桥；集成后的整仓结果另见 `I01-final-review.md`。**边界**：合成 ctx/host，不是正式 Harness/Desktop 进程内重放。
 
-## 五、待用户决定（均未批准）
+## 五、后续选择与批准边界
+
+2026-10-29 补充：用户在两种技能维护方式解释后明确“skill可以新增，这个不影响”。按前述 A 默认方案推进 C08-I01；只允许新增技能副本及对应维护接线，不扩为其它新增功能文件或原生管理自动化。其余未批准事项仍保留如下。
 
 | 事项 | 建议 | 理由 |
 | --- | --- | --- |
 | 新增 `crosschat dsh install/update/remove` 自动命令 | **不建议** | 原生 `dsh plugin` 已是官方入口，且 Desktop 与 npm 是两套 CLI；crosschat 再包一层会与官方语义漂移，装错 profile 仍然静默 |
 | 为桥设默认 profile | **不设**，必须显式指定 | Desktop profile 只能由 Desktop 自己的 CLI 管理，默认值会把"装错地方"变成默认行为 |
 | 卸载时自动调用原生管理器 | **不调用**，只给命令与诊断 | 会改用户原生配置，且 npm 与 Desktop 是两套 CLI、各管各的 profile；两套都有 `plugin ... remove`（固定提交核实），但自动化仍需替用户选 profile、并在退出后执行，做不做由用户决定 |
-| 技能是否纳入 `install-skills` 的 Harness 写入 | **需用户决定**（属 C08 范围） | 扩大默认写入范围是用户可见的行为变更，本单不替用户选 |
+| 技能是否纳入 `install-skills` 的 Harness 写入 | **已允许新增skill，按 A 默认方案实施 C08-I01** | 用户已知默认第三目标会复制技能文件；仍不自动安装原生工具或桥 |
 
 现有手工流程（复制 skill、`dsh plugin add`）不需要用户再批准，本单只是把它写清。
 
-### C08 下一步需决定的写入范围
+### C08 写入范围选择记录
 
-I02 已通过[最终验收](evidence/c13-worker-20261029/I02-final-review.md)，现可消费上述合同。当前 `install-skills` 写 Claude/Codex 两个目录；OpenCode 复用 Claude 目录，Harness 仍手工复制。下面两种接法均未批准，root 尚未派发产品实现。
+I02 已通过[最终验收](evidence/c13-worker-20261029/I02-final-review.md)，可消费上述合同。讨论时 `install-skills` 写 Claude/Codex 两个目录，OpenCode 复用 Claude 目录，Harness 手工复制。用户现允许新增skill，root按已解释的 A 默认方案派发[C08-I01](evidence/c08-worker-20261029/I01-task.md)；下面保留两种方式的影响记录，B未选用，实施完成前不声称已接通。
 
 | 选择 | 用户可见行为 | 影响 |
 | --- | --- | --- |
 | 默认纳入 Harness | 保留现有命令，一次安装/更新现有两侧与 Harness 的 crosschat skill；默认 Harness 目标为 `<Harness home>/skills/crosschat`，尊重实际 DSH_HOME，未设时为 `~/.dsh` | 即使此前没有 Harness 副本，也会创建目标并复制随包 skill/references；统一卸载计划相应列出并移除该 crosschat skill 目录 |
 | 显式选择 Harness | 无参数仍只写现有两侧；用户显式选 Harness 后才安装/更新其 skill，卸载范围同样明确选择 | 避免扩大无参数写入范围，但需要批准选择入口的用户操作；具体参数随该选择写定 |
 
-两种方案均复用现有维护模块，CLI/TUI 使用同一目标计划；不新增持久追踪文件，不自动调用 Harness 插件管理器。技能目录之外的原生配置、插件引用、聊天不纳入技能删除。显式 `--dir` 的隔离根、自定义目标与更新残留的处理须在 C08 实施合同中明确，不能由默认目标选择反向推定已批准新的扫描或删除范围。此处只请求决定默认范围，不将 C08 其余合同或产品实现视为已经批准。
+实施复用现有维护模块，CLI/TUI 使用同一目标计划；不新增持久追踪文件，不自动调用 Harness 插件管理器。技能目录之外的原生配置、插件引用、聊天不纳入技能删除。C08-I01明确：显式 `--dir` 三目标均在其根内并忽略宿主DSH_HOME；普通环境尊重当前DSH_HOME；更新保留现有覆盖复制、不清额外文件；不扫描历史环境/项目或追踪旧自定义副本。其余C08合同继续保留，不由本次例外推定全部批准或完成。
 
 ## 六、依赖边界
 
