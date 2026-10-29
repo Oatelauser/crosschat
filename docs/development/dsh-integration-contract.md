@@ -24,6 +24,18 @@ loopback 随机端口、32-byte 随机 Bearer token；登记于 `~/.crosschat/ds
 
 `GET /v1/info`、`GET /v1/sessions`、`GET /v1/sessions/{id}` 只读；`POST /v1/sessions/{id}/messages` 携带 text/mode，回执确认 sessionId/messageId/mode。`followup/steer` 接收消息不代表模型已经理解或回答。桥卸载仅回收自身HTTP/登记，不销毁借用的Agent；dead PID记录只读忽略、不在发现时删除，活owner失联/损坏保持来源错误。
 
+## 生命周期与资产归属（2026-10-29 补记）
+
+本节只写已核实事实，不改上文批准范围。
+
+四类资产分开：crosschat npm 包（`dist/`、`skills/`、`integrations/dsh`）；用户手工复制的 skill 副本（`<Harness home>/skills/crosschat` 或项目 `.agents/skills/crosschat`，保留 `references`）；所选 profile 里的插件引用（`file:<桥目录>`，由 Harness 插件管理器写入）；桥运行时登记（`~/.crosschat/dsh/instances/<uuid>.json`，固定在用户主目录，与 `DSH_HOME` 无关）。crosschat 只拥有第一类和最后一项；`install-skills` 仍只写 `.claude`/`.codex`（`src/application/maintenance/skills.ts`）。
+
+插件管理命令在固定提交 `687f282e8625c6b8d11ff58211a90524be2e4317` 中由 `plugin` 子命令承担：`--profile` 必填，其余参数原样转交 profile 目录下的 pnpm（[`apps/cli/src/args.ts:194–201`](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/apps/cli/src/args.ts#L194-L201)）。npm CLI 拒绝管理 `desktop` profile（同文件 199 行）。Desktop 自带 `resources/runtime/cli/bin/dsh.cmd`，按 [`apps/desktop/README.md:131–141`](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/apps/desktop/README.md#L131-L141) 先初始化、完整退出再管理。Web 现有包的移除为 `dsh plugin --profile web remove @crosschat/dsh-bridge`（包名见 `integrations/dsh/package.json`，添加时用 `file:` 目录）。这是既有"卸载 crosschat 前先移除 bundle"步骤的准确命令，不是新增步骤。
+
+保存不等于加载：插件管理器持久化选择，是否即时应用取决于 HMR，须读安装结果的 `application/warnings`（[Plugin Manager](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/boot/plugin-manager/README.md)）。同一 Host 内禁用会触发插件 disposer → 桥的 `ctx.effect` 调 `close()`，撤销自身 listener 与登记；重新启用产生新实例登记，旧凭据被拒；`shellEnv` 子 scope 撤销只撤身份贡献、HTTP 保留；Host 崩溃可留死 PID 登记，发现侧只读忽略、不删除。安装路径变化时按新目录重新添加是原有要求；没有依据把 remove→add 定为必需顺序。
+
+证据边界：Web npm runtime 的禁用/启用与登记更替见[第三轮真实通过](evidence/dsh-20261023/third-live.json)（同一 PID、旧端口关闭、旧凭据拒绝、四个会话保留）；正式 Desktop 包未实测（C04）；桥 close 的逐项清理与 mount 错误保真是合成 ctx 上的测试（C13-I01/R1），不冒充 Desktop 生命周期验证；整仓全量仍待并行短柄线集成，未宣称通过。
+
 ## 开发验收
 
 本批桥、公共链路、发现/TUI、真实 npm/Web runtime、本地完整兼容编排与交付已验收，活动任务全部移除，证据见[验收记录](dsh-validation-20261023.md)。正常测试安装已卸载，C盘超时现场由用户删除；D盘测试根按用户随后明确指示保留，供后续工具测试，最终由用户统一删除，见[清理决定](dsh-cleanup-20261023.md)。

@@ -16,13 +16,23 @@ dsh plugin --profile web add "file:$bridge" --offline --ignore-scripts
 dsh web
 ```
 
-Plugins 页面也可添加同一个本地 bundle。选择实际使用的 profile；装到另一个 profile 不会让当前会话出现。`dsh-bridge-path` 只读，不会安装插件或修改配置。crosschat 升级改变了安装路径时，应按新目录重新添加；卸载 crosschat 前先从 Harness 移除该 bundle。
+Plugins 页面也可添加同一个本地 bundle。选择实际使用的 profile；装到另一个 profile 不会让当前会话出现。`dsh-bridge-path` 只读，不会安装插件或修改配置。插件管理器保存选择后，是否立即应用到运行中的 Host 取决于 HMR；**保存依赖不等于已经加载成功**，需查看安装结果的 `application/warnings` 并重启确认（[Plugin Manager](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/boot/plugin-manager/README.md)）。
 
 Desktop 具有独立的 `desktop` profile，由它的 Plugins 页面或其内置 `resources/runtime/cli/bin/dsh.cmd` 管理。命令行管理前先启动 Desktop 完成初始化，再完全退出应用；参数沿用 `plugin --profile desktop add "file:<桥目录>"`。系统 npm 的 `dsh` 不负责管理 Desktop profile。此路径来自[官方 Desktop 文档](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/apps/desktop/README.md#bundled-command-runtime)，本批尚未实测正式 Desktop 包。
 
+### 更新与移除
+
+`plugin` 子命令要求显式 `--profile`，其余参数原样转交给该 profile 目录下的 pnpm（[`apps/cli/src/args.ts:194–201`](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/apps/cli/src/args.ts#L194-L201)）。卸载 crosschat 前，先完全退出对应的 Host，再移除 bundle：
+
+```powershell
+dsh plugin --profile web remove @crosschat/dsh-bridge
+```
+
+添加时写的是 `file:<桥目录>`，移除用包名 `@crosschat/dsh-bridge`（见 `integrations/dsh/package.json`）。Desktop 同理，完整退出后运行其自带的 `resources/runtime/cli/bin/dsh.cmd plugin --profile desktop remove @crosschat/dsh-bridge`（[Desktop 文档](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/apps/desktop/README.md#L131-L141)）。crosschat 升级改变了安装路径时，按新目录重新添加即可，不需要先移除；"先 remove 再 add"也不是必需顺序。crosschat 不自动调用原生管理器，也不替用户选择 profile。
+
 ## 让 Agent 使用 crosschat
 
-把 crosschat 包中的完整 `skills/crosschat` 目录复制到 `<Harness home>/skills/crosschat`，或项目的 `.agents/skills/crosschat`。保留 `references` 子目录。桥目录的 `../../skills/crosschat` 是该 skill 的随包位置；Harness home 默认为用户的 `.dsh`，使用自定义 `DSH_HOME` 时以实际目录为准。现有 `crosschat install-skills` 没有新增 Harness 写入行为。
+把 crosschat 包中的完整 `skills/crosschat` 目录复制到 `<Harness home>/skills/crosschat`，或项目的 `.agents/skills/crosschat`。保留 `references` 子目录。桥目录的 `../../skills/crosschat` 是该 skill 的随包位置；Harness home 默认为用户的 `.dsh`，使用自定义 `DSH_HOME` 时以实际目录为准。现有 `crosschat install-skills` 只写 `.claude`/`.codex`，没有 Harness 写入行为，这份副本要手工复制和维护。
 
 在 Harness 原生窗口打开目标会话，使其成为 live root Agent，再检查：
 
@@ -37,6 +47,10 @@ crosschat send --to "dsh/<完整会话ID>" --delivery steer --body "用户让我
 `queue` 在目标忙时进入下一轮，`steer` 在下一步加入当前任务；空闲时都会启动处理。受理回执只表示原生 Agent 已接收，不表示模型已理解或完成。子 Agent、未打开的历史会话不在路由范围；找不到目标时 crosschat 报错，由用户在原生 UI 打开所需历史会话。
 
 ## 运行与维护
+
+四类东西分开归属：crosschat npm 包（含桥目录与 skill 源）、复制进 Harness 的 skill 副本、所选 profile 里的插件引用、桥运行时登记。crosschat 只写最后一项，登记固定在用户主目录的 `~/.crosschat/dsh/instances`，与 Harness 的 `DSH_HOME` 无关；skill 副本由用户手工复制，`crosschat install-skills` 仍只写 `.claude`/`.codex`；插件引用由 Harness 自己的插件管理器写进 profile。
+
+插件与桥在 Host 进程内运行，几种情况要分清：同一 Host 内禁用插件会走桥的 disposer，撤销它自己的 listener 和登记；重新启用会生成新的实例登记，旧凭据随之失效；只撤销 `shellEnv` 子 scope 时仅撤身份贡献，HTTP 仍继续服务；Host 崩溃可能留下死 PID 登记，发现侧只读忽略、不删除，下次启动写新实例。禁用/启用的实测见[第三轮真实通过](development/evidence/dsh-20261023/third-live.json)，覆盖范围仅官方 npm Web runtime。Web 与 Desktop 的 profile 和插件管理器各归各的，不互相代管。
 
 桥在同机 `127.0.0.1` 随机端口监听，以每次启动的随机 token 认证，登记位于 `~/.crosschat/dsh/instances`。crosschat 核对实例 PID、instance ID、runtime 版本及桥协议。登记是私有凭据，排错时只提供错误码和版本，不粘贴 token。跨机器通信走既有 SSH/TCP crosschat 通道，桥端口保持本机。
 
