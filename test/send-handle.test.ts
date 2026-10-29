@@ -35,9 +35,15 @@ function makeDeps(stateFile: string | undefined, overrides: Partial<SendDeps> = 
 const freshState = (): string => join(mkdtempSync(join(root, 'state-')), 'conversations.json');
 
 describe('G0 send 输出换柄（长引用退场）', () => {
-  it('delivered 行尾追加 · 续话 c1，不再有 reply-ref 行', async () => {
+  it('rejects a legacy numeric parameter before invoking a native delivery adapter', async () => {
+    let deliveries = 0;
+    const deps = makeDeps(freshState(), { deliverCodex: async () => { deliveries++; return { status: 'accepted', turnId: 'not-used' }; } });
+    await expect(runSend({ tool: 'codex-cli', conversation: 'c14', bodyArg: 'old hint' }, deps)).rejects.toThrow(/旧.*短柄.*停用/);
+    expect(deliveries).toBe(0);
+  });
+  it('delivered 行尾追加五字符续话柄，不再有 reply-ref 行', async () => {
     const out = await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'hello' }, makeDeps(freshState()));
-    expect(out).toBe('delivered to workteam (turn 1) · 续话 c1');
+    expect(out).toBe('delivered to workteam (turn 1) · 续话 cA000');
     expect(out).not.toContain('reply-ref');
   });
 
@@ -52,7 +58,7 @@ describe('G0 send 输出换柄（长引用退场）', () => {
       }),
     );
     expect(out).toContain('已寄存给 workteam');
-    expect(out.split('\n')[2]).toMatch(/^续话: c\d+$/);
+    expect(out.split('\n')[2]).toMatch(/^续话: c[A-Z]\d{3}$/);
     expect(out).not.toContain('reply-ref');
   });
 
@@ -70,12 +76,12 @@ describe('G0 send 输出换柄（长引用退场）', () => {
     expect(out).toMatch(/^delivered to workteam \(turn 1\)\nreply-ref: mc2_[A-Za-z0-9_-]+$/);
   });
 
-  it('续话柄真的可续：--conversation c1 第二发 turn 递增', async () => {
+  it('续话柄真的可续：--conversation cA000 第二发 turn 递增', async () => {
     const state = freshState();
     const deps = makeDeps(state);
     await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'one' }, deps);
-    const second = await runSend({ tool: 'codex-cli', conversation: 'c1', bodyArg: 'two' }, deps);
-    expect(second).toContain('delivered to workteam (turn 2) · 续话 c1');
+    const second = await runSend({ tool: 'codex-cli', conversation: 'cA000', bodyArg: 'two' }, deps);
+    expect(second).toContain('delivered to workteam (turn 2) · 续话 cA000');
   });
 });
 
@@ -93,6 +99,6 @@ describe('G0 via 腿输出换柄', () => {
       }),
     });
     const out = await runViaSend({ tool: 'codex-cli', via: 'ssh:build01', to: 'worker2' }, '干活', deps);
-    expect(out).toBe('delivered to worker2@build01 (turn 3) · 续话 c1');
+    expect(out).toBe('delivered to worker2@build01 (turn 3) · 续话 cA000');
   });
 });
