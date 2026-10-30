@@ -208,3 +208,21 @@ RED 实测 **4 失败 / 30 通过**，全部业务断言：数组 `installationI
 
 - 未单列反例：attempt 层报告 `runId`/`installationId` 为数组（JSON 往返已使引用不相等，类型收口由 sequence 层反例与 `validDesktopReport` 先验共同覆盖）；dev/ino 一致性见上节定位。
 - 清理：三个新用例均使用独占 `mkdtemp` 临时根（含 marker 文件）并在结束时删除，删除前以绝对路径断言归属；无新增调试产物，未触碰 `docs/代码消息投递.md`。
+
+### 6. 定向补充：假值异常的真实 reason（2026-10-30）
+
+R2 双轴复审（`I01-R2-review.md`）发现 `retainedIdentity` 用异常值真伪判定，`throw 0` 等假值丢失真实原因。本节只补这一条错误上下文分支，其余范围不变。
+
+| 阶段 | 提交 | 内容 |
+| --- | --- | --- |
+| 基线 | `6121bad` | root R2 复审提交 |
+| RED | `62f260e` | 只改测试：五个假值逐一断言 reason/summary.error 为 `String(value)` |
+| GREEN | `8a5b61f` | 只改产品：`threw` 标志 + 投影按"是否捕获异常"判定 |
+
+RED 实测 **1 失败 / 34 通过**，失败即 `throw undefined` 的 `retainedInstallation.reason` 退回通用释放未知文案（`0`/`false`/`''`/`null` 随首条断言在同组覆盖；remove `throw 0` 当时已正确，作守护）。GREEN **35/35**。
+
+修复：`serialSequence` 独立记录 `threw`（捕获即真，与异常值无关），`retain(reason, error, threw)` 传入投影；Desktop `retainedIdentity(installation, error, threw)` 以 `threw` 判定，`reason = message(error)`（即 `String(value)`，`throw undefined` → `'undefined'`）。释放未知且 probe 正常返回时仍用原文案；remove 抛错分支恒为已捕获。Web 无投影，原文案与结构逐字节不变（守护用例保持）。
+
+反例（「keeps String(value) as the real reason when the probe throws a falsy value」，真实独占临时根 + marker）：`[undefined, 0, false, '', null]` 逐一断言 `reason` 与 `summary.error` 均为 `String(value)`、身份完整、调用停在 `['install','probe']`、marker 未删；remove `throw 0` → `reason`/`summary.error` 均为 `'0'`。
+
+验证：定向 35/35；`node --check`、`npm run lint`（0）、`npm run check:imports`（203/682）、`npm run build` 通过；一次完整 `npm run check`（forks/threads 均 max2/min1）**退出码 0**，231 文件通过 / 3 跳过，**2565 项通过 / 11 跳过**（较 R2 的 2564 增加 1），完整输出与退出码**追加**在 `I01-R2-check.txt`（原 357 行未改动，现共 717 行）；无首败。
