@@ -97,6 +97,10 @@ export function verifyNpmArtifact(bytes, artifact) {
   return true;
 }
 
+/** Temporary RED placeholders so the new desktop expectations fail on business assertions; the GREEN implementation replaces them. */
+export function parseDshDesktopWindowsManifest() {}
+export async function downloadDshDesktopInstaller() {}
+
 /** A timeout cannot prove descendant release; the caller retains the installation. */
 export function runDshProcess(binary, args, options = {}) {
   return new Promise((done, reject) => {

@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
-import { dshRegressionIdentity, hasDesktopCleanupProof, hasDshRuntimeReleaseProof, parseDshNpmManifest, parsePnpmManifest, resolveDshNpmCache, runDshBuildSequence,
-  runDshDesktopAttempt, runDshDesktopSequence, runDshProbeAttempt, runDshProcess, verifyNpmArtifact } from '../scripts/dsh-compat-ci.mjs';
+import { downloadDshDesktopInstaller, dshRegressionIdentity, hasDesktopCleanupProof, hasDshRuntimeReleaseProof, parseDshDesktopWindowsManifest, parseDshNpmManifest,
+  parsePnpmManifest, resolveDshNpmCache, runDshBuildSequence, runDshDesktopAttempt, runDshDesktopSequence, runDshProbeAttempt, runDshProcess, verifyNpmArtifact } from '../scripts/dsh-compat-ci.mjs';
 
 const integrity = `sha512-${Buffer.alloc(64, 1).toString('base64')}`;
 const pnpmIntegrity = 'sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng==';
@@ -602,6 +602,128 @@ describe('DeepSeek Harness formal desktop report and lifecycle', () => {
       expect(calls).toEqual(['install', 'probe', 'remove']);
       expect(closed.retainedInstallation).toMatchObject({ label: 'baseline', root, installationId: installation.installationId, owner, reason: '0' });
       expect(closed.error).toBe('0');
+    });
+  });
+});
+
+describe('DeepSeek Harness official Windows desktop installer metadata and streaming verification', () => {
+  const installerBytes = Buffer.from('controlled official desktop installer fixture');
+  const installerSha512 = createHash('sha512').update(installerBytes).digest('base64');
+  const installerUrl = 'https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.1-rc.2-win-x64.exe';
+  const installerName = 'deepseek-harness-0.2.1-rc.2-win-x64.exe';
+  const desktopWindows = (overrides: Record<string, unknown> = {}) => ({ feed: 'https://download.deepseek.com/dsh-desk/feeds/win-x64/nightly.yml',
+    version: '0.2.1-rc.2', url: installerUrl, size: installerBytes.length, sha512: installerSha512, ...overrides });
+  const projected = () => parseDshDesktopWindowsManifest(desktopWindows(), 'win32', 'x64');
+  const response = (body: unknown, status = 200, headers: Record<string, string> = {}) => ({ ok: status >= 200 && status < 300, status, body,
+    headers: { get: (name: string) => headers[name.toLowerCase()] ?? null } });
+  const stream = (chunks: Buffer[], onCanceled: () => void = () => {}) => new ReadableStream<Uint8Array>({
+    start(controller) { for (const chunk of chunks) controller.enqueue(new Uint8Array(chunk)); controller.close(); }, cancel: onCanceled,
+  });
+  const stalled = (onCanceled: () => void) => new ReadableStream<Uint8Array>({ cancel: onCanceled });
+  const download = (fetchImpl: (url: string, init: { redirect?: string; signal?: AbortSignal }) => Promise<unknown>, options: Record<string, unknown> = {}) =>
+    downloadDshDesktopInstaller(projected(), { fetchImpl, timeoutMs: 5000, ...options });
+
+  it('projects the pinned research metadata and refuses masquerading or mutable desktop sources', async () => {
+    const pinned = JSON.parse(await readFile(new URL('../scripts/dsh-compat-baseline.json', import.meta.url), 'utf8'));
+    expect(parseDshDesktopWindowsManifest(pinned.desktopWindows, 'win32', 'x64')).toEqual({ version: '0.2.1-rc.2', url: installerUrl, size: 289385456,
+      integrity: 'sha512-39POl5osl9PKMqrPXQA52dh/bCV0Z02vOV9cTjOJDHE6gsJwp5bv7lfgB3mVWAKspX7a/w1iTi+8Listdhq45g==', filename: installerName });
+    expect(projected()).toEqual({ version: '0.2.1-rc.2', url: installerUrl, size: installerBytes.length, integrity: `sha512-${installerSha512}`, filename: installerName });
+    const newer = desktopWindows({ version: '0.2.2', url: 'https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.2-win-x64.exe' });
+    expect(parseDshDesktopWindowsManifest(newer, 'win32', 'x64').version).toBe('0.2.2');
+    for (const version of ['0.2.1-rc.1', '0.3.0-0']) expect(() => parseDshDesktopWindowsManifest(desktopWindows({ version }), 'win32', 'x64')).toThrow(expect.objectContaining({ category: 'unsupported' }));
+    expect(() => parseDshDesktopWindowsManifest(desktopWindows(), 'linux', 'x64')).toThrow();
+    expect(() => parseDshDesktopWindowsManifest(desktopWindows(), 'win32', 'arm64')).toThrow();
+    for (const override of [
+      { version: 'latest' }, { version: 0.21 }, { version: '0.2' },
+      { url: 'https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-latest-win-x64.exe' },
+      { url: `${installerUrl}?from=nightly` }, { url: `${installerUrl}#signature` },
+      { url: 'https://token@download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.1-rc.2-win-x64.exe' },
+      { url: 'http://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.1-rc.2-win-x64.exe' },
+      { url: 'https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.2.tgz' },
+      { url: 'https://download.deepseek.com/dsh-desk/bin/mac-arm64/deepseek-harness-0.2.1-rc.2-mac-arm64.dmg' },
+      { url: 'https://download.deepseek.com/other/deepseek-harness-0.2.1-rc.2-win-x64.exe' },
+      { feed: 'http://download.deepseek.com/dsh-desk/feeds/win-x64/nightly.yml' }, { feed: 'https://example.org/dsh-desk/feeds/win-x64/nightly.yml' },
+      { size: 0 }, { size: -1 }, { size: 1.5 }, { size: '36' }, { size: 512 * 1024 * 1024 + 1 },
+      { sha512: 'not-base64!!!' }, { sha512: 'short' }, { sha512: `sha512-${installerSha512}` },
+    ]) expect(() => parseDshDesktopWindowsManifest(desktopWindows(override), 'win32', 'x64')).toThrow();
+    // The web package stays a web package however it is wrapped.
+    expect(() => parseDshDesktopWindowsManifest(pinned.package, 'win32', 'x64')).toThrow();
+    expect(() => parseDshDesktopWindowsManifest(artifact(), 'win32', 'x64')).toThrow();
+  });
+
+  it('streams the exact pinned bytes into the exclusive directory and proves only the transfer', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      const requests: { url: string; redirect?: string }[] = [];
+      const fetchImpl = async (url: string, init: { redirect?: string } = {}) => {
+        requests.push({ url, redirect: init.redirect });
+        return response(stream([installerBytes.subarray(0, 10), installerBytes.subarray(10)]), 200, { 'content-length': String(installerBytes.length) });
+      };
+      const result = await download(fetchImpl, { directory: target });
+      expect(result).toEqual({ path: join(target, installerName), filename: installerName, version: '0.2.1-rc.2',
+        size: installerBytes.length, integrity: `sha512-${installerSha512}` });
+      expect(await readFile(result.path)).toEqual(installerBytes);
+      expect(requests).toEqual([{ url: installerUrl, redirect: 'error' }]);
+      // A missing Content-Length is acceptable; the pinned size and digest still decide.
+      const implied = join(output, 'owned-without-length'); await mkdir(implied);
+      await download(async () => response(stream([installerBytes])), { directory: implied });
+      expect(await readFile(join(implied, installerName))).toEqual(installerBytes);
+    });
+  });
+
+  it('rejects redirect, error and missing-body responses and size or digest disagreements without keeping partials', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      const attempt = (body: unknown, status = 200, headers: Record<string, string> = {}) => download(async () => response(body, status, headers), { directory: target });
+      await expect(attempt(stream([installerBytes]), 200, { 'content-length': '35' })).rejects.toThrow();
+      await expect(attempt(stream([installerBytes]), 200, { 'content-length': '+36' })).rejects.toThrow();
+      await expect(attempt(stream([installerBytes]), 200, { 'content-length': '0x24' })).rejects.toThrow();
+      await expect(attempt(stream([Buffer.concat([installerBytes, Buffer.from('!')])]))).rejects.toThrow();
+      await expect(attempt(stream([installerBytes.subarray(0, 20)]))).rejects.toThrow();
+      await expect(attempt(stream([Buffer.alloc(installerBytes.length, 7)]))).rejects.toThrow();
+      await expect(attempt(stream([installerBytes]), 302)).rejects.toThrow();
+      await expect(attempt(stream([installerBytes]), 404)).rejects.toThrow();
+      await expect(attempt(stream([installerBytes]), 500)).rejects.toThrow();
+      await expect(attempt(null)).rejects.toThrow();
+      // Deleting the partials proves the write handles were released; Windows keeps open files undeletable.
+      expect(readdirSync(target)).toEqual([]);
+    });
+  });
+
+  it('enforces the total deadline over headers and body and honors external cancellation', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      // Headers that never arrive still hit the deadline.
+      await expect(download(() => new Promise(() => {}) as Promise<unknown>, { directory: target, timeoutMs: 60 })).rejects.toThrow();
+      // A stalled body releases the reader and removes the partial file when the deadline fires.
+      let stalledCanceled = false;
+      await expect(download(async () => response(stalled(() => { stalledCanceled = true; })), { directory: target, timeoutMs: 60 })).rejects.toThrow();
+      expect(stalledCanceled).toBe(true);
+      // Caller cancellation mid-body never yields an installable path either.
+      let cancelled = false; const caller = new AbortController();
+      const partial = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array(installerBytes.subarray(0, 10))); }, cancel: () => { cancelled = true; } });
+      const attempt = download(async () => response(partial), { directory: target, signal: caller.signal });
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      caller.abort(new Error('caller cancelled the desktop download'));
+      await expect(attempt).rejects.toThrow();
+      expect(cancelled).toBe(true);
+      expect(readdirSync(target)).toEqual([]);
+    });
+  });
+
+  it('never overwrites an existing file and re-checks the projection before any network call', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      const existing = join(target, installerName); await writeFile(existing, 'original bytes');
+      await expect(download(async () => response(stream([installerBytes])), { directory: target })).rejects.toThrow();
+      expect(await readFile(existing, 'utf8')).toBe('original bytes');
+      const requests: string[] = [];
+      const fetchImpl = async (url: string) => { requests.push(url); return response(stream([installerBytes])); };
+      for (const invalid of [artifact(), desktopWindows({ url: 'https://example.org/deepseek-harness-0.2.1-rc.2-win-x64.exe' }), desktopWindows({ size: 0 })]) {
+        await expect(downloadDshDesktopInstaller(invalid, { directory: target, fetchImpl, timeoutMs: 5000 })).rejects.toThrow();
+      }
+      await expect(downloadDshDesktopInstaller(projected(), { directory: 'relative-desktop-dir', fetchImpl, timeoutMs: 5000 })).rejects.toThrow();
+      expect(requests).toEqual([]);
     });
   });
 });
