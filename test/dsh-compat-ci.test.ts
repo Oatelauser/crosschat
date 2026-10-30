@@ -155,6 +155,16 @@ describe('DeepSeek Harness baseline and candidate lifecycle', () => {
     }
   });
 
+  it('keeps the web retainedInstallation shape unchanged when a probe fails', async () => {
+    const summary = await runDshBuildSequence(builds, {
+      install: async () => ({ root: 'owned-web' }),
+      probe: async () => { throw new Error('Probe crashed'); },
+      remove: async () => {},
+    });
+    expect(summary.retainedInstallation).toEqual({ label: 'baseline', version: builds.baseline.version, root: 'owned-web',
+      reason: 'Owned runtime release is unknown; do not remove or start another build' });
+  });
+
   it('does not turn installation, readiness, cleanup, baseline failure or flaky checks into issues', async () => {
     const ready = async (reports: Record<string, unknown>, remove = async () => {}) => runDshBuildSequence(builds, {
       install: async (_build: unknown, label: string) => ({ label }), probe: async (_installation: unknown, _build: unknown, label: string) => reports[label], remove,
@@ -213,7 +223,7 @@ describe('DeepSeek Harness formal desktop report and lifecycle', () => {
     status: 'passed', stage: 'done', category: null, checks: desktopChecks.map((name) => ({ name, status: 'passed', elapsedMs: 1 })),
     scope: desktopScope, cleanup: desktopCleanup, process: exited, ...extra });
   // A sequence-side report must carry the installation and run identity the sequence handed to the probe, plus its own native instance.
-  const bound = (build: { version: string }, installation: { installationId: string; owner: string }, runId: string, extra: Record<string, unknown> = {}) =>
+  const bound = (build: { version: string }, installation: { installationId: unknown; owner: string }, runId: string, extra: Record<string, unknown> = {}) =>
     desktopPassed(build.version, runId, { installationId: installation.installationId, owner: installation.owner, instanceId: randomUUID(), ...extra });
 
   it('accepts a fresh desktop report bound to this install, native instance, session and artifact', async () => {
@@ -464,5 +474,99 @@ describe('DeepSeek Harness formal desktop report and lifecycle', () => {
       probe: async (_installation: unknown, build: typeof builds.baseline) => passed(build.version), remove: async () => { desktopCalls.push('remove'); },
     });
     expect(desktopCalls).toEqual(['baseline']); expect(desktop.retainedInstallation).toBeDefined();
+  });
+
+  it('rejects array UUID identities and never lets equal arrays bypass instance dedup', async () => {
+    // An installationId that only stringifies to a UUID is not a UUID string; the first attempt must already stop.
+    const installCalls: string[] = [];
+    const arrayInstall = await runDshDesktopSequence(builds, {
+      install: async (_build: unknown, label: string) => { installCalls.push(`install:${label}`); return { installationId: [randomUUID()], owner, root: `owned-${label}` }; },
+      probe: async (installation: { installationId: unknown; owner: string }, build: typeof builds.baseline, label: string, context?: { runId: string }) => {
+        installCalls.push(`probe:${label}`); return bound(build, installation, context?.runId ?? randomUUID());
+      },
+      remove: async (_installation: unknown, _build: unknown, label: string) => { installCalls.push(`remove:${label}`); },
+    });
+    expect(installCalls).toEqual(['install:baseline', 'probe:baseline']);
+    expect(arrayInstall.retainedInstallation).toMatchObject({ label: 'baseline' });
+    expect(arrayInstall.classification).toEqual({ kind: 'infrastructure', notify: false });
+
+    // Two separately created arrays carrying the same UUID are not one instance either.
+    const shared = randomUUID(); const instanceCalls: string[] = [];
+    const arrayInstance = await runDshDesktopSequence(builds, {
+      install: async (_build: unknown, label: string) => { instanceCalls.push(`install:${label}`); return { ...owned, installationId: randomUUID(), root: `owned-${label}` }; },
+      probe: async (installation: { installationId: unknown; owner: string }, build: typeof builds.baseline, label: string, context?: { runId: string }) => {
+        instanceCalls.push(`probe:${label}`); return bound(build, installation, context?.runId ?? randomUUID(), { instanceId: [shared] });
+      },
+      remove: async (_installation: unknown, _build: unknown, label: string) => { instanceCalls.push(`remove:${label}`); },
+    });
+    expect(instanceCalls).toEqual(['install:baseline', 'probe:baseline']);
+    expect(arrayInstance.retainedInstallation).toMatchObject({ label: 'baseline' });
+    expect(arrayInstance.classification).toEqual({ kind: 'infrastructure', notify: false });
+
+    // Equal string instances stay rejected exactly as before.
+    const stringShared = randomUUID(); const stringCalls: string[] = [];
+    const stringInstance = await runDshDesktopSequence(builds, {
+      install: async (_build: unknown, label: string) => { stringCalls.push(`install:${label}`); return { ...owned, installationId: randomUUID(), root: `owned-${label}` }; },
+      probe: async (installation: { installationId: unknown; owner: string }, build: typeof builds.baseline, label: string, context?: { runId: string }) => {
+        stringCalls.push(`probe:${label}`); return bound(build, installation, context?.runId ?? randomUUID(), { instanceId: stringShared });
+      },
+      remove: async (_installation: unknown, _build: unknown, label: string) => { stringCalls.push(`remove:${label}`); },
+    });
+    expect(stringCalls).toEqual(['install:baseline', 'probe:baseline', 'remove:baseline', 'install:candidate', 'probe:candidate']);
+    expect(stringInstance.retainedInstallation).toMatchObject({ label: 'candidate' });
+  });
+
+  it('retains the full ownership after a normal install when release is unknown', async () => {
+    await isolated(async (output) => {
+      const root = join(output, 'owned-unknown'); await mkdir(root); await writeFile(join(root, '.fixture-owner'), 'marker');
+      const installation = { installationId: randomUUID(), owner, root }; const calls: string[] = [];
+      const summary = await runDshDesktopSequence(builds, {
+        install: async () => { calls.push('install'); return installation; },
+        probe: async (_installation: unknown, build: typeof builds.baseline, _label: string, context?: { runId: string }) => {
+          calls.push('probe'); return bound(build, installation, context?.runId ?? randomUUID(), { cleanup: undefined });
+        },
+        remove: async () => { calls.push('remove'); },
+      });
+      expect(calls).toEqual(['install', 'probe']);
+      expect(summary.retainedInstallation).toMatchObject({ label: 'baseline', version: builds.baseline.version, root, installationId: installation.installationId, owner });
+      expect(typeof summary.retainedInstallation?.reason).toBe('string');
+      expect(existsSync(join(root, '.fixture-owner'))).toBe(true);
+      expect(summary.classification).toEqual({ kind: 'infrastructure', notify: false });
+    });
+  });
+
+  it('retains the full ownership with the real reason when the desktop probe throws', async () => {
+    await isolated(async (output) => {
+      const root = join(output, 'owned-crashed'); await mkdir(root); await writeFile(join(root, '.fixture-owner'), 'marker');
+      const installation = { installationId: randomUUID(), owner, root }; const calls: string[] = [];
+      const summary = await runDshDesktopSequence(builds, {
+        install: async () => { calls.push('install'); return installation; },
+        probe: async () => { calls.push('probe'); throw new Error('desktop driver crashed mid-session'); },
+        remove: async () => { calls.push('remove'); },
+      });
+      expect(calls).toEqual(['install', 'probe']);
+      expect(summary.retainedInstallation).toMatchObject({ label: 'baseline', version: builds.baseline.version, root,
+        installationId: installation.installationId, owner, reason: 'desktop driver crashed mid-session' });
+      expect(existsSync(join(root, '.fixture-owner'))).toBe(true);
+      expect(summary.classification).toEqual({ kind: 'infrastructure', notify: false });
+    });
+  });
+
+  it('retains the full ownership when the official close fails', async () => {
+    await isolated(async (output) => {
+      const root = join(output, 'owned-refused'); await mkdir(root); await writeFile(join(root, '.fixture-owner'), 'marker');
+      const installation = { installationId: randomUUID(), owner, root }; const calls: string[] = [];
+      const summary = await runDshDesktopSequence(builds, {
+        install: async () => { calls.push('install'); return installation; },
+        probe: async (_installation: unknown, build: typeof builds.baseline, _label: string, context?: { runId: string }) => {
+          calls.push('probe'); return bound(build, installation, context?.runId ?? randomUUID());
+        },
+        remove: async () => { calls.push('remove'); throw new Error('Official uninstall refused'); },
+      });
+      expect(calls).toEqual(['install', 'probe', 'remove']);
+      expect(summary.retainedInstallation).toMatchObject({ label: 'baseline', version: builds.baseline.version, root,
+        installationId: installation.installationId, owner, reason: 'Official uninstall refused' });
+      expect(summary.classification).toEqual({ kind: 'infrastructure', notify: false });
+    });
   });
 });
