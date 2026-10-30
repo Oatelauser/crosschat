@@ -18,7 +18,7 @@
 
 本会话不再派发通信相关子单。用户明确将全部通信任务交给现有 Codex Desktop 会话 **Bug修复2**，由用户亲自对接；见[完整交接](communication-handoff-bugfix2-20261029.md)。W08 最新研究交付到 `1066e30`，尚未完成 root 最终验收，按真实状态随证据交接。短信封内部 subagent 已停写，确认没有任何代码/测试修改。
 
-当前实施 [C04-I01-R2：UUID类型与失败归属收口](evidence/c04-worker-20261029/I01-R2-task.md)。从9b3af23暂停点恢复，只补[R1复审](evidence/c04-worker-20261029/I01-R1-review.md)保留的Standards/Spec各1项；R1到ea51da9（产品d406392）、worker完整check2559/11。仍仅两个既有功能文件及开发证据，保留Web原接口；不重开报告文件替换研究，不接真实Desktop driver/runner，C04未验收。
+当前实施 [C04-I01-R2](evidence/c04-worker-20261029/I01-R2-task.md)的[定向补充](evidence/c04-worker-20261029/I01-R2-review.md)：首交付730e8b4已修UUID类型与完整归属，worker完整check2564/11、root定向34/34；双轴仍发现probe抛出假值会丢真实reason，仅补这一分支。仍仅两个既有功能文件及开发证据，保留Web原接口；不重开报告文件替换研究，不接真实Desktop driver/runner，C04未验收。
 
 [C08-I01 默认 Harness 技能维护已最终验收](evidence/c08-worker-20261029/I01-final-review.md)：最终产品 `a77a39b`，两轴复审通过，root 七套件87项通过；worker完整check第二次2544通过/11原有跳过，最多2/最少1 worker。首次全量的machines断言失败仍完整保留，根因未确认；不以随后通过替代根因证据。I01/R1/R2移出活动子单，原任务书仅作批准证据。[I02 生命周期说明已最终验收](evidence/c13-worker-20261029/I02-final-review.md)，继续作为合同输入。新增功能文件或用户必需操作仍须先决定。
 
