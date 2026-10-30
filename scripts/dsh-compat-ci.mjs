@@ -97,39 +97,38 @@ export function verifyNpmArtifact(bytes, artifact) {
   return true;
 }
 
-const desktopDownloadHost = 'download.deepseek.com';
-const desktopFeedPath = '/dsh-desk/feeds/win-x64/';
-const desktopBinaryPath = '/dsh-desk/bin/win-x64/';
+const desktopFeedUrl = 'https://download.deepseek.com/dsh-desk/feeds/win-x64/nightly.yml';
+const desktopInstallerUrl = (version) => `https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-${version}-win-x64.exe`;
+const desktopInstallerName = (version) => `deepseek-harness-${version}-win-x64.exe`;
 const desktopMaxInstallerBytes = 512 * 1024 * 1024;
 const rawDesktopSha512 = /^[A-Za-z0-9+/]{85}[AQgw]==$/;
 
-/** Desktop releases live only on versioned HTTPS paths of the recorded host; mutable latest names never reach a projection. */
-function officialDesktopUrl(url, prefix) {
-  if (typeof url !== 'string') throw new Error('Desktop metadata URLs must be strings');
-  let parsed;
-  try { parsed = new URL(url); } catch { throw new Error('Desktop metadata must use absolute URLs'); }
-  if (parsed.protocol !== 'https:' || parsed.hostname !== desktopDownloadHost || parsed.username !== '' || parsed.password !== ''
-    || parsed.search !== '' || parsed.hash !== '' || !parsed.pathname.startsWith(prefix) || parsed.pathname.split('/').includes('latest')) throw new Error('Desktop metadata must stay on official versioned HTTPS paths');
-  return parsed;
+/** Bounded settlement for owned IO: an operation that never settles reports done:false instead of hanging its caller. */
+function settleWithin(operation, budgetMs) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ done: false }), budgetMs);
+    Promise.resolve().then(operation).then(
+      (value) => { clearTimeout(timer); resolve({ done: true, failed: false, value }); },
+      (error) => { clearTimeout(timer); resolve({ done: true, failed: true, error }); },
+    );
+  });
 }
 
 export function parseDshDesktopWindowsManifest(input, platform, arch) {
   if (!record(input) || typeof input.version !== 'string' || !semver(input.version)) throw new Error('Invalid official Desktop installer metadata');
   if (!supported(input.version)) throw Object.assign(new Error('Desktop release is outside the approved >=0.2.1-rc.2 <0.3.0-0 window'), { category: 'unsupported', version: input.version });
   if (platform !== 'win32' || arch !== 'x64') throw new Error('This compatibility probe is configured for Windows x64 only');
-  officialDesktopUrl(input.feed, desktopFeedPath);
-  const filename = officialDesktopUrl(input.url, desktopBinaryPath).pathname.split('/').pop();
-  if (!filename.includes(input.version) || /[\\/:]/.test(filename) || !rawDesktopSha512.test(input.sha512 ?? '')
+  if (input.feed !== desktopFeedUrl || input.url !== desktopInstallerUrl(input.version)) throw new Error('Desktop metadata must use the official feed and the exact versioned installer URL');
+  if (typeof input.sha512 !== 'string' || !rawDesktopSha512.test(input.sha512)
     || !Number.isSafeInteger(input.size) || input.size <= 0 || input.size > desktopMaxInstallerBytes) throw new Error('Invalid official Desktop installer metadata');
-  return { version: input.version, url: input.url, size: input.size, integrity: `sha512-${input.sha512}`, filename };
+  return { version: input.version, url: input.url, size: input.size, integrity: `sha512-${input.sha512}`, filename: desktopInstallerName(input.version) };
 }
 
 /** The download boundary re-derives its own plan, so no caller record skips straight to the network. */
 function desktopInstallerPlan(artifact) {
   if (!record(artifact) || typeof artifact.version !== 'string' || !semver(artifact.version)) throw new Error('Invalid Desktop installer identity');
   if (!supported(artifact.version)) throw Object.assign(new Error('Desktop release is outside the approved >=0.2.1-rc.2 <0.3.0-0 window'), { category: 'unsupported', version: artifact.version });
-  const filename = officialDesktopUrl(artifact.url, desktopBinaryPath).pathname.split('/').pop();
-  if (typeof artifact.filename !== 'string' || artifact.filename !== filename || !artifact.filename.includes(artifact.version) || /[\\/:]/.test(artifact.filename)
+  if (artifact.url !== desktopInstallerUrl(artifact.version) || typeof artifact.filename !== 'string' || artifact.filename !== desktopInstallerName(artifact.version)
     || !Number.isSafeInteger(artifact.size) || artifact.size <= 0 || artifact.size > desktopMaxInstallerBytes
     || typeof artifact.integrity !== 'string' || !sri.test(artifact.integrity)) throw new Error('Invalid Desktop installer identity');
   return { version: artifact.version, url: artifact.url, size: artifact.size, filename: artifact.filename, sha512: artifact.integrity.slice(7) };
@@ -137,8 +136,8 @@ function desktopInstallerPlan(artifact) {
 
 /**
  * Streams the pinned Desktop installer into a caller-owned exclusive directory and returns a path only when the
- * transferred bytes matched the pinned size and SHA-512; that proves transfer integrity, never a publisher,
- * installation or Desktop function.
+ * transferred bytes were fully written to a confirmed-closed file whose size and SHA-512 match the pinned record;
+ * that proves transfer integrity, never a publisher, installation or Desktop function.
  */
 export async function downloadDshDesktopInstaller(artifact, { directory, signal, timeoutMs = 120000, fetchImpl = globalThis.fetch } = {}) {
   const plan = desktopInstallerPlan(artifact);
@@ -153,39 +152,74 @@ export async function downloadDshDesktopInstaller(artifact, { directory, signal,
   const forward = () => deadline.abort(signal.reason);
   const stop = () => { clearTimeout(timer); if (signal) signal.removeEventListener('abort', forward); };
   if (signal) { if (signal.aborted) deadline.abort(signal.reason); else signal.addEventListener('abort', forward); }
-  let reader; let handle; let created = false; let failure;
+  let reader; let handle; let created = false; let failed = false; let failure;
+  const annotate = (fields) => {
+    // The failure value keeps its identity: frozen or non-object throws are never replaced by an annotation TypeError.
+    if (failure === null || (typeof failure !== 'object' && typeof failure !== 'function')) return;
+    try { Object.assign(failure, fields); } catch { /* A frozen failure keeps its original identity. */ }
+  };
   try {
     const request = fetchImpl(plan.url, { redirect: 'error', signal: deadline.signal });
     request.catch(() => {});
     const response = await Promise.race([request, expired]);
-    if (!response?.ok || !response.body) throw new Error(`Official Desktop installer response was not a successful body (status ${response?.status})`);
+    // The body is owned from the moment the response exists, so rejections before the first read still cancel it.
+    if (response?.body && typeof response.body.getReader === 'function') reader = response.body.getReader();
+    if (!response?.ok || !reader) throw new Error(`Official Desktop installer response was not a successful body (status ${response?.status})`);
     const declared = response.headers?.get?.('content-length');
     if (declared !== null && declared !== undefined) {
-      if (!/^\d+$/.test(declared) || Number(declared) !== plan.size) throw new Error('Desktop installer Content-Length disagrees with the pinned size');
+      if (typeof declared !== 'string' || !/^\d+$/.test(declared) || Number(declared) !== plan.size) throw new Error('Desktop installer Content-Length disagrees with the pinned size');
     }
     handle = await open(path, 'wx'); created = true;
-    reader = response.body.getReader();
     const hash = createHash('sha512'); let written = 0;
     for (;;) {
       const part = reader.read(); part.catch(() => {});
       const chunk = await Promise.race([part, expired]);
       if (chunk.done) break;
-      written += chunk.value.byteLength;
-      if (written > plan.size) throw new Error('Desktop installer response exceeded the pinned size');
+      if (chunk.value?.byteLength > plan.size - written) throw new Error('Desktop installer response exceeded the pinned size');
       hash.update(chunk.value);
-      await handle.write(chunk.value);
+      const flushing = handle.write(chunk.value); flushing.catch(() => {});
+      const saved = await Promise.race([flushing, expired]);
+      // A short or zero-progress disk write never counts as delivered bytes.
+      if (saved?.bytesWritten !== chunk.value.byteLength) throw new Error('Desktop installer disk write did not accept the full chunk');
+      written += chunk.value.byteLength;
     }
     if (written !== plan.size) throw new Error('Desktop installer response was truncated below the pinned size');
     if (hash.digest('base64') !== plan.sha512) throw new Error('Desktop installer failed SHA-512 verification');
+    const closed = await settleWithin(() => handle.close(), timeoutMs);
+    if (!closed.done) throw new Error('Desktop installer file close did not settle within its deadline');
+    if (closed.failed) throw closed.error;
+    handle = undefined;
     stop();
     return { path, filename: plan.filename, version: plan.version, size: plan.size, integrity: `sha512-${plan.sha512}` };
-  } catch (error) { failure = error; }
+  } catch (error) { failed = true; failure = error; }
   finally {
     stop();
-    if (reader) { try { await reader.cancel(); } catch { /* The stream may already be closed or broken. */ } }
-    if (handle) { try { await handle.close(); } catch { /* A failed close still leaves the deletion attempt below. */ } }
-    if (failure && created) {
-      try { await rm(path); } catch (error) { Object.assign(failure, { partialFile: path, cleanupError: message(error) }); }
+    const unclear = [];
+    if (reader) {
+      const cancelled = await settleWithin(() => reader.cancel(), timeoutMs);
+      if (!cancelled.done) unclear.push('the response body cancel did not settle within its deadline');
+      else if (cancelled.failed) unclear.push(`the response body cancel failed: ${message(cancelled.error)}`);
+      try { reader.releaseLock(); } catch { /* An already released or stuck reader keeps its own state. */ }
+    }
+    let released = true;
+    if (handle) {
+      const closed = await settleWithin(() => handle.close(), timeoutMs);
+      if (!closed.done) { released = false; unclear.push('the partial file handle close did not settle within its deadline'); }
+      else if (closed.failed) { released = false; unclear.push(`the partial file handle close failed: ${message(closed.error)}`); }
+    }
+    if (failed && created) {
+      const fields = {};
+      if (!released) {
+        // Without a confirmed close the file may still change; it is reported and retained, never force-deleted.
+        fields.releaseUnclear = unclear;
+      } else {
+        const removed = await settleWithin(() => rm(path), timeoutMs);
+        if (!removed.done) fields.cleanupError = 'the partial file removal did not settle within its deadline';
+        else if (removed.failed) fields.cleanupError = message(removed.error);
+        if (unclear.length > 0) fields.cleanupNotes = unclear;
+      }
+      if (fields.releaseUnclear !== undefined || fields.cleanupError !== undefined) fields.partialFile = path;
+      if (Object.keys(fields).length > 0) annotate(fields);
     }
   }
   throw failure;

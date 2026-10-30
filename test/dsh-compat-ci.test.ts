@@ -780,11 +780,16 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
         return owned;
       };
       try {
+        // The fixture releases each retained handle for real between sub-cases and removes the retained partial.
+        const release = async (owned: { handle: Record<string, unknown>; close: unknown }[]) => {
+          for (const item of owned) { item.handle.close = item.close; await (item.close as () => Promise<unknown>)().catch(() => {}); }
+        };
         let stalled = swapClose(() => new Promise(() => {}));
         await expect(bounded(download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 60 }))).rejects.toThrow(/close did not settle/);
         // Without a confirmed close the partial is retained and reported, never force-deleted.
         expect(existsSync(join(target, installerName))).toBe(true);
-        for (const item of stalled) item.handle.close = item.close;
+        await release(stalled);
+        await rm(join(target, installerName));
 
         // A frozen close failure keeps its identity through cleanup bookkeeping.
         const frozen = Object.freeze(new Error('frozen close failure'));
@@ -792,7 +797,8 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
         const failure: unknown = await bounded(download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 60 })).catch((error: unknown) => error);
         expect(failure).toBe(frozen);
         expect(existsSync(join(target, installerName))).toBe(true);
-        for (const item of stalled) item.handle.close = item.close;
+        await release(stalled);
+        await rm(join(target, installerName));
       } finally { proto.write = realWrite; }
     });
   });
