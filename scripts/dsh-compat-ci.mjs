@@ -140,9 +140,16 @@ function knownDesktopArtifact(artifact) {
   return record(artifact) && typeof artifact.version === 'string' && artifact.version !== '' && typeof artifact.integrity === 'string' && sri.test(artifact.integrity);
 }
 
+/** Identity fields are UUID/owner strings only; an array that stringifies to a UUID is not an identity. */
+function desktopIdentity(installation) {
+  if (typeof installation?.installationId !== 'string' || !uuid.test(installation.installationId)
+    || typeof installation?.owner !== 'string' || installation.owner === '') return;
+  return { installationId: installation.installationId, owner: installation.owner };
+}
+
 function desktopBinding(installation, runId) {
-  if (!uuid.test(runId ?? '') || !uuid.test(installation?.installationId ?? '') || typeof installation?.owner !== 'string' || installation.owner === '') return;
-  return { runId, installationId: installation.installationId, owner: installation.owner };
+  const identity = desktopIdentity(installation);
+  return typeof runId === 'string' && uuid.test(runId) && identity ? { runId, ...identity } : undefined;
 }
 
 /**
@@ -151,7 +158,8 @@ function desktopBinding(installation, runId) {
  */
 function desktopExpectation(installation, launch, runId) {
   const binding = desktopBinding(installation, runId);
-  return binding && uuid.test(launch?.instanceId ?? '') && typeof launch.sessionId === 'string' && desktopSessionId.test(launch.sessionId)
+  return binding && typeof launch?.instanceId === 'string' && uuid.test(launch.instanceId)
+    && typeof launch.sessionId === 'string' && desktopSessionId.test(launch.sessionId)
     ? { ...binding, instanceId: launch.instanceId, sessionId: launch.sessionId } : undefined;
 }
 
@@ -163,8 +171,9 @@ function validDesktopReport(report, artifact, expected) {
   if (!record(report) || !knownDesktopArtifact(artifact) || !record(expected)
     || report.schema !== 1 || report.tool !== desktopTool || report.platform !== 'win32' || report.arch !== 'x64'
     || report.version !== artifact.version || typeof report.artifactId !== 'string' || !sri.test(report.artifactId) || report.artifactId !== artifact.integrity
-    || report.runId !== expected.runId || report.installationId !== expected.installationId || report.owner !== expected.owner
-    || !uuid.test(report.instanceId ?? '') || (expected.instanceId !== undefined && report.instanceId !== expected.instanceId)
+    || typeof report.runId !== 'string' || report.runId !== expected.runId
+    || typeof report.installationId !== 'string' || report.installationId !== expected.installationId || report.owner !== expected.owner
+    || typeof report.instanceId !== 'string' || !uuid.test(report.instanceId) || (expected.instanceId !== undefined && report.instanceId !== expected.instanceId)
     || typeof report.sessionId !== 'string' || !desktopSessionId.test(report.sessionId) || (expected.sessionId !== undefined && report.sessionId !== expected.sessionId)
     || !validDesktopScope(report.scope)
     || !Array.isArray(report.checks) || report.checks.some((check) => !record(check) || !desktopChecks.includes(check.name) || check.status !== 'passed' || !Number.isFinite(check.elapsedMs) || check.elapsedMs < 0)
@@ -199,9 +208,9 @@ async function readDesktopReport(path) {
 /** A failed install that still names the root, installation and owner it created keeps that ownership; less than that is honestly unknown. */
 function desktopPartialInstallation(error) {
   const installation = error?.installation;
-  if (!record(installation) || typeof installation.root !== 'string' || !isAbsolute(installation.root)
-    || !uuid.test(installation.installationId ?? '') || typeof installation.owner !== 'string' || installation.owner === '') return;
-  return { root: installation.root, installationId: installation.installationId, owner: installation.owner };
+  const identity = desktopIdentity(installation);
+  if (!record(installation) || typeof installation.root !== 'string' || !isAbsolute(installation.root) || !identity) return;
+  return { root: installation.root, ...identity };
 }
 
 /** Desktop release needs the Host's own exit, the official uninstall and both registration cleanups; a kill is not release. */
@@ -269,17 +278,22 @@ async function serialSequence(builds, config) {
       throw error;
     }
     const context = config.context?.();
-    let report;
+    // A retained record keeps what this run knew: label, version, root, and — where the entry allows it — the
+    // installation identity, owner and the real failure; nothing is invented from error text alone.
+    const retain = (reason, error) => {
+      summary.retainedInstallation = { label, version: artifact.version, root: installation.root, reason, ...config.retainedIdentity?.(installation, error) };
+      return summary.retainedInstallation;
+    };
+    let report; let failure;
     try { report = await config.operations.probe(installation, artifact, label, context); }
-    catch (error) { report = config.fail(artifact.version, 'process', error); }
+    catch (error) { failure = error; report = config.fail(artifact.version, 'process', error); }
     if (!config.verify(report, artifact, installation, context)) report = config.fail(artifact.version, 'report', new Error('Fresh process/report evidence is invalid'));
     summary[label] = report;
     if (!config.released(report.cleanup)) {
-      summary.retainedInstallation = { label, version: artifact.version, root: installation.root, reason: 'Owned runtime release is unknown; do not remove or start another build' };
-      throw new Error(summary.retainedInstallation.reason);
+      throw new Error(retain('Owned runtime release is unknown; do not remove or start another build', failure).reason);
     }
     try { await config.operations.remove(installation, artifact, label); }
-    catch (error) { summary.retainedInstallation = { label, version: artifact.version, root: installation.root, reason: message(error) }; throw error; }
+    catch (error) { retain(message(error), error); throw error; }
     return report;
   }
   try {
@@ -307,6 +321,10 @@ export function runDshDesktopSequence(builds, operations) {
     // The sequence mints the run identity it hands to the attempt it uses; the launch record stays with the runner.
     context: () => ({ runId: randomUUID() }),
     partialInstallation: desktopPartialInstallation,
+    retainedIdentity: (installation, error) => {
+      const identity = desktopIdentity(installation);
+      return identity ? { ...identity, ...(error ? { reason: message(error) } : {}) } : undefined;
+    },
     verify: (report, artifact, installation, context) => {
       const expected = desktopBinding(installation, context?.runId);
       if (!expected || installations.has(expected.installationId) || instances.has(report?.instanceId)
