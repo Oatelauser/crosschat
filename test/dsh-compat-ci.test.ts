@@ -4,9 +4,18 @@ import { mkdir, mkdtemp, open, readFile, realpath, rm, symlink, writeFile } from
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { downloadDshDesktopInstaller, dshRegressionIdentity, hasDesktopCleanupProof, hasDshRuntimeReleaseProof, parseDshDesktopWindowsManifest, parseDshNpmManifest,
   parsePnpmManifest, resolveDshNpmCache, runDshBuildSequence, runDshDesktopAttempt, runDshDesktopSequence, runDshProbeAttempt, runDshProcess, verifyNpmArtifact } from '../scripts/dsh-compat-ci.mjs';
+
+// The only fs injection this suite needs: open() can stall or arrive late, everything else stays real.
+const openInjection = vi.hoisted(() => ({ impl: null as null | ((...args: unknown[]) => Promise<unknown>), real: null as null | ((...args: unknown[]) => Promise<unknown>) }));
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  const real = actual.open as unknown as (...args: unknown[]) => Promise<unknown>;
+  openInjection.real = real;
+  return { ...actual, open: (...args: unknown[]) => (openInjection.impl ?? real)(...args) };
+});
 
 const integrity = `sha512-${Buffer.alloc(64, 1).toString('base64')}`;
 const pnpmIntegrity = 'sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng==';
@@ -740,10 +749,15 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
         for (const item of stalledHandles) await (item as Record<string, () => Promise<unknown>>).close().catch(() => {});
       }
       expect(readdirSync(target)).toEqual([]);
-      // A cancel that never settles still returns bounded and still removes the partial.
+      // A cancel that never settles still returns bounded; with a finite shared cleanup budget the close is
+      // confirmed first, so the partial is removed when possible and retained with a reason when not.
       const neverCancelled = new ReadableStream<Uint8Array>({ cancel: () => new Promise(() => {}) });
-      await expect(bounded(download(async () => response(neverCancelled), { directory: target, timeoutMs: 60 }))).rejects.toThrow();
-      expect(readdirSync(target)).toEqual([]);
+      const stalledCancel: unknown = await bounded(download(async () => response(neverCancelled), { directory: target, timeoutMs: 60 })).catch((error: unknown) => error);
+      expect(stalledCancel).toBeInstanceOf(Error);
+      const stalledCancelFailure = stalledCancel as Error & { partialFile?: unknown; cleanupError?: unknown };
+      expect(stalledCancelFailure.partialFile).toBe(join(target, installerName));
+      expect(typeof stalledCancelFailure.cleanupError).toBe('string');
+      await rm(join(target, installerName), { force: true }).catch(() => {});
     });
   });
 
@@ -763,43 +777,154 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
     });
   });
 
-  it('retains the partial and reports unclear release when a completed transfer cannot close', async () => {
+  it('voids delivery when cancellation or the total deadline lands during the close', async () => {
     await isolated(async (output) => {
       const target = join(output, 'owned-desktop-download'); await mkdir(target);
       // FileHandle.close is an own bound property, so a full-write patch swaps it per captured instance.
       const proto = await fileHandleProto(output);
       const realWrite = proto.write;
+      const owned: { handle: Record<string, unknown>; close: unknown }[] = [];
+      const swapClose = (make: (original: () => Promise<unknown>) => () => Promise<unknown>) => {
+        proto.write = function (this: unknown, buffer: unknown) {
+          const handle = this as Record<string, unknown>;
+          const original = handle.close as () => Promise<unknown>;
+          handle.close = make(original);
+          owned.push({ handle, close: original });
+          return realWrite.call(this, buffer);
+        };
+      };
+      const release = async () => {
+        for (const item of owned) { item.handle.close = item.close; await (item.close as () => Promise<unknown>)().catch(() => {}); }
+      };
+      try {
+        // Cancellation while the only close is still pending voids the delivery and retains the partial.
+        swapClose(() => () => new Promise(() => {}));
+        const caller = new AbortController();
+        const cancelled = download(async () => response(stream([installerBytes])), { directory: target, signal: caller.signal, timeoutMs: 5000 });
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        caller.abort(new Error('cancelled during close'));
+        const cancelledFailure: unknown = await bounded(cancelled).catch((error: unknown) => error);
+        expect(cancelledFailure).toMatchObject({ message: 'cancelled during close', partialFile: join(target, installerName) });
+        expect(Array.isArray((cancelledFailure as { releaseUnclear?: unknown }).releaseUnclear)).toBe(true);
+        await release(); owned.length = 0;
+        await rm(join(target, installerName));
+
+        // A close finishing after the total deadline is not a success even though it does finish.
+        swapClose((original) => () => new Promise((resolve) => setTimeout(resolve, 50)).then(() => original()));
+        await expect(bounded(download(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 80));
+          return response(stream([installerBytes]));
+        }, { directory: target, timeoutMs: 100 }))).rejects.toThrow(/exceeded its 100ms deadline/);
+        expect(existsSync(join(target, installerName))).toBe(true);
+        await release(); owned.length = 0;
+        await rm(join(target, installerName));
+      } finally {
+        proto.write = realWrite;
+        await release();
+        await rm(join(target, installerName), { force: true }).catch(() => {});
+      }
+    });
+  });
+
+  it('wraps frozen and falsy close failures with the retained path and the original cause', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      const proto = await fileHandleProto(output);
+      const realWrite = proto.write;
+      const owned: { handle: Record<string, unknown>; close: unknown }[] = [];
       const swapClose = (replacement: () => Promise<unknown>) => {
-        const owned: { handle: Record<string, unknown>; close: unknown }[] = [];
         proto.write = function (this: unknown, buffer: unknown) {
           const handle = this as Record<string, unknown>;
           owned.push({ handle, close: handle.close });
           handle.close = replacement;
           return realWrite.call(this, buffer);
         };
-        return owned;
+      };
+      const release = async () => {
+        for (const item of owned) { item.handle.close = item.close; await (item.close as () => Promise<unknown>)().catch(() => {}); }
       };
       try {
-        // The fixture releases each retained handle for real between sub-cases and removes the retained partial.
-        const release = async (owned: { handle: Record<string, unknown>; close: unknown }[]) => {
-          for (const item of owned) { item.handle.close = item.close; await (item.close as () => Promise<unknown>)().catch(() => {}); }
-        };
-        let stalled = swapClose(() => new Promise(() => {}));
-        await expect(bounded(download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 60 }))).rejects.toThrow(/close did not settle/);
-        // Without a confirmed close the partial is retained and reported, never force-deleted.
+        // A frozen close failure cannot carry fields itself, so the report wraps it and keeps the cause.
+        const frozen = Object.freeze(new Error('frozen close failure'));
+        swapClose(() => Promise.reject(frozen));
+        const frozenFailure: unknown = await bounded(download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 60 })).catch((error: unknown) => error);
+        const wrapped = frozenFailure as Error & { cause?: unknown; partialFile?: unknown; releaseUnclear?: unknown };
+        expect(wrapped).toBeInstanceOf(Error);
+        expect(wrapped.cause).toBe(frozen);
+        expect(wrapped.partialFile).toBe(join(target, installerName));
+        expect(Array.isArray(wrapped.releaseUnclear)).toBe(true);
         expect(existsSync(join(target, installerName))).toBe(true);
-        await release(stalled);
+        await release(); owned.length = 0;
         await rm(join(target, installerName));
 
-        // A frozen close failure keeps its identity through cleanup bookkeeping.
-        const frozen = Object.freeze(new Error('frozen close failure'));
-        stalled = swapClose(() => Promise.reject(frozen));
-        const failure: unknown = await bounded(download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 60 })).catch((error: unknown) => error);
-        expect(failure).toBe(frozen);
-        expect(existsSync(join(target, installerName))).toBe(true);
-        await release(stalled);
+        // A falsy close rejection keeps its value as the cause of the same writable report.
+        swapClose(() => Promise.reject(0));
+        const falsyFailure: unknown = await bounded(download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 60 })).catch((error: unknown) => error);
+        const falsyWrapped = falsyFailure as Error & { cause?: unknown; partialFile?: unknown };
+        expect(falsyWrapped.cause).toBe(0);
+        expect(falsyWrapped.partialFile).toBe(join(target, installerName));
+        await release(); owned.length = 0;
         await rm(join(target, installerName));
-      } finally { proto.write = realWrite; }
+      } finally {
+        proto.write = realWrite;
+        await release();
+        await rm(join(target, installerName), { force: true }).catch(() => {});
+      }
+    });
+  });
+
+  it('keeps late responses and late handles owned after the deadline', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      // A response that only arrives after the deadline still has its body cancelled.
+      let lateCanceled = false;
+      const lateBody = new ReadableStream<Uint8Array>({ cancel: () => { lateCanceled = true; } });
+      await expect(bounded(download(async () => new Promise((resolve) => setTimeout(() => resolve(response(lateBody)), 120)), { directory: target, timeoutMs: 20 }))).rejects.toThrow();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      expect(lateCanceled).toBe(true);
+      expect(readdirSync(target)).toEqual([]);
+      // A handle that only opens after the deadline is closed and removed by its owner, never resumed into success.
+      openInjection.impl = async (...args: unknown[]) => {
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        return openInjection.real!(...args);
+      };
+      try {
+        await expect(bounded(download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 20 }))).rejects.toThrow();
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        expect(readdirSync(target)).toEqual([]);
+      } finally { openInjection.impl = null; }
+    });
+  });
+
+  it('keeps the cause and the retained path when a falsy read failure meets an unclear release', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      const proto = await fileHandleProto(output);
+      const realWrite = proto.write;
+      const owned: { handle: Record<string, unknown>; close: unknown }[] = [];
+      proto.write = function (this: unknown, buffer: unknown) {
+        const handle = this as Record<string, unknown>;
+        owned.push({ handle, close: handle.close });
+        handle.close = () => new Promise(() => {});
+        return realWrite.call(this, buffer);
+      };
+      const release = async () => {
+        for (const item of owned) { item.handle.close = item.close; await (item.close as () => Promise<unknown>)().catch(() => {}); }
+      };
+      try {
+        const failing = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array(installerBytes.subarray(0, 10))); controller.error(0); } });
+        const failure: unknown = await bounded(download(async () => response(failing), { directory: target, timeoutMs: 80 })).catch((error: unknown) => error);
+        const wrapped = failure as Error & { cause?: unknown; partialFile?: unknown; releaseUnclear?: unknown };
+        expect(wrapped).toBeInstanceOf(Error);
+        expect(wrapped.cause).toBe(0);
+        expect(wrapped.partialFile).toBe(join(target, installerName));
+        expect(Array.isArray(wrapped.releaseUnclear)).toBe(true);
+        expect(existsSync(join(target, installerName))).toBe(true);
+      } finally {
+        proto.write = realWrite;
+        await release();
+        await rm(join(target, installerName), { force: true }).catch(() => {});
+      }
     });
   });
 
