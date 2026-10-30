@@ -280,20 +280,21 @@ async function serialSequence(builds, config) {
     const context = config.context?.();
     // A retained record keeps what this run knew: label, version, root, and — where the entry allows it — the
     // installation identity, owner and the real failure; nothing is invented from error text alone.
-    const retain = (reason, error) => {
-      summary.retainedInstallation = { label, version: artifact.version, root: installation.root, reason, ...config.retainedIdentity?.(installation, error) };
+    const retain = (reason, error, threw = false) => {
+      summary.retainedInstallation = { label, version: artifact.version, root: installation.root, reason, ...config.retainedIdentity?.(installation, error, threw) };
       return summary.retainedInstallation;
     };
-    let report; let failure;
+    let report; let failure; let threw = false;
     try { report = await config.operations.probe(installation, artifact, label, context); }
-    catch (error) { failure = error; report = config.fail(artifact.version, 'process', error); }
+    catch (error) { threw = true; failure = error; report = config.fail(artifact.version, 'process', error); }
     if (!config.verify(report, artifact, installation, context)) report = config.fail(artifact.version, 'report', new Error('Fresh process/report evidence is invalid'));
     summary[label] = report;
     if (!config.released(report.cleanup)) {
-      throw new Error(retain('Owned runtime release is unknown; do not remove or start another build', failure).reason);
+      // A captured throw is real even when its value is falsy; only a probe that returned keeps the generic wording.
+      throw new Error(retain('Owned runtime release is unknown; do not remove or start another build', failure, threw).reason);
     }
     try { await config.operations.remove(installation, artifact, label); }
-    catch (error) { retain(message(error), error); throw error; }
+    catch (error) { retain(message(error), error, true); throw error; }
     return report;
   }
   try {
@@ -321,9 +322,9 @@ export function runDshDesktopSequence(builds, operations) {
     // The sequence mints the run identity it hands to the attempt it uses; the launch record stays with the runner.
     context: () => ({ runId: randomUUID() }),
     partialInstallation: desktopPartialInstallation,
-    retainedIdentity: (installation, error) => {
+    retainedIdentity: (installation, error, threw) => {
       const identity = desktopIdentity(installation);
-      return identity ? { ...identity, ...(error ? { reason: message(error) } : {}) } : undefined;
+      return identity ? { ...identity, ...(threw ? { reason: message(error) } : {}) } : undefined;
     },
     verify: (report, artifact, installation, context) => {
       const expected = desktopBinding(installation, context?.runId);
