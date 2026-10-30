@@ -1,10 +1,10 @@
 # C04-I02：正式 Windows Desktop 安装包获取与校验
 
-2026-10-30（UTC+8）。执行者 Claude cworker1；root为Codex Desktop「多工具适配」。本稿由root准备，只有收到标明完整基线SHA的派单消息才启动；不要求旧聊天记忆。
+2026-10-30（UTC+8）。执行者 Claude cworker1；root为Codex Desktop「多工具适配」。用户现明确“开始下一个任务”，本单正式启用；收到root标明完整基线SHA的派单消息后直接执行，不要求旧聊天记忆。worker此前报告不能自行执行 /clear；root不追认上下文已经清空，本单仍提供完整独立续接包。
 
 ## 授权、基线与读取
 
-仓库 D:/workspace/CC/multichat，branch codex/core-refactor-pre-tui。用户已恢复持续逐单开发；新增非skill功能文件或必需用户操作仍先决策。本单沿用现有功能文件，不增源码、依赖、命令、用户持久状态或用户步骤。开发任务/证据允许新增。原未跟踪 docs/代码消息投递.md 不动不stage。
+仓库 D:/workspace/CC/multichat，branch codex/core-refactor-pre-tui。用户已恢复持续逐单开发；新增非skill功能文件或必需用户操作仍先决策。本单沿用现有功能文件，不新增源码文件、依赖、命令、用户持久状态或用户步骤。开发任务/证据允许新增。原未跟踪 docs/代码消息投递.md 不动不stage。
 
 先读AGENTS.md、docs/development/code-standards.md、本单、docs/research/deepseek-harness-runtime-probe-20261023.md的固定Desktop元数据、scripts/dsh-compat-ci.mjs及其测试与baseline。开工/结束核对真实branch/HEAD/dirty。并行无关提交只核对祖先及白名单，不checkout/pull/reset/clean/stash/amend/push，不回退共享文件归责；显式路径提交，不夹带其它index。
 
@@ -13,6 +13,7 @@
 给后续真实Desktop安装器提供直接可调用的「官方元数据投影 + 流式下载并校验」组件。现有模块已拥有Harness发行物、网络与CI编排职责；本单在其中独立实现Desktop分支，保留Web默认main、npm/packageManager元数据和现有报告/reporter合同。不是新增报告协议，不扩成安装器或UI driver。
 
 白名单仅：
+
 - scripts/dsh-compat-ci.mjs
 - scripts/dsh-compat-baseline.json
 - test/dsh-compat-ci.test.ts
