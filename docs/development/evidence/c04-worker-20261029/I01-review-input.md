@@ -2,7 +2,9 @@
 
 执行 `cworker1`，分支 `codex/core-refactor-pre-tui`，派单基线 `7ecde0b139d8bafed3a0008eecdc14d8c3ccbae1`（开工与结束一致）。任务书 `I01-task.md`。只改白名单内两个既有文件，另新增本文件与 `I01-check.txt`。
 
-**R1 返修（2026-10-29，基线 `209e9a6c9ff4f446dec2d30fc220f06b8a22b6d6`，任务书 `I01-R1-task.md`，审查 `I01-review.md`）**：本文件已按 R1 订正首轮过宽表述，并追加 R1 实际保证与调用方法（见末尾「九、R1 返修」）。R1 只改 `scripts/dsh-compat-ci.mjs`、`test/dsh-compat-ci.test.ts` 与本文件，新增 `I01-R1-check.txt`；`I01-check.txt` 原样保留，不重复、不改写。
+**R1 返修（2026-10-29，基线 `209e9a6c9ff4f446dec2d30fc220f06b8a22b6d6`，任务书 `I01-R1-task.md`，审查 `I01-review.md`）**：本文件已按 R1 订正首轮过宽表述，并追加 R1 实际保证与调用方法（见「九、R1 返修」）。R1 只改 `scripts/dsh-compat-ci.mjs`、`test/dsh-compat-ci.test.ts` 与本文件，新增 `I01-R1-check.txt`；`I01-check.txt` 原样保留，不重复、不改写。
+
+**R2 返修（2026-10-30，基线 `699753ad3039562d397ca076658dc95595b5481b`，任务书 `I01-R2-task.md`）**：收口 R1 复审剩余两项 P2（UUID 类型先验、失败归属完整），见「十、R2 返修」。R2 只改同样两个功能文件与本文件，新增 `I01-R2-check.txt`；此前日志均原样保留。
 
 验收口径是**“离线 Desktop 工装核心完成”**，不是 C04 通过：正式 Desktop 的下载、安装、UI 驱动、Host 退出、官方卸载与系统注册清理都还没有真实执行过，本单不产生任何桌面 PASS 的原生证据。
 
@@ -87,8 +89,9 @@ GREEN 删除别名后同组 23/23 通过。
 
 - `scripts/dsh-compat-ci.mjs`：新增桌面常量（`desktopTool`/`desktopChecks`/`desktopScope`）、`validDesktopReport`、`desktopFailure`、`desktopExpectation`、`hasDesktopCleanupProof`、`runDshDesktopAttempt`、`runDshDesktopSequence`；把原 `runDshBuildSequence` 的循环抽为私有 `serialSequence`，两入口共用。未改 `main()`、默认 CLI、Web 报告校验、分类与 workflow reporter。
 - R1 追加（详见九）：`desktopReportMaxBytes`/`desktopSessionId` 常量、`knownDesktopArtifact`、`desktopBinding`、有界读取 `readDesktopReport`、`intactProcess`/`desktopProcessMatches`、`desktopPartialInstallation`；`validDesktopReport` 改为先验形状后比较、PASS 必须带完整 cleanup；`runDshDesktopAttempt` 增加调用方 `launch` 与 `runId` 期望；`serialSequence` 增加 `context` 与安装抛错的结构化归属收口。
+- R2 追加（详见十）：`desktopIdentity` 字符串投影供 `desktopBinding`/`desktopPartialInstallation`/`retainedIdentity` 共用；`validDesktopReport` 对 `runId`/`installationId`/`instanceId` 先验字符串；`serialSequence` 三处 `retainedInstallation` 收敛为 `retain(reason, error)` 并按入口投影身份（Web 无投影，形状不变）。
 - `test/dsh-compat-ci.test.ts`：新增 `formal desktop report and lifecycle` 一组 9 个用例；GREEN 中修正该组自身一处反例（错版本原写 `0.2.2`，恰好等于候选版本，改为 `0.3.0`），这是测试缺陷不是产品让步。
-- 证据：本文件、`I01-check.txt`、`I01-R1-check.txt`。
+- 证据：本文件、`I01-check.txt`、`I01-R1-check.txt`、`I01-R2-check.txt`。
 
 未改：`docs/代码消息投递.md`（仍为原未跟踪，未 stage）、workflow、根任务书与 C08/C13 记录。
 
@@ -167,3 +170,41 @@ GREEN 同组 **29/29 通过**。
 - `七、未实现 / 未测` 的整张清单仍然有效：本单只修离线工装，没有下载/安装/UI/注册/用户状态/模型/远端动作。
 - R1 未单列反例：“报告是链接或非普通文件”由 `readDesktopReport` 的 `lstat` + `isFile` + 打开后复核拒绝，但未写成用例（在 Windows 建链需要额外权限）；“预检之后文件继续增长”同理只靠有界循环保证，没有做并发写入的时间竞态用例。
 - 清理：全部用例使用独占临时目录（`mkdtemp` + 结束时删除），部分安装用例的根也落在该临时目录内；顺带删除了首轮遗留的未跟踪调试产物 `test/.dsh-compat-ci.head.tmp`（未 stage、未提交），未触碰 `docs/代码消息投递.md`。
+
+## 十、R2 返修（C04-I01-R2）
+
+2026-10-30。基线 `699753ad3039562d397ca076658dc95595b5481b`（用户恢复后 root 续档），任务 `I01-R2-task.md`，收口 `I01-R1-review.md` 剩余 Standards/Spec 各 1 项 P2。仍只做离线工装，不接真实 Desktop。
+
+### 1. 提交
+
+| 阶段 | 提交 | 内容 |
+| --- | --- | --- |
+| 基线 | `699753ad` | root 复审暂停检查点之后的恢复提交 |
+| RED | `9c83614` | 只改 `test/dsh-compat-ci.test.ts`：数组 UUID 与完整归属反例 |
+| GREEN | `807443d` | 只改 `scripts/dsh-compat-ci.mjs`：类型先验与归属投影的最小实现 |
+
+RED 实测 **4 失败 / 30 通过**，全部业务断言：数组 `installationId`（字符串化后恰为合法 UUID）的序列仍推进 remove 与候选安装；释放未知 / probe 抛错 / remove 抛错三种 `retainedInstallation` 都缺 `installationId`/`owner`（probe 抛错还缺真实 reason）。同组内“两个分别新建但装同一 UUID 的数组绕过实例去重”与“相同字符串实例仍拒”随首条断言一并生效；Web 形状守护用例今日即通过（守护性质）。GREEN 同组 **34/34 通过**。
+
+### 2. 两项保证 → 修复 → 反例
+
+**UUID 先验字符串。** 新增 `desktopIdentity(installation)`：`installationId` 必须 `typeof === 'string'` 且匹配 UUID、`owner` 为非空字符串；`desktopBinding`（`runId` 同样先验字符串）、`desktopExpectation`（`launch.instanceId`）、`validDesktopReport`（`report.runId`/`report.installationId`/`report.instanceId`）与 `desktopPartialInstallation` 全部走同一投影或同样先验，数组等非字符串一律拒绝，不经 Set、stringify 或强转认可。反例：「rejects array UUID identities and never lets equal arrays bypass instance dedup」——数组 `installationId` 的序列在第 1 次 attempt 即停（零 remove、无候选安装）；两个分别新建但装同一 UUID 的数组实例同样在 baseline 被拒；相同字符串实例重复仍拒、合法字符串序列照常 compatible（既有用例保持）。Web 载荷合同未动（`validReport` 的 runId 正则原样）。
+
+**已知失败归属完整。** `serialSequence` 的三处 `retainedInstallation` 收敛为 `retain(reason, error)`：`{ label, version, root, reason }` 加 `config.retainedIdentity(installation, error)` 投影。Web 不配置该投影，记录形状与文案逐字节不变（新守护用例 `toEqual` 全等断言）。Desktop 投影：`desktopIdentity` 有效时补 `installationId`/`owner`；probe 抛错时 `reason` 覆写为真实错误文本（释放未知且无抛错保留原“release unknown”文案；remove 抛错时 reason 本就是真实错误）；无有效身份不伪造、不从错误文本猜路径。反例（均真实独占临时根 + marker）：释放未知 → 调用只有 `['install','probe']`、`retainedInstallation` 含 root/installationId/owner/label/version、marker 未被工装删除；probe 抛错 → 同上且 `reason` 为 `desktop driver crashed mid-session`；remove 抛错 → `['install','probe','remove']`、`reason` 为 `Official uninstall refused`、身份完整。结构化部分安装失败路径不回退（既有用例保持）。
+
+### 3. 字段与边界
+
+- Desktop `retainedInstallation` 为 `{ label, version, root, reason, installationId, owner }`（身份可得时）；Web 维持 `{ label, version, root, reason }`。
+- Desktop 下 probe 抛错时 `summary.error` 同步为真实抛错文本（随覆写后的 reason 抛出）；Web 的 `summary.error` 文案不变。
+- 不扩第三项研究：打开报告后的 dev/ino 预检-句柄一致性维持 R1 复审“未动态复现风险”的定位，本单未整改也未当作已证实问题。
+
+### 4. 验证
+
+- 定向：`npx vitest run test/dsh-compat-ci.test.ts`（max2/min1）GREEN **34/34**；RED 4 失败 / 30 通过。
+- `node --check`、`npm run lint`（0）、`npm run check:imports`（203 模块 / 682 边）、`npm run build` 通过。
+- 完整：GREEN 后一次 `npm run check`（forks/threads 均 max2/min1，未筛套件、未加 skip、未放宽断言），完整 stdout/stderr 与真实退出码见 `I01-R2-check.txt`（357 行，原样保存）。结果：**退出码 0**，231 文件通过 / 3 跳过，**2564 项通过 / 11 跳过**（较 R1 的 2559 增加 5，即本单新增用例），导入图 203 模块 / 682 边。
+- 首败：本轮完整检查一次通过，没有首败需要记录；未因任何失败改写或覆盖该文件。
+
+### 5. 未测 / 清理
+
+- 未单列反例：attempt 层报告 `runId`/`installationId` 为数组（JSON 往返已使引用不相等，类型收口由 sequence 层反例与 `validDesktopReport` 先验共同覆盖）；dev/ino 一致性见上节定位。
+- 清理：三个新用例均使用独占 `mkdtemp` 临时根（含 marker 文件）并在结束时删除，删除前以绝对路径断言归属；无新增调试产物，未触碰 `docs/代码消息投递.md`。
