@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readdirSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, open, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
@@ -622,8 +622,18 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
   const stalled = (onCanceled: () => void) => new ReadableStream<Uint8Array>({ cancel: onCanceled });
   const download = (fetchImpl: (url: string, init: { redirect?: string; signal?: AbortSignal }) => Promise<unknown>, options: Record<string, unknown> = {}) =>
     downloadDshDesktopInstaller(projected(), { fetchImpl, timeoutMs: 5000, ...options });
+  const bounded = <T,>(operation: Promise<T>, ms = 800): Promise<T> => {
+    operation.catch(() => {});
+    return Promise.race([operation, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('bounded-guard tripped')), ms))]);
+  };
+  const fileHandleProto = async (output: string) => {
+    const probe = await open(join(output, 'handle-probe'), 'w');
+    const proto = Object.getPrototypeOf(probe) as Record<string, (...args: unknown[]) => Promise<unknown>>;
+    await probe.close();
+    return proto;
+  };
 
-  it('projects the pinned research metadata and refuses masquerading or mutable desktop sources', async () => {
+  it('projects the pinned research metadata and refuses masquerading or inexact desktop sources', async () => {
     const pinned = JSON.parse(await readFile(new URL('../scripts/dsh-compat-baseline.json', import.meta.url), 'utf8'));
     expect(parseDshDesktopWindowsManifest(pinned.desktopWindows, 'win32', 'x64')).toEqual({ version: '0.2.1-rc.2', url: installerUrl, size: 289385456,
       integrity: 'sha512-39POl5osl9PKMqrPXQA52dh/bCV0Z02vOV9cTjOJDHE6gsJwp5bv7lfgB3mVWAKspX7a/w1iTi+8Listdhq45g==', filename: installerName });
@@ -642,6 +652,12 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
       { url: 'https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.2.tgz' },
       { url: 'https://download.deepseek.com/dsh-desk/bin/mac-arm64/deepseek-harness-0.2.1-rc.2-mac-arm64.dmg' },
       { url: 'https://download.deepseek.com/other/deepseek-harness-0.2.1-rc.2-win-x64.exe' },
+      { url: 'https://download.deepseek.com:8443/dsh-desk/bin/win-x64/deepseek-harness-0.2.1-rc.2-win-x64.exe' },
+      { url: 'https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.1-rc.2-win-x64.exe.txt' },
+      { url: 'https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.1-rc.2-win-x64.exe.zip' },
+      { url: 'https://download.deepseek.com/dsh-desk/bin/win-x64/nightly/deepseek-harness-0.2.1-rc.2-win-x64.exe' },
+      { url: 'https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.1-rc.22-win-x64.exe' },
+      { sha512: [installerSha512] }, { feed: ['https://download.deepseek.com/dsh-desk/feeds/win-x64/nightly.yml'] }, { url: [installerUrl] },
       { feed: 'http://download.deepseek.com/dsh-desk/feeds/win-x64/nightly.yml' }, { feed: 'https://example.org/dsh-desk/feeds/win-x64/nightly.yml' },
       { size: 0 }, { size: -1 }, { size: 1.5 }, { size: '36' }, { size: 512 * 1024 * 1024 + 1 },
       { sha512: 'not-base64!!!' }, { sha512: 'short' }, { sha512: `sha512-${installerSha512}` },
@@ -675,14 +691,19 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
     await isolated(async (output) => {
       const target = join(output, 'owned-desktop-download'); await mkdir(target);
       const attempt = (body: unknown, status = 200, headers: Record<string, string> = {}) => download(async () => response(body, status, headers), { directory: target });
-      await expect(attempt(stream([installerBytes]), 200, { 'content-length': '35' })).rejects.toThrow();
+      // Rejections before the first read still own the response body and cancel it.
+      let lengthCanceled = false;
+      await expect(attempt(stream([installerBytes], () => { lengthCanceled = true; }), 200, { 'content-length': '35' })).rejects.toThrow();
+      expect(lengthCanceled).toBe(true);
+      let statusCanceled = false;
+      await expect(attempt(stream([installerBytes], () => { statusCanceled = true; }), 404)).rejects.toThrow();
+      expect(statusCanceled).toBe(true);
       await expect(attempt(stream([installerBytes]), 200, { 'content-length': '+36' })).rejects.toThrow();
       await expect(attempt(stream([installerBytes]), 200, { 'content-length': '0x24' })).rejects.toThrow();
       await expect(attempt(stream([Buffer.concat([installerBytes, Buffer.from('!')])]))).rejects.toThrow();
       await expect(attempt(stream([installerBytes.subarray(0, 20)]))).rejects.toThrow();
       await expect(attempt(stream([Buffer.alloc(installerBytes.length, 7)]))).rejects.toThrow();
       await expect(attempt(stream([installerBytes]), 302)).rejects.toThrow();
-      await expect(attempt(stream([installerBytes]), 404)).rejects.toThrow();
       await expect(attempt(stream([installerBytes]), 500)).rejects.toThrow();
       await expect(attempt(null)).rejects.toThrow();
       // Deleting the partials proves the write handles were released; Windows keeps open files undeletable.
@@ -708,6 +729,91 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
       await expect(attempt).rejects.toThrow();
       expect(cancelled).toBe(true);
       expect(readdirSync(target)).toEqual([]);
+      // A stalled disk write cannot outlive the deadline either.
+      const proto = await fileHandleProto(output);
+      const realWrite = proto.write; const stalledHandles: unknown[] = [];
+      proto.write = function () { stalledHandles.push(this); return new Promise(() => {}); };
+      try {
+        await expect(bounded(download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 60 }))).rejects.toThrow(/exceeded its 60ms deadline/);
+      } finally {
+        proto.write = realWrite;
+        for (const item of stalledHandles) await (item as Record<string, () => Promise<unknown>>).close().catch(() => {});
+      }
+      expect(readdirSync(target)).toEqual([]);
+      // A cancel that never settles still returns bounded and still removes the partial.
+      const neverCancelled = new ReadableStream<Uint8Array>({ cancel: () => new Promise(() => {}) });
+      await expect(bounded(download(async () => response(neverCancelled), { directory: target, timeoutMs: 60 }))).rejects.toThrow();
+      expect(readdirSync(target)).toEqual([]);
+    });
+  });
+
+  it('rejects short and zero-progress disk writes instead of trusting the stream digest', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      const proto = await fileHandleProto(output);
+      const realWrite = proto.write;
+      try {
+        // A real one-byte write against a full-chunk claim: the transferred digest alone must not certify the file.
+        proto.write = function (buffer: unknown) { return realWrite.call(this, (buffer as Uint8Array).subarray(0, 1)); };
+        await expect(download(async () => response(stream([installerBytes])), { directory: target })).rejects.toThrow(/did not accept the full chunk/);
+        proto.write = async function () { return { bytesWritten: 0 }; };
+        await expect(download(async () => response(stream([installerBytes])), { directory: target })).rejects.toThrow(/did not accept the full chunk/);
+        expect(readdirSync(target)).toEqual([]);
+      } finally { proto.write = realWrite; }
+    });
+  });
+
+  it('retains the partial and reports unclear release when a completed transfer cannot close', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      // FileHandle.close is an own bound property, so a full-write patch swaps it per captured instance.
+      const proto = await fileHandleProto(output);
+      const realWrite = proto.write;
+      const swapClose = (replacement: () => Promise<unknown>) => {
+        const owned: { handle: Record<string, unknown>; close: unknown }[] = [];
+        proto.write = function (this: unknown, buffer: unknown) {
+          const handle = this as Record<string, unknown>;
+          owned.push({ handle, close: handle.close });
+          handle.close = replacement;
+          return realWrite.call(this, buffer);
+        };
+        return owned;
+      };
+      try {
+        let stalled = swapClose(() => new Promise(() => {}));
+        await expect(bounded(download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 60 }))).rejects.toThrow(/close did not settle/);
+        // Without a confirmed close the partial is retained and reported, never force-deleted.
+        expect(existsSync(join(target, installerName))).toBe(true);
+        for (const item of stalled) item.handle.close = item.close;
+
+        // A frozen close failure keeps its identity through cleanup bookkeeping.
+        const frozen = Object.freeze(new Error('frozen close failure'));
+        stalled = swapClose(() => Promise.reject(frozen));
+        const failure: unknown = await bounded(download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 60 })).catch((error: unknown) => error);
+        expect(failure).toBe(frozen);
+        expect(existsSync(join(target, installerName))).toBe(true);
+        for (const item of stalled) item.handle.close = item.close;
+      } finally { proto.write = realWrite; }
+    });
+  });
+
+  it('keeps falsy and frozen stream failures as real failures and still cleans the owned partial', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      const failing = (thrown: unknown) => new ReadableStream<Uint8Array>({
+        start(controller) { controller.enqueue(new Uint8Array(installerBytes.subarray(0, 10))); controller.error(thrown); },
+      });
+      // A falsy rejection is still a failure; the partial this call created is still cleaned.
+      for (const thrown of [null, undefined, 0, false, '']) {
+        const failure: unknown = await download(async () => response(failing(thrown)), { directory: target }).catch((error: unknown) => error);
+        expect(failure).toBe(thrown);
+        expect(readdirSync(target)).toEqual([]);
+      }
+      // A frozen Error keeps its identity; no annotation TypeError may replace it.
+      const frozen = Object.freeze(new Error('frozen stream failure'));
+      const frozenFailure: unknown = await download(async () => response(failing(frozen)), { directory: target }).catch((error: unknown) => error);
+      expect(frozenFailure).toBe(frozen);
+      expect(readdirSync(target)).toEqual([]);
     });
   });
 
@@ -715,8 +821,10 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
     await isolated(async (output) => {
       const target = join(output, 'owned-desktop-download'); await mkdir(target);
       const existing = join(target, installerName); await writeFile(existing, 'original bytes');
-      await expect(download(async () => response(stream([installerBytes])), { directory: target })).rejects.toThrow();
+      let existingCanceled = false;
+      await expect(download(async () => response(stream([installerBytes], () => { existingCanceled = true; })), { directory: target })).rejects.toThrow();
       expect(await readFile(existing, 'utf8')).toBe('original bytes');
+      expect(existingCanceled).toBe(true);
       const requests: string[] = [];
       const fetchImpl = async (url: string) => { requests.push(url); return response(stream([installerBytes])); };
       for (const invalid of [artifact(), desktopWindows({ url: 'https://example.org/deepseek-harness-0.2.1-rc.2-win-x64.exe' }), desktopWindows({ size: 0 })]) {
