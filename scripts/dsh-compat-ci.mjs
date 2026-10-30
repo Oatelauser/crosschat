@@ -97,9 +97,99 @@ export function verifyNpmArtifact(bytes, artifact) {
   return true;
 }
 
-/** Temporary RED placeholders so the new desktop expectations fail on business assertions; the GREEN implementation replaces them. */
-export function parseDshDesktopWindowsManifest() {}
-export async function downloadDshDesktopInstaller() {}
+const desktopDownloadHost = 'download.deepseek.com';
+const desktopFeedPath = '/dsh-desk/feeds/win-x64/';
+const desktopBinaryPath = '/dsh-desk/bin/win-x64/';
+const desktopMaxInstallerBytes = 512 * 1024 * 1024;
+const rawDesktopSha512 = /^[A-Za-z0-9+/]{85}[AQgw]==$/;
+
+/** Desktop releases live only on versioned HTTPS paths of the recorded host; mutable latest names never reach a projection. */
+function officialDesktopUrl(url, prefix) {
+  if (typeof url !== 'string') throw new Error('Desktop metadata URLs must be strings');
+  let parsed;
+  try { parsed = new URL(url); } catch { throw new Error('Desktop metadata must use absolute URLs'); }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== desktopDownloadHost || parsed.username !== '' || parsed.password !== ''
+    || parsed.search !== '' || parsed.hash !== '' || !parsed.pathname.startsWith(prefix) || parsed.pathname.split('/').includes('latest')) throw new Error('Desktop metadata must stay on official versioned HTTPS paths');
+  return parsed;
+}
+
+export function parseDshDesktopWindowsManifest(input, platform, arch) {
+  if (!record(input) || typeof input.version !== 'string' || !semver(input.version)) throw new Error('Invalid official Desktop installer metadata');
+  if (!supported(input.version)) throw Object.assign(new Error('Desktop release is outside the approved >=0.2.1-rc.2 <0.3.0-0 window'), { category: 'unsupported', version: input.version });
+  if (platform !== 'win32' || arch !== 'x64') throw new Error('This compatibility probe is configured for Windows x64 only');
+  officialDesktopUrl(input.feed, desktopFeedPath);
+  const filename = officialDesktopUrl(input.url, desktopBinaryPath).pathname.split('/').pop();
+  if (!filename.includes(input.version) || /[\\/:]/.test(filename) || !rawDesktopSha512.test(input.sha512 ?? '')
+    || !Number.isSafeInteger(input.size) || input.size <= 0 || input.size > desktopMaxInstallerBytes) throw new Error('Invalid official Desktop installer metadata');
+  return { version: input.version, url: input.url, size: input.size, integrity: `sha512-${input.sha512}`, filename };
+}
+
+/** The download boundary re-derives its own plan, so no caller record skips straight to the network. */
+function desktopInstallerPlan(artifact) {
+  if (!record(artifact) || typeof artifact.version !== 'string' || !semver(artifact.version)) throw new Error('Invalid Desktop installer identity');
+  if (!supported(artifact.version)) throw Object.assign(new Error('Desktop release is outside the approved >=0.2.1-rc.2 <0.3.0-0 window'), { category: 'unsupported', version: artifact.version });
+  const filename = officialDesktopUrl(artifact.url, desktopBinaryPath).pathname.split('/').pop();
+  if (typeof artifact.filename !== 'string' || artifact.filename !== filename || !artifact.filename.includes(artifact.version) || /[\\/:]/.test(artifact.filename)
+    || !Number.isSafeInteger(artifact.size) || artifact.size <= 0 || artifact.size > desktopMaxInstallerBytes
+    || typeof artifact.integrity !== 'string' || !sri.test(artifact.integrity)) throw new Error('Invalid Desktop installer identity');
+  return { version: artifact.version, url: artifact.url, size: artifact.size, filename: artifact.filename, sha512: artifact.integrity.slice(7) };
+}
+
+/**
+ * Streams the pinned Desktop installer into a caller-owned exclusive directory and returns a path only when the
+ * transferred bytes matched the pinned size and SHA-512; that proves transfer integrity, never a publisher,
+ * installation or Desktop function.
+ */
+export async function downloadDshDesktopInstaller(artifact, { directory, signal, timeoutMs = 120000, fetchImpl = globalThis.fetch } = {}) {
+  const plan = desktopInstallerPlan(artifact);
+  if (typeof fetchImpl !== 'function') throw new Error('A fetch implementation is required to download the Desktop installer');
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new Error('The Desktop installer deadline must be a positive integer of milliseconds');
+  if (typeof directory !== 'string' || !isAbsolute(directory)) throw new Error('The Desktop installer target directory must be an absolute caller-owned path');
+  const path = join(directory, plan.filename);
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(new Error(`Desktop installer exceeded its ${timeoutMs}ms deadline`)), timeoutMs);
+  const expired = new Promise((_, reject) => deadline.signal.addEventListener('abort', () => reject(deadline.signal.reason), { once: true }));
+  expired.catch(() => {});
+  const forward = () => deadline.abort(signal.reason);
+  const stop = () => { clearTimeout(timer); if (signal) signal.removeEventListener('abort', forward); };
+  if (signal) { if (signal.aborted) deadline.abort(signal.reason); else signal.addEventListener('abort', forward); }
+  let reader; let handle; let created = false; let failure;
+  try {
+    const request = fetchImpl(plan.url, { redirect: 'error', signal: deadline.signal });
+    request.catch(() => {});
+    const response = await Promise.race([request, expired]);
+    if (!response?.ok || !response.body) throw new Error(`Official Desktop installer response was not a successful body (status ${response?.status})`);
+    const declared = response.headers?.get?.('content-length');
+    if (declared !== null && declared !== undefined) {
+      if (!/^\d+$/.test(declared) || Number(declared) !== plan.size) throw new Error('Desktop installer Content-Length disagrees with the pinned size');
+    }
+    handle = await open(path, 'wx'); created = true;
+    reader = response.body.getReader();
+    const hash = createHash('sha512'); let written = 0;
+    for (;;) {
+      const part = reader.read(); part.catch(() => {});
+      const chunk = await Promise.race([part, expired]);
+      if (chunk.done) break;
+      written += chunk.value.byteLength;
+      if (written > plan.size) throw new Error('Desktop installer response exceeded the pinned size');
+      hash.update(chunk.value);
+      await handle.write(chunk.value);
+    }
+    if (written !== plan.size) throw new Error('Desktop installer response was truncated below the pinned size');
+    if (hash.digest('base64') !== plan.sha512) throw new Error('Desktop installer failed SHA-512 verification');
+    stop();
+    return { path, filename: plan.filename, version: plan.version, size: plan.size, integrity: `sha512-${plan.sha512}` };
+  } catch (error) { failure = error; }
+  finally {
+    stop();
+    if (reader) { try { await reader.cancel(); } catch { /* The stream may already be closed or broken. */ } }
+    if (handle) { try { await handle.close(); } catch { /* A failed close still leaves the deletion attempt below. */ } }
+    if (failure && created) {
+      try { await rm(path); } catch (error) { Object.assign(failure, { partialFile: path, cleanupError: message(error) }); }
+    }
+  }
+  throw failure;
+}
 
 /** A timeout cannot prove descendant release; the caller retains the installation. */
 export function runDshProcess(binary, args, options = {}) {
