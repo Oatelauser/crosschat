@@ -569,4 +569,39 @@ describe('DeepSeek Harness formal desktop report and lifecycle', () => {
       expect(summary.classification).toEqual({ kind: 'infrastructure', notify: false });
     });
   });
+
+  it('keeps String(value) as the real reason when the probe throws a falsy value', async () => {
+    await isolated(async (output) => {
+      const reject = async (value: unknown): Promise<never> => { throw value; };
+      // A captured exception is a captured exception: throwing undefined is not "no exception".
+      for (const [index, thrown] of [undefined, 0, false, '', null].entries()) {
+        const root = join(output, `owned-falsy-${index}`); await mkdir(root); await writeFile(join(root, '.fixture-owner'), 'marker');
+        const installation = { installationId: randomUUID(), owner, root }; const calls: string[] = [];
+        const summary = await runDshDesktopSequence(builds, {
+          install: async () => { calls.push('install'); return installation; },
+          probe: async () => { calls.push('probe'); return reject(thrown); },
+          remove: async () => { calls.push('remove'); },
+        });
+        expect(calls).toEqual(['install', 'probe']);
+        expect(summary.retainedInstallation).toMatchObject({ label: 'baseline', version: builds.baseline.version, root,
+          installationId: installation.installationId, owner, reason: String(thrown) });
+        expect(summary.error).toBe(String(thrown));
+        expect(existsSync(join(root, '.fixture-owner'))).toBe(true);
+        expect(summary.classification).toEqual({ kind: 'infrastructure', notify: false });
+      }
+      // A close that throws a falsy value keeps String(value) as its reason too.
+      const root = join(output, 'owned-falsy-close'); await mkdir(root); await writeFile(join(root, '.fixture-owner'), 'marker');
+      const installation = { installationId: randomUUID(), owner, root }; const calls: string[] = [];
+      const closed = await runDshDesktopSequence(builds, {
+        install: async () => { calls.push('install'); return installation; },
+        probe: async (_installation: unknown, build: typeof builds.baseline, _label: string, context?: { runId: string }) => {
+          calls.push('probe'); return bound(build, installation, context?.runId ?? randomUUID());
+        },
+        remove: async () => { calls.push('remove'); return reject(0); },
+      });
+      expect(calls).toEqual(['install', 'probe', 'remove']);
+      expect(closed.retainedInstallation).toMatchObject({ label: 'baseline', root, installationId: installation.installationId, owner, reason: '0' });
+      expect(closed.error).toBe('0');
+    });
+  });
 });
