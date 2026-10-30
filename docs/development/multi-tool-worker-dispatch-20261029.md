@@ -19,7 +19,7 @@
 
 本会话不再派发通信相关子单。用户明确将全部通信任务交给现有 Codex Desktop 会话 **Bug修复2**，由用户亲自对接；见[完整交接](communication-handoff-bugfix2-20261029.md)。W08 最新研究交付到 `1066e30`，尚未完成 root 最终验收，按真实状态随证据交接。短信封内部 subagent 已停写，确认没有任何代码/测试修改。
 
-当前实施[C04-I02-R1定向返修](evidence/c04-worker-20261029/I02-R1-task.md)。[I02首轮双轴复审未通过](evidence/c04-worker-20261029/I02-review.md)：产品c2a2e2f、证据7741cf3，root40/40、worker全量2570/11，但实证短写仍返回成功、异常收口/截止和元数据精确校验有缺口；合并返修，不进入下一功能单。只改既有模块/测试及开发证据，不实际下载或安装官方二进制。[I01核心已验收](evidence/c04-worker-20261029/I01-final-review.md)，C04父项仍未完成。
+当前实施[C04-I02-R2收口](evidence/c04-worker-20261029/I02-R2-task.md)。[R1复审](evidence/c04-worker-20261029/I02-R1-review.md)：产品4476f33、证据7e4e9b0，root43/43、worker全量2573/11；短写/元数据/假值清理已修，仍需闭合最终交付前截止、迟到资源归属、冻结异常保留信息及fixture异常收尾。继续同一任务，不进入下一功能单，不实际下载或安装官方二进制。[I01核心已验收](evidence/c04-worker-20261029/I01-final-review.md)，C04父项仍未完成。
 
 [C08-I01 默认 Harness 技能维护已最终验收](evidence/c08-worker-20261029/I01-final-review.md)：最终产品 `a77a39b`，两轴复审通过，root 七套件87项通过；worker完整check第二次2544通过/11原有跳过，最多2/最少1 worker。首次全量的machines断言失败仍完整保留，根因未确认；不以随后通过替代根因证据。I01/R1/R2移出活动子单，原任务书仅作批准证据。[I02 生命周期说明已最终验收](evidence/c13-worker-20261029/I02-final-review.md)，继续作为合同输入。新增功能文件或用户必需操作仍须先决定。
 
