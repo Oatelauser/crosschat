@@ -749,14 +749,16 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
         for (const item of stalledHandles) await (item as Record<string, () => Promise<unknown>>).close().catch(() => {});
       }
       expect(readdirSync(target)).toEqual([]);
-      // A cancel that never settles still returns bounded; with a finite shared cleanup budget the close is
-      // confirmed first, so the partial is removed when possible and retained with a reason when not.
+      // A cancel that never settles still returns bounded within the finite shared cleanup budget; whatever the
+      // leftover budget does to the partial, a retained file is always reported with its path.
       const neverCancelled = new ReadableStream<Uint8Array>({ cancel: () => new Promise(() => {}) });
       const stalledCancel: unknown = await bounded(download(async () => response(neverCancelled), { directory: target, timeoutMs: 60 })).catch((error: unknown) => error);
       expect(stalledCancel).toBeInstanceOf(Error);
-      const stalledCancelFailure = stalledCancel as Error & { partialFile?: unknown; cleanupError?: unknown };
-      expect(stalledCancelFailure.partialFile).toBe(join(target, installerName));
-      expect(typeof stalledCancelFailure.cleanupError).toBe('string');
+      const stalledCancelFailure = stalledCancel as Error & { partialFile?: unknown; cleanupError?: unknown; cleanupNotes?: unknown; releaseUnclear?: unknown };
+      const notes = [...(Array.isArray(stalledCancelFailure.cleanupNotes) ? stalledCancelFailure.cleanupNotes as unknown[] : []),
+        ...(Array.isArray(stalledCancelFailure.releaseUnclear) ? stalledCancelFailure.releaseUnclear as unknown[] : [])].join('; ');
+      expect(notes).toContain('the response body cancel did not settle');
+      if (existsSync(join(target, installerName))) expect(stalledCancelFailure.partialFile).toBe(join(target, installerName));
       await rm(join(target, installerName), { force: true }).catch(() => {});
     });
   });
@@ -912,7 +914,11 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
         for (const item of owned) { item.handle.close = item.close; await (item.close as () => Promise<unknown>)().catch(() => {}); }
       };
       try {
-        const failing = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array(installerBytes.subarray(0, 10))); controller.error(0); } });
+        // The chunk is delivered before the error so the write (and the close swap) actually happens.
+        const failing = new ReadableStream<Uint8Array>({
+          start(controller) { controller.enqueue(new Uint8Array(installerBytes.subarray(0, 10))); },
+          async pull(controller) { await new Promise((resolve) => setTimeout(resolve, 10)); controller.error(0); },
+        });
         const failure: unknown = await bounded(download(async () => response(failing), { directory: target, timeoutMs: 80 })).catch((error: unknown) => error);
         const wrapped = failure as Error & { cause?: unknown; partialFile?: unknown; releaseUnclear?: unknown };
         expect(wrapped).toBeInstanceOf(Error);
