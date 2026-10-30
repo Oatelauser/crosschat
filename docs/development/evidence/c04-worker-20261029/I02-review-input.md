@@ -6,6 +6,8 @@
 
 **R1 返修（2026-10-30，基线 `bb40ce93322fe70175e4305df9379f92eb13006b`，任务书 `I02-R1-task.md`，双轴审查 `I02-review.md`）**：root 首轮复审未通过（Standards 4 项最高 P1、Spec 4 项 P2，均有实测复现）。本文件第二节与第三节中「任何失败都释放…」「清理失败在原始错误上附加…」及 URL 前缀/子串校验的表述**首轮过宽**，已由 R1 收口，订正与实际保证见「八、R1 返修」。R1 只改 `scripts/dsh-compat-ci.mjs`、`test/dsh-compat-ci.test.ts` 与本文件，新增 `I02-R1-check.txt`；`I02-check.txt` 及其末尾尾空格属原始证据，原样保留不改。
 
+**R2 返修（2026-10-30，基线 `60cd3f3169c0196d3f42c4537c1e6a69356dfa47`，任务书 `I02-R2-task.md`，双轴审查 `I02-R1-review.md`）**：R1 复审仍余 Standards 3 项 + Spec 3 项（均 P2）：close 另用新预算绕过总截止、冻结/非对象异常丢失保留报告、fixture 实例释放在断言后。第八节 R1 的「close 确认」与「原样抛出冻结异常」表述已由 R2 进一步收口（见「九、R2 返修」）：单一传输截止覆盖 open/唯一 close/最终交付，冻结/假值异常叠加保留信息时改为**带 cause 的可写包装**（引用相等不再是合同）。R2 只改同两个功能文件与本文件，新增 `I02-R2-check.txt`；旧日志原样。
+
 ## 一、提交
 
 | 阶段 | 提交 | 内容 |
@@ -112,3 +114,47 @@ RED 实测 **7 失败 / 36 通过**，失败全部是业务断言（不精确 UR
 - 未单测：partial `rm` 删除失败/未落定分支（`cleanupError`）——Windows 下无法便携模拟"句柄已确认关闭而删除仍失败"；实现已按有界+附加字段处理。`open()` 本身停滞未设界：原规格保证列举的是响应头/body/写盘等待，真实 fs open 无已知停滞路径，如实说明不冒充已覆盖。真实 undici abort/3xx 语义同首轮口径（全部注入 fetch，`redirect:'error'`）。
 - 注入方式说明：`FileHandle.close` 是实例自有绑定属性（原型上不存在），close 停滞/失败用例经原型 `write` 补丁捕获模块内部实例后在其上换置 close 实现，子用例间与 finally 均恢复真实 close 并 await——所有原型/实例补丁在 finally 恢复，保留的 partial 由 fixture 确认句柄关闭后按绝对路径删除，独占 `mkdtemp` 根用后即删。
 - 第六节其余未测边界（真实下载、目录祖先扫描、trickle 流、runner 接线）维持不变；C04 未关闭。
+
+## 九、R2 返修（C04-I02-R2）
+
+### 1. 提交
+
+| 阶段 | 提交 | 内容 |
+| --- | --- | --- |
+| 基线 | `60cd3f3` | root R1 复审提交（本单派单基线） |
+| RED | `4aec870` | 只改 `test/dsh-compat-ci.test.ts`：5 类缺口反例（close 内取消/总截止、迟到响应与迟到句柄、冻结/假值叠加保留信息、有限共享清理预算）+ `node:fs/promises` 的 `open` 局部 vi.mock 注入 |
+| GREEN | `9699354` | 只改 `scripts/dsh-compat-ci.mjs`（与测试两处非让步修正，见下）：记录结果→有界收尾→最终裁决 |
+
+RED 实测 **5 失败 / 41 通过**，失败全部是业务断言（close 内取消返回 success、迟到 close 在总截止后成功、迟到响应 body 未取消、迟到 open 恢复成功、冻结/假值丢失 partialFile/cause）。GREEN 同组 **46/46**，连跑三次全绿。
+
+**GREEN 内两处测试修正（非产品让步）**：(a) errored 流的 `cancel()` 会以流错误拒绝且已入队 chunk 被丢弃——假值+收尾不明用例改为 pull 延迟报错，使 write/close 换置确实发生；(b) 取消停滞场景中「partial 是否在剩余预算内删净」是时序性的，断言改为确定性双分支「保留⇒已报告 partialFile」，不再碰运气。
+
+### 2. root 缺口 → 修复 → 反例
+
+| 审查项 | 修复 | 覆盖反例 |
+| --- | --- | --- |
+| close 另用新预算，绕过已有取消/总截止；close 内取消仍返回路径 | 函数重排为**记录结果→有界收尾→最终裁决**，try 内不再 return；唯一 close 与 open、每次读写一样与同一 `expired` race；close 确认后还须 `deadline.signal.aborted === false` 才记录交付；finally 顶部与最终裁决各再复核一次取消（abort 落在收尾期间也作废交付并补删已关文件） | 「voids delivery…」：close 挂起中 caller.abort → 拒绝且保留 partial+`releaseUnclear`；头部耗 80ms 预算后 close 于 130ms 完成仍拒绝（总截止 100ms） |
+| 迟到资源无 owner：截止后 fetch 返回的 Response body 未取消 | 响应与 open 都经 `reflect` 包裹；主流程未消费（`responseTaken`/`handleTaken` 为假）而迟到的结果由 disown 路径有界收尾：body → `getReader().cancel()`，句柄 → 有界 close 后删本次创建的文件；标记在 race 消费后置位，disown 处理器在 finally 补挂，顺序保证不误伤主流程正要读的流 | 「keeps late responses and late handles owned after the deadline」：截止后 120ms 到达的 Response 其 body cancel 回调实际触发；截止后 120ms 才 open 的句柄被关闭、文件被删除，绝不从迟到 IO 恢复成功 |
+| 清理每项用全新 timeout 无限续期 | finally 使用**有限共享清理预算**（`timeoutMs` 总额，按 `Date.now` 递减）：close→cancel→rm 依序分享；预算耗尽的操作立即如实记 `!done`；某项失败不阻断其余收口；唯一 close 只启动一次（`closing`/`closeConfirmed` 保存状态，不重复启动） | 「enforces the total deadline…」取消停滞子例：bounded 返回、cancel 未落定必入 notes（cleanupNotes 或 releaseUnclear），保留的 partial 必带 `partialFile` |
+| 冻结/非对象异常丢失保留报告（partialFile/原因） | 裁决阶段：无保留信息时原样抛出（假值也原样）；有保留信息时先尝试在原异常上附加；不可附加（冻结/假值/原始值非对象）则抛**可写包装 Error**，`cause` 保存原始抛值，`partialFile`/`releaseUnclear`/`cleanupNotes`/`cleanupError` 齐全——引用相等不再是合同，必需信息不丢 | 「wraps frozen and falsy close failures…」：冻结 close 错误 → 包装 `cause` 为同一冻结实例 + partialFile + releaseUnclear；`reject(0)` → `cause === 0` + partialFile；「keeps the cause…」：假值读取错误叠加 close 未确认 → `cause === 0` + partialFile + releaseUnclear；「keeps falsy and frozen stream failures…」（无保留信息）仍原样抛出，`toBe(thrown)` 保持 |
+| 已 errored 流的 cancel 拒绝被当泄漏记入 notes | cancel 拒绝=流已终止的正常结果，只有**未落定**才记 unclear（仍在预算内有界） | 上述 falsy 用例不再被 cancel 噪声包装（RED 时曾因此把 `null` 误包成 `cleanupNotes` 包装错误） |
+| fixture 实例释放在断言后、finally 仅恢复原型 | 所有换置/捕获的实例句柄收口（恢复原 close 并 await 真实关闭）移入 `finally`，断言抛错也执行；子用例间额外中途释放仅为后续子例起点干净（双释放安全） | 「voids delivery…」「wraps frozen and falsy…」「keeps the cause…」三用例的 finally 结构本身即反例（人为在断言处失败也会关句柄；未单列破坏性用例） |
+
+### 3. 最终形态（对外不变，内部语义）
+
+- API 与参数不变；成功返回 `{ path, filename, version, size, integrity }`，条件收紧为：字节与摘要一致 + 每块 `bytesWritten` 全量 + **唯一 close 在同一传输截止内确认** + 最终复核无取消/超时。
+- 失败对象三种形态：原样（无保留信息，含一切假值）；原异常+附加字段（可写对象）；**可写包装**（`message` 含 `String(原始值)`、`cause` 链保留、字段齐全）。
+- `settleWithin` 复用；新增局部 `reflect`/`disownResponse`/`disownHandle`，无新对外 API、无状态文件。
+- `open` 经 `vi.mock('node:fs/promises')` 局部注入（仅 `open` 一项可替换，其余 passthrough），注入在 finally 恢复。
+
+### 4. 验证
+
+- 定向：`npx vitest run test/dsh-compat-ci.test.ts`（forks/threads max2/min1）GREEN **46/46**，另连跑两次全绿；RED 5 失败 / 41 通过。
+- `node --check` 通过；`npm run lint` 0；`npm run check:imports` 203 模块 / 682 边；`npm run build` 通过。
+- 代码 diff 空白检查：`git diff --check 60cd3f3..HEAD -- scripts test` **退出 0**（旧原始日志尾空格不在代码 diff，原样保留，分开报告）。
+- 完整：GREEN 后一次 `npm run check`（forks/threads max2/min1，未筛/未 skip/未放宽），完整输出与真实退出码见 `I02-R2-check.txt`（345 行，末行 `CHECK_EXIT=0`）。结果：**退出码 0**，231 文件通过 / 3 跳过，**2576 项通过 / 11 跳过**（较 R1 的 2573 净增 3：拆 1 增 4）。首败：一次通过，无首败。
+
+### 5. 未测 / 清理
+
+- 未单列反例：最终裁决阶段的「收尾期间 abort」补删分支（时序窗口无法确定性命中，行为由同路径的 close 内取消反例覆盖其裁决语义）；disown 路径删除迟到文件与调用方立即重试同路径的竞态（真实 fs open 无迟到形态，仅注入可造）；`rm` 删除失败分支仍不可便携模拟（同 R1 口径）。
+- 清理：`vi.mock` 的 `open` 注入、原型 `write` 补丁、实例 `close` 换置均在各自用例 finally 恢复/真实关闭；保留 partial 由 fixture 确认句柄关闭后按绝对路径删除；独占 `mkdtemp` 根用后即删；无外网、无官方二进制、无用户状态写入；C04 未关闭。
