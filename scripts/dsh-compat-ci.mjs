@@ -249,14 +249,20 @@ export async function downloadDshDesktopInstaller(artifact, { directory, signal,
       });
     };
     const owners = [];
-    if (arrival && !responseTaken) owners.push(arrival.then((result) => (result.ok ? ownResponse(result.value) : undefined)));
+    let responseOwnerStarted = false;
+    if (arrival && !responseTaken) owners.push(arrival.then((result) => {
+      responseOwnerStarted = true;
+      return result.ok ? ownResponse(result.value) : undefined;
+    }));
     if (opening && !handleTaken) owners.push(opening.then((result) => (result.ok ? ownHandle(result.value) : undefined)));
     if (owners.length > 0) {
       // Wait only inside the finite cleanup budget; anything later stays owned and is reported as undecided now.
       const settledLate = await settleWithin(() => Promise.allSettled(owners), left());
       if (!settledLate.done) {
-        if (arrival && !responseTaken) undecided.push('the official response had not settled at return; its body stays owned');
-        if (opening && !handleTaken) undecided.push(`the late file open had not settled at return; ${path} may exist and stays owned`);
+        if (arrival && !responseTaken && !responseOwnerStarted) undecided.push('the official response had not settled at return; its body stays owned');
+        if (opening && !handleTaken) undecided.push(created
+          ? `a late file close or removal had not settled at return; ${path} stays owned`
+          : `the late file open had not settled at return; ${path} may exist and stays owned`);
       }
     }
     const removePartial = async (reason) => {
