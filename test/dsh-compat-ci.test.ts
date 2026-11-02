@@ -1,12 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, mkdtemp, open, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
-import { downloadDshDesktopInstaller, dshRegressionIdentity, hasDesktopCleanupProof, hasDshRuntimeReleaseProof, parseDshDesktopWindowsManifest, parseDshNpmManifest,
-  parsePnpmManifest, resolveDshNpmCache, runDshBuildSequence, runDshDesktopAttempt, runDshDesktopSequence, runDshProbeAttempt, runDshProcess, verifyNpmArtifact } from '../scripts/dsh-compat-ci.mjs';
+import { admitDshDesktopInstaller, downloadDshDesktopInstaller, dshRegressionIdentity, hasDesktopCleanupProof, hasDshRuntimeReleaseProof, parseDshDesktopWindowsManifest,
+  parseDshNpmManifest, parsePnpmManifest, resolveDshNpmCache, runDshBuildSequence, runDshDesktopAttempt, runDshDesktopSequence, runDshProbeAttempt, runDshProcess,
+  verifyNpmArtifact } from '../scripts/dsh-compat-ci.mjs';
 
 // The only fs injections this suite needs: open() can stall or arrive late and rm() can refuse a late cleanup.
 const openInjection = vi.hoisted(() => ({ impl: null as null | ((...args: unknown[]) => Promise<unknown>), real: null as null | ((...args: unknown[]) => Promise<unknown>) }));
@@ -20,6 +22,15 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual,
     open: (...args: unknown[]) => (openInjection.impl ?? real)(...args),
     rm: (...args: unknown[]) => (rmInjection.impl ?? realRm)(...args) };
+});
+
+// The default signature adapter is a read-only child process; tests replace spawn only for that path.
+const spawnInjection = vi.hoisted(() => ({ impl: null as null | ((...args: unknown[]) => unknown), real: null as null | ((...args: unknown[]) => unknown) }));
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  const real = actual.spawn as unknown as (...args: unknown[]) => unknown;
+  spawnInjection.real = real;
+  return { ...actual, spawn: (...args: unknown[]) => (spawnInjection.impl ?? real)(...args) };
 });
 
 const integrity = `sha512-${Buffer.alloc(64, 1).toString('base64')}`;
@@ -1208,6 +1219,189 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
       }
       await expect(downloadDshDesktopInstaller(projected(), { directory: 'relative-desktop-dir', fetchImpl, timeoutMs: 5000 })).rejects.toThrow();
       expect(requests).toEqual([]);
+    });
+  });
+});
+
+describe('DeepSeek Harness desktop installer admission', () => {
+  const bytes = Buffer.from('controlled desktop installer admission fixture');
+  const digest = createHash('sha512').update(bytes).digest('base64');
+  const url = 'https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.2.1-rc.2-win-x64.exe';
+  const filename = 'deepseek-harness-0.2.1-rc.2-win-x64.exe';
+  const artifact = (overrides: Record<string, unknown> = {}) => ({ version: '0.2.1-rc.2', url, size: bytes.length,
+    integrity: `sha512-${digest}`, filename, ...overrides });
+  const subject = 'CN=DeepSeek, O=DeepSeek, C=CN';
+  const thumbprint = 'A'.repeat(40);
+  const policy = { publisher: { subject, thumbprint } };
+  const signature = { status: 'Valid', subject, thumbprint };
+  const writeInstaller = async (output: string, content = bytes) => { const path = join(output, filename); await writeFile(path, content); return path; };
+  const call = (path: string, extra: Record<string, unknown> = {}) => admitDshDesktopInstaller({ path, artifact: artifact(), policy,
+    readSignature: async () => signature, timeoutMs: 5000, ...extra });
+
+  type FakeChild = EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; kill: () => void };
+  // A controlled read-only child: no PowerShell, no user certificate, no real signature environment.
+  const fakeSpawn = (options: { stdout?: string; stderr?: string; code?: number | null; signal?: string | null; hang?: boolean; error?: Error }) => {
+    const calls: { command: string; args: string[]; options: Record<string, unknown> }[] = [];
+    spawnInjection.impl = (...args: unknown[]) => {
+      calls.push({ command: String(args[0]), args: args[1] as string[], options: args[2] as Record<string, unknown> });
+      const child = new EventEmitter() as FakeChild;
+      child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+      let closed = false;
+      child.kill = () => { if (closed) return; closed = true; queueMicrotask(() => child.emit('close', null, 'SIGTERM')); };
+      queueMicrotask(() => {
+        if (options.error) { child.emit('error', options.error); return; }
+        if (options.stdout) child.stdout.emit('data', Buffer.from(options.stdout));
+        if (options.stderr) child.stderr.emit('data', Buffer.from(options.stderr));
+        if (!options.hang) { closed = true; child.emit('close', options.code ?? 0, options.signal ?? null); }
+      });
+      return child;
+    };
+    return calls;
+  };
+
+  it('admits the exact verified file and matching publisher without writing an installation', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      const before = readdirSync(output);
+      const result = await call(path);
+      expect(result).toMatchObject({ path, version: '0.2.1-rc.2', size: bytes.length, integrity: `sha512-${digest}`, filename, publisher: signature });
+      expect(Object.keys(result).sort()).toEqual(['filename', 'integrity', 'path', 'publisher', 'size', 'version']);
+      expect(readdirSync(output)).toEqual(before);
+    });
+  });
+
+  it('rejects a missing or malformed publisher policy before any file read or child process', async () => {
+    await isolated(async (output) => {
+      const missing = join(output, 'missing-installer.exe');
+      const reader = vi.fn(async () => signature);
+      await expect(admitDshDesktopInstaller({ path: missing, artifact: artifact(), readSignature: reader })).rejects.toMatchObject({ stage: 'policy' });
+      expect(reader).not.toHaveBeenCalled();
+      for (const invalid of [null, {}, { publisher: null }, { publisher: {} }, { publisher: { subject, thumbprint: 'A'.repeat(39) } },
+        { publisher: { subject, thumbprint: 'G'.repeat(40) } }, { publisher: { subject: '', thumbprint } }, { publisher: { subject: 1, thumbprint } },
+        { publisher: { subject: 'x'.repeat(513), thumbprint } }]) {
+        await expect(admitDshDesktopInstaller({ path: missing, artifact: artifact(), policy: invalid as never, readSignature: reader })).rejects.toMatchObject({ stage: 'policy' });
+      }
+      expect(reader).not.toHaveBeenCalled();
+      const calls = fakeSpawn({ stdout: JSON.stringify(signature) });
+      try {
+        await expect(admitDshDesktopInstaller({ path: missing, artifact: artifact(), readSignature: undefined })).rejects.toMatchObject({ stage: 'policy' });
+      } finally { spawnInjection.impl = null; }
+      expect(calls).toEqual([]);
+    });
+  });
+
+  it('rejects inexact artifact identities and file size or digest disagreements', async () => {
+    await isolated(async (output) => {
+      const missing = join(output, 'missing-installer.exe');
+      for (const invalid of [{ ...artifact(), url: 'https://example.org/deepseek-harness-0.2.1-rc.2-win-x64.exe' }, { ...artifact(), version: '0.2.1-rc.1' },
+        { ...artifact(), filename: 'deepseek-harness-latest-win-x64.exe' }, { ...artifact(), size: 0 }, { ...artifact(), integrity: 'sha1-bad' }]) {
+        await expect(admitDshDesktopInstaller({ path: missing, artifact: invalid, policy, readSignature: async () => signature })).rejects.toMatchObject({ stage: 'artifact' });
+      }
+      const path = await writeInstaller(output);
+      await expect(call(path, { artifact: artifact({ size: bytes.length + 1 }) })).rejects.toMatchObject({ stage: 'file' });
+      const other = Buffer.from('other installer bytes'); await writeFile(path, other);
+      await expect(call(path)).rejects.toMatchObject({ stage: 'file' });
+    });
+  });
+
+  it('rejects links and non-regular files', async () => {
+    await isolated(async (output) => {
+      const directory = join(output, 'installer-directory'); await mkdir(directory);
+      await expect(call(directory)).rejects.toMatchObject({ stage: 'file' });
+      const target = join(output, 'installer-target'); await mkdir(target);
+      const link = join(output, 'installer-link'); await symlink(target, link, 'junction');
+      await expect(call(link)).rejects.toMatchObject({ stage: 'file' });
+    });
+  });
+
+  it('rejects a file replaced between the read and the final state check', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      const replacement = Buffer.alloc(bytes.length, 0x42);
+      let release!: () => void; const gate = new Promise<void>((resolve) => { release = resolve; });
+      let readStarted!: () => void; const started = new Promise<void>((resolve) => { readStarted = resolve; });
+      const pending = call(path);
+      try {
+        openInjection.impl = async (...args: unknown[]) => {
+          const handle = await openInjection.real!(...args) as { read: (...readArgs: unknown[]) => Promise<unknown>; [key: string]: unknown };
+          const realRead = handle.read.bind(handle); let first = true;
+          handle.read = async (...readArgs: unknown[]) => { if (first) { first = false; readStarted(); await gate; } return realRead(...readArgs); };
+          return handle;
+        };
+        const began = await Promise.race([started.then(() => true), new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1000))]);
+        expect(began).toBe(true);
+        if (!began) { release(); await pending.catch(() => {}); return; }
+        await writeFile(path, replacement); release();
+        await expect(pending).rejects.toMatchObject({ stage: 'file' });
+      } finally {
+        release(); openInjection.impl = null;
+        await pending.catch(() => {});
+      }
+    });
+  });
+
+  it('rejects a signature status, subject or thumbprint that disagrees with the policy', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      for (const invalid of [{ status: 'NotSigned', subject, thumbprint }, { status: 'Valid', subject: 'CN=Other', thumbprint },
+        { status: 'Valid', subject, thumbprint: 'B'.repeat(40) }, { status: 'Valid', subject: '', thumbprint },
+        { status: 'Valid', subject, thumbprint: 'bad' }, { status: 'Valid', subject, thumbprint: 123 },
+        'not-json', '[]', 'null', '{"status":"Valid"}']) {
+        await expect(call(path, { readSignature: async () => invalid })).rejects.toMatchObject({ stage: 'signature' });
+      }
+    });
+  });
+
+  it('rejects pre-cancelled, timed-out and externally cancelled admissions without success', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      const controller = new AbortController(); controller.abort(new Error('pre-cancelled'));
+      const preReader = vi.fn(async () => signature);
+      await expect(call(path, { signal: controller.signal, readSignature: preReader })).rejects.toMatchObject({ stage: 'cancelled' });
+      expect(preReader).not.toHaveBeenCalled();
+      await expect(call(path, { timeoutMs: 0 })).rejects.toMatchObject({ stage: 'timeout' });
+      let started!: () => void; const began = new Promise<void>((resolve) => { started = resolve; });
+      const waiting = vi.fn(() => { started(); return new Promise<never>(() => {}); });
+      await expect(call(path, { readSignature: waiting, timeoutMs: 50 })).rejects.toMatchObject({ stage: 'cancelled' });
+      const external = new AbortController(); const pending = call(path, { signal: external.signal, readSignature: waiting });
+      await began; external.abort(new Error('cancelled during signature'));
+      await expect(pending).rejects.toMatchObject({ stage: 'cancelled' });
+    });
+  });
+
+  it('uses the bounded Windows Authenticode adapter with the path in an environment field', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      const calls = fakeSpawn({ stdout: JSON.stringify(signature) });
+      try {
+        const result = await call(path, { readSignature: undefined });
+        expect(result).toBeDefined();
+        expect(result?.publisher).toEqual(signature);
+        expect(calls).toHaveLength(1);
+        expect(calls[0].command).toBe('powershell.exe');
+        expect(calls[0].args).toEqual(expect.arrayContaining(['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command']));
+        expect(calls[0].options.shell).toBe(false);
+        expect(calls[0].options.windowsHide).toBe(true);
+        expect((calls[0].options.env as Record<string, string | undefined>).DSH_ADMIT_SIGNATURE_PATH).toBe(path);
+        expect(calls[0].args.join(' ')).not.toContain(path);
+      } finally { spawnInjection.impl = null; }
+    });
+  });
+
+  it('rejects default-adapter output, JSON and process failures', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      for (const options of [{ stdout: 'x'.repeat(70 * 1024) }, { stdout: 'not-json' }, { code: 1 }, { signal: 'SIGKILL' },
+        { error: new Error('spawn failed') }]) {
+        const calls = fakeSpawn(options);
+        try { await expect(call(path, { readSignature: undefined })).rejects.toMatchObject({ stage: 'signature' }); }
+        finally { spawnInjection.impl = null; }
+        expect(calls).toHaveLength(1);
+      }
+      const calls = fakeSpawn({ hang: true });
+      try { await expect(call(path, { readSignature: undefined, timeoutMs: 50 })).rejects.toMatchObject({ stage: 'cancelled' }); }
+      finally { spawnInjection.impl = null; }
+      expect(calls).toHaveLength(1);
     });
   });
 });

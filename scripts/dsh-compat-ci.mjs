@@ -452,6 +452,9 @@ function desktopPartialInstallation(error) {
   return { root: installation.root, ...identity };
 }
 
+/** Stage-B admission placeholder; the RED tests drive the real boundary. */
+export async function admitDshDesktopInstaller() { return undefined; }
+
 /** Desktop release needs the Host's own exit, the official uninstall and both registration cleanups; a kill is not release. */
 export function hasDesktopCleanupProof(cleanup) {
   return record(cleanup) && cleanup.hostExited === true && cleanup.uninstalled === true && cleanup.registrationRemoved === true
