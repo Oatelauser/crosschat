@@ -350,6 +350,86 @@ export async function downloadDshDesktopInstaller(artifact, { directory, signal,
   }
 }
 
+const desktopProcessOutputMaxBytes = 128000;
+const desktopProcessCloseMs = 1000;
+const maxTimerMs = 2147483647;
+
+/** Runs one direct Desktop child; close proves only that child, never descendants, Host release or install success. */
+export async function runDshDesktopProcess(binary, args, options = {}) {
+  const { cwd, env, signal, spawnImpl = spawn } = options;
+  const timeoutMs = options.timeoutMs;
+  if (typeof binary !== 'string' || !isAbsolute(binary) || binary.includes('\0')) throw new Error('Desktop process binary must be an absolute path without NUL');
+  if (!Array.isArray(args) || args.some((arg) => typeof arg !== 'string' || arg.includes('\0'))) throw new Error('Desktop process arguments must be strings without NUL');
+  if (cwd !== undefined && (typeof cwd !== 'string' || !isAbsolute(cwd) || cwd.includes('\0'))) throw new Error('Desktop process cwd must be an absolute path without NUL');
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > maxTimerMs) throw new Error('Desktop process deadline must be a valid positive integer of milliseconds');
+  if (typeof spawnImpl !== 'function') throw new Error('Desktop process spawn implementation must be a function');
+  const cancelledBeforeSpawn = Boolean(signal?.aborted);
+  if (cancelledBeforeSpawn) return Promise.resolve({ code: null, signal: null, pid: null, stdout: '', stderr: '', timedOut: false,
+    cancelled: true, truncated: false, closed: false, failure: signal.reason, releaseUnclear: ['The Desktop process was cancelled before spawn'] });
+
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawnImpl(binary, args, { cwd, env, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (failure) {
+      resolve({ code: null, signal: null, pid: null, stdout: '', stderr: '', timedOut: false, cancelled: false,
+        truncated: false, closed: false, failure, releaseUnclear: ['The Desktop process could not be spawned'] });
+      return;
+    }
+    const stdout = []; const stderr = []; const releaseUnclear = [];
+    let outputBytes = 0; let code = null; let signalName = null; let timedOut = false; let cancelled = false;
+    let truncated = false; let closed = false; let failure; let failing = false; let settled = false; let closeTimer; let deadlineTimer;
+    const collect = (target, chunk) => {
+      if (settled || failing) return;
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      const remaining = desktopProcessOutputMaxBytes - outputBytes;
+      if (remaining > 0) target.push(bytes.subarray(0, remaining));
+      outputBytes += Math.min(bytes.length, Math.max(remaining, 0));
+      if (bytes.length > remaining) { truncated = true; beginFailure(new Error('Desktop process exceeded its combined output budget')); }
+    };
+    const onStdout = (chunk) => collect(stdout, chunk);
+    const onStderr = (chunk) => collect(stderr, chunk);
+    const detach = () => {
+      child.stdout?.removeListener?.('data', onStdout); child.stderr?.removeListener?.('data', onStderr);
+      child.stdout?.removeListener?.('error', onPipeError); child.stderr?.removeListener?.('error', onPipeError);
+      if (signal) signal.removeEventListener('abort', onAbort);
+    };
+    const snapshot = () => ({ code, signal: signalName, pid: child.pid ?? null, stdout: Buffer.concat(stdout).toString('utf8'),
+      stderr: Buffer.concat(stderr).toString('utf8'), timedOut, cancelled, truncated, closed, failure,
+      releaseUnclear: releaseUnclear.slice() });
+    const finish = () => {
+      if (settled) return;
+      settled = true; clearTimeout(deadlineTimer); clearTimeout(closeTimer); detach();
+      child.on?.('error', () => {});
+      if (!closed) {
+        try { child.stdout?.destroy?.(); } catch { /* Parent pipe release is best effort. */ }
+        try { child.stderr?.destroy?.(); } catch { /* Parent pipe release is best effort. */ }
+        try { child.unref?.(); } catch { /* The child may already be gone. */ }
+      }
+      resolve(snapshot());
+    };
+    const beginFailure = (reason) => {
+      if (settled || failing) return;
+      failing = true; failure = reason;
+      try {
+        if (child.kill?.() === false) releaseUnclear.push('The Desktop process stop request was not accepted');
+      } catch (error) { releaseUnclear.push(`The Desktop process could not be asked to stop: ${message(error)}`); }
+      closeTimer = setTimeout(() => {
+        releaseUnclear.push('The Desktop process did not close within its release budget');
+        finish();
+      }, desktopProcessCloseMs);
+    };
+    const onAbort = () => { cancelled = true; beginFailure(signal?.reason); };
+    const onPipeError = (error) => beginFailure(error);
+    deadlineTimer = setTimeout(() => { timedOut = true; beginFailure(new Error(`Desktop process exceeded its ${timeoutMs}ms deadline`)); }, timeoutMs);
+    child.stdout?.on?.('data', onStdout); child.stderr?.on?.('data', onStderr);
+    child.stdout?.on?.('error', onPipeError); child.stderr?.on?.('error', onPipeError);
+    child.on?.('error', (error) => beginFailure(error));
+    child.once?.('close', (nextCode, nextSignal) => { code = nextCode; signalName = nextSignal; closed = true; finish(); });
+    if (signal) { signal.addEventListener('abort', onAbort, { once: true }); if (signal.aborted) onAbort(); }
+  });
+}
+
 /** A timeout cannot prove descendant release; the caller retains the installation. */
 export function runDshProcess(binary, args, options = {}) {
   return new Promise((done, reject) => {

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, mkdtemp, open, readFile, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -7,7 +8,7 @@ import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 import { admitDshDesktopInstaller, downloadDshDesktopInstaller, dshRegressionIdentity, hasDesktopCleanupProof, hasDshRuntimeReleaseProof, parseDshDesktopWindowsManifest,
-  parseDshNpmManifest, parsePnpmManifest, resolveDshNpmCache, runDshBuildSequence, runDshDesktopAttempt, runDshDesktopSequence, runDshProbeAttempt, runDshProcess,
+  parseDshNpmManifest, parsePnpmManifest, resolveDshNpmCache, runDshBuildSequence, runDshDesktopAttempt, runDshDesktopProcess, runDshDesktopSequence, runDshProbeAttempt, runDshProcess,
   verifyNpmArtifact } from '../scripts/dsh-compat-ci.mjs';
 
 // The only fs injections this suite needs: metadata/open() can stall or arrive late and rm() can refuse a late cleanup.
@@ -113,6 +114,94 @@ describe('DeepSeek Harness isolated npm download cache', () => {
       await expect(resolveDshNpmCache(root, link)).rejects.toThrow();
       await expect(resolveDshNpmCache(root, join(link, 'nested'))).rejects.toThrow();
     });
+  });
+});
+
+describe('DeepSeek Harness controlled desktop process', () => {
+  type FakeChild = EventEmitter & { pid: number; stdout: PassThrough; stderr: PassThrough; kill: ReturnType<typeof vi.fn>; unref: ReturnType<typeof vi.fn> };
+  const child = () => Object.assign(new EventEmitter(), {
+    pid: 41, stdout: new PassThrough(), stderr: new PassThrough(), kill: vi.fn(() => true), unref: vi.fn(),
+  }) as FakeChild;
+  const run = (fake: FakeChild, extra: Record<string, unknown> = {}) => runDshDesktopProcess(process.execPath, ['-e', ''], {
+    timeoutMs: 5000, spawnImpl: vi.fn(() => fake), ...extra,
+  });
+
+  it('validates execution inputs and honors pre-cancellation without spawning', async () => {
+    const spawnImpl = vi.fn(); const aborted = new AbortController(); aborted.abort(new Error('stop before spawn'));
+    await expect(runDshDesktopProcess('relative.exe', [], { timeoutMs: 10, spawnImpl })).rejects.toThrow();
+    await expect(runDshDesktopProcess(process.execPath, ['bad\0arg'], { timeoutMs: 10, spawnImpl })).rejects.toThrow();
+    await expect(runDshDesktopProcess(process.execPath, [], { cwd: 'relative', timeoutMs: 10, spawnImpl })).rejects.toThrow();
+    const result = await runDshDesktopProcess(process.execPath, [], { timeoutMs: 10, signal: aborted.signal, spawnImpl });
+    expect(result).toMatchObject({ cancelled: true, closed: false, pid: null });
+    expect(spawnImpl).not.toHaveBeenCalled();
+  });
+
+  it('returns stdout, stderr and exit facts only after close', async () => {
+    const fake = child(); const pending = run(fake);
+    fake.stdout.write('out'); fake.stderr.write('err'); fake.emit('exit', 0, null);
+    let settled = false; pending.then(() => { settled = true; });
+    await Promise.resolve(); expect(settled).toBe(false);
+    fake.emit('close', 0, null);
+    await expect(pending).resolves.toMatchObject({ code: 0, signal: null, pid: 41, stdout: 'out', stderr: 'err',
+      timedOut: false, cancelled: false, truncated: false, closed: true, failure: undefined });
+  });
+
+  it('runs a real controlled Node child and reports only its own close', async () => {
+    const result = await runDshDesktopProcess(process.execPath, ['-e', 'process.stdout.write("out");process.stderr.write("err");process.exitCode=3'], { timeoutMs: 10000 });
+    expect(result).toMatchObject({ code: 3, signal: null, stdout: 'out', stderr: 'err', closed: true, timedOut: false, cancelled: false, truncated: false });
+    expect(typeof result.pid).toBe('number');
+    const stopped = await runDshDesktopProcess(process.execPath, ['-e', 'setTimeout(()=>{},20000)'], { timeoutMs: 150 });
+    expect(stopped).toMatchObject({ timedOut: true, cancelled: false, closed: true });
+  });
+
+  it('preserves nonzero and signal exit facts', async () => {
+    for (const [code, signal] of [[7, null], [null, 'SIGTERM']] as const) {
+      const fake = child(); const pending = run(fake); fake.emit('close', code, signal);
+      await expect(pending).resolves.toMatchObject({ code, signal, closed: true });
+    }
+  });
+
+  it('keeps cancellation and timeout primary even if close later reports zero', async () => {
+    const fake = child(); const controller = new AbortController(); const cancelled = run(fake, { signal: controller.signal });
+    controller.abort(new Error('caller cancelled')); fake.emit('close', 0, null);
+    await expect(cancelled).resolves.toMatchObject({ code: 0, cancelled: true, timedOut: false, closed: true });
+
+    const timedChild = child(); const timed = run(timedChild, { timeoutMs: 20 });
+    await new Promise((resolve) => setTimeout(resolve, 30)); timedChild.emit('close', 0, null);
+    await expect(timed).resolves.toMatchObject({ code: 0, timedOut: true, cancelled: false, closed: true });
+  });
+
+  it('shares one byte budget across stdout and stderr and marks truncation', async () => {
+    const fake = child(); const pending = run(fake);
+    fake.stdout.write(Buffer.alloc(100000, 0x61)); fake.stderr.write(Buffer.alloc(28001, 0x62)); fake.emit('close', 0, null);
+    const result = await pending;
+    expect(result).toMatchObject({ truncated: true, closed: true, code: 0 });
+    expect(Buffer.byteLength(result.stdout) + Buffer.byteLength(result.stderr)).toBe(128000);
+  });
+
+  it('uses one bounded release after child and pipe failures without replacing the first cause', async () => {
+    vi.useFakeTimers();
+    try {
+      const fake = child(); fake.kill.mockReturnValue(false);
+      const pending = run(fake); const first = Object.freeze(new Error('child failed'));
+      fake.emit('error', first); fake.stderr.emit('error', new Error('later pipe failure'));
+      await vi.advanceTimersByTimeAsync(1000);
+      const result = await pending;
+      expect(result).toMatchObject({ closed: false, failure: first });
+      expect(result.releaseUnclear.join('; ')).toContain('did not close');
+      expect(fake.kill).toHaveBeenCalledTimes(1); expect(fake.unref).toHaveBeenCalledTimes(1);
+      const snapshot = { ...result }; fake.emit('close', 0, null); fake.emit('error', new Error('late'));
+      expect(result).toEqual(snapshot);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('waits for close when kill throws and reports the stop request separately', async () => {
+    const fake = child(); fake.kill.mockImplementation(() => { throw new Error('kill refused'); });
+    const controller = new AbortController(); const pending = run(fake, { signal: controller.signal });
+    controller.abort(new Error('cancel first')); fake.emit('close', null, 'SIGTERM');
+    const result = await pending;
+    expect(result).toMatchObject({ cancelled: true, closed: true, signal: 'SIGTERM' });
+    expect(result.releaseUnclear.join('; ')).toContain('kill refused');
   });
 });
 

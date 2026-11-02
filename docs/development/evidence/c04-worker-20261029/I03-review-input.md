@@ -127,6 +127,25 @@
 - 完整检查：四个 `VITEST_MAX/MIN_FORKS/THREADS=2/1` 下只跑一次 `npm run check`，`231` 个文件通过、`2593` 个测试通过、`11` 个既有 live 用例跳过，`FULL_CHECK_EXIT=0`；完整 stdout/stderr 在 `I03-B-check.txt`，未筛全量、未增 skip、未改语义。
 - 清理：只使用本轮独占 TEMP fixture；测试在 `finally` 释放 gate/句柄/补丁。未触碰旧日志、baseline、root 记录、被拒 5 个 HTTP 资源或 I02/W05 历史 TEMP/cache。
 
-## 七、停止
+## 七、C1 Desktop 受控进程入口接口约定（实施前）
+
+新增 `runDshDesktopProcess(binary, args, options)`，只供后续 Desktop 安装/卸载操作调用，本单不接入执行流程。`binary` 与可选 `cwd` 必须是绝对路径，`args` 必须为无 NUL 字符串数组；`timeoutMs` 为 Node 定时器范围内的有限正整数。`options` 可含 `signal`、`env` 和仅用于受控测试的小型 `spawnImpl`，实际 spawn 固定 `shell:false`、`windowsHide:true`、stdin ignore、stdout/stderr pipe。
+
+返回快照字段至少为 `code`、`signal`、`pid`、`stdout`、`stderr`、`timedOut`、`cancelled`、`truncated`、`closed`，并在失败时保留 `failure`、`releaseUnclear` 与收尾观察。stdout/stderr 共享固定 128000 字节预算；只有直接 child 的 `close` 事件令 `closed:true`。超时、取消、超限、spawn/运行/pipe/收尾失败一旦发生，即使随后 `close(0)` 也不恢复成功。首次失败主因保持原值；失败后的 1 秒总 close 等待预算只启动一次，耗尽后返回 `closed:false` 和释放未确认，迟到 close/error 不修改已返回快照。
+
+该入口只证明直接子进程的本次观测，不证明 Host 自然退出、子孙释放、安装成功、回滚或卸载完成；实际参数、执行字节重核、目的地和卸载前守卫仍待后续证据与接线。
+
+### C1 实现与证据
+
+- 实现位于既有 `scripts/dsh-compat-ci.mjs`，只新增 `runDshDesktopProcess`；`runDshProcess`、Web main、workflow/reporter、I01 报告/串行合同、I02 下载器、阶段B准入/签名适配器均未改。未接入 main/installer/uninstaller，未新增依赖、用户命令或功能文件。
+- 校验：绝对 `binary`/可选绝对 `cwd`、无 NUL 的字符串 `args`、Node 定时器范围内的正整数 `timeoutMs`；固定 `shell:false`、`windowsHide:true`、stdin ignore。预先取消返回 `cancelled:true` 且零 spawn；无效输入以拒绝结束。
+- 退出事实：只有本次 child 的 `close` 令 `closed:true`；`exit` 单独不结束调用。快照含 `code`、`signal`、`pid`、`stdout`、`stderr`、`timedOut`、`cancelled`、`truncated`、`closed`、`failure`、`releaseUnclear`。非零/信号退出照实返回。
+- 输出与截止：stdout/stderr 共享固定 128000 字节预算，超限标记 `truncated` 并进入失败收尾；截止 timer 只设一次，输出/exit 不能推迟。
+- 收尾：spawn 同步抛错直接报告原因；child `error`、pipe `error`、取消、超限、截止都走唯一 `beginFailure`，只保留首个主因并调用一次 `kill`；从首次失败起固定 1 秒 close 等待，budget 耗尽报告 `closed:false`、`releaseUnclear`，并 destroy 父侧管道、unref child、移除 data/pipe/abort 监听、清 timer；`kill` 抛错或返回 false 记录在 `releaseUnclear`，仍等待 close。返回后迟到 close/error 不改变已返回快照，也不产生未处理异常。
+- 证据：业务 RED `7 failed | 77 passed (84)`，`RED_EXIT=1`（临时不可工作占位，失败为目标行为断言）；补真实 Node child 用例后定向 GREEN `85 passed`，`TARGETED_EXIT=0`。原始定向与全量输出见 [I03-C1-check.txt](I03-C1-check.txt)。`node --check`、定向 ESLint、`npm run build`、代码 diff 检查通过。
+- 完整检查：四个 `VITEST_MAX/MIN_FORKS/THREADS=2/1`、`CROSSCHAT_LIVE` 未启用下只跑一次 `npm run check`，`FULL_CHECK_EXIT=1`：`11 failed | 2604 passed | 11 skipped`，`8 failed` 文件 / `223 passed` / `3 skipped`。首败 `test/c14-conversation-refinement.test.ts`（`Test timed out in 5000ms`）；其余失败在 `c14-explicit-send`、`conversation-summary`、`conversations`、`dsh-send`、`send-command`、`send-handle`、`tool-type-observations`。这些文件本轮零 diff，原样保留原始输出，未连跑全量、未放宽断言或加 skip，不逐条断言为同一原因。
+- 未测边界：只用少量真实自有 Node 子进程与受控 fake child/pipe；未运行真实 installer/uninstaller，未启停 Desktop/Host，未写注册表/用户状态。`closed` 只证明直接 child 关闭，不证明子孙释放、Host 自然退出、安装成功、回滚或卸载完成。
+
+## 八、停止
 
 阶段 B、同单 R1、R2、R3 与 R3 末节补充交付完成。停写等待 root 双轴复审；不自行进入安装/卸载执行阶段、不关闭 I03 整体或 C04，不轮询。完整检查的会话锁相关失败已如实保留，未以定向绿替代，也未修改白名单外实现。
