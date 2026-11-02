@@ -8,13 +8,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { downloadDshDesktopInstaller, dshRegressionIdentity, hasDesktopCleanupProof, hasDshRuntimeReleaseProof, parseDshDesktopWindowsManifest, parseDshNpmManifest,
   parsePnpmManifest, resolveDshNpmCache, runDshBuildSequence, runDshDesktopAttempt, runDshDesktopSequence, runDshProbeAttempt, runDshProcess, verifyNpmArtifact } from '../scripts/dsh-compat-ci.mjs';
 
-// The only fs injection this suite needs: open() can stall or arrive late, everything else stays real.
+// The only fs injections this suite needs: open() can stall or arrive late and rm() can refuse a late cleanup.
 const openInjection = vi.hoisted(() => ({ impl: null as null | ((...args: unknown[]) => Promise<unknown>), real: null as null | ((...args: unknown[]) => Promise<unknown>) }));
+const rmInjection = vi.hoisted(() => ({ impl: null as null | ((...args: unknown[]) => Promise<unknown>), real: null as null | ((...args: unknown[]) => Promise<unknown>) }));
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   const real = actual.open as unknown as (...args: unknown[]) => Promise<unknown>;
+  const realRm = actual.rm as unknown as (...args: unknown[]) => Promise<unknown>;
   openInjection.real = real;
-  return { ...actual, open: (...args: unknown[]) => (openInjection.impl ?? real)(...args) };
+  rmInjection.real = realRm;
+  return { ...actual,
+    open: (...args: unknown[]) => (openInjection.impl ?? real)(...args),
+    rm: (...args: unknown[]) => (rmInjection.impl ?? realRm)(...args) };
 });
 
 const integrity = `sha512-${Buffer.alloc(64, 1).toString('base64')}`;
@@ -930,6 +935,124 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
         proto.write = realWrite;
         await release();
         await rm(join(target, installerName), { force: true }).catch(() => {});
+      }
+    });
+  });
+
+  it('refuses delivery when cancellation or the total deadline lands during cleanup', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      const gatedBody = (onStarted: () => void) => {
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const pending = [new Uint8Array(installerBytes)];
+        // A consumed real stream makes cancel a no-op, so the body is a fake reader that delivers every byte, then gates.
+        const body = { getReader: () => ({
+          read: async () => (pending.length > 0 ? { done: false, value: pending.shift() } : { done: true, value: undefined }),
+          cancel: () => { onStarted(); return gate; },
+          releaseLock: () => {},
+        }) };
+        return { body, release };
+      };
+      // Caller cancellation while the owned body cancel is still gated voids the already recorded delivery.
+      let cancelStartedA!: () => void;
+      const startedA = new Promise<void>((resolve) => { cancelStartedA = resolve; });
+      const first = gatedBody(() => { cancelStartedA(); });
+      const caller = new AbortController();
+      const cancelled = download(async () => response(first.body), { directory: target, signal: caller.signal, timeoutMs: 4000 });
+      cancelled.catch(() => {});
+      await startedA;
+      caller.abort(new Error('cancelled during cleanup'));
+      first.release();
+      const cancelledFailure: unknown = await bounded(cancelled).catch((error: unknown) => error);
+      expect(cancelledFailure).toMatchObject({ message: 'Desktop installer deadline or cancellation preceded delivery' });
+      expect(readdirSync(target)).toEqual([]);
+      // A cleanup that crosses the total deadline is not a success; the undeliverable closed file is reported.
+      let cancelStartedB!: () => void;
+      const startedB = new Promise<void>((resolve) => { cancelStartedB = resolve; });
+      const second = gatedBody(() => { cancelStartedB(); });
+      const overdue = download(async () => response(second.body), { directory: target, timeoutMs: 80 });
+      overdue.catch(() => {});
+      await startedB;
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      second.release();
+      const overdueFailure: unknown = await bounded(overdue).catch((error: unknown) => error);
+      expect(overdueFailure).toMatchObject({ message: 'Desktop installer deadline or cancellation preceded delivery' });
+      const overdueFields = overdueFailure as Error & { partialFile?: unknown; cleanupError?: unknown };
+      expect(overdueFields.partialFile).toBe(join(target, installerName));
+      expect(typeof overdueFields.cleanupError).toBe('string');
+      expect(existsSync(join(target, installerName))).toBe(true);
+    });
+  });
+
+  it('reports undecided late resources with locatable paths and keeps them owned', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      const retained = join(target, installerName);
+      const lateOpen = (swap: (handle: Record<string, unknown>) => void | Promise<void>) => {
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        openInjection.impl = async (...args: unknown[]) => {
+          await gate;
+          const handle = await openInjection.real!(...args) as Record<string, unknown>;
+          await swap(handle);
+          return handle;
+        };
+        return { release };
+      };
+      const cleanups: (() => Promise<void>)[] = [];
+      const runCleanups = async () => { for (const fn of cleanups.splice(0)) await fn(); };
+      const notesOf = (failure: unknown) => (Array.isArray((failure as { undecidedResources?: unknown }).undecidedResources)
+        ? (failure as { undecidedResources: unknown[] }).undecidedResources : []).join('; ');
+      try {
+        // A late open whose close fails keeps its path and the real reason inside the original timeout report.
+        const first = lateOpen((handle) => {
+          const original = handle.close as () => Promise<unknown>;
+          cleanups.push(async () => { handle.close = original; await original().catch(() => {}); });
+          handle.close = () => Promise.reject(new Error('late close refused'));
+        });
+        const firstAttempt = download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 200 });
+        firstAttempt.catch(() => {});
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        first.release();
+        const firstFailure: unknown = await bounded(firstAttempt, 3000).catch((error: unknown) => error);
+        expect(firstFailure).toMatchObject({ message: 'Desktop installer exceeded its 200ms deadline' });
+        expect((firstFailure as { partialFile?: unknown }).partialFile).toBe(retained);
+        expect(notesOf(firstFailure)).toContain('a late file close failed: late close refused');
+        expect(existsSync(retained)).toBe(true);
+        await runCleanups();
+        await rm(retained, { force: true }).catch(() => {});
+
+        // A late removal that fails keeps the file and reports the real reason.
+        const second = lateOpen((handle) => { cleanups.push(() => handle.close() as Promise<unknown>); });
+        rmInjection.impl = async () => { throw new Error('late removal refused'); };
+        const secondAttempt = download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 200 });
+        secondAttempt.catch(() => {});
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        second.release();
+        const secondFailure: unknown = await bounded(secondAttempt, 3000).catch((error: unknown) => error);
+        rmInjection.impl = null;
+        expect(secondFailure).toMatchObject({ message: 'Desktop installer exceeded its 200ms deadline' });
+        expect((secondFailure as { partialFile?: unknown }).partialFile).toBe(retained);
+        expect(notesOf(secondFailure)).toContain('the late partial removal failed');
+        expect(existsSync(retained)).toBe(true);
+        await runCleanups();
+        await rm(retained, { force: true }).catch(() => {});
+
+        // A response arriving after the deadline is cancelled with its lock released and named in the return report.
+        let lateCanceled = false;
+        const lateBody = new ReadableStream<Uint8Array>({ cancel: () => { lateCanceled = true; } });
+        const thirdFailure: unknown = await download(async () => new Promise((resolve) => setTimeout(() => resolve(response(lateBody)), 150)), { directory: target, timeoutMs: 30 }).catch((error: unknown) => error);
+        expect(notesOf(thirdFailure)).toContain('the official response had not settled at return');
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        expect(lateCanceled).toBe(true);
+        expect(lateBody.locked).toBe(false);
+        expect(readdirSync(target)).toEqual([]);
+      } finally {
+        await runCleanups();
+        openInjection.impl = null;
+        rmInjection.impl = null;
+        await rm(retained, { force: true }).catch(() => {});
       }
     });
   });
