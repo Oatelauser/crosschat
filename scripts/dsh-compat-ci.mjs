@@ -768,6 +768,20 @@ export async function admitDshDesktopInstaller({ path, artifact, policy, readSig
       || !sameDesktopFileState(desktopFileState(opened), desktopFileState(pathAfterSignature))) {
       throw admissionFailure('file', 'The installer file changed during signature verification');
     }
+    // A stat fingerprint is not a content identity: a same-length rewrite can keep every state field equal.
+    // Re-read the same handle from offset zero under the same deadline and re-prove the pinned digest.
+    const recheck = createHash('sha512');
+    let rechecked = 0;
+    for (;;) {
+      const chunk = await bounded('read', () => handle.read(buffer, 0, buffer.length, rechecked));
+      if (chunk.bytesRead === 0) break;
+      rechecked += chunk.bytesRead;
+      if (rechecked > plan.size) throw admissionFailure('file', 'The installer file exceeded the pinned size');
+      recheck.update(buffer.subarray(0, chunk.bytesRead));
+    }
+    if (rechecked !== plan.size || recheck.digest('base64') !== plan.sha512) {
+      throw admissionFailure('file', 'The installer file changed during signature verification');
+    }
     const signer = parseDshDesktopSignature(signature, publisher);
     const closeProblem = closeFailure(await ensureClose(left()));
     if (closeProblem) throw closeProblem;

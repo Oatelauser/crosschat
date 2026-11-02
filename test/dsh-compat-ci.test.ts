@@ -655,17 +655,38 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
     operation.catch(() => {});
     return Promise.race([operation, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('bounded-guard tripped')), ms))]);
   };
-  // A gated open: the product's own open resolves only after the caller releases it.
+  // A gated open: the product's own open resolves only after the caller releases it. The fixture owns every
+  // started open (real handle plus swap) and settle() releases the gate, waits for it, restores the real
+  // close and awaits it, so a late handle is actually closed before the test removes its root.
   const lateOpen = (swap: (handle: Record<string, unknown>) => void | Promise<void>) => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
-    openInjection.impl = async (...args: unknown[]) => {
-      await gate;
-      const handle = await openInjection.real!(...args) as Record<string, unknown>;
-      await swap(handle);
-      return handle;
+    const started: Promise<void>[] = [];
+    const opened: { handle: Record<string, unknown>; close: () => Promise<unknown> }[] = [];
+    openInjection.impl = (...args: unknown[]) => {
+      const completion = (async () => {
+        await gate;
+        const handle = await openInjection.real!(...args) as Record<string, unknown>;
+        opened.push({ handle, close: handle.close as () => Promise<unknown> });
+        await swap(handle);
+        return handle;
+      })();
+      started.push(completion.then(() => {}, () => {}));
+      return completion;
     };
-    return { release };
+    return {
+      release,
+      handles: () => opened.length,
+      arrived: async () => { await Promise.allSettled(started.slice()); return opened.at(-1)?.handle; },
+      settle: async () => {
+        release();
+        await Promise.allSettled(started.splice(0));
+        for (const { handle, close } of opened.splice(0)) {
+          handle.close = close;
+          await close.call(handle).catch(() => {});
+        }
+      },
+    };
   };
   const notesOf = (failure: unknown) => (Array.isArray((failure as { undecidedResources?: unknown }).undecidedResources)
     ? (failure as { undecidedResources: unknown[] }).undecidedResources : []).join('; ');
@@ -1018,24 +1039,21 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
     await isolated(async (output) => {
       const target = join(output, 'owned-desktop-download'); await mkdir(target);
       const retained = join(target, installerName);
-      const cleanups: (() => Promise<void>)[] = [];
-      const late = lateOpen((handle) => {
-        const original = handle.close as () => Promise<unknown>;
-        cleanups.push(async () => { handle.close = original; await original().catch(() => {}); });
-        handle.close = () => Promise.reject(new Error('late close refused'));
-      });
+      const late = lateOpen((handle) => { handle.close = () => Promise.reject(new Error('late close refused')); });
       try {
-        const attempt = download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 200 });
+        const attempt = download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 1000 });
         attempt.catch(() => {});
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        await new Promise((resolve) => setTimeout(resolve, 1100));
         late.release();
+        // The handle is registered and its refused close is under way before the product stops waiting.
+        await late.arrived();
         const failure: unknown = await bounded(attempt, 3000).catch((error: unknown) => error);
-        expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 200ms deadline' });
+        expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 1000ms deadline' });
         expect((failure as { partialFile?: unknown }).partialFile).toBe(retained);
         expect(notesOf(failure)).toContain('a late file close failed: late close refused');
         expect(existsSync(retained)).toBe(true);
       } finally {
-        for (const fn of cleanups.splice(0)) await fn();
+        await late.settle();
         openInjection.impl = null;
         await rm(retained, { force: true }).catch(() => {});
       }
@@ -1046,24 +1064,20 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
     await isolated(async (output) => {
       const target = join(output, 'owned-desktop-download'); await mkdir(target);
       const retained = join(target, installerName);
-      const cleanups: (() => Promise<void>)[] = [];
-      const late = lateOpen((handle) => {
-        const original = handle.close as () => Promise<unknown>;
-        cleanups.push(async () => { handle.close = original; await original().catch(() => {}); });
-        handle.close = () => new Promise(() => {});
-      });
+      const late = lateOpen((handle) => { handle.close = () => new Promise(() => {}); });
       try {
-        const attempt = download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 200 });
+        const attempt = download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 1000 });
         attempt.catch(() => {});
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        await new Promise((resolve) => setTimeout(resolve, 1100));
         late.release();
-        const failure: unknown = await bounded(attempt, 3000).catch((error: unknown) => error);
-        expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 200ms deadline' });
+        await late.arrived();
+        const failure: unknown = await bounded(attempt, 4000).catch((error: unknown) => error);
+        expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 1000ms deadline' });
         expect((failure as { partialFile?: unknown }).partialFile).toBe(retained);
         expect(notesOf(failure)).toContain('had not settled at return');
         expect(existsSync(retained)).toBe(true);
       } finally {
-        for (const fn of cleanups.splice(0)) await fn();
+        await late.settle();
         openInjection.impl = null;
         await rm(retained, { force: true }).catch(() => {});
       }
@@ -1081,12 +1095,14 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
         attempt.catch(() => {});
         await new Promise((resolve) => setTimeout(resolve, 250));
         late.release();
+        await late.arrived();
         const failure: unknown = await bounded(attempt, 3000).catch((error: unknown) => error);
         expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 200ms deadline' });
         expect((failure as { partialFile?: unknown }).partialFile).toBe(retained);
         expect(notesOf(failure)).toContain('the late partial removal failed');
         expect(existsSync(retained)).toBe(true);
       } finally {
+        await late.settle();
         openInjection.impl = null;
         rmInjection.impl = null;
         await rm(retained, { force: true }).catch(() => {});
@@ -1112,12 +1128,14 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
         attempt.catch(() => {});
         await new Promise((resolve) => setTimeout(resolve, 250));
         late.release();
+        await late.arrived();
         const failure: unknown = await bounded(attempt, 3000).catch((error: unknown) => error);
         expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 200ms deadline' });
         expect((failure as { partialFile?: unknown }).partialFile).toBeUndefined();
         expect(rmCalls).toBe(1);
         expect(await readFile(retained, 'utf8')).toBe('replacement bytes');
       } finally {
+        await late.settle();
         openInjection.impl = null;
         rmInjection.impl = null;
         await rm(retained, { force: true }).catch(() => {});
@@ -1137,6 +1155,7 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
         attempt.catch(() => {});
         await new Promise((resolve) => setTimeout(resolve, 250));
         late.release();
+        await late.arrived();
         const failure: unknown = await bounded(attempt, 3000).catch((error: unknown) => error);
         expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 200ms deadline' });
         expect((failure as { partialFile?: unknown }).partialFile).toBeUndefined();
@@ -1144,10 +1163,37 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
         expect(rmCalls).toBe(1);
         expect(existsSync(retained)).toBe(false);
       } finally {
+        await late.settle();
         openInjection.impl = null;
         rmInjection.impl = null;
         await rm(retained, { force: true }).catch(() => {});
       }
+    });
+  });
+
+  it('closes a real late handle that arrives after the product returned even when its close was replaced', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      const retained = join(target, installerName);
+      const late = lateOpen((handle) => { handle.close = () => new Promise(() => {}); });
+      let handle: Record<string, unknown> | undefined;
+      try {
+        const attempt = download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 50 });
+        const failure: unknown = await bounded(attempt, 3000).catch((error: unknown) => error);
+        expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 50ms deadline' });
+        // The product returned before its open callback registered any handle.
+        expect(late.handles()).toBe(0);
+        late.release();
+        handle = await late.arrived();
+        expect(handle).toBeDefined();
+        await expect((handle as { stat: () => Promise<unknown> }).stat()).resolves.toBeDefined();
+      } finally {
+        await late.settle();
+        openInjection.impl = null;
+        await rm(retained, { force: true }).catch(() => {});
+      }
+      // Only the fixture's own restore-and-close can make the real handle unusable.
+      await expect((handle as { stat: () => Promise<unknown> }).stat()).rejects.toMatchObject({ code: 'EBADF' });
     });
   });
 
@@ -1433,17 +1479,51 @@ describe('DeepSeek Harness desktop installer admission', () => {
     });
   });
 
-  it('rejects a file rewritten while its signature is being read', async () => {
+  it('rejects same-fingerprint content rewritten while its signature is being read', async () => {
     await isolated(async (output) => {
       const path = await writeInstaller(output);
-      const replacement = Buffer.alloc(bytes.length, 0x43);
-      let reads = 0;
-      await expect(call(path, { readSignature: async (target: string) => {
-        reads += 1;
-        await writeFile(target, replacement);
-        return signature;
-      } })).rejects.toMatchObject({ stage: 'file' });
-      expect(reads).toBe(1);
+      const replacement = Buffer.from(bytes); replacement[0] = 0x43;
+      // The file system can report an unchanged fingerprint for a same-length rewrite; this test pins the
+      // metadata projection to the first valid state so only a real content comparison can reject the change.
+      const original = await lstatInjection.real!(path);
+      lstatInjection.impl = async () => original;
+      openInjection.impl = async (...args: unknown[]) => {
+        const handle = await openInjection.real!(...args) as Record<string, unknown>;
+        handle.stat = async () => original;
+        return handle;
+      };
+      try {
+        let reads = 0;
+        await expect(call(path, { readSignature: async (target: string) => {
+          reads += 1;
+          await writeFile(target, replacement);
+          return signature;
+        } })).rejects.toMatchObject({ stage: 'file' });
+        expect(reads).toBe(1);
+        expect(await readFile(path)).toEqual(replacement);
+      } finally { openInjection.impl = null; lstatInjection.impl = null; }
+    });
+  });
+
+  it('bounds the post-signature content read and still closes the handle', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      let closeCalls = 0;
+      openInjection.impl = async (...args: unknown[]) => {
+        const handle = await openInjection.real!(...args) as Record<string, unknown>;
+        const realRead = (handle.read as (...readArgs: unknown[]) => Promise<unknown>).bind(handle);
+        const realClose = (handle.close as () => Promise<unknown>).bind(handle);
+        // The first hash reads sequentially; the post-signature pass reads from an explicit position and stalls.
+        handle.read = async (...readArgs: unknown[]) => (readArgs[3] === null ? realRead(...readArgs) : new Promise(() => {}));
+        handle.close = async () => { closeCalls += 1; return realClose(); };
+        return handle;
+      };
+      try {
+        const outcome = await call(path, { timeoutMs: 30 }).catch((value) => value) as AdmissionOutcome;
+        expect(outcome).toMatchObject({ stage: 'cancelled' });
+        expect(outcome.unresolvedResources).toEqual(expect.arrayContaining([expect.stringContaining('read')]));
+        expect(closeCalls).toBe(1);
+      } finally { openInjection.impl = null; }
     });
   });
 

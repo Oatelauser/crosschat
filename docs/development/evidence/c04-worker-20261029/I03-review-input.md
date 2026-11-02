@@ -65,7 +65,7 @@
 
 新基线 `b5dbe7c18298593307a59b33b00b4d1b055f51f9`。四组反例先 RED（`7 failed | 63 passed`），最小 GREEN 后定向 `70 passed`；完整原始输出与真实退出码见 `I03-B-R1-check.txt`。
 
-- **签名期间一致性**：签名结束后、解析与裁决前，重新读取同一句柄和路径状态并与 open 后状态比较。反例：注入签名读取器同长改写文件再返回合法签名，准入拒绝 `stage=file`；未改文件照常通过。该复核是基于 `dev/ino/nlink/size/mtime/ctime/birthtime` 的状态指纹，不是再次重算内容摘要；也不消除本次核验后到未来执行的窗口。
+- **签名期间一致性**：签名结束后、解析与裁决前，重新读取同一句柄和路径状态并与 open 后状态比较。反例：注入签名读取器同长改写文件再返回合法签名，准入拒绝 `stage=file`；未改文件照常通过。R1 当时的复核仅是 `dev/ino/nlink/size/mtime/ctime/birthtime` 状态指纹；R2 复审用真实入口证明同长改写可保持全部状态字段相等，因此 R3 在同一句柄上补做了从偏移 0 的有界内容摘要复核（见第 6 节），不再把状态指纹当作内容身份。该内容复核也不消除本次核验后到未来执行的窗口。
 - **有界等待与迟到 owner**：`lstat`、`open`、句柄 `stat`、分块 read、读后与签名后状态复核全部与同一截止竞争。反例：open 停滞、lstat 停滞时，`timeoutMs=30` 均在返回时给出 `stage=cancelled` 与 `unresolvedResources`；迟到 open 的本次句柄由 `lateOpen` owner 用固定 1 s 预算唯一 close，返回不恢复成功、不写删输入。返回后实际落定不改变已返回结论。
 - **默认签名 child 有限收尾**：只有观察到 `close` 才认定进程退出。反例：kill 返回 false 且不发 close 时，输出超限与取消都在 1 s 后报告 `releaseUnclear`（`did not close`），`destroy`/`unref` 父侧管道与进程引用、data 监听归零；迟到 close/error 仍有 owner 且无未处理错误。spawn error 不声称已看到 close。
 - **唯一 close 与错误保真**：close 只启动一次并保存落定/未决结果，成功路径与失败 `finally` 共用。反例：真实 `FileHandle` close 拒绝时调用恰为 1 次，准入报 `stage=cleanup`；冻结签名主错加 close 失败时保留 `stage=signature`、原 `cause`、`originalError`，并附 `cleanupError`/`cleanupCause`；没有额外清理问题时不包装。
@@ -80,7 +80,17 @@
 - **总截止与先前签名失败叠加**：`signatureOutcome.stopped` 不再按 late error 的 `stage` 丢弃信息；默认适配器先完成自己的 1 s close 等待，返回时保留实际主因/cause 与 `releaseUnclear`，并附 `unresolvedResources`，不返回成功。反例：70 KiB、kill=false、无 close、`timeoutMs=50`，约 1 s 后返回 `stage=signature`、输出超限信息与未 close 报告，父侧管道/引用已释放；仅取消、超限但 close 及时、冻结主错加文件 close 失败等既有用例继续通过。
 - **边界**：两个 1 s 收尾预算彼此独立（child close 等待、文件清理各一）；返回时的 `releaseUnclear`/`unresolvedResources` 仍是快照。未重开 R1 已修的文件一致性/等待/迟到 open/唯一 close 实现。
 
-**R2 验证**：`node --check`、对应 ESLint、`npm run build`、`git diff --check` 通过；定向套件 74/74。一次完整 `npm run check`（四个 VITEST 上限 2/1，未启用 `CROSSCHAT_LIVE`）退出 1：`13 failed | 2591 passed | 11 skipped`，8 个文件失败，首败在 `test/c14-conversation-refinement.test.ts`，其余集中在 `conversations`/`conversation-state-concurrency` 及依赖会话状态的用例；这些失败文件本轮零 diff。一次定向复跑曾出现两条 R1 时序敏感用例失败与一个 FileHandle GC 未处理错误，随后复跑 74/74，均已原样记入原始证据。按任务未连续重跑全量、未扩大白名单。完整检查未绿，交 root 判定。
+**R2 验证（口径订正）**：`node --check`、对应 ESLint、`npm run build`、`git diff --check` 通过。首次 GREEN 实际退出 1：`2 failed | 72 passed`，另有 1 个 FileHandle GC 未处理错误；随后重跑 `74 passed`、退出 0，不能写成首 GREEN 通过。两条失败不是注入未生效或时序噪声：其中签名期间同长改写用例后经真实入口复现为产品内容漏检（见 R3），另一条 `late close failure` 用例是 fixture 没有拥有迟到真实句柄的登记/关闭（见 R3）。一次完整 `npm run check` 退出 1：`13 failed | 2591 passed | 11 skipped`，8 个文件失败，首败在 `test/c14-conversation-refinement.test.ts`，其余集中在 `conversations`/`conversation-state-concurrency` 及依赖会话状态的用例；这些失败文件本轮零 diff。未连续重跑全量、未扩大白名单；不把 13 条都断言为同一已证原因。
+
+### 6. R3 同单返修（内容复核与 fixture 迟到句柄）
+
+新基线 `f38458fd5385a04706b283d696f66bdbf324c345`，产品仍为 R2 的 `915ba9f`。两个已证问题先 RED（`2 failed | 74 passed`，`RED_EXIT=1`），最小 GREEN 后定向 `76 passed`；完整原始输出见 `I03-B-R3-check.txt`。
+
+- **同指纹、不同内容必须拒绝**：签名读取成功后、成功裁决前，在本次同一句柄上从偏移 0 再做一次有界流式 SHA-512；内容与固定摘要不符即 `stage=file`。保留原路径/句柄状态一致性检查、总截止与取消、唯一 close。确定性反例：真实小文件、真实 `readSignature` 同长改写，`lstat`/`handle.stat` 固定为第一次有效指纹（同长同 mtime/ctime），当前实现曾通过并返回不相符的 `integrity`；GREEN 拒绝。另一反例把签名后的第二次读取停在显式偏移上，`timeoutMs=30` 返回 `stage=cancelled`、`unresolvedResources` 含 `read`，真实 close 恰为 1 次。第二次读取同样受总截止约束，不整包缓冲。
+- **fixture 独立等待迟到 open 并实际 close**：`lateOpen` helper 现在拥有每次实际 open 的完成 promise（真实句柄 + swap 登记），`settle()` 先释放 gate、等待已启动 open、恢复真实 `close` 并 await 其关闭；`finally` 先 `settle()` 再恢复注入和删根。迟到 close failure 用例改为先 `arrived()` 再等产品返回，确保命中“句柄已到、close 拒绝/未落定”阶段，未放宽断言。受控反证：产品已返回且 helper 尚未登记任何句柄时释放 gate，真实句柄到达后由 fixture 恢复并 close，随后 `stat()` 报 `EBADF`。
+- **边界**：内容复核只覆盖本次核验内签名结束到裁决前，不消除核验结束到未来执行的替换窗口；fixture 修复只改测试，不改 I02 下载产品合同。
+
+**R3 验证**：`node --check`、对应 ESLint、`npm run build`、`git diff --check` 通过；定向套件 `76 passed`。一次完整 `npm run check`（四个 VITEST 上限 2/1，未启用 `CROSSCHAT_LIVE`）退出 1：`11 failed | 2595 passed | 11 skipped`，7 个文件失败，首败在 `test/caller-source-service.test.ts`（`SOURCE_STATE_BUSY`，来自 `withStateLock acquired=false`），其余仍在会话状态/句柄相关用例；失败文件本轮零 diff。按任务原样保留原始输出，未连续重跑全量、未扩大白名单，不逐条断言为同一原因。
 
 **R1 验证**：`node --check`、对应 ESLint、`npm run build`、代码范围 `git diff --check` 通过；定向套件 `70 passed`。一次完整 `npm run check`（四个 VITEST 上限 2/1）退出 1：4 个失败都在 `test/conversations.test.ts` 与 `test/conversation-state-concurrency.test.ts` 的会话锁用例，不属本轮改动模块；完整 stdout/stderr、首败与 `FULL_CHECK_EXIT=1` 保留在 `I03-B-R1-check.txt`。单文件复跑仍红；独立只读探针显示 `withStateLock` 按 temp 目录哈希选择 20000–39999 端口，新随机目录多次命中 `EADDRINUSE`，`recordConversation` 依既有 best-effort 语义静默放弃写入。该锁实现不在 R1 白名单内，未修改；R1 定向套件为绿，但完整检查未绿，交 root 判定。
 
@@ -109,4 +119,4 @@
 
 ## 七、停止
 
-阶段 B、同单 R1 与 R2 交付完成。停写等待 root 双轴复审；不自行进入安装/卸载执行阶段、不关闭 I03 整体或 C04，不轮询。完整检查的会话锁相关失败已如实保留，未以定向绿替代，也未修改白名单外实现。
+阶段 B、同单 R1、R2 与 R3 交付完成。停写等待 root 双轴复审；不自行进入安装/卸载执行阶段、不关闭 I03 整体或 C04，不轮询。完整检查的会话锁相关失败已如实保留，未以定向绿替代，也未修改白名单外实现。
