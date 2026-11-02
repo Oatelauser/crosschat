@@ -10,16 +10,20 @@ import { admitDshDesktopInstaller, downloadDshDesktopInstaller, dshRegressionIde
   parseDshNpmManifest, parsePnpmManifest, resolveDshNpmCache, runDshBuildSequence, runDshDesktopAttempt, runDshDesktopSequence, runDshProbeAttempt, runDshProcess,
   verifyNpmArtifact } from '../scripts/dsh-compat-ci.mjs';
 
-// The only fs injections this suite needs: open() can stall or arrive late and rm() can refuse a late cleanup.
+// The only fs injections this suite needs: metadata/open() can stall or arrive late and rm() can refuse a late cleanup.
+const lstatInjection = vi.hoisted(() => ({ impl: null as null | ((...args: unknown[]) => Promise<unknown>), real: null as null | ((...args: unknown[]) => Promise<unknown>) }));
 const openInjection = vi.hoisted(() => ({ impl: null as null | ((...args: unknown[]) => Promise<unknown>), real: null as null | ((...args: unknown[]) => Promise<unknown>) }));
 const rmInjection = vi.hoisted(() => ({ impl: null as null | ((...args: unknown[]) => Promise<unknown>), real: null as null | ((...args: unknown[]) => Promise<unknown>) }));
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
+  const realLstat = actual.lstat as unknown as (...args: unknown[]) => Promise<unknown>;
   const real = actual.open as unknown as (...args: unknown[]) => Promise<unknown>;
   const realRm = actual.rm as unknown as (...args: unknown[]) => Promise<unknown>;
+  lstatInjection.real = realLstat;
   openInjection.real = real;
   rmInjection.real = realRm;
   return { ...actual,
+    lstat: (...args: unknown[]) => (lstatInjection.impl ?? realLstat)(...args),
     open: (...args: unknown[]) => (openInjection.impl ?? real)(...args),
     rm: (...args: unknown[]) => (rmInjection.impl ?? realRm)(...args) };
 });
@@ -1237,26 +1241,45 @@ describe('DeepSeek Harness desktop installer admission', () => {
   const writeInstaller = async (output: string, content = bytes) => { const path = join(output, filename); await writeFile(path, content); return path; };
   const call = (path: string, extra: Record<string, unknown> = {}) => admitDshDesktopInstaller({ path, artifact: artifact(), policy,
     readSignature: async () => signature, timeoutMs: 5000, ...extra });
+  const waitFor = async (check: () => boolean, budgetMs = 1500) => {
+    const started = Date.now();
+    while (!check() && Date.now() - started < budgetMs) await new Promise((resolve) => setTimeout(resolve, 10));
+    return check();
+  };
+  type AdmissionOutcome = {
+    stage?: string; lateOpen?: { closed: boolean }; unresolvedResources?: string[]; cleanupError?: string;
+    cleanupCause?: { message?: string }; cause?: unknown; originalError?: unknown;
+  };
 
-  type FakeChild = EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; kill: () => void };
+  type FakeStream = EventEmitter & { destroy?: () => void };
+  type FakeChild = EventEmitter & { stdout: FakeStream; stderr: FakeStream; kill: () => boolean | void; unref?: () => void };
   // A controlled read-only child: no PowerShell, no user certificate, no real signature environment.
-  const fakeSpawn = (options: { stdout?: string; stderr?: string; code?: number | null; signal?: string | null; hang?: boolean; error?: Error }) => {
+  const fakeSpawn = (options: { stdout?: string; stderr?: string; code?: number | null; signal?: string | null; hang?: boolean; error?: Error;
+    killEffect?: boolean; noClose?: boolean; lateClose?: number }) => {
     const calls: { command: string; args: string[]; options: Record<string, unknown> }[] = [];
+    const state = { destroy: 0, unref: 0, kill: 0, child: null as FakeChild | null };
     spawnInjection.impl = (...args: unknown[]) => {
       calls.push({ command: String(args[0]), args: args[1] as string[], options: args[2] as Record<string, unknown> });
       const child = new EventEmitter() as FakeChild;
       child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+      child.stdout.destroy = () => { state.destroy += 1; };
+      child.stderr.destroy = () => { state.destroy += 1; };
+      child.unref = () => { state.unref += 1; };
       let closed = false;
-      child.kill = () => { if (closed) return; closed = true; queueMicrotask(() => child.emit('close', null, 'SIGTERM')); };
+      const close = (code: number | null, signalName: string | null) => { if (closed) return; closed = true; child.emit('close', code, signalName); };
+      child.kill = () => { state.kill += 1; if (options.killEffect === false) return false; close(null, 'SIGTERM'); return true; };
       queueMicrotask(() => {
         if (options.error) { child.emit('error', options.error); return; }
         if (options.stdout) child.stdout.emit('data', Buffer.from(options.stdout));
         if (options.stderr) child.stderr.emit('data', Buffer.from(options.stderr));
-        if (!options.hang) { closed = true; child.emit('close', options.code ?? 0, options.signal ?? null); }
+        if (options.noClose) return;
+        if (options.lateClose !== undefined) { setTimeout(() => close(options.code ?? 0, options.signal ?? null), options.lateClose); return; }
+        if (!options.hang) close(options.code ?? 0, options.signal ?? null);
       });
+      state.child = child;
       return child;
     };
-    return calls;
+    return { calls, state };
   };
 
   it('admits the exact verified file and matching publisher without writing an installation', async () => {
@@ -1282,7 +1305,7 @@ describe('DeepSeek Harness desktop installer admission', () => {
         await expect(admitDshDesktopInstaller({ path: missing, artifact: artifact(), policy: invalid as never, readSignature: reader })).rejects.toMatchObject({ stage: 'policy' });
       }
       expect(reader).not.toHaveBeenCalled();
-      const calls = fakeSpawn({ stdout: JSON.stringify(signature) });
+      const { calls } = fakeSpawn({ stdout: JSON.stringify(signature) });
       try {
         await expect(admitDshDesktopInstaller({ path: missing, artifact: artifact(), readSignature: undefined })).rejects.toMatchObject({ stage: 'policy' });
       } finally { spawnInjection.impl = null; }
@@ -1372,7 +1395,7 @@ describe('DeepSeek Harness desktop installer admission', () => {
   it('uses the bounded Windows Authenticode adapter with the path in an environment field', async () => {
     await isolated(async (output) => {
       const path = await writeInstaller(output);
-      const calls = fakeSpawn({ stdout: JSON.stringify(signature) });
+      const { calls } = fakeSpawn({ stdout: JSON.stringify(signature) });
       try {
         const result = await call(path, { readSignature: undefined });
         expect(result).toBeDefined();
@@ -1393,15 +1416,155 @@ describe('DeepSeek Harness desktop installer admission', () => {
       const path = await writeInstaller(output);
       for (const options of [{ stdout: 'x'.repeat(70 * 1024) }, { stdout: 'not-json' }, { code: 1 }, { signal: 'SIGKILL' },
         { error: new Error('spawn failed') }]) {
-        const calls = fakeSpawn(options);
+        const { calls } = fakeSpawn(options);
         try { await expect(call(path, { readSignature: undefined })).rejects.toMatchObject({ stage: 'signature' }); }
         finally { spawnInjection.impl = null; }
         expect(calls).toHaveLength(1);
       }
-      const calls = fakeSpawn({ hang: true });
+      const { calls } = fakeSpawn({ hang: true });
       try { await expect(call(path, { readSignature: undefined, timeoutMs: 50 })).rejects.toMatchObject({ stage: 'cancelled' }); }
       finally { spawnInjection.impl = null; }
       expect(calls).toHaveLength(1);
+    });
+  });
+
+  it('rejects a file rewritten while its signature is being read', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      const replacement = Buffer.alloc(bytes.length, 0x43);
+      let reads = 0;
+      await expect(call(path, { readSignature: async (target: string) => {
+        reads += 1;
+        await writeFile(target, replacement);
+        return signature;
+      } })).rejects.toMatchObject({ stage: 'file' });
+      expect(reads).toBe(1);
+    });
+  });
+
+  it('bounds a stalled open, owns the late handle and closes it once', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      let release!: () => void; const gate = new Promise<void>((resolve) => { release = resolve; });
+      let closeCalls = 0; let handle: { close: () => Promise<void> } | undefined; let realClose: (() => Promise<void>) | undefined;
+      openInjection.impl = async (...args: unknown[]) => {
+        await gate;
+        handle = await openInjection.real!(...args) as { close: () => Promise<void> };
+        realClose = handle.close.bind(handle);
+        handle.close = async () => { closeCalls += 1; return realClose!(); };
+        return handle;
+      };
+      const pending = call(path, { timeoutMs: 30 });
+      let outcome: AdmissionOutcome;
+      try {
+        outcome = await Promise.race([pending.then(() => ({ stage: 'resolved' }), (error: AdmissionOutcome) => error), new Promise<AdmissionOutcome>((resolve) => setTimeout(() => resolve({ stage: 'hung' }), 500))]);
+        expect(outcome).toMatchObject({ stage: 'cancelled' });
+        expect(outcome.lateOpen).toBeDefined();
+        expect(outcome.unresolvedResources).toEqual(expect.arrayContaining([expect.stringContaining('open')]));
+        release();
+        expect(await waitFor(() => outcome.lateOpen?.closed === true)).toBe(true);
+        expect(closeCalls).toBe(1);
+      } finally {
+        release();
+        await Promise.race([pending.catch(() => {}), new Promise((resolve) => setTimeout(resolve, 100))]);
+        await waitFor(() => closeCalls > 0, 500);
+        openInjection.impl = null;
+        if (handle && realClose) { handle.close = realClose; await realClose().catch(() => {}); }
+      }
+    });
+  });
+
+  it('bounds a stalled metadata read', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      lstatInjection.impl = () => new Promise(() => {});
+      const pending = call(path, { timeoutMs: 30 });
+      try {
+        const outcome = await Promise.race([pending.then(() => ({ stage: 'resolved' }), (error: AdmissionOutcome) => error),
+          new Promise<AdmissionOutcome>((resolve) => setTimeout(() => resolve({ stage: 'hung' }), 500))]);
+        expect(outcome).toMatchObject({ stage: 'cancelled' });
+        expect(outcome.unresolvedResources).toEqual(expect.arrayContaining([expect.stringContaining('read')]));
+      } finally {
+        lstatInjection.impl = null;
+        await Promise.race([pending.catch(() => {}), new Promise((resolve) => setTimeout(resolve, 100))]);
+      }
+    });
+  });
+
+  it('reports an unconfirmed signature child release and clears parent pipes', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      const { calls, state } = fakeSpawn({ stdout: 'x'.repeat(70 * 1024), killEffect: false, noClose: true });
+      try {
+        const error = await call(path, { readSignature: undefined, timeoutMs: 5000 }).catch((value) => value);
+        expect(error).toMatchObject({ stage: 'signature', releaseUnclear: expect.arrayContaining([expect.stringContaining('did not close')]) });
+        expect(state.kill).toBeGreaterThan(0);
+        expect(state.destroy).toBeGreaterThan(0);
+        expect(state.unref).toBeGreaterThan(0);
+        expect(state.child?.stdout.listenerCount('data')).toBe(0);
+        expect(state.child?.stderr.listenerCount('data')).toBe(0);
+      } finally { spawnInjection.impl = null; }
+      expect(calls).toHaveLength(1);
+    });
+  });
+
+  it('reports an unconfirmed signature child release on cancellation', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      const { state } = fakeSpawn({ killEffect: false, noClose: true });
+      try {
+        const error = await call(path, { readSignature: undefined, timeoutMs: 30 }).catch((value) => value);
+        expect(error).toMatchObject({ stage: 'cancelled', releaseUnclear: expect.arrayContaining([expect.stringContaining('did not close')]) });
+        expect(state.destroy).toBeGreaterThan(0);
+        expect(state.unref).toBeGreaterThan(0);
+        expect(state.child?.stdout.listenerCount('data')).toBe(0);
+      } finally { spawnInjection.impl = null; }
+    });
+  });
+
+  it('starts the real file close only once when it rejects', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      let closeCalls = 0; let handle: { close: () => Promise<void> } | undefined; let realClose: (() => Promise<void>) | undefined;
+      openInjection.impl = async (...args: unknown[]) => {
+        handle = await openInjection.real!(...args) as { close: () => Promise<void> };
+        realClose = handle.close.bind(handle);
+        handle.close = async () => { closeCalls += 1; throw new Error('close refused'); };
+        return handle;
+      };
+      try {
+        await expect(call(path)).rejects.toMatchObject({ stage: 'cleanup' });
+        expect(closeCalls).toBe(1);
+      } finally {
+        openInjection.impl = null;
+        if (handle && realClose) { handle.close = realClose; await realClose().catch(() => {}); }
+      }
+    });
+  });
+
+  it('preserves a frozen signature failure alongside the close failure', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      let closeCalls = 0; let handle: { close: () => Promise<void> } | undefined; let realClose: (() => Promise<void>) | undefined;
+      openInjection.impl = async (...args: unknown[]) => {
+        handle = await openInjection.real!(...args) as { close: () => Promise<void> };
+        realClose = handle.close.bind(handle);
+        handle.close = async () => { closeCalls += 1; throw new Error('close refused'); };
+        return handle;
+      };
+      const signatureCause = new Error('signature cause');
+      const frozen = Object.freeze(Object.assign(new Error('frozen signature', { cause: signatureCause }), { stage: 'signature' }));
+      try {
+        const error = await call(path, { readSignature: async () => { throw frozen; } }).catch((value) => value) as AdmissionOutcome;
+        expect(error).toMatchObject({ stage: 'signature', cleanupError: expect.stringContaining('close') });
+        expect(error.cause).toBe(signatureCause);
+        expect(error.originalError).toBe(frozen);
+        expect(error.cleanupCause).toMatchObject({ message: 'close refused' });
+        expect(closeCalls).toBe(1);
+      } finally {
+        openInjection.impl = null;
+        if (handle && realClose) { handle.close = realClose; await realClose().catch(() => {}); }
+      }
     });
   });
 });

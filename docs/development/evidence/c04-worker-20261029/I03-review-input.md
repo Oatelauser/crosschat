@@ -61,6 +61,19 @@
 
 必须保留待真实包或干净 runner 验证的是静默参数、目录参数、自启动、卸载器名、默认根、注册表键、发布者默认值与真实签名结果。注入测试不能替代 Desktop 原生验收。
 
+### 4. R1 同单返修（只读准入）
+
+新基线 `b5dbe7c18298593307a59b33b00b4d1b055f51f9`。四组反例先 RED（`7 failed | 63 passed`），最小 GREEN 后定向 `70 passed`；完整原始输出与真实退出码见 `I03-B-R1-check.txt`。
+
+- **签名期间一致性**：签名结束后、解析与裁决前，重新读取同一句柄和路径状态并与 open 后状态比较。反例：注入签名读取器同长改写文件再返回合法签名，准入拒绝 `stage=file`；未改文件照常通过。该复核是基于 `dev/ino/nlink/size/mtime/ctime/birthtime` 的状态指纹，不是再次重算内容摘要；也不消除本次核验后到未来执行的窗口。
+- **有界等待与迟到 owner**：`lstat`、`open`、句柄 `stat`、分块 read、读后与签名后状态复核全部与同一截止竞争。反例：open 停滞、lstat 停滞时，`timeoutMs=30` 均在返回时给出 `stage=cancelled` 与 `unresolvedResources`；迟到 open 的本次句柄由 `lateOpen` owner 用固定 1 s 预算唯一 close，返回不恢复成功、不写删输入。返回后实际落定不改变已返回结论。
+- **默认签名 child 有限收尾**：只有观察到 `close` 才认定进程退出。反例：kill 返回 false 且不发 close 时，输出超限与取消都在 1 s 后报告 `releaseUnclear`（`did not close`），`destroy`/`unref` 父侧管道与进程引用、data 监听归零；迟到 close/error 仍有 owner 且无未处理错误。spawn error 不声称已看到 close。
+- **唯一 close 与错误保真**：close 只启动一次并保存落定/未决结果，成功路径与失败 `finally` 共用。反例：真实 `FileHandle` close 拒绝时调用恰为 1 次，准入报 `stage=cleanup`；冻结签名主错加 close 失败时保留 `stage=signature`、原 `cause`、`originalError`，并附 `cleanupError`/`cleanupCause`；没有额外清理问题时不包装。
+
+**未测与边界**：文件等待与 child 收尾均用注入/合成验证，未跑真实 PowerShell、用户证书或官方 EXE；失败清理预算固定 1 s，耗尽只报告未决/未确认，返回后迟到完成不构成已释放证明；准入结果仍不构成执行授权。
+
+**R1 验证**：`node --check`、对应 ESLint、`npm run build`、代码范围 `git diff --check` 通过；定向套件 `70 passed`。一次完整 `npm run check`（四个 VITEST 上限 2/1）退出 1：4 个失败都在 `test/conversations.test.ts` 与 `test/conversation-state-concurrency.test.ts` 的会话锁用例，不属本轮改动模块；完整 stdout/stderr、首败与 `FULL_CHECK_EXIT=1` 保留在 `I03-B-R1-check.txt`。单文件复跑仍红；独立只读探针显示 `withStateLock` 按 temp 目录哈希选择 20000–39999 端口，新随机目录多次命中 `EADDRINUSE`，`recordConversation` 依既有 best-effort 语义静默放弃写入。该锁实现不在 R1 白名单内，未修改；R1 定向套件为绿，但完整检查未绿，交 root 判定。
+
 ## 四、用户拍板与影响
 
 - 阶段 A 只新增研究/证据文档，**不触发用户拍板**。
@@ -86,4 +99,4 @@
 
 ## 七、停止
 
-阶段 B 交付完成。停写等待 root 双轴复审；不自行进入安装/卸载执行阶段、不关闭 I03 整体或 C04，不轮询。
+阶段 B 及同单 R1 交付完成。停写等待 root 双轴复审；不自行进入安装/卸载执行阶段、不关闭 I03 整体或 C04，不轮询。完整检查的 4 个会话锁失败已如实保留，未以定向绿替代，也未修改白名单外实现。
