@@ -205,3 +205,34 @@ RED-1（产品回退到基线、测试为当时版本）**2 失败 / 46 通过**
 - 未单列反例：owner 在**返回之后**才落定并记录失败的分支——报告已抛出，无法再附加字段；测试只断言返回时的保守报告与后台收口动作，二者与返回前落定路径共用同一代码。
 - 总截止跨界由固定等待（120ms > 80ms）驱动而非假时钟；cancel 的「已开始未完成」由假 reader 门控确定性控制，裁决本身用墙钟而非定时器先后顺序。
 - 清理：`open`/`rm` 两处 `vi.mock` 注入、原型 `write` 补丁、实例 `close` 换置均在各自用例 finally 恢复；保留 partial 由 fixture 确认句柄关闭后按绝对路径删除；独占 `mkdtemp` 根用后即删；无外网、无官方二进制、无用户状态修改；C04 未关闭。
+
+## 十一、R3 同单补充（C04-I02-R3 复审两条 P2）
+
+### 1. 提交
+
+| 节点 | 提交 | 内容 |
+| --- | --- | --- |
+| 基线 | `c813d4e` | root R3 复审（本单派单基线） |
+| RED | `04ae24a` | 只改测试：迟到文件只删一次 + 替换文件字节保留；成功收口不虚报 partial；response 已到但 cancel 未决的返回报告 |
+| GREEN | `33f9c05` | 只改产品：迟到句柄唯一 close/remove owner，主收尾只消费结果；迟到响应三态记录 |
+
+### 2. 审查项 → 修复 → 反例
+
+| 审查项 | 修复 | 覆盖反例 |
+| --- | --- | --- |
+| `ownHandle` 已 close+rm，主收尾因 `failed && created` 再 rm 同一路径（双删除 owner；成功删除后虚报 `partialFile`/ENOENT；首次删除后另一 attempt 以 `wx` 创建的替换文件会被第二次删除） | `ownHandle` 改用独立的 `lateFile` 状态，不再置 `created`；该句柄的 close/rm 是唯一 owner，结果（closed、removal outcome）记入状态。主收尾新增 `else if (failed && lateFile)` 分支：只读取真实结果，绝不再次 rm；close 失败/未落定 → `releaseUnclear`+`partialFile`，rm 失败/未落定 → `cleanupError`+`partialFile`，rm 成功 → 不产生任何保留字段 | 「removes a late-created file exactly once and never deletes a replacement」：rm 注入计数，首次删除后写入替换内容；断言 `rmCalls === 1`、替换字节原样保留、无 `partialFile`。「does not report a partial path after a successful late close and removal」：无替换时断言 `rmCalls === 1`、`partialFile`/`cleanupError` 均为 undefined、文件确已删除 |
+| `:262` 只在 `!responseOwnerStarted` 时写返回报告，漏「response 已到但 cancel 未落定」；owner 已启动被当成资源已释放，公共收尾预算先耗尽时返回普通超时且无 `undecidedResources` | `ownResponse` 记录 `lateResponse` 状态与 cancel outcome。返回报告分三态：响应未到 → 「had not settled at return」；已到但 cancel 未落定 → 「cancel had not settled at return」；cancel 已落定 → 不报。owner 启动不再等价于释放；`releaseLock` 仍在 cancel 落定后的 finally 执行 | 「reports a late response whose cancel is still undecided when cleanup returns」：timeout 100ms，真实 `ReadableStream` 在 150ms 到达，cancel 由 gate 挂起；断言返回时 `cancelStarted === true`、`undecidedResources` 含「cancel had not settled at return」、`body.locked === true`；释放 gate 后 `locked === false` 且目录为空 |
+
+既有保证未变：最终取消裁决、有限共享收尾预算（`left()`）、`wx` 边界（只清本次创建的文件）、精确元数据/短写/Web 回归、冻结/假值错误的 cause 包装均保持原行为。
+
+### 3. 验证
+
+- 定向：RED **3 失败 / 51 通过**（退出码 1，首败 `expected 2 to be 1` 即双删除）；GREEN **54/54**（退出码 0）。
+- `node --check` 通过；`npm run lint` 0；`npm run check:imports` 203 模块 / 682 边；`npm run build` 通过；`git diff --check` 0。
+- 完整：GREEN 后一次 `npm run check`（forks/threads max2/min1，未筛/未 skip/未放宽）**退出码 0**，231 文件通过 / 3 跳过，**2584 项通过 / 11 跳过**（较 R3 的 2581 净增 3）。完整记录见 `I02-R3-supplement-check.txt`。
+
+### 4. 未测 / 清理
+
+- 未单列反例：迟到 owner 在返回之后才落定并失败——报告已抛出，只能记录后台结果；返回前落定与返回后落定共用同一状态记录代码。
+- gate 反例用真实 `ReadableStream` 的 `cancel` 挂起，锁释放由 gate 释放后的轮询断言确认；未引入假时钟。
+- 清理：`open`/`rm` 注入与 gate 均在用例 finally 恢复；独占 `mkdtemp` 根与测试写入的替换文件按绝对路径删除；无外网、无官方二进制、无用户状态修改；C04 未关闭。
