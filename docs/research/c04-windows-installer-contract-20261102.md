@@ -23,7 +23,7 @@
 | 实际二进制内容 | 未验证 | C | 未校验 Authenticode、安装后 runtime descriptor 或文件内容。 |
 | 发布者 | 源码无固定主体/指纹 | C | 见第三节；必须由调用方提供已独立核实的策略。 |
 
-**准入链的最小含义**：I02 下载结果（精确 URL、固定大小、SHA-512 校验通过、独占目录、`wx` 创建）只把“候选文件”交给准入层；准入层还必须完成签名身份核验，才能 spawn 安装器。传输一致不等于发布者可信，也不等于可安装。
+**准入链的最小含义**：I02 下载结果（精确 URL、固定大小、SHA-512 校验通过、独占目录、`wx` 创建）只把“候选文件”交给准入层；准入层还必须完成签名身份核验。传输一致不等于发布者可信，也不等于可安装。准入结果只是对本次文件的一次观测，不是可传给任意执行器的不可伪造授权；未来执行层仍须在 spawn 前重新核验它实际执行的字节和目的地。
 
 ## 二、安装合同
 
@@ -71,40 +71,54 @@
 { publisher: { subject: string, thumbprint: string } }
 ```
 
-`subject` 与 `thumbprint` 都要非空、有长度上限，并与 Authenticode 读取结果严格相等。只给 `status: 'Valid'` 不足以放行。当前尚无可信默认值，所以真实安装前必须由用户/root 提供独立核实的策略；这属于必需用户决定，不在本阶段自行填充。
+`subject` 与 `thumbprint` 都要非空、有长度上限，并与 Authenticode 读取结果严格相等。只给 `status: 'Valid'` 不足以放行。当前尚无可信默认值。
+
+这里要区分两类事项：**事实/技术前置**是“必须有一份独立于待校验文件的发布者材料”，以及既有模块内的默认只读签名适配器；前者仍缺证据，后者不新增用户操作。**用户决定**只在真正改变授权或用户操作时成立，例如新增功能文件、要求终端用户手工配置策略、执行真实安装/卸载。`subject+thumbprint` 同时固定是 root 为本轮内部 CI 选定的比较策略，不是上游已证实的发布合同；取得可信策略值本身不自动升级为用户选择题。
 
 ## 四、生命周期与归属
 
 沿用 I01 已验收合同，不重写：
 
 1. **部分安装失败保留归属**：`runDshDesktopSequence` 的 `serialSequence` 在 install 抛错且带结构化安装信息时，记录 `retainedInstallation`（label、version、root、installationId、owner、真实 reason）；不进入 probe/remove，也不安装下一构建。
-2. **Host 退出未确认不卸载**：`hasDesktopCleanupProof` 要求 `hostExited === true`；未确认即 release unknown，序列停止。关窗可能只是隐藏，不能当作 Host 已退出。
+2. **Host 退出未确认不卸载**：`hasDesktopCleanupProof` 要求 `hostExited === true`；未确认即 release unknown，序列停止。关窗可能只是隐藏，不能当作 Host 已退出。但该证明在 sequence 中是**最终核验**：序列先运行 probe，再核对 cleanup，因此它只阻止后续 `remove`，不能阻止 probe 内部提前 spawn 卸载器。真正的“未退出零卸载”守卫必须放在未来卸载 spawn **之前**；现有卸载接口没有这个 spawn 前守卫，属于待闭合缺口。
 3. **官方卸载与注册清理分开核对**：cleanup 分别要求 `uninstalled`、`registrationRemoved`、`systemRegistrationRemoved`，且 `forced === false`、无 errors；卸载器退出码 0 本身不是任何一项的证明。
 4. **probe 报告已要求官方卸载完成**：`desktopChecks` 含 `official-uninstall`，PASS 还必须有完整 cleanup 证明。I01 的 probe 合同已经要求“官方卸载完成”，不是本阶段新增的循环要求。
 5. **sequence 的 remove 只清自有目录**：`remove` 在 release 证明之后删除本次独占的安装目录/任务目录；不能把官方卸载移到 `remove` 再要求 probe 事先声称已卸载。官方卸载仍发生在 probe/runner 的生命周期内，`remove` 消费释放证明。
 6. **系统注册归属**：`dsh` 协议可能由安装器声明，也可能由应用启动时 `setAsDefaultProtocolClient` 创建；两者都可能留下 HKCU 注册。清理证明必须相对安装前 baseline 判断“本次创建”并只撤销本次项，保留用户原有注册。当前仓库只能验证 cleanup 布尔值，不能独立核验注册表；这是 probe/runner 的证据责任。
 7. **卸载残留**：卸载器保留 Harness home，且锁定残留不令卸载失败；因此卸载后仍可能有用户数据、缓存或注册项。自有目录清理失败要保留并报告，不得用卸载退出码 0 覆盖。
 
-## 五、最小实施方案（阶段 B 候选，尚未下发）
+## 五、阶段 B 已实现的只读准入与未闭合的执行层
 
-### 1. 复用边界
+### 1. 复用边界与既有进程框架的真实差距
 
-- 安装包来源只用 I02 `downloadDshDesktopInstaller` 的返回值；不重写下载器、流式校验或超时框架。
-- 安装/卸载进程复用既有 `runDshProcess`：有界 stdout/stderr、超时 kill、完整 `code/signal/timedOut`。
-- 生命周期复用 `runDshDesktopSequence`、`runDshDesktopAttempt`、`hasDesktopCleanupProof`；不改 install→probe→verify→remove 顺序，不把官方卸载移入 remove。
-- 测试只加在既有 `test/dsh-compat-ci.test.ts`，注入签名读取器与进程执行器，不跑真实安装器。
+- 安装包来源仍只用 I02 `downloadDshDesktopInstaller` 的返回值；不重写下载器、流式校验或超时框架。
+- 准入实现在既有 `scripts/dsh-compat-ci.mjs`，不新增功能文件。
+- 安装/卸载执行层本轮不实现。既有 `runDshProcess` **不是完整执行基础**：不接 `AbortSignal`；stdout/stderr 各只保留最后 128000 字符，没有 `truncated` 标记；timeout 发 kill 后立即返回，不等 `close`，也不提供 `signal`/`close` 确认。因此“超时返回”不能当作进程已释放或安装已停止的证明。本轮不借机重写共享进程框架。
+- 生命周期仍复用 `runDshDesktopSequence`、`runDshDesktopAttempt`、`hasDesktopCleanupProof`；但 cleanup 是最终核验，只阻止后续 `remove`，不能阻止 probe 内提前 spawn 卸载器，且卸载接口没有 spawn 前 Host 退出守卫。
 
-### 2. 可立即实现的部分（无需猜上游参数）
+### 2. 已实现：只读准入组件
 
-| 边界 | 建议接口 | 行为 |
+| 边界 | 实现 | 行为 |
 | --- | --- | --- |
-| 准入策略 | `parseDshDesktopAdmissionPolicy(input)` | 只接受 `{ publisher: { subject, thumbprint } }`；非空、长度有界；无默认值。 |
-| 准入判定 | `admitDshDesktopInstaller({ path, artifact, policy, readSignature })` | 绝对路径且为普通文件 → 重算 SHA-512 与 `artifact.integrity` 相等 → `status === 'Valid'` → subject/thumbprint 严格等于策略。任一步失败即抛错，调用方不得 spawn。`readSignature` 注入；默认 PowerShell `Get-AuthenticodeSignature` 适配器留到真实 runner 实测。 |
-| 安装执行 | `runDshDesktopInstaller({ admitted, plan, signal, timeoutMs })` | `plan` 必须显式提供 `arguments`（有界字符串数组）与 `root`（绝对路径）；不提供默认静默开关、默认目录或默认卸载器名。无 plan 即拒绝。返回 `runDshProcess` 的进程证据；超时/kill 不产生可用安装结果。 |
-| 卸载执行 | `runDshDesktopUninstaller({ admitted, plan, signal, timeoutMs })` | `plan` 显式提供绝对卸载器路径与参数；只返回进程证据，**不设置** `uninstalled`。`uninstalled` 仍由 probe 依据卸载后实际状态给出。 |
-| 安装结果归属 | 由既有 install 操作组合 | 安装器退出码 0 只证明进程正常结束；root、installationId、owner 由调用方提供/观测；部分安装或超时保留所有权。 |
+| 准入策略 | 私有 `parseDshDesktopPublisherPolicy` | 只接受 `{ publisher: { subject, thumbprint } }`；两者非空、长度/十六进制格式有界；无默认值；缺失或畸形在文件读取和子进程前拒绝。 |
+| 发行物身份 | 复用 `desktopInstallerPlan` | 重新推导版本、精确 URL、filename、size、SRI，不信任调用方记录的成功字段。 |
+| 文件 | `lstat` + `open('r')` + 句柄 `stat` | 绝对本地路径；拒绝链接、非普通文件、`nlink !== 1`、大小不符；前后 `dev/ino/nlink/size/mtime/ctime/birthtime` 一致，否则拒绝替换。 |
+| 摘要 | 流式 SHA-512 | 64 KiB 分块，按固定大小有界，不整包 `Buffer.concat`；大小或摘要不符拒绝。 |
+| 签名 | 注入或默认 Windows 适配器 | 默认 `powershell.exe`：常量脚本、`-NoProfile -NonInteractive -WindowStyle Hidden -Command`、路径放 `DSH_ADMIT_SIGNATURE_PATH` 环境字段、`shell:false`、`windowsHide:true`、64 KiB 输出上限、等待 `close`。输出先按 unknown 解析；只有 `status === 'Valid'` 且 subject/thumbprint 与策略严格相符才通过。 |
+| 取消与资源 | 单一截止 | 同一截止覆盖读盘、签名读取和最终裁决；预先取消/执行中取消/超时均不返回成功；`finally` 关闭句柄、清除 timer/listener。 |
+| 返回值 | `{ path, version, size, integrity, filename, publisher }` | 只报告本次观测；不启动安装器/卸载器，不写安装目录、注册表、协议或用户配置。 |
 
-### 3. 必须保留待证据、阶段 B 不得猜的部分
+该结果**不是**可伪造的安装授权：它不把“已核验的字节”绑定到未来实际执行的进程，也不承诺核验结束后到执行之间文件不变。未来执行层必须重新核验实际执行文件与目的地。
+
+### 3. 未实现且不得据此执行的部分
+
+- 本轮没有 `runDshDesktopInstaller` / `runDshDesktopUninstaller` wrapper，也不修改 `runDshProcess`、`main()`、workflow、reporter、UI 或 baseline。
+- 显式 `arguments` + 绝对 `root` 只是调用方**声明**，不证明安装器实际写入的位置；不能据此保证外来安装不受影响。安装目的地约束、安装前 baseline 和失败关闭仍需具体方案与证据。
+- 卸载器 spawn 前的 Host 退出守卫尚未实现；最终 `hasDesktopCleanupProof` 不能替代它。
+- 准入结果不绑定实际执行字节；执行层必须对即将 spawn 的同一文件重新读盘、重算摘要并重验签名。
+- `runDshProcess` 目前不能兑现 `signal`，超时返回也不是释放确认；执行层若需要这些保证，必须另行闭合，不能把普通进程 wrapper 记为已具备安全安装能力。
+
+### 4. 必须保留待证据、不得猜的部分
 
 - `/S`、`/D=` 的确切拼写与语义；静默自启动；固定卸载器名。
 - 默认安装根、`InstallLocation` 的键路径/值、卸载注册表项/GUID、产品名。
@@ -112,22 +126,23 @@
 - 默认发布者主体/指纹、时间戳与吊销行为。
 - 真实包安装后是否启动应用、实际文件布局、同版本 HKCU 冲突/升级行为。
 
-这些需要真实官方包在独立干净 runner 上观测；注入测试只能证明边界拒绝与执行参数，不证明 Desktop 原生行为。
+这些需要真实官方包在独立干净 runner 上观测；注入测试只能证明边界拒绝与签名解析，不证明 Desktop 原生行为。
 
-### 4. 文件与范围
+### 5. 文件与范围
 
-- 只改 `scripts/dsh-compat-ci.mjs` 与 `test/dsh-compat-ci.test.ts`；不需要新增功能文件。
+- 只改 `scripts/dsh-compat-ci.mjs`、`test/dsh-compat-ci.test.ts` 和两份证据/研究文档；不新增功能文件、依赖或用户命令。
 - 不改 `main()` 的 Desktop 入口、`.github/workflows/dsh-compat.yml`、reporter、UI driver、Web 默认入口或全局安装。
-- 若 root 要求默认签名适配器、真实 runner 接线或真实发布者策略，则超出“复用既有文件”的范围，需用户决定。
+- 默认签名适配器位于既有模块内，不新增用户操作，属于技术前置而非用户决定。用户决定只在真实安装/卸载、新增功能文件或必需用户操作变化时触发；可信策略值本身仍需独立材料，但不自动升级为用户选择题。
 
 ## 六、验收入口与反例
 
 | 保证 | 反例/验收点 | 接线点 |
 | --- | --- | --- |
 | 签名/摘要不符零安装 | 摘要不符、`status !== 'Valid'`、subject 不符、thumbprint 不符、策略缺失/空串：准入抛错，spawn 调用次数为 0，未创建安装目录 | `admitDshDesktopInstaller` + 注入 `readSignature` 与进程执行器 |
-| 已有/外来安装不触碰 | 安装前 baseline 发现已有 HKLM/HKCU 安装或外来目录：拒绝安装；不调用卸载器、不删除目录 | install 操作的 pre-check + plan/root guard |
+| 准入结果不绑定执行字节 | 准入通过后文件被替换：未来执行层不得直接 spawn 已返回的 `path`；必须在 spawn 前对同一路径重新读盘、重算摘要并重验签名 | 未来执行层；本轮不实现 |
+| 已有/外来安装不触碰 | 安装前 baseline 发现已有 HKLM/HKCU 安装或外来目录：拒绝安装；不调用卸载器、不删除目录。显式 `arguments` + 绝对 `root` 只是声明，不构成安装位置证明 | install 操作 pre-check + 目的地约束证据；本轮未实现 |
 | 部分安装保留 | 安装器异常退出或超时，但已产生 root：`retainedInstallation` 保留 root/installationId/owner/reason；不 probe、不 remove、不装下一构建 | 既有 `serialSequence` |
-| 未确认 Host 退出零卸载 | cleanup 缺 `hostExited` 或为 false：`hasDesktopCleanupProof` 为 false，序列在 remove 前停止 | 既有 `hasDesktopCleanupProof` |
+| 未确认 Host 退出零卸载 | 卸载 spawn **之前**未确认 Host 已退出：不得 spawn 卸载器。现有 `hasDesktopCleanupProof` 只在 probe 之后核验，不能阻止 probe 内提前卸载 | 未来卸载接口的 spawn 前守卫；本轮未实现 |
 | 卸载失败停止序列 | 卸载器异常/超时，或 probe 报 `uninstalled:false`：release unknown，不进入 candidate | probe + sequence |
 | 卸载退出 0 但注册残留 | `systemRegistrationRemoved:false` 或 `registrationRemoved:false`：不得 PASS | cleanup 布尔值 + probe 观测 |
 | 自有目录删除失败 | remove 抛错：保留归属并停止；不得报告 installationCleanup=removed | 既有 `serialSequence`/`remove` |
@@ -136,6 +151,7 @@
 ## 七、边界与结论
 
 - 本阶段只确证了部分合同：安装器模式、当前用户/无提权、all-users/HKLM 拒绝、静默分支存在、`InstallLocation` 写入、卸载器数据行为、内置 runtime、协议声明均有固定源码证据；静默开关、目录参数、自启动、固定卸载器名、默认安装根、注册表键、发布者默认值均缺证据。
-- 因此阶段 B 只能实现“失败关闭的准入/执行边界”，不能实现“已确证参数的真实安装”。真实安装/卸载必须等独立干净 runner、安装前 baseline 和用户/root 提供的发布者策略。
+- 阶段 B 已实现证据支持的只读准入组件：策略缺省拒绝、同一普通独占文件的流式摘要与前后状态核验、签名 `Valid` + subject/thumbprint 比对、单一截止与资源清理。它不启动安装器，不构成不可伪造的安装授权，也不消除核验后到执行之间的替换窗口。
+- 安装/卸载执行层仍未实现：显式 `arguments` + 绝对 `root` 不证明安装位置，卸载 spawn 前没有 Host 退出守卫，`runDshProcess` 不能兑现 `signal` 且超时返回不是 close/释放证明。真实安装/卸载必须等独立干净 runner、安装前 baseline、目的地约束方案和独立可信的发布者策略。
 - 不把 NSIS/Electron 常识、OpenCode 或其它产品的参数/GUID/publisher 当作 Harness 事实。
 - 不声称 C04 或正式 Desktop 已通过；不关闭 C04。

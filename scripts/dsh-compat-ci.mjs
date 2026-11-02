@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global AbortController */
 import { spawn } from 'node:child_process';
 import { Buffer } from 'node:buffer';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -102,6 +103,18 @@ const desktopInstallerUrl = (version) => `https://download.deepseek.com/dsh-desk
 const desktopInstallerName = (version) => `deepseek-harness-${version}-win-x64.exe`;
 const desktopMaxInstallerBytes = 512 * 1024 * 1024;
 const rawDesktopSha512 = /^[A-Za-z0-9+/]{85}[AQgw]==$/;
+const desktopPublisherSubjectMax = 512;
+const desktopThumbprint = /^[0-9A-Fa-f]{40,128}$/;
+const signatureOutputMaxBytes = 64 * 1024;
+const signatureAbortCloseMs = 1000;
+const authenticodeSignatureScript = [
+  '$ErrorActionPreference = "Stop"',
+  '$target = $env:DSH_ADMIT_SIGNATURE_PATH',
+  'if ([string]::IsNullOrEmpty($target)) { throw "missing signature target" }',
+  '$signature = Get-AuthenticodeSignature -LiteralPath $target',
+  '$certificate = $signature.SignerCertificate',
+  '[pscustomobject]@{ status = [string]$signature.Status; subject = $(if ($certificate) { [string]$certificate.Subject } else { "" }); thumbprint = $(if ($certificate) { [string]$certificate.Thumbprint } else { "" }) } | ConvertTo-Json -Compress',
+].join('; ');
 
 /** Bounded settlement for owned IO: an operation that never settles reports done:false instead of hanging its caller. */
 function settleWithin(operation, budgetMs) {
@@ -452,8 +465,201 @@ function desktopPartialInstallation(error) {
   return { root: installation.root, ...identity };
 }
 
-/** Stage-B admission placeholder; the RED tests drive the real boundary. */
-export async function admitDshDesktopInstaller() { return undefined; }
+const admissionFailure = (stage, text, cause) => {
+  const error = cause === undefined ? new Error(text) : new Error(text, { cause });
+  error.stage = stage;
+  return error;
+};
+const hasControlCharacter = (value) => [...value].some((character) => character.codePointAt(0) < 0x20 || character.codePointAt(0) === 0x7f);
+
+/** The strict CI publisher policy has no trusted default: absent or malformed material never falls back to a guess. */
+function parseDshDesktopPublisherPolicy(input) {
+  if (!record(input) || !record(input.publisher)) throw admissionFailure('policy', 'A verified publisher policy is required before any file read or child process');
+  const { subject, thumbprint } = input.publisher;
+  if (typeof subject !== 'string' || subject.trim() === '' || subject.length > desktopPublisherSubjectMax || hasControlCharacter(subject)) {
+    throw admissionFailure('policy', 'The publisher subject must be a bounded non-empty string');
+  }
+  if (typeof thumbprint !== 'string' || !desktopThumbprint.test(thumbprint)) {
+    throw admissionFailure('policy', 'The publisher thumbprint must be 40 to 128 hexadecimal characters');
+  }
+  return { subject, thumbprint: thumbprint.toUpperCase() };
+}
+
+/** A signature report is unknown input until every field is checked; Valid alone never proves the expected publisher. */
+function parseDshDesktopSignature(input, expected) {
+  let value = input;
+  if (typeof value === 'string') {
+    if (value.length > signatureOutputMaxBytes) throw admissionFailure('signature', 'The signature report exceeded its byte budget');
+    try { value = JSON.parse(value); } catch (error) { throw admissionFailure('signature', 'The signature report was not valid JSON', error); }
+  }
+  if (!record(value)) throw admissionFailure('signature', 'The signature report must be a JSON object');
+  if (value.status !== 'Valid') throw admissionFailure('signature', 'Authenticode status is not Valid');
+  if (typeof value.subject !== 'string' || value.subject.trim() === '' || value.subject.length > desktopPublisherSubjectMax
+    || hasControlCharacter(value.subject)) throw admissionFailure('signature', 'The signer subject is not a bounded non-empty string');
+  if (typeof value.thumbprint !== 'string' || !desktopThumbprint.test(value.thumbprint)) throw admissionFailure('signature', 'The signer thumbprint is not hexadecimal');
+  if (value.subject !== expected.subject || value.thumbprint.toUpperCase() !== expected.thumbprint) {
+    throw admissionFailure('signature', 'The signer does not match the verified publisher policy');
+  }
+  return { status: 'Valid', subject: value.subject, thumbprint: value.thumbprint.toUpperCase() };
+}
+
+/** Windows default adapter: a constant script, the target path in an environment field, no shell and a byte budget. */
+function readAuthenticodeSignature(path, { signal } = {}) {
+  if (typeof path !== 'string' || path === '') return Promise.reject(admissionFailure('signature', 'A signature target path is required'));
+  if (signal?.aborted) return Promise.reject(admissionFailure('cancelled', 'The signature read was cancelled before it started', signal.reason));
+  return new Promise((resolve, reject) => {
+    let child;
+    try {
+      child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', authenticodeSignatureScript], {
+        env: { ...process.env, DSH_ADMIT_SIGNATURE_PATH: path }, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (error) { reject(admissionFailure('signature', `The signature reader could not start: ${message(error)}`, error)); return; }
+    let settled = false; let aborting = false; let total = 0; let abortTimer;
+    const stdout = [];
+    const finish = (value, error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(abortTimer);
+      if (signal) signal.removeEventListener('abort', onAbort);
+      if (error) reject(error); else resolve(value);
+    };
+    const onAbort = () => {
+      if (aborting) return;
+      aborting = true;
+      try { child.kill(); } catch { /* The child may already be gone. */ }
+      abortTimer = setTimeout(() => finish(undefined, admissionFailure('cancelled', 'The signature reader did not close after cancellation', signal?.reason)), signatureAbortCloseMs);
+    };
+    const collect = (chunk) => {
+      total += chunk.length;
+      if (total <= signatureOutputMaxBytes) return true;
+      try { child.kill(); } catch { /* The child may already be gone. */ }
+      finish(undefined, admissionFailure('signature', 'The signature reader exceeded its output budget'));
+      return false;
+    };
+    if (signal) { signal.addEventListener('abort', onAbort, { once: true }); if (signal.aborted) onAbort(); }
+    child.stdout.on('data', (chunk) => { if (collect(chunk)) stdout.push(chunk); });
+    child.stderr.on('data', (chunk) => { collect(chunk); });
+    child.once('error', (error) => finish(undefined, admissionFailure('signature', `The signature reader failed: ${message(error)}`, error)));
+    child.once('close', (code, signalName) => {
+      if (settled) return;
+      if (signalName !== null || code !== 0) {
+        finish(undefined, admissionFailure('signature', `The signature reader exited abnormally (code ${code}, signal ${signalName})`));
+        return;
+      }
+      finish(Buffer.concat(stdout).toString('utf8'));
+    });
+  });
+}
+
+const desktopFileState = (stats) => ({ dev: stats.dev, ino: stats.ino, nlink: stats.nlink, size: stats.size,
+  mtimeMs: stats.mtimeMs, ctimeMs: stats.ctimeMs, birthtimeMs: stats.birthtimeMs });
+const sameDesktopFileState = (left, right) => left.dev === right.dev && left.ino === right.ino && left.nlink === right.nlink
+  && left.size === right.size && left.mtimeMs === right.mtimeMs && left.ctimeMs === right.ctimeMs && left.birthtimeMs === right.birthtimeMs;
+
+/**
+ * Reads one caller-owned installer, proves its fixed identity, digest and Authenticode signer against a caller-supplied
+ * policy, and reports only this observation. It never starts an installer; the result is not an unforgeable execution
+ * authorization, and a future executor must re-verify the exact bytes it runs.
+ */
+export async function admitDshDesktopInstaller({ path, artifact, policy, readSignature, signal, timeoutMs = 120000 } = {}) {
+  const publisher = parseDshDesktopPublisherPolicy(policy);
+  let plan;
+  try { plan = desktopInstallerPlan(artifact); }
+  catch (error) { throw admissionFailure('artifact', message(error), error); }
+  if (typeof path !== 'string' || !isAbsolute(path) || /^[\\/]{2}/.test(path)) {
+    throw admissionFailure('path', 'The installer path must be an absolute local file path');
+  }
+  if (readSignature !== undefined && typeof readSignature !== 'function') {
+    throw admissionFailure('signature', 'The signature reader must be a function when supplied');
+  }
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+    throw admissionFailure('timeout', 'The admission deadline must be a positive integer of milliseconds');
+  }
+  const startedAt = Date.now();
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(admissionFailure('cancelled', `Installer admission exceeded its ${timeoutMs}ms deadline`)), timeoutMs);
+  const expired = new Promise((_, reject) => deadline.signal.addEventListener('abort', () => reject(deadline.signal.reason), { once: true }));
+  expired.catch(() => {});
+  const forward = () => deadline.abort(signal.reason);
+  if (signal) { if (signal.aborted) deadline.abort(signal.reason); else signal.addEventListener('abort', forward); }
+  // The live signal and the wall clock both decide; cleanup that crosses the deadline is a failure, not a success.
+  const cancelled = () => Boolean(signal?.aborted) || deadline.signal.aborted || Date.now() - startedAt >= timeoutMs;
+  const left = () => Math.max(timeoutMs - (Date.now() - startedAt), 0);
+  let handle; let handleClosed = false; let failure;
+  const closeHandle = async () => {
+    if (!handle || handleClosed) return;
+    const closed = await settleWithin(() => handle.close(), left());
+    if (!closed.done) throw admissionFailure('cleanup', 'The installer file handle close did not settle within the admission deadline');
+    if (closed.failed) throw admissionFailure('cleanup', `The installer file handle close failed: ${message(closed.error)}`, closed.error);
+    handleClosed = true;
+  };
+  try {
+    if (cancelled()) throw admissionFailure('cancelled', 'Installer admission was cancelled before it started', deadline.signal.reason);
+    let before;
+    try { before = await lstat(path); }
+    catch (error) { throw admissionFailure('file', `The installer file could not be read: ${message(error)}`, error); }
+    if (before.isSymbolicLink() || !before.isFile() || before.nlink !== 1 || before.size !== plan.size) {
+      throw admissionFailure('file', 'The installer must be one plain, unlinked file of the pinned size');
+    }
+    try { handle = await open(path, 'r'); }
+    catch (error) { throw admissionFailure('file', `The installer file could not be opened: ${message(error)}`, error); }
+    let opened;
+    try { opened = await handle.stat(); }
+    catch (error) { throw admissionFailure('file', `The installer file state could not be read: ${message(error)}`, error); }
+    if (!opened.isFile() || opened.nlink !== 1 || opened.size !== plan.size || !sameDesktopFileState(desktopFileState(before), desktopFileState(opened))) {
+      throw admissionFailure('file', 'The opened installer is not the same plain file that was checked');
+    }
+    const hash = createHash('sha512');
+    const buffer = Buffer.allocUnsafe(64 * 1024);
+    let read = 0;
+    for (;;) {
+      if (cancelled()) throw admissionFailure('cancelled', 'Installer admission was cancelled during the file read', deadline.signal.reason);
+      const part = handle.read(buffer, 0, buffer.length, null); part.catch(() => {});
+      const chunk = await Promise.race([part, expired]);
+      if (chunk.bytesRead === 0) break;
+      read += chunk.bytesRead;
+      if (read > plan.size) throw admissionFailure('file', 'The installer file exceeded the pinned size');
+      hash.update(buffer.subarray(0, chunk.bytesRead));
+    }
+    if (read !== plan.size) throw admissionFailure('file', 'The installer file was truncated below the pinned size');
+    if (hash.digest('base64') !== plan.sha512) throw admissionFailure('file', 'The installer file failed SHA-512 verification');
+    let after; let pathAfter;
+    try { after = await handle.stat(); pathAfter = await lstat(path); }
+    catch (error) { throw admissionFailure('file', `The installer file state could not be re-read: ${message(error)}`, error); }
+    if (pathAfter.isSymbolicLink() || !pathAfter.isFile() || pathAfter.nlink !== 1
+      || !sameDesktopFileState(desktopFileState(opened), desktopFileState(after))
+      || !sameDesktopFileState(desktopFileState(opened), desktopFileState(pathAfter))) {
+      throw admissionFailure('file', 'The installer file changed during verification');
+    }
+    const reader = readSignature ?? readAuthenticodeSignature;
+    const signaturePromise = Promise.resolve().then(() => reader(path, { signal: deadline.signal }));
+    signaturePromise.catch(() => {});
+    let signature;
+    try { signature = await Promise.race([signaturePromise, expired]); }
+    catch (error) {
+      if (error?.stage) throw error;
+      if (cancelled()) throw admissionFailure('cancelled', 'Installer admission was cancelled during signature verification', deadline.signal.reason);
+      throw admissionFailure('signature', message(error), error);
+    }
+    const signer = parseDshDesktopSignature(signature, publisher);
+    await closeHandle();
+    if (cancelled()) throw admissionFailure('cancelled', 'Installer admission was cancelled before its final decision', deadline.signal.reason);
+    return { path, version: plan.version, size: plan.size, integrity: `sha512-${plan.sha512}`, filename: plan.filename, publisher: signer };
+  } catch (error) {
+    failure = error;
+    throw error;
+  } finally {
+    if (handle && !handleClosed) {
+      const closed = await settleWithin(() => handle.close(), left());
+      // The main path reports its own close failure; a best-effort cleanup never replaces the original outcome.
+      if ((!closed.done || closed.failed) && failure !== null && (typeof failure === 'object' || typeof failure === 'function')) {
+        try { failure.cleanupError = closed.done ? `The installer file handle close failed: ${message(closed.error)}` : 'The installer file handle close did not settle within the admission deadline'; } catch { /* A frozen failure keeps its own message. */ }
+      }
+    }
+    clearTimeout(timer);
+    if (signal) signal.removeEventListener('abort', forward);
+  }
+}
 
 /** Desktop release needs the Host's own exit, the official uninstall and both registration cleanups; a kill is not release. */
 export function hasDesktopCleanupProof(cleanup) {

@@ -1,8 +1,8 @@
-# C04-I03 阶段 A 交付说明（供 root 审查）
+# C04-I03 交付说明（阶段 A/B，供 root 审查）
 
-执行 `cworker1`，分支 `codex/core-refactor-pre-tui`。派单基线 `521e889d07831244456c80ac804541d7047509e8`；研究文件提交 `86f167e5b518989a0301c2e366c27382e4cffa7c`。本文件所在提交为阶段 A 终点（最终 HEAD 见本轮回报）。开工与收尾均核对：工作区仅原未跟踪 `docs/代码消息投递.md`，未动未 stage。
+执行 `cworker1`，分支 `codex/core-refactor-pre-tui`。阶段 A 派单基线 `521e889d07831244456c80ac804541d7047509e8`，研究文件提交 `86f167e5b518989a0301c2e366c27382e4cffa7c`。阶段 B 新基线 `e1dbefda0e3f7785d6088f1cb7afded1390bc06b`；RED 提交 `4c1e7c977a9ea88c0172263cb7d9a07e7af21e44`，GREEN 与文档同提交（最终 HEAD 见本轮回报）。开工与收尾均核对：工作区仅原未跟踪 `docs/代码消息投递.md`，未动未 stage。
 
-阶段 A 只新增两份文档，不改产品/测试，不新增功能文件；未下载/执行官方 EXE，未安装/卸载/启停 Desktop 或 Host，未写注册表/协议/用户配置，未发新增网络请求，未跑 npm 全量或原生 probe。
+阶段 A 只新增两份文档；阶段 B 只改 `scripts/dsh-compat-ci.mjs`、`test/dsh-compat-ci.test.ts` 和本目录证据文档，不新增功能文件。两个阶段均未下载/执行官方 EXE，未安装/卸载/启停 Desktop 或 Host，未写注册表/协议/用户配置，未发新增网络请求，未跑真实签名环境或原生 probe。
 
 ## 一、交付
 
@@ -43,27 +43,30 @@
 - 因此预期发布者必须来自独立于待校验文件的材料；当前没有可信默认值。不得编造 DeepSeek 主体、thumbprint 或 GUID，也不得从待校验文件/报告回抄期望值。
 - 最窄接口是调用方提供 `{ publisher: { subject, thumbprint } }`，缺失即拒绝；只给 `status:'Valid'` 不放行。
 
-## 三、最窄后续实现建议（阶段 B 候选，尚未下发）
+## 三、阶段 B：已实现的只读准入（同单）
 
-只改两个既有文件，不新增功能文件：
+阶段 B 只改两个既有文件，不新增功能文件：
 
 - `scripts/dsh-compat-ci.mjs`
-  - `parseDshDesktopAdmissionPolicy(input)`：严格校验调用方策略，无默认值。
-  - `admitDshDesktopInstaller({ path, artifact, policy, readSignature })`：绝对路径/普通文件 → 重算 SHA-512 与 I02 `artifact.integrity` 相等 → `status === 'Valid'` → subject/thumbprint 严格相等；任一步失败即抛错，调用方不得 spawn。
-  - `runDshDesktopInstaller({ admitted, plan, signal, timeoutMs })`：`plan` 必须显式提供 `arguments` 与绝对 `root`；不提供默认静默开关/默认目录/默认卸载器名；复用 `runDshProcess`。
-  - `runDshDesktopUninstaller({ admitted, plan, signal, timeoutMs })`：显式提供绝对卸载器路径与参数；只返回进程证据，不设置 `uninstalled`。
+  - 私有 `parseDshDesktopPublisherPolicy`：严格校验 `{ publisher: { subject, thumbprint } }`，无默认值；缺失/畸形在文件读取和子进程前拒绝。
+  - 公开 `admitDshDesktopInstaller({ path, artifact, policy, readSignature?, signal?, timeoutMs? })`：复用 `desktopInstallerPlan` 重推导发行物身份；绝对本地路径、普通独占文件；流式 SHA-512 按固定大小有界；同一句柄前后状态核验；签名先按 unknown 解析，只有 `Valid` 且 subject/thumbprint 严格相符才通过。
+  - 既有模块内的默认 Windows 只读签名适配器：`powershell.exe` + 常量脚本 + `-NoProfile -NonInteractive -WindowStyle Hidden -Command`，路径通过 `DSH_ADMIT_SIGNATURE_PATH` 环境字段传递，`shell:false`、`windowsHide:true`、64 KiB 输出上限、等待 `close`。
+  - 单一截止覆盖读盘、签名读取和最终裁决；取消/超时不返回成功；`finally` 关闭句柄、清除 timer/listener。
 - `test/dsh-compat-ci.test.ts`
-  - 新增一组准入/执行边界用例，注入 `readSignature` 与进程执行器；不跑真实安装器。
-  - 关键反例：签名/摘要不符零安装（spawn 次数 0、无目录）；已有/外来安装不触碰；部分安装保留；未确认 Host 退出零卸载；卸载失败停止序列；卸载退出 0 但注册残留不得 PASS；自有目录删除失败保留归属。
-  - 既有用例不改；`main()`、workflow、reporter、UI driver、Web 默认入口、全局安装均不动。
+  - 新增 9 条准入用例，注入 `readSignature` 与受控 `spawn`；不跑真实安装器，不读取用户证书。
+  - 反例覆盖：策略缺失/畸形、发行物身份不符、大小/摘要不符、链接/非普通文件、读后替换、签名状态/subject/thumbprint 不符、坏 JSON/数组/null、预先/执行中取消、超时、默认适配器输出超限/异常退出/信号/spawn 错误/挂起。
+  - 既有 54 条用例不改；`main()`、workflow、reporter、UI driver、Web 默认入口、全局安装均不动。
 
-可立即实现的是“失败关闭的准入/执行边界”；必须保留待真实包或干净 runner 验证的是静默参数、目录参数、自启动、卸载器名、默认根、注册表键、发布者默认值与真实签名结果。注入测试不能替代 Desktop 原生验收。
+**未实现、也不得据此执行的部分**：没有 `runDshDesktopInstaller`/`runDshDesktopUninstaller` wrapper；显式 `arguments` + 绝对 `root` 只是声明，不证明安装位置；卸载 spawn 前没有 Host 退出守卫；`runDshProcess` 不接 `AbortSignal`，stdout/stderr 各只保留最后 128000 字符且无 `truncated` 标记，timeout kill 后立即返回、不等 `close`；准入结果不绑定未来实际执行的字节。真实安装/卸载必须等独立干净 runner、安装前 baseline、目的地约束方案和独立可信发布者策略。
+
+必须保留待真实包或干净 runner 验证的是静默参数、目录参数、自启动、卸载器名、默认根、注册表键、发布者默认值与真实签名结果。注入测试不能替代 Desktop 原生验收。
 
 ## 四、用户拍板与影响
 
 - 阶段 A 只新增研究/证据文档，**不触发用户拍板**。
-- 阶段 B 若按上述范围只改两个既有文件，仍不需要新增功能文件，也不改变既有 CLI/报告/生命周期合同；但需 root 明确白名单后才实施。
-- 需要用户决定的事项：真实官方包安装/卸载（独立干净 runner、安装前 baseline、实际执行）、可信发布者策略的具体值、默认 Authenticode 适配器若引入新的用户操作/工具，或任何新增功能文件。当前方案不包含这些。
+- 阶段 B 只改两个既有文件和证据文档，不新增功能文件、依赖或用户命令，也不改变既有 CLI/报告/生命周期合同；**不触发用户拍板**。
+- 默认 Authenticode 适配器在既有模块内实现，不引入新的用户操作/工具，属于技术前置，不是用户决定。`subject+thumbprint` 同时固定是 root 为本轮内部 CI 选定的比较策略，不是上游已证实合同；当前没有可信默认值，未来策略值仍须独立材料，但资料核实本身不自动升级为用户选择题。
+- 需要用户决定的事项：真实官方包安装/卸载（独立干净 runner、安装前 baseline、实际执行）、要求终端用户手工配置策略、任何新增功能文件或必需用户操作变化。当前方案不包含这些。
 
 ## 五、边界与风险
 
@@ -73,6 +76,14 @@
 - 卸载器保留 Harness home 且锁定残留不令卸载失败；卸载退出码 0 不能证明数据/注册清理。
 - 被拒读取与 I02 保留的 TEMP/cache 不属本单清理，均未触碰、未代删、未重试。
 
-## 六、停止
+## 六、阶段 B 交付与验证记录
 
-阶段 A 完成。停写等待 root 复审；不自行进入阶段 B 或下一个功能任务，不轮询，不关闭 C04。
+- 基线/提交：新基线 `e1dbefda0e3f7785d6088f1cb7afded1390bc06b`；RED `4c1e7c977a9ea88c0172263cb7d9a07e7af21e44`；GREEN 与两份文档、`I03-B-check.txt` 同提交，最终 HEAD 见本轮回报。只按显式路径本地 checkpoint，无 push/amend/切分支/共享回退。
+- RED：新增 9 条准入用例先失败（`9 failed | 54 passed`），证明是业务断言而非 missing export；完整输出与 `RED_EXIT=1` 在 `I03-B-check.txt`。
+- GREEN：定向套件 `63 passed`，`GREEN_EXIT=0`；`node --check` 通过；`npx eslint scripts/dsh-compat-ci.mjs test/dsh-compat-ci.test.ts` 通过；`npm run build` 通过。
+- 完整检查：四个 `VITEST_MAX/MIN_FORKS/THREADS=2/1` 下只跑一次 `npm run check`，`231` 个文件通过、`2593` 个测试通过、`11` 个既有 live 用例跳过，`FULL_CHECK_EXIT=0`；完整 stdout/stderr 在 `I03-B-check.txt`，未筛全量、未增 skip、未改语义。
+- 清理：只使用本轮独占 TEMP fixture；测试在 `finally` 释放 gate/句柄/补丁。未触碰旧日志、baseline、root 记录、被拒 5 个 HTTP 资源或 I02/W05 历史 TEMP/cache。
+
+## 七、停止
+
+阶段 B 交付完成。停写等待 root 双轴复审；不自行进入安装/卸载执行阶段、不关闭 I03 整体或 C04，不轮询。
