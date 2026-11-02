@@ -20,7 +20,7 @@
 
 本会话不再派发通信相关子单。用户明确将全部通信任务交给现有 Codex Desktop 会话 **Bug修复2**，由用户亲自对接；见[完整交接](communication-handoff-bugfix2-20261029.md)。W08 最新研究交付到 `1066e30`，尚未完成 root 最终验收，按真实状态随证据交接。短信封内部 subagent 已停写，确认没有任何代码/测试修改。
 
-当前C04-I03阶段B R3交付c6b1782经[双轴复审](evidence/c04-worker-20261029/I03-B-R3-review.md)：Standards无未决，fixture迟到句柄已修；同指纹内容复核已修，但新增二次读取后未再次核对最终路径，实证读取中路径替换仍假成功。同单[R3任务末节补充](evidence/c04-worker-20261029/I03-B-R3-task.md)仅修此顺序与反例。root76/76、worker完整11失败/2595通过/11跳过保留，不逐条断言同因，不扩通信白名单。仍只读准入，安装/卸载执行层待证据，不新增用户步骤/功能文件，本机不实际安装Desktop。[C04-I02组件产品已最终验收](evidence/c04-worker-20261029/I02-final-review.md)：产品33f9c05、fixture6648c91、证据219a35c，root54/54、worker2584/11；产品不重开，原测试helper收尾缺口已随当前fixture修复。一处45字节合成TEMP fixture删除受阻保留，I03不代删或重试；规格/失败/日志继续保留。[I01核心已验收](evidence/c04-worker-20261029/I01-final-review.md)，I03整体与C04父项未完成。
+当前C04-I03阶段B最终6fb9ac1已[代码复审收口](evidence/c04-worker-20261029/I03-B-review-closure.md)：Standards/Spec均0项未决，root独立77/77，无GC错误；最后完整17失败/2590通过/11跳过仍保留，不逐条断言同因，不扩通信白名单。worker停写，无待修派单，不进入安装执行或后续任务。I03整合验证、可信实际发布者/安装卸载合同及干净runner证据仍缺，I03整体与C04未完成。保留只读准入范围，不新增用户步骤/功能文件、本机不实际安装Desktop。[C04-I02组件产品已最终验收](evidence/c04-worker-20261029/I02-final-review.md)：产品33f9c05、fixture6648c91、证据219a35c，root54/54、worker2584/11；产品不重开，测试helper收尾已修。一处45字节合成TEMP fixture删除受阻保留，I03不代删或重试；原任务/规格/失败/raw保留为历史证据，已闭合代码发现不再作活动引用。[I01核心已验收](evidence/c04-worker-20261029/I01-final-review.md)。
 
 [C08-I01 默认 Harness 技能维护已最终验收](evidence/c08-worker-20261029/I01-final-review.md)：最终产品 `a77a39b`，两轴复审通过，root 七套件87项通过；worker完整check第二次2544通过/11原有跳过，最多2/最少1 worker。首次全量的machines断言失败仍完整保留，根因未确认；不以随后通过替代根因证据。I01/R1/R2移出活动子单，原任务书仅作批准证据。[I02 生命周期说明已最终验收](evidence/c13-worker-20261029/I02-final-review.md)，继续作为合同输入。新增功能文件或用户必需操作仍须先决定。
 
