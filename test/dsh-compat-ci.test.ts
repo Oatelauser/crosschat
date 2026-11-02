@@ -1143,13 +1143,17 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
       let release!: () => void;
       const gate = new Promise<void>((resolve) => { release = resolve; });
       const lateBody = new ReadableStream<Uint8Array>({ cancel: () => { cancelStarted = true; return gate; } });
-      const failure: unknown = await download(async () => new Promise((resolve) => setTimeout(() => resolve(response(lateBody)), 150)), { directory: target, timeoutMs: 100 }).catch((error: unknown) => error);
-      expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 100ms deadline' });
-      expect(cancelStarted).toBe(true);
-      expect(notesOf(failure)).toContain('cancel had not settled at return');
-      expect(lateBody.locked).toBe(true);
-      release();
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      try {
+        const failure: unknown = await download(async () => new Promise((resolve) => setTimeout(() => resolve(response(lateBody)), 150)), { directory: target, timeoutMs: 100 }).catch((error: unknown) => error);
+        expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 100ms deadline' });
+        expect(cancelStarted).toBe(true);
+        expect(notesOf(failure)).toContain('cancel had not settled at return');
+        expect(lateBody.locked).toBe(true);
+      } finally {
+        // The gate is released even when a return-time assertion fails; cleanup never depends on the happy path.
+        release();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
       expect(lateBody.locked).toBe(false);
       expect(readdirSync(target)).toEqual([]);
     });
