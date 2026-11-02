@@ -1079,6 +1079,82 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
     });
   });
 
+  it('removes a late-created file exactly once and never deletes a replacement', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      const retained = join(target, installerName);
+      let rmCalls = 0;
+      rmInjection.impl = async (...args: unknown[]) => {
+        rmCalls += 1;
+        const removed = await rmInjection.real!(...args);
+        // Another attempt may create the same path right after this call's own file is gone.
+        await writeFile(retained, 'replacement bytes');
+        return removed;
+      };
+      const late = lateOpen(() => {});
+      try {
+        const attempt = download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 200 });
+        attempt.catch(() => {});
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        late.release();
+        const failure: unknown = await bounded(attempt, 3000).catch((error: unknown) => error);
+        expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 200ms deadline' });
+        expect((failure as { partialFile?: unknown }).partialFile).toBeUndefined();
+        expect(rmCalls).toBe(1);
+        expect(await readFile(retained, 'utf8')).toBe('replacement bytes');
+      } finally {
+        openInjection.impl = null;
+        rmInjection.impl = null;
+        await rm(retained, { force: true }).catch(() => {});
+      }
+    });
+  });
+
+  it('does not report a partial path after a successful late close and removal', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      const retained = join(target, installerName);
+      let rmCalls = 0;
+      rmInjection.impl = async (...args: unknown[]) => { rmCalls += 1; return rmInjection.real!(...args); };
+      const late = lateOpen(() => {});
+      try {
+        const attempt = download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 200 });
+        attempt.catch(() => {});
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        late.release();
+        const failure: unknown = await bounded(attempt, 3000).catch((error: unknown) => error);
+        expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 200ms deadline' });
+        expect((failure as { partialFile?: unknown }).partialFile).toBeUndefined();
+        expect((failure as { cleanupError?: unknown }).cleanupError).toBeUndefined();
+        expect(rmCalls).toBe(1);
+        expect(existsSync(retained)).toBe(false);
+      } finally {
+        openInjection.impl = null;
+        rmInjection.impl = null;
+        await rm(retained, { force: true }).catch(() => {});
+      }
+    });
+  });
+
+  it('reports a late response whose cancel is still undecided when cleanup returns', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      let cancelStarted = false;
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const lateBody = new ReadableStream<Uint8Array>({ cancel: () => { cancelStarted = true; return gate; } });
+      const failure: unknown = await download(async () => new Promise((resolve) => setTimeout(() => resolve(response(lateBody)), 150)), { directory: target, timeoutMs: 100 }).catch((error: unknown) => error);
+      expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 100ms deadline' });
+      expect(cancelStarted).toBe(true);
+      expect(notesOf(failure)).toContain('cancel had not settled at return');
+      expect(lateBody.locked).toBe(true);
+      release();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(lateBody.locked).toBe(false);
+      expect(readdirSync(target)).toEqual([]);
+    });
+  });
+
   it('cancels a late response, releases its lock and reports it as undecided at return', async () => {
     await isolated(async (output) => {
       const target = join(output, 'owned-desktop-download'); await mkdir(target);
