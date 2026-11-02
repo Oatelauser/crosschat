@@ -354,7 +354,11 @@ const desktopProcessOutputMaxBytes = 128000;
 const desktopProcessCloseMs = 1000;
 const maxTimerMs = 2147483647;
 
-/** Runs one direct Desktop child; close proves only that child, never descendants, Host release or install success. */
+/**
+ * Runs one direct Desktop child; close proves only that child, never descendants, Host release or install success.
+ * The deadline starts before spawn and is re-checked at the close adjudication, so a delayed timer cannot report a
+ * late success. `failed` is the explicit failure discriminant: a falsy or frozen first cause is still a failure.
+ */
 export async function runDshDesktopProcess(binary, args, options = {}) {
   const { cwd, env, signal, spawnImpl = spawn } = options;
   const timeoutMs = options.timeoutMs;
@@ -363,48 +367,56 @@ export async function runDshDesktopProcess(binary, args, options = {}) {
   if (cwd !== undefined && (typeof cwd !== 'string' || !isAbsolute(cwd) || cwd.includes('\0'))) throw new Error('Desktop process cwd must be an absolute path without NUL');
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > maxTimerMs) throw new Error('Desktop process deadline must be a valid positive integer of milliseconds');
   if (typeof spawnImpl !== 'function') throw new Error('Desktop process spawn implementation must be a function');
-  const cancelledBeforeSpawn = Boolean(signal?.aborted);
-  if (cancelledBeforeSpawn) return Promise.resolve({ code: null, signal: null, pid: null, stdout: '', stderr: '', timedOut: false,
-    cancelled: true, truncated: false, closed: false, failure: signal.reason, releaseUnclear: ['The Desktop process was cancelled before spawn'] });
+  if (signal?.aborted) return { code: null, signal: null, pid: null, stdout: '', stderr: '', timedOut: false,
+    cancelled: true, truncated: false, closed: false, failed: true, failure: signal.reason,
+    releaseUnclear: ['The Desktop process was cancelled before spawn'], secondaryProblems: [] };
 
+  const deadlineAt = Date.now() + timeoutMs;
+  const expired = () => Date.now() >= deadlineAt;
+  const deadlineError = () => new Error(`Desktop process exceeded its ${timeoutMs}ms deadline`);
   return new Promise((resolve) => {
     let child;
     try {
       child = spawnImpl(binary, args, { cwd, env, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (failure) {
       resolve({ code: null, signal: null, pid: null, stdout: '', stderr: '', timedOut: false, cancelled: false,
-        truncated: false, closed: false, failure, releaseUnclear: ['The Desktop process could not be spawned'] });
+        truncated: false, closed: false, failed: true, failure, releaseUnclear: ['The Desktop process could not be spawned'], secondaryProblems: [] });
       return;
     }
-    const stdout = []; const stderr = []; const releaseUnclear = [];
+    const stdout = []; const stderr = []; const releaseUnclear = []; const secondaryProblems = [];
     let outputBytes = 0; let code = null; let signalName = null; let timedOut = false; let cancelled = false;
     let truncated = false; let closed = false; let failure; let failing = false; let settled = false; let closeTimer; let deadlineTimer;
+    const note = (text) => { if (!settled) secondaryProblems.push(text); };
     const collect = (target, chunk) => {
       if (settled || failing) return;
       const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       const remaining = desktopProcessOutputMaxBytes - outputBytes;
-      if (remaining > 0) target.push(bytes.subarray(0, remaining));
+      // Only an independent bounded copy is kept, so no small view pins a huge chunk's backing buffer.
+      if (remaining > 0) target.push(Buffer.from(bytes.subarray(0, remaining)));
       outputBytes += Math.min(bytes.length, Math.max(remaining, 0));
       if (bytes.length > remaining) { truncated = true; beginFailure(new Error('Desktop process exceeded its combined output budget')); }
     };
     const onStdout = (chunk) => collect(stdout, chunk);
     const onStderr = (chunk) => collect(stderr, chunk);
+    // Data and abort listeners are removed at return; pipe error listeners stay as the minimal late-error owner.
     const detach = () => {
       child.stdout?.removeListener?.('data', onStdout); child.stderr?.removeListener?.('data', onStderr);
-      child.stdout?.removeListener?.('error', onPipeError); child.stderr?.removeListener?.('error', onPipeError);
       if (signal) signal.removeEventListener('abort', onAbort);
     };
     const snapshot = () => ({ code, signal: signalName, pid: child.pid ?? null, stdout: Buffer.concat(stdout).toString('utf8'),
-      stderr: Buffer.concat(stderr).toString('utf8'), timedOut, cancelled, truncated, closed, failure,
-      releaseUnclear: releaseUnclear.slice() });
+      stderr: Buffer.concat(stderr).toString('utf8'), timedOut, cancelled, truncated, closed, failed: failing, failure,
+      releaseUnclear: releaseUnclear.slice(), secondaryProblems: secondaryProblems.slice() });
+    const release = (label, operation) => {
+      try { operation(); } catch (error) { secondaryProblems.push(`The ${label} could not be released: ${message(error)}`); }
+    };
     const finish = () => {
       if (settled) return;
       settled = true; clearTimeout(deadlineTimer); clearTimeout(closeTimer); detach();
       child.on?.('error', () => {});
       if (!closed) {
-        try { child.stdout?.destroy?.(); } catch { /* Parent pipe release is best effort. */ }
-        try { child.stderr?.destroy?.(); } catch { /* Parent pipe release is best effort. */ }
-        try { child.unref?.(); } catch { /* The child may already be gone. */ }
+        release('stdout pipe', () => child.stdout?.destroy?.());
+        release('stderr pipe', () => child.stderr?.destroy?.());
+        release('child reference', () => child.unref?.());
       }
       resolve(snapshot());
     };
@@ -419,14 +431,29 @@ export async function runDshDesktopProcess(binary, args, options = {}) {
         finish();
       }, desktopProcessCloseMs);
     };
-    const onAbort = () => { cancelled = true; beginFailure(signal?.reason); };
-    const onPipeError = (error) => beginFailure(error);
-    deadlineTimer = setTimeout(() => { timedOut = true; beginFailure(new Error(`Desktop process exceeded its ${timeoutMs}ms deadline`)); }, timeoutMs);
+    // A later child or pipe error is observed without replacing the first cause or reopening the release wait.
+    const later = (label, error) => {
+      if (settled) return;
+      if (failing) note(`A later ${label} error: ${message(error)}`);
+      else beginFailure(error);
+    };
+    const onStdoutError = (error) => later('stdout pipe', error);
+    const onStderrError = (error) => later('stderr pipe', error);
+    const onAbort = () => { if (settled) return; cancelled = true; beginFailure(signal?.reason); };
     child.stdout?.on?.('data', onStdout); child.stderr?.on?.('data', onStderr);
-    child.stdout?.on?.('error', onPipeError); child.stderr?.on?.('error', onPipeError);
-    child.on?.('error', (error) => beginFailure(error));
-    child.once?.('close', (nextCode, nextSignal) => { code = nextCode; signalName = nextSignal; closed = true; finish(); });
+    child.stdout?.on?.('error', onStdoutError); child.stderr?.on?.('error', onStderrError);
+    child.on?.('error', (error) => later('child', error));
+    child.once?.('close', (nextCode, nextSignal) => {
+      code = nextCode; signalName = nextSignal; closed = true;
+      // The final adjudication re-checks expiry even when the timer callback never got to run.
+      if (expired()) { timedOut = true; if (!failing) { failing = true; failure = deadlineError(); } }
+      finish();
+    });
     if (signal) { signal.addEventListener('abort', onAbort, { once: true }); if (signal.aborted) onAbort(); }
+    // The spawn attempt is already inside the deadline; a spawn that consumed it cannot report a normal success.
+    const remaining = Math.max(deadlineAt - Date.now(), 0);
+    if (remaining === 0) { timedOut = true; beginFailure(deadlineError()); }
+    else deadlineTimer = setTimeout(() => { timedOut = true; if (!failing) beginFailure(deadlineError()); }, remaining);
   });
 }
 

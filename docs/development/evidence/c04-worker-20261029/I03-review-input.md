@@ -131,7 +131,7 @@
 
 新增 `runDshDesktopProcess(binary, args, options)`，只供后续 Desktop 安装/卸载操作调用，本单不接入执行流程。`binary` 与可选 `cwd` 必须是绝对路径，`args` 必须为无 NUL 字符串数组；`timeoutMs` 为 Node 定时器范围内的有限正整数。`options` 可含 `signal`、`env` 和仅用于受控测试的小型 `spawnImpl`，实际 spawn 固定 `shell:false`、`windowsHide:true`、stdin ignore、stdout/stderr pipe。
 
-返回快照字段至少为 `code`、`signal`、`pid`、`stdout`、`stderr`、`timedOut`、`cancelled`、`truncated`、`closed`，并在失败时保留 `failure`、`releaseUnclear` 与收尾观察。stdout/stderr 共享固定 128000 字节预算；只有直接 child 的 `close` 事件令 `closed:true`。超时、取消、超限、spawn/运行/pipe/收尾失败一旦发生，即使随后 `close(0)` 也不恢复成功。首次失败主因保持原值；失败后的 1 秒总 close 等待预算只启动一次，耗尽后返回 `closed:false` 和释放未确认，迟到 close/error 不修改已返回快照。
+返回快照字段至少为 `code`、`signal`、`pid`、`stdout`、`stderr`、`timedOut`、`cancelled`、`truncated`、`closed`、`failed`，并在失败时保留 `failure`、`releaseUnclear`、`secondaryProblems` 与收尾观察。stdout/stderr 共享固定 128000 字节预算；只有直接 child 的 `close` 事件令 `closed:true`。超时、取消、超限、spawn/运行/pipe/收尾失败一旦发生，即使随后 `close(0)` 也不恢复成功。`failed` 是明确失败判别，`failure` 保留原始首因（含 `undefined`/`0`/`false`/`''`/`null`，不以 truthiness 判断）。截止从 spawn 尝试前起算，并在 close 裁决时复查；首次失败主因保持原值；失败后的 1 秒总 close 等待预算只启动一次，耗尽后返回 `closed:false` 和释放未确认，迟到 close/error 不修改已返回快照。
 
 该入口只证明直接子进程的本次观测，不证明 Host 自然退出、子孙释放、安装成功、回滚或卸载完成；实际参数、执行字节重核、目的地和卸载前守卫仍待后续证据与接线。
 
@@ -139,13 +139,29 @@
 
 - 实现位于既有 `scripts/dsh-compat-ci.mjs`，只新增 `runDshDesktopProcess`；`runDshProcess`、Web main、workflow/reporter、I01 报告/串行合同、I02 下载器、阶段B准入/签名适配器均未改。未接入 main/installer/uninstaller，未新增依赖、用户命令或功能文件。
 - 校验：绝对 `binary`/可选绝对 `cwd`、无 NUL 的字符串 `args`、Node 定时器范围内的正整数 `timeoutMs`；固定 `shell:false`、`windowsHide:true`、stdin ignore。预先取消返回 `cancelled:true` 且零 spawn；无效输入以拒绝结束。
-- 退出事实：只有本次 child 的 `close` 令 `closed:true`；`exit` 单独不结束调用。快照含 `code`、`signal`、`pid`、`stdout`、`stderr`、`timedOut`、`cancelled`、`truncated`、`closed`、`failure`、`releaseUnclear`。非零/信号退出照实返回。
-- 输出与截止：stdout/stderr 共享固定 128000 字节预算，超限标记 `truncated` 并进入失败收尾；截止 timer 只设一次，输出/exit 不能推迟。
-- 收尾：spawn 同步抛错直接报告原因；child `error`、pipe `error`、取消、超限、截止都走唯一 `beginFailure`，只保留首个主因并调用一次 `kill`；从首次失败起固定 1 秒 close 等待，budget 耗尽报告 `closed:false`、`releaseUnclear`，并 destroy 父侧管道、unref child、移除 data/pipe/abort 监听、清 timer；`kill` 抛错或返回 false 记录在 `releaseUnclear`，仍等待 close。返回后迟到 close/error 不改变已返回快照，也不产生未处理异常。
-- 证据：业务 RED `7 failed | 77 passed (84)`，`RED_EXIT=1`（临时不可工作占位，失败为目标行为断言）；补真实 Node child 用例后定向 GREEN `85 passed`，`TARGETED_EXIT=0`。原始定向与全量输出见 [I03-C1-check.txt](I03-C1-check.txt)。`node --check`、定向 ESLint、`npm run build`、代码 diff 检查通过。
+- 退出事实：只有本次 child 的 `close` 令 `closed:true`；`exit` 单独不结束调用。快照含 `code`、`signal`、`pid`、`stdout`、`stderr`、`timedOut`、`cancelled`、`truncated`、`closed`、`failed`、`failure`、`releaseUnclear`、`secondaryProblems`。非零/信号退出照实返回。
+- 输出与截止：stdout/stderr 共享固定 128000 字节预算，超限标记 `truncated` 并进入失败收尾；截止从 spawn 尝试前起算，输出/exit 不能推迟，close 裁决再次核对是否过期。
+- 收尾：spawn 同步抛错直接报告原因；child `error`、pipe `error`、取消、超限、截止都走唯一 `beginFailure`，只保留首个主因并调用一次 `kill`；从首次失败起固定 1 秒 close 等待，budget 耗尽报告 `closed:false`、`releaseUnclear`，并 destroy 父侧管道、unref child、移除 data/abort 监听、清 timer；`kill` 抛错或返回 false 记录在 `releaseUnclear`，仍等待 close。返回后迟到 close/error 不改变已返回快照；pipe 的 error 监听保留到释放，作为迟到错误的唯一 owner，因此移除 data 监听不会让迟到 pipe error 变成未处理异常。该保证只覆盖本次直接 child/父侧 pipe，不覆盖返回后事件的可见性更新或子孙进程。
+- 证据：业务 RED `7 failed | 77 passed (84)`，`RED_EXIT=1`（临时不可工作占位，失败为目标行为断言）；补真实 Node child 用例后定向 GREEN `85 passed`，`TARGETED_EXIT=0`。原始定向与全量输出见 [I03-C1-check.txt](I03-C1-check.txt)；该文件只有 RED 摘要，原始 RED 未留存（见 R1 的 S3 说明）。`node --check`、定向 ESLint、`npm run build`、代码 diff 检查通过。
 - 完整检查：四个 `VITEST_MAX/MIN_FORKS/THREADS=2/1`、`CROSSCHAT_LIVE` 未启用下只跑一次 `npm run check`，`FULL_CHECK_EXIT=1`：`11 failed | 2604 passed | 11 skipped`，`8 failed` 文件 / `223 passed` / `3 skipped`。首败 `test/c14-conversation-refinement.test.ts`（`Test timed out in 5000ms`）；其余失败在 `c14-explicit-send`、`conversation-summary`、`conversations`、`dsh-send`、`send-command`、`send-handle`、`tool-type-observations`。这些文件本轮零 diff，原样保留原始输出，未连跑全量、未放宽断言或加 skip，不逐条断言为同一原因。
 - 未测边界：只用少量真实自有 Node 子进程与受控 fake child/pipe；未运行真实 installer/uninstaller，未启停 Desktop/Host，未写注册表/用户状态。`closed` 只证明直接 child 关闭，不证明子孙释放、Host 自然退出、安装成功、回滚或卸载完成。
 
+### C1-R1 返修与证据
+
+新基线 `ce73aefb9e7fd55fb9aa63051570578460edcfc1`。按首轮复审 S1–S3/F1–F4 逐条补业务反例，先 RED 再最小 GREEN；产品仍只在既有 `scripts/dsh-compat-ci.mjs` 内改 `runDshDesktopProcess`，未改 `runDshProcess`、Web main、workflow/reporter、I01/I02、阶段 B 准入或 installer/uninstaller 接线。
+
+- **F1 总截止含 spawn 且在裁决复查**：截止点固定在 spawn 尝试前；spawn 返回后若已过期立即失败；close 裁决再次检查 `Date.now() >= deadlineAt`，不依赖 timer 是否来得及回调。反例：spawn 内同步阻塞 70 ms 后 `close(0)`（`timeoutMs=10`），以及 spawn 后阻塞 70 ms 再 `close(0)`，均返回 `timedOut:true`、`failed:true`，不再误报正常。
+- **F2 只保留预算内独立副本**：采集时对允许字节做 `Buffer.from(bytes.subarray(...))` 拷贝，不再让 128000 字节 view 引用原 8 MiB 分配。反例：写入 8 MiB 后在 `Buffer.concat` 处检查，保留片段总长 128000 且每段 `buffer.byteLength <= 128000`。
+- **F3 明确失败判别与假值首因**：快照新增 `failed`，直接来自内部失败状态，不以 `failure` truthiness 判断；`failure` 保留原始抛值。反例覆盖 `undefined`/`0`/`false`/`''`/`null`：`error(reason)` 后 `close(0)` 均为 `failed:true` 且 `failure` 与 `reason` 同一值；正常路径 `failed:false`。
+- **F4 首因不顶替、次级问题可观察**：首因之后的 child/pipe error 写入 `secondaryProblems`，`destroy`/`unref` 抛错也在返回前记录；首个主因与 `releaseUnclear` 不变，不重开 1 秒等待。反例：冻结首错后 stderr error、`stdout.destroy` 抛错、`unref` 抛错，返回仍保留首错，且 `closed:false`、次级消息可见。
+- **S1 迟到 pipe error 的最小 owner**：返回时只移除 data 与 abort 监听，保留 stdout/stderr 的 error 监听作为迟到错误 owner。反例：预算耗尽返回 `closed:false` 后再 emit stdout/stderr error，不抛未处理异常；已返回快照（JSON 序列化）不变。
+- **S2 真实 child fixture 独立收尾**：新增 fixture 以注入的 `spawnInjection.real` 捕获本次真实 child、登记其完成 promise，`finally` 中请求结束并等待 actual close，断言 `exitCode`/`signalCode` 已落定；用“产品无法确认释放”的受控场景反证 fixture 能独立兜底，不发伪 close、不扫描其它进程。
+- **S3 原始 RED 处置**：复查确认 `I03-C1-check.txt` 只有 RED 摘要，原始输出未独立留存；本轮不补造、不把重演称作最初 RED，明确标注首次原始 RED 缺失、其业务失败未由 raw 审计。本轮新的真实 RED/GREEN 原始输出另存 [I03-C1-R1-check.txt](I03-C1-R1-check.txt)。
+
+**C1-R1 验证**：R1 RED `6 failed | 85 passed (91)`、`RED_EXIT=1`，6 条均为目标行为断言（非 missing export/编译失败）；最小 GREEN 后定向 `91 passed`，正确捕获的退出码为 `GREEN_RERUN_EXIT=0`（首条 GREEN 行的退出码在 shell 中于空 echo 后取值，已在该文件内注明无效并重跑正确捕获）。`node --check`、对应 ESLint（两文件）、`npm run build`、`git diff --check` 通过。一次完整 `npm run check`（四个 `VITEST_MAX/MIN_FORKS/THREADS=2/1`，`CROSSCHAT_LIVE` 未启用）`FULL_CHECK_EXIT=1`：`7 failed | 2614 passed | 11 skipped`，`4 failed` 文件；`test/dsh-compat-ci.test.ts` 在该次全量中 `91 passed`。首败 `test/c14-conversation-refinement.test.ts`（`expected undefined to be 'cA000'`），其余失败在 `caller-source-service`、`conversations`、`send-command`，均为会话状态锁/busy 一类；四个失败文件对本轮基线零 diff。按合同保留首败原始输出，未连续重跑全量、未以定向绿替代、未逐条断言同因。
+
+**未测边界**：仍只用真实自有 Node 子进程与受控 fake child/pipe；未运行真实 installer/uninstaller，未启停 Desktop/Host，未访问注册表/用户配置/证书。`secondaryProblems` 只记录返回前观察到的次级问题；返回后事件仅保持安全收口，不更新已返回快照。
+
 ## 八、停止
 
-阶段 B、同单 R1、R2、R3 与 R3 末节补充交付完成。停写等待 root 双轴复审；不自行进入安装/卸载执行阶段、不关闭 I03 整体或 C04，不轮询。完整检查的会话锁相关失败已如实保留，未以定向绿替代，也未修改白名单外实现。
+阶段 B、同单 R1、R2、R3、R3 末节补充与 C1、C1-R1 交付完成。停写等待 root 双轴复审；不自行进入安装/卸载执行阶段、不关闭 I03 整体或 C04，不轮询。完整检查的会话锁相关失败已如实保留，未以定向绿替代，也未修改白名单外实现。

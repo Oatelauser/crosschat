@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import type { ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { existsSync, readdirSync } from 'node:fs';
@@ -125,6 +126,28 @@ describe('DeepSeek Harness controlled desktop process', () => {
   const run = (fake: FakeChild, extra: Record<string, unknown> = {}) => runDshDesktopProcess(process.execPath, ['-e', ''], {
     timeoutMs: 5000, spawnImpl: vi.fn(() => fake), ...extra,
   });
+  // Fixture ownership for real children: capture the actual process and its close completion, never fake that close.
+  const realChildren = () => {
+    const captured: ChildProcess[] = []; const closed = new Map<ChildProcess, Promise<void>>();
+    return {
+      spawnImpl: (...args: unknown[]) => {
+        const process = (spawnInjection.real as (...input: unknown[]) => ChildProcess)(...args);
+        let release!: () => void;
+        const done = new Promise<void>((resolve) => { release = resolve; });
+        closed.set(process, done); process.once('close', release); captured.push(process);
+        return process;
+      },
+      cleanup: async () => {
+        for (const process of captured) {
+          if (process.exitCode === null && process.signalCode === null) { try { process.kill(); } catch { /* It may already be gone. */ } }
+          const bounded = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('fixture child did not close')), 10000));
+          await Promise.race([closed.get(process), bounded]);
+          expect(process.exitCode !== null || process.signalCode !== null).toBe(true);
+        }
+      },
+    };
+  };
+  const block = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
   it('validates execution inputs and honors pre-cancellation without spawning', async () => {
     const spawnImpl = vi.fn(); const aborted = new AbortController(); aborted.abort(new Error('stop before spawn'));
@@ -147,11 +170,16 @@ describe('DeepSeek Harness controlled desktop process', () => {
   });
 
   it('runs a real controlled Node child and reports only its own close', async () => {
-    const result = await runDshDesktopProcess(process.execPath, ['-e', 'process.stdout.write("out");process.stderr.write("err");process.exitCode=3'], { timeoutMs: 10000 });
-    expect(result).toMatchObject({ code: 3, signal: null, stdout: 'out', stderr: 'err', closed: true, timedOut: false, cancelled: false, truncated: false });
-    expect(typeof result.pid).toBe('number');
-    const stopped = await runDshDesktopProcess(process.execPath, ['-e', 'setTimeout(()=>{},20000)'], { timeoutMs: 150 });
-    expect(stopped).toMatchObject({ timedOut: true, cancelled: false, closed: true });
+    // The fixture owns each real child itself: finally asks this process to stop and waits for its actual close.
+    const fixture = realChildren();
+    try {
+      const result = await runDshDesktopProcess(process.execPath, ['-e', 'process.stdout.write("out");process.stderr.write("err");process.exitCode=3'],
+        { timeoutMs: 10000, spawnImpl: fixture.spawnImpl });
+      expect(result).toMatchObject({ code: 3, signal: null, stdout: 'out', stderr: 'err', closed: true, timedOut: false, cancelled: false, truncated: false });
+      expect(typeof result.pid).toBe('number');
+      const stopped = await runDshDesktopProcess(process.execPath, ['-e', 'setTimeout(()=>{},20000)'], { timeoutMs: 150, spawnImpl: fixture.spawnImpl });
+      expect(stopped).toMatchObject({ timedOut: true, cancelled: false, closed: true });
+    } finally { await fixture.cleanup(); }
   });
 
   it('preserves nonzero and signal exit facts', async () => {
@@ -202,6 +230,93 @@ describe('DeepSeek Harness controlled desktop process', () => {
     const result = await pending;
     expect(result).toMatchObject({ cancelled: true, closed: true, signal: 'SIGTERM' });
     expect(result.releaseUnclear.join('; ')).toContain('kill refused');
+  });
+
+  it('counts the spawn attempt against the deadline and refuses an overdue success', async () => {
+    const fake = child();
+    const pending = runDshDesktopProcess(process.execPath, [], { timeoutMs: 10, spawnImpl: () => { block(70); return fake; } });
+    fake.emit('close', 0, null);
+    const spawned = await pending;
+    expect(spawned).toMatchObject({ code: 0, timedOut: true, failed: true, closed: true });
+    expect(spawned.failure).toBeInstanceOf(Error);
+
+    // The close adjudication itself re-checks the wall clock; a delayed timer does not make expiry a success.
+    const late = child(); const waiting = run(late, { timeoutMs: 10 });
+    block(70); late.emit('close', 0, null);
+    await expect(waiting).resolves.toMatchObject({ code: 0, timedOut: true, failed: true, closed: true });
+  });
+
+  it('keeps only bounded copies of the bytes inside the output budget', async () => {
+    const realConcat = Buffer.concat.bind(Buffer); const seen: Buffer[][] = [];
+    const spy = vi.spyOn(Buffer, 'concat').mockImplementation(((list: Buffer[], length?: number) => {
+      seen.push(list.slice()); return realConcat(list, length);
+    }) as typeof Buffer.concat);
+    try {
+      const fake = child(); const pending = run(fake);
+      fake.stdout.write(Buffer.alloc(8 * 1024 * 1024, 0x61)); fake.emit('close', 0, null);
+      const result = await pending;
+      expect(result).toMatchObject({ truncated: true, closed: true });
+      const retained = seen[0] ?? [];
+      expect(retained.reduce((sum, item) => sum + item.length, 0)).toBe(128000);
+      for (const item of retained) expect(item.buffer.byteLength).toBeLessThanOrEqual(128000);
+    } finally { spy.mockRestore(); }
+  });
+
+  it('keeps falsy first causes and marks the failure explicitly', async () => {
+    for (const reason of [undefined, 0, false, '', null]) {
+      const fake = child(); const pending = run(fake);
+      fake.emit('error', reason); fake.emit('close', 0, null);
+      const result = await pending;
+      expect(result).toMatchObject({ failed: true, closed: true, code: 0 });
+      expect(result.failure).toBe(reason);
+    }
+    const normal = child(); const pending = run(normal); normal.emit('close', 0, null);
+    await expect(pending).resolves.toMatchObject({ failed: false, closed: true, code: 0 });
+  });
+
+  it('records later pipe, child and release problems without replacing the first cause', async () => {
+    vi.useFakeTimers();
+    try {
+      const fake = child(); fake.kill.mockReturnValue(false);
+      fake.unref.mockImplementation(() => { throw new Error('unref refused'); });
+      (fake.stdout as unknown as { destroy: () => void }).destroy = () => { throw new Error('stdout release refused'); };
+      const pending = run(fake); const first = Object.freeze(new Error('first child failure'));
+      fake.emit('error', first);
+      fake.stderr.emit('error', new Error('later stderr failure'));
+      await vi.advanceTimersByTimeAsync(1000);
+      const result = await pending;
+      expect(result).toMatchObject({ failed: true, closed: false, failure: first });
+      const notes = result.secondaryProblems.join('; ');
+      expect(notes).toContain('later stderr failure');
+      expect(notes).toContain('stdout release refused');
+      expect(notes).toContain('unref refused');
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('keeps late pipe errors owned after return without changing the snapshot', async () => {
+    const fake = child();
+    vi.useFakeTimers();
+    let result: Awaited<ReturnType<typeof run>>; let snapshot: string;
+    try {
+      fake.kill.mockReturnValue(false);
+      const pending = run(fake); fake.emit('error', new Error('early failure'));
+      await vi.advanceTimersByTimeAsync(1000);
+      result = await pending; snapshot = JSON.stringify(result);
+      expect(result).toMatchObject({ failed: true, closed: false });
+    } finally { vi.useRealTimers(); }
+    expect(() => fake.stdout.emit('error', new Error('late stdout failure'))).not.toThrow();
+    expect(() => fake.stderr.emit('error', new Error('late stderr failure'))).not.toThrow();
+    expect(JSON.stringify(result!)).toBe(snapshot!);
+  });
+
+  it('lets the fixture end and await its own real child when the product cannot confirm release', async () => {
+    const fixture = realChildren();
+    try {
+      // The product sees a child that never closes; the real process stays owned by the fixture until finally.
+      const hidden = () => { fixture.spawnImpl(process.execPath, ['-e', 'setTimeout(()=>{},20000)'], {}); return child(); };
+      const result = await runDshDesktopProcess(process.execPath, ['-e', 'setTimeout(()=>{},20000)'], { timeoutMs: 100, spawnImpl: hidden });
+      expect(result).toMatchObject({ timedOut: true, closed: false, failed: true });
+    } finally { await fixture.cleanup(); }
   });
 });
 
