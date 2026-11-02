@@ -146,25 +146,21 @@ export async function downloadDshDesktopInstaller(artifact, { directory, signal,
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new Error('The Desktop installer deadline must be a positive integer of milliseconds');
   if (typeof directory !== 'string' || !isAbsolute(directory)) throw new Error('The Desktop installer target directory must be an absolute caller-owned path');
   const path = join(directory, plan.filename);
+  const startedAt = Date.now();
   const deadline = new AbortController();
   const timer = setTimeout(() => deadline.abort(new Error(`Desktop installer exceeded its ${timeoutMs}ms deadline`)), timeoutMs);
   const expired = new Promise((_, reject) => deadline.signal.addEventListener('abort', () => reject(deadline.signal.reason), { once: true }));
   expired.catch(() => {});
   const forward = () => deadline.abort(signal.reason);
-  const stop = () => { clearTimeout(timer); if (signal) signal.removeEventListener('abort', forward); };
   if (signal) { if (signal.aborted) deadline.abort(signal.reason); else signal.addEventListener('abort', forward); }
+  // The live signal and the wall clock both decide: cleanup that crosses the deadline is a failure, not a success.
+  const cancelled = () => Boolean(signal?.aborted) || deadline.signal.aborted || Date.now() - startedAt >= timeoutMs;
   const reflect = (operation) => operation.then((value) => ({ ok: true, value }), (error) => ({ ok: false, error }));
-  // Late arrivals keep an owner: an abandoned response body is cancelled, a late handle is closed and its file removed.
-  const disownResponse = (response) => {
-    const body = response?.body;
-    if (body && typeof body.getReader === 'function') settleWithin(() => body.getReader().cancel(), timeoutMs);
-  };
-  const disownHandle = (late) => settleWithin(() => late.close(), timeoutMs)
-    .then((closed) => (closed.done && !closed.failed ? settleWithin(() => rm(path), timeoutMs) : undefined));
   let delivered; let failed = false; let failure; let retention;
   let reader; let handle; let created = false;
   let arrival; let opening;
   let responseTaken = false; let handleTaken = false; let closing = false; let closeConfirmed = false;
+  const undecided = [];
   try {
     const request = fetchImpl(plan.url, { redirect: 'error', signal: deadline.signal });
     arrival = reflect(request);
@@ -205,19 +201,12 @@ export async function downloadDshDesktopInstaller(artifact, { directory, signal,
     if (!settledClose.ok) throw settledClose.error;
     closeConfirmed = true;
     // Final delivery review under the same deadline: any cancellation or expiry voids the success.
-    if (deadline.signal.aborted) throw new Error('Desktop installer deadline or cancellation preceded delivery', { cause: deadline.signal.reason });
+    if (cancelled()) throw new Error('Desktop installer deadline or cancellation preceded delivery', { cause: deadline.signal.reason });
     delivered = { path, filename: plan.filename, version: plan.version, size: plan.size, integrity: `sha512-${plan.sha512}` };
   } catch (error) { failed = true; failure = error; }
-  finally {
-    // An abort landing between the review and this cleanup converts the delivery into a failure that cleans up.
-    if (!failed && deadline.signal.aborted) {
-      failed = true;
-      failure = new Error('Desktop installer deadline or cancellation preceded delivery', { cause: deadline.signal.reason });
-    }
-    // Attached here so the main flow's flags win the ordering: only unconsumed late arrivals are disowned.
-    if (arrival) arrival.then((result) => { if (!responseTaken && result.ok) disownResponse(result.value); });
-    if (opening) opening.then((result) => { if (!handleTaken && result.ok) disownHandle(result.value); });
-    stop();
+  try {
+    // Bounded cleanup. The transfer timer and the caller listener stay live until the final adjudication below,
+    // so a cancellation or expiry landing during cleanup still voids a recorded delivery.
     const cleanupStart = Date.now();
     const left = () => Math.max(timeoutMs - (Date.now() - cleanupStart), 0);
     const unclear = [];
@@ -231,45 +220,88 @@ export async function downloadDshDesktopInstaller(artifact, { directory, signal,
       unclear.push('the only file close did not confirm completion within the transfer deadline');
     }
     if (reader) {
-      // A cancel that rejects has reached an already terminal stream; only an unsettled cancel can still leak.
-      const cancelled = await settleWithin(() => reader.cancel(), left());
-      if (!cancelled.done) unclear.push('the response body cancel did not settle within the cleanup budget');
+      // A rejecting cancel has reached an already terminal stream; only an unsettled cancel can still leak.
+      const cancelledReader = await settleWithin(() => reader.cancel(), left());
+      if (!cancelledReader.done) unclear.push('the response body cancel did not settle within the cleanup budget');
       try { reader.releaseLock(); } catch { /* An already released or stuck reader keeps its own state. */ }
     }
+    // Late arrivals keep an owner and record their outcome; they are never resumed into a delivery.
+    const ownResponse = (late) => {
+      const body = late?.body;
+      if (!body || typeof body.getReader !== 'function') return undefined;
+      const lateReader = body.getReader();
+      return settleWithin(() => lateReader.cancel(), timeoutMs).then((outcome) => {
+        try {
+          if (!outcome.done) undecided.push('the late official response cancel did not settle');
+          else if (outcome.failed) undecided.push(`the late official response cancel failed: ${message(outcome.error)}`);
+        } finally { try { lateReader.releaseLock(); } catch { /* terminal or stuck reader */ } }
+      });
+    };
+    const ownHandle = (late) => {
+      created = true;
+      return settleWithin(() => late.close(), timeoutMs).then((closed) => {
+        if (!closed.done) { released = false; undecided.push('a late file close did not settle; the partial path may still change'); return undefined; }
+        if (closed.failed) { released = false; undecided.push(`a late file close failed: ${message(closed.error)}`); return undefined; }
+        return settleWithin(() => rm(path), timeoutMs).then((removed) => {
+          if (!removed.done) undecided.push('the late partial removal did not settle');
+          else if (removed.failed) undecided.push(`the late partial removal failed: ${message(removed.error)}`);
+        });
+      });
+    };
+    const owners = [];
+    if (arrival && !responseTaken) owners.push(arrival.then((result) => (result.ok ? ownResponse(result.value) : undefined)));
+    if (opening && !handleTaken) owners.push(opening.then((result) => (result.ok ? ownHandle(result.value) : undefined)));
+    if (owners.length > 0) {
+      // Wait only inside the finite cleanup budget; anything later stays owned and is reported as undecided now.
+      const settledLate = await settleWithin(() => Promise.allSettled(owners), left());
+      if (!settledLate.done) {
+        if (arrival && !responseTaken) undecided.push('the official response had not settled at return; its body stays owned');
+        if (opening && !handleTaken) undecided.push(`the late file open had not settled at return; ${path} may exist and stays owned`);
+      }
+    }
+    const removePartial = async (reason) => {
+      if (left() <= 0) return `the cleanup budget was exhausted before ${reason}`;
+      const removed = await settleWithin(() => rm(path), left());
+      if (!removed.done) return `${reason} did not settle within the cleanup budget`;
+      return removed.failed ? `${reason} failed: ${message(removed.error)}` : undefined;
+    };
     if (failed && created) {
       const fields = {};
       if (!released) {
         // Without a confirmed close the file may still change; it is reported and retained, never force-deleted.
         fields.releaseUnclear = unclear;
       } else {
-        const removed = await settleWithin(() => rm(path), left());
-        if (!removed.done) fields.cleanupError = 'the partial file removal did not settle within the cleanup budget';
-        else if (removed.failed) fields.cleanupError = message(removed.error);
+        const removal = await removePartial('the partial file removal');
+        if (removal) fields.cleanupError = removal;
         if (unclear.length > 0) fields.cleanupNotes = unclear;
       }
       if (fields.releaseUnclear !== undefined || fields.cleanupError !== undefined) fields.partialFile = path;
       if (Object.keys(fields).length > 0) retention = fields;
     }
+    if (undecided.length > 0) retention = Object.assign(retention ?? {}, { undecidedResources: undecided });
+    // Final adjudication while the deadline is still live; only now is the recorded delivery allowed to stand.
+    if (!failed && cancelled()) {
+      failed = true;
+      failure = new Error('Desktop installer deadline or cancellation preceded delivery', { cause: deadline.signal.reason });
+      const removal = await removePartial('the delivered file removal');
+      if (removal) retention = { partialFile: path, cleanupError: removal };
+    }
+    if (!failed) return delivered;
+    if (!retention) throw failure;
+    let annotated = false;
+    if (failure !== null && (typeof failure === 'object' || typeof failure === 'function')) {
+      try { Object.assign(failure, retention); annotated = true; } catch { annotated = false; }
+    }
+    if (annotated) throw failure;
+    // Frozen or non-object failures keep their identity as the cause of a writable report that carries the retention.
+    const reported = new Error(`Desktop installer failure: ${message(failure)}`, { cause: failure });
+    Object.assign(reported, retention);
+    throw reported;
+  } finally {
+    // Released only after the final adjudication, on every exit, including a thrown report.
+    clearTimeout(timer);
+    if (signal) signal.removeEventListener('abort', forward);
   }
-  if (!failed && !deadline.signal.aborted) return delivered;
-  // A cancellation that lands after cleanup still voids the delivery; the closed file is removed before reporting.
-  if (!failed) {
-    failed = true;
-    failure = new Error('Desktop installer deadline or cancellation preceded delivery', { cause: deadline.signal.reason });
-    const removed = await settleWithin(() => rm(path), timeoutMs);
-    if (!removed.done) retention = { partialFile: path, cleanupError: 'the delivered file removal did not settle within its budget' };
-    else if (removed.failed) retention = { partialFile: path, cleanupError: message(removed.error) };
-  }
-  if (!retention) throw failure;
-  let annotated = false;
-  if (failure !== null && (typeof failure === 'object' || typeof failure === 'function')) {
-    try { Object.assign(failure, retention); annotated = true; } catch { annotated = false; }
-  }
-  if (annotated) throw failure;
-  // Frozen or non-object failures keep their identity as the cause of a writable report that carries the retention.
-  const reported = new Error(`Desktop installer failure: ${message(failure)}`, { cause: failure });
-  Object.assign(reported, retention);
-  throw reported;
 }
 
 /** A timeout cannot prove descendant release; the caller retains the installation. */
