@@ -226,23 +226,32 @@ export async function downloadDshDesktopInstaller(artifact, { directory, signal,
       try { reader.releaseLock(); } catch { /* An already released or stuck reader keeps its own state. */ }
     }
     // Late arrivals keep an owner and record their outcome; they are never resumed into a delivery.
+    let lateResponse;
     const ownResponse = (late) => {
       const body = late?.body;
       if (!body || typeof body.getReader !== 'function') return undefined;
       const lateReader = body.getReader();
+      const state = {};
+      lateResponse = state;
       return settleWithin(() => lateReader.cancel(), timeoutMs).then((outcome) => {
+        state.outcome = outcome;
         try {
           if (!outcome.done) undecided.push('the late official response cancel did not settle');
           else if (outcome.failed) undecided.push(`the late official response cancel failed: ${message(outcome.error)}`);
         } finally { try { lateReader.releaseLock(); } catch { /* terminal or stuck reader */ } }
       });
     };
+    // The late handler is the only owner of the file it created: one close and at most one removal.
+    let lateFile;
     const ownHandle = (late) => {
-      created = true;
+      const state = {};
+      lateFile = state;
       return settleWithin(() => late.close(), timeoutMs).then((closed) => {
-        if (!closed.done) { released = false; undecided.push('a late file close did not settle; the partial path may still change'); return undefined; }
-        if (closed.failed) { released = false; undecided.push(`a late file close failed: ${message(closed.error)}`); return undefined; }
+        if (!closed.done) { state.closeReason = 'a late file close did not settle; the partial path may still change'; undecided.push(state.closeReason); return undefined; }
+        if (closed.failed) { state.closeReason = `a late file close failed: ${message(closed.error)}`; undecided.push(state.closeReason); return undefined; }
+        state.closed = true;
         return settleWithin(() => rm(path), timeoutMs).then((removed) => {
+          state.removal = removed;
           if (!removed.done) undecided.push('the late partial removal did not settle');
           else if (removed.failed) undecided.push(`the late partial removal failed: ${message(removed.error)}`);
         });
@@ -259,8 +268,12 @@ export async function downloadDshDesktopInstaller(artifact, { directory, signal,
       // Wait only inside the finite cleanup budget; anything later stays owned and is reported as undecided now.
       const settledLate = await settleWithin(() => Promise.allSettled(owners), left());
       if (!settledLate.done) {
-        if (arrival && !responseTaken && !responseOwnerStarted) undecided.push('the official response had not settled at return; its body stays owned');
-        if (opening && !handleTaken) undecided.push(created
+        // A started owner is not a released resource: report each late resource by its actual state.
+        if (arrival && !responseTaken) {
+          if (!responseOwnerStarted) undecided.push('the official response had not settled at return; its body stays owned');
+          else if (lateResponse && !lateResponse.outcome) undecided.push('the late official response cancel had not settled at return; the body stays owned');
+        }
+        if (opening && !handleTaken) undecided.push(lateFile
           ? `a late file close or removal had not settled at return; ${path} stays owned`
           : `the late file open had not settled at return; ${path} may exist and stays owned`);
       }
@@ -283,6 +296,19 @@ export async function downloadDshDesktopInstaller(artifact, { directory, signal,
       }
       if (fields.releaseUnclear !== undefined || fields.cleanupError !== undefined) fields.partialFile = path;
       if (Object.keys(fields).length > 0) retention = fields;
+    } else if (failed && lateFile) {
+      // Consume the owner's real close/removal result; this path is never removed a second time.
+      const fields = {};
+      if (!lateFile.closed) {
+        fields.releaseUnclear = [lateFile.closeReason ?? 'the late file close had not settled at return'];
+      } else if (lateFile.removal === undefined) {
+        fields.cleanupError = 'the late partial removal had not settled at return';
+      } else if (!lateFile.removal.done) {
+        fields.cleanupError = 'the late partial removal did not settle';
+      } else if (lateFile.removal.failed) {
+        fields.cleanupError = `the late partial removal failed: ${message(lateFile.removal.error)}`;
+      }
+      if (Object.keys(fields).length > 0) { fields.partialFile = path; retention = fields; }
     }
     if (undecided.length > 0) retention = Object.assign(retention ?? {}, { undecidedResources: undecided });
     // Final adjudication while the deadline is still live; only now is the recorded delivery allowed to stand.
