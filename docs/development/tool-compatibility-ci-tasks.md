@@ -1,6 +1,6 @@
 # 工具完整接入与兼容验证待办
 
-最新用户指令：用户在I03-B收口和进度说明后再次明确“开始下一个任务”，启动[C04-I03-C1：Desktop受控进程执行组件](evidence/c04-worker-20261029/I03-C1-task.md)。首交36ac385的root定向85/85，双轴[首轮复审及同单R1](evidence/c04-worker-20261029/I03-C1-review.md)为Standards 3项/Spec 4项，全部P2，未验收；完整check11失败/2604通过/11跳过保留，不扩通信范围。限既有模块内的进程基础，不接真实安装/卸载。阶段B最终6fb9ac1已[代码复审收口](evidence/c04-worker-20261029/I03-B-review-closure.md)：两轴均无未决，root77/77，原完整17失败保留。I03整合验证、实际安装/卸载合同与干净runner仍待条件和证据。被拒读取/清理不重试，新增非skill功能文件、必需用户操作变化及真实安装执行沿既定决定边界。
+最新用户指令：用户在I03-B收口和进度说明后再次明确“开始下一个任务”，启动[C04-I03-C1：Desktop受控进程执行组件](evidence/c04-worker-20261029/I03-C1-task.md)。R1交付d2df512的root定向91/91，[R1复审及同单R2](evidence/c04-worker-20261029/I03-C1-R1-review.md)剩Standards 1项P2、Spec 1项P2，仅收尾timer/同步清理错误，未验收；完整check7失败/2614通过/11跳过保留，不扩通信范围。限既有模块内的进程基础，不接真实安装/卸载。阶段B最终6fb9ac1已[代码复审收口](evidence/c04-worker-20261029/I03-B-review-closure.md)：两轴均无未决，root77/77，原完整17失败保留。I03整合验证、实际安装/卸载合同与干净runner仍待条件和证据。被拒读取/清理不重试，新增非skill功能文件、必需用户操作变化及真实安装执行沿既定决定边界。
 
 2026-11-02（UTC+8）[C04-I01离线核心已验收](evidence/c04-worker-20261029/I01-final-review.md)；[I02安装包获取与校验组件产品已验收](evidence/c04-worker-20261029/I02-final-review.md)，最终产品33f9c05、fixture6648c91、证据219a35c，root54/54、worker完整2584/11，未清理残留单独保留。I02产品不重开，其测试helper迟到owner已随I03-R3修复。I03-B最终root77/77、两轴无未决；全量17条白名单外状态/通信相关失败保留、未逐条归责，不扩通信所有权。I03整体与C04父项未完成，没有真实Desktop验收。
 
