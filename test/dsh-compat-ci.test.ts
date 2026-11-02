@@ -640,6 +640,20 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
     operation.catch(() => {});
     return Promise.race([operation, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('bounded-guard tripped')), ms))]);
   };
+  // A gated open: the product's own open resolves only after the caller releases it.
+  const lateOpen = (swap: (handle: Record<string, unknown>) => void | Promise<void>) => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    openInjection.impl = async (...args: unknown[]) => {
+      await gate;
+      const handle = await openInjection.real!(...args) as Record<string, unknown>;
+      await swap(handle);
+      return handle;
+    };
+    return { release };
+  };
+  const notesOf = (failure: unknown) => (Array.isArray((failure as { undecidedResources?: unknown }).undecidedResources)
+    ? (failure as { undecidedResources: unknown[] }).undecidedResources : []).join('; ');
   const fileHandleProto = async (output: string) => {
     const probe = await open(join(output, 'handle-probe'), 'w');
     const proto = Object.getPrototypeOf(probe) as Record<string, (...args: unknown[]) => Promise<unknown>>;
@@ -985,75 +999,97 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
     });
   });
 
-  it('reports undecided late resources with locatable paths and keeps them owned', async () => {
+  it('reports a late file close failure with the path and keeps the file owned', async () => {
     await isolated(async (output) => {
       const target = join(output, 'owned-desktop-download'); await mkdir(target);
       const retained = join(target, installerName);
-      const lateOpen = (swap: (handle: Record<string, unknown>) => void | Promise<void>) => {
-        let release!: () => void;
-        const gate = new Promise<void>((resolve) => { release = resolve; });
-        openInjection.impl = async (...args: unknown[]) => {
-          await gate;
-          const handle = await openInjection.real!(...args) as Record<string, unknown>;
-          await swap(handle);
-          return handle;
-        };
-        return { release };
-      };
       const cleanups: (() => Promise<void>)[] = [];
-      const runCleanups = async () => { for (const fn of cleanups.splice(0)) await fn(); };
-      const notesOf = (failure: unknown) => (Array.isArray((failure as { undecidedResources?: unknown }).undecidedResources)
-        ? (failure as { undecidedResources: unknown[] }).undecidedResources : []).join('; ');
+      const late = lateOpen((handle) => {
+        const original = handle.close as () => Promise<unknown>;
+        cleanups.push(async () => { handle.close = original; await original().catch(() => {}); });
+        handle.close = () => Promise.reject(new Error('late close refused'));
+      });
       try {
-        // A late open whose close fails keeps its path and the real reason inside the original timeout report.
-        const first = lateOpen((handle) => {
-          const original = handle.close as () => Promise<unknown>;
-          cleanups.push(async () => { handle.close = original; await original().catch(() => {}); });
-          handle.close = () => Promise.reject(new Error('late close refused'));
-        });
-        const firstAttempt = download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 200 });
-        firstAttempt.catch(() => {});
+        const attempt = download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 200 });
+        attempt.catch(() => {});
         await new Promise((resolve) => setTimeout(resolve, 250));
-        first.release();
-        const firstFailure: unknown = await bounded(firstAttempt, 3000).catch((error: unknown) => error);
-        expect(firstFailure).toMatchObject({ message: 'Desktop installer exceeded its 200ms deadline' });
-        expect((firstFailure as { partialFile?: unknown }).partialFile).toBe(retained);
-        expect(notesOf(firstFailure)).toContain('a late file close failed: late close refused');
+        late.release();
+        const failure: unknown = await bounded(attempt, 3000).catch((error: unknown) => error);
+        expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 200ms deadline' });
+        expect((failure as { partialFile?: unknown }).partialFile).toBe(retained);
+        expect(notesOf(failure)).toContain('a late file close failed: late close refused');
         expect(existsSync(retained)).toBe(true);
-        await runCleanups();
-        await rm(retained, { force: true }).catch(() => {});
-
-        // A late removal that fails keeps the file and reports the real reason.
-        const second = lateOpen((handle) => { cleanups.push(() => handle.close() as Promise<unknown>); });
-        rmInjection.impl = async () => { throw new Error('late removal refused'); };
-        const secondAttempt = download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 200 });
-        secondAttempt.catch(() => {});
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        second.release();
-        const secondFailure: unknown = await bounded(secondAttempt, 3000).catch((error: unknown) => error);
-        rmInjection.impl = null;
-        expect(secondFailure).toMatchObject({ message: 'Desktop installer exceeded its 200ms deadline' });
-        expect((secondFailure as { partialFile?: unknown }).partialFile).toBe(retained);
-        expect(notesOf(secondFailure)).toContain('the late partial removal failed');
-        expect(existsSync(retained)).toBe(true);
-        await runCleanups();
-        await rm(retained, { force: true }).catch(() => {});
-
-        // A response arriving after the deadline is cancelled with its lock released and named in the return report.
-        let lateCanceled = false;
-        const lateBody = new ReadableStream<Uint8Array>({ cancel: () => { lateCanceled = true; } });
-        const thirdFailure: unknown = await download(async () => new Promise((resolve) => setTimeout(() => resolve(response(lateBody)), 150)), { directory: target, timeoutMs: 30 }).catch((error: unknown) => error);
-        expect(notesOf(thirdFailure)).toContain('the official response had not settled at return');
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        expect(lateCanceled).toBe(true);
-        expect(lateBody.locked).toBe(false);
-        expect(readdirSync(target)).toEqual([]);
       } finally {
-        await runCleanups();
+        for (const fn of cleanups.splice(0)) await fn();
+        openInjection.impl = null;
+        await rm(retained, { force: true }).catch(() => {});
+      }
+    });
+  });
+
+  it('reports a late file close that never settles as undecided at return', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      const retained = join(target, installerName);
+      const cleanups: (() => Promise<void>)[] = [];
+      const late = lateOpen((handle) => {
+        const original = handle.close as () => Promise<unknown>;
+        cleanups.push(async () => { handle.close = original; await original().catch(() => {}); });
+        handle.close = () => new Promise(() => {});
+      });
+      try {
+        const attempt = download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 200 });
+        attempt.catch(() => {});
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        late.release();
+        const failure: unknown = await bounded(attempt, 3000).catch((error: unknown) => error);
+        expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 200ms deadline' });
+        expect((failure as { partialFile?: unknown }).partialFile).toBe(retained);
+        expect(notesOf(failure)).toContain('had not settled at return');
+        expect(existsSync(retained)).toBe(true);
+      } finally {
+        for (const fn of cleanups.splice(0)) await fn();
+        openInjection.impl = null;
+        await rm(retained, { force: true }).catch(() => {});
+      }
+    });
+  });
+
+  it('reports a late partial removal failure with the path and keeps the file owned', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      const retained = join(target, installerName);
+      const late = lateOpen(() => {});
+      rmInjection.impl = async () => { throw new Error('late removal refused'); };
+      try {
+        const attempt = download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 200 });
+        attempt.catch(() => {});
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        late.release();
+        const failure: unknown = await bounded(attempt, 3000).catch((error: unknown) => error);
+        expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 200ms deadline' });
+        expect((failure as { partialFile?: unknown }).partialFile).toBe(retained);
+        expect(notesOf(failure)).toContain('the late partial removal failed');
+        expect(existsSync(retained)).toBe(true);
+      } finally {
         openInjection.impl = null;
         rmInjection.impl = null;
         await rm(retained, { force: true }).catch(() => {});
       }
+    });
+  });
+
+  it('cancels a late response, releases its lock and reports it as undecided at return', async () => {
+    await isolated(async (output) => {
+      const target = join(output, 'owned-desktop-download'); await mkdir(target);
+      let lateCanceled = false;
+      const lateBody = new ReadableStream<Uint8Array>({ cancel: () => { lateCanceled = true; } });
+      const failure: unknown = await download(async () => new Promise((resolve) => setTimeout(() => resolve(response(lateBody)), 150)), { directory: target, timeoutMs: 30 }).catch((error: unknown) => error);
+      expect(notesOf(failure)).toContain('the official response had not settled at return');
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(lateCanceled).toBe(true);
+      expect(lateBody.locked).toBe(false);
+      expect(readdirSync(target)).toEqual([]);
     });
   });
 
