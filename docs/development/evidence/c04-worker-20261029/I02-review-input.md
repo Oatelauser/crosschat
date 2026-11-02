@@ -229,10 +229,36 @@ RED-1（产品回退到基线、测试为当时版本）**2 失败 / 46 通过**
 
 - 定向：RED **3 失败 / 51 通过**（退出码 1，首败 `expected 2 to be 1` 即双删除）；GREEN **54/54**（退出码 0）。
 - `node --check` 通过；`npm run lint` 0；`npm run check:imports` 203 模块 / 682 边；`npm run build` 通过；`git diff --check` 0。
-- 完整：GREEN 后一次 `npm run check`（forks/threads max2/min1，未筛/未 skip/未放宽）**退出码 0**，231 文件通过 / 3 跳过，**2584 项通过 / 11 跳过**（较 R3 的 2581 净增 3）。完整记录见 `I02-R3-supplement-check.txt`。
+- 完整：GREEN 后一次 `npm run check`（forks/threads max2/min1，未筛/未 skip/未放宽）**退出码 0**，231 文件通过 / 3 跳过，**2584 项通过 / 11 跳过**（较 R3 的 2581 净增 3）。数字与命令见 `I02-R3-supplement-check.txt`（**人工摘要**）；逐字节 stdout/stderr 与退出码见 `I02-R3-supplement-raw.txt`。
 
 ### 4. 未测 / 清理
 
 - 未单列反例：迟到 owner 在返回之后才落定并失败——报告已抛出，只能记录后台结果；返回前落定与返回后落定共用同一状态记录代码。
 - gate 反例用真实 `ReadableStream` 的 `cancel` 挂起，锁释放由 gate 释放后的轮询断言确认；未引入假时钟。
 - 清理：`open`/`rm` 注入与 gate 均在用例 finally 恢复；独占 `mkdtemp` 根与测试写入的替换文件按绝对路径删除；无外网、无官方二进制、无用户状态修改；C04 未关闭。
+
+## 十二、补充收尾修正（C04-I02-R3 同单）
+
+### 1. 提交
+
+| 节点 | 提交 | 内容 |
+| --- | --- | --- |
+| 基线 | `238f582` | 本单补充交付（复审基线） |
+| 收尾 | `6648c91` | 只改测试：gate 解锁与释放等待移入 finally；本文件与 raw 证据随文档提交 |
+
+### 2. 修正
+
+- **gate 用例**（`test/dsh-compat-ci.test.ts:1139` 起）：返回时的 `failure`/`cancelStarted`/`undecidedResources`/`locked` 断言保留在 `try` 内；`release()` 与等待 owner 释放锁移入 `finally`；`finally` 之后再验证 `locked === false` 与目录为空。断言失败不再跳过释放，清理不依赖成功路径。
+- **临时反证**：把返回时 `locked` 断言故意翻转为 `false` 并加标记输出，运行得到预期失败（`PROOF_EXIT=1`）且输出 `GATE_RELEASED_IN_FINALLY`，证明断言失败后 `finally` 仍执行；随后还原，未改产品、未提交翻转版本。原始输出见 raw 证据 E 段。
+- **证据更正**：`I02-R3-supplement-check.txt` 保留不动，明确为人工摘要；新增 `I02-R3-supplement-raw.txt`（1018 行，A–F 段）逐字节保存 RED、GREEN、第一次完整 check、finally 后定向、临时反证、finally 后完整 check 的 stdout/stderr 与退出码。§十一.3 的引用已同步更正。
+
+### 3. 验证
+
+- finally 修正后定向：`npx vitest run test/dsh-compat-ci.test.ts` **54/54**，退出 0。
+- finally 修正后**一次**完整 `npm run check`（forks/threads max2/min1，未筛/未 skip/未放宽）：**退出码 0**，231 文件通过 / 3 跳过，**2584 项通过 / 11 跳过**（与第一次报告一致）。
+- 首败：无。E 段失败是人为翻转的预期反证，不是产品/测试缺陷。
+
+### 4. 限制 / 清理
+
+- RED、GREEN 与第一次完整 check 的原始输出是会话内保存的文件，已按原字节并入 raw（含终端颜色控制符）；会话终端之外的更早输出无法核对，未补造。
+- 工作树仍仅用户原未跟踪 `docs/代码消息投递.md`；未 push/amend/回退共享文件；未改 `scripts/` 及其它文件；C04 未关闭。
