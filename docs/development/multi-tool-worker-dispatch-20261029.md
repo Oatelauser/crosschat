@@ -20,7 +20,7 @@
 
 本会话不再派发通信相关子单。用户明确将全部通信任务交给现有 Codex Desktop 会话 **Bug修复2**，由用户亲自对接；见[完整交接](communication-handoff-bugfix2-20261029.md)。W08 最新研究交付到 `1066e30`，尚未完成 root 最终验收，按真实状态随证据交接。短信封内部 subagent 已停写，确认没有任何代码/测试修改。
 
-当前启动[C04-I03：Windows正式包准入与安装/卸载执行层](evidence/c04-worker-20261029/I03-task.md)，先下发阶段A合同证据与拟接线，产品实现待同单root复审明确；本机不实际安装Desktop。[C04-I02组件产品已最终验收](evidence/c04-worker-20261029/I02-final-review.md)：产品33f9c05、fixture6648c91、证据219a35c，root54/54、worker2584/11。一处45字节合成TEMP fixture删除受阻保留，I03不代删或重试；规格/失败/日志继续保留。[I01核心已验收](evidence/c04-worker-20261029/I01-final-review.md)，C04父项未完成。
+当前C04-I03阶段A已交942f981，[双轴复审](evidence/c04-worker-20261029/I03-A-review.md)要求订正拟执行方案；同单[阶段B](evidence/c04-worker-20261029/I03-B-task.md)仅实施文件完整性/签名准入并修正文档。安装/卸载执行层继续待证据与具体守卫，不以任意参数wrapper充数，不新增用户步骤/功能文件，本机不实际安装Desktop。[C04-I02组件产品已最终验收](evidence/c04-worker-20261029/I02-final-review.md)：产品33f9c05、fixture6648c91、证据219a35c，root54/54、worker2584/11。一处45字节合成TEMP fixture删除受阻保留，I03不代删或重试；规格/失败/日志继续保留。[I01核心已验收](evidence/c04-worker-20261029/I01-final-review.md)，I03整体与C04父项未完成。
 
 [C08-I01 默认 Harness 技能维护已最终验收](evidence/c08-worker-20261029/I01-final-review.md)：最终产品 `a77a39b`，两轴复审通过，root 七套件87项通过；worker完整check第二次2544通过/11原有跳过，最多2/最少1 worker。首次全量的machines断言失败仍完整保留，根因未确认；不以随后通过替代根因证据。I01/R1/R2移出活动子单，原任务书仅作批准证据。[I02 生命周期说明已最终验收](evidence/c13-worker-20261029/I02-final-review.md)，继续作为合同输入。新增功能文件或用户必需操作仍须先决定。
 
