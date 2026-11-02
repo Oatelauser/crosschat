@@ -158,3 +158,50 @@ RED 实测 **5 失败 / 41 通过**，失败全部是业务断言（close 内取
 
 - 未单列反例：最终裁决阶段的「收尾期间 abort」补删分支（时序窗口无法确定性命中，行为由同路径的 close 内取消反例覆盖其裁决语义）；disown 路径删除迟到文件与调用方立即重试同路径的竞态（真实 fs open 无迟到形态，仅注入可造）；`rm` 删除失败分支仍不可便携模拟（同 R1 口径）。
 - 清理：`vi.mock` 的 `open` 注入、原型 `write` 补丁、实例 `close` 换置均在各自用例 finally 恢复/真实关闭；保留 partial 由 fixture 确认句柄关闭后按绝对路径删除；独占 `mkdtemp` 根用后即删；无外网、无官方二进制、无用户状态写入；C04 未关闭。
+
+## 十、R3 返修（C04-I02-R3）
+
+### 1. 提交
+
+| 阶段 | 提交 | 内容 |
+| --- | --- | --- |
+| 基线 | `2548c08` | root R2 复审提交（本单派单基线） |
+| RED-1 | `54a6796` | 只改测试：cleanup 期间取消/总截止两个子例，迟到 open/响应的可读结果与锁释放（新增 `rm` 局部注入） |
+| GREEN-1 | `3c15675` | 只改产品：定时器/监听器活到最终裁决；迟到 owner 记录 done/failed 并 `releaseLock`；收尾与最终删除共享有限预算 |
+| RED-2 | `6e4d77a` | 只改测试：把迟到 close 失败、close 停滞、迟到 rm 失败、迟到响应拆成独立用例，逐支可独立 RED |
+| GREEN-2 | `9b72442` | 只改产品：区分「open 已落定但 close/rm 未落定」与「open 本身未落定」的返回报告 |
+
+RED-1（产品回退到基线、测试为当时版本）**2 失败 / 46 通过**；RED-2（最终测试、产品回退基线）**5 失败 / 46 通过**，五条均为业务断言：cleanup 期间 caller.abort 仍返回成功；迟到 close 失败、close 停滞、迟到 rm 失败都没有 `partialFile`/可读原因；迟到响应没有返回报告。基线运行另会出现 FileHandle 在 GC 期未关闭的 unhandled error（迟到句柄被丢弃），GREEN 后消失。GREEN-2 同组 **51/51**，连跑三次全绿。
+
+拆成 RED-2 的原因：R2 复审要求同时覆盖「close 失败」与「close 停滞」；放在同一用例里时首个断言失败会跳过后续子例，无法逐支证明红，故拆为独立 `it`。
+
+### 2. root 缺口 → 修复 → 反例
+
+| 审查项 | 修复 | 覆盖反例 |
+| --- | --- | --- |
+| 定时器/取消监听在 finally 顶部 `stop()`，随后 await 收尾；最终用已停止更新的内部 signal 证明「未取消」 | 删除提前 `stop()`；`cancelled()` 同时看外部 signal、仍活的 deadline signal 和墙钟（`Date.now() - startedAt >= timeoutMs`）。收尾与最终裁决完成后才在 finally 释放定时器/监听器，任何抛出也走同一 finally；只有收尾后且 `cancelled() === false` 才返回交付 | 「refuses delivery when cancellation or the total deadline lands during cleanup」：(a) 交付已记录后，收尾中的 body cancel 仍挂起时 caller.abort → 拒绝且目录清空；(b) 响应/写入/close 全部完成后，收尾跨过总截止（80ms）→ 拒绝、`partialFile`+`cleanupError`、文件保留 |
+| 迟到资源丢弃 `settleWithin` 的 done/failed 与迟到 close/rm 结果；迟到 reader 未 `releaseLock` | `ownResponse`/`ownHandle` 把 cancel/close/rm 的未落定与失败原因写入 `undecidedResources`；`releaseLock` 在 finally 执行。迟到 IO 只收口与记录，绝不恢复交付，也绝不删除不是本次 `wx` 创建的文件 | 「reports a late file close failure…」：原超时报告 + `partialFile` + `undecidedResources` 含 `a late file close failed: late close refused`，文件保留；「reports a late partial removal failure…」：含 `the late partial removal failed`；「cancels a late response…」：cancel 回调触发且 `body.locked === false` |
+| 截止返回时 open/请求仍挂起没有保守报告，也没有持续 owner | 收尾内用剩余预算等待迟到 owner：返回前落定则记录真实结果；未落定则立即写保守报告——响应「未落定」、open「可能已存在」，并保留后台 owner 继续收口。区分「已创建」与「可能已存在」：只有 `created` 才报 `partialFile`，未落定的 open 只报可能存在的路径 | 「reports a late file close that never settles…」：open 已落定、close 停滞 → 返回报告含「had not settled at return」、`partialFile`、`cleanupError`；「keeps late responses and late handles owned after the deadline」仍通过（截止后到达的响应被取消，迟到句柄被关闭并删除） |
+| 最终删除重开完整预算 | 收尾与最终删除共用同一 `left()` 剩余预算；预算为 0 时不再启动删除，如实记「cleanup budget was exhausted」 | 上述停滞子例中收尾耗尽 200ms 预算后删除必定记 `cleanupError`，不依赖 rm 与 0ms 定时器的竞争 |
+| 假值/冻结失败仍须带报告 | 保持 R2 的 cause 包装：无保留信息原样抛；有保留信息时附加或包装 | 「keeps falsy and frozen stream failures…」仍 `toBe(thrown)`；「wraps frozen and falsy…」仍 `cause` 相等 + `partialFile` |
+
+### 3. R2 表述更正
+
+- 九.2 第 1 行「abort 落在收尾期间也作废交付」在 R2 实现中**不成立**：`stop()` 已先移除外部监听并清定时器，最终裁决读到的 signal 不再更新。R3 才真正覆盖（见上表）。
+- 九.2 第 2 行「迟到 close 结果有界收口」只做了动作，未记录 done/failed；close/rm 失败或未落定被静默丢弃，reader 也未 `releaseLock`。R3 更正为可读报告。
+- 九.5「真实 fs open 无迟到形态」的表述撤回：异步 `fs.open` 可以迟到（测试以门控注入确定性复现），不得以「不可能迟到」作为不处理理由。
+- 九.5「rm 删除失败分支不可便携模拟」不再成立：本机实测 Windows 允许删除仍被句柄持有的文件，不能靠「文件被占用即不可删」制造失败；R3 改用局部 `rm` 注入确定性制造迟到删除失败。
+- 九.5「未单列反例：最终裁决阶段的收尾期间 abort 补删分支」已由本单第一个反例覆盖。
+
+### 4. 验证
+
+- 定向：`npx vitest run test/dsh-compat-ci.test.ts`（forks/threads max2/min1）GREEN **51/51**，另连跑两次全绿；RED-2 **5 失败 / 46 通过**。
+- `node --check` 通过；`npm run lint` 0；`npm run check:imports` 203 模块 / 682 边；`npm run build` 通过。
+- 代码 diff 空白检查：`git diff --check 2548c08..HEAD -- scripts test` 退出 0。
+- 完整：GREEN-2 后一次 `npm run check`（forks/threads max2/min1，未筛/未 skip/未放宽），完整输出与真实退出码见 `I02-R3-check.txt`（357 行，末行 `CHECK_EXIT=0`）。结果：**退出码 0**，231 文件通过 / 3 跳过，**2581 项通过 / 11 跳过**（较 R2 的 2576 净增 5，即本单新增五条反例）。首败：一次通过，无首败。
+
+### 5. 未测 / 清理
+
+- 未单列反例：owner 在**返回之后**才落定并记录失败的分支——报告已抛出，无法再附加字段；测试只断言返回时的保守报告与后台收口动作，二者与返回前落定路径共用同一代码。
+- 总截止跨界由固定等待（120ms > 80ms）驱动而非假时钟；cancel 的「已开始未完成」由假 reader 门控确定性控制，裁决本身用墙钟而非定时器先后顺序。
+- 清理：`open`/`rm` 两处 `vi.mock` 注入、原型 `write` 补丁、实例 `close` 换置均在各自用例 finally 恢复；保留 partial 由 fixture 确认句柄关闭后按绝对路径删除；独占 `mkdtemp` 根用后即删；无外网、无官方二进制、无用户状态修改；C04 未关闭。
