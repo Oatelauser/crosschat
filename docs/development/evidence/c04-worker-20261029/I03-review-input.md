@@ -72,6 +72,16 @@
 
 **未测与边界**：文件等待与 child 收尾均用注入/合成验证，未跑真实 PowerShell、用户证书或官方 EXE；失败清理预算固定 1 s，耗尽只报告未决/未确认，返回后迟到完成不构成已释放证明；准入结果仍不构成执行授权。
 
+### 5. R2 同单返修（只读准入）
+
+新基线 `23584f753a967daea24199ce4fcbc9408143d5ab`，产品代码仍为 R1 的 `fe96cb7`。两处组合缺口先 RED（`4 failed | 70 passed`，`RED_EXIT=1`），最小 GREEN 后定向 `74 passed`；完整原始输出见 `I03-B-R2-check.txt`。
+
+- **child error 共用有限收口**：spawn 返回后的 `error` 事件不再直接 `finish`，而是进入与超限/取消相同的 `beginRelease`：保留首个 `pendingError`；已进入收尾时后续 error 不顶替主因、不清 close 等待 timer；只有 `close` 才确认退出，1 s 内未见 close 则报告 `releaseUnclear`（did not close），并 `destroy`/`unref` 父侧管道与进程引用、移除 data 监听。反例：error 且无 close 时 kill/destroy/unref 均 > 0、无未处理错误；error 后 close 及时则不报释放未确认；70 KiB 超限后 kill 失败再触发 EPERM error 时，仍返回输出超限主因。
+- **总截止与先前签名失败叠加**：`signatureOutcome.stopped` 不再按 late error 的 `stage` 丢弃信息；默认适配器先完成自己的 1 s close 等待，返回时保留实际主因/cause 与 `releaseUnclear`，并附 `unresolvedResources`，不返回成功。反例：70 KiB、kill=false、无 close、`timeoutMs=50`，约 1 s 后返回 `stage=signature`、输出超限信息与未 close 报告，父侧管道/引用已释放；仅取消、超限但 close 及时、冻结主错加文件 close 失败等既有用例继续通过。
+- **边界**：两个 1 s 收尾预算彼此独立（child close 等待、文件清理各一）；返回时的 `releaseUnclear`/`unresolvedResources` 仍是快照。未重开 R1 已修的文件一致性/等待/迟到 open/唯一 close 实现。
+
+**R2 验证**：`node --check`、对应 ESLint、`npm run build`、`git diff --check` 通过；定向套件 74/74。一次完整 `npm run check`（四个 VITEST 上限 2/1，未启用 `CROSSCHAT_LIVE`）退出 1：`13 failed | 2591 passed | 11 skipped`，8 个文件失败，首败在 `test/c14-conversation-refinement.test.ts`，其余集中在 `conversations`/`conversation-state-concurrency` 及依赖会话状态的用例；这些失败文件本轮零 diff。一次定向复跑曾出现两条 R1 时序敏感用例失败与一个 FileHandle GC 未处理错误，随后复跑 74/74，均已原样记入原始证据。按任务未连续重跑全量、未扩大白名单。完整检查未绿，交 root 判定。
+
 **R1 验证**：`node --check`、对应 ESLint、`npm run build`、代码范围 `git diff --check` 通过；定向套件 `70 passed`。一次完整 `npm run check`（四个 VITEST 上限 2/1）退出 1：4 个失败都在 `test/conversations.test.ts` 与 `test/conversation-state-concurrency.test.ts` 的会话锁用例，不属本轮改动模块；完整 stdout/stderr、首败与 `FULL_CHECK_EXIT=1` 保留在 `I03-B-R1-check.txt`。单文件复跑仍红；独立只读探针显示 `withStateLock` 按 temp 目录哈希选择 20000–39999 端口，新随机目录多次命中 `EADDRINUSE`，`recordConversation` 依既有 best-effort 语义静默放弃写入。该锁实现不在 R1 白名单内，未修改；R1 定向套件为绿，但完整检查未绿，交 root 判定。
 
 ## 四、用户拍板与影响
@@ -99,4 +109,4 @@
 
 ## 七、停止
 
-阶段 B 及同单 R1 交付完成。停写等待 root 双轴复审；不自行进入安装/卸载执行阶段、不关闭 I03 整体或 C04，不轮询。完整检查的 4 个会话锁失败已如实保留，未以定向绿替代，也未修改白名单外实现。
+阶段 B、同单 R1 与 R2 交付完成。停写等待 root 双轴复审；不自行进入安装/卸载执行阶段、不关闭 I03 整体或 C04，不轮询。完整检查的会话锁相关失败已如实保留，未以定向绿替代，也未修改白名单外实现。

@@ -562,7 +562,11 @@ function readAuthenticodeSignature(path, { signal } = {}) {
     if (signal) { signal.addEventListener('abort', onAbort, { once: true }); if (signal.aborted) onAbort(); }
     child.stdout.on('data', onStdout);
     child.stderr.on('data', onStderr);
-    child.once('error', (error) => finish(undefined, admissionFailure('signature', `The signature reader failed: ${message(error)}`, error)));
+    // An error event is not proof of exit: it enters the same bounded release and never replaces the first primary cause.
+    child.on('error', (error) => {
+      if (settled || closing) return;
+      beginRelease(admissionFailure('signature', `The signature reader failed: ${message(error)}`, error));
+    });
     child.once('close', (code, signalName) => {
       if (settled) return;
       if (closing) { finish(undefined, pendingError); return; }
@@ -734,16 +738,21 @@ export async function admitDshDesktopInstaller({ path, artifact, policy, readSig
     let signature;
     if (signatureOutcome.stopped) {
       unresolved.push('signature');
-      let error = cancellationError('Installer admission was cancelled during signature verification');
       if (readSignature === undefined) {
-        // The default adapter gets its own bounded close wait so an unconfirmed release is reported with this return.
+        // The default adapter gets its own bounded close wait; keep its actual primary cause and unconfirmed release.
         const late = await signatureTask.then((value) => ({ value }), (signatureError) => ({ error: signatureError }));
-        if (late.error?.stage === 'cancelled') {
-          error = late.error;
-          error.unresolvedResources = unresolved.slice();
+        if ('error' in late) {
+          const error = late.error;
+          if (error !== null && (typeof error === 'object' || typeof error === 'function') && typeof error.stage === 'string') {
+            try { error.unresolvedResources = unresolved.slice(); } catch { /* Fresh admission errors are extensible. */ }
+            throw error;
+          }
+          const wrapped = admissionFailure('signature', message(error), error);
+          wrapped.unresolvedResources = unresolved.slice();
+          throw wrapped;
         }
       }
-      throw error;
+      throw cancellationError('Installer admission was cancelled during signature verification');
     }
     if ('error' in signatureOutcome) {
       if (signatureOutcome.error?.stage) throw signatureOutcome.error;

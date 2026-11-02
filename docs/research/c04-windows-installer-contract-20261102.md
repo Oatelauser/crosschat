@@ -104,8 +104,8 @@
 | 发行物身份 | 复用 `desktopInstallerPlan` | 重新推导版本、精确 URL、filename、size、SRI，不信任调用方记录的成功字段。 |
 | 文件 | `lstat` + `open('r')` + 句柄 `stat` | 绝对本地路径；拒绝链接、非普通文件、`nlink !== 1`、大小不符；读盘前后以及**签名结束后、本次裁决前**都复核句柄与路径的 `dev/ino/nlink/size/mtime/ctime/birthtime`，不一致即拒绝。该复核是基于状态的指纹，不是再次重算内容摘要。 |
 | 摘要 | 流式 SHA-512 | 64 KiB 分块，按固定大小有界，不整包 `Buffer.concat`；大小或摘要不符拒绝。 |
-| 签名 | 注入或默认 Windows 适配器 | 默认 `powershell.exe`：常量脚本、`-NoProfile -NonInteractive -WindowStyle Hidden -Command`、路径放 `DSH_ADMIT_SIGNATURE_PATH` 环境字段、`shell:false`、`windowsHide:true`、64 KiB 输出上限。只有观察到 `close` 才认定子进程已退出；kill 失败或无 close 时，有限等待后报告释放未确认，并 `destroy`/`unref` 父侧管道和进程引用、移除 data 监听；迟到 close/error 仍有 owner 且不产生未处理错误。输出先按 unknown 解析；只有 `status === 'Valid'` 且 subject/thumbprint 与策略严格相符才通过。 |
-| 取消与资源 | 单一截止 + 有限收尾预算 | 同一截止与 `lstat`/`open`/句柄 `stat`/分块 read/前后状态复核/签名读取/成功裁决竞争；预先取消、执行中取消或超时都不返回成功，也不在取消后启动签名。截止时未落定的操作在错误中如实记录为 `unresolvedResources`；迟到 open 的本次句柄由后台 owner 唯一关闭并记录 `lateOpen`，不恢复成功、不写删输入。失败清理另有固定 1 s 预算，预算耗尽按未决/未确认报告，不重新打开无限等待。 |
+| 签名 | 注入或默认 Windows 适配器 | 默认 `powershell.exe`：常量脚本、`-NoProfile -NonInteractive -WindowStyle Hidden -Command`、路径放 `DSH_ADMIT_SIGNATURE_PATH` 环境字段、`shell:false`、`windowsHide:true`、64 KiB 输出上限。只有观察到 `close` 才认定子进程已退出；kill 失败或无 close 时，有限等待后报告释放未确认，并 `destroy`/`unref` 父侧管道和进程引用、移除 data 监听；迟到 close/error 仍有 owner 且不产生未处理错误。spawn 返回后的 `error` 事件不直接结束：它进入同一条有限收尾，只保留首个主因（超限/取消先行时 error 不覆盖），见到 close 才确认退出，否则报告未确认并释放父侧。输出先按 unknown 解析；只有 `status === 'Valid'` 且 subject/thumbprint 与策略严格相符才通过。 |
+| 取消与资源 | 单一截止 + 有限收尾预算 | 同一截止与 `lstat`/`open`/句柄 `stat`/分块 read/前后状态复核/签名读取/成功裁决竞争；预先取消、执行中取消或超时都不返回成功，也不在取消后启动签名。截止时未落定的操作在错误中如实记录为 `unresolvedResources`；迟到 open 的本次句柄由后台 owner 唯一关闭并记录 `lateOpen`，不恢复成功、不写删输入。失败清理另有固定 1 s 预算，预算耗尽按未决/未确认报告，不重新打开无限等待。总截止落在签名读取上时，默认适配器先走完自己的 1 s close 等待，返回值保留其实际主因/cause 与 `releaseUnclear`（不按 `stage` 丢弃），并附 `unresolvedResources`；即使 late 值成功也不返回成功。 |
 | 唯一 close 与错误保真 | 单一 close 状态 | 文件 `close` 只启动一次并保存落定/未决结果；成功路径与失败 `finally` 共用该结果，不重复调用。close 失败或未落定不能交付成功。原始文件/签名失败与清理失败并存时，保留主因、已有 `cause`、`cleanupError`/`cleanupCause`；冻结或假值异常用明确包装保留 `stage`、原始 `cause` 与 `originalError`，不吞掉清理信息；没有额外清理问题时不包装。 |
 | 返回值 | `{ path, version, size, integrity, filename, publisher }` | 只报告本次观测；不启动安装器/卸载器，不写安装目录、注册表、协议或用户配置。 |
 
@@ -153,7 +153,7 @@
 ## 七、边界与结论
 
 - 本阶段只确证了部分合同：安装器模式、当前用户/无提权、all-users/HKLM 拒绝、静默分支存在、`InstallLocation` 写入、卸载器数据行为、内置 runtime、协议声明均有固定源码证据；静默开关、目录参数、自启动、固定卸载器名、默认安装根、注册表键、发布者默认值均缺证据。
-- 阶段 B 已实现证据支持的只读准入组件：策略缺省拒绝、同一普通独占文件的流式摘要与前后状态核验、**签名期间文件一致性复核**、签名 `Valid` + subject/thumbprint 比对、单一截止覆盖全部文件等待、迟到句柄 owner、签名子进程有限收尾与释放未确认报告、唯一 close 与清理错误保真。R1 反例还确认：清理预算耗尽只报告未决/未确认，之后实际落定不改变已返回结论；`unresolvedResources` 是返回时的保守快照，不是后续完成的证明。它不启动安装器，不构成不可伪造的安装授权，也不消除本次核验结束到未来执行之间的替换窗口。
+- 阶段 B 已实现证据支持的只读准入组件：策略缺省拒绝、同一普通独占文件的流式摘要与前后状态核验、**签名期间文件一致性复核**、签名 `Valid` + subject/thumbprint 比对、单一截止覆盖全部文件等待、迟到句柄 owner、签名子进程有限收尾与释放未确认报告、唯一 close 与清理错误保真。R1 反例还确认：清理预算耗尽只报告未决/未确认，之后实际落定不改变已返回结论；`unresolvedResources` 是返回时的保守快照，不是后续完成的证明。R2 补确认：spawn 后的 child `error` 与超限/取消共用同一条有限收尾，首个主因不被后续 error 顶替；总截止与先前的签名失败叠加时，签名主因和 `releaseUnclear` 仍随返回可观察，不因 `stage` 被丢弃。它不启动安装器，不构成不可伪造的安装授权，也不消除本次核验结束到未来执行之间的替换窗口。
 - 安装/卸载执行层仍未实现：显式 `arguments` + 绝对 `root` 不证明安装位置，卸载 spawn 前没有 Host 退出守卫，`runDshProcess` 不能兑现 `signal` 且超时返回不是 close/释放证明。真实安装/卸载必须等独立干净 runner、安装前 baseline、目的地约束方案和独立可信的发布者策略。
 - 不把 NSIS/Electron 常识、OpenCode 或其它产品的参数/GUID/publisher 当作 Harness 事实。
 - 不声称 C04 或正式 Desktop 已通过；不关闭 C04。

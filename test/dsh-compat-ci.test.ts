@@ -1247,15 +1247,15 @@ describe('DeepSeek Harness desktop installer admission', () => {
     return check();
   };
   type AdmissionOutcome = {
-    stage?: string; lateOpen?: { closed: boolean }; unresolvedResources?: string[]; cleanupError?: string;
-    cleanupCause?: { message?: string }; cause?: unknown; originalError?: unknown;
+    stage?: string; message?: string; lateOpen?: { closed: boolean }; unresolvedResources?: string[]; releaseUnclear?: string[];
+    cleanupError?: string; cleanupCause?: { message?: string }; cause?: unknown; originalError?: unknown;
   };
 
   type FakeStream = EventEmitter & { destroy?: () => void };
   type FakeChild = EventEmitter & { stdout: FakeStream; stderr: FakeStream; kill: () => boolean | void; unref?: () => void };
   // A controlled read-only child: no PowerShell, no user certificate, no real signature environment.
   const fakeSpawn = (options: { stdout?: string; stderr?: string; code?: number | null; signal?: string | null; hang?: boolean; error?: Error;
-    killEffect?: boolean; noClose?: boolean; lateClose?: number }) => {
+    killEffect?: boolean; killError?: Error; noClose?: boolean; lateClose?: number }) => {
     const calls: { command: string; args: string[]; options: Record<string, unknown> }[] = [];
     const state = { destroy: 0, unref: 0, kill: 0, child: null as FakeChild | null };
     spawnInjection.impl = (...args: unknown[]) => {
@@ -1267,7 +1267,12 @@ describe('DeepSeek Harness desktop installer admission', () => {
       child.unref = () => { state.unref += 1; };
       let closed = false;
       const close = (code: number | null, signalName: string | null) => { if (closed) return; closed = true; child.emit('close', code, signalName); };
-      child.kill = () => { state.kill += 1; if (options.killEffect === false) return false; close(null, 'SIGTERM'); return true; };
+      child.kill = () => {
+        state.kill += 1;
+        if (options.killEffect === false) { if (options.killError) child.emit('error', options.killError); return false; }
+        close(null, 'SIGTERM');
+        return true;
+      };
       queueMicrotask(() => {
         if (options.error) { child.emit('error', options.error); return; }
         if (options.stdout) child.stdout.emit('data', Buffer.from(options.stdout));
@@ -1565,6 +1570,69 @@ describe('DeepSeek Harness desktop installer admission', () => {
         openInjection.impl = null;
         if (handle && realClose) { handle.close = realClose; await realClose().catch(() => {}); }
       }
+    });
+  });
+
+  it('owns a spawned child error without a close instead of returning early', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      const { state } = fakeSpawn({ error: new Error('EPERM stop failed'), killEffect: false });
+      try {
+        const error = await call(path, { readSignature: undefined, timeoutMs: 5000 }).catch((value) => value) as AdmissionOutcome;
+        expect(error).toMatchObject({ stage: 'signature', releaseUnclear: expect.arrayContaining([expect.stringContaining('did not close')]) });
+        expect(error.message).toContain('EPERM stop failed');
+        expect(state.kill).toBeGreaterThan(0);
+        expect(state.destroy).toBeGreaterThan(0);
+        expect(state.unref).toBeGreaterThan(0);
+        expect(state.child?.stdout.listenerCount('data')).toBe(0);
+        expect(state.child?.stderr.listenerCount('data')).toBe(0);
+      } finally { spawnInjection.impl = null; }
+    });
+  });
+
+  it('finishes a spawned child error once its close is observed', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      const { state } = fakeSpawn({ error: new Error('ENOENT') });
+      try {
+        const error = await call(path, { readSignature: undefined, timeoutMs: 5000 }).catch((value) => value) as AdmissionOutcome;
+        expect(error).toMatchObject({ stage: 'signature' });
+        expect(error.releaseUnclear).toBeUndefined();
+        expect(state.kill).toBeGreaterThan(0);
+        expect(state.destroy).toBe(0);
+        expect(state.unref).toBe(0);
+      } finally { spawnInjection.impl = null; }
+    });
+  });
+
+  it('keeps the overflow failure when a failed stop reports an error', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      const { state } = fakeSpawn({ stdout: 'x'.repeat(70 * 1024), killEffect: false, killError: new Error('EPERM stop failed'), noClose: true });
+      try {
+        const error = await call(path, { readSignature: undefined, timeoutMs: 5000 }).catch((value) => value) as AdmissionOutcome;
+        expect(error).toMatchObject({ stage: 'signature', releaseUnclear: expect.arrayContaining([expect.stringContaining('did not close')]) });
+        expect(error.message).toContain('output budget');
+        expect(state.kill).toBeGreaterThan(0);
+        expect(state.destroy).toBeGreaterThan(0);
+        expect(state.unref).toBeGreaterThan(0);
+        expect(state.child?.stdout.listenerCount('data')).toBe(0);
+      } finally { spawnInjection.impl = null; }
+    });
+  });
+
+  it('keeps the signature failure and release state across the total deadline', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      const { state } = fakeSpawn({ stdout: 'x'.repeat(70 * 1024), killEffect: false, noClose: true });
+      try {
+        const error = await call(path, { readSignature: undefined, timeoutMs: 50 }).catch((value) => value) as AdmissionOutcome;
+        expect(error).toMatchObject({ stage: 'signature', releaseUnclear: expect.arrayContaining([expect.stringContaining('did not close')]) });
+        expect(error.message).toContain('output budget');
+        expect(error.unresolvedResources).toEqual(expect.arrayContaining([expect.stringContaining('signature')]));
+        expect(state.destroy).toBeGreaterThan(0);
+        expect(state.unref).toBeGreaterThan(0);
+      } finally { spawnInjection.impl = null; }
     });
   });
 });
