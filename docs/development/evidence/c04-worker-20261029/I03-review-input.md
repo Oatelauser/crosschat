@@ -86,11 +86,21 @@
 
 新基线 `f38458fd5385a04706b283d696f66bdbf324c345`，产品仍为 R2 的 `915ba9f`。两个已证问题先 RED（`2 failed | 74 passed`，`RED_EXIT=1`），最小 GREEN 后定向 `76 passed`；完整原始输出见 `I03-B-R3-check.txt`。
 
-- **同指纹、不同内容必须拒绝**：签名读取成功后、成功裁决前，在本次同一句柄上从偏移 0 再做一次有界流式 SHA-512；内容与固定摘要不符即 `stage=file`。保留原路径/句柄状态一致性检查、总截止与取消、唯一 close。确定性反例：真实小文件、真实 `readSignature` 同长改写，`lstat`/`handle.stat` 固定为第一次有效指纹（同长同 mtime/ctime），当前实现曾通过并返回不相符的 `integrity`；GREEN 拒绝。另一反例把签名后的第二次读取停在显式偏移上，`timeoutMs=30` 返回 `stage=cancelled`、`unresolvedResources` 含 `read`，真实 close 恰为 1 次。第二次读取同样受总截止约束，不整包缓冲。
+- **同指纹、不同内容必须拒绝**：签名读取成功后、成功裁决前，在本次同一句柄上从偏移 0 再做一次有界流式 SHA-512；内容与固定摘要不符即 `stage=file`。最终路径/句柄状态核对位于该二次读取之后、close 与裁决之前（R3 末节补充），覆盖整个读取期间。保留总截止与取消、唯一 close。确定性反例：真实小文件、真实 `readSignature` 同长改写，`lstat`/`handle.stat` 固定为第一次有效指纹（同长同 mtime/ctime），当前实现曾通过并返回不相符的 `integrity`；GREEN 拒绝。另一反例把签名后的第二次读取停在显式偏移上，`timeoutMs=30` 返回 `stage=cancelled`、`unresolvedResources` 含 `read`，真实 close 恰为 1 次。第二次读取同样受总截止约束，不整包缓冲。
 - **fixture 独立等待迟到 open 并实际 close**：`lateOpen` helper 现在拥有每次实际 open 的完成 promise（真实句柄 + swap 登记），`settle()` 先释放 gate、等待已启动 open、恢复真实 `close` 并 await 其关闭；`finally` 先 `settle()` 再恢复注入和删根。迟到 close failure 用例改为先 `arrived()` 再等产品返回，确保命中“句柄已到、close 拒绝/未落定”阶段，未放宽断言。受控反证：产品已返回且 helper 尚未登记任何句柄时释放 gate，真实句柄到达后由 fixture 恢复并 close，随后 `stat()` 报 `EBADF`。
 - **边界**：内容复核只覆盖本次核验内签名结束到裁决前，不消除核验结束到未来执行的替换窗口；fixture 修复只改测试，不改 I02 下载产品合同。
 
 **R3 验证**：`node --check`、对应 ESLint、`npm run build`、`git diff --check` 通过；定向套件 `76 passed`。一次完整 `npm run check`（四个 VITEST 上限 2/1，未启用 `CROSSCHAT_LIVE`）退出 1：`11 failed | 2595 passed | 11 skipped`，7 个文件失败，首败在 `test/caller-source-service.test.ts`（`SOURCE_STATE_BUSY`，来自 `withStateLock acquired=false`），其余仍在会话状态/句柄相关用例；失败文件本轮零 diff。按任务原样保留原始输出，未连续重跑全量、未扩大白名单，不逐条断言为同一原因。
+
+### 7. R3 末节补充（最终路径核对顺序）
+
+新基线 `5a0c981f6d130e2aa5427ba652a6e210ffc7ac1b`，产品仍为 `c6b1782`。先业务 RED（`1 failed | 76 passed`，`RED_EXIT=1`），最小 GREEN 后定向 `77 passed`；完整原始输出见 `I03-B-R3-supplement-check.txt`。
+
+- **问题**：R3 的最终路径/句柄状态核对原本位于签名后、二次摘要读取之前。二次读取期间把原 path 换名并新建同长文件后，旧句柄仍读原字节、摘要正确，返回 path 却指向新文件。确定性反例：在第二遍首次显式 `position=0` 的 read 前真实 `rename` 原文件到自有 retired 路径、再 `wx` 新建同长不同内容原 path，旧句柄照常真实读取；修复前准入成功，修复后 `stage=file` 拒绝。
+- **修复**：把最终路径/句柄状态核对移动到二次摘要之后、close 与最终裁决之前，复用既有小检查，不新增公开 API/资源框架；签名后内容复核算法不变。
+- **回归**：未替换路径的成功、同指纹改写拒绝、post-read 取消和 fixture 迟到 owner 用例继续通过。新 fixture 在 `finally` 恢复 read 补丁、await 真实 close，并清理自有 retired 与原 path 两份文件。
+
+**补充验证**：`node --check`、对应 ESLint、`npm run build`、`git diff --check` 通过；定向 `77 passed`。一次完整 `npm run check`（四个 VITEST 2/1，`CROSSCHAT_LIVE` 未启用）退出 1：`17 failed | 2590 passed | 11 skipped`，8 个文件失败，首败 `test/c14-conversation-refinement.test.ts`（`CONVERSATION_STATE_BUSY`），其余仍为会话状态/句柄与 send 相关用例；失败文件本轮零 diff，原样保留，未连续重跑、未扩大白名单，不逐条归因。
 
 **R1 验证**：`node --check`、对应 ESLint、`npm run build`、代码范围 `git diff --check` 通过；定向套件 `70 passed`。一次完整 `npm run check`（四个 VITEST 上限 2/1）退出 1：4 个失败都在 `test/conversations.test.ts` 与 `test/conversation-state-concurrency.test.ts` 的会话锁用例，不属本轮改动模块；完整 stdout/stderr、首败与 `FULL_CHECK_EXIT=1` 保留在 `I03-B-R1-check.txt`。单文件复跑仍红；独立只读探针显示 `withStateLock` 按 temp 目录哈希选择 20000–39999 端口，新随机目录多次命中 `EADDRINUSE`，`recordConversation` 依既有 best-effort 语义静默放弃写入。该锁实现不在 R1 白名单内，未修改；R1 定向套件为绿，但完整检查未绿，交 root 判定。
 
@@ -119,4 +129,4 @@
 
 ## 七、停止
 
-阶段 B、同单 R1、R2 与 R3 交付完成。停写等待 root 双轴复审；不自行进入安装/卸载执行阶段、不关闭 I03 整体或 C04，不轮询。完整检查的会话锁相关失败已如实保留，未以定向绿替代，也未修改白名单外实现。
+阶段 B、同单 R1、R2、R3 与 R3 末节补充交付完成。停写等待 root 双轴复审；不自行进入安装/卸载执行阶段、不关闭 I03 整体或 C04，不轮询。完整检查的会话锁相关失败已如实保留，未以定向绿替代，也未修改白名单外实现。

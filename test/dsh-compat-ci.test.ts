@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { existsSync, readdirSync } from 'node:fs';
-import { mkdir, mkdtemp, open, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, open, readFile, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
@@ -1524,6 +1524,42 @@ describe('DeepSeek Harness desktop installer admission', () => {
         expect(outcome.unresolvedResources).toEqual(expect.arrayContaining([expect.stringContaining('read')]));
         expect(closeCalls).toBe(1);
       } finally { openInjection.impl = null; }
+    });
+  });
+
+  it('rejects a path replaced while the post-signature content is being re-read', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      const retired = join(output, 'retired-installer.exe');
+      const replacement = Buffer.from(bytes); replacement[0] = 0x44;
+      let swapped = false;
+      let restore: (() => Promise<void>) | undefined;
+      openInjection.impl = async (...args: unknown[]) => {
+        const handle = await openInjection.real!(...args) as Record<string, unknown>;
+        const realRead = (handle.read as (...readArgs: unknown[]) => Promise<unknown>).bind(handle);
+        const realClose = (handle.close as () => Promise<unknown>).bind(handle);
+        // The old handle still reads the original bytes; the path now names another same-length file.
+        handle.read = async (...readArgs: unknown[]) => {
+          if (!swapped && readArgs[3] === 0) {
+            swapped = true;
+            await rename(path, retired);
+            await writeFile(path, replacement);
+          }
+          return realRead(...readArgs);
+        };
+        restore = async () => { handle.read = realRead; await realClose().catch(() => {}); };
+        return handle;
+      };
+      try {
+        await expect(call(path)).rejects.toMatchObject({ stage: 'file' });
+        expect(swapped).toBe(true);
+        expect(await readFile(path)).toEqual(replacement);
+        expect(await readFile(retired)).toEqual(bytes);
+      } finally {
+        openInjection.impl = null;
+        await restore?.();
+        await rm(retired, { force: true }).catch(() => {});
+      }
     });
   });
 
