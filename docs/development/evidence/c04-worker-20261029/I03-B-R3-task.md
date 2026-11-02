@@ -24,3 +24,11 @@ R2两个child/错误传递缺口已经闭合，不再重开。前轮禁止重开
 无外网/官方EXE/真实PowerShell签名环境/安装卸载启停/用户状态/注册表/模型/试发/Actions；五个被拒URL和I02/W05历史TEMP/cache不碰不重试。只清本轮独占fixture，先确认绝对归属和真实句柄关闭。只显式路径本地commit，无全仓stage、push/amend/切分支/拉取/reset/clean/stash或共享回退。
 
 完成按本轮typed hint、仓库node dist/cli.js send、stdin、显式steer报告：真实基线/提交、两组保证→确定性反例、RED/GREEN/一次全量、受控fixture反证、未测/清理。停写等双轴复审，不轮询、不关闭I03/C04、不进入安装执行或下一任务。
+
+## c6b1782复审后的同单补充
+
+[I03-B-R3-review.md](I03-B-R3-review.md)：Standards无未决；Spec仍1项P2。签名后内容二次读取已修同指纹改写，但最后路径/句柄状态核对还在二次读取之前。已用真实rename+wx实证：二次读取期间原path换成BB，旧句柄仍读AA并算对摘要，返回path却是BB，入口仍通过。
+
+只补一个结果：最后路径/句柄状态核对须覆盖新增二次摘要读取之后，再进入close与最终成功裁决。可移动/复用现有小型检查，不新增公开接口或重写资源框架；不重开已修fixture、child和其它保证。确定性业务RED：在第二遍首次显式position=0的read前，将自有原文件rename至自有retired路径，再wx创建同长不同内容的新原path；实际从旧句柄读取，现版仍成功，修复后stage=file拒绝。未替换路径的成功和同指纹内容改写拒绝继续通过。新fixture自行finally恢复补丁、await真实close、清理自己的两份文件。
+
+沿原白名单，可新增I03-B-R3-supplement-check.txt完整raw，原I03-B-R3-check.txt不改。订正研究/review-input的核验顺序，先业务RED再最小GREEN，定向/syntax/lint/build/diff后一次完整check（四个VITEST2/1），不启用CROSSCHAT_LIVE；白名单外全量失败如实保留，不连续重跑或扩通信改动。新基线以root回信为准，所有被拒资源/原生执行/用户状态/提交与停止边界不变。
