@@ -140,8 +140,9 @@ describe('DeepSeek Harness controlled desktop process', () => {
       cleanup: async () => {
         for (const process of captured) {
           if (process.exitCode === null && process.signalCode === null) { try { process.kill(); } catch { /* It may already be gone. */ } }
-          const bounded = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('fixture child did not close')), 10000));
-          await Promise.race([closed.get(process), bounded]);
+          let timer!: ReturnType<typeof setTimeout>;
+          const bounded = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('fixture child did not close')), 10000); });
+          try { await Promise.race([closed.get(process), bounded]); } finally { clearTimeout(timer); }
           expect(process.exitCode !== null || process.signalCode !== null).toBe(true);
         }
       },
@@ -307,6 +308,34 @@ describe('DeepSeek Harness controlled desktop process', () => {
     expect(() => fake.stdout.emit('error', new Error('late stdout failure'))).not.toThrow();
     expect(() => fake.stderr.emit('error', new Error('late stderr failure'))).not.toThrow();
     expect(JSON.stringify(result!)).toBe(snapshot!);
+  });
+
+  it('clears the fixture cleanup wait once the real child is known closed', async () => {
+    vi.useFakeTimers();
+    const fixture = realChildren();
+    try {
+      const real = fixture.spawnImpl(process.execPath, ['-e', '']);
+      await new Promise<void>((resolve) => (real as ChildProcess).once('close', () => resolve()));
+      await fixture.cleanup();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { await fixture.cleanup(); vi.useRealTimers(); }
+  });
+
+  it('records a pipe error raised synchronously while releasing the pipes', async () => {
+    vi.useFakeTimers();
+    try {
+      const fake = child(); fake.kill.mockReturnValue(false);
+      const first = Object.freeze(new Error('first child failure'));
+      const original = fake.stdout.destroy.bind(fake.stdout);
+      (fake.stdout as unknown as { destroy: () => void }).destroy = () => {
+        fake.stdout.emit('error', new Error('synchronous pipe cleanup error')); original();
+      };
+      const pending = run(fake); fake.emit('error', first);
+      await vi.advanceTimersByTimeAsync(1000);
+      const result = await pending;
+      expect(result).toMatchObject({ failed: true, closed: false, failure: first });
+      expect(result.secondaryProblems.join('; ')).toContain('synchronous pipe cleanup error');
+    } finally { vi.useRealTimers(); }
   });
 
   it('lets the fixture end and await its own real child when the product cannot confirm release', async () => {

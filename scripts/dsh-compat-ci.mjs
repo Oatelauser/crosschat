@@ -385,8 +385,10 @@ export async function runDshDesktopProcess(binary, args, options = {}) {
     }
     const stdout = []; const stderr = []; const releaseUnclear = []; const secondaryProblems = [];
     let outputBytes = 0; let code = null; let signalName = null; let timedOut = false; let cancelled = false;
-    let truncated = false; let closed = false; let failure; let failing = false; let settled = false; let closeTimer; let deadlineTimer;
-    const note = (text) => { if (!settled) secondaryProblems.push(text); };
+    let truncated = false; let closed = false; let failure; let failing = false; let settled = false; let returned = false;
+    let closeTimer; let deadlineTimer;
+    // Problems observed before the promise resolves are kept, including ones raised synchronously inside release.
+    const note = (text) => { if (!returned) secondaryProblems.push(text); };
     const collect = (target, chunk) => {
       if (settled || failing) return;
       const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
@@ -419,6 +421,7 @@ export async function runDshDesktopProcess(binary, args, options = {}) {
         release('child reference', () => child.unref?.());
       }
       resolve(snapshot());
+      returned = true;
     };
     const beginFailure = (reason) => {
       if (settled || failing) return;
@@ -433,8 +436,8 @@ export async function runDshDesktopProcess(binary, args, options = {}) {
     };
     // A later child or pipe error is observed without replacing the first cause or reopening the release wait.
     const later = (label, error) => {
-      if (settled) return;
-      if (failing) note(`A later ${label} error: ${message(error)}`);
+      if (returned) return;
+      if (settled || failing) note(`A later ${label} error: ${message(error)}`);
       else beginFailure(error);
     };
     const onStdoutError = (error) => later('stdout pipe', error);

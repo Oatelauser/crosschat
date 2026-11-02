@@ -162,6 +162,17 @@
 
 **未测边界**：仍只用真实自有 Node 子进程与受控 fake child/pipe；未运行真实 installer/uninstaller，未启停 Desktop/Host，未访问注册表/用户配置/证书。`secondaryProblems` 只记录返回前观察到的次级问题；返回后事件仅保持安全收口，不更新已返回快照。
 
+### C1-R2 返修与证据
+
+新基线 `097048029d09cf52ef2aa9ec17870705b0ff4af0`（`d2df512` 仍为祖先）。只收两处剩余 P2，不新建资源框架、不改公开接口语义。
+
+- **S2 残留 timer**：`realChildren.cleanup` 保存 10 秒 bounded timer，`Promise.race` 结束后在 `finally` 清除，fixture 返回后不再留下等待句柄。反例：真实短命 child 已 close 后执行 cleanup，在 fake timer 下 `vi.getTimerCount()` 必须为 0；修复前为 1。
+- **Spec 同步收尾错误**：`finish` 先置 `settled` 再 release，原先同步 `pipe error` 会因 `settled` 被丢弃。现在区分“正在收尾”（`settled`）与“已返回”（`returned`）：收尾期间观察到的 child/pipe 错误写入 `secondaryProblems`，已返回后的迟到事件仍只保持 owner、不改快照。反例：受控 `PassThrough.destroy` 内同步 `emit('error')` 后调用原 destroy，首个冻结 child 错加 `kill=false` 且无 close，返回仍保留首因，`secondaryProblems` 含该同步 pipe 错误；修复前为空。
+
+**C1-R2 验证**：两处新增反例先 RED，定向 `2 failed | 91 skipped (93)`、`RED_EXIT=1`；最小 GREEN 后全目标文件 `93 passed`、`GREEN_EXIT=0`。`node --check`、对应 ESLint、`npm run build`、`git diff --check` 通过。一次完整 `npm run check`（四个 VITEST 2/1，`CROSSCHAT_LIVE` 未启用）`FULL_CHECK_EXIT=1`：`14 failed | 2609 passed | 11 skipped`，`9 failed` 文件；`test/dsh-compat-ci.test.ts` 在该次全量中 `93 passed`。首败 `test/c14-explicit-send.test.ts`（`TARGET_REQUIRED: Specify a target`），其余失败在 `caller-source-service`、`conversation-handle-ring`、`conversation-state-concurrency`、`conversation-summary`、`conversations`、`send-command`、`send-handle`、`via-send`；9 个失败文件对本轮基线零 diff。原始输出与首败保留在 [I03-C1-R2-check.txt](I03-C1-R2-check.txt)；未连续重跑全量、未以定向绿替代、未用零 diff 或少量 busy 症状推定所有失败同因。原 `7 failed | 2614 passed | 11 skipped` 记录未被覆盖，本轮完整检查实际为上述 14 条。
+
+**未测边界**：timer 与同步收尾错误均由受控 fake/真实自有 child 验证；未跑真实 installer/uninstaller、Desktop/Host 或用户状态。`returned` 只界定本次直接 child/父侧 pipe 的观察窗口。
+
 ## 八、停止
 
-阶段 B、同单 R1、R2、R3、R3 末节补充与 C1、C1-R1 交付完成。停写等待 root 双轴复审；不自行进入安装/卸载执行阶段、不关闭 I03 整体或 C04，不轮询。完整检查的会话锁相关失败已如实保留，未以定向绿替代，也未修改白名单外实现。
+阶段 B、同单 R1、R2、R3、R3 末节补充与 C1、C1-R1、C1-R2 交付完成。停写等待 root 双轴复审；不自行进入安装/卸载执行阶段、不关闭 I03 整体或 C04，不轮询。完整检查的会话状态相关失败已如实保留，未以定向绿替代，也未修改白名单外实现。
