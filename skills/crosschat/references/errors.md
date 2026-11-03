@@ -42,7 +42,9 @@
 
 ## Harness 桥诊断
 
-需要核实当前机器的 Harness 桥时，运行 `crosschat doctor` 或 `crosschat doctor --json`，也可查看 TUI 的 doctor 页。无活桥是 info；鉴权、owner 和版本核对通过后，pass 展示实例、PID、runtime 及已确认的 profile/类型；异常是带固定错误码和恢复指引的 warn。新增警告本身不令 doctor 退出1。桥检查共享5秒预算，取消时回收诊断请求和子进程。
+需要核实当前机器的 Harness 桥时，运行 `crosschat doctor` 或 `crosschat doctor --json`，也可查看 TUI 的 doctor 页。无活桥是 info；鉴权、owner 和版本核对通过后，pass 展示实例、PID、runtime 及已确认的 profile/类型；异常是带固定错误码和恢复指引的 warn。新增警告本身不令 doctor 退出1。活桥与 profile 检查共享5秒预算，取消时回收诊断请求和子进程。
+
+profile 检查还区分未声明引用、缺失/损坏安装、与当前随包桥内容一致或不同，并显示实际位置和版本；同版本不代表内容相同。只读取当前 Harness home 及活桥已核实的 profile 位置，项目和历史 home 由原有维护规则处理。文件一致只证明安装副本，当前加载/启用仍按 live 握手或原生 Plugins 页面核实。
 
 按实际错误码核对原生 profile、插件状态和兼容范围后刷新。诊断只读，保留登记文件；健康桥可没有 live 会话，桥握手成功与技能已被会话加载分别核实。排错只提供安全诊断字段，保留 token 和鉴权地址为私有资料。
 

@@ -3241,3 +3241,17 @@ usage: node scripts/codex-call-correlation-probe.mjs --root <owned temp dir> [--
 </details>
 
 C08补验fixture由测试afterAll回收；本轮完整日志经逐字归一转录核对后，其独占缓存根也已按owner/realpath核实删除。用户保留的DSH安装仍在，不触碰历史缓存和用户未跟踪文档。
+
+## 2026-11-03/04 C10 profile插件静态诊断
+
+用户澄清新增文件审批指crosschat持久数据（如home/.crosschat），代码、测试等开发文件直接推进；本切片沿现有doctor入口及info/pass/warn规则实现，没有新增持久数据或命令参数。只读当前Harness home的profiles与活桥核实的profileDir，报告未声明引用、缺失/损坏安装、实际位置/版本及当前随包七项文件的内容差异。正常pnpm/file包链接解析到真实目标；未核实profile链接不递归发现。读取每项64KiB、目录100项有界，活桥与静态读取共享5秒总预算。安装文件一致不证明当前Host加载了这版，单一静态disabled字段不代替bundle/profile/home/launch合成或原生UI证据。
+
+正式Windows包0.2.1-rc.2的main bundle只读核实了默认home/.dsh及profiles/desktop规则；打包后没有独立lib/paths.js、lib/node-environment.js，先前ENOENT保留为研究定位结果。插件管理器按devDependencies→dependencies→optionalDependencies合并直接依赖，诊断仅提取本桥字段，不输出依赖spec、秘密配置或源码。未再次启动正式DSH UI。
+
+TDD链：c20502e为14失败/1通过的行为RED，5f0abca初版GREEN；15c7c81补齐短读误判和已变文件的profile反例，2失败/16通过，a0b7f09修复；c4cd458接线RED3失败/33通过，e3b777e最终同源接线及可复跑ConPTY helper。reader首次lint指出finally显式throw，改为close后保留首个结果/错误；helper首次lint需要node:process显式导入，最终检查均通过。没有放宽产品断言，超时夹具改为到达IO gate后受控推进计时，迟到真实句柄确实close。
+
+完整check退出0：**2696通过/11原有跳过，232文件通过/3跳过**，lint、204模块688边导入图和build通过；max workers/threads=2、min=1，未启用CROSSCHAT_LIVE。定向5文件114/114，最终静态单套20/20。最终构建ConPTY三场（内容一致/不同/未声明）两轮均通过；筛选、详情、resize、正常退出及终端raw/监听/模式恢复通过，profile字节保持，私有字段未输出。桥/配置均是隔离fixture，不将其冒充正式工具新增原生验收。
+
+[验证摘要](evidence/c10-profile-20261103/validation.json)和[27份原始日志/事件的脱敏证据包](evidence/c10-profile-20261103/raw-evidence-redacted.zip)已归档。ZIP SHA-256=4825755b498bc4b502d54f527572fca52613a6888fd6d9522908d71966cc4793，65946字节；CRC及逐项SHA核对通过。排除fixture安装/配置目录，文本用户home及owned根已脱敏，ConPTY帧按实际输出保留。两个ConPTY round及诊断进程均正常退出，单测迟到IO gate均释放；核实owner/realpath后删除本轮临时根，D:/soft/DeepSeek Harness/DeepSeek Harness.exe仍在。
+
+用户要求准备暂停后只做此证据/清理/续接收口，未启动新开发、push或Actions。
