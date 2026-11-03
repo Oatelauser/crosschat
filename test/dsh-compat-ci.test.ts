@@ -365,6 +365,50 @@ describe('DeepSeek Harness guarded desktop uninstall', () => {
       expect(uninstall).not.toHaveBeenCalled();
     }
   });
+
+  it('binds every identity to the caller and returns process facts without claiming cleanup', async () => {
+    const input = options();
+    for (const foreign of [{ root: join(process.cwd(), 'foreign') }, { runId: randomUUID() }, { installationId: randomUUID() },
+      { owner: 'other-owner' }, { instanceId: randomUUID() }, { sessionId: 'other-session' }, { installationId: [input.installation.installationId] }]) {
+      const uninstall = vi.fn(async () => closed());
+      await expect(runDshDesktopUninstall(input, { observeHostExit: async () => ({ ...observed(input), ...foreign }), uninstall })).rejects.toThrow();
+      expect(uninstall).not.toHaveBeenCalled();
+    }
+    const calls: string[] = [];
+    const result = await runDshDesktopUninstall(input, {
+      observeHostExit: async () => { calls.push('observe'); return observed(input); },
+      uninstall: async (context: { installation: unknown; runId: string }) => {
+        calls.push('uninstall'); expect(context.installation).toEqual(input.installation); expect(context.runId).toBe(input.runId); return closed();
+      },
+    });
+    expect(calls).toEqual(['observe', 'uninstall']); expect(result.process).toEqual(closed());
+    expect(result).not.toHaveProperty('cleanup'); expect(result).not.toHaveProperty('uninstalled');
+  });
+
+  it('refuses pre-cancellation and a Host observation that consumes the total deadline', async () => {
+    const input = options(); const controller = new AbortController(); controller.abort('cancel before guard');
+    const observeHostExit = vi.fn(async () => observed(input)); const uninstall = vi.fn(async () => closed());
+    await expect(runDshDesktopUninstall({ ...input, signal: controller.signal }, { observeHostExit, uninstall }))
+      .rejects.toMatchObject({ cancelled: true, uninstallStarted: false });
+    expect(observeHostExit).not.toHaveBeenCalled(); expect(uninstall).not.toHaveBeenCalled();
+
+    await expect(runDshDesktopUninstall({ ...input, timeoutMs: 10 }, {
+      observeHostExit: async () => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 40); return observed(input); }, uninstall,
+    })).rejects.toMatchObject({ timedOut: true, uninstallStarted: false });
+    expect(uninstall).not.toHaveBeenCalled();
+  });
+
+  it('preserves a runner failure and installation ownership even for falsy causes', async () => {
+    const input = options(); const uninstall = vi.fn(async () => closed());
+    for (const cause of [undefined, null, false, 0, '', Object.freeze(new Error('observer refused'))]) {
+      let failure: unknown;
+      try { await runDshDesktopUninstall(input, { observeHostExit: async () => { throw cause; }, uninstall }); }
+      catch (error) { failure = error; }
+      expect(failure).toMatchObject({ stage: 'desktop-host-exit', installation: input.installation, uninstallStarted: false });
+      expect((failure as Error).cause).toBe(cause);
+    }
+    expect(uninstall).not.toHaveBeenCalled();
+  });
 });
 
 describe('DeepSeek Harness fresh process and cleanup evidence', () => {
