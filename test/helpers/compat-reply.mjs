@@ -10,7 +10,7 @@ export function replySendArgs(input, { tool, requestBody, body }) {
     const source = envelope.match(/^<cross-session-message\b[^>]*\bfrom-tool="([a-z][a-z0-9-]*)"/)?.[1];
     if (source !== tool) throw new Error('The incoming source tool is unverified or differs from the owned sender');
     for (const [, hint] of envelope.matchAll(/<crosschat-reply-hint\b[^>]*>([\s\S]*?)<\/crosschat-reply-hint>/g)) {
-      const command = /crosschat send --conversation (mc[12]_[A-Za-z0-9_-]+|c[1-9][0-9]*) --tool ([a-z][a-z0-9-]*) --body\b/.exec(hint);
+      const command = /crosschat send --conversation (mc[12]_[A-Za-z0-9_-]+|c[A-Z][0-9]{3}) --tool ([a-z][a-z0-9-]*) --body\b/.exec(hint);
       if (!command) throw new Error('The incoming reply hint has no complete explicit recipient command');
       const [, reference, recipientTool] = command;
       if (recipientTool !== tool) throw new Error('The reply hint selects a different recipient tool');
