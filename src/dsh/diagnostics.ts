@@ -75,10 +75,15 @@ export async function inspectDshProfiles(options: DshProfileDiagnosticOptions): 
       if (!stat.isFile()) throw new ProfileReadFailure(reason, path);
       if (stat.size > readLimit) throw new ProfileReadFailure('read-limit', path);
       const buffer = Buffer.alloc(readLimit + 1);
-      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-      active();
-      if (bytesRead > readLimit) throw new ProfileReadFailure('read-limit', path);
-      return buffer.subarray(0, bytesRead);
+      let total = 0;
+      while (total < buffer.length) {
+        const { bytesRead } = await handle.read({ buffer, offset: total, length: buffer.length - total, position: total });
+        active();
+        if (bytesRead === 0) break;
+        total += bytesRead;
+      }
+      if (total > readLimit) throw new ProfileReadFailure('read-limit', path);
+      return buffer.subarray(0, total);
     } catch (error) {
       failed = true;
       active();
@@ -182,7 +187,11 @@ export async function inspectDshProfiles(options: DshProfileDiagnosticOptions): 
     for (const path of candidates) {
       active();
       let canonical: string;
-      try { canonical = await realpath(path); active(); }
+      try {
+        canonical = await realpath(path); active();
+        const stat = await lstat(canonical); active();
+        if (!stat.isDirectory() || stat.isSymbolicLink()) { results.push({ state: 'warning', path, reason: 'profile-location' }); continue; }
+      }
       catch { active(); results.push({ state: 'warning', path, reason: 'profile-location' }); continue; }
       const key = process.platform === 'win32' ? canonical.toLowerCase() : canonical;
       if (seen.has(key)) continue;
