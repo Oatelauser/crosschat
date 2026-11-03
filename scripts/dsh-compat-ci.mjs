@@ -924,6 +924,7 @@ export function hasDesktopCleanupProof(cleanup) {
 /** A runner observation, not a native release proof: only a complete C1 process result can pass this boundary. */
 function desktopOperationClosed(result) {
   return record(result) && result.closed === true && result.failed === false && result.failure === undefined
+    && Number.isSafeInteger(result.pid) && result.pid > 0 && typeof result.stdout === 'string' && typeof result.stderr === 'string'
     && result.code === 0 && result.signal === null && result.timedOut === false && result.cancelled === false && result.truncated === false
     && Array.isArray(result.releaseUnclear) && result.releaseUnclear.length === 0
     && Array.isArray(result.secondaryProblems) && result.secondaryProblems.length === 0;
@@ -969,7 +970,10 @@ export async function runDshDesktopUninstall(options = {}, operations = {}) {
     const context = { installation: owned, launch: caller, runId: expected.runId, signal: controller.signal,
       timeoutMs: Math.max(1, deadlineAt - Date.now()) };
     let pending;
-    try { pending = Promise.resolve(operation(context)).then((value) => ({ value }), (error) => ({ error, failed: true })); }
+    try {
+      if (stage === 'desktop-uninstall') uninstallStarted = true;
+      pending = Promise.resolve(operation(context)).then((value) => ({ value }), (error) => ({ error, failed: true }));
+    }
     catch (error) { throw fail(stage, `Desktop runner failed: ${message(error)}`, error); }
     const outcome = await Promise.race([pending, stopped]);
     assertActive(stage);
@@ -985,10 +989,11 @@ export async function runDshDesktopUninstall(options = {}, operations = {}) {
     // Freeze the observation before handing control to an operation that may await or mutate its own records.
     const hostExit = { ...binding, forced: false, process: { ...observation.process, releaseUnclear: [], secondaryProblems: [] } };
     assertActive('desktop-uninstall');
-    uninstallStarted = true;
     const result = await invoke(uninstall, 'desktop-uninstall');
     if (!desktopOperationClosed(result)) throw fail('desktop-uninstall', 'The uninstall process did not close normally; removal remains unverified', result);
-    return { hostExit, process: { ...result, releaseUnclear: [], secondaryProblems: [] } };
+    const resultSnapshot = { hostExit, process: { ...result, releaseUnclear: [], secondaryProblems: [] } };
+    assertActive('desktop-uninstall');
+    return resultSnapshot;
   } catch (error) {
     if (!controller.signal.aborted) controller.abort(error);
     throw error;
