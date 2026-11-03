@@ -1,4 +1,4 @@
-/** Synchronous legacy CLI adapter; new callers use structured diagnostics. */
+/** Synchronous embedding adapter; production CLI/TUI use the owned native query. */
 import { collectDoctorDiagnostics } from '../application/diagnostics/checks.js';
 import { defaultDoctorDeps } from '../application/diagnostics/deps.js';
 import type { DoctorDeps } from '../application/diagnostics/deps.js';

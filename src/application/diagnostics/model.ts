@@ -1,9 +1,18 @@
+import type { DshBridgeInfo } from '../../dsh/client.js';
+
 export type DiagnosticLevel = 'pass' | 'warn' | 'error' | 'info';
 export type DiagnosticGroup = { kind: 'environment' } | { kind: 'tcp'; star?: string } | { kind: 'other' };
 type Empty = Record<string, never>;
 type SkillSide = 'claude' | 'codex' | 'harness';
 type Endpoint = { host: string; port: number };
 type Version = { version: string };
+
+export const HARNESS_BRIDGE_WARNING_REASONS = [
+  'DSH_REGISTRATION_UNREADABLE', 'DSH_REGISTRATION_MALFORMED', 'DSH_INVALID_ENDPOINT',
+  'DSH_AUTH_REQUIRED', 'DSH_OWNER_MISMATCH', 'DSH_UNSUPPORTED_PROTOCOL', 'DSH_UNSUPPORTED_VERSION',
+  'DSH_PROTOCOL_ERROR', 'DSH_UNAVAILABLE', 'DSH_TIMEOUT',
+] as const;
+export type HarnessBridgeWarningReason = typeof HARNESS_BRIDGE_WARNING_REASONS[number];
 
 /** Facts only: presentation and guidance belong to the renderer. No credentials. */
 export interface DiagnosticData {
@@ -25,6 +34,9 @@ export interface DiagnosticData {
   'skill-match': { side: SkillSide };
   'skill-mismatch': { side: SkillSide; paths: string[] };
   'harness-home-invalid': { value: string };
+  'harness-bridge-inactive': Empty;
+  'harness-bridge-ready': DshBridgeInfo;
+  'harness-bridge-warning': { reason: HarnessBridgeWarningReason };
   'identity-conflict': Empty;
   'identity-clear': Empty;
   'node-config-invalid': { path: string };
@@ -72,6 +84,7 @@ const LEVELS: Record<DiagnosticCode, DiagnosticLevel> = {
   'codex-daemon-missing': 'warn', 'codex-daemon-old': 'warn', 'codex-daemon-ready': 'pass',
   'skill-missing': 'warn', 'skill-installed': 'pass', 'skill-match': 'pass', 'skill-mismatch': 'warn',
   'harness-home-invalid': 'warn',
+  'harness-bridge-inactive': 'info', 'harness-bridge-ready': 'pass', 'harness-bridge-warning': 'warn',
   'identity-conflict': 'warn', 'identity-clear': 'pass',
   'node-config-invalid': 'error', 'node-config-ready': 'pass', 'node-star-id-missing': 'warn', 'node-star-id-duplicate': 'warn',
   'broker-reachable': 'pass', 'broker-unreachable': 'error', 'broker-empty': 'warn', 'broker-ready': 'pass',

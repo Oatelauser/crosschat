@@ -12,7 +12,8 @@ import { runSend, type SendArgs, type SendDeps } from './commands/send.js';
 import { runStatus, type StatusDeps, type StatusFilters } from './commands/status.js';
 import { runInstallSkills, type InstallSkillsArgs } from './commands/install-skills.js';
 import { skillPlan } from './application/maintenance/skills.js';
-import { runDoctor, runDoctorDiagnostics } from './commands/doctor.js';
+import { queryDoctorDiagnostics } from './application/diagnostics/query.js';
+import { renderDoctorDiagnostics } from './application/diagnostics/render.js';
 import { runDiscover } from './commands/discover.js';
 import { DISCOVERY_MAX_BYTES } from './application/discovery/boundary.js';
 import { runClaudeWrapper } from './commands/claude-wrapper.js';
@@ -804,14 +805,19 @@ export async function main(argv: string[]): Promise<number> {
       process.stderr.write(usage);
       return 1;
     }
-    if (json) {
-      const result = runDoctorDiagnostics();
-      process.stdout.write(`${JSON.stringify(result)}\n`);
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    process.on('SIGINT', abort);
+    process.on('SIGTERM', abort);
+    try {
+      const result = await queryDoctorDiagnostics({ signal: controller.signal });
+      process.stdout.write(json ? `${JSON.stringify(result)}\n` : `${renderDoctorDiagnostics(result).output}\n`);
       return result.summary.failed ? 1 : 0;
+    } catch (err) { return printFailure(err); }
+    finally {
+      process.off('SIGINT', abort);
+      process.off('SIGTERM', abort);
     }
-    const report = runDoctor();
-    process.stdout.write(`${report.output}\n`);
-    return report.failed ? 1 : 0;
   }
   if (command === 'install-skills') {
     if (rest.includes('--help')) {

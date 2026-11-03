@@ -8,12 +8,36 @@ import { DEFAULT_PORT } from '../../serve/broker.js';
 import { isProcessAlive } from '../../platform/process-inspector.js';
 import { listNodeStatusFiles, nodeStatusSelector, TCP_STATUS_FRESH_MS } from '../status/status-files.js';
 import { skillPlan } from '../maintenance/skills.js';
+import { inspectDshBridges } from '../../dsh/client.js';
+import { MultichatError } from '../../errors.js';
 import type { DoctorDeps } from './deps.js';
 import { DoctorSourceReadError } from './deps.js';
-import { diagnosticCheck, summarizeDiagnosticChecks } from './model.js';
+import { diagnosticCheck, HARNESS_BRIDGE_WARNING_REASONS, summarizeDiagnosticChecks } from './model.js';
 import type { DiagnosticCheckGroup, DiagnosticGroup, DiagnosticInput, DiagnosticResult } from './model.js';
 
 const CODEX_MIN_VERSION: readonly [number, number, number] = [0, 160, 0];
+
+/** Native IO stays inside the query-owned process; all faces consume this result. */
+export async function collectLiveDoctorDiagnostics(deps: DoctorDeps): Promise<DiagnosticResult> {
+  const result = collectDoctorDiagnostics(deps);
+  const environment = result.groups.find((group) => group.context.kind === 'environment')!;
+  let findings: DiagnosticInput[];
+  try {
+    const bridges = await inspectDshBridges({ home: deps.homeDir(), timeoutMs: 5000 });
+    findings = bridges.length === 0 ? [{ code: 'harness-bridge-inactive', data: {} }]
+      : bridges.map((bridge) => ({ code: 'harness-bridge-ready', data: bridge }));
+  } catch (error) {
+    const code = error instanceof MultichatError ? error.code : undefined;
+    if (code === 'DSH_CANCELLED') throw error;
+    if (code === 'DSH_NOT_CONFIGURED') findings = [{ code: 'harness-bridge-inactive', data: {} }];
+    else {
+      const reason = HARNESS_BRIDGE_WARNING_REASONS.find((candidate) => candidate === code) ?? 'DSH_UNAVAILABLE';
+      findings = [{ code: 'harness-bridge-warning', data: { reason } }];
+    }
+  }
+  environment.checks.push(...findings.map(diagnosticCheck));
+  return { groups: result.groups, summary: summarizeDiagnosticChecks(result.groups) };
+}
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);

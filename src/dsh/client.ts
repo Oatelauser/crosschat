@@ -26,6 +26,25 @@ export interface DshThread {
 export interface DshPageOptions extends DshOptions { cursor?: string; limit?: number }
 export interface DshThreadPage { data: DshThread[]; nextCursor: string | null; completeness: 'complete' | 'partial' }
 
+/** Public diagnostic facts after the existing authenticated owner handshake. */
+export interface DshBridgeInfo {
+  instanceId: string;
+  pid: number;
+  runtimeVersion: string;
+  profile?: string;
+  endpointType?: string;
+  profileDir?: string;
+}
+
+/** Inspect the bridge itself even when no live root Agent is open. No credentials escape. */
+export async function inspectDshBridges(options: DshOptions = {}): Promise<DshBridgeInfo[]> {
+  return withDshOperation(options, async (operation) => (await operation.connections()).map(({ registration }) => ({
+    instanceId: registration.instanceId, pid: registration.pid, runtimeVersion: registration.runtimeVersion,
+    ...(registration.profile === undefined ? {} : { profile: registration.profile, endpointType: registration.endpointType }),
+    ...(registration.callerIdentity === undefined ? {} : { profileDir: registration.callerIdentity.profileDir }),
+  })));
+}
+
 export function dshSessionPath(id: string): string {
   if (typeof id !== 'string' || id === '' || id === '.' || id === '..' || Buffer.byteLength(id) > 16 * 1024) throw dshError('INPUT_REJECTED', 'An exact bounded Harness native session ID is required.');
   return `/v1/sessions/${encodeURIComponent(id)}`;

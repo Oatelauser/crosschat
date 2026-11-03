@@ -1,9 +1,9 @@
 import { execFile, fork } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import process from 'node:process';
 import type { Worker } from 'node:worker_threads';
-import { diagnosticCheck, summarizeDiagnosticChecks } from './model.js';
+import { diagnosticCheck, HARNESS_BRIDGE_WARNING_REASONS, summarizeDiagnosticChecks } from './model.js';
 import type { DiagnosticCode, DiagnosticGroup, DiagnosticInput, DiagnosticResult } from './model.js';
 
 export interface DiagnosticQueryOptions {
@@ -19,7 +19,7 @@ export interface DiagnosticQueryOptions {
   createProcess?(options: { env: NodeJS.ProcessEnv }): ChildProcess;
 }
 
-type FieldType = 'text' | 'number' | 'boolean' | 'strings' | 'side' | 'nullable-number';
+type FieldType = 'text' | 'number' | 'boolean' | 'strings' | 'side' | 'nullable-number' | 'positive-integer' | 'harness-reason';
 const schemas: Record<DiagnosticCode, Record<string, FieldType>> = {
   'node-supported': { version: 'text' }, 'node-unsupported': { version: 'text' },
   'claude-ready': { executable: 'text', count: 'number' }, 'claude-empty': { executable: 'text' }, 'claude-missing': {}, 'claude-registry-malformed': { count: 'number' },
@@ -27,6 +27,8 @@ const schemas: Record<DiagnosticCode, Record<string, FieldType>> = {
   'codex-daemon-missing': {}, 'codex-daemon-old': { version: 'text' }, 'codex-daemon-ready': { version: 'text' },
   'skill-missing': { side: 'side', path: 'text' }, 'skill-installed': { side: 'side' }, 'skill-match': { side: 'side' }, 'skill-mismatch': { side: 'side', paths: 'strings' },
   'harness-home-invalid': { value: 'text' },
+  'harness-bridge-inactive': {}, 'harness-bridge-ready': { instanceId: 'text', pid: 'positive-integer', runtimeVersion: 'text' },
+  'harness-bridge-warning': { reason: 'harness-reason' },
   'identity-conflict': {}, 'identity-clear': {}, 'node-config-invalid': { path: 'text' }, 'node-config-ready': {}, 'node-star-id-missing': { label: 'text' },
   'node-star-id-duplicate': { first: 'text', label: 'text', starId: 'text' }, 'broker-reachable': { host: 'text', port: 'number' }, 'broker-unreachable': { host: 'text', port: 'number' },
   'broker-empty': {}, 'broker-ready': { stars: 'number', nodes: 'number' }, 'broker-port-custom': { port: 'number', defaultPort: 'number', path: 'text' }, 'broker-invalid': {},
@@ -41,6 +43,8 @@ function field(value: unknown, type: FieldType): unknown {
   if ((type === 'number' || type === 'nullable-number') && typeof value === 'number' && Number.isFinite(value)) return value;
   if (type === 'nullable-number' && value === null) return value;
   if (type === 'boolean' && typeof value === 'boolean') return value;
+  if (type === 'positive-integer' && typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return value;
+  if (type === 'harness-reason' && HARNESS_BRIDGE_WARNING_REASONS.some((reason) => reason === value)) return value;
   if (type === 'side' && (value === 'claude' || value === 'codex' || value === 'harness')) return value;
   if (type === 'strings' && Array.isArray(value) && value.length <= 2000 && value.every((item) => typeof item === 'string' && item.length <= 65_536)) return [...value];
   return invalid();
@@ -65,6 +69,18 @@ export function parseDiagnosticResult(input: unknown): DiagnosticResult {
       for (const [name, type] of Object.entries(schemas[code])) data[name] = field(check.data[name], type);
       if (code === 'status-process-unavailable' && check.data.pid !== undefined) data.pid = field(check.data.pid, 'number');
       if (code === 'outbox-parked' && check.data.ageMinutes !== undefined) data.ageMinutes = field(check.data.ageMinutes, 'number');
+      if (code === 'harness-bridge-ready') {
+        if (check.data.profile !== undefined || check.data.endpointType !== undefined) {
+          if (typeof check.data.profile !== 'string' || check.data.profile.trim() === '' || check.data.profile.length > 256
+            || check.data.endpointType !== (check.data.profile === 'desktop' ? 'desktop' : 'host')) invalid();
+          data.profile = check.data.profile;
+          data.endpointType = check.data.endpointType;
+        }
+        if (check.data.profileDir !== undefined) {
+          if (typeof check.data.profileDir !== 'string' || check.data.profileDir.length > 65_536 || !isAbsolute(check.data.profileDir)) invalid();
+          data.profileDir = check.data.profileDir;
+        }
+      }
       // Every discriminant and schema field was checked above; this restores the correlated union.
       const validated = diagnosticCheck({ code, data } as DiagnosticInput);
       if (check.level !== validated.level) invalid();
