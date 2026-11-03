@@ -170,6 +170,48 @@ describe('runDoctor', () => {
     expect(noRepo.output).toContain('claude 侧 skill 已安装（安装源 skill 目录未定位到，跳过版本比对）');
   });
 
+  it('checks the default Harness skill and its references without changing warning exit semantics', () => {
+    const skillDir = join('C:\\home', '.dsh', 'skills', 'crosschat');
+    const exists = vi.fn((path: string) => path !== join(skillDir, 'SKILL.md'));
+    const missing = runDoctor(makeDeps({ exists }));
+    expect(exists).toHaveBeenCalledWith(join(skillDir, 'SKILL.md'));
+    expect(missing.failed).toBe(false);
+    expect(missing.output).toContain(`harness 侧 skill 未安装（${join(skillDir, 'SKILL.md')}）`);
+
+    const stale = runDoctor(makeDeps({
+      repoSkillFiles: () => [{ path: 'SKILL.md', content: 'main' }, { path: 'references/send.md', content: 'current' }],
+      readFile: (path) => path === join(skillDir, 'references/send.md') ? 'old' : path.endsWith('SKILL.md') ? 'main' : 'current',
+    }));
+    expect(stale.output).toContain('harness 侧 skill 与安装源不一致（references/send.md）');
+    expect(stale.output).toContain('claude 侧 skill 与安装源一致');
+    expect(stale.output).toContain('codex 侧 skill 与安装源一致');
+  });
+
+  it('uses the configured Harness home without probing the default or historical copies', () => {
+    const dshHome = join(process.cwd(), 'fixture-only-custom-harness');
+    const exists = vi.fn<(path: string) => boolean>().mockReturnValue(true);
+    const readFile = vi.fn<(path: string) => string>().mockReturnValue('SKILL body');
+    const report = runDoctor(makeDeps({ env: { DSH_HOME: dshHome }, exists, readFile }));
+    expect(report.output).toContain('harness 侧 skill 与安装源一致');
+    expect(exists.mock.calls.map(([path]) => path)).toContain(join(dshHome, 'skills', 'crosschat', 'SKILL.md'));
+    expect(exists.mock.calls.map(([path]) => path)).not.toContain(join('C:\\home', '.dsh', 'skills', 'crosschat', 'SKILL.md'));
+    expect(readFile.mock.calls.map(([path]) => path)).toContain(join(dshHome, 'skills', 'crosschat', 'SKILL.md'));
+  });
+
+  it('reports a relative Harness home without reading a guessed destination or losing other checks', () => {
+    const exists = vi.fn<(path: string) => boolean>().mockReturnValue(true);
+    const readFile = vi.fn<(path: string) => string>().mockReturnValue('SKILL body');
+    const report = runDoctor(makeDeps({ env: { DSH_HOME: 'relative-harness' }, exists, readFile }));
+    expect(report.failed).toBe(false);
+    expect(report.output).toContain('DSH_HOME');
+    expect(report.output).toContain('relative-harness');
+    expect(report.output).toContain('绝对路径');
+    expect(report.output).toContain('claude 侧 skill 与安装源一致');
+    expect(report.output).toContain('codex 侧 skill 与安装源一致');
+    expect(report.output).not.toContain('harness 侧 skill 与安装源一致');
+    expect(exists.mock.calls.map(([path]) => path)).toHaveLength(2);
+  });
+
   it('028 skill 分层：递归比对 references/ 子文件，点名差异文件；多出文件不算不一致', () => {
     const repo = [
       { path: 'SKILL.md', content: 'main' },

@@ -1,4 +1,5 @@
 import { Worker } from 'node:worker_threads';
+import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -30,6 +31,16 @@ function fixture(overrides: Partial<DoctorDeps> = {}): DoctorDeps {
 }
 
 describe('structured diagnostics', () => {
+  it('preserves Harness findings across the JSON boundary and rejects an unknown skill side', async () => {
+    const { parseDiagnosticResult, formatDiagnosticCheck } = await import('../src/application/diagnostics/index.js');
+    const check = { code: 'skill-mismatch', level: 'warn', data: { side: 'harness', paths: ['references/send.md'] } };
+    const input = { groups: [{ context: { kind: 'environment' }, checks: [check] }], summary: { pass: 0, warn: 1, error: 0, failed: false } };
+    const parsed = parseDiagnosticResult(input);
+    expect(parsed).toEqual(input);
+    expect(formatDiagnosticCheck(parsed.groups[0]!.checks[0]!).description).toContain('harness 侧 skill');
+    expect(() => parseDiagnosticResult({ ...input, groups: [{ context: { kind: 'environment' }, checks: [{ ...check, data: { ...check.data, side: 'unknown' } }] }] })).toThrow('malformed');
+  });
+
   it('separates typed checks and severity counts from the unchanged synchronous CLI rendering', async () => {
     const { collectDoctorDiagnostics, renderDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
     const deps = fixture({ nodeVersion: '20.0.0' });
@@ -96,6 +107,25 @@ describe('structured diagnostics', () => {
 });
 
 describe('isolated cancellable diagnostics', () => {
+  it.each([undefined, 'isolated', 'inherit'] as const)('keeps Harness home inside the selected diagnostic environment (%s)', async (nativeEnvironment) => {
+    const { queryDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
+    const home = join(tmpdir(), 'crosschat-diagnostic-scoped-home');
+    const dshHome = join(tmpdir(), 'crosschat-diagnostic-host-harness');
+    const report = { groups: [], summary: { pass: 0, warn: 0, error: 0, failed: false } };
+    let actualHome: string | undefined;
+    const result = await queryDoctorDiagnostics({
+      home, nativeEnvironment, env: { DSH_HOME: dshHome },
+      createProcess: ({ env }) => {
+        actualHome = env.DSH_HOME;
+        return spawn(process.execPath, ['-e', `process.on('disconnect',()=>process.exit(0));process.send(${JSON.stringify(report)});`], {
+          env, stdio: ['ignore', 'ignore', 'ignore', 'ipc'], windowsHide: true, detached: process.platform !== 'win32',
+        });
+      },
+    });
+    expect(result).toEqual(report);
+    expect(actualHome).toBe(nativeEnvironment === 'inherit' ? dshHome : join(home, '.dsh'));
+  });
+
   it('terminates a real probe child through the default built isolation path on cancellation', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'crosschat-diagnostic-tree-'));
     const marker = join(dir, 'probe-pid');
