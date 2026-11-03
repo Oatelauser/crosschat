@@ -31,6 +31,31 @@ function fixture(overrides: Partial<DoctorDeps> = {}): DoctorDeps {
 }
 
 describe('structured diagnostics', () => {
+  it('validates native bridge facts and strips secret fields across the diagnostic IPC boundary', async () => {
+    const { parseDiagnosticResult, formatDiagnosticCheck } = await import('../src/application/diagnostics/index.js');
+    const check = { code: 'harness-bridge-ready', level: 'pass', data: { instanceId: 'f61b7f24-b2cb-4d32-960f-38b877c12ccd',
+      pid: 123, runtimeVersion: '0.2.1-rc.2', profile: 'desktop', endpointType: 'desktop', profileDir: join(tmpdir(), 'owned-desktop-profile') } };
+    const input = { groups: [{ context: { kind: 'environment' }, checks: [{ ...check, data: { ...check.data, token: 'private-token', url: 'private-url' } }] }],
+      summary: { pass: 1, warn: 0, error: 0, failed: false } };
+    const parsed = parseDiagnosticResult(input);
+    expect(parsed.groups[0]!.checks).toEqual([check]);
+    expect(formatDiagnosticCheck(parsed.groups[0]!.checks[0]!).description).toContain('dsh-desktop');
+    for (const data of [{ ...check.data, pid: -1 }, { ...check.data, pid: 1.5 }, { ...check.data, endpointType: 'host' },
+      { ...check.data, profile: undefined }, { ...check.data, profileDir: 'relative' }]) {
+      expect(() => parseDiagnosticResult({ ...input, groups: [{ context: { kind: 'environment' }, checks: [{ ...check, data }] }] })).toThrow('malformed');
+    }
+    expect(() => parseDiagnosticResult({ ...input, groups: [{ context: { kind: 'environment' }, checks: [{ ...check, level: 'warn' }] }] })).toThrow('malformed');
+  });
+
+  it('accepts only fixed native warning reasons and supplies the same guidance to TUI details', async () => {
+    const { parseDiagnosticResult, formatDiagnosticCheck } = await import('../src/application/diagnostics/index.js');
+    const input = { groups: [{ context: { kind: 'environment' }, checks: [{ code: 'harness-bridge-warning', level: 'warn', data: { reason: 'DSH_AUTH_REQUIRED' } }] }],
+      summary: { pass: 0, warn: 1, error: 0, failed: false } };
+    const parsed = parseDiagnosticResult(input);
+    expect(formatDiagnosticCheck(parsed.groups[0]!.checks[0]!).guidance).toContain('鉴权');
+    expect(() => parseDiagnosticResult({ ...input, groups: [{ context: { kind: 'environment' }, checks: [{ code: 'harness-bridge-warning', level: 'warn', data: { reason: 'secret-untrusted-detail' } }] }] })).toThrow('malformed');
+  });
+
   it('preserves Harness findings across the JSON boundary and rejects an unknown skill side', async () => {
     const { parseDiagnosticResult, formatDiagnosticCheck } = await import('../src/application/diagnostics/index.js');
     const check = { code: 'skill-mismatch', level: 'warn', data: { side: 'harness', paths: ['references/send.md'] } };

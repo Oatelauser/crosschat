@@ -1,12 +1,16 @@
 import { createServer } from 'node:http';
+import { execFile, fork } from 'node:child_process';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { getDshThread, listDshThreadPage, listDshThreads } from '../src/dsh/client.js';
 import { deliverToDshSession } from '../src/dsh/deliver.js';
+import { queryDoctorDiagnostics } from '../src/application/diagnostics/query.js';
+import { renderDoctorDiagnostics } from '../src/application/diagnostics/render.js';
 
 const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const dispose of cleanup.splice(0).reverse()) await dispose(); });
@@ -26,7 +30,7 @@ function nativeThread(id: string, status: 'idle' | 'running' = 'idle') {
   return { id, name: null, cwd: '/current/work', originalCwd: '/original/work', status, createdAt: 123 };
 }
 
-async function fixture(options: { home?: string; handler?: (request: IncomingMessage, response: ServerResponse) => void; info?: Record<string, unknown>; infoStatus?: number; runtimeVersion?: string; profile?: string; endpointType?: string } = {}) {
+async function fixture(options: { home?: string; handler?: (request: IncomingMessage, response: ServerResponse) => void; infoHandler?: (request: IncomingMessage, response: ServerResponse) => void; info?: Record<string, unknown>; infoStatus?: number; runtimeVersion?: string; profile?: string; endpointType?: string } = {}) {
   const home = options.home ?? await directory();
   const instancesDir = join(home, '.crosschat', 'dsh', 'instances');
   await mkdir(instancesDir, { recursive: true, mode: 0o700 });
@@ -39,7 +43,7 @@ async function fixture(options: { home?: string; handler?: (request: IncomingMes
   const server = createServer((request, response) => {
     calls.push(`${request.method} ${request.url}`);
     if (request.headers.authorization !== `Bearer ${token}`) return reply(response, { error: { code: 'DSH_AUTH_REQUIRED' } }, 401);
-    if (request.url === '/v1/info') return reply(response, info, options.infoStatus ?? 200);
+    if (request.url === '/v1/info') return options.infoHandler ? options.infoHandler(request, response) : reply(response, info, options.infoStatus ?? 200);
     if (options.handler) return options.handler(request, response);
     reply(response, { items: [nativeThread('native/+?雪'), nativeThread('busy', 'running')] });
   });
@@ -280,5 +284,131 @@ describe('DSH native bridge adapter', () => {
     } });
     await expect(deliverToDshSession('target', 'payload', { home: service.home, timeoutMs: 100 })).rejects.toMatchObject({ code: 'DSH_WRITE_UNCERTAIN' });
     expect(writes).toBe(1);
+  });
+});
+
+describe('Harness read-only bridge diagnostics', () => {
+  const env = { PATH: '', CROSSCHAT_CODEX_BIN: 'unavailable-codex', CROSSCHAT_CLAUDE_BIN: 'unavailable-claude' };
+  const diagnose = (home: string, signal?: AbortSignal) => queryDoctorDiagnostics({ home, env, signal,
+    createProcess: ({ env: childEnv }) => fork(new URL('../dist/application/diagnostics/isolated.js', import.meta.url), [], {
+      env: childEnv, stdio: ['ignore', 'ignore', 'ignore', 'ipc'], windowsHide: true, detached: process.platform !== 'win32',
+    }),
+  });
+
+  it('reports no live bridge as info without creating or repairing registrations', async () => {
+    const home = await directory();
+    const result = await diagnose(home);
+    expect(result.groups.flatMap((group) => group.checks)).toContainEqual({ code: 'harness-bridge-inactive', level: 'info', data: {} });
+    expect(result.summary.failed).toBe(false);
+    expect(await readdir(home)).toEqual([]);
+  });
+
+  it('verifies every instance without listing or creating sessions and publishes only safe facts', async () => {
+    const desktop = await fixture({ profile: 'desktop', endpointType: 'desktop', info: { secretConfig: 'private-fixture-configuration' } });
+    const profileDir = join(desktop.home, 'native-desktop-profile');
+    desktop.info.callerIdentity = { schema: 1, profileDir };
+    const bytes = JSON.stringify({ ...desktop.registration, callerIdentity: { schema: 1, profileDir } });
+    await writeFile(desktop.file, bytes, { mode: 0o600 });
+    const unknown = await fixture({ home: desktop.home });
+    const result = await diagnose(desktop.home);
+    const checks = result.groups.flatMap((group) => group.checks).filter((check) => check.code.startsWith('harness-bridge-'));
+    expect(checks).toHaveLength(2);
+    expect(checks).toEqual(expect.arrayContaining([
+      { code: 'harness-bridge-ready', level: 'pass', data: { instanceId: desktop.instanceId, pid: process.pid,
+        runtimeVersion: '0.2.1-rc.2', profile: 'desktop', endpointType: 'desktop', profileDir } },
+      { code: 'harness-bridge-ready', level: 'pass', data: { instanceId: unknown.instanceId, pid: process.pid, runtimeVersion: '0.2.1-rc.2' } },
+    ]));
+    expect(desktop.calls).toEqual(['GET /v1/info']);
+    expect(unknown.calls).toEqual(['GET /v1/info']);
+    expect(await readFile(desktop.file, 'utf8')).toBe(bytes);
+    for (const secret of [desktop.token, desktop.url, 'private-fixture-configuration']) expect(JSON.stringify(checks)).not.toContain(secret);
+    const text = renderDoctorDiagnostics(result).output;
+    expect(text).toContain('dsh-desktop');
+    expect(text).toContain(profileDir);
+    expect(text).toContain('未核实');
+  });
+
+  it.each([
+    { infoStatus: 401, reason: 'DSH_AUTH_REQUIRED' },
+    { info: { pid: process.pid + 1 }, reason: 'DSH_OWNER_MISMATCH' },
+    { runtimeVersion: '0.3.0', reason: 'DSH_UNSUPPORTED_VERSION' },
+    { info: { protocol: 2 }, reason: 'DSH_UNSUPPORTED_PROTOCOL' },
+    { info: { schema: 2, secret: 'private-error-detail' }, reason: 'DSH_PROTOCOL_ERROR' },
+    { infoHandler: (_request: IncomingMessage, response: ServerResponse) => response.destroy(), reason: 'DSH_UNAVAILABLE' },
+  ])('keeps other findings and warns without failing doctor for $reason', async (scenario) => {
+    const bridge = await fixture(scenario);
+    const bytes = await readFile(bridge.file, 'utf8');
+    const result = await diagnose(bridge.home);
+    const checks = result.groups.flatMap((group) => group.checks);
+    expect(checks).toContainEqual({ code: 'harness-bridge-warning', level: 'warn', data: { reason: scenario.reason } });
+    expect(checks).toContainEqual(expect.objectContaining({ code: 'node-supported' }));
+    expect(result.summary.failed).toBe(false);
+    expect(bridge.calls).toEqual(['GET /v1/info']);
+    expect(await readFile(bridge.file, 'utf8')).toBe(bytes);
+    expect(JSON.stringify(result)).not.toContain('private-error-detail');
+    expect(JSON.stringify(result)).not.toContain(bridge.token);
+  });
+
+  it('reports a corrupt registration without leaking or replacing its original bytes', async () => {
+    const bridge = await fixture();
+    await writeFile(bridge.file, '{private-corrupt-registration');
+    const result = await diagnose(bridge.home);
+    expect(result.groups.flatMap((group) => group.checks)).toContainEqual({
+      code: 'harness-bridge-warning', level: 'warn', data: { reason: 'DSH_REGISTRATION_MALFORMED' },
+    });
+    expect(bridge.calls).toEqual([]);
+    expect(await readFile(bridge.file, 'utf8')).toBe('{private-corrupt-registration');
+    expect(JSON.stringify(result)).not.toContain('private-corrupt');
+  });
+
+  it('bounds a stalled handshake to one shared five-second budget without retrying', async () => {
+    const bridge = await fixture({ infoHandler: () => undefined });
+    const result = await diagnose(bridge.home);
+    expect(result.groups.flatMap((group) => group.checks)).toContainEqual({
+      code: 'harness-bridge-warning', level: 'warn', data: { reason: 'DSH_TIMEOUT' },
+    });
+    expect(result.summary.failed).toBe(false);
+    expect(bridge.calls).toEqual(['GET /v1/info']);
+  }, 10_000);
+
+  it('cancels an in-flight handshake and releases the owned process and connection', async () => {
+    let enter = () => {};
+    let close = () => {};
+    const entered = new Promise<void>((resolve) => { enter = resolve; });
+    const closed = new Promise<void>((resolve) => { close = resolve; });
+    const bridge = await fixture({ infoHandler: (_request, response) => { response.once('close', close); enter(); } });
+    const controller = new AbortController();
+    const pending = diagnose(bridge.home, controller.signal).then(() => 'resolved', (error: Error) => error.name);
+    try {
+      const state = await Promise.race([entered.then(() => 'entered'), pending]);
+      expect(state).toBe('entered');
+      controller.abort();
+      expect(await pending).toBe('AbortError');
+      await closed;
+      expect(bridge.calls).toEqual(['GET /v1/info']);
+    } finally { controller.abort(); await pending; }
+  }, 10_000);
+
+  it.each([200, 401])('uses the same native facts in the actual CLI text and JSON, HTTP %s', async (status) => {
+    const bridge = await fixture({ profile: 'web', endpointType: 'host', infoStatus: status });
+    const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
+    const run = (args: string[]) => new Promise<{ status: string | number; stdout: string; stderr: string }>((resolve) => {
+      execFile(process.execPath, [cli, 'doctor', ...args], { encoding: 'utf8', timeout: 10_000, maxBuffer: 1024 * 1024, windowsHide: true,
+        env: { ...process.env, ...env, HOME: bridge.home, USERPROFILE: bridge.home, APPDATA: join(bridge.home, 'appdata'),
+          LOCALAPPDATA: join(bridge.home, 'localappdata'), CODEX_HOME: join(bridge.home, '.codex'), CODEX_SQLITE_HOME: join(bridge.home, '.codex'),
+          CLAUDE_CONFIG_DIR: join(bridge.home, '.claude'), DSH_HOME: join(bridge.home, '.dsh'), CROSSCHAT_DIAGNOSTIC_HOME: undefined } },
+      (error, stdout, stderr) => resolve({ status: error?.code ?? 0, stdout, stderr }));
+    });
+    const json = await run(['--json']);
+    expect(json.status, json.stderr).toBe(0);
+    const result = JSON.parse(json.stdout);
+    expect(result.groups.flatMap((group: { checks: Array<{ code: string }> }) => group.checks)).toContainEqual(expect.objectContaining({
+      code: status === 200 ? 'harness-bridge-ready' : 'harness-bridge-warning', level: status === 200 ? 'pass' : 'warn',
+    }));
+    const text = await run([]);
+    expect(text.status, text.stderr).toBe(0);
+    expect(text.stdout).toBe(`${renderDoctorDiagnostics(result).output}\n`);
+    expect(bridge.calls).toEqual(['GET /v1/info', 'GET /v1/info']);
+    expect(json.stdout + text.stdout).not.toContain(bridge.token);
   });
 });
