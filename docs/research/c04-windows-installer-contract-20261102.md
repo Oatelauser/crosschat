@@ -12,7 +12,7 @@
 
 本阶段不重试任务书列出的 5 个被拒资源，也不以换工具、换 URL 或委托其它 agent 的方式绕行；缺失保持待核实。
 
-2026-11-03续接：下列阶段A/B事实与缺口保留；当前新增的C1受控进程及C2卸载前守卫见文末“C1/C2实施补记”。“当时未实现”不代表后续组件不存在，实际安装/卸载合同和原生验证仍未补齐。
+2026-11-03续接：下列阶段A/B事实与缺口保留；C1受控进程及C2卸载前守卫见文末“C1/C2实施补记”。最新[C3执行合同与独立环境方案](../development/evidence/c04-worker-20261029/I03-C3-execution-plan.md)订正自定义安装目录/交互finish启动的旧推断，明确Host私有退出确认与强停分支；以下“本轮未实现/没有守卫”保留为阶段A/B当时状态，不代表C1/C2不存在。实际原生执行与验收仍未完成。
 
 ## 一、固定发行物与可信准入链
 
@@ -33,11 +33,11 @@
 
 | 项目 | 已知 | 分级 | 结论与缺口 |
 | --- | --- | --- | --- |
-| 安装器类型与模式 | `apps/desktop/scripts/electron-builder-config.mjs:238–261`：NSIS、`oneClick:false`、`perMachine:false`、`allowElevation:false`、`allowToChangeInstallationDirectory:false` | A | 辅助式安装、当前用户级、不请求提权、无“更改安装目录”页面。 |
+| 安装器类型与模式 | `apps/desktop/scripts/electron-builder-config.mjs:238–261`：NSIS、`oneClick:false`、`perMachine:false`、`allowElevation:false`、`allowToChangeInstallationDirectory:false` | A | 辅助式、当前用户级、不请求提权。C3订正：不能从最后一个配置推断自定义界面禁止改目录；同版本README说明可编辑，真实包待验。 |
 | 提权与用户范围 | 同上；`apps/desktop/scripts/installer.nsh:32–44` 拒绝 all-users 及已有 HKLM 安装 | A（组合） | 当前用户安装，不走 all-users/HKLM；真实包在干净 runner 上的实际行为仍为 C。 |
 | 静默模式 | `apps/desktop/scripts/installer.nsh:70` 存在静默分支 | A（分支存在） | **不能**据此确认 `/S` 开关名、参数拼写或静默时的完整行为；这些是 B/C，不得当事实。 |
-| 目录选择 | UI 目录页被禁用（`allowToChangeInstallationDirectory:false`）；`installer.nsh:242` 写 `InstallLocation` | A（源码行为） | 命令行 `/D=` 是否仍生效、`InstallLocation` 的键路径/值、默认安装根均未确证；不能由 UI 配置外推。 |
-| 安装后是否启动应用 | 未确证 | C | 任务书明确“静默自启动”尚未确证；不得假设安装后不启动，也不得假设会启动。 |
+| 目录选择 | builder配置为false；同版本 `apps/desktop/README.md:252–254` 明确自定义安装UI可编辑目录，`installer.nsh:79–87` 保留自定义welcome选中的目录，242行写 `InstallLocation` | A（源码/说明） | 旧“UI目录不可选”推断撤回。实际包、命令行 `/D=`、`InstallLocation` 的完整键路径/值、默认根仍未确证；不打开已被拒的pages.nsh补证。 |
+| 安装后是否启动应用 | README:252–254说明交互式finish页启动勾选默认选中，先退出安装器再启动 | A（交互文档）；C（实际/静默） | C3补证；实际正式包与静默自启动仍未知，不能外推交互说明到静默。 |
 | 安装产物 | `apps/desktop/README.md:131–141`：内置 `resources/runtime/cli/bin/dsh.cmd`；插件管理前初始化并完整退出，命令结束后才更新/卸载 | A（README 合同） | 真实安装后的文件布局、目录清单与卸载器文件名仍为 C。 |
 | 官方卸载入口 | `apps/desktop/installer/uninstall.nsh:12–35` 存在；更新或 `KEEP_APP_DATA` 跳过数据清理，否则处理 Electron APPDATA/updater 缓存，保留 Harness home；锁定残留不令卸载失败 | A（源码行为） | 固定卸载器名、Apps & Features 注册项、卸载参数均未确证；卸载退出码 0 不等于数据/注册全部清理。 |
 | 协议注册 | `electron-builder-config.mjs:108` 声明 `dsh` scheme；正式 main 启动调用 `app.setAsDefaultProtocolClient('dsh')`（研究记录） | A（声明/调用） | 实际注册表键、键值、由安装器还是应用创建、卸载是否撤销，均未确证。 |
@@ -111,7 +111,7 @@
 | 唯一 close 与错误保真 | 单一 close 状态 | 文件 `close` 只启动一次并保存落定/未决结果；成功路径与失败 `finally` 共用该结果，不重复调用。close 失败或未落定不能交付成功。原始文件/签名失败与清理失败并存时，保留主因、已有 `cause`、`cleanupError`/`cleanupCause`；冻结或假值异常用明确包装保留 `stage`、原始 `cause` 与 `originalError`，不吞掉清理信息；没有额外清理问题时不包装。 |
 | 返回值 | `{ path, version, size, integrity, filename, publisher }` | 只报告本次观测；不启动安装器/卸载器，不写安装目录、注册表、协议或用户配置。 |
 
-该结果**不是**可伪造的安装授权：它不把“已核验的字节”绑定到未来实际执行的进程，也不承诺核验结束后到执行之间文件不变。未来执行层必须重新核验实际执行文件与目的地。
+该结果只是本次只读准入观测，**不是不可伪造的安装授权**：它不把“已核验的字节”绑定到未来实际执行的进程，也不承诺核验结束后到执行之间文件不变。未来执行层必须重新核验实际执行文件与目的地。
 
 ### 3. 未实现且不得据此执行的部分
 
@@ -167,3 +167,7 @@ C1已在既有模块实现 `runDshDesktopProcess`，提供取消/总截止、有
 C2由root独立实现 `runDshDesktopUninstall(options,operations)`，规格、验证与边界见[C2记录](../development/evidence/c04-worker-20261029/I03-C2-development.md)。observeHostExit与uninstall是无默认实现的runner回调；先固定调用方installation/root/runId/instance/session，只有匹配的forced:false和完整C1正常close记录才允许调用uninstall。执行前重核取消/同一截止，超时或迟到观测不会触发后续卸载；错误保留是否已调用及安装归属。不生成uninstalled或两类登记清理证明。
 
 这闭合了可用受控回调验证的“卸载前守卫”编排接缝，**尚未接入真实Windows Host观察器、官方卸载命令或main/probe**。回调是可信runner边界，必须独立核实所观察进程确为本次Host且未强制退出；字段相等不抗伪造。发布者实际值、正式安装/卸载参数、实际目的地约束、执行字节重核、原生注册清理与干净runner验收仍缺；不据此实际执行或关闭C04。
+
+## C3执行方案补记（2026-11-03）
+
+[C3方案](../development/evidence/c04-worker-20261029/I03-C3-execution-plan.md)给出从download/admit、官方交互安装、内置runtime/profile/加载、真实UI身份与投递、C2卸载前守卫到官方卸载/系统注册对账的整条接线；推荐独立可销毁Windows 11 VM先探测真实合同，之后才接自动化和独立workflow。正式Host有独立PID和私有shutdown-complete；stop还可能升级SIGTERM/SIGKILL，普通Quit的外部自然退出证明尚缺，不能拿shell/helper的正常记录顶替。自定义目录和交互finish启动已按固定README补证，但实际包、静默参数、publisher和系统注册事实仍未知。本机只读确认Hyper-V模块/vmms存在但当前无管理权限，未创建VM或安装软件；原生环境及执行范围待用户决定，新脚本/workflow未创建/批准，C04/I03保持开放。
