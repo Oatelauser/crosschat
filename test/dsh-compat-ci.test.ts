@@ -443,6 +443,24 @@ describe('DeepSeek Harness guarded desktop uninstall', () => {
     }
   });
 
+  it.each(['observe', 'uninstall'])('classifies its own fired deadline even when the wall clock has not reached it (%s)', async (phase) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    const input = options();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const uninstall = vi.fn(async () => { if (phase === 'uninstall') await gate; return closed(); });
+    try {
+      const settled = runDshDesktopUninstall({ ...input, timeoutMs: 25 }, {
+        observeHostExit: async () => { if (phase === 'observe') await gate; return observed(input); }, uninstall,
+      }).then(() => undefined, (error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(25);
+      expect(await settled).toMatchObject({ timedOut: true, cancelled: false,
+        uninstallStarted: phase === 'uninstall', installation: input.installation });
+      expect(uninstall).toHaveBeenCalledTimes(phase === 'uninstall' ? 1 : 0);
+    } finally { release(); await gate; clock.mockRestore(); vi.useRealTimers(); }
+  });
+
   it('rejects abnormal uninstall records and preserves executor causes without retrying', async () => {
     const input = options();
     for (const invalid of [{ code: 1 }, { signal: 'SIGTERM' }, { failed: true, failure: false }, { closed: false }, { timedOut: true },
