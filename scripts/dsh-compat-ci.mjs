@@ -621,8 +621,11 @@ function readAuthenticodeSignature(path, { signal } = {}) {
   return new Promise((resolve, reject) => {
     let child;
     try {
+      // Windows PowerShell must construct its own module path. Inheriting a
+      // PowerShell 7 path can load incompatible security type data before signing reads.
+      const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toLowerCase() !== 'psmodulepath'));
       child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', authenticodeSignatureScript], {
-        env: { ...process.env, DSH_ADMIT_SIGNATURE_PATH: path }, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...env, DSH_ADMIT_SIGNATURE_PATH: path }, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch (error) { reject(admissionFailure('signature', `The signature reader could not start: ${message(error)}`, error)); return; }
     let settled = false; let closing = false; let pendingError; let waitTimer; let total = 0;
