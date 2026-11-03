@@ -1,5 +1,5 @@
 import { readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { defaultOutboxDir, mailboxFileFor } from '../../outbox.js';
 import { watchdogStatus } from '../../watchdog.js';
 import { parseNodeConfig } from '../../serve/node-config.js';
@@ -7,6 +7,7 @@ import type { BrokerEntry } from '../../serve/node-config.js';
 import { DEFAULT_PORT } from '../../serve/broker.js';
 import { isProcessAlive } from '../../platform/process-inspector.js';
 import { listNodeStatusFiles, nodeStatusSelector, TCP_STATUS_FRESH_MS } from '../status/status-files.js';
+import { skillPlan } from '../maintenance/skills.js';
 import type { DoctorDeps } from './deps.js';
 import { DoctorSourceReadError } from './deps.js';
 import { diagnosticCheck, summarizeDiagnosticChecks } from './model.js';
@@ -66,9 +67,11 @@ export function collectDoctorDiagnostics(deps: DoctorDeps): DiagnosticResult {
   }
 
   const repo = deps.repoSkillFiles();
-  for (const root of ['.claude', '.codex'] as const) {
-    const side = root === '.claude' ? 'claude' : 'codex';
-    const skillDir = join(deps.homeDir(), root, 'skills', 'crosschat');
+  const dshHome = deps.env.DSH_HOME;
+  const invalidDshHome = dshHome !== undefined && dshHome !== '' && !isAbsolute(dshHome);
+  const targets = skillPlan(deps.homeDir(), { DSH_HOME: invalidDshHome ? undefined : dshHome });
+  for (const { side, path: skillDir } of targets) {
+    if (side === 'harness' && invalidDshHome) continue;
     const path = join(skillDir, 'SKILL.md');
     if (!deps.exists(path)) {
       add({ code: 'skill-missing', data: { side, path } });
@@ -82,6 +85,7 @@ export function collectDoctorDiagnostics(deps: DoctorDeps): DiagnosticResult {
     if (paths.length === 0) add({ code: 'skill-match', data: { side } });
     else add({ code: 'skill-mismatch', data: { side, paths } });
   }
+  if (invalidDshHome) add({ code: 'harness-home-invalid', data: { value: dshHome } });
 
   const claudeSide = (deps.env.CLAUDE_CODE_MESSAGING_SOCKET ?? '') !== '';
   const codexSide = (deps.env.CODEX_THREAD_ID ?? '') !== '' || (deps.env.CODEX_SESSION_ID ?? '') !== '';

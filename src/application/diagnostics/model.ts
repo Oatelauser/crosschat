@@ -1,7 +1,7 @@
 export type DiagnosticLevel = 'pass' | 'warn' | 'error' | 'info';
 export type DiagnosticGroup = { kind: 'environment' } | { kind: 'tcp'; star?: string } | { kind: 'other' };
 type Empty = Record<string, never>;
-type SkillSide = 'claude' | 'codex';
+type SkillSide = 'claude' | 'codex' | 'harness';
 type Endpoint = { host: string; port: number };
 type Version = { version: string };
 
@@ -24,6 +24,7 @@ export interface DiagnosticData {
   'skill-installed': { side: SkillSide };
   'skill-match': { side: SkillSide };
   'skill-mismatch': { side: SkillSide; paths: string[] };
+  'harness-home-invalid': { value: string };
   'identity-conflict': Empty;
   'identity-clear': Empty;
   'node-config-invalid': { path: string };
@@ -70,6 +71,7 @@ const LEVELS: Record<DiagnosticCode, DiagnosticLevel> = {
   'codex-missing': 'warn', 'codex-unparsed': 'warn', 'codex-cli-old': 'warn', 'codex-cli-ready': 'pass',
   'codex-daemon-missing': 'warn', 'codex-daemon-old': 'warn', 'codex-daemon-ready': 'pass',
   'skill-missing': 'warn', 'skill-installed': 'pass', 'skill-match': 'pass', 'skill-mismatch': 'warn',
+  'harness-home-invalid': 'warn',
   'identity-conflict': 'warn', 'identity-clear': 'pass',
   'node-config-invalid': 'error', 'node-config-ready': 'pass', 'node-star-id-missing': 'warn', 'node-star-id-duplicate': 'warn',
   'broker-reachable': 'pass', 'broker-unreachable': 'error', 'broker-empty': 'warn', 'broker-ready': 'pass',

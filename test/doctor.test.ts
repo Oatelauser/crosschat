@@ -64,7 +64,7 @@ describe('runDoctor', () => {
     expect(lines[1]).toBe('  ✅ Node v24.7.0 (≥22)');
     expect(lines.at(-3)).toBe('其他');
     expect(lines.at(-2)).toBe('  ✅ 发件箱空（无暂存消息）');
-    expect(lines.at(-1)).toBe('结论: 8 项通过，0 项警告，0 项错误');
+    expect(lines.at(-1)).toBe('结论: 9 项通过，0 项警告，0 项错误');
     expect(report.failed).toBe(false);
   });
 
@@ -161,7 +161,7 @@ describe('runDoctor', () => {
   it('warns on missing / mismatched skills and passes on repo-identical ones', () => {
     const missing = runDoctor(makeDeps({ exists: () => false }));
     expect(missing.failed).toBe(false);
-    expect(missing.output.match(/⚠️ .* skill 未安装/g)).toHaveLength(2);
+    expect(missing.output.match(/⚠️ .* skill 未安装/g)).toHaveLength(3);
     expect(missing.output).toContain('crosschat install-skills');
     const stale = runDoctor(makeDeps({ readFile: () => 'old skill body' }));
     expect(stale.output).toContain('claude 侧 skill 与安装源不一致');
@@ -196,6 +196,24 @@ describe('runDoctor', () => {
     expect(exists.mock.calls.map(([path]) => path)).toContain(join(dshHome, 'skills', 'crosschat', 'SKILL.md'));
     expect(exists.mock.calls.map(([path]) => path)).not.toContain(join('C:\\home', '.dsh', 'skills', 'crosschat', 'SKILL.md'));
     expect(readFile.mock.calls.map(([path]) => path)).toContain(join(dshHome, 'skills', 'crosschat', 'SKILL.md'));
+  });
+
+  it.each([undefined, ''])('uses the default Harness skill home when DSH_HOME is %s', (DSH_HOME) => {
+    const exists = vi.fn<(path: string) => boolean>().mockReturnValue(true);
+    const report = runDoctor(makeDeps({ env: { DSH_HOME }, exists }));
+    expect(report.output).toContain('harness 侧 skill 与安装源一致');
+    expect(exists.mock.calls.map(([path]) => path)).toContain(join('C:\\home', '.dsh', 'skills', 'crosschat', 'SKILL.md'));
+  });
+
+  it('checks a shared physical skill destination only once, like install and uninstall', () => {
+    const home = join(process.cwd(), 'fixture-only-shared-skill-home');
+    const exists = vi.fn<(path: string) => boolean>().mockReturnValue(true);
+    const report = runDoctor(makeDeps({ homeDir: () => home, env: { DSH_HOME: join(home, '.claude') }, exists }));
+    expect(report.failed).toBe(false);
+    expect(exists.mock.calls.map(([path]) => path)).toEqual([
+      join(home, '.claude', 'skills', 'crosschat', 'SKILL.md'),
+      join(home, '.codex', 'skills', 'crosschat', 'SKILL.md'),
+    ]);
   });
 
   it('reports a relative Harness home without reading a guessed destination or losing other checks', () => {

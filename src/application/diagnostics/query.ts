@@ -26,6 +26,7 @@ const schemas: Record<DiagnosticCode, Record<string, FieldType>> = {
   'codex-missing': {}, 'codex-unparsed': { firstLine: 'text', status: 'nullable-number' }, 'codex-cli-old': { version: 'text' }, 'codex-cli-ready': { version: 'text' },
   'codex-daemon-missing': {}, 'codex-daemon-old': { version: 'text' }, 'codex-daemon-ready': { version: 'text' },
   'skill-missing': { side: 'side', path: 'text' }, 'skill-installed': { side: 'side' }, 'skill-match': { side: 'side' }, 'skill-mismatch': { side: 'side', paths: 'strings' },
+  'harness-home-invalid': { value: 'text' },
   'identity-conflict': {}, 'identity-clear': {}, 'node-config-invalid': { path: 'text' }, 'node-config-ready': {}, 'node-star-id-missing': { label: 'text' },
   'node-star-id-duplicate': { first: 'text', label: 'text', starId: 'text' }, 'broker-reachable': { host: 'text', port: 'number' }, 'broker-unreachable': { host: 'text', port: 'number' },
   'broker-empty': {}, 'broker-ready': { stars: 'number', nodes: 'number' }, 'broker-port-custom': { port: 'number', defaultPort: 'number', path: 'text' }, 'broker-invalid': {},
@@ -40,7 +41,7 @@ function field(value: unknown, type: FieldType): unknown {
   if ((type === 'number' || type === 'nullable-number') && typeof value === 'number' && Number.isFinite(value)) return value;
   if (type === 'nullable-number' && value === null) return value;
   if (type === 'boolean' && typeof value === 'boolean') return value;
-  if (type === 'side' && (value === 'claude' || value === 'codex')) return value;
+  if (type === 'side' && (value === 'claude' || value === 'codex' || value === 'harness')) return value;
   if (type === 'strings' && Array.isArray(value) && value.length <= 2000 && value.every((item) => typeof item === 'string' && item.length <= 65_536)) return [...value];
   return invalid();
 }
@@ -81,8 +82,8 @@ function environment(options: DiagnosticQueryOptions): NodeJS.ProcessEnv {
   const env = { ...process.env, ...options.env };
   if (options.home === undefined) return env;
   if (options.nativeEnvironment === 'inherit') return { ...env, CROSSCHAT_DIAGNOSTIC_HOME: options.home };
-  for (const key of Object.keys(env)) if (['HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'CODEX_HOME', 'CODEX_SQLITE_HOME', 'CLAUDE_CONFIG_DIR'].includes(key.toUpperCase())) delete env[key];
-  return { ...env, HOME: options.home, USERPROFILE: options.home, CODEX_HOME: join(options.home, '.codex'), CLAUDE_CONFIG_DIR: join(options.home, '.claude'), CROSSCHAT_DIAGNOSTIC_HOME: options.home };
+  for (const key of Object.keys(env)) if (['HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'CODEX_HOME', 'CODEX_SQLITE_HOME', 'CLAUDE_CONFIG_DIR', 'DSH_HOME'].includes(key.toUpperCase())) delete env[key];
+  return { ...env, HOME: options.home, USERPROFILE: options.home, CODEX_HOME: join(options.home, '.codex'), CLAUDE_CONFIG_DIR: join(options.home, '.claude'), DSH_HOME: join(options.home, '.dsh'), CROSSCHAT_DIAGNOSTIC_HOME: options.home };
 }
 
 function abortError(): Error {

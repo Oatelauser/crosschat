@@ -31,6 +31,7 @@ function checkLine(check: DiagnosticCheck): string {
     case 'skill-installed': return `✅ ${check.data.side} 侧 skill 已安装（安装源 skill 目录未定位到，跳过版本比对）`;
     case 'skill-match': return `✅ ${check.data.side} 侧 skill 与安装源一致`;
     case 'skill-mismatch': return `⚠️ ${check.data.side} 侧 skill 与安装源不一致（${check.data.paths.slice(0, 3).join('、')}）；重跑 crosschat install-skills`;
+    case 'harness-home-invalid': return `⚠️ harness 侧 skill 目录无法核实：DSH_HOME 必须是绝对路径（${check.data.value}）`;
     case 'identity-conflict': return '⚠️ 双身份残留：CLAUDE_CODE_* 与 CODEX_* 并存（CALLER_IDENTITY_CONFLICT 风险）；'
       + '临时自纠: env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID <命令>';
     case 'identity-clear': return '✅ 无双身份残留';
@@ -57,6 +58,7 @@ const labels: Record<DiagnosticCode, string> = {
   'claude-missing': 'Claude CLI', 'claude-registry-malformed': 'Claude 注册表', 'codex-missing': 'Codex CLI', 'codex-unparsed': 'Codex CLI 版本',
   'codex-cli-old': 'Codex CLI 版本', 'codex-cli-ready': 'Codex CLI 版本', 'codex-daemon-missing': 'Codex daemon', 'codex-daemon-old': 'Codex daemon 版本', 'codex-daemon-ready': 'Codex daemon 版本',
   'skill-missing': '工具技能', 'skill-installed': '工具技能', 'skill-match': '工具技能', 'skill-mismatch': '工具技能', 'identity-conflict': '调用身份', 'identity-clear': '调用身份',
+  'harness-home-invalid': 'Harness 技能目录',
   'node-config-invalid': '节点配置', 'node-config-ready': '节点配置', 'node-star-id-missing': '星身份', 'node-star-id-duplicate': '星身份',
   'broker-reachable': 'broker 连通性', 'broker-unreachable': 'broker 连通性', 'broker-empty': 'broker 星配置', 'broker-ready': 'broker 注册表', 'broker-port-custom': 'broker 监听口', 'broker-invalid': 'broker 注册表',
   'status-stale': '状态文件时效', 'status-process-unavailable': '状态进程证据', 'resident-version-mismatch': '常驻版本', 'outbox-empty': '发件箱', 'outbox-parked': '发件箱暂存',
@@ -73,6 +75,7 @@ export function formatDiagnosticCheck(check: DiagnosticCheck): { label: string; 
     case 'codex-missing': case 'codex-daemon-missing': guidance = '需要 Codex 通道时先确认已安装 Codex CLI，再由用户在当前机器执行：codex app-server daemon start'; break;
     case 'codex-unparsed': case 'codex-cli-old': case 'codex-daemon-old': guidance = '在当前机器核对 Codex CLI 与 daemon 版本；按原生工具的升级和重启指引处理后重新体检。'; break;
     case 'skill-missing': case 'skill-mismatch': guidance = '由用户在当前机器执行：crosschat install-skills'; break;
+    case 'harness-home-invalid': guidance = '核对当前机器的 DSH_HOME，使用 Harness 实际的绝对路径后重新体检；不会自动修改环境或复制技能。'; break;
     case 'identity-conflict': guidance = '在当前机器核对 Claude/Codex 调用身份环境；清理不属于当前调用方的身份变量后重新运行命令。'; break;
     case 'node-config-invalid': guidance = '检查当前机器的 node.json；向该星管理员索取正确配置，确认后显式覆盖。'; break;
     case 'node-star-id-missing': case 'node-star-id-duplicate': guidance = '核对当前机器配置中的完整星 ID 与目标；消除缺失或重复绑定后重新体检。'; break;

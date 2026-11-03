@@ -41,7 +41,7 @@ describe('structured diagnostics', () => {
     expect(() => parseDiagnosticResult({ ...input, groups: [{ context: { kind: 'environment' }, checks: [{ ...check, data: { ...check.data, side: 'unknown' } }] }] })).toThrow('malformed');
   });
 
-  it('separates typed checks and severity counts from the unchanged synchronous CLI rendering', async () => {
+  it('separates typed checks and severity counts from the shared synchronous CLI rendering', async () => {
     const { collectDoctorDiagnostics, renderDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
     const deps = fixture({ nodeVersion: '20.0.0' });
     const result = collectDoctorDiagnostics(deps);
@@ -52,7 +52,7 @@ describe('structured diagnostics', () => {
     expect(checks.find((check) => check.code === 'claude-registry-malformed')).toMatchObject({
       level: 'warn', data: { count: 1 },
     });
-    expect(result.summary).toEqual({ pass: 5, warn: 3, error: 1, failed: true });
+    expect(result.summary).toEqual({ pass: 6, warn: 3, error: 1, failed: true });
     expect(renderDoctorDiagnostics(result)).toEqual(runDoctor(deps));
     expect(renderDoctorDiagnostics(result).output).toBe([
       '环境',
@@ -63,10 +63,11 @@ describe('structured diagnostics', () => {
       '  ⚠️ codex daemon 未运行；要用 codex 通道时先执行: codex app-server daemon start',
       '  ✅ claude 侧 skill 已安装（安装源 skill 目录未定位到，跳过版本比对）',
       '  ✅ codex 侧 skill 已安装（安装源 skill 目录未定位到，跳过版本比对）',
+      '  ✅ harness 侧 skill 已安装（安装源 skill 目录未定位到，跳过版本比对）',
       '  ✅ 无双身份残留',
       '其他',
       '  ✅ 发件箱空（无暂存消息）',
-      '结论: 5 项通过，3 项警告，1 项错误',
+      '结论: 6 项通过，3 项警告，1 项错误',
     ].join('\n'));
   });
 
@@ -80,7 +81,7 @@ describe('structured diagnostics', () => {
     }));
     const checks = result.groups.flatMap((group) => group.checks);
     expect(checks.find((check) => check.code === 'status-stale')).toMatchObject({ level: 'info', data: { file: 'status-broker.json' } });
-    expect(result.summary).toEqual({ pass: 6, warn: 3, error: 0, failed: false });
+    expect(result.summary).toEqual({ pass: 7, warn: 3, error: 0, failed: false });
     expect(JSON.stringify(result)).not.toContain('secret-');
   });
 

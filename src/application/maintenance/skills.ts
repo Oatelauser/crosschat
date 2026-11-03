@@ -40,13 +40,13 @@ function targetKey(path: string): string {
   return `path:${resolve(path)}`;
 }
 /** Ordered Claude, Codex, then Harness plan shared by install/update, CLI uninstall and TUI maintenance. */
-export function skillPlan(root: string, env: { DSH_HOME?: string } = {}): SkillTarget[] {
+export function skillPlan(root: string, env: { DSH_HOME?: string } = {}): Array<SkillTarget & { side: 'claude' | 'codex' | 'harness' }> {
   const harness = harnessHome(root, env);
   const targets = [
-    { label: 'claude 侧 skill', path: join(root, '.claude', 'skills', 'crosschat'), root },
-    { label: 'codex 侧 skill', path: join(root, '.codex', 'skills', 'crosschat'), root },
-    { label: 'harness 侧 skill', path: join(harness, 'skills', 'crosschat'), root: harness },
-  ];
+    { side: 'claude', label: 'claude 侧 skill', path: join(root, '.claude', 'skills', 'crosschat'), root },
+    { side: 'codex', label: 'codex 侧 skill', path: join(root, '.codex', 'skills', 'crosschat'), root },
+    { side: 'harness', label: 'harness 侧 skill', path: join(harness, 'skills', 'crosschat'), root: harness },
+  ] satisfies Array<SkillTarget & { side: 'claude' | 'codex' | 'harness' }>;
   const seen = new Set<string>();
   return targets.filter((target) => {
     const key = targetKey(target.path);
