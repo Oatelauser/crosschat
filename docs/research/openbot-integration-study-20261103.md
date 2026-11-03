@@ -1,5 +1,7 @@
 # OpenBot 接入方式与 crosschat 可借鉴点
 
+用户备注（2026-11-03）：本研究与[CodexHost研究](codex-host-integration-study-20261103.md)一并保留，供未来crosschat Desktop开发参考；Desktop具体需求由用户后续单独沟通，本备注不启动开发或确定功能范围。
+
 2026-11-03（UTC+8）。用户要求研究nightly-labs/openbot，借鉴类似功能的实现。本次由root本人只读研究，无worker/子代理；未安装、运行、clone该项目或执行其README命令。通过GitHub第一方源码固定到提交 [21369e1eec420772a7db9f6bbfeae2ef9b3ab83a](https://github.com/nightly-labs/openbot/commit/21369e1eec420772a7db9f6bbfeae2ef9b3ab83a)，不是对未来main的兼容保证。未进行产品原生实测，源码/文档描述与本仓库实测分开。
 
 ## 1. 先区分产品边界

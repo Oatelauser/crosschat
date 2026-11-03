@@ -1,5 +1,7 @@
 # CodexHost 接入方式与 DSH 优先计划的补充
 
+用户备注（2026-11-03）：本研究与[OpenBot研究](openbot-integration-study-20261103.md)一并保留，供未来crosschat Desktop开发参考；Desktop具体需求由用户后续单独沟通，本备注不启动开发或确定功能范围。
+
 2026-11-03（UTC+8）。按用户要求研究BytePioneer-AI/codex-host，由root本人完成，worker和子代理未参与。通过GitHub第一方源码读取，固定到main当时的提交[78106589d07d3ad7af1079e3252afa30c2062477](https://github.com/BytePioneer-AI/codex-host/commit/78106589d07d3ad7af1079e3252afa30c2062477)。没有clone、安装、运行该项目或执行README命令；没有将其验证记录当成本仓库实测。本文是[OpenBot研究](openbot-integration-study-20261103.md)之后的补充，落实方向仍为[DSH优先完成计划](../development/dsh-completion-plan-20261103.md)。
 
 ## 1. 结论：有真实DSH适配器，但托管边界不同
