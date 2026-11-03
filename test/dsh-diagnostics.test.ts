@@ -1,10 +1,14 @@
 import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
 import type { PathLike } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { inspectDshProfiles } from '../src/dsh/diagnostics.js';
+import { parseDiagnosticResult } from '../src/application/diagnostics/query.js';
+import { renderDoctorDiagnostics } from '../src/application/diagnostics/render.js';
 
 const io = vi.hoisted((): {
   beforeOpen?: (path: PathLike) => Promise<void>;
@@ -48,6 +52,28 @@ async function fixture() {
 }
 
 describe('Harness profile plugin diagnostics', () => {
+  it.each(['matching', 'different'])('uses saved profile facts in the actual doctor CLI text and JSON (%s)', async (mode) => {
+    const f = await fixture(); const p = await f.profile();
+    const packaged = fileURLToPath(new URL('../integrations/dsh', import.meta.url));
+    await cp(packaged, p.packageDir, { recursive: true });
+    if (mode === 'different') await writeFile(join(p.packageDir, 'bridge.js'), 'private-customized-bridge-source');
+    const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
+    const env = { SystemRoot: process.env.SystemRoot, WINDIR: process.env.WINDIR, HOME: f.home, USERPROFILE: f.home,
+      APPDATA: join(f.root, 'appdata'), LOCALAPPDATA: join(f.root, 'localappdata'), PATH: '',
+      CODEX_HOME: join(f.home, '.codex'), CODEX_SQLITE_HOME: join(f.home, '.codex'), CLAUDE_CONFIG_DIR: join(f.home, '.claude') };
+    const run = (args: string[]) => spawnSync(process.execPath, [cli, 'doctor', ...args], { env, encoding: 'utf8', timeout: 10_000, windowsHide: true });
+    const json = run(['--json']); expect(json.status, json.stderr).toBe(0);
+    const result = parseDiagnosticResult(JSON.parse(json.stdout));
+    expect(result.groups.flatMap((group) => group.checks)).toContainEqual(expect.objectContaining({
+      code: mode === 'matching' ? 'harness-profile-plugin-ready' : 'harness-profile-plugin-warning',
+      level: mode === 'matching' ? 'pass' : 'warn',
+    }));
+    const text = run([]); expect(text.status, text.stderr).toBe(0);
+    expect(text.stdout).toBe(`${renderDoctorDiagnostics(result).output}\n`);
+    expect(json.stdout + text.stdout).not.toContain('private-');
+    expect(await readFile(p.manifest, 'utf8')).toContain('private-spec-never-display');
+  });
+
   it('leaves an unconfigured home empty and never creates a profile', async () => {
     const f = await fixture();
     expect(await inspectDshProfiles(f.options)).toEqual([]);

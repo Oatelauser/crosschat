@@ -31,6 +31,25 @@ function fixture(overrides: Partial<DoctorDeps> = {}): DoctorDeps {
 }
 
 describe('structured diagnostics', () => {
+  it('validates static plugin facts, fixed reasons and severities without carrying private fields', async () => {
+    const { parseDiagnosticResult, formatDiagnosticCheck } = await import('../src/application/diagnostics/index.js');
+    const profileDir = join(tmpdir(), 'owned-harness-profile');
+    const packageDir = join(tmpdir(), 'owned-installed-bridge');
+    const checks = [
+      { code: 'harness-profile-plugin-ready', level: 'pass', data: { profileDir, packageDir, version: '0.1.0' } },
+      { code: 'harness-profile-plugin-warning', level: 'warn', data: { path: packageDir, profileDir, packageDir, version: '0.1.0', reason: 'content-differs' } },
+      { code: 'harness-profile-not-declared', level: 'info', data: { profileDir } },
+    ];
+    const input = { groups: [{ context: { kind: 'environment' }, checks: checks.map((check) => ({ ...check, data: { ...check.data, token: 'private-token', rawConfig: 'private-config' } })) }],
+      summary: { pass: 1, warn: 1, error: 0, failed: false } };
+    const parsed = parseDiagnosticResult(input);
+    expect(parsed.groups[0]!.checks).toEqual(checks);
+    expect(formatDiagnosticCheck(parsed.groups[0]!.checks[0]!).guidance).toContain('加载');
+    for (const data of [{ path: packageDir, reason: 'private-raw-error' }, { path: 'relative', reason: 'content-differs' }]) {
+      expect(() => parseDiagnosticResult({ ...input, groups: [{ context: { kind: 'environment' }, checks: [{ ...checks[1], data }] }] })).toThrow('malformed');
+    }
+  });
+
   it('validates native bridge facts and strips secret fields across the diagnostic IPC boundary', async () => {
     const { parseDiagnosticResult, formatDiagnosticCheck } = await import('../src/application/diagnostics/index.js');
     const check = { code: 'harness-bridge-ready', level: 'pass', data: { instanceId: 'f61b7f24-b2cb-4d32-960f-38b877c12ccd',
