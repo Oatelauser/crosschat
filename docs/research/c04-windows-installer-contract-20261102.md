@@ -12,6 +12,8 @@
 
 本阶段不重试任务书列出的 5 个被拒资源，也不以换工具、换 URL 或委托其它 agent 的方式绕行；缺失保持待核实。
 
+2026-11-03续接：下列阶段A/B事实与缺口保留；当前新增的C1受控进程及C2卸载前守卫见文末“C1/C2实施补记”。“当时未实现”不代表后续组件不存在，实际安装/卸载合同和原生验证仍未补齐。
+
 ## 一、固定发行物与可信准入链
 
 | 项目 | 当前已知 | 分级 | 证明边界 |
@@ -157,3 +159,11 @@
 - 安装/卸载执行层仍未实现：显式 `arguments` + 绝对 `root` 不证明安装位置，卸载 spawn 前没有 Host 退出守卫，`runDshProcess` 不能兑现 `signal` 且超时返回不是 close/释放证明。真实安装/卸载必须等独立干净 runner、安装前 baseline、目的地约束方案和独立可信的发布者策略。
 - 不把 NSIS/Electron 常识、OpenCode 或其它产品的参数/GUID/publisher 当作 Harness 事实。
 - 不声称 C04 或正式 Desktop 已通过；不关闭 C04。
+
+## C1/C2实施补记（2026-11-03）
+
+C1已在既有模块实现 `runDshDesktopProcess`，提供取消/总截止、有界输出、failed显式判别、child close事实与有限收口，旧Web runDshProcess保持原合同；见[代码收口](../development/evidence/c04-worker-20261029/I03-C1-review-closure.md)。它没有把任意child close升级成Host自然退出证明。
+
+C2由root独立实现 `runDshDesktopUninstall(options,operations)`，规格、验证与边界见[C2记录](../development/evidence/c04-worker-20261029/I03-C2-development.md)。observeHostExit与uninstall是无默认实现的runner回调；先固定调用方installation/root/runId/instance/session，只有匹配的forced:false和完整C1正常close记录才允许调用uninstall。执行前重核取消/同一截止，超时或迟到观测不会触发后续卸载；错误保留是否已调用及安装归属。不生成uninstalled或两类登记清理证明。
+
+这闭合了可用受控回调验证的“卸载前守卫”编排接缝，**尚未接入真实Windows Host观察器、官方卸载命令或main/probe**。回调是可信runner边界，必须独立核实所观察进程确为本次Host且未强制退出；字段相等不抗伪造。发布者实际值、正式安装/卸载参数、实际目的地约束、执行字节重核、原生注册清理与干净runner验收仍缺；不据此实际执行或关闭C04。

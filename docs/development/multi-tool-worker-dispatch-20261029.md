@@ -4,7 +4,7 @@
 
 ## 当前合同
 
-- **最新授权：用户在I03-B收口与进度说明后再次明确“开始下一个任务”，C04-I03-C1现已[代码复审收口](evidence/c04-worker-20261029/I03-C1-review-closure.md)。** 仅在既有模块和测试内补Desktop执行层基础；无待修代码派单，worker保持停写，不启动真实安装/卸载或后续任务。完整check仍14失败，整合验证与I03/C04未完成。新增非skill功能文件或必需用户操作变化仍先交用户决定。
+- **最新授权：2026-11-03用户明确下一任务由root独立开发，先不交worker，并追加openbot源码研究。** root已完成[C04-I03-C2卸载前Host退出守卫](evidence/c04-worker-20261029/I03-C2-development.md)及[研究](../research/openbot-integration-study-20261103.md)，未启动worker/子代理；本轮规范/合同为自行审查，非独立双轴。目标102/102、单次完整check2632通过/11原有跳过、退出0。worker保持停写，不据此授权真实安装或后续任务；I03/C04原生边界仍缺，新增非skill功能文件或必需用户操作变化仍先交用户决定。
 - **2026-10-30（UTC+8）用户明确“继续任务”，恢复此前派单、交付、双轴复审与验收流程。** 2026-10-29 23:51的停止已执行并保存检查点；本次恢复来自用户新指令，不是worker来信触发。新增非skill功能文件或必需用户操作变化仍先等用户决定。
 - 2026-10-29 用户新增持续推进授权：开始下一项，完成一项后由 root 继续派发、审查和验收，直到用户人为喊停或出现必须拍板事项；不再因每张普通实现单重复询问。**涉及用户操作必须变更，或功能需要新增文件，必须先等用户决定。** 常规修复限已明确范围；不得把持续授权扩成自动安装、改配置、增命令/功能文件或扩大删除范围。开发任务/审查证据不作为功能文件使用。
 - 用户随后明确“skill可以新增，这个不影响”，承接已解释的 A 默认方案：可把 Harness skill 纳入现有安装/覆盖更新及匹配卸载目标，技能副本不再单独阻断。此例外不包括新增源码/账本、其它必需操作或原生插件自动管理。
@@ -20,7 +20,7 @@
 
 本会话不再派发通信相关子单。用户明确将全部通信任务交给现有 Codex Desktop 会话 **Bug修复2**，由用户亲自对接；见[完整交接](communication-handoff-bugfix2-20261029.md)。W08 最新研究交付到 `1066e30`，尚未完成 root 最终验收，按真实状态随证据交接。短信封内部 subagent 已停写，确认没有任何代码/测试修改。
 
-当前无待修代码派单。[C04-I03-C1最终e13e04f已代码复审收口](evidence/c04-worker-20261029/I03-C1-review-closure.md)：Standards/Spec各0项未决，root独立93/93；完整check最终14失败/2609通过/11跳过，整合验证保留，不逐条归因、不改通信线。worker保持停写，不接安装器/main或下一单；原C1任务/各轮发现与raw仅作历史规格和证据，不作为活动引用。阶段B最终6fb9ac1已[代码复审收口](evidence/c04-worker-20261029/I03-B-review-closure.md)，root77/77、两轴无未决，原17条全量失败保留。可信实际发布者/安装卸载合同、执行前守卫及干净runner证据仍缺，I03整体与C04未完成。不新增用户步骤/功能文件，本机不实际安装Desktop。[C04-I02组件产品已最终验收](evidence/c04-worker-20261029/I02-final-review.md)：产品33f9c05、fixture6648c91、证据219a35c，root54/54、worker2584/11；产品不重开，测试helper收尾已修。历史合成fixture与cache清理记录保留，不代删或重试；原任务/规格/失败/raw保留为历史证据。[I01核心已验收](evidence/c04-worker-20261029/I01-final-review.md)。
+当前无worker活动派单。root本人完成[C04-I03-C2组件开发验收](evidence/c04-worker-20261029/I03-C2-development.md)：最终产品3b3f05b，目标102/102，单次完整check2632通过/11原有跳过、退出0；[openbot研究](../research/openbot-integration-study-20261103.md)交付。当前整仓绿覆盖含C1的实现，但不证明历史会话状态失败根因已修复；本轮未改通信线。C1最终e13e04f的[两轴收口](evidence/c04-worker-20261029/I03-C1-review-closure.md)与原11/7/14条失败、阶段B的[代码收口](evidence/c04-worker-20261029/I03-B-review-closure.md)及失败raw保持历史证据，不作待修派单。C2仅提供可信runner回调的卸载前守卫，真实Host观察/官方卸载/执行字节与目的地/系统注册清理及干净runner仍缺，I03/C04未完成。worker继续停写，不接原生安装或下一单。本机不实际安装Desktop；历史TEMP/cache和被拒资源不代删不重试。[I02](evidence/c04-worker-20261029/I02-final-review.md)与[I01](evidence/c04-worker-20261029/I01-final-review.md)已验收事实保留。
 
 [C08-I01 默认 Harness 技能维护已最终验收](evidence/c08-worker-20261029/I01-final-review.md)：最终产品 `a77a39b`，两轴复审通过，root 七套件87项通过；worker完整check第二次2544通过/11原有跳过，最多2/最少1 worker。首次全量的machines断言失败仍完整保留，根因未确认；不以随后通过替代根因证据。I01/R1/R2移出活动子单，原任务书仅作批准证据。[I02 生命周期说明已最终验收](evidence/c13-worker-20261029/I02-final-review.md)，继续作为合同输入。新增功能文件或用户必需操作仍须先决定。
 
