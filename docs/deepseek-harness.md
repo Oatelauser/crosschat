@@ -34,6 +34,8 @@ dsh plugin --profile web remove @crosschat/dsh-bridge
 
 把 crosschat 包中的完整 `skills/crosschat` 目录复制到 `<Harness home>/skills/crosschat`，或项目的 `.agents/skills/crosschat`。保留 `references` 子目录。桥目录的 `../../skills/crosschat` 是该 skill 的随包位置；Harness home 默认为用户的 `.dsh`，使用自定义 `DSH_HOME` 时以实际目录为准。`crosschat install-skills` 现在把同一份技能覆盖安装到 Claude、Codex 和 Harness 三个目标（Harness 为 `<DSH_HOME>/skills/crosschat`，未设置或为空时 `<home>/.dsh/skills/crosschat`；`DSH_HOME` 必须是绝对路径）。项目内的 `.agents/skills/crosschat` 仍需手工复制，crosschat 不扫描项目或历史副本。
 
+更新会覆盖安装源中同名的技能和 references，保留目标目录里的额外文件；doctor 比较安装源中的文件，额外文件不算内容不一致。`crosschat uninstall` 删除当前目标的整个 `skills/crosschat` 目录，包括这些额外文件，保留 Harness home、其它技能、profile、插件配置和聊天。改变 `DSH_HOME` 后，旧位置及项目副本仍由用户单独维护。`install-skills --dir <root>` 把三侧目标都放在指定 root 下，忽略宿主 `DSH_HOME`；卸载依当时的 home/`DSH_HOME` 重新计算当前目标，没有历史位置账本。
+
 在 Harness 原生窗口打开目标会话，使其成为 live root Agent，再检查：
 
 ```bash

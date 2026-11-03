@@ -1,7 +1,9 @@
 /** `crosschat uninstall`（票B B3）：清单组装 / --yes / serve 在跑拒删 / 不存在跳过 / 确认交互。 */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, isAbsolute, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { runUninstall, type UninstallDeps } from '../src/commands/uninstall.js';
 import type { SkillTarget } from '../src/application/maintenance/skills.js';
@@ -62,6 +64,62 @@ function seedServeRunning(home: string, which: 'broker' | 'node'): void {
 }
 
 describe('runUninstall', () => {
+  it.each(['default', 'custom'])('preserves native, historical and project data across actual CLI skill update/uninstall (%s Harness home)', (mode) => {
+    const owned = mkdtempSync(join(root, 'cli-'));
+    const home = join(owned, 'home');
+    const harness = mode === 'default' ? join(home, '.dsh') : join(owned, 'current-harness');
+    const local = join(owned, 'localappdata');
+    const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
+    const source = fileURLToPath(new URL('../skills/crosschat', import.meta.url));
+    const put = (file: string, text: string) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, text); };
+    const preserved = new Map([
+      [join(harness, 'profiles', 'desktop', 'package.json'), '{"dependencies":{"@crosschat/dsh-bridge":"file:fixture"}}'],
+      [join(harness, 'settings.json'), 'owned-native-settings'],
+      [join(harness, 'sessions', 'keep.json'), 'owned-synthetic-chat'],
+      [join(harness, 'skills', 'other', 'SKILL.md'), 'other native skill'],
+      [join(owned, 'previous-harness', 'skills', 'crosschat', 'SKILL.md'), 'historical skill copy'],
+      [join(owned, 'project', '.agents', 'skills', 'crosschat', 'SKILL.md'), 'project skill copy'],
+    ]);
+    for (const [file, text] of preserved) put(file, text);
+    put(join(home, '.crosschat', 'send-log.jsonl'), 'owned-crosschat-state');
+    put(join(home, 'crosschat', 'legacy-state'), 'owned-legacy-state');
+    put(join(local, 'crosschat', 'legacy-state'), 'owned-local-state');
+    const env: NodeJS.ProcessEnv = { SystemRoot: process.env.SystemRoot, WINDIR: process.env.WINDIR,
+      HOME: home, USERPROFILE: home, APPDATA: join(owned, 'appdata'), LOCALAPPDATA: local, PATH: '',
+      CODEX_HOME: join(home, '.codex'), CODEX_SQLITE_HOME: join(home, '.codex'), CLAUDE_CONFIG_DIR: join(home, '.claude'),
+      ...(mode === 'custom' ? { DSH_HOME: harness } : {}) };
+    const run = (...args: string[]) => spawnSync(process.execPath, [cli, ...args], { cwd: owned, env, encoding: 'utf8', timeout: 10_000, windowsHide: true });
+    const install = run('install-skills');
+    expect(install.status, install.stderr).toBe(0);
+    const targets = [join(home, '.claude', 'skills', 'crosschat'), join(home, '.codex', 'skills', 'crosschat'), join(harness, 'skills', 'crosschat')];
+    for (const target of targets) expect(install.stdout).toContain(target);
+    const harnessSkill = targets[2]!;
+    put(join(harnessSkill, 'SKILL.md'), 'stale skill');
+    put(join(harnessSkill, 'references', 'send.md'), 'stale reference');
+    put(join(harnessSkill, 'user-extra.md'), 'owned extra file');
+    put(join(harnessSkill, 'references', 'retired.md'), 'owned retired source file');
+    const update = run('install-skills');
+    expect(update.status, update.stderr).toBe(0);
+    for (const file of ['SKILL.md', 'references/send.md']) expect(readFileSync(join(harnessSkill, file), 'utf8')).toBe(readFileSync(join(source, file), 'utf8'));
+    expect(readFileSync(join(harnessSkill, 'user-extra.md'), 'utf8')).toBe('owned extra file');
+    expect(readFileSync(join(harnessSkill, 'references', 'retired.md'), 'utf8')).toBe('owned retired source file');
+    // Verify every actual uninstall root before allowing the child to delete recursively.
+    const ownedReal = realpathSync(owned);
+    for (const target of [join(home, '.crosschat'), join(home, 'crosschat'), join(local, 'crosschat'), ...targets]) {
+      const within = relative(ownedReal, realpathSync(target));
+      expect(within).not.toBe('');
+      expect(within.startsWith('..') || isAbsolute(within)).toBe(false);
+    }
+    const uninstall = run('uninstall', '--yes');
+    expect(uninstall.status, uninstall.stderr).toBe(0);
+    for (const target of targets) expect(existsSync(target)).toBe(false);
+    for (const [file, text] of preserved) expect(readFileSync(file, 'utf8')).toBe(text);
+    expect(existsSync(join(home, '.crosschat'))).toBe(false);
+    expect(existsSync(join(home, 'crosschat'))).toBe(false);
+    expect(existsSync(join(local, 'crosschat'))).toBe(false);
+    expect(uninstall.stdout).toContain('npm uninstall -g @oatelauser/crosschat');
+  });
+
   it('--yes deletes the full list and prints the npm finisher', async () => {
     const f = fixture();
     mkdirSync(join(f.home, 'tcp'), { recursive: true });
