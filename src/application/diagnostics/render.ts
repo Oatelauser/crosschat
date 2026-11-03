@@ -1,4 +1,20 @@
 import type { DiagnosticCheck, DiagnosticCode, DiagnosticGroup, DiagnosticResult, HarnessBridgeWarningReason } from './model.js';
+import type { DshPluginIssue } from '../../dsh/diagnostics.js';
+
+const harnessProfileGuidance: Record<DshPluginIssue, string> = {
+  'profiles-unreadable': '核对当前 Harness home 的 profiles 目录与读取权限，再刷新。',
+  'profile-limit': 'profiles 超过本次有界读取范围；核对实际使用的原生 profile 后再诊断。',
+  'profile-location': 'profile 路径已变化、不是目录或是未核实的链接；先在原生工具核对实际位置。',
+  'profile-unreadable': '无法读取 profile 的安装清单；核对目录和读取权限，保留原文件。',
+  'profile-invalid': 'profile 安装清单格式不符合预期；核对原生插件管理结果，保留原文件。',
+  'installation-missing': '已保存桥引用，但未找到安装目录；在该 profile 的原生插件管理器核对安装结果。',
+  'package-invalid': '安装目录的包名或版本元数据不符合桥包合同；核对插件来源与实际安装。',
+  'installation-unreadable': '桥安装文件缺失或不可读；核对该 profile 的原生插件安装结果。',
+  'content-differs': '安装文件与当前 crosschat 随包桥不同；核对是否保留定制，或通过原生插件管理器更新后刷新。',
+  'read-limit': '所需文件超过有界读取限制；核对插件来源与安装文件，不自动读取完整内容。',
+  'source-unavailable': '当前 crosschat 随包桥源不可读；核对 crosschat 安装是否完整。',
+  timeout: 'profile 检查超过与活桥共享的 5 秒预算；核对存储和原生工具响应后刷新。',
+};
 
 const harnessBridgeGuidance: Record<HarnessBridgeWarningReason, string> = {
   DSH_REGISTRATION_UNREADABLE: '核对当前用户的 Harness 桥登记目录权限，再刷新诊断。',
@@ -52,6 +68,9 @@ function checkLine(check: DiagnosticCheck): string {
       return `✅ Harness 桥 ${instanceId}；Host PID ${pid}；runtime ${runtimeVersion}；${source}${profileDir === undefined ? '' : `；profile目录=${profileDir}`}`;
     }
     case 'harness-bridge-warning': return `⚠️ Harness 桥 ${check.data.reason}——${harnessBridgeGuidance[check.data.reason]}`;
+    case 'harness-profile-not-declared': return `ℹ️ Harness profile 未声明 crosschat 桥引用：${check.data.profileDir}`;
+    case 'harness-profile-plugin-ready': return `✅ Harness 插件文件与随包源一致；profile=${check.data.profileDir}；安装=${check.data.packageDir}；版本=${check.data.version}`;
+    case 'harness-profile-plugin-warning': return `⚠️ Harness 插件 ${check.data.reason}（${check.data.path}）——${harnessProfileGuidance[check.data.reason]}`;
     case 'identity-conflict': return '⚠️ 双身份残留：CLAUDE_CODE_* 与 CODEX_* 并存（CALLER_IDENTITY_CONFLICT 风险）；'
       + '临时自纠: env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID <命令>';
     case 'identity-clear': return '✅ 无双身份残留';
@@ -80,6 +99,7 @@ const labels: Record<DiagnosticCode, string> = {
   'skill-missing': '工具技能', 'skill-installed': '工具技能', 'skill-match': '工具技能', 'skill-mismatch': '工具技能', 'identity-conflict': '调用身份', 'identity-clear': '调用身份',
   'harness-home-invalid': 'Harness 技能目录',
   'harness-bridge-inactive': 'Harness 桥', 'harness-bridge-ready': 'Harness 桥版本与身份', 'harness-bridge-warning': 'Harness 桥异常',
+  'harness-profile-not-declared': 'Harness 插件引用', 'harness-profile-plugin-ready': 'Harness 插件安装文件', 'harness-profile-plugin-warning': 'Harness 插件配置异常',
   'node-config-invalid': '节点配置', 'node-config-ready': '节点配置', 'node-star-id-missing': '星身份', 'node-star-id-duplicate': '星身份',
   'broker-reachable': 'broker 连通性', 'broker-unreachable': 'broker 连通性', 'broker-empty': 'broker 星配置', 'broker-ready': 'broker 注册表', 'broker-port-custom': 'broker 监听口', 'broker-invalid': 'broker 注册表',
   'status-stale': '状态文件时效', 'status-process-unavailable': '状态进程证据', 'resident-version-mismatch': '常驻版本', 'outbox-empty': '发件箱', 'outbox-parked': '发件箱暂存',
@@ -100,6 +120,9 @@ export function formatDiagnosticCheck(check: DiagnosticCheck): { label: string; 
     case 'harness-bridge-inactive': guidance = '当前没有活桥可核实；需要通信时在所需原生 profile 中启用桥，再刷新诊断。'; break;
     case 'harness-bridge-ready': guidance = '已核实本次桥的鉴权、owner 与版本；这不证明技能已被当前会话加载。'; break;
     case 'harness-bridge-warning': guidance = harnessBridgeGuidance[check.data.reason]; break;
+    case 'harness-profile-not-declared': guidance = '此 profile 未声明桥引用；需要通信时按原生插件管理流程处理，再刷新。'; break;
+    case 'harness-profile-plugin-ready': guidance = '这里只核实安装文件；当前是否加载这版桥，另查看活桥握手或原生 Plugins 页面。'; break;
+    case 'harness-profile-plugin-warning': guidance = harnessProfileGuidance[check.data.reason]; break;
     case 'identity-conflict': guidance = '在当前机器核对 Claude/Codex 调用身份环境；清理不属于当前调用方的身份变量后重新运行命令。'; break;
     case 'node-config-invalid': guidance = '检查当前机器的 node.json；向该星管理员索取正确配置，确认后显式覆盖。'; break;
     case 'node-star-id-missing': case 'node-star-id-duplicate': guidance = '核对当前机器配置中的完整星 ID 与目标；消除缺失或重复绑定后重新体检。'; break;

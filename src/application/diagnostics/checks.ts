@@ -9,6 +9,8 @@ import { isProcessAlive } from '../../platform/process-inspector.js';
 import { listNodeStatusFiles, nodeStatusSelector, TCP_STATUS_FRESH_MS } from '../status/status-files.js';
 import { skillPlan } from '../maintenance/skills.js';
 import { inspectDshBridges } from '../../dsh/client.js';
+import type { DshBridgeInfo } from '../../dsh/client.js';
+import { inspectDshProfiles } from '../../dsh/diagnostics.js';
 import { MultichatError } from '../../errors.js';
 import type { DoctorDeps } from './deps.js';
 import { DoctorSourceReadError } from './deps.js';
@@ -21,9 +23,11 @@ const CODEX_MIN_VERSION: readonly [number, number, number] = [0, 160, 0];
 export async function collectLiveDoctorDiagnostics(deps: DoctorDeps): Promise<DiagnosticResult> {
   const result = collectDoctorDiagnostics(deps);
   const environment = result.groups.find((group) => group.context.kind === 'environment')!;
+  const dshDeadline = Date.now() + 5000;
+  let bridges: DshBridgeInfo[] = [];
   let findings: DiagnosticInput[];
   try {
-    const bridges = await inspectDshBridges({ home: deps.homeDir(), timeoutMs: 5000 });
+    bridges = await inspectDshBridges({ home: deps.homeDir(), timeoutMs: 5000 });
     findings = bridges.length === 0 ? [{ code: 'harness-bridge-inactive', data: {} }]
       : bridges.map((bridge) => ({ code: 'harness-bridge-ready', data: bridge }));
   } catch (error) {
@@ -36,6 +40,24 @@ export async function collectLiveDoctorDiagnostics(deps: DoctorDeps): Promise<Di
     }
   }
   environment.checks.push(...findings.map(diagnosticCheck));
+  const remaining = dshDeadline - Date.now();
+  const dshHome = deps.env.DSH_HOME;
+  if (remaining > 0 && (dshHome === undefined || dshHome === '' || isAbsolute(dshHome))) {
+    const profiles = await inspectDshProfiles({ home: deps.homeDir(), dshHome, timeoutMs: remaining,
+      verifiedProfileDirs: bridges.flatMap((bridge) => bridge.profileDir === undefined ? [] : [bridge.profileDir]) });
+    for (const profile of profiles) {
+      if (profile.state === 'not-declared') environment.checks.push(diagnosticCheck({ code: 'harness-profile-not-declared', data: { profileDir: profile.profileDir } }));
+      else if (profile.state === 'ready') environment.checks.push(diagnosticCheck({ code: 'harness-profile-plugin-ready', data: {
+        profileDir: profile.profileDir, packageDir: profile.packageDir, version: profile.version,
+      } }));
+      else environment.checks.push(diagnosticCheck({ code: 'harness-profile-plugin-warning', data: {
+        path: profile.path, reason: profile.reason,
+        ...(profile.profileDir === undefined ? {} : { profileDir: profile.profileDir }),
+        ...(profile.packageDir === undefined ? {} : { packageDir: profile.packageDir }),
+        ...(profile.version === undefined ? {} : { version: profile.version }),
+      } }));
+    }
+  }
   return { groups: result.groups, summary: summarizeDiagnosticChecks(result.groups) };
 }
 

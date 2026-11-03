@@ -3,7 +3,7 @@ import type { ChildProcess } from 'node:child_process';
 import { isAbsolute, join } from 'node:path';
 import process from 'node:process';
 import type { Worker } from 'node:worker_threads';
-import { diagnosticCheck, HARNESS_BRIDGE_WARNING_REASONS, summarizeDiagnosticChecks } from './model.js';
+import { diagnosticCheck, HARNESS_BRIDGE_WARNING_REASONS, HARNESS_PROFILE_ISSUES, summarizeDiagnosticChecks } from './model.js';
 import type { DiagnosticCode, DiagnosticGroup, DiagnosticInput, DiagnosticResult } from './model.js';
 
 export interface DiagnosticQueryOptions {
@@ -19,7 +19,7 @@ export interface DiagnosticQueryOptions {
   createProcess?(options: { env: NodeJS.ProcessEnv }): ChildProcess;
 }
 
-type FieldType = 'text' | 'number' | 'boolean' | 'strings' | 'side' | 'nullable-number' | 'positive-integer' | 'harness-reason';
+type FieldType = 'text' | 'number' | 'boolean' | 'strings' | 'side' | 'nullable-number' | 'positive-integer' | 'harness-reason' | 'path' | 'profile-issue';
 const schemas: Record<DiagnosticCode, Record<string, FieldType>> = {
   'node-supported': { version: 'text' }, 'node-unsupported': { version: 'text' },
   'claude-ready': { executable: 'text', count: 'number' }, 'claude-empty': { executable: 'text' }, 'claude-missing': {}, 'claude-registry-malformed': { count: 'number' },
@@ -29,6 +29,9 @@ const schemas: Record<DiagnosticCode, Record<string, FieldType>> = {
   'harness-home-invalid': { value: 'text' },
   'harness-bridge-inactive': {}, 'harness-bridge-ready': { instanceId: 'text', pid: 'positive-integer', runtimeVersion: 'text' },
   'harness-bridge-warning': { reason: 'harness-reason' },
+  'harness-profile-not-declared': { profileDir: 'path' },
+  'harness-profile-plugin-ready': { profileDir: 'path', packageDir: 'path', version: 'text' },
+  'harness-profile-plugin-warning': { path: 'path', reason: 'profile-issue' },
   'identity-conflict': {}, 'identity-clear': {}, 'node-config-invalid': { path: 'text' }, 'node-config-ready': {}, 'node-star-id-missing': { label: 'text' },
   'node-star-id-duplicate': { first: 'text', label: 'text', starId: 'text' }, 'broker-reachable': { host: 'text', port: 'number' }, 'broker-unreachable': { host: 'text', port: 'number' },
   'broker-empty': {}, 'broker-ready': { stars: 'number', nodes: 'number' }, 'broker-port-custom': { port: 'number', defaultPort: 'number', path: 'text' }, 'broker-invalid': {},
@@ -45,6 +48,8 @@ function field(value: unknown, type: FieldType): unknown {
   if (type === 'boolean' && typeof value === 'boolean') return value;
   if (type === 'positive-integer' && typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return value;
   if (type === 'harness-reason' && HARNESS_BRIDGE_WARNING_REASONS.some((reason) => reason === value)) return value;
+  if (type === 'path' && typeof value === 'string' && value.length <= 65_536 && isAbsolute(value)) return value;
+  if (type === 'profile-issue' && HARNESS_PROFILE_ISSUES.some((reason) => reason === value)) return value;
   if (type === 'side' && (value === 'claude' || value === 'codex' || value === 'harness')) return value;
   if (type === 'strings' && Array.isArray(value) && value.length <= 2000 && value.every((item) => typeof item === 'string' && item.length <= 65_536)) return [...value];
   return invalid();
@@ -69,6 +74,10 @@ export function parseDiagnosticResult(input: unknown): DiagnosticResult {
       for (const [name, type] of Object.entries(schemas[code])) data[name] = field(check.data[name], type);
       if (code === 'status-process-unavailable' && check.data.pid !== undefined) data.pid = field(check.data.pid, 'number');
       if (code === 'outbox-parked' && check.data.ageMinutes !== undefined) data.ageMinutes = field(check.data.ageMinutes, 'number');
+      if (code === 'harness-profile-plugin-warning') {
+        for (const name of ['profileDir', 'packageDir']) if (check.data[name] !== undefined) data[name] = field(check.data[name], 'path');
+        if (check.data.version !== undefined) data.version = field(check.data.version, 'text');
+      }
       if (code === 'harness-bridge-ready') {
         if (check.data.profile !== undefined || check.data.endpointType !== undefined) {
           if (typeof check.data.profile !== 'string' || check.data.profile.trim() === '' || check.data.profile.length > 256

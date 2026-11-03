@@ -219,14 +219,16 @@ describe('Harness profile plugin diagnostics', () => {
       vi.spyOn(handle, 'close').mockImplementation(async () => { await close(); closed = true; });
     } };
     const controller = new AbortController();
-    const pending = inspectDshProfiles({ ...f.options, timeoutMs: mode === 'timeout' ? 30 : 5000, signal: controller.signal })
+    if (mode === 'timeout') vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const pending = inspectDshProfiles({ ...f.options, timeoutMs: 5000, signal: controller.signal })
       .then((result) => ({ result, error: undefined }), (error: Error) => ({ result: undefined, error }));
     try {
       expect(await Promise.race([opening.then(() => 'entered'), pending.then(() => 'settled')])).toBe('entered');
       if (mode === 'cancel') controller.abort();
+      else await vi.advanceTimersByTimeAsync(5000);
       const outcome = await pending;
       if (mode === 'cancel') expect(outcome.error?.name).toBe('AbortError');
       else expect(outcome.result).toContainEqual(expect.objectContaining({ state: 'warning', reason: 'timeout' }));
-    } finally { release(); await pending; if (started) await vi.waitFor(() => expect(closed).toBe(true)); }
+    } finally { vi.useRealTimers(); release(); await pending; if (started) await vi.waitFor(() => expect(closed).toBe(true)); }
   });
 });

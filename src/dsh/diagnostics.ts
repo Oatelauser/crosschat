@@ -66,6 +66,8 @@ export async function inspectDshProfiles(options: DshProfileDiagnosticOptions): 
   const read = async (path: string, reason: DshPluginIssue): Promise<Buffer> => {
     let handle: Awaited<ReturnType<typeof open>> | undefined;
     let failed = false;
+    let problem: unknown;
+    let value: Buffer | undefined;
     try {
       active();
       handle = await open(path, 'r');
@@ -83,18 +85,20 @@ export async function inspectDshProfiles(options: DshProfileDiagnosticOptions): 
         total += bytesRead;
       }
       if (total > readLimit) throw new ProfileReadFailure('read-limit', path);
-      return buffer.subarray(0, total);
+      value = buffer.subarray(0, total);
     } catch (error) {
       failed = true;
-      active();
-      if (error instanceof ProfileReadFailure) throw error;
-      throw new ProfileReadFailure(reason, path, missing(error));
+      problem = error;
     } finally {
       if (handle !== undefined) {
         try { await handle.close(); }
-        catch { if (!failed) throw new ProfileReadFailure(reason, path); }
+        catch (error) { if (!failed) { failed = true; problem = error; } }
       }
     }
+    active();
+    if (failed) throw problem instanceof ProfileReadFailure ? problem : new ProfileReadFailure(reason, path, missing(problem));
+    if (value === undefined) throw new ProfileReadFailure(reason, path);
+    return value;
   };
   const json = (bytes: Buffer, path: string, reason: DshPluginIssue): Record<string, unknown> => {
     try { const value: unknown = JSON.parse(bytes.toString('utf8')); if (isDshRecord(value)) return value; }
@@ -119,14 +123,15 @@ export async function inspectDshProfiles(options: DshProfileDiagnosticOptions): 
         if (error instanceof ProfileReadFailure && error.absent) return { state: 'not-declared', profileDir };
         throw error;
       }
-      const dependencies: Record<string, unknown> = {};
+      let declared = false;
+      let reference: unknown;
       for (const field of ['devDependencies', 'dependencies', 'optionalDependencies']) {
         if (manifest[field] === undefined) continue;
         if (!isDshRecord(manifest[field])) throw new ProfileReadFailure('profile-invalid', manifestPath);
-        Object.assign(dependencies, manifest[field]);
+        if (Object.hasOwn(manifest[field], packageName)) { declared = true; reference = manifest[field][packageName]; }
       }
-      if (!Object.hasOwn(dependencies, packageName)) return { state: 'not-declared', profileDir };
-      if (typeof dependencies[packageName] !== 'string' || dependencies[packageName].trim() === '') throw new ProfileReadFailure('profile-invalid', manifestPath);
+      if (!declared) return { state: 'not-declared', profileDir };
+      if (typeof reference !== 'string' || reference.trim() === '') throw new ProfileReadFailure('profile-invalid', manifestPath);
       const installedPath = join(profileDir, 'node_modules', '@crosschat', 'dsh-bridge');
       try { packageDir = await realpath(installedPath); active(); }
       catch (error) {
@@ -205,6 +210,6 @@ export async function inspectDshProfiles(options: DshProfileDiagnosticOptions): 
   catch (error) {
     options.signal?.throwIfAborted();
     if (error instanceof ProfileReadFailure && error.reason === 'timeout') return [{ state: 'warning', path: profilesPath, reason: 'timeout' }];
-    throw error;
+    return [{ state: 'warning', path: profilesPath, reason: 'profiles-unreadable' }];
   } finally { clearTimeout(timer); options.signal?.removeEventListener('abort', forward); }
 }
