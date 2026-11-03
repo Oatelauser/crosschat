@@ -88,6 +88,38 @@ describe('Harness profile plugin diagnostics', () => {
       profileDir: p.profileDir, packageDir: await realpath(p.packageDir), version: '0.1.0', reason: 'content-differs' });
   });
 
+  it('reads through short file chunks before deciding whether installed contents match', async () => {
+    const f = await fixture(); const p = await f.profile(); await cp(f.sourceDir, p.packageDir, { recursive: true });
+    await writeFile(join(f.sourceDir, 'bridge.js'), 'sameprefix-source-suffix');
+    await writeFile(join(p.packageDir, 'bridge.js'), 'sameprefix-installed-different-suffix');
+    io.opened = (path, handle) => { if (String(path).endsWith('bridge.js')) {
+      const read = handle.read.bind(handle);
+      vi.spyOn(handle, 'read').mockImplementation(async (options) => Buffer.isBuffer(options)
+        ? read(options, 0, 8, 0)
+        : read({ ...options, length: Math.min(options?.length ?? 8, 8) }));
+    } };
+    expect(await inspectDshProfiles(f.options)).toContainEqual(expect.objectContaining({ state: 'warning', reason: 'content-differs' }));
+  });
+
+  it('reports a verified profile path that is now a file instead of calling it undeclared', async () => {
+    const f = await fixture(); const path = join(f.root, 'former-profile'); await writeFile(path, 'owned file');
+    expect(await inspectDshProfiles({ ...f.options, verifiedProfileDirs: [path] })).toEqual([
+      { state: 'warning', path, reason: 'profile-location' },
+    ]);
+  });
+
+  it('uses only the selected custom Harness home for automatic profile discovery', async () => {
+    const f = await fixture(); const ignored = await f.profile(); await writeFile(ignored.manifest, '{private-ignored-home');
+    const dshHome = join(f.root, 'selected-harness'); const profileDir = join(dshHome, 'profiles', 'web');
+    const packageDir = join(profileDir, 'node_modules', '@crosschat', 'dsh-bridge');
+    await cp(f.sourceDir, packageDir, { recursive: true });
+    await writeFile(join(profileDir, 'package.json'), JSON.stringify({ dependencies: { '@crosschat/dsh-bridge': 'file:fixture' } }));
+    expect(await inspectDshProfiles({ ...f.options, dshHome })).toEqual([
+      { state: 'ready', profileDir, packageDir: await realpath(packageDir), version: '0.1.0' },
+    ]);
+    expect(await readFile(ignored.manifest, 'utf8')).toBe('{private-ignored-home');
+  });
+
   it('follows an actual pnpm/file package link and deduplicates a verified native profile', async () => {
     const f = await fixture(); const p = await f.profile();
     await mkdir(join(p.packageDir, '..'), { recursive: true });
