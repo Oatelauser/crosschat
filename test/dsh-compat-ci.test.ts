@@ -409,6 +409,79 @@ describe('DeepSeek Harness guarded desktop uninstall', () => {
     }
     expect(uninstall).not.toHaveBeenCalled();
   });
+
+  it('ignores a late Host observation after cancellation and releases its abort listener', async () => {
+    const input = options(); const controller = new AbortController();
+    const add = vi.spyOn(controller.signal, 'addEventListener'); const remove = vi.spyOn(controller.signal, 'removeEventListener');
+    let release!: (value: ReturnType<typeof observed>) => void;
+    let operationSignal: AbortSignal | undefined;
+    const gate = new Promise<ReturnType<typeof observed>>((resolve) => { release = resolve; });
+    const uninstall = vi.fn(async () => closed());
+    const pending = runDshDesktopUninstall({ ...input, signal: controller.signal }, {
+      observeHostExit: (context: { signal: AbortSignal }) => { operationSignal = context.signal; return gate; }, uninstall,
+    });
+    const failure = expect(pending).rejects.toMatchObject({ cancelled: true, uninstallStarted: false });
+    try {
+      controller.abort(0); await failure; expect(operationSignal?.aborted).toBe(true);
+      release(observed(input)); await gate; await Promise.resolve(); expect(uninstall).not.toHaveBeenCalled();
+      expect(remove).toHaveBeenCalledWith('abort', add.mock.calls[0][1]);
+    } finally { release(observed(input)); await gate; add.mockRestore(); remove.mockRestore(); }
+  });
+
+  it('bounds both runner waits and records when uninstall was already invoked', async () => {
+    const input = options();
+    for (const phase of ['observe', 'uninstall']) {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const uninstall = vi.fn(async () => { if (phase === 'uninstall') await gate; return closed(); });
+      try {
+        await expect(runDshDesktopUninstall({ ...input, timeoutMs: 25 }, {
+          observeHostExit: async () => { if (phase === 'observe') await gate; return observed(input); }, uninstall,
+        })).rejects.toMatchObject({ timedOut: true, uninstallStarted: phase === 'uninstall', installation: input.installation });
+        expect(uninstall).toHaveBeenCalledTimes(phase === 'uninstall' ? 1 : 0);
+      } finally { release(); await gate; await Promise.resolve(); }
+    }
+  });
+
+  it('rejects abnormal uninstall records and preserves executor causes without retrying', async () => {
+    const input = options();
+    for (const invalid of [{ code: 1 }, { signal: 'SIGTERM' }, { failed: true, failure: false }, { closed: false }, { timedOut: true },
+      { cancelled: true }, { truncated: true }, { releaseUnclear: ['child still running'] }, { secondaryProblems: ['pipe failed'] }]) {
+      const uninstall = vi.fn(async () => ({ ...closed(), ...invalid }));
+      await expect(runDshDesktopUninstall(input, { observeHostExit: async () => observed(input), uninstall }))
+        .rejects.toMatchObject({ stage: 'desktop-uninstall', uninstallStarted: true, installation: input.installation });
+      expect(uninstall).toHaveBeenCalledTimes(1);
+    }
+    const cause = Object.freeze(new Error('official uninstall refused'));
+    const uninstall = vi.fn(async () => { throw cause; });
+    await expect(runDshDesktopUninstall(input, { observeHostExit: async () => observed(input), uninstall }))
+      .rejects.toMatchObject({ stage: 'desktop-uninstall', uninstallStarted: true, cause });
+    expect(uninstall).toHaveBeenCalledTimes(1);
+  });
+
+  it('validates caller identities before either operation and keeps the captured binding', async () => {
+    const input = options(); const observeHostExit = vi.fn(async () => observed(input)); const uninstall = vi.fn(async () => closed());
+    for (const invalid of [{ ...input, runId: [input.runId] }, { ...input, timeoutMs: 0 }, { ...input, launch: {} },
+      { ...input, installation: { ...input.installation, root: 'relative' } }]) {
+      await expect(runDshDesktopUninstall(invalid, { observeHostExit, uninstall })).rejects.toThrow();
+    }
+    expect(observeHostExit).not.toHaveBeenCalled(); expect(uninstall).not.toHaveBeenCalled();
+    const proof = observed(input); const original = { ...input.installation };
+    const result = await runDshDesktopUninstall(input, { observeHostExit: async () => {
+      input.installation.owner = 'mutated-after-launch'; return proof;
+    }, uninstall: async (context: { installation: unknown }) => { expect(context.installation).toEqual(original); proof.owner = 'mutated-after-exit'; return closed(); } });
+    expect(result.hostExit.owner).toBe(original.owner);
+  });
+
+  it('refuses an incomplete process observation before invoking uninstall', async () => {
+    const input = options(); const uninstall = vi.fn(async () => closed());
+    for (const invalid of [{ pid: undefined }, { pid: [41] }, { pid: 0 }, { stdout: undefined }, { stderr: [] }]) {
+      await expect(runDshDesktopUninstall(input, {
+        observeHostExit: async () => ({ ...observed(input), process: { ...closed(), ...invalid } }), uninstall,
+      })).rejects.toMatchObject({ stage: 'desktop-host-exit', uninstallStarted: false });
+    }
+    expect(uninstall).not.toHaveBeenCalled();
+  });
 });
 
 describe('DeepSeek Harness fresh process and cleanup evidence', () => {
