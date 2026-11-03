@@ -105,3 +105,20 @@ Desktop环境等待期间可独立推进既定DSH npm/Web的C08/C13实际skill/�
 root对已读源码、既有接口、未实现observer/执行层、环境与用户决定做规范/合同自审；没有独立审查代理，不称双人复审。五份变更文档89个本地相对链接存在性检查通过，25个父项编号/顺序和11个CI相关索引保留；git diff --check通过。本单不改代码或测试，因此不重跑npm/Vitest，不借旧2632/11称本单原生通过。C3方案交付从活动实施项移出，原生执行前置和C04/I03父项仍开放。
 
 未创建临时根、VM磁盘、下载包或后台进程；没有新的待清理软件/登记。只读工具的GitHub响应留在会话工具结果，资料以固定permalink续接；历史TEMP/cache、五份被拒资料和用户未跟踪文档均未操作。
+
+
+## 8. 2026-11-03 多工具适配2续接：本机下载与新增用户决定
+
+本节是后续执行事实，上文C3方案当轮未下载/未执行的历史保持原意。用户要求持续推进至暂停或需拍板；用户命令/交互变化与新增非skill文件仍需具体决定。
+
+用户先授权独立Windows guest内安装、启动、官方卸载，但未提供guest连接；随后询问WSL、本机下载验证。WSL是Linux环境，从WSL启动Windows EXE仍在宿主执行，不能替代Windows安装隔离。
+
+21:21:55—21:22:40（UTC+8）实际调用既有I02下载器，固定版本0.2.1-rc.2官方URL、289385456字节及sha512-39POl5osl9PKMqrPXQA52dh/bCV0Z02vOV9cTjOJDHE6gsJwp5bv7lfgB3mVWAKspX7a/w1iTi+8Listdhq45g==均匹配；下载进程退出0。仅落盘校验，没有执行安装器。
+
+Windows Get-AuthenticodeSignature实际返回Valid；签名主体中的公司名为Hangzhou DeepSeek Artificial Intelligence Co., Ltd.，issuer为CN=GlobalSign GCC R45 EV CodeSigning CA 2020, O=GlobalSign nv-sa, C=BE。观测证书指纹为84032578657219876E273E0D1BD303CFE1B82E6F，有效期2026-08-31T08:49:44.0000000Z至2027-09-01T08:49:44.0000000Z。这是从文件读取的观测，**不冒充官方独立公布的预期指纹**。DeepSeek官网[Harness条款](https://deepseek.com/en/harness/terms-of-use/)独立确认相同运营公司，但未给出证书指纹。
+
+本机只读baseline：HKCU/HKLM及WOW6432Node卸载项中按DeepSeek/Harness/DSH匹配0项；HKCU/HKLM Software/Classes/dsh均不存在；默认.dsh不存在、当前DSH_HOME未设置、命令搜索无dsh、按deepseek/dsh进程名匹配0项。名称匹配不等于完整进程所有权调查；正式启动前还须绑定实际安装根、Host PID及创建时间。Windows11专业工作站版25H2/10.0.26200，查询时总31.6GiB/空闲16.8GiB、D盘空闲393.6GiB，均为当时观察。
+
+用户随后对具体提议答复：“同意本机，但是必须要保证完成之后清理干净”。提议范围为：本机受控安装→真实UI/收发→官方卸载，以及仅对本次固定文件采用“官方固定URL＋固定摘要＋Windows有效签名＋官网确认主体”的一次性人工准入；例外于原开发宿主不试装及必须独立取得指纹的要求。实测指纹仅绑定本次已批准文件，不自动生成未来CI的可信发布者默认值、不推广到其它版本。**完整清理为本次验收条件**：先保存安装前baseline，结束后核对软件、进程、协议/卸载项、快捷方式与owned测试数据；有未决残留不报完成，保留证据继续处理。
+
+当前下载根：D:/workspace/CC/multichat/node_modules/.cache/crosschat-c04-native-download-20261103-60kgZX，owner runId=71bfe4fb-b611-4b62-8f8a-f494bced8f18；内含官方EXE及ownership/download/signature-observation生成证据，尚未删除。下载及签名核验未安装/启停DSH，未修改协议/用户模型/插件配置。下一步先准备原生测试隔离、UI操作和官方卸载回收路径，再执行已授权安装；未新增产品脚本/workflow。C04/I03尚未验收，不以本机人工结果冒充独立runner、托管首轮或全平台通过。

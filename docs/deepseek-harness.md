@@ -38,11 +38,15 @@ dsh plugin --profile web remove @crosschat/dsh-bridge
 
 ```bash
 crosschat status --dsh --all --json
-crosschat send --to "dsh/<完整会话ID>" --body "请检查这一项"
-crosschat send --to "dsh/<完整会话ID>" --delivery steer --body "用户让我追加这项要求"
+crosschat send --to "<完整会话ID>" --tool dsh --body "请检查这一项"
+crosschat send --to "<完整会话ID>" --tool dsh --delivery steer --body "用户让我追加这项要求"
 ```
 
 发信方 Agent 在原生 `pwsh/bash` 工具里运行命令；Harness 自动提供当前 `DSH_SESSION_ID`。收到的信封带有回复命令，照该命令回信即可保留会话和跨机路由。所有 `session-...` ID 都保留完整值，不能使用共同的前八位代替身份。外部普通终端可向目标发信，但不应伪造原生身份来冒充 Harness 会话。
+
+`--tool` 始终表示收件类型，名称和原生 ID 中的斜杠保留原值；不再把 `dsh/` 加到 ID 前面。npm/Web Host 使用 `dsh`，正式 Desktop 使用发现结果对应的 `dsh-desktop`；正式 Desktop 的实际 UI 验收仍待完成，不能靠修改类型参数代替。
+
+`crosschat doctor` 和 `crosschat doctor --json` 使用与技能安装、TUI 维护和卸载相同的目标计划，检查 Harness 的 `SKILL.md` 及安装源中的全部 references。`DSH_HOME` 未设置或为空时检查 `<home>/.dsh/skills/crosschat`；绝对路径覆盖默认目录，相对路径产生警告，不按当前工作目录猜测。相同物理目标只检查一次。诊断只读，不覆盖过期文件，不扫描项目或历史副本；“与安装源一致”仅证明技能副本内容匹配，不证明原生会话已加载技能或插件。
 
 `queue` 在目标忙时进入下一轮，`steer` 在下一步加入当前任务；空闲时都会启动处理。受理回执只表示原生 Agent 已接收，不表示模型已理解或完成。子 Agent、未打开的历史会话不在路由范围；找不到目标时 crosschat 报错，由用户在原生 UI 打开所需历史会话。
 

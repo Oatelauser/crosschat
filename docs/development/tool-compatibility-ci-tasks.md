@@ -1,10 +1,12 @@
 # 工具完整接入与兼容验证待办
 
+2026-11-03「多工具适配2」续接：用户要求按交接持续推进，用户命令/交互变化及新增非skill文件仍先提交决定。C10的Harness技能诊断切片已完成：RED `5eaec97`，产品 `ae0727f`；默认/自定义home、references差异、相对DSH_HOME、物理目标去重及诊断进程隔离已接入，定向105/105，单次完整check **2643通过/11原有跳过，231文件通过/3跳过**，lint/203模块683边/build通过。root独立实现及自审，未派worker；[新增验收与完整原始输出](dsh-validation-20261023.md#2026-11-03-c10-harness-技能诊断完整检查原始输出)保留。只证明技能副本诊断，桥/版本/鉴权/实际加载与TUI终端补验仍属C10/C09，父项未关闭。用户已授权独立guest内安装/启动/官方卸载，连接环境尚未提供；随后询问WSL和本机验证，本机仅下载核验固定官方包，尚未安装；用户随后批准本机受控验证与仅固定包的一次性人工准入，并要求结束后完整清理。实际安装/退出/官方卸载与清理尚未验证，详见C3执行方案第8节。
+
 2026-11-03用户要求将本会话全部任务、背景与关键上下文交接至Codex Desktop「多工具适配2」，完整入口为[交接包](multi-tool-handoff-to-adaptation2-20261103.md)。后续由该会话接续本会话原有范围；原会话发送后停写。下列编号、已批准范围与Bug修复2/其它原负责人归属保持，交接不批准原生执行或新功能文件。
 
 2026-11-03用户要求借鉴参考项目、先完成DSH，随后明确开始下一单。当前顺序以[DSH优先完成计划](dsh-completion-plan-20261103.md)为准：先收口DSH CLI/npm Host与正式Desktop的真实生命周期、维护、诊断/TUI、从零CI，再做该工具已批准增强；其它工具待办与原负责人保留。root已独立交付[C04-I03-C3执行合同与独立Windows环境方案](evidence/c04-worker-20261029/I03-C3-execution-plan.md)，worker停写。本单仅方案/事实订正；尚未开始原生执行，下一步为独立guest及其执行范围决定、publisher与真实合同前置，不重复堆已完成离线组件。
 
-最近代码交付：[C04-I03-C2卸载前Host退出守卫](evidence/c04-worker-20261029/I03-C2-development.md)，产品3b3f05b，目标102/102；当轮单次完整check退出0：2632通过/11原有跳过，231文件通过/3跳过，lint/203模块682边/build通过。规范/合同为root自行审查，非独立双轴；worker及子代理未参与。[openbot研究](../research/openbot-integration-study-20261103.md)及用户追加的[codex-host研究](../research/codex-host-integration-study-20261103.md)作为后续接入设计输入；后者的真实DSH托管Web/Remote实现与本项目借用live Agent分开，补充已写入DSH计划，不据此修改通信协议/状态，也不采用停止后重发或扩展版本窗口。当前整仓绿覆盖含C1的实现；C1/B此前失败与原始证据保留，未追认历史根因修复。真实Host观察、正式安装/卸载合同、执行字节/目的地及干净runner原生证据仍缺，I03/C04未完成。被拒读取/清理不重试，新增非skill功能文件、必需用户操作变化及真实安装执行沿既定决定边界。
+上一批C04代码交付：[C04-I03-C2卸载前Host退出守卫](evidence/c04-worker-20261029/I03-C2-development.md)，产品3b3f05b，目标102/102；当轮单次完整check退出0：2632通过/11原有跳过，231文件通过/3跳过，lint/203模块682边/build通过。规范/合同为root自行审查，非独立双轴；worker及子代理未参与。[openbot研究](../research/openbot-integration-study-20261103.md)及用户追加的[codex-host研究](../research/codex-host-integration-study-20261103.md)作为后续接入设计输入；后者的真实DSH托管Web/Remote实现与本项目借用live Agent分开，补充已写入DSH计划，不据此修改通信协议/状态，也不采用停止后重发或扩展版本窗口。当前整仓绿覆盖含C1的实现；C1/B此前失败与原始证据保留，未追认历史根因修复。真实Host观察、正式安装/卸载合同、执行字节/目的地及干净runner原生证据仍缺，I03/C04未完成。被拒读取/清理不重试，新增非skill功能文件、必需用户操作变化及真实安装执行沿既定决定边界。
 
 2026-11-02（UTC+8）[C04-I01离线核心已验收](evidence/c04-worker-20261029/I01-final-review.md)；[I02安装包获取与校验组件产品已验收](evidence/c04-worker-20261029/I02-final-review.md)，最终产品33f9c05、fixture6648c91、证据219a35c，root54/54、worker完整2584/11，未清理残留单独保留。I02产品不重开，其测试helper迟到owner已随I03-R3修复。I03-B最终root77/77、两轴无未决；全量17条白名单外状态/通信相关失败保留、未逐条归责，不扩通信所有权。I03整体与C04父项未完成，没有真实Desktop验收。
 
@@ -52,11 +54,11 @@ C09/C10/C11/C12 的**基础接入部分不依赖 C15—C24**；后者只在增�
 
 | 推进顺序 | 编号 | 任务与完成标准 | 负责人／必要依赖 | 当前状态 |
 | --- | --- | --- | --- | --- |
-| 1 | C04 | Harness正式Desktop在独立干净runner验证包/profile/插件、真实UI收发、退出、官方卸载及注册清理，保留生命周期工装；本机不新增此前难清理的系统注册。 | 本会话；C13合同、C14类型规则，技能部分消费C08；先做既定Windows范围，完整桌面workflow/托管首轮由C11/C12收口 | [I01](evidence/c04-worker-20261029/I01-final-review.md)/[I02](evidence/c04-worker-20261029/I02-final-review.md)已验收；[I03-B](evidence/c04-worker-20261029/I03-B-review-closure.md)/[C1](evidence/c04-worker-20261029/I03-C1-review-closure.md)代码收口。[C2](evidence/c04-worker-20261029/I03-C2-development.md)root独立完成，产品3b3f05b、目标102/102，单次完整check2632通过/11原有跳过；历史失败保留。[C3执行方案](evidence/c04-worker-20261029/I03-C3-execution-plan.md)已交付，目录/交互启动订正、调用链和VM方案明确；独立guest/执行范围待决定，publisher、实际参数/自然Host退出observer等待证。无原生Desktop验收，父项未完成 |
+| 1 | C04 | Harness正式Desktop在独立干净runner验证包/profile/插件、真实UI收发、退出、官方卸载及注册清理，保留生命周期工装；本机不新增此前难清理的系统注册。 | 本会话；C13合同、C14类型规则，技能部分消费C08；先做既定Windows范围，完整桌面workflow/托管首轮由C11/C12收口 | [I01](evidence/c04-worker-20261029/I01-final-review.md)/[I02](evidence/c04-worker-20261029/I02-final-review.md)已验收；[I03-B](evidence/c04-worker-20261029/I03-B-review-closure.md)/[C1](evidence/c04-worker-20261029/I03-C1-review-closure.md)代码收口。[C2](evidence/c04-worker-20261029/I03-C2-development.md)root独立完成，产品3b3f05b、目标102/102，单次完整check2632通过/11原有跳过；历史失败保留。[C3执行方案](evidence/c04-worker-20261029/I03-C3-execution-plan.md)已交付，目录/交互启动订正、调用链和VM方案明确；用户后续已批准仅本次固定包的本机受控验证及一次性人工准入，完整清理为验收条件；真实下载大小/SHA-512匹配、签名观测Valid（C3第8节），尚未安装，实际参数/自然Host退出observer/官方卸载与清理仍待证。人工准入不推广为CI默认策略，独立runner与托管范围保留。无原生Desktop验收，父项未完成 |
 | 2 | C14 | 明确工具类型与send必填收件tool；补自动来源识别、同源跨会话复用、并发询问去重及重启自动重核。无法可靠确认/持续复用的入口先列证据与方案交用户逐项拍板；按批准范围整改寻址、引用、回信、类型隔离、TUI模板和skill教学。 | DSH类型/来源切片随原生入口验证；[收敛稿](c14-explicit-tool-design-20261028.md)及[批准历史](c14-user-command-review.md)；共用层与Codex/Claude负责人协调，公共合同供下游消费 | 本轮公共整改最终check 2416通过/11原有跳过，Windows ConPTY三场及Harness正式npm/Web来源两轮通过，记录收口。Codex调用到CLI/Desktop关联、OpenCode多服务来源和正式Desktop专属增量仍未完成；逐入口例外不默认获批，整项继续保留 |
 | 3 | C13 | Harness skill与Host bridge分开管理，先明确安装、更新、禁用、重连、移除及归属，保留其它配置；按合同补生命周期接线。 | 本会话；C14类型合同；合同先供C08/C04，Desktop验收随C04补齐 | 桥清理[最终验收](evidence/c13-worker-20261029/I01-final-review.md)：root定向80项、包含R1的共享全量2527通过/11跳过（最多2 worker）；[生命周期说明已验收](evidence/c13-worker-20261029/I02-final-review.md)，未增用户步骤/功能文件。合同可供C08/C04，C04及诊断边界保留，C13未完成 |
 | 4 | C08 | install-skills、更新、卸载及TUI维护共用目标计划；补Harness，明确OpenCode兼容/原生目录、自定义home/profile/project、安装卸载对应关系、覆盖更新和遗留文件语义。 | 各工具接线，共用维护入口协调；接入规范、C14合同、C13插件/技能边界 | 默认三侧维护接线及两轮边界修复已[最终验收](evidence/c08-worker-20261029/I01-final-review.md)，产品a77a39b；root定向87通过，worker完整check第二次2544/11、首次machines断言失败保留且根因未确认。正式加载/平台验证、历史与项目副本/额外文件语义的后续收口保留，整项未完成 |
-| 5 | C10 | 原生服务/鉴权/版本、实际技能和插件位置诊断；统一skill references、help、工具指南、architecture和包元数据；纠正旧恢复及清理教学。CLI/JSON/TUI同源。 | 各工具负责人；接入规范、C08/C13目标与合同、C14；Desktop事实消费C04；供C09接线，基础出口共同核对 | 待整改；保留已有用户README修改 |
+| 5 | C10 | 原生服务/鉴权/版本、实际技能和插件位置诊断；统一skill references、help、工具指南、architecture和包元数据；纠正旧恢复及清理教学。CLI/JSON/TUI同源。 | 各工具负责人；接入规范、C08/C13目标与合同、C14；Desktop事实消费C04；供C09接线，基础出口共同核对 | Harness技能副本诊断切片已完成，产品ae0727f，定向105/105、单次完整check2643通过/11原有跳过；同源计划/JSON/隔离home及现有命令教学已核对。原生桥/版本/鉴权/实际加载、其它入口与TUI终端验收仍待完成；保留已有用户README修改 |
 | 6 | C09 | 补列表、筛选、详情、发送命令复制、成员展示、技能维护/诊断及错误指引；补Harness真实来源终端验收，复用共享成员页。 | 本会话做OpenCode/Harness；C08/C10、C14类型合同及相应原生入口；不等待增强C17/C18/C24 | 部分已有代码与证据，完整接入补验待做 |
 | 7 | C05 | Harness npm/Web GitHub首轮，核实定时、artifact、报告权限和去重Issue条件；不为验收制造外部错误Issue。 | 本会话；既有工作流进入可运行分支及runner；与他方CI独立，可提前验证既定范围 | 工装及本地基线→候选通过，托管未验收 |
 | 8 | C11 | 从零接入CI：隔离安装→加载技能/插件→发现/身份→原生收发→基础TUI/诊断→更新/移除。正式工具＋本机mock，不以直调Adapter代替；包含Harness正式Desktop独立workflow及托管首轮。 | 各入口工装；C14、C08/C09/C10/C13及相应正式工具与C04等入口证据；不依赖增强任务 | 待开发；既有通信探针复用，相应入口可逐项推进 |
@@ -98,7 +100,7 @@ C15—C24 的详细完成标准与阶段内依赖见[增强任务计划](multi-t
 | --- | --- | --- |
 | 技能安装/更新/卸载 | C08-I01默认三侧计划及R1/R2边界已验收，产品a77a39b；OpenCode复用Claude，DSH_HOME与隔离根分别处理。DSH实际加载及覆盖/遗留语义收口仍待B阶段；历史自定义根/项目副本未自动扫描删除，不新增清理行为。 | C08 |
 | TUI 会话与成员 | OpenCode/Harness 已接入列表、动态筛选、状态、详情、地址、原生指引、成员及收编；OpenCode CLI 已有真实终端证据。Harness 尚无真实来源加终端的完整验收，技能维护与诊断也未形成新工具闭环。 | C09 |
-| 诊断 | `checks.ts` 仍只检查 Claude/Codex CLI、两侧技能及两家族身份；OpenCode/Harness 和 Codex Desktop 缺专项检查。 | C10 |
+| 诊断 | `checks.ts` 已共用Claude/Codex/Harness三侧技能维护目标；Harness相对home有明确告警、隔离诊断不继承宿主DSH_HOME。原生版本/服务/桥/鉴权及来源身份的其它工具专项检查仍缺，副本匹配不证明实际加载。 | C10 |
 | 技能教学与文档 | 技能正文已列四家族，但 `references/remote.md` 等仍有两家族残留；其它教学和包描述需统一核对。 | C10 |
 | 插件生命周期 | Harness 通信桥已实现，用户仍手工部署/管理；技能与插件不可当作同一安装目标。 | C13 |
 
