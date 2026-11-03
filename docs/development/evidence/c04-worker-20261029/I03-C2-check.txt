@@ -145,3 +145,15 @@ AssertionError: promise resolved "{ process: { code: +0, …(12) } }" instead of
    Duration  486ms (transform 190ms, setup 0ms, collect 219ms, tests 10ms, environment 0ms, prepare 102ms)
 
 RED1_EXIT=1
+GREEN1 command: npx vitest run test/dsh-compat-ci.test.ts --maxWorkers=2 --minWorkers=1 -t "guarded desktop uninstall"
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ✓ test/dsh-compat-ci.test.ts (94 tests | 93 skipped) 4ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 93 skipped (94)
+   Start at  16:20:57
+   Duration  434ms (transform 158ms, setup 0ms, collect 200ms, tests 4ms, environment 0ms, prepare 85ms)
+
+GREEN1_EXIT=0

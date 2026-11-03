@@ -921,9 +921,40 @@ export function hasDesktopCleanupProof(cleanup) {
     && (cleanup.errors === undefined || (Array.isArray(cleanup.errors) && cleanup.errors.length === 0));
 }
 
-// RED seam only: the Host exit guard is not implemented yet.
-export async function runDshDesktopUninstall(_options, operations) {
-  return { process: await operations.uninstall() };
+/** A runner observation, not a native release proof: only a complete C1 process result can pass this boundary. */
+function desktopOperationClosed(result) {
+  return record(result) && result.closed === true && result.failed === false && result.failure === undefined
+    && result.code === 0 && result.signal === null && result.timedOut === false && result.cancelled === false && result.truncated === false
+    && Array.isArray(result.releaseUnclear) && result.releaseUnclear.length === 0
+    && Array.isArray(result.secondaryProblems) && result.secondaryProblems.length === 0;
+}
+
+/**
+ * Guards a runner-owned uninstall callback with its own Host exit observation. Neither callback has a default native
+ * implementation: the runner must supply verified commands and independently observe the Host, not an arbitrary helper.
+ * A normal uninstall process result does not establish official removal or either registration cleanup.
+ */
+export async function runDshDesktopUninstall(options = {}, operations = {}) {
+  const { installation, launch, runId, signal, timeoutMs } = options;
+  const expected = desktopExpectation(installation, launch, runId);
+  if (!expected || typeof installation.root !== 'string' || !isAbsolute(installation.root) || installation.root.includes('\0'))
+    throw new Error('Desktop uninstall needs this installation root, owner, run and caller Host identity');
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > maxTimerMs) throw new Error('Desktop uninstall needs a valid total deadline');
+  if (typeof operations.observeHostExit !== 'function' || typeof operations.uninstall !== 'function') throw new Error('Desktop uninstall needs both runner operations');
+  const owned = Object.freeze({ root: installation.root, installationId: expected.installationId, owner: expected.owner });
+  const caller = Object.freeze({ instanceId: expected.instanceId, sessionId: expected.sessionId });
+  const binding = { ...owned, ...caller, runId: expected.runId };
+  let uninstallStarted = false;
+  const fail = (stage, text, cause) => Object.assign(new Error(text, { cause }), { stage, installation: owned, uninstallStarted });
+  const observation = await operations.observeHostExit({ installation: owned, launch: caller, runId: expected.runId, signal, timeoutMs });
+  if (!record(observation) || !Object.entries(binding).every(([key, value]) => observation[key] === value)
+    || observation.forced !== false || !desktopOperationClosed(observation.process)) {
+    throw fail('desktop-host-exit', 'This Host has no complete natural exit observation; do not uninstall');
+  }
+  uninstallStarted = true;
+  const result = await operations.uninstall({ installation: owned, launch: caller, runId: expected.runId, signal, timeoutMs });
+  if (!desktopOperationClosed(result)) throw fail('desktop-uninstall', 'The uninstall process did not close normally; removal remains unverified', result);
+  return { hostExit: { ...binding, forced: false, process: { ...observation.process } }, process: { ...result } };
 }
 
 /** Every Desktop attempt owns a fresh directory, run ID and caller launch record; stale or foreign reports are never read. */
