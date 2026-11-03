@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 import { admitDshDesktopInstaller, downloadDshDesktopInstaller, dshRegressionIdentity, hasDesktopCleanupProof, hasDshRuntimeReleaseProof, parseDshDesktopWindowsManifest,
-  parseDshNpmManifest, parsePnpmManifest, resolveDshNpmCache, runDshBuildSequence, runDshDesktopAttempt, runDshDesktopProcess, runDshDesktopSequence, runDshProbeAttempt, runDshProcess,
+  parseDshNpmManifest, parsePnpmManifest, resolveDshNpmCache, runDshBuildSequence, runDshDesktopAttempt, runDshDesktopProcess, runDshDesktopSequence, runDshDesktopUninstall, runDshProbeAttempt, runDshProcess,
   verifyNpmArtifact } from '../scripts/dsh-compat-ci.mjs';
 
 // The only fs injections this suite needs: metadata/open() can stall or arrive late and rm() can refuse a late cleanup.
@@ -346,6 +346,24 @@ describe('DeepSeek Harness controlled desktop process', () => {
       const result = await runDshDesktopProcess(process.execPath, ['-e', 'setTimeout(()=>{},20000)'], { timeoutMs: 100, spawnImpl: hidden });
       expect(result).toMatchObject({ timedOut: true, closed: false, failed: true });
     } finally { await fixture.cleanup(); }
+  });
+});
+
+describe('DeepSeek Harness guarded desktop uninstall', () => {
+  const options = () => ({ installation: { root: join(process.cwd(), 'owned-fixture'), installationId: randomUUID(), owner: 'c04-c2' },
+    launch: { instanceId: randomUUID(), sessionId: 'owned-host-session' }, runId: randomUUID(), timeoutMs: 1000 });
+  const closed = () => ({ code: 0, signal: null, pid: 41, stdout: '', stderr: '', timedOut: false, cancelled: false,
+    truncated: false, closed: true, failed: false, failure: undefined, releaseUnclear: [], secondaryProblems: [] });
+  const observed = (input: ReturnType<typeof options>) => ({ ...input.installation, ...input.launch, runId: input.runId, forced: false, process: closed() });
+
+  it('never calls uninstall without a complete natural exit observation for this Host', async () => {
+    const input = options();
+    for (const proof of [undefined, {}, { ...observed(input), forced: true }, { ...observed(input), process: { ...closed(), closed: false } }]) {
+      const uninstall = vi.fn(async () => closed());
+      await expect(runDshDesktopUninstall(input, { observeHostExit: async () => proof, uninstall }))
+        .rejects.toMatchObject({ stage: 'desktop-host-exit', uninstallStarted: false, installation: input.installation });
+      expect(uninstall).not.toHaveBeenCalled();
+    }
   });
 });
 

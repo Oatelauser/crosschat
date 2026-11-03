@@ -921,6 +921,11 @@ export function hasDesktopCleanupProof(cleanup) {
     && (cleanup.errors === undefined || (Array.isArray(cleanup.errors) && cleanup.errors.length === 0));
 }
 
+// RED seam only: the Host exit guard is not implemented yet.
+export async function runDshDesktopUninstall(_options, operations) {
+  return { process: await operations.uninstall() };
+}
+
 /** Every Desktop attempt owns a fresh directory, run ID and caller launch record; stale or foreign reports are never read. */
 export async function runDshDesktopAttempt({ output, label, artifact, installation, launch, runId = randomUUID() }, execute) {
   if (!['baseline', 'candidate', 'retry'].includes(label)) throw new Error('Invalid Harness desktop probe label');
