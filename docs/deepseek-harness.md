@@ -2,7 +2,7 @@
 
 crosschat 通过官方 Host 插件桥发现并投递到 Harness 当前运行的根 Agent。它支持完整 ID、名称消歧、空闲唤醒、忙时 `queue/steer`、原生 shell 发信、会话回信，以及既有跨机器路由。无需把模型 API key 交给 crosschat。
 
-桥依赖上游的面集中在官方插件入口；crosschat client 使用自有 protocol=1。Harness 仍处预发布，实验宿主窗口为 `>=0.2.1-rc.2 <0.3.0-0`，窗口内的新版本仍需行为 CI 验证。目前实际验证的是 Windows 上的官方 npm `0.2.1-rc.2`、Web Host 和普通交互会话。浏览器 UI、正式 Desktop 安装与 UI、Linux/macOS 尚未完成实测，不能由此推断通过。
+桥依赖上游的面集中在官方插件入口；crosschat client 使用自有 protocol=1。Harness 仍处预发布，实验宿主窗口为 `>=0.2.1-rc.2 <0.3.0-0`，窗口内的新版本仍需行为 CI 验证。目前已验证 Windows 上的官方 npm `0.2.1-rc.2`、Web Host 和普通交互会话；正式 Windows Desktop `0.2.1-rc.2` 也已在用户手动安装后，以隔离 profile 和 loopback 模型桩验证真实 UI 收发、技能加载、原生来源及插件开关。用户保留 Desktop 安装，因此官方卸载未测；Host 自然退出证明、干净 runner 和 Linux/macOS 仍未完成，不能由本机人工结果推断通过。
 
 ## 安装桥
 
@@ -18,7 +18,7 @@ dsh web
 
 Plugins 页面也可添加同一个本地 bundle。选择实际使用的 profile；装到另一个 profile 不会让当前会话出现。`dsh-bridge-path` 只读，不会安装插件或修改配置。插件管理器保存选择后，是否立即应用到运行中的 Host 取决于 HMR；**保存依赖不等于已经加载成功**，以安装结果的 `application/warnings` 为准，仅当结果指明未应用或需要重启时再重启该 profile（[Plugin Manager](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/boot/plugin-manager/README.md)）。
 
-Desktop 具有独立的 `desktop` profile，由它的 Plugins 页面或其内置 `resources/runtime/cli/bin/dsh.cmd` 管理。命令行管理前先启动 Desktop 完成初始化，再完全退出应用；参数沿用 `plugin --profile desktop add "file:<桥目录>"`。系统 npm 的 `dsh` 不负责管理 Desktop profile。此路径来自[官方 Desktop 文档](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/apps/desktop/README.md#bundled-command-runtime)，本批尚未实测正式 Desktop 包。
+Desktop 具有独立的 `desktop` profile，由它的 Plugins 页面或其内置 `resources/runtime/cli/bin/dsh.cmd` 管理。命令行管理前先启动 Desktop 完成初始化，再完全退出应用；参数沿用 `plugin --profile desktop add "file:<桥目录>"`。系统 npm 的 `dsh` 不负责管理 Desktop profile。此路径来自[官方 Desktop 文档](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/apps/desktop/README.md#bundled-command-runtime)，已在正式 Windows 包的隔离 desktop profile 实测内置 CLI 安装及移除插件；实际发行物与旧源码研究的 build commit 不同，不能宣称一一对应。
 
 ### 更新与移除
 
@@ -44,7 +44,7 @@ crosschat send --to "<完整会话ID>" --tool dsh --delivery steer --body "用�
 
 发信方 Agent 在原生 `pwsh/bash` 工具里运行命令；Harness 自动提供当前 `DSH_SESSION_ID`。收到的信封带有回复命令，照该命令回信即可保留会话和跨机路由。所有 `session-...` ID 都保留完整值，不能使用共同的前八位代替身份。外部普通终端可向目标发信，但不应伪造原生身份来冒充 Harness 会话。
 
-`--tool` 始终表示收件类型，名称和原生 ID 中的斜杠保留原值；不再把 `dsh/` 加到 ID 前面。npm/Web Host 使用 `dsh`，正式 Desktop 使用发现结果对应的 `dsh-desktop`；正式 Desktop 的实际 UI 验收仍待完成，不能靠修改类型参数代替。
+`--tool` 始终表示收件类型，名称和原生 ID 中的斜杠保留原值；不再把 `dsh/` 加到 ID 前面。npm/Web Host 使用 `dsh`，正式 Desktop 使用发现结果对应的 `dsh-desktop`。本次正式 Desktop 的两条实际 UI 会话已完成原生 shell 发信及按真实 `cA000` hint 回信，不能靠修改类型参数代替原生验证。
 
 `crosschat doctor` 和 `crosschat doctor --json` 使用与技能安装、TUI 维护和卸载相同的目标计划，检查 Harness 的 `SKILL.md` 及安装源中的全部 references。`DSH_HOME` 未设置或为空时检查 `<home>/.dsh/skills/crosschat`；绝对路径覆盖默认目录，相对路径产生警告，不按当前工作目录猜测。相同物理目标只检查一次。诊断只读，不覆盖过期文件，不扫描项目或历史副本；“与安装源一致”仅证明技能副本内容匹配，不证明原生会话已加载技能或插件。
 
@@ -54,7 +54,7 @@ crosschat send --to "<完整会话ID>" --tool dsh --delivery steer --body "用�
 
 四类东西分开归属：crosschat npm 包（含桥目录与 skill 源）、复制进 Harness 的 skill 副本、所选 profile 里的插件引用、桥运行时登记。crosschat 只写最后一项和技能副本；登记默认在用户主目录的 `~/.crosschat/dsh/instances`，不随 Harness 的 `DSH_HOME` 迁移，插件配置里已有的显式 `home` 会原样传给桥（`options.home ?? homedir()`）；skill 副本由 `crosschat install-skills`、TUI 维护和 `crosschat uninstall` 共用同一目标计划覆盖安装或移除（Claude、Codex、Harness 三处，项目 `.agents/skills` 不在其中），插件引用由 Harness 自己的插件管理器写进 profile。
 
-插件与桥在 Host 进程内运行，几种情况要分清：同一 Host 内禁用插件会走桥的 disposer，撤销它自己的 listener 和登记；重新启用会生成新的实例登记，旧凭据随之失效；只撤销 `shellEnv` 子 scope 时仅撤身份贡献，HTTP 仍继续服务；Host 崩溃可能留下死 PID 登记，发现侧只读忽略、不删除，下次启动写新实例。禁用/启用的实测见[第三轮真实通过](development/evidence/dsh-20261023/third-live.json)，覆盖范围仅官方 npm Web runtime。Web 与 Desktop 的 profile 和插件管理器各归各的，不互相代管。
+插件与桥在 Host 进程内运行，几种情况要分清：同一 Host 内禁用插件会走桥的 disposer，撤销它自己的 listener 和登记；重新启用会生成新的实例登记，旧凭据随之失效；只撤销 `shellEnv` 子 scope 时仅撤身份贡献，HTTP 仍继续服务；Host 崩溃可能留下死 PID 登记，发现侧只读忽略、不删除，下次启动写新实例。npm Web 的禁用/启用实测见[第三轮真实通过](development/evidence/dsh-20261023/third-live.json)。正式 Desktop 也已通过其原生 Plugins UI 验证登记撤销/新实例和会话保留，但本轮未单独重测旧凭据失效；见[Desktop 验证边界](development/evidence/c04-worker-20261029/I03-C3-execution-plan.md#11-正式desktop人工原生验收与运行数据清理)。Web 与 Desktop 的 profile 和插件管理器各归各的，不互相代管。
 
 桥在同机 `127.0.0.1` 随机端口监听，以每次启动的随机 token 认证，登记位于 `~/.crosschat/dsh/instances`。crosschat 核对实例 PID、instance ID、runtime 版本及桥协议。登记是私有凭据，排错时只提供错误码和版本，不粘贴 token。跨机器通信走既有 SSH/TCP crosschat 通道，桥端口保持本机。
 
