@@ -936,25 +936,67 @@ function desktopOperationClosed(result) {
  */
 export async function runDshDesktopUninstall(options = {}, operations = {}) {
   const { installation, launch, runId, signal, timeoutMs } = options;
+  const { observeHostExit, uninstall } = operations;
   const expected = desktopExpectation(installation, launch, runId);
   if (!expected || typeof installation.root !== 'string' || !isAbsolute(installation.root) || installation.root.includes('\0'))
     throw new Error('Desktop uninstall needs this installation root, owner, run and caller Host identity');
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > maxTimerMs) throw new Error('Desktop uninstall needs a valid total deadline');
-  if (typeof operations.observeHostExit !== 'function' || typeof operations.uninstall !== 'function') throw new Error('Desktop uninstall needs both runner operations');
+  if (typeof observeHostExit !== 'function' || typeof uninstall !== 'function') throw new Error('Desktop uninstall needs both runner operations');
   const owned = Object.freeze({ root: installation.root, installationId: expected.installationId, owner: expected.owner });
   const caller = Object.freeze({ instanceId: expected.instanceId, sessionId: expected.sessionId });
   const binding = { ...owned, ...caller, runId: expected.runId };
   let uninstallStarted = false;
-  const fail = (stage, text, cause) => Object.assign(new Error(text, { cause }), { stage, installation: owned, uninstallStarted });
-  const observation = await operations.observeHostExit({ installation: owned, launch: caller, runId: expected.runId, signal, timeoutMs });
-  if (!record(observation) || !Object.entries(binding).every(([key, value]) => observation[key] === value)
-    || observation.forced !== false || !desktopOperationClosed(observation.process)) {
-    throw fail('desktop-host-exit', 'This Host has no complete natural exit observation; do not uninstall');
+  const deadlineAt = Date.now() + timeoutMs;
+  const controller = new AbortController();
+  const fail = (stage, text, cause) => Object.assign(new Error(text, { cause }), {
+    stage, installation: owned, uninstallStarted, timedOut: Date.now() >= deadlineAt, cancelled: signal?.aborted === true,
+  });
+  const forward = () => controller.abort(signal.reason);
+  const assertActive = (stage) => {
+    if (signal?.aborted || controller.signal.aborted || Date.now() >= deadlineAt) {
+      if (!controller.signal.aborted) controller.abort(new Error('Desktop uninstall total deadline expired'));
+      throw fail(stage, 'Desktop uninstall was cancelled or its total deadline expired; release remains unverified', controller.signal.reason);
+    }
+  };
+  let stopWaiting;
+  const stopped = new Promise((resolve) => { stopWaiting = () => resolve({ stopped: true }); });
+  controller.signal.addEventListener('abort', stopWaiting, { once: true });
+  const timer = setTimeout(() => controller.abort(new Error('Desktop uninstall total deadline expired')), timeoutMs);
+  if (signal) { signal.addEventListener('abort', forward, { once: true }); if (signal.aborted) forward(); }
+  const invoke = async (operation, stage) => {
+    assertActive(stage);
+    // Attach both outcomes even when cancellation wins: a late rejected operation remains owned by its runner.
+    const context = { installation: owned, launch: caller, runId: expected.runId, signal: controller.signal,
+      timeoutMs: Math.max(1, deadlineAt - Date.now()) };
+    let pending;
+    try { pending = Promise.resolve(operation(context)).then((value) => ({ value }), (error) => ({ error, failed: true })); }
+    catch (error) { throw fail(stage, `Desktop runner failed: ${message(error)}`, error); }
+    const outcome = await Promise.race([pending, stopped]);
+    assertActive(stage);
+    if (outcome.failed) throw fail(stage, `Desktop runner failed: ${message(outcome.error)}`, outcome.error);
+    return outcome.value;
+  };
+  try {
+    const observation = await invoke(observeHostExit, 'desktop-host-exit');
+    if (!record(observation) || !Object.entries(binding).every(([key, value]) => observation[key] === value)
+      || observation.forced !== false || !desktopOperationClosed(observation.process)) {
+      throw fail('desktop-host-exit', 'This Host has no complete natural exit observation; do not uninstall');
+    }
+    // Freeze the observation before handing control to an operation that may await or mutate its own records.
+    const hostExit = { ...binding, forced: false, process: { ...observation.process, releaseUnclear: [], secondaryProblems: [] } };
+    assertActive('desktop-uninstall');
+    uninstallStarted = true;
+    const result = await invoke(uninstall, 'desktop-uninstall');
+    if (!desktopOperationClosed(result)) throw fail('desktop-uninstall', 'The uninstall process did not close normally; removal remains unverified', result);
+    return { hostExit, process: { ...result, releaseUnclear: [], secondaryProblems: [] } };
+  } catch (error) {
+    if (!controller.signal.aborted) controller.abort(error);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    controller.signal.removeEventListener('abort', stopWaiting);
+    if (signal) signal.removeEventListener('abort', forward);
   }
-  uninstallStarted = true;
-  const result = await operations.uninstall({ installation: owned, launch: caller, runId: expected.runId, signal, timeoutMs });
-  if (!desktopOperationClosed(result)) throw fail('desktop-uninstall', 'The uninstall process did not close normally; removal remains unverified', result);
-  return { hostExit: { ...binding, forced: false, process: { ...observation.process } }, process: { ...result } };
 }
 
 /** Every Desktop attempt owns a fresh directory, run ID and caller launch record; stale or foreign reports are never read. */
