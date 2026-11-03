@@ -2840,3 +2840,404 @@ usage: node scripts/codex-call-correlation-probe.mjs --root <owned temp dir> [--
 </details>
 
 本轮收尾：18份stdout/终端/复现资料已逐项与以上转录核对；自有loopback server与ConPTY/诊断进程均已结束，三场response均关闭。对owner任务、绝对realpath、固定目录名及全部无链接子树核实后，已删除本轮C10缓存根和其中测试home/profile/桥token；原生DSH安装未启动或变更。未新增永久文件，历史被拒缓存及用户文档未触碰。
+
+## 2026-11-03 C08 技能更新与卸载CLI端到端补验
+
+79196b2补齐I01-final-review明确保留的CLI顶层卸载验收，产品行为保持既有合同。两项真实构建CLI fixture分别使用默认与自定义Harness home；先安装、改旧SKILL/reference、增加额外文件、再次覆盖更新，再执行uninstall --yes。递归删除前逐项realpath确认实际目标均属于本次独占根。已确认更新覆盖源内同名文件并保留额外文件；卸载删除当前crosschat技能整个目录及本次crosschat状态，保留Harness profile/插件引用/设置/聊天、其它技能、旧Harness home和项目副本。原生DSH没有启动，个人文件和模型key未进入fixture。
+
+定向实际5文件56/56（名称过滤同时包含tui-maintenance）；最新完整check退出0：**2675通过/11原有跳过，231文件通过/3跳过，lint/build及203模块686边导入图通过**。这是现有Windows行为补验，不等于npm/Web所有加载组合、POSIX或三平台CI完成。覆盖/额外文件、历史/项目副本的现有语义已写入工具指南；未新增命令、历史目录账本或永久文件。
+
+<details><summary>C08补验后的完整check原始输出</summary>
+
+转录SHA-256: eb540a402d6073af7fc9d2f5d89b10f7587092a44f7e99dc5705d5882bfacfcd
+
+```text
+
+> @oatelauser/crosschat@1.10.0 check
+> npm run lint && npm run check:imports && npm run build && npm test
+
+
+> @oatelauser/crosschat@1.10.0 lint
+> eslint src test
+
+
+> @oatelauser/crosschat@1.10.0 check:imports
+> node scripts/runtime-import-graph.mjs
+
+Runtime import graph: 203 modules, 686 edges; no cycles or boundary violations.
+
+> @oatelauser/crosschat@1.10.0 build
+> tsc
+
+
+> @oatelauser/crosschat@1.10.0 test
+> vitest run --dir test
+
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ✓ test/serve-star-lifecycle.test.ts (11 tests) 17010ms
+   ✓ 033 热加星：不重启即托管即收发 > 在跑 serve + CLI --add-star 经管理插座：回执生效、自登记落位、聚合器播种、新星上 node/sender 完整收发  1574ms
+   ✓ 033 删星：即时收尾 + 直报已删 + 最后一颗可删 > 热删 beta：在跑连接收"星已删除"断开、node.json 摘条、死钥直报、邻星零中断  2342ms
+   ✓ 033 插座冷热路径与 stop 收口 > 回执超时绝不回落直写：插座连上但无回执 → 报错重试、台账零改动  10007ms
+   ✓ 033 插座冷热路径与 stop 收口 > stop 收口：serve 停机后状态 stopped、插座随进程撤（CLI 退冷路径）  1526ms
+   ✓ 036 按星机器名（--star --show-name）热闭环 > 按星只重挂该星：条目覆盖落 node.json、注册表该星 machineName 更新、邻星回落全局不变；--list 显示随条目；'' 清除回落全局  1525ms
+ ✓ test/dsh-compat-ci.test.ts (107 tests) 18265ms
+   ✓ DeepSeek Harness controlled desktop process > uses one bounded release after child and pipe failures without replacing the first cause  1018ms
+   ✓ DeepSeek Harness controlled desktop process > records later pipe, child and release problems without replacing the first cause  1011ms
+   ✓ DeepSeek Harness controlled desktop process > keeps late pipe errors owned after return without changing the snapshot  1009ms
+   ✓ DeepSeek Harness controlled desktop process > records a pipe error raised synchronously while releasing the pipes  1011ms
+   ✓ DeepSeek Harness controlled desktop process > lets the fixture end and await its own real child when the product cannot confirm release  1113ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > enforces the total deadline over headers and body and honors external cancellation  446ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > keeps late responses and late handles owned after the deadline  655ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late file close failure with the path and keeps the file owned  1109ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late file close that never settles as undecided at return  2025ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > cancels a late response, releases its lock and reports it as undecided at return  394ms
+   ✓ DeepSeek Harness desktop installer admission > uses native Windows signature modules rather than executing an inherited shadow module  305ms
+   ✓ DeepSeek Harness desktop installer admission > reports an unconfirmed signature child release and clears parent pipes  1017ms
+   ✓ DeepSeek Harness desktop installer admission > reports an unconfirmed signature child release on cancellation  1063ms
+   ✓ DeepSeek Harness desktop installer admission > owns a spawned child error without a close instead of returning early  1013ms
+   ✓ DeepSeek Harness desktop installer admission > keeps the overflow failure when a failed stop reports an error  1010ms
+   ✓ DeepSeek Harness desktop installer admission > keeps the signature failure and release state across the total deadline  1018ms
+ ✓ test/conversation-state-concurrency.test.ts (11 tests) 9303ms
+   ✓ conversation state cross-process writes > independent processes allocating at once never share a handle and each resolves to its own ref  337ms
+   ✓ conversation state cross-process writes > a live writer on an aliased path blocks every other write path until it releases  2156ms
+   ✓ conversation state cross-process writes > a send that cannot take the lock delivers nothing, then succeeds once released  1162ms
+   ✓ conversation state cross-process writes > a stuck holder still exits within its barrier deadline  5103ms
+ ✓ test/dsh-adapter.test.ts (57 tests) 12502ms
+   ✓ Harness read-only bridge diagnostics > reports no live bridge as info without creating or repairing registrations  537ms
+   ✓ Harness read-only bridge diagnostics > verifies every instance without listing or creating sessions and publishes only safe facts  379ms
+   ✓ Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_AUTH_REQUIRED'  373ms
+   ✓ Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_OWNER_MISMATCH'  426ms
+   ✓ Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_UNSUPPORTED_VERSION'  397ms
+   ✓ Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_UNSUPPORTED_PROTOCOL'  370ms
+   ✓ Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_PROTOCOL_ERROR'  408ms
+   ✓ Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_UNAVAILABLE'  358ms
+   ✓ Harness read-only bridge diagnostics > reports a corrupt registration without leaking or replacing its original bytes  388ms
+   ✓ Harness read-only bridge diagnostics > bounds a stalled handshake to one shared five-second budget without retrying  5350ms
+   ✓ Harness read-only bridge diagnostics > cancels an in-flight handshake and releases the owned process and connection  379ms
+   ✓ Harness read-only bridge diagnostics > uses the same native facts in the actual CLI text and JSON, HTTP 200  1226ms
+   ✓ Harness read-only bridge diagnostics > uses the same native facts in the actual CLI text and JSON, HTTP 401  1147ms
+ ✓ test/session-star.test.ts (40 tests) 6441ms
+   ✓ 018 批二：启动器入星链路 > spawn 会话→自动拉聚合器→attach→三段直达；退出即 detach  649ms
+   ✓ 018 批二：启动器入星链路 > 多星：--connect 可重复，两会话成员表各自 attach（win 带杠 mid 形态）  689ms
+   ✓ 018 批二：启动器入星链路 > 021 断连静默：聚合器被杀→重连提示落日志、控制台零输出、成员籍自动恢复  1586ms
+   ✓ 018 批二：9b 降级告警（不只日志） > NodeClient.warn 直打一行；warnIfBrokerLacksSessionCaps 对老 broker 出声、新 broker 静默  317ms
+   ✓ 028 双模式与命令面 > 双模式集成：永久退出留册、裸 resume 不归队、明确选择恢复；--rm 退出清册  873ms
+ ✓ test/serve-admin-key.test.ts (7 tests) 6128ms
+   ✓ 034 挑战应答全链与角色矩阵 > admin 握手（钥匙永不过线）→ 读/发/删全过 → 成员/星管逐格 → 重放拒绝 → 被吊钥 BAD_AUTH → 审计在场  2891ms
+   ✓ 034 挑战应答全链与角色矩阵 > CLI 远程管理路由：--via tcp:<星> 成员读（星钥）+ 星管写（adminKey 挑战应答）  1540ms
+   ✓ 034 set-port 无命令回归（旗标+插座 op 全删） > 管理插座 set-port op 已删（未知 op 拒绝、台账零改动）  1509ms
+probe failed: root-not-exclusive:C:\Users\YANGSH~1\AppData\Local\Temp\c14w05-test-NydYGu\previous-run
+ ✓ test/endpoint-protocol.test.ts (5 tests) 5468ms
+   ✓ endpoint identity capability guard > does not replay an uncertain lifecycle removal while readonly roster still reports the same temporary member  5423ms
+usage: node scripts/codex-call-correlation-probe.mjs --root <owned temp dir> [--evidence <json>]
+ ✓ test/codex-call-correlation-probe.test.ts (56 tests) 5256ms
+   ✓ codex call correlation probe: bounded reads and processes > kills a timed-out child together with its descendant and waits for close  1805ms
+   ✓ codex call correlation probe: bounded reads and processes > stops a cancelled child through the abort signal  428ms
+   ✓ codex call correlation probe: run root and main chain > keeps the root when the run is cancelled  556ms
+   ✓ codex call correlation probe: run root and main chain > keeps the run root when the launched process never closed  1498ms
+ ✓ test/serve-sessions.test.ts (37 tests) 4678ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 028 claude 活性：扫描核验——死 claude 成员转下线（教学）、活成员续投  528ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > C14 Codex 活性：核实实际 CLI 端点后续投，原生不存在的同类成员转下线  539ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 029 临时成员异常死亡：对账验死报 member-remove 清册零痕迹（不留下线态）  728ms
+   ✓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > 028 下线成员随 roster 帧下发（offlineSessions 单列；sessions 保持活成员语义）  420ms
+   ✓ 018 9b：老 broker（proto:1）降级的协议侧 > connect 携带 caps；info.caps 缺端点能力时拒绝类型化 attach，且不发 sessions 帧  314ms
+ ✓ test/serve-multistar.test.ts (20 tests) 4409ms
+   ✓ 032 多星握手与星域隔离 > 钥匙不属任何星 → BAD_AUTH（跨星错钥匙不放行）  512ms
+   ✓ 032 bootstrap 与 CLI > 033 serve 永不造星：空表首启零星合法（不建星、不写 node.json），教学指 --add-star  1523ms
+   ✓ 032 bootstrap 与 CLI > 内挂聚合器不写 status-node 文件（非独立进程）  1509ms
+ ✓ test/doctor-json-cli.test.ts (3 tests) 4155ms
+   ✓ doctor JSON CLI extension > diagnoses the exact custom Harness copy installed by the shared maintenance plan without repairing it  2193ms
+   ✓ doctor JSON CLI extension > returns the structured checks and preserves the existing default report and exit severity  1066ms
+   ✓ doctor JSON CLI extension > emits valid structured findings with exit one for a failed check and rejects extra options  895ms
+ ✓ test/broker-revocation.test.ts (12 tests) 3887ms
+   ✓ broker credential revocation > local remove-node immediately revokes every node/sender using that credential and retains offline permanent members in its star  857ms
+   ✓ broker credential revocation > remote remove-node has the same immediate effect while members and star admins retain their three-layer limits  655ms
+   ✓ broker credential revocation > local remove-admin-key closes only authenticated sessions of the removed credential, including unique-prefix selection  1034ms
+   ✓ broker credential revocation > marks a revoked session unusable before close completes without affecting another credential  319ms
+   ✓ broker credential revocation > finishes target pending work and file routes on revocation before the close callback, ignoring late target results  301ms
+ ✓ test/maintenance-boundaries.test.ts (5 tests) 2629ms
+   ✓ TUI maintenance source and copy boundaries > closes unreadable sources and bounds directory enumeration before accepting a skill plan  2528ms
+ ✓ test/local-service-inspection.test.ts (6 tests) 2992ms
+   ✓ owned service inspection and guard workers > reclaims an inspector blocked in spawnSync, including its owned probe child, before cancellation returns  424ms
+   ✓ owned service inspection and guard workers > uses the real process wrapper for successful inspection/guard IPC and releases it before returning  605ms
+   ✓ owned service inspection and guard workers > reclaims a real wrapper and its controlled blocked probe when its read timeout expires  1745ms
+ ✓ test/local-service-owned-stop.test.ts (6 tests) 2670ms
+   ✓ TUI owned service stop process trees > releases a hung OS scanner and its helper before completing cancellation without claiming the external stop was undone  326ms
+   ✓ TUI owned service stop process trees > bounds a nonresponding stop job and reclaims its full scanner tree on timeout  1280ms
+   ✓ TUI owned service stop process trees > runs the actual stop process wrapper and prior stop worker with the same fixed target, then releases the wrapper  406ms
+   ✓ TUI owned service stop process trees > retains prior request validation inside the real wrapper before any stop business call  335ms
+   ✓ TUI owned service stop process trees > uses the owned stop default from the managed task and waits for tree cleanup before returning an uncertain issued result  316ms
+ ✓ test/serve-node.test.ts (30 tests) 2572ms
+   ✓ B0 starId handshake > 036 无 id 星（手编形状）：连接按 BAD_AUTH 拒——broker 机跑一次 serve 补 id  580ms
+   ✓ B1 multi-star: delivery pipeline stamps starId into issued refs > broker queue self-delivery: the receipt ref carries the registry starId  569ms
+   ✓ B1 multi-star: delivery pipeline stamps starId into issued refs > broker steer self-delivery: the receipt ref carries the registry starId  542ms
+ ✓ test/ssh-native-authentication.test.ts (3 tests) 2340ms
+   ✓ SSH application native ASKPASS integration > reuses authentication across refreshes, retains strict host checking and forgets credentials when configuration changes  1340ms
+   ✓ SSH application native ASKPASS integration > preserves full Windows ASKPASS fingerprints and offers no approval for a changed known host  512ms
+   ✓ SSH application native ASKPASS integration > cancels a pending native authentication helper when the active connection closes  488ms
+ ✓ test/opencode-desktop-fixture.test.ts (13 tests) 2249ms
+   ✓ official desktop test environment > reports an unregistered executable under the owned run before allowing cleanup  1666ms
+ ✓ test/tui-controller.test.ts (25 tests) 1991ms
+ ✓ test/core-code-standards.test.ts (2 tests) 1960ms
+   ✓ progressive typed lint rules > rejects floating promises, async void callbacks and value imports used only as types  1943ms
+ ✓ test/caller-source-confirmations.test.ts (21 tests) 1652ms
+   ✓ source classification shared across native sessions > reports bounded busy without mutating state when an unrelated listener occupies its mutex port  1063ms
+ ✓ test/revocation-pause.test.ts (13 tests) 1666ms
+   ✓ explicit credential revocation pauses this star > stops one launcher supervisor without restarting it or disrupting another star  1199ms
+ ✓ test/send-log.test.ts (10 tests) 1528ms
+   ✓ appendSendLog > rotates past 5MiB instead of truncating: the bulk moves whole to .old, the new entry starts a fresh file  1405ms
+ ✓ test/tui-cli.test.ts (11 tests) 1322ms
+ ✓ test/session-membership.test.ts (16 tests) 1667ms
+   ✓ session membership application boundary > adopts an anonymous full native ref through the shared aggregator and verifies broker roster authority  544ms
+   ✓ session membership application boundary > adopts and removes a typed Codex member without overwriting the same native ID on another endpoint  534ms
+ ✓ test/ssh-askpass-bridge.test.ts (3 tests) 1439ms
+   ✓ owned native SSH ASKPASS bridge > uses a real local helper to pass one bounded prompt without storing the password in files, argv or environment  484ms
+   ✓ owned native SSH ASKPASS bridge > closes a pending helper and cancels its challenge when the owned bridge is disposed  526ms
+   ✓ owned native SSH ASKPASS bridge > rejects an oversized or cancelled answer without writing any secret material to stderr  428ms
+ ✓ test/runtime-import-graph.test.ts (9 tests) 1431ms
+   ✓ core source architecture > has no runtime dependency cycle or broken local import  554ms
+   ✓ core source architecture > keeps node configuration and connection selection independent of commands and clients  411ms
+   ✓ core source architecture > keeps every application adapter independent of command and UI entry points  397ms
+ ✓ test/uninstall.test.ts (12 tests) 1528ms
+   ✓ runUninstall > preserves native, historical and project data across actual CLI skill update/uninstall (default Harness home)  744ms
+   ✓ runUninstall > preserves native, historical and project data across actual CLI skill update/uninstall (custom Harness home)  712ms
+ ✓ test/core-diagnostics.test.ts (15 tests) 1591ms
+   ✓ isolated cancellable diagnostics > keeps Harness home inside the selected diagnostic environment (undefined)  338ms
+   ✓ isolated cancellable diagnostics > keeps Harness home inside the selected diagnostic environment (isolated)  312ms
+   ✓ isolated cancellable diagnostics > keeps Harness home inside the selected diagnostic environment (inherit)  311ms
+   ✓ isolated cancellable diagnostics > terminates a real probe child through the default built isolation path on cancellation  493ms
+ ✓ test/ssh-target-lifecycle.test.ts (4 tests) 1274ms
+   ✓ SSH target identity and process completion > bounds a child that never closes, reports incomplete cleanup, and removes its owned listeners  1059ms
+ ✓ test/tui-workspaces.test.ts (10 tests) 1246ms
+   ✓ independent TUI workspaces > rechecks the role when history returns to a different star (updated)  364ms
+   ✓ independent TUI workspaces > rechecks the role when history returns to a different star (failed)  384ms
+ ✓ test/via-tcp.test.ts (36 tests) 1162ms
+   ✓ runViaTcpSend against a real broker > times out with TCP_TRANSPORT_FAILED and the 勿盲目重发 wording  426ms
+ ✓ test/tui-composition.test.ts (15 tests) 1179ms
+ ✓ test/tui-send-command.test.ts (5 tests) 1000ms
+   ✓ TUI send command templates > round-trips opaque arguments through the current platform shell  996ms
+ ✓ test/maintenance.test.ts (21 tests) 1077ms
+   ✓ owned maintenance worker lifecycle > runs actual plans and filesystem effects through the default built worker using only isolated fixture paths  650ms
+ ✓ test/ssh-application.test.ts (15 tests) 995ms
+ ✓ test/outbox.test.ts (24 tests) 970ms
+   ✓ park > refuses honestly at the per-thread cap and leaves the file untouched  637ms
+ ✓ test/remote-discovery-cli.test.ts (2 tests) 911ms
+   ✓ built discover CLI endpoint > rejects invalid JSON and oversized input before provider execution  641ms
+ ✓ test/tui-filters.test.ts (9 tests) 881ms
+ ✓ test/status-remote.test.ts (16 tests) 870ms
+   ✓ CLI：runViaTcpStatus 传输腿 > 版本偏差：旧 broker 对 status-query 无行为 → 超时教学  421ms
+ ✓ test/serve-broker.test.ts (33 tests) 771ms
+ ✓ test/observation-overview.test.ts (18 tests) 804ms
+   ✓ safe isolated diagnostics for observation pages > retains native data environment overrides in inherit mode while binding crosschat sources to the requested HOME  311ms
+ ✓ test/tui-main-observations.test.ts (3 tests) 769ms
+   ✓ default local observation wiring > installs the five real readonly resources lazily and preserves exact related routes  355ms
+ ✓ test/tui-observation-navigation.test.ts (4 tests) 771ms
+   ✓ observation resource routes > keeps related route caches separate, canonicalizes query order, clears associations on direct commands and restores the source  354ms
+ ✓ test/codex-session-events.test.ts (2 tests) 564ms
+   ✓ Codex per-window native protocol selection > only successful native selection and first accepted input affect this window, never global notifications or failed resume  355ms
+ ✓ test/dsh-cli.test.ts (4 tests) 525ms
+   ✓ DeepSeek Harness CLI composition > connects real send dependencies to Harness delivery with an explicit mode  514ms
+ ✓ test/claude-session-events.test.ts (2 tests) 552ms
+ ✓ test/tui-form.test.ts (5 tests) 511ms
+ ✓ test/dsh-bridge.test.ts (32 tests) 514ms
+ ✓ test/tui-main-sessions.test.ts (3 tests) 458ms
+ ✓ test/remote-discovery-tcp.test.ts (6 tests) 399ms
+ ✓ test/tui-sensitive-result.test.ts (2 tests) 435ms
+ ✓ test/tcp-peer-naming-transport.test.ts (8 tests) 442ms
+ ✓ test/smoke.test.ts (2 tests) 425ms
+ ✓ test/cli-args.test.ts (18 tests) 484ms
+ ✓ test/revocation-auth-race.test.ts (2 tests) 398ms
+   ✓ revocation during current process lifecycles > a corrupt self-aggregator pause does not become an unhandled rejection in the broker  352ms
+ ✓ test/c14-conversation-refinement.test.ts (24 tests) 471ms
+ ✓ test/pipe-transport.test.ts (6 tests | 3 skipped) 378ms
+   ✓ WindowsNamedPipeTransport > reports PIPE_WRITE_UNCERTAIN when the server cuts the connection mid-write  314ms
+ ✓ test/tui-follow.test.ts (6 tests) 399ms
+ ✓ test/tcp-session-operations.test.ts (7 tests) 358ms
+ ✓ test/local-service-worker-boundary.test.ts (8 tests) 390ms
+ ✓ test/tui-context-source.test.ts (7 tests) 307ms
+ ✓ test/claude-compat-ci.test.ts (15 tests) 328ms
+ ✓ test/install-skills.test.ts (12 tests) 345ms
+ ✓ test/serve-b21.test.ts (29 tests) 354ms
+ ✓ test/send-command.test.ts (57 tests) 357ms
+ ✓ test/broker-discovery.test.ts (17 tests) 307ms
+ ✓ test/opencode-adapter.test.ts (26 tests) 332ms
+ ✓ test/tui-layout-paging.test.tsx (3 tests) 308ms
+ ✓ test/serve-f0.test.ts (19 tests) 284ms
+ ✓ test/conversations.test.ts (26 tests) 294ms
+ ✓ test/claude-compat-fixture.test.ts (19 tests) 267ms
+ ✓ test/caller-source-providers.test.ts (14 tests) 247ms
+ ✓ test/remote-discovery-node.test.ts (8 tests) 289ms
+ ✓ test/core-sessions-readers.test.ts (13 tests) 240ms
+ ✓ test/tui-clipboard.test.ts (5 tests) 237ms
+ ✓ test/tcp-exact-transport.test.ts (3 tests) 251ms
+ ✓ test/caller-source-state-lock.test.ts (2 tests) 234ms
+ ✓ test/serve-cli.test.ts (32 tests) 243ms
+ ✓ test/core-services-background.test.ts (5 tests) 232ms
+ ✓ test/conversation-handle-ring.test.ts (9 tests) 217ms
+ ✓ test/tcp-configuration-management.test.ts (7 tests) 204ms
+ ✓ test/codex-aggregate-discovery.test.ts (11 tests) 197ms
+ ✓ test/serve-tool-type-bridge.test.ts (6 tests) 191ms
+ ✓ test/file-channel.test.ts (10 tests) 173ms
+ ✓ test/c14-explicit-send.test.ts (29 tests) 188ms
+ ✓ test/tool-type-routing-state.test.ts (32 tests) 181ms
+ ✓ test/tui-view.test.tsx (13 tests) 190ms
+ ✓ test/dsh-node-members.test.ts (1 test) 201ms
+ ✓ test/tcp-application.test.ts (13 tests) 167ms
+ ✓ test/tui-session-view.test.tsx (8 tests) 172ms
+ ✓ test/send-handle.test.ts (10 tests) 139ms
+ ✓ test/session-membership-exact.test.ts (9 tests) 159ms
+ ✓ test/core-queries.test.ts (17 tests) 145ms
+ ✓ test/watchdog.test.ts (10 tests) 162ms
+ ✓ test/tui-mutation-navigation.test.ts (1 test) 155ms
+ ✓ test/tcp-transport.test.ts (7 tests) 136ms
+ ✓ test/discovery-service.test.ts (10 tests) 146ms
+ ✓ test/tui-main-preferences.test.ts (2 tests) 131ms
+ ✓ test/claude-compat-lifecycle.test.ts (4 tests) 119ms
+ ✓ test/tcp-configuration.test.ts (8 tests) 132ms
+ ✓ test/tui-terminal.test.ts (8 tests) 131ms
+ ✓ test/tui-workspace-layout.test.tsx (8 tests) 131ms
+ ✓ test/via-send.test.ts (42 tests) 116ms
+ ✓ test/codex-deliver.test.ts (26 tests) 115ms
+(node:4464) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ test/desktop-metadata.test.ts (5 tests) 122ms
+ ✓ test/observation-logs.test.ts (11 tests) 115ms
+ ✓ test/dsh-live-fixture.test.ts (18 tests) 115ms
+ ✓ test/status-doctor-tcp.test.ts (27 tests) 106ms
+ ✓ test/ssh-managed-profiles.test.ts (5 tests) 103ms
+ ✓ test/tcp-machine-transaction.test.ts (9 tests) 99ms
+ ✓ test/tui-contexts.test.ts (13 tests) 98ms
+ ✓ test/outbox-ownership.test.ts (15 tests) 112ms
+ ✓ test/status-conversations.test.ts (20 tests) 90ms
+ ✓ test/local-services.test.ts (11 tests) 97ms
+ ✓ test/caller-source-service.test.ts (11 tests) 92ms
+ ✓ test/tui-input.test.tsx (21 tests) 96ms
+ ✓ test/observation-communications.test.ts (11 tests) 88ms
+ ✓ test/opencode-compat-fixture.test.ts (7 tests) 88ms
+ ✓ test/tui-sessions.test.ts (22 tests) 76ms
+ ✓ test/dsh-mock-model.test.ts (5 tests) 79ms
+ ✓ test/dsh-runtime-driver.test.ts (3 tests) 86ms
+ ✓ test/dsh-send.test.ts (16 tests) 86ms
+ ✓ test/desktop-ipc.test.ts (21 tests) 81ms
+ ✓ test/tcp-snapshot-transport.test.ts (2 tests) 72ms
+ ✓ test/conversation-summary.test.ts (15 tests) 84ms
+ ✓ test/tool-type-observations.test.ts (7 tests) 98ms
+ ✓ test/tcp-management-exact.test.ts (8 tests) 74ms
+ ✓ test/codex-routing.test.ts (15 tests) 67ms
+ ✓ test/codex-target-diagnostics.test.ts (13 tests) 70ms
+ ✓ test/session-operations.test.ts (4 tests) 72ms
+ ✓ test/state-paths.test.ts (9 tests) 78ms
+ ✓ test/claude-wrapper.test.ts (16 tests | 2 skipped) 66ms
+ ✓ test/session-selection.test.ts (3 tests) 59ms
+ ✓ test/tui-context-actions.test.ts (3 tests) 68ms
+ ✓ test/core-cleanup.test.ts (5 tests) 63ms
+ ✓ test/tui-registry.test.ts (5 tests) 54ms
+ ✓ test/tcp-cold-management.test.ts (5 tests) 77ms
+ ✓ test/serve-registry.test.ts (10 tests) 75ms
+ ✓ test/core-management.test.ts (12 tests) 55ms
+ ✓ test/opencode-members.test.ts (7 tests) 59ms
+ ✓ test/rollout-meta.test.ts (13 tests) 43ms
+ ✓ test/codex-rpc.test.ts (11 tests) 67ms
+ ✓ test/identity-command.test.ts (7 tests) 55ms
+ ✓ test/opencode-desktop-probe.test.ts (9 tests) 63ms
+ ✓ test/opencode-desktop-ci.test.ts (13 tests) 60ms
+ ✓ test/delivery-mode.test.ts (15 tests) 46ms
+ ✓ test/status-filters.test.ts (20 tests) 50ms
+ ✓ test/status-summary.test.ts (14 tests) 55ms
+ ✓ test/clean.test.ts (10 tests) 51ms
+ ✓ test/dsh-members.test.ts (13 tests) 46ms
+ ✓ test/tcp-local-management.test.ts (6 tests) 45ms
+ ✓ test/tui-tcp.test.ts (24 tests) 43ms
+ ✓ test/native-rename-providers.test.ts (6 tests) 40ms
+ ✓ test/c14-native-send-seams.test.ts (17 tests) 37ms
+ ✓ test/tui-table.test.ts (23 tests) 34ms
+ ✓ test/discovery-ssh.test.ts (7 tests) 45ms
+ ✓ test/tcp-management-boundaries.test.ts (4 tests) 37ms
+ ✓ test/opencode-send.test.ts (9 tests) 32ms
+ ✓ test/core-services.test.ts (5 tests) 35ms
+ ✓ test/node-config.test.ts (9 tests) 28ms
+ ✓ test/tui-text.test.ts (52 tests) 31ms
+ ✓ test/rate-limit.test.ts (6 tests) 26ms
+ ✓ test/tcp-management.test.ts (15 tests) 24ms
+ ✓ test/doctor.test.ts (20 tests) 24ms
+ ✓ test/core-send-diagnostics.test.ts (6 tests) 17ms
+ ✓ test/serve-management-errors.test.ts (6 tests) 22ms
+ ✓ test/c14-tool-addressing.test.ts (8 tests) 17ms
+ ✓ test/tcp-machine-workspace.test.ts (8 tests) 16ms
+ ✓ test/session-star-logging.test.ts (2 tests) 16ms
+ ✓ test/tui-tcp-targets.test.ts (2 tests) 14ms
+ ✓ test/session-membership-machine.test.ts (4 tests) 15ms
+ ✓ test/tcp-empty-node-config.test.ts (3 tests) 13ms
+ ✓ test/tui-star-audit.test.ts (2 tests) 20ms
+ ✓ test/core-send.test.ts (4 tests) 22ms
+ ✓ test/tui-logs.test.ts (5 tests) 15ms
+ ✓ test/native-endpoint-types.test.ts (10 tests) 16ms
+ ✓ test/tui-ssh.test.ts (7 tests) 17ms
+ ✓ test/codex-pagination.test.ts (5 tests) 13ms
+ ✓ test/opencode-tui.test.ts (9 tests) 13ms
+ ✓ test/star-snapshot.test.ts (1 test) 10ms
+ ✓ test/tcp-node-naming-lifecycle.test.ts (6 tests) 16ms
+ ✓ test/session-membership-ipv6.test.ts (2 tests) 11ms
+ ✓ test/ref.test.ts (25 tests) 15ms
+ ✓ test/tui-communications.test.ts (13 tests) 12ms
+ ✓ test/dsh-identity.test.ts (19 tests) 15ms
+ ✓ test/tool-type-discovery-state.test.ts (6 tests) 10ms
+ ✓ test/tui-connections.test.ts (7 tests) 10ms
+ ✓ test/opencode-composition.test.ts (4 tests) 10ms
+ ✓ test/core-sessions.test.ts (8 tests) 9ms
+ ✓ test/tui-overview.test.ts (4 tests) 9ms
+ ✓ test/dsh-status.test.ts (7 tests) 7ms
+ ✓ test/tui-page-presentation.test.ts (3 tests) 11ms
+ ✓ test/opencode-identity.test.ts (18 tests) 10ms
+ ✓ test/c14-discovery-tui.test.ts (3 tests) 9ms
+ ✓ test/tui-maintenance.test.ts (6 tests) 10ms
+ ✓ test/ssh-interaction.test.ts (6 tests) 7ms
+ ✓ test/codex-proxy-env.test.ts (2 tests) 9ms
+ ✓ test/core-members.test.ts (8 tests) 10ms
+ ✓ test/dsh-composition.test.ts (5 tests) 11ms
+ ✓ test/tui-services.test.ts (4 tests) 8ms
+ ✓ test/resolve.test.ts (24 tests) 7ms
+ ✓ test/tui-ssh-management.test.ts (3 tests) 9ms
+ ✓ test/codex-caller-source-probe.test.ts (14 tests) 7ms
+ ✓ test/dsh-tui.test.ts (3 tests) 7ms
+ ✓ test/core-local-discovery.test.ts (3 tests) 8ms
+ ✓ test/dsh-reader.test.ts (11 tests) 8ms
+ ✓ test/key-file.test.ts (6 tests) 8ms
+ ✓ test/registry.test.ts (6 tests) 8ms
+ ✓ test/deliver.test.ts (5 tests) 8ms
+ ✓ test/compat-reply.test.ts (19 tests) 8ms
+ ✓ test/opencode-status.test.ts (6 tests) 7ms
+ ✓ test/envelope.test.ts (20 tests) 7ms
+ ✓ test/local-service-stop-target.test.ts (3 tests) 5ms
+ ✓ test/discovery-command.test.ts (2 tests) 5ms
+ ✓ test/opencode-desktop-process-race.test.ts (3 tests) 6ms
+ ✓ test/codex-launcher-owner.test.ts (2 tests) 6ms
+ ✓ test/limits.test.ts (11 tests) 3ms
+ ✓ test/tcp-management-state.test.ts (3 tests) 4ms
+ ✓ test/opencode-wrapper.test.ts (3 tests) 5ms
+ ✓ test/local-service-readiness.test.ts (1 test) 4ms
+ ✓ test/codex-wrapper.test.ts (6 tests) 5ms
+ ✓ test/remote-discovery-protocol.test.ts (10 tests) 3ms
+ ✓ test/claude-compat-evidence.test.ts (5 tests) 4ms
+ ✓ test/frame.test.ts (5 tests) 3ms
+ ✓ test/credential-revoked-protocol.test.ts (6 tests) 3ms
+ ✓ test/serve-protocol.test.ts (3 tests) 3ms
+ ✓ test/tui-status.test.ts (4 tests) 3ms
+ ✓ test/c14-envelope-tool.test.ts (3 tests) 3ms
+ ✓ test/opencode-ref-boundary.test.ts (2 tests) 2ms
+ ✓ test/tui-ssh-authentication-prompt.test.ts (1 test) 2ms
+ ↓ test/live/claude-live.test.ts (2 tests | 2 skipped)
+ ↓ test/live/codex-live.test.ts (2 tests | 2 skipped)
+ ↓ test/live/status-live.test.ts (2 tests | 2 skipped)
+
+ Test Files  231 passed | 3 skipped (234)
+      Tests  2675 passed | 11 skipped (2686)
+   Start at  23:23:02
+   Duration  120.34s (transform 3.24s, setup 0ms, collect 22.75s, tests 167.23s, environment 37ms, prepare 18.64s)
+```
+
+</details>
+
+C08补验fixture由测试afterAll回收；本轮完整日志经逐字归一转录核对后，其独占缓存根也已按owner/realpath核实删除。用户保留的DSH安装仍在，不触碰历史缓存和用户未跟踪文档。
