@@ -9,7 +9,7 @@ crosschat status --via tcp:<机器>
 crosschat send --via tcp:<星>:<机器>:<名称或完整ID> --tool <收件类型> --body "正文"
 ```
 
-目标名单从对端查询，每次都把收件类型放在独立 `--tool`：`claude`、`codex-cli`、`codex-desktop`、`opencode`、`dsh` 或 `dsh-desktop`，以对端实际声明为准。同类型重名时用完整原生 ID。OpenCode CLI/Desktop 共用服务，Harness Desktop 的正式 UI 验收仍待完成。类型必须被发送端、broker、目标 node 保留，缺少能力报错后先升级相应 crosschat，保留原目标类型。
+目标名单从对端查询，每次都把收件类型放在独立 `--tool`：`claude`、`codex-cli`、`codex-desktop`、`opencode`、`dsh` 或 `dsh-desktop`，以对端实际声明为准。同类型重名时用完整原生 ID。OpenCode CLI/Desktop 共用服务；Harness 正式 Windows Desktop 已有本机真实 UI 收发证据，跨机及其它平台按实际验收范围判断。类型必须被发送端、broker、目标 node 保留，缺少能力报错后先升级相应 crosschat，保留原目标类型。
 
 ## SSH
 

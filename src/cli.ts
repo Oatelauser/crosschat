@@ -124,7 +124,7 @@ commands:
                             save a requested source classification, not a recipient
   dsh-bridge-path           print the packaged DeepSeek Harness bridge path;
                             enable it in the intended native runtime explicitly
-  doctor [--json]           environment health check (exits 1 on any ❌)
+  doctor [--json]           environment and Harness bridge checks (exits 1 on any ❌)
   serve [options]           run/manage the tcp broker (star topology,
                             default port ${DEFAULT_PORT}; a non-default
                             port is a hand-edited broker.json field —
