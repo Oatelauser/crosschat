@@ -2,7 +2,7 @@
 
 2026-11-03最新用户要求“借鉴openbot重新规划”，并明确“先把dsh完成”。当前顺序以[DSH优先完成计划](dsh-completion-plan-20261103.md)为准：先收口DSH CLI/npm Host与正式Desktop的真实生命周期、维护、诊断/TUI、从零CI，再做该工具已批准增强；其它工具待办与原负责人保留。root继续独立工作，worker停写；本轮只改规划，未开始新开发或原生执行。下一张拟实施单为C04-I03-C3，先交正式Desktop执行合同与干净runner具体方案，不重复堆已完成离线组件。
 
-最近代码交付：[C04-I03-C2卸载前Host退出守卫](evidence/c04-worker-20261029/I03-C2-development.md)，产品3b3f05b，目标102/102；当轮单次完整check退出0：2632通过/11原有跳过，231文件通过/3跳过，lint/203模块682边/build通过。规范/合同为root自行审查，非独立双轴；worker及子代理未参与。[openbot研究](../research/openbot-integration-study-20261103.md)作为后续接入设计输入，不据此改通信协议/状态。当前整仓绿覆盖含C1的实现；C1/B此前失败与原始证据保留，未追认历史根因修复。真实Host观察、正式安装/卸载合同、执行字节/目的地及干净runner原生证据仍缺，I03/C04未完成。被拒读取/清理不重试，新增非skill功能文件、必需用户操作变化及真实安装执行沿既定决定边界。
+最近代码交付：[C04-I03-C2卸载前Host退出守卫](evidence/c04-worker-20261029/I03-C2-development.md)，产品3b3f05b，目标102/102；当轮单次完整check退出0：2632通过/11原有跳过，231文件通过/3跳过，lint/203模块682边/build通过。规范/合同为root自行审查，非独立双轴；worker及子代理未参与。[openbot研究](../research/openbot-integration-study-20261103.md)及用户追加的[codex-host研究](../research/codex-host-integration-study-20261103.md)作为后续接入设计输入；后者的真实DSH托管Web/Remote实现与本项目借用live Agent分开，补充已写入DSH计划，不据此修改通信协议/状态，也不采用停止后重发或扩展版本窗口。当前整仓绿覆盖含C1的实现；C1/B此前失败与原始证据保留，未追认历史根因修复。真实Host观察、正式安装/卸载合同、执行字节/目的地及干净runner原生证据仍缺，I03/C04未完成。被拒读取/清理不重试，新增非skill功能文件、必需用户操作变化及真实安装执行沿既定决定边界。
 
 2026-11-02（UTC+8）[C04-I01离线核心已验收](evidence/c04-worker-20261029/I01-final-review.md)；[I02安装包获取与校验组件产品已验收](evidence/c04-worker-20261029/I02-final-review.md)，最终产品33f9c05、fixture6648c91、证据219a35c，root54/54、worker完整2584/11，未清理残留单独保留。I02产品不重开，其测试helper迟到owner已随I03-R3修复。I03-B最终root77/77、两轴无未决；全量17条白名单外状态/通信相关失败保留、未逐条归责，不扩通信所有权。I03整体与C04父项未完成，没有真实Desktop验收。
 
