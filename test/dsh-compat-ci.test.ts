@@ -1830,6 +1830,44 @@ describe('DeepSeek Harness desktop installer admission', () => {
     });
   });
 
+  it.each(['PSModulePath', 'psmodulepath'])('keeps the native signature reader independent of inherited %s without changing the caller environment', async (key) => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      const inherited = join(output, 'unrelated-shell-modules');
+      vi.stubEnv(key, inherited);
+      const { calls } = fakeSpawn({ stdout: JSON.stringify(signature) });
+      try {
+        await expect(call(path, { readSignature: undefined })).resolves.toMatchObject({ publisher: signature });
+        const childEnv = calls[0].options.env as Record<string, string | undefined>;
+        expect(Object.keys(childEnv).filter((name) => name.toLowerCase() === 'psmodulepath')).toEqual([]);
+        expect(childEnv.DSH_ADMIT_SIGNATURE_PATH).toBe(path);
+        expect(process.env[key]).toBe(inherited);
+      } finally { spawnInjection.impl = null; vi.unstubAllEnvs(); }
+    });
+  });
+
+  it.runIf(process.platform === 'win32')('uses native Windows signature modules rather than executing an inherited shadow module', async () => {
+    await isolated(async (output) => {
+      const path = await writeInstaller(output);
+      const moduleRoot = join(output, 'shell-modules');
+      const moduleDir = join(moduleRoot, 'Microsoft.PowerShell.Security');
+      const marker = join(output, 'shadow-module-executed');
+      await mkdir(moduleDir, { recursive: true });
+      await writeFile(join(moduleDir, 'Microsoft.PowerShell.Security.psd1'), "@{RootModule='Microsoft.PowerShell.Security.psm1';ModuleVersion='99.0.0';FunctionsToExport=@('Get-AuthenticodeSignature');CmdletsToExport=@()}");
+      await writeFile(join(moduleDir, 'Microsoft.PowerShell.Security.psm1'), "[System.IO.File]::WriteAllText($env:CROSSCHAT_SIGNATURE_POISON_MARKER, 'executed'); throw 'inherited shadow signature module loaded'");
+      vi.stubEnv('PSModulePath', moduleRoot);
+      vi.stubEnv('CROSSCHAT_SIGNATURE_POISON_MARKER', marker);
+      try {
+        // This intentionally unsigned fixture must reach the genuine signature check,
+        // then be refused as unsigned. A shell-module import failure is a different result.
+        await expect(call(path, { readSignature: undefined })).rejects.toMatchObject({
+          stage: 'signature', message: 'Authenticode status is not Valid',
+        });
+        expect(existsSync(marker)).toBe(false);
+      } finally { vi.unstubAllEnvs(); }
+    });
+  });
+
   it('rejects default-adapter output, JSON and process failures', async () => {
     await isolated(async (output) => {
       const path = await writeInstaller(output);
