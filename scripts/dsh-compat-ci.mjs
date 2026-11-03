@@ -950,10 +950,11 @@ export async function runDshDesktopUninstall(options = {}, operations = {}) {
   const caller = Object.freeze({ instanceId: expected.instanceId, sessionId: expected.sessionId });
   const binding = { ...owned, ...caller, runId: expected.runId };
   let uninstallStarted = false;
+  let deadlineTriggered = false;
   const deadlineAt = Date.now() + timeoutMs;
   const controller = new AbortController();
   const fail = (stage, text, cause) => Object.assign(new Error(text, { cause }), {
-    stage, installation: owned, uninstallStarted, timedOut: Date.now() >= deadlineAt, cancelled: signal?.aborted === true,
+    stage, installation: owned, uninstallStarted, timedOut: deadlineTriggered || Date.now() >= deadlineAt, cancelled: signal?.aborted === true,
   });
   const forward = () => controller.abort(signal.reason);
   const assertActive = (stage) => {
@@ -965,7 +966,10 @@ export async function runDshDesktopUninstall(options = {}, operations = {}) {
   let stopWaiting;
   const stopped = new Promise((resolve) => { stopWaiting = () => resolve({ stopped: true }); });
   controller.signal.addEventListener('abort', stopWaiting, { once: true });
-  const timer = setTimeout(() => controller.abort(new Error('Desktop uninstall total deadline expired')), timeoutMs);
+  const timer = setTimeout(() => {
+    deadlineTriggered = true;
+    controller.abort(new Error('Desktop uninstall total deadline expired'));
+  }, timeoutMs);
   if (signal) { signal.addEventListener('abort', forward, { once: true }); if (signal.aborted) forward(); }
   const invoke = async (operation, stage) => {
     assertActive(stage);
