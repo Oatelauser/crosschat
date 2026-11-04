@@ -1,0 +1,7 @@
+PASS official-profile-plugin-and-skill-installation
+PASS native-skill-load-and-current-source
+PASS native-roundtrip-and-typed-discovery
+PASS same-source-diagnostics-and-real-terminal
+PASS skill-update-and-profile-preserving-shutdown
+PASS official-plugin-and-crosschat-removal-with-owned-cleanup
+{"status":"passed","passed":6,"reportPath":"[owned-root]\\native-green-1\\report.json"}

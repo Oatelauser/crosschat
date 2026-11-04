@@ -22,7 +22,7 @@ const marker = `c11_${runId.slice(0, 8)}_`;
 const report = { schema: 1, tool: DSH_ONBOARDING_TOOL, platform: 'win32', arch: 'x64', runId,
   version: process.env.DSH_EXPECTED_VERSION, scope: DSH_ONBOARDING_SCOPE, status: 'failed', category: 'infrastructure',
   stage: 'setup', check: DSH_ONBOARDING_CHECKS[0], startedAt: new Date().toISOString(), checks: [] };
-let fixture, node, pty, tuiEvents, skillIssued = false, identityIssued = false, senderIssued = false, receiverIssued = false;
+let fixture, node, pty, tuiEvents, maintenanceReleaseUnclear = false, skillIssued = false, identityIssued = false, senderIssued = false, receiverIssued = false;
 const sessions = {};
 const userText = (body) => body.messages.filter((message) => message.role === 'user').flatMap((message) => typeof message.content === 'string' ? [message.content]
   : message.content.filter((part) => part.type === 'text').map((part) => part.text)).join('\n');
@@ -43,7 +43,10 @@ async function check(index, work) {
   report.checks.push({ name: report.check, status: 'passed', elapsedMs: Math.round(performance.now() - started) });
   process.stdout.write(`PASS ${report.check}\n`);
 }
-function normal(result) { assert.equal(result.code, 0, result.stderr); assert.equal(result.timedOut, false); assert.equal(result.signal, null); }
+function normal(result) {
+  if (result.timedOut || result.signal !== null || !Number.isInteger(result.code)) throw Object.assign(new Error('Owned command did not exit normally'), { category: 'infrastructure' });
+  assert.equal(result.code, 0, result.stderr);
+}
 function redact(value) {
   let result = typeof value === 'string' ? value : JSON.stringify(value);
   if (fixture?.info?.token) result = result.replaceAll(fixture.info.token, '[fixture-token-redacted]');
@@ -91,7 +94,10 @@ try {
     assert(senderIssued && receiverIssued);
     const listed = await fixture.cli(['discover'], JSON.stringify({ op: 'list', filter: { providerIds: ['dsh'] }, limit: 10 })); normal(listed);
     const page = JSON.parse(listed.stdout).page; assert.equal(page.completeness, 'complete'); assert.equal(page.items.length, 2);
-    for (const session of Object.values(sessions)) assert(page.items.some((item) => item.ref.nativeId === session.id && item.ref.endpointType === 'host'));
+    for (const session of Object.values(sessions)) {
+      assert(page.items.some((item) => item.ref.nativeId === session.id && item.ref.endpointType === 'host'));
+      assert.equal((await fixture.snapshot(session.id)).sameAgent, true);
+    }
     await save('discovery.json', page);
   });
   await check(3, async () => {
@@ -126,6 +132,7 @@ try {
     await send('q'); assert.deepEqual(await pty.exited, { code: 0, hostCode: 0 });
     const exit = (await events()).find((entry) => entry.event === 'exit'); assert.deepEqual(exit.after, exit.before);
     for (const mode of ['1049', '2004']) assert(pty.output.lastIndexOf(`\x1b[?${mode}l`) > pty.output.lastIndexOf(`\x1b[?${mode}h`));
+    await save('tui-application.jsonl', await readFile(eventsPath, 'utf8'));
     await pty.dispose(); pty = undefined; await node.close(); node = undefined;
   });
   await check(4, async () => {
@@ -139,6 +146,7 @@ try {
   });
   await check(5, async () => {
     const removed = await runDshCommand(process.execPath, [join(fixture.root, 'official-launcher.mjs'), 'plugin', '--profile', 'web', 'remove', '@crosschat/dsh-bridge'], { env: fixture.env, cwd: fixture.workspace, timeout: 120000 });
+    maintenanceReleaseUnclear = removed.timedOut || removed.signal !== null || !Number.isInteger(removed.code);
     normal(removed); await save('remove-plugin.json', removed);
     const profileFile = join(fixture.env.DSH_HOME, 'profiles/web/package.json'), profile = await readFile(profileFile, 'utf8');
     assert(!JSON.parse(profile).dependencies?.['@crosschat/dsh-bridge']);
@@ -163,7 +171,10 @@ try {
   if (fixture) {
     await release('terminal evidence', async () => { if (tuiEvents) { try { await save('tui-application.jsonl', await readFile(tuiEvents, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; } } });
     await release('runtime evidence', () => save('runtime-logs.json', fixture.logs));
-    await release('runtime', () => fixture.close()); report.cleanup = fixture.cleanup;
+    if (maintenanceReleaseUnclear) {
+      cleanupErrors.push('Native package-manager release is unknown; the owned run root is retained'); report.retainedFixtureRoot = fixture.root;
+    } else await release('runtime', () => fixture.close());
+    report.cleanup = fixture.cleanup;
   }
   if (cleanupErrors.length) { report.status = 'failed'; report.category = 'infrastructure'; report.stage = 'cleanup'; report.check = 'owned-cleanup'; report.cleanupErrors = cleanupErrors; }
   report.finishedAt = new Date().toISOString();

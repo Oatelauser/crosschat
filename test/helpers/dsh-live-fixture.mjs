@@ -161,7 +161,7 @@ export async function createDshFixture(options, respond) {
   const root = await realpath(await mkdtemp(join(parent, 'run-')));
   const owner = randomUUID();
   await writeFile(join(root, '.fixture-owner'), owner);
-  let model; let env; let child; let control; let closing; let unsafe = false;
+  let model; let env; let child; let control; let stopping; let closing; let unsafe = false;
   const logs = { stdout: '', stderr: '' };
   const cleanup = { runtimeStopped: false, registrationRemoved: false, removed: false, forced: false };
   const controllerPath = join(root, 'controller.json');
@@ -186,8 +186,9 @@ export async function createDshFixture(options, respond) {
     async snapshot(id) { return fixture.controller(`/sessions/${encodeURIComponent(id)}`); },
     async idle(id) { await fixture.controller(`/sessions/${encodeURIComponent(id)}/idle`, {}, 60000); },
     async cli(args, input) { return runDshCommand(process.execPath, [join(repositoryRoot, 'dist', 'cli.js'), ...args], { env, cwd: workspace, input }); },
-    async close() {
-      return closing ??= (async () => {
+    /** Stop owned runtime resources while retaining profile/chat files for native maintenance checks. */
+    async stop() {
+      return stopping ??= (async () => {
         const failures = [];
         if (child && child.exitCode === null && child.signalCode === null) {
           const exited = new Promise((done) => child.once('close', done));
@@ -213,13 +214,16 @@ export async function createDshFixture(options, respond) {
           catch (error) { if (error.code === 'ENOENT') cleanup.registrationRemoved = true; else failures.push(error); }
         } else cleanup.registrationRemoved = true;
         if (!cleanup.runtimeStopped || !cleanup.registrationRemoved || unsafe) failures.push(new Error('Runtime cleanup is incomplete; the owned run directory is retained'));
-        if (!failures.length) {
-          const target = await realpath(root);
-          const childPath = relative(parent, target);
-          if (target !== root || !childPath || childPath.startsWith(`..${sep}`) || childPath === '..' || isAbsolute(childPath) || !basename(target).startsWith('run-') || await readFile(join(root, '.fixture-owner'), 'utf8') !== owner) throw new Error('Unsafe Harness fixture cleanup target');
-          await rm(target, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); cleanup.removed = true;
-        }
         if (failures.length) throw new AggregateError(failures, 'Harness fixture teardown failed');
+      })();
+    },
+    async close() {
+      return closing ??= (async () => {
+        await fixture.stop();
+        const target = await realpath(root);
+        const childPath = relative(parent, target);
+        if (target !== root || !childPath || childPath.startsWith(`..${sep}`) || childPath === '..' || isAbsolute(childPath) || !basename(target).startsWith('run-') || await readFile(join(root, '.fixture-owner'), 'utf8') !== owner) throw new Error('Unsafe Harness fixture cleanup target');
+        await rm(target, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); cleanup.removed = true;
       })();
     },
   };
