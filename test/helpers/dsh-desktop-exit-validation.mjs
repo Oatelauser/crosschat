@@ -25,7 +25,7 @@ await writeFile(join(project, 'cordis.patch.yml'), JSON.stringify([
   { id: 'session-title-llm', disabled: true },
   { id: 'workspace-controller', config: { documentsDirectory: join(env.HOME, 'Documents') } },
 ]));
-const report = { sourceSha256: DSH_DESKTOP_MAIN_SHA256, continuous: true, errors: [], events: [], pauses: [],
+const report = { expectedSourceSha256: DSH_DESKTOP_MAIN_SHA256, continuous: true, errors: [], events: [], pauses: [],
   scope: 'Fixed formal user-retained Desktop; passive debugger + native held handle; no install/uninstall/C2 execution' };
 const electron = `process.getBuiltinModule('node:module').createRequire(${JSON.stringify(appPackage)})('electron')`;
 const protocol = []; const points = new Map();
@@ -37,7 +37,11 @@ async function freePort() {
   await new Promise((done, reject) => server.close((error) => error ? reject(error) : done())); return address.port;
 }
 async function save(name, value) { await writeFile(join(artifacts, name), JSON.stringify(value, null, 2) + '\n'); }
-function error(label, failure) { report.errors.push({ label, message: failure instanceof Error ? failure.message : String(failure) }); }
+function error(label, failure) {
+  const message = failure instanceof Error ? failure.message : String(failure);
+  report.errors.push({ label, message }); process.stderr.write(`${label}: ${message}\n`);
+}
+async function step(phase) { report.phase = phase; await save('progress.json', { phase }); process.stdout.write(`${phase}\n`); }
 async function observeHost(pid) {
   const ready = join(artifacts, 'host-handle-ready.json'), script = join(artifacts, 'hold-native-host.ps1');
   await writeFile(script, `param([int]$TargetPid,[string]$ReadyFile)\n$ErrorActionPreference='Stop'\n$heldHost=[Diagnostics.Process]::GetProcessById($TargetPid)\n$null=$heldHost.Handle\n$created=$heldHost.StartTime.ToUniversalTime().ToString('o')\n$executable=$heldHost.MainModule.FileName\n@{pid=$heldHost.Id;creationTime=$created;executable=$executable} | ConvertTo-Json -Compress | Set-Content -LiteralPath $ReadyFile\nif (-not $heldHost.WaitForExit(150000)) { throw 'Owned Host did not close within observation budget' }\n@{pid=$heldHost.Id;creationTime=$created;executable=$executable;exitCode=$heldHost.ExitCode} | ConvertTo-Json -Compress\n$heldHost.Dispose()\n`);
@@ -92,14 +96,33 @@ try {
     const response = await globalThis.fetch(`http://127.0.0.1:${port}/json/list`, { signal: globalThis.AbortSignal.timeout(1000) });
     return (await response.json())[0];
   }, 'owned main debugger', 20000);
+  await step('verify-owned-loopback-listener');
+  const systemRoot = process.env.SystemRoot ?? process.env.WINDIR; assert(systemRoot);
+  const listeners = await runDshCommand(join(systemRoot, 'System32', 'netstat.exe'), ['-ano', '-p', 'tcp'], { env, timeout: 5000 });
+  assert.equal(listeners.code, 0); assert.equal(listeners.signal, null); assert.equal(listeners.timedOut, false);
+  assert(listeners.stdout.split(/\r?\n/).some((line) => {
+    const parts = line.trim().split(/\s+/); return parts[0] === 'TCP' && parts[1] === `127.0.0.1:${port}` && parts[3] === 'LISTENING' && Number(parts[4]) === child.pid;
+  }), 'Inspector listener must belong to the exact child before startup is released');
+  ownMain = true;
   main = await connectDshExitInspector(target.webSocketDebuggerUrl, event);
-  assert.equal(await main.value('process.pid'), child.pid); ownMain = true;
+  await step('release-debugger-startup-gate');
   await main.call('Runtime.enable'); await main.call('Debugger.enable'); await main.call('Runtime.runIfWaitingForDebugger');
   await pollDsh(() => protocol.find((entry) => entry.method === 'Debugger.paused'), 'main paused before startup', 10000);
-  const script = await pollDsh(() => protocol.find((entry) => entry.method === 'Debugger.scriptParsed' && entry.params.url.replaceAll('\\', '/').endsWith('/resources/app.asar/lib/main.js')), 'official main script before Host spawn', 10000);
+  const officialScript = () => protocol.find((entry) => entry.method === 'Debugger.scriptParsed' && typeof entry.params.url === 'string' && entry.params.url.replaceAll('\\', '/').endsWith('/resources/app.asar/lib/main.js'));
+  let entryBreakpoint;
+  if (!officialScript()) {
+    const after = protocol.length;
+    entryBreakpoint = (await main.call('Debugger.setBreakpointByUrl', { urlRegex: 'resources[/\\\\]app\\.asar[/\\\\]lib[/\\\\]main\\.js$', lineNumber: 0, columnNumber: 0 })).breakpointId;
+    await main.call('Debugger.resume');
+    await pollDsh(() => protocol.slice(after).find((entry) => entry.method === 'Debugger.paused' && entry.params.hitBreakpoints?.includes(entryBreakpoint)), 'official main entry before Host spawn', 10000);
+  }
+  await step('bind-pinned-main-lifecycle');
+  const script = await pollDsh(officialScript, 'official main script before Host spawn', 10000);
+  assert.equal(await main.value('process.pid'), child.pid);
   report.mainScriptId = script.params.scriptId;
   const source = await main.call('Debugger.getScriptSource', { scriptId: report.mainScriptId });
   const breakpoints = locateDshDesktopExitBreakpoints(source.scriptSource);
+  report.sourceSha256 = DSH_DESKTOP_MAIN_SHA256;
   report.boundBreakpoints = [];
   for (const point of breakpoints) {
     const bound = await main.call('Debugger.setBreakpoint', { location: { scriptId: report.mainScriptId, lineNumber: point.lineNumber, columnNumber: point.columnNumber },
@@ -107,6 +130,8 @@ try {
     assert.equal(bound.actualLocation.lineNumber, point.lineNumber, `Breakpoint must stay on the exact ${point.kind} statement`);
     points.set(bound.breakpointId, point); report.boundBreakpoints.push({ kind: point.kind, ...bound.actualLocation });
   }
+  if (entryBreakpoint) await main.call('Debugger.removeBreakpoint', { breakpointId: entryBreakpoint });
+  await step('await-real-native-host-and-window');
   observing = true; await main.call('Debugger.resume');
   await pollDsh(() => report.ready && report.events.find((entry) => entry.kind === 'birth'), 'native Host ready under continuous observation', 60000);
   const facts = await main.value(`({pid:process.pid,dshHome:process.env.DSH_HOME,userData:${electron}.app.getPath('userData'),version:${electron}.app.getVersion()})`);
@@ -116,10 +141,11 @@ try {
   await quit(); mainResult = await application;
 } catch (failure) { error('native exit probe', failure); }
 finally {
-  try { await quit(); } catch (failure) { error('normal Quit request', failure); }
   if (!observing && main && ownMain) {
+    try { await main.call('Runtime.runIfWaitingForDebugger'); } catch (failure) { error('release startup gate', failure); }
     try { await main.call('Debugger.disable'); } catch (failure) { error('release startup pause', failure); }
   }
+  try { await quit(); } catch (failure) { error('normal Quit request', failure); }
   mainResult ??= await application;
   await queue;
   report.main = mainResult;
@@ -134,6 +160,7 @@ finally {
   try { await model.close(); } catch (failure) { error('mock close', failure); }
   report.assessment = assessDshDesktopNaturalExit(report, { parentPid: child.pid, projectDir: project, binary, sourceSha256: DSH_DESKTOP_MAIN_SHA256 });
   report.c2AdmissibleRecordProduced = false;
+  if (report.errors.length) await save('startup-debugger-scripts.json', protocol.filter((entry) => entry.method === 'Debugger.scriptParsed').map((entry) => ({ id: entry.params.scriptId, url: entry.params.url })));
   await save('exit-observation.json', report);
   process.stdout.write(JSON.stringify({ artifacts, assessment: report.assessment, errors: report.errors }) + '\n');
   if (!report.assessment.verified) process.exitCode = 1;
