@@ -23,17 +23,27 @@ beforeEach(() => {
     if (path === otherBinary) throw Object.assign(new Error('Snapshot executable disappeared'), { code: 'ENOENT' });
     throw new Error('Unexpected path boundary');
   });
-  boundary.runCommand.mockResolvedValue({ code: 0, signal: null, timedOut: false, stdout: JSON.stringify([gone, owned]), stderr: '' });
+  boundary.runCommand.mockResolvedValue({ code: 0, signal: null, timedOut: false, ready: true, stdout: JSON.stringify([gone, owned]), stderr: '' });
 });
 
 describe('desktop executable snapshot races', () => {
   it('reports the bounded CIM timeout without trusting a partial process table', async () => {
-    boundary.runCommand.mockResolvedValue({ code: null, signal: 'SIGTERM', timedOut: true,
+    boundary.runCommand.mockResolvedValue({ code: null, signal: 'SIGTERM', timedOut: true, ready: true, timeoutStage: 'command',
       stdout: JSON.stringify([owned]), stderr: 'crosschat-cim:started' });
     const result = await inspectDesktopRunProcesses(root, env);
     expect(result).toMatchObject({ state: 'unknown', processes: [], error: expect.stringContaining('timed out after 5000ms') });
     expect(result.error).toContain('crosschat-cim:started');
     expect(boundary.realpath).toHaveBeenCalledExactlyOnceWith(root);
+  });
+
+  it('keeps startup expiry distinct from an expired metadata query', async () => {
+    boundary.runCommand.mockResolvedValue({ code: null, timedOut: true, ready: false, timeoutStage: 'startup', stdout: '', stderr: 'crosschat-cim:started' });
+    expect(await inspectDesktopRunProcesses(root, env)).toMatchObject({ state: 'unknown', error: expect.stringContaining('module initialization timed out after 30000ms') });
+  });
+
+  it('rejects a complete-looking table if module readiness was never confirmed', async () => {
+    boundary.runCommand.mockResolvedValue({ code: 0, timedOut: false, ready: false, stdout: JSON.stringify([owned]), stderr: '' });
+    expect(await inspectDesktopRunProcesses(root, env)).toMatchObject({ state: 'unknown', processes: [], error: expect.stringContaining('module readiness') });
   });
 
   it('ignores an unrelated short-path executable only after the sampled process has explicitly exited', async () => {
