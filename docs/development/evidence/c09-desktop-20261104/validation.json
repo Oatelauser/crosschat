@@ -1,0 +1,462 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "task": "C09-formal-Desktop-terminal",
+  "acceptanceCommit": "d8ac696",
+  "softwareOwner": "user-retained D:/soft/DeepSeek Harness",
+  "version": "0.2.1-rc.2",
+  "accepted": {
+    "scope": "Formal user-retained Windows Desktop + production bridge/reader + real ConPTY; no install/uninstall acceptance",
+    "checks": [
+      "actual-Desktop-UI-native-shell-and-typed-source",
+      "Desktop-native-list-filter-full-typed-copy-guide-and-refresh",
+      "Desktop-profile-real-skill-maintenance-and-live-static-doctor",
+      "formal-Desktop-native-member-in-real-owned-broker-node-and-typed-copy",
+      "terminal-resize-exit-restoration"
+    ],
+    "identity": {
+      "nativeId": "session-2c4d1d96-04f9-44e2-aa2b-8cbc716e73d3",
+      "source": {
+        "status": "identified",
+        "shouldAsk": false,
+        "sourceTool": "dsh-desktop",
+        "basis": "native",
+        "scope": "instance",
+        "association": "verified"
+      },
+      "name": "C09_DESKTOP_NATIVE_IDENTITY_ACK",
+      "endpointType": "desktop"
+    },
+    "cleanup": {
+      "mainExitedZero": true,
+      "hostExitedZero": true,
+      "hostNaturalExit": "not-proven",
+      "failures": []
+    },
+    "status": "passed"
+  },
+  "verification": {
+    "fullCheckExitCode": 0,
+    "testsPassed": 2698,
+    "testsSkipped": 11,
+    "testFilesPassed": 232,
+    "testFilesSkipped": 3,
+    "runtimeModules": 204,
+    "runtimeEdges": 688,
+    "maxWorkers": 2,
+    "checkCROSSCHAT_LIVE": false
+  },
+  "artifact": {
+    "path": "raw-evidence-redacted.zip",
+    "bytes": 119485,
+    "sha256": "b082e72e23dddcea49d56a720e69bb1d9fa83cc52a59df4c1533a17bbbfb3f48",
+    "files": [
+      {
+        "path": "attempt-before-unique-artifacts/bootstrap-attempt-1.log",
+        "bytes": 163,
+        "sha256": "86cbb86085a5a0e00f300476fea0e64581e7977d6ce1e6ad485829f2a161b470"
+      },
+      {
+        "path": "attempt-before-unique-artifacts/bootstrap-paths.json",
+        "bytes": 123,
+        "sha256": "552ce6a24b5cf55e1301816988c9ece5c6a90305f2153c17e9721a715e6e80f7"
+      },
+      {
+        "path": "attempt-before-unique-artifacts/bootstrap-process.json",
+        "bytes": 898,
+        "sha256": "3bc95af0e1e52207e801efcdb99e2a59103aaba08c46ec1e29f2a52ce5096c62"
+      },
+      {
+        "path": "attempt-before-unique-artifacts/bridge-info.json",
+        "bytes": 250,
+        "sha256": "005c1549e3ad18d1ebf503d434cf2bd5c38e8e7dd34c15eb216ac2916658588b"
+      },
+      {
+        "path": "attempt-before-unique-artifacts/desktop-inspection-attempt-1.log",
+        "bytes": 163,
+        "sha256": "c6f0ca7f9e7040bbe36eeed7e4b8b4da5c00df72e6d1c7e4803b984bca7055a2"
+      },
+      {
+        "path": "attempt-before-unique-artifacts/desktop-tui-attempt-1.log",
+        "bytes": 514,
+        "sha256": "f954a8644bce10c6b34f9bbdfcbc0c93f7370e1b7cb95204fd764d160166cc68"
+      },
+      {
+        "path": "attempt-before-unique-artifacts/desktop-tui-summary.json",
+        "bytes": 143,
+        "sha256": "db97b5a63f2805c09ff75e61387e743f1c09a7a792ffd774abb5a3ff54e9aa62"
+      },
+      {
+        "path": "attempt-before-unique-artifacts/desktop-ui-inspection.json",
+        "bytes": 2260,
+        "sha256": "529a2f49a9b41e011d45272caef85ee122f598a519578bbadc190262e27307e2"
+      },
+      {
+        "path": "attempt-before-unique-artifacts/earlier-bootstrap-race-transcript.json",
+        "bytes": 586,
+        "sha256": "51d1ccfc3896adc5fa406a11073ce368b5ff2013152a7475a72461239cd27997"
+      },
+      {
+        "path": "attempt-before-unique-artifacts/host-exit-observation.json",
+        "bytes": 135,
+        "sha256": "1a2df1eb54bd8ef4d068210188085ffd5c1722fe68c00fafc1dd22acb55d7162"
+      },
+      {
+        "path": "attempt-before-unique-artifacts/host-handle-ready.json",
+        "bytes": 55,
+        "sha256": "9ab72ad4f208b5916f80024fdb27301e1353555332138a638804b72e349ae20e"
+      },
+      {
+        "path": "attempt-before-unique-artifacts/plugin-install.json",
+        "bytes": 728,
+        "sha256": "0f06efaedf0682cd9ccda7a4fc75cf7172537d30b5abb5001c6df26b81c8e5c1"
+      },
+      {
+        "path": "attempt-before-unique-artifacts/plugin-preparation.json",
+        "bytes": 373,
+        "sha256": "d883e33afc5578969f231e69b54f9e81ae4b23cf2340c5a583430cb0a4a4f2df"
+      },
+      {
+        "path": "bootstrap-attempt-1.log",
+        "bytes": 163,
+        "sha256": "86cbb86085a5a0e00f300476fea0e64581e7977d6ce1e6ad485829f2a161b470"
+      },
+      {
+        "path": "bootstrap-paths.json",
+        "bytes": 123,
+        "sha256": "552ce6a24b5cf55e1301816988c9ece5c6a90305f2153c17e9721a715e6e80f7"
+      },
+      {
+        "path": "bootstrap-process.json",
+        "bytes": 898,
+        "sha256": "3bc95af0e1e52207e801efcdb99e2a59103aaba08c46ec1e29f2a52ce5096c62"
+      },
+      {
+        "path": "bridge-info.json",
+        "bytes": 250,
+        "sha256": "005c1549e3ad18d1ebf503d434cf2bd5c38e8e7dd34c15eb216ac2916658588b"
+      },
+      {
+        "path": "desktop-inspection-attempt-1.log",
+        "bytes": 163,
+        "sha256": "c6f0ca7f9e7040bbe36eeed7e4b8b4da5c00df72e6d1c7e4803b984bca7055a2"
+      },
+      {
+        "path": "desktop-tui-attempt-1.log",
+        "bytes": 514,
+        "sha256": "f954a8644bce10c6b34f9bbdfcbc0c93f7370e1b7cb95204fd764d160166cc68"
+      },
+      {
+        "path": "desktop-tui-attempt-2.log",
+        "bytes": 663,
+        "sha256": "c07372e11a26e3dbc7109c1ab5446712994d7c36e7bd1fc047709d79316f92c9"
+      },
+      {
+        "path": "desktop-tui-attempt-3.log",
+        "bytes": 219,
+        "sha256": "0de53355f93f37053994fb86efb20059c03a3b4afd946d38767c9421a23a98a9"
+      },
+      {
+        "path": "desktop-tui-attempt-4.log",
+        "bytes": 221,
+        "sha256": "fb305056edce58d0523d09f8ffa9473355976b7fe0cfe74209b54c6a617006c3"
+      },
+      {
+        "path": "desktop-tui-attempt-5.log",
+        "bytes": 263,
+        "sha256": "c0e782d6841b7f7d7fe2e8410fbbf2faff7a83d74a2b67f5ebecbfd96093b147"
+      },
+      {
+        "path": "desktop-tui-summary.json",
+        "bytes": 143,
+        "sha256": "db97b5a63f2805c09ff75e61387e743f1c09a7a792ffd774abb5a3ff54e9aa62"
+      },
+      {
+        "path": "desktop-ui-inspection.json",
+        "bytes": 2260,
+        "sha256": "529a2f49a9b41e011d45272caef85ee122f598a519578bbadc190262e27307e2"
+      },
+      {
+        "path": "final-full-check.log",
+        "bytes": 31060,
+        "sha256": "34a3c9cd4bcdc9503ee4db3dea53f36a20bfd5ef280cffc3df15fb2ccb08b903"
+      },
+      {
+        "path": "host-exit-observation.json",
+        "bytes": 135,
+        "sha256": "1a2df1eb54bd8ef4d068210188085ffd5c1722fe68c00fafc1dd22acb55d7162"
+      },
+      {
+        "path": "host-handle-ready.json",
+        "bytes": 55,
+        "sha256": "9ab72ad4f208b5916f80024fdb27301e1353555332138a638804b72e349ae20e"
+      },
+      {
+        "path": "plugin-install.json",
+        "bytes": 728,
+        "sha256": "0f06efaedf0682cd9ccda7a4fc75cf7172537d30b5abb5001c6df26b81c8e5c1"
+      },
+      {
+        "path": "plugin-preparation.json",
+        "bytes": 373,
+        "sha256": "d883e33afc5578969f231e69b54f9e81ae4b23cf2340c5a583430cb0a4a4f2df"
+      },
+      {
+        "path": "round-2LPREN/bootstrap-paths.json",
+        "bytes": 123,
+        "sha256": "debc90597c09e171a722da59b3536915a47e57d456806f113f58915576797153"
+      },
+      {
+        "path": "round-2LPREN/bootstrap-process.json",
+        "bytes": 875,
+        "sha256": "1629e72d3297375553179fcf2b085a568188b54e5e03a41626eeeaa8db65dd97"
+      },
+      {
+        "path": "round-2LPREN/bridge-info.json",
+        "bytes": 250,
+        "sha256": "34e977eb8e3241a8d3bdeebeeff1230c38c0dc337836e6c80c31dba9752daf0b"
+      },
+      {
+        "path": "round-2LPREN/desktop-tui-summary.json",
+        "bytes": 836,
+        "sha256": "7b14d7fd8cd61b67d1165532f890373897b7dddc4fc28d1a187a800238c75dee"
+      },
+      {
+        "path": "round-2LPREN/desktop-ui-inspection.json",
+        "bytes": 2882,
+        "sha256": "4aeb63eba1d3574ded8770750fd01c2c223db541a3b614d9d04132684fe653de"
+      },
+      {
+        "path": "round-2LPREN/host-exit-observation.json",
+        "bytes": 136,
+        "sha256": "20b4fd1d7a1cd13dcfb81f3fa4858e4c3929b812e4b5e9ef758d351817bd2db1"
+      },
+      {
+        "path": "round-2LPREN/host-handle-ready.json",
+        "bytes": 55,
+        "sha256": "0720f7916f1435ddc59ca96f7ab9541a6ab80c4f4c8970dd25f900d09eec416a"
+      },
+      {
+        "path": "round-2LPREN/model-observations.json",
+        "bytes": 19369,
+        "sha256": "4e3beb88084e6f095026d86cac64dbac0c8b72dd6b9315fd9a99d7c3460ab5a5"
+      },
+      {
+        "path": "round-2LPREN/native-identity.json",
+        "bytes": 320,
+        "sha256": "0e1b6be92864cd5c3ee621af21b7b2ff9a121f021442581179e7b5c9550e9f01"
+      },
+      {
+        "path": "round-2LPREN/tui-application.jsonl",
+        "bytes": 43729,
+        "sha256": "1f3eb072216bb4253008f09f80afb73d5f9673b15ce1394ae986e23b50e93cfc"
+      },
+      {
+        "path": "round-2LPREN/tui-terminal.jsonl",
+        "bytes": 232545,
+        "sha256": "90981764fa0da7bbf62793e3846d0272166bdd3f39e1e61b95b95021efdc0b8f"
+      },
+      {
+        "path": "round-9F00Bv/bootstrap-process.json",
+        "bytes": 875,
+        "sha256": "76ffe18692a3432b3b71860e4dfe6b59b19861771b729f4bcebd940fd26af497"
+      },
+      {
+        "path": "round-9F00Bv/bridge-info.json",
+        "bytes": 250,
+        "sha256": "85ae68853adfe8ac5b620ac1384bb9cf2b5a9ae33836f12b118359c6ddd0aada"
+      },
+      {
+        "path": "round-9F00Bv/desktop-tui-summary.json",
+        "bytes": 1261,
+        "sha256": "45b505ba000673b4b4b81bad6312daf2dd8b21c6280627dcf19c6afbbd05f42c"
+      },
+      {
+        "path": "round-9F00Bv/desktop-ui-inspection.json",
+        "bytes": 2879,
+        "sha256": "1fccf6cb73c275c0b94dbef97e7cf3eea9eff356dbd75dd5b42b14b18891ce34"
+      },
+      {
+        "path": "round-9F00Bv/host-exit-observation.json",
+        "bytes": 136,
+        "sha256": "998d8a144b58a256bc2d3bd1627817d38ffb5baaf5ffb83dd82e8e29e4d4c4c2"
+      },
+      {
+        "path": "round-9F00Bv/host-handle-ready.json",
+        "bytes": 55,
+        "sha256": "52d6b06ac178c0b2defd7b27eca45a129a116064b617060d9960e41abbc77180"
+      },
+      {
+        "path": "round-9F00Bv/model-observations.json",
+        "bytes": 10505,
+        "sha256": "72b442bec5872b678a5e09433d59f851485fa6d59fa226b117e6758c6fa6aeb8"
+      },
+      {
+        "path": "round-9F00Bv/native-identity.json",
+        "bytes": 320,
+        "sha256": "0e1b6be92864cd5c3ee621af21b7b2ff9a121f021442581179e7b5c9550e9f01"
+      },
+      {
+        "path": "round-9F00Bv/tui-application.jsonl",
+        "bytes": 28112,
+        "sha256": "901264d59f219e10067a4dc85c6e3bc7ca68ba7af31afa5826cf91a28e582cc3"
+      },
+      {
+        "path": "round-9F00Bv/tui-terminal.jsonl",
+        "bytes": 158106,
+        "sha256": "d15840237cf64b795442e0762871c31a2f526387414039409bb78d40d9823cf1"
+      },
+      {
+        "path": "round-OwE72q/bootstrap-paths.json",
+        "bytes": 123,
+        "sha256": "bd724f865e5820ccfc3eae08e4545d36ace99f2f9babeb5b79defe4857b5c69c"
+      },
+      {
+        "path": "round-OwE72q/bootstrap-process.json",
+        "bytes": 875,
+        "sha256": "431867a1d95f1d8933e12497a98bbb272e7db8f97a0bede975ed7e6749fd66b5"
+      },
+      {
+        "path": "round-OwE72q/bridge-info.json",
+        "bytes": 250,
+        "sha256": "480220ef67c880e7eab5f895b28fdc73c603024a999e1aa06d31d75d77316b0b"
+      },
+      {
+        "path": "round-OwE72q/desktop-tui-summary.json",
+        "bytes": 968,
+        "sha256": "9171206ee558a0e616871621ba1f7be1ed8d26f2d9f75f3c2e2e6f460c0278cf"
+      },
+      {
+        "path": "round-OwE72q/desktop-ui-inspection.json",
+        "bytes": 2882,
+        "sha256": "82088cdd7881be6db27c7fcb82b940460fc255a9700ebfda6a44e840aef5c9ff"
+      },
+      {
+        "path": "round-OwE72q/host-exit-observation.json",
+        "bytes": 135,
+        "sha256": "083d59ff8b3a9e031b24593c6adb2d8c58be8e9a150e5b239e862bd5e8ed0c5c"
+      },
+      {
+        "path": "round-OwE72q/host-handle-ready.json",
+        "bytes": 55,
+        "sha256": "405f8f0628437f20dd68e7d582cae660096954b98d534429bb92c9b79dcfb89c"
+      },
+      {
+        "path": "round-OwE72q/model-observations.json",
+        "bytes": 23777,
+        "sha256": "556c5bd8023fb2e730e2d5bf058647e475d33ac83850478820c73a592e7b7800"
+      },
+      {
+        "path": "round-OwE72q/native-identity.json",
+        "bytes": 320,
+        "sha256": "0e1b6be92864cd5c3ee621af21b7b2ff9a121f021442581179e7b5c9550e9f01"
+      },
+      {
+        "path": "round-OwE72q/tui-application.jsonl",
+        "bytes": 43729,
+        "sha256": "18221a3272b32a4c5064eda2191269182437dbb816bc93dc34b24f8fc90e8840"
+      },
+      {
+        "path": "round-OwE72q/tui-terminal.jsonl",
+        "bytes": 232699,
+        "sha256": "d3753ba14c8ab7ec67ac8291d8b6494bce78086521ea2f48444bbc8b48789df8"
+      },
+      {
+        "path": "round-zyi7Hr/bootstrap-paths.json",
+        "bytes": 121,
+        "sha256": "1e330961dbf24a9a0487be98ea4568647a06420c1e57b5e3887c4d490702c753"
+      },
+      {
+        "path": "round-zyi7Hr/bootstrap-process.json",
+        "bytes": 873,
+        "sha256": "c240434df6dfe2f9c622960b24131112d260b3b322c135c210990ebb93988dbd"
+      },
+      {
+        "path": "round-zyi7Hr/bridge-info.json",
+        "bytes": 250,
+        "sha256": "26a838ead24b0478c5c27b43f599f0f0b9edcfaa1f04f74b5a1eef6f9f0b16da"
+      },
+      {
+        "path": "round-zyi7Hr/desktop-tui-summary.json",
+        "bytes": 759,
+        "sha256": "bc5a907f5a60c1408b3f62ad2d9c321f80fbf7add774008a774cd08dbcc0673f"
+      },
+      {
+        "path": "round-zyi7Hr/desktop-ui-inspection.json",
+        "bytes": 2801,
+        "sha256": "dc3629684818d227bbb29346c03e0634cba2f8374e3d67575d4cf19fcae43611"
+      },
+      {
+        "path": "round-zyi7Hr/host-exit-observation.json",
+        "bytes": 136,
+        "sha256": "09acc520cf79b157e3d591b1fb4f575bb8c6ee16b4788b82e399c217a3cfe344"
+      },
+      {
+        "path": "round-zyi7Hr/host-handle-ready.json",
+        "bytes": 55,
+        "sha256": "4850072820c5288b426f4595fe970be85204a909d7885c6bf7b98464a26831eb"
+      },
+      {
+        "path": "round-zyi7Hr/model-observations.json",
+        "bytes": 15615,
+        "sha256": "4a1feb69d4040b7b048938b8a719c5f31e89c72569ab51d2addeb64a74fe5693"
+      },
+      {
+        "path": "round-zyi7Hr/native-identity.json",
+        "bytes": 320,
+        "sha256": "0e1b6be92864cd5c3ee621af21b7b2ff9a121f021442581179e7b5c9550e9f01"
+      },
+      {
+        "path": "round-zyi7Hr/tui-application.jsonl",
+        "bytes": 28015,
+        "sha256": "03e598f6705695f2c7b719a4a5e014598e5415e04d40e44ef6bfd1d079735f6b"
+      },
+      {
+        "path": "round-zyi7Hr/tui-terminal.jsonl",
+        "bytes": 194681,
+        "sha256": "d318bb84c7374be43c6f739f970fca4f1cf54cffe1585ea008d66d7cae88cfde"
+      },
+      {
+        "path": "precleanup-readonly.json",
+        "bytes": 145,
+        "sha256": "91d07bedad0e64c8d5fc128c12c60df00804b298ffcfe1b2610426b0ffbc04bd"
+      }
+    ]
+  },
+  "sourceFiles": [
+    {
+      "path": "test/helpers/dsh-tui-pty-validation.mjs",
+      "sha256": "26dca8d83c04e152a642a185e0b9e4e2e4f432eb2abf599a44e3b4138264047a"
+    },
+    {
+      "path": "test/helpers/dsh-desktop-tui-validation.mjs",
+      "sha256": "f803065495f7775c114096448c90c8b1f432ebd29360d00a8c01fb464949a058"
+    },
+    {
+      "path": "test/helpers/dsh-owned-node.mjs",
+      "sha256": "5acebfd156a7f7cbbe02d06e7b32173ab543a1ea4f16114e28a4781544c05aed"
+    }
+  ],
+  "evidenceLimitations": [
+    "The first bootstrap was quit before full Host/UI readiness and emitted inactive-context startup errors; its original process JSON was overwritten before unique artifacts were introduced. A separately labelled tool-output transcript is retained instead of claiming an original raw file.",
+    "The first TUI attempt used a nonunique GUI ACK and unbounded debugger close; exact identity assertion failed and C1 timed out. Available raw process failure and Host exit observation retained.",
+    "A later attempt used the isolated diagnostic environment, which intentionally inspected home/.dsh rather than the explicitly configured native DSH_HOME; the fixture was corrected to model production inherited environment with fixture-owned paths.",
+    "Subsequent native runs use a unique marker/tool_use_id and artifact directory; current native identity must come from this exact tool result."
+  ],
+  "notValidated": [
+    "private Host graceful-completion or absence of stop escalation",
+    "official installation/uninstallation and global registration lifecycle",
+    "independent clean runner, hosted Actions, other OS platforms",
+    "C18/C20 enhanced member management or rename"
+  ],
+  "cleanup": {
+    "mainAndObservedHostExitedZero": true,
+    "ownedRootRemoved": true,
+    "userDshRetained": true,
+    "precleanupOwnedProcessCount": 0,
+    "userPathContainsFixture": false,
+    "removedBy": "user",
+    "agentReadOnlyAbsenceVerified": true,
+    "automaticDeletion": "rejected: blocked by policy; no retry or alternate tool used"
+  }
+}

@@ -3270,3 +3270,16 @@ TDD链：c20502e为14失败/1通过的行为RED，5f0abca初版GREEN；15c7c81�
 [摘要](evidence/c09-dsh-20261104/validation.json)与[27项脱敏原始证据](evidence/c09-dsh-20261104/raw-evidence-redacted.zip)已归档，ZIP 106141字节，SHA-256=d32fea87d2143b175bbd8a1141c88650408611c1b453ae4879dd64da456593d4，CRC/逐项SHA核对通过。排除安装/profile配置与下载包，保留五次运行及最终完整检查。各正式runtime正常停止、登记与原生run目录移除；最终所有者匹配、相关进程为0。总安装/缓存根自动删除被拒（blocked by policy，仅此原因），未换工具重试；用户随后手动删除，代理只读确认不存在，D:/soft/DeepSeek Harness保留。
 
 本次为npm/Web Host真实来源＋终端验收，不含浏览器UI、正式Desktop同一TUI流程、干净runner/托管或其它平台；C09及共享父项剩余范围保留。
+
+
+## 2026-11-04 C09 正式Desktop来源、维护诊断与成员页
+
+产品保持e3b777e，本轮仅更新验收工装；代码d8ac696，最终完整check退出0，2698通过/11原有跳过，232文件通过/3跳过，lint/build与204模块688边导入图通过，最多2/最少1 worker。使用用户保留的D:/soft/DeepSeek Harness 0.2.1-rc.2，沿隔离HOME/DSH_HOME/appdata/user-data-dir、loopback模型及内置CLI合同执行。初始化/插件安装、默认工作区和原生会话数据均在本次根内，workspace注册的真实路径已检查。未执行原生安装、升级或官方卸载。
+
+正式聊天界面的Input.insertText/发送按钮触发本轮唯一marker；实际pwsh工具的唯一tool_use_id返回identified/dsh-desktop/native/instance/verified来源和完整ID，模型请求与界面ACK均核实。生产reader与真实ConPTY完成工具/完整ID筛选、完整命令/ref、原生指引、刷新选择；维护页真实worker安装/更新三侧技能；诊断页核实当前原生profile的活桥、静态插件和Harness技能副本一致。真实受控broker/node持有这条精确Desktop根会话，共享成员页复制带--tool dsh-desktop的完整TCP命令。48×16/140×36 resize及raw/监听/终端模式恢复通过。没有新增持久数据格式、用户命令或成员增强机制；C18专属增强仍另验。
+
+最终应用正常Quit且C1关闭0；持有精确Host操作系统句柄观察退出0。没有观测私有shutdown-complete或停止升级，不能据此声称Host自然退出或使C2准入通过。最后三次原生运行分别通过维护诊断、加入真实成员页、再核实完整收尾；最终摘要仅采用round-OwE72q。早期失败均不追认为通过：第一次只等profile文件就Quit触发inactive-context错误，原始process JSON在引入分轮目录前被覆盖，保留明确标注的工具输出转录；首轮TUI使用旧ACK/无界debugger关闭，身份断言失败且C1超时，现存raw保留；下一轮错误使用隔离诊断环境，按设计检查home/.dsh而非显式DSH_HOME，改为与生产TUI一致的继承模式并锁定全部fixture路径。后续用唯一marker/tool_use_id排除历史工具结果，debugger关闭有界，各轮独立证据目录，清理失败不会跳过后续资源或提前报告通过。
+
+[摘要](evidence/c09-desktop-20261104/validation.json)与[74项脱敏原始证据](evidence/c09-desktop-20261104/raw-evidence-redacted.zip)已归档，ZIP 119485字节，SHA-256=b082e72e23dddcea49d56a720e69bb1d9fa83cc52a59df4c1533a17bbbfb3f48，CRC/逐项SHA核对通过；排除native安装/profile/凭据与tui输入配置。归档前核实相关测试进程0、用户PATH无测试根。总根删除再次被自动审批以blocked by policy拒绝，未重试；用户随后手动删除，代理只读确认不存在，原DSH软件保留。此轮未触发Actions、写远端、派worker或改用户文档。
+
+结合前述npm/Web来源、C10诊断ConPTY及既有共享TUI故障/取消证据，C09的DSH Windows基础TUI切片已验收，移出活动实施范围；其它工具与平台/CI继续按总表，不关闭整个C09父项。
