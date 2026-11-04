@@ -25,3 +25,13 @@ OpenCode首轮unknown仅有state，未记录error，不能追认唯一根因。5
 WSL Node22.14只用于普通开发复现。首次副本放在node_modules下面导致Vite将部分被测模块外部化，mock失效，产生29个失败；另有PowerShell/WSL参数转递使shell包装退出2，Vitest自己的失败计数仍保留，不把这些当产品结论。移到独立D:/workspace/CC/cc-pr1-linux-20261104后，先暴露两个真实fixture前提问题及一次ACK传播竞争，原始输出分别保留；修正前提和只读就绪等待后，7文件199通过/3个既有平台跳过。没有新增永久skip，未安装原生工具或远端Codex。
 
 最终Windows npm run check退出0：2763通过/11原有跳过、235文件通过/3跳过、204模块689边，lint/build通过；raw见windows-check.txt。Linux定向GREEN见linux-targeted-green.txt；各名称带final但曾失败的文件仍按实际结果保留，不追认为通过。此阶段尚待更新同一PR后的托管复核，未关闭C05/C11专用工具CI或C04正式生命周期。
+
+## 托管复核41786206149与CIM阶段核对
+
+8c41149的普通CI复核中，Ubuntu/macOS均2758通过、16个既有条件跳过；Windows为2762通过、1失败、11跳过，唯一失败已明确为CIM超过5000ms。三份followup raw保留；本次可确认超时，不能把此新证据倒填成首轮唯一原因证明。
+
+检查隔离环境allowlist已排除继承的PSModulePath。本机同一隔离profile交替执行全属性/指定属性四次，均返回416行及相同长度JSON、无超时，耗时938/749/722/759ms；不能由这组本机数据推断托管速度或根因。初次基准脚本的相对import多写一层，启动前失败，没有执行查询；修正后才得到上述实测。
+
+按[Get-CimInstance官方Property说明](https://learn.microsoft.com/en-us/powershell/module/cimcmdlets/get-ciminstance?view=powershell-5.1#-property)，明确只请求ProcessId/ExecutablePath/ParentProcessId，仍枚举全表并保留原Select投影，不改变字段与清理身份核对。stderr仅加入started/query-complete/output-complete三个阶段；超时仍unknown、原始JSON未消费，错误携带有界阶段上下文或“PowerShell未产出阶段信息”。预算保持5000ms，无重试。超时丢阶段信息先RED（40a69ae），17项定向及helper ESLint通过。
+
+本次只有验收工装查询/诊断变化，完整新版检查交由同一PR的自动普通CI复核；先前本机2763/11按8c41149快照保留，不追认新版结果。没有运行专用DSH CI或改变普通三平台矩阵。

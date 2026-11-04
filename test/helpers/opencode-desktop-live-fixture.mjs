@@ -50,11 +50,14 @@ export async function inspectDesktopRunProcesses(root, env) {
     const script = [
       '$ErrorActionPreference = "Stop"',
       '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)',
-      '$ownedProcessMetadata = @(Get-CimInstance -ClassName Win32_Process | Select-Object ProcessId, ExecutablePath, ParentProcessId)',
+      '[Console]::Error.WriteLine("crosschat-cim:started")',
+      '$ownedProcessMetadata = @(Get-CimInstance -ClassName Win32_Process -Property ProcessId, ExecutablePath, ParentProcessId | Select-Object ProcessId, ExecutablePath, ParentProcessId)',
+      '[Console]::Error.WriteLine("crosschat-cim:query-complete")',
       'ConvertTo-Json -InputObject $ownedProcessMetadata -Compress',
+      '[Console]::Error.WriteLine("crosschat-cim:output-complete")',
     ].join('\n');
     const result = await runCommand(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], { env, cwd: target, timeout: 5000 });
-    if (result.timedOut) throw new Error('CIM query timed out after 5000ms; process ownership remains unknown');
+    if (result.timedOut) throw new Error(`CIM query timed out after 5000ms; process ownership remains unknown${result.stderr ? `; ${result.stderr.trim().slice(0, 1000)}` : '; PowerShell produced no phase output'}`);
     if (result.code !== 0) throw new Error(`CIM query failed${result.stderr ? `: ${result.stderr.trim().slice(0, 1000)}` : ''}`);
     const rows = JSON.parse(result.stdout.trim());
     if (!Array.isArray(rows)) throw new Error('CIM did not return a complete process metadata array');
