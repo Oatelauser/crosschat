@@ -51,14 +51,17 @@ export async function inspectDesktopRunProcesses(root, env) {
       '$ErrorActionPreference = "Stop"',
       '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)',
       '[Console]::Error.WriteLine("crosschat-cim:started")',
+      'Import-Module (Join-Path $PSHOME "Modules/CimCmdlets/CimCmdlets.psd1") -ErrorAction Stop',
+      '[Console]::Error.WriteLine("crosschat-cim:ready")',
       '$ownedProcessMetadata = @(Get-CimInstance -ClassName Win32_Process -Property ProcessId, ExecutablePath, ParentProcessId | Select-Object ProcessId, ExecutablePath, ParentProcessId)',
       '[Console]::Error.WriteLine("crosschat-cim:query-complete")',
       'ConvertTo-Json -InputObject $ownedProcessMetadata -Compress',
       '[Console]::Error.WriteLine("crosschat-cim:output-complete")',
     ].join('\n');
-    const result = await runCommand(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], { env, cwd: target, timeout: 5000 });
-    if (result.timedOut) throw new Error(`CIM query timed out after 5000ms; process ownership remains unknown${result.stderr ? `; ${result.stderr.trim().slice(0, 1000)}` : '; PowerShell produced no phase output'}`);
+    const result = await runCommand(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], { env, cwd: target, startupTimeout: 30000, readyLine: 'crosschat-cim:ready', timeout: 5000 });
+    if (result.timedOut) throw new Error(`CIM ${result.timeoutStage === 'startup' ? 'module initialization timed out after 30000ms' : 'query timed out after 5000ms'}; process ownership remains unknown${result.stderr ? `; ${result.stderr.trim().slice(0, 1000)}` : '; PowerShell produced no phase output'}`);
     if (result.code !== 0) throw new Error(`CIM query failed${result.stderr ? `: ${result.stderr.trim().slice(0, 1000)}` : ''}`);
+    if (!result.ready) throw new Error('CIM module readiness was not confirmed; process ownership remains unknown');
     const rows = JSON.parse(result.stdout.trim());
     if (!Array.isArray(rows)) throw new Error('CIM did not return a complete process metadata array');
     const processes = [];

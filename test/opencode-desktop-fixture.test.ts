@@ -97,7 +97,7 @@ describe('official desktop test environment', () => {
     }
     const stopped = await inspectDesktopRunProcesses(root, env);
     expect(stopped).toMatchObject({ state: 'clear', processes: [] });
-  }, 20000);
+  }, 90000);
 
   it.each([
     [401, {}, 'compatibility', 'service-authentication', false],

@@ -35,3 +35,13 @@ WSL Node22.14只用于普通开发复现。首次副本放在node_modules下面�
 按[Get-CimInstance官方Property说明](https://learn.microsoft.com/en-us/powershell/module/cimcmdlets/get-ciminstance?view=powershell-5.1#-property)，明确只请求ProcessId/ExecutablePath/ParentProcessId，仍枚举全表并保留原Select投影，不改变字段与清理身份核对。stderr仅加入started/query-complete/output-complete三个阶段；超时仍unknown、原始JSON未消费，错误携带有界阶段上下文或“PowerShell未产出阶段信息”。预算保持5000ms，无重试。超时丢阶段信息先RED（40a69ae），17项定向及helper ESLint通过。
 
 本次只有验收工装查询/诊断变化，完整新版检查交由同一PR的自动普通CI复核；先前本机2763/11按8c41149快照保留，不追认新版结果。没有运行专用DSH CI或改变普通三平台矩阵。
+
+## 托管模块初始化实测与分阶段预算
+
+普通CI 41787585476的Windows仍只输出started，未到query-complete；完整raw见windows-phase-job.txt。为定位而临时加入的失败后只读诊断在41789111797/job126438087527取得有效结果：模块导入完成16046ms、单PID完成16076ms、全表完成16092ms，总16096ms，142行、自己的PID恰好1行，退出0。即本次托管冷启动耗时集中在CIM模块导入，后续两次查询分别约30ms和16ms；不把这一轮测量推广为所有Windows机器的固定耗时。诊断日志保留在windows-diagnostic-job.txt；该次普通CI的Ubuntu/macOS通过，Windows仍因旧5000ms整进程预算失败。
+
+先提交有意义的readiness RED f6e03d2（8失败、5通过）：可控子进程覆盖迟到/重复/跨chunk/超长伪就绪行、独立初始化与查询预算、无就绪的成功样式输出及owner资源释放；进程扫描反例保证两类超时与无就绪输出都不授权删除。
+
+修复仅影响验收工装：现有runCommand增加可选精确stderr就绪行与启动预算，CIM明确导入系统PowerShell目录中的CimCmdlets模块，再发ready。启动及导入限30000ms；收到完整ready后，原5000ms查询/输出预算开始且只开始一次。迟到ready不能复活已超时的操作；缺ready、失败、超时或不完整表仍unknown。默认调用方的单阶段超时及结果形状保持。只有包含两次新进程扫描的实际Windows用例上限改为90000ms，为两个各自30秒初始化和5秒查询及收尾留出空间；没有改变产品命令、重试、用户流程或持久数据。
+
+三文件定向26项通过，包括本机真实PING占用与退出后clear；见cim-readiness-green.txt。定位完成后移除临时失败诊断workflow步骤及windows-cim-diagnostic.mjs，保留原始证据。后续完整检查及同一草稿PR的普通三平台CI以各自实际提交和run记录为准，不关闭C04/C05/C11原生工具/专用托管父项。

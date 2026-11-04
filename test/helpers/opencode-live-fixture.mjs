@@ -42,16 +42,49 @@ export function isolatedEnvironment(root) {
 
 export function runCommand(binary, args, options = {}) {
   return new Promise((resolveRun, reject) => {
+    const watchReadiness = options.readyLine !== undefined;
+    if (watchReadiness && (typeof options.readyLine !== 'string' || !options.readyLine.length || options.readyLine.length > 1023 || /[\r\n]/u.test(options.readyLine))) throw new Error('Command readiness must be a single nonempty line of at most 1023 characters');
+    if (watchReadiness && (!Number.isSafeInteger(options.startupTimeout ?? 30000) || (options.startupTimeout ?? 30000) < 1)) throw new Error('Command startup timeout must be a positive integer');
     const child = spawn(binary, args, { env: options.env, cwd: options.cwd ?? repositoryRoot, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = ''; let stderr = ''; let timedOut = false;
-    const timeout = setTimeout(() => { timedOut = true; child.kill(); }, options.timeout ?? 30000);
-    child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
-    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
-    child.once('error', (error) => { clearTimeout(timeout); reject(error); });
-    child.once('close', (code, signal) => {
-      clearTimeout(timeout);
-      resolveRun({ code, signal, stdout, stderr, timedOut });
-    });
+    let ready = false; let finished = false; let timeoutStage;
+    let pendingLine = ''; let discardLine = false;
+    const expire = () => {
+      if (finished || timedOut) return;
+      timedOut = true; timeoutStage = watchReadiness && !ready ? 'startup' : 'command';
+      child.kill();
+    };
+    let timeout = setTimeout(expire, watchReadiness ? options.startupTimeout ?? 30000 : options.timeout ?? 30000);
+    const readStdout = (chunk) => { stdout += chunk.toString(); };
+    const readStderr = (chunk) => {
+      const text = chunk.toString(); stderr += text;
+      if (!watchReadiness || ready || timedOut || finished) return;
+      // Only the complete controlled stderr line starts the operation budget, once.
+      for (const character of text) {
+        if (character === '\n') {
+          if (!discardLine && pendingLine.replace(/\r$/u, '') === options.readyLine) {
+            ready = true; clearTimeout(timeout); timeout = setTimeout(expire, options.timeout ?? 30000);
+            pendingLine = ''; return;
+          }
+          pendingLine = ''; discardLine = false;
+        } else if (!discardLine) {
+          if (pendingLine.length === 1024) { pendingLine = ''; discardLine = true; }
+          else pendingLine += character;
+        }
+      }
+    };
+    const release = () => {
+      finished = true; clearTimeout(timeout);
+      child.stdout.off('data', readStdout); child.stderr.off('data', readStderr);
+      child.off('error', onError); child.off('close', onClose);
+    };
+    const onError = (error) => { release(); reject(error); };
+    const onClose = (code, signal) => {
+      release();
+      resolveRun({ code, signal, stdout, stderr, timedOut, ...(watchReadiness ? { ready, ...(timedOut ? { timeoutStage } : {}) } : {}) });
+    };
+    child.stdout.on('data', readStdout); child.stderr.on('data', readStderr);
+    child.once('error', onError); child.once('close', onClose);
     child.stdin.end(options.input ?? '');
   });
 }

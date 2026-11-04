@@ -1,0 +1,105 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "scope": "PR #1 ordinary CI fixture CIM startup; not native-tool compatibility",
+  "pr": "https://github.com/Oatelauser/crosschat/pull/1",
+  "red": {
+    "commit": "f6e03d2",
+    "failed": 8,
+    "passed": 5
+  },
+  "measuredHosted": {
+    "code": 0,
+    "job": 126438087527,
+    "rows": 142,
+    "ownRows": 1,
+    "selfQueryCompleteMs": 16076,
+    "moduleReadyMs": 16046,
+    "run": 41789111797,
+    "totalMs": 16096,
+    "fullQueryCompleteMs": 16092,
+    "diagnosticAdmitsCleanup": false
+  },
+  "budgets": {
+    "actualTwoQueryTestMs": 90000,
+    "missingReadinessAdmitsCleanup": false,
+    "readyMayRearmOnce": true,
+    "startupAndModuleMs": 30000,
+    "readyQueryAndOutputMs": 5000
+  },
+  "local": {
+    "fullCheck": {
+      "filesPassed": 236,
+      "build": true,
+      "exitCode": 0,
+      "edges": 689,
+      "skipped": 11,
+      "passed": 2772,
+      "lint": true,
+      "filesSkipped": 3,
+      "modules": 204
+    },
+    "liveEnabled": false,
+    "targeted": {
+      "exitCode": 0,
+      "passed": 26,
+      "files": 3
+    },
+    "node": "v25.0.0"
+  },
+  "temporaryDiagnosticRemoved": true,
+  "hostedRecheck": "Pending ordinary PR CI on the GREEN commit",
+  "sources": [
+    {
+      "path": "test/helpers/opencode-live-fixture.mjs",
+      "gitBlob": "a63567575d602f9e6daf6faf57bb8e90cf141088"
+    },
+    {
+      "path": "test/helpers/opencode-desktop-live-fixture.mjs",
+      "gitBlob": "e2b10ca62409c25f604083a0fa8fb8a2a8522a3b"
+    },
+    {
+      "path": "test/opencode-command-fixture.test.ts",
+      "gitBlob": "e5a2d68e07ffadf44732f7d7e11b436f86b74f31"
+    },
+    {
+      "path": "test/opencode-desktop-process-race.test.ts",
+      "gitBlob": "f2f13efdde79846b2184cbb18dfd502a58a56131"
+    },
+    {
+      "path": "test/opencode-desktop-fixture.test.ts",
+      "gitBlob": "e070c4813ddff305676159dd1485042e0b50abdb"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "gitBlob": "d83aa44a6a4f2f5722a1c5df75fc9dabf160418b"
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "cim-readiness-red.txt",
+      "bytes": 10448,
+      "sha256": "5735b5e13e110afe0ced00bec10767dee08a9dc86b3660b3779a12ab1475941b"
+    },
+    {
+      "file": "cim-readiness-green.txt",
+      "bytes": 557,
+      "sha256": "c78c095bdbefb4eb6da9b0544d74accba174c17571afc84b9f1a5dbad580d260"
+    },
+    {
+      "file": "windows-readiness-check.txt",
+      "bytes": 31379,
+      "sha256": "09bb5d86145bb0ff5801796475a498d56597fcbf5e025825154fdfdb8ed7084d"
+    },
+    {
+      "file": "windows-phase-job.txt",
+      "bytes": 80232,
+      "sha256": "b44064b25e2fe8eec53c53af7ab44cd1dc9e3ef5743c83cf3184ad6a90f37a79"
+    },
+    {
+      "file": "windows-diagnostic-job.txt",
+      "bytes": 74777,
+      "sha256": "0dfeb23b5db341c46aa06e13c71d5200931734c70c6a16f10f82e57827ea97c4"
+    }
+  ]
+}
