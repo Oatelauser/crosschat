@@ -481,6 +481,12 @@ export function runDshProcess(binary, args, options = {}) {
   });
 }
 
+/** Shared npm command policy; the sequence still owns installation identity and cleanup. */
+export function installDshNpmDependencies({ npmCLI, runtime, env, existingLock, label }) {
+  return runDshProcess(process.execPath, [npmCLI, existingLock ? 'ci' : 'install', '--ignore-scripts', '--no-audit', '--no-fund', '--prefer-offline'],
+    { cwd: runtime, env, timeout: 15 * 60 * 1000 });
+}
+
 function validScope(value) { return record(value) && Object.entries(scope).every(([key, expected]) => value[key] === expected); }
 function validReport(report, artifact, runId) {
   if (!record(report) || report.schema !== 1 || report.tool !== tool || report.platform !== 'win32' || report.arch !== 'x64'
@@ -1257,7 +1263,7 @@ async function main() {
           dependencies: { '@deepseek-ai/dsh': pathToFileURL(native).href, pnpm: pathToFileURL(manager).href } }));
         const lock = join(root, `${createHash('sha256').update(artifact.integrity).digest('hex')}.lock.json`);
         let existingLock = false; try { await copyFile(lock, join(runtime, 'package-lock.json')); existingLock = true; } catch (error) { if (error.code !== 'ENOENT') throw error; }
-        const installed = await runDshProcess(process.execPath, [npmCLI, existingLock ? 'ci' : 'install', '--ignore-scripts', '--no-audit', '--no-fund', '--prefer-offline'], { cwd: runtime, env, timeout: 15 * 60 * 1000 });
+        const installed = await installDshNpmDependencies({ npmCLI, runtime, env, existingLock, label });
         await writeFile(join(output, `${label}-install.json`), JSON.stringify(installed, null, 2));
         installation.safe = installed.timedOut === false && installed.signal === null && Number.isInteger(installed.code);
         if (!installation.safe || installed.code !== 0) throw new Error('Isolated npm installation failed; abnormal process release is retained for inspection');
