@@ -3255,3 +3255,18 @@ TDD链：c20502e为14失败/1通过的行为RED，5f0abca初版GREEN；15c7c81�
 [验证摘要](evidence/c10-profile-20261103/validation.json)和[27份原始日志/事件的脱敏证据包](evidence/c10-profile-20261103/raw-evidence-redacted.zip)已归档。ZIP SHA-256=4825755b498bc4b502d54f527572fca52613a6888fd6d9522908d71966cc4793，65946字节；CRC及逐项SHA核对通过。排除fixture安装/配置目录，文本用户home及owned根已脱敏，ConPTY帧按实际输出保留。两个ConPTY round及诊断进程均正常退出，单测迟到IO gate均释放；核实owner/realpath后删除本轮临时根，D:/soft/DeepSeek Harness/DeepSeek Harness.exe仍在。
 
 用户要求准备暂停后只做此证据/清理/续接收口，未启动新开发、push或Actions。
+
+
+## 2026-11-04 C09 正式npm/Web来源与TUI流程
+
+用户恢复任务后，root独立补验现有实现，未派worker、未修改产品代码、命令参数或持久数据格式。验收工装与两项边界测试提交75ffc7b；定向三文件19/19，单次完整npm run check为2698通过/11原有跳过，232文件通过/3跳过，lint/build与204模块688边导入图通过，最多2/最少1 worker，完整检查未启用CROSSCHAT_LIVE。
+
+正式npm产物仍为固定0.2.1-rc.2、pnpm11.28.5，两个下载包经既有SHA-512校验，在独占目录npm install --ignore-scripts安装。正式管理器安装生产桥，真实Web Host创建两条同名会话；普通原生pwsh工具取得identified/dsh/native/verified/instance来源。生产鉴权reader→DiscoveryService→构建TUI在Windows ConPTY中验证列表、同名完整ID筛选、完整命令/ref复制、只读详情/原生指引、工具筛选和刷新选择。npm实际标题投影两条均显示C09-SAME-TITLE；这不证明此前正式Desktop标题为空的原因已解决。
+
+实际原生插件停用后来源返回unavailable而非完整空列表；重新启用后恢复相同完整会话ID。维护页默认取消没有执行，明确确认后真实worker安装三侧技能，Harness副本与随包源相同，原生profile package.json字节保持。真实受控broker/node收编经实际reader核实入口类型的已有根会话；共享成员页显示在线、完整机器/原生ID并复制带--tool dsh的完整TCP命令。没有修改选择/成员增强机制、发信、连接远端或使用系统剪贴板；普通成员显示验收不等于C18专属增强完成。48×16与140×36 resize、正常退出后raw模式、信号及resize监听、终端模式恢复通过。
+
+五次记录全部保留：第一至三次工装依次误等旧式“1项”、不存在的维护“影响范围已更新”和“星成员”文字，真实界面/维护已按现有实现完成；第四次工装attach未传endpoint，成员复制按合同禁用，第五次用鉴权来源的host类型声明后通过。这些不是产品RED/GREEN或四个兼容回归。两项普通回归覆盖Host/Desktop同ID仍独立及不完整快照禁止复制；新测试从已有正确行为直接通过。
+
+[摘要](evidence/c09-dsh-20261104/validation.json)与[27项脱敏原始证据](evidence/c09-dsh-20261104/raw-evidence-redacted.zip)已归档，ZIP 106141字节，SHA-256=d32fea87d2143b175bbd8a1141c88650408611c1b453ae4879dd64da456593d4，CRC/逐项SHA核对通过。排除安装/profile配置与下载包，保留五次运行及最终完整检查。各正式runtime正常停止、登记与原生run目录移除；最终所有者匹配、相关进程为0。总安装/缓存根自动删除被拒（blocked by policy，仅此原因），未换工具重试；用户随后手动删除，代理只读确认不存在，D:/soft/DeepSeek Harness保留。
+
+本次为npm/Web Host真实来源＋终端验收，不含浏览器UI、正式Desktop同一TUI流程、干净runner/托管或其它平台；C09及共享父项剩余范围保留。

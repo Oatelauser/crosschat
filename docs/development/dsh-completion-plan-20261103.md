@@ -4,7 +4,7 @@
 
 C10的Harness技能副本、活桥与profile静态诊断切片已验收。当前产品e3b777e，完整check **2696通过/11原有跳过，232文件通过/3跳过，lint/204模块688边/build通过**；静态诊断定向114/114、最终单套20/20、ConPTY三场两轮通过，见[摘要](evidence/c10-profile-20261103/validation.json)及[本轮说明](dsh-validation-20261023.md#2026-11-0304-c10-profile插件静态诊断)。此前活桥与C2计时修复、C08默认/自定义home实际CLI更新卸载证据保留；其它工具、实际启用/加载核实及平台/CI范围继续按总表，不由本切片关闭父项。
 
-用户要求准备暂停，当前已收尾并暂停。恢复入口见[暂停与续接记录](multi-tool-adaptation2-pause-20261104.md)；profile静态诊断已验收移出活动切片，不保留为待实施方案。
+2026-11-04用户要求“继续”，已从[暂停记录](multi-tool-adaptation2-pause-20261104.md)恢复。C09的Windows npm/Web真实来源终端切片通过：正式0.2.1-rc.2与生产桥/reader、完整发送命令/ref、同名精确筛选/刷新、真实插件停用/恢复、维护页实际技能安装、真实受控broker/node成员页及resize/退出恢复。定向19/19，完整check2698通过/11原有跳过，232文件/3跳过、204模块688边，未改产品命令或实现。[摘要与原始证据](evidence/c09-dsh-20261104/validation.json)保留五次运行：前三次为工装UI文字预期错误，第四次工装未传原生已核实endpoint导致复制按合同禁用，第五次通过。正式Desktop的同一TUI流程、其它平台和托管不由本次结果追认。测试进程均退出、原生fixture已移除；删除本轮独占安装/缓存总根被自动审批以blocked by policy拒绝，未绕行重试；用户随后手动删除，代理只读核实目录不存在，保留DSH软件。
 
 交接时记录（2026-11-03）：用户要求由Codex Desktop「多工具适配2」接续本会话任务，见[完整交接包](multi-tool-handoff-to-adaptation2-20261103.md)。本计划顺序/完成口径及既定外部负责人不变；原会话发送交接后停止开发，worker继续停写。当时C3后的环境/执行决定未取得，后续决定与结果以上方执行更新及C3补记为准。
 
@@ -32,7 +32,7 @@ C10的Harness技能副本、活桥与profile静态诊断切片已验收。当前
 | 每次异步等待后执行前再核对 | 同一实例/会话/owner及取消/截止；复用现有C1/C2，不新增平行账本或进程框架 | C04-I03剩余原生接线、C18、C20 |
 | 资源与交接有明确owner | 每单完整小交接包；软件/子进程/登记/fixture的归属和收尾随原生结果验收，参考原始证据即可续接 | 各单及C13/C04/C11 |
 
-产品边界继续是连接用户已有live会话：不因openbot托管session就改成自动创建/恢复替代会话、不加入ACP或统一SQLite迁移、不自动下载升级用户工具。改变这些行为、必需用户操作或新增非skill功能文件仍需另行决定。openbot的DeepSeek API接入不作为Harness证据。
+产品边界继续是连接用户已有live会话：不因openbot托管session就改成自动创建/恢复替代会话、不加入ACP或统一SQLite迁移、不自动下载升级用户工具。改变这些行为、必需用户操作或新增crosschat持久数据存储仍需另行决定；代码/测试文件按用户最新澄清直接推进。openbot的DeepSeek API接入不作为Harness证据。
 
 ## 从codex-host补充的DSH参考
 
@@ -67,7 +67,7 @@ DSH各入口可以按证据先后分段完成；不因Desktop外部条件未满�
 
 后续用户已批准本机单次人工例外并自行安装，改变了原方案的本次执行环境；安装后又决定保留软件。此次原生收发结果与用户资产保留已核验，详细边界见C3补记。完整生命周期CI仍需独立可销毁Windows环境及独立publisher策略。真实包的安装目录、内置CLI、版本和卸载登记已观察，但静默安装/官方卸载执行与普通Quit无强停证明仍待证，不猜参数、不复用本机观察指纹为未来默认信任。
 
-首次原生探测未新增功能文件；如自动化需要拆分，拟增scripts/dsh-desktop-compat.mjs及.github/workflows/dsh-desktop-compat.yml仍未创建/批准。没有创建VM或触发Actions。B/C的DSH维护与诊断可独立推进；不重复离线helper，不派worker，不重领通信线，已拒资源不重试。
+首次原生探测未新增功能文件；如自动化需要拆分，拟增scripts/dsh-desktop-compat.mjs及.github/workflows/dsh-desktop-compat.yml尚未创建。用户后续已澄清这些代码文件无需逐项批准；运行原生安装/卸载、外部Actions及新增持久数据仍沿各自授权边界。没有创建VM或触发Actions。B/C的DSH维护与诊断可独立推进；不重复离线helper，不派worker，不重领通信线，已拒资源不重试。
 
 ## 通信归属与父项关闭规则
 
