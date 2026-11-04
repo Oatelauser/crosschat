@@ -1,0 +1,38 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ❯ test/dsh-desktop-exit-observer.test.ts (12 tests | 1 failed) 5397ms
+   ✓ formal Desktop natural-exit observation boundary > accepts the actual owner, ordered private acknowledgement, close and independent held Host handle 2ms
+   ✓ formal Desktop natural-exit observation boundary > keeps a zero OS exit unknown without the real shutdown acknowledgement and stop completion 0ms
+   ✓ formal Desktop natural-exit observation boundary > rejects changed source, another parent/profile/binary and an unrelated Host handle 0ms
+   ✓ formal Desktop natural-exit observation boundary > refuses any kill, non-graceful completion, missing stream close or abnormal main exit 0ms
+   ✓ formal Desktop natural-exit observation boundary > requires continuous observation, one exact Host and the actual lifecycle order 0ms
+   ✓ formal Desktop natural-exit observation boundary > does not infer complete process release from a truncated or unresolved owning Desktop record 0ms
+   ✓ formal Desktop natural-exit observation boundary > refuses breakpoint relocation into any main script other than the pinned official bytes 1ms
+   × owned Desktop inspector transport > reads the owned process synchronously while paused, without waiting for blocked promise microtasks 5178ms
+     → Owned inspector deadline: Runtime.evaluate
+   ✓ owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies ([]) 87ms
+   ✓ owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies (null) 61ms
+   ✓ owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies (true) 62ms
+   ✓ owned Desktop inspector transport > correlates actual responses and rejects pending reads when the owned connection closes 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-desktop-exit-observer.test.ts > owned Desktop inspector transport > reads the owned process synchronously while paused, without waiting for blocked promise microtasks
+Error: Owned inspector deadline: Runtime.evaluate
+ ❯ Timeout._onTimeout test/helpers/dsh-desktop-exit-observer.mjs:88:69
+     86|       return new Promise((resolve, reject) => {
+     87|         const id = ++nextId;
+     88|         const timer = setTimeout(() => { pending.delete(id); reject(ne…
+       |                                                                     ^
+     89|         pending.set(id, { resolve, reject, timer });
+     90|         socket.send(JSON.stringify({ id, method, params }), (error) =>…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 11 passed (12)
+   Start at  11:36:50
+   Duration  5.92s (transform 75ms, setup 0ms, collect 124ms, tests 5.40s, environment 0ms, prepare 142ms)
+

@@ -1,7 +1,9 @@
 import { once } from 'node:events';
+import { spawn } from 'node:child_process';
 import { WebSocketServer } from 'ws';
 import { describe, expect, it } from 'vitest';
 import { assessDshDesktopNaturalExit, connectDshExitInspector, DSH_DESKTOP_MAIN_SHA256, locateDshDesktopExitBreakpoints } from './helpers/dsh-desktop-exit-observer.mjs';
+import { pollDsh } from './helpers/dsh-live-fixture.mjs';
 
 const expected = { parentPid: 4100, projectDir: 'D:/owned/profiles/desktop', binary: 'D:/soft/DeepSeek Harness/DeepSeek Harness.exe', sourceSha256: DSH_DESKTOP_MAIN_SHA256 };
 function observed() {
@@ -68,6 +70,28 @@ describe('formal Desktop natural-exit observation boundary', () => {
 });
 
 describe('owned Desktop inspector transport', () => {
+  it('reads the owned process synchronously while paused, without waiting for blocked promise microtasks', async () => {
+    const child = spawn(process.execPath, ['--inspect-brk=127.0.0.1:0', '-e', 'process.stdout.write("owned pause fixture")'], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    let stderr = '', stdout = '', startupError: Error | undefined;
+    const events: Array<{ method: string; params: { callFrames?: Array<{ callFrameId: string }> } }> = [];
+    child.once('error', (error) => { startupError = error; });
+    child.stderr.on('data', (value) => { stderr += String(value); }); child.stdout.on('data', (value) => { stdout += String(value); });
+    const exited = new Promise<{ code: number | null; signal: string | null }>((done) => child.once('close', (code, signal) => done({ code, signal })));
+    let client: Awaited<ReturnType<typeof connectDshExitInspector>> | undefined;
+    try {
+      const url = await pollDsh(() => { if (startupError) throw startupError; return stderr.match(/ws:\/\/127\.0\.0\.1:[0-9]+\/[a-z0-9-]+/)?.[0]; }, 'owned inspector URL', 3000);
+      client = await connectDshExitInspector(url, (method: string, params: { callFrames?: Array<{ callFrameId: string }> }) => events.push({ method, params }));
+      await client.call('Runtime.enable'); await client.call('Debugger.enable'); await client.call('Runtime.runIfWaitingForDebugger');
+      const pause = await pollDsh(() => events.find((event) => event.method === 'Debugger.paused'), 'owned paused frame', 3000);
+      expect(await client.value('process.pid', pause.params.callFrames?.[0].callFrameId)).toBe(child.pid);
+      expect(await client.value('process.pid')).toBe(child.pid);
+    } finally {
+      await client?.call('Debugger.resume').catch(() => {}); await client?.close();
+      const timer = setTimeout(() => { if (child.exitCode === null && child.signalCode === null) child.kill(); }, 1000);
+      try { expect(await exited).toEqual({ code: 0, signal: null }); expect(stdout).toBe('owned pause fixture'); } finally { clearTimeout(timer); }
+    }
+  }, 10000);
+
   async function server() {
     const value = new WebSocketServer({ host: '127.0.0.1', port: 0 }); await once(value, 'listening');
     const address = value.address(); if (typeof address === 'string' || !address) throw new Error('Missing loopback listener');
