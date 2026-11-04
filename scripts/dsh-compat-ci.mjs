@@ -1134,6 +1134,8 @@ export function runDshOnboardingSequence(builds, operations) {
   });
 }
 
+export function resolveDshCiSuite() { return undefined; }
+
 export function runDshDesktopSequence(builds, operations) {
   const installations = new Set(); const instances = new Set();
   return serialSequence(builds, {

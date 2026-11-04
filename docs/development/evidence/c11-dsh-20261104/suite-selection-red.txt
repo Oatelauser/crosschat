@@ -1,0 +1,126 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ❯ test/dsh-onboarding-ci.test.ts (24 tests | 7 failed) 22ms
+   ✓ DSH from-zero onboarding report boundary > accepts a complete fresh onboarding report independently of the communication schema 1ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"tool":"dsh-web-runtime"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"platform":"linux"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"arch":"arm64"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"version":"0.2.1-rc.3"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"runId":"11111111-1111-1111-1111-111111111111"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"runId":"22222222-2222-4222-8222-222222222222"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects omitted or expanded evidence claims instead of treating them as a full onboarding pass 0ms
+   ✓ DSH from-zero onboarding report boundary > requires every successful phase once, in order, with valid timing 0ms
+   ✓ DSH from-zero onboarding report boundary > retains a real failure at the next phase without claiming a complete pass or inventing release 0ms
+   ✓ DSH from-zero onboarding report boundary > requires explicit cleanup observations instead of coercing unknown values 0ms
+   ✓ DSH from-zero onboarding report boundary > checks normal process completion against the report outcome 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a failed claim that omits the failed phase after all phases passed 0ms
+   ✓ onboarding fresh attempts and serial resource ownership > accepts only the freshly minted report and never reuses a preceding PASS 8ms
+   ✓ onboarding fresh attempts and serial resource ownership > rejects filesystem link metadata before accepting otherwise valid report bytes 3ms
+   ✓ onboarding fresh attempts and serial resource ownership > retains an installation with incomplete release and never enters the next build or removes it 1ms
+   ✓ onboarding fresh attempts and serial resource ownership > uses the same candidate twice only after both observed runtime and installation releases 0ms
+   × independent communication and onboarding CI entry points > preserves the existing communication default (undefined) 5ms
+     → expected undefined to match object { tool: 'dsh-web-runtime', …(4) }
+   × independent communication and onboarding CI entry points > preserves the existing communication default (communication) 0ms
+     → expected undefined to match object { tool: 'dsh-web-runtime', …(4) }
+   × independent communication and onboarding CI entry points > binds onboarding to its complete report and independent artifact directory 0ms
+     → expected undefined to match object { tool: 'dsh-onboarding', …(4) }
+   × independent communication and onboarding CI entry points > rejects an unknown suite instead of running the communication default () 1ms
+     → expected [Function] to throw an error
+   × independent communication and onboarding CI entry points > rejects an unknown suite instead of running the communication default (desktop) 0ms
+     → expected [Function] to throw an error
+   × independent communication and onboarding CI entry points > rejects an unknown suite instead of running the communication default (ONBOARDING) 0ms
+     → expected [Function] to throw an error
+   × independent communication and onboarding CI entry points > rejects an unknown suite instead of running the communication default (false) 0ms
+     → expected [Function] to throw an error
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-onboarding-ci.test.ts > independent communication and onboarding CI entry points > preserves the existing communication default (undefined)
+ FAIL  test/dsh-onboarding-ci.test.ts > independent communication and onboarding CI entry points > preserves the existing communication default (communication)
+AssertionError: expected undefined to match object { tool: 'dsh-web-runtime', …(4) }
+
+- Expected: 
+{
+  "evidenceDirectory": "dsh-compat-evidence",
+  "scope": {
+    "browserUI": false,
+    "desktop": false,
+    "officialNpmRuntime": true,
+    "ordinaryWebSessions": true,
+  },
+  "script": "dsh-compat.mjs",
+  "timeoutMs": 360000,
+  "tool": "dsh-web-runtime",
+}
+
++ Received: 
+undefined
+
+ ❯ test/dsh-onboarding-ci.test.ts:149:38
+    147| describe('independent communication and onboarding CI entry points', (…
+    148|   it.each([undefined, 'communication'])('preserves the existing commun…
+    149|     expect(resolveDshCiSuite(value)).toMatchObject({ tool: 'dsh-web-ru…
+       |                                      ^
+    150|       scope: { officialNpmRuntime: true, ordinaryWebSessions: true, br…
+    151|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  test/dsh-onboarding-ci.test.ts > independent communication and onboarding CI entry points > binds onboarding to its complete report and independent artifact directory
+AssertionError: expected undefined to match object { tool: 'dsh-onboarding', …(4) }
+
+- Expected: 
+{
+  "evidenceDirectory": "dsh-onboarding-evidence",
+  "scope": {
+    "browserUI": false,
+    "desktop": false,
+    "diagnostics": true,
+    "modelIntelligence": false,
+    "officialNpmRuntime": true,
+    "officialPluginManager": true,
+    "ordinaryWebSessions": true,
+    "scriptedLocalModel": true,
+    "skillLifecycle": true,
+    "tui": true,
+  },
+  "script": "dsh-onboarding.mjs",
+  "timeoutMs": 600000,
+  "tool": "dsh-onboarding",
+}
+
++ Received: 
+undefined
+
+ ❯ test/dsh-onboarding-ci.test.ts:154:22
+    152|   it('binds onboarding to its complete report and independent artifact…
+    153|     const selected = resolveDshCiSuite('onboarding');
+    154|     expect(selected).toMatchObject({ tool: DSH_ONBOARDING_TOOL, scope:…
+       |                      ^
+    155|     expect(selected.attempt).toBe(runDshOnboardingAttempt); expect(sel…
+    156|     expect(Object.isFrozen(selected.scope)).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  test/dsh-onboarding-ci.test.ts > independent communication and onboarding CI entry points > rejects an unknown suite instead of running the communication default ()
+ FAIL  test/dsh-onboarding-ci.test.ts > independent communication and onboarding CI entry points > rejects an unknown suite instead of running the communication default (desktop)
+ FAIL  test/dsh-onboarding-ci.test.ts > independent communication and onboarding CI entry points > rejects an unknown suite instead of running the communication default (ONBOARDING)
+ FAIL  test/dsh-onboarding-ci.test.ts > independent communication and onboarding CI entry points > rejects an unknown suite instead of running the communication default (false)
+AssertionError: expected [Function] to throw an error
+ ❯ test/dsh-onboarding-ci.test.ts:159:44
+    157|   });
+    158|   it.each(['', 'desktop', 'ONBOARDING', false])('rejects an unknown su…
+    159|     expect(() => resolveDshCiSuite(value)).toThrow();
+       |                                            ^
+    160|   });
+    161| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 17 passed (24)
+   Start at  10:36:23
+   Duration  359ms (transform 80ms, setup 0ms, collect 108ms, tests 22ms, environment 0ms, prepare 88ms)
+

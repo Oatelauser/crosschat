@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DSH_ONBOARDING_CHECKS, DSH_ONBOARDING_SCOPE, DSH_ONBOARDING_TOOL, validDshOnboardingProcessReport, validDshOnboardingReport } from '../scripts/dsh-onboarding-contract.mjs';
-import { runDshOnboardingAttempt, runDshOnboardingSequence } from '../scripts/dsh-compat-ci.mjs';
+import { resolveDshCiSuite, runDshOnboardingAttempt, runDshOnboardingSequence } from '../scripts/dsh-compat-ci.mjs';
 
 // File symlinks require privileges on this Windows host (EPERM). Supply only
 // the filesystem's nonregular/link observation; real report bytes remain valid.
@@ -141,5 +141,21 @@ describe('onboarding fresh attempts and serial resource ownership', () => {
     });
     expect(result).toMatchObject({ tool: DSH_ONBOARDING_TOOL, installationCleanup: 'removed', classification: { kind: 'regression', notify: true } });
     expect(events).toEqual(['install:baseline:0.2.1-rc.2', 'probe:baseline', 'remove:baseline', 'install:candidate:0.2.2', 'probe:candidate', 'remove:candidate', 'install:retry:0.2.2', 'probe:retry', 'remove:retry']);
+  });
+});
+
+describe('independent communication and onboarding CI entry points', () => {
+  it.each([undefined, 'communication'])('preserves the existing communication default (%s)', (value) => {
+    expect(resolveDshCiSuite(value)).toMatchObject({ tool: 'dsh-web-runtime', evidenceDirectory: 'dsh-compat-evidence', script: 'dsh-compat.mjs', timeoutMs: 360000,
+      scope: { officialNpmRuntime: true, ordinaryWebSessions: true, browserUI: false, desktop: false } });
+  });
+  it('binds onboarding to its complete report and independent artifact directory', () => {
+    const selected = resolveDshCiSuite('onboarding');
+    expect(selected).toMatchObject({ tool: DSH_ONBOARDING_TOOL, scope: DSH_ONBOARDING_SCOPE, evidenceDirectory: 'dsh-onboarding-evidence', script: 'dsh-onboarding.mjs', timeoutMs: 600000 });
+    expect(selected.attempt).toBe(runDshOnboardingAttempt); expect(selected.sequence).toBe(runDshOnboardingSequence);
+    expect(Object.isFrozen(selected.scope)).toBe(true);
+  });
+  it.each(['', 'desktop', 'ONBOARDING', false])('rejects an unknown suite instead of running the communication default (%s)', (value) => {
+    expect(() => resolveDshCiSuite(value)).toThrow();
   });
 });
