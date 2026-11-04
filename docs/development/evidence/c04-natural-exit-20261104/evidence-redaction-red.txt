@@ -1,0 +1,51 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ❯ test/dsh-desktop-exit-observer.test.ts (13 tests | 1 failed) 371ms
+   ✓ formal Desktop natural-exit observation boundary > accepts the actual owner, ordered private acknowledgement, close and independent held Host handle 1ms
+   ✓ formal Desktop natural-exit observation boundary > keeps a zero OS exit unknown without the real shutdown acknowledgement and stop completion 0ms
+   ✓ formal Desktop natural-exit observation boundary > rejects changed source, another parent/profile/binary and an unrelated Host handle 0ms
+   ✓ formal Desktop natural-exit observation boundary > refuses any kill, non-graceful completion, missing stream close or abnormal main exit 0ms
+   ✓ formal Desktop natural-exit observation boundary > requires continuous observation, one exact Host and the actual lifecycle order 0ms
+   ✓ formal Desktop natural-exit observation boundary > does not infer complete process release from a truncated or unresolved owning Desktop record 0ms
+   ✓ formal Desktop natural-exit observation boundary > refuses breakpoint relocation into any main script other than the pinned official bytes 1ms
+   × formal Desktop natural-exit observation boundary > redacts native authentication URLs in both structured facts and embedded process logs before writing evidence 5ms
+     → expected '{\n  "hash": "6f3d1ddd1106371452c2204…' not to contain 'owned-secret'
+   ✓ owned Desktop inspector transport > reads the owned process synchronously while paused, without waiting for blocked promise microtasks 166ms
+   ✓ owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies ([]) 67ms
+   ✓ owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies (null) 62ms
+   ✓ owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies (true) 62ms
+   ✓ owned Desktop inspector transport > correlates actual responses and rejects pending reads when the owned connection closes 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-desktop-exit-observer.test.ts > formal Desktop natural-exit observation boundary > redacts native authentication URLs in both structured facts and embedded process logs before writing evidence
+AssertionError: expected '{\n  "hash": "6f3d1ddd1106371452c2204…' not to contain 'owned-secret'
+
+- Expected
++ Received
+
+- owned-secret
++ {
++   "hash": "6f3d1ddd1106371452c2204be6dfb2e5460a8e8259cdd05cdccb5387b3f9a85a",
++   "url": "http://127.0.0.1:1234/?token=owned-secret&mode=test",
++   "stdout": "native URL \"http://127.0.0.1:1234/?token=owned-secret\""
++ }
++
+
+ ❯ test/dsh-desktop-exit-observer.test.ts:75:28
+     73|       stdout: 'native URL "http://127.0.0.1:1234/?token=owned-secret"'…
+     74|     const serialized = serializeDshExitEvidence(value);
+     75|     expect(serialized).not.toContain('owned-secret'); expect(JSON.pars…
+       |                            ^
+     76|     expect(JSON.parse(serialized).url).toBe('http://127.0.0.1:1234/?to…
+     77|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 12 passed (13)
+   Start at  11:42:52
+   Duration  813ms (transform 60ms, setup 0ms, collect 90ms, tests 371ms, environment 0ms, prepare 107ms)
+

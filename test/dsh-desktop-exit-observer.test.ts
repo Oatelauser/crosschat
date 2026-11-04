@@ -2,7 +2,7 @@ import { once } from 'node:events';
 import { spawn } from 'node:child_process';
 import { WebSocketServer } from 'ws';
 import { describe, expect, it } from 'vitest';
-import { assessDshDesktopNaturalExit, connectDshExitInspector, DSH_DESKTOP_MAIN_SHA256, locateDshDesktopExitBreakpoints } from './helpers/dsh-desktop-exit-observer.mjs';
+import { assessDshDesktopNaturalExit, connectDshExitInspector, DSH_DESKTOP_MAIN_SHA256, locateDshDesktopExitBreakpoints, serializeDshExitEvidence } from './helpers/dsh-desktop-exit-observer.mjs';
 import { pollDsh } from './helpers/dsh-live-fixture.mjs';
 
 const expected = { parentPid: 4100, projectDir: 'D:/owned/profiles/desktop', binary: 'D:/soft/DeepSeek Harness/DeepSeek Harness.exe', sourceSha256: DSH_DESKTOP_MAIN_SHA256 };
@@ -66,6 +66,14 @@ describe('formal Desktop natural-exit observation boundary', () => {
 
   it('refuses breakpoint relocation into any main script other than the pinned official bytes', () => {
     expect(() => locateDshDesktopExitBreakpoints('another build or injected lifecycle implementation')).toThrow();
+  });
+
+  it('redacts native authentication URLs in both structured facts and embedded process logs before writing evidence', () => {
+    const value = { hash: DSH_DESKTOP_MAIN_SHA256, url: 'http://127.0.0.1:1234/?token=owned-secret&mode=test',
+      stdout: 'native URL "http://127.0.0.1:1234/?token=owned-secret"' };
+    const serialized = serializeDshExitEvidence(value);
+    expect(serialized).not.toContain('owned-secret'); expect(JSON.parse(serialized).hash).toBe(DSH_DESKTOP_MAIN_SHA256);
+    expect(JSON.parse(serialized).url).toBe('http://127.0.0.1:1234/?token=[fixture-token-redacted]&mode=test');
   });
 });
 

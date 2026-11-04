@@ -5,6 +5,10 @@ import { WebSocket } from 'ws';
 export const DSH_DESKTOP_MAIN_SHA256 = '6f3d1ddd1106371452c2204be6dfb2e5460a8e8259cdd05cdccb5387b3f9a85a';
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
+export function serializeDshExitEvidence(value) {
+  return JSON.stringify(value, null, 2) + '\n';
+}
+
 export function locateDshDesktopExitBreakpoints(source) {
   if (typeof source !== 'string' || createHash('sha256').update(source).digest('hex') !== DSH_DESKTOP_MAIN_SHA256)
     throw new Error('Desktop observer only accepts the pinned official main script');

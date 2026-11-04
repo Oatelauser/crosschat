@@ -30,7 +30,7 @@ const report = { expectedSourceSha256: DSH_DESKTOP_MAIN_SHA256, continuous: true
   scope: 'Fixed formal user-retained Desktop; passive debugger + native held handle; no install/uninstall/C2 execution' };
 const electron = `process.getBuiltinModule('node:module').createRequire(${JSON.stringify(appPackage)})('electron')`;
 const protocol = []; const points = new Map();
-let main, child, mainResult, hostMonitor, hostReady, queue = Promise.resolve(), observing = false, ownMain = false, quitRequested = false;
+let main, child, mainResult, hostMonitor, hostReady, finishing, queue = Promise.resolve(), observing = false, ownMain = false, quitRequested = false, mainExited = false;
 
 async function freePort() {
   const server = createServer(); await new Promise((done, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', done); });
@@ -69,6 +69,7 @@ async function paused(params) {
     else if (point.kind === 'ready') report.ready = value;
     else if (point.kind.startsWith('kill-')) report.events.push({ kind: 'kill', site: point.kind, signal: point.kind === 'kill-kill' ? 'SIGKILL' : 'SIGTERM', ...value });
     else report.events.push({ kind: point.kind, ...value });
+    await save('lifecycle-events.json', report.events);
   } catch (failure) { error(point.kind, failure); }
   finally {
     report.pauses.push({ kind: point.kind, elapsedMs: Math.round(performance.now() - started) });
@@ -86,12 +87,30 @@ async function quit() {
   quitRequested = true;
   await main.value(`setTimeout(()=>${electron}.app.quit(),100);true`);
 }
+async function finish() {
+  return finishing ??= (async () => {
+    await step('request-normal-quit');
+    try { await quit(); } catch (failure) { error('normal Quit request', failure); }
+    if (observing) {
+      try {
+        await pollDsh(() => mainExited || report.events.some((entry) => entry.kind === 'complete'), 'native shutdown completion before debugger release', 30000);
+        await queue;
+      } catch (failure) { report.continuous = false; error('native stop before debugger release', failure); }
+    }
+    // An attached Node inspector can itself hold process exit open. Release it only after the exact Host
+    // completed, or explicitly mark the incomplete observation above; never wait for main close first.
+    await step('release-observer-connection');
+    try { await main?.close(); } catch (failure) { error('inspector close', failure); }
+    mainResult = await application;
+  })();
+}
 
 const port = await freePort();
 const application = runDshDesktopProcess(binary, [`--inspect-brk=127.0.0.1:${port}`, `--user-data-dir=${join(artifacts, 'electron-user-data')}`], {
   cwd: join(artifacts, 'native', 'workspace'), env, timeoutMs: 180000,
   spawnImpl: (...args) => { child = spawn(...args); return child; },
 });
+void application.then(() => { mainExited = true; });
 try {
   const target = await pollDsh(async () => {
     const response = await globalThis.fetch(`http://127.0.0.1:${port}/json/list`, { signal: globalThis.AbortSignal.timeout(1000) });
@@ -142,7 +161,7 @@ try {
   assert.equal(facts.pid, child.pid); assert.equal(facts.dshHome, env.DSH_HOME); assert.equal(facts.userData, join(artifacts, 'electron-user-data')); assert.equal(facts.version, '0.2.1-rc.2');
   await pollDsh(() => main.value(`${electron}.BrowserWindow.getAllWindows().some(w=>w.webContents.getURL()==='dsh-app://app/'&&!w.webContents.isLoadingMainFrame())`), 'loaded formal app window', 30000);
   report.facts = facts;
-  await quit(); mainResult = await application;
+  await finish();
 } catch (failure) { error('native exit probe', failure); }
 finally {
   if (!observing && main && ownMain) {
@@ -150,8 +169,7 @@ finally {
     try { await main.call('Debugger.resume'); } catch (failure) { error('release startup execution', failure); }
     try { await main.call('Debugger.disable'); } catch (failure) { error('release startup pause', failure); }
   }
-  try { await quit(); } catch (failure) { error('normal Quit request', failure); }
-  mainResult ??= await application;
+  await finish();
   await queue;
   report.main = mainResult;
   if (hostMonitor) {
@@ -161,7 +179,6 @@ finally {
       report.hostHandle = { ...JSON.parse(result.stdout), heldBeforeShutdown: Boolean(hostReady) };
     } catch (failure) { error('held Host observation', failure); }
   }
-  try { await main?.close(); } catch (failure) { error('inspector close', failure); }
   try { await model.close(); } catch (failure) { error('mock close', failure); }
   report.assessment = assessDshDesktopNaturalExit(report, { parentPid: child.pid, projectDir: project, binary, sourceSha256: DSH_DESKTOP_MAIN_SHA256 });
   report.c2AdmissibleRecordProduced = false;
