@@ -79,6 +79,17 @@ describe('official desktop test environment', () => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'crosschat-desktop-fixture-unit-')));
     roots.push(root);
     const env = await prepareDesktopProfile(root);
+    const moduleRoot = join(root, 'competing-modules');
+    for (const module of [
+      { name: 'Microsoft.PowerShell.Management', commands: ['Join-Path'] },
+      { name: 'Microsoft.PowerShell.Utility', commands: ['Select-Object', 'ConvertTo-Json'] },
+    ]) {
+      const directory = join(moduleRoot, module.name);
+      await mkdir(directory, { recursive: true });
+      await writeFile(join(directory, 'poison.psm1'), module.commands.map((command) => `function ${command} { throw 'Competing module search must not control process inspection' }`).join('\n'));
+      await writeFile(join(directory, `${module.name}.psd1`), `@{ ModuleVersion = '1.0.0'; RootModule = 'poison.psm1'; FunctionsToExport = @(${module.commands.map((command) => `'${command}'`).join(',')}); CmdletsToExport = @(); AliasesToExport = @() }`);
+    }
+    env.PSModulePath = moduleRoot;
     const binary = join(root, 'native', 'ping.exe');
     await mkdir(join(root, 'native'));
     await copyFile(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'PING.EXE'), binary);
