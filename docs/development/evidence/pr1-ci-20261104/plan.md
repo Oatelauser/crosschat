@@ -55,3 +55,11 @@ WSL Node22.14只用于普通开发复现。首次副本放在node_modules下面�
 在已有真实Windows进程占用用例内加入两个竞争模块：它们导出同名Join-Path/Select-Object/ConvertTo-Json并在调用时明确失败。原实现先RED cb882d9（cim-system-modules-red.txt，1失败/12通过），证明模块搜索能干扰检查；原有准确PID/父PID/原生路径及退出后clear断言保留，没有增加skip。首次显式导入先CIM后Utility失败，因为CIM初始化需要Set-Alias，原始cim-system-modules-green.txt虽名称带green仍为1失败/25通过，不能列为通过；调整到依赖先后后，cim-system-modules-final-green.txt为26/26，未覆盖此前输出。
 
 本次源码的Windows完整npm run check退出0，2772通过/11原有跳过、236文件通过/3跳过；lint/build与204模块689边通过，raw为windows-system-modules-check.txt。源码blob和7份raw的字节/SHA记录在cim-system-modules-validation.json；普通托管复核随GREEN正常推送进入同一草稿PR，实际结果另行核对。
+
+## 41793731734托管CIM通过与发送单元夹具前提
+
+15fe931的普通托管复核41793731734中，Windows2772通过/11跳过、macOS2767通过/16跳过，均236文件通过/3跳过。此前失败的真实Windows进程占用用例本次1114ms通过，CIM模块加载整改取得该固定runner结果；不能宣称以后所有Windows初始化都恒定如此。完整windows-system-job.txt与macos-system-job.txt保留。
+
+Ubuntu本轮2766通过、1失败、16跳过，原始ubuntu-system-job.txt显示c14-explicit-send第89行将handleForRef的可选空值作为conversation传入，resolveTargetArgs直接报TARGET_REQUIRED；尚未进入本用例要验证的类型补全。用例耗时2008ms与两个1000ms锁等待相符，但没有原始锁错误，不能认定本轮就是EADDRINUSE，也不把历史失败归为同因。
+
+该组29项是顺序的应用层发送/身份/端点补全测试，真实shard与ref更新保留，原来却依赖可失败的系统loopback锁分配。只在本测试文件将withStateLock执行边界隔离为直接运行本地同步写事务，并在三处fixture准备后明确断言已持久化短柄，避免准备失败被误报为寻址逻辑失败；不改产品锁、超时、分配/降级、交互或持久格式。真实OS锁、路径别名、竞争/持有者死亡与不明零发送继续由未mock的conversation-state-concurrency覆盖。发送/短柄/跨进程锁四文件59项通过、ESLint通过，raw为handle-fixture-green.txt；新版完整检查由同一PR的普通三平台CI核验，15fe931完整成绩不追认为后续提交成绩。

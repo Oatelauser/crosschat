@@ -11,6 +11,13 @@ import { resolveTargetByName } from '../src/resolve.js';
 import { encodeOrigin, sendViaSsh } from '../src/federation.js';
 import { sendViaTcp } from '../src/serve/via-tcp.js';
 
+// These sequential application tests exercise real shard/refinement writes, not OS lock
+// acquisition. Keep them independent of unrelated loopback users; the unmocked
+// cross-process/alias/holder-death contract lives in conversation-state-concurrency.test.ts.
+vi.mock('../src/state-lock.js', () => ({
+  withStateLock: async (_directory: string, _key: string, work: () => Promise<unknown>) => ({ acquired: true, value: await work() }),
+}));
+
 const root = mkdtempSync(join(tmpdir(), 'crosschat-c14-explicit-send-'));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 const senderId = 'native-codex-sender';
@@ -83,6 +90,7 @@ describe('explicit recipient tool contract', () => {
     const original = { ...newConversationRef({ p: 'claude' as const, id: receiverId }, { p: 'codex' as const, id: senderId }), c: 4 };
     await recordConversation(file, original, 10);
     const handle = await handleForRef(file, original);
+    expect(handle, 'refinement fixture needs a persisted short handle').toMatch(/^c[A-Z]\d{3}$/u);
     const dependencies = { ...deps(), env: { CLAUDE_CODE_MESSAGING_SOCKET: 'fixture-socket' }, conversationStateFile: file,
       listCodexThreads: vi.fn(async () => [{ id: senderId, name: null, status: 'idle' as const, endpointType: 'desktop' }]),
     };
@@ -111,6 +119,7 @@ describe('explicit recipient tool contract', () => {
     const original = { ...newConversationRef({ p: 'codex' as const, id: senderId }, { p: 'claude' as const, id: receiverId, endpointType: 'cli' }), c: 7 };
     await recordConversation(file, original, 10, { peer: 'kept-machine-name' });
     const handle = await handleForRef(file, original);
+    expect(handle, 'source-refinement fixture needs a persisted short handle').toMatch(/^c[A-Z]\d{3}$/u);
     const dependencies = { ...deps(), env: { CODEX_THREAD_ID: senderId }, conversationStateFile: file,
       enrichCallerIdentity: vi.fn(async (caller: import('../src/identity.js').CallerIdentity) => caller.p === 'codex' ? { ...caller, endpointType: 'cli' } : caller),
     };
@@ -153,6 +162,7 @@ describe('explicit recipient tool contract', () => {
     );
     await recordConversation(file, original, 10, { aaaaaaaa: 'machine-a', bbbbbbbb: 'machine-b' });
     const handle = await handleForRef(file, original);
+    expect(handle, 'remote-refinement fixture needs a persisted short handle').toMatch(/^c[A-Z]\d{3}$/u);
     const local = endpointType === 'cli' ? original.f : original.t;
     const source = endpointType === 'cli' ? original.t : original.f;
     if (local.p === 'human' || source.p === 'human') throw new Error('Expected native endpoints');
