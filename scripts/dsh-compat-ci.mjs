@@ -1046,6 +1046,9 @@ export async function runDshProbeAttempt({ output, label, artifact }, execute) {
   return { ...report, process: { code: result.code, signal: result.signal, timedOut: result.timedOut } };
 }
 
+export async function runDshOnboardingAttempt() { return undefined; }
+export async function runDshOnboardingSequence() { return undefined; }
+
 function classify(baseline, candidate, retry) {
   if (baseline?.status !== 'passed') return { kind: 'baseline-failed', notify: false };
   if (candidate?.category === 'infrastructure' || retry?.category === 'infrastructure') return { kind: 'infrastructure', notify: false };

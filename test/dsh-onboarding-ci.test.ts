@@ -1,8 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, rm, writeFile, symlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { afterEach, describe, expect, it } from 'vitest';
 import { DSH_ONBOARDING_CHECKS, DSH_ONBOARDING_SCOPE, DSH_ONBOARDING_TOOL, validDshOnboardingProcessReport, validDshOnboardingReport } from '../scripts/dsh-onboarding-contract.mjs';
+import { runDshOnboardingAttempt, runDshOnboardingSequence } from '../scripts/dsh-compat-ci.mjs';
 
 const artifact = { name: '@deepseek-ai/dsh', version: '0.2.1-rc.2' };
 const runId = '11111111-1111-4111-8111-111111111111';
+const roots: string[] = [];
+afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
+async function directory() { const root = await mkdtemp(join(tmpdir(), 'crosschat-dsh-onboarding-unit-')); roots.push(root); return root; }
 function passed() {
   return { schema: 1, tool: DSH_ONBOARDING_TOOL, platform: 'win32', arch: 'x64', version: artifact.version, runId,
     scope: { ...DSH_ONBOARDING_SCOPE }, status: 'passed', category: null, stage: 'done',
@@ -69,5 +77,60 @@ describe('DSH from-zero onboarding report boundary', () => {
 
   it('rejects a failed claim that omits the failed phase after all phases passed', () => {
     expect(validDshOnboardingReport({ ...passed(), status: 'failed', category: 'compatibility', stage: 'onboarding' }, artifact, runId)).toBe(false);
+  });
+});
+
+describe('onboarding fresh attempts and serial resource ownership', () => {
+  const processResult = { code: 0, signal: null, timedOut: false };
+  const builds = { baseline: artifact, candidate: { ...artifact, version: '0.2.2' } };
+  const successful = (version: string) => ({ ...passed(), version, runId: randomUUID() });
+
+  it('accepts only the freshly minted report and never reuses a preceding PASS', async () => {
+    const output = await directory(); let previousId = '';
+    const first = await runDshOnboardingAttempt({ output, label: 'baseline', artifact }, async ({ reportPath, runId }: { reportPath: string; runId: string }) => {
+      previousId = runId; await writeFile(reportPath, JSON.stringify({ ...passed(), runId })); return processResult;
+    });
+    expect(first.status).toBe('passed');
+    const stale = await runDshOnboardingAttempt({ output, label: 'baseline', artifact }, async ({ reportPath }: { reportPath: string }) => {
+      await writeFile(reportPath, JSON.stringify({ ...passed(), runId: previousId })); return processResult;
+    });
+    expect(stale).toMatchObject({ tool: DSH_ONBOARDING_TOOL, category: 'infrastructure', check: 'probe-report' });
+    expect(stale.cleanup).toBeUndefined();
+  });
+
+  it('rejects a linked report before accepting its otherwise valid contents', async () => {
+    const output = await directory();
+    const result = await runDshOnboardingAttempt({ output, label: 'candidate', artifact }, async ({ reportPath, runId }: { reportPath: string; runId: string }) => {
+      const target = join(output, 'linked-source.json'); await writeFile(target, JSON.stringify({ ...passed(), runId }));
+      await symlink(target, reportPath, 'file'); return processResult;
+    });
+    expect(result).toMatchObject({ category: 'infrastructure', check: 'probe-report' });
+  });
+
+  it('retains an installation with incomplete release and never enters the next build or removes it', async () => {
+    const events: string[] = [];
+    const result = await runDshOnboardingSequence(builds, {
+      async install(value: typeof artifact, label: string) { events.push(`install:${label}`); return { root: `/owned/${value.version}` }; },
+      async probe() { events.push('probe'); return { ...successful(artifact.version), status: 'failed', category: 'infrastructure', stage: 'cleanup', check: 'owned-cleanup',
+        cleanup: { runtimeStopped: true, registrationRemoved: false, removed: false, forced: false }, process: { code: 1, signal: null, timedOut: false } }; },
+      async remove() { events.push('remove'); },
+    });
+    expect(events).toEqual(['install:baseline', 'probe']);
+    expect(result).toMatchObject({ tool: DSH_ONBOARDING_TOOL, installationCleanup: 'incomplete', classification: { kind: 'infrastructure', notify: false }, retainedInstallation: { label: 'baseline', root: `/owned/${artifact.version}` } });
+  });
+
+  it('uses the same candidate twice only after both observed runtime and installation releases', async () => {
+    const events: string[] = [];
+    const result = await runDshOnboardingSequence(builds, {
+      async install(value: typeof artifact, label: string) { events.push(`install:${label}:${value.version}`); return { root: `/owned/${label}` }; },
+      async probe(_installation: unknown, value: typeof artifact, label: string) {
+        events.push(`probe:${label}`);
+        return label === 'baseline' ? successful(value.version) : { ...successful(value.version), status: 'failed', category: 'compatibility', stage: 'onboarding',
+          check: DSH_ONBOARDING_CHECKS[1], checks: passed().checks.slice(0, 1), process: { code: 1, signal: null, timedOut: false } };
+      },
+      async remove(_installation: unknown, _value: typeof artifact, label: string) { events.push(`remove:${label}`); },
+    });
+    expect(result).toMatchObject({ tool: DSH_ONBOARDING_TOOL, installationCleanup: 'removed', classification: { kind: 'regression', notify: true } });
+    expect(events).toEqual(['install:baseline:0.2.1-rc.2', 'probe:baseline', 'remove:baseline', 'install:candidate:0.2.2', 'probe:candidate', 'remove:candidate', 'install:retry:0.2.2', 'probe:retry', 'remove:retry']);
   });
 });
