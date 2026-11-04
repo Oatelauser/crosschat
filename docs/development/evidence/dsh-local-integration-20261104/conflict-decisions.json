@@ -1,0 +1,177 @@
+[
+  {
+    "file": "src/application/session-operations.ts",
+    "resolution": "development blob preserved",
+    "reason": "main is an earlier development blob or the release-only pruning of OpenCode/DSH; keep approved C14 endpoint isolation and current multi-tool routing; main POSIX lifecycle fix is retained separately"
+  },
+  {
+    "file": "src/application/session-selection.ts",
+    "resolution": "development blob preserved",
+    "reason": "main is an earlier development blob or the release-only pruning of OpenCode/DSH; keep approved C14 endpoint isolation and current multi-tool routing; main POSIX lifecycle fix is retained separately"
+  },
+  {
+    "file": "src/application/sessions/codex-reader.ts",
+    "resolution": "development blob preserved",
+    "reason": "main is an earlier development blob or the release-only pruning of OpenCode/DSH; keep approved C14 endpoint isolation and current multi-tool routing; main POSIX lifecycle fix is retained separately"
+  },
+  {
+    "file": "src/application/tcp/management.ts",
+    "resolution": "development blob preserved",
+    "reason": "main is an earlier development blob or the release-only pruning of OpenCode/DSH; keep approved C14 endpoint isolation and current multi-tool routing; main POSIX lifecycle fix is retained separately"
+  },
+  {
+    "file": "src/application/tcp/session-operations.ts",
+    "resolution": "development blob preserved",
+    "reason": "main is an earlier development blob or the release-only pruning of OpenCode/DSH; keep approved C14 endpoint isolation and current multi-tool routing; main POSIX lifecycle fix is retained separately"
+  },
+  {
+    "file": "src/codex/aggregate-discovery.ts",
+    "resolution": "development blob preserved",
+    "reason": "main is an earlier development blob or the release-only pruning of OpenCode/DSH; keep approved C14 endpoint isolation and current multi-tool routing; main POSIX lifecycle fix is retained separately"
+  },
+  {
+    "file": "src/codex/client.ts",
+    "resolution": "development blob preserved",
+    "reason": "main is an earlier development blob or the release-only pruning of OpenCode/DSH; keep approved C14 endpoint isolation and current multi-tool routing; main POSIX lifecycle fix is retained separately"
+  },
+  {
+    "file": "src/commands/serve.ts",
+    "resolution": "development blob preserved",
+    "reason": "main is an earlier development blob or the release-only pruning of OpenCode/DSH; keep approved C14 endpoint isolation and current multi-tool routing; main POSIX lifecycle fix is retained separately"
+  },
+  {
+    "file": "src/commands/session-star.ts",
+    "resolution": "development blob preserved",
+    "reason": "main is an earlier development blob or the release-only pruning of OpenCode/DSH; keep approved C14 endpoint isolation and current multi-tool routing; main POSIX lifecycle fix is retained separately"
+  },
+  {
+    "file": "src/serve/broker.ts",
+    "resolution": "development blob preserved",
+    "reason": "main is an earlier development blob or the release-only pruning of OpenCode/DSH; keep approved C14 endpoint isolation and current multi-tool routing; main POSIX lifecycle fix is retained separately"
+  },
+  {
+    "file": "src/serve/node.ts",
+    "resolution": "development blob preserved",
+    "reason": "main is an earlier development blob or the release-only pruning of OpenCode/DSH; keep approved C14 endpoint isolation and current multi-tool routing; main POSIX lifecycle fix is retained separately"
+  },
+  {
+    "file": "src/serve/protocol.ts",
+    "resolution": "development blob preserved",
+    "reason": "main is an earlier development blob or the release-only pruning of OpenCode/DSH; keep approved C14 endpoint isolation and current multi-tool routing; main POSIX lifecycle fix is retained separately"
+  },
+  {
+    "file": "src/serve/registry.ts",
+    "resolution": "development blob preserved",
+    "reason": "main is an earlier development blob or the release-only pruning of OpenCode/DSH; keep approved C14 endpoint isolation and current multi-tool routing; main POSIX lifecycle fix is retained separately"
+  },
+  {
+    "file": "src/serve/session-operations.ts",
+    "resolution": "development blob preserved",
+    "reason": "main is an earlier development blob or the release-only pruning of OpenCode/DSH; keep approved C14 endpoint isolation and current multi-tool routing; main POSIX lifecycle fix is retained separately"
+  },
+  {
+    "file": "src/tui/resources/ssh.ts",
+    "resolution": "development blob preserved",
+    "reason": "main is an earlier development blob or the release-only pruning of OpenCode/DSH; keep approved C14 endpoint isolation and current multi-tool routing; main POSIX lifecycle fix is retained separately"
+  },
+  {
+    "file": "src/tui/resources/tcp.ts",
+    "resolution": "development blob preserved",
+    "reason": "main is an earlier development blob or the release-only pruning of OpenCode/DSH; keep approved C14 endpoint isolation and current multi-tool routing; main POSIX lifecycle fix is retained separately"
+  },
+  {
+    "file": "test/codex-aggregate-discovery.test.ts",
+    "conflictHunks": 1,
+    "resolution": "development conflict hunks with main nonconflicting portability fixes retained",
+    "reason": "keep endpoint-aware assertions and current isolated native helpers; explicitly reconcile TCP socket guards and joiner finally below"
+  },
+  {
+    "file": "test/codex-pagination.test.ts",
+    "conflictHunks": 1,
+    "resolution": "development conflict hunks with main nonconflicting portability fixes retained",
+    "reason": "keep endpoint-aware assertions and current isolated native helpers; explicitly reconcile TCP socket guards and joiner finally below"
+  },
+  {
+    "file": "test/helpers/claude-rename-native-validation.mjs",
+    "conflictHunks": 1,
+    "resolution": "development conflict hunks with main nonconflicting portability fixes retained",
+    "reason": "keep endpoint-aware assertions and current isolated native helpers; explicitly reconcile TCP socket guards and joiner finally below"
+  },
+  {
+    "file": "test/helpers/session-selection-native-validation.mjs",
+    "conflictHunks": 1,
+    "resolution": "development conflict hunks with main nonconflicting portability fixes retained",
+    "reason": "keep endpoint-aware assertions and current isolated native helpers; explicitly reconcile TCP socket guards and joiner finally below"
+  },
+  {
+    "file": "test/serve-sessions.test.ts",
+    "conflictHunks": 9,
+    "resolution": "development conflict hunks with main nonconflicting portability fixes retained",
+    "reason": "keep endpoint-aware assertions and current isolated native helpers; explicitly reconcile TCP socket guards and joiner finally below"
+  },
+  {
+    "file": "test/session-selection.test.ts",
+    "conflictHunks": 1,
+    "resolution": "development conflict hunks with main nonconflicting portability fixes retained",
+    "reason": "keep endpoint-aware assertions and current isolated native helpers; explicitly reconcile TCP socket guards and joiner finally below"
+  },
+  {
+    "file": "test/session-star.test.ts",
+    "conflictHunks": 11,
+    "resolution": "development conflict hunks with main nonconflicting portability fixes retained",
+    "reason": "keep endpoint-aware assertions and current isolated native helpers; explicitly reconcile TCP socket guards and joiner finally below",
+    "finalReconciliation": "main try/finally and complete two-star polling, development mandatory tool:claude; macOS short fixture root/label budget retained"
+  },
+  {
+    "file": "test/tcp-configuration-management.test.ts",
+    "conflictHunks": 2,
+    "resolution": "main canonical fixture path",
+    "reason": "keep canonical fixture root before linked-path attack cases"
+  },
+  {
+    "file": "test/tcp-session-operations.test.ts",
+    "conflictHunks": 4,
+    "resolution": "development conflict hunks with main nonconflicting portability fixes retained",
+    "reason": "keep endpoint-aware assertions and current isolated native helpers; explicitly reconcile TCP socket guards and joiner finally below",
+    "finalReconciliation": "main canonical macOS /tmp and explicit attach path budget combined with all typed endpoint discovery/receipt/roster assertions"
+  },
+  {
+    "file": "test/tui-tcp.test.ts",
+    "conflictHunks": 1,
+    "resolution": "development conflict hunks with main nonconflicting portability fixes retained",
+    "reason": "keep endpoint-aware assertions and current isolated native helpers; explicitly reconcile TCP socket guards and joiner finally below"
+  },
+  {
+    "file": "README.md",
+    "conflictHunks": 2,
+    "resolution": "development conflict hunks",
+    "reason": "keep approved explicit --tool / cA000 guidance, complete research sources and current C14 status"
+  },
+  {
+    "file": "docs/development/session-selection-membership-design-20261026.md",
+    "conflictHunks": 1,
+    "resolution": "development conflict hunks",
+    "reason": "keep approved explicit --tool / cA000 guidance, complete research sources and current C14 status"
+  },
+  {
+    "file": "docs/development/tui-progress.md",
+    "conflictHunks": 1,
+    "resolution": "development conflict hunks",
+    "reason": "keep approved explicit --tool / cA000 guidance, complete research sources and current C14 status"
+  },
+  {
+    "file": "CHANGELOG.md",
+    "resolution": "both",
+    "reason": "keep Unreleased short-handle change and all historical 1.11-1.13.1 release entries"
+  },
+  {
+    "file": "docs/development/tui-workspace-progress.md",
+    "resolution": "current feedback plus historical release context",
+    "reason": "preserve pending user feedback; do not describe the current full line as the old limited release"
+  },
+  {
+    "file": "docs/development/tui-workspace-validation-20261023.md",
+    "resolution": "both historical scope/evidence contexts",
+    "reason": "retain original merged development evidence, main limited-release qualification and archived/blocked cleanup history"
+  }
+]

@@ -1,0 +1,15 @@
+diff --git a/test/claude-compat-fixture.test.ts b/test/claude-compat-fixture.test.ts
+index a3d3e34..8059739 100644
+--- a/test/claude-compat-fixture.test.ts
++++ b/test/claude-compat-fixture.test.ts
+@@ -167,8 +167,8 @@ describe('Claude compatibility runtime profile isolation', () => {
+ });
+ 
+ describe('Claude compatibility workflow trust boundary', () => {
+-  it('keeps real upstream execution on a read-only Windows job and issue reporting on a separate trusted job', async () => {
+-    const workflow = await readFile(new URL('../.github/workflows/claude-compat.yml', import.meta.url), 'utf8');
++  it.each(['\n', '\r\n'])('keeps real upstream execution on a read-only Windows job and issue reporting on a separate trusted job with %j line endings', async (lineEnding) => {
++    const workflow = (await readFile(new URL('../.github/workflows/claude-compat.yml', import.meta.url), 'utf8')).replace(/\r?\n/g, lineEnding);
+     const probe = workflow.split('\n  probe:')[1]?.split('\n  report:')[0];
+     const report = workflow.split('\n  report:')[1];
+     expect(probe).toBeTruthy(); expect(report).toBeTruthy();

@@ -1,0 +1,198 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "scope": "local complete-development/main integration candidate only",
+  "branch": "codex/dsh-hosted-integration-20261104",
+  "worktree": "D:/workspace/CC/cc-int-20261104",
+  "firstParent": "1b49d7eccd916dc53658aef4a6672f022db9a0ec",
+  "secondParent": "874461ae9ecdb799d880c28c1db30999c2c51555",
+  "mergeBase": "de791a90e1e1c7503aa9561d5fc2d0e8d6ea1d20",
+  "authorization": "user selected local integration responsibility; no external operations",
+  "review": "root self-review against standards and both source intents; no independent reviewer",
+  "initialConflictedPaths": 32,
+  "resolution": "16 current development source versions; main lifecycle fix exact; fixture portability combined with typed behavior; historical evidence retained",
+  "environment": {
+    "platform": "win32",
+    "arch": "x64",
+    "node": "v25.0.0",
+    "npm": "11.6.2",
+    "vitest": "3.2.7",
+    "dependencyInstall": "npm ci --ignore-scripts --no-audit --fund=false with worktree-owned cache"
+  },
+  "checks": {
+    "build": 0,
+    "targeted": {
+      "files": 13,
+      "passed": 149
+    },
+    "initialFull": {
+      "exitCode": 1,
+      "passed": 2759,
+      "failed": 1,
+      "skipped": 11,
+      "raw": "check.txt",
+      "cause": "existing workflow test LF-only permission regex on fresh Windows CRLF checkout"
+    },
+    "lfCrlfCounterexample": {
+      "passed": 1,
+      "failed": 1,
+      "filteredOut": 18,
+      "raw": "workflow-crlf-red.txt",
+      "patch": "workflow-crlf-red.patch"
+    },
+    "lfCrlfGreen": {
+      "passed": 20,
+      "raw": "workflow-crlf-green.txt"
+    },
+    "finalFull": {
+      "exitCode": 0,
+      "passed": 2761,
+      "skipped": 11,
+      "filesPassed": 235,
+      "filesSkipped": 3,
+      "lint": "passed",
+      "imports": {
+        "modules": 204,
+        "edges": 688
+      },
+      "build": "passed",
+      "raw": "check-final.txt",
+      "metadata": "check-metadata-final.json"
+    },
+    "newSkips": 0,
+    "liveEnabled": false,
+    "maxWorkers": 2,
+    "minWorkers": 1,
+    "whitespace": {
+      "sourceAndDocs": "git diff --cached --check excluding this exact raw-evidence directory",
+      "raw": "diff/context and failure-output whitespace retained; exact bytes preserved with local -text attributes and index SHA-256 verification"
+    }
+  },
+  "package": {
+    "versionInheritedFromMain": "1.13.1",
+    "newReleaseVersionDecided": false,
+    "entries": 427,
+    "requiredAssets": 15,
+    "missingAssets": 0,
+    "tgzWritten": false,
+    "globalInstallation": false,
+    "omittedPriorStaleDistFiles": 6
+  },
+  "cleanup": {
+    "c04UserRemovalVerified": true,
+    "userDshRetained": true,
+    "nativeToolExecuted": false,
+    "worktreeRetainedForReview": true
+  },
+  "externalOperations": {
+    "pushed": false,
+    "prCreated": false,
+    "mainMerged": false,
+    "actionsDispatched": false,
+    "issueCreated": false,
+    "published": false
+  },
+  "notValidated": [
+    "hosted Node22 or all-platform current candidate run",
+    "DSH compatibility first hosted round or schedule/artifact/report permissions",
+    "formal Desktop installer/uninstaller and trusted C2 native runner",
+    "all profile/fault combinations or enhancements"
+  ],
+  "artifacts": [
+    {
+      "path": "build.txt",
+      "bytes": 46,
+      "sha256": "de8d0988e1bd4b35b020e2bdbd65199198e3709c145d33b0b2ab8b792deb46b5"
+    },
+    {
+      "path": "check-final.txt",
+      "bytes": 31309,
+      "sha256": "1a8bade57a7e5c42237b736d501871ffeb999086806b53f5f1ecab7a7f36b804"
+    },
+    {
+      "path": "check-metadata-final.json",
+      "bytes": 195,
+      "sha256": "a9c8ff0d515ededbacb068de8936ba5f5b6bb65845935f8b1c348c49c5e2b233"
+    },
+    {
+      "path": "check-metadata.json",
+      "bytes": 195,
+      "sha256": "f8df019047369ec2d9d404e9d7ea748f7d2066d5ed21be938042e3fc513be3d8"
+    },
+    {
+      "path": "check.txt",
+      "bytes": 35236,
+      "sha256": "00647dc7550f03f8013240ff79f82b9db29802d2e9cb52e36b2d92c5a8388038"
+    },
+    {
+      "path": "conflict-decisions.json",
+      "bytes": 9968,
+      "sha256": "44208449c0cce54b6039f629b5dcaf5a0b6470a91b0b3084fcd492c2c9c0f2b2"
+    },
+    {
+      "path": "conflict-history.json",
+      "bytes": 8421,
+      "sha256": "12c4f75b5b94dcd4b75c03e676ff38e5e8f8570e5754967c35eeee7f5be09b7b"
+    },
+    {
+      "path": "merge-conflicts.patch",
+      "bytes": 152132,
+      "sha256": "578828bc0d1e752193e9e34518ca2adae89628917b7c882a687809c0a393c875"
+    },
+    {
+      "path": "merge-initial.txt",
+      "bytes": 4437,
+      "sha256": "4ce8e5b2c7219b3fca46c3bf1109df2174083fd84a80c32bb742e59b499c5f7c"
+    },
+    {
+      "path": "pack-audit.json",
+      "bytes": 1466,
+      "sha256": "6af2cca62d09dbcce2d7752873165a5b4652ca46298ae1cc3f936120cc9c2c68"
+    },
+    {
+      "path": "pack-dry-run.json",
+      "bytes": 49909,
+      "sha256": "92b621bb3f6793ab8d8f05b17416a37b52e7f2376071a48b8be703c32292fc47"
+    },
+    {
+      "path": "pack-dry-run.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scope-audit.json",
+      "bytes": 960,
+      "sha256": "c0ee5ff105041c6db28acaa772e9c65f05bc3071988a1a7099695020246de5da"
+    },
+    {
+      "path": "targeted.txt",
+      "bytes": 4492,
+      "sha256": "2f8d00e27305b8c75aecbb95864a3a2055d976d54547e49709fd1ade39a721bd"
+    },
+    {
+      "path": "workflow-crlf-green.txt",
+      "bytes": 294,
+      "sha256": "fd66a75bff00db1a91c3f3c28e2d38496885cb1f65e1d4ed4243a2d00fa82429"
+    },
+    {
+      "path": "workflow-crlf-red.patch",
+      "bytes": 1128,
+      "sha256": "3546453a158834862febcdc58dac6a49fe099f1457f219422508216500a666ee"
+    },
+    {
+      "path": "workflow-crlf-red.txt",
+      "bytes": 4895,
+      "sha256": "d6c60182c9dfa4afcc00b6f6133e65f711ad67ff999bb8ada25bf626bbd27d4c"
+    },
+    {
+      "path": "resolved-delta.patch",
+      "bytes": 66549,
+      "sha256": "9b12ea61323c0f4f7b45d959b83c0c29a4ec0d865edd670f480b7c88de462e40"
+    },
+    {
+      "path": ".gitattributes",
+      "bytes": 75,
+      "sha256": "807d9db56795428ea962d22fc9f0003c589d90304463e3ac77d722b9bea7522c"
+    }
+  ]
+}

@@ -1,0 +1,242 @@
+[
+  {
+    "file": "CHANGELOG.md",
+    "mainBlob": "59e57aa089241d32b015c426f1bb76e78f56efa5",
+    "seenInDevelopmentHistory": false,
+    "developmentTransitions": []
+  },
+  {
+    "file": "README.md",
+    "mainBlob": "1b25f90537746bce76e0695bdd4dea547d2ca448",
+    "seenInDevelopmentHistory": false,
+    "developmentTransitions": []
+  },
+  {
+    "file": "docs/development/session-selection-membership-design-20261026.md",
+    "mainBlob": "74a213955b00a787e6c3af89829943f25ba00c46",
+    "seenInDevelopmentHistory": false,
+    "developmentTransitions": []
+  },
+  {
+    "file": "docs/development/tui-progress.md",
+    "mainBlob": "53be9c98ca47d4dd8d69bb33517d78159a28226f",
+    "seenInDevelopmentHistory": false,
+    "developmentTransitions": []
+  },
+  {
+    "file": "docs/development/tui-workspace-progress.md",
+    "mainBlob": "e704f21b6b74fc3ab780cbe9c8be6af33e5c2a04",
+    "seenInDevelopmentHistory": false,
+    "developmentTransitions": []
+  },
+  {
+    "file": "docs/development/tui-workspace-validation-20261023.md",
+    "mainBlob": "0da32a0c1e748f36cc604a44e14dfc20e54dd344",
+    "seenInDevelopmentHistory": false,
+    "developmentTransitions": []
+  },
+  {
+    "file": "src/application/session-operations.ts",
+    "mainBlob": "b3e8f74bca6cf360d6b34b4e214905e1811c4b82",
+    "seenInDevelopmentHistory": true,
+    "developmentTransitions": [
+      "0f146c0 feat: require explicit recipient tool types",
+      "ce0737b feat: isolate launcher sessions and manage star membership in TUI"
+    ]
+  },
+  {
+    "file": "src/application/session-selection.ts",
+    "mainBlob": "24d66a430d8eef353928fd5d24974a70cf6615c2",
+    "seenInDevelopmentHistory": true,
+    "developmentTransitions": [
+      "0f146c0 feat: require explicit recipient tool types",
+      "ce0737b feat: isolate launcher sessions and manage star membership in TUI"
+    ]
+  },
+  {
+    "file": "src/application/sessions/codex-reader.ts",
+    "mainBlob": "12a7c1a04d5df8fd22aef5b6eb1987c83c8e2638",
+    "seenInDevelopmentHistory": true,
+    "developmentTransitions": [
+      "0f146c0 feat: require explicit recipient tool types",
+      "ce0737b feat: isolate launcher sessions and manage star membership in TUI"
+    ]
+  },
+  {
+    "file": "src/application/tcp/management.ts",
+    "mainBlob": "85e76a432f09af214a35774deff582fbad655d36",
+    "seenInDevelopmentHistory": true,
+    "developmentTransitions": [
+      "0f146c0 feat: require explicit recipient tool types",
+      "ce0737b feat: isolate launcher sessions and manage star membership in TUI"
+    ]
+  },
+  {
+    "file": "src/application/tcp/session-operations.ts",
+    "mainBlob": "0d7fe7560ef69b06815c636b4290822d0c2e1e57",
+    "seenInDevelopmentHistory": true,
+    "developmentTransitions": [
+      "0f146c0 feat: require explicit recipient tool types",
+      "ce0737b feat: isolate launcher sessions and manage star membership in TUI"
+    ]
+  },
+  {
+    "file": "src/codex/aggregate-discovery.ts",
+    "mainBlob": "90561512859e4ba3bc4f5f2c6a7d2945b4845abe",
+    "seenInDevelopmentHistory": true,
+    "developmentTransitions": [
+      "0f146c0 feat: require explicit recipient tool types",
+      "ce0737b feat: isolate launcher sessions and manage star membership in TUI"
+    ]
+  },
+  {
+    "file": "src/codex/client.ts",
+    "mainBlob": "d397a4e65750244dfba8c7092251daa52e4380fe",
+    "seenInDevelopmentHistory": true,
+    "developmentTransitions": [
+      "0f146c0 feat: require explicit recipient tool types",
+      "ce0737b feat: isolate launcher sessions and manage star membership in TUI"
+    ]
+  },
+  {
+    "file": "src/commands/serve.ts",
+    "mainBlob": "a3a954a2611cf882d6feb5c6c278175740751501",
+    "seenInDevelopmentHistory": false,
+    "developmentTransitions": []
+  },
+  {
+    "file": "src/commands/session-star.ts",
+    "mainBlob": "5195d5a43a715d779d908d009c9644239af0b6e9",
+    "seenInDevelopmentHistory": false,
+    "developmentTransitions": []
+  },
+  {
+    "file": "src/serve/broker.ts",
+    "mainBlob": "2389c37b39f286ff6ba583e3cca20a7d19cb1f72",
+    "seenInDevelopmentHistory": true,
+    "developmentTransitions": [
+      "0f146c0 feat: require explicit recipient tool types",
+      "ce0737b feat: isolate launcher sessions and manage star membership in TUI"
+    ]
+  },
+  {
+    "file": "src/serve/node.ts",
+    "mainBlob": "862e5a080ed0a765bfd50f23e8913bdd671f1b4d",
+    "seenInDevelopmentHistory": false,
+    "developmentTransitions": []
+  },
+  {
+    "file": "src/serve/protocol.ts",
+    "mainBlob": "e1d8cbfcfd638f3e6033d89f608fdb755900a18d",
+    "seenInDevelopmentHistory": false,
+    "developmentTransitions": []
+  },
+  {
+    "file": "src/serve/registry.ts",
+    "mainBlob": "f56283af32340600e20166c913da0516231ca752",
+    "seenInDevelopmentHistory": true,
+    "developmentTransitions": [
+      "0f146c0 feat: require explicit recipient tool types",
+      "ce0737b feat: isolate launcher sessions and manage star membership in TUI"
+    ]
+  },
+  {
+    "file": "src/serve/session-operations.ts",
+    "mainBlob": "c6a2260f4f69c8842d097595b6da01623f0d70e0",
+    "seenInDevelopmentHistory": true,
+    "developmentTransitions": [
+      "0f146c0 feat: require explicit recipient tool types",
+      "ce0737b feat: isolate launcher sessions and manage star membership in TUI"
+    ]
+  },
+  {
+    "file": "src/tui/resources/ssh.ts",
+    "mainBlob": "6f6e19fe3723525540c65edaf298ee698067b4c4",
+    "seenInDevelopmentHistory": true,
+    "developmentTransitions": [
+      "0f146c0 feat: require explicit recipient tool types",
+      "2c9c959 fix(tui): align paging, workspace history and SSH authentication ownership"
+    ]
+  },
+  {
+    "file": "src/tui/resources/tcp.ts",
+    "mainBlob": "cde1d874afdb0dc564ab361091b076f01a936873",
+    "seenInDevelopmentHistory": true,
+    "developmentTransitions": [
+      "0f146c0 feat: require explicit recipient tool types",
+      "ce0737b feat: isolate launcher sessions and manage star membership in TUI"
+    ]
+  },
+  {
+    "file": "test/codex-aggregate-discovery.test.ts",
+    "mainBlob": "061a08679aa1952e2cfa2b867e744c9b311507e8",
+    "seenInDevelopmentHistory": true,
+    "developmentTransitions": [
+      "0f146c0 feat: require explicit recipient tool types",
+      "ce0737b feat: isolate launcher sessions and manage star membership in TUI"
+    ]
+  },
+  {
+    "file": "test/codex-pagination.test.ts",
+    "mainBlob": "2557836044c9ae72010d59eeb2eccf011e342ae2",
+    "seenInDevelopmentHistory": true,
+    "developmentTransitions": [
+      "0f146c0 feat: require explicit recipient tool types",
+      "ce0737b feat: isolate launcher sessions and manage star membership in TUI"
+    ]
+  },
+  {
+    "file": "test/helpers/claude-rename-native-validation.mjs",
+    "mainBlob": "eb14036a56cdac4d85a9714e56b9b1f90b5ea03d",
+    "seenInDevelopmentHistory": false,
+    "developmentTransitions": []
+  },
+  {
+    "file": "test/helpers/session-selection-native-validation.mjs",
+    "mainBlob": "a000bff82e342255c7aa6280d1207654a8303df5",
+    "seenInDevelopmentHistory": false,
+    "developmentTransitions": []
+  },
+  {
+    "file": "test/serve-sessions.test.ts",
+    "mainBlob": "9ccbaf5b160b73937e2938cd3812c819098c4511",
+    "seenInDevelopmentHistory": false,
+    "developmentTransitions": []
+  },
+  {
+    "file": "test/session-selection.test.ts",
+    "mainBlob": "1330f0ba90989373c6cc3c3054599f961822ac6c",
+    "seenInDevelopmentHistory": true,
+    "developmentTransitions": [
+      "0a45bb9 test: follow selected endpoint changes with the same native ID",
+      "ce0737b feat: isolate launcher sessions and manage star membership in TUI"
+    ]
+  },
+  {
+    "file": "test/session-star.test.ts",
+    "mainBlob": "7df472506b97b59ccbbe5ddb9767154ac1ccec55",
+    "seenInDevelopmentHistory": false,
+    "developmentTransitions": []
+  },
+  {
+    "file": "test/tcp-configuration-management.test.ts",
+    "mainBlob": "0f0e3aa46d236bcfd353b6b11c0e0863e56494f5",
+    "seenInDevelopmentHistory": false,
+    "developmentTransitions": []
+  },
+  {
+    "file": "test/tcp-session-operations.test.ts",
+    "mainBlob": "cbe8bfa63ac1332d12f96b000631567b48b904c3",
+    "seenInDevelopmentHistory": false,
+    "developmentTransitions": []
+  },
+  {
+    "file": "test/tui-tcp.test.ts",
+    "mainBlob": "748cfddd11990f29bfac62e5e9ab2e0000048855",
+    "seenInDevelopmentHistory": true,
+    "developmentTransitions": [
+      "b82aef2 test: reproduce typed TCP view and operation target loss",
+      "ce0737b feat: isolate launcher sessions and manage star membership in TUI"
+    ]
+  }
+]

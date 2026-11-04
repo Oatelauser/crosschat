@@ -1,0 +1,1038 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 5e6efad..6f5e2b0 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -6,6 +6,86 @@
+ 
+ - 会话短柄改为固定五字符 `cA000`～`cZ999`，保留最近 1000 次分配窗口及每对端点 LRU8；同一对话往返复用，耗尽或状态无法安全读写时回退完整引用。进度复用现有分片，普通清理保留最高进度；强清/手动删除状态会重置编号。旧数字柄已停用，旧全局会话文件不再读取；完整 `mc1_` / `mc2_` 引用继续支持。
+ 
++## [1.13.1] - 2026-10-27
++
++### 修复
++
++- 同步打包 skill 的星成员指引与 1.13.0 行为：启动器跟随首条输入与 `/resume`；直接原生/桌面/Web 由 TUI 选择，裸 `/resume` 不自动归队。
++- 补齐 `--rm` 保护已有永久成员、多窗口释放、守护重启、TUI 入星/删册及改名能力说明；移除用 id8 绕过下线状态的错误指引。产品实现与 1.13.0 相同。
++
++## [1.13.0] - 2026-10-27
++
++### 会话选择与入星
++
++- 同目录启动多个匿名 Claude 会话时，按各窗口所属原生会话独立入星、收发和退出，避免差分发现把其他窗口的会话认作自己。
++- 通过 `crosschat claude/codex --connect <星>` 启动后，空白窗口先等待，首条输入或确认 `/resume` 后跟随完整会话 ID 入星。切换 A→B 只释放当前窗口对 A 的声明，其他窗口独立工作。
++- `--rm` 两种参数顺序等效；仅将新成员设为临时，最后一个窗口释放后删册，不能悄悄改变已有永久成员。永久成员退出后保留册位。
++- 统一恢复入口：直接运行原生工具、桌面/Web 时由 TUI 明确选择会话入星；裸 `/resume` 不自动恢复星内在线声明。node 重启后永久册位保留，存活启动器重声明当前选择，手动成员由 TUI 或显式 adopt 恢复。
++
++### TUI 成员管理与改名
++
++- 可在指定 node 的发现会话列表选择具体会话入星，并实时查询、删除星籍；手动入星为永久成员，删除星籍不结束原生聊天。
++- 新增可扩展的原生操作接口，按实际来源核验能力并定时刷新。Codex CLI 已接入原生改名，核对同一 profile、已加载会话与 owner 后写入，再验证原生名称、星册及路由同步；协议基线为 0.163.0。
++- Claude 官方 SDK 尚不能同步活窗口与通信名称，Codex 桌面版当前协同接口未提供改名入口，TUI 对这两类来源禁用改名并说明原因；不增加星内别名。
++
++### 启动诊断与升级
++
++- 移除容易被误认为报错的“attach 自动，异常见日志”正常提示。真正入星失败时直接显示具体原因与完整日志路径，正常连接确认仍写入日志。
++- 保留 1.12.0 的 POSIX 进程组回收和 macOS 测试修复；仅纳入本聊天的实现与验收材料，未增加 OpenCode、DSH 或其他工具适配。
++- Node.js 仍要求 >=22。更新后需重启现有 broker/node 服务；本轮成员选择与管理协议要求相关端使用新版，不增加旧端降级。完整范围与检查见 `docs/development/release-1.13.0.md`。
++
++## [1.12.0] - 2026-10-23
++
++### 修复
++
++- 修复POSIX服务辅助进程组的回收竞态：取消、超时或完成后，在同一有界预算内等待owner退出及整个组消失；清理失败返回明确错误，不把owner退出当成全部后代已回收。Windows停机行为和外部服务停止策略保持。
++- 修复macOS两组双星测试的临时socket路径过长问题，增加Unix路径预算检查，并在失败时释放joiner，避免后续测试被遗留监督链干扰。
++
++### TUI 工作区与操作
++
++- `ctx` 改为全局只读看板，新增独立 `:local`、`:ssh`、`:tcp` 工作区；TCP 支持选择本机 broker 或远程星连接，再次进入恢复上次目标的星列表。
++- 进入星默认成员列表，`1/2/3` 切换成员、机器节点与完整发现会话。列表直接提供管理动作，详情保持只读；发节点钥、发管理钥及撤销凭证无需先进入凭证列表。
++- 新增 CC 紧凑标识、资源关键按键与完整帮助、限宽主表及独立筛选行。跨星历史返回重新核验角色，核验中禁写，失败或取消明确显示上次身份。
++
++### TCP 与 SSH
++
++- 删除节点原子核对本星该机器的全部绑定节点凭证并立即断开对应连接，保留永久成员册、原生会话及其他星。
++- 在线远程修改节点当前星名称，写入对端 `brokers[].showName`；保存与运行生效均收到确认后才报告完成。全局默认和其他星保持，失联结果不明时不自动重发。
++- TCP 保存连接支持导入、编辑和移除，最后一项移除保留合法空配置；星列表可直接精确起停所属整个 broker。
++- SSH 支持 TUI 受管连接增删改、遮蔽密码/私钥口令、活动连接内存复用和首次完整主机指纹确认；已知指纹变化拒绝。外部 SSH Host 继续只读，秘密不写入配置、日志、argv 或环境变量。
++
++### 发布范围
++
++- 保留 1.11.0 及上述已验收 macOS 修复，只新增本轮 TUI 改动；其他会话的 OpenCode、DSH、Claude 兼容性工作及未提交 README/研究文件未纳入。
++- 维护边界测试改用虚拟文件夹具，严格验证枚举上限及句柄回收，避免重复真实磁盘访问造成并发超时；产品检查、超时和跳过规则保持。
++- Node.js 仍要求 >=22。远程节点改名需要两端新版，不提供旧端降级；仅运行 Claude Code 的远端无需安装 Codex。范围与验收见 `docs/development/release-1.12.0.md`。
++
++## [1.11.0] - 2026-10-23
++
++### 终端管理界面
++
++- 新增 `crosschat tui`，从连接上下文 `ctx` 进入本机、已有 SSH Host 或 TCP 星。命令栏同时支持资源补全与筛选；列表限宽，详情保留完整身份，状态显示中文与原值，帮助和操作键共用资源登记。
++- 本机可浏览会话（含匿名）、状态、体检、通信对、暂存、日志、服务、文件及维护；SSH 提供真实远端发现与逐项体检；TCP 提供星、机器、全星/单机两种会话范围、成员及凭证元数据。增删改从对应资源列表确认，详情只读。
++- 管理确认绑定完整目标、权限和影响版本；变化即拒绝，结果不明不自动重放。秘密配置仅在显式发钥结果展示，支持复制与清屏退出。TUI 不代替 Claude Code/Codex 原生聊天，也不接管原生会话生命周期；OpenCode、zcode 尚未接入。
++
++### 完整发现与精确管理
++
++- 新增只读 `crosschat discover` JSON 接口与 `crosschat doctor --json`；本机、SSH、TCP 共用可扩展 Provider 和应用接口，保留完整引用、匿名条目、分页、来源错误、部分结果和取消状态。原 CLI 默认扫描范围及无参 doctor 文本、规则和退出码保持。
++- 新增按完整会话引用精确收编、broker 原子精确删册；会话同名、匿名或目标变化不再依赖名字/前缀回落。
++- 新增本星只读快照，提供完整机器身份、连接、成员与凭证元数据；新快照不返回钥匙且不写管理审计，原 list 读取审计保持。删节点、吊管理钥及删星在删除同一步核对确认版本，目标替换或影响变化时拒绝；管理审计追加完整 starId。
++- 撤节点、吊管理钥立即关闭对应已有连接；明确撤权后暂停该星自动重连/拉起，保留会话与配置，更新凭证后显式恢复。普通断网继续使用原退避重连。
++
++### 原生投递与核心结构
++
++- 新增逐条 `--delivery queue|steer`，默认 `queue`：忙时等待原任务结束；`steer` 忙时追加当前任务、空闲时唤醒。Desktop 连接原生 owner，CLI 使用 app-server；不明写入不自动重放，回执区分受理、暂存和确认。
++- 配置、只读查询、诊断、服务/维护、发现、投递与管理应用层解耦，CLI/TUI 共用结构化接口，Provider 差异留在适配层，并增加类型规范与运行时依赖方向检查。
++- 修复发现范围丢失离线册位、TCP 失联空页指引不可达、精确成员管理 IPv6 地址、服务/诊断取消回收及维护目标核验等边界。
++
++### 升级与验证
++
++- Node.js 最低要求仍为 22。本轮直接升级，相关远端发现/快照接口要求两端使用新版，不提供旧端降级。更新安装与 skill 后重启已有常驻服务；无需在仅运行 Claude Code 的节点安装 Codex。
++- 隔离验收 1657 项通过、11 项既有跳过，16 场 Windows ConPTY 通过；真实 Linux SSH/TCP（经 SSH 隧道）及 Windows 默认 TUI 主链通过。公网 TCP 直连、真实非空远端会话及 macOS live 未覆盖，详见 `docs/development/tui-remote-validation-20261023.md`。
++
+ ## [1.10.0] - 2026-10-21
+ 
+ ### 036：单星特例全灭与星域统一指名（2026-10-21 用户拍板"统一当多星处理，不存在单星机特殊存在"）
+diff --git a/README.md b/README.md
+index d718d25..13ec48f 100644
+--- a/README.md
++++ b/README.md
+@@ -231,6 +231,8 @@ ssh 配置方向一句话：**每台机写自己的 `~/.ssh/config`，内容是"
+ 
+ 完整参数、启动器与环境变量说明见 [命令手册](docs/commands.md)。
+ 
++运行 `crosschat tui` 可从连接上下文进入本机、SSH 或 TCP 资源，使用命令补全、筛选、只读详情和列表管理操作；布局及完整按键见 [终端界面](docs/tui.md)。原生聊天仍在 Claude Code/Codex 中进行。
++
+ ```
+ crosschat send --to <名字或完整ID> --tool <收件类型> --body "<正文>" # 新消息（目标有空格或特殊字符时按 shell 规则引用）
+ crosschat send --to <名字或完整ID> --tool <收件类型> --delivery steer --body "<追加内容>" # 忙时追加当前任务，空闲时唤醒
+@@ -242,6 +244,7 @@ echo … | crosschat send --to <名字或完整ID> --tool <收件类型> # 正
+ crosschat status [--json] [--conversations] [--stars] [--claude|--codex] [--name <子串>] [--all]   # 裸跑三段式摘要；旗标在场=明细视图（--via tcp|ssh 配 --conversations 按传输滤）
+ crosschat discover                                  # 新只读JSON发现；stdin可传list/detail请求，包含匿名/完整ID/分页，不补投
+ crosschat doctor                                    # 一键环境体检（有 ❌ 时退出码 1）
++crosschat doctor --json                             # 结构化体检结果（供远端及程序读取）
+ crosschat serve [--add-star/--remove-star/--gen-key/--list/--connect/--detach/--stop]  # tcp 星：起服务+造星(--add-star)/机器连星·聚合器(--connect)/钥匙管理（见跨机通信手册）
+ crosschat clean [--force]                           # 清 tcp 收件/断点残留（默认懒删除规则；--force 全清）
+ crosschat uninstall [--yes]                         # 卸载数据面（serve 在跑拒删；结尾 npm uninstall 收尾）
+diff --git a/package-lock.json b/package-lock.json
+index 81485f6..7283ab4 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+   "name": "@oatelauser/crosschat",
+-  "version": "1.10.0",
++  "version": "1.13.1",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "@oatelauser/crosschat",
+-      "version": "1.10.0",
++      "version": "1.13.1",
+       "license": "MIT",
+       "dependencies": {
+         "ink": "8.0.0",
+diff --git a/package.json b/package.json
+index 53ff633..4ffe33b 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "@oatelauser/crosschat",
+-  "version": "1.10.0",
++  "version": "1.13.1",
+   "type": "module",
+   "description": "Native messaging between existing AI CLI and desktop sessions, with local, SSH and TCP routing.",
+   "repository": {
+diff --git a/skills/crosschat/SKILL.md b/skills/crosschat/SKILL.md
+index 8c8f0cb..9c8f855 100644
+--- a/skills/crosschat/SKILL.md
++++ b/skills/crosschat/SKILL.md
+@@ -31,6 +31,6 @@ description: 使用 crosschat 与本机或跨机的 Claude Code、Codex CLI/桌
+ | 正文多行、含引号或特殊字符、内容很大、发送文件 | [正文与文件](references/advanced.md) |
+ | 判断 queue/steer、delivered/queued/parked 或 confirmed/unconfirmed；发送后做什么 | [投递与结果](references/delivery.md) |
+ | 命令报错、身份冲突、连接失败或投递结果不明 | [错误恢复](references/errors.md) |
+-| 星网络入网、成员下线、会话接任或迁移 | [星成员管理](references/stars.md) |
++| 星网络入网、成员下线、接任/迁移或 TUI 会话管理 | [星成员管理](references/stars.md) |
+ 
+ 组合场景沿用同一入口：**跨机回信先读“按信封回复”**，保留 hint 路由；特殊正文再读“正文与文件”。每次发送后按“投递与结果”处理，失败时再进入“错误恢复”。
+diff --git a/skills/crosschat/references/stars.md b/skills/crosschat/references/stars.md
+index 76252cd..f6d65ba 100644
+--- a/skills/crosschat/references/stars.md
++++ b/skills/crosschat/references/stars.md
+@@ -6,21 +6,30 @@
+ |---|---|---|
+ | `crosschat serve --detach` + `serve --add-star <星名>` | broker 机 | **起服务**（永不造星）+ **造星**（首星同此命令；热生效，加删改星免重启；零星合法） |
+ | `crosschat serve --connect <星>` | node 机 | **机器接入**：节点守护（机器级收发+聚合器） |
+-| `crosschat claude/codex -n <名> --connect <星>` | 会话 | **会话注册入册**（默认**永久**：退出=下线，册位保留） |
+-| 同上 + `--rm` | 会话 | **临时**（docker --rm 语义）：退出即离册零痕迹——一次性 worker 用它 |
++| `crosschat claude/codex --connect <星>` | 会话 | 首条输入或确认 `/resume` 后跟随本窗口选择入星；新成员默认**永久**，下线后册位保留 |
++| 同上 + `--rm` | 会话 | 新成员为**临时**，最后一个窗口释放后删册；已有永久成员保持永久 |
++| `crosschat tui` 中选择 node 的具体会话入星 | 会话 | 管理 CLI、桌面/Web 的会话；新手动成员永久，已有成员保持原属性 |
+ 
+ - 造星/删星/发钥是 broker 机管理员（或持星管理钥的星管理员，`--via tcp:<星>`）的事；agent 会话侧一般只碰 `--connect`/`--rm`。
+ 
+-- `--rm` 只作用于**会话册位**，不碰机器守护（聚合器生命周期独立——永久成员的复活检测靠它活着；退机器走 `serve --stop`）。`--rm × --extend-session` 互斥报错。
+-- 多星：`--connect` 可重复，各星独立册、独立上下线；`--rm` 作用于同命令全部 `--connect`。
++- `--rm` 只作用于新会话册位；`--rm --connect <星>` 与 `--connect <星> --rm` 等效。机器守护独立，退机器走 `serve --stop`；`--rm × --extend-session` 互斥报错。
++- 多星：`--connect` 可重复，各星独立册、独立上下线；`--rm` 对同命令各星的新成员生效。
+ 
+ ## 双模式册：下线与复活
+ 
+-- **永久（默认）**：会话退出 = **下线**（不再是退星）；同 id `/resume` 或重启 = **自动复活上线**，无需任何声明（对账循环数秒内验活重入册）。一步到位形态：`crosschat claude --resume <会话id> --connect <星>`（`--resume` 原生透传）或裸 `crosschat claude --resume <会话id>`（无声明靠对账归队）。
+-- 发给下线成员 → `SESSION_OFFLINE`（绝不静默改投）；逃生口 = 会话段投 `<id 前 8 位>` 点对点。
+-- **临时（`--rm`）**：退出即删册位，之后按名投报 `SESSION_NOT_MEMBER`（从未入册同码）。
++- **启动器选择**：通过 `crosschat claude/codex --connect <星>` 启动，空白窗口先等待；首条输入或确认 `/resume` 后入星。切换 A→B 仅释放本窗口对 A 的声明，其他窗口独立工作。
++- **永久成员**：最后一个有效声明释放后下线、册位保留。恢复时通过上述启动器选择会话，或在 TUI 明确选择；直接运行原生工具、桌面/Web 统一走 TUI，裸 `/resume` 不自动归队。
++- **临时成员（`--rm`）**：最后一个窗口释放后删册位，之后按名投报 `SESSION_NOT_MEMBER`。本次启动的 `--rm` 不改变已有永久成员。
++- **守护重启**：普通断网重连重播当前声明；node 进程重启后永久册位保留，仍活着的启动器重新声明当前选择，手动成员由 TUI 或显式 adopt 恢复。
++- 发给下线成员 → `SESSION_OFFLINE`，请按上述入口恢复；会话段改投 `<id 前 8 位>` 仍要求成员在线。
+ - **册位绑机器**：同 id 换机器 resume 报 `MACHINE_BOUND`——先 `--member-remove` 再在新机入星。
+-- 查册：`crosschat status --stars`——成员行=在线；`下线: ⚪…` 行=在册未在线（等 resume 复活 / `--extend-session` 接任 / `--member-remove` 删）。
++- 查册：`crosschat status --stars`——成员行=在线；`下线: ⚪…` 行=在册未在线，可通过启动器或 TUI 恢复，也可 `--extend-session` 接任或 `--member-remove` 删册。
++
++## TUI 会话管理
++
++- 进入目标星，在成员列表按 `a` 打开可发现会话，选定 node 的完整会话后再按 `a` 确认入星。登记的是会话 ID；原生 GUI 切到其他会话时，在 TUI 另选该会话入星。
++- `Ctrl+D` 删除选定星籍及对应路由，原生进程与历史保留；新手动成员永久，不靠关闭桌面标签推断退星。
++- `e` 按来源能力修改原生名称，没有星内别名。Codex CLI 须可核实同一服务及已加载会话，协议基线 0.163.0；Claude 活窗口同步尚未核实，Codex 桌面协同接口没有改名入口，请在其原生界面改名。不可用时界面说明原因，来源恢复后重新核验。
+ 
+ ## extends：唯一名字转移口
+ 
+@@ -30,13 +39,13 @@
+ 
+ ## adopt / member-remove
+ 
+-- `crosschat serve --connect <星> --adopt <名>`：收编**活的裸会话**入册（永久注册；`status --stars` 诊断行会当场打印这条命令）。
++- `crosschat serve --connect <星> --adopt <名>`：收编活会话入册，或恢复离线册位；新成员永久，已有成员保留永久/临时属性。`status --stars` 诊断行会当场打印对应命令。
+ - `crosschat serve --connect <星> --member-remove <名|id8>`：删册位（自退/管理删；幂等——重复删除成功注明"本不在册"；星内任何机器可执）。
+ 
+ ## 恢复配方（发给 tcp 三段地址出问题时）
+ 
+ - 报 `SESSION_SUPERSEDED` → 对端已换轨：照报错里的接任者地址改投。
+-- 报 `SESSION_OFFLINE` → 对端下线：等同 id 会话 resume 后上线，或走 extends 接任 / id8 点对点。
++- 报 `SESSION_OFFLINE` → 对端下线：请对端通过 crosschat 启动器选择恢复或在 TUI 入星，也可走 extends 接任；id8 寻址仍需成员在线。
+ - 报 `SESSION_NOT_MEMBER` → 名字从未入册/已删：让对端入星或 adopt 收编。
+ - 报 `MACHINE_BOUND` → 对端换机器了：原机 member-remove 后新机重新入星。
+ - **引用续线不看星籍**：`--conversation` 回复走引用路由，成员在不在册都照常互通——只有**主动**三段寻址才吃上述错误。
+diff --git a/src/application/services/owned-process.ts b/src/application/services/owned-process.ts
+index 47f79d2..409ce76 100644
+--- a/src/application/services/owned-process.ts
++++ b/src/application/services/owned-process.ts
+@@ -59,19 +59,53 @@ export async function runOwnedServiceProcess(payload: object, options: OwnedServ
+ }
+ 
+ async function terminateOwnedTree(child: ChildProcess): Promise<void> {
+-  if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
++  if (child.pid === undefined) return;
++  if (process.platform !== 'win32') {
++    await terminateOwnedPosixGroup(child, child.pid);
++    return;
++  }
++  if (child.exitCode !== null || child.signalCode !== null) return;
+   const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+-  if (process.platform === 'win32') {
+-    const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
+-    await new Promise<void>((resolve, reject) => {
+-      execFile(taskkill, ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, (error) => {
+-        if (error === null || child.exitCode !== null || child.signalCode !== null) resolve();
+-        else reject(new OwnedServiceProcessError('cleanup'));
+-      });
++  const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
++  await new Promise<void>((resolve, reject) => {
++    execFile(taskkill, ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, (error) => {
++      if (error === null || child.exitCode !== null || child.signalCode !== null) resolve();
++      else reject(new OwnedServiceProcessError('cleanup'));
+     });
+-  } else {
+-    try { process.kill(-child.pid, 'SIGKILL'); }
+-    catch { if (child.exitCode === null && child.signalCode === null) throw new OwnedServiceProcessError('cleanup'); }
+-  }
++  });
+   await exited;
+ }
++
++function groupExists(groupId: number): boolean {
++  try { process.kill(-groupId, 0); return true; }
++  catch (error) {
++    if (error !== null && typeof error === 'object' && 'code' in error && error.code === 'ESRCH') return false;
++    throw new OwnedServiceProcessError('cleanup');
++  }
++}
++
++async function terminateOwnedPosixGroup(child: ChildProcess, groupId: number): Promise<void> {
++  if (child.exitCode !== null || child.signalCode !== null) {
++    // An exited owner no longer proves that this PGID is still ours. Never send
++    // another kill to it, but do not report a surviving group as released.
++    if (groupExists(groupId)) throw new OwnedServiceProcessError('cleanup');
++    return;
++  }
++  const deadline = Date.now() + 1000;
++  let ownerExited = false;
++  const onExit = () => { ownerExited = true; };
++  child.once('exit', onExit);
++  try {
++    try { process.kill(-groupId, 'SIGKILL'); }
++    catch (error) {
++      if (error === null || typeof error !== 'object' || !('code' in error) || error.code !== 'ESRCH') throw new OwnedServiceProcessError('cleanup');
++    }
++    // The owner exit event can precede the OS reaping its scanner descendants.
++    // Keep the whole cleanup bounded, including a missing owner exit event.
++    while (!ownerExited || groupExists(groupId)) {
++      const remaining = deadline - Date.now();
++      if (remaining <= 0) throw new OwnedServiceProcessError('cleanup');
++      await new Promise<void>((resolve) => setTimeout(resolve, Math.min(10, remaining)));
++    }
++  } finally { child.off('exit', onExit); }
++}
+diff --git a/test/claude-compat-fixture.test.ts b/test/claude-compat-fixture.test.ts
+index a3d3e34..4ad3092 100644
+--- a/test/claude-compat-fixture.test.ts
++++ b/test/claude-compat-fixture.test.ts
+@@ -167,15 +167,15 @@ describe('Claude compatibility runtime profile isolation', () => {
+ });
+ 
+ describe('Claude compatibility workflow trust boundary', () => {
+-  it('keeps real upstream execution on a read-only Windows job and issue reporting on a separate trusted job', async () => {
+-    const workflow = await readFile(new URL('../.github/workflows/claude-compat.yml', import.meta.url), 'utf8');
++  it.each(['\n', '\r\n'])('keeps real upstream execution on a read-only Windows job and issue reporting on a separate trusted job with %j line endings', async (lineEnding) => {
++    const workflow = (await readFile(new URL('../.github/workflows/claude-compat.yml', import.meta.url), 'utf8')).replace(/\r?\n/g, lineEnding);
+     const probe = workflow.split('\n  probe:')[1]?.split('\n  report:')[0];
+     const report = workflow.split('\n  report:')[1];
+     expect(probe).toBeTruthy(); expect(report).toBeTruthy();
+     expect(workflow).toMatch(/^ {2}schedule:/m); expect(workflow).toMatch(/^ {2}workflow_dispatch:/m);
+     expect(workflow).not.toMatch(/pull_request|workflow_run|\bsecrets\./);
+     expect(probe).toMatch(/runs-on: windows-latest/);
+-    expect(probe).toMatch(/permissions:\n {6}contents: read/);
++    expect(probe).toMatch(/permissions:\r?\n {6}contents: read/);
+     expect(probe).not.toMatch(/issues: write|contents: write|matrix:|GITHUB_TOKEN|GH_TOKEN/);
+     expect(probe).toContain('node scripts/claude-compat-ci.mjs');
+     expect(probe).toMatch(/persist-credentials: false/);
+diff --git a/test/core-code-standards.test.ts b/test/core-code-standards.test.ts
+index f191830..07c05f4 100644
+--- a/test/core-code-standards.test.ts
++++ b/test/core-code-standards.test.ts
+@@ -5,6 +5,7 @@ describe('progressive typed lint rules', () => {
+   const lint = new ESLint();
+   const filePath = 'src/application/sessions/catalog.ts';
+ 
++  // The first typed lint builds a TypeScript program on cold CI runners.
+   it('rejects floating promises, async void callbacks and value imports used only as types', async () => {
+     const [result] = await lint.lintText([
+       "import { Session } from './model.js';",
+@@ -19,7 +20,7 @@ describe('progressive typed lint rules', () => {
+       '@typescript-eslint/no-misused-promises',
+       '@typescript-eslint/consistent-type-imports',
+     ]));
+-  });
++  }, 15_000);
+ 
+   it('accepts type-only imports and deliberately handled asynchronous work', async () => {
+     const [result] = await lint.lintText([
+diff --git a/test/helpers/native-claude-fixture.mjs b/test/helpers/native-claude-fixture.mjs
+new file mode 100644
+index 0000000..8669e42
+--- /dev/null
++++ b/test/helpers/native-claude-fixture.mjs
+@@ -0,0 +1,160 @@
++import { Buffer } from 'node:buffer';
++import { spawn } from 'node:child_process';
++import { mkdir, writeFile } from 'node:fs/promises';
++import { createServer } from 'node:http';
++import { dirname, isAbsolute, join, resolve } from 'node:path';
++import process from 'node:process';
++import { clearTimeout, setTimeout } from 'node:timers';
++import { setTimeout as delay } from 'node:timers/promises';
++import { fileURLToPath, URL } from 'node:url';
++
++const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
++const bounded = (value) => value.slice(-128000);
++const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
++
++/** Isolate explicit native acceptance from personal profiles, credentials and remote models. */
++export async function prepareClaudeProfile(root, modelURL) {
++  let endpoint;
++  try { endpoint = new URL(modelURL); } catch { /* Rejected before writes. */ }
++  if (!endpoint || endpoint.protocol !== 'http:' || endpoint.hostname !== '127.0.0.1' || !endpoint.port || endpoint.pathname !== '/'
++    || endpoint.search || endpoint.hash || endpoint.username || endpoint.password) {
++    throw Object.assign(new Error('Claude fixture requires an exact loopback model endpoint'), { code: 'INVALID_MODEL_ENDPOINT' });
++  }
++  if (!isAbsolute(root)) throw new Error('Claude fixture root must be absolute');
++  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => /^(PATH|PATHEXT|SystemRoot|WINDIR|COMSPEC|LANG|LC_.*|TERM|COLORTERM|PROCESSOR_ARCHITECTURE|PROCESSOR_IDENTIFIER|NUMBER_OF_PROCESSORS|ProgramFiles.*|SYSTEMDRIVE|PROGRAMDATA|OS)$/i.test(name)));
++  const profile = join(root, 'profile');
++  Object.assign(env, {
++    HOME: profile, USERPROFILE: profile, CLAUDE_CONFIG_DIR: join(profile, '.claude'),
++    APPDATA: join(profile, 'appdata'), LOCALAPPDATA: join(profile, 'localappdata'),
++    XDG_CONFIG_HOME: join(profile, 'config'), XDG_CACHE_HOME: join(profile, 'cache'), XDG_DATA_HOME: join(profile, 'data'), XDG_STATE_HOME: join(profile, 'state'),
++    TEMP: join(root, 'tmp'), TMP: join(root, 'tmp'), TMPDIR: join(root, 'tmp'), CLAUDE_CODE_TMPDIR: join(root, 'tmp'),
++    ANTHROPIC_BASE_URL: modelURL, ANTHROPIC_API_KEY: 'mock-key', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
++    CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL: '1', CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1',
++    CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION: 'false', DISABLE_AUTOUPDATER: '1', DISABLE_AUTO_COMPACT: '1',
++    GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: join(root, 'gitconfig'),
++    CODEX_HOME: join(profile, '.codex'), CROSSCHAT_CODEX_BIN: join(root, 'codex-not-installed.exe'),
++    NO_COLOR: '1', CI: '1',
++  });
++  if (process.platform === 'win32') { env.HOMEDRIVE = profile.slice(0, 2); env.HOMEPATH = profile.slice(2); }
++  const directories = await Promise.allSettled([profile, env.CLAUDE_CONFIG_DIR, env.APPDATA, env.LOCALAPPDATA, env.TEMP, env.XDG_CONFIG_HOME, env.XDG_CACHE_HOME,
++    env.XDG_DATA_HOME, env.XDG_STATE_HOME, env.CODEX_HOME, join(root, 'workspace')].map(async (directory) => mkdir(directory, { recursive: true })));
++  const failure = directories.find((result) => result.status === 'rejected');
++  if (failure) throw failure.reason;
++  await writeFile(env.GIT_CONFIG_GLOBAL, '');
++  return env;
++}
++
++export function runClaudeCommand(binary, args, options = {}) {
++  return new Promise((done, reject) => {
++    const child = spawn(binary, args, { cwd: options.cwd ?? repositoryRoot, env: options.env, windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
++    let stdout = ''; let stderr = ''; let timedOut = false;
++    const timer = setTimeout(() => { timedOut = true; child.kill(); }, options.timeout ?? 30000);
++    child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
++    child.stdout.on('data', (chunk) => { stdout = bounded(stdout + chunk); });
++    child.stderr.on('data', (chunk) => { stderr = bounded(stderr + chunk); });
++    child.once('error', (error) => { clearTimeout(timer); reject(error); });
++    child.once('close', (code, signal) => { clearTimeout(timer); done({ code, signal, timedOut, stdout, stderr, pid: child.pid }); });
++    child.stdin.end(options.input ?? '');
++  });
++}
++
++function modelMessage(result, index, model) {
++  if (!isRecord(result)) throw new Error('Invalid model script result');
++  const tool = isRecord(result.tool) ? result.tool : undefined;
++  if (tool) {
++    if (typeof tool.name !== 'string' || !tool.name || !isRecord(tool.input) || (tool.id !== undefined && (typeof tool.id !== 'string' || !tool.id))) throw new Error('Invalid model script result');
++  } else if (typeof result.text !== 'string' || result.tool !== undefined) throw new Error('Invalid model script result');
++  return {
++    id: `crosschat-claude-fixture-${index}`, type: 'message', role: 'assistant', model,
++    content: [tool ? { type: 'tool_use', id: tool.id ?? `fixture-bash-${index}`, name: tool.name, input: tool.input } : { type: 'text', text: result.text }],
++    stop_reason: tool ? 'tool_use' : 'end_turn', stop_sequence: null,
++    usage: { input_tokens: 10, output_tokens: 10 },
++  };
++}
++
++function messageStream(message) {
++  const content = message.content[0];
++  const tool = content.type === 'tool_use';
++  const frames = [
++    { type: 'message_start', message: { ...message, content: [], stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } },
++    { type: 'content_block_start', index: 0, content_block: tool ? { ...content, input: {} } : { type: 'text', text: '' } },
++    { type: 'content_block_delta', index: 0, delta: tool ? { type: 'input_json_delta', partial_json: JSON.stringify(content.input) } : { type: 'text_delta', text: content.text } },
++    { type: 'content_block_stop', index: 0 },
++    { type: 'message_delta', delta: { stop_reason: message.stop_reason, stop_sequence: null }, usage: { output_tokens: message.usage.output_tokens } },
++    { type: 'message_stop' },
++  ];
++  return frames.map((frame) => `event: ${frame.type}\ndata: ${JSON.stringify(frame)}\n\n`).join('');
++}
++
++/** Script model output only; native acceptance retains its own sessions and actual tool execution. */
++export async function createClaudeMockModel(respond, options = {}) {
++  if (typeof respond !== 'function') throw new TypeError('A model response function is required');
++  const maxRequestBytes = options.maxRequestBytes ?? 2 * 1024 * 1024;
++  if (!Number.isSafeInteger(maxRequestBytes) || maxRequestBytes < 1 || maxRequestBytes > 16 * 1024 * 1024) throw new RangeError('Invalid model request byte limit');
++  const requests = [];
++  const errors = [];
++  const pending = new Set();
++  let closing;
++  const sendError = (response, status, code) => {
++    if (response.destroyed || response.headersSent) return;
++    response.writeHead(status, { 'content-type': 'application/json' });
++    response.end(JSON.stringify({ type: 'error', error: { type: 'crosschat_fixture_error', message: code } }));
++  };
++  const server = createServer((request, response) => {
++    const controller = new globalThis.AbortController();
++    pending.add(controller);
++    response.once('close', () => { controller.abort(); pending.delete(controller); });
++    void (async () => {
++      const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
++      if (request.method === 'HEAD' && pathname === '/api/hello') { response.writeHead(204); response.end(); return; }
++      if (request.method !== 'POST' || !['/v1/messages', '/v1/messages/count_tokens'].includes(pathname)) { sendError(response, 404, 'UNEXPECTED_MODEL_ENDPOINT'); request.resume(); return; }
++      if (request.headers['x-api-key'] !== 'mock-key') { sendError(response, 401, 'INVALID_FIXTURE_KEY'); request.resume(); return; }
++      let size = 0;
++      const chunks = [];
++      for await (const chunk of request) {
++        size += chunk.length;
++        if (size > maxRequestBytes) { sendError(response, 413, 'MODEL_REQUEST_TOO_LARGE'); return; }
++        chunks.push(chunk);
++      }
++      let body;
++      try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
++      catch { sendError(response, 400, 'INVALID_JSON'); return; }
++      if (!isRecord(body) || typeof body.model !== 'string' || !body.model || !Array.isArray(body.messages) || (body.stream !== undefined && typeof body.stream !== 'boolean')) { sendError(response, 400, 'INVALID_MESSAGES_REQUEST'); return; }
++      if (pathname === '/v1/messages/count_tokens') {
++        response.writeHead(200, { 'content-type': 'application/json' });
++        response.end(JSON.stringify({ input_tokens: Math.max(1, Math.ceil(size / 4)) }));
++        return;
++      }
++      const index = requests.length;
++      requests.push(body);
++      const result = await respond(body, { index, signal: controller.signal });
++      if (response.destroyed || controller.signal.aborted) return;
++      const message = modelMessage(result, index, body.model);
++      const payload = body.stream ? messageStream(message) : JSON.stringify(message);
++      response.writeHead(200, { 'content-type': body.stream ? 'text/event-stream; charset=utf-8' : 'application/json', 'cache-control': 'no-cache' });
++      response.end(payload);
++    })().catch(() => {
++      if (controller.signal.aborted) return;
++      errors.push('MODEL_SCRIPT_FAILED');
++      sendError(response, 500, 'MODEL_SCRIPT_FAILED');
++    });
++  });
++  await new Promise((done, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', done); });
++  const address = server.address();
++  if (!address || typeof address === 'string') throw new Error('Claude model fixture did not bind loopback');
++  return {
++    url: `http://127.0.0.1:${address.port}`, requests, errors,
++    async waitForRequests(count, timeout = 10000) {
++      const deadline = Date.now() + timeout;
++      while (requests.length < count && Date.now() < deadline && !closing) await delay(20);
++      if (requests.length < count) throw new Error(`Expected ${count} Claude model requests, observed ${requests.length}`);
++    },
++    close() {
++      return closing ??= new Promise((done, reject) => {
++        for (const controller of pending) controller.abort();
++        server.close((error) => error ? reject(error) : done());
++        server.closeAllConnections();
++      });
++    },
++  };
++}
+diff --git a/test/local-service-owned-process.test.ts b/test/local-service-owned-process.test.ts
+new file mode 100644
+index 0000000..2a6700d
+--- /dev/null
++++ b/test/local-service-owned-process.test.ts
+@@ -0,0 +1,131 @@
++import { ChildProcess } from 'node:child_process';
++import { getEventListeners } from 'node:events';
++import process from 'node:process';
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
++import { runOwnedServiceProcess } from '../src/application/services/owned-process.js';
++
++const originalPlatform = process.platform;
++const groupId = 424242;
++
++function missingGroup(): NodeJS.ErrnoException {
++  return Object.assign(new Error('No such process group'), { code: 'ESRCH' });
++}
++
++function ownedFixture(options: { exitDelay?: number; groupError?: string } = {}) {
++  const child = new ChildProcess();
++  Object.defineProperty(child, 'pid', { value: groupId });
++  child.send = vi.fn(() => true);
++  let groupPresent = true;
++  const exit = () => {
++    child.signalCode = 'SIGKILL';
++    child.emit('exit', null, 'SIGKILL');
++  };
++  const kill = vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
++    if (pid !== -groupId) throw new Error('The owner must target only its fixed process group');
++    if (signal === 'SIGKILL') {
++      if (options.exitDelay !== undefined) setTimeout(exit, options.exitDelay);
++      return true;
++    }
++    if (signal !== 0) throw new Error('Unexpected cleanup signal');
++    if (options.groupError !== undefined) throw Object.assign(new Error('Cannot inspect process group'), { code: options.groupError });
++    if (!groupPresent) throw missingGroup();
++    return true;
++  });
++  const signal = new AbortController().signal;
++  const run = () => runOwnedServiceProcess({}, {
++    entry: new URL('file:///isolated/owned-process.js'), signal, timeoutMs: 5000, createProcess: () => child,
++  });
++  function expectReleasedListeners() {
++    for (const event of ['message', 'error', 'exit']) expect(child.listenerCount(event)).toBe(0);
++    expect(getEventListeners(signal, 'abort')).toHaveLength(0);
++    expect(vi.getTimerCount()).toBe(0);
++  }
++  return { child, kill, run, exit, removeGroup: () => { groupPresent = false; }, expectReleasedListeners };
++}
++
++beforeEach(() => {
++  // Exercise the POSIX OS boundary on every host without starting real processes
++  // or changing the existing real fork/scanner integration assertions.
++  Object.defineProperty(process, 'platform', { value: 'darwin' });
++  vi.useFakeTimers();
++});
++afterEach(() => {
++  vi.restoreAllMocks();
++  vi.useRealTimers();
++  Object.defineProperty(process, 'platform', { value: originalPlatform });
++});
++
++describe('owned POSIX process group completion', () => {
++  it('keeps a completed request pending until the helper has exited and its scanner group has disappeared', async () => {
++    const fixture = ownedFixture({ exitDelay: 10 });
++    let settled = false;
++    const pending = fixture.run().then((value) => { settled = true; return value; });
++    fixture.child.emit('message', { state: 'ready' });
++    await vi.advanceTimersByTimeAsync(30);
++    expect(settled).toBe(false);
++    fixture.removeGroup();
++    await vi.advanceTimersByTimeAsync(30);
++    expect(await pending).toEqual({ state: 'ready' });
++    expect(fixture.kill.mock.calls.filter(([, signal]) => signal === 'SIGKILL')).toHaveLength(1);
++    fixture.expectReleasedListeners();
++  });
++
++  it('reports bounded cleanup failure for a persistent scanner group without repeatedly sending kill signals', async () => {
++    const fixture = ownedFixture({ exitDelay: 10 });
++    const outcome = fixture.run().catch((error: unknown) => error);
++    fixture.child.emit('message', { state: 'ready' });
++    await vi.advanceTimersByTimeAsync(1100);
++    expect(await outcome).toMatchObject({ code: 'cleanup' });
++    expect(fixture.kill.mock.calls.filter(([, signal]) => signal === 'SIGKILL')).toHaveLength(1);
++    fixture.expectReleasedListeners();
++  });
++
++  it.each(['EPERM', 'EIO'])('treats %s during group verification as cleanup failure rather than disappearance', async (groupError) => {
++    const fixture = ownedFixture({ exitDelay: 10, groupError });
++    const outcome = fixture.run().catch((error: unknown) => error);
++    fixture.child.emit('message', { state: 'ready' });
++    await vi.advanceTimersByTimeAsync(1100);
++    expect(await outcome).toMatchObject({ code: 'cleanup' });
++    expect(fixture.kill.mock.calls.filter(([, signal]) => signal === 'SIGKILL')).toHaveLength(1);
++    fixture.expectReleasedListeners();
++  });
++
++  it('bounds waiting for a missing helper exit event and releases its temporary listener', async () => {
++    const fixture = ownedFixture();
++    let settled = false;
++    const outcome = fixture.run().catch((error: unknown) => error).then((value) => { settled = true; return value; });
++    fixture.child.emit('message', { state: 'ready' });
++    fixture.removeGroup();
++    try {
++      await vi.advanceTimersByTimeAsync(1100);
++      expect(settled).toBe(true);
++      expect(await outcome).toMatchObject({ code: 'cleanup' });
++      fixture.expectReleasedListeners();
++    } finally {
++      // Release the pre-fix implementation after the RED assertion, so the
++      // reproducer itself does not retain a deliberately unresolved promise.
++      fixture.exit();
++      await outcome;
++    }
++  });
++
++  it('does not send another kill after an unreported helper exit and reports a still-visible group as incomplete cleanup', async () => {
++    const fixture = ownedFixture();
++    const outcome = fixture.run().catch((error: unknown) => error);
++    fixture.exit();
++    expect(await outcome).toMatchObject({ code: 'cleanup' });
++    expect(fixture.kill.mock.calls.filter(([, signal]) => signal === 'SIGKILL')).toHaveLength(0);
++    fixture.expectReleasedListeners();
++  });
++
++  it('retains the missing-receipt error when an exited helper group is gone and leaves no exit listener', async () => {
++    const fixture = ownedFixture();
++    const outcome = fixture.run().catch((error: unknown) => error);
++    fixture.removeGroup();
++    fixture.exit();
++    expect(await outcome).toMatchObject({ code: 'exit' });
++    expect(fixture.kill).toHaveBeenCalledWith(-groupId, 0);
++    expect(fixture.kill.mock.calls.filter(([, signal]) => signal === 'SIGKILL')).toHaveLength(0);
++    fixture.expectReleasedListeners();
++  });
++});
+diff --git a/test/maintenance-boundaries.test.ts b/test/maintenance-boundaries.test.ts
+index 7eddb18..0116688 100644
+--- a/test/maintenance-boundaries.test.ts
++++ b/test/maintenance-boundaries.test.ts
+@@ -1,21 +1,42 @@
+-import { linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
++import { linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+ import { tmpdir } from 'node:os';
+ import { join } from 'node:path';
+ import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
+ import { executeMaintenance, previewMaintenance } from '../src/application/maintenance/operations.js';
+ 
+-const failures = vi.hoisted(() => ({ denied: new Set<string>(), crowded: '', reads: 0, closed: 0 }));
++const failures = vi.hoisted(() => {
++  let virtualStat: import('node:fs').BigIntStats | undefined;
++  return { denied: new Set<string>(), crowded: '', reads: 0, closed: 0,
++    virtualStat, descriptors: new Set<number>(), nextDescriptor: 1_000_000, opened: 0, fileClosed: 0 };
++});
+ vi.mock('node:fs', async (importOriginal) => {
+   const actual = await importOriginal<typeof import('node:fs')>();
++  const crowdedFile = (path: string) => failures.crowded !== '' && path.startsWith(join(failures.crowded, 'virtual-'));
++  const virtualStat = () => {
++    if (failures.virtualStat === undefined) throw new Error('Crowded fixture metadata was not initialized');
++    return failures.virtualStat;
++  };
+   return { ...actual,
++    lstatSync: (...args: Parameters<typeof actual.lstatSync>) => crowdedFile(String(args[0])) ? virtualStat() : actual.lstatSync(...args),
+     openSync: (...args: Parameters<typeof actual.openSync>) => {
+       if (failures.denied.has(String(args[0]))) throw Object.assign(new Error('SECRET source failure'), { code: 'EACCES' });
++      if (crowdedFile(String(args[0]))) {
++        if (args[1] !== 'r') throw new Error('Crowded fixture only supports read-only files');
++        const descriptor = failures.nextDescriptor++;
++        failures.descriptors.add(descriptor); failures.opened++;
++        return descriptor;
++      }
+       return actual.openSync(...args);
+     },
++    fstatSync: (...args: Parameters<typeof actual.fstatSync>) => failures.descriptors.has(args[0]) ? virtualStat() : actual.fstatSync(...args),
++    closeSync: (descriptor: number) => {
++      if (failures.descriptors.delete(descriptor)) { failures.fileClosed++; return; }
++      actual.closeSync(descriptor);
++    },
+     opendirSync: (...args: Parameters<typeof actual.opendirSync>) => {
+       if (failures.denied.has(String(args[0]))) throw Object.assign(new Error('SECRET directory failure'), { code: 'EACCES' });
+       if (String(args[0]) === failures.crowded) return {
+-        readSync: () => ++failures.reads <= 20_000 ? { name: 'SKILL.md' } : null,
++        readSync: () => ++failures.reads <= 20_000 ? { name: `virtual-${failures.reads}.md` } : null,
+         closeSync: () => { failures.closed++; },
+       };
+       return actual.opendirSync(...args);
+@@ -25,7 +46,10 @@ vi.mock('node:fs', async (importOriginal) => {
+ 
+ const root = mkdtempSync(join(tmpdir(), 'crosschat-maintenance-boundaries-'));
+ const NOW = 1_800_000_000_000;
+-afterEach(() => { failures.denied.clear(); failures.crowded = ''; failures.reads = 0; failures.closed = 0; });
++afterEach(() => {
++  failures.denied.clear(); failures.crowded = ''; failures.reads = 0; failures.closed = 0;
++  failures.virtualStat = undefined; failures.descriptors.clear(); failures.nextDescriptor = 1_000_000; failures.opened = 0; failures.fileClosed = 0;
++});
+ afterAll(() => rmSync(root, { recursive: true, force: true }));
+ function fixture() {
+   const home = mkdtempSync(join(root, 'home-'));
+@@ -105,9 +129,15 @@ describe('TUI maintenance source and copy boundaries', () => {
+     expect(previewMaintenance('install-skills', denied.options).enabled).toBe(false);
+     failures.denied.clear();
+     const crowded = fixture();
++    // Keep the inventory-boundary test independent of 50,000 repeated OS file probes.
++    // Ordinary source, permission and link cases above retain their real filesystem boundaries.
++    failures.virtualStat = lstatSync(join(crowded.sourceDir, 'SKILL.md'), { bigint: true });
+     failures.crowded = crowded.sourceDir;
+     expect(previewMaintenance('install-skills', crowded.options).enabled).toBe(false);
+-    expect(failures.reads).toBeLessThanOrEqual(10_001);
++    expect(failures.reads).toBe(10_001);
++    expect(failures.opened).toBe(10_000);
++    expect(failures.fileClosed).toBe(10_000);
++    expect(failures.descriptors.size).toBe(0);
+     expect(failures.closed).toBe(1);
+   }, 15_000);
+ });
+diff --git a/test/revocation-pause.test.ts b/test/revocation-pause.test.ts
+index a1be0a8..681c4ec 100644
+--- a/test/revocation-pause.test.ts
++++ b/test/revocation-pause.test.ts
+@@ -1,4 +1,4 @@
+-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
++import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+ import fs from 'node:fs';
+ import { randomUUID } from 'node:crypto';
+ import { EventEmitter } from 'node:events';
+@@ -31,12 +31,20 @@ afterEach(async () => {
+ });
+ 
+ function temporaryHome(): string {
+-  const home = mkdtempSync(join(tmpdir(), 'crosschat-revocation-'));
++  // Keep both star labels intact within macOS's Unix socket path limit.
++  const fixtureTmpDir = process.platform === 'darwin' ? realpathSync('/tmp') : tmpdir();
++  const home = mkdtempSync(join(fixtureTmpDir, 'crosschat-revocation-'));
+   cleanup.push(() => rmSync(home, { recursive: true, force: true }));
+   mkdirSync(join(home, 'tcp'));
+   return home;
+ }
+ 
++function assertAttachPathFits(path: string): void {
++  if (process.platform === 'win32') return;
++  expect(Buffer.byteLength(path), `Fixture attach path exceeds the Unix socket limit: ${path}`)
++    .toBeLessThanOrEqual(process.platform === 'darwin' ? 103 : 107);
++}
++
+ /** Controlled broker boundary: no real credentials, providers or native children. */
+ async function controlledBroker(rejectNodes = false, options: { starId?: string; name?: string; revokeBeforeConnected?: boolean } = {}) {
+   const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+@@ -87,6 +95,7 @@ function fakeSendDeps(home: string): SendDeps {
+ }
+ 
+ function nodeClient(home: string, entry: BrokerEntry, logs: string[] = [], extra: Partial<NodeClientDeps> = {}): NodeClient {
++  assertAttachPathFits(attachPipePath(entry, join(home, 'tcp'), extra.attachLabel));
+   const client = new NodeClient({
+     config: { entries: [{ ...entry }] },
+     configFile: join(home, 'tcp', 'node.json'),
+@@ -165,6 +174,7 @@ describe('explicit credential revocation pauses this star', () => {
+   it('settles an attach request when immediate revocation closes IPC before the reply', async () => {
+     const home = temporaryHome();
+     const path = attachPipePath({ host: 'fixture', port: 9, key: NODE_KEY, name: `${NAME_A}-close` }, join(home, 'tcp'));
++    assertAttachPathFits(path);
+     const server = createServer((socket) => socket.once('data', () => socket.destroy()));
+     await new Promise<void>((resolve, reject) => {
+       server.once('error', reject);
+diff --git a/test/serve-sessions.test.ts b/test/serve-sessions.test.ts
+index db13d9b..a552ef9 100644
+--- a/test/serve-sessions.test.ts
++++ b/test/serve-sessions.test.ts
+@@ -2,10 +2,12 @@
+  * 018 批一：proto:3 会话级星成员——协议帧/broker 聚合/聚合器 attach 与活性。
+  * 夹具用真实平台形状：win 带杠 MachineGuid、linux 32-hex（F0 归一互认）。
+  */
+-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
++import { Buffer } from 'node:buffer';
++import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+ import { createConnection, type Socket } from 'node:net';
+ import { tmpdir } from 'node:os';
+ import { join } from 'node:path';
++import process from 'node:process';
+ import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
+ import WebSocket, { type RawData, WebSocketServer } from 'ws';
+ import { Broker, type BrokerDeps } from '../src/serve/broker.js';
+@@ -24,7 +26,8 @@ import { FileInbox } from '../src/serve/file-channel.js';
+ import type { SendDeps } from '../src/commands/send.js';
+ import type { MemberProvider } from '../src/application/members/index.js';
+ 
+-const root = mkdtempSync(join(tmpdir(), 'crosschat-serve-sessions-'));
++const fixtureTmpDir = process.platform === 'darwin' ? realpathSync('/tmp') : tmpdir();
++const root = mkdtempSync(join(fixtureTmpDir, 'crosschat-serve-sessions-'));
+ afterAll(() => rmSync(root, { recursive: true, force: true }));
+ 
+ // 真实平台形态：Windows MachineGuid 带杠 UUID / Linux /etc/machine-id 32-hex
+@@ -474,9 +477,14 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
+       { key: key('s'), machineName: 'sender-host' },
+       { key: key('n'), machineId: 'NODE-MID', machineName: 'node-host' },
+     ]);
+-    const dir = mkdtempSync(join(root, `nd-${label}-`));
++    const dir = mkdtempSync(join(root, 'nd-'));
+     const inbox = mkdtempSync(join(root, 'node-'));
+     const entry: BrokerEntry = { host: '127.0.0.1', port: Number(new URL(harness.url).port), name: 'broker-alias', key: key('n') };
++    const attachPath = attachPipePath(entry, dir, label);
++    if (process.platform !== 'win32') {
++      expect(Buffer.byteLength(attachPath), `Fixture attach path exceeds the Unix socket limit: ${attachPath}`)
++        .toBeLessThanOrEqual(process.platform === 'darwin' ? 103 : 107);
++    }
+     const capture = fakeDeps(depsOpts);
+     const client = new NodeClient({
+       config: { entries: [entry], showName: 'node-host' },
+@@ -496,7 +504,7 @@ describe('018 NodeClient 聚合器：attach IPC / 重播 / 双活性', () => {
+     nodeClients.push(client);
+     void client.run();
+     await client.waitForState('online');
+-    const attach = await attachTalk(attachPipePath(entry, dir, label));
++    const attach = await attachTalk(attachPath);
+     return { harness, client, capture, attach, entry, dir };
+   }
+ 
+diff --git a/test/session-star.test.ts b/test/session-star.test.ts
+index a309f57..26923c8 100644
+--- a/test/session-star.test.ts
++++ b/test/session-star.test.ts
+@@ -4,7 +4,7 @@
+  * 路径与幂等、status 星会话视图与诊断行、9b 命令面告警、改名跟随。
+  * 夹具真实平台形状：win 带杠 MachineGuid、linux 32-hex（F0 归一互认）。
+  */
+-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
++import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+ import { tmpdir } from 'node:os';
+ import { join } from 'node:path';
+ import { afterAll, afterEach, describe, expect, it } from 'vitest';
+@@ -34,7 +34,9 @@ import { runStatus, type StatusDeps } from '../src/commands/status.js';
+ import { runClaudeWrapper } from '../src/commands/claude-wrapper.js';
+ import { MultichatError } from '../src/errors.js';
+ 
+-const root = mkdtempSync(join(tmpdir(), 'crosschat-session-star-'));
++// macOS's long per-user tmpdir can truncate two distinct Unix socket paths to one.
++const fixtureTmpDir = process.platform === 'darwin' ? realpathSync('/tmp') : tmpdir();
++const root = mkdtempSync(join(fixtureTmpDir, 'crosschat-session-star-'));
+ afterAll(() => rmSync(root, { recursive: true, force: true }));
+ 
+ // 真实平台形状：Windows MachineGuid 带杠 UUID / Linux /etc/machine-id 32-hex
+@@ -216,8 +218,14 @@ async function startStarStar(
+     { key: key('s'), machineName: 'sender-host' },
+     { key: key('n'), machineId: mid, machineName: opts.machineName ?? 'node-host' },
+   ]);
+-  const baseDir = opts.baseDir ?? mkdtempSync(join(root, `base-${label}-`));
++  // The label already appears in the socket filename; repeating it can exceed macOS's limit.
++  const baseDir = opts.baseDir ?? mkdtempSync(join(root, 'base-'));
+   const entry: BrokerEntry = { host: '127.0.0.1', port: Number(new URL(harness.url).port), name: label, key: key('n') };
++  if (process.platform !== 'win32') {
++    const path = attachPipePath(entry, join(baseDir, 'tcp'));
++    expect(Buffer.byteLength(path), `Fixture attach path exceeds the Unix socket limit: ${path}`)
++      .toBeLessThanOrEqual(process.platform === 'darwin' ? 103 : 107);
++  }
+   mkdirSync(join(baseDir, 'tcp'), { recursive: true });
+   writeFileSync(
+     join(baseDir, 'tcp', 'node.json'),
+@@ -756,33 +764,36 @@ describe('018 批二：启动器入星链路', () => {
+       // 基线=旧会话；spawn 后新会话 sess-multi 出现（夹具曾把两者写反，靠旗标强塞名侥幸过——现按差分语义修正）
+       shA.state.claude = [{ sessionId: 'sess-base', name: 'x', updatedAt: 1 }];
+       const joiner = new StarJoiner({ deps, side: 'claude', connects: ['sl-ma', 'sl-mb'] });
+-      await joiner.begin();
+-      shA.state.claude = [
+-        { sessionId: 'sess-base', name: 'x', updatedAt: 1 },
+-        { sessionId: 'sess-multi', name: 'boss', updatedAt: 99 },
+-      ];
+-      shB.state.claude = shA.state.claude; // 同一物理机的同一份扫描（两星夹具共享视图）
+-      const probe = async (sh: StarHarness, id: string): Promise<Frame> => {
+-        const sender = await senderOn(sh.harness.url, key('s'));
+-        sender.send({ tool: 'claude', op: 'send', id, targetMachine: 'win-box:boss', body: 'x' });
+-        return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
+-      };
+-      let okA: Frame | undefined;
+-      let okB: Frame | undefined;
+-      for (let i = 0; i < 50; i++) {
+-        if (okA === undefined) {
+-          const r = await probe(shA, `ma${i}`);
+-          if (r.op === 'receipt' && r.status === 'delivered') okA = r;
+-        }
+-        if (okB === undefined) {
+-          const r = await probe(shB, `mb${i}`);
+-          if (r.op === 'receipt' && r.status === 'delivered') okB = r;
++      try {
++        await joiner.begin();
++        shA.state.claude = [
++          { sessionId: 'sess-base', name: 'x', updatedAt: 1 },
++          { sessionId: 'sess-multi', name: 'boss', updatedAt: 99 },
++        ];
++        shB.state.claude = shA.state.claude; // 同一物理机的同一份扫描（两星夹具共享视图）
++        const probe = async (sh: StarHarness, id: string): Promise<Frame> => {
++          const sender = await senderOn(sh.harness.url, key('s'));
++          sender.send({ tool: 'claude', op: 'send', id, targetMachine: 'win-box:boss', body: 'x' });
++          return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
++        };
++        let okA: Frame | undefined;
++        let okB: Frame | undefined;
++        for (let i = 0; i < 50; i++) {
++          if (okA === undefined) {
++            const r = await probe(shA, `ma${i}`);
++            if (r.op === 'receipt' && r.status === 'delivered') okA = r;
++          }
++          if (okB === undefined) {
++            const r = await probe(shB, `mb${i}`);
++            if (r.op === 'receipt' && r.status === 'delivered') okB = r;
++          }
++          if (okA !== undefined && okB !== undefined) break;
++          if (i === 49) throw new Error('双星 attach 未全部生效');
++          await new Promise((resolve) => setTimeout(resolve, 300));
+         }
+-        if (okA !== undefined && okB !== undefined) break;
+-        if (i === 49) throw new Error('双星 attach 未全部生效');
+-        await new Promise((resolve) => setTimeout(resolve, 300));
++      } finally {
++        await joiner.stop();
+       }
+-      await joiner.stop();
+       expect(out).toEqual([]);
+       expect(err).toEqual([]);
+     },
+diff --git a/test/tcp-configuration-management.test.ts b/test/tcp-configuration-management.test.ts
+index 83071c6..0f0e3aa 100644
+--- a/test/tcp-configuration-management.test.ts
++++ b/test/tcp-configuration-management.test.ts
+@@ -1,4 +1,4 @@
+-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
++import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+ import { tmpdir } from 'node:os';
+ import { join } from 'node:path';
+ import { afterEach, describe, expect, it } from 'vitest';
+@@ -9,7 +9,7 @@ afterEach(async () => { for (const directory of cleanup.splice(0)) await rm(dire
+ const first = { host: 'first.invalid', port: 7260, starId: 'first-star', key: 'PRIVATE-NODE-KEY', adminKey: 'PRIVATE-ADMIN-KEY', showName: 'per-star', keep: { entry: true } };
+ const second = { host: 'second.invalid', port: 7261, starId: 'second-star', key: 'OTHER-PRIVATE-KEY' };
+ async function fixture() {
+-  const home = await mkdtemp(join(tmpdir(), 'crosschat-tcp-config-'));
++  const home = await realpath(await mkdtemp(join(tmpdir(), 'crosschat-tcp-config-')));
+   cleanup.push(home);
+   const baseDir = join(home, '.crosschat');
+   const directory = join(baseDir, 'tcp');
+diff --git a/test/tcp-configuration.test.ts b/test/tcp-configuration.test.ts
+index a34c0a5..21de373 100644
+--- a/test/tcp-configuration.test.ts
++++ b/test/tcp-configuration.test.ts
+@@ -1,4 +1,4 @@
+-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile, link, symlink } from 'node:fs/promises';
++import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile, link, symlink } from 'node:fs/promises';
+ import { tmpdir } from 'node:os';
+ import { join } from 'node:path';
+ import { afterEach, describe, expect, it } from 'vitest';
+@@ -13,7 +13,8 @@ const adminKey = 'b'.repeat(64);
+ const entry = { host: 'broker.example', port: 7260, starId: 'imported-star', name: 'imported', key: memberKey, adminKey, custom: { keep: 'new entry' } };
+ const content = JSON.stringify({ brokers: [entry], showName: 'receiver', customTop: { keep: 'import' } });
+ async function fixture(original?: string) {
+-  const home = await mkdtemp(join(tmpdir(), 'crosschat-tcp-import-'));
++  // The fixture itself is canonical; attack cases add their own linked paths.
++  const home = await realpath(await mkdtemp(join(tmpdir(), 'crosschat-tcp-import-')));
+   cleanups.push(() => rm(home, { recursive: true, force: true }));
+   const baseDir = join(home, '.crosschat');
+   const directory = join(baseDir, 'tcp');
+diff --git a/test/tcp-exact-transport.test.ts b/test/tcp-exact-transport.test.ts
+index ce36a25..cd70c25 100644
+--- a/test/tcp-exact-transport.test.ts
++++ b/test/tcp-exact-transport.test.ts
+@@ -1,4 +1,4 @@
+-import { mkdtemp, readFile, rm } from 'node:fs/promises';
++import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
+ import { tmpdir } from 'node:os';
+ import { join } from 'node:path';
+ import { createConnection } from 'node:net';
+@@ -11,7 +11,8 @@ import { seedBroker } from './helpers/broker-seed.js';
+ const cleanups: Array<() => Promise<void>> = [];
+ afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
+ async function fixture() {
+-  const dir = await mkdtemp(join(tmpdir(), 'crosschat-exact-wire-')); cleanups.push(() => rm(dir, { recursive: true, force: true }));
++  // Keep intentional linked-parent rejection separate from macOS's temp alias.
++  const dir = await realpath(await mkdtemp(join(tmpdir(), 'crosschat-exact-wire-'))); cleanups.push(() => rm(dir, { recursive: true, force: true }));
+   const file = join(dir, 'broker.json'); const status = join(dir, 'status.json'); const logs: string[] = [];
+   seedBroker(file, { stars: [{ starId: 'full-star', name: 'fixture', nodes: [
+     { label: 'node-1', key: 'fixture-node-key', machineId: 'a'.repeat(32), addedAt: '2026-01-01' },
+diff --git a/test/tcp-management-exact.test.ts b/test/tcp-management-exact.test.ts
+index 692defb..f15bd53 100644
+--- a/test/tcp-management-exact.test.ts
++++ b/test/tcp-management-exact.test.ts
+@@ -1,5 +1,5 @@
+ import * as fs from 'node:fs';
+-import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
++import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+ import { tmpdir } from 'node:os';
+ import { join } from 'node:path';
+ import { afterEach, describe, expect, it, vi } from 'vitest';
+@@ -16,7 +16,8 @@ const actualFs = await vi.importActual<typeof import('node:fs')>('node:fs');
+ const directories: string[] = [];
+ const machine = 'a'.repeat(32);
+ function fixture() {
+-  const directory = mkdtempSync(join(tmpdir(), 'crosschat-tcp-exact-'));
++  // Use the real fixture root: macOS tmpdir can include the system /var symlink.
++  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'crosschat-tcp-exact-')));
+   directories.push(directory);
+   const file = join(directory, 'broker.json');
+   const star: StarRecord = { starId: 'full-star-id', name: 'fixture', nodes: [{ label: 'node-1', key: 'only-fixture-key', addedAt: '2026-10-22T00:00:00.000Z', machineId: machine }, { label: 'admin-long', adminKey: 'only-fixture-admin-key', addedAt: '2026-10-22T00:00:00.000Z' }], roster: [{ sessionId: 'full/native/session', machine, tool: 'futuretool' }] };
+diff --git a/test/tcp-session-operations.test.ts b/test/tcp-session-operations.test.ts
+index 1711be9..3b06e08 100644
+--- a/test/tcp-session-operations.test.ts
++++ b/test/tcp-session-operations.test.ts
+@@ -1,6 +1,8 @@
+-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
++import { Buffer } from 'node:buffer';
++import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+ import { tmpdir } from 'node:os';
+ import { join } from 'node:path';
++import process from 'node:process';
+ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import { Broker } from '../src/serve/broker.js';
+ import { attachPipePath, NodeClient } from '../src/serve/node.js';
+@@ -16,7 +18,8 @@ const cleanups: Array<() => void | Promise<void>> = [];
+ afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
+ const machineId = 'a'.repeat(32);
+ async function fixture(rename?: 'normal' | 'lost') {
+-  const dir = await mkdtemp(join(tmpdir(), 'cc-session-ops-'));
++  const fixtureTmpDir = process.platform === 'darwin' ? await realpath('/tmp') : tmpdir();
++  const dir = await mkdtemp(join(fixtureTmpDir, 'cc-session-ops-'));
+   cleanups.push(() => rm(dir, { recursive: true, force: true }));
+   const registryFile = join(dir, 'broker.json');
+   writeBrokerFile(registryFile, { stars: [{ starId: 'star-a', name: 'alpha', nodes: [{ label: 'node', key: 'fixture-key', addedAt: '2026-10-26' }], roster: [] },
+@@ -36,6 +39,11 @@ async function fixture(rename?: 'normal' | 'lost') {
+       detail: { item: state.item?.ref.nativeId === request.nativeId ? state.item : null, completeness: 'complete', errors: [], observedAt: Date.now() } };
+   };
+   const attachLabel = dir.split(/[\\/]/).at(-1)!;
++  const attachPath = attachPipePath(entry, join(dir, 'tcp'), attachLabel);
++  if (process.platform !== 'win32') {
++    expect(Buffer.byteLength(attachPath), `Fixture attach path exceeds the Unix socket limit: ${attachPath}`)
++      .toBeLessThanOrEqual(process.platform === 'darwin' ? 103 : 107);
++  }
+   const node = new NodeClient({ config: { entries: [entry] }, configFile, machineId: () => machineId,
+     fileInbox: new FileInbox({ inboxDir: join(dir, 'inbox'), partsDir: join(dir, 'parts') }), now: Date.now, log: () => undefined,
+     makeSendDeps: () => { throw new Error('Operations must not send messages'); }, memberProviders: () => [], memberCheckMs: 60_000,
+@@ -56,7 +64,7 @@ async function fixture(rename?: 'normal' | 'lost') {
+     await selected.send({ op: 'session-operation', id, starId, machineId, providerId: 'claude', nativeId, request: input });
+     return selected.waitFor((frame) => (frame.op === 'session-operation-result' || frame.op === 'error') && frame.id === id, 2_000);
+   };
+-  return { dir, registryFile, state, request, other, node, attachPath: attachPipePath(entry, join(dir, 'tcp'), attachLabel) };
++  return { dir, registryFile, state, request, other, node, attachPath };
+ }
+ 
+ describe('exact node session operations over real broker/node transport', () => {

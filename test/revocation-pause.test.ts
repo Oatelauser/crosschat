@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
@@ -31,10 +31,18 @@ afterEach(async () => {
 });
 
 function temporaryHome(): string {
-  const home = mkdtempSync(join(tmpdir(), 'crosschat-revocation-'));
+  // Keep both star labels intact within macOS's Unix socket path limit.
+  const fixtureTmpDir = process.platform === 'darwin' ? realpathSync('/tmp') : tmpdir();
+  const home = mkdtempSync(join(fixtureTmpDir, 'crosschat-revocation-'));
   cleanup.push(() => rmSync(home, { recursive: true, force: true }));
   mkdirSync(join(home, 'tcp'));
   return home;
+}
+
+function assertAttachPathFits(path: string): void {
+  if (process.platform === 'win32') return;
+  expect(Buffer.byteLength(path), `Fixture attach path exceeds the Unix socket limit: ${path}`)
+    .toBeLessThanOrEqual(process.platform === 'darwin' ? 103 : 107);
 }
 
 /** Controlled broker boundary: no real credentials, providers or native children. */
@@ -87,6 +95,7 @@ function fakeSendDeps(home: string): SendDeps {
 }
 
 function nodeClient(home: string, entry: BrokerEntry, logs: string[] = [], extra: Partial<NodeClientDeps> = {}): NodeClient {
+  assertAttachPathFits(attachPipePath(entry, join(home, 'tcp'), extra.attachLabel));
   const client = new NodeClient({
     config: { entries: [{ ...entry }] },
     configFile: join(home, 'tcp', 'node.json'),
@@ -165,6 +174,7 @@ describe('explicit credential revocation pauses this star', () => {
   it('settles an attach request when immediate revocation closes IPC before the reply', async () => {
     const home = temporaryHome();
     const path = attachPipePath({ host: 'fixture', port: 9, key: NODE_KEY, name: `${NAME_A}-close` }, join(home, 'tcp'));
+    assertAttachPathFits(path);
     const server = createServer((socket) => socket.once('data', () => socket.destroy()));
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);

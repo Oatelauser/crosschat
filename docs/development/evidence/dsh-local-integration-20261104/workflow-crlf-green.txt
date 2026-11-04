@@ -1,0 +1,9 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-int-20261104
+
+ ✓ test/claude-compat-fixture.test.ts (20 tests) 215ms
+
+ Test Files  1 passed (1)
+      Tests  20 passed (20)
+   Start at  13:33:31
+   Duration  492ms (transform 56ms, setup 0ms, collect 76ms, tests 215ms, environment 0ms, prepare 79ms)

@@ -1,0 +1,2 @@
+# Preserve captured byte hashes across Windows and Unix checkouts.
+* -text

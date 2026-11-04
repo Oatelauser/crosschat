@@ -167,15 +167,15 @@ describe('Claude compatibility runtime profile isolation', () => {
 });
 
 describe('Claude compatibility workflow trust boundary', () => {
-  it('keeps real upstream execution on a read-only Windows job and issue reporting on a separate trusted job', async () => {
-    const workflow = await readFile(new URL('../.github/workflows/claude-compat.yml', import.meta.url), 'utf8');
+  it.each(['\n', '\r\n'])('keeps real upstream execution on a read-only Windows job and issue reporting on a separate trusted job with %j line endings', async (lineEnding) => {
+    const workflow = (await readFile(new URL('../.github/workflows/claude-compat.yml', import.meta.url), 'utf8')).replace(/\r?\n/g, lineEnding);
     const probe = workflow.split('\n  probe:')[1]?.split('\n  report:')[0];
     const report = workflow.split('\n  report:')[1];
     expect(probe).toBeTruthy(); expect(report).toBeTruthy();
     expect(workflow).toMatch(/^ {2}schedule:/m); expect(workflow).toMatch(/^ {2}workflow_dispatch:/m);
     expect(workflow).not.toMatch(/pull_request|workflow_run|\bsecrets\./);
     expect(probe).toMatch(/runs-on: windows-latest/);
-    expect(probe).toMatch(/permissions:\n {6}contents: read/);
+    expect(probe).toMatch(/permissions:\r?\n {6}contents: read/);
     expect(probe).not.toMatch(/issues: write|contents: write|matrix:|GITHUB_TOKEN|GH_TOKEN/);
     expect(probe).toContain('node scripts/claude-compat-ci.mjs');
     expect(probe).toMatch(/persist-credentials: false/);

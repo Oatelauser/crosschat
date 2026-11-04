@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile, link, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile, link, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -13,7 +13,8 @@ const adminKey = 'b'.repeat(64);
 const entry = { host: 'broker.example', port: 7260, starId: 'imported-star', name: 'imported', key: memberKey, adminKey, custom: { keep: 'new entry' } };
 const content = JSON.stringify({ brokers: [entry], showName: 'receiver', customTop: { keep: 'import' } });
 async function fixture(original?: string) {
-  const home = await mkdtemp(join(tmpdir(), 'crosschat-tcp-import-'));
+  // The fixture itself is canonical; attack cases add their own linked paths.
+  const home = await realpath(await mkdtemp(join(tmpdir(), 'crosschat-tcp-import-')));
   cleanups.push(() => rm(home, { recursive: true, force: true }));
   const baseDir = join(home, '.crosschat');
   const directory = join(baseDir, 'tcp');

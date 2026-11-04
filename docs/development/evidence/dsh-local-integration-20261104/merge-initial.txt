@@ -1,0 +1,80 @@
+Auto-merging CHANGELOG.md
+CONFLICT (content): Merge conflict in CHANGELOG.md
+Auto-merging README.md
+CONFLICT (content): Merge conflict in README.md
+Auto-merging docs/development/core-api.md
+Auto-merging docs/development/session-selection-membership-design-20261026.md
+CONFLICT (add/add): Merge conflict in docs/development/session-selection-membership-design-20261026.md
+Auto-merging docs/development/tui-progress.md
+CONFLICT (content): Merge conflict in docs/development/tui-progress.md
+Auto-merging docs/development/tui-workspace-progress.md
+CONFLICT (add/add): Merge conflict in docs/development/tui-workspace-progress.md
+Auto-merging docs/development/tui-workspace-validation-20261023.md
+CONFLICT (add/add): Merge conflict in docs/development/tui-workspace-validation-20261023.md
+Auto-merging package.json
+Auto-merging skills/crosschat/SKILL.md
+Auto-merging skills/crosschat/references/stars.md
+Auto-merging src/application/session-operations.ts
+CONFLICT (add/add): Merge conflict in src/application/session-operations.ts
+Auto-merging src/application/session-selection.ts
+CONFLICT (add/add): Merge conflict in src/application/session-selection.ts
+Auto-merging src/application/sessions/codex-reader.ts
+CONFLICT (content): Merge conflict in src/application/sessions/codex-reader.ts
+Auto-merging src/application/tcp/index.ts
+Auto-merging src/application/tcp/management.ts
+CONFLICT (content): Merge conflict in src/application/tcp/management.ts
+Auto-merging src/application/tcp/reading.ts
+Auto-merging src/application/tcp/session-operations.ts
+CONFLICT (add/add): Merge conflict in src/application/tcp/session-operations.ts
+Auto-merging src/codex/aggregate-discovery.ts
+CONFLICT (content): Merge conflict in src/codex/aggregate-discovery.ts
+Auto-merging src/codex/client.ts
+CONFLICT (content): Merge conflict in src/codex/client.ts
+Auto-merging src/commands/serve.ts
+CONFLICT (content): Merge conflict in src/commands/serve.ts
+Auto-merging src/commands/session-star.ts
+CONFLICT (content): Merge conflict in src/commands/session-star.ts
+Auto-merging src/commands/status.ts
+Auto-merging src/serve/broker.ts
+CONFLICT (content): Merge conflict in src/serve/broker.ts
+Auto-merging src/serve/node.ts
+CONFLICT (content): Merge conflict in src/serve/node.ts
+Auto-merging src/serve/protocol.ts
+CONFLICT (content): Merge conflict in src/serve/protocol.ts
+Auto-merging src/serve/registry.ts
+CONFLICT (content): Merge conflict in src/serve/registry.ts
+Auto-merging src/serve/session-operations.ts
+CONFLICT (add/add): Merge conflict in src/serve/session-operations.ts
+Auto-merging src/serve/via-tcp.ts
+Auto-merging src/tui/composition.ts
+Auto-merging src/tui/resources/ssh.ts
+CONFLICT (content): Merge conflict in src/tui/resources/ssh.ts
+Auto-merging src/tui/resources/tcp.ts
+CONFLICT (content): Merge conflict in src/tui/resources/tcp.ts
+Auto-merging test/codex-aggregate-discovery.test.ts
+CONFLICT (content): Merge conflict in test/codex-aggregate-discovery.test.ts
+Auto-merging test/codex-pagination.test.ts
+CONFLICT (content): Merge conflict in test/codex-pagination.test.ts
+Auto-merging test/helpers/claude-rename-native-validation.mjs
+CONFLICT (add/add): Merge conflict in test/helpers/claude-rename-native-validation.mjs
+Auto-merging test/helpers/session-selection-native-validation.mjs
+CONFLICT (add/add): Merge conflict in test/helpers/session-selection-native-validation.mjs
+Auto-merging test/revocation-pause.test.ts
+Auto-merging test/serve-node.test.ts
+Auto-merging test/serve-sessions.test.ts
+CONFLICT (content): Merge conflict in test/serve-sessions.test.ts
+Auto-merging test/session-selection.test.ts
+CONFLICT (add/add): Merge conflict in test/session-selection.test.ts
+Auto-merging test/session-star.test.ts
+CONFLICT (content): Merge conflict in test/session-star.test.ts
+Auto-merging test/status-summary.test.ts
+Auto-merging test/tcp-configuration-management.test.ts
+CONFLICT (add/add): Merge conflict in test/tcp-configuration-management.test.ts
+Auto-merging test/tcp-session-operations.test.ts
+CONFLICT (add/add): Merge conflict in test/tcp-session-operations.test.ts
+Auto-merging test/tui-composition.test.ts
+Auto-merging test/tui-main-observations.test.ts
+Auto-merging test/tui-ssh.test.ts
+Auto-merging test/tui-tcp.test.ts
+CONFLICT (content): Merge conflict in test/tui-tcp.test.ts
+Automatic merge failed; fix conflicts and then commit the result.

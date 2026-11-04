@@ -1,6 +1,6 @@
 {
   "name": "@oatelauser/crosschat",
-  "version": "1.10.0",
+  "version": "1.13.1",
   "type": "module",
   "description": "Native messaging between existing AI CLI and desktop sessions, with local, SSH and TCP routing.",
   "repository": {

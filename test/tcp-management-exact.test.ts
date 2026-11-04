@@ -1,5 +1,5 @@
 import * as fs from 'node:fs';
-import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -16,7 +16,8 @@ const actualFs = await vi.importActual<typeof import('node:fs')>('node:fs');
 const directories: string[] = [];
 const machine = 'a'.repeat(32);
 function fixture() {
-  const directory = mkdtempSync(join(tmpdir(), 'crosschat-tcp-exact-'));
+  // Use the real fixture root: macOS tmpdir can include the system /var symlink.
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'crosschat-tcp-exact-')));
   directories.push(directory);
   const file = join(directory, 'broker.json');
   const star: StarRecord = { starId: 'full-star-id', name: 'fixture', nodes: [{ label: 'node-1', key: 'only-fixture-key', addedAt: '2026-10-22T00:00:00.000Z', machineId: machine }, { label: 'admin-long', adminKey: 'only-fixture-admin-key', addedAt: '2026-10-22T00:00:00.000Z' }], roster: [{ sessionId: 'full/native/session', machine, tool: 'futuretool' }] };
