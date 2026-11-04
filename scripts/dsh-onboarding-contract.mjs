@@ -30,7 +30,7 @@ export function validDshOnboardingReport(input, artifact, runId) {
   if (input.status === 'passed') return input.stage === 'done' && input.category === null && input.check === undefined && input.error === undefined
     && input.checks.length === DSH_ONBOARDING_CHECKS.length && input.cleanup.runtimeStopped && input.cleanup.registrationRemoved
     && input.cleanup.removed && !input.cleanup.forced && !input.cleanup.errors?.length;
-  return input.status === 'failed' && ['compatibility', 'infrastructure'].includes(input.category)
+  return input.status === 'failed' && typeof input.check === 'string' && ['compatibility', 'infrastructure'].includes(input.category)
     && ['setup', 'onboarding', 'cleanup'].includes(input.stage)
     && (input.check === DSH_ONBOARDING_CHECKS[input.checks.length]
       || (input.category === 'infrastructure' && input.stage === 'cleanup' && input.check === 'owned-cleanup'));
