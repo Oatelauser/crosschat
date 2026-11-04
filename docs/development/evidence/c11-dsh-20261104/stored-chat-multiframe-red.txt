@@ -1,0 +1,74 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ❯ test/dsh-live-fixture.test.ts (24 tests | 2 failed) 118ms
+   ✓ DSH stored-chat preservation evidence > verifies actual text from a compressed native session while hashing its original stored bytes 10ms
+   ✓ DSH stored-chat preservation evidence > does not accept empty data or unrelated files as proof that the test conversation was retained 3ms
+   ✓ DSH stored-chat preservation evidence > accepts native uncompressed JSONL and detects later changes through the original-byte hashes 4ms
+   ✓ DSH stored-chat preservation evidence > treats unreadable compressed conversation content as a fixture failure 7ms
+   × DSH stored-chat preservation evidence > reads later native append frames rather than stopping after the first valid frame 3ms
+     → Native persistence fixture did not locate the expected test conversation content
+   × DSH stored-chat preservation evidence > does not hide a corrupted trailing frame behind an earlier valid conversation 6ms
+     → promise resolved "{ 'session.v4.jsonl.zstd': '8105842b…' }" instead of rejecting
+   ✓ DSH real-runtime profile isolation > keeps native home, shared skills, temporary files and credentials inside a new fixture profile 76ms
+   ✓ DSH real-runtime profile isolation > rejects a non-fixture model endpoint before preparing https://api.deepseek.com/v1 2ms
+   ✓ DSH real-runtime profile isolation > rejects a non-fixture model endpoint before preparing http://localhost:12345/v1 1ms
+   ✓ DSH real-runtime profile isolation > rejects a non-fixture model endpoint before preparing http://127.0.0.1:12345/v1?token=x 1ms
+   ✓ DSH real-runtime profile isolation > rejects a non-fixture model endpoint before preparing http://user:secret@127.0.0.1:12345/v1 1ms
+   ✓ DSH startup failure evidence > keeps a broken fixture import distinct from a broken production bridge import 0ms
+   ✓ DSH startup failure evidence > treats a missing test controller as infrastructure while keeping transient process readiness inconclusive 0ms
+   ✓ DSH native shell identity evidence > accepts only the exact identity returned by a real tool-result shape 0ms
+   ✓ DSH native shell identity evidence > reports removed or changed native DSH fields as compatibility after a successful JSON shell result 0ms
+   ✓ DSH native shell identity evidence > requires the real native shell and read-only identity observation in the same tool result 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: undefined 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: {"status":"identified","sourceTool":"dsh-desktop","basis":"native","association":"verified","scope":"instance","shouldAsk":false} 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: {"status":"confirmed","sourceTool":"dsh","basis":"user","association":"verified","scope":"instance","shouldAsk":false} 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: {"status":"identified","sourceTool":"dsh","basis":"native","association":"unavailable","scope":"instance","shouldAsk":false} 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: {"status":"identified","sourceTool":"dsh","basis":"native","association":"verified","scope":"origin","shouldAsk":false} 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: {"status":"identified","sourceTool":"dsh","basis":"native","association":"verified","scope":"instance","shouldAsk":true,"context":"manual-confirmation-context"} 0ms
+   ✓ DSH native shell identity evidence > distinguishes a broken shell JSON bootstrap from an unavailable native source probe 0ms
+   ✓ DSH native shell identity evidence > retains structured source failures and presence facts without token, directory or free-form values 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-live-fixture.test.ts > DSH stored-chat preservation evidence > reads later native append frames rather than stopping after the first valid frame
+Error: Native persistence fixture did not locate the expected test conversation content
+ ❯ snapshotDshStoredChats test/helpers/dsh-live-fixture.mjs:41:67
+     39|   try {
+     40|     await visit(root);
+     41|     if (!expectedTexts.every((text) => observed.has(text))) throw new …
+       |                                                                   ^
+     42|   } catch (error) { throw Object.assign(error, { category: 'infrastruc…
+     43|   return hashes;
+ ❯ test/dsh-live-fixture.test.ts:62:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/dsh-live-fixture.test.ts > DSH stored-chat preservation evidence > does not hide a corrupted trailing frame behind an earlier valid conversation
+AssertionError: promise resolved "{ 'session.v4.jsonl.zstd': '8105842b…' }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "session.v4.jsonl.zstd": "8105842beaa77d2d70b83072e7c4abeb55715d75f2b3614cd4999db8558c961c",
+  }
+
+ ❯ test/dsh-live-fixture.test.ts:70:74
+     68|     const first = Buffer.from('KLUv/SAjGQEAb3duZWQgc3RvcmVkIGNoYXQgcmV…
+     69|     await writeFile(join(directory, 'session.v4.jsonl.zstd'), Buffer.c…
+     70|     await expect(snapshotDshStoredChats(directory, ['owned stored chat…
+       |                                                                          ^
+     71|   });
+     72| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 22 passed (24)
+   Start at  11:02:36
+   Duration  554ms (transform 53ms, setup 0ms, collect 65ms, tests 118ms, environment 0ms, prepare 98ms)
+

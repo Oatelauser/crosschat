@@ -50,6 +50,25 @@ describe('DSH stored-chat preservation evidence', () => {
     await writeFile(join(directory, 'session.v4.jsonl.zstd'), 'not a zstd stream');
     await expect(snapshotDshStoredChats(directory, ['owned message'])).rejects.toMatchObject({ category: 'infrastructure' });
   });
+
+  it('reads later native append frames rather than stopping after the first valid frame', async () => {
+    const directory = await root();
+    const frames = [Buffer.from('KLUv/SAjGQEAb3duZWQgc3RvcmVkIGNoYXQgcmVxdWVzdC1hbmQtcmVwbHk=', 'base64'),
+      Buffer.from('KLUv/SAe8QAAbGF0ZXIgbmF0aXZlIHJlcXVlc3QtYW5kLXJlcGx5', 'base64')];
+    await writeFile(join(directory, 'session.v4.jsonl.zstd'), Buffer.concat(frames));
+    if (typeof zlib.zstdDecompressSync !== 'function') {
+      await expect(snapshotDshStoredChats(directory, ['later native request-and-reply'])).rejects.toMatchObject({ category: 'infrastructure' });
+    } else {
+      expect(Object.keys(await snapshotDshStoredChats(directory, ['owned stored chat', 'later native request-and-reply']))).toEqual(['session.v4.jsonl.zstd']);
+    }
+  });
+
+  it('does not hide a corrupted trailing frame behind an earlier valid conversation', async () => {
+    const directory = await root();
+    const first = Buffer.from('KLUv/SAjGQEAb3duZWQgc3RvcmVkIGNoYXQgcmVxdWVzdC1hbmQtcmVwbHk=', 'base64');
+    await writeFile(join(directory, 'session.v4.jsonl.zstd'), Buffer.concat([first, Buffer.from('corrupted trailing frame')]));
+    await expect(snapshotDshStoredChats(directory, ['owned stored chat'])).rejects.toMatchObject({ category: 'infrastructure' });
+  });
 });
 
 describe('DSH real-runtime profile isolation', () => {
