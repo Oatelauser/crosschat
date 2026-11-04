@@ -39,6 +39,7 @@ export function locateDshDesktopExitBreakpoints(source) {
     ['ready', 'if (message.type === "ready") this.readyResolve({', 'this.readyResolve', 'message.type === "ready"'],
     ['shutdown', 'if (child.connected) child.send({ type: "shutdown" }, (error) => {', 'child.send', 'child.connected === true'],
     ['ack', 'else if (message.type === "shutdown-complete") if (this.stopping) this.shutdownCompleted = true;', 'this.shutdownCompleted', 'message.type === "shutdown-complete" && this.stopping === true'],
+    ['inspection', 'const request = this.controlRequests.get(message.requestId);\n\t\t\t\tif (message.error === void 0)', 'const request', 'message.type === "quit-inspection"'],
     ['close', 'child.once("close", (code) => {\n\t\t\t\tconst suffix = this.stderr.trim()', 'const suffix'],
     ['complete', 'this.child = void 0;\n\t\tif (requireGraceful', 'this.child'],
     ['kill-invalid', 'this.fail(/* @__PURE__ */ new Error("dsh desktop host sent an invalid IPC event"));\n\t\t\t\tchild.kill("SIGTERM");', 'child.kill'],

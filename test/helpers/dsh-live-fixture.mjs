@@ -79,11 +79,13 @@ export function assessDshNativeIdentity(requests, expected) {
 
 /** Native shellEnv must prove the live instance; an absent contribution remains a capability failure. */
 export function assessDshCallerSourceIdentity(requests, expected) {
+  const sourceTool = expected.sourceTool ?? 'dsh';
+  if (!['dsh', 'dsh-desktop'].includes(sourceTool)) return { ready: false, category: 'infrastructure', check: 'fixture-caller-source-expectation' };
   const observed = readDshNativeIdentity(requests, expected);
   if (!observed.ready) return observed;
   for (const identity of observed.identities) {
     const source = identity.callerSource;
-    if (identity.callerSourceExit !== 0 || !isRecord(source) || source.status !== 'identified' || source.sourceTool !== 'dsh'
+    if (identity.callerSourceExit !== 0 || !isRecord(source) || source.status !== 'identified' || source.sourceTool !== sourceTool
       || source.basis !== 'native' || source.association !== 'verified' || source.scope !== 'instance' || source.shouldAsk !== false
       || source.context !== undefined || source.promptClaim !== undefined || source.confirmationCommand !== undefined) continue;
     return { ready: true, source: { status: source.status, sourceTool: source.sourceTool, basis: source.basis,

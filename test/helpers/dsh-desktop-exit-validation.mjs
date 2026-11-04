@@ -53,7 +53,7 @@ async function freePort() {
 async function save(name, value) { await writeFile(join(artifacts, name), serializeDshExitEvidence(value)); }
 function error(label, failure) {
   const message = failure instanceof Error ? failure.message : String(failure);
-  report.errors.push({ label, message }); process.stderr.write(`${label}: ${message}\n`);
+  report.errors.push({ label, message, ...(failure instanceof Error ? { stack: failure.stack } : {}) }); process.stderr.write(`${label}: ${message}\n`);
 }
 async function step(phase) { report.phase = phase; await save('progress.json', { phase }); process.stdout.write(`${phase}\n`); }
 async function bridgeRegistrations() {
@@ -88,9 +88,10 @@ async function nativeUiTurn(rendererPort) {
   const requests = model.requests.map((body) => ({ messages: body.messages.map((message) => ({ ...message,
     content: Array.isArray(message.content) ? message.content.filter((part) => part.type === 'tool_result' && part.tool_use_id === marker) : [],
   })) }));
-  const identity = assessDshCallerSourceIdentity(requests, { session: native.id, profile: 'desktop', dshHome: env.DSH_HOME });
-  assert.equal(identity.ready, true); assert.equal(identity.source.sourceTool, 'dsh-desktop');
+  await save('native-tool-results.json', requests);
   await pollDsh(async () => (await listDshThreads({ home: env.HOME })).some((entry) => entry.id === native.id && entry.rawStatus.type === 'idle'), 'this exact native session idle', 10000);
+  const identity = assessDshCallerSourceIdentity(requests, { session: native.id, profile: 'desktop', dshHome: env.DSH_HOME, sourceTool: 'dsh-desktop' });
+  assert.equal(identity.ready, true); assert.equal(identity.source.sourceTool, 'dsh-desktop');
   const workspaces = JSON.parse(await readFile(join(env.DSH_HOME, 'storages', 'workspace.json'), 'utf8'));
   const paths = [];
   for (const entry of Object.values(workspaces.tables.workspaces)) {
@@ -116,6 +117,7 @@ async function paused(params) {
     ready: '({pid:child.pid,urlOrigin:new URL(message.url).origin})',
     shutdown: '({pid:child.pid,connected:child.connected,stopping:this.stopping})',
     ack: '({pid:child.pid,type:message.type,stopping:this.stopping})',
+    inspection: '({pid:child.pid,activeTasks:message.activeTasks,scheduledTasks:message.scheduledTasks})',
     close: '({pid:child.pid,code,signal:child.signalCode})',
     complete: '({pid:child.pid,graceful,shutdownCompleted:this.shutdownCompleted,code:child.exitCode,signal:child.signalCode,stdoutDestroyed:child.stdout?.destroyed===true,stderrDestroyed:child.stderr?.destroyed===true,stderrTail:this.stderr})',
   };
@@ -124,6 +126,7 @@ async function paused(params) {
     const value = await main.value(expressions[point.kind] ?? '({pid:child.pid})', frame.callFrameId);
     if (point.kind === 'birth') { await observeHost(value.pid); report.events.push({ kind: 'birth', ...value }); }
     else if (point.kind === 'ready') report.ready = value;
+    else if (point.kind === 'inspection') report.quitInspection = value;
     else if (point.kind.startsWith('kill-')) report.events.push({ kind: 'kill', site: point.kind, signal: point.kind === 'kill-kill' ? 'SIGKILL' : 'SIGTERM', ...value });
     else report.events.push({ kind: point.kind, ...value });
     await save('lifecycle-events.json', report.events);
@@ -146,6 +149,16 @@ async function quit() {
 }
 async function finish() {
   return finishing ??= (async () => {
+    if (live && observing && !mainExited && report.events.some((entry) => entry.kind === 'birth')) {
+      try {
+        await pollDsh(async () => {
+          const bridges = await inspectDshBridges({ home: env.HOME });
+          assert.equal(bridges.length, 1); assert.equal(bridges[0].pid, report.events[0].pid);
+          const roots = await listDshThreads({ home: env.HOME }); return roots.every((entry) => entry.rawStatus.type === 'idle');
+        }, 'owned UI sessions idle before Quit', 10000);
+        report.uiIdleBeforeQuit = true;
+      } catch (failure) { error('owned UI idle before Quit', failure); }
+    }
     try { await renderer?.close(); } catch (failure) { error('renderer close', failure); }
     try { await step('request-normal-quit'); } catch (failure) { error('Quit progress evidence', failure); }
     try { await quit(); } catch (failure) { error('normal Quit request', failure); }

@@ -1,0 +1,11 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ✓ test/dsh-live-fixture.test.ts (26 tests) 107ms
+ ✓ test/dsh-desktop-exit-observer.test.ts (17 tests) 382ms
+
+ Test Files  2 passed (2)
+      Tests  43 passed (43)
+   Start at  12:17:42
+   Duration  838ms (transform 119ms, setup 0ms, collect 184ms, tests 489ms, environment 0ms, prepare 230ms)
+
