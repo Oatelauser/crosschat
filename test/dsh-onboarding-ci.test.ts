@@ -214,4 +214,11 @@ describe('from-zero onboarding independent issue report', () => {
     const report = await executeReport(await genuineSummary(), [], 4 * 1024 * 1024 + 1);
     expect(report.created).toHaveLength(0); expect(report.reads).toBe(0);
   });
+
+  it('never treats cleanup-stage failures as compatibility regressions, even when the summary claims one', async () => {
+    const summary = await genuineSummary();
+    const invalid = { ...summary, candidate: { ...summary.candidate, stage: 'cleanup' }, retry: { ...summary.retry, stage: 'cleanup' } };
+    expect(dshOnboardingRegressionIdentity(invalid)).toBeUndefined();
+    expect((await executeReport(invalid)).created).toHaveLength(0);
+  });
 });

@@ -1185,7 +1185,22 @@ export function dshRegressionIdentity(summary) {
   return { marker: `<!-- dsh-compat:${candidate.version}:win32:${candidate.check} -->`, title: `DeepSeek Harness ${candidate.version}: ${candidate.check} compatibility regression (win32)` };
 }
 
-export function dshOnboardingRegressionIdentity() { return undefined; }
+export function dshOnboardingRegressionIdentity(summary) {
+  if (!record(summary) || summary.schema !== 1 || summary.tool !== DSH_ONBOARDING_TOOL || summary.platform !== 'win32' || summary.arch !== 'x64'
+    || !record(summary.scope) || Object.keys(summary.scope).length !== Object.keys(DSH_ONBOARDING_SCOPE).length
+    || !Object.entries(DSH_ONBOARDING_SCOPE).every(([key, value]) => Object.hasOwn(summary.scope, key) && summary.scope[key] === value)
+    || summary.installationCleanup !== 'removed' || summary.classification?.kind !== 'regression' || summary.classification?.notify !== true || !record(summary.builds)) return;
+  const { builds, baseline, candidate, retry } = summary;
+  try {
+    for (const artifact of [builds.baseline, builds.candidate]) parseDshNpmManifest({ ...artifact, dist: { tarball: artifact.url, integrity: artifact.integrity } }, 'win32', 'x64');
+    parsePnpmManifest({ ...builds.packageManager, dist: { tarball: builds.packageManager.url, integrity: builds.packageManager.integrity } });
+  } catch { return; }
+  if (!validDshOnboardingProcessReport(baseline, builds.baseline) || !validDshOnboardingProcessReport(candidate, builds.candidate) || !validDshOnboardingProcessReport(retry, builds.candidate)
+    || [baseline, candidate, retry].some((item) => !hasDshRuntimeReleaseProof(item.cleanup))
+    || new Set([baseline.runId, candidate.runId, retry.runId]).size !== 3 || classify(baseline, candidate, retry).kind !== 'regression') return;
+  return { marker: `<!-- dsh-onboarding-compat:${candidate.version}:win32:${candidate.check} -->`,
+    title: `DeepSeek Harness ${candidate.version}: ${candidate.check} from-zero compatibility regression (win32)` };
+}
 
 async function fetchBytes(url, maxBytes) {
   const response = await globalThis.fetch(url, { redirect: 'error', signal: globalThis.AbortSignal.timeout(120000) });

@@ -51,4 +51,68 @@ jobs:
       - uses: actions/github-script@v7
         with:
           script: |
-            core.notice('Onboarding report verification is being implemented; no issue created.');
+            const fs = require('node:fs/promises');
+            let summary;
+            try {
+              const info = await fs.lstat('evidence/summary.json');
+              if (!info.isFile() || info.isSymbolicLink() || info.size > 4 * 1024 * 1024) { core.notice('Summary is not a bounded regular file; no issue created.'); return; }
+              summary = JSON.parse(await fs.readFile('evidence/summary.json', 'utf8'));
+            } catch { core.notice('No fresh summary; inspect the probe artifacts. No issue created.'); return; }
+            const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+            const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+            const sri = /^sha512-[A-Za-z0-9+/]{85}[AQgw]==$/;
+            const scope = { officialNpmRuntime: true, officialPluginManager: true, ordinaryWebSessions: true, scriptedLocalModel: true,
+              skillLifecycle: true, diagnostics: true, tui: true, browserUI: false, desktop: false, modelIntelligence: false };
+            const checks = ['official-profile-plugin-and-skill-installation', 'native-skill-load-and-current-source', 'native-roundtrip-and-typed-discovery',
+              'same-source-diagnostics-and-real-terminal', 'skill-update-and-profile-preserving-shutdown', 'official-plugin-and-crosschat-removal-with-owned-cleanup'];
+            function supported(version) {
+              if (typeof version !== 'string' || version.length > 80) return false;
+              const parts = /^0\.2\.([1-9][0-9]*)(?:-([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*))?$/.exec(version);
+              if (!parts || !Number.isSafeInteger(Number(parts[1]))) return false;
+              const pre = parts[2]?.split('.');
+              if (pre?.some((item) => /^[0-9]+$/.test(item) && item.length > 1 && item.startsWith('0'))) return false;
+              if (Number(parts[1]) > 1 || !pre) return true;
+              const floor = ['rc', '2'];
+              for (let i = 0; i < Math.max(pre.length, floor.length); i++) {
+                if (pre[i] === undefined) return false;
+                if (floor[i] === undefined) return true;
+                if (pre[i] === floor[i]) continue;
+                const a = /^[0-9]+$/.test(pre[i]); const b = /^[0-9]+$/.test(floor[i]);
+                if (a && b) return BigInt(pre[i]) > BigInt(floor[i]);
+                return a !== b ? !a : pre[i] > floor[i];
+              }
+              return true;
+            }
+            const scoped = (value) => record(value) && Object.keys(value).length === Object.keys(scope).length
+              && Object.entries(scope).every(([key, expected]) => Object.hasOwn(value, key) && value[key] === expected);
+            const released = (value) => record(value) && value.runtimeStopped === true && value.registrationRemoved === true && value.removed === true && value.forced === false
+              && (value.errors === undefined || (Array.isArray(value.errors) && value.errors.length === 0));
+            const artifact = (value) => record(value) && value.name === '@deepseek-ai/dsh' && supported(value.version) && sri.test(value.integrity ?? '')
+              && value.url === `https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-${value.version}.tgz`;
+            function valid(value, build) {
+              if (!record(value) || value.schema !== 1 || value.tool !== 'dsh-onboarding' || value.platform !== 'win32' || value.arch !== 'x64'
+                || value.version !== build.version || !uuid.test(value.runId ?? '') || !scoped(value.scope) || !released(value.cleanup)
+                || !record(value.process) || value.process.timedOut !== false || value.process.signal !== null
+                || value.process.code !== (value.status === 'passed' ? 0 : 1) || !Array.isArray(value.checks) || value.checks.length > checks.length
+                || !value.checks.every((check, index) => record(check) && check.name === checks[index] && check.status === 'passed' && Number.isFinite(check.elapsedMs) && check.elapsedMs >= 0)) return false;
+              if (value.status === 'passed') return value.category === null && value.stage === 'done' && value.check === undefined && value.error === undefined && value.checks.length === checks.length;
+              return value.status === 'failed' && value.category === 'compatibility' && ['setup', 'onboarding'].includes(value.stage)
+                && typeof value.check === 'string' && value.check === checks[value.checks.length];
+            }
+            if (!record(summary) || summary.schema !== 1 || summary.tool !== 'dsh-onboarding' || summary.platform !== 'win32' || summary.arch !== 'x64' || !scoped(summary.scope)
+              || summary.installationCleanup !== 'removed' || summary.classification?.kind !== 'regression' || summary.classification?.notify !== true || !record(summary.builds)) return;
+            const { baseline, candidate, retry, builds } = summary;
+            if (!artifact(builds.baseline) || !artifact(builds.candidate) || !record(builds.packageManager) || builds.packageManager.name !== 'pnpm' || builds.packageManager.version !== '11.28.5'
+              || builds.packageManager.url !== 'https://registry.npmjs.org/pnpm/-/pnpm-11.28.5.tgz'
+              || builds.packageManager.integrity !== 'sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng=='
+              || !valid(baseline, builds.baseline) || !valid(candidate, builds.candidate) || !valid(retry, builds.candidate)
+              || baseline.status !== 'passed' || candidate.status !== 'failed' || retry.status !== 'failed'
+              || candidate.check !== retry.check || candidate.stage !== retry.stage || new Set([baseline.runId, candidate.runId, retry.runId]).size !== 3) return;
+            const marker = `<!-- dsh-onboarding-compat:${candidate.version}:win32:${candidate.check} -->`;
+            const issues = await github.paginate(github.rest.issues.listForRepo, { ...context.repo, state: 'all', creator: 'github-actions[bot]', per_page: 100 });
+            if (!Array.isArray(issues)) { core.notice('Issue listing is incomplete; no issue created.'); return; }
+            if (issues.some((issue) => typeof issue.body === 'string' && issue.body.includes(marker))) { core.notice('This candidate/check was already reported.'); return; }
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.create({ ...context.repo,
+              title: `DeepSeek Harness ${candidate.version}: ${candidate.check} from-zero compatibility regression (win32)`,
+              body: `${marker}\nPinned baseline ${baseline.version} passed all six from-zero checks. The same official candidate failed the same compatibility phase twice with verified runtime and installation cleanup.\n\nFailed phase: \`${candidate.check}\`\nCandidate SHA-512 SRI: \`${builds.candidate.integrity}\`\n\n[Inspect workflow and retained evidence](${run}).\n\nScope: official npm Web Host, native skill loading and shell identity, typed round trip, doctor/ConPTY, update, native plugin removal and crosschat data removal with profile/chat preservation. Scripted local model only; no browser UI, formal Desktop, other platforms or model intelligence is claimed.` });
