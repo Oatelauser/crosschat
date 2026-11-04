@@ -30,6 +30,39 @@ describe('Harness native session TUI', () => {
     expect(guide?.fields).toContainEqual({ label: '完整会话 ID', value: 'native_full_id' });
     expect(guide?.fields.map((field) => field.value).join(' ')).toMatch(/原.*窗口|Web|桌面/);
   });
+  it('keeps the same native ID independent across Host and Desktop, including anonymous rows and complete details', async () => {
+    const id = 'session-11111111-2222-4333-8444-555555555555';
+    const host = session(id);
+    const desktop = { ...session(id, '桌面标题'), ref: { ...host.ref, endpointType: 'desktop' } };
+    const page = await createSessionsResource({ discovery: discovery([host, desktop]) }).adapter.read({ context, signal: new AbortController().signal });
+    expect(new Set(page.rows.map((row) => row.id)).size).toBe(2);
+    expect(page.rows.map((row) => [row.cells.name, row.cells.provider, row.facets?.provider])).toEqual([
+      ['匿名', 'dsh', 'dsh'], ['桌面标题', 'dsh-desktop', 'dsh-desktop'],
+    ]);
+    expect(page.rows.map((row) => row.copyValue)).toEqual([
+      `crosschat send --to ${id} --tool dsh --body "<正文>"`,
+      `crosschat send --to ${id} --tool dsh-desktop --body "<正文>"`,
+    ]);
+    for (const [index, row] of page.rows.entries()) {
+      expect(JSON.parse(row.copyValues!.ref)).toEqual([host, desktop][index].ref);
+      expect(row.detail).toContainEqual({ label: '原生引用', value: row.copyValues!.ref });
+      expect(row.detailViews?.['native-guide']?.fields).toContainEqual({ label: '完整会话 ID', value: id });
+    }
+  });
+  it('withholds a command for an incomplete native snapshot while retaining a complete reference', async () => {
+    const source = discovery([session('session-exact')]);
+    const page = await createSessionsResource({ discovery: { async execute(request, options) {
+      const result = await source.execute(request, options);
+      if (result.op !== 'list') throw new Error('Only list is used in this fixture');
+      return { ...result, page: { ...result.page, completeness: 'partial' } };
+    } } }).adapter.read({ context, signal: new AbortController().signal });
+    expect(page.rows).toHaveLength(1);
+    for (const row of page.rows) {
+      expect(row.copyValue).toBeUndefined();
+      expect(row.actionAvailability?.copy?.reason).toMatch(/不完整/);
+      expect(JSON.parse(row.copyValues!.ref).nativeId).toBe('session-exact');
+    }
+  });
   it('preserves the two native states and displays unknown values explicitly', () => {
     const registry = createStatusRegistry();
     expect(registry.format('dsh', { type: 'idle' })).toBe('空闲<idle>');
