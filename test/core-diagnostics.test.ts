@@ -1,6 +1,6 @@
 import { Worker } from 'node:worker_threads';
-import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { ChildProcess, spawn } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -152,6 +152,51 @@ describe('structured diagnostics', () => {
 });
 
 describe('isolated cancellable diagnostics', () => {
+  it('keeps a cancelled POSIX query pending until both its owner and probe group disappear', async () => {
+    const { queryDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
+    const platform = process.platform;
+    const child = new ChildProcess();
+    const pid = 424242;
+    Object.defineProperty(child, 'pid', { value: pid });
+    let groupPresent = true;
+    let finished = false;
+    let settled: Promise<string> | undefined;
+    vi.useFakeTimers();
+    Object.defineProperty(process, 'platform', { value: 'linux' });
+    const kill = vi.spyOn(process, 'kill').mockImplementation((target, signal) => {
+      expect(target).toBe(-pid);
+      if (signal === 'SIGKILL') {
+        setTimeout(() => { child.signalCode = 'SIGKILL'; child.emit('exit', null, 'SIGKILL'); }, 10);
+        return true;
+      }
+      if (signal !== 0) throw new Error('Unexpected diagnostic cleanup signal');
+      if (groupPresent) return true;
+      throw Object.assign(new Error('No such group'), { code: 'ESRCH' });
+    });
+    try {
+      const controller = new AbortController();
+      settled = queryDoctorDiagnostics({ signal: controller.signal, createProcess: () => child })
+        .then(() => 'resolved', (error: Error) => error.name).then((value) => { finished = true; return value; });
+      controller.abort();
+      await vi.advanceTimersByTimeAsync(20);
+      expect(child.signalCode).toBe('SIGKILL');
+      expect(finished).toBe(false);
+      groupPresent = false;
+      await vi.advanceTimersByTimeAsync(20);
+      expect(await settled).toBe('AbortError');
+      expect(kill.mock.calls.filter(([, signal]) => signal === 'SIGKILL')).toHaveLength(1);
+      expect(child.listenerCount('exit')).toBe(0);
+    } finally {
+      groupPresent = false;
+      if (child.signalCode === null) { child.signalCode = 'SIGKILL'; child.emit('exit', null, 'SIGKILL'); }
+      await vi.advanceTimersByTimeAsync(20);
+      await settled;
+      vi.restoreAllMocks();
+      Object.defineProperty(process, 'platform', { value: platform });
+      vi.useRealTimers();
+    }
+  });
+
   it.each([undefined, 'isolated', 'inherit'] as const)('keeps Harness home inside the selected diagnostic environment (%s)', async (nativeEnvironment) => {
     const { queryDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
     const home = join(tmpdir(), 'crosschat-diagnostic-scoped-home');
@@ -174,6 +219,10 @@ describe('isolated cancellable diagnostics', () => {
   it('terminates a real probe child through the default built isolation path on cancellation', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'crosschat-diagnostic-tree-'));
     const marker = join(dir, 'probe-pid');
+    const diagnosticDir = join(dir, 'diagnostics');
+    const servicesDir = join(dir, 'services');
+    mkdirSync(diagnosticDir);
+    mkdirSync(servicesDir);
     let probePid: number | undefined;
     let settled: Promise<string> | undefined;
     try {
@@ -184,16 +233,20 @@ describe('isolated cancellable diagnostics', () => {
         compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2023 },
       }).outputText;
       writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
-      writeFileSync(join(dir, 'query.js'), built);
+      writeFileSync(join(diagnosticDir, 'query.js'), built);
       const modelSource = readFileSync(new URL('../src/application/diagnostics/model.ts', import.meta.url), 'utf8');
-      writeFileSync(join(dir, 'model.js'), ts.transpileModule(modelSource, {
+      writeFileSync(join(diagnosticDir, 'model.js'), ts.transpileModule(modelSource, {
+        compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2023 },
+      }).outputText);
+      const processSource = readFileSync(new URL('../src/application/services/owned-process.ts', import.meta.url), 'utf8');
+      writeFileSync(join(servicesDir, 'owned-process.js'), ts.transpileModule(processSource, {
         compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2023 },
       }).outputText);
       const childScript = `require('node:fs').writeFileSync(${JSON.stringify(marker)},String(process.pid));setInterval(()=>{},1000);`;
       const isolatedScript = `import {spawnSync} from 'node:child_process'; spawnSync(process.execPath,['-e',${JSON.stringify(childScript)}]);`;
-      writeFileSync(join(dir, 'worker.js'), isolatedScript);
-      writeFileSync(join(dir, 'isolated.js'), isolatedScript);
-      const { queryDoctorDiagnostics } = await import(pathToFileURL(join(dir, 'query.js')).href);
+      writeFileSync(join(diagnosticDir, 'worker.js'), isolatedScript);
+      writeFileSync(join(diagnosticDir, 'isolated.js'), isolatedScript);
+      const { queryDoctorDiagnostics } = await import(pathToFileURL(join(diagnosticDir, 'query.js')).href);
       const controller = new AbortController();
       const pending = queryDoctorDiagnostics({ signal: controller.signal });
       settled = pending.then(() => 'resolved', (error: Error) => error.name);
