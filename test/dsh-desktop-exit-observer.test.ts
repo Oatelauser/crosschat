@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { WebSocketServer } from 'ws';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { assessDshDesktopNaturalExit, connectDshExitInspector, DSH_DESKTOP_MAIN_SHA256, locateDshDesktopExitBreakpoints, resolveOwnedDshDesktopProfile, serializeDshExitEvidence } from './helpers/dsh-desktop-exit-observer.mjs';
+import { assessDshDesktopNaturalExit, connectDshExitInspector, DSH_DESKTOP_MAIN_SHA256, hasDshOwnedRegistrationRelease, locateDshDesktopExitBreakpoints, resolveOwnedDshDesktopProfile, serializeDshExitEvidence } from './helpers/dsh-desktop-exit-observer.mjs';
 import { pollDsh } from './helpers/dsh-live-fixture.mjs';
 
 const profileWrites = vi.hoisted((): { paths: string[] } => ({ paths: [] }));
@@ -122,6 +122,21 @@ describe('owned native Desktop profile reuse', () => {
     await expect(resolveOwnedDshDesktopProfile(root, target)).rejects.toThrow();
     expect(profileWrites.paths.slice(after)).not.toContain(target);
     await expect(stat(join(outside, 'new-profile'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+});
+
+describe('this native launch registration release', () => {
+  const instance = '11111111-1111-4111-8111-111111111111', current = `${instance}.json`, old = '22222222-2222-4222-8222-222222222222.json';
+  const baseline = { [old]: 'a'.repeat(64) };
+  it('accepts this exact instance removal while retaining an unchanged previous registration', () => {
+    expect(hasDshOwnedRegistrationRelease(baseline, { ...baseline }, instance)).toBe(true);
+    expect(hasDshOwnedRegistrationRelease({}, {}, instance)).toBe(true);
+  });
+  it('refuses surviving current records, erased or altered previous records and unexpected new ownership', () => {
+    for (const after of [{ ...baseline, [current]: 'b'.repeat(64) }, {}, { [old]: 'c'.repeat(64) },
+      { ...baseline, 'unexpected.json': 'd'.repeat(64) }]) expect(hasDshOwnedRegistrationRelease(baseline, after, instance)).toBe(false);
+    expect(hasDshOwnedRegistrationRelease({ [current]: 'b'.repeat(64) }, {}, instance)).toBe(false);
+    expect(hasDshOwnedRegistrationRelease({}, {}, '../foreign')).toBe(false);
   });
 });
 

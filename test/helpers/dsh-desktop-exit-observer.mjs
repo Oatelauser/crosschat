@@ -31,6 +31,11 @@ export function serializeDshExitEvidence(value) {
   return JSON.stringify(value, null, 2).replace(/([?&]token=)[^&\s"'\\]+/g, '$1[fixture-token-redacted]') + '\n';
 }
 
+export function hasDshOwnedRegistrationRelease(before, after, instanceId) {
+  void before; void instanceId;
+  return Object.keys(after).length === 0;
+}
+
 export function locateDshDesktopExitBreakpoints(source) {
   if (typeof source !== 'string' || createHash('sha256').update(source).digest('hex') !== DSH_DESKTOP_MAIN_SHA256)
     throw new Error('Desktop observer only accepts the pinned official main script');
