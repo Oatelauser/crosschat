@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
@@ -29,7 +30,16 @@ export async function snapshotDshStoredChats(root, expectedTexts = []) {
           let content = bytes;
           if (entry.name.endsWith('.zstd')) {
             if (typeof zlib.zstdDecompressSync !== 'function') throw new Error('This Node runtime cannot inspect native zstd conversation data');
-            content = zlib.zstdDecompressSync(bytes, { maxOutputLength: 16 * 1024 * 1024 });
+            const parts = []; let offset = 0, total = 0;
+            // Native persistence appends independent frames. Node's one-shot API stops at the first frame;
+            // its public info result records the input consumed, so walk each frame without private decoders.
+            while (offset < bytes.length) {
+              const decoded = zlib.zstdDecompressSync(bytes.subarray(offset), { info: true, maxOutputLength: 16 * 1024 * 1024 - total });
+              const consumed = decoded.engine.bytesWritten;
+              if (!Number.isSafeInteger(consumed) || consumed <= 0 || consumed > bytes.length - offset) throw new Error('Native zstd frame did not provide valid forward progress');
+              parts.push(decoded.buffer); total += decoded.buffer.length; offset += consumed;
+            }
+            content = Buffer.concat(parts, total);
           }
           for (const text of expectedTexts) if (content.includes(text)) observed.add(text);
         }
