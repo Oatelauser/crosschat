@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
-import { appendFile, mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
-import { randomBytes } from 'node:crypto';
+import { appendFile, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 import { createElement } from 'react';
 import { render, Text } from 'ink';
 import { launchPty } from './tui-pty-driver.mjs';
+import { createDshOwnedNode } from './dsh-owned-node.mjs';
 import { assessDshCallerSourceIdentity, createDshFixture, dshIdentityBootstrapCommand, pollDsh } from './dsh-live-fixture.mjs';
 
 const workspace = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -41,10 +41,22 @@ async function fixture() {
   maintenance.preview = async (request) => { const result = await originalPreview(request); await record({ event: 'preview', result }); return result; };
   maintenance.execute = async (request) => { assert.equal(request.operationId, 'install-skills'); const result = await originalExecute(request); await record({ event: 'maintenance', result }); return result; };
   const maint = createMaintenanceResource({ maintenance });
+  const [{ createDoctorResource }, { createLocalOverview }] = await Promise.all([
+    import('../../dist/tui/resources/overview.js'), import('../../dist/application/observations/overview.js'),
+  ]);
+  const doctor = createDoctorResource({ overview: createLocalOverview({ home: config.home,
+    discovery: new DiscoveryService([createDshSessionReader({ home: config.home })]),
+    nativeEnvironment: 'inherit',
+    env: { PATH: '', HOME: config.home, USERPROFILE: config.home, DSH_HOME: config.dshHome,
+      CODEX_HOME: join(config.home, '.codex'), CODEX_SQLITE_HOME: join(config.home, '.codex'), CLAUDE_CONFIG_DIR: join(config.home, '.claude'),
+      CROSSCHAT_CLAUDE_BIN: 'fixture-unavailable', CROSSCHAT_CODEX_BIN: 'fixture-unavailable' },
+  }) });
+  const readDoctor = doctor.adapter.read;
+  doctor.adapter.read = async (request) => { const page = await readDoctor(request); await record({ event: 'doctor', page }); return page; };
   const tcp = createTcpResources({ tcp: createTcpApplication({ baseDir: join(config.home, '.crosschat') }) });
   const readMembers = tcp.members.adapter.read;
   tcp.members.adapter.read = async (request) => { const page = await readMembers(request); await record({ event: 'members', page }); return page; };
-  const bindings = new Map([sessions, maint, tcp.stars, tcp.members].map((binding) => [binding.resource.id, binding]));
+  const bindings = new Map([sessions, maint, doctor, tcp.stars, tcp.members].map((binding) => [binding.resource.id, binding]));
   const warmup = render(createElement(Text, null, 'C09 terminal baseline'), { interactive: true, patchConsole: false, exitOnCtrlC: false });
   await warmup.waitUntilRenderFlush(); warmup.unmount(); await warmup.waitUntilExit();
   const before = snapshot();
@@ -60,7 +72,7 @@ async function validate() {
   const root = await realpath(process.env.DSH_TUI_EVIDENCE_ROOT);
   const owner = JSON.parse(await readFile(join(root, 'ownership.json'), 'utf8')); assert.equal(owner.task, 'c09-dsh-tui'); assert.equal(owner.root, root);
   const round = await mkdtemp(join(root, 'tui-'));
-  let runtime, pty, broker, node, pipe, nodeRun, bootstrap = false;
+  let runtime, pty, node, bootstrap = false;
   const results = { scope: 'Official npm/Web Host + production bridge/reader + built TUI in Windows ConPTY; no browser or Desktop UI', checks: [] };
   try {
     runtime = await createDshFixture({ runtime: process.env.DSH_TUI_RUNTIME_DIR, parentRoot: root }, () => {
@@ -73,32 +85,8 @@ async function validate() {
     const identity = assessDshCallerSourceIdentity(runtime.model.requests, { session: first.id, profile: 'web', dshHome: runtime.env.DSH_HOME });
     assert.equal(identity.ready, true); results.identity = identity;
     results.version = runtime.info.version; results.pid = runtime.pid; results.sessions = [first.id, second.id];
-    const [{ Broker }, { NodeClient, attachPipePath }, { connectAttachPipe }, { writeBrokerFile }, { FileInbox }, { listDshThreads }] = await Promise.all([
-      import('../../dist/serve/broker.js'), import('../../dist/serve/node.js'), import('../../dist/serve/attach-client.js'),
-      import('../../dist/serve/registry.js'), import('../../dist/serve/file-channel.js'), import('../../dist/dsh/client.js'),
-    ]);
-    const baseDir = join(runtime.env.HOME, '.crosschat'), tcpDir = join(baseDir, 'tcp'); await mkdir(tcpDir, { recursive: true });
-    const machineId = '11111111222233334444555555555555', starId = 'c09-dsh-owned-star', registryFile = join(tcpDir, 'broker.json');
-    const key = randomBytes(32).toString('hex');
-    writeBrokerFile(registryFile, { stars: [{ starId, name: 'C09-OWNED-STAR', nodes: [{ label: 'c09-node', key, addedAt: new Date().toISOString() }], roster: [] }] });
-    broker = new Broker({ registryFile, statusFile: join(tcpDir, 'status-broker.json'), port: 0, version: 'c09-owned-fixture',
-      machineId: () => '66666666777788889999aaaaaaaaaaaa', hostname: () => 'C09-broker', now: Date.now, log: () => {}, heartbeatMs: 60000,
-      deliverLocal: async () => { throw new Error('This TUI validation never sends a broker message'); } });
-    const port = await broker.start();
-    const entry = { host: '127.0.0.1', port, key, name: 'C09-OWNED-STAR', starId };
-    await writeFile(registryFile, JSON.stringify({ ...JSON.parse(await readFile(registryFile, 'utf8')), port }));
-    const configFile = join(tcpDir, 'node.json'); await writeFile(configFile, JSON.stringify({ brokers: [entry] }));
-    node = new NodeClient({ config: { entries: [entry] }, configFile, machineId: () => machineId, now: Date.now, log: () => {}, memberCheckMs: 60000,
-      codexHome: join(runtime.env.HOME, '.codex'), fileInbox: new FileInbox({ inboxDir: join(baseDir, 'inbox'), partsDir: join(baseDir, 'parts') }),
-      makeSendDeps: () => ({ env: runtime.env, listClaudeSessions: () => ({ sessions: [], malformed: 0 }), listCodexThreads: async () => [],
-        listDshThreads: () => listDshThreads({ home: runtime.env.HOME }), deliverClaude: async () => { throw new Error('No Claude fixture'); },
-        deliverCodex: async () => { throw new Error('No Codex fixture'); }, sendLogFile: join(baseDir, 'send-log.jsonl'), outboxDir: join(baseDir, 'outbox'), now: Date.now }),
-    });
-    nodeRun = node.run().catch((error) => { results.nodeFailure = error.message; }); await node.waitForState('online');
-    pipe = await connectAttachPipe(attachPipePath(entry, tcpDir));
-    const native = (await listDshThreads({ home: runtime.env.HOME })).find((thread) => thread.id === first.id);
-    assert(native); assert.equal(native.endpointType, 'host');
-    assert.equal((await pipe.send({ op: 'attach', sessionId: first.id, tool: 'dsh', endpointType: native.endpointType, name: native.name })).ok, true);
+    node = await createDshOwnedNode({ root, home: runtime.env.HOME, env: runtime.env, nativeId: first.id, endpointType: 'host' });
+    const { starId, machineId } = node;
     results.starId = starId; results.machineId = machineId;
     const profileFile = join(runtime.env.DSH_HOME, 'profiles', 'web', 'package.json');
     const profileBefore = await readFile(profileFile, 'utf8');
@@ -165,11 +153,14 @@ async function validate() {
   } catch (error) {
     results.status = 'failed'; results.failure = { message: error.message, stack: error.stack }; throw error;
   } finally {
-    await pty?.dispose();
-    pipe?.close(); await node?.stop(); await nodeRun; await broker?.stop();
-    if (runtime) { await writeFile(join(round, 'runtime-logs.json'), JSON.stringify(runtime.logs)); await runtime.close(); results.cleanup = runtime.cleanup; }
-    await writeFile(join(round, 'summary.json'), JSON.stringify(results, null, 2));
-    process.stdout.write(`${JSON.stringify({ round, ...results })}\n`);
+    try { await pty?.dispose(); }
+    finally {
+      try { await node?.close(); }
+      finally {
+        try { if (runtime) { await writeFile(join(round, 'runtime-logs.json'), JSON.stringify(runtime.logs)); await runtime.close(); results.cleanup = runtime.cleanup; } }
+        finally { await writeFile(join(round, 'summary.json'), JSON.stringify(results, null, 2)); process.stdout.write(`${JSON.stringify({ round, ...results })}\n`); }
+      }
+    }
   }
 }
 
