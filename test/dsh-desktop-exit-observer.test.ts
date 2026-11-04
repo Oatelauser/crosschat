@@ -74,11 +74,11 @@ describe('owned Desktop inspector transport', () => {
     return { value, url: `ws://127.0.0.1:${address.port}/owned`, async close() { for (const client of value.clients) client.terminate(); await new Promise<void>((done) => value.close(() => done())); } };
   }
 
-  it('rejects malformed protocol values explicitly instead of treating them as missing or late replies', async () => {
+  it.each(['[]', 'null', 'true'])('rejects malformed protocol values explicitly instead of treating them as missing or late replies (%s)', async (packet) => {
     const fixture = await server(), events: string[] = [];
     const client = await connectDshExitInspector(fixture.url, (method: string) => events.push(method));
     try {
-      for (const peer of fixture.value.clients) peer.send('[]');
+      for (const peer of fixture.value.clients) peer.send(packet);
       await expect.poll(() => events.includes('transport-error'), { timeout: 1000 }).toBe(true);
     } finally { await client.close(); await fixture.close(); }
   });

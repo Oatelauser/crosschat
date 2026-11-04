@@ -10,6 +10,7 @@ export function locateDshDesktopExitBreakpoints(source) {
     throw new Error('Desktop observer only accepts the pinned official main script');
   const anchors = [
     ['birth', 'this.child = child;\n\t\tchild.stderr?.setEncoding("utf8");', 'child.stderr'],
+    ['ready', 'if (message.type === "ready") this.readyResolve({', 'this.readyResolve', 'message.type === "ready"'],
     ['shutdown', 'if (child.connected) child.send({ type: "shutdown" }, (error) => {', 'child.send', 'child.connected === true'],
     ['ack', 'else if (message.type === "shutdown-complete") if (this.stopping) this.shutdownCompleted = true;', 'this.shutdownCompleted', 'message.type === "shutdown-complete" && this.stopping === true'],
     ['close', 'child.once("close", (code) => {\n\t\t\t\tconst suffix = this.stderr.trim()', 'const suffix'],
@@ -67,6 +68,11 @@ export async function connectDshExitInspector(url, onEvent) {
   socket.on('message', (raw) => {
     let message;
     try { message = JSON.parse(String(raw)); } catch { fail(); socket.terminate(); onEvent('transport-error', { message: 'Invalid inspector JSON' }); return; }
+    if (!record(message) || (typeof message.method === 'string'
+      ? message.params !== undefined && !record(message.params)
+      : !Number.isSafeInteger(message.id) || (!record(message.result) && !record(message.error)))) {
+      fail(); socket.terminate(); onEvent('transport-error', { message: 'Invalid inspector packet shape' }); return;
+    }
     if (typeof message.method === 'string') { onEvent(message.method, message.params ?? {}); return; }
     const request = pending.get(message.id); if (!request) return;
     pending.delete(message.id); clearTimeout(request.timer);
