@@ -40,7 +40,7 @@ try {
 } catch (failure) { await model.close(); throw failure; }
 const report = { expectedSourceSha256: DSH_DESKTOP_MAIN_SHA256, continuous: true, errors: [], events: [], pauses: [],
   nativeUiTurnRequested: live,
-  scope: 'Fixed formal user-retained Desktop; passive debugger + native held handle; no install/uninstall/C2 execution' };
+  scope: 'Fixed formal user-retained Desktop; passive debugger + native held handle; no application install/official uninstall/C2 execution' };
 const electron = `process.getBuiltinModule('node:module').createRequire(${JSON.stringify(appPackage)})('electron')`;
 const protocol = []; const points = new Map();
 let main, renderer, child, mainResult, hostMonitor, hostReady, finishing, queue = Promise.resolve(), observing = false, ownMain = false, quitRequested = false, mainExited = false;
@@ -178,7 +178,7 @@ try {
 const application = runDshDesktopProcess(binary, [`--inspect-brk=127.0.0.1:${port}`,
   ...(live ? ['--remote-debugging-address=127.0.0.1', `--remote-debugging-port=${rendererPort}`] : []),
   `--user-data-dir=${join(artifacts, 'electron-user-data')}`], {
-  cwd: join(artifacts, 'native', 'workspace'), env, timeoutMs: 180000,
+  cwd: join(profileRoot, 'workspace'), env, timeoutMs: 180000,
   spawnImpl: (...args) => { child = spawn(...args); return child; },
 });
 void application.then(() => { mainExited = true; }, (failure) => { mainExited = true; error('main process runner', failure); });
