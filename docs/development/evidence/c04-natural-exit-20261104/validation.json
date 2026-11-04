@@ -324,8 +324,10 @@
     "precleanupOwnedProcessCount": 0,
     "userPathContainsFixture": false,
     "userDshRetained": true,
-    "ownedAggregateRootRemoved": false,
-    "aggregateRootDisposition": "awaiting user manual removal after verified archive and zero owned processes",
+    "ownedAggregateRootRemoved": true,
+    "aggregateRootDisposition": "removed by user; exact root absence and retained DSH installation verified read-only on 2026-11-04",
+    "removedBy": "user",
+    "absenceVerifiedReadOnly": true,
     "automaticDeletion": "rejected: blocked by policy; no retry or alternate tool used"
   },
   "sourceFiles": [

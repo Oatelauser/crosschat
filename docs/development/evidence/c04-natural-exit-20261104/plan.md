@@ -20,7 +20,7 @@
 
 真实UI增量的推进合同（现已完成）：在同一个owned测试根内复用已完成初始化且已完全停止的native profile，以正式内置CLI安装生产桥，然后重新启动正式UI，执行唯一marker的原生pwsh身份调用，验证当前完整sessionId/desktop来源及精确Host，再观察同一Host的正常退出与桥撤登记。内置dsh.cmd已只读核实为Electron --expose-internals + app.asar/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js；已用同样固定参数直接执行，保持shell:false。这个增量未执行官方卸载，未产生假的C1 Host输出/记录或绕过C2。
 
-现场：独占根node_modules/.cache/crosschat-c04-natural-20261104-hu9W8P，owner=c04-native-natural-exit；八轮执行均已结束，相关进程0，最终85项脱敏证据已归档并核验。自动删除被拒（仅blocked by policy），没有换工具重试，已请求用户手动删除，最终处置以[摘要](validation.json)为准。C11根已由用户手动删除并只读核实，收口47e9b7e。没有活动worker，后续仍由root独立推进。C05远端集成、外部Actions、C00平台范围及官方卸载所需独立环境继续按原边界。
+现场：独占根node_modules/.cache/crosschat-c04-natural-20261104-hu9W8P，owner=c04-native-natural-exit；八轮执行均已结束，相关进程0，最终85项脱敏证据已归档并核验。自动删除被拒（仅blocked by policy），没有换工具重试；用户随后手动删除，2026-11-04只读核实该根不存在且用户DSH安装保留，清理关闭，见[摘要](validation.json)。C11根也已由用户手动删除并只读核实，收口47e9b7e。没有活动worker，后续仍由root独立推进。C05本地集成由用户后续明确移交，外部Actions、C00平台范围及官方卸载所需独立环境继续按各自边界。
 
 ## 真实UI切片收口
 

@@ -3315,3 +3315,5 @@ C11的Windows npm/Web本地切片移出活动实施；新workflow只手动，报
 已批准的Harness技能、活桥、profile只读诊断和CLI/JSON/TUI源事实仍为e3b777e，既有定向/真实ConPTY证据保留。核对当前CLI帮助、skill全部references、home/profile与项目/历史副本、覆盖/额外文件/卸载保留、官方插件维护及错误/不明零重发教学；六种收件类型和四个工具家族已有正确教学。更新Harness指南的npm rc.2/rc.5与正式Desktop rc.2真实边界，并补架构总览的OpenCode/Harness原生通道。命令、产品输出、包描述和用户README未改。
 
 [包布局摘要](evidence/c10-docs-20261104/validation.json)与npm离线dry-run原始输出保留：433项条目包含全部15项skill/bridge源资产，未执行脚本、联网、生成tgz或发布包。这证明当前本地交付布局，不冒充发布包安装或跨平台执行。该已批准DSH Windows诊断/基础教学切片移出活动实施；其它工具/平台、条件原生事实及托管范围保留。纯文档核对消费最新2753/11，不重复全量测试。
+
+2026-11-04清理补记：用户确认手动删除本轮crosschat-c04-natural-20261104-hu9W8P总根，代理只读核实精确路径不存在，D:/soft/DeepSeek Harness/DeepSeek Harness.exe仍存在。保留原自动审批拒绝与85项脱敏证据，不重试删除；本轮测试数据清理关闭。
