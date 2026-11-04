@@ -27,6 +27,14 @@ beforeEach(() => {
 });
 
 describe('desktop executable snapshot races', () => {
+  it('reports the bounded CIM timeout without trusting a partial process table', async () => {
+    boundary.runCommand.mockResolvedValue({ code: null, signal: 'SIGTERM', timedOut: true,
+      stdout: JSON.stringify([owned]), stderr: '' });
+    const result = await inspectDesktopRunProcesses(root, env);
+    expect(result).toMatchObject({ state: 'unknown', processes: [], error: expect.stringContaining('timed out after 5000ms') });
+    expect(boundary.realpath).toHaveBeenCalledExactlyOnceWith(root);
+  });
+
   it('ignores an unrelated short-path executable only after the sampled process has explicitly exited', async () => {
     boundary.kill.mockImplementation((pid: number) => {
       if (pid === gone.ProcessId) throw Object.assign(new Error('No such process'), { code: 'ESRCH' });
