@@ -1,0 +1,368 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "task": "C11-DSH-Windows-npm-Web-from-zero-local",
+  "codeCheckpoint": "8137e1a",
+  "lastProductChange": "e3b777e",
+  "authoring": "root independent development and self-review; no workers or independent reviewer",
+  "scope": {
+    "officialNpmRuntime": true,
+    "officialPluginManager": true,
+    "ordinaryWebSessions": true,
+    "scriptedLocalModel": true,
+    "skillLifecycle": true,
+    "diagnostics": true,
+    "tui": true,
+    "browserUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "crosschatBuild": "local repository dist + packaged skill/bridge source; not a published npm release acceptance",
+  "environment": {
+    "os": "Windows 11 Pro for Workstations",
+    "arch": "x64",
+    "node": "25.0.0",
+    "npm": "11.6.2",
+    "nativeProfile": "web",
+    "packageManager": "pnpm 11.28.5"
+  },
+  "builds": {
+    "baseline": {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.2",
+      "url": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.2.tgz",
+      "integrity": "sha512-tvY+yhfKRifthbqPe/OK0AYxM5ZkvqfYq/jMYgJcEUxiRRL1Vwra3Ti5TB6AXgSWQdiPHYh/Vp6SJa9yHwMNuw=="
+    },
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.28.5",
+      "url": "https://registry.npmjs.org/pnpm/-/pnpm-11.28.5.tgz",
+      "integrity": "sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng=="
+    },
+    "candidate": {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.5",
+      "url": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.5.tgz",
+      "integrity": "sha512-WkyJZv4zl9sCAxSzRctGm58m0rilGqwR6pniBiLOz5CPDfHfDuAUicg0AAazXI7oj/Cph6/cjNTncA/rpLTXpw=="
+    }
+  },
+  "classification": {
+    "kind": "compatible",
+    "notify": false
+  },
+  "retryNeeded": false,
+  "acceptedAttempts": [
+    {
+      "label": "baseline",
+      "version": "0.2.1-rc.2",
+      "runId": "2587bb02-71ae-4e35-aad1-41d6112bccf4",
+      "source": {
+        "status": "identified",
+        "sourceTool": "dsh",
+        "basis": "native",
+        "association": "verified",
+        "scope": "instance",
+        "shouldAsk": false
+      },
+      "checks": [
+        {
+          "name": "official-profile-plugin-and-skill-installation",
+          "status": "passed",
+          "elapsedMs": 8843
+        },
+        {
+          "name": "native-skill-load-and-current-source",
+          "status": "passed",
+          "elapsedMs": 1113
+        },
+        {
+          "name": "native-roundtrip-and-typed-discovery",
+          "status": "passed",
+          "elapsedMs": 4069
+        },
+        {
+          "name": "same-source-diagnostics-and-real-terminal",
+          "status": "passed",
+          "elapsedMs": 3841
+        },
+        {
+          "name": "skill-update-and-profile-preserving-shutdown",
+          "status": "passed",
+          "elapsedMs": 263
+        },
+        {
+          "name": "official-plugin-and-crosschat-removal-with-owned-cleanup",
+          "status": "passed",
+          "elapsedMs": 941
+        }
+      ],
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "process": {
+        "code": 0,
+        "signal": null,
+        "timedOut": false
+      },
+      "nativeSessionIds": [
+        "session-7e70051a-98b2-4c09-ab70-46ffdc3e611d",
+        "session-55569a4d-2c06-41b2-8688-c0249383f089"
+      ],
+      "verifiedStoredContentMarkers": [
+        "c11_2587bb02_skill",
+        "c11_2587bb02_request",
+        "c11_2587bb02_reply"
+      ],
+      "retainedNativeChatFiles": 2,
+      "profileSha256": "207430228a8315c78dd73ee35c0f4ca6a2092121880031863ac15b38ed3ce5a8",
+      "archiveDirectory": "native/full-sequence-accepted/baseline-wUJRTt"
+    },
+    {
+      "label": "candidate",
+      "version": "0.2.1-rc.5",
+      "runId": "b45a8113-3b10-4355-b570-19b73fda0373",
+      "source": {
+        "status": "identified",
+        "sourceTool": "dsh",
+        "basis": "native",
+        "association": "verified",
+        "scope": "instance",
+        "shouldAsk": false
+      },
+      "checks": [
+        {
+          "name": "official-profile-plugin-and-skill-installation",
+          "status": "passed",
+          "elapsedMs": 17010
+        },
+        {
+          "name": "native-skill-load-and-current-source",
+          "status": "passed",
+          "elapsedMs": 1569
+        },
+        {
+          "name": "native-roundtrip-and-typed-discovery",
+          "status": "passed",
+          "elapsedMs": 6967
+        },
+        {
+          "name": "same-source-diagnostics-and-real-terminal",
+          "status": "passed",
+          "elapsedMs": 4285
+        },
+        {
+          "name": "skill-update-and-profile-preserving-shutdown",
+          "status": "passed",
+          "elapsedMs": 306
+        },
+        {
+          "name": "official-plugin-and-crosschat-removal-with-owned-cleanup",
+          "status": "passed",
+          "elapsedMs": 996
+        }
+      ],
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "process": {
+        "code": 0,
+        "signal": null,
+        "timedOut": false
+      },
+      "nativeSessionIds": [
+        "session-7a131a48-204f-427d-9fba-5d16bc92b488",
+        "session-9c640a41-2417-4264-80f6-df1d4d2f637a"
+      ],
+      "verifiedStoredContentMarkers": [
+        "c11_b45a8113_skill",
+        "c11_b45a8113_request",
+        "c11_b45a8113_reply"
+      ],
+      "retainedNativeChatFiles": 2,
+      "profileSha256": "207430228a8315c78dd73ee35c0f4ca6a2092121880031863ac15b38ed3ce5a8",
+      "archiveDirectory": "native/full-sequence-accepted/candidate-Q5EpJg"
+    }
+  ],
+  "checks": {
+    "full": {
+      "command": "npm run check",
+      "passed": 2732,
+      "skipped": 11,
+      "passedFiles": 233,
+      "skippedFiles": 3,
+      "modules": 204,
+      "edges": 688,
+      "exitCode": 0,
+      "liveEnabled": false,
+      "maxWorkers": 2,
+      "minWorkers": 1,
+      "raw": "check-final.txt"
+    },
+    "targetedBeforeMultiframe": {
+      "passed": 157,
+      "files": 3,
+      "raw": "stored-chat-green.txt"
+    },
+    "finalStoredChatReader": {
+      "passed": 24,
+      "raw": "stored-chat-multiframe-green.txt"
+    },
+    "reporterContract": {
+      "passed": 28,
+      "raw": "cleanup-category-green.txt"
+    },
+    "explicitScriptEslint": "passed"
+  },
+  "preservation": {
+    "nativeSkillToolLoadedCompleteCurrentInstructions": true,
+    "nativeShellReturnedVerifiedCallerSource": true,
+    "nativeRoundtripUsedExactReceivedHint": true,
+    "doctorTextJsonTuiSharedFacts": true,
+    "realConPtyAndOwnedBrokerNode": true,
+    "staleSkillOverwritten": true,
+    "additionalSkillFilePreservedOnUpdate": true,
+    "officialPluginRemovedBeforeCrosschatUninstall": true,
+    "profileBytesAndTwoStoredChatsUnchangedByUninstall": true,
+    "storedChatContentCheckedAcrossAllZstdFrames": true,
+    "terminalModesAndListenersRestored": true
+  },
+  "reporting": {
+    "existingCommunicationEightChecksDefaultPreserved": true,
+    "newWorkflow": "dsh-onboarding-compat.yml",
+    "manualOnly": true,
+    "hostedRun": null,
+    "externalIssueCreated": false,
+    "writeJobHasNoCheckoutOrNativeExecution": true,
+    "boundedIndependentJsonVerification": true,
+    "requiresGoodBaselineAndSameCandidateFailureTwiceWithCompleteRelease": true
+  },
+  "failureHistory": [
+    {
+      "path": "native/native-red-1",
+      "result": "3 phases passed; transient terminal notice/clipboard readiness expectation failed",
+      "rawCategory": "compatibility",
+      "diagnosis": "fixture timing, not accepted as an upstream compatibility regression; wait exact member row and clipboard event"
+    },
+    {
+      "path": "native/native-red-2",
+      "result": "4 phases passed; fixture.stop was not implemented",
+      "rawCategory": "compatibility",
+      "diagnosis": "meaningful fixture lifecycle development RED; stop/close ownership added"
+    },
+    {
+      "path": "native/native-green-1",
+      "result": "six phases passed",
+      "gap": "successful TUI application JSONL was removed before finally could save it; not reconstructed; later serial runs retain the original"
+    },
+    {
+      "path": "checks/runner-green.txt",
+      "result": "report-link fixture failed with EPERM on Windows",
+      "diagnosis": "test supplies filesystem link metadata over otherwise real valid bytes; no skip or relaxed report guard"
+    },
+    {
+      "path": "native/full-sequence",
+      "result": "both versions passed six phases before stored content verification was strengthened"
+    },
+    {
+      "path": "native/full-sequence-final",
+      "result": "both versions passed five phases; raw compressed-byte marker scan failed",
+      "classification": "baseline-failed, notify=false",
+      "diagnosis": "infrastructure fixture error; native chat files were actually zstd-compressed"
+    },
+    {
+      "path": "native/full-sequence-verified",
+      "result": "both versions passed five phases; one-shot decoder read only the first append frame",
+      "classification": "baseline-failed, notify=false",
+      "diagnosis": "infrastructure fixture error; reproduced consumed input versus full stream, added multi-frame and corrupted-tail RED cases"
+    },
+    {
+      "path": "native/native-multiframe-green",
+      "result": "six phases passed with actual multi-frame content verification"
+    },
+    {
+      "path": "checks/stored-chat-red.txt",
+      "result": "4 failed/18 passed"
+    },
+    {
+      "path": "checks/stored-chat-multiframe-red.txt",
+      "result": "2 failed/22 passed"
+    }
+  ],
+  "notValidated": [
+    "GitHub Node22 hosted run, artifact retrieval and permissions",
+    "scheduled dispatch or platform matrix",
+    "browser UI, formal Desktop or other operating systems in this C11 probe",
+    "a published crosschat npm package installation",
+    "formal Desktop clean-runner installation, trusted publisher default, natural Host observer, official uninstall/system-registration cleanup",
+    "all profile/project/history combinations, C13 crash/reconnect variants, C18/C20 enhancements",
+    "model intelligence or personal model-provider configuration"
+  ],
+  "cleanup": {
+    "allProbeRuntimesStopped": true,
+    "allProbeRegistrationsRemoved": true,
+    "allNativeRunRootsRemoved": true,
+    "serialInstallationRootsRemoved": true,
+    "userDshRetained": true,
+    "ownedAggregateRootRemoved": false,
+    "aggregateRootDisposition": "awaiting user manual removal after archive and zero-owned-process verification",
+    "precleanupOwnedProcessCount": 0,
+    "ownedTemporaryRootNames": [
+      "crosschat-dsh-ci-Jb0531",
+      "crosschat-dsh-ci-cp9n7J",
+      "crosschat-dsh-ci-j8DwmU",
+      "crosschat-dsh-ci-xnKfCb"
+    ],
+    "automaticDeletion": "rejected: blocked by policy; no retry or alternate tool used"
+  },
+  "sourceFiles": [
+    {
+      "path": "scripts/dsh-compat-ci.mjs",
+      "sha256": "172485511b5160de7e69a4ce90e4918601c2ac14ab3a7de8d6146875a2341b3d"
+    },
+    {
+      "path": "scripts/dsh-onboarding.mjs",
+      "sha256": "cf476be210d4656b67ee7c8c0167a297e0d5c7d4b6381a5d9229b7ff5a1ffed6"
+    },
+    {
+      "path": "scripts/dsh-onboarding-contract.mjs",
+      "sha256": "4ac6b99189ea99f2be967186f5c8a10ca51a4af0b0c4fa7d44f678bde1ea09c4"
+    },
+    {
+      "path": "test/helpers/dsh-live-fixture.mjs",
+      "sha256": "8ec54ae3445b504db65b254600047dee982e3963efd78dafcade71e60bc6014a"
+    },
+    {
+      "path": "test/helpers/dsh-owned-node.mjs",
+      "sha256": "a1d822bda8d4d36ea6c5e62d08e44d400439590e2e3886687f7935f7d3da85bc"
+    },
+    {
+      "path": "test/helpers/dsh-tui-pty-validation.mjs",
+      "sha256": "498d83a239423a988faba7e4d58b4365f42c35db6d8eccad6c3f18eb82315bc3"
+    },
+    {
+      "path": "test/dsh-onboarding-ci.test.ts",
+      "sha256": "432ef47b28cbbd0496eb4d6d59ff10e938dfe45aa2a0cf912c6909d18ee0383a"
+    },
+    {
+      "path": "test/dsh-live-fixture.test.ts",
+      "sha256": "db244b30c045146c5f152c310dcb5ed3fc7db86b293bff4d6a9215117cf45099"
+    },
+    {
+      "path": ".github/workflows/dsh-onboarding-compat.yml",
+      "sha256": "971d1115efa5ca9047ea5d7e4e4ddc564771e34b5725e676e43a410e5b0e5266"
+    }
+  ],
+  "archive": {
+    "path": "raw-evidence-redacted.zip",
+    "bytes": 945024,
+    "items": 202,
+    "sha256": "779568e4c0c0c3263dfdada90c2ea5e57e0d3b75a09b4403d26dd31ffb5365a6",
+    "crcAndEveryEntrySha256Verified": true
+  }
+}

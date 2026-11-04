@@ -15,6 +15,8 @@ GitHub要求workflow_dispatch对应的工作流文件先存在于默认分支，
 
 这些配置和本机正式序列已存在；托管run、权限实际效果、artifact下载、定时事件和报告链尚未留证。一次手动成功也不等于已经观察到定时触发。C09的74项Desktop证据以及本地完整check均不能填充C05托管成绩。
 
+2026-11-04追加C11：新增[从零手动工作流](../../.github/workflows/dsh-onboarding-compat.yml)，Windows/Node22、独立dsh-onboarding-win32-x64 artifact、保留21天，复用正式包摘要/串行生命周期。六阶段报告与C05八项通信报告分离，默认入口保持通信检查；本地验收见[C11摘要](evidence/c11-dsh-20261104/validation.json)。报告job仍只处理有界JSON、无checkout或执行原生代码，默认分支才有issues:write，独立重核基线/候选/重试、精确scope及完整释放后去重；没有新增定时。文件存在与本地Node25运行不代表GitHub Node22已验收，远端集成及Actions授权沿下述边界。
+
 ## 继续C05需要的决定与证据
 
 1. 用户确定可用远端集成分支、范围及负责集成的人；本会话保留当前共享开发线，不自动把整个分支推送或合入main。

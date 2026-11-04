@@ -3283,3 +3283,17 @@ TDD链：c20502e为14失败/1通过的行为RED，5f0abca初版GREEN；15c7c81�
 [摘要](evidence/c09-desktop-20261104/validation.json)与[74项脱敏原始证据](evidence/c09-desktop-20261104/raw-evidence-redacted.zip)已归档，ZIP 119485字节，SHA-256=b082e72e23dddcea49d56a720e69bb1d9fa83cc52a59df4c1533a17bbbfb3f48，CRC/逐项SHA核对通过；排除native安装/profile/凭据与tui输入配置。归档前核实相关测试进程0、用户PATH无测试根。总根删除再次被自动审批以blocked by policy拒绝，未重试；用户随后手动删除，代理只读确认不存在，原DSH软件保留。此轮未触发Actions、写远端、派worker或改用户文档。
 
 结合前述npm/Web来源、C10诊断ConPTY及既有共享TUI故障/取消证据，C09的DSH Windows基础TUI切片已验收，移出活动实施范围；其它工具与平台/CI继续按总表，不关闭整个C09父项。
+
+## 2026-11-04 C11 Windows npm/Web本地从零序列
+
+最终工装8137e1a，产品仍为e3b777e；root独立开发/自审，无worker或独立复审。新增独立六阶段探针、报告合同和手动workflow，复用原固定包摘要/pnpm与串行安装owner，C05默认入口及原八项通信检查保留。真实官方npm 0.2.1-rc.2基线→0.2.1-rc.5候选均六项通过，compatible/notify=false，无重试、外部Issue或Actions执行。各次原生Host/登记/run目录与串行安装根正常清理；loopback模型只给定固定工具调用，不使用个人key或证明模型智能。
+
+六阶段覆盖官方profile/桥安装与三侧skill维护；原生skill工具完整返回当前正文；原生pwsh的verified来源与按实际hint双向回信；同源doctor文本/JSON及真实ConPTY列表、精确复制、维护默认取消/实际安装、真实broker/node成员页、resize/终端恢复；覆盖更新保留额外文件；停止Host后官方plugin remove，再crosschat uninstall，profile和两条真实聊天原始文件哈希保持。使用本地构建dist及随包skill/bridge源码，不冒充已发布crosschat npm包的安装验收。完整check退出0：**2732通过/11原有跳过，233文件通过/3跳过，lint/build及204模块688边检查通过**；最多2/最少1 worker，未启用live。脚本另做ESLint通过。
+
+保留全部失效证据：首次成员复制工装等瞬时提示而非实际页/clipboard事件，前三项通过后失败；随后fixture.stop缺失，前四项通过，驱动stop/close同owner收口。两次原报告默认category=compatibility，不改写raw；调查确认为工装问题，没有生成外部报告。首个单版本成功遗漏TUI应用JSONL，因为run根先删除，未补造该文件；后续序列均在关闭前保存原始JSONL。Windows文件symlink fixture因EPERM失败，改为只注入文件系统link元数据，保留真实有效报告字节，不skip或放宽校验。
+
+加强聊天保留检查后，直接在压缩字节查正文、一次性解压仅首帧的两轮基线/候选均在第六项失败，按infrastructure记录、baseline-failed/notify=false，全部清理。DSH聊天为zstd多帧追加；独立双帧诊断确认Node单次解压只消费首帧，最终通过公开info.bytesWritten逐帧核验、有总输出上限，并拒绝损坏尾部。4项内容与2项多帧反例先RED再GREEN；最终单版本及完整双版本均核实本轮skill/request/reply真实内容后，再做原始字节哈希比较，未放宽断言或改原生存储。
+
+[摘要](evidence/c11-dsh-20261104/validation.json)与[202项脱敏原始证据](evidence/c11-dsh-20261104/raw-evidence-redacted.zip)归档，ZIP 945024字节，SHA-256=779568e4c0c0c3263dfdada90c2ea5e57e0d3b75a09b4403d26dd31ffb5365a6；CRC及逐项SHA核验通过。排除原生profile/凭据/聊天存储、安装包/runtime及npm缓存。归档后只读核实本轮相关进程0；独占安装/缓存总根自动删除被拒，原因仅blocked by policy，未换工具重试，已请求用户手动删除。用户DSH软件保留，最终总根处置以摘要补记为准。
+
+C11的Windows npm/Web本地切片移出活动实施；新workflow只手动，报告job仅处理有界JSON、不checkout/执行原生代码、默认分支才有Issue写权限，并独立重核基线/同一候选两次失败/唯一运行身份/精确scope/完整清理及去重。离线反例含清理失败伪装兼容回归，不以summary自称regression直接发Issue。当前本地Node25.0.0，不能替代workflow的GitHub Node22首轮、定时、artifact读取和权限实证；C11其它工具/正式Desktop、C04完整生命周期及C00/C12三平台仍保留。托管集成边界见[前置核实](dsh-hosted-preflight-20261104.md)。未新增产品持久数据格式、命令参数或用户操作要求。
