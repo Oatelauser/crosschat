@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assessDshDesktopNaturalExit, DSH_DESKTOP_MAIN_SHA256 } from './helpers/dsh-desktop-exit-observer.mjs';
+import { assessDshDesktopNaturalExit, DSH_DESKTOP_MAIN_SHA256, locateDshDesktopExitBreakpoints } from './helpers/dsh-desktop-exit-observer.mjs';
 
 const expected = { parentPid: 4100, projectDir: 'D:/owned/profiles/desktop', binary: 'D:/soft/DeepSeek Harness/DeepSeek Harness.exe', sourceSha256: DSH_DESKTOP_MAIN_SHA256 };
 function observed() {
@@ -10,7 +10,8 @@ function observed() {
     { kind: 'close', pid: 4200, code: 0, signal: null },
     { kind: 'complete', pid: 4200, graceful: true, shutdownCompleted: true, code: 0, signal: null, stdoutDestroyed: true, stderrDestroyed: true },
   ], hostHandle: { pid: 4200, heldBeforeShutdown: true, creationTime: '2026-11-04T03:00:00Z', exitCode: 0 },
-  main: { pid: 4100, code: 0, signal: null, failed: false, closed: true, timedOut: false, cancelled: false } };
+  main: { pid: 4100, code: 0, signal: null, failed: false, closed: true, timedOut: false, cancelled: false,
+    truncated: false, releaseUnclear: [], secondaryProblems: [] } };
 }
 
 describe('formal Desktop natural-exit observation boundary', () => {
@@ -51,5 +52,15 @@ describe('formal Desktop natural-exit observation boundary', () => {
       { ...report, events: [report.events[0], report.events[2], report.events[1], ...report.events.slice(3)] },
       { ...report, events: report.events.map((event) => event.kind === 'ack' ? { ...event, pid: 4300 } : event) },
     ]) expect(assessDshDesktopNaturalExit(changed, expected).verified).toBe(false);
+  });
+
+  it('does not infer complete process release from a truncated or unresolved owning Desktop record', () => {
+    const report = observed();
+    for (const main of [{ ...report.main, truncated: true }, { ...report.main, releaseUnclear: ['child'] },
+      { ...report.main, secondaryProblems: ['stop failed'] }]) expect(assessDshDesktopNaturalExit({ ...report, main }, expected).verified).toBe(false);
+  });
+
+  it('refuses breakpoint relocation into any main script other than the pinned official bytes', () => {
+    expect(() => locateDshDesktopExitBreakpoints('another build or injected lifecycle implementation')).toThrow();
   });
 });

@@ -1,0 +1,53 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ❯ test/dsh-desktop-exit-observer.test.ts (7 tests | 2 failed) 13ms
+   ✓ formal Desktop natural-exit observation boundary > accepts the actual owner, ordered private acknowledgement, close and independent held Host handle 2ms
+   ✓ formal Desktop natural-exit observation boundary > keeps a zero OS exit unknown without the real shutdown acknowledgement and stop completion 0ms
+   ✓ formal Desktop natural-exit observation boundary > rejects changed source, another parent/profile/binary and an unrelated Host handle 0ms
+   ✓ formal Desktop natural-exit observation boundary > refuses any kill, non-graceful completion, missing stream close or abnormal main exit 0ms
+   ✓ formal Desktop natural-exit observation boundary > requires continuous observation, one exact Host and the actual lifecycle order 0ms
+   × formal Desktop natural-exit observation boundary > does not infer complete process release from a truncated or unresolved owning Desktop record 6ms
+     → expected true to be false // Object.is equality
+   × formal Desktop natural-exit observation boundary > refuses breakpoint relocation into any main script other than the pinned official bytes 2ms
+     → expected [Function] to throw an error
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-desktop-exit-observer.test.ts > formal Desktop natural-exit observation boundary > does not infer complete process release from a truncated or unresolved owning Desktop record
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ test/dsh-desktop-exit-observer.test.ts:60:140
+     58|     const report = observed();
+     59|     for (const main of [{ ...report.main, truncated: true }, { ...repo…
+     60|       { ...report.main, secondaryProblems: ['stop failed'] }]) expect(…
+       |                                                                                                                                            ^
+     61|   });
+     62| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/dsh-desktop-exit-observer.test.ts > formal Desktop natural-exit observation boundary > refuses breakpoint relocation into any main script other than the pinned official bytes
+AssertionError: expected [Function] to throw an error
+ ❯ test/dsh-desktop-exit-observer.test.ts:64:105
+     62| 
+     63|   it('refuses breakpoint relocation into any main script other than th…
+     64|     expect(() => locateDshDesktopExitBreakpoints('another build or inj…
+       |                                                                                                         ^
+     65|   });
+     66| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 5 passed (7)
+   Start at  11:23:13
+   Duration  491ms (transform 69ms, setup 0ms, collect 78ms, tests 13ms, environment 0ms, prepare 129ms)
+
