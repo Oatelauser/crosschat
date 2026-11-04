@@ -1,15 +1,24 @@
-import { mkdtemp, rm, writeFile, symlink } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DSH_ONBOARDING_CHECKS, DSH_ONBOARDING_SCOPE, DSH_ONBOARDING_TOOL, validDshOnboardingProcessReport, validDshOnboardingReport } from '../scripts/dsh-onboarding-contract.mjs';
 import { runDshOnboardingAttempt, runDshOnboardingSequence } from '../scripts/dsh-compat-ci.mjs';
+
+// File symlinks require privileges on this Windows host (EPERM). Supply only
+// the filesystem's nonregular/link observation; real report bytes remain valid.
+const reportLink = vi.hoisted(() => ({ active: false }));
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, lstat: async (path: string) => reportLink.active && path.endsWith('report.json')
+    ? { isFile: () => false, isSymbolicLink: () => true, size: 1 } : actual.lstat(path) };
+});
 
 const artifact = { name: '@deepseek-ai/dsh', version: '0.2.1-rc.2' };
 const runId = '11111111-1111-4111-8111-111111111111';
 const roots: string[] = [];
-afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
+afterEach(async () => { reportLink.active = false; for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
 async function directory() { const root = await mkdtemp(join(tmpdir(), 'crosschat-dsh-onboarding-unit-')); roots.push(root); return root; }
 function passed() {
   return { schema: 1, tool: DSH_ONBOARDING_TOOL, platform: 'win32', arch: 'x64', version: artifact.version, runId,
@@ -98,11 +107,11 @@ describe('onboarding fresh attempts and serial resource ownership', () => {
     expect(stale.cleanup).toBeUndefined();
   });
 
-  it('rejects a linked report before accepting its otherwise valid contents', async () => {
+  it('rejects filesystem link metadata before accepting otherwise valid report bytes', async () => {
     const output = await directory();
     const result = await runDshOnboardingAttempt({ output, label: 'candidate', artifact }, async ({ reportPath, runId }: { reportPath: string; runId: string }) => {
-      const target = join(output, 'linked-source.json'); await writeFile(target, JSON.stringify({ ...passed(), runId }));
-      await symlink(target, reportPath, 'file'); return processResult;
+      await writeFile(reportPath, JSON.stringify({ ...passed(), runId })); reportLink.active = true;
+      return processResult;
     });
     expect(result).toMatchObject({ category: 'infrastructure', check: 'probe-report' });
   });

@@ -10,6 +10,7 @@ import process from 'node:process';
 import { clearTimeout, setTimeout } from 'node:timers';
 import { pathToFileURL, URL } from 'node:url';
 import { prepareDshProfile, repositoryRoot } from '../test/helpers/dsh-live-fixture.mjs';
+import { DSH_ONBOARDING_SCOPE, DSH_ONBOARDING_TOOL, validDshOnboardingProcessReport, validDshOnboardingReport } from './dsh-onboarding-contract.mjs';
 
 const tool = 'dsh-web-runtime';
 const pnpmVersion = '11.28.5';
@@ -1032,22 +1033,38 @@ export async function runDshDesktopAttempt({ output, label, artifact, installati
 
 /** Every child gets a new directory and UUID; stale PASS files are never read. */
 export async function runDshProbeAttempt({ output, label, artifact }, execute) {
+  return runNpmProbeAttempt({ output, label, artifact }, execute, { valid: validReport, fail: infrastructure });
+}
+
+function onboardingInfrastructure(version, stage) {
+  return { schema: 1, tool: DSH_ONBOARDING_TOOL, platform: 'win32', arch: 'x64', version,
+    status: 'failed', category: 'infrastructure', stage, check: stage,
+    error: 'The from-zero probe did not provide valid fresh process/report evidence; inspect its owned artifacts.' };
+}
+
+export async function runDshOnboardingAttempt(options, execute) {
+  return runNpmProbeAttempt(options, execute, { valid: validDshOnboardingReport, fail: onboardingInfrastructure, maxReportBytes: 1024 * 1024 });
+}
+
+async function runNpmProbeAttempt({ output, label, artifact }, execute, contract) {
   if (!['baseline', 'candidate', 'retry'].includes(label)) throw new Error('Invalid Harness probe label');
   const directory = await mkdtemp(join(output, `${label}-`));
   const reportPath = join(directory, 'report.json'); const runId = randomUUID();
   let result;
   try { result = await execute({ reportPath, runId, directory }); }
-  catch (error) { return infrastructure(artifact.version, 'probe-process', error); }
-  if (!normalProcess(result)) return infrastructure(artifact.version, 'probe-process', 'Probe did not exit normally; runtime release is unknown');
+  catch (error) { return contract.fail(artifact.version, 'probe-process', error); }
+  if (!normalProcess(result)) return contract.fail(artifact.version, 'probe-process', 'Probe did not exit normally; runtime release is unknown');
   let report;
-  try { report = JSON.parse(await readFile(reportPath, 'utf8')); }
-  catch { return infrastructure(artifact.version, 'probe-report', 'Probe did not produce a fresh valid report'); }
-  if (!validReport(report, artifact, runId) || result.code !== (report.status === 'passed' ? 0 : 1)) return infrastructure(artifact.version, 'probe-report', 'Probe identity, complete checks, scope or process exit disagrees with the fresh report');
+  try {
+    if (contract.maxReportBytes !== undefined) {
+      const details = await lstat(reportPath);
+      if (!details.isFile() || details.isSymbolicLink() || details.size > contract.maxReportBytes) throw new Error('Invalid owned report file');
+    }
+    report = JSON.parse(await readFile(reportPath, 'utf8'));
+  } catch { return contract.fail(artifact.version, 'probe-report', 'Probe did not produce a fresh valid report'); }
+  if (!contract.valid(report, artifact, runId) || result.code !== (report.status === 'passed' ? 0 : 1)) return contract.fail(artifact.version, 'probe-report', 'Probe identity, complete checks, scope or process exit disagrees with the fresh report');
   return { ...report, process: { code: result.code, signal: result.signal, timedOut: result.timedOut } };
 }
-
-export async function runDshOnboardingAttempt() { return undefined; }
-export async function runDshOnboardingSequence() { return undefined; }
 
 function classify(baseline, candidate, retry) {
   if (baseline?.status !== 'passed') return { kind: 'baseline-failed', notify: false };
@@ -1106,6 +1123,14 @@ export function runDshBuildSequence(builds, operations) {
     verify: (report, artifact) => validReport(report, artifact) && processMatches(report),
     released: hasDshRuntimeReleaseProof,
     fail: (version, phase, error) => infrastructure(version, phase === 'process' ? 'probe-process' : 'probe-report', error),
+  });
+}
+
+export function runDshOnboardingSequence(builds, operations) {
+  return serialSequence(builds, {
+    tool: DSH_ONBOARDING_TOOL, scope: DSH_ONBOARDING_SCOPE, operations,
+    verify: validDshOnboardingProcessReport, released: hasDshRuntimeReleaseProof,
+    fail: (version, phase) => onboardingInfrastructure(version, phase === 'process' ? 'probe-process' : 'probe-report'),
   });
 }
 
