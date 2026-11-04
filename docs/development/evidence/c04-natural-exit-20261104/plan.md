@@ -11,3 +11,13 @@
 先做有意义的拒绝/顺序测试，再执行真实应用。真实observer结果和C2原直接child记录保持区别；本轮不生成假的C1 Host输出/closed记录，不调用C2卸载，不把自然退出结果扩大为安装/官方卸载或系统注册清理。后续接入C2如需调整内部观察合同，将单独保留规格、RED及新证据。
 
 工装拟放test/helpers/dsh-desktop-exit-observer.mjs、dsh-desktop-exit-validation.mjs，测试放test/dsh-desktop-exit-observer.test.ts；代码文件按用户最新澄清直接推进。全量检查只在代码收口后运行一次；此前2732/11与C11证据不覆盖本次新代码。所有fixture位于本轮独占缓存根，归档后验证进程和owner再清理；若自动删除被拒，不换工具重试。C11总根的用户手动清理仍独立跟踪。
+
+## 空闲冷启动切片及下一原生步骤
+
+2026-11-04，baadff0：正式包的九个断点在Host出生前精确绑定，round-d2Mv8E已观察birth→shutdown→shutdown-complete→真实close0→stop graceful=true，Host进程句柄和主进程均退出0，无kill，观察连续、无错误；暂停累计536ms。dsh协议登记四个key的值与测试前相同，软件保留。当前workspace表为空，本轮没有创建/输入原生聊天，不能当作已绑定实际UI会话的C2观测。[空闲摘要](idle-validation.json)及完整check2745通过/11原有跳过（234文件/3跳过、204模块688边）保留。
+
+前三轮失败保留：round-YQOg22在启动门释放前读Runtime.evaluate超时；round-uscelV在暂停中awaitPromise超时，早退又产生UI初始化错误；round-g3gNh3的Host正常收尾已观察，但调试连接保持主进程存活，最后C1超时强停，不能判通过。独立Node探针和实际回归复现awaitPromise死等；读取暂停帧、不等待Promise微任务，并在Host完成后断开调试器的收尾顺序修复后，第四轮3秒完成。13项合同/连接/脱敏回归先RED后GREEN。早期raw中的URL token只在私有fixture内，归档必须脱敏；最终工装仅记录origin并在写证据前脱敏嵌套日志。
+
+下一步在同一个owned测试根内复用已完成初始化且已完全停止的native profile，以正式内置CLI安装生产桥，然后重新启动正式UI，执行唯一marker的原生pwsh身份调用，验证当前完整sessionId/desktop来源及精确Host，再观察同一Host的正常退出与桥撤登记。内置dsh.cmd已只读核实为Electron --expose-internals + app.asar/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js；可用同样固定参数直接执行，保持shell:false，不使用系统npm dsh替代。这个增量不执行官方卸载，不产生假的C1 Host输出/记录或绕过C2。
+
+现场：独占根node_modules/.cache/crosschat-c04-natural-20261104-hu9W8P，owner=c04-native-natural-exit；尚未请求删除。C11根已由用户手动删除并只读核实，收口47e9b7e。没有活动worker、已完成所有四轮原生执行；后续仍由root独立推进。C05远端集成、外部Actions、C00平台范围及官方卸载所需独立环境继续按原边界。

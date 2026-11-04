@@ -1,0 +1,190 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "scope": "formal Desktop 0.2.1-rc.2 instrumented idle cold startup and normal Quit; no native chat turn",
+  "codeCheckpoint": "baadff0",
+  "mainSourceSha256": "6f3d1ddd1106371452c2204be6dfb2e5460a8e8259cdd05cdccb5387b3f9a85a",
+  "assessment": {
+    "verified": true,
+    "hostPid": 33904,
+    "parentPid": 38412,
+    "scope": "fixed formal Desktop with passive debugger and held OS handle"
+  },
+  "events": [
+    {
+      "kind": "birth",
+      "parentPid": 38412,
+      "pid": 33904,
+      "projectDir": "[C04-OWNED-ROOT]\\round-d2Mv8E\\native\\dsh-home\\profiles\\desktop",
+      "binary": "D:\\soft\\DeepSeek Harness\\DeepSeek Harness.exe",
+      "spawnargs": [
+        "D:\\soft\\DeepSeek Harness\\DeepSeek Harness.exe",
+        "--expose-internals",
+        "D:\\soft\\DeepSeek Harness\\resources\\app.asar\\dsh\\node_modules\\@deepseek-ai\\dsh-desktop-host\\lib\\index.js",
+        "D:\\soft\\DeepSeek Harness\\resources\\app.asar\\dsh",
+        "[C04-OWNED-ROOT]\\round-d2Mv8E\\native\\dsh-home\\profiles\\desktop",
+        "D:\\soft\\DeepSeek Harness\\resources\\runtime\\primary-runtime",
+        "D:\\soft\\DeepSeek Harness\\resources\\runtime\\primary-runtime\\dependencies\\pnpm\\bin\\pnpm.mjs",
+        "D:\\soft\\DeepSeek Harness\\resources\\runtime\\bin"
+      ]
+    },
+    {
+      "kind": "shutdown",
+      "pid": 33904,
+      "connected": true,
+      "stopping": true
+    },
+    {
+      "kind": "ack",
+      "pid": 33904,
+      "type": "shutdown-complete",
+      "stopping": true
+    },
+    {
+      "kind": "close",
+      "pid": 33904,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "kind": "complete",
+      "pid": 33904,
+      "graceful": true,
+      "shutdownCompleted": true,
+      "code": 0,
+      "signal": null,
+      "stdoutDestroyed": true,
+      "stderrDestroyed": true,
+      "stderrTail": ""
+    }
+  ],
+  "main": {
+    "code": 0,
+    "signal": null,
+    "pid": 38412,
+    "stdout": "\r\nChecking for update\nGenerated new staging user ID: 14eb2ecc-f932-5355-b8c5-90f84e72bfe3\ndsh web: http://127.0.0.1:49741/?token=[fixture-token-redacted]\n",
+    "stderr": "Debugger listening on ws://127.0.0.1:49976/ddf4d29c-f34c-4f6d-bafd-cd0bf39328ba\r\nFor help, see: https://nodejs.org/learn/getting-started/debugging\r\nDebugger attached.\r\nDebugger ending on ws://127.0.0.1:49976/ddf4d29c-f34c-4f6d-bafd-cd0bf39328ba\r\nFor help, see: https://nodejs.org/learn/getting-started/debugging\r\n",
+    "timedOut": false,
+    "cancelled": false,
+    "truncated": false,
+    "closed": true,
+    "failed": false,
+    "releaseUnclear": [],
+    "secondaryProblems": []
+  },
+  "hostHandle": {
+    "exitCode": 0,
+    "creationTime": "2026-11-04T03:44:03.3478973Z",
+    "pid": 33904,
+    "executable": "D:\\soft\\DeepSeek Harness\\DeepSeek Harness.exe",
+    "heldBeforeShutdown": true
+  },
+  "pauses": [
+    {
+      "kind": "birth",
+      "elapsedMs": 523
+    },
+    {
+      "kind": "ready",
+      "elapsedMs": 1
+    },
+    {
+      "kind": "shutdown",
+      "elapsedMs": 1
+    },
+    {
+      "kind": "ack",
+      "elapsedMs": 1
+    },
+    {
+      "kind": "close",
+      "elapsedMs": 9
+    },
+    {
+      "kind": "complete",
+      "elapsedMs": 1
+    }
+  ],
+  "boundBreakpoints": [
+    {
+      "kind": "birth",
+      "scriptId": "133",
+      "lineNumber": 3812,
+      "columnNumber": 2
+    },
+    {
+      "kind": "ready",
+      "scriptId": "133",
+      "lineNumber": 3823,
+      "columnNumber": 33
+    },
+    {
+      "kind": "shutdown",
+      "scriptId": "133",
+      "lineNumber": 3914,
+      "columnNumber": 29
+    },
+    {
+      "kind": "ack",
+      "scriptId": "133",
+      "lineNumber": 3828,
+      "columnNumber": 69
+    },
+    {
+      "kind": "close",
+      "scriptId": "133",
+      "lineNumber": 3842,
+      "columnNumber": 19
+    },
+    {
+      "kind": "complete",
+      "scriptId": "133",
+      "lineNumber": 3924,
+      "columnNumber": 2
+    },
+    {
+      "kind": "kill-invalid",
+      "scriptId": "133",
+      "lineNumber": 3820,
+      "columnNumber": 4
+    },
+    {
+      "kind": "kill-term",
+      "scriptId": "133",
+      "lineNumber": 3919,
+      "columnNumber": 23
+    },
+    {
+      "kind": "kill-kill",
+      "scriptId": "133",
+      "lineNumber": 3921,
+      "columnNumber": 9
+    }
+  ],
+  "protocolRegistrationUnchanged": true,
+  "registeredWorkspaceCount": 0,
+  "nativeChatTurnExercised": false,
+  "c2AdmissibleRecordProduced": false,
+  "fullCheck": {
+    "passed": 2745,
+    "skipped": 11,
+    "passedFiles": 234,
+    "skippedFiles": 3,
+    "modules": 204,
+    "edges": 688,
+    "exitCode": 0,
+    "raw": "check-final.txt"
+  },
+  "rawRound": "round-d2Mv8E",
+  "notValidated": [
+    "natural teardown of an identified live UI session in the same run",
+    "C2 runner binding / admissible native process record",
+    "clean runner installation/uninstallation/system registration lifecycle",
+    "hosted Actions and other platforms"
+  ],
+  "failureRounds": {
+    "round-YQOg22": "Runtime.evaluate before startup release timed out; C1 eventually stopped only the owned paused main",
+    "round-uscelV": "awaitPromise in a paused runtime timed out; early cleanup produced UI bootstrap errors; C1 eventually stopped the owned main",
+    "round-g3gNh3": "Host shutdown-complete/close0/graceful=true observed; attached debugger held main open, C1 timed out; not accepted"
+  }
+}
