@@ -17,7 +17,7 @@ const snapshot = () => ({ raw: process.stdin.isRaw === true, resize: process.std
 async function fixture() {
   const [root, input, events] = process.argv.slice(3);
   const owner = JSON.parse(await readFile(join(root, 'ownership.json'), 'utf8'));
-  assert.equal(owner.task, 'c09-dsh-tui'); assert.equal(await realpath(root), owner.root);
+  assert(['c09-dsh-tui', 'c11-dsh-onboarding'].includes(owner.task)); assert.equal(await realpath(root), owner.root);
   const config = JSON.parse(await readFile(input, 'utf8'));
   for (const path of [input, events, config.home, config.dshHome]) {
     const inside = relative(root, resolve(path));

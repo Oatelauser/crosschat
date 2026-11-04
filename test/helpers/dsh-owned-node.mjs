@@ -12,7 +12,7 @@ import { listDshThreads } from '../../dist/dsh/client.js';
 /** One real, loopback-only broker/node for an already verified fixture-owned native root. */
 export async function createDshOwnedNode({ root, home, env, nativeId, endpointType }) {
   const owner = JSON.parse(await readFile(join(root, 'ownership.json'), 'utf8'));
-  assert.equal(owner.task, 'c09-dsh-tui'); assert.equal(await realpath(root), owner.root);
+  assert(['c09-dsh-tui', 'c11-dsh-onboarding'].includes(owner.task)); assert.equal(await realpath(root), owner.root);
   const inside = relative(owner.root, await realpath(home));
   assert(inside && !inside.startsWith('..') && !isAbsolute(inside));
   const native = (await listDshThreads({ home })).find((thread) => thread.id === nativeId && thread.endpointType === endpointType);

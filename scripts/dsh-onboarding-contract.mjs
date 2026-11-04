@@ -8,8 +8,8 @@ export const DSH_ONBOARDING_CHECKS = Object.freeze([
   'native-skill-load-and-current-source',
   'native-roundtrip-and-typed-discovery',
   'same-source-diagnostics-and-real-terminal',
-  'profile-preserving-skill-update-and-removal',
-  'official-plugin-removal-and-owned-cleanup',
+  'skill-update-and-profile-preserving-shutdown',
+  'official-plugin-and-crosschat-removal-with-owned-cleanup',
 ]);
 
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
