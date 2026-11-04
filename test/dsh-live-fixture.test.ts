@@ -132,6 +132,19 @@ describe('DSH native shell identity evidence', () => {
   });
 
   const source = { status: 'identified', sourceTool: 'dsh', basis: 'native', association: 'verified', scope: 'instance', shouldAsk: false };
+  it('verifies an explicitly expected Desktop endpoint while preserving the default Host-only boundary', () => {
+    const desktop = { ...expected, profile: 'desktop' }, desktopSource = { ...source, sourceTool: 'dsh-desktop' };
+    const values = requests({ ...desktop, callerSourceExit: 0, callerSource: desktopSource });
+    expect(assessDshCallerSourceIdentity(values, { ...desktop, sourceTool: 'dsh-desktop' })).toEqual({ ready: true, source: desktopSource });
+    expect(assessDshCallerSourceIdentity(values, desktop).ready).toBe(false);
+    expect(assessDshCallerSourceIdentity(requests({ ...desktop, callerSourceExit: 0, callerSource: source }), { ...desktop, sourceTool: 'dsh-desktop' }).ready).toBe(false);
+  });
+
+  it('treats a foreign expected tool as a fixture configuration error', () => {
+    const values = requests({ ...expected, callerSourceExit: 0, callerSource: { ...source, sourceTool: 'opencode' } });
+    expect(assessDshCallerSourceIdentity(values, { ...expected, sourceTool: 'opencode' })).toMatchObject({ ready: false, category: 'infrastructure' });
+  });
+
   it('requires the real native shell and read-only identity observation in the same tool result', () => {
     const observed = { ...expected, callerSourceExit: 0, callerSource: source };
     expect(assessDshCallerSourceIdentity(requests(observed), expected)).toEqual({ ready: true, source });
