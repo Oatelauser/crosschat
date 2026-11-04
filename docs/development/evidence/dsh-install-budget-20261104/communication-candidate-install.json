@@ -1,0 +1,8 @@
+{
+  "code": 0,
+  "signal": null,
+  "timedOut": false,
+  "stdout": "\nadded 617 packages in 10m\n",
+  "stderr": "npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead\n",
+  "pid": 1416
+}

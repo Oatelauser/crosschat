@@ -1,0 +1,11 @@
+{
+  "suite": "onboarding",
+  "run": 41800341606,
+  "head": "ec41c11a0333a3f1ba1f5d9ac2436907e989caab",
+  "artifactId": 13308675595,
+  "name": "dsh-onboarding-win32-x64",
+  "bytes": 1295,
+  "sha256": "9a3224ad82c656d9afc1b55df32622136431c9143784b7b4ea9f9fc3c056e0ce",
+  "githubDigest": "sha256:9a3224ad82c656d9afc1b55df32622136431c9143784b7b4ea9f9fc3c056e0ce",
+  "githubDigestMatched": true
+}

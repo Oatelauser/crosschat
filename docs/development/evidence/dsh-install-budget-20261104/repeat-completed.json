@@ -1,0 +1,166 @@
+{
+  "observedAt": "2026-11-04T09:17:08.682Z",
+  "suite": "onboarding",
+  "run": {
+    "id": 41803826165,
+    "url": "https://github.com/Oatelauser/crosschat/actions/runs/41803826165",
+    "event": "workflow_dispatch",
+    "head": "ec41c11a0333a3f1ba1f5d9ac2436907e989caab",
+    "status": "completed",
+    "conclusion": "failure",
+    "runAttempt": 1,
+    "createdAt": "2026-11-04T09:00:01Z",
+    "updatedAt": "2026-11-04T09:16:39Z"
+  },
+  "jobs": [
+    {
+      "id": 126485857562,
+      "name": "probe",
+      "status": "completed",
+      "conclusion": "failure",
+      "runnerOs": [
+        "windows-latest"
+      ],
+      "startedAt": "2026-11-04T09:00:05Z",
+      "completedAt": "2026-11-04T09:16:30Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "number": 1,
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-11-04T09:00:06Z",
+          "completedAt": "2026-11-04T09:00:07Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "number": 2,
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-11-04T09:00:07Z",
+          "completedAt": "2026-11-04T09:00:14Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "number": 3,
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-11-04T09:00:14Z",
+          "completedAt": "2026-11-04T09:00:20Z"
+        },
+        {
+          "name": "Run npm ci",
+          "number": 4,
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-11-04T09:00:20Z",
+          "completedAt": "2026-11-04T09:01:12Z"
+        },
+        {
+          "name": "Run npm run build",
+          "number": 5,
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-11-04T09:01:12Z",
+          "completedAt": "2026-11-04T09:01:25Z"
+        },
+        {
+          "name": "Run node scripts/dsh-compat-ci.mjs",
+          "number": 6,
+          "status": "completed",
+          "conclusion": "failure",
+          "startedAt": "2026-11-04T09:01:25Z",
+          "completedAt": "2026-11-04T09:16:26Z"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "number": 7,
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-11-04T09:16:26Z",
+          "completedAt": "2026-11-04T09:16:27Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "number": 13,
+          "status": "completed",
+          "conclusion": "skipped",
+          "startedAt": "2026-11-04T09:16:27Z",
+          "completedAt": "2026-11-04T09:16:27Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "number": 14,
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-11-04T09:16:27Z",
+          "completedAt": "2026-11-04T09:16:29Z"
+        },
+        {
+          "name": "Complete job",
+          "number": 15,
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-11-04T09:16:29Z",
+          "completedAt": "2026-11-04T09:16:29Z"
+        }
+      ]
+    },
+    {
+      "id": 126493440511,
+      "name": "report",
+      "status": "completed",
+      "conclusion": "success",
+      "runnerOs": [
+        "ubuntu-latest"
+      ],
+      "startedAt": "2026-11-04T09:16:34Z",
+      "completedAt": "2026-11-04T09:16:39Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "number": 1,
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-11-04T09:16:34Z",
+          "completedAt": "2026-11-04T09:16:36Z"
+        },
+        {
+          "name": "Run actions/download-artifact@v4",
+          "number": 2,
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-11-04T09:16:36Z",
+          "completedAt": "2026-11-04T09:16:37Z"
+        },
+        {
+          "name": "Run actions/github-script@v7",
+          "number": 3,
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-11-04T09:16:37Z",
+          "completedAt": "2026-11-04T09:16:37Z"
+        },
+        {
+          "name": "Complete job",
+          "number": 4,
+          "status": "completed",
+          "conclusion": "success",
+          "startedAt": "2026-11-04T09:16:37Z",
+          "completedAt": "2026-11-04T09:16:37Z"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 13310370306,
+      "name": "dsh-onboarding-win32-x64",
+      "bytes": 1294,
+      "expired": false,
+      "digest": "sha256:58e43efb731ed6a0765de49d6304c1cc5c49ef047b928caf57acdcba219c9b5f",
+      "createdAt": "2026-11-04T09:16:26Z",
+      "expiresAt": "2026-11-25T09:16:26Z"
+    }
+  ]
+}

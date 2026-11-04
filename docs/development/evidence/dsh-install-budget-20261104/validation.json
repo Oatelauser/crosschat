@@ -1,0 +1,154 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "base": "ec41c11a0333a3f1ba1f5d9ac2436907e989caab",
+  "scope": "DSH shared hosted npm installation budget and diagnostics; no new user command or crosschat persistent data",
+  "red": {
+    "commit": "9ddc0d7",
+    "failed": 5
+  },
+  "hostedFailures": [
+    41800341606,
+    41803826165
+  ],
+  "observed": "Both baseline npm installers exceeded 900000ms before native checks; prior same-source communication installs completed in 12/10 minutes",
+  "policy": {
+    "npmInstallMs": 1200000,
+    "jobMinutes": 75,
+    "autoRetry": false,
+    "ignoreScripts": true,
+    "normalResultRequiredBeforeCleanup": true,
+    "timing": true,
+    "phaseOutput": "stderr only",
+    "classificationStdoutUnchanged": true
+  },
+  "local": {
+    "node": "v25.0.0",
+    "targeted": {
+      "files": 3,
+      "passed": 140,
+      "exitCode": 0
+    },
+    "fullCheck": {
+      "passed": 2777,
+      "skipped": 11,
+      "filesPassed": 237,
+      "filesSkipped": 3,
+      "lint": true,
+      "build": true,
+      "modules": 204,
+      "edges": 689,
+      "exitCode": 0
+    },
+    "explicitEslint": true,
+    "liveEnabled": false
+  },
+  "nativeHostedValidation": "Not yet run on this changed source; C11 remains unaccepted",
+  "sources": [
+    {
+      "path": "scripts/dsh-compat-ci.mjs",
+      "gitBlob": "46c1806f2ab2ce971e1d19ca2f472e3934ef222c"
+    },
+    {
+      "path": "test/dsh-npm-install.test.ts",
+      "gitBlob": "1f9f6e8986e5bb0f19913b9357e6fab5e54f55b7"
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "communication-baseline-install.json",
+      "bytes": 224,
+      "sha256": "1090caa2c0d8226bfcce6915ba4f7e7b7f86c0c04223429581d3cc519de478df"
+    },
+    {
+      "file": "communication-candidate-install.json",
+      "bytes": 224,
+      "sha256": "edf751e070b6dfe0ebe2f42985351d9c91e79b3190fc5b6bb0a79fd2932fed59"
+    },
+    {
+      "file": "first-artifact-download.json",
+      "bytes": 392,
+      "sha256": "890df84e9ec23cb0b586cf24d43734e97ea834093877697f01175ae338c708d8"
+    },
+    {
+      "file": "first-artifact.zip",
+      "bytes": 1295,
+      "sha256": "9a3224ad82c656d9afc1b55df32622136431c9143784b7b4ea9f9fc3c056e0ce"
+    },
+    {
+      "file": "first-baseline-install.json",
+      "bytes": 197,
+      "sha256": "2af8bd9e10e4f56a042dcf9bd4196f1912734e975a80db5ce8fc8548c0bc203f"
+    },
+    {
+      "file": "first-completed.json",
+      "bytes": 4862,
+      "sha256": "93ea10c00af53ecf2455648deff7a3b7ad6fff907760d57de5d8ecc111f17a95"
+    },
+    {
+      "file": "first-probe-job.txt",
+      "bytes": 14757,
+      "sha256": "35ab540b28196f8956cf3ec394c9c6ca205fcb95ae9972f9197a60a64ddc2e36"
+    },
+    {
+      "file": "first-report-job.txt",
+      "bytes": 11528,
+      "sha256": "6502b35395d5abebd31f1b242e08058b660c2385f2727def667e8e6a187af7fd"
+    },
+    {
+      "file": "first-summary.json",
+      "bytes": 1843,
+      "sha256": "d5c0712f683a73a82c061b7d421f198137e72190080320575324123e290f5960"
+    },
+    {
+      "file": "full-check.txt",
+      "bytes": 31290,
+      "sha256": "2328b7b7358a23ea7b67aaafedd0b7a44ed27226500a9bd7c6d394e83bd26ccc"
+    },
+    {
+      "file": "npm-policy-green.txt",
+      "bytes": 2816,
+      "sha256": "709262cb220de2676ff6568ff41f1b6226ece0680f9aa0bcf7c1c0eb93f58714"
+    },
+    {
+      "file": "npm-policy-red.txt",
+      "bytes": 5025,
+      "sha256": "040656316a13ff1fca608a9191ad8a37abc34110182e4f729d78c95deb0cc508"
+    },
+    {
+      "file": "repeat-artifact-download.json",
+      "bytes": 392,
+      "sha256": "06e1c34a3aca38fb9737c7d05ff6f23b87ceeaf7b5ea1ed8839451c966cf6f95"
+    },
+    {
+      "file": "repeat-artifact.zip",
+      "bytes": 1294,
+      "sha256": "58e43efb731ed6a0765de49d6304c1cc5c49ef047b928caf57acdcba219c9b5f"
+    },
+    {
+      "file": "repeat-baseline-install.json",
+      "bytes": 197,
+      "sha256": "c8f0def32d32ccab08e1b54a6c89100431305db5a22a4bd10068c3255bf5880e"
+    },
+    {
+      "file": "repeat-completed.json",
+      "bytes": 4862,
+      "sha256": "c32799751ad0c6ba816e6bd1931ea06b685347c56723b8f2634e11ecdc3aacb2"
+    },
+    {
+      "file": "repeat-probe-job.txt",
+      "bytes": 14756,
+      "sha256": "c28f7474bb2c9d85b4c4f1e6dff20a89d2beee5be9fba27c07cc2723d6d4fb0e"
+    },
+    {
+      "file": "repeat-report-job.txt",
+      "bytes": 11533,
+      "sha256": "62413a599159b4e35dc1b4f74119bed898de55aa90e4d9743133581cba523e41"
+    },
+    {
+      "file": "repeat-summary.json",
+      "bytes": 1843,
+      "sha256": "3dee89f5effa7dc4a823a1fbd6eda0dbb0271032159bae5f6894e810ae92c013"
+    }
+  ]
+}

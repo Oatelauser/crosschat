@@ -482,9 +482,21 @@ export function runDshProcess(binary, args, options = {}) {
 }
 
 /** Shared npm command policy; the sequence still owns installation identity and cleanup. */
-export function installDshNpmDependencies({ npmCLI, runtime, env, existingLock, label }) {
-  return runDshProcess(process.execPath, [npmCLI, existingLock ? 'ci' : 'install', '--ignore-scripts', '--no-audit', '--no-fund', '--prefer-offline'],
-    { cwd: runtime, env, timeout: 15 * 60 * 1000 });
+export async function installDshNpmDependencies({ npmCLI, runtime, env, existingLock, label }) {
+  const timeout = 20 * 60 * 1000;
+  const mode = existingLock ? 'ci' : 'install';
+  const started = globalThis.performance.now();
+  process.stderr.write(`[dsh-ci] ${label} npm ${mode} started; limit=${timeout}ms\n`);
+  try {
+    const result = await runDshProcess(process.execPath, [npmCLI, mode, '--ignore-scripts', '--no-audit', '--no-fund', '--prefer-offline', '--timing'],
+      { cwd: runtime, env, timeout });
+    const elapsed = Math.round(globalThis.performance.now() - started);
+    process.stderr.write(`[dsh-ci] ${label} npm ${mode} ${result.timedOut ? 'timed out; release unverified' : `exited ${result.code}`} after ${elapsed}ms\n`);
+    return result;
+  } catch (error) {
+    process.stderr.write(`[dsh-ci] ${label} npm ${mode} failed before a result after ${Math.round(globalThis.performance.now() - started)}ms\n`);
+    throw error;
+  }
 }
 
 function validScope(value) { return record(value) && Object.entries(scope).every(([key, expected]) => value[key] === expected); }
