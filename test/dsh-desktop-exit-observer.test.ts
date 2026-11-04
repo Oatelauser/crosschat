@@ -1,11 +1,16 @@
 import { once } from 'node:events';
 import { spawn } from 'node:child_process';
+import { mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, join } from 'node:path';
 import { WebSocketServer } from 'ws';
-import { describe, expect, it } from 'vitest';
-import { assessDshDesktopNaturalExit, connectDshExitInspector, DSH_DESKTOP_MAIN_SHA256, locateDshDesktopExitBreakpoints, serializeDshExitEvidence } from './helpers/dsh-desktop-exit-observer.mjs';
+import { afterEach, describe, expect, it } from 'vitest';
+import { assessDshDesktopNaturalExit, connectDshExitInspector, DSH_DESKTOP_MAIN_SHA256, locateDshDesktopExitBreakpoints, resolveOwnedDshDesktopProfile, serializeDshExitEvidence } from './helpers/dsh-desktop-exit-observer.mjs';
 import { pollDsh } from './helpers/dsh-live-fixture.mjs';
 
 const expected = { parentPid: 4100, projectDir: 'D:/owned/profiles/desktop', binary: 'D:/soft/DeepSeek Harness/DeepSeek Harness.exe', sourceSha256: DSH_DESKTOP_MAIN_SHA256 };
+const roots: string[] = [];
+afterEach(async () => { for (const root of roots.splice(0)) { expect(basename(root)).toMatch(/^crosschat-dsh-exit-unit-/); await rm(root, { recursive: true, force: true }); } });
 function observed() {
   return { sourceSha256: DSH_DESKTOP_MAIN_SHA256, continuous: true, errors: [], events: [
     { kind: 'birth', parentPid: 4100, pid: 4200, projectDir: expected.projectDir, binary: expected.binary },
@@ -74,6 +79,34 @@ describe('formal Desktop natural-exit observation boundary', () => {
     const serialized = serializeDshExitEvidence(value);
     expect(serialized).not.toContain('owned-secret'); expect(JSON.parse(serialized).hash).toBe(DSH_DESKTOP_MAIN_SHA256);
     expect(JSON.parse(serialized).url).toBe('http://127.0.0.1:1234/?token=[fixture-token-redacted]&mode=test');
+  });
+});
+
+describe('owned native Desktop profile reuse', () => {
+  async function fixture() {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'crosschat-dsh-exit-unit-'))); roots.push(root);
+    await writeFile(join(root, 'ownership.json'), JSON.stringify({ task: 'c04-native-natural-exit', root })); return root;
+  }
+
+  it('creates only a canonical child of the exact task-owned root for native initialization or reuse', async () => {
+    const root = await fixture(), profile = join(root, 'round', 'native');
+    expect(await resolveOwnedDshDesktopProfile(root, profile)).toBe(profile);
+    expect((await stat(profile)).isDirectory()).toBe(true);
+    expect(await resolveOwnedDshDesktopProfile(root, profile)).toBe(profile);
+    expect(JSON.parse(await readFile(join(root, 'ownership.json'), 'utf8')).task).toBe('c04-native-natural-exit');
+  });
+
+  it('rejects the task root itself and outside paths before creating or writing a native profile', async () => {
+    const root = await fixture(), outside = join(root, '..', `${basename(root)}-outside`);
+    for (const requested of [root, outside]) await expect(resolveOwnedDshDesktopProfile(root, requested)).rejects.toThrow();
+    await expect(stat(outside)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('requires the current owner marker before any new profile writes', async () => {
+    const root = await fixture(), profile = join(root, 'native');
+    await writeFile(join(root, 'ownership.json'), JSON.stringify({ task: 'foreign-task', root }));
+    await expect(resolveOwnedDshDesktopProfile(root, profile)).rejects.toThrow();
+    await expect(stat(profile)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
 
