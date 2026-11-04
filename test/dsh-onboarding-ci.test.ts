@@ -1,10 +1,11 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { runInNewContext } from 'node:vm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DSH_ONBOARDING_CHECKS, DSH_ONBOARDING_SCOPE, DSH_ONBOARDING_TOOL, validDshOnboardingProcessReport, validDshOnboardingReport } from '../scripts/dsh-onboarding-contract.mjs';
-import { resolveDshCiSuite, runDshOnboardingAttempt, runDshOnboardingSequence } from '../scripts/dsh-compat-ci.mjs';
+import { dshOnboardingRegressionIdentity, resolveDshCiSuite, runDshOnboardingAttempt, runDshOnboardingSequence } from '../scripts/dsh-compat-ci.mjs';
 
 // File symlinks require privileges on this Windows host (EPERM). Supply only
 // the filesystem's nonregular/link observation; real report bytes remain valid.
@@ -157,5 +158,60 @@ describe('independent communication and onboarding CI entry points', () => {
   });
   it.each(['', 'desktop', 'ONBOARDING', false])('rejects an unknown suite instead of running the communication default (%s)', (value) => {
     expect(() => resolveDshCiSuite(value)).toThrow();
+  });
+});
+
+describe('from-zero onboarding independent issue report', () => {
+  async function genuineSummary() {
+    const pinned = JSON.parse(await readFile(new URL('../scripts/dsh-compat-baseline.json', import.meta.url), 'utf8'));
+    const baseline = { name: pinned.package.name, version: pinned.package.version, url: pinned.package.dist.tarball, integrity: pinned.package.dist.integrity };
+    const candidate = { ...baseline, version: '0.2.2', url: 'https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.2.tgz' };
+    const failed = () => ({ ...passed(), runId: randomUUID(), version: candidate.version, status: 'failed', category: 'compatibility', stage: 'onboarding',
+      check: DSH_ONBOARDING_CHECKS[1], checks: passed().checks.slice(0, 1), process: { code: 1, signal: null, timedOut: false } });
+    return { schema: 1, tool: DSH_ONBOARDING_TOOL, platform: 'win32', arch: 'x64', scope: DSH_ONBOARDING_SCOPE,
+      builds: { baseline, candidate, packageManager: { name: pinned.packageManager.name, version: pinned.packageManager.version, url: pinned.packageManager.dist.tarball, integrity: pinned.packageManager.dist.integrity } },
+      baseline: passed(), candidate: failed(), retry: failed(), classification: { kind: 'regression', notify: true }, installationCleanup: 'removed' };
+  }
+  async function executeReport(summary: unknown, existing: unknown[] = [], size?: number) {
+    const workflow = await readFile(new URL('../.github/workflows/dsh-onboarding-compat.yml', import.meta.url), 'utf8');
+    const script = workflow.split(/ {10}script: \|\r?\n/)[1].split(/\r?\n/).map((line) => line.replace(/^ {12}/, '')).join('\n');
+    const created: unknown[] = []; let reads = 0;
+    await runInNewContext(`(async()=>{${script}\n})()`, {
+      require: (name: string) => {
+        if (name !== 'node:fs/promises') throw new Error(`Unexpected report dependency ${name}`);
+        return { lstat: async () => ({ isFile: () => true, isSymbolicLink: () => false, size: size ?? 1000 }), readFile: async () => { reads++; return JSON.stringify(summary); } };
+      },
+      context: { serverUrl: 'https://github.com', repo: { owner: 'fixture', repo: 'fixture' }, runId: 1 }, core: { notice: () => {} },
+      github: { paginate: async () => existing, rest: { issues: { listForRepo: {}, create: async (value: unknown) => created.push(value) } } },
+    });
+    return { workflow, created, reads };
+  }
+
+  it('independently admits and deduplicates only a fully released repeated candidate failure', async () => {
+    const summary = await genuineSummary(); const identity = dshOnboardingRegressionIdentity(summary);
+    expect(identity?.marker).toContain('dsh-onboarding-compat:0.2.2:win32:');
+    const report = await executeReport(summary); expect(report.created).toHaveLength(1);
+    expect((await executeReport(summary, [{ body: identity?.marker }])).created).toHaveLength(0);
+    expect(report.workflow.split('  report:')[0]).not.toContain('issues: write');
+    expect(report.workflow.split('  report:')[1]).not.toMatch(/checkout@|run:|node scripts/);
+    expect(report.workflow).not.toContain('schedule:');
+  });
+
+  it('refuses partial scope, incomplete cleanup, altered candidates, reused runs and infrastructure outcomes in both verifiers', async () => {
+    const summary = await genuineSummary();
+    for (const invalid of [
+      { ...summary, installationCleanup: 'retained' }, { ...summary, tool: 'dsh-web-runtime' },
+      { ...summary, baseline: { ...summary.baseline, status: 'failed' } },
+      { ...summary, candidate: { ...summary.candidate, scope: { ...DSH_ONBOARDING_SCOPE, skillLifecycle: false } } },
+      { ...summary, retry: { ...summary.retry, cleanup: { ...summary.retry.cleanup, forced: true } } },
+      { ...summary, retry: { ...summary.retry, runId: summary.candidate.runId } },
+      { ...summary, retry: { ...summary.retry, version: '0.2.3' } },
+      { ...summary, candidate: { ...summary.candidate, category: 'infrastructure' } },
+    ]) { expect(dshOnboardingRegressionIdentity(invalid)).toBeUndefined(); expect((await executeReport(invalid)).created).toHaveLength(0); }
+  });
+
+  it('bounds the summary before loading or parsing artifact content', async () => {
+    const report = await executeReport(await genuineSummary(), [], 4 * 1024 * 1024 + 1);
+    expect(report.created).toHaveLength(0); expect(report.reads).toBe(0);
   });
 });

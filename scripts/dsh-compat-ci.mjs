@@ -1134,7 +1134,19 @@ export function runDshOnboardingSequence(builds, operations) {
   });
 }
 
-export function resolveDshCiSuite() { return undefined; }
+/** Each entry binds its probe, validator, scope and output together; the established default is unchanged. */
+export function resolveDshCiSuite(value = 'communication') {
+  if (!['communication', 'onboarding'].includes(value)) throw new Error('DSH_COMPAT_SUITE must be communication or onboarding');
+  const onboarding = value === 'onboarding';
+  return Object.freeze({
+    tool: onboarding ? DSH_ONBOARDING_TOOL : tool,
+    scope: Object.freeze({ ...(onboarding ? DSH_ONBOARDING_SCOPE : scope) }),
+    evidenceDirectory: onboarding ? 'dsh-onboarding-evidence' : 'dsh-compat-evidence',
+    script: onboarding ? 'dsh-onboarding.mjs' : 'dsh-compat.mjs', timeoutMs: onboarding ? 600000 : 360000,
+    attempt: onboarding ? runDshOnboardingAttempt : runDshProbeAttempt,
+    sequence: onboarding ? runDshOnboardingSequence : runDshBuildSequence,
+  });
+}
 
 export function runDshDesktopSequence(builds, operations) {
   const installations = new Set(); const instances = new Set();
@@ -1173,6 +1185,8 @@ export function dshRegressionIdentity(summary) {
   return { marker: `<!-- dsh-compat:${candidate.version}:win32:${candidate.check} -->`, title: `DeepSeek Harness ${candidate.version}: ${candidate.check} compatibility regression (win32)` };
 }
 
+export function dshOnboardingRegressionIdentity() { return undefined; }
+
 async function fetchBytes(url, maxBytes) {
   const response = await globalThis.fetch(url, { redirect: 'error', signal: globalThis.AbortSignal.timeout(120000) });
   if (!response.ok || Number(response.headers.get('content-length')) > maxBytes || !response.body) throw new Error('Official npm request failed or exceeded its byte budget');
@@ -1191,12 +1205,13 @@ async function ownedChild(parent, target, owner) {
 async function main() {
   if (process.env.CROSSCHAT_LIVE !== '1') throw new Error('CROSSCHAT_LIVE=1 is required for official Harness downloads and isolated probes');
   if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Only Windows x64 is configured; platform matrix work remains separate');
-  const output = resolve(process.env.DSH_COMPAT_EVIDENCE ?? 'dsh-compat-evidence'); await mkdir(output, { recursive: true });
+  const suite = resolveDshCiSuite(process.env.DSH_COMPAT_SUITE);
+  const output = resolve(process.env.DSH_COMPAT_EVIDENCE ?? suite.evidenceDirectory); await mkdir(output, { recursive: true });
   const temp = await realpath(tmpdir()); const root = await realpath(await mkdtemp(join(temp, 'crosschat-dsh-ci-'))); const owner = randomUUID();
   await writeFile(join(root, '.fixture-owner'), owner);
   const installations = []; const archives = new Map();
   let npmCache;
-  let summary = { schema: 1, tool, platform: 'win32', arch: 'x64', scope, builds: {}, classification: { kind: 'infrastructure', notify: false }, installationCleanup: 'incomplete' };
+  let summary = { schema: 1, tool: suite.tool, platform: 'win32', arch: 'x64', scope: suite.scope, builds: {}, classification: { kind: 'infrastructure', notify: false }, installationCleanup: 'incomplete' };
   async function archive(artifact) {
     const key = createHash('sha256').update(artifact.integrity).digest('hex');
     if (!archives.has(key)) {
@@ -1216,7 +1231,7 @@ async function main() {
     const builds = { baseline: parseDshNpmManifest(pinned.package, process.platform, process.arch), packageManager: parsePnpmManifest(pinned.packageManager) }; summary.builds = builds;
     builds.candidate = parseDshNpmManifest(JSON.parse((await fetchBytes('https://registry.npmjs.org/@deepseek-ai/dsh/latest', 2 * 1024 * 1024)).toString('utf8')), process.platform, process.arch);
     const npmCLI = join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'); await access(npmCLI);
-    summary = await runDshBuildSequence(builds, {
+    summary = await suite.sequence(builds, {
       async install(artifact, label) {
         const runtime = join(root, `install-${label}`); await mkdir(runtime); await writeFile(join(runtime, '.fixture-owner'), owner);
         const installation = { root: runtime, safe: false, removed: false }; installations.push(installation);
@@ -1240,10 +1255,10 @@ async function main() {
       },
       async probe(installation, artifact, label) {
         installation.safe = false;
-        return runDshProbeAttempt({ output, label, artifact }, async ({ reportPath, runId, directory }) => {
-          const result = await runDshProcess(process.execPath, [join(repositoryRoot, 'scripts', 'dsh-compat.mjs'), '--report', reportPath], {
+        return suite.attempt({ output, label, artifact }, async ({ reportPath, runId, directory }) => {
+          const result = await runDshProcess(process.execPath, [join(repositoryRoot, 'scripts', suite.script), '--report', reportPath], {
             env: { ...(await prepareDshProfile(join(root, `controller-${label}`), 'http://127.0.0.1:1/v1')), CROSSCHAT_LIVE: '1', DSH_RUNTIME_DIR: installation.root,
-              DSH_TASK_ROOT: root, DSH_EXPECTED_VERSION: artifact.version, DSH_EXPECTED_RUN_ID: runId }, timeout: 360000,
+              DSH_TASK_ROOT: root, DSH_EXPECTED_VERSION: artifact.version, DSH_EXPECTED_RUN_ID: runId }, timeout: suite.timeoutMs,
           });
           await writeFile(join(directory, 'process.json'), JSON.stringify(result, null, 2)); return result;
         });
