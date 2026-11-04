@@ -24,4 +24,14 @@ GitHub要求workflow_dispatch对应的工作流文件先存在于默认分支，
 3. 针对明确ref执行正式Windows首轮，记录commit/run/job身份、工具版本与摘要、原始报告和清理、artifact可读取性。检查报告job确实按当前分支条件执行或跳过，保留未触发Issue的真实原因。
 4. 定时触发、报告权限及去重条件分别补证，不把“YAML已写”或“手动首轮通过”扩成整项C05关闭。
 
-集成条件未就绪时继续C11的Windows npm/Web从零接入开发；不以C05外部条件冻结本地代码，也不自行缩减C00/C12的平台范围。正式Desktop独立runner、可信publisher默认策略、自然Host退出及官方卸载仍沿C04合同。
+2026-11-04后续：C11的Windows npm/Web从零本地切片现已验收，不再作为待开发项目重开。正式Desktop同一原生UI会话→Host自然退出的固定包本地观察切片也已验收，见[自然退出摘要](evidence/c04-natural-exit-20261104/validation.json)；它不替代C2可信runner接线、独立干净runner、可信publisher默认策略或官方卸载。C00/C12的平台范围保持待决定，不自行缩减。
+
+## 最新集成差异与本地虚拟合并预览
+
+2026-11-04 04:49:13 UTC重新通过GitHub连接只读核实：main仍为874461ae9ecdb799d880c28c1db30999c2c51555；返回的11个远端分支中没有codex/core-refactor-pre-tui，main的工作流目录仍只有ci.yml、deploy-book.yml、publish.yml。本次两类DSH工作流均未进入默认分支。精确查询快照、原始合并预览及无外部写入边界见[证据摘要](evidence/dsh-hosted-preflight-20261104/validation.json)。
+
+以本地56f6e76a517acb8c94baaab34fe7ee2c727319d7为新快照，main独有14个提交、开发线独有334个提交，内容差异703个文件。旧becae8e的297/634数字保留为历史，不代表当前差异。本地运行git merge-tree --write-tree预览两条线的合并，得到32个冲突路径，包括公共会话选择/操作、Codex读取、TCP与broker/node、TUI及README/变更记录；完整清单见[原始输出](evidence/dsh-hosted-preflight-20261104/merge-tree.txt)。
+
+这次预览只生成Git对象和证据文件；当前HEAD、分支、工作树与索引未进行合并或切换，未解决冲突、未验证预览树，不能宣称已有可发布的整合分支。当前开发线包含原核心/TUI、其它负责人公共通信与多工具工作；用户须指定由原集成负责人提供可运行ref，或明确移交完整开发线的集成责任后再由本会话准备本地候选。不能把仅授权DSH开发理解为接管上述32处共享冲突。
+
+集成候选可审阅且对应范围确定后，推送/PR/默认分支落地与Actions仍各按既有授权边界进行。本次没有推送、创建PR、合入main、触发Actions或创建Issue；配置存在与虚拟合并预览均不是托管首轮通过。
