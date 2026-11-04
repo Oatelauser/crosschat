@@ -1,0 +1,43 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ❯ test/dsh-desktop-exit-observer.test.ts (9 tests | 1 failed) 1048ms
+   ✓ formal Desktop natural-exit observation boundary > accepts the actual owner, ordered private acknowledgement, close and independent held Host handle 1ms
+   ✓ formal Desktop natural-exit observation boundary > keeps a zero OS exit unknown without the real shutdown acknowledgement and stop completion 0ms
+   ✓ formal Desktop natural-exit observation boundary > rejects changed source, another parent/profile/binary and an unrelated Host handle 0ms
+   ✓ formal Desktop natural-exit observation boundary > refuses any kill, non-graceful completion, missing stream close or abnormal main exit 0ms
+   ✓ formal Desktop natural-exit observation boundary > requires continuous observation, one exact Host and the actual lifecycle order 0ms
+   ✓ formal Desktop natural-exit observation boundary > does not infer complete process release from a truncated or unresolved owning Desktop record 0ms
+   ✓ formal Desktop natural-exit observation boundary > refuses breakpoint relocation into any main script other than the pinned official bytes 1ms
+   × owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies 1039ms
+     → Matcher did not succeed in time.
+   ✓ owned Desktop inspector transport > correlates actual responses and rejects pending reads when the owned connection closes 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-desktop-exit-observer.test.ts > owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies
+Error: Matcher did not succeed in time.
+ ❯ test/dsh-desktop-exit-observer.test.ts:82:86
+     80|     try {
+     81|       for (const peer of fixture.value.clients) peer.send('[]');
+     82|       await expect.poll(() => events.includes('transport-error'), { ti…
+       |                                                                                      ^
+     83|     } finally { await client.close(); await fixture.close(); }
+     84|   });
+
+Caused by: AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 passed (9)
+   Start at  11:25:06
+   Duration  1.47s (transform 44ms, setup 0ms, collect 63ms, tests 1.05s, environment 0ms, prepare 92ms)
+

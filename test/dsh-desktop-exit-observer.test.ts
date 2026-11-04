@@ -1,5 +1,7 @@
+import { once } from 'node:events';
+import { WebSocketServer } from 'ws';
 import { describe, expect, it } from 'vitest';
-import { assessDshDesktopNaturalExit, DSH_DESKTOP_MAIN_SHA256, locateDshDesktopExitBreakpoints } from './helpers/dsh-desktop-exit-observer.mjs';
+import { assessDshDesktopNaturalExit, connectDshExitInspector, DSH_DESKTOP_MAIN_SHA256, locateDshDesktopExitBreakpoints } from './helpers/dsh-desktop-exit-observer.mjs';
 
 const expected = { parentPid: 4100, projectDir: 'D:/owned/profiles/desktop', binary: 'D:/soft/DeepSeek Harness/DeepSeek Harness.exe', sourceSha256: DSH_DESKTOP_MAIN_SHA256 };
 function observed() {
@@ -62,5 +64,37 @@ describe('formal Desktop natural-exit observation boundary', () => {
 
   it('refuses breakpoint relocation into any main script other than the pinned official bytes', () => {
     expect(() => locateDshDesktopExitBreakpoints('another build or injected lifecycle implementation')).toThrow();
+  });
+});
+
+describe('owned Desktop inspector transport', () => {
+  async function server() {
+    const value = new WebSocketServer({ host: '127.0.0.1', port: 0 }); await once(value, 'listening');
+    const address = value.address(); if (typeof address === 'string' || !address) throw new Error('Missing loopback listener');
+    return { value, url: `ws://127.0.0.1:${address.port}/owned`, async close() { for (const client of value.clients) client.terminate(); await new Promise<void>((done) => value.close(() => done())); } };
+  }
+
+  it('rejects malformed protocol values explicitly instead of treating them as missing or late replies', async () => {
+    const fixture = await server(), events: string[] = [];
+    const client = await connectDshExitInspector(fixture.url, (method: string) => events.push(method));
+    try {
+      for (const peer of fixture.value.clients) peer.send('[]');
+      await expect.poll(() => events.includes('transport-error'), { timeout: 1000 }).toBe(true);
+    } finally { await client.close(); await fixture.close(); }
+  });
+
+  it('correlates actual responses and rejects pending reads when the owned connection closes', async () => {
+    const fixture = await server();
+    fixture.value.on('connection', (peer) => { peer.on('message', (raw) => {
+      const request = JSON.parse(String(raw));
+      if (request.method === 'Runtime.evaluate') peer.send(JSON.stringify({ id: request.id, result: { result: { value: 42 } } }));
+    }); });
+    const client = await connectDshExitInspector(fixture.url, () => {});
+    try {
+      expect(await client.value('42')).toBe(42);
+      const stopped = expect(client.call('Runtime.enable')).rejects.toThrow('closed');
+      for (const peer of fixture.value.clients) peer.close();
+      await stopped;
+    } finally { await client.close(); await fixture.close(); }
   });
 });
