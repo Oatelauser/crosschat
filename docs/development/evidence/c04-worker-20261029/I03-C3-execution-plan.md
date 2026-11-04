@@ -1,5 +1,7 @@
 # C04-I03-C3：正式 Desktop 执行合同与独立 Windows 环境方案
 
+2026-11-04补记：固定正式Desktop 0.2.1-rc.2的同一UI原生身份调用→精确Host→正常Quit私有确认/真实close/进程句柄→主进程0→准确实例撤登记与聊天保留已通过本地仪器化验证，见[自然退出摘要](../c04-natural-exit-20261104/validation.json)。工装be4e743、完整check2753/11，原始八轮结果保留；旧“自然退出未知”属于当轮证据。当前没有生成可供旧C2直接消费的C1 Host记录，官方安装/卸载、独立clean runner、publisher默认策略与托管仍未完成，I03/C04不关闭。内置CLI已按实际dsh.cmd的固定Electron/bootstrap参数以shell:false成功安装生产桥；不把cmd脚本直接作为可执行文件。
+
 2026-11-03（UTC+8）。用户要求按已借鉴的思路开始下一单，root独立完成，无worker或子代理。开工基线 `69c4e5d0bfc84d5598993c9e17037b05a73cd237`，branch `codex/core-refactor-pre-tui`；仅用户原未跟踪 `docs/代码消息投递.md`，未触碰。范围来自[DSH优先计划](../../dsh-completion-plan-20261103.md)，承接[I03安装研究](../../../research/c04-windows-installer-contract-20261102.md)及[C2组件](I03-C2-development.md)。
 
 **第1—7节保留原方案交付时的事实；后续授权及本机原生结果见第8节起的补记。I03/C04父项仍未完成。** 原方案当轮没有下载/执行官方EXE、创建VM、注册runner、触发Actions、启停Desktop/Host、写注册表或修改产品，没有新增功能文件/依赖/用户命令。第1—7节的命令、路径和回调安排除“本机只读观察”外均为拟议，不能当作已执行结果。

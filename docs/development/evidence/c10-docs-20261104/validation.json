@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "scope": "C10-DSH Windows basic teaching and local npm delivery layout audit",
+  "sourceCheckpoint": "be4e743",
+  "command": "npm pack --dry-run --json --ignore-scripts --offline --logs-max=0",
+  "publishedRelease": false,
+  "nativePackageInstallationExercised": false,
+  "packageId": "@oatelauser/crosschat@1.10.0",
+  "entryCount": 433,
+  "archiveBytesIfPacked": 803263,
+  "unpackedBytes": 3612547,
+  "packageArchiveCreated": false,
+  "cliEntryMode": 420,
+  "requiredSkillAndBridgeAssets": [
+    "skills/crosschat/SKILL.md",
+    "skills/crosschat/references/advanced.md",
+    "skills/crosschat/references/delivery.md",
+    "skills/crosschat/references/errors.md",
+    "skills/crosschat/references/remote.md",
+    "skills/crosschat/references/reply.md",
+    "skills/crosschat/references/send.md",
+    "skills/crosschat/references/stars.md",
+    "integrations/dsh/bridge.js",
+    "integrations/dsh/cordis.patch.yml",
+    "integrations/dsh/icon.svg",
+    "integrations/dsh/index.js",
+    "integrations/dsh/package.json",
+    "integrations/dsh/locale/en.json",
+    "integrations/dsh/locale/zh.json"
+  ],
+  "coveredFacts": [
+    "six canonical recipient types in the shared CLI tool registry and skill references",
+    "Harness home/profile and bridge ownership remain distinct",
+    "install/update/uninstall and doctor share the current target plan",
+    "plugin native management is explicit; no automatic service start/repair/history restore",
+    "queue/steer, received hint and uncertain zero-resend teaching matches current contracts",
+    "package description is generic; npm files include complete skills and production bridge",
+    "current Windows npm/desktop evidence and remaining hosted/platform/lifecycle scope stated separately"
+  ],
+  "changes": "guide evidence update and architecture overview for all four families; commands, output, README and metadata behavior unchanged",
+  "checks": {
+    "productCode": "no change",
+    "previousCompleteCheck": {
+      "passed": 2753,
+      "skipped": 11,
+      "evidence": "../c04-natural-exit-20261104/check-live-final.txt"
+    },
+    "packageAssetsVerified": 15,
+    "rawPreview": "pack-dry-run.json",
+    "rawStderr": "pack-dry-run.stderr.txt"
+  },
+  "rawPreviewSha256": "17ffd0fa24ff4b34669a32a8e8ac23f66c6b6db959ad59b7f97f85856776af38"
+}

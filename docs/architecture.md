@@ -19,7 +19,16 @@
                     （消息注入为用户消息）           （模型直接被驱动干活）
 ```
 
-本机 CLI 每次调用独立完成发现、鉴权和投递。SSH 通过远端 CLI 执行；可选 TCP 形态另有常驻 broker（按星转发、管理、维护成员表）和 node 聚合器（本机投递、星籍对账），协议与三层权限见 [broker.md](broker.md)。原生会话及聊天仍由 Claude Code/Codex 管理。
+上图保留 Claude/Codex 两条通道的示例。当前四个工具家族使用同一发现、类型寻址和发送应用层，各自的原生传输留在 Adapter：
+
+| 家族 | 原生通道与接收端 | 接入范围 |
+| --- | --- | --- |
+| Claude Code | 原生注册记录、named pipe 与 peer 鉴权 | 已运行的 Claude 会话 |
+| Codex | App Server 与原生端点 | CLI/Desktop 按实际端点分别寻址 |
+| OpenCode | 已运行服务的 HTTP API 与原生会话 | CLI/Desktop 共用服务时使用共享类型 |
+| DeepSeek Harness | 官方 Host 插件桥、Bearer loopback HTTP 与原生根 Agent | `dsh` Host 与 `dsh-desktop` 分别寻址，profile/实例独立核实 |
+
+本机 CLI 每次调用独立完成发现、鉴权和投递。SSH 通过远端 CLI 执行；可选 TCP 形态另有常驻 broker（按星转发、管理、维护成员表）和 node 聚合器（本机投递、星籍对账），协议与三层权限见 [broker.md](broker.md)。会话与聊天由各自原生工具管理；crosschat 的接入边界见[工具类型](tool-types.md)和[Harness 指南](deepseek-harness.md)。
 
 crosschat 有持久状态：`~/.crosschat` 保存对话分片/短柄、发送日志、outbox/mailbox、机器标识和 TCP 配置/台账；broker/node 的活性快照写入 `status-*.json`。待投队列由按需启动、箱空即退的 watchdog 重试。路由和轮次保存在完整引用中，不依赖中央对话服务。
 

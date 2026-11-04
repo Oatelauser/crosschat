@@ -3297,3 +3297,21 @@ TDD链：c20502e为14失败/1通过的行为RED，5f0abca初版GREEN；15c7c81�
 [摘要](evidence/c11-dsh-20261104/validation.json)与[202项脱敏原始证据](evidence/c11-dsh-20261104/raw-evidence-redacted.zip)归档，ZIP 945024字节，SHA-256=779568e4c0c0c3263dfdada90c2ea5e57e0d3b75a09b4403d26dd31ffb5365a6；CRC及逐项SHA核验通过。排除原生profile/凭据/聊天存储、安装包/runtime及npm缓存。归档后只读核实本轮相关进程0；独占安装/缓存总根自动删除被拒，原因仅blocked by policy，未换工具重试，用户随后手动删除，代理只读核实目录不存在，用户DSH软件保留。
 
 C11的Windows npm/Web本地切片移出活动实施；新workflow只手动，报告job仅处理有界JSON、不checkout/执行原生代码、默认分支才有Issue写权限，并独立重核基线/同一候选两次失败/唯一运行身份/精确scope/完整清理及去重。离线反例含清理失败伪装兼容回归，不以summary自称regression直接发Issue。当前本地Node25.0.0，不能替代workflow的GitHub Node22首轮、定时、artifact读取和权限实证；C11其它工具/正式Desktop、C04完整生命周期及C00/C12三平台仍保留。托管集成边界见[前置核实](dsh-hosted-preflight-20261104.md)。未新增产品持久数据格式、命令参数或用户操作要求。
+
+## 2026-11-04 C04正式Desktop同一UI会话与自然退出
+
+最终工装be4e743，产品仍为e3b777e。用户保留的正式Windows Desktop 0.2.1-rc.2在本轮隔离home/profile/user-data中，通过内置CLI实际bootstrap参数以shell:false安装生产桥；正式UI输入唯一marker，原生pwsh执行当前构建的身份检查，返回完整session ID和identified/dsh-desktop/native/instance/verified。生产reader的精确Host PID与从出生起绑定的真实child/OS句柄一致，workspace实际路径位于隔离profile内，消息由本机模型桩固定驱动。
+
+固定main源码摘要绑定十个只读调试点；未替换函数、修改官方包、注入伪造观察插件或制造IPC。最终round-QW7oaI观察原生Quit检查activeTasks=false/scheduledTasks=false，随后同一Host的shutdown→shutdown-complete→真实close0→graceful=true及stdio销毁；持续持有的Host句柄和主进程均退出0，无kill，调试暂停累计407ms。当前instanceId的登记文件确实存在过且已撤销，原有旧登记的文件集合和哈希严格保持；三份聊天存储文件及本轮唯一marker保留。dsh协议登记四个key的值与测试前相同，用户PATH无fixture，用户软件保留。
+
+八轮所有原始结果保留，不追认为全绿。第一、二轮启动/暂停时Runtime.evaluate的awaitPromise挂起，早退还产生原生UI初始化错误；第三轮Host已正常退出，但调试连接保持主进程存活，最后C1超时。独立实际Node探针复现并修复后，第四轮空闲冷启动通过，单独[空闲摘要](evidence/c04-natural-exit-20261104/idle-validation.json)保留。第五轮复用profile但cwd未更新，主进程未spawn；第六轮真实Desktop身份正确，被Web-only工装误拒，未完成退出，Host monitor预算到期、主进程随后C1超时，monitor退出1不能写成Host退出1；之后只读核实相关进程均退出。第七轮UI、存储、Host/主进程退出均完成，但过宽的“所有登记为空”断言计入了第六轮旧记录；最终按已鉴权的准确instanceId检查本次撤登记，同时要求全部其它记录与baseline不变，没有删除旧记录追绿。真实junction初始Windows用例已绿，追加写前检查次序反例后才有RED/GREEN；其它边界/连接/来源/脱敏反例均留存。
+
+[最终摘要](evidence/c04-natural-exit-20261104/validation.json)及[85项脱敏原始证据](evidence/c04-natural-exit-20261104/raw-evidence-redacted.zip)归档，ZIP 88744字节，SHA-256=8de146c1865def90ab4f7fc3ba71b99455140cb58953437209c01f6d992d33cf，CRC及逐项SHA通过。排除原生profile、会话存储、Electron用户数据、凭据、runtime和包缓存，旧raw的认证URL与inspector ID已脱敏。最终定向45/45及显式helper ESLint通过，完整check退出0：**2753通过/11原有跳过，234文件通过/3跳过，lint/build及204模块688边通过**，最多2/最少1 worker、未开启live。此前空闲阶段完整2745/11仍保留，新完整检查对应后续真实UI/归属实现。
+
+当前本轮进程0；总测试根删除被自动审批以blocked by policy拒绝，未重试或换工具，已请求用户手动删除，最终处置见摘要。这个测试观察器未产生假的C1 Host记录，未调用C2卸载；C2可信runner接线、独立干净runner的安装/官方卸载/全量注册对账、publisher默认策略、托管及其它平台仍待完成。只核实固定包/本轮空闲后的退出，不扩大为全部版本或忙时停止。没有更改CLI/TUI命令、产品输出或新增crosschat持久数据格式。
+
+## 2026-11-04 C10 Windows基础诊断与教学核对
+
+已批准的Harness技能、活桥、profile只读诊断和CLI/JSON/TUI源事实仍为e3b777e，既有定向/真实ConPTY证据保留。核对当前CLI帮助、skill全部references、home/profile与项目/历史副本、覆盖/额外文件/卸载保留、官方插件维护及错误/不明零重发教学；六种收件类型和四个工具家族已有正确教学。更新Harness指南的npm rc.2/rc.5与正式Desktop rc.2真实边界，并补架构总览的OpenCode/Harness原生通道。命令、产品输出、包描述和用户README未改。
+
+[包布局摘要](evidence/c10-docs-20261104/validation.json)与npm离线dry-run原始输出保留：433项条目包含全部15项skill/bridge源资产，未执行脚本、联网、生成tgz或发布包。这证明当前本地交付布局，不冒充发布包安装或跨平台执行。该已批准DSH Windows诊断/基础教学切片移出活动实施；其它工具/平台、条件原生事实及托管范围保留。纯文档核对消费最新2753/11，不重复全量测试。

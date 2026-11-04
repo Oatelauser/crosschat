@@ -1,0 +1,360 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "task": "C04-formal-Desktop-native-UI-and-natural-exit-local-slice",
+  "codeCheckpoint": "be4e743",
+  "lastProductChange": "e3b777e",
+  "authoring": "root independent development and self-review; no worker or independent review",
+  "environment": {
+    "os": "Windows 11 Pro for Workstations",
+    "arch": "x64",
+    "controllerNode": "25.0.0",
+    "formalDesktopVersion": "0.2.1-rc.2",
+    "nativeProfile": "desktop",
+    "model": "scripted loopback only"
+  },
+  "acceptedRound": "round-QW7oaI",
+  "nativeMainScriptSha256": "6f3d1ddd1106371452c2204be6dfb2e5460a8e8259cdd05cdccb5387b3f9a85a",
+  "observedScriptSha256": "6f3d1ddd1106371452c2204be6dfb2e5460a8e8259cdd05cdccb5387b3f9a85a",
+  "nativeSession": {
+    "nativeId": "session-afc24e35-948c-4b25-8f3d-660c1c78221f",
+    "endpointType": "desktop",
+    "source": {
+      "status": "identified",
+      "sourceTool": "dsh-desktop",
+      "basis": "native",
+      "association": "verified",
+      "scope": "instance",
+      "shouldAsk": false
+    },
+    "hostPid": 24036,
+    "marker": "C04_NATURAL_NATIVE_efe585c7",
+    "ownedWorkspacePaths": [
+      "profile\\Documents\\deepseek-harness\\default-workspace"
+    ]
+  },
+  "nativeRegistration": {
+    "instanceId": "f3d5c457-29e0-4b67-888d-91aa5f8afa2c",
+    "pid": 24036,
+    "filename": "f3d5c457-29e0-4b67-888d-91aa5f8afa2c.json",
+    "sha256": "dbbdb8d38421ca19609f10547d3697f9bd79b0d9aeee7b6d3f57b3603bbe6bb8"
+  },
+  "privateLifecycle": [
+    {
+      "kind": "birth",
+      "parentPid": 42300,
+      "pid": 24036,
+      "projectDir": "[C04-OWNED-ROOT]\\round-d2Mv8E\\native\\dsh-home\\profiles\\desktop",
+      "binary": "D:\\soft\\DeepSeek Harness\\DeepSeek Harness.exe",
+      "spawnargs": [
+        "D:\\soft\\DeepSeek Harness\\DeepSeek Harness.exe",
+        "--expose-internals",
+        "D:\\soft\\DeepSeek Harness\\resources\\app.asar\\dsh\\node_modules\\@deepseek-ai\\dsh-desktop-host\\lib\\index.js",
+        "D:\\soft\\DeepSeek Harness\\resources\\app.asar\\dsh",
+        "[C04-OWNED-ROOT]\\round-d2Mv8E\\native\\dsh-home\\profiles\\desktop",
+        "D:\\soft\\DeepSeek Harness\\resources\\runtime\\primary-runtime",
+        "D:\\soft\\DeepSeek Harness\\resources\\runtime\\primary-runtime\\dependencies\\pnpm\\bin\\pnpm.mjs",
+        "D:\\soft\\DeepSeek Harness\\resources\\runtime\\bin"
+      ]
+    },
+    {
+      "kind": "shutdown",
+      "pid": 24036,
+      "connected": true,
+      "stopping": true
+    },
+    {
+      "kind": "ack",
+      "pid": 24036,
+      "type": "shutdown-complete",
+      "stopping": true
+    },
+    {
+      "kind": "close",
+      "pid": 24036,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "kind": "complete",
+      "pid": 24036,
+      "graceful": true,
+      "shutdownCompleted": true,
+      "code": 0,
+      "signal": null,
+      "stdoutDestroyed": true,
+      "stderrDestroyed": true,
+      "stderrTail": ""
+    }
+  ],
+  "quitInspection": {
+    "pid": 24036,
+    "activeTasks": false,
+    "scheduledTasks": false
+  },
+  "uiIdleBeforeQuit": true,
+  "hostHandle": {
+    "executable": "D:\\soft\\DeepSeek Harness\\DeepSeek Harness.exe",
+    "exitCode": 0,
+    "creationTime": "2026-11-04T04:24:20.9599271Z",
+    "pid": 24036,
+    "heldBeforeShutdown": true
+  },
+  "owningMainProcess": {
+    "pid": 42300,
+    "code": 0,
+    "signal": null,
+    "closed": true,
+    "failed": false,
+    "timedOut": false,
+    "cancelled": false,
+    "truncated": false,
+    "releaseUnclear": [],
+    "secondaryProblems": []
+  },
+  "assessment": {
+    "verified": true,
+    "hostPid": 24036,
+    "parentPid": 42300,
+    "scope": "fixed formal Desktop with passive debugger and held OS handle"
+  },
+  "boundBreakpoints": [
+    {
+      "kind": "birth",
+      "scriptId": "133",
+      "lineNumber": 3812,
+      "columnNumber": 2
+    },
+    {
+      "kind": "ready",
+      "scriptId": "133",
+      "lineNumber": 3823,
+      "columnNumber": 33
+    },
+    {
+      "kind": "shutdown",
+      "scriptId": "133",
+      "lineNumber": 3914,
+      "columnNumber": 29
+    },
+    {
+      "kind": "ack",
+      "scriptId": "133",
+      "lineNumber": 3828,
+      "columnNumber": 69
+    },
+    {
+      "kind": "inspection",
+      "scriptId": "133",
+      "lineNumber": 3832,
+      "columnNumber": 20
+    },
+    {
+      "kind": "close",
+      "scriptId": "133",
+      "lineNumber": 3842,
+      "columnNumber": 19
+    },
+    {
+      "kind": "complete",
+      "scriptId": "133",
+      "lineNumber": 3924,
+      "columnNumber": 2
+    },
+    {
+      "kind": "kill-invalid",
+      "scriptId": "133",
+      "lineNumber": 3820,
+      "columnNumber": 4
+    },
+    {
+      "kind": "kill-term",
+      "scriptId": "133",
+      "lineNumber": 3919,
+      "columnNumber": 23
+    },
+    {
+      "kind": "kill-kill",
+      "scriptId": "133",
+      "lineNumber": 3921,
+      "columnNumber": 9
+    }
+  ],
+  "debuggerPauses": [
+    {
+      "kind": "birth",
+      "elapsedMs": 395
+    },
+    {
+      "kind": "ready",
+      "elapsedMs": 1
+    },
+    {
+      "kind": "inspection",
+      "elapsedMs": 1
+    },
+    {
+      "kind": "shutdown",
+      "elapsedMs": 1
+    },
+    {
+      "kind": "ack",
+      "elapsedMs": 1
+    },
+    {
+      "kind": "close",
+      "elapsedMs": 7
+    },
+    {
+      "kind": "complete",
+      "elapsedMs": 1
+    }
+  ],
+  "totalDebuggerPauseMs": 407,
+  "preservation": {
+    "persistedChatFiles": 3,
+    "originalStoredChatHashes": {
+      "--D-workspace-CC-multichat-node_modules-.cache-crosschat-c04-natural-20261104-hu9W8P-round-d2Mv8E-native-profile-Documents-deepseek-harness-default-workspace--/session-08a2785c-ed7c-46e4-bdc5-6af26471cc18/session.v4.jsonl.zstd": "89ebca985df2372082c6e8681a0783b50c7e8f127927338c49a957a2147ceac4",
+      "--D-workspace-CC-multichat-node_modules-.cache-crosschat-c04-natural-20261104-hu9W8P-round-d2Mv8E-native-profile-Documents-deepseek-harness-default-workspace--/session-afc24e35-948c-4b25-8f3d-660c1c78221f/session.v4.jsonl.zstd": "852d09be8fdaf6cc2498af3d7783e303f08a9f4b14b25784defe81646d79ae32",
+      "--D-workspace-CC-multichat-node_modules-.cache-crosschat-c04-natural-20261104-hu9W8P-round-d2Mv8E-native-profile-Documents-deepseek-harness-default-workspace--/session-e287799a-c778-4446-bdaa-cca5c73f2842/session.v4.jsonl.zstd": "e3888a06df8538c2aceb668208309a02ada291e2aa6951e5d9167c023a1560fa"
+    },
+    "currentInstanceRecordRemoved": true,
+    "priorRecordsPreserved": true,
+    "priorRegistrationCount": 1,
+    "registrationBaselineHashes": {
+      "e116a315-243d-49eb-a983-82baae440329.json": "125b86f50e36a76e865b4dde046f0d74d8647bf3103d8666ec4449697a0072f2"
+    },
+    "registrationAfterHashes": {
+      "e116a315-243d-49eb-a983-82baae440329.json": "125b86f50e36a76e865b4dde046f0d74d8647bf3103d8666ec4449697a0072f2"
+    },
+    "dshProtocolRegistryValuesUnchanged": true,
+    "protocolRegistryKeyCount": 4,
+    "ownedWorkspacesVerified": true
+  },
+  "checks": {
+    "finalFull": {
+      "command": "npm run check",
+      "passed": 2753,
+      "skipped": 11,
+      "passedFiles": 234,
+      "skippedFiles": 3,
+      "modules": 204,
+      "edges": 688,
+      "exitCode": 0,
+      "liveEnabled": false,
+      "maxWorkers": 2,
+      "minWorkers": 1,
+      "raw": "check-live-final.txt"
+    },
+    "previousIdleFull": {
+      "passed": 2745,
+      "skipped": 11,
+      "raw": "check-final.txt"
+    },
+    "finalTargeted": {
+      "passed": 45,
+      "files": 2,
+      "raw": "registration-release-green.txt"
+    },
+    "explicitHelperEslint": "passed"
+  },
+  "failureHistory": [
+    {
+      "round": "round-YQOg22",
+      "checkpoint": "04ed5cf",
+      "result": "Runtime.evaluate before startup release timed out; owned main eventually stopped by C1; no natural proof"
+    },
+    {
+      "round": "round-uscelV",
+      "checkpoint": "7429dd0",
+      "result": "awaitPromise read while paused deadlocked; early cleanup produced UI startup errors and owned main timed out"
+    },
+    {
+      "round": "round-g3gNh3",
+      "checkpoint": "6784106",
+      "result": "Host acknowledged graceful close0, but debugger held owning main open until C1 timeout; not accepted"
+    },
+    {
+      "round": "round-d2Mv8E",
+      "checkpoint": "baadff0",
+      "result": "idle cold startup + natural Host/main exit passed; no native chat turn; separate idle summary retained"
+    },
+    {
+      "round": "round-eZRxoY",
+      "checkpoint": "0957ec9",
+      "result": "official bridge install succeeded; reused-profile launch cwd was still artifact-relative, native main not spawned"
+    },
+    {
+      "round": "round-Iskt95",
+      "checkpoint": "2f0c65c",
+      "result": "real tool output was correct verified Desktop source; shared Web-only fixture verifier rejected it. No private shutdown observed; held Host monitor budget expired, owning main later timed out. Later read-only scan found zero owned processes; do not interpret monitor exit1 as Host exit1"
+    },
+    {
+      "round": "round-s6LIVN",
+      "checkpoint": "5f3f133",
+      "result": "live UI identity, storage and graceful Host/main exit0 passed; old all-records-empty teardown assertion counted a previous failed-run record as current. Not accepted retrospectively"
+    },
+    {
+      "round": "round-QW7oaI",
+      "checkpoint": "be4e743",
+      "result": "complete live UI source/Host linkage, current registration release with exact preservation of earlier records and native chat persistence passed"
+    }
+  ],
+  "guardEvidence": [
+    "source-and-release-red/green.txt",
+    "transport-red/green.txt",
+    "paused-runtime-red/green.txt",
+    "evidence-redaction-red/green.txt",
+    "profile-owner-red/green.txt",
+    "profile-redirect-existing-green.txt was already green on Windows; stronger pre-write ordering counterexample then RED/GREEN",
+    "desktop-source-red/green.txt",
+    "registration-release-red/green.txt"
+  ],
+  "notValidated": [
+    "uninstrumented production observation or all native versions/active-turn shutdown scenarios",
+    "C2 trusted-runner binding / admissible Host process record; no fake C1 record produced",
+    "automatic installer or official uninstall / complete global registration lifecycle",
+    "independent clean Windows runner, hosted Actions, other OS platforms",
+    "publisher default policy, model intelligence or personal model-provider configuration",
+    "all profile/project/history combinations, C18/C20 enhancements"
+  ],
+  "c2AdmissibleRecordProduced": false,
+  "cleanup": {
+    "allNativeExecutionsFinished": true,
+    "precleanupOwnedProcessCount": 0,
+    "userPathContainsFixture": false,
+    "userDshRetained": true,
+    "ownedAggregateRootRemoved": false,
+    "aggregateRootDisposition": "awaiting user manual removal after verified archive and zero owned processes",
+    "automaticDeletion": "rejected: blocked by policy; no retry or alternate tool used"
+  },
+  "sourceFiles": [
+    {
+      "path": "test/helpers/dsh-desktop-exit-observer.mjs",
+      "sha256": "f840d7ea38186d27aba7a43ae90ab3c59b73990331f8057c609bf482ef0e1a13"
+    },
+    {
+      "path": "test/helpers/dsh-desktop-exit-validation.mjs",
+      "sha256": "72c160a4a4b2180984fc03829e172bf6a29b703f13f6cdf842080639f2e1281f"
+    },
+    {
+      "path": "test/dsh-desktop-exit-observer.test.ts",
+      "sha256": "d16e0b662bf0eacf67a3f679284574bbf865f91b4df37879957a33851c56758c"
+    },
+    {
+      "path": "test/helpers/dsh-live-fixture.mjs",
+      "sha256": "786af7c34e74e58e6a77ab8cf68545d44129cc3e13edd192866a6773ab061bac"
+    },
+    {
+      "path": "test/dsh-live-fixture.test.ts",
+      "sha256": "6095af1e245d3f1f30227ed4e671c023001e4e2f8711bb67ed7be2ca5e0eaa52"
+    }
+  ],
+  "archive": {
+    "path": "raw-evidence-redacted.zip",
+    "bytes": 88744,
+    "items": 85,
+    "sha256": "8de146c1865def90ab4f7fc3ba71b99455140cb58953437209c01f6d992d33cf",
+    "crcAndEveryEntrySha256Verified": true
+  }
+}
