@@ -21,3 +21,7 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npm run check
+      - name: Diagnose Windows CIM after a failed check
+        if: ${{ failure() && runner.os == 'Windows' }}
+        timeout-minutes: 1
+        run: node test/helpers/windows-cim-diagnostic.mjs
