@@ -89,7 +89,7 @@ describe('official desktop test environment', () => {
       expect(child.pid).toBeTypeOf('number');
       expect(child.exitCode).toBeNull();
       const inspection = await inspectDesktopRunProcesses(root, env);
-      expect(inspection.state).toBe('occupied');
+      expect(inspection.state, JSON.stringify(inspection)).toBe('occupied');
       expect(inspection.processes).toContainEqual({ pid: child.pid, parentPid: process.pid, executablePath: binary });
     } finally {
       if (child.exitCode === null && child.signalCode === null) child.kill();

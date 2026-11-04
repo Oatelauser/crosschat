@@ -16,6 +16,13 @@ import { admitDshDesktopInstaller, downloadDshDesktopInstaller, dshRegressionIde
 const lstatInjection = vi.hoisted(() => ({ impl: null as null | ((...args: unknown[]) => Promise<unknown>), real: null as null | ((...args: unknown[]) => Promise<unknown>) }));
 const openInjection = vi.hoisted(() => ({ impl: null as null | ((...args: unknown[]) => Promise<unknown>), real: null as null | ((...args: unknown[]) => Promise<unknown>) }));
 const rmInjection = vi.hoisted(() => ({ impl: null as null | ((...args: unknown[]) => Promise<unknown>), real: null as null | ((...args: unknown[]) => Promise<unknown>) }));
+const timerInjection = vi.hoisted(() => ({ impl: null as null | ((...args: unknown[]) => unknown), real: null as null | ((...args: unknown[]) => unknown) }));
+vi.mock('node:timers', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:timers')>();
+  const real = actual.setTimeout as unknown as (...args: unknown[]) => unknown;
+  timerInjection.real = real;
+  return { ...actual, setTimeout: (...args: unknown[]) => (timerInjection.impl ?? real)(...args) };
+});
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   const realLstat = actual.lstat as unknown as (...args: unknown[]) => Promise<unknown>;
@@ -56,7 +63,7 @@ const passed = (version: string, runId = randomUUID()) => ({ schema: 1, tool: 'd
 const failed = (version: string, runId = randomUUID()) => ({ ...passed(version, runId), status: 'failed', stage: 'contract', check: 'native-queue', category: 'compatibility', process: { code: 1, signal: null, timedOut: false } });
 
 async function isolated(work: (output: string) => Promise<void>) {
-  const output = await mkdtemp(join(tmpdir(), 'crosschat-dsh-ci-test-'));
+  const output = await realpath(await mkdtemp(join(tmpdir(), 'crosschat-dsh-ci-test-')));
   try { await work(output); } finally { await rm(output, { recursive: true, force: true }); }
 }
 
@@ -1227,24 +1234,35 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
       const proto = await fileHandleProto(output);
       const realWrite = proto.write;
       const owned: { handle: Record<string, unknown>; close: unknown }[] = [];
+      let closeStarted = () => {};
+      let finishLateClose: (() => void) | undefined;
+      let lateClose: Promise<unknown> | undefined;
       const swapClose = (make: (original: () => Promise<unknown>) => () => Promise<unknown>) => {
         proto.write = function (this: unknown, buffer: unknown) {
           const handle = this as Record<string, unknown>;
           const original = handle.close as () => Promise<unknown>;
-          handle.close = make(original);
+          const close = make(original);
+          handle.close = () => { closeStarted(); return close(); };
           owned.push({ handle, close: original });
           return realWrite.call(this, buffer);
         };
       };
       const release = async () => {
+        if (lateClose !== undefined) {
+          finishLateClose?.();
+          await lateClose;
+          for (const item of owned) item.handle.close = item.close;
+          owned.length = 0;
+        }
         for (const item of owned) { item.handle.close = item.close; await (item.close as () => Promise<unknown>)().catch(() => {}); }
       };
       try {
         // Cancellation while the only close is still pending voids the delivery and retains the partial.
         swapClose(() => () => new Promise(() => {}));
+        const cancellingCloseStarted = new Promise<void>((resolve) => { closeStarted = resolve; });
         const caller = new AbortController();
         const cancelled = download(async () => response(stream([installerBytes])), { directory: target, signal: caller.signal, timeoutMs: 5000 });
-        await new Promise((resolve) => setTimeout(resolve, 30));
+        await bounded(cancellingCloseStarted);
         caller.abort(new Error('cancelled during close'));
         const cancelledFailure: unknown = await bounded(cancelled).catch((error: unknown) => error);
         expect(cancelledFailure).toMatchObject({ message: 'cancelled during close', partialFile: join(target, installerName) });
@@ -1252,16 +1270,32 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
         await release(); owned.length = 0;
         await rm(join(target, installerName));
 
-        // A close finishing after the total deadline is not a success even though it does finish.
-        swapClose((original) => () => new Promise((resolve) => setTimeout(resolve, 50)).then(() => original()));
-        await expect(bounded(download(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 80));
-          return response(stream([installerBytes]));
-        }, { directory: target, timeoutMs: 100 }))).rejects.toThrow(/exceeded its 100ms deadline/);
+        // Fire the real deadline callback only after close has begun; filesystem speed is not the phase signal.
+        const realTimer = timerInjection.real!;
+        let fireDeadline: (() => void) | undefined;
+        timerInjection.impl = (callback, delay, ...args) => {
+          if (delay === 100 && fireDeadline === undefined) {
+            fireDeadline = callback as () => void;
+            return realTimer(() => {}, 60_000);
+          }
+          return realTimer(callback, delay, ...args);
+        };
+        const expiringCloseStarted = new Promise<void>((resolve) => { closeStarted = resolve; });
+        swapClose((original) => () => {
+          lateClose = new Promise<void>((resolve) => { finishLateClose = resolve; }).then(original);
+          return lateClose;
+        });
+        const overdue = download(async () => response(stream([installerBytes])), { directory: target, timeoutMs: 100 });
+        overdue.catch(() => {});
+        await bounded(expiringCloseStarted);
+        expect(fireDeadline).toBeTypeOf('function');
+        fireDeadline!();
+        await expect(bounded(overdue)).rejects.toThrow(/exceeded its 100ms deadline/);
         expect(existsSync(join(target, installerName))).toBe(true);
         await release(); owned.length = 0;
         await rm(join(target, installerName));
       } finally {
+        timerInjection.impl = null;
         proto.write = realWrite;
         await release();
         await rm(join(target, installerName), { force: true }).catch(() => {});
@@ -1407,17 +1441,38 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
       let cancelStartedB!: () => void;
       const startedB = new Promise<void>((resolve) => { cancelStartedB = resolve; });
       const second = gatedBody(() => { cancelStartedB(); });
+      let clock = 0;
+      const now = vi.spyOn(Date, 'now').mockImplementation(() => clock);
+      let fireDeadline: (() => void) | undefined;
+      const realTimer = timerInjection.real!;
+      timerInjection.impl = (callback, delay, ...args) => {
+        if (delay === 80 && fireDeadline === undefined) {
+          fireDeadline = callback as () => void;
+          return realTimer(() => {}, 60_000);
+        }
+        return realTimer(callback, delay, ...args);
+      };
       const overdue = download(async () => response(second.body), { directory: target, timeoutMs: 80 });
       overdue.catch(() => {});
-      await startedB;
-      await new Promise((resolve) => setTimeout(resolve, 120));
-      second.release();
-      const overdueFailure: unknown = await bounded(overdue).catch((error: unknown) => error);
-      expect(overdueFailure).toMatchObject({ message: 'Desktop installer deadline or cancellation preceded delivery' });
-      const overdueFields = overdueFailure as Error & { partialFile?: unknown; cleanupError?: unknown };
-      expect(overdueFields.partialFile).toBe(join(target, installerName));
-      expect(typeof overdueFields.cleanupError).toBe('string');
-      expect(existsSync(join(target, installerName))).toBe(true);
+      try {
+        await bounded(startedB);
+        expect(existsSync(join(target, installerName))).toBe(true);
+        expect(fireDeadline).toBeTypeOf('function');
+        clock = 1000;
+        fireDeadline!();
+        second.release();
+        const overdueFailure: unknown = await bounded(overdue).catch((error: unknown) => error);
+        expect(overdueFailure).toMatchObject({ message: 'Desktop installer deadline or cancellation preceded delivery' });
+        const overdueFields = overdueFailure as Error & { partialFile?: unknown; cleanupError?: unknown };
+        expect(overdueFields.partialFile).toBe(join(target, installerName));
+        expect(typeof overdueFields.cleanupError).toBe('string');
+        expect(existsSync(join(target, installerName))).toBe(true);
+      } finally {
+        timerInjection.impl = null;
+        now.mockRestore();
+        second.release();
+        await overdue.catch(() => {});
+      }
     });
   });
 

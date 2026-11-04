@@ -13,3 +13,15 @@
 顺序：先补有意义的可控诊断POSIX回收RED，复用main已有的有界整组回收owner；研究探针固定注入win32，canonical fixture保持产品link拒绝；同名提示先核实原生/成员准备顺序；关闭阶段以可控门证明到达，再施加取消/超时；unknown扫描先补完整诊断上下文，不直接归因或放宽清理准入。每项保留RED/GREEN或原始平台反例。已有本机WSL只用于普通Node单元/进程夹具复现，无DSH/OpenCode/Codex安装，不作为C00/C12工具矩阵验收。
 
 最终定向及必要完整检查通过后普通推送更新同一草稿PR，核实相应三平台CI；不force、不合main、不改定时/权限、不用skip/重发追绿。历史本地2761/11及首轮平台结果分别保留。
+
+## 本地修复与验证
+
+诊断取消的可控POSIX反例已先RED（d02f1e6），随后复用main已有的整组释放实现（b967103）；核心定向50项通过。研究探针只在测试中明确注入win32，生产仍只支持既定Windows研究范围。npm缓存fixture使用realpath，不放宽产品对链接的拒绝。
+
+两处下载测试改为先确认close/cleanup阶段，再触发原deadline回调及相应时钟进度；真实文件写入、关闭、保留/删除断言保持，没有放大产品超时。成员fixture先发布真实原生存活数据，在只读broker声明可见后再发送或重启，解决ACK与上行sessions之间的竞争；没有增加生产重试或改变adopt/回执语义。
+
+OpenCode首轮unknown仅有state，未记录error，不能追认唯一根因。5064ms耗时与5000ms扫描预算相符，只作为待核实线索。新增超时诊断RED（54b6881），明确区分CIM超时并仍返回unknown；真实用例失败时输出完整inspection，预算仍5000ms，无重试或清理准入放宽。Windows四文件定向164项通过。
+
+WSL Node22.14只用于普通开发复现。首次副本放在node_modules下面导致Vite将部分被测模块外部化，mock失效，产生29个失败；另有PowerShell/WSL参数转递使shell包装退出2，Vitest自己的失败计数仍保留，不把这些当产品结论。移到独立D:/workspace/CC/cc-pr1-linux-20261104后，先暴露两个真实fixture前提问题及一次ACK传播竞争，原始输出分别保留；修正前提和只读就绪等待后，7文件199通过/3个既有平台跳过。没有新增永久skip，未安装原生工具或远端Codex。
+
+最终Windows npm run check退出0：2763通过/11原有跳过、235文件通过/3跳过、204模块689边，lint/build通过；raw见windows-check.txt。Linux定向GREEN见linux-targeted-green.txt；各名称带final但曾失败的文件仍按实际结果保留，不追认为通过。此阶段尚待更新同一PR后的托管复核，未关闭C05/C11专用工具CI或C04正式生命周期。

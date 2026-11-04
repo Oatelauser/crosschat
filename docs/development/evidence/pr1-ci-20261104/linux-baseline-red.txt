@@ -1,0 +1,56 @@
+
+ RUN  v3.2.7 /mnt/d/workspace/CC/cc-int-20261104/node_modules/.cache/crosschat-pr1-linux-20261104/source
+
+ ❯ test/codex-caller-source-probe.test.ts (14 tests | 1 failed) 28ms
+   ✓ codex caller source probe > reports only CODEX_/CROSSCHAT_ variables and never their raw values 2ms
+   ✓ codex caller source probe > drops malformed process rows instead of inventing parents 1ms
+   ✓ codex caller source probe > drops unusable creation times instead of treating them as real 0ms
+   ✓ codex caller source probe > never skips a nearer unrecognized codex executor for a farther known one 1ms
+   ✓ codex caller source probe > refuses to name an entry when the instance metadata is incomplete 0ms
+   ✓ codex caller source probe > stops at a missing parent rather than guessing the entry 0ms
+   ✓ codex caller source probe > rejects a parent created after its child, so pid reuse cannot fake an entry 0ms
+   ✓ codex caller source probe > bounds the walk by depth and by cycles 0ms
+   ✓ codex caller source probe > classifies a CLI shell and a Desktop shell apart, and refuses to guess otherwise 1ms
+   ✓ codex caller source probe > sees through the bundled command runner between executor and shell 0ms
+   ✓ codex caller source probe > reports why a table is unavailable instead of emitting a verdict 1ms
+   × codex caller source probe > passes the caller timeout to the process-table command 21ms
+     → expected {} to deeply equal { command: 'powershell.exe', …(1) }
+   ✓ codex caller source probe > reports an unreadable table instead of a verdict, and never emits absolute paths 0ms
+   ✓ codex caller source probe > classifies the documented install layouts from paths alone 0ms
+ ✓ test/core-diagnostics.test.ts (16 tests) 444ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/codex-caller-source-probe.test.ts > codex caller source probe > passes the caller timeout to the process-table command
+AssertionError: expected {} to deeply equal { command: 'powershell.exe', …(1) }
+
+- Expected
++ Received
+
+- {
+-   "command": "powershell.exe",
+-   "timeoutMs": 250,
+- }
++ {}
+
+ ❯ test/codex-caller-source-probe.test.ts:156:18
+    154|     };
+    155|     await readProcessTable({ run, timeoutMs: 250 });
+    156|     expect(seen).toEqual({ command: 'powershell.exe', timeoutMs: 250 }…
+       |                  ^
+    157|   });
+    158| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 29 passed (30)
+   Start at  14:04:56
+   Duration  6.18s (transform 2.03s, setup 0ms, collect 4.00s, tests 472ms, environment 0ms, prepare 3.18s)
+
+npm notice
+npm notice New major version of npm available! 10.9.2 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice

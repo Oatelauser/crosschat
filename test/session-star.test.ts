@@ -958,6 +958,7 @@ describe('018 批二：extends 四级校验', () => {
     '分支一：旧名仍是星内活成员 → 拒绝并教学（不锁死：指明出路）',
     async () => {
       const sh = await startStarStar('sl-e1');
+      sh.state.claude = [{ sessionId: 'sess-old', name: 'old' }];
       await sh.aggregator();
       const conn = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
       try {
@@ -1035,6 +1036,8 @@ describe('统一恢复入口（启动器重声明或显式管理，册落盘不�
       const next = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
       clients.push(next);
       expect((await next.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', endpointType: 'cli', claimId: 'new-window', selectionOwned: true })).ok).toBe(true);
+      await expect.poll(async () => (await fetchRosterFor(sh.baseDir, sh.entry))?.flatMap((machine) => machine.sessions ?? []), { timeout: 5_000 })
+        .toContainEqual(expect.objectContaining({ sessionId: 'sess-boss', tool: 'claude', endpointType: 'cli' }));
       expect(await send3('selected-again', 'lin-box:boss')).toMatchObject({ status: 'delivered' });
       const gone = await send3('r2', 'lin-box:gone');
       expect(gone).toMatchObject({ op: 'error', code: 'SESSION_OFFLINE' }); // 不再除名——下线等复活
@@ -1050,6 +1053,9 @@ describe('统一恢复入口（启动器重声明或显式管理，册落盘不�
       const aggA = await sh.aggregator();
       const pipe = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
       expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', endpointType: 'cli', selectionOwned: true, claimId: 'window' })).ok).toBe(true);
+      const declared = (sessionId: string) => expect.poll(async () => (await fetchRosterFor(sh.baseDir, sh.entry))?.flatMap((machine) => machine.sessions ?? []), { timeout: 5_000 })
+        .toContainEqual(expect.objectContaining({ sessionId, tool: 'claude', endpointType: 'cli' }));
+      await declared('sess-boss');
       await aggA.stop();
       await pipe.close();
       // broker 重启——roster.json 落盘（018 双失忆边角由册根治）
@@ -1077,6 +1083,7 @@ describe('统一恢复入口（启动器重声明或显式管理，册落盘不�
       sender.send({ tool: 'claude', op: 'send', id: 'am-offline', targetMachine: 'node-host:boss', body: 'x' });
       expect(await sender.waitFor((f) => f.op === 'error' && f.id === 'am-offline')).toMatchObject({ code: 'SESSION_OFFLINE' });
       expect(await runAdopt({ connect: 'sl-r2', adopt: 'boss' }, starJoinDeps(sh))).toBe(0);
+      await declared('sess-boss');
       sender.send({ tool: 'claude', op: 'send', id: 'am-selected', targetMachine: 'node-host:boss', body: 'x' });
       expect(await sender.waitFor((f) => f.op === 'receipt' && f.id === 'am-selected')).toMatchObject({ status: 'delivered' });
       // 册外活进程（从未入册）仍走 adopt 收编
@@ -1091,6 +1098,7 @@ describe('统一恢复入口（启动器重声明或显式管理，册落盘不�
       );
       expect(rc).toBe(0);
       expect(out.some((l) => l.includes('已收编 orphan'))).toBe(true);
+      await declared('sess-orphan');
       sender.send({ tool: 'claude', op: 'send', id: 'am2', targetMachine: 'node-host:orphan', body: 'back' });
       const back = await sender.waitFor((f) => f.op === 'receipt' && f.id === 'am2');
       expect(back).toMatchObject({ status: 'delivered' });
@@ -1488,10 +1496,10 @@ describe('020 工具限定词：启动器声明与 spawn 前预警', () => {
       const sh = await startStarStar('sl-t1');
       await sh.aggregator(); // 聚合器先在（预警探针的管道面）
       // 既有成员 codex/boss（attach 管道直声明，带 tool）
+      sh.state.codex = [{ id: CODEX_THREAD, name: 'boss' }];
       const pipe = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')));
       const reply = await pipe.send({ op: 'attach', sessionId: CODEX_THREAD, name: 'boss', tool: 'codex', endpointType: 'cli' });
       expect(reply.ok).toBe(true);
-      sh.state.codex = [{ id: CODEX_THREAD, name: 'boss' }];
       const out: string[] = [];
       const err: string[] = [];
       const joiner = new StarJoiner({

@@ -1,0 +1,903 @@
+
+ RUN  v3.2.7 /mnt/d/workspace/CC/cc-int-20261104/node_modules/.cache/crosschat-pr1-linux-20261104/source
+
+ ❯ test/dsh-compat-ci.test.ts (107 tests | 27 failed | 1 skipped) 12678ms
+   ✓ DeepSeek Harness official npm artifact constraints > pins the scoped npm artifact, package manager and the supported prerelease window 6ms
+   ✓ DeepSeek Harness official npm artifact constraints > rejects unrelated or mutable sources, malformed SRI and package-manager drift 0ms
+   ✓ DeepSeek Harness official npm artifact constraints > verifies the exact downloaded archive bytes using canonical SHA-512 SRI 0ms
+   ✓ DeepSeek Harness isolated npm download cache > uses a shared run-owned default and marks an explicit existing external cache for retention 3ms
+   ✓ DeepSeek Harness isolated npm download cache > rejects relative paths, URLs, network paths, files and externally labelled owned paths 3ms
+   ✓ DeepSeek Harness isolated npm download cache > rejects directory links and linked ancestors before using an external cache 2ms
+   ✓ DeepSeek Harness controlled desktop process > validates execution inputs and honors pre-cancellation without spawning 1ms
+   ✓ DeepSeek Harness controlled desktop process > returns stdout, stderr and exit facts only after close 1ms
+   × DeepSeek Harness controlled desktop process > runs a real controlled Node child and reports only its own close 34ms
+     → expected { code: null, signal: null, …(11) } to match object { code: 3, signal: null, …(6) }
+(5 matching properties omitted from actual)
+   ✓ DeepSeek Harness controlled desktop process > preserves nonzero and signal exit facts 1ms
+   ✓ DeepSeek Harness controlled desktop process > keeps cancellation and timeout primary even if close later reports zero 32ms
+   ✓ DeepSeek Harness controlled desktop process > shares one byte budget across stdout and stderr and marks truncation 0ms
+   ✓ DeepSeek Harness controlled desktop process > uses one bounded release after child and pipe failures without replacing the first cause  1002ms
+   ✓ DeepSeek Harness controlled desktop process > waits for close when kill throws and reports the stop request separately 0ms
+   ✓ DeepSeek Harness controlled desktop process > counts the spawn attempt against the deadline and refuses an overdue success 141ms
+   ✓ DeepSeek Harness controlled desktop process > keeps only bounded copies of the bytes inside the output budget 5ms
+   ✓ DeepSeek Harness controlled desktop process > keeps falsy first causes and marks the failure explicitly 1ms
+   ✓ DeepSeek Harness controlled desktop process > records later pipe, child and release problems without replacing the first cause  1000ms
+   ✓ DeepSeek Harness controlled desktop process > keeps late pipe errors owned after return without changing the snapshot  1007ms
+   × DeepSeek Harness controlled desktop process > clears the fixture cleanup wait once the real child is known closed 1ms
+     → spawnInjection.real is not a function
+   ✓ DeepSeek Harness controlled desktop process > records a pipe error raised synchronously while releasing the pipes  1002ms
+   × DeepSeek Harness controlled desktop process > lets the fixture end and await its own real child when the product cannot confirm release 1ms
+     → expected { code: null, signal: null, …(11) } to match object { timedOut: true, closed: false, …(1) }
+(10 matching properties omitted from actual)
+   ✓ DeepSeek Harness guarded desktop uninstall > never calls uninstall without a complete natural exit observation for this Host 2ms
+   ✓ DeepSeek Harness guarded desktop uninstall > binds every identity to the caller and returns process facts without claiming cleanup 2ms
+   ✓ DeepSeek Harness guarded desktop uninstall > refuses pre-cancellation and a Host observation that consumes the total deadline 42ms
+   ✓ DeepSeek Harness guarded desktop uninstall > preserves a runner failure and installation ownership even for falsy causes 1ms
+   ✓ DeepSeek Harness guarded desktop uninstall > ignores a late Host observation after cancellation and releases its abort listener 1ms
+   ✓ DeepSeek Harness guarded desktop uninstall > bounds both runner waits and records when uninstall was already invoked 54ms
+   ✓ DeepSeek Harness guarded desktop uninstall > classifies its own fired deadline even when the wall clock has not reached it (observe) 27ms
+   ✓ DeepSeek Harness guarded desktop uninstall > classifies its own fired deadline even when the wall clock has not reached it (uninstall) 27ms
+   ✓ DeepSeek Harness guarded desktop uninstall > rejects abnormal uninstall records and preserves executor causes without retrying 1ms
+   ✓ DeepSeek Harness guarded desktop uninstall > validates caller identities before either operation and keeps the captured binding 1ms
+   ✓ DeepSeek Harness guarded desktop uninstall > refuses an incomplete process observation before invoking uninstall 0ms
+   ✓ DeepSeek Harness fresh process and cleanup evidence > runs only controlled child processes and reports normal and timed-out termination distinctly 173ms
+   ✓ DeepSeek Harness fresh process and cleanup evidence > uses a unique empty report location and a caller-chosen UUID for every attempt 7ms
+   ✓ DeepSeek Harness fresh process and cleanup evidence > rejects wrong run IDs, incomplete PASS evidence, timeout/signal and process/report disagreement 5ms
+   ✓ DeepSeek Harness fresh process and cleanup evidence > requires all four exact cleanup booleans and refuses forced or unknown release 0ms
+   ✓ DeepSeek Harness baseline and candidate lifecycle > removes each released install before the next and retries the same pinned candidate 1ms
+   ✓ DeepSeek Harness baseline and candidate lifecycle > retains unknown runtime state and never advances or removes it 0ms
+   ✓ DeepSeek Harness baseline and candidate lifecycle > keeps the web retainedInstallation shape unchanged when a probe fails 0ms
+   ✓ DeepSeek Harness baseline and candidate lifecycle > does not turn installation, readiness, cleanup, baseline failure or flaky checks into issues 0ms
+   ✓ DeepSeek Harness independent issue reporter > creates only one deduplicated issue after independently verifying genuine scoped regression evidence 25ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > accepts a fresh desktop report bound to this install, native instance, session and artifact 2ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > binds the report to the caller launch instead of the report claim 2ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > rejects web, stale, foreign and incomplete desktop evidence 13ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > ignores reports outside the exclusive attempt location and never reuses an earlier report 3ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > rejects a well formed report above the read budget and keeps release unknown 12ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > never binds two missing artifact identities 2ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > keeps release unknown when the session times out, is killed, truncates output or disagrees 5ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > requires the Host exit, official uninstall and both registration cleanups for desktop release 0ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > installs the candidate only after a released baseline bound to this run 0ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > refuses to reuse an installation identity across attempts 0ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > keeps the desktop summary out of the web reporter 0ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > retains the first desktop installation and stops when release is unverified 0ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > never closes blindly after a thrown desktop operation and keeps ownership when the close fails 0ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > keeps the owned root of a partially created installation that throws 1ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > keeps the web entry closed to desktop reports and the desktop entry closed to web reports 0ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > rejects array UUID identities and never lets equal arrays bypass instance dedup 1ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > retains the full ownership after a normal install when release is unknown 1ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > retains the full ownership with the real reason when the desktop probe throws 1ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > retains the full ownership when the official close fails 1ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > keeps String(value) as the real reason when the probe throws a falsy value 4ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > projects the pinned research metadata and refuses masquerading or inexact desktop sources 3ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > streams the exact pinned bytes into the exclusive directory and proves only the transfer 8ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > rejects redirect, error and missing-body responses and size or digest disagreements without keeping partials 4ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > enforces the total deadline over headers and body and honors external cancellation  409ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > rejects short and zero-progress disk writes instead of trusting the stream digest 4ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > voids delivery when cancellation or the total deadline lands during the close 138ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > wraps frozen and falsy close failures with the retained path and the original cause 4ms
+   × DeepSeek Harness official Windows desktop installer metadata and streaming verification > keeps late responses and late handles owned after the deadline 297ms
+     → promise resolved "{ …(5) }" instead of rejecting
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > keeps the cause and the retained path when a falsy read failure meets an unclear release 93ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > refuses delivery when cancellation or the total deadline lands during cleanup 123ms
+   × DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late file close failure with the path and keeps the file owned 1104ms
+     → expected { …(5) } to match object { Object (message) }
+(5 matching properties omitted from actual)
+   × DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late file close that never settles as undecided at return 1105ms
+     → expected { …(5) } to match object { Object (message) }
+(5 matching properties omitted from actual)
+   × DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late partial removal failure with the path and keeps the file owned 252ms
+     → expected { …(5) } to match object { Object (message) }
+(5 matching properties omitted from actual)
+   × DeepSeek Harness official Windows desktop installer metadata and streaming verification > removes a late-created file exactly once and never deletes a replacement 255ms
+     → expected { …(5) } to match object { Object (message) }
+(5 matching properties omitted from actual)
+   × DeepSeek Harness official Windows desktop installer metadata and streaming verification > does not report a partial path after a successful late close and removal 255ms
+     → expected { …(5) } to match object { Object (message) }
+(5 matching properties omitted from actual)
+   × DeepSeek Harness official Windows desktop installer metadata and streaming verification > closes a real late handle that arrives after the product returned even when its close was replaced 3ms
+     → expected { …(5) } to match object { Object (message) }
+(5 matching properties omitted from actual)
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late response whose cancel is still undecided when cleanup returns 252ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > cancels a late response, releases its lock and reports it as undecided at return  364ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > keeps falsy and frozen stream failures as real failures and still cleans the owned partial 8ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > never overwrites an existing file and re-checks the projection before any network call 2ms
+   ✓ DeepSeek Harness desktop installer admission > admits the exact verified file and matching publisher without writing an installation 3ms
+   ✓ DeepSeek Harness desktop installer admission > rejects a missing or malformed publisher policy before any file read or child process 1ms
+   ✓ DeepSeek Harness desktop installer admission > rejects inexact artifact identities and file size or digest disagreements 3ms
+   ✓ DeepSeek Harness desktop installer admission > rejects links and non-regular files 2ms
+   × DeepSeek Harness desktop installer admission > rejects a file replaced between the read and the final state check 1012ms
+     → expected false to be true // Object.is equality
+   ✓ DeepSeek Harness desktop installer admission > rejects a signature status, subject or thumbprint that disagrees with the policy 10ms
+   ✓ DeepSeek Harness desktop installer admission > rejects pre-cancelled, timed-out and externally cancelled admissions without success 54ms
+   × DeepSeek Harness desktop installer admission > uses the bounded Windows Authenticode adapter with the path in an environment field 234ms
+     → The signature reader exited abnormally (code 1, signal null)
+   × DeepSeek Harness desktop installer admission > keeps the native signature reader independent of inherited PSModulePath without changing the caller environment 197ms
+     → promise rejected "Error: The signature reader exited abnorm… { stage: '…' }" instead of resolving
+   × DeepSeek Harness desktop installer admission > keeps the native signature reader independent of inherited psmodulepath without changing the caller environment 197ms
+     → promise rejected "Error: The signature reader exited abnorm… { stage: '…' }" instead of resolving
+   ↓ DeepSeek Harness desktop installer admission > uses native Windows signature modules rather than executing an inherited shadow module
+   × DeepSeek Harness desktop installer admission > rejects default-adapter output, JSON and process failures 198ms
+     → expected [] to have a length of 1 but got +0
+   ✓ DeepSeek Harness desktop installer admission > rejects same-fingerprint content rewritten while its signature is being read 3ms
+   × DeepSeek Harness desktop installer admission > bounds the post-signature content read and still closes the handle 2ms
+     → expected { …(6) } to match object { stage: 'cancelled' }
+(9 matching properties omitted from actual)
+   × DeepSeek Harness desktop installer admission > rejects a path replaced while the post-signature content is being re-read 2ms
+     → promise resolved "{ …(6) }" instead of rejecting
+   × DeepSeek Harness desktop installer admission > bounds a stalled open, owns the late handle and closes it once 503ms
+     → expected { stage: 'resolved' } to match object { stage: 'cancelled' }
+   × DeepSeek Harness desktop installer admission > bounds a stalled metadata read 3ms
+     → expected { stage: 'resolved' } to match object { stage: 'cancelled' }
+   × DeepSeek Harness desktop installer admission > reports an unconfirmed signature child release and clears parent pipes 210ms
+     → expected Error: The signature reader exited abnorm… { stage: '…' } to match object { stage: 'signature', …(1) }
+   × DeepSeek Harness desktop installer admission > reports an unconfirmed signature child release on cancellation 33ms
+     → expected Error: The signature read was cancelled { …(2) } to match object { stage: 'cancelled', …(1) }
+(1 matching property omitted from actual)
+   × DeepSeek Harness desktop installer admission > starts the real file close only once when it rejects 2ms
+     → promise resolved "{ …(6) }" instead of rejecting
+   × DeepSeek Harness desktop installer admission > preserves a frozen signature failure alongside the close failure 2ms
+     → expected Error: frozen signature { stage: 'si…' } to match object { stage: 'signature', …(1) }
+   × DeepSeek Harness desktop installer admission > owns a spawned child error without a close instead of returning early 200ms
+     → expected Error: The signature reader exited abnorm… { stage: '…' } to match object { stage: 'signature', …(1) }
+   × DeepSeek Harness desktop installer admission > finishes a spawned child error once its close is observed 201ms
+     → expected 0 to be greater than 0
+   × DeepSeek Harness desktop installer admission > keeps the overflow failure when a failed stop reports an error 199ms
+     → expected Error: The signature reader exited abnorm… { stage: '…' } to match object { stage: 'signature', …(1) }
+   × DeepSeek Harness desktop installer admission > keeps the signature failure and release state across the total deadline 53ms
+     → expected Error: The signature read was cancelled { …(2) } to match object { stage: 'signature', …(1) }
+(1 matching property omitted from actual)
+ ✓ test/codex-caller-source-probe.test.ts (14 tests) 6ms
+ ✓ test/core-diagnostics.test.ts (17 tests) 420ms
+ ❯ test/session-star.test.ts (40 tests | 2 failed) 14444ms
+   ✓ 018 批二：启动器旗标解析 > 只认死自家旗标：--connect 可重复/--extend-session 剥离，-n 等 claude/codex 原生参数原样透传 1ms
+   ✓ 018 批二：启动器旗标解析 > 裸 --connect=默认腿；-n 透传不受影响 0ms
+   ✓ 018 批二：启动器旗标解析 > 旧名禁冒号；--connect 缺值拒绝 0ms
+   ✓ 018 批二：启动器旗标解析 > serve 解析：--adopt/--extend-session 值旗标；--adopt 无 --connect 即拒 1ms
+   ✓ 018 批二：启动器入星链路 > Claude 原生恢复/指定 ID 参数 "--resume" 原样透传，按新进程识别已有 ID 100ms
+   ✓ 018 批二：启动器入星链路 > Claude 原生恢复/指定 ID 参数 "--continue" 原样透传，按新进程识别已有 ID 26ms
+   ✓ 018 批二：启动器入星链路 > Claude 原生恢复/指定 ID 参数 "--session-id" 原样透传，按新进程识别已有 ID 83ms
+   ✓ 018 批二：启动器入星链路 > Claude 空白窗口不超时猜测其他新增会话，等待原生选择事件 122ms
+   ✓ 018 批二：启动器入星链路 > 同目录匿名并发：精确入册、独立投递，退出第 0 个 --rm 不影响另一会话 121ms
+   ✓ 018 批二：启动器入星链路 > 同目录匿名并发：精确入册、独立投递，退出第 1 个 --rm 不影响另一会话 35ms
+   ✓ 018 批二：启动器入星链路 > node.json 缺失：stderr 显示原因和实际日志完整路径，错误也写日志，begin 不拒绝 1ms
+   ✓ 018 批二：启动器入星链路 > 星选择器错误：stderr 显示具体星名和实际日志完整路径，同一原因写入日志 15ms
+   ✓ 018 批二：启动器入星链路 > 错误日志写入抛异常：stderr 保留原错误、完整路径及写入失败状态 14ms
+   ✓ 018 批二：启动器入星链路 > 新会话探测超时：明确未入星的原因、实际日志路径和错误日志，停止仍可完成 69ms
+   ✓ 018 批二：启动器入星链路 > 聚合器拉起失败：保留具体异常、显示实际日志路径并写日志，会话扫描数据不受影响 71ms
+   ✓ 018 批二：启动器入星链路 > attach 拒绝：stderr 显示聚合器返回的具体原因和日志完整路径，错误落日志并正常收线 75ms
+   ✓ 018 批二：启动器入星链路 > 成功日志写入抛异常：已入星会话仍可直达，不显示入星失败 81ms
+   ✓ 018 批二：启动器入星链路 > spawn 会话→自动拉聚合器→attach→三段直达；退出即 detach  634ms
+   ✓ 018 批二：启动器入星链路 > 多星：--connect 可重复，两会话成员表各自 attach（win 带杠 mid 形态）  672ms
+   ✓ 018 批二：启动器入星链路 > 021 断连静默：聚合器被杀→重连提示落日志、控制台零输出、成员籍自动恢复  1538ms
+   ✓ 018 批二：启动器入星链路 > 023 stop 落重连窗口：waitClose 与 stop 信号 race，限时返回不挂起 25ms
+   ✓ 018 批二：三段寻址命令面（send --via tcp:<星>:<机器>:<会话> 免 --to） > CLI 三段直达：入星成员按会话名投递成功；非成员名报 SESSION_NOT_MEMBER 教学 27ms
+   × 018 批二：extends 四级校验 > 分支一：旧名仍是星内活成员 → 拒绝并教学（不锁死：指明出路） 8235ms
+     → promise resolved "'none'" instead of rejecting
+   ✓ 018 批二：extends 四级校验 > 分支二：本机对话分片有该名对话史（send-log 落盘证据）→ 放行并出声 22ms
+   ✓ 018 批二：extends 四级校验 > 分支三：都无 → 静默放行（无人查询的名字） 20ms
+   × 统一恢复入口（启动器重声明或显式管理，册落盘不丢） > 聚合器重启保留离线册位，存活的原生会话也须明确重声明（linux 32-hex 形态） 283ms
+     → expected { op: 'error', …(3) } to match object { status: 'delivered' }
+(4 matching properties omitted from actual)
+   ✓ 统一恢复入口（启动器重声明或显式管理，册落盘不丢） > broker/node 重启册位不丢，已有成员与新会话统一由显式 adopt 恢复 293ms
+   ✓ 018 批二：adopt 错误路径 > UNKNOWN→候选 did-you-mean；双活→NAME_COLLISION；--extend-session 血统入册 30ms
+   ✓ 018 批二：status --stars 会话视图与诊断行 > 每星下会话成员行（机器:会话名 extends←旧名）+ adopt 诊断行 + json sessions 键 2ms
+   ✓ 018 批二：9b 降级告警（不只日志） > NodeClient.warn 直打一行；warnIfBrokerLacksSessionCaps 对老 broker 出声、新 broker 静默  340ms
+   ✓ 018 批二：/rename 自动跟随（claude 扫描 + codex 名字回填） > publishes the CLI launcher endpoint and uses it again when releasing its selected session 29ms
+   ✓ 018 批二：/rename 自动跟随（claude 扫描 + codex 名字回填） > claude 改名→成员名跟随重播；codex 未命名成员→线程表名字回填 231ms
+   ✓ 018 批二：兼容锁（机器级零回归锚） > status 解析 --stars 仍只与 --json 组合；机器级 roster 无 sessions 字段照旧可读 0ms
+   ✓ 028 双模式与命令面 > 旗标面：--rm 剥离透传；--rm×--extend-session 互斥（边界2）；--rm 无 --connect 拒绝 0ms
+   ✓ 028 双模式与命令面 > serve 命令面：--connect --rm 组合拒绝（边界5）；--member-remove 解析与缺 --connect 即拒 1ms
+   ✓ 028 双模式与命令面 > 双模式集成：永久退出留册、裸 resume 不归队、明确选择恢复；--rm 退出清册  1092ms
+   ✓ 028 双模式与命令面 > member-remove 命令面：runServe 删册→册外无名（进程仍活）；幂等再删注明本不在册 28ms
+   ✓ 020 工具限定词：启动器声明与 spawn 前预警 > uses the selected star node-name override in launcher success logs and adoption receipts 73ms
+   ✓ 020 工具限定词：启动器声明与 spawn 前预警 > C14 工具声明独立：同名 Claude/Codex 成员按显式工具各自直达，斜杠不作类型前缀 28ms
+   ✓ 020 工具限定词：启动器声明与 spawn 前预警 > 聚合器不在→预警静默跳过，正常 begin 不输出入星预告 15ms
+ ✓ test/local-service-owned-process.test.ts (7 tests) 13ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 29 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness controlled desktop process > runs a real controlled Node child and reports only its own close
+AssertionError: expected { code: null, signal: null, …(11) } to match object { code: 3, signal: null, …(6) }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "cancelled": false,
+-   "closed": true,
+-   "code": 3,
++   "closed": false,
++   "code": null,
+    "signal": null,
+-   "stderr": "err",
+-   "stdout": "out",
++   "stderr": "",
++   "stdout": "",
+    "timedOut": false,
+    "truncated": false,
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:179:22
+    177|       const result = await runDshDesktopProcess(process.execPath, ['-e…
+    178|         { timeoutMs: 10000, spawnImpl: fixture.spawnImpl });
+    179|       expect(result).toMatchObject({ code: 3, signal: null, stdout: 'o…
+       |                      ^
+    180|       expect(typeof result.pid).toBe('number');
+    181|       const stopped = await runDshDesktopProcess(process.execPath, ['-…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness controlled desktop process > clears the fixture cleanup wait once the real child is known closed
+TypeError: spawnInjection.real is not a function
+ ❯ Object.spawnImpl test/dsh-compat-ci.test.ts:134:41
+    132|     return {
+    133|       spawnImpl: (...args: unknown[]) => {
+    134|         const process = (spawnInjection.real as (...input: unknown[]) …
+       |                                         ^
+    135|         let release!: () => void;
+    136|         const done = new Promise<void>((resolve) => { release = resolv…
+ ❯ test/dsh-compat-ci.test.ts:317:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness controlled desktop process > lets the fixture end and await its own real child when the product cannot confirm release
+AssertionError: expected { code: null, signal: null, …(11) } to match object { timedOut: true, closed: false, …(1) }
+(10 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "closed": false,
+    "failed": true,
+-   "timedOut": true,
++   "timedOut": false,
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:347:22
+    345|       const hidden = () => { fixture.spawnImpl(process.execPath, ['-e'…
+    346|       const result = await runDshDesktopProcess(process.execPath, ['-e…
+    347|       expect(result).toMatchObject({ timedOut: true, closed: false, fa…
+       |                      ^
+    348|     } finally { await fixture.cleanup(); }
+    349|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness official Windows desktop installer metadata and streaming verification > keeps late responses and late handles owned after the deadline
+AssertionError: promise resolved "{ …(5) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "filename": "deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "integrity": "sha512-4t9rfJgfwVYCESTK5r5tDm8LJfwuF2s3sad2uxV+N+RM0e66qGkLKIdejjzBLvgTqBHaCN5xgEGZxu6aVxBtMg==",
++   "path": "/tmp/crosschat-dsh-ci-test-t54crW/owned-desktop-download/deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "size": 45,
++   "version": "0.2.1-rc.2",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:1335:125
+    1333|       };
+    1334|       try {
+    1335|         await expect(bounded(download(async () => response(stream([ins…
+       |                                                                                                                             ^
+    1336|         await new Promise((resolve) => setTimeout(resolve, 250));
+    1337|         expect(readdirSync(target)).toEqual([]);
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:1320:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late file close failure with the path and keeps the file owned
+AssertionError: expected { …(5) } to match object { Object (message) }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "message": "Desktop installer exceeded its 1000ms deadline",
++   "filename": "deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "integrity": "sha512-4t9rfJgfwVYCESTK5r5tDm8LJfwuF2s3sad2uxV+N+RM0e66qGkLKIdejjzBLvgTqBHaCN5xgEGZxu6aVxBtMg==",
++   "path": "/tmp/crosschat-dsh-ci-test-aKKcA7/owned-desktop-download/deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "size": 45,
++   "version": "0.2.1-rc.2",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:1437:25
+    1435|         await late.arrived();
+    1436|         const failure: unknown = await bounded(attempt, 3000).catch((e…
+    1437|         expect(failure).toMatchObject({ message: 'Desktop installer ex…
+       |                         ^
+    1438|         expect((failure as { partialFile?: unknown }).partialFile).toB…
+    1439|         expect(notesOf(failure)).toContain('a late file close failed: …
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:1425:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late file close that never settles as undecided at return
+AssertionError: expected { …(5) } to match object { Object (message) }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "message": "Desktop installer exceeded its 1000ms deadline",
++   "filename": "deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "integrity": "sha512-4t9rfJgfwVYCESTK5r5tDm8LJfwuF2s3sad2uxV+N+RM0e66qGkLKIdejjzBLvgTqBHaCN5xgEGZxu6aVxBtMg==",
++   "path": "/tmp/crosschat-dsh-ci-test-iNEkGR/owned-desktop-download/deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "size": 45,
++   "version": "0.2.1-rc.2",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:1461:25
+    1459|         await late.arrived();
+    1460|         const failure: unknown = await bounded(attempt, 4000).catch((e…
+    1461|         expect(failure).toMatchObject({ message: 'Desktop installer ex…
+       |                         ^
+    1462|         expect((failure as { partialFile?: unknown }).partialFile).toB…
+    1463|         expect(notesOf(failure)).toContain('had not settled at return'…
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:1450:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late partial removal failure with the path and keeps the file owned
+AssertionError: expected { …(5) } to match object { Object (message) }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "message": "Desktop installer exceeded its 200ms deadline",
++   "filename": "deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "integrity": "sha512-4t9rfJgfwVYCESTK5r5tDm8LJfwuF2s3sad2uxV+N+RM0e66qGkLKIdejjzBLvgTqBHaCN5xgEGZxu6aVxBtMg==",
++   "path": "/tmp/crosschat-dsh-ci-test-y3aw2j/owned-desktop-download/deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "size": 45,
++   "version": "0.2.1-rc.2",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:1486:25
+    1484|         await late.arrived();
+    1485|         const failure: unknown = await bounded(attempt, 3000).catch((e…
+    1486|         expect(failure).toMatchObject({ message: 'Desktop installer ex…
+       |                         ^
+    1487|         expect((failure as { partialFile?: unknown }).partialFile).toB…
+    1488|         expect(notesOf(failure)).toContain('the late partial removal f…
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:1474:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness official Windows desktop installer metadata and streaming verification > removes a late-created file exactly once and never deletes a replacement
+AssertionError: expected { …(5) } to match object { Object (message) }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "message": "Desktop installer exceeded its 200ms deadline",
++   "filename": "deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "integrity": "sha512-4t9rfJgfwVYCESTK5r5tDm8LJfwuF2s3sad2uxV+N+RM0e66qGkLKIdejjzBLvgTqBHaCN5xgEGZxu6aVxBtMg==",
++   "path": "/tmp/crosschat-dsh-ci-test-qgz610/owned-desktop-download/deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "size": 45,
++   "version": "0.2.1-rc.2",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:1519:25
+    1517|         await late.arrived();
+    1518|         const failure: unknown = await bounded(attempt, 3000).catch((e…
+    1519|         expect(failure).toMatchObject({ message: 'Desktop installer ex…
+       |                         ^
+    1520|         expect((failure as { partialFile?: unknown }).partialFile).toB…
+    1521|         expect(rmCalls).toBe(1);
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:1500:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness official Windows desktop installer metadata and streaming verification > does not report a partial path after a successful late close and removal
+AssertionError: expected { …(5) } to match object { Object (message) }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "message": "Desktop installer exceeded its 200ms deadline",
++   "filename": "deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "integrity": "sha512-4t9rfJgfwVYCESTK5r5tDm8LJfwuF2s3sad2uxV+N+RM0e66qGkLKIdejjzBLvgTqBHaCN5xgEGZxu6aVxBtMg==",
++   "path": "/tmp/crosschat-dsh-ci-test-CBVQEl/owned-desktop-download/deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "size": 45,
++   "version": "0.2.1-rc.2",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:1546:25
+    1544|         await late.arrived();
+    1545|         const failure: unknown = await bounded(attempt, 3000).catch((e…
+    1546|         expect(failure).toMatchObject({ message: 'Desktop installer ex…
+       |                         ^
+    1547|         expect((failure as { partialFile?: unknown }).partialFile).toB…
+    1548|         expect((failure as { cleanupError?: unknown }).cleanupError).t…
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:1533:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness official Windows desktop installer metadata and streaming verification > closes a real late handle that arrives after the product returned even when its close was replaced
+AssertionError: expected { …(5) } to match object { Object (message) }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "message": "Desktop installer exceeded its 50ms deadline",
++   "filename": "deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "integrity": "sha512-4t9rfJgfwVYCESTK5r5tDm8LJfwuF2s3sad2uxV+N+RM0e66qGkLKIdejjzBLvgTqBHaCN5xgEGZxu6aVxBtMg==",
++   "path": "/tmp/crosschat-dsh-ci-test-HoQIUg/owned-desktop-download/deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "size": 45,
++   "version": "0.2.1-rc.2",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:1569:25
+    1567|         const attempt = download(async () => response(stream([installe…
+    1568|         const failure: unknown = await bounded(attempt, 3000).catch((e…
+    1569|         expect(failure).toMatchObject({ message: 'Desktop installer ex…
+       |                         ^
+    1570|         // The product returned before its open callback registered an…
+    1571|         expect(late.handles()).toBe(0);
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:1561:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > rejects a file replaced between the read and the final state check
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ test/dsh-compat-ci.test.ts:1792:23
+    1790|         };
+    1791|         const began = await Promise.race([started.then(() => true), ne…
+    1792|         expect(began).toBe(true);
+       |                       ^
+    1793|         if (!began) { release(); await pending.catch(() => {}); return…
+    1794|         await writeFile(path, replacement); release();
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:1778:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > uses the bounded Windows Authenticode adapter with the path in an environment field
+Error: The signature reader exited abnormally (code 1, signal null)
+ ❯ admissionFailure scripts/dsh-compat-ci.mjs:581:39
+    579| 
+    580| const admissionFailure = (stage, text, cause) => {
+    581|   const error = cause === undefined ? new Error(text) : new Error(text…
+       |                                       ^
+    582|   error.stage = stage;
+    583|   return error;
+ ❯ ChildProcess.<anonymous> scripts/dsh-compat-ci.mjs:688:27
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > keeps the native signature reader independent of inherited PSModulePath without changing the caller environment
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > keeps the native signature reader independent of inherited psmodulepath without changing the caller environment
+AssertionError: promise rejected "Error: The signature reader exited abnorm… { stage: '…' }" instead of resolving
+ ❯ test/dsh-compat-ci.test.ts:1858:62
+    1856|       const { calls } = fakeSpawn({ stdout: JSON.stringify(signature) …
+    1857|       try {
+    1858|         await expect(call(path, { readSignature: undefined })).resolve…
+       |                                                              ^
+    1859|         const childEnv = calls[0].options.env as Record<string, string…
+    1860|         expect(Object.keys(childEnv).filter((name) => name.toLowerCase…
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:1852:5
+
+Caused by: Error: The signature reader exited abnormally (code 1, signal null)
+ ❯ admissionFailure scripts/dsh-compat-ci.mjs:581:39
+ ❯ ChildProcess.<anonymous> scripts/dsh-compat-ci.mjs:688:27
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { stage: 'signature' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > rejects default-adapter output, JSON and process failures
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ test/dsh-compat-ci.test.ts:1897:23
+    1895|         try { await expect(call(path, { readSignature: undefined })).r…
+    1896|         finally { spawnInjection.impl = null; }
+    1897|         expect(calls).toHaveLength(1);
+       |                       ^
+    1898|       }
+    1899|       const { calls } = fakeSpawn({ hang: true });
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:1890:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > bounds the post-signature content read and still closes the handle
+AssertionError: expected { …(6) } to match object { stage: 'cancelled' }
+(9 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "stage": "cancelled",
++   "filename": "deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "integrity": "sha512-l2Zk9b6wYrffwP5Sl3MSe4LSMfwCK7uJro1Fn92D0nO37LszegJv8x3fiZncM5WdEfPvE6U+umsA8dWZow5DGw==",
++   "path": "/tmp/crosschat-dsh-ci-test-GRnsof/deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "publisher": {
++     "status": "Valid",
++     "subject": "CN=DeepSeek, O=DeepSeek, C=CN",
++     "thumbprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
++   },
++   "size": 46,
++   "version": "0.2.1-rc.2",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:1947:25
+    1945|       try {
+    1946|         const outcome = await call(path, { timeoutMs: 30 }).catch((val…
+    1947|         expect(outcome).toMatchObject({ stage: 'cancelled' });
+       |                         ^
+    1948|         expect(outcome.unresolvedResources).toEqual(expect.arrayContai…
+    1949|         expect(closeCalls).toBe(1);
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:1933:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > rejects a path replaced while the post-signature content is being re-read
+AssertionError: promise resolved "{ …(6) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "filename": "deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "integrity": "sha512-l2Zk9b6wYrffwP5Sl3MSe4LSMfwCK7uJro1Fn92D0nO37LszegJv8x3fiZncM5WdEfPvE6U+umsA8dWZow5DGw==",
++   "path": "/tmp/crosschat-dsh-ci-test-zVSLzU/deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "publisher": {
++     "status": "Valid",
++     "subject": "CN=DeepSeek, O=DeepSeek, C=CN",
++     "thumbprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
++   },
++   "size": 46,
++   "version": "0.2.1-rc.2",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:1978:32
+    1976|       };
+    1977|       try {
+    1978|         await expect(call(path)).rejects.toMatchObject({ stage: 'file'…
+       |                                ^
+    1979|         expect(swapped).toBe(true);
+    1980|         expect(await readFile(path)).toEqual(replacement);
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:1955:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > bounds a stalled open, owns the late handle and closes it once
+AssertionError: expected { stage: 'resolved' } to match object { stage: 'cancelled' }
+
+- Expected
++ Received
+
+  {
+-   "stage": "cancelled",
++   "stage": "resolved",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:2006:25
+
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:1991:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > bounds a stalled metadata read
+AssertionError: expected { stage: 'resolved' } to match object { stage: 'cancelled' }
+
+- Expected
++ Received
+
+  {
+-   "stage": "cancelled",
++   "stage": "resolved",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:2030:25
+    2028|         const outcome = await Promise.race([pending.then(() => ({ stag…
+    2029|           new Promise<AdmissionOutcome>((resolve) => setTimeout(() => …
+    2030|         expect(outcome).toMatchObject({ stage: 'cancelled' });
+       |                         ^
+    2031|         expect(outcome.unresolvedResources).toEqual(expect.arrayContai…
+    2032|       } finally {
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:2023:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > reports an unconfirmed signature child release and clears parent pipes
+AssertionError: expected Error: The signature reader exited abnorm… { stage: '…' } to match object { stage: 'signature', …(1) }
+
+- Expected
++ Received
+
+- {
+-   "releaseUnclear": ArrayContaining [
+-     StringContaining "did not close",
+-   ],
++ Error {
+    "stage": "signature",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:2045:23
+    2043|       try {
+    2044|         const error = await call(path, { readSignature: undefined, tim…
+    2045|         expect(error).toMatchObject({ stage: 'signature', releaseUncle…
+       |                       ^
+    2046|         expect(state.kill).toBeGreaterThan(0);
+    2047|         expect(state.destroy).toBeGreaterThan(0);
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:2040:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > reports an unconfirmed signature child release on cancellation
+AssertionError: expected Error: The signature read was cancelled { …(2) } to match object { stage: 'cancelled', …(1) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "releaseUnclear": ArrayContaining [
+-     StringContaining "did not close",
+-   ],
++ Error {
+    "stage": "cancelled",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:2062:23
+    2060|       try {
+    2061|         const error = await call(path, { readSignature: undefined, tim…
+    2062|         expect(error).toMatchObject({ stage: 'cancelled', releaseUncle…
+       |                       ^
+    2063|         expect(state.destroy).toBeGreaterThan(0);
+    2064|         expect(state.unref).toBeGreaterThan(0);
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:2057:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > starts the real file close only once when it rejects
+AssertionError: promise resolved "{ …(6) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "filename": "deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "integrity": "sha512-l2Zk9b6wYrffwP5Sl3MSe4LSMfwCK7uJro1Fn92D0nO37LszegJv8x3fiZncM5WdEfPvE6U+umsA8dWZow5DGw==",
++   "path": "/tmp/crosschat-dsh-ci-test-XrcdSh/deepseek-harness-0.2.1-rc.2-win-x64.exe",
++   "publisher": {
++     "status": "Valid",
++     "subject": "CN=DeepSeek, O=DeepSeek, C=CN",
++     "thumbprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
++   },
++   "size": 46,
++   "version": "0.2.1-rc.2",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:2081:32
+    2079|       };
+    2080|       try {
+    2081|         await expect(call(path)).rejects.toMatchObject({ stage: 'clean…
+       |                                ^
+    2082|         expect(closeCalls).toBe(1);
+    2083|       } finally {
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:2071:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > preserves a frozen signature failure alongside the close failure
+AssertionError: expected Error: frozen signature { stage: 'si…' } to match object { stage: 'signature', …(1) }
+
+- Expected
++ Received
+
+- {
+-   "cleanupError": StringContaining "close",
++ Error {
+    "stage": "signature",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:2104:23
+    2102|       try {
+    2103|         const error = await call(path, { readSignature: async () => { …
+    2104|         expect(error).toMatchObject({ stage: 'signature', cleanupError…
+       |                       ^
+    2105|         expect(error.cause).toBe(signatureCause);
+    2106|         expect(error.originalError).toBe(frozen);
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:2091:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > owns a spawned child error without a close instead of returning early
+AssertionError: expected Error: The signature reader exited abnorm… { stage: '…' } to match object { stage: 'signature', …(1) }
+
+- Expected
++ Received
+
+- {
+-   "releaseUnclear": ArrayContaining [
+-     StringContaining "did not close",
+-   ],
++ Error {
+    "stage": "signature",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:2122:23
+    2120|       try {
+    2121|         const error = await call(path, { readSignature: undefined, tim…
+    2122|         expect(error).toMatchObject({ stage: 'signature', releaseUncle…
+       |                       ^
+    2123|         expect(error.message).toContain('EPERM stop failed');
+    2124|         expect(state.kill).toBeGreaterThan(0);
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:2117:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > finishes a spawned child error once its close is observed
+AssertionError: expected 0 to be greater than 0
+ ❯ test/dsh-compat-ci.test.ts:2141:28
+    2139|         expect(error).toMatchObject({ stage: 'signature' });
+    2140|         expect(error.releaseUnclear).toBeUndefined();
+    2141|         expect(state.kill).toBeGreaterThan(0);
+       |                            ^
+    2142|         expect(state.destroy).toBe(0);
+    2143|         expect(state.unref).toBe(0);
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:2134:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > keeps the overflow failure when a failed stop reports an error
+AssertionError: expected Error: The signature reader exited abnorm… { stage: '…' } to match object { stage: 'signature', …(1) }
+
+- Expected
++ Received
+
+- {
+-   "releaseUnclear": ArrayContaining [
+-     StringContaining "did not close",
+-   ],
++ Error {
+    "stage": "signature",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:2154:23
+    2152|       try {
+    2153|         const error = await call(path, { readSignature: undefined, tim…
+    2154|         expect(error).toMatchObject({ stage: 'signature', releaseUncle…
+       |                       ^
+    2155|         expect(error.message).toContain('output budget');
+    2156|         expect(state.kill).toBeGreaterThan(0);
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:2149:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/29]⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness desktop installer admission > keeps the signature failure and release state across the total deadline
+AssertionError: expected Error: The signature read was cancelled { …(2) } to match object { stage: 'signature', …(1) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "releaseUnclear": ArrayContaining [
+-     StringContaining "did not close",
+-   ],
+-   "stage": "signature",
++ Error {
++   "stage": "cancelled",
+  }
+
+ ❯ test/dsh-compat-ci.test.ts:2170:23
+    2168|       try {
+    2169|         const error = await call(path, { readSignature: undefined, tim…
+    2170|         expect(error).toMatchObject({ stage: 'signature', releaseUncle…
+       |                       ^
+    2171|         expect(error.message).toContain('output budget');
+    2172|         expect(error.unresolvedResources).toEqual(expect.arrayContaini…
+ ❯ isolated test/dsh-compat-ci.test.ts:60:9
+ ❯ test/dsh-compat-ci.test.ts:2165:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/29]⎯
+
+ FAIL  test/session-star.test.ts > 018 批二：extends 四级校验 > 分支一：旧名仍是星内活成员 → 拒绝并教学（不锁死：指明出路）
+AssertionError: promise resolved "'none'" instead of rejecting
+
+- Expected: 
+Error {
+  "message": "rejected promise",
+}
+
++ Received: 
+"none"
+
+ ❯ test/session-star.test.ts:972:85
+    970|           await new Promise((resolve) => setTimeout(resolve, 200));
+    971|         }
+    972|         await expect(checkExtendSession({ tcpBaseDir: sh.baseDir }, 'o…
+       |                                                                                     ^
+    973|       } finally {
+    974|         conn.close();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/29]⎯
+
+ FAIL  test/session-star.test.ts > 统一恢复入口（启动器重声明或显式管理，册落盘不丢） > 聚合器重启保留离线册位，存活的原生会话也须明确重声明（linux 32-hex 形态）
+AssertionError: expected { op: 'error', …(3) } to match object { status: 'delivered' }
+(4 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "status": "delivered",
++   "code": "SESSION_OFFLINE",
++   "id": "selected-again",
++   "message": "成员 boss 已下线（册位保留）——通过 crosschat 启动器 /resume 选择，或在 TUI 选择该会话入星；也可 --extend-session 接任；id8 寻址需该成员先上线",
++   "op": "error",
+  }
+
+ ❯ test/session-star.test.ts:1038:61
+    1036|       clients.push(next);
+    1037|       expect((await next.send({ op: 'attach', sessionId: 'sess-boss', …
+    1038|       expect(await send3('selected-again', 'lin-box:boss')).toMatchObj…
+       |                                                             ^
+    1039|       const gone = await send3('r2', 'lin-box:gone');
+    1040|       expect(gone).toMatchObject({ op: 'error', code: 'SESSION_OFFLINE…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/29]⎯
+
+
+ Test Files  2 failed | 3 passed (5)
+      Tests  29 failed | 155 passed | 1 skipped (185)
+   Start at  14:05:05
+   Duration  21.28s (transform 3.49s, setup 0ms, collect 6.00s, tests 27.56s, environment 1ms, prepare 4.32s)
+

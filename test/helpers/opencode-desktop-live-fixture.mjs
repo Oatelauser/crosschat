@@ -54,7 +54,8 @@ export async function inspectDesktopRunProcesses(root, env) {
       'ConvertTo-Json -InputObject $ownedProcessMetadata -Compress',
     ].join('\n');
     const result = await runCommand(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], { env, cwd: target, timeout: 5000 });
-    if (result.code !== 0 || result.timedOut) throw new Error(`CIM query failed${result.stderr ? `: ${result.stderr.trim().slice(0, 1000)}` : ''}`);
+    if (result.timedOut) throw new Error('CIM query timed out after 5000ms; process ownership remains unknown');
+    if (result.code !== 0) throw new Error(`CIM query failed${result.stderr ? `: ${result.stderr.trim().slice(0, 1000)}` : ''}`);
     const rows = JSON.parse(result.stdout.trim());
     if (!Array.isArray(rows)) throw new Error('CIM did not return a complete process metadata array');
     const processes = [];
