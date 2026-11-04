@@ -309,8 +309,8 @@
     "allNativeRunRootsRemoved": true,
     "serialInstallationRootsRemoved": true,
     "userDshRetained": true,
-    "ownedAggregateRootRemoved": false,
-    "aggregateRootDisposition": "awaiting user manual removal after archive and zero-owned-process verification",
+    "ownedAggregateRootRemoved": true,
+    "aggregateRootDisposition": "removed manually by user; agent read-only absence verified",
     "precleanupOwnedProcessCount": 0,
     "ownedTemporaryRootNames": [
       "crosschat-dsh-ci-Jb0531",
@@ -318,7 +318,9 @@
       "crosschat-dsh-ci-j8DwmU",
       "crosschat-dsh-ci-xnKfCb"
     ],
-    "automaticDeletion": "rejected: blocked by policy; no retry or alternate tool used"
+    "automaticDeletion": "rejected: blocked by policy; no retry or alternate tool used",
+    "removedBy": "user",
+    "agentReadOnlyAbsenceVerified": true
   },
   "sourceFiles": [
     {

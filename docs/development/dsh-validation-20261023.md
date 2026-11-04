@@ -3294,6 +3294,6 @@ TDD链：c20502e为14失败/1通过的行为RED，5f0abca初版GREEN；15c7c81�
 
 加强聊天保留检查后，直接在压缩字节查正文、一次性解压仅首帧的两轮基线/候选均在第六项失败，按infrastructure记录、baseline-failed/notify=false，全部清理。DSH聊天为zstd多帧追加；独立双帧诊断确认Node单次解压只消费首帧，最终通过公开info.bytesWritten逐帧核验、有总输出上限，并拒绝损坏尾部。4项内容与2项多帧反例先RED再GREEN；最终单版本及完整双版本均核实本轮skill/request/reply真实内容后，再做原始字节哈希比较，未放宽断言或改原生存储。
 
-[摘要](evidence/c11-dsh-20261104/validation.json)与[202项脱敏原始证据](evidence/c11-dsh-20261104/raw-evidence-redacted.zip)归档，ZIP 945024字节，SHA-256=779568e4c0c0c3263dfdada90c2ea5e57e0d3b75a09b4403d26dd31ffb5365a6；CRC及逐项SHA核验通过。排除原生profile/凭据/聊天存储、安装包/runtime及npm缓存。归档后只读核实本轮相关进程0；独占安装/缓存总根自动删除被拒，原因仅blocked by policy，未换工具重试，已请求用户手动删除。用户DSH软件保留，最终总根处置以摘要补记为准。
+[摘要](evidence/c11-dsh-20261104/validation.json)与[202项脱敏原始证据](evidence/c11-dsh-20261104/raw-evidence-redacted.zip)归档，ZIP 945024字节，SHA-256=779568e4c0c0c3263dfdada90c2ea5e57e0d3b75a09b4403d26dd31ffb5365a6；CRC及逐项SHA核验通过。排除原生profile/凭据/聊天存储、安装包/runtime及npm缓存。归档后只读核实本轮相关进程0；独占安装/缓存总根自动删除被拒，原因仅blocked by policy，未换工具重试，用户随后手动删除，代理只读核实目录不存在，用户DSH软件保留。
 
 C11的Windows npm/Web本地切片移出活动实施；新workflow只手动，报告job仅处理有界JSON、不checkout/执行原生代码、默认分支才有Issue写权限，并独立重核基线/同一候选两次失败/唯一运行身份/精确scope/完整清理及去重。离线反例含清理失败伪装兼容回归，不以summary自称regression直接发Issue。当前本地Node25.0.0，不能替代workflow的GitHub Node22首轮、定时、artifact读取和权限实证；C11其它工具/正式Desktop、C04完整生命周期及C00/C12三平台仍保留。托管集成边界见[前置核实](dsh-hosted-preflight-20261104.md)。未新增产品持久数据格式、命令参数或用户操作要求。
