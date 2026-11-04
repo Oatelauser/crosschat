@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -12,6 +12,22 @@ import { createDshMockModel } from './dsh-mock-model.mjs';
 export const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const bounded = (text) => text.slice(-128000);
+
+/** Read the stopped fixture's native chat files; hash the original stored bytes. */
+export async function snapshotDshStoredChats(root, expectedTexts = []) {
+  const hashes = {};
+  async function visit(directory, prefix = '') {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (entry.isSymbolicLink()) throw new Error('Unexpected link in owned session data');
+      const file = join(directory, entry.name), key = `${prefix}${entry.name}`;
+      if (entry.isDirectory()) await visit(file, `${key}/`);
+      else if (entry.isFile()) hashes[key] = createHash('sha256').update(await readFile(file)).digest('hex');
+    }
+  }
+  await visit(root);
+  void expectedTexts;
+  return hashes;
+}
 
 export function classifyDshStartupFailure(evidence) {
   const lines = String(evidence.stderr ?? '').split(/\r?\n/);

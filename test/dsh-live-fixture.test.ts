@@ -1,10 +1,12 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import * as zlib from 'node:zlib';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { assessDshCallerSourceIdentity, assessDshNativeIdentity, classifyDshStartupFailure, diagnoseDshCallerSource, prepareDshProfile } from './helpers/dsh-live-fixture.mjs';
+import { assessDshCallerSourceIdentity, assessDshNativeIdentity, classifyDshStartupFailure, diagnoseDshCallerSource, prepareDshProfile, snapshotDshStoredChats } from './helpers/dsh-live-fixture.mjs';
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -12,6 +14,43 @@ afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 async function root() { const value = await mkdtemp(join(tmpdir(), 'crosschat-dsh-env-unit-')); roots.push(value); return value; }
+
+describe('DSH stored-chat preservation evidence', () => {
+  it('verifies actual text from a compressed native session while hashing its original stored bytes', async () => {
+    const directory = await root();
+    const stored = Buffer.from('KLUv/SAjGQEAb3duZWQgc3RvcmVkIGNoYXQgcmVxdWVzdC1hbmQtcmVwbHk=', 'base64');
+    await writeFile(join(directory, 'session.v4.jsonl.zstd'), stored);
+    // Older supported Node minors without zstd must fail explicitly as infrastructure, not silently pass or skip.
+    if (typeof zlib.zstdDecompressSync !== 'function') {
+      await expect(snapshotDshStoredChats(directory, ['request-and-reply'])).rejects.toMatchObject({ category: 'infrastructure' });
+    } else {
+      expect(await snapshotDshStoredChats(directory, ['request-and-reply'])).toEqual({ 'session.v4.jsonl.zstd': createHash('sha256').update(stored).digest('hex') });
+      await expect(snapshotDshStoredChats(directory, ['absent request'])).rejects.toMatchObject({ category: 'infrastructure' });
+    }
+  });
+
+  it('does not accept empty data or unrelated files as proof that the test conversation was retained', async () => {
+    const directory = await root();
+    await expect(snapshotDshStoredChats(directory, ['owned message'])).rejects.toMatchObject({ category: 'infrastructure' });
+    await writeFile(join(directory, 'unrelated.txt'), 'owned message');
+    await expect(snapshotDshStoredChats(directory, ['owned message'])).rejects.toMatchObject({ category: 'infrastructure' });
+  });
+
+  it('accepts native uncompressed JSONL and detects later changes through the original-byte hashes', async () => {
+    const directory = await root(), file = join(directory, 'session.v4.jsonl');
+    await writeFile(file, 'owned request and reply');
+    const before = await snapshotDshStoredChats(directory, ['owned request', 'reply']);
+    await writeFile(file, 'changed chat');
+    expect(await snapshotDshStoredChats(directory)).not.toEqual(before);
+    await expect(snapshotDshStoredChats(directory, ['owned request'])).rejects.toMatchObject({ category: 'infrastructure' });
+  });
+
+  it('treats unreadable compressed conversation content as a fixture failure', async () => {
+    const directory = await root();
+    await writeFile(join(directory, 'session.v4.jsonl.zstd'), 'not a zstd stream');
+    await expect(snapshotDshStoredChats(directory, ['owned message'])).rejects.toMatchObject({ category: 'infrastructure' });
+  });
+});
 
 describe('DSH real-runtime profile isolation', () => {
   it('keeps native home, shared skills, temporary files and credentials inside a new fixture profile', async () => {

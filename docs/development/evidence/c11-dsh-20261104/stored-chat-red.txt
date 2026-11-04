@@ -1,0 +1,126 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ❯ test/dsh-live-fixture.test.ts (22 tests | 4 failed) 107ms
+   × DSH stored-chat preservation evidence > verifies actual text from a compressed native session while hashing its original stored bytes 17ms
+     → promise resolved "{ 'session.v4.jsonl.zstd': '418d15d1…' }" instead of rejecting
+   × DSH stored-chat preservation evidence > does not accept empty data or unrelated files as proof that the test conversation was retained 2ms
+     → promise resolved "{}" instead of rejecting
+   × DSH stored-chat preservation evidence > accepts native uncompressed JSONL and detects later changes through the original-byte hashes 5ms
+     → promise resolved "{ 'session.v4.jsonl': '5c6ca8b3f04d6…' }" instead of rejecting
+   × DSH stored-chat preservation evidence > treats unreadable compressed conversation content as a fixture failure 3ms
+     → promise resolved "{ 'session.v4.jsonl.zstd': '38626dcf…' }" instead of rejecting
+   ✓ DSH real-runtime profile isolation > keeps native home, shared skills, temporary files and credentials inside a new fixture profile 70ms
+   ✓ DSH real-runtime profile isolation > rejects a non-fixture model endpoint before preparing https://api.deepseek.com/v1 2ms
+   ✓ DSH real-runtime profile isolation > rejects a non-fixture model endpoint before preparing http://localhost:12345/v1 2ms
+   ✓ DSH real-runtime profile isolation > rejects a non-fixture model endpoint before preparing http://127.0.0.1:12345/v1?token=x 2ms
+   ✓ DSH real-runtime profile isolation > rejects a non-fixture model endpoint before preparing http://user:secret@127.0.0.1:12345/v1 1ms
+   ✓ DSH startup failure evidence > keeps a broken fixture import distinct from a broken production bridge import 0ms
+   ✓ DSH startup failure evidence > treats a missing test controller as infrastructure while keeping transient process readiness inconclusive 0ms
+   ✓ DSH native shell identity evidence > accepts only the exact identity returned by a real tool-result shape 0ms
+   ✓ DSH native shell identity evidence > reports removed or changed native DSH fields as compatibility after a successful JSON shell result 0ms
+   ✓ DSH native shell identity evidence > requires the real native shell and read-only identity observation in the same tool result 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: undefined 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: {"status":"identified","sourceTool":"dsh-desktop","basis":"native","association":"verified","scope":"instance","shouldAsk":false} 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: {"status":"confirmed","sourceTool":"dsh","basis":"user","association":"verified","scope":"instance","shouldAsk":false} 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: {"status":"identified","sourceTool":"dsh","basis":"native","association":"unavailable","scope":"instance","shouldAsk":false} 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: {"status":"identified","sourceTool":"dsh","basis":"native","association":"verified","scope":"origin","shouldAsk":false} 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: {"status":"identified","sourceTool":"dsh","basis":"native","association":"verified","scope":"instance","shouldAsk":true,"context":"manual-confirmation-context"} 0ms
+   ✓ DSH native shell identity evidence > distinguishes a broken shell JSON bootstrap from an unavailable native source probe 0ms
+   ✓ DSH native shell identity evidence > retains structured source failures and presence facts without token, directory or free-form values 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-live-fixture.test.ts > DSH stored-chat preservation evidence > verifies actual text from a compressed native session while hashing its original stored bytes
+AssertionError: promise resolved "{ 'session.v4.jsonl.zstd': '418d15d1…' }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "session.v4.jsonl.zstd": "418d15d191b1e733d54a7eaf97a660b75556a81e27ec1feb8bc9a869cb9b1154",
+  }
+
+ ❯ test/dsh-live-fixture.test.ts:28:73
+     26|     } else {
+     27|       expect(await snapshotDshStoredChats(directory, ['request-and-rep…
+     28|       await expect(snapshotDshStoredChats(directory, ['absent request'…
+       |                                                                         ^
+     29|     }
+     30|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  test/dsh-live-fixture.test.ts > DSH stored-chat preservation evidence > does not accept empty data or unrelated files as proof that the test conversation was retained
+AssertionError: promise resolved "{}" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
+- }
++ {}
+
+ ❯ test/dsh-live-fixture.test.ts:34:70
+     32|   it('does not accept empty data or unrelated files as proof that the …
+     33|     const directory = await root();
+     34|     await expect(snapshotDshStoredChats(directory, ['owned message']))…
+       |                                                                      ^
+     35|     await writeFile(join(directory, 'unrelated.txt'), 'owned message');
+     36|     await expect(snapshotDshStoredChats(directory, ['owned message']))…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  test/dsh-live-fixture.test.ts > DSH stored-chat preservation evidence > accepts native uncompressed JSONL and detects later changes through the original-byte hashes
+AssertionError: promise resolved "{ 'session.v4.jsonl': '5c6ca8b3f04d6…' }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "session.v4.jsonl": "5c6ca8b3f04d608f843f78701242790392cc867240fefc6b4ad081db3d4952f4",
+  }
+
+ ❯ test/dsh-live-fixture.test.ts:45:70
+     43|     await writeFile(file, 'changed chat');
+     44|     expect(await snapshotDshStoredChats(directory)).not.toEqual(before…
+     45|     await expect(snapshotDshStoredChats(directory, ['owned request']))…
+       |                                                                      ^
+     46|   });
+     47| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  test/dsh-live-fixture.test.ts > DSH stored-chat preservation evidence > treats unreadable compressed conversation content as a fixture failure
+AssertionError: promise resolved "{ 'session.v4.jsonl.zstd': '38626dcf…' }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "session.v4.jsonl.zstd": "38626dcf5b124a11981d6bbc60ba9409e73e65e2f248227db0686fe2ba67dc51",
+  }
+
+ ❯ test/dsh-live-fixture.test.ts:51:70
+     49|     const directory = await root();
+     50|     await writeFile(join(directory, 'session.v4.jsonl.zstd'), 'not a z…
+     51|     await expect(snapshotDshStoredChats(directory, ['owned message']))…
+       |                                                                      ^
+     52|   });
+     53| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 18 passed (22)
+   Start at  10:57:40
+   Duration  419ms (transform 61ms, setup 0ms, collect 73ms, tests 107ms, environment 0ms, prepare 93ms)
+
