@@ -50,13 +50,18 @@ export async function inspectDesktopRunProcesses(root, env) {
     const script = [
       '$ErrorActionPreference = "Stop"',
       '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)',
+      '$PSModuleAutoLoadingPreference = "None"',
+      '$crosschatCimClock = [System.Diagnostics.Stopwatch]::StartNew()',
       '[Console]::Error.WriteLine("crosschat-cim:started")',
-      'Import-Module (Join-Path $PSHOME "Modules/CimCmdlets/CimCmdlets.psd1") -ErrorAction Stop',
+      'Import-Module ([System.IO.Path]::Combine($PSHOME, "Modules", "Microsoft.PowerShell.Utility", "Microsoft.PowerShell.Utility.psd1")) -ErrorAction Stop',
+      '[Console]::Error.WriteLine("crosschat-cim:utility-module:" + $crosschatCimClock.ElapsedMilliseconds)',
+      'Import-Module ([System.IO.Path]::Combine($PSHOME, "Modules", "CimCmdlets", "CimCmdlets.psd1")) -ErrorAction Stop',
+      '[Console]::Error.WriteLine("crosschat-cim:cim-module:" + $crosschatCimClock.ElapsedMilliseconds)',
       '[Console]::Error.WriteLine("crosschat-cim:ready")',
       '$ownedProcessMetadata = @(Get-CimInstance -ClassName Win32_Process -Property ProcessId, ExecutablePath, ParentProcessId | Select-Object ProcessId, ExecutablePath, ParentProcessId)',
-      '[Console]::Error.WriteLine("crosschat-cim:query-complete")',
+      '[Console]::Error.WriteLine("crosschat-cim:query-complete:" + $crosschatCimClock.ElapsedMilliseconds)',
       'ConvertTo-Json -InputObject $ownedProcessMetadata -Compress',
-      '[Console]::Error.WriteLine("crosschat-cim:output-complete")',
+      '[Console]::Error.WriteLine("crosschat-cim:output-complete:" + $crosschatCimClock.ElapsedMilliseconds)',
     ].join('\n');
     const result = await runCommand(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], { env, cwd: target, startupTimeout: 30000, readyLine: 'crosschat-cim:ready', timeout: 5000 });
     if (result.timedOut) throw new Error(`CIM ${result.timeoutStage === 'startup' ? 'module initialization timed out after 30000ms' : 'query timed out after 5000ms'}; process ownership remains unknown${result.stderr ? `; ${result.stderr.trim().slice(0, 1000)}` : '; PowerShell produced no phase output'}`);

@@ -45,3 +45,13 @@ WSL Node22.14只用于普通开发复现。首次副本放在node_modules下面�
 修复仅影响验收工装：现有runCommand增加可选精确stderr就绪行与启动预算，CIM明确导入系统PowerShell目录中的CimCmdlets模块，再发ready。启动及导入限30000ms；收到完整ready后，原5000ms查询/输出预算开始且只开始一次。迟到ready不能复活已超时的操作；缺ready、失败、超时或不完整表仍unknown。默认调用方的单阶段超时及结果形状保持。只有包含两次新进程扫描的实际Windows用例上限改为90000ms，为两个各自30秒初始化和5秒查询及收尾留出空间；没有改变产品命令、重试、用户流程或持久数据。
 
 三文件定向26项通过，包括本机真实PING占用与退出后clear；见cim-readiness-green.txt。定位完成后移除临时失败诊断workflow步骤及windows-cim-diagnostic.mjs，保留原始证据。后续完整检查及同一草稿PR的普通三平台CI以各自实际提交和run记录为准，不关闭C04/C05/C11原生工具/专用托管父项。
+
+## 41792019528反例与精确系统模块加载
+
+28e7178本机完整2772通过/11原有跳过，236文件通过/3跳过，lint/build及204模块689边检查通过；摘要与源码blob/5份raw校验见cim-readiness-validation.json。普通托管复核41792019528中Ubuntu/macOS均2767通过/16跳过；Windows2771通过、1失败、11跳过，实际模块初始化超过30000ms，只见started。三份readiness-job.txt保留完整结果；此前16046ms是在全量结束后的单独测量，不能代表并发运行阶段或证明30秒足够。
+
+继续核对脚本发现，Join-Path属于Microsoft.PowerShell.Management，Select-Object与ConvertTo-Json属于Microsoft.PowerShell.Utility，原先只显式加载CIM仍触发隐式模块搜索。按[Import-Module官方说明](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/import-module?view=powershell-5.1)收敛依赖：只用.NET组合系统绝对路径，禁用本子进程的模块自动发现，并先显式加载系统Utility，再加载系统CimCmdlets；所有所需模块完成后才ready。初始化仍30000ms、查询/输出仍5000ms。各阶段新增单调时钟诊断，失败可区分Utility/CIM导入与查询；不改机器策略/证书校验，不继承调用者模块目录，不做重试。该修改保证精确模块来源，托管性能改善仍须实际CI验证，不能仅凭本机GREEN宣称根因全部解决。
+
+在已有真实Windows进程占用用例内加入两个竞争模块：它们导出同名Join-Path/Select-Object/ConvertTo-Json并在调用时明确失败。原实现先RED cb882d9（cim-system-modules-red.txt，1失败/12通过），证明模块搜索能干扰检查；原有准确PID/父PID/原生路径及退出后clear断言保留，没有增加skip。首次显式导入先CIM后Utility失败，因为CIM初始化需要Set-Alias，原始cim-system-modules-green.txt虽名称带green仍为1失败/25通过，不能列为通过；调整到依赖先后后，cim-system-modules-final-green.txt为26/26，未覆盖此前输出。
+
+本次源码的Windows完整npm run check退出0，2772通过/11原有跳过、236文件通过/3跳过；lint/build与204模块689边通过，raw为windows-system-modules-check.txt。源码blob和7份raw的字节/SHA记录在cim-system-modules-validation.json；普通托管复核随GREEN正常推送进入同一草稿PR，实际结果另行核对。

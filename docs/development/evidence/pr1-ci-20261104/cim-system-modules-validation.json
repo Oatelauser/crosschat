@@ -1,0 +1,139 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "scope": "PR #1 ordinary CI fixture explicit Windows system modules",
+  "pr": "https://github.com/Oatelauser/crosschat/pull/1",
+  "previousHosted": {
+    "run": 41792019528,
+    "head": "28e71783629281d90846bbee501aeb9808b2e4b6",
+    "windows": {
+      "job": 126447339447,
+      "passed": 2771,
+      "failed": 1,
+      "skipped": 11,
+      "error": "Module initialization exceeded 30000ms"
+    },
+    "ubuntu": {
+      "job": 126447339311,
+      "passed": 2767,
+      "skipped": 16,
+      "conclusion": "success"
+    },
+    "macos": {
+      "job": 126447339165,
+      "passed": 2767,
+      "skipped": 16,
+      "conclusion": "success"
+    }
+  },
+  "red": {
+    "commit": "cb882d9",
+    "file": "cim-system-modules-red.txt",
+    "failed": 1,
+    "passed": 12,
+    "reason": "Implicit competing Microsoft.PowerShell.Management module controlled Join-Path"
+  },
+  "intermediate": {
+    "file": "cim-system-modules-green.txt",
+    "failed": 1,
+    "passed": 25,
+    "reason": "CimCmdlets import needs Utility Set-Alias; import Utility first"
+  },
+  "trustedModules": [
+    "Microsoft.PowerShell.Utility",
+    "CimCmdlets"
+  ],
+  "modulePathSource": "Absolute modules under native system PowerShell PSHOME",
+  "autoLoading": "None within the owned child",
+  "budgets": {
+    "actualTwoQueryTestMs": 90000,
+    "missingReadinessAdmitsCleanup": false,
+    "readyMayRearmOnce": true,
+    "startupAndModuleMs": 30000,
+    "readyQueryAndOutputMs": 5000
+  },
+  "local": {
+    "node": "v25.0.0",
+    "targeted": {
+      "passed": 26,
+      "files": 3,
+      "exitCode": 0
+    },
+    "fullCheck": {
+      "filesPassed": 236,
+      "build": true,
+      "exitCode": 0,
+      "edges": 689,
+      "skipped": 11,
+      "passed": 2772,
+      "lint": true,
+      "filesSkipped": 3,
+      "modules": 204
+    },
+    "liveEnabled": false
+  },
+  "hostedRecheck": "Pending ordinary PR CI on this GREEN source",
+  "sources": [
+    {
+      "path": "test/helpers/opencode-live-fixture.mjs",
+      "gitBlob": "a63567575d602f9e6daf6faf57bb8e90cf141088"
+    },
+    {
+      "path": "test/helpers/opencode-desktop-live-fixture.mjs",
+      "gitBlob": "247b57526b2ef1d2912b8323cc1ffa18c240747e"
+    },
+    {
+      "path": "test/opencode-command-fixture.test.ts",
+      "gitBlob": "e5a2d68e07ffadf44732f7d7e11b436f86b74f31"
+    },
+    {
+      "path": "test/opencode-desktop-process-race.test.ts",
+      "gitBlob": "f2f13efdde79846b2184cbb18dfd502a58a56131"
+    },
+    {
+      "path": "test/opencode-desktop-fixture.test.ts",
+      "gitBlob": "5956764e5f440221d53a011f8237ba3e607c0ae3"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "gitBlob": "d83aa44a6a4f2f5722a1c5df75fc9dabf160418b"
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "cim-system-modules-red.txt",
+      "bytes": 4422,
+      "sha256": "3cd1759da0afd5a36551df6ba22f436e4a7083e19b6cd8b7315585bcea810e0c"
+    },
+    {
+      "file": "cim-system-modules-green.txt",
+      "bytes": 4566,
+      "sha256": "61e3f1252ff8ece9a9891753ae17e4a23a488743a1df1061b1ba9cb84de94689"
+    },
+    {
+      "file": "cim-system-modules-final-green.txt",
+      "bytes": 557,
+      "sha256": "924a6ce2ea164ae62a7cf6402f653e8fccb6838ddeaca9669ca61177f8ef7dd8"
+    },
+    {
+      "file": "windows-system-modules-check.txt",
+      "bytes": 31080,
+      "sha256": "44b12fe6feb4b06c18f0de86c987f79ec2f35d538975df17c39cda87146effa8"
+    },
+    {
+      "file": "windows-readiness-job.txt",
+      "bytes": 80688,
+      "sha256": "180ece46eb75ccee96cd21b8458609df09291f2730a4dba51805534ffbeb5d65"
+    },
+    {
+      "file": "ubuntu-readiness-job.txt",
+      "bytes": 68643,
+      "sha256": "89e9a662800d15bdc1d9332f7efd04cbb385fff82f6712aaecad904aa46a9c0c"
+    },
+    {
+      "file": "macos-readiness-job.txt",
+      "bytes": 66272,
+      "sha256": "0c77dfbc19174f26bfbd307ed67ad76912c56eec9b0b928f2cba1f9c71154897"
+    }
+  ]
+}
