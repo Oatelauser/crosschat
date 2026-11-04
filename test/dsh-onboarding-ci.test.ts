@@ -66,4 +66,8 @@ describe('DSH from-zero onboarding report boundary', () => {
     const failure = { ...passed(), status: 'failed', category: 'compatibility', stage: 'onboarding', check: DSH_ONBOARDING_CHECKS[0], checks: [], process: { code: 1, signal: null, timedOut: false } };
     expect(validDshOnboardingProcessReport(failure, artifact)).toBe(true);
   });
+
+  it('rejects a failed claim that omits the failed phase after all phases passed', () => {
+    expect(validDshOnboardingReport({ ...passed(), status: 'failed', category: 'compatibility', stage: 'onboarding' }, artifact, runId)).toBe(false);
+  });
 });
