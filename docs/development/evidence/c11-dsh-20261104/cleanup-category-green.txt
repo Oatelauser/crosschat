@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ✓ test/dsh-onboarding-ci.test.ts (28 tests) 32ms
+
+ Test Files  1 passed (1)
+      Tests  28 passed (28)
+   Start at  10:50:15
+   Duration  381ms (transform 94ms, setup 0ms, collect 125ms, tests 32ms, environment 0ms, prepare 89ms)
+

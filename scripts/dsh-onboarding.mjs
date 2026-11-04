@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { DSH_ONBOARDING_CHECKS, DSH_ONBOARDING_SCOPE, DSH_ONBOARDING_TOOL } from './dsh-onboarding-contract.mjs';
-import { assessDshCallerSourceIdentity, createDshFixture, dshIdentityBootstrapCommand, dshShellCommand, pollDsh, repositoryRoot, runDshCommand } from '../test/helpers/dsh-live-fixture.mjs';
+import { assessDshCallerSourceIdentity, createDshFixture, dshIdentityBootstrapCommand, dshShellCommand, pollDsh, repositoryRoot, runDshCommand, snapshotDshStoredChats } from '../test/helpers/dsh-live-fixture.mjs';
 import { replySendArgs } from '../test/helpers/compat-reply.mjs';
 import { launchPty } from '../test/helpers/tui-pty-driver.mjs';
 import { createDshOwnedNode } from '../test/helpers/dsh-owned-node.mjs';
@@ -53,17 +53,6 @@ function redact(value) {
   return result.replace(/([?&]token=)[^&\s"'\\]+/g, '$1[fixture-token-redacted]');
 }
 async function save(name, value) { await writeFile(join(evidence, name), redact(value) + '\n'); }
-async function treeHashes(root) {
-  const result = {};
-  async function visit(directory, prefix = '') {
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      assert(!entry.isSymbolicLink()); const file = join(directory, entry.name), key = `${prefix}${entry.name}`;
-      if (entry.isDirectory()) await visit(file, `${key}/`);
-      else if (entry.isFile()) result[key] = createHash('sha256').update(await readFile(file)).digest('hex');
-    }
-  }
-  await visit(root); return result;
-}
 
 try {
   await check(0, async () => {
@@ -150,13 +139,15 @@ try {
     normal(removed); await save('remove-plugin.json', removed);
     const profileFile = join(fixture.env.DSH_HOME, 'profiles/web/package.json'), profile = await readFile(profileFile, 'utf8');
     assert(!JSON.parse(profile).dependencies?.['@crosschat/dsh-bridge']);
-    const chatFiles = await treeHashes(join(fixture.env.DSH_HOME, 'sessions'));
+    const contentMarkers = [`${marker}skill`, `${marker}request`, `${marker}reply`];
+    const chatFiles = await snapshotDshStoredChats(join(fixture.env.DSH_HOME, 'sessions'), contentMarkers);
     const uninstalled = await fixture.cli(['uninstall', '--yes']); normal(uninstalled); await save('uninstall-crosschat-data.json', uninstalled);
     assert.equal(await readFile(profileFile, 'utf8'), profile);
-    assert.deepEqual(await treeHashes(join(fixture.env.DSH_HOME, 'sessions')), chatFiles);
+    assert.deepEqual(await snapshotDshStoredChats(join(fixture.env.DSH_HOME, 'sessions')), chatFiles);
     const skillExists = await readFile(join(fixture.env.DSH_HOME, 'skills/crosschat/SKILL.md')).then(() => true, (error) => { if (error.code === 'ENOENT') return false; throw error; });
     assert.equal(skillExists, false);
-    await save('retained-profile-chat-hashes.json', { nativeSessionIds: Object.values(sessions).map((session) => session.id), profileSha256: createHash('sha256').update(profile).digest('hex'), chatFiles });
+    await save('retained-profile-chat-hashes.json', { nativeSessionIds: Object.values(sessions).map((session) => session.id), contentMarkers,
+      profileSha256: createHash('sha256').update(profile).digest('hex'), chatFiles });
     await fixture.close(); assert.equal(fixture.cleanup.removed, true);
   });
   report.status = 'passed'; report.stage = 'done'; report.category = null; delete report.check;

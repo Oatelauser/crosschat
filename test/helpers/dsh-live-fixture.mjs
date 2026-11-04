@@ -7,6 +7,7 @@ import process from 'node:process';
 import { clearTimeout, setTimeout } from 'node:timers';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL, URL } from 'node:url';
+import * as zlib from 'node:zlib';
 import { createDshMockModel } from './dsh-mock-model.mjs';
 
 export const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -15,17 +16,30 @@ const bounded = (text) => text.slice(-128000);
 
 /** Read the stopped fixture's native chat files; hash the original stored bytes. */
 export async function snapshotDshStoredChats(root, expectedTexts = []) {
-  const hashes = {};
+  const hashes = {}, observed = new Set();
   async function visit(directory, prefix = '') {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       if (entry.isSymbolicLink()) throw new Error('Unexpected link in owned session data');
       const file = join(directory, entry.name), key = `${prefix}${entry.name}`;
       if (entry.isDirectory()) await visit(file, `${key}/`);
-      else if (entry.isFile()) hashes[key] = createHash('sha256').update(await readFile(file)).digest('hex');
+      else if (entry.isFile()) {
+        const bytes = await readFile(file);
+        hashes[key] = createHash('sha256').update(bytes).digest('hex');
+        if (expectedTexts.length && /^session\.v4\.jsonl(?:\.zstd)?$/.test(entry.name)) {
+          let content = bytes;
+          if (entry.name.endsWith('.zstd')) {
+            if (typeof zlib.zstdDecompressSync !== 'function') throw new Error('This Node runtime cannot inspect native zstd conversation data');
+            content = zlib.zstdDecompressSync(bytes, { maxOutputLength: 16 * 1024 * 1024 });
+          }
+          for (const text of expectedTexts) if (content.includes(text)) observed.add(text);
+        }
+      }
     }
   }
-  await visit(root);
-  void expectedTexts;
+  try {
+    await visit(root);
+    if (!expectedTexts.every((text) => observed.has(text))) throw new Error('Native persistence fixture did not locate the expected test conversation content');
+  } catch (error) { throw Object.assign(error, { category: 'infrastructure' }); }
   return hashes;
 }
 
