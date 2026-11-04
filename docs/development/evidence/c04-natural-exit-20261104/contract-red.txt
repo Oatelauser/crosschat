@@ -1,0 +1,43 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ❯ test/dsh-desktop-exit-observer.test.ts (5 tests | 1 failed) 10ms
+   × formal Desktop natural-exit observation boundary > accepts the actual owner, ordered private acknowledgement, close and independent held Host handle 8ms
+     → expected { verified: false, …(1) } to match object { verified: true, hostPid: 4200 }
+(1 matching property omitted from actual)
+   ✓ formal Desktop natural-exit observation boundary > keeps a zero OS exit unknown without the real shutdown acknowledgement and stop completion 0ms
+   ✓ formal Desktop natural-exit observation boundary > rejects changed source, another parent/profile/binary and an unrelated Host handle 0ms
+   ✓ formal Desktop natural-exit observation boundary > refuses any kill, non-graceful completion, missing stream close or abnormal main exit 0ms
+   ✓ formal Desktop natural-exit observation boundary > requires continuous observation, one exact Host and the actual lifecycle order 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-desktop-exit-observer.test.ts > formal Desktop natural-exit observation boundary > accepts the actual owner, ordered private acknowledgement, close and independent held Host handle
+AssertionError: expected { verified: false, …(1) } to match object { verified: true, hostPid: 4200 }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "hostPid": 4200,
+-   "verified": true,
++   "verified": false,
+  }
+
+ ❯ test/dsh-desktop-exit-observer.test.ts:18:63
+     16| describe('formal Desktop natural-exit observation boundary', () => {
+     17|   it('accepts the actual owner, ordered private acknowledgement, close…
+     18|     expect(assessDshDesktopNaturalExit(observed(), expected)).toMatchO…
+       |                                                               ^
+     19|   });
+     20| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  11:19:38
+   Duration  497ms (transform 50ms, setup 0ms, collect 48ms, tests 10ms, environment 0ms, prepare 135ms)
+

@@ -23,12 +23,13 @@ export function createCodexSessionReader(options: CodexReaderOptions = {}): Sess
     providerId: 'codex', capabilities,
     async list(request): Promise<SessionPage> {
       if (request.signal?.aborted) return cancelledPage(request.contextId, 'codex', now());
+      if (request.endpointType !== undefined && request.endpointType !== 'cli' && request.endpointType !== 'desktop') return { items: [], nextCursor: null, completeness: 'complete', observedAt: now(), errors: [] };
       if (options.sessionFactory === undefined || options.desktop !== undefined) {
         try {
           const page = await listCodexThreadPage({ sessionFactory: options.sessionFactory, codexHome: options.codexHome, desktop: options.desktop,
-            cursor: request.cursor, cursorScope: request.contextId, limit: request.limit, signal: request.signal });
+            cursor: request.cursor, cursorScope: request.contextId, limit: request.limit, signal: request.signal, endpointType: request.endpointType });
           return { items: page.data.map((thread) => {
-            const ref = { contextId: request.contextId, providerId: 'codex', nativeId: thread.id };
+            const ref = { contextId: request.contextId, providerId: 'codex', nativeId: thread.id, ...(thread.endpointType === undefined ? {} : { endpointType: thread.endpointType }) };
             return { ref, key: sessionKey(ref), name: thread.name, rawStatus: thread.rawStatus, capabilities, attributes: thread.attributes };
           }), nextCursor: page.nextCursor, completeness: page.completeness, observedAt: now(), errors: page.errors.map((error) => ({
             source: { contextId: request.contextId, providerId: 'codex', path: error.source }, kind: error.kind,
@@ -43,6 +44,7 @@ export function createCodexSessionReader(options: CodexReaderOptions = {}): Sess
             ...(invalid ? { completeness: 'partial' as const } : {}) };
         }
       }
+      if (request.endpointType !== undefined && request.endpointType !== 'cli') return { items: [], nextCursor: null, completeness: 'complete', observedAt: now(), errors: [] };
       let session: CodexSession | undefined;
       let closing: Promise<void> | undefined;
       const close = (): Promise<void> => {
@@ -63,7 +65,7 @@ export function createCodexSessionReader(options: CodexReaderOptions = {}): Sess
         const partial = legacy || page.completeness === 'partial';
         return {
           items: page.data.map((thread) => {
-            const ref = { contextId: request.contextId, providerId: 'codex', nativeId: thread.id };
+            const ref = { contextId: request.contextId, providerId: 'codex', endpointType: 'cli', nativeId: thread.id };
             return { ref, key: sessionKey(ref), name: thread.name, rawStatus: thread.rawStatus, capabilities, attributes: { ...thread.attributes, transport: 'cli' } };
           }),
           nextCursor: page.nextCursor,

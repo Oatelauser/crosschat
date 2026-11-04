@@ -1,0 +1,78 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-int-20261104
+
+ ❯ test/claude-compat-fixture.test.ts (20 tests | 1 failed | 18 skipped) 8ms
+   ↓ Claude compatibility model-only HTTP fixture > binds loopback and streams the complete Messages text response without accepting invalid traffic
+   ↓ Claude compatibility model-only HTTP fixture > returns an ordinary Message for stream=false and echoes the requested model
+   ↓ Claude compatibility model-only HTTP fixture > returns an ordinary Message for stream=undefined and echoes the requested model
+   ↓ Claude compatibility model-only HTTP fixture > serves actual Bash tool_use arguments for stream=true
+   ↓ Claude compatibility model-only HTTP fixture > serves actual Bash tool_use arguments for stream=false
+   ↓ Claude compatibility model-only HTTP fixture > serves token counting and startup warming without consuming the inference script
+   ↓ Claude compatibility model-only HTTP fixture > bounds request bytes before invoking the script
+   ↓ Claude compatibility model-only HTTP fixture > redacts responder errors and invalid results while remaining usable
+   ↓ Claude compatibility model-only HTTP fixture > closes pending responses, aborts their owned signal, and is idempotent
+   ↓ Claude compatibility runtime profile isolation > isolates actual child home and Git without passing inherited credentials or native identities
+   ↓ Claude compatibility runtime profile isolation > rejects unsafe model URL https://api.anthropic.com before any profile write
+   ↓ Claude compatibility runtime profile isolation > rejects unsafe model URL http://localhost:12345 before any profile write
+   ↓ Claude compatibility runtime profile isolation > rejects unsafe model URL http://127.0.0.2:12345 before any profile write
+   ↓ Claude compatibility runtime profile isolation > rejects unsafe model URL http://127.0.0.1 before any profile write
+   ↓ Claude compatibility runtime profile isolation > rejects unsafe model URL http://127.0.0.1:12345/v1 before any profile write
+   ↓ Claude compatibility runtime profile isolation > rejects unsafe model URL http://127.0.0.1:12345?token=x before any profile write
+   ↓ Claude compatibility runtime profile isolation > rejects unsafe model URL http://127.0.0.1:12345#secret before any profile write
+   ↓ Claude compatibility runtime profile isolation > rejects unsafe model URL http://user:secret@127.0.0.1:12345 before any profile write
+   ✓ Claude compatibility workflow trust boundary > keeps real upstream execution on a read-only Windows job and issue reporting on a separate trusted job with "\n" line endings 2ms
+   × Claude compatibility workflow trust boundary > keeps real upstream execution on a read-only Windows job and issue reporting on a separate trusted job with "\r\n" line endings 5ms
+     → expected '\r\n    runs-on: windows-latest\r\n  …' to match /permissions:\n {6}contents: read/
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/claude-compat-fixture.test.ts > Claude compatibility workflow trust boundary > keeps real upstream execution on a read-only Windows job and issue reporting on a separate trusted job with "\r\n" line endings
+AssertionError: expected '\r\n    runs-on: windows-latest\r\n  …' to match /permissions:\n {6}contents: read/
+
+- Expected: 
+/permissions:\n {6}contents: read/
+
++ Received: 
+"
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run build
+      - name: Probe pinned native baseline and official candidate serially
+        run: node scripts/claude-compat-ci.mjs
+        env:
+          CROSSCHAT_LIVE: '1'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-compat-win32-x64
+          path: claude-compat-evidence/
+          if-no-files-found: warn
+          retention-days: 21
+
+"
+
+ ❯ test/claude-compat-fixture.test.ts:178:19
+    176|     expect(workflow).not.toMatch(/pull_request|workflow_run|\bsecrets\…
+    177|     expect(probe).toMatch(/runs-on: windows-latest/);
+    178|     expect(probe).toMatch(/permissions:\n {6}contents: read/);
+       |                   ^
+    179|     expect(probe).not.toMatch(/issues: write|contents: write|matrix:|G…
+    180|     expect(probe).toContain('node scripts/claude-compat-ci.mjs');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed | 18 skipped (20)
+   Start at  13:33:10
+   Duration  287ms (transform 56ms, setup 0ms, collect 76ms, tests 8ms, environment 0ms, prepare 78ms)

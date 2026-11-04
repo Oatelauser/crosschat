@@ -1,0 +1,36 @@
+{
+  "at": "2026-10-23T03:50:55.2683149Z",
+  "protocolExistedBefore": false,
+  "protocolExistsInToolView": true,
+  "userExternalPowerShellReply": "Remove-Item reports path does not exist",
+  "userReadonlyVerification": {
+    "date": "2026-10-23",
+    "source": "User pasted output from their own PowerShell at C:\\Users\\yangsheng",
+    "protocolPath": "HKCU:\\Software\\Classes\\opencode",
+    "testPathResult": false,
+    "conditionalCommandValueOutput": null,
+    "userSideProtocolCleanup": "closed; key confirmed absent in user terminal",
+    "toolAndUserViewDifferenceCause": "not established"
+  },
+  "protocolCleanupAutomaticReview": "blocked by policy",
+  "uiaDirectoryCleanupAutomaticReview": "blocked by policy; command rejected before execution",
+  "ownedProcesses": [],
+  "uiaDirectories": [
+    {
+      "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-uia-probe-20261023",
+      "exists": true
+    },
+    {
+      "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-uia-probe-20261023-r2",
+      "exists": true
+    },
+    {
+      "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-uia-probe-20261023-r3",
+      "exists": true
+    },
+    {
+      "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-uia-probe-20261023-r4",
+      "exists": true
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "task": "C14 finite five-character conversation handles",
+  "scope": "Short handles only; source association and the C14 parent remain unfinished.",
+  "branch": "codex/core-refactor-pre-tui",
+  "validatedCommit": "303e7cecfe47a67ae296eb01dee4923cc32756ab",
+  "command": "npm run check",
+  "environment": {
+    "VITEST_MAX_FORKS": "2",
+    "VITEST_MIN_FORKS": "1",
+    "VITEST_MAX_THREADS": "2",
+    "VITEST_MIN_THREADS": "1"
+  },
+  "exitCode": 0,
+  "lint": "passed",
+  "build": "passed",
+  "runtimeImports": { "modules": 203, "edges": 681, "cycles": 0, "boundaryViolations": 0 },
+  "testFiles": { "passed": 231, "failed": 0, "skipped": 3, "total": 234 },
+  "tests": { "passed": 2527, "failed": 0, "skipped": 11, "total": 2538 },
+  "vitestStartTimeVerbatim": "21:28:28",
+  "durationSeconds": 127.83,
+  "rawOutput": "final-check.txt",
+  "rawOutputWindowsSha256": "43f80ccc4353949bcb0cfd0731a8f20280cda43703a61205087dd73e65c2b903",
+  "rawOutputCommittedLfSha256": "1629c155c89c93c9386288870dc9ed3f964a07d65ac6cf4f66a2480859ec323c",
+  "coverage": "No configured coverage script or provider; behavioral guarantees are indexed in the specification.",
+  "validationIsolation": "Temporary fixtures and controlled local processes/adapters; no real user delivery or remote acceptance tests."
+}

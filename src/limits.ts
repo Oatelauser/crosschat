@@ -18,6 +18,10 @@ export const MAX_BODY_KIB_CEILING = 16_384;
 /** 目标端点封顶（传输天花板）：claude 投递管道 64KiB；codex 1MiB。 */
 export const CLAUDE_ENDPOINT_MAX_BODY_BYTES = 65_536;
 export const CODEX_ENDPOINT_MAX_BODY_BYTES = 1_048_576;
+/** Initial OpenCode adapter policy, not an upstream native transport limit. */
+export const OPENCODE_ADAPTER_MAX_BODY_BYTES = 1_048_576;
+/** Initial Harness adapter policy, not an upstream native transport limit. */
+export const DSH_ADAPTER_MAX_BODY_BYTES = 1_048_576;
 
 /** 正整数解析：非数字 / NaN / 非整数 / ≤0 → undefined。send 侧静默降级；wrapper 侧直接报错（一次性人工输入）。 */
 export function parsePositiveInt(raw: string | undefined): number | undefined {
@@ -45,7 +49,7 @@ export function resolveMaxTurn(
 }
 
 /** 哪个硬顶挡下了这次发送（决定报错教学说"可提额"还是"提额无效"）。 */
-export type BodyHardCap = 'claude' | 'codex' | 'ssh-precheck' | 'tcp-precheck' | 'absolute';
+export type BodyHardCap = 'claude' | 'codex' | 'opencode' | 'dsh' | 'ssh-precheck' | 'tcp-precheck' | 'absolute';
 
 /**
  * MESSAGE_TOO_LARGE 教学文案（票A）：本地变体保留分形态尾巴（单机落盘 /
@@ -69,8 +73,14 @@ export function bodyTooLargeMessage(
   // 本机 /tmp → --via 发对端本地路径。
   const scpDetour =
     '大内容走 scp 旁路：发送方先落盘，scp <文件> <接收方>:/tmp/<文件名>，' +
-    '再 crosschat send --via ssh:<接收方> … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）。';
+    '再 crosschat send --via ssh:<接收方> --tool <收件类型> … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）。';
   if (remote) {
+    if (hardCap === 'opencode') {
+      return `Body is ${size} bytes; opencode 适配策略上限 1MiB——提额无效（这是一条 --via 跨机来件）。${scpDetour}`;
+    }
+    if (hardCap === 'dsh') {
+      return `Body is ${size} bytes; dsh 适配策略上限 1MiB——提额无效（这是一条 --via 跨机来件）。${scpDetour}`;
+    }
     if (hardCap === 'claude' || hardCap === 'codex') {
       const fact = hardCap === 'claude' ? 'claude 端点硬顶 64KiB' : 'codex 端点硬顶 1MiB';
       return `Body is ${size} bytes; ${fact}——提额无效（这是一条 --via 跨机来件）。${scpDetour}`;
@@ -85,7 +95,7 @@ export function bodyTooLargeMessage(
     via === undefined
       ? 'Write the content to a file and send the path instead.'
       : via.startsWith('ssh:')
-        ? `跨机大内容（ssh 形态）：先 scp <文件> ${via.slice(4)}:/tmp/<文件名>，再 crosschat send --via ${via} … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）`
+        ? `跨机大内容（ssh 形态）：先 scp <文件> ${via.slice(4)}:/tmp/<文件名>，再 crosschat send --via ${via} --tool <收件类型> … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）`
         : via.startsWith('tcp:')
           ? `跨机大内容（tcp 形态）：改用 --file <路径> 发送文件（自动分块传输，上限 64MiB），正文只发说明或路径。`
           : '该传输形态的大内容通道未定义——ssh 形态支持 scp 旁路（见文档），或压缩/分段后重试。';
@@ -94,13 +104,17 @@ export function bodyTooLargeMessage(
       ? 'claude 端点硬顶 64KiB——提额无效，只能落盘发文件路径。'
       : hardCap === 'codex'
         ? 'codex 端点硬顶 1MiB——提额无效，只能落盘发文件路径。'
-        : hardCap === 'ssh-precheck'
-          ? 'ssh 形态本地按最宽端点（codex 1MiB）预检——提额无效；远端自行复检（claude 端点更严，64KiB）。'
-          : hardCap === 'tcp-precheck'
-            ? 'tcp 形态本地按最宽端点（codex 1MiB）预检——提额无效；远端自行复检（claude 端点更严，64KiB）。'
-            : hardCap === 'absolute'
-              ? '已到绝对上界 16MiB——提额无效，只能落盘发文件路径。'
-              : '可提额：--max-body-kb <KiB> 或 CROSSCHAT_MAX_BODY_KIB=<KiB>（claude 端点硬顶 64KiB、codex 端点 1MiB，到顶只能落盘）。';
+        : hardCap === 'opencode'
+          ? 'opencode 适配策略上限 1MiB——提额无效，只能落盘发文件路径。'
+          : hardCap === 'dsh'
+            ? 'dsh 适配策略上限 1MiB——提额无效，只能落盘发文件路径。'
+          : hardCap === 'ssh-precheck'
+            ? 'ssh 形态本地按最宽端点（codex 1MiB）预检——提额无效；远端自行复检（claude 端点更严，64KiB）。'
+            : hardCap === 'tcp-precheck'
+              ? 'tcp 形态本地按最宽端点（codex 1MiB）预检——提额无效；远端自行复检（claude 端点更严，64KiB）。'
+              : hardCap === 'absolute'
+                ? '已到绝对上界 16MiB——提额无效，只能落盘发文件路径。'
+                : '可提额：--max-body-kb <KiB> 或 CROSSCHAT_MAX_BODY_KIB=<KiB>（claude 端点硬顶 64KiB、codex 端点 1MiB，到顶只能落盘）。';
   return `Body is ${size} bytes; the limit is ${limitBytes}. ${note}${tail}`;
 }
 

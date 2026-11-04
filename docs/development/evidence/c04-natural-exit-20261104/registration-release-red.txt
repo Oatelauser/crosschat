@@ -1,0 +1,72 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ❯ test/dsh-desktop-exit-observer.test.ts (19 tests | 2 failed) 392ms
+   ✓ formal Desktop natural-exit observation boundary > accepts the actual owner, ordered private acknowledgement, close and independent held Host handle 1ms
+   ✓ formal Desktop natural-exit observation boundary > keeps a zero OS exit unknown without the real shutdown acknowledgement and stop completion 0ms
+   ✓ formal Desktop natural-exit observation boundary > rejects changed source, another parent/profile/binary and an unrelated Host handle 0ms
+   ✓ formal Desktop natural-exit observation boundary > refuses any kill, non-graceful completion, missing stream close or abnormal main exit 0ms
+   ✓ formal Desktop natural-exit observation boundary > requires continuous observation, one exact Host and the actual lifecycle order 0ms
+   ✓ formal Desktop natural-exit observation boundary > does not infer complete process release from a truncated or unresolved owning Desktop record 0ms
+   ✓ formal Desktop natural-exit observation boundary > refuses breakpoint relocation into any main script other than the pinned official bytes 1ms
+   ✓ formal Desktop natural-exit observation boundary > redacts native authentication URLs in both structured facts and embedded process logs before writing evidence 0ms
+   ✓ owned native Desktop profile reuse > creates only a canonical child of the exact task-owned root for native initialization or reuse 9ms
+   ✓ owned native Desktop profile reuse > rejects the task root itself and outside paths before creating or writing a native profile 4ms
+   ✓ owned native Desktop profile reuse > requires the current owner marker before any new profile writes 4ms
+   ✓ owned native Desktop profile reuse > refuses an existing directory redirect before creating anything beneath its outside target 6ms
+   × this native launch registration release > accepts this exact instance removal while retaining an unchanged previous registration 6ms
+     → expected false to be true // Object.is equality
+   × this native launch registration release > refuses surviving current records, erased or altered previous records and unexpected new ownership 0ms
+     → expected true to be false // Object.is equality
+   ✓ owned Desktop inspector transport > reads the owned process synchronously while paused, without waiting for blocked promise microtasks 161ms
+   ✓ owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies ([]) 70ms
+   ✓ owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies (null) 62ms
+   ✓ owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies (true) 62ms
+   ✓ owned Desktop inspector transport > correlates actual responses and rejects pending reads when the owned connection closes 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-desktop-exit-observer.test.ts > this native launch registration release > accepts this exact instance removal while retaining an unchanged previous registration
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ test/dsh-desktop-exit-observer.test.ts:132:81
+    130|   const baseline = { [old]: 'a'.repeat(64) };
+    131|   it('accepts this exact instance removal while retaining an unchanged…
+    132|     expect(hasDshOwnedRegistrationRelease(baseline, { ...baseline }, i…
+       |                                                                                 ^
+    133|     expect(hasDshOwnedRegistrationRelease({}, {}, instance)).toBe(true…
+    134|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/dsh-desktop-exit-observer.test.ts > this native launch registration release > refuses surviving current records, erased or altered previous records and unexpected new ownership
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ test/dsh-desktop-exit-observer.test.ts:137:126
+    135|   it('refuses surviving current records, erased or altered previous re…
+    136|     for (const after of [{ ...baseline, [current]: 'b'.repeat(64) }, {…
+    137|       { ...baseline, 'unexpected.json': 'd'.repeat(64) }]) expect(hasD…
+       |                                                                                                                              ^
+    138|     expect(hasDshOwnedRegistrationRelease({ [current]: 'b'.repeat(64) …
+    139|     expect(hasDshOwnedRegistrationRelease({}, {}, '../foreign')).toBe(…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 17 passed (19)
+   Start at  12:22:29
+   Duration  847ms (transform 67ms, setup 0ms, collect 94ms, tests 392ms, environment 0ms, prepare 120ms)
+

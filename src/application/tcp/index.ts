@@ -7,6 +7,7 @@ import { selectBrokerEntry } from '../../serve/via-tcp.js';
 import { untilAborted } from '../sessions/reading.js';
 import { checkAbort } from '../queries/reading.js';
 import { sessionKey } from '../sessions/model.js';
+import { toolTypeFor } from '../../tool-types.js';
 import type { QueryError } from '../queries/reading.js';
 import { fullTcpMachineId, resolveTcpContext, tcpNodeContextId } from './reading.js';
 import type { TcpConfigurationOptions, TcpResolvedContext, TcpResolvedTarget } from './reading.js';
@@ -72,16 +73,20 @@ export function createTcpApplication(options: TcpApplicationOptions): TcpApplica
       return { id: itemId('machine', contextId, starId, machine.machineId), contextId, starId, machineId: machine.machineId, mid8: machine.machineId.slice(0, 8), name: machine.name ?? null,
         labels: keys.map((key) => key.label), presence: snapshot.live ? machine.online ? 'online' : 'offline' : 'unknown', addedAt: keys.map((key) => key.addedAt).sort()[0] ?? null };
     });
-    const members: TcpMember[] = snapshot.members.map((member) => ({ id: itemId('member', contextId, starId, member.machine, member.tool ?? '', member.sessionId), contextId, starId,
+    const members: TcpMember[] = snapshot.members.map((member) => ({ id: itemId('member', contextId, starId, member.machine, member.tool ?? '', member.sessionId, ...(member.endpointType === undefined ? [] : [member.endpointType])), contextId, starId,
       machineId: member.machine, machineName: member.machineName ?? machines.find((machine) => machine.machineId === member.machine)?.name ?? null,
       nativeId: member.sessionId, providerId: member.tool || null, name: member.name ?? null, presence: snapshot.live ? member.online ? 'online' : 'offline' : 'unknown', temporary: member.temporary === true,
+      ...(member.endpointType === undefined ? {} : { endpointType: member.endpointType }),
       ...(member.extendsName === undefined ? {} : { extendsName: member.extendsName }), ...(member.extendsMachine === undefined ? {} : { extendsMachine: member.extendsMachine }) }));
     for (const member of members) {
       let address: string | undefined;
       try {
         if (!member.providerId || member.providerId.length > 16 || !/^[a-z0-9]+$/.test(member.providerId) || !/^[A-Za-z0-9._:/-]+$/.test(member.nativeId)
           || !/^[A-Za-z0-9._-]+$/.test(starId) || !target.nodeConfig || selectBrokerEntry(target.nodeConfig.entries, starId, undefined).starId !== starId) throw new Error('No safe selector');
-        const exact = members.filter((other) => other.machineId === member.machineId && (other.name === member.nativeId || other.nativeId === member.nativeId));
+        const tool = toolTypeFor(member.providerId, member.endpointType);
+        if (tool === undefined) throw new Error('Unconfirmed recipient type');
+        const exact = members.filter((other) => other.machineId === member.machineId && other.nativeId === member.nativeId
+          && other.providerId === member.providerId && other.endpointType === member.endpointType);
         if (exact.length !== 1 || exact[0].id !== member.id || credentials.filter((credential) => credential.kind === 'node' && credential.machineId === member.machineId).length !== 1) throw new Error('Ambiguous member address');
         address = `tcp:${starId}:${member.machineId}:${member.nativeId}`;
       } catch { /* Full metadata remains available even when old selectors cannot safely address it. */ }
@@ -152,17 +157,21 @@ export function createTcpApplication(options: TcpApplicationOptions): TcpApplica
   }
 
   function memberSession(member: TcpMember): TcpSession {
-    const ref = member.providerId ? { contextId: tcpNodeContextId(member.contextId, member.starId, member.machineId), providerId: member.providerId, nativeId: member.nativeId } : null;
+    const ref = member.providerId ? { contextId: tcpNodeContextId(member.contextId, member.starId, member.machineId), providerId: member.providerId, nativeId: member.nativeId,
+      ...(member.endpointType === undefined ? {} : { endpointType: member.endpointType }) } : null;
     return { id: member.id, contextId: member.contextId, starId: member.starId, machineId: member.machineId, mid8: member.machineId.slice(0, 8), machineName: member.machineName,
       nativeId: member.nativeId, providerId: member.providerId, name: member.name, ref, rawStatus: null, capabilities: null, attributes: {},
+      ...(member.endpointType === undefined ? {} : { endpointType: member.endpointType }),
       member, membership: 'member', presence: member.presence, discovered: false, ...(member.address ? { address: member.address } : { addressReason: member.addressReason }) };
   }
   function nativeSession(item: DiscoverySession, machine: TcpMachine, page: TcpStarResult): TcpSession {
-    const exact = page.members.filter((member) => member.machineId === machine.machineId && member.nativeId === item.ref.nativeId && member.providerId === item.ref.providerId && item.ref.referenceKind !== 'process');
-    const uncertain = page.members.some((member) => member.machineId === machine.machineId && member.nativeId === item.ref.nativeId && member.providerId === null);
+    const exact = page.members.filter((member) => member.machineId === machine.machineId && member.nativeId === item.ref.nativeId && member.providerId === item.ref.providerId && member.endpointType === item.ref.endpointType && item.ref.referenceKind !== 'process');
+    const uncertain = page.members.some((member) => member.machineId === machine.machineId && member.nativeId === item.ref.nativeId
+      && (member.providerId === null || (member.providerId === item.ref.providerId && member.endpointType === undefined && item.ref.endpointType !== undefined)));
     const member = exact.length === 1 ? exact[0] : null;
     return { id: sessionKey(item.ref), contextId: machine.contextId, starId: machine.starId, machineId: machine.machineId, mid8: machine.mid8, machineName: machine.name,
       nativeId: item.ref.nativeId, providerId: item.ref.providerId, name: item.name, ref: item.ref, rawStatus: item.rawStatus, capabilities: item.capabilities, attributes: item.attributes,
+      ...(item.ref.endpointType === undefined ? {} : { endpointType: item.ref.endpointType }),
       member, membership: member ? 'member' : uncertain || page.completeness !== 'complete' ? 'unknown' : 'not-member', presence: member?.presence ?? 'unknown', discovered: true,
       ...(member?.address ? { address: member.address } : { addressReason: '仅有原生发现不能证明已入星；没有可核验的现有三段成员地址。' }) };
   }

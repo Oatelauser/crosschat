@@ -1,0 +1,165 @@
+daee8508d47d1d5bc11eb8ceb79856a81f501769
+100644 e63d1a39342c62ad135aaf0302a23abad98c5003 1	CHANGELOG.md
+100644 59e57aa089241d32b015c426f1bb76e78f56efa5 2	CHANGELOG.md
+100644 5e6efad9ad6683e633a6b496b89e173652d9b9fe 3	CHANGELOG.md
+100644 2414aad48da1b1c73dade8d985763d55dd3e4749 1	README.md
+100644 1b25f90537746bce76e0695bdd4dea547d2ca448 2	README.md
+100644 d718d252277709c904771a984fc3d303ff0ae725 3	README.md
+100644 74a213955b00a787e6c3af89829943f25ba00c46 2	docs/development/session-selection-membership-design-20261026.md
+100644 4a987dc0f4a7d15f29666a5b028c048bcf8db35f 3	docs/development/session-selection-membership-design-20261026.md
+100644 195554784d35e77088c313e533ad3d5002f23de5 1	docs/development/tui-progress.md
+100644 53be9c98ca47d4dd8d69bb33517d78159a28226f 2	docs/development/tui-progress.md
+100644 62e46b9458ba32d6952489cf728fff1e97684458 3	docs/development/tui-progress.md
+100644 e704f21b6b74fc3ab780cbe9c8be6af33e5c2a04 2	docs/development/tui-workspace-progress.md
+100644 1275bf7710ca41f764427f6071c591be853e68de 3	docs/development/tui-workspace-progress.md
+100644 0da32a0c1e748f36cc604a44e14dfc20e54dd344 2	docs/development/tui-workspace-validation-20261023.md
+100644 10a68513b03ad5faf8b3f7e7d8b3133ee817f857 3	docs/development/tui-workspace-validation-20261023.md
+100644 b3e8f74bca6cf360d6b34b4e214905e1811c4b82 2	src/application/session-operations.ts
+100644 cdbf021372cc6ac66499ab4aa2168a38d4aab706 3	src/application/session-operations.ts
+100644 24d66a430d8eef353928fd5d24974a70cf6615c2 2	src/application/session-selection.ts
+100644 95a6297abd9ffcea7efec03c4e0d46b5df26b58f 3	src/application/session-selection.ts
+100644 d0e72c2e90615a8925ddc5489b6ebcf1edbb0001 1	src/application/sessions/codex-reader.ts
+100644 12a7c1a04d5df8fd22aef5b6eb1987c83c8e2638 2	src/application/sessions/codex-reader.ts
+100644 0a7730b72ed71d1fe261576b79ceccabcb8f1b8e 3	src/application/sessions/codex-reader.ts
+100644 0a30e080f8241c2766917affe323df0dce81a9e9 1	src/application/tcp/management.ts
+100644 85e76a432f09af214a35774deff582fbad655d36 2	src/application/tcp/management.ts
+100644 9cec42052fb094a8f1e384282a8fc426622ed255 3	src/application/tcp/management.ts
+100644 0d7fe7560ef69b06815c636b4290822d0c2e1e57 2	src/application/tcp/session-operations.ts
+100644 6136de63244d59145be6aa6103da6c47a31176c7 3	src/application/tcp/session-operations.ts
+100644 a1783b8c6cdf8ff102f9e537b9303cfac459a15e 1	src/codex/aggregate-discovery.ts
+100644 90561512859e4ba3bc4f5f2c6a7d2945b4845abe 2	src/codex/aggregate-discovery.ts
+100644 96096d6e724a87526e97860fd827f62005678277 3	src/codex/aggregate-discovery.ts
+100644 d66265ae0fae3f4bcfd4ecbdd32580e0533b6043 1	src/codex/client.ts
+100644 d397a4e65750244dfba8c7092251daa52e4380fe 2	src/codex/client.ts
+100644 99af8fbf5b2c411e97ffcae4e34453d0226abf99 3	src/codex/client.ts
+100644 e8bc669d5d24be1151261e5860865ad6ae6503de 1	src/commands/serve.ts
+100644 a3a954a2611cf882d6feb5c6c278175740751501 2	src/commands/serve.ts
+100644 62ad48727a25a0d12603a42d2c8aa8c0cce3a475 3	src/commands/serve.ts
+100644 cb89027a99f47b9de8ce6e39157e34453e4c6e22 1	src/commands/session-star.ts
+100644 5195d5a43a715d779d908d009c9644239af0b6e9 2	src/commands/session-star.ts
+100644 8607252b9df675f22f24dbf157ac49b1b3694a8c 3	src/commands/session-star.ts
+100644 b4aec33c60d5923ca3cd65867204e627a1bcab42 1	src/serve/broker.ts
+100644 2389c37b39f286ff6ba583e3cca20a7d19cb1f72 2	src/serve/broker.ts
+100644 f68ac7310e6feb74fdb61c285364aff85c88496f 3	src/serve/broker.ts
+100644 7c896bb266d68e9d6be8cb2af2dd288e9317b571 1	src/serve/node.ts
+100644 862e5a080ed0a765bfd50f23e8913bdd671f1b4d 2	src/serve/node.ts
+100644 b736a2befaba61e75e1f4abd76fe9417bbcc92cb 3	src/serve/node.ts
+100644 d8479119df19858d95103f279bb3183c12221f6b 1	src/serve/protocol.ts
+100644 e1d8cbfcfd638f3e6033d89f608fdb755900a18d 2	src/serve/protocol.ts
+100644 eb09e844212f364f6f4e746225a5b7509cbf93c0 3	src/serve/protocol.ts
+100644 a44bc6f970978d26b137a640c4a571816193fb8b 1	src/serve/registry.ts
+100644 f56283af32340600e20166c913da0516231ca752 2	src/serve/registry.ts
+100644 5b668cbd15297f0620edfae60d2ea56c7b59d69b 3	src/serve/registry.ts
+100644 c6a2260f4f69c8842d097595b6da01623f0d70e0 2	src/serve/session-operations.ts
+100644 273e4c305def71f1c28204c093a52c03037ad267 3	src/serve/session-operations.ts
+100644 66b6552e0d183c16122e6973596c7310a6096a04 1	src/tui/resources/ssh.ts
+100644 6f6e19fe3723525540c65edaf298ee698067b4c4 2	src/tui/resources/ssh.ts
+100644 1935ffe582aaf2bc1fb6723ab815b973a56bbbc2 3	src/tui/resources/ssh.ts
+100644 b60d7a9b2f5b063898bf4da1479e59a1048ee4a2 1	src/tui/resources/tcp.ts
+100644 cde1d874afdb0dc564ab361091b076f01a936873 2	src/tui/resources/tcp.ts
+100644 1743feb5fd5efb50015f928420363696b83cc564 3	src/tui/resources/tcp.ts
+100644 8e71977d998044247c757d1d3479caa4cda23176 1	test/codex-aggregate-discovery.test.ts
+100644 061a08679aa1952e2cfa2b867e744c9b311507e8 2	test/codex-aggregate-discovery.test.ts
+100644 51081d2e65ec98bef275c4ed0409dfcdb4eb2ca8 3	test/codex-aggregate-discovery.test.ts
+100644 70461e8a70133bd7c13fefd3839285766e8b4183 1	test/codex-pagination.test.ts
+100644 2557836044c9ae72010d59eeb2eccf011e342ae2 2	test/codex-pagination.test.ts
+100644 fb377ab7ca4173e1e2a0351b08a4e0ea26134f91 3	test/codex-pagination.test.ts
+100644 eb14036a56cdac4d85a9714e56b9b1f90b5ea03d 2	test/helpers/claude-rename-native-validation.mjs
+100644 262aa59398876f4fb1ed8a49bbdb0df58e4002bf 3	test/helpers/claude-rename-native-validation.mjs
+100644 a000bff82e342255c7aa6280d1207654a8303df5 2	test/helpers/session-selection-native-validation.mjs
+100644 8662ec6efb27a2b50378deb50c6cacfed1bd35be 3	test/helpers/session-selection-native-validation.mjs
+100644 691ac0934ab58ad66e70b0651e022410e5c9b242 1	test/serve-sessions.test.ts
+100644 9ccbaf5b160b73937e2938cd3812c819098c4511 2	test/serve-sessions.test.ts
+100644 db13d9b2922e13ba367ede08eb22115a0c8b61c6 3	test/serve-sessions.test.ts
+100644 1330f0ba90989373c6cc3c3054599f961822ac6c 2	test/session-selection.test.ts
+100644 7546c67b0ae503747b436b5229c403ed96e9d374 3	test/session-selection.test.ts
+100644 201b42f821df85c1133e32cd4a0ba8a64c9dd82c 1	test/session-star.test.ts
+100644 7df472506b97b59ccbbe5ddb9767154ac1ccec55 2	test/session-star.test.ts
+100644 a309f57bf6ac871a3106148eb844f8636333a999 3	test/session-star.test.ts
+100644 0f0e3aa46d236bcfd353b6b11c0e0863e56494f5 2	test/tcp-configuration-management.test.ts
+100644 83071c64afce0dfe2c6e2b5e2f4706af76d18cf8 3	test/tcp-configuration-management.test.ts
+100644 cbe8bfa63ac1332d12f96b000631567b48b904c3 2	test/tcp-session-operations.test.ts
+100644 1711be98d67ae5ac58be884b1d46ac82cdf76400 3	test/tcp-session-operations.test.ts
+100644 9fb182e6e799bbfc4f7645ee1b1d51992d8fbd4c 1	test/tui-tcp.test.ts
+100644 748cfddd11990f29bfac62e5e9ab2e0000048855 2	test/tui-tcp.test.ts
+100644 474c3f1213e0765c46b7ece25480d4cd9e3fabad 3	test/tui-tcp.test.ts
+
+Auto-merging CHANGELOG.md
+CONFLICT (content): Merge conflict in CHANGELOG.md
+Auto-merging README.md
+CONFLICT (content): Merge conflict in README.md
+Auto-merging docs/development/core-api.md
+Auto-merging docs/development/session-selection-membership-design-20261026.md
+CONFLICT (add/add): Merge conflict in docs/development/session-selection-membership-design-20261026.md
+Auto-merging docs/development/tui-progress.md
+CONFLICT (content): Merge conflict in docs/development/tui-progress.md
+Auto-merging docs/development/tui-workspace-progress.md
+CONFLICT (add/add): Merge conflict in docs/development/tui-workspace-progress.md
+Auto-merging docs/development/tui-workspace-validation-20261023.md
+CONFLICT (add/add): Merge conflict in docs/development/tui-workspace-validation-20261023.md
+Auto-merging package.json
+Auto-merging skills/crosschat/SKILL.md
+Auto-merging skills/crosschat/references/stars.md
+Auto-merging src/application/session-operations.ts
+CONFLICT (add/add): Merge conflict in src/application/session-operations.ts
+Auto-merging src/application/session-selection.ts
+CONFLICT (add/add): Merge conflict in src/application/session-selection.ts
+Auto-merging src/application/sessions/codex-reader.ts
+CONFLICT (content): Merge conflict in src/application/sessions/codex-reader.ts
+Auto-merging src/application/tcp/index.ts
+Auto-merging src/application/tcp/management.ts
+CONFLICT (content): Merge conflict in src/application/tcp/management.ts
+Auto-merging src/application/tcp/reading.ts
+Auto-merging src/application/tcp/session-operations.ts
+CONFLICT (add/add): Merge conflict in src/application/tcp/session-operations.ts
+Auto-merging src/codex/aggregate-discovery.ts
+CONFLICT (content): Merge conflict in src/codex/aggregate-discovery.ts
+Auto-merging src/codex/client.ts
+CONFLICT (content): Merge conflict in src/codex/client.ts
+Auto-merging src/commands/serve.ts
+CONFLICT (content): Merge conflict in src/commands/serve.ts
+Auto-merging src/commands/session-star.ts
+CONFLICT (content): Merge conflict in src/commands/session-star.ts
+Auto-merging src/commands/status.ts
+Auto-merging src/serve/broker.ts
+CONFLICT (content): Merge conflict in src/serve/broker.ts
+Auto-merging src/serve/node.ts
+CONFLICT (content): Merge conflict in src/serve/node.ts
+Auto-merging src/serve/protocol.ts
+CONFLICT (content): Merge conflict in src/serve/protocol.ts
+Auto-merging src/serve/registry.ts
+CONFLICT (content): Merge conflict in src/serve/registry.ts
+Auto-merging src/serve/session-operations.ts
+CONFLICT (add/add): Merge conflict in src/serve/session-operations.ts
+Auto-merging src/serve/via-tcp.ts
+Auto-merging src/tui/composition.ts
+Auto-merging src/tui/resources/ssh.ts
+CONFLICT (content): Merge conflict in src/tui/resources/ssh.ts
+Auto-merging src/tui/resources/tcp.ts
+CONFLICT (content): Merge conflict in src/tui/resources/tcp.ts
+Auto-merging test/codex-aggregate-discovery.test.ts
+CONFLICT (content): Merge conflict in test/codex-aggregate-discovery.test.ts
+Auto-merging test/codex-pagination.test.ts
+CONFLICT (content): Merge conflict in test/codex-pagination.test.ts
+Auto-merging test/helpers/claude-rename-native-validation.mjs
+CONFLICT (add/add): Merge conflict in test/helpers/claude-rename-native-validation.mjs
+Auto-merging test/helpers/session-selection-native-validation.mjs
+CONFLICT (add/add): Merge conflict in test/helpers/session-selection-native-validation.mjs
+Auto-merging test/revocation-pause.test.ts
+Auto-merging test/serve-node.test.ts
+Auto-merging test/serve-sessions.test.ts
+CONFLICT (content): Merge conflict in test/serve-sessions.test.ts
+Auto-merging test/session-selection.test.ts
+CONFLICT (add/add): Merge conflict in test/session-selection.test.ts
+Auto-merging test/session-star.test.ts
+CONFLICT (content): Merge conflict in test/session-star.test.ts
+Auto-merging test/status-summary.test.ts
+Auto-merging test/tcp-configuration-management.test.ts
+CONFLICT (add/add): Merge conflict in test/tcp-configuration-management.test.ts
+Auto-merging test/tcp-session-operations.test.ts
+CONFLICT (add/add): Merge conflict in test/tcp-session-operations.test.ts
+Auto-merging test/tui-composition.test.ts
+Auto-merging test/tui-main-observations.test.ts
+Auto-merging test/tui-ssh.test.ts
+Auto-merging test/tui-tcp.test.ts
+CONFLICT (content): Merge conflict in test/tui-tcp.test.ts

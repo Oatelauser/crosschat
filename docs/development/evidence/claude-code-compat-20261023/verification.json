@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "recordedAt": "2026-10-23T08:02:23.0104427Z",
+  "testedHead": "0ec876413aebdeb443b571ef749822c812de160b",
+  "command": "npm run check",
+  "exitCode": 0,
+  "lint": "passed",
+  "runtimeImports": {
+    "modules": 184,
+    "edges": 584,
+    "cycles": 0,
+    "boundaryViolations": 0
+  },
+  "build": "passed",
+  "vitest": {
+    "passed": 2084,
+    "skipped": 11,
+    "total": 2095,
+    "filesPassed": 200,
+    "filesSkipped": 3,
+    "filesTotal": 203
+  },
+  "focusedClaudeTests": 43,
+  "finalLiveSequence": {
+    "baselineVersion": "2.1.309",
+    "baselineChecks": 7,
+    "candidateVersion": "2.1.309",
+    "candidateChecks": 7,
+    "classification": {
+      "kind": "compatible",
+      "notify": false
+    },
+    "installationCleanup": "removed"
+  },
+  "githubActionsObserved": false,
+  "realModelCredentialUsed": false
+}

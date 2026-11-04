@@ -1,0 +1,33 @@
+{
+  "record": "c14-w05-cleanup",
+  "at": "2026-10-29T07:08:43.935Z",
+  "ownedRoots": [
+    {
+      "path": "D:/cc-own-c14w05-a1",
+      "files": 86,
+      "bytes": 4320075,
+      "reparsePoints": 0,
+      "removed": true
+    },
+    {
+      "path": "D:/cc-own-c14w05-run1",
+      "files": 81,
+      "bytes": 4041100,
+      "reparsePoints": 0,
+      "removed": true
+    },
+    {
+      "path": "D:/cc-own-c14w05-run2",
+      "files": 82,
+      "bytes": 4047591,
+      "reparsePoints": 0,
+      "removed": true
+    }
+  ],
+  "processes": "Each run waited for the CLI child to exit and closed the loopback model server; a Win32_Process query for the temp roots found no leftover codex.exe or node.exe before deletion.",
+  "untouched": [
+    "D:/cc-own-cztKHB (not owned by this ticket)",
+    "user ~/.codex, user config and auth files, shared daemon"
+  ],
+  "note": "No software was installed, upgraded or uninstalled. No deletion was blocked by policy."
+}

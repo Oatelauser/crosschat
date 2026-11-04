@@ -1,0 +1,494 @@
+
+> @oatelauser/crosschat@1.10.0 check
+> npm run lint && npm run check:imports && npm run build && npm test
+
+
+> @oatelauser/crosschat@1.10.0 lint
+> eslint src test
+
+
+> @oatelauser/crosschat@1.10.0 check:imports
+> node scripts/runtime-import-graph.mjs
+
+Runtime import graph: 203 modules, 681 edges; no cycles or boundary violations.
+
+> @oatelauser/crosschat@1.10.0 build
+> tsc
+
+
+> @oatelauser/crosschat@1.10.0 test
+> vitest run --dir test
+
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mD:/workspace/CC/multichat[39m
+
+ [31m❯[39m test/dsh-send.test.ts [2m([22m[2m16 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 261[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness explicitly selected addressing[2m > [22muses a full opaque ID before a conflicting title in the same selected type[32m 6[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness explicitly selected addressing[2m > [22mresolves a unique native prefix and refuses ambiguous names or IDs[32m 2[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness explicitly selected addressing[2m > [22mresolves exact member IDs and rejects the same native ID present in another tool[32m 1[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness through the application send seam[2m > [22mdelivers an escaped envelope once to the exact native session and retains its reply endpoint[32m 53[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness through the application send seam[2m > [22muses native sender identity and replies with the same nonce while independently defaulting to queue[32m 8[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness through the application send seam[2m > [22mreports native queue admission without creating a Codex outbox[32m 6[2mms[22m[39m
+[31m   [31m×[31m DeepSeek Harness through the application send seam[2m > [22mkeeps conversation aliases and turns in the shared continuity store[39m[32m 139[2mms[22m[39m
+[31m     → expected 'cA000' to match /^c\d+$/[39m
+   [32m✓[39m DeepSeek Harness through the application send seam[2m > [22mpreserves selected native-source errors and does not replace a missing target with Codex diagnosis[32m 6[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness through the application send seam[2m > [22mkeeps existing explicit and unique-prefix sends usable during an unrelated Harness outage[32m 5[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness through the application send seam[2m > [22mnever retries an uncertain native write or parks it in another provider[32m 5[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness through the application send seam[2m > [22mcarries remote native origin into the ref and visible envelope without ambient identity takeover[32m 5[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness through the application send seam[2m > [22mkeeps two session-prefixed native senders distinct in usable TCP from-addresses[32m 6[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness through the application send seam[2m > [22mcarries the complete 'claude' sender ID without a tool prefix[32m 4[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness through the application send seam[2m > [22mcarries the complete 'codex' sender ID without a tool prefix[32m 4[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness through the application send seam[2m > [22mcarries the complete 'opencode' sender ID without a tool prefix[32m 4[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness through the application send seam[2m > [22mapplies a named Harness adapter cap without misreporting a Codex transport limit[32m 4[2mms[22m[39m
+ [31m❯[39m test/maintenance.test.ts [2m([22m[2m14 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 1770[2mms[22m[39m
+[31m   [31m×[31m local maintenance plans and exact execution[2m > [22mpreviews the unchanged retention rules without touching data or skills[39m[33m 318[2mms[22m[39m
+[31m     → expected [ Array(1) ] to deeply equal [ …(2) ][39m
+   [32m✓[39m local maintenance plans and exact execution[2m > [22mrefuses a changed cleanup plan before any deletion, rather than extending its accepted targets[32m 16[2mms[22m[39m
+   [32m✓[39m local maintenance plans and exact execution[2m > [22mreports actual successful and failed removals without claiming the planned count was deleted[32m 18[2mms[22m[39m
+   [32m✓[39m local maintenance plans and exact execution[2m > [22mforce cleanup keeps the old temporary-shard and outbox exclusions[32m 21[2mms[22m[39m
+   [32m✓[39m local maintenance plans and exact execution[2m > [22mskill installation previews both existing destinations and retains the original overwrite behavior[32m 31[2mms[22m[39m
+   [32m✓[39m local maintenance plans and exact execution[2m > [22mblocks uninstall if a named node becomes fresh after preview and never executes npm[32m 15[2mms[22m[39m
+   [32m✓[39m local maintenance plans and exact execution[2m > [22muninstalls exactly the old data and skill scopes with distinct missing/failed outcomes and npm left installed[32m 15[2mms[22m[39m
+   [32m✓[39m local maintenance plans and exact execution[2m > [22mrefuses parent-directory junctions before a cleanup or skills target can escape the confirmed home scope[32m 18[2mms[22m[39m
+   [32m✓[39m local maintenance plans and exact execution[2m > [22mstops the skills task after its first failure without pretending the second destination was attempted[32m 14[2mms[22m[39m
+[31m   [31m×[31m owned maintenance worker lifecycle[2m > [22mruns actual plans and filesystem effects through the default built worker using only isolated fixture paths[39m[33m 853[2mms[22m[39m
+[31m     → 维护范围无法预览；检查本机来源与权限。[39m
+   [32m✓[39m owned maintenance worker lifecycle[2m > [22mdoes not start work for an already-aborted operation[32m 91[2mms[22m[39m
+   [32m✓[39m owned maintenance worker lifecycle[2m > [22mterminates blocked IO work and removes only its listeners when cancelled[32m 76[2mms[22m[39m
+   [32m✓[39m owned maintenance worker lifecycle[2m > [22mrejects malformed IPC without echoing its raw contents and still terminates the owned worker[32m 112[2mms[22m[39m
+   [32m✓[39m owned maintenance worker lifecycle[2m > [22mtimes out a pending write with an uncertain result and releases its worker and listeners[32m 76[2mms[22m[39m
+ [32m✓[39m test/doctor-json-cli.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 3027[2mms[22m[39m
+   [33m[2m✓[22m[39m doctor JSON CLI extension[2m > [22mreturns the structured checks and preserves the existing default report and exit severity [33m 1159[2mms[22m[39m
+   [33m[2m✓[22m[39m doctor JSON CLI extension[2m > [22memits valid structured findings with exit one for a failed check and rejects extra options [33m 1866[2mms[22m[39m
+ [32m✓[39m test/ssh-askpass-bridge.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 3370[2mms[22m[39m
+   [33m[2m✓[22m[39m owned native SSH ASKPASS bridge[2m > [22muses a real local helper to pass one bounded prompt without storing the password in files, argv or environment [33m 1087[2mms[22m[39m
+   [33m[2m✓[22m[39m owned native SSH ASKPASS bridge[2m > [22mcloses a pending helper and cancels its challenge when the owned bridge is disposed [33m 1214[2mms[22m[39m
+   [33m[2m✓[22m[39m owned native SSH ASKPASS bridge[2m > [22mrejects an oversized or cancelled answer without writing any secret material to stderr [33m 1066[2mms[22m[39m
+ [32m✓[39m test/maintenance-boundaries.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 2256[2mms[22m[39m
+   [33m[2m✓[22m[39m TUI maintenance source and copy boundaries[2m > [22mcloses unreadable sources and bounds directory enumeration before accepting a skill plan [33m 2083[2mms[22m[39m
+ [32m✓[39m test/tui-cli.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 3294[2mms[22m[39m
+   [33m[2m✓[22m[39m CLI TUI command isolation[2m > [22mkeeps "--help" independent from TUI and Ink modules [33m 784[2mms[22m[39m
+   [33m[2m✓[22m[39m CLI TUI command isolation[2m > [22mkeeps "--version" independent from TUI and Ink modules [33m 717[2mms[22m[39m
+   [33m[2m✓[22m[39m CLI TUI command isolation[2m > [22mkeeps "tui" independent from TUI and Ink modules [33m 636[2mms[22m[39m
+   [33m[2m✓[22m[39m CLI TUI command isolation[2m > [22mrejects unsupported TUI arguments without importing the renderer [33m 671[2mms[22m[39m
+probe failed: root-not-exclusive:C:\Users\YANGSH~1\AppData\Local\Temp\c14w05-test-IoDZZa\previous-run
+ [32m✓[39m test/broker-revocation.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 4248[2mms[22m[39m
+   [33m[2m✓[22m[39m broker credential revocation[2m > [22mlocal remove-node immediately revokes every node/sender using that credential and retains offline permanent members in its star [33m 982[2mms[22m[39m
+   [33m[2m✓[22m[39m broker credential revocation[2m > [22mremote remove-node has the same immediate effect while members and star admins retain their three-layer limits [33m 672[2mms[22m[39m
+   [33m[2m✓[22m[39m broker credential revocation[2m > [22mlocal remove-admin-key closes only authenticated sessions of the removed credential, including unique-prefix selection [33m 1055[2mms[22m[39m
+   [33m[2m✓[22m[39m broker credential revocation[2m > [22mmarks a revoked session unusable before close completes without affecting another credential [33m 344[2mms[22m[39m
+   [33m[2m✓[22m[39m broker credential revocation[2m > [22mfinishes target pending work and file routes on revocation before the close callback, ignoring late target results [33m 306[2mms[22m[39m
+ [32m✓[39m test/opencode-desktop-fixture.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 4820[2mms[22m[39m
+   [33m[2m✓[22m[39m official desktop test environment[2m > [22mreports an unregistered executable under the owned run before allowing cleanup [33m 3681[2mms[22m[39m
+   [33m[2m✓[22m[39m official desktop test environment[2m > [22mretains a locked-log diagnostic while collecting remaining logs for teardown [33m 504[2mms[22m[39m
+ [32m✓[39m test/runtime-import-graph.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 5116[2mms[22m[39m
+   [33m[2m✓[22m[39m core source architecture[2m > [22mhas no runtime dependency cycle or broken local import [33m 1946[2mms[22m[39m
+   [33m[2m✓[22m[39m core source architecture[2m > [22mkeeps node configuration and connection selection independent of commands and clients [33m 1545[2mms[22m[39m
+   [33m[2m✓[22m[39m core source architecture[2m > [22mkeeps every application adapter independent of command and UI entry points [33m 1471[2mms[22m[39m
+ [32m✓[39m test/local-service-owned-stop.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 4411[2mms[22m[39m
+   [33m[2m✓[22m[39m TUI owned service stop process trees[2m > [22mreleases a hung OS scanner and its helper before completing cancellation without claiming the external stop was undone [33m 801[2mms[22m[39m
+   [33m[2m✓[22m[39m TUI owned service stop process trees[2m > [22mbounds a nonresponding stop job and reclaims its full scanner tree on timeout [33m 1401[2mms[22m[39m
+   [33m[2m✓[22m[39m TUI owned service stop process trees[2m > [22mruns the actual stop process wrapper and prior stop worker with the same fixed target, then releases the wrapper [33m 845[2mms[22m[39m
+   [33m[2m✓[22m[39m TUI owned service stop process trees[2m > [22mretains prior request validation inside the real wrapper before any stop business call [33m 690[2mms[22m[39m
+   [33m[2m✓[22m[39m TUI owned service stop process trees[2m > [22muses the owned stop default from the managed task and waits for tree cleanup before returning an uncertain issued result [33m 659[2mms[22m[39m
+ [32m✓[39m test/local-service-inspection.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 5113[2mms[22m[39m
+   [33m[2m✓[22m[39m owned service inspection and guard workers[2m > [22mreclaims an inspector blocked in spawnSync, including its owned probe child, before cancellation returns [33m 1198[2mms[22m[39m
+   [33m[2m✓[22m[39m owned service inspection and guard workers[2m > [22muses the real process wrapper for successful inspection/guard IPC and releases it before returning [33m 1352[2mms[22m[39m
+   [33m[2m✓[22m[39m owned service inspection and guard workers[2m > [22mreclaims a real wrapper and its controlled blocked probe when its read timeout expires [33m 2113[2mms[22m[39m
+ [32m✓[39m test/session-membership.test.ts [2m([22m[2m16 tests[22m[2m)[22m[33m 2630[2mms[22m[39m
+   [33m[2m✓[22m[39m session membership application boundary[2m > [22madopts an anonymous full native ref through the shared aggregator and verifies broker roster authority [33m 599[2mms[22m[39m
+   [33m[2m✓[22m[39m session membership application boundary[2m > [22madopts and removes a typed Codex member without overwriting the same native ID on another endpoint [33m 601[2mms[22m[39m
+ [32m✓[39m test/ssh-native-authentication.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 5507[2mms[22m[39m
+   [33m[2m✓[22m[39m SSH application native ASKPASS integration[2m > [22mreuses authentication across refreshes, retains strict host checking and forgets credentials when configuration changes [33m 3350[2mms[22m[39m
+   [33m[2m✓[22m[39m SSH application native ASKPASS integration[2m > [22mpreserves full Windows ASKPASS fingerprints and offers no approval for a changed known host [33m 1086[2mms[22m[39m
+   [33m[2m✓[22m[39m SSH application native ASKPASS integration[2m > [22mcancels a pending native authentication helper when the active connection closes [33m 1068[2mms[22m[39m
+ [32m✓[39m test/outbox.test.ts [2m([22m[2m24 tests[22m[2m)[22m[33m 5736[2mms[22m[39m
+   [33m[2m✓[22m[39m park[2m > [22mrefuses honestly at the per-thread cap and leaves the file untouched [33m 4089[2mms[22m[39m
+ [32m✓[39m test/remote-discovery-cli.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 2330[2mms[22m[39m
+   [33m[2m✓[22m[39m built discover CLI endpoint[2m > [22mreads only JSON stdin and emits full anonymous metadata without draining outbox or exposing sockets [33m 552[2mms[22m[39m
+   [33m[2m✓[22m[39m built discover CLI endpoint[2m > [22mrejects invalid JSON and oversized input before provider execution [33m 1775[2mms[22m[39m
+ [31m❯[39m test/core-code-standards.test.ts [2m([22m[2m2 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 6527[2mms[22m[39m
+[31m   [31m×[31m progressive typed lint rules[2m > [22mrejects floating promises, async void callbacks and value imports used only as types[39m[33m 6470[2mms[22m[39m
+[31m     → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+   [32m✓[39m progressive typed lint rules[2m > [22maccepts type-only imports and deliberately handled asynchronous work[32m 55[2mms[22m[39m
+ [32m✓[39m test/via-tcp.test.ts [2m([22m[2m36 tests[22m[2m)[22m[33m 2501[2mms[22m[39m
+   [33m[2m✓[22m[39m runViaTcpSend against a real broker[2m > [22mtimes out with TCP_TRANSPORT_FAILED and the 勿盲目重发 wording [33m 444[2mms[22m[39m
+   [33m[2m✓[22m[39m send --via tcp: branch in runSend[2m > [22mD0: body over 64MiB still fails FILE_TOO_LARGE, keeping the原文 temp file with its path [33m 368[2mms[22m[39m
+ [32m✓[39m test/send-log.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 6431[2mms[22m[39m
+   [33m[2m✓[22m[39m appendSendLog[2m > [22mrotates past 5MiB instead of truncating: the bulk moves whole to .old, the new entry starts a fresh file [33m 6283[2mms[22m[39m
+ [32m✓[39m test/tui-input.test.tsx [2m([22m[2m21 tests[22m[2m)[22m[33m 1268[2mms[22m[39m
+   [33m[2m✓[22m[39m Ink input batches[2m > [22mfeeds one real useInput batch across the list and command editor modes [33m 358[2mms[22m[39m
+   [33m[2m✓[22m[39m Ink input batches[2m > [22mkeeps bracketed paste separate from batched shortcut dispatch [33m 315[2mms[22m[39m
+ [32m✓[39m test/endpoint-protocol.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 5559[2mms[22m[39m
+   [33m[2m✓[22m[39m endpoint identity capability guard[2m > [22mdoes not replay an uncertain lifecycle removal while readonly roster still reports the same temporary member [33m 5427[2mms[22m[39m
+ [32m✓[39m test/revocation-pause.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 1910[2mms[22m[39m
+   [33m[2m✓[22m[39m explicit credential revocation pauses this star[2m > [22mstops one launcher supervisor without restarting it or disrupting another star [33m 1219[2mms[22m[39m
+usage: node scripts/codex-call-correlation-probe.mjs --root <owned temp dir> [--evidence <json>]
+ [32m✓[39m test/codex-call-correlation-probe.test.ts [2m([22m[2m56 tests[22m[2m)[22m[33m 7097[2mms[22m[39m
+   [33m[2m✓[22m[39m codex call correlation probe: bounded reads and processes[2m > [22mreturns the exit code of a child that finished [33m 329[2mms[22m[39m
+   [33m[2m✓[22m[39m codex call correlation probe: bounded reads and processes[2m > [22mkills a timed-out child together with its descendant and waits for close [33m 1965[2mms[22m[39m
+   [33m[2m✓[22m[39m codex call correlation probe: bounded reads and processes[2m > [22mstops a cancelled child through the abort signal [33m 660[2mms[22m[39m
+   [33m[2m✓[22m[39m codex call correlation probe: loopback service[2m > [22mleaves no timer behind, so the process exits as soon as the server closes [33m 358[2mms[22m[39m
+   [33m[2m✓[22m[39m codex call correlation probe: run root and main chain[2m > [22mkeeps the root when the run is cancelled [33m 689[2mms[22m[39m
+   [33m[2m✓[22m[39m codex call correlation probe: run root and main chain[2m > [22mkeeps the run root when the launched process never closed [33m 1695[2mms[22m[39m
+ [32m✓[39m test/serve-node.test.ts [2m([22m[2m30 tests[22m[2m)[22m[33m 5047[2mms[22m[39m
+   [33m[2m✓[22m[39m B0 starId handshake[2m > [22m036 无 id 星（手编形状）：连接按 BAD_AUTH 拒——broker 机跑一次 serve 补 id [33m 584[2mms[22m[39m
+   [33m[2m✓[22m[39m B1 multi-star: delivery pipeline stamps starId into issued refs[2m > [22mbroker queue self-delivery: the receipt ref carries the registry starId [33m 1243[2mms[22m[39m
+   [33m[2m✓[22m[39m B1 multi-star: delivery pipeline stamps starId into issued refs[2m > [22mbroker steer self-delivery: the receipt ref carries the registry starId [33m 1230[2mms[22m[39m
+ [32m✓[39m test/serve-multistar.test.ts [2m([22m[2m20 tests[22m[2m)[22m[33m 5478[2mms[22m[39m
+   [33m[2m✓[22m[39m 032 多星握手与星域隔离[2m > [22m钥匙不属任何星 → BAD_AUTH（跨星错钥匙不放行） [33m 550[2mms[22m[39m
+   [33m[2m✓[22m[39m 032 本进程自挂（虚拟会话对）[2m > [22madmitLocal+makeSocket：真实握手上线、attach 入成员、三段直达投递不经回环 WS [33m 312[2mms[22m[39m
+   [33m[2m✓[22m[39m 032 bootstrap 与 CLI[2m > [22m033 serve 永不造星：空表首启零星合法（不建星、不写 node.json），教学指 --add-star [33m 1533[2mms[22m[39m
+   [33m[2m✓[22m[39m 032 bootstrap 与 CLI[2m > [22m内挂聚合器不写 status-node 文件（非独立进程） [33m 1569[2mms[22m[39m
+ [32m✓[39m test/tui-controller.test.ts [2m([22m[2m25 tests[22m[2m)[22m[33m 1996[2mms[22m[39m
+ [32m✓[39m test/core-queries.test.ts [2m([22m[2m17 tests[22m[2m)[22m[33m 389[2mms[22m[39m
+ [32m✓[39m test/smoke.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 1075[2mms[22m[39m
+   [33m[2m✓[22m[39m --version prints the package.json version [33m 550[2mms[22m[39m
+   [33m[2m✓[22m[39m unknown command exits non-zero and reports to stderr with the crosschat prefix [33m 523[2mms[22m[39m
+ [32m✓[39m test/dsh-adapter.test.ts [2m([22m[2m44 tests[22m[2m)[22m[33m 1643[2mms[22m[39m
+ [32m✓[39m test/dsh-cli.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 2307[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness CLI composition[2m > [22mconnects real send dependencies to Harness delivery with an explicit mode [33m 2277[2mms[22m[39m
+ [32m✓[39m test/serve-sessions.test.ts [2m([22m[2m37 tests[22m[2m)[22m[33m 7342[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 NodeClient 聚合器：attach IPC / 重播 / 双活性[2m > [22m永久成员以 --rm 恢复后退出仍保留册位，再次明确选择才恢复在线 [33m 340[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 NodeClient 聚合器：attach IPC / 重播 / 双活性[2m > [22m窗口切走永久 A 后，历史仍可发现也不会对账复活 A；重新选择才上线 [33m 314[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 NodeClient 聚合器：attach IPC / 重播 / 双活性[2m > [22m028 claude 活性：扫描核验——死 claude 成员转下线（教学）、活成员续投 [33m 621[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 NodeClient 聚合器：attach IPC / 重播 / 双活性[2m > [22mC14 Codex 活性：核实实际 CLI 端点后续投，原生不存在的同类成员转下线 [33m 610[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 NodeClient 聚合器：attach IPC / 重播 / 双活性[2m > [22m029 临时成员异常死亡：对账验死报 member-remove 清册零痕迹（不留下线态） [33m 800[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 NodeClient 聚合器：attach IPC / 重播 / 双活性[2m > [22mdelegates name following to a third provider without reviving a released manual membership [33m 318[2mms[22m[39m
+   [33m[2m✓[22m[39m 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove[2m > [22m028 下线成员随 roster 帧下发（offlineSessions 单列；sessions 保持活成员语义） [33m 475[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 9b：老 broker（proto:1）降级的协议侧[2m > [22mconnect 携带 caps；info.caps 缺端点能力时拒绝类型化 attach，且不发 sessions 帧 [33m 317[2mms[22m[39m
+ [32m✓[39m test/serve-broker.test.ts [2m([22m[2m33 tests[22m[2m)[22m[33m 1686[2mms[22m[39m
+ [32m✓[39m test/ssh-target-lifecycle.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 1333[2mms[22m[39m
+   [33m[2m✓[22m[39m SSH target identity and process completion[2m > [22mbounds a child that never closes, reports incomplete cleanup, and removes its owned listeners [33m 1059[2mms[22m[39m
+ [32m✓[39m test/observation-overview.test.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 1733[2mms[22m[39m
+   [33m[2m✓[22m[39m safe isolated diagnostics for observation pages[2m > [22mbinds the isolated process environment to explicit HOME instead of inherited native data overrides [33m 475[2mms[22m[39m
+   [33m[2m✓[22m[39m safe isolated diagnostics for observation pages[2m > [22mretains native data environment overrides in inherit mode while binding crosschat sources to the requested HOME [33m 521[2mms[22m[39m
+ [32m✓[39m test/tui-main-observations.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 1921[2mms[22m[39m
+   [33m[2m✓[22m[39m default local observation wiring[2m > [22mpreserves native environment paths when the caller has not requested an isolated home [33m 1417[2mms[22m[39m
+   [33m[2m✓[22m[39m default local observation wiring[2m > [22minstalls the five real readonly resources lazily and preserves exact related routes [33m 376[2mms[22m[39m
+ [32m✓[39m test/serve-b21.test.ts [2m([22m[2m29 tests[22m[2m)[22m[33m 1121[2mms[22m[39m
+ [32m✓[39m test/tui-send-command.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 2548[2mms[22m[39m
+   [33m[2m✓[22m[39m TUI send command templates[2m > [22mround-trips opaque arguments through the current platform shell [33m 2536[2mms[22m[39m
+ [32m✓[39m test/tui-workspaces.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 1136[2mms[22m[39m
+   [33m[2m✓[22m[39m independent TUI workspaces[2m > [22mrechecks the role when history returns to a different star (updated) [33m 331[2mms[22m[39m
+   [33m[2m✓[22m[39m independent TUI workspaces[2m > [22mrechecks the role when history returns to a different star (failed) [33m 331[2mms[22m[39m
+ [32m✓[39m test/tcp-peer-naming-transport.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 1086[2mms[22m[39m
+ [32m✓[39m test/status-remote.test.ts [2m([22m[2m16 tests[22m[2m)[22m[33m 1235[2mms[22m[39m
+   [33m[2m✓[22m[39m broker：status-query 路由[2m > [22m节点在线但不应答 → resultTimeoutMs 超时回 error [33m 303[2mms[22m[39m
+   [33m[2m✓[22m[39m CLI：runViaTcpStatus 传输腿[2m > [22m版本偏差：旧 broker 对 status-query 无行为 → 超时教学 [33m 431[2mms[22m[39m
+ [32m✓[39m test/serve-admin-key.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 6892[2mms[22m[39m
+   [33m[2m✓[22m[39m 034 挑战应答全链与角色矩阵[2m > [22madmin 握手（钥匙永不过线）→ 读/发/删全过 → 成员/星管逐格 → 重放拒绝 → 被吊钥 BAD_AUTH → 审计在场 [33m 3112[2mms[22m[39m
+   [33m[2m✓[22m[39m 034 挑战应答全链与角色矩阵[2m > [22mCLI 远程管理路由：--via tcp:<星> 成员读（星钥）+ 星管写（adminKey 挑战应答） [33m 1616[2mms[22m[39m
+   [33m[2m✓[22m[39m 034 set-port 无命令回归（旗标+插座 op 全删）[2m > [22mhelp 不再提供 --port 且提供 034 新面；解析拒绝（parseServeArgs 用例见 serve-cli 组） [33m 525[2mms[22m[39m
+   [33m[2m✓[22m[39m 034 set-port 无命令回归（旗标+插座 op 全删）[2m > [22m管理插座 set-port op 已删（未知 op 拒绝、台账零改动） [33m 1535[2mms[22m[39m
+ [32m✓[39m test/caller-source-confirmations.test.ts [2m([22m[2m21 tests[22m[2m)[22m[33m 2601[2mms[22m[39m
+   [33m[2m✓[22m[39m source classification shared across native sessions[2m > [22mreports bounded busy without mutating state when an unrelated listener occupies its mutex port [33m 1105[2mms[22m[39m
+ [32m✓[39m test/core-diagnostics.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 1328[2mms[22m[39m
+   [33m[2m✓[22m[39m isolated cancellable diagnostics[2m > [22mterminates a real probe child through the default built isolation path on cancellation [33m 928[2mms[22m[39m
+ [32m✓[39m test/remote-discovery-tcp.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 891[2mms[22m[39m
+   [33m[2m✓[22m[39m TCP complete read-only discovery[2m > [22mreads 100 anonymous sessions across real broker/node WebSockets and resolves full-ID details [33m 573[2mms[22m[39m
+ [32m✓[39m test/ssh-application.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 1061[2mms[22m[39m
+ [32m✓[39m test/tui-composition.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 1202[2mms[22m[39m
+ [32m✓[39m test/conversation-handle-ring.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 824[2mms[22m[39m
+   [33m[2m✓[22m[39m five-character conversation handle ring[2m > [22mkeeps allocation progress after eight-slot eviction and accounting when rereading stored state [33m 458[2mms[22m[39m
+ [32m✓[39m test/ssh-managed-profiles.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 504[2mms[22m[39m
+ [32m✓[39m test/tui-main-sessions.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 1086[2mms[22m[39m
+   [33m[2m✓[22m[39m default local sessions wiring[2m > [22minstalls the real session resource through injectable safe application sources after entering local [33m 802[2mms[22m[39m
+ [32m✓[39m test/discovery-service.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 671[2mms[22m[39m
+   [33m[2m✓[22m[39m complete read-only discovery service[2m > [22mshares the Claude reader and reaches all 100 anonymous sessions through bounded pages without writes [33m 624[2mms[22m[39m
+ [32m✓[39m test/tcp-session-operations.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 1097[2mms[22m[39m
+   [33m[2m✓[22m[39m exact node session operations over real broker/node transport[2m > [22mkeeps same-ID CLI and Desktop claims separate through attach, status and typed detach [33m 318[2mms[22m[39m
+ [32m✓[39m test/serve-f0.test.ts [2m([22m[2m19 tests[22m[2m)[22m[33m 1163[2mms[22m[39m
+ [32m✓[39m test/tcp-application.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 569[2mms[22m[39m
+   [33m[2m✓[22m[39m TCP readonly application[2m > [22mpreserves same-ID endpoint roster rows and exact endpoint references through snapshot projection [33m 335[2mms[22m[39m
+ [32m✓[39m test/revocation-auth-race.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 865[2mms[22m[39m
+   [33m[2m✓[22m[39m revocation during current process lifecycles[2m > [22ma corrupt self-aggregator pause does not become an unhandled rejection in the broker [33m 703[2mms[22m[39m
+ [32m✓[39m test/tui-filters.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 919[2mms[22m[39m
+ [32m✓[39m test/local-service-worker-boundary.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 1107[2mms[22m[39m
+   [33m[2m✓[22m[39m actual service worker boundaries with isolated system dependencies[2m > [22mbounds broker metadata reads independently of known process evidence [33m 313[2mms[22m[39m
+ [32m✓[39m test/opencode-adapter.test.ts [2m([22m[2m26 tests[22m[2m)[22m[33m 803[2mms[22m[39m
+ [32m✓[39m test/claude-compat-ci.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 725[2mms[22m[39m
+   [33m[2m✓[22m[39m Claude Code fresh probe evidence and resource release[2m > [22mbounds controlled child execution and reports timeout separately from a clean process exit [33m 382[2mms[22m[39m
+ [32m✓[39m test/serve-cli.test.ts [2m([22m[2m32 tests[22m[2m)[22m[33m 825[2mms[22m[39m
+   [33m[2m✓[22m[39m B3.1 bug3: matchServeProcesses identity gate (no host/shell kills)[2m > [22mB2 --stop 选择器与停机顺序（注入进程扫描/杀进程）[2m > [22mbare --stop with zero hits resets ghost status files (online/running → stopped, fields kept) [33m 305[2mms[22m[39m
+ [32m✓[39m test/tui-observation-navigation.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 748[2mms[22m[39m
+   [33m[2m✓[22m[39m observation resource routes[2m > [22mkeeps related route caches separate, canonicalizes query order, clears associations on direct commands and restores the source [33m 344[2mms[22m[39m
+ [32m✓[39m test/c14-conversation-refinement.test.ts [2m([22m[2m24 tests[22m[2m)[22m[33m 1974[2mms[22m[39m
+   [33m[2m✓[22m[39m C14 conversation refinement[2m > [22mretains historical handles and their latest known type after another nonce advances the pair [33m 466[2mms[22m[39m
+   [33m[2m✓[22m[39m C14 conversation refinement[2m > [22mkeeps the migrated handle within the target LRU limit even when delivery fails [33m 523[2mms[22m[39m
+ [32m✓[39m test/broker-discovery.test.ts [2m([22m[2m17 tests[22m[2m)[22m[33m 810[2mms[22m[39m
+ [32m✓[39m test/claude-compat-fixture.test.ts [2m([22m[2m19 tests[22m[2m)[22m[33m 582[2mms[22m[39m
+ [32m✓[39m test/conversations.test.ts [2m([22m[2m26 tests[22m[2m)[22m[33m 1479[2mms[22m[39m
+   [33m[2m✓[22m[39m conversation short handles (F2)[2m > [22mcaps a shard at 8 handles, evicting the least recently touched [33m 421[2mms[22m[39m
+ [32m✓[39m test/c14-explicit-send.test.ts [2m([22m[2m29 tests[22m[2m)[22m[33m 688[2mms[22m[39m
+ [32m✓[39m test/tui-view.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 719[2mms[22m[39m
+ [32m✓[39m test/tui-clipboard.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 619[2mms[22m[39m
+   [33m[2m✓[22m[39m explicit clipboard copy[2m > [22mpreserves complete UTF-8 stdin in Windows PowerShell without touching the real clipboard [33m 593[2mms[22m[39m
+ [32m✓[39m test/tui-contexts.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 615[2mms[22m[39m
+ [32m✓[39m test/tui-form.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 649[2mms[22m[39m
+ [32m✓[39m test/conversation-state-concurrency.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 11338[2mms[22m[39m
+   [33m[2m✓[22m[39m conversation state cross-process writes[2m > [22mconcurrent allocators cross generations without sharing a slot or reviving the expired token [33m 521[2mms[22m[39m
+   [33m[2m✓[22m[39m conversation state cross-process writes[2m > [22mindependent processes allocating at once never share a handle and each resolves to its own ref [33m 663[2mms[22m[39m
+   [33m[2m✓[22m[39m conversation state cross-process writes[2m > [22mconcurrent processes reusing one nonce all get its single handle [33m 525[2mms[22m[39m
+   [33m[2m✓[22m[39m conversation state cross-process writes[2m > [22ma live writer on an aliased path blocks every other write path until it releases [33m 2504[2mms[22m[39m
+   [33m[2m✓[22m[39m conversation state cross-process writes[2m > [22ma send that cannot take the lock delivers nothing, then succeeds once released [33m 1330[2mms[22m[39m
+   [33m[2m✓[22m[39m conversation state cross-process writes[2m > [22ma stuck holder still exits within its barrier deadline [33m 5321[2mms[22m[39m
+ [32m✓[39m test/core-sessions-readers.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 729[2mms[22m[39m
+   [33m[2m✓[22m[39m Claude pure reader[2m > [22mreads 100 anonymous sessions across pages without changing the registry [33m 571[2mms[22m[39m
+ [32m✓[39m test/codex-session-events.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 644[2mms[22m[39m
+   [33m[2m✓[22m[39m Codex per-window native protocol selection[2m > [22monly successful native selection and first accepted input affect this window, never global notifications or failed resume [33m 346[2mms[22m[39m
+ [32m✓[39m test/send-command.test.ts [2m([22m[2m57 tests[22m[2m)[22m[33m 1418[2mms[22m[39m
+ [32m✓[39m test/watchdog.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 690[2mms[22m[39m
+ [32m✓[39m test/tool-type-routing-state.test.ts [2m([22m[2m32 tests[22m[2m)[22m[33m 649[2mms[22m[39m
+ [32m✓[39m test/claude-compat-lifecycle.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 460[2mms[22m[39m
+ [32m✓[39m test/session-membership-exact.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 463[2mms[22m[39m
+ [32m✓[39m test/tcp-exact-transport.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 503[2mms[22m[39m
+ [32m✓[39m test/dsh-compat-ci.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 629[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness fresh process and cleanup evidence[2m > [22mruns only controlled child processes and reports normal and timed-out termination distinctly [33m 368[2mms[22m[39m
+ [32m✓[39m test/file-channel.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 478[2mms[22m[39m
+ [32m✓[39m test/claude-session-events.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 521[2mms[22m[39m
+ [32m✓[39m test/tui-layout-paging.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 496[2mms[22m[39m
+ [32m✓[39m test/core-services-background.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 438[2mms[22m[39m
+ [32m✓[39m test/tcp-transport.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 553[2mms[22m[39m
+ [32m✓[39m test/outbox-ownership.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 368[2mms[22m[39m
+ [32m✓[39m test/tui-sensitive-result.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 488[2mms[22m[39m
+ [32m✓[39m test/dsh-live-fixture.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 272[2mms[22m[39m
+ [32m✓[39m test/tool-type-observations.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 367[2mms[22m[39m
+ [32m✓[39m test/remote-discovery-node.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 326[2mms[22m[39m
+ [32m✓[39m test/status-doctor-tcp.test.ts [2m([22m[2m27 tests[22m[2m)[22m[32m 265[2mms[22m[39m
+ [32m✓[39m test/local-services.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 270[2mms[22m[39m
+ [32m✓[39m test/pipe-transport.test.ts [2m([22m[2m6 tests[22m[2m | [22m[33m3 skipped[39m[2m)[22m[33m 380[2mms[22m[39m
+   [33m[2m✓[22m[39m WindowsNamedPipeTransport[2m > [22mreports PIPE_WRITE_UNCERTAIN when the server cuts the connection mid-write [33m 309[2mms[22m[39m
+ [32m✓[39m test/tui-context-source.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 399[2mms[22m[39m
+ [32m✓[39m test/identity-command.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 212[2mms[22m[39m
+ [32m✓[39m test/tui-follow.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 368[2mms[22m[39m
+(node:14652) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ [32m✓[39m test/serve-tool-type-bridge.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 369[2mms[22m[39m
+ [32m✓[39m test/via-send.test.ts [2m([22m[2m42 tests[22m[2m)[22m[33m 372[2mms[22m[39m
+ [32m✓[39m test/tcp-configuration.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 317[2mms[22m[39m
+ [32m✓[39m test/tui-session-view.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 472[2mms[22m[39m
+ [32m✓[39m test/observation-logs.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 546[2mms[22m[39m
+ [32m✓[39m test/session-star.test.ts [2m([22m[2m40 tests[22m[2m)[22m[33m 10921[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 批二：启动器入星链路[2m > [22mClaude 原生恢复/指定 ID 参数 "--resume" 原样透传，按新进程识别已有 ID [33m 343[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 批二：启动器入星链路[2m > [22m同目录匿名并发：精确入册、独立投递，退出第 0 个 --rm 不影响另一会话 [33m 314[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 批二：启动器入星链路[2m > [22mspawn 会话→自动拉聚合器→attach→三段直达；退出即 detach [33m 711[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 批二：启动器入星链路[2m > [22m多星：--connect 可重复，两会话成员表各自 attach（win 带杠 mid 形态） [33m 876[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 批二：启动器入星链路[2m > [22m021 断连静默：聚合器被杀→重连提示落日志、控制台零输出、成员籍自动恢复 [33m 1687[2mms[22m[39m
+   [33m[2m✓[22m[39m 统一恢复入口（启动器重声明或显式管理，册落盘不丢）[2m > [22m聚合器重启保留离线册位，存活的原生会话也须明确重声明（linux 32-hex 形态） [33m 490[2mms[22m[39m
+   [33m[2m✓[22m[39m 统一恢复入口（启动器重声明或显式管理，册落盘不丢）[2m > [22mbroker/node 重启册位不丢，已有成员与新会话统一由显式 adopt 恢复 [33m 621[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 批二：9b 降级告警（不只日志）[2m > [22mNodeClient.warn 直打一行；warnIfBrokerLacksSessionCaps 对老 broker 出声、新 broker 静默 [33m 381[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 批二：/rename 自动跟随（claude 扫描 + codex 名字回填）[2m > [22mclaude 改名→成员名跟随重播；codex 未命名成员→线程表名字回填 [33m 511[2mms[22m[39m
+   [33m[2m✓[22m[39m 028 双模式与命令面[2m > [22m双模式集成：永久退出留册、裸 resume 不归队、明确选择恢复；--rm 退出清册 [33m 1105[2mms[22m[39m
+   [33m[2m✓[22m[39m 020 工具限定词：启动器声明与 spawn 前预警[2m > [22muses the selected star node-name override in launcher success logs and adoption receipts [33m 303[2mms[22m[39m
+ [32m✓[39m test/desktop-metadata.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 353[2mms[22m[39m
+   [33m[2m✓[22m[39m Desktop metadata candidates[2m > [22mreads an isolated SQLite file through the worker, excludes archived/noninteractive rows, and never creates a missing DB [33m 332[2mms[22m[39m
+ [32m✓[39m test/core-management.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 349[2mms[22m[39m
+ [32m✓[39m test/tui-workspace-layout.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 387[2mms[22m[39m
+ [32m✓[39m test/dsh-bridge.test.ts [2m([22m[2m32 tests[22m[2m)[22m[33m 2044[2mms[22m[39m
+ [32m✓[39m test/tcp-management-exact.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 353[2mms[22m[39m
+ [32m✓[39m test/opencode-desktop-ci.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 361[2mms[22m[39m
+ [32m✓[39m test/dsh-runtime-driver.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 415[2mms[22m[39m
+   [33m[2m✓[22m[39m controlled DSH driver lifecycle boundary[2m > [22mrequires its own token and only delegates the fixed production bundle toggle [33m 322[2mms[22m[39m
+ [32m✓[39m test/tcp-snapshot-transport.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 291[2mms[22m[39m
+ [32m✓[39m test/serve-registry.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 421[2mms[22m[39m
+ [32m✓[39m test/tcp-configuration-management.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 499[2mms[22m[39m
+ [32m✓[39m test/tcp-machine-transaction.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 320[2mms[22m[39m
+ [32m✓[39m test/rollout-meta.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 143[2mms[22m[39m
+ [32m✓[39m test/install-skills.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 366[2mms[22m[39m
+ [32m✓[39m test/dsh-mock-model.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 220[2mms[22m[39m
+ [32m✓[39m test/core-cleanup.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 227[2mms[22m[39m
+ [32m✓[39m test/status-conversations.test.ts [2m([22m[2m20 tests[22m[2m)[22m[33m 316[2mms[22m[39m
+ [32m✓[39m test/tcp-local-management.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 130[2mms[22m[39m
+ [32m✓[39m test/state-paths.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 214[2mms[22m[39m
+ [32m✓[39m test/dsh-node-members.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 287[2mms[22m[39m
+ [32m✓[39m test/observation-communications.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 491[2mms[22m[39m
+ [32m✓[39m test/caller-source-service.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 382[2mms[22m[39m
+ [32m✓[39m test/opencode-desktop-probe.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 157[2mms[22m[39m
+ [32m✓[39m test/opencode-compat-fixture.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 181[2mms[22m[39m
+ [32m✓[39m test/tui-registry.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 196[2mms[22m[39m
+ [32m✓[39m test/caller-source-state-lock.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 575[2mms[22m[39m
+   [33m[2m✓[22m[39m shared state OS mutex[2m > [22mautomatically releases a real child process lock after that process is killed [33m 470[2mms[22m[39m
+ [32m✓[39m test/send-handle.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 552[2mms[22m[39m
+ [32m✓[39m test/node-config.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 81[2mms[22m[39m
+ [32m✓[39m test/caller-source-providers.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 766[2mms[22m[39m
+ [32m✓[39m test/tui-mutation-navigation.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 192[2mms[22m[39m
+ [32m✓[39m test/codex-aggregate-discovery.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 229[2mms[22m[39m
+ [32m✓[39m test/tui-sessions.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 122[2mms[22m[39m
+ [32m✓[39m test/conversation-summary.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 308[2mms[22m[39m
+ [32m✓[39m test/status-summary.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 200[2mms[22m[39m
+ [32m✓[39m test/claude-wrapper.test.ts [2m([22m[2m16 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m[32m 166[2mms[22m[39m
+ [32m✓[39m test/status-filters.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 189[2mms[22m[39m
+ [32m✓[39m test/uninstall.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 117[2mms[22m[39m
+ [32m✓[39m test/dsh-members.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 115[2mms[22m[39m
+ [32m✓[39m test/native-rename-providers.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 356[2mms[22m[39m
+ [32m✓[39m test/tcp-cold-management.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 416[2mms[22m[39m
+ [32m✓[39m test/cli-args.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 270[2mms[22m[39m
+ [32m✓[39m test/tui-main-preferences.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 141[2mms[22m[39m
+ [32m✓[39m test/desktop-ipc.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 129[2mms[22m[39m
+ [32m✓[39m test/tui-terminal.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 128[2mms[22m[39m
+ [32m✓[39m test/codex-deliver.test.ts [2m([22m[2m26 tests[22m[2m)[22m[32m 149[2mms[22m[39m
+ [32m✓[39m test/delivery-mode.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 177[2mms[22m[39m
+ [32m✓[39m test/tui-table.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 90[2mms[22m[39m
+ [32m✓[39m test/tui-tcp.test.ts [2m([22m[2m24 tests[22m[2m)[22m[32m 133[2mms[22m[39m
+ [32m✓[39m test/tui-context-actions.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 96[2mms[22m[39m
+ [32m✓[39m test/codex-routing.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 92[2mms[22m[39m
+ [32m✓[39m test/codex-target-diagnostics.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 95[2mms[22m[39m
+ [32m✓[39m test/c14-native-send-seams.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 102[2mms[22m[39m
+ [32m✓[39m test/session-membership-machine.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m test/serve-management-errors.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 49[2mms[22m[39m
+ [32m✓[39m test/discovery-ssh.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 86[2mms[22m[39m
+ [32m✓[39m test/opencode-members.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 118[2mms[22m[39m
+ [32m✓[39m test/tcp-management-boundaries.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 80[2mms[22m[39m
+ [32m✓[39m test/clean.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 90[2mms[22m[39m
+ [32m✓[39m test/opencode-send.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 78[2mms[22m[39m
+ [32m✓[39m test/core-services.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 92[2mms[22m[39m
+ [32m✓[39m test/session-selection.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 64[2mms[22m[39m
+ [32m✓[39m test/session-operations.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 84[2mms[22m[39m
+ [32m✓[39m test/tui-text.test.ts [2m([22m[2m52 tests[22m[2m)[22m[32m 73[2mms[22m[39m
+ [32m✓[39m test/codex-rpc.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 75[2mms[22m[39m
+ [32m✓[39m test/rate-limit.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 54[2mms[22m[39m
+ [32m✓[39m test/session-star-logging.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 43[2mms[22m[39m
+ [32m✓[39m test/tui-tcp-targets.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 48[2mms[22m[39m
+ [32m✓[39m test/opencode-tui.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+ [32m✓[39m test/tui-star-audit.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 55[2mms[22m[39m
+ [32m✓[39m test/codex-proxy-env.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m test/core-send-diagnostics.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 58[2mms[22m[39m
+ [32m✓[39m test/tcp-management.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 62[2mms[22m[39m
+ [32m✓[39m test/tui-logs.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 49[2mms[22m[39m
+ [32m✓[39m test/tui-ssh.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 50[2mms[22m[39m
+ [32m✓[39m test/tui-communications.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m test/ref.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+ [32m✓[39m test/tui-connections.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+ [32m✓[39m test/codex-pagination.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 43[2mms[22m[39m
+ [32m✓[39m test/tcp-node-naming-lifecycle.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 36[2mms[22m[39m
+ [32m✓[39m test/core-send.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 53[2mms[22m[39m
+ [32m✓[39m test/deliver.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m test/tui-page-presentation.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m test/native-endpoint-types.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 35[2mms[22m[39m
+ [32m✓[39m test/c14-tool-addressing.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 46[2mms[22m[39m
+ [32m✓[39m test/key-file.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 53[2mms[22m[39m
+ [32m✓[39m test/star-snapshot.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 31[2mms[22m[39m
+ [32m✓[39m test/tui-overview.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m test/tcp-machine-workspace.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+ [32m✓[39m test/tool-type-discovery-state.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m test/dsh-identity.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 36[2mms[22m[39m
+ [32m✓[39m test/session-membership-ipv6.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+ [32m✓[39m test/tui-services.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m test/tcp-empty-node-config.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m test/tui-ssh-management.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+ [32m✓[39m test/tui-maintenance.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m test/dsh-composition.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m test/core-members.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m test/ssh-interaction.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m test/core-sessions.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m test/c14-discovery-tui.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m test/opencode-identity.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+ [32m✓[39m test/envelope.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m test/dsh-reader.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m test/core-local-discovery.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m test/resolve.test.ts [2m([22m[2m24 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m test/dsh-tui.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m test/opencode-composition.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m test/doctor.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m test/compat-reply.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m test/registry.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m test/dsh-status.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m test/serve-star-lifecycle.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 17652[2mms[22m[39m
+   [33m[2m✓[22m[39m 033 热加星：不重启即托管即收发[2m > [22m在跑 serve + CLI --add-star 经管理插座：回执生效、自登记落位、聚合器播种、新星上 node/sender 完整收发 [33m 1807[2mms[22m[39m
+   [33m[2m✓[22m[39m 033 删星：即时收尾 + 直报已删 + 最后一颗可删[2m > [22m热删 beta：在跑连接收"星已删除"断开、node.json 摘条、死钥直报、邻星零中断 [33m 2415[2mms[22m[39m
+   [33m[2m✓[22m[39m 033 插座冷热路径与 stop 收口[2m > [22m回执超时绝不回落直写：插座连上但无回执 → 报错重试、台账零改动 [33m 10012[2mms[22m[39m
+   [33m[2m✓[22m[39m 033 插座冷热路径与 stop 收口[2m > [22mstop 收口：serve 停机后状态 stopped、插座随进程撤（CLI 退冷路径） [33m 1610[2mms[22m[39m
+   [33m[2m✓[22m[39m 036 按星机器名（--star --show-name）热闭环[2m > [22m按星只重挂该星：条目覆盖落 node.json、注册表该星 machineName 更新、邻星回落全局不变；--list 显示随条目；'' 清除回落全局 [33m 1656[2mms[22m[39m
+ [32m✓[39m test/opencode-desktop-process-race.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m test/discovery-command.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m test/opencode-status.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m test/local-service-stop-target.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m test/codex-launcher-owner.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m test/tcp-management-state.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m test/serve-protocol.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m test/limits.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m test/frame.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m test/codex-caller-source-probe.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m test/claude-compat-evidence.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m test/codex-wrapper.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m test/credential-revoked-protocol.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m test/c14-envelope-tool.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m test/remote-discovery-protocol.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m test/tui-status.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m test/opencode-ref-boundary.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m test/tui-ssh-authentication-prompt.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 7[2mms[22m[39m
+ [2m[90m↓[39m[22m test/live/claude-live.test.ts [2m([22m[2m2 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m
+ [32m✓[39m test/local-service-readiness.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 8[2mms[22m[39m
+ [2m[90m↓[39m[22m test/live/status-live.test.ts [2m([22m[2m2 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m
+ [2m[90m↓[39m[22m test/live/codex-live.test.ts [2m([22m[2m2 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m
+ [32m✓[39m test/opencode-wrapper.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 4 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/core-code-standards.test.ts[2m > [22mprogressive typed lint rules[2m > [22mrejects floating promises, async void callbacks and value imports used only as types
+[31m[1mError[22m: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+[36m [2m❯[22m test/core-code-standards.test.ts:[2m8:3[22m[39m
+    [90m  6| [39m  [35mconst[39m filePath [33m=[39m [32m'src/application/sessions/catalog.ts'[39m[33m;[39m
+    [90m  7| [39m
+    [90m  8| [39m  it('rejects floating promises, async void callbacks and value import…
+    [90m   | [39m  [31m^[39m
+    [90m  9| [39m    [35mconst[39m [result] [33m=[39m [35mawait[39m lint[33m.[39m[34mlintText[39m([
+    [90m 10| [39m      [32m"import { Session } from './model.js';"[39m[33m,[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/dsh-send.test.ts[2m > [22mDeepSeek Harness through the application send seam[2m > [22mkeeps conversation aliases and turns in the shared continuity store
+[31m[1mAssertionError[22m: expected 'cA000' to match /^c\d+$/[39m
+
+[32m- Expected:[39m 
+/^c\d+$/
+
+[31m+ Received:[39m 
+"cA000"
+
+[36m [2m❯[22m test/dsh-send.test.ts:[2m87:26[22m[39m
+    [90m 85| [39m    const first = await sendMessage({ to: 'Worker', tool: 'dsh', bodyA…
+    [90m 86| [39m    const second = await sendMessage({ to: thread.id, tool: 'dsh', bod…
+    [90m 87| [39m    [34mexpect[39m(first[33m.[39mhandle)[33m.[39m[34mtoMatch[39m([36m/^c\d+$/[39m)[33m;[39m
+    [90m   | [39m                         [31m^[39m
+    [90m 88| [39m    [34mexpect[39m(second[33m.[39mhandle)[33m.[39m[34mtoBe[39m(first[33m.[39mhandle)[33m;[39m
+    [90m 89| [39m    expect(decodeRef(second.receipt.replyRef)).toMatchObject({ n: deco…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/maintenance.test.ts[2m > [22mlocal maintenance plans and exact execution[2m > [22mpreviews the unchanged retention rules without touching data or skills
+[31m[1mAssertionError[22m: expected [ Array(1) ] to deeply equal [ …(2) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-maintenance-mulaNC\\home-zGv14n\\.crosschat\\tcp\\inbox\\old",[22m
+[32m-   "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-maintenance-mulaNC\\home-zGv14n\\.crosschat\\conversations\\old.json",[39m
+[2m  ][22m
+
+[36m [2m❯[22m test/maintenance.test.ts:[2m42:54[22m[39m
+    [90m 40| [39m    [34mexpect[39m(preview[33m.[39moperationId)[33m.[39m[34mtoBe[39m([32m'cleanup'[39m)[33m;[39m
+    [90m 41| [39m    [34mexpect[39m(preview[33m.[39menabled)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m 42| [39m    expect(preview.targets.map((item) => item.path)).toEqual([expired,…
+    [90m   | [39m                                                     [31m^[39m
+    [90m 43| [39m    [34mexpect[39m(preview[33m.[39meffects[33m.[39m[34mjoin[39m([32m'\n'[39m))[33m.[39m[34mtoContain[39m([32m'30'[39m)[33m;[39m
+    [90m 44| [39m    for (const file of [expired, fresh, shard, temporary, ignored]) ex…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/maintenance.test.ts[2m > [22mowned maintenance worker lifecycle[2m > [22mruns actual plans and filesystem effects through the default built worker using only isolated fixture paths
+[31m[1mError[22m: 维护范围无法预览；检查本机来源与权限。[39m
+[90m [2m❯[22m Worker.onError C:/Users/yangsheng/AppData/Local/Temp/crosschat-maintenance-mulaNC/built-SjXAaK/application/maintenance/index.js:[2m51:46[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m228 passed[39m[22m[2m | [22m[33m3 skipped[39m[90m (234)[39m
+[2m      Tests [22m [1m[31m4 failed[39m[22m[2m | [22m[1m[32m2523 passed[39m[22m[2m | [22m[33m11 skipped[39m[90m (2538)[39m
+[2m   Start at [22m 21:18:51
+[2m   Duration [22m 22.69s[2m (transform 17.05s, setup 0ms, collect 109.66s, tests 230.48s, environment 88ms, prepare 70.93s)[22m
+

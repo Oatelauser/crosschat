@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "scope": "PR #1 sequential application fixture lock isolation; no product lock change",
+  "previousHosted": {
+    "run": 41793731734,
+    "head": "15fe931013392976415f4a04cea207e66b80fafe",
+    "windows": {
+      "job": 126452820872,
+      "conclusion": "success",
+      "passed": 2772,
+      "skipped": 11,
+      "cimOwnershipCaseMs": 1114
+    },
+    "macos": {
+      "job": 126452820486,
+      "conclusion": "success",
+      "passed": 2767,
+      "skipped": 16
+    },
+    "ubuntu": {
+      "job": 126452821110,
+      "conclusion": "failure",
+      "passed": 2766,
+      "failed": 1,
+      "skipped": 16,
+      "observed": "handleForRef returned undefined; target validation failed before refinement",
+      "cause": "Original lock/allocation error not captured; port conflict not established"
+    }
+  },
+  "fixture": {
+    "realShardWrites": true,
+    "realRefinementAndHandleAssertions": true,
+    "onlySequentialApplicationFileMocksStateLock": true,
+    "productionStateLockChanged": false,
+    "realCrossProcessLockSuiteRetained": true
+  },
+  "local": {
+    "node": "v25.0.0",
+    "targeted": {
+      "files": 4,
+      "passed": 59,
+      "exitCode": 0
+    },
+    "eslint": true,
+    "liveEnabled": false
+  },
+  "hostedRecheck": "Pending ordinary PR CI on the fixture GREEN commit",
+  "sources": [
+    {
+      "path": "test/c14-explicit-send.test.ts",
+      "gitBlob": "82224e69ef7aaa5a86c8fecd3cbf99794739d171"
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "windows-system-job.txt",
+      "bytes": 75710,
+      "sha256": "6a1f03c370743ac2d4d14969b5c8229c6b03554ae77df3fd7aeaa8fb2da236c8"
+    },
+    {
+      "file": "ubuntu-system-job.txt",
+      "bytes": 73977,
+      "sha256": "1771faad959fda09e099a1471cbaa1a4eae00a07ce13dc9dd5b5629c076e6e9a"
+    },
+    {
+      "file": "macos-system-job.txt",
+      "bytes": 64670,
+      "sha256": "79489f96310da797d4bddaaf40ea397813b9d758cb9e187b847dcf4897eba500"
+    },
+    {
+      "file": "handle-fixture-green.txt",
+      "bytes": 861,
+      "sha256": "232ec7c486191dec4034f44d45112df13e66dbb69ff408a70a4238ce6f4d2f01"
+    }
+  ]
+}

@@ -5,8 +5,13 @@ import type { SendLogEntry } from '../../send-log.js';
 import type { SshResult } from '../../federation.js';
 import type { DeliveryMode, DeliveryOptions } from '../../delivery-mode.js';
 import type { CodexTargetDiagnosis } from '../../codex/discovery.js';
+import type { OpenCodeThread } from '../../opencode/client.js';
+import type { DshThread } from '../../dsh/client.js';
+import type { CallerIdentity } from '../../identity.js';
 
 export interface SendArgs {
+  /** Public tool type selector, independent of the native session name. */
+  tool?: string;
   /** Per-message intent; omitted means queue, including conversation replies. */
   delivery?: DeliveryMode;
   to?: string;
@@ -30,18 +35,26 @@ export interface SendArgs {
    * to 值仅作占位（sessionId 在场即被忽略）。
    */
   targetSessionId?: string;
+  targetProviderId?: string;
+  targetEndpointType?: string;
 }
 
 export interface SendDeps {
   env: Record<string, string | undefined>;
+  /** Provider observation may refine the source type, never its native provider/ID. */
+  enrichCallerIdentity?(caller: CallerIdentity): Promise<CallerIdentity>;
   /** Stdin content when piped (already normalized: undefined = not given). */
   stdinText?: string;
   listClaudeSessions(): ClaudeRegistryScan;
-  listCodexThreads(): Promise<CodexThreadSummary[]>;
+  listCodexThreads(options?: { endpointType?: string; complete?: boolean }): Promise<CodexThreadSummary[]>;
+  listOpenCodeThreads?(): Promise<OpenCodeThread[]>;
+  listDshThreads?(options?: { endpointType?: string }): Promise<DshThread[]>;
   /** Read-only explanation, used only after normal --to name resolution misses. */
   diagnoseCodexTarget?(query: string): Promise<CodexTargetDiagnosis>;
   deliverClaude(target: ClaudeDeliveryTarget, content: string, options?: DeliveryOptions): Promise<{ status: 'delivered' }>;
   deliverCodex(threadId: string, content: string, options?: DeliveryOptions): Promise<{ status: 'accepted'; turnId: string; queued?: boolean }>;
+  deliverOpenCode?(sessionId: string, content: string, options?: DeliveryOptions): Promise<{ status: 'accepted'; messageId: string; queued: boolean }>;
+  deliverDsh?(sessionId: string, content: string, options?: DeliveryOptions): Promise<{ status: 'accepted'; messageId: string; queued: boolean }>;
   /** Send-log file: the rate limiter counts this pair's tail-window entries (014 evaporation). */
   sendLogFile: string;
   /** Outbox root for parking busy/locked codex deliveries (~/.crosschat/outbox). */
@@ -52,7 +65,7 @@ export interface SendDeps {
   /** Sender-side send log (B14); optional so tests stay file-free. */
   appendLog?(entry: SendLogEntry): void;
   /** Rollout receipt probe for codex deliveries (B14). */
-  confirmReceipt?(threadId: string, marker: string): Promise<'confirmed' | 'unconfirmed'>;
+  confirmReceipt?(threadId: string, marker: string, endpointType?: string): Promise<'confirmed' | 'unconfirmed'>;
   /** Pair-conversation continuity state (B15); absent = always fresh threads. */
   conversationStateFile?: string;
   /** Federation transport executor (008/B1); injectable for tests. */

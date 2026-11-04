@@ -1,0 +1,39 @@
+# 多工具适配 worker 调度与验收
+
+交接更新（2026-11-03）：用户明确要求把本会话全部任务/背景/关键上下文交至Codex Desktop「多工具适配2」，见[完整交接包](multi-tool-handoff-to-adaptation2-20261103.md)。原会话完成发送后停写；接收方接续原范围，worker保持空闲，不重派通信线，不自动批准guest原生执行或新增功能文件。
+
+2026-10-29（用户端时间）建立的历史worker协作记录。**当前方式以最新合同为准：root独立完成DSH主线，worker停写。** 历史派单/交付及验收证据保留；允许显式路径本地commit，不push。
+
+## 当前合同
+
+- **最新授权：2026-11-03用户要求借鉴参考项目、先完成DSH，并开始下一单。** 当前执行[DSH优先计划](dsh-completion-plan-20261103.md)，root独立工作，先不交worker；[C04-I03-C3执行合同/独立Windows环境方案](evidence/c04-worker-20261029/I03-C3-execution-plan.md)已交付，只改文档，未启动产品或原生操作。此前C2及研究交付事实保持；独立guest及执行范围待用户决定，publisher/实际合同仍需证据，新增功能文件与必需操作变化不自动批准。
+- **2026-10-30（UTC+8）用户明确“继续任务”，恢复此前派单、交付、双轴复审与验收流程。** 2026-10-29 23:51的停止已执行并保存检查点；本次恢复来自用户新指令，不是worker来信触发。新增非skill功能文件或必需用户操作变化仍先等用户决定。
+- 2026-10-29 用户新增持续推进授权：开始下一项，完成一项后由 root 继续派发、审查和验收，直到用户人为喊停或出现必须拍板事项；不再因每张普通实现单重复询问。**涉及用户操作必须变更，或功能需要新增文件，必须先等用户决定。** 常规修复限已明确范围；不得把持续授权扩成自动安装、改配置、增命令/功能文件或扩大删除范围。开发任务/审查证据不作为功能文件使用。
+- 用户随后明确“skill可以新增，这个不影响”，承接已解释的 A 默认方案：可把 Harness skill 纳入现有安装/覆盖更新及匹配卸载目标，技能副本不再单独阻断。此例外不包括新增源码/账本、其它必需操作或原生插件自动管理。
+- 共用仓库 `D:/workspace/CC/multichat`，branch `codex/core-refactor-pre-tui`；逐单同步基线 SHA，开始和结束都核对真实 branch/HEAD。
+- root 已建立本地基线：测试隔离修复 `381c5e5`，C14公共整改 `0f146c00db013178069ad41bd8b84222b26045ac`；最终完整检查2417通过/11原有跳过。未获单独领取的原文件保持；共用 Git index 只交一个 owner，禁止全仓 stage 或相互切分支。
+- 每单明确文件白名单、研究/实现范围、步骤、验证、结果报告和清理；worker 可以切换任务，但需把续接状态写入本单报告，不能只留在聊天记忆。
+- root 按需求与代码规范分别审查任务独立 commit，检查关键证据和适用边界，必要时独立运行检查。worker 自报完成不等于 root 验收。
+- 用户已清空worker上下文，后续单必须给独立续接包：角色、真实基线、授权、最小文档入口、白名单、行为及验证、通信入口均写全，不要求记旧聊天。每单验收后可清上下文。固定用仓库 `node dist/cli.js` 和实际typed hint；Claude 的 ListAgents/SendMessage 不用于判断或联系 Codex Desktop。此前该独立通道报不可达，改用crosschat后双向已送达，不归因为短柄轮换。
+- 2026-10-30用户要求下一单前清空worker；I01验收后已等待，并按用户要求让worker测试 `/clear`，worker报告agent无法执行，需用户手动输入。用户随后明确“开始下一个任务”，据此启用I02并重新发送完整任务包；不追认清空成功，也不要求worker恢复旧聊天。
+- 完成后清理测试进程/便携软件/临时 profile；按用户 D 盘统一清理约定处理被拒删除的下载残留，不重试已拒操作。验收后移除活动子单及引用，保存独立任务书、提交和验收证据。
+
+## 活动子单
+
+当前无worker活动派单；C04-I03-C3方案交付移出待实施项，证据保留于[执行方案](evidence/c04-worker-20261029/I03-C3-execution-plan.md)。下一步是独立guest/执行范围决定和实际准入/执行合同前置，不代表原生Desktop已通过。DSH主线及出口见[新计划](dsh-completion-plan-20261103.md)，本会话不接管通信线或开始其它工具开发，新脚本/workflow未创建/批准。
+
+本会话不再派发通信相关子单。用户明确将全部通信任务交给现有 Codex Desktop 会话 **Bug修复2**，由用户亲自对接；见[完整交接](communication-handoff-bugfix2-20261029.md)。W08 最新研究交付到 `1066e30`，尚未完成 root 最终验收，按真实状态随证据交接。短信封内部 subagent 已停写，确认没有任何代码/测试修改。
+
+当前无worker活动派单。root本人完成[C04-I03-C2组件开发验收](evidence/c04-worker-20261029/I03-C2-development.md)：最终产品3b3f05b，目标102/102，单次完整check2632通过/11原有跳过、退出0；[openbot研究](../research/openbot-integration-study-20261103.md)交付。当前整仓绿覆盖含C1的实现，但不证明历史会话状态失败根因已修复；本轮未改通信线。C1最终e13e04f的[两轴收口](evidence/c04-worker-20261029/I03-C1-review-closure.md)与原11/7/14条失败、阶段B的[代码收口](evidence/c04-worker-20261029/I03-B-review-closure.md)及失败raw保持历史证据，不作待修派单。C2仅提供可信runner回调的卸载前守卫，真实Host观察/官方卸载/执行字节与目的地/系统注册清理及干净runner仍缺，I03/C04未完成。worker继续停写，不接原生安装或下一单。本机不实际安装Desktop；历史TEMP/cache和被拒资源不代删不重试。[I02](evidence/c04-worker-20261029/I02-final-review.md)与[I01](evidence/c04-worker-20261029/I01-final-review.md)已验收事实保留。
+
+[C08-I01 默认 Harness 技能维护已最终验收](evidence/c08-worker-20261029/I01-final-review.md)：最终产品 `a77a39b`，两轴复审通过，root 七套件87项通过；worker完整check第二次2544通过/11原有跳过，最多2/最少1 worker。首次全量的machines断言失败仍完整保留，根因未确认；不以随后通过替代根因证据。I01/R1/R2移出活动子单，原任务书仅作批准证据。[I02 生命周期说明已最终验收](evidence/c13-worker-20261029/I02-final-review.md)，继续作为合同输入。新增功能文件或用户必需操作仍须先决定。
+
+I01产品首交付 `1112f82`、返修 `4f8b6c2` 已[最终验收](evidence/c13-worker-20261029/I01-final-review.md)：两轴复审和root定向80项通过；Bug修复2在包含桥R1的 `303e7ce` 完整check退出0，2527通过/11原有跳过，最多2/最少1 Vitest worker。root已核对祖先链、日志、结构结果与两种换行哈希，没有冒称独立重跑该次全量。两次首败49项、4项仍保留，不用限并发通过抹去默认并发失败。共享分支各单显式路径commit，不覆盖他方文件归责。
+
+已验收子单见[测试隔离审计](evidence/c14-worker-20261029/W00-review.md)、[协作规则审计](evidence/c14-worker-20261029/W02-review.md)、[短柄诊断验收](evidence/c14-worker-20261029/W03-final-review.md)、[短柄产品修复验收](evidence/c14-worker-20261029/W04-final-review.md)、[来源研究验收](evidence/c14-worker-20261029/W01-final-review.md)、[CLI逐调用研究验收](evidence/c14-worker-20261029/W05-final-review.md)、[既有测试等待修复](evidence/c14-worker-20261029/W06-final-review.md)、[短信封恢复研究](evidence/c14-worker-20261029/W07-final-review.md)及[Harness生命周期方案与隔离复现](evidence/c13-worker-20261029/P01-final-review.md)，活动项不重复保留。root最新完整check为2503通过/11原有跳过，退出0；研究收口不代表生产来源关联或CI门禁已实现。仓库代码/skill未全局部署。历史实机短柄成因未作追认，当前构建的已证实缺陷修复按独立记录收口。
+
+## 后续切分原则
+
+本会话先前将“开始下一个任务”误解为跳过短信封，已被用户纠正：短信封应先讨论“不新增文件”的方案，未经确认不得修改代码。随后用户要求通信任务整体交接 Bug修复2，由用户直接确定后续。W07研究不等于产品恢复；新增独立账本文件已否决，其它字段/LRU/清理变化未自动批准。本页只留事实和交接入口，不继续派通信任务，也不把研究结果记成工具/CI整体完成。
+
+全量25任务及11个CI相关索引继续由[总表](tool-compatibility-ci-tasks.md)维护；本页只管理 worker 活动子单，不重编号、不取消原 CI。

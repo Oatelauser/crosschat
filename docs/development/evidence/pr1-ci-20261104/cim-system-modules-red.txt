@@ -1,0 +1,43 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-int-20261104
+
+ ❯ test/opencode-desktop-fixture.test.ts (13 tests | 1 failed) 896ms
+   ✓ official desktop test environment > keeps the desktop initial state and Windows post-initialization fallback in the same owned profile 74ms
+   × official desktop test environment > reports an unregistered executable under the owned run before allowing cleanup 395ms
+     → {"state":"unknown","processes":[],"error":"CIM query failed: crosschat-cim:started\r\nCompeting module search must not control process inspection\r\n所在位置 C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-desktop-fixture-unit-N3WwUD\\competing-modules\\Microsoft.PowerShell\r\n.Management\\poison.psm1:1 字符: 22\r\n+ ... Join-Path { throw 'Competing module search must not control process i ...\r\n+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Competing modul...cess inspection:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Competing module search must not control process inspection"}: expected 'unknown' to be 'occupied' // Object.is equality
+   ✓ official desktop test environment > classifies actual desktop HTTP 401 failures without hiding wire changes as infrastructure 28ms
+   ✓ official desktop test environment > classifies actual desktop HTTP 403 failures without hiding wire changes as infrastructure 6ms
+   ✓ official desktop test environment > classifies actual desktop HTTP 404 failures without hiding wire changes as infrastructure 5ms
+   ✓ official desktop test environment > classifies actual desktop HTTP 405 failures without hiding wire changes as infrastructure 5ms
+   ✓ official desktop test environment > classifies actual desktop HTTP 200 failures without hiding wire changes as infrastructure 6ms
+   ✓ official desktop test environment > classifies actual desktop HTTP 200 failures without hiding wire changes as infrastructure 5ms
+   ✓ official desktop test environment > classifies actual desktop HTTP 503 failures without hiding wire changes as infrastructure 5ms
+   ✓ official desktop test environment > distinguishes a missing desktop registration from a published malformed registration 5ms
+   ✓ official desktop test environment > accepts only authenticated health belonging to the registered process 5ms
+   ✓ official desktop test environment > keeps an interrupted successful HTTP body distinct from malformed completed JSON 115ms
+   ✓ official desktop test environment > retains a locked-log diagnostic while collecting remaining logs for teardown 241ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/opencode-desktop-fixture.test.ts > official desktop test environment > reports an unregistered executable under the owned run before allowing cleanup
+AssertionError: {"state":"unknown","processes":[],"error":"CIM query failed: crosschat-cim:started\r\nCompeting module search must not control process inspection\r\n所在位置 C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-desktop-fixture-unit-N3WwUD\\competing-modules\\Microsoft.PowerShell\r\n.Management\\poison.psm1:1 字符: 22\r\n+ ... Join-Path { throw 'Competing module search must not control process i ...\r\n+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : OperationStopped: (Competing modul...cess inspection:String) [], RuntimeException\r\n    + FullyQualifiedErrorId : Competing module search must not control process inspection"}: expected 'unknown' to be 'occupied' // Object.is equality
+
+Expected: "occupied"
+Received: "unknown"
+
+ ❯ test/opencode-desktop-fixture.test.ts:103:60
+    101|       expect(child.exitCode).toBeNull();
+    102|       const inspection = await inspectDesktopRunProcesses(root, env);
+    103|       expect(inspection.state, JSON.stringify(inspection)).toBe('occup…
+       |                                                            ^
+    104|       expect(inspection.processes).toContainEqual({ pid: child.pid, pa…
+    105|     } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 12 passed (13)
+   Start at  15:33:25
+   Duration  1.19s (transform 60ms, setup 0ms, collect 87ms, tests 896ms, environment 0ms, prepare 81ms)
+

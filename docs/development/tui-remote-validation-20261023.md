@@ -1,6 +1,6 @@
 # TUI真实SSH/TCP远端验收
 
-2026-10-22—23（Asia/Shanghai）。用户先授权、暂停，后明确恢复；恢复前读取[暂停点](tui-remote-validation-checkpoint-20261022.md)。**本轮列明的真实远端检查均通过；远端临时环境和隧道已清除。本机临时测试凭证的删除被自动审批阻断，仍保留在私有目录，见清理一节。** 本轮没有产品代码或现有功能变更，无新增功能待拍板。
+2026-10-22—23（Asia/Shanghai）。用户先授权、暂停，后明确恢复；恢复前读取[暂停点](tui-remote-validation-checkpoint-20261022.md)。**本轮列明的真实远端检查均通过；远端临时环境和隧道已清除。本机临时测试凭证当时的清理阻断及后续核对见清理一节。** 本轮没有产品代码或现有功能变更，无新增功能待拍板。
 
 ## 版本、来源与隔离
 
@@ -34,6 +34,8 @@ SSH真实发现为0会话、partial；Codex desktop/cli来源明确unavailable�
 - resume_terminal_audit独立定位工装状态等待并补秘密输出断言，resume_failure_audit审查真实取消/失联工装和新隔离setup；resume_acceptance_review在检查完成后复核代码、summary、lifecycle及范围，未发现阻断这些验收结论的问题。代理均已停写，root唯一提交。
 
 ## 清理与生产复核
+
+- 2026-10-23 17:01（Asia/Shanghai）用户随后要求统一复核临时文件，[仅本机只读检查](evidence/tool-integration-cleanup-20261023.json)确认本节原两个本机 `crosschat-live-tui-*` 根均不存在，Temp 下同前缀条目也为0，因此原私有配置/测试 key 不再留于这些目录。本次没有读取凭据、执行删除、连接远端或恢复验证。下文关于私有目录和本机证据的保留状态属于当时记录；仓库内已归档记录保持。
 
 - 两轮测试broker/临时sshd均已停止，停止回执为正常退出；Unix sockets剩余0；原22端口的本机隧道已关闭。本机owned验收Node/SSH/ConPTY进程扫描为空。
 - 保存安全证据后，核对精确/tmp私有根、进程所有权及生产基线，删除`/tmp/crosschat-live-tui-_3ffdd7j`和`/tmp/crosschat-live-tui-f9hl2ty7`。两根均不存在，包含状态、测试凭证、host key和临时授权文件的远端工装已清除。

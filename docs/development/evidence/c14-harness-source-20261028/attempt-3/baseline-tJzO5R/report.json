@@ -1,0 +1,138 @@
+{
+  "schema": 1,
+  "tool": "dsh-web-runtime",
+  "platform": "win32",
+  "arch": "x64",
+  "runId": "1fd8b9cc-13b4-47f1-9eb8-e78753e8eace",
+  "version": "0.2.1-rc.2",
+  "startedAt": "2026-10-28T08:42:22.896Z",
+  "status": "passed",
+  "category": null,
+  "stage": "done",
+  "checks": [
+    {
+      "name": "official-plugin-installation-and-owned-web-runtime",
+      "status": "passed",
+      "elapsedMs": 3
+    },
+    {
+      "name": "public-web-session-controller-creates-interactive-sessions",
+      "status": "passed",
+      "elapsedMs": 409
+    },
+    {
+      "name": "messages-model-and-native-shell-identity-bootstrap",
+      "status": "passed",
+      "elapsedMs": 2782
+    },
+    {
+      "name": "authenticated-production-discovery-and-pagination",
+      "status": "passed",
+      "elapsedMs": 721
+    },
+    {
+      "name": "idle-production-delivery-wakes-the-existing-session",
+      "status": "passed",
+      "elapsedMs": 8207
+    },
+    {
+      "name": "busy-native-queue-and-steer-step-boundaries",
+      "status": "passed",
+      "elapsedMs": 6352
+    },
+    {
+      "name": "native-shell-send-and-conversation-reply-have-full-session-identities",
+      "status": "passed",
+      "elapsedMs": 6679
+    },
+    {
+      "name": "missing-target-does-not-create-or-resume-a-replacement",
+      "status": "passed",
+      "elapsedMs": 640
+    }
+  ],
+  "scope": {
+    "officialNpmRuntime": true,
+    "officialPluginManager": true,
+    "ordinaryWebSessions": true,
+    "scriptedLocalModel": true,
+    "browserUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "installation": {
+    "code": 0,
+    "timedOut": false,
+    "stdout": "Progress: resolved 1, reused 0, downloaded 0, added 0\nPackages: +1\n+\nPackages are hard linked from the content-addressable store to the virtual store.\n  Content-addressable store is at: D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-c14-native-dsh-20261028\\crosschat-dsh-ci-8d3akx\\run-u2Pz8o\\pnpm-home\\store\\v11\n  Virtual store is at:             node_modules/.pnpm\nProgress: resolved 1, reused 1, downloaded 0, added 1, done\n\ndependencies:\n+ @crosschat/dsh-bridge @crosschat/dsh-bridge@file:../../../../../../../../integrations/dsh\n\nDone in 792ms using pnpm v11.28.5\n",
+    "stderr": "dsh: initialized profile web at D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-c14-native-dsh-20261028\\crosschat-dsh-ci-8d3akx\\run-u2Pz8o\\dsh-home\\profiles\\web\n"
+  },
+  "runtimePid": 34796,
+  "webPort": 61519,
+  "sessionIds": {
+    "idle": "session-805a9df0-2b66-4518-8d7b-fe5f01cf7ba5",
+    "busy": "session-055a9c20-bee5-409b-9ca2-b876fd0f59eb",
+    "sender": "session-9cd74f9f-6b6c-42c5-92eb-a3ae3e27beba",
+    "receiver": "session-75bfb49d-708a-482c-bc2b-00c5c08d7554"
+  },
+  "bootstrapCallerSourceDiagnostics": {
+    "nativeIdentityMatched": true,
+    "sourceExit": 0,
+    "source": {
+      "status": "identified",
+      "sourceTool": "dsh",
+      "basis": "native",
+      "association": "verified",
+      "scope": "instance",
+      "shouldAsk": false
+    },
+    "input": {
+      "shellFlagExpected": true,
+      "instanceMarkerValid": true,
+      "stateHomeAbsolute": true,
+      "profileDirAbsolute": true
+    },
+    "bridge": {
+      "callerIdentityAdvertised": true,
+      "endpointType": "host",
+      "profileMatched": true
+    }
+  },
+  "bootstrapCallerSource": {
+    "status": "identified",
+    "sourceTool": "dsh",
+    "basis": "native",
+    "association": "verified",
+    "scope": "instance",
+    "shouldAsk": false
+  },
+  "bootstrapModelRequests": 2,
+  "lifecycle": {
+    "status": "passed",
+    "mechanism": "official-plugin-manager-bundle-disable-enable",
+    "pid": 34796,
+    "retainedSessionIds": [
+      "session-805a9df0-2b66-4518-8d7b-fe5f01cf7ba5",
+      "session-055a9c20-bee5-409b-9ca2-b876fd0f59eb",
+      "session-9cd74f9f-6b6c-42c5-92eb-a3ae3e27beba",
+      "session-75bfb49d-708a-482c-bc2b-00c5c08d7554"
+    ],
+    "previousInstanceId": "693384c7-da21-438a-8918-3ed99bb84284",
+    "newInstanceId": "43d4c97d-f65a-43fe-9bad-bbb6fefad96d",
+    "previousPort": 61520,
+    "newPort": 60536,
+    "previousPortClosed": true,
+    "previousCredentialRejected": true,
+    "freshAck": true
+  },
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  },
+  "logs": {
+    "stdout": "dsh web: http://127.0.0.1:61519/?token=[redacted]\n",
+    "stderr": ""
+  },
+  "finishedAt": "2026-10-28T08:42:56.442Z"
+}

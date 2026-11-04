@@ -1,0 +1,76 @@
+C04-I02-R3 同单补充验证记录
+2026-11-02（UTC+8）
+基线 c813d4eae0f4f13411f0db8be18d9d47e312c19e（root R3 复审）；分支 codex/core-refactor-pre-tui。
+起：HEAD=c813d4e，branch=codex/core-refactor-pre-tui，dirty 仅未跟踪 docs/代码消息投递.md；6af60f2 为祖先。
+止：HEAD=33f9c05，branch 不变，dirty 仍仅该未跟踪文件。
+RED=04ae24a（仅测试），GREEN=33f9c05（仅 scripts/dsh-compat-ci.mjs）。
+
+================================================================
+1. RED：定向用例（产品为基线，测试为新增反例）
+================================================================
+命令：npx vitest run test/dsh-compat-ci.test.ts
+结果：3 failed | 51 passed (54)；退出码 1
+
+失败用例（原样摘要）：
+  × removes a late-created file exactly once and never deletes a replacement
+    → expected 2 to be 1 // Object.is equality
+  × does not report a partial path after a successful late close and removal
+    → expected 'C:\Users\YANGSH~1\AppData\Local\Temp\…' to be undefined
+  × reports a late response whose cancel is still undecided when cleanup returns
+    → expected '' to contain 'cancel had not settled at return'
+
+首败完整输出：
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness official Windows desktop installer metadata and streaming verification > removes a late-created file exactly once and never deletes a replacement
+AssertionError: expected 2 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ test/dsh-compat-ci.test.ts:1103:25
+    1101|         expect(failure).toMatchObject({ message: 'Desktop installer ex…
+    1102|         expect((failure as { partialFile?: unknown }).partialFile).toB…
+    1103|         expect(rmCalls).toBe(1);
+       |                         ^
+    1104|         expect(await readFile(retained, 'utf8')).toBe('replacement byt…
+    1105|       } finally {
+
+后两条完整输出：
+ FAIL  test/dsh-compat-ci.test.ts > … > does not report a partial path after a successful late close and removal
+AssertionError: expected 'C:\Users\YANGSH~1\AppData\Local\Temp\…' to be undefined
+ ❯ test/dsh-compat-ci.test.ts:1127:68
+
+ FAIL  test/dsh-compat-ci.test.ts > … > reports a late response whose cancel is still undecided when cleanup returns
+AssertionError: expected '' to contain 'cancel had not settled at return'
+ ❯ test/dsh-compat-ci.test.ts:1149:32
+
+（RED_EXIT=1；其余 51 条全过，证明三条红均来自本单新增保证。）
+
+================================================================
+2. GREEN：同一组定向用例（产品修复后）
+================================================================
+命令：npx vitest run test/dsh-compat-ci.test.ts
+结果：Test Files 1 passed；Tests 54 passed (54)；退出码 0
+（GREEN_EXIT=0）
+
+================================================================
+3. 语法 / lint / imports / build / 空白
+================================================================
+node --check scripts/dsh-compat-ci.mjs          → 退出 0
+npm run lint                                     → 退出 0（eslint src test）
+npm run check:imports                            → 203 modules, 682 edges; no cycles or boundary violations
+npm run build                                    → 退出 0（tsc）
+git diff --check（RED/GREEN 两次提交前）          → 退出 0
+
+================================================================
+4. 完整 check（GREEN 后一次，未筛/未 skip/未放宽）
+================================================================
+命令：npm run check
+结果：退出码 0
+  Test Files  231 passed | 3 skipped (234)
+       Tests  2584 passed | 11 skipped (2595)
+对比 R3 的 2581/11（2592）：净增 3，即本单新增三条反例；无跳过变化。
+首败：一次通过，无首败。
+CHECK_EXIT=0

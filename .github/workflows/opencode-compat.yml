@@ -1,0 +1,126 @@
+name: OpenCode compatibility
+
+on:
+  schedule:
+    - cron: '37 3 * * 2,5'
+  workflow_dispatch:
+
+concurrency:
+  group: opencode-compat-${{ github.ref }}
+  cancel-in-progress: false
+
+# Upstream executables run with no repository mutation permission or model secret.
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run build
+      - name: Probe pinned baseline and official candidate
+        run: node scripts/opencode-compat-ci.mjs
+        env:
+          CROSSCHAT_LIVE: '1'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: opencode-compat-${{ matrix.os }}
+          path: opencode-compat-evidence/
+          if-no-files-found: warn
+          retention-days: 21
+
+  desktop-probe:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run build
+      - name: Probe official Desktop baseline and candidate with clean serial NSIS installs
+        run: node scripts/opencode-desktop-compat-ci.mjs
+        env:
+          CROSSCHAT_LIVE: '1'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: opencode-compat-desktop-windows-latest
+          path: opencode-desktop-compat-evidence/
+          if-no-files-found: warn
+          retention-days: 21
+
+  report:
+    needs: [probe, desktop-probe]
+    if: always() && !cancelled() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: opencode-compat-*
+          path: evidence
+      # This job neither checks out nor runs the upstream executable.
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs/promises');
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            let entries;
+            try { entries = await fs.readdir('evidence', { withFileTypes: true }); }
+            catch { core.notice('No probe evidence; inspect the workflow failure. No compatibility issue created.'); return; }
+            for (const entry of entries.filter((entry) => entry.isDirectory())) {
+              let summary;
+              try { summary = JSON.parse(await fs.readFile(`evidence/${entry.name}/summary.json`, 'utf8')); }
+              catch { core.notice(`Missing valid summary for ${entry.name}; no issue created.`); continue; }
+              if (summary.schema !== 1 || summary.classification?.kind !== 'regression' || summary.classification?.notify !== true) continue;
+              const { baseline, candidate, retry, builds } = summary;
+              const desktop = summary.tool === 'opencode-desktop';
+              if (summary.tool !== undefined && !desktop && summary.tool !== 'opencode-cli') continue;
+              // Desktop evidence must be from the independent Windows desktop probe.
+              if (desktop && (summary.platform !== 'win32' || summary.arch !== 'x64'
+                || [baseline, candidate, retry].some((report) => report?.schema !== 1 || report?.tool !== 'opencode-desktop'
+                  || report?.platform !== 'win32' || report?.arch !== 'x64'
+                  || report?.cleanup?.appStopped !== true || report?.cleanup?.serviceStopped !== true || report?.cleanup?.removed !== true
+                  || report?.cleanup?.runProcesses?.state !== 'clear'
+                  || (report?.cleanup?.errors !== undefined && (!Array.isArray(report.cleanup.errors) || report.cleanup.errors.length !== 0)))
+                || baseline?.version !== builds?.baseline?.version || candidate?.version !== builds?.candidate?.version
+                || !/^2\.\d+\.\d+$/.test(baseline?.version ?? '')
+                || !/^[a-z0-9-]{1,80}$/.test(candidate?.stage ?? '')
+                || !/^[0-9a-f]{40}$/.test(builds?.candidate?.sourceCommit ?? '')
+                || builds?.candidate?.url !== `https://opencode.ai/files/bin/${candidate?.version}/opencode-desktop-win-x64.exe`)) continue;
+              // Revalidate the evidence instead of trusting a boolean from a process-running job.
+              if (baseline?.status !== 'passed' || candidate?.status !== 'failed' || retry?.status !== 'failed'
+                || candidate.category !== 'compatibility' || retry.category !== 'compatibility'
+                || candidate.stage !== retry.stage || candidate.check !== retry.check || candidate.version !== retry.version
+                || !/^2\.\d+\.\d+$/.test(candidate.version) || !/^[a-z0-9-]{1,80}$/.test(candidate.check ?? '')
+                || !['win32', 'linux'].includes(summary.platform) || !/^[0-9a-f]{64}$/.test(builds?.candidate?.sha256 ?? '')) continue;
+              const marker = desktop
+                ? `<!-- opencode-desktop-compat:${candidate.version}:${summary.platform}:${candidate.check} -->`
+                : `<!-- opencode-compat:${candidate.version}:${summary.platform}:${candidate.check} -->`;
+              const issues = await github.paginate(github.rest.issues.listForRepo, { ...context.repo, state: 'all', creator: 'github-actions[bot]', per_page: 100 });
+              if (issues.some((issue) => issue.body?.includes(marker))) { core.notice(`Already reported ${candidate.version}/${summary.platform}/${candidate.check}`); continue; }
+              await github.rest.issues.create({ ...context.repo,
+                title: `OpenCode ${desktop ? 'Desktop ' : ''}${candidate.version}: ${candidate.check} compatibility regression (${summary.platform})`,
+                body: `${marker}\nPinned baseline ${baseline.version} passed. The same official candidate failed the same check in two clean isolated runs.\n\nFailed check: \`${candidate.check}\`\nCandidate SHA-256: \`${builds.candidate.sha256}\`\n\n[Inspect workflow and retained JSON evidence](${run}).\n\n${desktop ? 'The official Windows Desktop release was installed, exercised through its real UI, and uninstalled between builds. The model was scripted; no real model key or personal login was used. First-launch onboarding was seeded complete.' : 'The model was scripted; no real model key, personal login or desktop UI was used.'} This report requires investigation before changing support claims.`
+              });
+            }

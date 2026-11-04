@@ -1,0 +1,1301 @@
+#!/usr/bin/env node
+/* global AbortController */
+import { spawn } from 'node:child_process';
+import { Buffer } from 'node:buffer';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { access, copyFile, lstat, mkdir, mkdtemp, open, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import process from 'node:process';
+import { clearTimeout, setTimeout } from 'node:timers';
+import { pathToFileURL, URL } from 'node:url';
+import { prepareDshProfile, repositoryRoot } from '../test/helpers/dsh-live-fixture.mjs';
+import { DSH_ONBOARDING_SCOPE, DSH_ONBOARDING_TOOL, validDshOnboardingProcessReport, validDshOnboardingReport } from './dsh-onboarding-contract.mjs';
+
+const tool = 'dsh-web-runtime';
+const pnpmVersion = '11.28.5';
+const pnpmIntegrity = 'sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng==';
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const slug = /^[a-z0-9-]{1,100}$/;
+const sri = /^sha512-[A-Za-z0-9+/]{85}[AQgw]==$/;
+const requiredChecks = ['official-plugin-installation-and-owned-web-runtime', 'public-web-session-controller-creates-interactive-sessions', 'messages-model-and-native-shell-identity-bootstrap',
+  'authenticated-production-discovery-and-pagination', 'idle-production-delivery-wakes-the-existing-session', 'busy-native-queue-and-steer-step-boundaries',
+  'native-shell-send-and-conversation-reply-have-full-session-identities', 'missing-target-does-not-create-or-resume-a-replacement'];
+const scope = { officialNpmRuntime: true, officialPluginManager: true, ordinaryWebSessions: true, scriptedLocalModel: true, browserUI: false, desktop: false, modelIntelligence: false };
+const desktopTool = 'dsh-desktop';
+const desktopChecks = ['formal-desktop-artifact-and-built-in-runtime-profile', 'skill-and-plugin-loading', 'desktop-ui-send-receive-and-reply',
+  'host-natural-exit', 'official-uninstall', 'bridge-registration-and-system-registration-cleanup'];
+const desktopScope = { officialDesktopArtifact: true, builtInRuntimeProfile: true, skillAndPluginLoading: true, desktopUi: true,
+  ordinaryWebSessions: false, browserUI: false, modelIntelligence: false };
+const desktopReportMaxBytes = 1024 * 1024;
+const desktopSessionId = /^[A-Za-z0-9._:-]{1,200}$/;
+const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+const message = (error) => error instanceof Error ? error.message : String(error);
+
+export async function resolveDshNpmCache(root, supplied) {
+  const owned = await realpath(root);
+  const external = supplied !== undefined;
+  if (external && (typeof supplied !== 'string' || !isAbsolute(supplied) || /^[a-z][a-z0-9+.-]*:\/\//i.test(supplied)
+    || /^[\\/]{2}/.test(supplied) || supplied.split(/[\\/]/).some((part) => part === '.' || part === '..'))) throw new Error('External npm cache must be an absolute local directory path');
+  const selected = external ? resolve(supplied) : join(owned, 'npm-cache');
+  if (!external) await mkdir(selected, { recursive: true });
+  for (let cursor = selected;; cursor = dirname(cursor)) {
+    const info = await lstat(cursor);
+    if (info.isSymbolicLink() || !info.isDirectory()) throw new Error('Npm cache and its ancestors must be real directories without links');
+    if (dirname(cursor) === cursor) break;
+  }
+  const path = await realpath(selected);
+  const child = relative(owned, path);
+  if (external && (!child || (!isAbsolute(child) && child !== '..' && !child.startsWith(`..${sep}`)))) throw new Error('An external cache must be outside the owned compatibility task directory');
+  return { path, external };
+}
+
+function semver(version) {
+  if (typeof version !== 'string' || version.length > 80) return;
+  const parts = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*))?$/.exec(version);
+  if (!parts || parts.slice(1, 4).some((item) => !Number.isSafeInteger(Number(item)))) return;
+  const pre = parts[4]?.split('.');
+  if (pre?.some((item) => /^[0-9]+$/.test(item) && item.length > 1 && item.startsWith('0'))) return;
+  return { major: Number(parts[1]), minor: Number(parts[2]), patch: Number(parts[3]), pre };
+}
+
+function supported(version) {
+  const parts = semver(version);
+  if (!parts || parts.major !== 0 || parts.minor !== 2 || parts.patch < 1) return false;
+  if (parts.patch > 1 || !parts.pre) return true;
+  const minimum = ['rc', '2'];
+  for (let index = 0; index < Math.max(minimum.length, parts.pre.length); index++) {
+    const left = parts.pre[index]; const right = minimum[index];
+    if (left === undefined) return false;
+    if (right === undefined) return true;
+    if (left === right) continue;
+    const numericLeft = /^[0-9]+$/.test(left); const numericRight = /^[0-9]+$/.test(right);
+    if (numericLeft && numericRight) return BigInt(left) > BigInt(right);
+    if (numericLeft !== numericRight) return !numericLeft;
+    return left > right;
+  }
+  return true;
+}
+
+export function parseDshNpmManifest(input, platform, arch) {
+  if (!record(input) || input.name !== '@deepseek-ai/dsh' || !semver(input.version) || !record(input.dist)) throw new Error('Invalid official Harness npm metadata');
+  if (!supported(input.version)) throw Object.assign(new Error('Harness release is outside the approved >=0.2.1-rc.2 <0.3.0-0 window'), { category: 'unsupported', version: input.version });
+  if (platform !== 'win32' || arch !== 'x64') throw new Error('This compatibility probe is configured for Windows x64 only');
+  const url = `https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-${input.version}.tgz`;
+  if (input.dist.tarball !== url || !sri.test(input.dist.integrity ?? '')) throw new Error('Invalid official Harness archive URL or SHA-512 SRI');
+  return { name: input.name, version: input.version, url, integrity: input.dist.integrity };
+}
+
+export function parsePnpmManifest(input) {
+  if (!record(input) || input.name !== 'pnpm' || input.version !== pnpmVersion || !record(input.dist)
+    || input.dist.tarball !== `https://registry.npmjs.org/pnpm/-/pnpm-${pnpmVersion}.tgz` || input.dist.integrity !== pnpmIntegrity) throw new Error('The isolated package manager must match the pinned official pnpm archive');
+  return { name: input.name, version: input.version, url: input.dist.tarball, integrity: input.dist.integrity };
+}
+
+export function verifyNpmArtifact(bytes, artifact) {
+  if (!sri.test(artifact?.integrity ?? '') || !(bytes instanceof Uint8Array)) throw new Error('Invalid archive integrity input');
+  const expected = Buffer.from(artifact.integrity.slice(7), 'base64');
+  if (!timingSafeEqual(createHash('sha512').update(bytes).digest(), expected)) throw new Error('Official npm archive failed SHA-512 verification');
+  return true;
+}
+
+const desktopFeedUrl = 'https://download.deepseek.com/dsh-desk/feeds/win-x64/nightly.yml';
+const desktopInstallerUrl = (version) => `https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-${version}-win-x64.exe`;
+const desktopInstallerName = (version) => `deepseek-harness-${version}-win-x64.exe`;
+const desktopMaxInstallerBytes = 512 * 1024 * 1024;
+const rawDesktopSha512 = /^[A-Za-z0-9+/]{85}[AQgw]==$/;
+const desktopPublisherSubjectMax = 512;
+const desktopThumbprint = /^[0-9A-Fa-f]{40,128}$/;
+const signatureOutputMaxBytes = 64 * 1024;
+const signatureAbortCloseMs = 1000;
+const admissionCleanupMs = 1000;
+const authenticodeSignatureScript = [
+  '$ErrorActionPreference = "Stop"',
+  '$target = $env:DSH_ADMIT_SIGNATURE_PATH',
+  'if ([string]::IsNullOrEmpty($target)) { throw "missing signature target" }',
+  '$signature = Get-AuthenticodeSignature -LiteralPath $target',
+  '$certificate = $signature.SignerCertificate',
+  '[pscustomobject]@{ status = [string]$signature.Status; subject = $(if ($certificate) { [string]$certificate.Subject } else { "" }); thumbprint = $(if ($certificate) { [string]$certificate.Thumbprint } else { "" }) } | ConvertTo-Json -Compress',
+].join('; ');
+
+/** Bounded settlement for owned IO: an operation that never settles reports done:false instead of hanging its caller. */
+function settleWithin(operation, budgetMs) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ done: false }), budgetMs);
+    Promise.resolve().then(operation).then(
+      (value) => { clearTimeout(timer); resolve({ done: true, failed: false, value }); },
+      (error) => { clearTimeout(timer); resolve({ done: true, failed: true, error }); },
+    );
+  });
+}
+
+export function parseDshDesktopWindowsManifest(input, platform, arch) {
+  if (!record(input) || typeof input.version !== 'string' || !semver(input.version)) throw new Error('Invalid official Desktop installer metadata');
+  if (!supported(input.version)) throw Object.assign(new Error('Desktop release is outside the approved >=0.2.1-rc.2 <0.3.0-0 window'), { category: 'unsupported', version: input.version });
+  if (platform !== 'win32' || arch !== 'x64') throw new Error('This compatibility probe is configured for Windows x64 only');
+  if (input.feed !== desktopFeedUrl || input.url !== desktopInstallerUrl(input.version)) throw new Error('Desktop metadata must use the official feed and the exact versioned installer URL');
+  if (typeof input.sha512 !== 'string' || !rawDesktopSha512.test(input.sha512)
+    || !Number.isSafeInteger(input.size) || input.size <= 0 || input.size > desktopMaxInstallerBytes) throw new Error('Invalid official Desktop installer metadata');
+  return { version: input.version, url: input.url, size: input.size, integrity: `sha512-${input.sha512}`, filename: desktopInstallerName(input.version) };
+}
+
+/** The download boundary re-derives its own plan, so no caller record skips straight to the network. */
+function desktopInstallerPlan(artifact) {
+  if (!record(artifact) || typeof artifact.version !== 'string' || !semver(artifact.version)) throw new Error('Invalid Desktop installer identity');
+  if (!supported(artifact.version)) throw Object.assign(new Error('Desktop release is outside the approved >=0.2.1-rc.2 <0.3.0-0 window'), { category: 'unsupported', version: artifact.version });
+  if (artifact.url !== desktopInstallerUrl(artifact.version) || typeof artifact.filename !== 'string' || artifact.filename !== desktopInstallerName(artifact.version)
+    || !Number.isSafeInteger(artifact.size) || artifact.size <= 0 || artifact.size > desktopMaxInstallerBytes
+    || typeof artifact.integrity !== 'string' || !sri.test(artifact.integrity)) throw new Error('Invalid Desktop installer identity');
+  return { version: artifact.version, url: artifact.url, size: artifact.size, filename: artifact.filename, sha512: artifact.integrity.slice(7) };
+}
+
+/**
+ * Streams the pinned Desktop installer into a caller-owned exclusive directory. The single transfer deadline covers
+ * the response, the open, every write and the only close; the recorded result is adjudicated after bounded cleanup,
+ * so a path is returned only for a fully written, confirmed-closed file that no cancellation preceded. That proves
+ * transfer integrity, never a publisher, installation or Desktop function.
+ */
+export async function downloadDshDesktopInstaller(artifact, { directory, signal, timeoutMs = 120000, fetchImpl = globalThis.fetch } = {}) {
+  const plan = desktopInstallerPlan(artifact);
+  if (typeof fetchImpl !== 'function') throw new Error('A fetch implementation is required to download the Desktop installer');
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new Error('The Desktop installer deadline must be a positive integer of milliseconds');
+  if (typeof directory !== 'string' || !isAbsolute(directory)) throw new Error('The Desktop installer target directory must be an absolute caller-owned path');
+  const path = join(directory, plan.filename);
+  const startedAt = Date.now();
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(new Error(`Desktop installer exceeded its ${timeoutMs}ms deadline`)), timeoutMs);
+  const expired = new Promise((_, reject) => deadline.signal.addEventListener('abort', () => reject(deadline.signal.reason), { once: true }));
+  expired.catch(() => {});
+  const forward = () => deadline.abort(signal.reason);
+  if (signal) { if (signal.aborted) deadline.abort(signal.reason); else signal.addEventListener('abort', forward); }
+  // The live signal and the wall clock both decide: cleanup that crosses the deadline is a failure, not a success.
+  const cancelled = () => Boolean(signal?.aborted) || deadline.signal.aborted || Date.now() - startedAt >= timeoutMs;
+  const reflect = (operation) => operation.then((value) => ({ ok: true, value }), (error) => ({ ok: false, error }));
+  let delivered; let failed = false; let failure; let retention;
+  let reader; let handle; let created = false;
+  let arrival; let opening;
+  let responseTaken = false; let handleTaken = false; let closing = false; let closeConfirmed = false;
+  const undecided = [];
+  try {
+    const request = fetchImpl(plan.url, { redirect: 'error', signal: deadline.signal });
+    arrival = reflect(request);
+    const settledResponse = await Promise.race([arrival, expired]);
+    responseTaken = true;
+    if (!settledResponse.ok) throw settledResponse.error;
+    const response = settledResponse.value;
+    if (response?.body && typeof response.body.getReader === 'function') reader = response.body.getReader();
+    if (!response?.ok || !reader) throw new Error(`Official Desktop installer response was not a successful body (status ${response?.status})`);
+    const declared = response.headers?.get?.('content-length');
+    if (declared !== null && declared !== undefined) {
+      if (typeof declared !== 'string' || !/^\d+$/.test(declared) || Number(declared) !== plan.size) throw new Error('Desktop installer Content-Length disagrees with the pinned size');
+    }
+    const openingPromise = reflect(open(path, 'wx'));
+    opening = openingPromise;
+    const settledOpen = await Promise.race([openingPromise, expired]);
+    handleTaken = true;
+    if (!settledOpen.ok) throw settledOpen.error;
+    handle = settledOpen.value; created = true;
+    const hash = createHash('sha512'); let written = 0;
+    for (;;) {
+      const part = reader.read(); part.catch(() => {});
+      const chunk = await Promise.race([part, expired]);
+      if (chunk.done) break;
+      if (chunk.value?.byteLength > plan.size - written) throw new Error('Desktop installer response exceeded the pinned size');
+      hash.update(chunk.value);
+      const flushing = handle.write(chunk.value); flushing.catch(() => {});
+      const saved = await Promise.race([flushing, expired]);
+      // A short or zero-progress disk write never counts as delivered bytes.
+      if (saved?.bytesWritten !== chunk.value.byteLength) throw new Error('Desktop installer disk write did not accept the full chunk');
+      written += chunk.value.byteLength;
+    }
+    if (written !== plan.size) throw new Error('Desktop installer response was truncated below the pinned size');
+    if (hash.digest('base64') !== plan.sha512) throw new Error('Desktop installer failed SHA-512 verification');
+    // The first close starts once and stays inside the same transfer deadline.
+    closing = true;
+    const settledClose = await Promise.race([reflect(handle.close()), expired]);
+    if (!settledClose.ok) throw settledClose.error;
+    closeConfirmed = true;
+    // Final delivery review under the same deadline: any cancellation or expiry voids the success.
+    if (cancelled()) throw new Error('Desktop installer deadline or cancellation preceded delivery', { cause: deadline.signal.reason });
+    delivered = { path, filename: plan.filename, version: plan.version, size: plan.size, integrity: `sha512-${plan.sha512}` };
+  } catch (error) { failed = true; failure = error; }
+  try {
+    // Bounded cleanup. The transfer timer and the caller listener stay live until the final adjudication below,
+    // so a cancellation or expiry landing during cleanup still voids a recorded delivery.
+    const cleanupStart = Date.now();
+    const left = () => Math.max(timeoutMs - (Date.now() - cleanupStart), 0);
+    const unclear = [];
+    let released = true;
+    if (handle && !closing) {
+      const closed = await settleWithin(() => handle.close(), left());
+      if (!closed.done) { released = false; unclear.push('the partial file handle close did not settle within the cleanup budget'); }
+      else if (closed.failed) { released = false; unclear.push(`the partial file handle close failed: ${message(closed.error)}`); }
+    } else if (handle && !closeConfirmed) {
+      released = false;
+      unclear.push('the only file close did not confirm completion within the transfer deadline');
+    }
+    if (reader) {
+      // A rejecting cancel has reached an already terminal stream; only an unsettled cancel can still leak.
+      const cancelledReader = await settleWithin(() => reader.cancel(), left());
+      if (!cancelledReader.done) unclear.push('the response body cancel did not settle within the cleanup budget');
+      try { reader.releaseLock(); } catch { /* An already released or stuck reader keeps its own state. */ }
+    }
+    // Late arrivals keep an owner and record their outcome; they are never resumed into a delivery.
+    let lateResponse;
+    const ownResponse = (late) => {
+      const body = late?.body;
+      if (!body || typeof body.getReader !== 'function') return undefined;
+      const lateReader = body.getReader();
+      const state = {};
+      lateResponse = state;
+      return settleWithin(() => lateReader.cancel(), timeoutMs).then((outcome) => {
+        state.outcome = outcome;
+        try {
+          if (!outcome.done) undecided.push('the late official response cancel did not settle');
+          else if (outcome.failed) undecided.push(`the late official response cancel failed: ${message(outcome.error)}`);
+        } finally { try { lateReader.releaseLock(); } catch { /* terminal or stuck reader */ } }
+      });
+    };
+    // The late handler is the only owner of the file it created: one close and at most one removal.
+    let lateFile;
+    const ownHandle = (late) => {
+      const state = {};
+      lateFile = state;
+      return settleWithin(() => late.close(), timeoutMs).then((closed) => {
+        if (!closed.done) { state.closeReason = 'a late file close did not settle; the partial path may still change'; undecided.push(state.closeReason); return undefined; }
+        if (closed.failed) { state.closeReason = `a late file close failed: ${message(closed.error)}`; undecided.push(state.closeReason); return undefined; }
+        state.closed = true;
+        return settleWithin(() => rm(path), timeoutMs).then((removed) => {
+          state.removal = removed;
+          if (!removed.done) undecided.push('the late partial removal did not settle');
+          else if (removed.failed) undecided.push(`the late partial removal failed: ${message(removed.error)}`);
+        });
+      });
+    };
+    const owners = [];
+    let responseOwnerStarted = false;
+    if (arrival && !responseTaken) owners.push(arrival.then((result) => {
+      responseOwnerStarted = true;
+      return result.ok ? ownResponse(result.value) : undefined;
+    }));
+    if (opening && !handleTaken) owners.push(opening.then((result) => (result.ok ? ownHandle(result.value) : undefined)));
+    if (owners.length > 0) {
+      // Wait only inside the finite cleanup budget; anything later stays owned and is reported as undecided now.
+      const settledLate = await settleWithin(() => Promise.allSettled(owners), left());
+      if (!settledLate.done) {
+        // A started owner is not a released resource: report each late resource by its actual state.
+        if (arrival && !responseTaken) {
+          if (!responseOwnerStarted) undecided.push('the official response had not settled at return; its body stays owned');
+          else if (lateResponse && !lateResponse.outcome) undecided.push('the late official response cancel had not settled at return; the body stays owned');
+        }
+        if (opening && !handleTaken) undecided.push(lateFile
+          ? `a late file close or removal had not settled at return; ${path} stays owned`
+          : `the late file open had not settled at return; ${path} may exist and stays owned`);
+      }
+    }
+    const removePartial = async (reason) => {
+      if (left() <= 0) return `the cleanup budget was exhausted before ${reason}`;
+      const removed = await settleWithin(() => rm(path), left());
+      if (!removed.done) return `${reason} did not settle within the cleanup budget`;
+      return removed.failed ? `${reason} failed: ${message(removed.error)}` : undefined;
+    };
+    if (failed && created) {
+      const fields = {};
+      if (!released) {
+        // Without a confirmed close the file may still change; it is reported and retained, never force-deleted.
+        fields.releaseUnclear = unclear;
+      } else {
+        const removal = await removePartial('the partial file removal');
+        if (removal) fields.cleanupError = removal;
+        if (unclear.length > 0) fields.cleanupNotes = unclear;
+      }
+      if (fields.releaseUnclear !== undefined || fields.cleanupError !== undefined) fields.partialFile = path;
+      if (Object.keys(fields).length > 0) retention = fields;
+    } else if (failed && lateFile) {
+      // Consume the owner's real close/removal result; this path is never removed a second time.
+      const fields = {};
+      if (!lateFile.closed) {
+        fields.releaseUnclear = [lateFile.closeReason ?? 'the late file close had not settled at return'];
+      } else if (lateFile.removal === undefined) {
+        fields.cleanupError = 'the late partial removal had not settled at return';
+      } else if (!lateFile.removal.done) {
+        fields.cleanupError = 'the late partial removal did not settle';
+      } else if (lateFile.removal.failed) {
+        fields.cleanupError = `the late partial removal failed: ${message(lateFile.removal.error)}`;
+      }
+      if (Object.keys(fields).length > 0) { fields.partialFile = path; retention = fields; }
+    }
+    if (undecided.length > 0) retention = Object.assign(retention ?? {}, { undecidedResources: undecided });
+    // Final adjudication while the deadline is still live; only now is the recorded delivery allowed to stand.
+    if (!failed && cancelled()) {
+      failed = true;
+      failure = new Error('Desktop installer deadline or cancellation preceded delivery', { cause: deadline.signal.reason });
+      const removal = await removePartial('the delivered file removal');
+      if (removal) retention = { partialFile: path, cleanupError: removal };
+    }
+    if (!failed) return delivered;
+    if (!retention) throw failure;
+    let annotated = false;
+    if (failure !== null && (typeof failure === 'object' || typeof failure === 'function')) {
+      try { Object.assign(failure, retention); annotated = true; } catch { annotated = false; }
+    }
+    if (annotated) throw failure;
+    // Frozen or non-object failures keep their identity as the cause of a writable report that carries the retention.
+    const reported = new Error(`Desktop installer failure: ${message(failure)}`, { cause: failure });
+    Object.assign(reported, retention);
+    throw reported;
+  } finally {
+    // Released only after the final adjudication, on every exit, including a thrown report.
+    clearTimeout(timer);
+    if (signal) signal.removeEventListener('abort', forward);
+  }
+}
+
+const desktopProcessOutputMaxBytes = 128000;
+const desktopProcessCloseMs = 1000;
+const maxTimerMs = 2147483647;
+
+/**
+ * Runs one direct Desktop child; close proves only that child, never descendants, Host release or install success.
+ * The deadline starts before spawn and is re-checked at the close adjudication, so a delayed timer cannot report a
+ * late success. `failed` is the explicit failure discriminant: a falsy or frozen first cause is still a failure.
+ */
+export async function runDshDesktopProcess(binary, args, options = {}) {
+  const { cwd, env, signal, spawnImpl = spawn } = options;
+  const timeoutMs = options.timeoutMs;
+  if (typeof binary !== 'string' || !isAbsolute(binary) || binary.includes('\0')) throw new Error('Desktop process binary must be an absolute path without NUL');
+  if (!Array.isArray(args) || args.some((arg) => typeof arg !== 'string' || arg.includes('\0'))) throw new Error('Desktop process arguments must be strings without NUL');
+  if (cwd !== undefined && (typeof cwd !== 'string' || !isAbsolute(cwd) || cwd.includes('\0'))) throw new Error('Desktop process cwd must be an absolute path without NUL');
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > maxTimerMs) throw new Error('Desktop process deadline must be a valid positive integer of milliseconds');
+  if (typeof spawnImpl !== 'function') throw new Error('Desktop process spawn implementation must be a function');
+  if (signal?.aborted) return { code: null, signal: null, pid: null, stdout: '', stderr: '', timedOut: false,
+    cancelled: true, truncated: false, closed: false, failed: true, failure: signal.reason,
+    releaseUnclear: ['The Desktop process was cancelled before spawn'], secondaryProblems: [] };
+
+  const deadlineAt = Date.now() + timeoutMs;
+  const expired = () => Date.now() >= deadlineAt;
+  const deadlineError = () => new Error(`Desktop process exceeded its ${timeoutMs}ms deadline`);
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawnImpl(binary, args, { cwd, env, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (failure) {
+      resolve({ code: null, signal: null, pid: null, stdout: '', stderr: '', timedOut: false, cancelled: false,
+        truncated: false, closed: false, failed: true, failure, releaseUnclear: ['The Desktop process could not be spawned'], secondaryProblems: [] });
+      return;
+    }
+    const stdout = []; const stderr = []; const releaseUnclear = []; const secondaryProblems = [];
+    let outputBytes = 0; let code = null; let signalName = null; let timedOut = false; let cancelled = false;
+    let truncated = false; let closed = false; let failure; let failing = false; let settled = false; let returned = false;
+    let closeTimer; let deadlineTimer;
+    // Problems observed before the promise resolves are kept, including ones raised synchronously inside release.
+    const note = (text) => { if (!returned) secondaryProblems.push(text); };
+    const collect = (target, chunk) => {
+      if (settled || failing) return;
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      const remaining = desktopProcessOutputMaxBytes - outputBytes;
+      // Only an independent bounded copy is kept, so no small view pins a huge chunk's backing buffer.
+      if (remaining > 0) target.push(Buffer.from(bytes.subarray(0, remaining)));
+      outputBytes += Math.min(bytes.length, Math.max(remaining, 0));
+      if (bytes.length > remaining) { truncated = true; beginFailure(new Error('Desktop process exceeded its combined output budget')); }
+    };
+    const onStdout = (chunk) => collect(stdout, chunk);
+    const onStderr = (chunk) => collect(stderr, chunk);
+    // Data and abort listeners are removed at return; pipe error listeners stay as the minimal late-error owner.
+    const detach = () => {
+      child.stdout?.removeListener?.('data', onStdout); child.stderr?.removeListener?.('data', onStderr);
+      if (signal) signal.removeEventListener('abort', onAbort);
+    };
+    const snapshot = () => ({ code, signal: signalName, pid: child.pid ?? null, stdout: Buffer.concat(stdout).toString('utf8'),
+      stderr: Buffer.concat(stderr).toString('utf8'), timedOut, cancelled, truncated, closed, failed: failing, failure,
+      releaseUnclear: releaseUnclear.slice(), secondaryProblems: secondaryProblems.slice() });
+    const release = (label, operation) => {
+      try { operation(); } catch (error) { secondaryProblems.push(`The ${label} could not be released: ${message(error)}`); }
+    };
+    const finish = () => {
+      if (settled) return;
+      settled = true; clearTimeout(deadlineTimer); clearTimeout(closeTimer); detach();
+      child.on?.('error', () => {});
+      if (!closed) {
+        release('stdout pipe', () => child.stdout?.destroy?.());
+        release('stderr pipe', () => child.stderr?.destroy?.());
+        release('child reference', () => child.unref?.());
+      }
+      resolve(snapshot());
+      returned = true;
+    };
+    const beginFailure = (reason) => {
+      if (settled || failing) return;
+      failing = true; failure = reason;
+      try {
+        if (child.kill?.() === false) releaseUnclear.push('The Desktop process stop request was not accepted');
+      } catch (error) { releaseUnclear.push(`The Desktop process could not be asked to stop: ${message(error)}`); }
+      closeTimer = setTimeout(() => {
+        releaseUnclear.push('The Desktop process did not close within its release budget');
+        finish();
+      }, desktopProcessCloseMs);
+    };
+    // A later child or pipe error is observed without replacing the first cause or reopening the release wait.
+    const later = (label, error) => {
+      if (returned) return;
+      if (settled || failing) note(`A later ${label} error: ${message(error)}`);
+      else beginFailure(error);
+    };
+    const onStdoutError = (error) => later('stdout pipe', error);
+    const onStderrError = (error) => later('stderr pipe', error);
+    const onAbort = () => { if (settled) return; cancelled = true; beginFailure(signal?.reason); };
+    child.stdout?.on?.('data', onStdout); child.stderr?.on?.('data', onStderr);
+    child.stdout?.on?.('error', onStdoutError); child.stderr?.on?.('error', onStderrError);
+    child.on?.('error', (error) => later('child', error));
+    child.once?.('close', (nextCode, nextSignal) => {
+      code = nextCode; signalName = nextSignal; closed = true;
+      // The final adjudication re-checks expiry even when the timer callback never got to run.
+      if (expired()) { timedOut = true; if (!failing) { failing = true; failure = deadlineError(); } }
+      finish();
+    });
+    if (signal) { signal.addEventListener('abort', onAbort, { once: true }); if (signal.aborted) onAbort(); }
+    // The spawn attempt is already inside the deadline; a spawn that consumed it cannot report a normal success.
+    const remaining = Math.max(deadlineAt - Date.now(), 0);
+    if (remaining === 0) { timedOut = true; beginFailure(deadlineError()); }
+    else deadlineTimer = setTimeout(() => { timedOut = true; if (!failing) beginFailure(deadlineError()); }, remaining);
+  });
+}
+
+/** A timeout cannot prove descendant release; the caller retains the installation. */
+export function runDshProcess(binary, args, options = {}) {
+  return new Promise((done, reject) => {
+    const child = spawn(binary, args, { cwd: options.cwd ?? repositoryRoot, env: options.env, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = ''; let stderr = ''; let settled = false;
+    const finish = (value, error) => {
+      if (settled) return; settled = true; clearTimeout(timer); child.stdout.destroy(); child.stderr.destroy();
+      if (error) reject(error); else done({ ...value, stdout, stderr, pid: child.pid });
+    };
+    const timer = setTimeout(() => {
+      try { child.kill(); } catch { /* Unknown release is retained by the caller. */ }
+      finish({ code: null, signal: null, timedOut: true });
+    }, options.timeout ?? 30000);
+    child.stdout.on('data', (chunk) => { stdout = (stdout + chunk).slice(-128000); });
+    child.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-128000); });
+    child.once('error', (error) => finish(undefined, error));
+    child.once('close', (code, signal) => finish({ code, signal, timedOut: false }));
+  });
+}
+
+function validScope(value) { return record(value) && Object.entries(scope).every(([key, expected]) => value[key] === expected); }
+function validReport(report, artifact, runId) {
+  if (!record(report) || report.schema !== 1 || report.tool !== tool || report.platform !== 'win32' || report.arch !== 'x64'
+    || report.version !== artifact.version || !uuid.test(report.runId ?? '') || (runId !== undefined && report.runId !== runId) || !validScope(report.scope)
+    || !Array.isArray(report.checks) || report.checks.some((check) => !record(check) || !requiredChecks.includes(check.name) || check.status !== 'passed' || !Number.isFinite(check.elapsedMs) || check.elapsedMs < 0)
+    || new Set(report.checks.map((check) => check.name)).size !== report.checks.length) return false;
+  return report.status === 'passed' ? report.stage === 'done' && report.category === null && report.checks.length === requiredChecks.length
+    : report.status === 'failed' && ['compatibility', 'infrastructure'].includes(report.category) && slug.test(report.stage ?? '') && report.stage !== 'done' && slug.test(report.check ?? '');
+}
+function normalProcess(result) { return record(result) && result.timedOut === false && result.signal === null && [0, 1].includes(result.code); }
+function processMatches(report) { return normalProcess(report.process) && report.process.code === (report.status === 'passed' ? 0 : 1); }
+function infrastructure(version, stage, error) { return { schema: 1, tool, platform: 'win32', arch: 'x64', version, status: 'failed', category: 'infrastructure', stage, check: stage, error: message(error) }; }
+
+export function hasDshRuntimeReleaseProof(cleanup) {
+  return record(cleanup) && cleanup.runtimeStopped === true && cleanup.registrationRemoved === true && cleanup.removed === true && cleanup.forced === false
+    && (cleanup.errors === undefined || (Array.isArray(cleanup.errors) && cleanup.errors.length === 0));
+}
+
+function validDesktopScope(value) { return record(value) && Object.entries(desktopScope).every(([key, expected]) => value[key] === expected); }
+function knownDesktopArtifact(artifact) {
+  return record(artifact) && typeof artifact.version === 'string' && artifact.version !== '' && typeof artifact.integrity === 'string' && sri.test(artifact.integrity);
+}
+
+/** Identity fields are UUID/owner strings only; an array that stringifies to a UUID is not an identity. */
+function desktopIdentity(installation) {
+  if (typeof installation?.installationId !== 'string' || !uuid.test(installation.installationId)
+    || typeof installation?.owner !== 'string' || installation.owner === '') return;
+  return { installationId: installation.installationId, owner: installation.owner };
+}
+
+function desktopBinding(installation, runId) {
+  const identity = desktopIdentity(installation);
+  return typeof runId === 'string' && uuid.test(runId) && identity ? { runId, ...identity } : undefined;
+}
+
+/**
+ * The caller's own record of this run, install, owner, native instance and session. The launch record comes from the
+ * launch step, never from the report: equality only proves agreement with the caller, not native facts or intent.
+ */
+function desktopExpectation(installation, launch, runId) {
+  const binding = desktopBinding(installation, runId);
+  return binding && typeof launch?.instanceId === 'string' && uuid.test(launch.instanceId)
+    && typeof launch.sessionId === 'string' && desktopSessionId.test(launch.sessionId)
+    ? { ...binding, instanceId: launch.instanceId, sessionId: launch.sessionId } : undefined;
+}
+
+/**
+ * Every bound field must be present with the expected type before it is compared, so two missing values never match.
+ * A PASS also needs complete, affirmative cleanup; unknown cleanup is never "proven released".
+ */
+function validDesktopReport(report, artifact, expected) {
+  if (!record(report) || !knownDesktopArtifact(artifact) || !record(expected)
+    || report.schema !== 1 || report.tool !== desktopTool || report.platform !== 'win32' || report.arch !== 'x64'
+    || report.version !== artifact.version || typeof report.artifactId !== 'string' || !sri.test(report.artifactId) || report.artifactId !== artifact.integrity
+    || typeof report.runId !== 'string' || report.runId !== expected.runId
+    || typeof report.installationId !== 'string' || report.installationId !== expected.installationId || report.owner !== expected.owner
+    || typeof report.instanceId !== 'string' || !uuid.test(report.instanceId) || (expected.instanceId !== undefined && report.instanceId !== expected.instanceId)
+    || typeof report.sessionId !== 'string' || !desktopSessionId.test(report.sessionId) || (expected.sessionId !== undefined && report.sessionId !== expected.sessionId)
+    || !validDesktopScope(report.scope)
+    || !Array.isArray(report.checks) || report.checks.some((check) => !record(check) || !desktopChecks.includes(check.name) || check.status !== 'passed' || !Number.isFinite(check.elapsedMs) || check.elapsedMs < 0)
+    || new Set(report.checks.map((check) => check.name)).size !== report.checks.length) return false;
+  // Every desktop area needs its own passing check, so a missing UI or uninstall record can never PASS.
+  return report.status === 'passed' ? report.stage === 'done' && report.category === null && report.checks.length === desktopChecks.length && hasDesktopCleanupProof(report.cleanup)
+    : report.status === 'failed' && ['compatibility', 'infrastructure'].includes(report.category) && slug.test(report.stage ?? '') && report.stage !== 'done' && slug.test(report.check ?? '');
+}
+function desktopFailure(version, stage, error) { return { schema: 1, tool: desktopTool, platform: 'win32', arch: 'x64', version, status: 'failed', category: 'infrastructure', stage, check: stage, error: message(error) }; }
+function intactProcess(result) { return normalProcess(result) && result.truncated === false; }
+function desktopProcessMatches(report) { return intactProcess(report.process) && report.process.code === (report.status === 'passed' ? 0 : 1); }
+
+/** The report is read against a byte budget before parsing; the open handle keeps growth after the pre-check bounded too. */
+async function readDesktopReport(path) {
+  const known = await lstat(path);
+  if (known.isSymbolicLink() || !known.isFile() || known.size > desktopReportMaxBytes) throw new Error('Desktop report must be a plain file within its byte budget');
+  const handle = await open(path, 'r');
+  try {
+    if (!(await handle.stat()).isFile()) throw new Error('Desktop report must be a plain file');
+    const parts = []; let total = 0;
+    for (let size = Math.min(64 * 1024, desktopReportMaxBytes + 1); size > 0; size = Math.min(64 * 1024, desktopReportMaxBytes + 1 - total)) {
+      const chunk = Buffer.allocUnsafe(size);
+      const { bytesRead } = await handle.read(chunk, 0, size, null);
+      if (bytesRead === 0) break;
+      parts.push(chunk.subarray(0, bytesRead)); total += bytesRead;
+      if (total > desktopReportMaxBytes) throw new Error('Desktop report exceeds its byte budget');
+    }
+    return JSON.parse(Buffer.concat(parts, total).toString('utf8'));
+  } finally { await handle.close(); }
+}
+
+/** A failed install that still names the root, installation and owner it created keeps that ownership; less than that is honestly unknown. */
+function desktopPartialInstallation(error) {
+  const installation = error?.installation;
+  const identity = desktopIdentity(installation);
+  if (!record(installation) || typeof installation.root !== 'string' || !isAbsolute(installation.root) || !identity) return;
+  return { root: installation.root, ...identity };
+}
+
+const admissionFailure = (stage, text, cause) => {
+  const error = cause === undefined ? new Error(text) : new Error(text, { cause });
+  error.stage = stage;
+  return error;
+};
+const hasControlCharacter = (value) => [...value].some((character) => character.codePointAt(0) < 0x20 || character.codePointAt(0) === 0x7f);
+
+/** The strict CI publisher policy has no trusted default: absent or malformed material never falls back to a guess. */
+function parseDshDesktopPublisherPolicy(input) {
+  if (!record(input) || !record(input.publisher)) throw admissionFailure('policy', 'A verified publisher policy is required before any file read or child process');
+  const { subject, thumbprint } = input.publisher;
+  if (typeof subject !== 'string' || subject.trim() === '' || subject.length > desktopPublisherSubjectMax || hasControlCharacter(subject)) {
+    throw admissionFailure('policy', 'The publisher subject must be a bounded non-empty string');
+  }
+  if (typeof thumbprint !== 'string' || !desktopThumbprint.test(thumbprint)) {
+    throw admissionFailure('policy', 'The publisher thumbprint must be 40 to 128 hexadecimal characters');
+  }
+  return { subject, thumbprint: thumbprint.toUpperCase() };
+}
+
+/** A signature report is unknown input until every field is checked; Valid alone never proves the expected publisher. */
+function parseDshDesktopSignature(input, expected) {
+  let value = input;
+  if (typeof value === 'string') {
+    if (value.length > signatureOutputMaxBytes) throw admissionFailure('signature', 'The signature report exceeded its byte budget');
+    try { value = JSON.parse(value); } catch (error) { throw admissionFailure('signature', 'The signature report was not valid JSON', error); }
+  }
+  if (!record(value)) throw admissionFailure('signature', 'The signature report must be a JSON object');
+  if (value.status !== 'Valid') throw admissionFailure('signature', 'Authenticode status is not Valid');
+  if (typeof value.subject !== 'string' || value.subject.trim() === '' || value.subject.length > desktopPublisherSubjectMax
+    || hasControlCharacter(value.subject)) throw admissionFailure('signature', 'The signer subject is not a bounded non-empty string');
+  if (typeof value.thumbprint !== 'string' || !desktopThumbprint.test(value.thumbprint)) throw admissionFailure('signature', 'The signer thumbprint is not hexadecimal');
+  if (value.subject !== expected.subject || value.thumbprint.toUpperCase() !== expected.thumbprint) {
+    throw admissionFailure('signature', 'The signer does not match the verified publisher policy');
+  }
+  return { status: 'Valid', subject: value.subject, thumbprint: value.thumbprint.toUpperCase() };
+}
+
+/** Windows default adapter: a constant script, the target path in an environment field, no shell and a byte budget. */
+function readAuthenticodeSignature(path, { signal } = {}) {
+  if (typeof path !== 'string' || path === '') return Promise.reject(admissionFailure('signature', 'A signature target path is required'));
+  if (signal?.aborted) return Promise.reject(admissionFailure('cancelled', 'The signature read was cancelled before it started', signal.reason));
+  return new Promise((resolve, reject) => {
+    let child;
+    try {
+      // Windows PowerShell must construct its own module path. Inheriting a
+      // PowerShell 7 path can load incompatible security type data before signing reads.
+      const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.toLowerCase() !== 'psmodulepath'));
+      child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', authenticodeSignatureScript], {
+        env: { ...env, DSH_ADMIT_SIGNATURE_PATH: path }, windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (error) { reject(admissionFailure('signature', `The signature reader could not start: ${message(error)}`, error)); return; }
+    let settled = false; let closing = false; let pendingError; let waitTimer; let total = 0;
+    const stdout = []; const releaseUnclear = [];
+    const collect = (chunk) => {
+      if (settled || closing) return false;
+      total += chunk.length;
+      if (total <= signatureOutputMaxBytes) return true;
+      beginRelease(admissionFailure('signature', 'The signature reader exceeded its output budget'));
+      return false;
+    };
+    const onStdout = (chunk) => { if (collect(chunk)) stdout.push(chunk); };
+    const onStderr = (chunk) => { collect(chunk); };
+    const detachData = () => {
+      child.stdout?.removeListener('data', onStdout);
+      child.stderr?.removeListener('data', onStderr);
+    };
+    const finish = (value, error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(waitTimer);
+      if (signal) signal.removeEventListener('abort', onAbort);
+      detachData();
+      // A late error from an already-finished child stays owned instead of becoming unhandled.
+      child?.on?.('error', () => {});
+      if (error && releaseUnclear.length > 0) error.releaseUnclear = releaseUnclear.slice();
+      if (error) reject(error); else resolve(value);
+    };
+    const releaseParent = () => {
+      try { child.stdout?.destroy?.(); } catch { /* The pipe may already be gone. */ }
+      try { child.stderr?.destroy?.(); } catch { /* The pipe may already be gone. */ }
+      try { child.unref?.(); } catch { /* The child may already be gone. */ }
+    };
+    /** Only an observed close proves the process exited; otherwise the bounded wait reports an unconfirmed release. */
+    const beginRelease = (error) => {
+      if (settled || closing) return;
+      closing = true;
+      pendingError = error;
+      waitTimer = setTimeout(() => {
+        releaseUnclear.push('The signature reader did not close after cancellation');
+        releaseParent();
+        finish(undefined, pendingError);
+      }, signatureAbortCloseMs);
+      try { child.kill(); } catch (killError) { releaseUnclear.push(`The signature reader could not be asked to stop: ${message(killError)}`); }
+    };
+    const onAbort = () => beginRelease(admissionFailure('cancelled', 'The signature read was cancelled', signal?.reason));
+    if (signal) { signal.addEventListener('abort', onAbort, { once: true }); if (signal.aborted) onAbort(); }
+    child.stdout.on('data', onStdout);
+    child.stderr.on('data', onStderr);
+    // An error event is not proof of exit: it enters the same bounded release and never replaces the first primary cause.
+    child.on('error', (error) => {
+      if (settled || closing) return;
+      beginRelease(admissionFailure('signature', `The signature reader failed: ${message(error)}`, error));
+    });
+    child.once('close', (code, signalName) => {
+      if (settled) return;
+      if (closing) { finish(undefined, pendingError); return; }
+      if (signalName !== null || code !== 0) {
+        finish(undefined, admissionFailure('signature', `The signature reader exited abnormally (code ${code}, signal ${signalName})`));
+        return;
+      }
+      finish(Buffer.concat(stdout).toString('utf8'));
+    });
+  });
+}
+
+const desktopFileState = (stats) => ({ dev: stats.dev, ino: stats.ino, nlink: stats.nlink, size: stats.size,
+  mtimeMs: stats.mtimeMs, ctimeMs: stats.ctimeMs, birthtimeMs: stats.birthtimeMs });
+const sameDesktopFileState = (left, right) => left.dev === right.dev && left.ino === right.ino && left.nlink === right.nlink
+  && left.size === right.size && left.mtimeMs === right.mtimeMs && left.ctimeMs === right.ctimeMs && left.birthtimeMs === right.birthtimeMs;
+
+/** A cleanup problem never hides the primary failure; frozen or primitive failures are wrapped, not mutated. */
+function withCleanup(failure, outcome) {
+  const cleanupError = outcome.done
+    ? `The installer file handle close failed: ${message(outcome.error)}`
+    : 'The installer file handle close did not settle within its cleanup budget';
+  const cleanupCause = outcome.done ? outcome.error : undefined;
+  const attach = (target) => {
+    target.cleanupError = cleanupError;
+    if (cleanupCause !== undefined) target.cleanupCause = cleanupCause;
+  };
+  if (failure !== null && (typeof failure === 'object' || typeof failure === 'function')) {
+    try { attach(failure); return failure; } catch { /* Frozen or sealed: wrap below. */ }
+  }
+  const stage = failure !== null && typeof failure === 'object' && typeof failure.stage === 'string' ? failure.stage : 'cleanup';
+  const cause = failure !== null && typeof failure === 'object' && 'cause' in failure ? failure.cause : failure;
+  const wrapped = admissionFailure(stage, message(failure), cause);
+  wrapped.originalError = failure;
+  try { attach(wrapped); } catch { /* A fresh Error is extensible. */ }
+  return wrapped;
+}
+
+/**
+ * Reads one caller-owned installer, proves its fixed identity, digest and Authenticode signer against a caller-supplied
+ * policy, and reports only this observation. It never starts an installer; the result is not an unforgeable execution
+ * authorization, and a future executor must re-verify the exact bytes it runs.
+ */
+export async function admitDshDesktopInstaller({ path, artifact, policy, readSignature, signal, timeoutMs = 120000 } = {}) {
+  const publisher = parseDshDesktopPublisherPolicy(policy);
+  let plan;
+  try { plan = desktopInstallerPlan(artifact); }
+  catch (error) { throw admissionFailure('artifact', message(error), error); }
+  if (typeof path !== 'string' || !isAbsolute(path) || /^[\\/]{2}/.test(path)) {
+    throw admissionFailure('path', 'The installer path must be an absolute local file path');
+  }
+  if (readSignature !== undefined && typeof readSignature !== 'function') {
+    throw admissionFailure('signature', 'The signature reader must be a function when supplied');
+  }
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+    throw admissionFailure('timeout', 'The admission deadline must be a positive integer of milliseconds');
+  }
+  const startedAt = Date.now();
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(admissionFailure('cancelled', `Installer admission exceeded its ${timeoutMs}ms deadline`)), timeoutMs);
+  const expired = new Promise((_, reject) => deadline.signal.addEventListener('abort', () => reject(deadline.signal.reason), { once: true }));
+  expired.catch(() => {});
+  const forward = () => deadline.abort(signal.reason);
+  if (signal) { if (signal.aborted) deadline.abort(signal.reason); else signal.addEventListener('abort', forward); }
+  // The live signal and the wall clock both decide; cleanup that crosses the deadline is a failure, not a success.
+  const cancelled = () => Boolean(signal?.aborted) || deadline.signal.aborted || Date.now() - startedAt >= timeoutMs;
+  const left = () => Math.max(timeoutMs - (Date.now() - startedAt), 0);
+  let handle; let closeOutcome; let failure; let failed = false;
+  const unresolved = [];
+  const cancellationError = (text) => {
+    const error = admissionFailure('cancelled', text, deadline.signal.reason);
+    error.unresolvedResources = unresolved.slice();
+    return error;
+  };
+  const fileFailure = (text, error) => (error?.stage ? error : admissionFailure('file', `${text}: ${message(error)}`, error));
+  const closeFailure = (outcome) => {
+    if (!outcome) return;
+    if (!outcome.done) return admissionFailure('cleanup', 'The installer file handle close did not settle within its cleanup budget');
+    if (outcome.failed) return admissionFailure('cleanup', `The installer file handle close failed: ${message(outcome.error)}`, outcome.error);
+  };
+  // The close starts once and keeps its single outcome; no later path starts a second close.
+  const ensureClose = (budgetMs) => {
+    if (!handle) return null;
+    if (!closeOutcome) closeOutcome = settleWithin(() => handle.close(), Math.max(0, budgetMs));
+    return closeOutcome;
+  };
+  const bounded = async (label, operation) => {
+    if (cancelled()) throw cancellationError(`Installer admission was cancelled before its ${label}`);
+    const task = Promise.resolve().then(operation);
+    task.catch(() => {});
+    const outcome = await Promise.race([
+      task.then((value) => ({ value }), (error) => ({ error })),
+      expired.then(() => ({ stopped: true }), () => ({ stopped: true })),
+    ]);
+    if (outcome.stopped) { unresolved.push(label); throw cancellationError(`Installer admission was cancelled during its ${label}`); }
+    if ('error' in outcome) throw outcome.error;
+    return outcome.value;
+  };
+  let result;
+  try {
+    if (cancelled()) throw cancellationError('Installer admission was cancelled before it started');
+    let before;
+    try { before = await bounded('read', () => lstat(path)); }
+    catch (error) { throw fileFailure('The installer file could not be read', error); }
+    if (before.isSymbolicLink() || !before.isFile() || before.nlink !== 1 || before.size !== plan.size) {
+      throw admissionFailure('file', 'The installer must be one plain, unlinked file of the pinned size');
+    }
+    if (cancelled()) throw cancellationError('Installer admission was cancelled before opening the file');
+    const openTask = Promise.resolve().then(() => open(path, 'r'));
+    openTask.catch(() => {});
+    const openOutcome = await Promise.race([
+      openTask.then((value) => ({ value }), (error) => ({ error })),
+      expired.then(() => ({ stopped: true }), () => ({ stopped: true })),
+    ]);
+    if (openOutcome.stopped) {
+      // A cancelled wait may still produce a handle later; that owner closes it and never restores success.
+      const lateOpen = { settled: false, closed: false, failed: false, releaseUnclear: [] };
+      openTask.then(async (lateHandle) => {
+        lateOpen.settled = true;
+        const closed = await settleWithin(() => lateHandle.close(), admissionCleanupMs);
+        if (!closed.done) { lateOpen.releaseUnclear.push('The late installer file handle close did not settle'); return; }
+        if (closed.failed) { lateOpen.failed = true; lateOpen.releaseUnclear.push(`The late installer file handle close failed: ${message(closed.error)}`); return; }
+        lateOpen.closed = true;
+      }, (error) => {
+        lateOpen.settled = true; lateOpen.failed = true;
+        lateOpen.releaseUnclear.push(`The late installer open failed: ${message(error)}`);
+      }).catch(() => {});
+      unresolved.push('open');
+      const error = cancellationError('Installer admission was cancelled during the file open');
+      error.lateOpen = lateOpen;
+      throw error;
+    }
+    if ('error' in openOutcome) throw fileFailure('The installer file could not be opened', openOutcome.error);
+    handle = openOutcome.value;
+    let opened;
+    try { opened = await bounded('read', () => handle.stat()); }
+    catch (error) { throw fileFailure('The installer file state could not be read', error); }
+    if (!opened.isFile() || opened.nlink !== 1 || opened.size !== plan.size || !sameDesktopFileState(desktopFileState(before), desktopFileState(opened))) {
+      throw admissionFailure('file', 'The opened installer is not the same plain file that was checked');
+    }
+    const hash = createHash('sha512');
+    const buffer = Buffer.allocUnsafe(64 * 1024);
+    let read = 0;
+    for (;;) {
+      const chunk = await bounded('read', () => handle.read(buffer, 0, buffer.length, null));
+      if (chunk.bytesRead === 0) break;
+      read += chunk.bytesRead;
+      if (read > plan.size) throw admissionFailure('file', 'The installer file exceeded the pinned size');
+      hash.update(buffer.subarray(0, chunk.bytesRead));
+    }
+    if (read !== plan.size) throw admissionFailure('file', 'The installer file was truncated below the pinned size');
+    if (hash.digest('base64') !== plan.sha512) throw admissionFailure('file', 'The installer file failed SHA-512 verification');
+    let after; let pathAfter;
+    try { after = await bounded('read', () => handle.stat()); pathAfter = await bounded('read', () => lstat(path)); }
+    catch (error) { throw fileFailure('The installer file state could not be re-read', error); }
+    if (pathAfter.isSymbolicLink() || !pathAfter.isFile() || pathAfter.nlink !== 1
+      || !sameDesktopFileState(desktopFileState(opened), desktopFileState(after))
+      || !sameDesktopFileState(desktopFileState(opened), desktopFileState(pathAfter))) {
+      throw admissionFailure('file', 'The installer file changed during verification');
+    }
+    if (cancelled()) throw cancellationError('Installer admission was cancelled before signature verification');
+    const reader = readSignature ?? readAuthenticodeSignature;
+    const signatureTask = Promise.resolve().then(() => reader(path, { signal: deadline.signal }));
+    signatureTask.catch(() => {});
+    const signatureOutcome = await Promise.race([
+      signatureTask.then((value) => ({ value }), (error) => ({ error })),
+      expired.then(() => ({ stopped: true }), () => ({ stopped: true })),
+    ]);
+    let signature;
+    if (signatureOutcome.stopped) {
+      unresolved.push('signature');
+      if (readSignature === undefined) {
+        // The default adapter gets its own bounded close wait; keep its actual primary cause and unconfirmed release.
+        const late = await signatureTask.then((value) => ({ value }), (signatureError) => ({ error: signatureError }));
+        if ('error' in late) {
+          const error = late.error;
+          if (error !== null && (typeof error === 'object' || typeof error === 'function') && typeof error.stage === 'string') {
+            try { error.unresolvedResources = unresolved.slice(); } catch { /* Fresh admission errors are extensible. */ }
+            throw error;
+          }
+          const wrapped = admissionFailure('signature', message(error), error);
+          wrapped.unresolvedResources = unresolved.slice();
+          throw wrapped;
+        }
+      }
+      throw cancellationError('Installer admission was cancelled during signature verification');
+    }
+    if ('error' in signatureOutcome) {
+      if (signatureOutcome.error?.stage) throw signatureOutcome.error;
+      if (cancelled()) throw cancellationError('Installer admission was cancelled during signature verification');
+      throw admissionFailure('signature', message(signatureOutcome.error), signatureOutcome.error);
+    }
+    signature = signatureOutcome.value;
+    // A stat fingerprint is not a content identity: a same-length rewrite can keep every state field equal.
+    // Re-read the same handle from offset zero under the same deadline and re-prove the pinned digest.
+    const recheck = createHash('sha512');
+    let rechecked = 0;
+    for (;;) {
+      const chunk = await bounded('read', () => handle.read(buffer, 0, buffer.length, rechecked));
+      if (chunk.bytesRead === 0) break;
+      rechecked += chunk.bytesRead;
+      if (rechecked > plan.size) throw admissionFailure('file', 'The installer file exceeded the pinned size');
+      recheck.update(buffer.subarray(0, chunk.bytesRead));
+    }
+    if (rechecked !== plan.size || recheck.digest('base64') !== plan.sha512) {
+      throw admissionFailure('file', 'The installer file changed during signature verification');
+    }
+    // The digest proves the old handle's bytes; the final state check must cover the whole read, not precede it.
+    let afterSignature; let pathAfterSignature;
+    try { afterSignature = await bounded('read', () => handle.stat()); pathAfterSignature = await bounded('read', () => lstat(path)); }
+    catch (error) { throw fileFailure('The installer file state could not be re-read after signing', error); }
+    if (pathAfterSignature.isSymbolicLink() || !pathAfterSignature.isFile() || pathAfterSignature.nlink !== 1
+      || !sameDesktopFileState(desktopFileState(opened), desktopFileState(afterSignature))
+      || !sameDesktopFileState(desktopFileState(opened), desktopFileState(pathAfterSignature))) {
+      throw admissionFailure('file', 'The installer file changed during signature verification');
+    }
+    const signer = parseDshDesktopSignature(signature, publisher);
+    const closeProblem = closeFailure(await ensureClose(left()));
+    if (closeProblem) throw closeProblem;
+    if (cancelled()) throw cancellationError('Installer admission was cancelled before its final decision');
+    result = { path, version: plan.version, size: plan.size, integrity: `sha512-${plan.sha512}`, filename: plan.filename, publisher: signer };
+  } catch (error) {
+    failed = true;
+    failure = error;
+  } finally {
+    if (failed) {
+      const outcome = await ensureClose(admissionCleanupMs);
+      const problem = closeFailure(outcome);
+      if (problem && failure?.stage !== 'cleanup') failure = withCleanup(failure, outcome);
+    }
+    clearTimeout(timer);
+    if (signal) signal.removeEventListener('abort', forward);
+  }
+  if (failed) throw failure;
+  return result;
+}
+
+/** Desktop release needs the Host's own exit, the official uninstall and both registration cleanups; a kill is not release. */
+export function hasDesktopCleanupProof(cleanup) {
+  return record(cleanup) && cleanup.hostExited === true && cleanup.uninstalled === true && cleanup.registrationRemoved === true
+    && cleanup.systemRegistrationRemoved === true && cleanup.forced === false
+    && (cleanup.errors === undefined || (Array.isArray(cleanup.errors) && cleanup.errors.length === 0));
+}
+
+/** A runner observation, not a native release proof: only a complete C1 process result can pass this boundary. */
+function desktopOperationClosed(result) {
+  return record(result) && result.closed === true && result.failed === false && result.failure === undefined
+    && Number.isSafeInteger(result.pid) && result.pid > 0 && typeof result.stdout === 'string' && typeof result.stderr === 'string'
+    && result.code === 0 && result.signal === null && result.timedOut === false && result.cancelled === false && result.truncated === false
+    && Array.isArray(result.releaseUnclear) && result.releaseUnclear.length === 0
+    && Array.isArray(result.secondaryProblems) && result.secondaryProblems.length === 0;
+}
+
+/**
+ * Guards a runner-owned uninstall callback with its own Host exit observation. Neither callback has a default native
+ * implementation: the runner must supply verified commands and independently observe the Host, not an arbitrary helper.
+ * A normal uninstall process result does not establish official removal or either registration cleanup.
+ */
+export async function runDshDesktopUninstall(options = {}, operations = {}) {
+  const { installation, launch, runId, signal, timeoutMs } = options;
+  const { observeHostExit, uninstall } = operations;
+  const expected = desktopExpectation(installation, launch, runId);
+  if (!expected || typeof installation.root !== 'string' || !isAbsolute(installation.root) || installation.root.includes('\0'))
+    throw new Error('Desktop uninstall needs this installation root, owner, run and caller Host identity');
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > maxTimerMs) throw new Error('Desktop uninstall needs a valid total deadline');
+  if (typeof observeHostExit !== 'function' || typeof uninstall !== 'function') throw new Error('Desktop uninstall needs both runner operations');
+  const owned = Object.freeze({ root: installation.root, installationId: expected.installationId, owner: expected.owner });
+  const caller = Object.freeze({ instanceId: expected.instanceId, sessionId: expected.sessionId });
+  const binding = { ...owned, ...caller, runId: expected.runId };
+  let uninstallStarted = false;
+  let deadlineTriggered = false;
+  const deadlineAt = Date.now() + timeoutMs;
+  const controller = new AbortController();
+  const fail = (stage, text, cause) => Object.assign(new Error(text, { cause }), {
+    stage, installation: owned, uninstallStarted, timedOut: deadlineTriggered || Date.now() >= deadlineAt, cancelled: signal?.aborted === true,
+  });
+  const forward = () => controller.abort(signal.reason);
+  const assertActive = (stage) => {
+    if (signal?.aborted || controller.signal.aborted || Date.now() >= deadlineAt) {
+      if (!controller.signal.aborted) controller.abort(new Error('Desktop uninstall total deadline expired'));
+      throw fail(stage, 'Desktop uninstall was cancelled or its total deadline expired; release remains unverified', controller.signal.reason);
+    }
+  };
+  let stopWaiting;
+  const stopped = new Promise((resolve) => { stopWaiting = () => resolve({ stopped: true }); });
+  controller.signal.addEventListener('abort', stopWaiting, { once: true });
+  const timer = setTimeout(() => {
+    deadlineTriggered = true;
+    controller.abort(new Error('Desktop uninstall total deadline expired'));
+  }, timeoutMs);
+  if (signal) { signal.addEventListener('abort', forward, { once: true }); if (signal.aborted) forward(); }
+  const invoke = async (operation, stage) => {
+    assertActive(stage);
+    // Attach both outcomes even when cancellation wins: a late rejected operation remains owned by its runner.
+    const context = { installation: owned, launch: caller, runId: expected.runId, signal: controller.signal,
+      timeoutMs: Math.max(1, deadlineAt - Date.now()) };
+    let pending;
+    try {
+      if (stage === 'desktop-uninstall') uninstallStarted = true;
+      pending = Promise.resolve(operation(context)).then((value) => ({ value }), (error) => ({ error, failed: true }));
+    }
+    catch (error) { throw fail(stage, `Desktop runner failed: ${message(error)}`, error); }
+    const outcome = await Promise.race([pending, stopped]);
+    assertActive(stage);
+    if (outcome.failed) throw fail(stage, `Desktop runner failed: ${message(outcome.error)}`, outcome.error);
+    return outcome.value;
+  };
+  try {
+    const observation = await invoke(observeHostExit, 'desktop-host-exit');
+    if (!record(observation) || !Object.entries(binding).every(([key, value]) => observation[key] === value)
+      || observation.forced !== false || !desktopOperationClosed(observation.process)) {
+      throw fail('desktop-host-exit', 'This Host has no complete natural exit observation; do not uninstall');
+    }
+    // Freeze the observation before handing control to an operation that may await or mutate its own records.
+    const hostExit = { ...binding, forced: false, process: { ...observation.process, releaseUnclear: [], secondaryProblems: [] } };
+    assertActive('desktop-uninstall');
+    const result = await invoke(uninstall, 'desktop-uninstall');
+    if (!desktopOperationClosed(result)) throw fail('desktop-uninstall', 'The uninstall process did not close normally; removal remains unverified', result);
+    const resultSnapshot = { hostExit, process: { ...result, releaseUnclear: [], secondaryProblems: [] } };
+    assertActive('desktop-uninstall');
+    return resultSnapshot;
+  } catch (error) {
+    if (!controller.signal.aborted) controller.abort(error);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    controller.signal.removeEventListener('abort', stopWaiting);
+    if (signal) signal.removeEventListener('abort', forward);
+  }
+}
+
+/** Every Desktop attempt owns a fresh directory, run ID and caller launch record; stale or foreign reports are never read. */
+export async function runDshDesktopAttempt({ output, label, artifact, installation, launch, runId = randomUUID() }, execute) {
+  if (!['baseline', 'candidate', 'retry'].includes(label)) throw new Error('Invalid Harness desktop probe label');
+  const expected = knownDesktopArtifact(artifact) ? desktopExpectation(installation, launch, runId) : undefined;
+  if (!expected) throw new Error('Desktop attempt needs a known artifact identity, installation, run ID, caller instance and session');
+  const directory = await mkdtemp(join(output, `${label}-desktop-`));
+  const reportPath = join(directory, 'report.json');
+  let result;
+  try { result = await execute({ reportPath, runId, directory }); }
+  catch (error) { return desktopFailure(artifact.version, 'desktop-session', error); }
+  if (!intactProcess(result)) return desktopFailure(artifact.version, 'desktop-session', 'Desktop session did not exit normally with complete output; release is unknown');
+  let report;
+  try { report = await readDesktopReport(reportPath); }
+  catch { return desktopFailure(artifact.version, 'desktop-report', 'Desktop session did not produce a fresh valid report'); }
+  if (!validDesktopReport(report, artifact, expected) || result.code !== (report.status === 'passed' ? 0 : 1))
+    return desktopFailure(artifact.version, 'desktop-report', 'Desktop identity, evidence, scope or process exit disagrees with this attempt');
+  return { ...report, process: { code: result.code, signal: result.signal, timedOut: false, truncated: false } };
+}
+
+/** Every child gets a new directory and UUID; stale PASS files are never read. */
+export async function runDshProbeAttempt({ output, label, artifact }, execute) {
+  return runNpmProbeAttempt({ output, label, artifact }, execute, { valid: validReport, fail: infrastructure });
+}
+
+function onboardingInfrastructure(version, stage) {
+  return { schema: 1, tool: DSH_ONBOARDING_TOOL, platform: 'win32', arch: 'x64', version,
+    status: 'failed', category: 'infrastructure', stage, check: stage,
+    error: 'The from-zero probe did not provide valid fresh process/report evidence; inspect its owned artifacts.' };
+}
+
+export async function runDshOnboardingAttempt(options, execute) {
+  return runNpmProbeAttempt(options, execute, { valid: validDshOnboardingReport, fail: onboardingInfrastructure, maxReportBytes: 1024 * 1024 });
+}
+
+async function runNpmProbeAttempt({ output, label, artifact }, execute, contract) {
+  if (!['baseline', 'candidate', 'retry'].includes(label)) throw new Error('Invalid Harness probe label');
+  const directory = await mkdtemp(join(output, `${label}-`));
+  const reportPath = join(directory, 'report.json'); const runId = randomUUID();
+  let result;
+  try { result = await execute({ reportPath, runId, directory }); }
+  catch (error) { return contract.fail(artifact.version, 'probe-process', error); }
+  if (!normalProcess(result)) return contract.fail(artifact.version, 'probe-process', 'Probe did not exit normally; runtime release is unknown');
+  let report;
+  try {
+    if (contract.maxReportBytes !== undefined) {
+      const details = await lstat(reportPath);
+      if (!details.isFile() || details.isSymbolicLink() || details.size > contract.maxReportBytes) throw new Error('Invalid owned report file');
+    }
+    report = JSON.parse(await readFile(reportPath, 'utf8'));
+  } catch { return contract.fail(artifact.version, 'probe-report', 'Probe did not produce a fresh valid report'); }
+  if (!contract.valid(report, artifact, runId) || result.code !== (report.status === 'passed' ? 0 : 1)) return contract.fail(artifact.version, 'probe-report', 'Probe identity, complete checks, scope or process exit disagrees with the fresh report');
+  return { ...report, process: { code: result.code, signal: result.signal, timedOut: result.timedOut } };
+}
+
+function classify(baseline, candidate, retry) {
+  if (baseline?.status !== 'passed') return { kind: 'baseline-failed', notify: false };
+  if (candidate?.category === 'infrastructure' || retry?.category === 'infrastructure') return { kind: 'infrastructure', notify: false };
+  if (candidate?.status === 'passed') return { kind: 'compatible', notify: false };
+  if (retry?.status === 'passed') return { kind: 'flaky', notify: false };
+  if (candidate?.status === 'failed' && retry?.status === 'failed' && candidate.category === 'compatibility' && retry.category === 'compatibility'
+    && candidate.version === retry.version && candidate.check === retry.check && candidate.stage === retry.stage) return { kind: 'regression', notify: true };
+  return { kind: 'inconclusive', notify: false };
+}
+
+/** One install, evidence and removal cycle per build; the next install waits for a proven release. */
+async function serialSequence(builds, config) {
+  const summary = { schema: 1, tool: config.tool, platform: 'win32', arch: 'x64', builds, scope: config.scope, installationCleanup: 'incomplete' };
+  async function attempt(artifact, label) {
+    let installation;
+    try { installation = await config.operations.install(artifact, label); }
+    catch (error) {
+      // A structured partial install keeps the ownership it created; an unstructured throw stays honestly unknown.
+      const partial = config.partialInstallation?.(error);
+      if (partial) summary.retainedInstallation = { label, version: artifact.version, ...partial, reason: message(error) };
+      throw error;
+    }
+    const context = config.context?.();
+    // A retained record keeps what this run knew: label, version, root, and — where the entry allows it — the
+    // installation identity, owner and the real failure; nothing is invented from error text alone.
+    const retain = (reason, error, threw = false) => {
+      summary.retainedInstallation = { label, version: artifact.version, root: installation.root, reason, ...config.retainedIdentity?.(installation, error, threw) };
+      return summary.retainedInstallation;
+    };
+    let report; let failure; let threw = false;
+    try { report = await config.operations.probe(installation, artifact, label, context); }
+    catch (error) { threw = true; failure = error; report = config.fail(artifact.version, 'process', error); }
+    if (!config.verify(report, artifact, installation, context)) report = config.fail(artifact.version, 'report', new Error('Fresh process/report evidence is invalid'));
+    summary[label] = report;
+    if (!config.released(report.cleanup)) {
+      // A captured throw is real even when its value is falsy; only a probe that returned keeps the generic wording.
+      throw new Error(retain('Owned runtime release is unknown; do not remove or start another build', failure, threw).reason);
+    }
+    try { await config.operations.remove(installation, artifact, label); }
+    catch (error) { retain(message(error), error, true); throw error; }
+    return report;
+  }
+  try {
+    summary.baseline = await attempt(builds.baseline, 'baseline');
+    summary.candidate = await attempt(builds.candidate, 'candidate');
+    if (summary.baseline.status === 'passed' && summary.candidate.status === 'failed' && summary.candidate.category === 'compatibility') summary.retry = await attempt(builds.candidate, 'retry');
+    summary.installationCleanup = 'removed'; summary.classification = classify(summary.baseline, summary.candidate, summary.retry);
+  } catch (error) { summary.error = message(error); summary.classification = { kind: 'infrastructure', notify: false }; }
+  return summary;
+}
+
+export function runDshBuildSequence(builds, operations) {
+  return serialSequence(builds, {
+    tool, scope, operations,
+    verify: (report, artifact) => validReport(report, artifact) && processMatches(report),
+    released: hasDshRuntimeReleaseProof,
+    fail: (version, phase, error) => infrastructure(version, phase === 'process' ? 'probe-process' : 'probe-report', error),
+  });
+}
+
+export function runDshOnboardingSequence(builds, operations) {
+  return serialSequence(builds, {
+    tool: DSH_ONBOARDING_TOOL, scope: DSH_ONBOARDING_SCOPE, operations,
+    verify: validDshOnboardingProcessReport, released: hasDshRuntimeReleaseProof,
+    fail: (version, phase) => onboardingInfrastructure(version, phase === 'process' ? 'probe-process' : 'probe-report'),
+  });
+}
+
+/** Each entry binds its probe, validator, scope and output together; the established default is unchanged. */
+export function resolveDshCiSuite(value = 'communication') {
+  if (!['communication', 'onboarding'].includes(value)) throw new Error('DSH_COMPAT_SUITE must be communication or onboarding');
+  const onboarding = value === 'onboarding';
+  return Object.freeze({
+    tool: onboarding ? DSH_ONBOARDING_TOOL : tool,
+    scope: Object.freeze({ ...(onboarding ? DSH_ONBOARDING_SCOPE : scope) }),
+    evidenceDirectory: onboarding ? 'dsh-onboarding-evidence' : 'dsh-compat-evidence',
+    script: onboarding ? 'dsh-onboarding.mjs' : 'dsh-compat.mjs', timeoutMs: onboarding ? 600000 : 360000,
+    attempt: onboarding ? runDshOnboardingAttempt : runDshProbeAttempt,
+    sequence: onboarding ? runDshOnboardingSequence : runDshBuildSequence,
+  });
+}
+
+export function runDshDesktopSequence(builds, operations) {
+  const installations = new Set(); const instances = new Set();
+  return serialSequence(builds, {
+    tool: desktopTool, scope: desktopScope, operations,
+    // The sequence mints the run identity it hands to the attempt it uses; the launch record stays with the runner.
+    context: () => ({ runId: randomUUID() }),
+    partialInstallation: desktopPartialInstallation,
+    retainedIdentity: (installation, error, threw) => {
+      const identity = desktopIdentity(installation);
+      return identity ? { ...identity, ...(threw ? { reason: message(error) } : {}) } : undefined;
+    },
+    verify: (report, artifact, installation, context) => {
+      const expected = desktopBinding(installation, context?.runId);
+      if (!expected || installations.has(expected.installationId) || instances.has(report?.instanceId)
+        || !validDesktopReport(report, artifact, expected) || !desktopProcessMatches(report)) return false;
+      installations.add(expected.installationId); instances.add(report.instanceId);
+      return true;
+    },
+    released: hasDesktopCleanupProof,
+    fail: (version, phase, error) => desktopFailure(version, phase === 'process' ? 'desktop-session' : 'desktop-report', error),
+  });
+}
+
+export function dshRegressionIdentity(summary) {
+  if (!record(summary) || summary.schema !== 1 || summary.tool !== tool || summary.platform !== 'win32' || summary.arch !== 'x64' || !validScope(summary.scope)
+    || summary.installationCleanup !== 'removed' || summary.classification?.kind !== 'regression' || summary.classification?.notify !== true || !record(summary.builds)) return;
+  const { builds, baseline, candidate, retry } = summary;
+  try {
+    for (const artifact of [builds.baseline, builds.candidate]) parseDshNpmManifest({ ...artifact, dist: { tarball: artifact.url, integrity: artifact.integrity } }, 'win32', 'x64');
+    parsePnpmManifest({ ...builds.packageManager, dist: { tarball: builds.packageManager.url, integrity: builds.packageManager.integrity } });
+  } catch { return; }
+  if (!validReport(baseline, builds.baseline) || !validReport(candidate, builds.candidate) || !validReport(retry, builds.candidate)
+    || [baseline, candidate, retry].some((item) => !processMatches(item) || !hasDshRuntimeReleaseProof(item.cleanup))
+    || new Set([baseline.runId, candidate.runId, retry.runId]).size !== 3 || classify(baseline, candidate, retry).kind !== 'regression') return;
+  return { marker: `<!-- dsh-compat:${candidate.version}:win32:${candidate.check} -->`, title: `DeepSeek Harness ${candidate.version}: ${candidate.check} compatibility regression (win32)` };
+}
+
+export function dshOnboardingRegressionIdentity(summary) {
+  if (!record(summary) || summary.schema !== 1 || summary.tool !== DSH_ONBOARDING_TOOL || summary.platform !== 'win32' || summary.arch !== 'x64'
+    || !record(summary.scope) || Object.keys(summary.scope).length !== Object.keys(DSH_ONBOARDING_SCOPE).length
+    || !Object.entries(DSH_ONBOARDING_SCOPE).every(([key, value]) => Object.hasOwn(summary.scope, key) && summary.scope[key] === value)
+    || summary.installationCleanup !== 'removed' || summary.classification?.kind !== 'regression' || summary.classification?.notify !== true || !record(summary.builds)) return;
+  const { builds, baseline, candidate, retry } = summary;
+  try {
+    for (const artifact of [builds.baseline, builds.candidate]) parseDshNpmManifest({ ...artifact, dist: { tarball: artifact.url, integrity: artifact.integrity } }, 'win32', 'x64');
+    parsePnpmManifest({ ...builds.packageManager, dist: { tarball: builds.packageManager.url, integrity: builds.packageManager.integrity } });
+  } catch { return; }
+  if (!validDshOnboardingProcessReport(baseline, builds.baseline) || !validDshOnboardingProcessReport(candidate, builds.candidate) || !validDshOnboardingProcessReport(retry, builds.candidate)
+    || [baseline, candidate, retry].some((item) => !hasDshRuntimeReleaseProof(item.cleanup))
+    || new Set([baseline.runId, candidate.runId, retry.runId]).size !== 3 || classify(baseline, candidate, retry).kind !== 'regression') return;
+  return { marker: `<!-- dsh-onboarding-compat:${candidate.version}:win32:${candidate.check} -->`,
+    title: `DeepSeek Harness ${candidate.version}: ${candidate.check} from-zero compatibility regression (win32)` };
+}
+
+async function fetchBytes(url, maxBytes) {
+  const response = await globalThis.fetch(url, { redirect: 'error', signal: globalThis.AbortSignal.timeout(120000) });
+  if (!response.ok || Number(response.headers.get('content-length')) > maxBytes || !response.body) throw new Error('Official npm request failed or exceeded its byte budget');
+  const reader = response.body.getReader(); const chunks = []; let size = 0;
+  try { for (;;) { const part = await reader.read(); if (part.done) break; size += part.value.length; if (size > maxBytes) throw new Error('Official npm response exceeded its byte budget'); chunks.push(part.value); } }
+  finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+  return Buffer.concat(chunks);
+}
+
+async function ownedChild(parent, target, owner) {
+  const real = await realpath(target); const child = relative(parent, real);
+  if (real !== target || !child || isAbsolute(child) || child === '..' || child.startsWith(`..${sep}`) || await readFile(join(real, '.fixture-owner'), 'utf8') !== owner) throw new Error('Unsafe Harness compatibility cleanup target');
+  return real;
+}
+
+async function main() {
+  if (process.env.CROSSCHAT_LIVE !== '1') throw new Error('CROSSCHAT_LIVE=1 is required for official Harness downloads and isolated probes');
+  if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Only Windows x64 is configured; platform matrix work remains separate');
+  const suite = resolveDshCiSuite(process.env.DSH_COMPAT_SUITE);
+  const output = resolve(process.env.DSH_COMPAT_EVIDENCE ?? suite.evidenceDirectory); await mkdir(output, { recursive: true });
+  const temp = await realpath(tmpdir()); const root = await realpath(await mkdtemp(join(temp, 'crosschat-dsh-ci-'))); const owner = randomUUID();
+  await writeFile(join(root, '.fixture-owner'), owner);
+  const installations = []; const archives = new Map();
+  let npmCache;
+  let summary = { schema: 1, tool: suite.tool, platform: 'win32', arch: 'x64', scope: suite.scope, builds: {}, classification: { kind: 'infrastructure', notify: false }, installationCleanup: 'incomplete' };
+  async function archive(artifact) {
+    const key = createHash('sha256').update(artifact.integrity).digest('hex');
+    if (!archives.has(key)) {
+      const bytes = await fetchBytes(artifact.url, 512 * 1024 * 1024); verifyNpmArtifact(bytes, artifact);
+      const path = join(root, `${key}.tgz`); await writeFile(path, bytes); archives.set(key, path);
+    }
+    return archives.get(key);
+  }
+  async function cleanupTaskRoot() {
+    if (installations.some((installation) => !installation.safe)) throw new Error('An installer or runtime has unknown release state; the owned CI directory is retained');
+    if (!basename(root).startsWith('crosschat-dsh-ci-')) throw new Error('Unexpected Harness compatibility task root');
+    await rm(await ownedChild(temp, root, owner), { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
+  try {
+    npmCache = await resolveDshNpmCache(root, process.env.DSH_COMPAT_NPM_CACHE);
+    const pinned = JSON.parse(await readFile(new URL('./dsh-compat-baseline.json', import.meta.url), 'utf8'));
+    const builds = { baseline: parseDshNpmManifest(pinned.package, process.platform, process.arch), packageManager: parsePnpmManifest(pinned.packageManager) }; summary.builds = builds;
+    builds.candidate = parseDshNpmManifest(JSON.parse((await fetchBytes('https://registry.npmjs.org/@deepseek-ai/dsh/latest', 2 * 1024 * 1024)).toString('utf8')), process.platform, process.arch);
+    const npmCLI = join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'); await access(npmCLI);
+    summary = await suite.sequence(builds, {
+      async install(artifact, label) {
+        const runtime = join(root, `install-${label}`); await mkdir(runtime); await writeFile(join(runtime, '.fixture-owner'), owner);
+        const installation = { root: runtime, safe: false, removed: false }; installations.push(installation);
+        const env = await prepareDshProfile(runtime, 'http://127.0.0.1:1/v1');
+        env.npm_config_cache = npmCache.path;
+        const [native, manager] = await Promise.all([archive(artifact), archive(builds.packageManager)]);
+        await writeFile(join(runtime, 'package.json'), JSON.stringify({ name: 'crosschat-dsh-compat-fixture', version: '0.0.0', private: true,
+          dependencies: { '@deepseek-ai/dsh': pathToFileURL(native).href, pnpm: pathToFileURL(manager).href } }));
+        const lock = join(root, `${createHash('sha256').update(artifact.integrity).digest('hex')}.lock.json`);
+        let existingLock = false; try { await copyFile(lock, join(runtime, 'package-lock.json')); existingLock = true; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+        const installed = await runDshProcess(process.execPath, [npmCLI, existingLock ? 'ci' : 'install', '--ignore-scripts', '--no-audit', '--no-fund', '--prefer-offline'], { cwd: runtime, env, timeout: 15 * 60 * 1000 });
+        await writeFile(join(output, `${label}-install.json`), JSON.stringify(installed, null, 2));
+        installation.safe = installed.timedOut === false && installed.signal === null && Number.isInteger(installed.code);
+        if (!installation.safe || installed.code !== 0) throw new Error('Isolated npm installation failed; abnormal process release is retained for inspection');
+        for (const [name, expected] of [['@deepseek-ai/dsh', artifact.version], ['pnpm', pnpmVersion]]) {
+          const manifest = JSON.parse(await readFile(join(runtime, 'node_modules', name, 'package.json'), 'utf8'));
+          if (manifest.name !== name || manifest.version !== expected) throw new Error('Installed npm package identity differs from the verified artifact');
+        }
+        if (!existingLock) await copyFile(join(runtime, 'package-lock.json'), lock);
+        await copyFile(join(runtime, 'package-lock.json'), join(output, `${label}-package-lock.json`)); return installation;
+      },
+      async probe(installation, artifact, label) {
+        installation.safe = false;
+        return suite.attempt({ output, label, artifact }, async ({ reportPath, runId, directory }) => {
+          const result = await runDshProcess(process.execPath, [join(repositoryRoot, 'scripts', suite.script), '--report', reportPath], {
+            env: { ...(await prepareDshProfile(join(root, `controller-${label}`), 'http://127.0.0.1:1/v1')), CROSSCHAT_LIVE: '1', DSH_RUNTIME_DIR: installation.root,
+              DSH_TASK_ROOT: root, DSH_EXPECTED_VERSION: artifact.version, DSH_EXPECTED_RUN_ID: runId }, timeout: suite.timeoutMs,
+          });
+          await writeFile(join(directory, 'process.json'), JSON.stringify(result, null, 2)); return result;
+        });
+      },
+      async remove(installation) {
+        installation.safe = true;
+        try { await rm(await ownedChild(root, installation.root, owner), { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); installation.removed = true; }
+        catch (error) { installation.safe = false; throw error; }
+      },
+    });
+  } catch (error) {
+    summary.error = message(error); summary.classification = { kind: error?.category === 'unsupported' ? 'unsupported-release' : 'infrastructure', notify: false };
+    if (error?.category === 'unsupported') summary.unsupportedVersion = error.version;
+  } finally {
+    try {
+      await cleanupTaskRoot(); summary.installationCleanup = 'removed';
+    } catch (error) { summary.installationCleanup = 'retained'; summary.retainedTaskRoot = root; summary.cleanupError = message(error); summary.classification = { kind: 'infrastructure', notify: false }; }
+    if (npmCache) summary.npmCache = { ...npmCache, disposition: npmCache.external ? 'retained-externally'
+      : summary.installationCleanup === 'removed' ? 'removed-with-task-root' : 'retained-with-task-root' };
+    await writeFile(join(output, 'summary.json'), JSON.stringify(summary, null, 2)); process.stdout.write(`${JSON.stringify(summary.classification)}\n`);
+    if (summary.classification.kind !== 'compatible') process.exitCode = 1;
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) await main();

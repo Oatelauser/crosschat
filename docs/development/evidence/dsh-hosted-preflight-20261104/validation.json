@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-11-04 04:49:13 UTC",
+  "repository": "Oatelauser/crosschat",
+  "method": "GitHub connector read-only list_branches / list_commits / get_file_contents",
+  "remote": {
+    "defaultBranch": "main",
+    "mainCommit": "874461ae9ecdb799d880c28c1db30999c2c51555",
+    "mainCommitUrl": "https://github.com/Oatelauser/crosschat/commit/874461ae9ecdb799d880c28c1db30999c2c51555",
+    "listedBranches": [
+      {
+        "name": "book-ssh-u5a",
+        "sha": "db099e91d048679945dbb9e1b8c98fd339f9d63e"
+      },
+      {
+        "name": "book-ssh-u5b",
+        "sha": "4c39982cde82aee9818e1d4026813b51ffd6cb7e"
+      },
+      {
+        "name": "codex/fix-macos-ci",
+        "sha": "56b4b0254ae557906eef8f26d12d2eed98be5e76"
+      },
+      {
+        "name": "lesson2-ssh-u2",
+        "sha": "f64fbb2c4c5a9abc8515387c0f602ea92f5e8baf"
+      },
+      {
+        "name": "lesson2-ssh-u3",
+        "sha": "d059e35a4eda5730d57788f092c091552f24a897"
+      },
+      {
+        "name": "lesson2-ssh-u4",
+        "sha": "a2dbd5ffeb45992972c0e2cae0828c413bb75ada"
+      },
+      {
+        "name": "main",
+        "sha": "874461ae9ecdb799d880c28c1db30999c2c51555"
+      },
+      {
+        "name": "research/book-mdbook",
+        "sha": "427b535522b1098333f7a044d04284ad3052ba3e"
+      },
+      {
+        "name": "worktree-lesson2-ssh",
+        "sha": "e441a89f0e6a2211e42655e091b21286dfc6b749"
+      },
+      {
+        "name": "worktree-lesson2-ssh-fix2",
+        "sha": "22e190cae96a984abe0ff142e2446f48429301c6"
+      },
+      {
+        "name": "worktree-lesson2-ssh-u1",
+        "sha": "7b091a0bae60104edb0f2534f30519baa059d437"
+      }
+    ],
+    "currentDevelopmentBranchFound": false,
+    "defaultBranchWorkflows": [
+      {
+        "name": "ci.yml",
+        "sha": "d83aa44a6a4f2f5722a1c5df75fc9dabf160418b",
+        "url": "https://github.com/Oatelauser/crosschat/blob/874461ae9ecdb799d880c28c1db30999c2c51555/.github/workflows/ci.yml"
+      },
+      {
+        "name": "deploy-book.yml",
+        "sha": "9f34a909bc7b9eaa5a80ab49ee983c56d8e71a83",
+        "url": "https://github.com/Oatelauser/crosschat/blob/874461ae9ecdb799d880c28c1db30999c2c51555/.github/workflows/deploy-book.yml"
+      },
+      {
+        "name": "publish.yml",
+        "sha": "0b5e40895930a3eefb493f8db1663fc996f2f1fa",
+        "url": "https://github.com/Oatelauser/crosschat/blob/874461ae9ecdb799d880c28c1db30999c2c51555/.github/workflows/publish.yml"
+      }
+    ]
+  },
+  "local": {
+    "branch": "codex/core-refactor-pre-tui",
+    "commit": "56f6e76a517acb8c94baaab34fe7ee2c727319d7",
+    "mainOnlyCommits": 14,
+    "developmentOnlyCommits": 334,
+    "changedPaths": 703
+  },
+  "virtualMerge": {
+    "command": "git merge-tree --write-tree 874461ae9ecdb799d880c28c1db30999c2c51555 56f6e76a517acb8c94baaab34fe7ee2c727319d7",
+    "tree": "daee8508d47d1d5bc11eb8ceb79856a81f501769",
+    "conflictedPaths": 32,
+    "raw": "merge-tree.txt",
+    "stderr": "merge-tree.stderr.txt",
+    "headUnchanged": true,
+    "actualMergePerformed": false,
+    "conflictsResolved": false,
+    "conflictedTreeValidated": false
+  },
+  "boundaries": {
+    "pushPerformed": false,
+    "pullFetchCheckoutPerformed": false,
+    "remoteBranchCreated": false,
+    "prCreated": false,
+    "defaultBranchChanged": false,
+    "actionsDispatched": false,
+    "issueCreated": false,
+    "otherOwnersImplementationAssumed": false
+  }
+}

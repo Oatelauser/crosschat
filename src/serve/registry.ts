@@ -17,6 +17,7 @@ import { MultichatError } from '../errors.js';
 import { normalizeMid } from '../platform/machine-id.js';
 import { credentialRevision, machineCredentialRevision, starRevision } from './management-state.js';
 import { parseNodeConfig } from './node-config.js';
+import { isEndpointTypeFor, nativeTargetKey } from '../tool-types.js';
 
 export interface NodeEntry {
   label: string;
@@ -35,10 +36,11 @@ export interface NodeEntry {
 
 /** 028 星成员册条目（032 起随星内嵌 broker.json；字段语义不变）。 */
 export interface RosterEntry {
-  /** 成员键=会话 ID（claude sessionId / codex thread id），全星唯一。 */
+  /** Provider、端点类型与完整原生 ID 共同确定成员；未知旧端点保持独立。 */
   sessionId: string;
   name?: string;
   tool?: string;
+  endpointType?: string;
   /** 归属机器（归一 mid）——复活判定的机器一致性锚（边界1：跨机拒绝）。 */
   machine: string;
   machineName?: string;
@@ -558,11 +560,15 @@ function readManagementBroker(file: string): BrokerFile {
     });
     const members = new Set<string>();
     const roster = (item.roster ?? []).map((member): RosterEntry => {
-      if (!managementRecord(member) || typeof member.sessionId !== 'string' || !member.sessionId || members.has(member.sessionId)
+      if (!managementRecord(member) || typeof member.sessionId !== 'string' || !member.sessionId
         || typeof member.machine !== 'string' || !completeMachine(member.machine) || !optionalText(member, ['name', 'tool', 'machineName', 'extendsName', 'extendsMachine'])
         || (member.temporary !== undefined && typeof member.temporary !== 'boolean')
         || (member.selectionOwned !== undefined && typeof member.selectionOwned !== 'boolean')) invalidManagementSource();
-      members.add(member.sessionId);
+      if (member.endpointType !== undefined && (typeof member.tool !== 'string' || !isEndpointTypeFor(member.tool, member.endpointType))) invalidManagementSource();
+      const key = nativeTargetKey({ providerId: typeof member.tool === 'string' ? member.tool : '', nativeId: member.sessionId,
+        ...(typeof member.endpointType === 'string' ? { endpointType: member.endpointType } : {}) });
+      if (members.has(key)) invalidManagementSource();
+      members.add(key);
       return { ...member, sessionId: member.sessionId, machine: member.machine,
         ...(typeof member.name === 'string' ? { name: member.name } : {}), ...(typeof member.tool === 'string' ? { tool: member.tool } : {}),
         ...(typeof member.machineName === 'string' ? { machineName: member.machineName } : {}), ...(typeof member.extendsName === 'string' ? { extendsName: member.extendsName } : {}),

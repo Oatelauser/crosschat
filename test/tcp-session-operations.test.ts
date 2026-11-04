@@ -68,6 +68,44 @@ async function fixture(rename?: 'normal' | 'lost') {
 }
 
 describe('exact node session operations over real broker/node transport', () => {
+  it('keeps same-ID CLI and Desktop claims separate through attach, status and typed detach', async () => {
+    const f = await fixture();
+    const window = await connectAttachPipe(f.attachPath);
+    cleanups.push(() => window.close());
+    const base = { sessionId: 'shared-native-id', tool: 'codex', selectionOwned: true };
+    expect(await window.send({ op: 'attach', ...base, endpointType: 'cli', claimId: 'cli-window' })).toMatchObject({ ok: true });
+    expect(await window.send({ op: 'attach', ...base, endpointType: 'desktop', claimId: 'desktop-window', temporary: true })).toMatchObject({ ok: true });
+    const status = await window.send({ op: 'status' });
+    expect(status.members).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sessionId: base.sessionId, endpointType: 'cli', selectionOwned: true }),
+      expect.objectContaining({ sessionId: base.sessionId, endpointType: 'desktop', temporary: true, selectionOwned: true }),
+    ]));
+    await vi.waitFor(() => expect(loadBrokerFile(f.registryFile).stars[0]?.roster).toHaveLength(2));
+    expect(await window.send({ op: 'detach', sessionId: base.sessionId })).toMatchObject({ ok: false });
+    expect(await window.send({ op: 'detach', ...base, endpointType: 'desktop', claimId: 'desktop-window', erase: true })).toMatchObject({ ok: true });
+    await vi.waitFor(() => expect(loadBrokerFile(f.registryFile).stars[0]?.roster).toEqual([
+      expect.objectContaining({ sessionId: base.sessionId, tool: 'codex', endpointType: 'cli' }),
+    ]));
+    expect((await window.send({ op: 'status' })).members).toEqual([
+      expect.objectContaining({ sessionId: base.sessionId, endpointType: 'cli' }),
+    ]);
+  });
+
+  it('preserves the verified endpoint in application transport, node detail and roster confirmation', async () => {
+    const f = await fixture();
+    if (!f.state.item) throw new Error('Missing native fixture');
+    Object.assign(f.state.item.ref, { endpointType: 'cli' });
+    const operate = createTcpSessionOperation({ baseDir: f.dir, timeoutMs: 1500 });
+    const target = { contextId: 'local', starId: 'star-a', machineId, providerId: 'claude', endpointType: 'cli', nativeId: 'exact-session-a' };
+    const described = await operate(target, { kind: 'describe' });
+    expect(described).toMatchObject({ endpointType: 'cli', description: { ref: { endpointType: 'cli' }, actions: { adopt: { state: 'executable' } } } });
+    const result = await operate(target, { kind: 'apply', operation: 'adopt', expectedRevision: described.description!.revision });
+    expect(result).toMatchObject({ endpointType: 'cli', result: { kind: 'applied' } });
+    expect(loadBrokerFile(f.registryFile).stars[0]?.roster).toEqual([
+      expect.objectContaining({ sessionId: target.nativeId, tool: 'claude', endpointType: 'cli' }),
+    ]);
+  });
+
   it('repeating TUI adoption preserves a temporary window membership and releases it with the final window', async () => {
     const f = await fixture();
     const window = await connectAttachPipe(f.attachPath);

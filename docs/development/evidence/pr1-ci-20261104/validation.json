@@ -1,0 +1,200 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "scope": "PR #1 ordinary CI fixes; not native-tool hosted compatibility",
+  "pr": 1,
+  "url": "https://github.com/Oatelauser/crosschat/pull/1",
+  "base": "874461ae9ecdb799d880c28c1db30999c2c51555",
+  "initialHead": "f3c71e5f29f1f7c3537104fba4610169a01e35a0",
+  "initialHosted": {
+    "run": 41782073105,
+    "windows": {
+      "job": 126415683727,
+      "conclusion": "failure",
+      "passed": 2759,
+      "failed": 2,
+      "skipped": 11
+    },
+    "ubuntu": {
+      "job": 126415684145,
+      "conclusion": "failure",
+      "passed": 2754,
+      "failed": 2,
+      "skipped": 16
+    },
+    "macos": {
+      "job": 126415684063,
+      "conclusion": "failure",
+      "passed": 2753,
+      "failed": 3,
+      "skipped": 16
+    }
+  },
+  "checkpoints": {
+    "posixRed": "d02f1e6",
+    "posixGreen": "b967103",
+    "cimRed": "54b6881"
+  },
+  "local": {
+    "windows": {
+      "node": "v25.0.0",
+      "fullCheck": {
+        "passed": 2763,
+        "skipped": 11,
+        "filesPassed": 235,
+        "filesSkipped": 3,
+        "exitCode": 0,
+        "lint": true,
+        "build": true,
+        "modules": 204,
+        "edges": 689
+      },
+      "coreTargeted": 50,
+      "fixtureTargeted": 164
+    },
+    "linux": {
+      "kind": "existing local WSL Ubuntu-22.04 ordinary development fixture",
+      "node": "22.14.0",
+      "filesPassed": 7,
+      "passed": 199,
+      "skipped": 3,
+      "fullCheck": false,
+      "nativeToolsInstalled": false
+    }
+  },
+  "newPermanentSkips": 0,
+  "productTimeoutsRaised": false,
+  "commandsChanged": false,
+  "persistentCrosschatStorageAdded": false,
+  "cimInitialCause": "unconfirmed; original error omitted; timing is consistent with timeout, not proof",
+  "invalidReproduction": "Initial copy under node_modules externalized modules and bypassed Vite mocks; shell wrapper exit2 was not Vitest verdict",
+  "sources": [
+    {
+      "path": "src/application/diagnostics/query.ts",
+      "gitBlob": "a52d185c54cb5c54ae42e601c5d9deffc4bc3d89"
+    },
+    {
+      "path": "src/application/services/owned-process.ts",
+      "gitBlob": "af746d6868b8e20e294143cdb6c2e6b6b4a0bb03"
+    },
+    {
+      "path": "test/core-diagnostics.test.ts",
+      "gitBlob": "dbbd54db9398e09db3a1ae619bf5349a544f43ed"
+    },
+    {
+      "path": "test/codex-caller-source-probe.test.ts",
+      "gitBlob": "0ad62ecb0e13101e836843179aea9d16e63266e4"
+    },
+    {
+      "path": "test/dsh-compat-ci.test.ts",
+      "gitBlob": "5c14cfd4ecfa4bb3422513121c988bb136b1c640"
+    },
+    {
+      "path": "test/session-star.test.ts",
+      "gitBlob": "05dc8351de130c97340d8feee8a59eb938d66e45"
+    },
+    {
+      "path": "test/opencode-desktop-fixture.test.ts",
+      "gitBlob": "d6570e9c96e29fd11d2517af46135af9c53dc367"
+    },
+    {
+      "path": "test/opencode-desktop-process-race.test.ts",
+      "gitBlob": "69e6be701f98f162ce89fa78fbf520b49393772f"
+    },
+    {
+      "path": "test/helpers/opencode-desktop-live-fixture.mjs",
+      "gitBlob": "a1af80762ccc51a5a6dffa987ef412289ba36a8e"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "cim-timeout-red.txt",
+      "bytes": 1938,
+      "sha256": "72fff693182d7e101627c01c69a8a5f7296706cfb221b5f0f4b39336180d01aa"
+    },
+    {
+      "path": "diagnostic-green.txt",
+      "bytes": 2304,
+      "sha256": "e70d10fa5fabb8ca6366be88a62a6a4ca82d1863c56f35d0bac2579bd34a57e3"
+    },
+    {
+      "path": "diagnostic-posix-red.txt",
+      "bytes": 3211,
+      "sha256": "bc8f99d7eb2b15f489bb4eec2d35a19bcbf6fb0dea7507e648a081ac2e286c76"
+    },
+    {
+      "path": "fixture-green-final.txt",
+      "bytes": 3795,
+      "sha256": "4f23ec16d5aaec1bd3f969d66ba4e3a7c1c74a2e6f96db3cabdeba80c26b08ce"
+    },
+    {
+      "path": "linux-baseline-red.txt",
+      "bytes": 2890,
+      "sha256": "bb9bfeacef9e488c3b735d297f5c1d7977055effc49956da50d4c11a93757969"
+    },
+    {
+      "path": "linux-build-final.txt",
+      "bytes": 45,
+      "sha256": "3ca58494244356319633845fd4a63dd18f1151593d0253a0a270b520bc9202a3"
+    },
+    {
+      "path": "linux-build-green.txt",
+      "bytes": 45,
+      "sha256": "3ca58494244356319633845fd4a63dd18f1151593d0253a0a270b520bc9202a3"
+    },
+    {
+      "path": "linux-build.txt",
+      "bytes": 45,
+      "sha256": "3ca58494244356319633845fd4a63dd18f1151593d0253a0a270b520bc9202a3"
+    },
+    {
+      "path": "linux-targeted-final.txt",
+      "bytes": 9692,
+      "sha256": "805bc2c920e6c5712770df15676b7928a222667e7db0ef6e89d0ab2a7650f40a"
+    },
+    {
+      "path": "linux-targeted-green.txt",
+      "bytes": 3836,
+      "sha256": "9175a50d0da4c06a2aa1ba7fd92ada548bbb714d0824b1b452001d3044059583"
+    },
+    {
+      "path": "linux-targeted-outside-dependencies.txt",
+      "bytes": 23828,
+      "sha256": "3d06c01c0610ea25a6613fa4fb754f3128375f420b890916c1a11357779969be"
+    },
+    {
+      "path": "linux-targeted.txt",
+      "bytes": 54797,
+      "sha256": "99f2dec3dcab08dc6d3b9bb4391db21575f30d7a87bbefa9a0dbed3349025fa6"
+    },
+    {
+      "path": "macos-job.txt",
+      "bytes": 101445,
+      "sha256": "776d8c64c3ffbfa0a136f512516b89f70fe6ad339e209203d52915c6f378d8aa"
+    },
+    {
+      "path": "ubuntu-job.txt",
+      "bytes": 75594,
+      "sha256": "eb4b63a6e50021491a7c6f1cedfb589925ebe99adcaa25c4d7d4c23669e4bc77"
+    },
+    {
+      "path": "windows-check.txt",
+      "bytes": 31781,
+      "sha256": "6ba428bc406c385c94fa79c8d232801263eeb0a0bfdc7ef63cdad8cb1a9a078e"
+    },
+    {
+      "path": "windows-fixture-targeted.txt",
+      "bytes": 3777,
+      "sha256": "da0807b5b4e0cc512ef6633df9b60a6e8aa2c82429811fa15f0480b6363ca9c9"
+    },
+    {
+      "path": "windows-job.txt",
+      "bytes": 95848,
+      "sha256": "b0873fceb482ebfa913b98b11359ecdee972e9b01d741f46c626605489ba157c"
+    }
+  ],
+  "followupHosted": "pending push/normal pull_request synchronize CI",
+  "mainMerged": false,
+  "published": false,
+  "dedicatedDshCiDispatched": false
+}

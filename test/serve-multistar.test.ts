@@ -226,7 +226,7 @@ describe('032 多星握手与星域隔离', () => {
     const info = (await c.waitFor((f) => f.op === 'info')) as InfoFrame;
     expect(info.starId).toBeUndefined(); // 036：单星 info 携带星标识旧形随葬
     expect(info.name).toBeUndefined();
-    expect(info.caps).toEqual([CAP_SESSION_MEMBERS, CAP_MULTI_STAR, CAP_CHALLENGE_AUTH]); // caps 恒含 multi-star（统一当多星处理）
+    expect(info.caps).toEqual([CAP_SESSION_MEMBERS, CAP_MULTI_STAR, CAP_CHALLENGE_AUTH, 'endpoint-types-v1']); // typed identity is negotiated independently
     c.send({ op: 'connect', proto: 1, role: 'node', machineId: 'aaaa1111aaaa', auth: key('a'), name: 'a-host', caps: [CAP_MULTI_STAR] });
     const conn = (await c.waitFor((f) => f.op === 'connected')) as ConnectedFrame;
     expect(conn.starId).toBe(STAR_A); // 单星也由 connected 回填
@@ -241,14 +241,14 @@ describe('032 多星握手与星域隔离', () => {
     const a = new TestClient(url);
     await a.opened();
     await a.waitFor((f) => f.op === 'info');
-    a.send({ op: 'connect', proto: 1, role: 'node', machineId: 'aaaa1111aaaa', auth: key('a'), name: 'a-host', caps: [CAP_MULTI_STAR] });
+    a.send({ op: 'connect', proto: 1, role: 'node', machineId: 'aaaa1111aaaa', auth: key('a'), name: 'a-host', caps: [CAP_MULTI_STAR, 'endpoint-types-v1'] });
     await a.waitFor((f) => f.op === 'connected');
     a.send({ op: 'roster' });
     const roster = await a.waitFor((f) => f.op === 'roster-result');
     const machines = (roster as { machines: Array<{ name?: string }> }).machines;
     expect(machines.map((m) => m.name)).toContain('a-host');
     expect(machines.map((m) => m.name)).not.toContain('b-host');
-    a.send({ op: 'send', id: 'x1', targetMachine: 'b-host', body: 'cross-star?' });
+    a.send({ op: 'send', tool: 'claude', id: 'x1', targetMachine: 'b-host', body: 'cross-star?' });
     const err = await a.waitFor((f) => f.op === 'error' && (f as { id?: string }).id === 'x1');
     expect((err as { code: string }).code).toBe('UNKNOWN_MACHINE');
   }, 10_000);
@@ -436,7 +436,7 @@ describe('032 本进程自挂（虚拟会话对）', () => {
 
     // attach 管道在 broker 进程内常驻：成员入册（同文件 alpha 册段）
     const attach = await attachTalk(attachPipePath(selfEntry, dir, 'ms-local'));
-    const reply = await attach.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude' });
+    const reply = await attach.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', endpointType: 'cli' });
     expect(reply).toEqual({ ok: true });
     await new Promise((r) => setTimeout(r, 200));
     expect(loadBrokerFile(registryFile).stars[0]!.roster.some((e) => e.sessionId === 'sess-boss')).toBe(true);
@@ -445,9 +445,9 @@ describe('032 本进程自挂（虚拟会话对）', () => {
     const sender = new TestClient(url);
     await sender.opened();
     await sender.waitFor((f) => f.op === 'info');
-    sender.send({ op: 'connect', proto: 1, role: 'sender', auth: key('x'), caps: [CAP_MULTI_STAR] });
+    sender.send({ op: 'connect', proto: 1, role: 'sender', auth: key('x'), caps: [CAP_MULTI_STAR, 'endpoint-types-v1'] });
     await sender.waitFor((f) => f.op === 'connected');
-    sender.send({ op: 'send', id: 'n1', targetMachine: 'broker-host:boss', body: 'hello local' });
+    sender.send({ op: 'send', tool: 'claude', id: 'n1', targetMachine: 'broker-host:boss', body: 'hello local' });
     const receipt = await sender.waitFor((f) => f.op === 'receipt' && (f as { id?: string }).id === 'n1');
     expect((receipt as { status: string }).status).toBe('delivered');
     expect(delivered[0]).toContain('hello local');

@@ -1,0 +1,80 @@
+{
+  "op": "list",
+  "providers": [
+    {
+      "providerId": "claude",
+      "capabilities": {
+        "discovery": true,
+        "delivery": true,
+        "launch": false,
+        "diagnostics": false,
+        "deliveryModes": [
+          "queue",
+          "steer"
+        ]
+      }
+    },
+    {
+      "providerId": "codex",
+      "capabilities": {
+        "discovery": true,
+        "delivery": true,
+        "launch": false,
+        "diagnostics": false,
+        "deliveryModes": [
+          "queue",
+          "steer"
+        ]
+      }
+    },
+    {
+      "providerId": "opencode",
+      "capabilities": {
+        "discovery": true,
+        "delivery": true,
+        "launch": false,
+        "diagnostics": false,
+        "deliveryModes": [
+          "queue",
+          "steer"
+        ]
+      }
+    }
+  ],
+  "page": {
+    "completeness": "partial",
+    "observedAt": 1792721566961,
+    "errors": [],
+    "items": [
+      {
+        "ref": {
+          "contextId": "local",
+          "providerId": "opencode",
+          "nativeId": "ses_e9977c3b9ffeJWh7ZQPGVNjDew"
+        },
+        "name": "OpenCode PTY Inbox",
+        "rawStatus": {
+          "type": "inactive"
+        },
+        "capabilities": {
+          "discovery": true,
+          "delivery": true,
+          "launch": false,
+          "diagnostics": false,
+          "deliveryModes": [
+            "queue",
+            "steer"
+          ]
+        },
+        "attributes": {
+          "location": {
+            "directory": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-compat-39KPBc\\workspace"
+          },
+          "projectID": "890deb271262f529f1644ffc0b2c59159e009f65",
+          "cwd": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-compat-39KPBc\\workspace"
+        }
+      }
+    ],
+    "nextCursor": "eyJjb250ZXh0SWQiOiJsb2NhbCIsImZpbHRlcktleSI6IltbXCJvcGVuY29kZVwiXSxcIlwiXSIsInBlbmRpbmciOlt7InByb3ZpZGVySWQiOiJvcGVuY29kZSIsImN1cnNvciI6ImV5SmhjbU5vYVhabFpDSTZJbVpoYkhObElpd2lZVzVqYUc5eUlqcDdJbWxrSWpvaWMyVnpYMlU1T1RjM1l6TmlPV1ptWlVwWGFEZGFVVkJIVms1cVJHVjNJaXdpZEdsdFpTSTZNVGM1TWpjeU1UVTJOamM1Tnl3aVpHbHlaV04wYVc5dUlqb2libVY0ZENKOWZRIn1dLCJlcnJvcnMiOltdLCJpbmNvbXBsZXRlIjpmYWxzZX0"
+  }
+}

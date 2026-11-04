@@ -65,6 +65,7 @@ export function createClaudeSessionReader(options: ClaudeReaderOptions = {}): Se
     providerId: 'claude', capabilities,
     async list(request): Promise<SessionPage> {
       if (request.signal?.aborted) return cancelledPage(request.contextId, 'claude', now());
+      if (request.endpointType !== undefined && request.endpointType !== 'cli') return { items: [], nextCursor: null, completeness: 'complete', observedAt: now(), errors: [] };
       try {
         return await untilAborted(scan(request), request.signal);
       } catch (error) {
@@ -107,7 +108,7 @@ export function createClaudeSessionReader(options: ClaudeReaderOptions = {}): Se
       if (!await alive(entry.pid, request.signal)) continue;
       if (request.signal?.aborted) throw abortError();
       const hasSessionId = typeof entry.sessionId === 'string' && entry.sessionId !== '';
-      const ref: SessionRef = { contextId: request.contextId, providerId: 'claude', nativeId: hasSessionId ? String(entry.sessionId) : String(entry.pid), referenceKind: hasSessionId ? 'native' : 'process' };
+      const ref: SessionRef = { contextId: request.contextId, providerId: 'claude', endpointType: 'cli', nativeId: hasSessionId ? String(entry.sessionId) : String(entry.pid), referenceKind: hasSessionId ? 'native' : 'process' };
       items.push({
         ref, key: sessionKey(ref), name: typeof entry.name === 'string' && entry.name !== '' ? entry.name : null,
         rawStatus: entry.status ?? 'unknown', capabilities,

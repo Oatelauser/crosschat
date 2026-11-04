@@ -1,0 +1,43 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-int-20261104
+
+ ✓ test/serve-sessions.test.ts (37 tests) 4813ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 028 claude 活性：扫描核验——死 claude 成员转下线（教学）、活成员续投  535ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > C14 Codex 活性：核实实际 CLI 端点后续投，原生不存在的同类成员转下线  524ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 029 临时成员异常死亡：对账验死报 member-remove 清册零痕迹（不留下线态）  739ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > delegates name following to a third provider without reviving a released manual membership  380ms
+   ✓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > 028 下线成员随 roster 帧下发（offlineSessions 单列；sessions 保持活成员语义）  424ms
+   ✓ 018 9b：老 broker（proto:1）降级的协议侧 > connect 携带 caps；info.caps 缺端点能力时拒绝类型化 attach，且不发 sessions 帧  313ms
+ ✓ test/revocation-pause.test.ts (13 tests) 1610ms
+   ✓ explicit credential revocation pauses this star > stops one launcher supervisor without restarting it or disrupting another star  1195ms
+ ✓ test/session-star.test.ts (40 tests) 6410ms
+   ✓ 018 批二：启动器入星链路 > spawn 会话→自动拉聚合器→attach→三段直达；退出即 detach  637ms
+   ✓ 018 批二：启动器入星链路 > 多星：--connect 可重复，两会话成员表各自 attach（win 带杠 mid 形态）  678ms
+   ✓ 018 批二：启动器入星链路 > 021 断连静默：聚合器被杀→重连提示落日志、控制台零输出、成员籍自动恢复  1594ms
+   ✓ 统一恢复入口（启动器重声明或显式管理，册落盘不丢） > 聚合器重启保留离线册位，存活的原生会话也须明确重声明（linux 32-hex 形态）  301ms
+   ✓ 018 批二：9b 降级告警（不只日志） > NodeClient.warn 直打一行；warnIfBrokerLacksSessionCaps 对老 broker 出声、新 broker 静默  321ms
+   ✓ 028 双模式与命令面 > 双模式集成：永久退出留册、裸 resume 不归队、明确选择恢复；--rm 退出清册  886ms
+ ✓ test/tcp-configuration.test.ts (8 tests) 99ms
+ ✓ test/tcp-session-operations.test.ts (7 tests) 278ms
+ ✓ test/local-service-owned-stop.test.ts (6 tests) 2802ms
+   ✓ TUI owned service stop process trees > releases a hung OS scanner and its helper before completing cancellation without claiming the external stop was undone  344ms
+   ✓ TUI owned service stop process trees > bounds a nonresponding stop job and reclaims its full scanner tree on timeout  1300ms
+   ✓ TUI owned service stop process trees > runs the actual stop process wrapper and prior stop worker with the same fixed target, then releases the wrapper  401ms
+   ✓ TUI owned service stop process trees > retains prior request validation inside the real wrapper before any stop business call  359ms
+   ✓ TUI owned service stop process trees > uses the owned stop default from the managed task and waits for tree cleanup before returning an uncertain issued result  393ms
+ ✓ test/local-service-inspection.test.ts (6 tests) 3202ms
+   ✓ owned service inspection and guard workers > reclaims an inspector blocked in spawnSync, including its owned probe child, before cancellation returns  460ms
+   ✓ owned service inspection and guard workers > uses the real process wrapper for successful inspection/guard IPC and releases it before returning  713ms
+   ✓ owned service inspection and guard workers > reclaims a real wrapper and its controlled blocked probe when its read timeout expires  1794ms
+ ✓ test/maintenance-boundaries.test.ts (5 tests) 192ms
+ ✓ test/tcp-management-exact.test.ts (8 tests) 63ms
+ ✓ test/tcp-configuration-management.test.ts (7 tests) 140ms
+ ✓ test/local-service-owned-process.test.ts (7 tests) 12ms
+ ✓ test/tcp-exact-transport.test.ts (3 tests) 220ms
+ ✓ test/core-code-standards.test.ts (2 tests) 1639ms
+   ✓ progressive typed lint rules > rejects floating promises, async void callbacks and value imports used only as types  1622ms
+
+ Test Files  13 passed (13)
+      Tests  149 passed (149)
+   Start at  13:28:39
+   Duration  14.29s (transform 813ms, setup 0ms, collect 2.70s, tests 21.48s, environment 2ms, prepare 816ms)

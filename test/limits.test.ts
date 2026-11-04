@@ -5,6 +5,7 @@ import {
   CODEX_ENDPOINT_MAX_BODY_BYTES,
   DEFAULT_MAX_BODY_BYTES,
   MAX_BODY_KIB_CEILING,
+  OPENCODE_ADAPTER_MAX_BODY_BYTES,
   resolveConfiguredMaxBodyBytes,
   resolveMaxTurn,
 } from '../src/limits.js';
@@ -53,6 +54,19 @@ describe('resolveMaxTurn (票A 双通道)', () => {
 });
 
 describe('bodyTooLargeMessage (票A 教学)', () => {
+  it('uses an explicit OpenCode adapter policy limit without claiming a native transport limit', () => {
+    expect(OPENCODE_ADAPTER_MAX_BODY_BYTES).toBe(1_048_576);
+    const local = bodyTooLargeMessage(2_000_000, OPENCODE_ADAPTER_MAX_BODY_BYTES, undefined, 'opencode');
+    expect(local).toContain('opencode');
+    expect(local).toContain('适配策略上限 1MiB');
+    expect(local).toContain('提额无效');
+    expect(local).not.toContain('端点硬顶');
+    const remote = bodyTooLargeMessage(2_000_000, OPENCODE_ADAPTER_MAX_BODY_BYTES, 'ssh:peer', 'opencode', true);
+    expect(remote).toContain('适配策略上限 1MiB');
+    expect(remote).toContain('scp');
+    expect(remote).not.toContain('CROSSCHAT_MAX_BODY_KIB');
+  });
+
   it('keeps the per-transport tails and appends the raise guidance', () => {
     const local = bodyTooLargeMessage(20_000, 16_384, undefined);
     expect(local).toContain('the limit is 16384.');
@@ -69,13 +83,13 @@ describe('bodyTooLargeMessage (票A 教学)', () => {
     expect(bodyTooLargeMessage(2_000_000, CODEX_ENDPOINT_MAX_BODY_BYTES, 'ssh:peer', 'ssh-precheck')).toContain('远端自行复检');
   });
 
-  it('D0 红线快照：三分支报错文本逐字不变（用户确认的权威教学，一字不许动）', () => {
+  it('preserves the approved size guidance and includes C14 recipient type in the SSH command', () => {
     const note = '可提额：--max-body-kb <KiB> 或 CROSSCHAT_MAX_BODY_KIB=<KiB>（claude 端点硬顶 64KiB、codex 端点 1MiB，到顶只能落盘）。';
     expect(bodyTooLargeMessage(20_000, 16_384, undefined)).toBe(
       `Body is 20000 bytes; the limit is 16384. ${note}Write the content to a file and send the path instead.`,
     );
     expect(bodyTooLargeMessage(20_000, 16_384, 'ssh:peer')).toBe(
-      `Body is 20000 bytes; the limit is 16384. ${note}跨机大内容（ssh 形态）：先 scp <文件> peer:/tmp/<文件名>，再 crosschat send --via ssh:peer … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）`,
+      `Body is 20000 bytes; the limit is 16384. ${note}跨机大内容（ssh 形态）：先 scp <文件> peer:/tmp/<文件名>，再 crosschat send --via ssh:peer --tool <收件类型> … --body "见 /tmp/<文件名>"（scp 与 --via 共用同一份 ssh 配置）`,
     );
     expect(bodyTooLargeMessage(20_000, 16_384, 'tcp:机器a')).toBe(
       `Body is 20000 bytes; the limit is 16384. ${note}跨机大内容（tcp 形态）：改用 --file <路径> 发送文件（自动分块传输，上限 64MiB），正文只发说明或路径。`,

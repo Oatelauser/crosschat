@@ -1,9 +1,16 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import process from 'node:process';
 import { stateRoot } from './state-root.js';
+import { withStateLock } from './state-lock.js';
+import type { StateLockResult } from './state-lock.js';
 import { MultichatError } from './errors.js';
+import { identityKey } from './identity.js';
+import {
+  CONVERSATION_HANDLE_RE, LEGACY_CONVERSATION_HANDLE_RE,
+  handleForSequence, highestHandleSequence, isCurrentHandle, isHandleSequence, sequenceForHandle,
+} from './conversation-handles.js';
 import {
   decodeRef,
   encodeRef,
@@ -25,24 +32,25 @@ import {
  * Storage (B20): one JSON shard per pair in a `conversations/` directory
  * next to the legacy state file (the `rate/<sha256>.json` precedent), so
  * concurrent sends from different pairs no longer read-modify-write one
- * global file. Lazy migration: reads prefer the shard and fall back to the
- * legacy global file (read-only — never rewritten, never deleted); writes
- * only ever touch the shard, so a stale global snapshot is harmless.
+ * global file. Only current shards are read; the retired global file is not
+ * a continuity or short-handle fallback.
  */
 
 export function defaultConversationsFile(): string {
   return join(stateRoot(), 'conversations.json');
 }
 
-interface PairRecord {
+export interface PairRecord {
   ref: string;
   updatedAt: number;
   /**
-   * F2 会话短柄表（c<数字> -> 完整 mc1_/mc2_ ref），寄生本分片零新文件。
+   * 五字符会话短柄表（cA000 -> 完整 mc1_/mc2_ ref），寄生本分片零新文件。
    * 键的插入序即 LRU 序（同 nonce 刷新会重插到尾）；生成与消费同机同版本，
    * 短柄永不过网。
    */
   handles?: Record<string, string>;
+  /** Highest machine-wide allocation committed by this shard; survives LRU eviction. */
+  handleSequence?: number;
   /**
    * 016① 机器名表（mid8 -> 信封 from-machine 名）：跨机信封到达时随
    * recordConversation 写入，回执显示层据它把裸指纹还原成 name(mid8)。
@@ -84,21 +92,31 @@ function sanitizeMachines(value: unknown): Record<string, string> | undefined {
 
 function parseShard(text: string): ShardRecord | undefined {
   try {
-    const parsed = JSON.parse(text) as Partial<ShardRecord>;
+    const parsed: unknown = JSON.parse(text);
     if (
       parsed !== null &&
       typeof parsed === 'object' &&
+      'pair' in parsed && 'ref' in parsed && 'updatedAt' in parsed &&
       typeof parsed.pair === 'string' &&
       typeof parsed.ref === 'string' &&
-      typeof parsed.updatedAt === 'number'
+      typeof parsed.updatedAt === 'number' && Number.isFinite(parsed.updatedAt)
     ) {
-      const handles = sanitizeHandles(parsed.handles);
-      const machines = sanitizeMachines(parsed.machines);
+      const rawHandles = 'handles' in parsed ? parsed.handles : undefined;
+      const handles = sanitizeHandles(rawHandles);
+      const machines = sanitizeMachines('machines' in parsed ? parsed.machines : undefined);
+      const progress = 'handleSequence' in parsed ? parsed.handleSequence : undefined;
+      if (progress !== undefined && !isHandleSequence(progress)) return undefined;
+      let required = 0;
+      if (rawHandles !== null && typeof rawHandles === 'object' && !Array.isArray(rawHandles)) {
+        for (const handle of Object.keys(rawHandles)) required = Math.max(required, sequenceForHandle(handle) ?? 0);
+      }
+      if (required > (progress ?? 0)) return undefined;
       return {
         pair: parsed.pair,
         ref: parsed.ref,
         updatedAt: parsed.updatedAt,
         ...(handles === undefined ? {} : { handles }),
+        ...(progress === undefined ? {} : { handleSequence: progress }),
         ...(machines === undefined ? {} : { machines }),
       };
     }
@@ -108,7 +126,7 @@ function parseShard(text: string): ShardRecord | undefined {
   return undefined;
 }
 
-function readShard(shardFile: string): ShardRecord | undefined {
+export function readConversationShard(shardFile: string): ShardRecord | undefined {
   try {
     return parseShard(readFileSync(shardFile, 'utf8'));
   } catch {
@@ -116,59 +134,66 @@ function readShard(shardFile: string): ShardRecord | undefined {
   }
 }
 
-/** The legacy global file, read-only: `{pairs: Record<pairKey, record>}`. */
-function loadLegacyPairs(file: string): Record<string, PairRecord> {
-  try {
-    const parsed = JSON.parse(readFileSync(file, 'utf8')) as { pairs?: Record<string, PairRecord> };
-    if (parsed !== null && typeof parsed === 'object' && parsed.pairs !== undefined) return parsed.pairs;
-  } catch {
-    // missing/corrupt: nothing to fall back to
-  }
-  return {};
-}
-
-/** One pair's record: shard first, else its entry in the legacy global file. */
+/** One pair's current shard; old global snapshots cannot resurrect deleted state. */
 function loadPair(file: string, pairKey: string): PairRecord | undefined {
-  const shard = readShard(shardFileOf(file, pairKey));
-  if (shard !== undefined) return shard;
-  return loadLegacyPairs(file)[pairKey];
+  return readConversationShard(shardFileOf(file, pairKey));
 }
 
-function savePair(file: string, pairKey: string, record: PairRecord): void {
+function savePair(file: string, pairKey: string, record: PairRecord): boolean {
   try {
     const dir = shardDirOf(file);
     mkdirSync(dir, { recursive: true });
     const shard = shardFileOf(file, pairKey);
-    // ponytail: no cross-process locking; same-pair millisecond races are
-    // last-write-wins — the pair's continuity lags one turn at worst, and
-    // refs are self-contained so in-flight replies are unaffected.
+    // Only reached inside withConversationLock, so no other process can
+    // interleave its own read-modify-write with this one.
     const tmp = `${shard}.${process.pid}.${Date.now()}.tmp`;
-    writeFileSync(tmp, JSON.stringify({ pair: pairKey, ...record }), 'utf8');
-    renameSync(tmp, shard);
+    try {
+      writeFileSync(tmp, JSON.stringify({ pair: pairKey, ...record }), 'utf8');
+      renameSync(tmp, shard);
+      return true;
+    } finally {
+      // A failed rename must not leave this write's scratch file behind; only
+      // ever this process's own uniquely named tmp, never the shard itself.
+      if (existsSync(tmp)) rmSync(tmp, { force: true });
+    }
   } catch {
     // ponytail: continuity is best-effort; a lost record just starts a new thread.
+    return false;
   }
 }
 
-/** All pairs' records: every shard, plus legacy records not yet migrated (shard wins). */
-export function loadAllPairs(file: string): Record<string, PairRecord> {
-  const pairs: Record<string, PairRecord> = loadLegacyPairs(file);
-  let names: string[] = [];
+export interface ConversationState {
+  pairs: Record<string, PairRecord>;
+  complete: boolean;
+}
+
+/** Missing state is empty; incomplete state must never restart short-handle allocation. */
+export function readConversationState(file: string): ConversationState {
+  const pairs: Record<string, PairRecord> = {};
+  let entries;
   try {
-    names = readdirSync(shardDirOf(file));
-  } catch {
-    return pairs; // no shard directory yet: legacy view only
+    entries = readdirSync(shardDirOf(file), { withFileTypes: true });
+  } catch (error) {
+    return { pairs, complete: error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT' };
   }
-  for (const name of names) {
-    if (!name.endsWith('.json')) continue;
-    const shard = readShard(join(shardDirOf(file), name));
-    if (shard !== undefined) pairs[shard.pair] = shard;
+  let complete = true;
+  for (const entry of entries) {
+    if (!entry.name.endsWith('.json') || entry.isDirectory()) continue;
+    if (!entry.isFile()) { complete = false; continue; }
+    const shard = readConversationShard(join(shardDirOf(file), entry.name));
+    if (shard !== undefined && join(shardDirOf(file), entry.name) === shardFileOf(file, shard.pair)) pairs[shard.pair] = shard;
+    else complete = false;
   }
-  return pairs;
+  return { pairs, complete };
+}
+
+/** Read-only continuity inventory; callers using handles also check completeness. */
+export function loadAllPairs(file: string): Record<string, PairRecord> {
+  return readConversationState(file).pairs;
 }
 
 function endpointKey(endpoint: RefEndpoint): string {
-  return endpoint.p === 'human' ? 'human' : `${endpoint.p}:${endpoint.id}`;
+  return identityKey(endpoint);
 }
 
 /** Unordered pair key: (A→B) and (B→A) map to the same conversation. */
@@ -246,10 +271,22 @@ function matchesEndpoints(ref: ConversationRef, a: RefEndpoint, b: RefEndpoint):
  * the passed ref, absent, a different conversation (nonce differs), or
  * endpoint-mismatched: unchanged pass-through continuation.
  */
-export function continueFromRef(
+export async function continueFromRef(
   file: string,
   ref: ConversationRef,
+  original: ConversationRef = ref,
+): Promise<{ ref: ConversationRef; turn: number }> {
+  const locked = await withConversationLock(file, () => continueFromRefLocked(file, ref, original));
+  if (!locked.acquired) throw conversationStateBusy();
+  return locked.value;
+}
+
+function continueFromRefLocked(
+  file: string,
+  ref: ConversationRef,
+  original: ConversationRef,
 ): { ref: ConversationRef; turn: number } {
+  ref = reconcileRefinement(file, original, ref);
   const stored = loadPair(file, pairKeyOf(ref.f, ref.t));
   if (stored !== undefined) {
     try {
@@ -266,18 +303,174 @@ export function continueFromRef(
 }
 
 /**
+ * Filling an unknown endpoint changes its pair key, not its conversation.
+ * Keep the nonce's handle and latest turn while rejecting stale unknown refs
+ * which try to replace a type already established by an earlier continuation.
+ */
+function reconcileRefinement(file: string, original: ConversationRef, requested: ConversationRef): ConversationRef {
+  const unknown = (endpoint: RefEndpoint) => endpoint.p !== 'human' && endpoint.endpointType === undefined;
+  const originalHasUnknownType = unknown(original.f) || unknown(original.t);
+  const records = matchingConversationRecords(file, original);
+  let refined = requested;
+  for (const { refs } of records) {
+    for (const ref of refs) {
+      refined = { ...refined,
+        f: mergeEndpointTypes(refined.f, ref.f), t: mergeEndpointTypes(refined.t, ref.t),
+        c: Math.max(refined.c, ref.c),
+      };
+    }
+  }
+  const pair = pairKeyOf(refined.f, refined.t);
+  const changed = records.filter((entry) => entry.pair !== pair
+    && (originalHasUnknownType || Object.values(entry.record.handles ?? {}).some((value) => encodedConversationMatches(value, original))));
+  if (changed.length === 0) return refined;
+  // Full references still route with damaged optional handle state. Do not
+  // overwrite an unreadable high-water mark while refining such a reference.
+  if (!readConversationState(file).complete) return refined;
+  const existing = loadPair(file, pair);
+  const handles: Record<string, string> = { ...existing?.handles };
+  let machines = existing?.machines;
+  let updatedAt = existing?.updatedAt ?? 0;
+  // Per old record: the handles actually moved into the destination shard. A
+  // number already owned by another conversation in the destination is left
+  // exactly as is on both sides — refinement never picks a winner for an
+  // existing collision, so that handle is not migrated at all.
+  const migrated = new Map<PairRecord, Set<string>>();
+  for (const { record } of records) {
+    if (existing === undefined) updatedAt = Math.max(updatedAt, record.updatedAt);
+    machines = { ...machines, ...record.machines };
+    for (const [handle, value] of Object.entries(record.handles ?? {})) {
+      if (!encodedConversationMatches(value, original)) continue;
+      const current = handles[handle];
+      if (current !== undefined && !encodedConversationMatches(current, original)) continue;
+      delete handles[handle];
+      handles[handle] = encodeRef(refined);
+      const moved = migrated.get(record) ?? new Set<string>();
+      moved.add(handle);
+      migrated.set(record, moved);
+    }
+  }
+  // Migrated handles are the most recently touched; keep the same per-shard
+  // bound before delivery, including when delivery later fails.
+  for (const handle of Object.keys(handles).slice(0, -HANDLE_MAX)) delete handles[handle];
+  const encoded = encodeRef(refined);
+  // Like handle allocation, refinement does not advance an existing pair's
+  // successful conversation line. Delivery records the new line afterwards.
+  const destinationRef = existing?.ref ?? encoded;
+  const handleSequence = highestHandleSequence([...(existing === undefined ? [] : [existing]), ...records.map(({ record }) => record)]);
+  const unchanged = existing !== undefined && existing.ref === destinationRef && existing.updatedAt === updatedAt
+    && (existing.handleSequence ?? 0) === handleSequence
+    && JSON.stringify(Object.entries(existing.handles ?? {})) === JSON.stringify(Object.entries(handles))
+    && Object.keys(existing.machines ?? {}).length === Object.keys(machines ?? {}).length
+    && Object.entries(machines ?? {}).every(([key, value]) => existing.machines?.[key] === value);
+  const saved = unchanged || savePair(file, pair, { ref: destinationRef, updatedAt,
+    ...(Object.keys(handles).length ? { handles } : {}),
+    ...(handleSequence === 0 ? {} : { handleSequence }),
+    ...(machines === undefined || Object.keys(machines).length === 0 ? {} : { machines }),
+  });
+  const persisted = readConversationShard(shardFileOf(file, pair));
+  if (!saved || persisted?.ref !== destinationRef || (handleSequence !== 0 && persisted.handleSequence !== handleSequence)
+    || Object.entries(handles).some(([handle, value]) => persisted.handles?.[handle] !== value)) {
+    throw new MultichatError('CONVERSATION_STATE_WRITE_FAILED', 'Conversation refinement could not be saved; no message was sent. The original conversation handle remains valid.');
+  }
+  // Remove only the handles that actually moved (never a skipped conflicting
+  // one) from their former pair. Other conversations and the old untyped
+  // continuity line remain intact.
+  for (const { pair: previous, record } of changed) {
+    const moved = migrated.get(record) ?? new Set<string>();
+    if (moved.size === 0) continue;
+    const remaining = Object.fromEntries(Object.entries(record.handles ?? {}).filter(([handle, value]) => {
+      return !(moved.has(handle) && encodedConversationMatches(value, original));
+    }));
+    if (!savePair(file, previous, { ...record, handles: remaining })) {
+      throw new MultichatError('CONVERSATION_STATE_WRITE_FAILED', 'Conversation refinement could not remove an old handle copy; no message was sent. The existing conversation handle remains readable.');
+    }
+  }
+  return refined;
+}
+
+/** Read an already established type before checking an explicitly selected recipient. */
+export function latestKnownConversationRef(file: string, original: ConversationRef): ConversationRef {
+  let known = original;
+  for (const { refs } of matchingConversationRecords(file, original)) {
+    for (const stored of refs) {
+      known = { ...known, f: mergeEndpointTypes(known.f, stored.f), t: mergeEndpointTypes(known.t, stored.t), c: Math.max(known.c, stored.c) };
+    }
+  }
+  return known;
+}
+
+function matchingConversationRecords(file: string, original: ConversationRef): { pair: string; record: PairRecord; refs: ConversationRef[] }[] {
+  return Object.entries(loadAllPairs(file)).flatMap(([pair, record]) => {
+    const refs: ConversationRef[] = [];
+    for (const encoded of [record.ref, ...Object.values(record.handles ?? {})]) {
+      try {
+        const ref = decodeRef(encoded);
+        if (conversationRefMatches(ref, original)) refs.push(ref);
+      } catch { /* Corrupt continuity never supplies a type. */ }
+    }
+    return refs.length === 0 ? [] : [{ pair, record, refs }];
+  });
+}
+
+function conversationRefMatches(stored: ConversationRef, original: ConversationRef): boolean {
+  return stored.n === original.n && stored.starId === original.starId
+    && nativeEndpointMatches(stored.f, original.f) && nativeEndpointMatches(stored.t, original.t);
+}
+
+function encodedConversationMatches(encoded: string, original: ConversationRef): boolean {
+  try { return conversationRefMatches(decodeRef(encoded), original); }
+  catch { return false; }
+}
+
+function nativeEndpointMatches(left: RefEndpoint, right: RefEndpoint): boolean {
+  return nativeEndpointContextMatches(left, right)
+    && (right.p === 'human' || left.p === 'human' || right.endpointType === undefined || left.endpointType === undefined || left.endpointType === right.endpointType);
+}
+
+function nativeEndpointContextMatches(left: RefEndpoint, right: RefEndpoint): boolean {
+  if (left.p === 'human' || right.p === 'human') return left.p === right.p;
+  return left.p === right.p && left.id === right.id
+    && left.m === right.m && left.mid === right.mid;
+}
+
+function mergeEndpointTypes(requested: RefEndpoint, stored: RefEndpoint): RefEndpoint {
+  if (requested.p === 'human' || stored.p === 'human') return requested;
+  if (requested.endpointType !== undefined && stored.endpointType !== undefined && requested.endpointType !== stored.endpointType) {
+    throw new MultichatError('TARGET_CONFLICT', 'This conversation already has a confirmed delivery type; an older untyped reference cannot replace it.');
+  }
+  return { ...stored, ...requested, ...(stored.endpointType === undefined ? {} : { endpointType: stored.endpointType }) };
+}
+
+/**
  * Record the pair's latest ref (issued with a message that got out: delivered,
  * queued, or parked). `machines`（016①）= 本次跨机信封到达携带的 mid8→名
  * 条目，随本次写合并进分片（既有条目不覆盖语义外的丢失）。
  */
-export function recordConversation(
+export async function recordConversation(
   file: string,
   ref: ConversationRef,
   nowMs: number = Date.now(),
   machines?: Record<string, string>,
+): Promise<void> {
+  // Runs after native delivered/queued/parked: a busy lock or failed write must
+  // never turn an accepted delivery into a failure, so every outcome is swallowed.
+  try {
+    await withConversationLock(file, () => { recordConversationLocked(file, ref, nowMs, machines); });
+  } catch {
+    // best-effort continuity only
+  }
+}
+
+function recordConversationLocked(
+  file: string,
+  ref: ConversationRef,
+  nowMs: number,
+  machines?: Record<string, string>,
 ): void {
   const pairKey = pairKeyOf(ref.f, ref.t);
-  const existing = readShard(shardFileOf(file, pairKey));
+  if (!readConversationState(file).complete) return;
+  const existing = readConversationShard(shardFileOf(file, pairKey));
   // F2 柄随轮次自新：骑本次原有写顺带把同 nonce 柄刷新到最新 ref（不新增写时刻）。
   const handles = refreshHandles(existing?.handles, ref);
   const mergedMachines = machines === undefined ? existing?.machines : { ...existing?.machines, ...machines };
@@ -285,6 +478,7 @@ export function recordConversation(
     ref: encodeRef(ref),
     updatedAt: nowMs,
     ...(Object.keys(handles).length === 0 ? {} : { handles }),
+    ...(existing?.handleSequence === undefined ? {} : { handleSequence: existing.handleSequence }),
     ...(mergedMachines === undefined || Object.keys(mergedMachines).length === 0 ? {} : { machines: mergedMachines }),
   });
 }
@@ -302,30 +496,32 @@ export function machineNameOfPair(
   return loadPair(file, pairKeyOf(ref.f, ref.t))?.machines?.[mid8];
 }
 
-// ---- F2 会话短柄（c<数字>）：reply-hint 的两字符本地柄 ------------------------
-// 寄生会话分片零新文件；柄号本机全分片唯一分配（max+1，CAS 撞号重试一次）；
+// ---- 五字符本机会话短柄：代次 + 回环槽位 ------------------------------------
+// 寄生会话分片零新文件；分配进度与新柄同一次原子保存，不回收已经发出的标识；
 // 每分片 LRU 封顶 HANDLE_MAX（键插入序即 LRU 序，JSON 往返保序）。
 
-export const CONVERSATION_HANDLE_RE = /^c\d+$/;
+export { CONVERSATION_HANDLE_RE, LEGACY_CONVERSATION_HANDLE_RE } from './conversation-handles.js';
 export const HANDLE_MAX = 8;
 
 /** One live handle entry anywhere on this machine. */
 interface HandleEntry {
   handle: string;
   nonce: string;
+  pair: string;
   ref: string;
   turn: number;
 }
 
 /** Every handle across every shard (broken entries skipped). */
-function scanHandles(file: string): HandleEntry[] {
+function scanHandles(pairs: Record<string, PairRecord>): HandleEntry[] {
   const out: HandleEntry[] = [];
-  for (const record of Object.values(loadAllPairs(file))) {
+  const highest = highestHandleSequence(Object.values(pairs));
+  for (const record of Object.values(pairs)) {
     for (const [handle, ref] of Object.entries(record.handles ?? {})) {
-      if (!CONVERSATION_HANDLE_RE.test(handle)) continue;
+      if (!isCurrentHandle(handle, highest)) continue;
       try {
         const decoded = decodeRef(ref);
-        out.push({ handle, nonce: decoded.n, ref, turn: decoded.c });
+        out.push({ handle, nonce: decoded.n, pair: pairKeyOf(decoded.f, decoded.t), ref, turn: decoded.c });
       } catch {
         // undecodable leftover: ignored
       }
@@ -334,18 +530,25 @@ function scanHandles(file: string): HandleEntry[] {
   return out;
 }
 
-function maxHandleNumber(entries: readonly HandleEntry[]): number {
-  let max = 0;
-  for (const entry of entries) {
-    const n = Number(entry.handle.slice(1));
-    if (Number.isInteger(n) && n > max) max = n;
+/** Shared read-only selection for status: stale or ambiguous bindings are never advertised. */
+export function resolvableConversationHandles(pairs: Record<string, PairRecord>): ReadonlyMap<string, string> {
+  const grouped = new Map<string, HandleEntry[]>();
+  for (const entry of scanHandles(pairs)) {
+    const group = grouped.get(entry.handle) ?? [];
+    group.push(entry);
+    grouped.set(entry.handle, group);
   }
-  return max;
+  const resolved = new Map<string, string>();
+  for (const [handle, entries] of grouped) {
+    const ref = entries.length === 1 ? entries[0]!.ref : resolveRefinementCopies(entries);
+    if (ref !== undefined) resolved.set(handle, ref);
+  }
+  return resolved;
 }
 
 /**
  * 柄表维护：newHandle 缺省（recordConversation 刷新腿）= 同 nonce 条目原地换
- * 最新 ref 并 LRU 触碰（重插到尾）；newHandle 在场（分配/CAS 改写腿）= 同
+ * 最新 ref 并 LRU 触碰（重插到尾）；newHandle 在场（分配腿）= 同
  * nonce 旧柄被新柄顶替（丢弃）。超 HANDLE_MAX 淘汰首键（最久未触碰）；
  * undecodable 条目丢弃。
  */
@@ -358,6 +561,7 @@ function refreshHandles(
   const next: Record<string, string> = {};
   let touched: string | undefined;
   for (const [handle, value] of Object.entries(handles ?? {})) {
+    if (!CONVERSATION_HANDLE_RE.test(handle)) continue;
     if (handle === newHandle) continue;
     try {
       if (decodeRef(value).n === ref.n) {
@@ -382,41 +586,97 @@ function refreshHandles(
  * its conversation line (ref/updatedAt kept verbatim) — a send that later fails
  * delivery leaves --to continuation untouched.
  */
-function attachHandle(file: string, pairKey: string, ref: ConversationRef, handle: string): void {
-  const existing = readShard(shardFileOf(file, pairKey));
-  savePair(file, pairKey, {
-    ref: existing?.ref ?? encodeRef(ref),
+function attachHandle(file: string, pairKey: string, ref: ConversationRef, handle: string, handleSequence: number): boolean {
+  const existing = readConversationShard(shardFileOf(file, pairKey));
+  const encoded = encodeRef(ref);
+  const saved = savePair(file, pairKey, {
+    ref: existing?.ref ?? encoded,
     updatedAt: existing?.updatedAt ?? 0,
     handles: refreshHandles(existing?.handles, ref, handle),
+    handleSequence,
+    ...(existing?.machines === undefined ? {} : { machines: existing.machines }),
   });
+  // Verify the persisted shard carries this binding: an unsaved handle must
+  // never come back as usable.
+  const persisted = readConversationShard(shardFileOf(file, pairKey));
+  return saved && persisted?.handles?.[handle] === encoded && persisted.handleSequence === handleSequence;
+}
+
+/** One machine-wide lock per real state directory: every conversation write shares it. */
+const CONVERSATION_LOCK_KEY = 'conversation-state';
+const CONVERSATION_LOCK_TIMEOUT_MS = 1_000;
+
+/**
+ * Serialize conversation-state writes across independent CLI processes. The lock
+ * identity is the canonical shard directory (path aliases and symlinks included),
+ * and the OS releases it when a holder dies. Never held across native delivery:
+ * callers only wrap the local read-modify-write.
+ */
+async function withConversationLock<T>(file: string, work: () => T): Promise<StateLockResult<T>> {
+  const directory = shardDirOf(file);
+  mkdirSync(directory, { recursive: true });
+  return withStateLock(directory, CONVERSATION_LOCK_KEY, async () => work(), CONVERSATION_LOCK_TIMEOUT_MS);
+}
+
+function conversationStateBusy(): MultichatError {
+  return new MultichatError('CONVERSATION_STATE_BUSY', 'Conversation state is locked by another crosschat process; no message was sent. Retry the send.');
 }
 
 /**
- * The conversation's short handle: reuse the machine-wide handle already bound
- * to this nonce, else claim max+1 with CAS collision protection.
+ * Reuse a safe current handle, otherwise advance the finite machine-wide ring.
+ * Optional hint failures fall back to the caller's complete, routable ref.
  */
-export function handleForRef(file: string, ref: ConversationRef): string {
-  const entries = scanHandles(file);
-  const reused = entries.find((entry) => entry.nonce === ref.n);
-  if (reused !== undefined) return reused.handle;
-  return claimHandle(file, ref, maxHandleNumber(entries) + 1);
-}
-
-/**
- * Claim + CAS verify + one rewrite at max+2. candidate is injectable so tests
- * can simulate a scan that raced a concurrent allocator. After the single
- * retry a still-colliding number is returned as-is — resolveHandle's ambiguity
- * error (列候选) is the safety net on consumption.
- */
-export function claimHandle(file: string, ref: ConversationRef, candidate: number): string {
-  const pairKey = pairKeyOf(ref.f, ref.t);
-  let handle = `c${candidate}`;
-  attachHandle(file, pairKey, ref, handle);
-  const after = scanHandles(file);
-  if (after.some((entry) => entry.handle === handle && entry.nonce !== ref.n)) {
-    handle = `c${maxHandleNumber(after) + 2}`;
-    attachHandle(file, pairKey, ref, handle);
+export async function handleForRef(file: string, ref: ConversationRef): Promise<string | undefined> {
+  try {
+    const locked = await withConversationLock(file, () => handleForRefLocked(file, ref));
+    return locked.acquired ? locked.value : undefined;
+  } catch {
+    return undefined; // optional hint must not block an otherwise routable full ref
   }
+}
+
+function handleForRefLocked(file: string, ref: ConversationRef): string | undefined {
+  const state = readConversationState(file);
+  if (!state.complete) return undefined;
+  const entries = scanHandles(state.pairs);
+  const pair = pairKeyOf(ref.f, ref.t);
+  const mine = entries.filter((entry) => entry.nonce === ref.n && entry.pair === pair);
+  if (mine.length === 0) return claimHandleLocked(file, ref, highestHandleSequence(Object.values(state.pairs)) + 1);
+  // 撞号 already in the user's state: reusing that number would hand out an
+  // ambiguous reply hint, and rewriting it would pick a winner for two real
+  // conversations. Omit the hint and leave the historical state untouched.
+  return mine.find((entry) => resolvesToNonce(file, entry.handle, ref.n))?.handle;
+}
+
+function resolvesToNonce(file: string, handle: string, nonce: string): boolean {
+  try {
+    return decodeRef(resolveHandle(file, handle)).n === nonce;
+  } catch {
+    return false; // 撞号 or expired: never handed out as a hint
+  }
+}
+
+/**
+ * Claim at or after the requested sequence under the same machine-wide lock.
+ * A stale candidate can never overwrite an issued identifier or rewind progress.
+ */
+export async function claimHandle(file: string, ref: ConversationRef, candidate: number): Promise<string | undefined> {
+  try {
+    const locked = await withConversationLock(file, () => claimHandleLocked(file, ref, candidate));
+    return locked.acquired ? locked.value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function claimHandleLocked(file: string, ref: ConversationRef, candidate: number): string | undefined {
+  const state = readConversationState(file);
+  if (!state.complete) return undefined;
+  const sequence = Math.max(highestHandleSequence(Object.values(state.pairs)) + 1, candidate);
+  if (!isHandleSequence(sequence)) return undefined;
+  const pairKey = pairKeyOf(ref.f, ref.t);
+  const handle = handleForSequence(sequence);
+  if (!attachHandle(file, pairKey, ref, handle, sequence)) return undefined;
   return handle;
 }
 
@@ -426,14 +686,36 @@ export function claimHandle(file: string, ref: ConversationRef, candidate: numbe
  * both teach the --to continuation (过期柄的消费侧自纠).
  */
 export function resolveHandle(file: string | undefined, handle: string): string {
-  const hits = (file === undefined ? [] : scanHandles(file))
+  const teach = '——用 --to <名> --tool <收件类型> 接续或开新对话';
+  if (LEGACY_CONVERSATION_HANDLE_RE.test(handle)) {
+    throw new MultichatError('INVALID_CONVERSATION_REF', `${handle} 是旧版会话短柄，已停用${teach}`);
+  }
+  const state = file === undefined ? { pairs: {}, complete: true } : readConversationState(file);
+  if (!state.complete) throw new MultichatError('INVALID_CONVERSATION_REF', `短柄状态无法完整核验，请使用完整会话引用${teach}`);
+  const hits = scanHandles(state.pairs)
     .filter((entry) => entry.handle === handle)
     .sort((a, b) => b.turn - a.turn); // same nonce twice: newest ref wins
-  if (hits.length > 0 && hits.every((entry) => entry.nonce === hits[0]!.nonce)) return hits[0]!.ref;
-  const teach = '——用 --to <名> 接续或开新对话';
+  if (hits.length === 1) return hits[0]!.ref;
+  const refined = resolveRefinementCopies(hits);
+  if (refined !== undefined) return refined;
   if (hits.length === 0) {
     throw new MultichatError('INVALID_CONVERSATION_REF', `${handle} 已过期或未知${teach}`);
   }
   const candidates = [...new Set(hits.map((entry) => entry.ref))].join(' ');
   throw new MultichatError('INVALID_CONVERSATION_REF', `${handle} 撞号指向多个对话：${candidates}${teach}`);
+}
+
+/** A failed old-shard cleanup may leave only compatible untyped/typed copies. */
+function resolveRefinementCopies(entries: readonly HandleEntry[]): string | undefined {
+  if (entries.length === 0) return undefined;
+  let known = decodeRef(entries[0]!.ref);
+  for (const entry of entries.slice(1)) {
+    const ref = decodeRef(entry.ref);
+    if (ref.n !== known.n || ref.starId !== known.starId
+      || !nativeEndpointContextMatches(ref.f, known.f) || !nativeEndpointContextMatches(ref.t, known.t)) return undefined;
+    try {
+      known = { ...known, f: mergeEndpointTypes(known.f, ref.f), t: mergeEndpointTypes(known.t, ref.t), c: Math.max(known.c, ref.c) };
+    } catch { return undefined; /* Different known endpoints still constitute a collision. */ }
+  }
+  return encodeRef(known);
 }

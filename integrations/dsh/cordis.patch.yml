@@ -1,0 +1,4 @@
+- insert:
+    - id: crosschat-dsh-bridge
+      name: '@crosschat/dsh-bridge'
+      config: {}

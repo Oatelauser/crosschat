@@ -104,7 +104,7 @@ class Client {
       ...(opts.machineId === undefined ? {} : { machineId: opts.machineId }),
       auth,
       ...(opts.name === undefined ? {} : { name: opts.name }),
-      caps: ['multi-star'],
+      caps: ['multi-star', 'endpoint-types-v1'],
     });
     await c.waitFor((f) => f.op === 'connected');
     return c;
@@ -132,7 +132,7 @@ async function dashedNodeOnline(url: string, k: string, machineId: string, name 
 
 /** 一笔 send→deliver→result→receipt 完整投递；返回 deliver 帧（证路由命中）。 */
 async function roundTrip(sender: Client, node: Client, spec: string, id: string): Promise<Frame> {
-  sender.send({ op: 'send', id, targetMachine: spec, body: `to-${id}` });
+  sender.send({ tool: 'claude', op: 'send', id, targetMachine: spec, body: `to-${id}` });
   const deliver = await node.waitFor((f) => f.op === 'deliver' && f.id === id);
   node.send({
     op: 'result',
@@ -191,7 +191,7 @@ describe('F0 四形态互投矩阵（注册表形态 × spec 形态，节点以�
       { key: key('k1'), machineId: 'ec542c2c28e742d1aaaa0f989d21f8b', machineName: 'win-b' },
     ]);
     const sender = await senderOn(h.url);
-    sender.send({ op: 'send', id: 'x', targetMachine: 'ec542c2c', body: '?' });
+    sender.send({ tool: 'claude', op: 'send', id: 'x', targetMachine: 'ec542c2c', body: '?' });
     const err = await sender.waitFor((f) => f.op === 'error');
     expect(err.op === 'error' && err.code).toBe('MACHINE_NAME_COLLISION');
   }, 10_000);
@@ -211,7 +211,7 @@ describe('F0 onConnect 绑定比对（双侧归一，防升级窗口断连）', 
   it('异值仍拒（BAD_AUTH）', async () => {
     const h = await startBroker([{ key: key('k0'), machineId: DASHED }], { authFailDelayMs: 20 });
     const c = await Client.raw(h.url);
-    c.send({ op: 'connect', proto: 1, role: 'node', machineId: '9999aaaa9999aaaa9999aaaa9999aaaa', auth: key('k0'), caps: ['multi-star'] });
+    c.send({ op: 'connect', proto: 1, role: 'node', machineId: '9999aaaa9999aaaa9999aaaa9999aaaa', auth: key('k0'), caps: ['multi-star', 'endpoint-types-v1'] });
     const err = await c.waitFor((f) => f.op === 'error');
     expect(err.op === 'error' && err.code).toBe('BAD_AUTH');
     expect(err.op === 'error' && err.message).toContain('machineId');
@@ -259,7 +259,7 @@ describe('F0 UNKNOWN_MACHINE did-you-mean', () => {
       { key: key('k1'), machineId: 'dddd00001111', machineName: 'linux-box' },
     ]);
     const sender = await senderOn(h.url);
-    sender.send({ op: 'send', id: 'u1', targetMachine: 'ghost', body: '?' });
+    sender.send({ tool: 'claude', op: 'send', id: 'u1', targetMachine: 'ghost', body: '?' });
     const err = await sender.waitFor((f) => f.op === 'error');
     expect(err.op === 'error' && err.code).toBe('UNKNOWN_MACHINE');
     const message = err.op === 'error' ? err.message : '';
@@ -272,7 +272,7 @@ describe('F0 UNKNOWN_MACHINE did-you-mean', () => {
     const h = await startBroker([{ key: key('k0'), machineId: DASHED, machineName: 'win-box' }]);
     const sender = await senderOn(h.url);
     // 下划线变体落名字轨（非 hex-dash 字符集），归一后恰是 mid 前缀
-    sender.send({ op: 'send', id: 'u2', targetMachine: 'ec542c2c_28e7', body: '?' });
+    sender.send({ tool: 'claude', op: 'send', id: 'u2', targetMachine: 'ec542c2c_28e7', body: '?' });
     const err = await sender.waitFor((f) => f.op === 'error');
     expect(err.op === 'error' && err.code).toBe('UNKNOWN_MACHINE');
     const message = err.op === 'error' ? err.message : '';
@@ -290,7 +290,7 @@ describe('F0 UNKNOWN_MACHINE did-you-mean', () => {
       })),
     );
     const sender = await senderOn(h.url);
-    sender.send({ op: 'send', id: 'u3', targetMachine: 'ghost', body: '?' });
+    sender.send({ tool: 'claude', op: 'send', id: 'u3', targetMachine: 'ghost', body: '?' });
     const err = await sender.waitFor((f) => f.op === 'error');
     const message = err.op === 'error' ? err.message : '';
     const listed = message.split('已注册：')[1] ?? '';
@@ -306,14 +306,14 @@ describe('F0 UNKNOWN_MACHINE did-you-mean', () => {
       { key: key('k1'), machineId: 'dddd00001111', machineName: 'linux-box' },
     ]);
     const sender = await senderOn(h.url);
-    sender.send({ op: 'send', id: 'u4', targetMachine: 'ghost', body: '?' });
+    sender.send({ tool: 'claude', op: 'send', id: 'u4', targetMachine: 'ghost', body: '?' });
     const err = await sender.waitFor((f) => f.op === 'error');
     const message = err.op === 'error' ? err.message : '';
     expect(message).not.toContain('junk'); // 空归一条目不进候选
     expect(message).toContain('linux-box');
     // hex 轨同样不被空归一条目劫持：前缀投递直达真实条目
     const linuxNode = await Client.connect(h.url, key('k1'), { role: 'node', machineId: 'dddd00001111' });
-    sender.send({ op: 'send', id: 'u5', targetMachine: 'dddd0000', body: 'ok' });
+    sender.send({ tool: 'claude', op: 'send', id: 'u5', targetMachine: 'dddd0000', body: 'ok' });
     const d = await linuxNode.waitFor((f) => f.op === 'deliver' && f.id === 'u5');
     expect(d.op).toBe('deliver');
   }, 10_000);
@@ -357,7 +357,7 @@ describe('F0 conversation ref 回信带杠机器（drill 场景，真 broker 集
       machineId: () => '1111aaaa2222bbbb', // 本机纯 hex（Linux）
       tcpBaseDir: home,
     };
-    const outP = runSend({ conversation: ref, bodyArg: 'pong' }, deps);
+    const outP = runSend({ tool: 'claude', conversation: ref, bodyArg: 'pong' }, deps);
     const deliver = await winNode.waitFor((f) => f.op === 'deliver');
     expect(deliver).toMatchObject({ op: 'deliver', payload: 'pong' });
     winNode.send({

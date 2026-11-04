@@ -31,7 +31,7 @@ import { createConnectionsResource, createTcpTargetsResource } from './resources
 function childEnvironment(home: string, isolated: boolean): NodeJS.ProcessEnv {
   const env = { ...process.env };
   if (!isolated) return env;
-  for (const key of Object.keys(env)) if (['HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'LOCALAPPDATA', 'APPDATA', 'CODEX_HOME', 'CODEX_SQLITE_HOME', 'CLAUDE_CONFIG_DIR'].includes(key.toUpperCase())) delete env[key];
+  for (const key of Object.keys(env)) if (['HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'LOCALAPPDATA', 'APPDATA', 'CODEX_HOME', 'CODEX_SQLITE_HOME', 'CLAUDE_CONFIG_DIR', 'DSH_HOME'].includes(key.toUpperCase())) delete env[key];
   return { ...env, HOME: home, USERPROFILE: home, LOCALAPPDATA: join(home, 'AppData', 'Local'), APPDATA: join(home, 'AppData', 'Roaming'), CODEX_HOME: join(home, '.codex'), CLAUDE_CONFIG_DIR: join(home, '.claude') };
 }
 

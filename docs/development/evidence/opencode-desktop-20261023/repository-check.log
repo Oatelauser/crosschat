@@ -1,0 +1,266 @@
+
+> @oatelauser/crosschat@1.10.0 check
+> npm run lint && npm run check:imports && npm run build && npm test
+
+
+> @oatelauser/crosschat@1.10.0 lint
+> eslint src test
+
+
+> @oatelauser/crosschat@1.10.0 check:imports
+> node scripts/runtime-import-graph.mjs
+
+Runtime import graph: 169 modules, 539 edges; no cycles or boundary violations.
+
+> @oatelauser/crosschat@1.10.0 build
+> tsc
+
+
+> @oatelauser/crosschat@1.10.0 test
+> vitest run --dir test
+
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ✓ test/doctor-json-cli.test.ts (2 tests) 1264ms
+   ✓ doctor JSON CLI extension > returns the structured checks and preserves the existing default report and exit severity  508ms
+   ✓ doctor JSON CLI extension > emits valid structured findings with exit one for a failed check and rejects extra options  754ms
+ ✓ test/tui-main-observations.test.ts (3 tests) 1294ms
+   ✓ default local observation wiring > preserves native environment paths when the caller has not requested an isolated home  791ms
+   ✓ default local observation wiring > installs the five real readonly resources lazily and preserves exact related routes  376ms
+ ✓ test/observation-overview.test.ts (18 tests) 1259ms
+   ✓ safe isolated diagnostics for observation pages > binds the isolated process environment to explicit HOME instead of inherited native data overrides  422ms
+   ✓ safe isolated diagnostics for observation pages > retains native data environment overrides in inherit mode while binding crosschat sources to the requested HOME  404ms
+ ✓ test/tui-cli.test.ts (11 tests) 1530ms
+   ✓ CLI TUI command isolation > keeps "--help" independent from TUI and Ink modules  327ms
+ ✓ test/outbox.test.ts (24 tests) 1702ms
+   ✓ park > refuses honestly at the per-thread cap and leaves the file untouched  1183ms
+ ✓ test/tui-controller.test.ts (23 tests) 1735ms
+ ✓ test/session-membership.test.ts (15 tests) 1441ms
+   ✓ session membership application boundary > adopts an anonymous full native ref through the shared aggregator and verifies broker roster authority  547ms
+ ✓ test/via-tcp.test.ts (35 tests) 1560ms
+   ✓ runViaTcpSend against a real broker > times out with TCP_TRANSPORT_FAILED and the 勿盲目重发 wording  433ms
+ ✓ test/runtime-import-graph.test.ts (9 tests) 1706ms
+   ✓ core source architecture > has no runtime dependency cycle or broken local import  722ms
+   ✓ core source architecture > keeps node configuration and connection selection independent of commands and clients  427ms
+   ✓ core source architecture > keeps every application adapter independent of command and UI entry points  427ms
+ ✓ test/send-log.test.ts (10 tests) 2553ms
+   ✓ appendSendLog > rotates past 5MiB instead of truncating: the bulk moves whole to .old, the new entry starts a fresh file  2389ms
+ ✓ test/core-code-standards.test.ts (2 tests) 2620ms
+   ✓ progressive typed lint rules > rejects floating promises, async void callbacks and value imports used only as types  2587ms
+ ✓ test/opencode-members.test.ts (7 tests) 1070ms
+   ✓ OpenCode star entry > discovers a newly started OpenCode session and detaches it after the launcher exits  1041ms
+ ✓ test/ssh-application.test.ts (15 tests) 1004ms
+ ✓ test/tui-filters.test.ts (9 tests) 950ms
+ ✓ test/serve-broker.test.ts (18 tests) 631ms
+ ✓ test/opencode-desktop-fixture.test.ts (13 tests) 2915ms
+   ✓ official desktop test environment > reports an unregistered executable under the owned run before allowing cleanup  2227ms
+   ✓ official desktop test environment > retains a locked-log diagnostic while collecting remaining logs for teardown  301ms
+ ✓ test/tui-observation-navigation.test.ts (4 tests) 814ms
+   ✓ observation resource routes > keeps related route caches separate, canonicalizes query order, clears associations on direct commands and restores the source  374ms
+ ✓ test/tui-composition.test.ts (12 tests) 944ms
+ ✓ test/core-diagnostics.test.ts (9 tests) 709ms
+   ✓ isolated cancellable diagnostics > terminates a real probe child through the default built isolation path on cancellation  552ms
+ ✓ test/maintenance.test.ts (14 tests) 875ms
+   ✓ owned maintenance worker lifecycle > runs actual plans and filesystem effects through the default built worker using only isolated fixture paths  513ms
+ ✓ test/status-remote.test.ts (16 tests) 927ms
+   ✓ CLI：runViaTcpStatus 传输腿 > 版本偏差：旧 broker 对 status-query 无行为 → 超时教学  412ms
+ ✓ test/revocation-pause.test.ts (13 tests) 2828ms
+   ✓ explicit credential revocation pauses this star > stops one launcher supervisor without restarting it or disrupting another star  2215ms
+ ✓ test/remote-discovery-tcp.test.ts (6 tests) 580ms
+   ✓ TCP complete read-only discovery > reads 100 anonymous sessions across real broker/node WebSockets and resolves full-ID details  335ms
+ ✓ test/tui-main-sessions.test.ts (3 tests) 527ms
+   ✓ default local sessions wiring > installs the real session resource through injectable safe application sources after entering local  334ms
+ ✓ test/tui-form.test.ts (5 tests) 572ms
+ ✓ test/local-service-owned-stop.test.ts (6 tests) 3349ms
+   ✓ TUI owned service stop process trees > releases a hung OS scanner and its helper before completing cancellation without claiming the external stop was undone  543ms
+   ✓ TUI owned service stop process trees > bounds a nonresponding stop job and reclaims its full scanner tree on timeout  1350ms
+   ✓ TUI owned service stop process trees > runs the actual stop process wrapper and prior stop worker with the same fixed target, then releases the wrapper  508ms
+   ✓ TUI owned service stop process trees > retains prior request validation inside the real wrapper before any stop business call  446ms
+   ✓ TUI owned service stop process trees > uses the owned stop default from the managed task and waits for tree cleanup before returning an uncertain issued result  494ms
+ ✓ test/remote-discovery-cli.test.ts (2 tests) 916ms
+   ✓ built discover CLI endpoint > rejects invalid JSON and oversized input before provider execution  707ms
+ ✓ test/serve-f0.test.ts (19 tests) 506ms
+ ✓ test/tui-sensitive-result.test.ts (2 tests) 469ms
+   ✓ one-time sensitive mutation results > uses a constant safe copy error, discards the result on interrupt and clears it on disposal  306ms
+ ✓ test/serve-node.test.ts (30 tests) 3315ms
+   ✓ B0 starId handshake > 036 无 id 星（手编形状）：连接按 BAD_AUTH 拒——broker 机跑一次 serve 补 id  590ms
+   ✓ B1 multi-star: delivery pipeline stamps starId into issued refs > broker queue self-delivery: the receipt ref carries the registry starId  724ms
+   ✓ B1 multi-star: delivery pipeline stamps starId into issued refs > broker steer self-delivery: the receipt ref carries the registry starId  619ms
+ ✓ test/opencode-adapter.test.ts (24 tests) 387ms
+ ✓ test/serve-b21.test.ts (29 tests) 619ms
+ ✓ test/local-service-inspection.test.ts (6 tests) 3797ms
+   ✓ owned service inspection and guard workers > reclaims an inspector blocked in spawnSync, including its owned probe child, before cancellation returns  633ms
+   ✓ owned service inspection and guard workers > uses the real process wrapper for successful inspection/guard IPC and releases it before returning  963ms
+   ✓ owned service inspection and guard workers > reclaims a real wrapper and its controlled blocked probe when its read timeout expires  1898ms
+ ✓ test/broker-discovery.test.ts (17 tests) 568ms
+ ✓ test/watchdog.test.ts (10 tests) 388ms
+ ✓ test/core-sessions-readers.test.ts (13 tests) 404ms
+ ✓ test/local-service-worker-boundary.test.ts (8 tests) 568ms
+ ✓ test/send-command.test.ts (57 tests) 540ms
+ ✓ test/tcp-configuration.test.ts (8 tests) 254ms
+ ✓ test/file-channel.test.ts (10 tests) 294ms
+ ✓ test/revocation-auth-race.test.ts (2 tests) 454ms
+   ✓ revocation during current process lifecycles > a corrupt self-aggregator pause does not become an unhandled rejection in the broker  381ms
+ ✓ test/pipe-transport.test.ts (6 tests | 3 skipped) 372ms
+   ✓ WindowsNamedPipeTransport > reports PIPE_WRITE_UNCERTAIN when the server cuts the connection mid-write  310ms
+ ✓ test/tui-follow.test.ts (6 tests) 378ms
+ ✓ test/core-queries.test.ts (17 tests) 246ms
+ ✓ test/conversations.test.ts (26 tests) 306ms
+ ✓ test/broker-revocation.test.ts (12 tests) 4333ms
+   ✓ broker credential revocation > local remove-node immediately revokes every node/sender using that credential and retains offline permanent members in its star  929ms
+   ✓ broker credential revocation > remote remove-node has the same immediate effect while members and star admins retain their three-layer limits  700ms
+   ✓ broker credential revocation > local remove-admin-key closes only authenticated sessions of the removed credential, including unique-prefix selection  1133ms
+   ✓ broker credential revocation > marks a revoked session unusable before close completes without affecting another credential  355ms
+   ✓ broker credential revocation > finishes target pending work and file routes on revocation before the close callback, ignoring late target results  346ms
+ ✓ test/smoke.test.ts (2 tests) 433ms
+ ✓ test/tui-contexts.test.ts (13 tests) 159ms
+ ✓ test/tcp-transport.test.ts (7 tests) 213ms
+ ✓ test/serve-sessions.test.ts (31 tests) 4282ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 028 claude 活性：扫描核验——死 claude 成员转下线（教学）、活成员续投  549ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 028 双活性（9a）：codex 线程存在（rollout 落盘）永不下线；两侧皆无的死名转下线  545ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 029 临时成员异常死亡：对账验死报 member-remove 清册零痕迹（不留下线态）  744ms
+   ✓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > 028 下线成员随 roster 帧下发（offlineSessions 单列；sessions 保持活成员语义）  443ms
+   ✓ 018 9b：老 broker（proto:1）降级的协议侧 > connect 携带 caps；info.caps 无 session-members→不发 sessions 帧并留降级日志  321ms
+ ✓ test/tcp-exact-transport.test.ts (3 tests) 340ms
+ ✓ test/tui-context-source.test.ts (7 tests) 367ms
+ ✓ test/tcp-application.test.ts (11 tests) 242ms
+ ✓ test/serve-cli.test.ts (32 tests) 338ms
+ ✓ test/remote-discovery-node.test.ts (8 tests) 307ms
+ ✓ test/core-services-background.test.ts (5 tests) 284ms
+ ✓ test/tui-clipboard.test.ts (5 tests) 315ms
+   ✓ explicit clipboard copy > preserves complete UTF-8 stdin in Windows PowerShell without touching the real clipboard  304ms
+ ✓ test/session-membership-exact.test.ts (6 tests) 181ms
+ ✓ test/install-skills.test.ts (6 tests) 239ms
+ ✓ test/outbox-ownership.test.ts (15 tests) 179ms
+ ✓ test/desktop-metadata.test.ts (5 tests) 182ms
+ ✓ test/observation-logs.test.ts (11 tests) 221ms
+ ✓ test/local-services.test.ts (11 tests) 220ms
+ ✓ test/observation-communications.test.ts (10 tests) 182ms
+ ✓ test/status-doctor-tcp.test.ts (27 tests) 256ms
+ ✓ test/discovery-service.test.ts (10 tests) 317ms
+ ✓ test/core-cleanup.test.ts (5 tests) 168ms
+ ✓ test/tcp-management-exact.test.ts (8 tests) 194ms
+ ✓ test/serve-multistar.test.ts (20 tests) 4770ms
+   ✓ 032 多星握手与星域隔离 > 钥匙不属任何星 → BAD_AUTH（跨星错钥匙不放行）  520ms
+   ✓ 032 bootstrap 与 CLI > 033 serve 永不造星：空表首启零星合法（不建星、不写 node.json），教学指 --add-star  1524ms
+   ✓ 032 bootstrap 与 CLI > 内挂聚合器不写 status-node 文件（非独立进程）  1526ms
+ ✓ test/serve-registry.test.ts (10 tests) 158ms
+ ✓ test/tui-mutation-navigation.test.ts (1 test) 150ms
+ ✓ test/codex-aggregate-discovery.test.ts (11 tests) 201ms
+ ✓ test/tui-main-preferences.test.ts (2 tests) 131ms
+ ✓ test/rollout-meta.test.ts (13 tests) 93ms
+ ✓ test/status-conversations.test.ts (20 tests) 115ms
+ ✓ test/tui-terminal.test.ts (8 tests) 135ms
+ ✓ test/via-send.test.ts (41 tests) 123ms
+ ✓ test/tui-session-view.test.tsx (8 tests) 183ms
+ ✓ test/tui-view.test.tsx (13 tests) 192ms
+ ✓ test/state-paths.test.ts (9 tests) 105ms
+ ✓ test/codex-deliver.test.ts (26 tests) 127ms
+ ✓ test/cli-args.test.ts (16 tests) 117ms
+ ✓ test/status-summary.test.ts (14 tests) 92ms
+ ✓ test/uninstall.test.ts (9 tests) 125ms
+ ✓ test/tui-input.test.tsx (21 tests) 122ms
+ ✓ test/tui-sessions.test.ts (24 tests) 91ms
+ ✓ test/tcp-local-management.test.ts (6 tests) 93ms
+ ✓ test/desktop-ipc.test.ts (21 tests) 103ms
+ ✓ test/conversation-summary.test.ts (15 tests) 94ms
+ ✓ test/tcp-snapshot-transport.test.ts (2 tests) 131ms
+ ✓ test/core-management.test.ts (12 tests) 123ms
+ ✓ test/clean.test.ts (10 tests) 113ms
+ ✓ test/send-handle.test.ts (6 tests) 106ms
+ ✓ test/tui-registry.test.ts (5 tests) 106ms
+ ✓ test/tcp-cold-management.test.ts (5 tests) 110ms
+ ✓ test/status-filters.test.ts (20 tests) 65ms
+ ✓ test/node-config.test.ts (9 tests) 47ms
+ ✓ test/tui-context-actions.test.ts (3 tests) 69ms
+ ✓ test/opencode-compat-fixture.test.ts (7 tests) 96ms
+ ✓ test/codex-routing.test.ts (15 tests) 68ms
+ ✓ test/codex-target-diagnostics.test.ts (13 tests) 83ms
+ ✓ test/codex-rpc.test.ts (11 tests) 74ms
+ ✓ test/star-snapshot.test.ts (1 test) 43ms
+ ✓ test/tui-table.test.ts (23 tests) 41ms
+ ✓ test/tui-tcp.test.ts (16 tests) 43ms
+ ✓ test/rate-limit.test.ts (6 tests) 43ms
+ ✓ test/opencode-desktop-probe.test.ts (9 tests) 82ms
+ ✓ test/discovery-ssh.test.ts (7 tests) 38ms
+ ✓ test/session-membership-ipv6.test.ts (2 tests) 15ms
+ ✓ test/core-services.test.ts (5 tests) 48ms
+ ✓ test/opencode-desktop-ci.test.ts (13 tests) 97ms
+ ✓ test/delivery-mode.test.ts (15 tests) 62ms
+ ✓ test/tui-text.test.ts (52 tests) 37ms
+ ✓ test/tcp-management-boundaries.test.ts (4 tests) 46ms
+ ✓ test/session-membership-machine.test.ts (4 tests) 18ms
+ ✓ test/serve-management-errors.test.ts (6 tests) 35ms
+ ✓ test/tui-star-audit.test.ts (2 tests) 31ms
+ ✓ test/opencode-send.test.ts (9 tests) 33ms
+ ✓ test/tui-logs.test.ts (3 tests) 16ms
+ ✓ test/ref.test.ts (25 tests) 16ms
+ ✓ test/core-send-diagnostics.test.ts (6 tests) 23ms
+ ✓ test/tui-ssh.test.ts (7 tests) 19ms
+ ✓ test/tui-overview.test.ts (4 tests) 14ms
+ ✓ test/core-send.test.ts (4 tests) 22ms
+ ✓ test/opencode-tui.test.ts (9 tests) 17ms
+ ✓ test/serve-admin-key.test.ts (7 tests) 6314ms
+   ✓ 034 挑战应答全链与角色矩阵 > admin 握手（钥匙永不过线）→ 读/发/删全过 → 成员/星管逐格 → 重放拒绝 → 被吊钥 BAD_AUTH → 审计在场  2938ms
+   ✓ 034 挑战应答全链与角色矩阵 > CLI 远程管理路由：--via tcp:<星> 成员读（星钥）+ 星管写（adminKey 挑战应答）  1590ms
+   ✓ 034 set-port 无命令回归（旗标+插座 op 全删） > 管理插座 set-port op 已删（未知 op 拒绝、台账零改动）  1514ms
+ ✓ test/tui-connections.test.ts (7 tests) 15ms
+ ✓ test/tui-maintenance.test.ts (6 tests) 14ms
+ ✓ test/tcp-management.test.ts (14 tests) 27ms
+ ✓ test/tui-communications.test.ts (10 tests) 14ms
+ ✓ test/opencode-identity.test.ts (18 tests) 14ms
+ ✓ test/codex-pagination.test.ts (4 tests) 13ms
+ ✓ test/codex-proxy-env.test.ts (2 tests) 13ms
+ ✓ test/tui-page-presentation.test.ts (3 tests) 14ms
+ ✓ test/opencode-composition.test.ts (4 tests) 14ms
+ ✓ test/tui-services.test.ts (4 tests) 11ms
+ ✓ test/key-file.test.ts (6 tests) 10ms
+ ✓ test/core-local-discovery.test.ts (3 tests) 10ms
+ ✓ test/deliver.test.ts (5 tests) 11ms
+ ✓ test/core-sessions.test.ts (8 tests) 12ms
+ ✓ test/core-members.test.ts (5 tests) 10ms
+ ✓ test/envelope.test.ts (20 tests) 8ms
+ ✓ test/resolve.test.ts (21 tests) 8ms
+ ✓ test/registry.test.ts (5 tests) 12ms
+ ✓ test/tcp-management-state.test.ts (3 tests) 8ms
+ ✓ test/doctor.test.ts (13 tests) 11ms
+ ✓ test/local-service-stop-target.test.ts (3 tests) 8ms
+ ✓ test/discovery-command.test.ts (2 tests) 8ms
+ ✓ test/serve-protocol.test.ts (3 tests) 4ms
+ ✓ test/claude-wrapper.test.ts (14 tests | 2 skipped) 10ms
+ ✓ test/limits.test.ts (11 tests) 6ms
+ ✓ test/frame.test.ts (5 tests) 4ms
+ ✓ test/remote-discovery-protocol.test.ts (10 tests) 4ms
+ ✓ test/opencode-status.test.ts (6 tests) 7ms
+ ✓ test/tui-status.test.ts (4 tests) 4ms
+ ✓ test/credential-revoked-protocol.test.ts (6 tests) 4ms
+ ✓ test/opencode-ref-boundary.test.ts (2 tests) 3ms
+ ✓ test/codex-wrapper.test.ts (6 tests) 6ms
+ ✓ test/local-service-readiness.test.ts (1 test) 5ms
+ ↓ test/live/claude-live.test.ts (2 tests | 2 skipped)
+ ✓ test/maintenance-boundaries.test.ts (5 tests) 7494ms
+   ✓ TUI maintenance source and copy boundaries > closes unreadable sources and bounds directory enumeration before accepting a skill plan  7327ms
+ ↓ test/live/codex-live.test.ts (2 tests | 2 skipped)
+ ↓ test/live/status-live.test.ts (2 tests | 2 skipped)
+ ✓ test/opencode-wrapper.test.ts (3 tests) 4ms
+ ✓ test/session-star.test.ts (25 tests) 12534ms
+   ✓ 018 批二：启动器入星链路 > spawn 会话→自动拉聚合器→attach→三段直达；退出即 detach  1719ms
+   ✓ 018 批二：启动器入星链路 > 多星：--connect 可重复，两会话成员表各自 attach（win 带杠 mid 形态）  1790ms
+   ✓ 018 批二：启动器入星链路 > 021 断连静默：聚合器被杀→重连提示落日志、控制台零输出、成员籍自动恢复  2749ms
+   ✓ 018 批二：启动器入星链路 > 023 stop 落重连窗口：waitClose 与 stop 信号 race，限时返回不挂起  1077ms
+   ✓ 018/028 恢复链常态化（孤儿找回/死转下线/册落盘不丢） > 聚合器重启：册切片对账→活的重入册复活、死的转下线册位保留（linux 32-hex 形态）  353ms
+   ✓ 018 批二：9b 降级告警（不只日志） > NodeClient.warn 直打一行；warnIfBrokerLacksSessionCaps 对老 broker 出声、新 broker 静默  327ms
+   ✓ 028 双模式与命令面 > 双模式集成：默认永久（退出=下线/裸 resume 同 id 复活）；--rm 零痕迹（退出册外无名）  2851ms
+   ✓ 020 工具限定词：启动器声明与 spawn 前预警 > attach 带 tool；星内已有异工具同名成员→spawn 前打预警行；限定地址直达、裸名报碰撞列两地址  1050ms
+ ✓ test/serve-star-lifecycle.test.ts (11 tests) 17198ms
+   ✓ 033 热加星：不重启即托管即收发 > 在跑 serve + CLI --add-star 经管理插座：回执生效、自登记落位、聚合器播种、新星上 node/sender 完整收发  1614ms
+   ✓ 033 删星：即时收尾 + 直报已删 + 最后一颗可删 > 热删 beta：在跑连接收"星已删除"断开、node.json 摘条、死钥直报、邻星零中断  2399ms
+   ✓ 033 插座冷热路径与 stop 收口 > 回执超时绝不回落直写：插座连上但无回执 → 报错重试、台账零改动  10018ms
+   ✓ 033 插座冷热路径与 stop 收口 > stop 收口：serve 停机后状态 stopped、插座随进程撤（CLI 退冷路径）  1540ms
+   ✓ 036 按星机器名（--star --show-name）热闭环 > 按星只重挂该星：条目覆盖落 node.json、注册表该星 machineName 更新、邻星回落全局不变；--list 显示随条目；'' 清除回落全局  1543ms
+
+ Test Files  163 passed | 3 skipped (166)
+      Tests  1782 passed | 11 skipped (1793)
+   Start at  11:53:24
+   Duration  18.65s (transform 8.09s, setup 0ms, collect 35.46s, tests 119.30s, environment 28ms, prepare 21.66s)

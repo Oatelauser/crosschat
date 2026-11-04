@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-23T03:55:10.8537201Z",
+  "command": "npm run check",
+  "exitCode": 0,
+  "node": "v25.0.0",
+  "platform": "win32",
+  "passedFiles": 163,
+  "skippedFiles": 3,
+  "passedTests": 1782,
+  "skippedTests": 11,
+  "runtimeModules": 169,
+  "runtimeEdges": 539,
+  "runtimeGraphViolations": 0,
+  "additionalEslint": "passed for desktop probe/CI/CDP/fixture/behavior/service helpers and existing PTY probe",
+  "githubActionsRun": false,
+  "desktopSerialCIInstallCycleRun": false
+}

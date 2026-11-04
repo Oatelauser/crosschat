@@ -1,0 +1,65 @@
+{
+  "at": "2026-10-23T02:17:21.9960143Z",
+  "testRoot": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-20261023-f7760fd441ab47ffba88d1be752f5e93",
+  "testRootRemoved": false,
+  "softwareCleanup": "blocked",
+  "automaticApprovalReason": "blocked by policy",
+  "attemptedActions": [
+    "Delete verified owned temporary installation root",
+    "Delete its exact owned opencode.exe only"
+  ],
+  "remainingBinary": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-20261023-f7760fd441ab47ffba88d1be752f5e93\\bin\\opencode.exe",
+  "ownedExecutablesRunning": [],
+  "commandAfter": [],
+  "remainingCompatibilityFixtures": [],
+  "userConfigChecks": [
+    {
+      "path": "C:\\Users\\yangsheng\\.local\\state\\opencode",
+      "exists": true
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\.local\\share\\opencode",
+      "exists": true
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\.config\\opencode",
+      "exists": true
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\AppData\\Local\\OpenCode",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\AppData\\Roaming\\OpenCode",
+      "exists": false
+    }
+  ],
+  "globalInstallChanged": false,
+  "userSkillInstalled": false,
+  "desktopInstalled": false,
+  "evidenceRetained": "docs/development/evidence/opencode-cli-20261023",
+  "isolatedFixtureCleanupComplete": true,
+  "userHomeLeak": {
+    "cause": "One preparation opencode --help was run without fixture environment",
+    "createdAt": "2026-10-23T10:07:17+08:00",
+    "paths": [
+      "C:\\Users\\yangsheng\\.local\\state\\opencode",
+      "C:\\Users\\yangsheng\\.local\\share\\opencode",
+      "C:\\Users\\yangsheng\\.config\\opencode"
+    ],
+    "onlyFile": "C:\\Users\\yangsheng\\.local\\share\\opencode\\log\\opencode.log",
+    "onlyFileBytes": 152,
+    "onlyFileSha256": "d8d5d3df8ffc7a255849380c573fa1fa9daab3d5e602260a6e2f9f6ed736220e",
+    "stateAndConfigEmpty": true,
+    "sourceConfirmed": true,
+    "removed": false
+  },
+  "resolution": {
+    "at": "2026-10-23T02:35:44.9455097Z",
+    "userReportedComplete": true,
+    "filesystemVerifiedAbsent": true,
+    "openCodeProcesses": 0,
+    "openCodeInstallations": 0,
+    "status": "cleaned-by-user"
+  }
+}

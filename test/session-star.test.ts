@@ -153,7 +153,7 @@ async function senderOn(url: string, auth: string): Promise<TestClient> {
   const client = new TestClient(url);
   await client.opened();
   await client.waitFor((f) => f.op === 'info');
-  client.send({ op: 'connect', proto: 1, role: 'sender', auth, caps: ['multi-star'] });
+  client.send({ op: 'connect', proto: 1, role: 'sender', auth, caps: ['multi-star', 'endpoint-types-v1'] });
   await client.waitFor((f) => f.op === 'connected');
   return client;
 }
@@ -182,7 +182,7 @@ function scanDeps(state: ScanState): SendDeps {
       })),
       malformed: 0,
     }),
-    listCodexThreads: async () => state.codex.map((t) => ({ id: t.id, name: t.name, status: 'idle' as const })),
+    listCodexThreads: async () => state.codex.map((t) => ({ id: t.id, name: t.name, status: 'idle' as const, endpointType: 'cli' })),
     deliverClaude: async (target, content) => {
       state.delivered.push(content);
       state.deliveredPids.push(target.pid);
@@ -287,7 +287,7 @@ function starJoinDeps(sh: StarHarness, overrides: Partial<StarJoinDeps> = {}): S
       const d = scanDeps(sh.state);
       return d.listClaudeSessions();
     },
-    listCodexThreads: async () => sh.state.codex.map((t) => ({ id: t.id, name: t.name, createdAt: undefined })),
+    listCodexThreads: async () => sh.state.codex.map((t) => ({ id: t.id, name: t.name, createdAt: undefined, endpointType: 'cli' })),
     spawnServeDetach: (selector) => {
       sh.spawnedSelectors.push(selector);
       void sh.aggregator();
@@ -455,7 +455,7 @@ describe('018 批二：启动器入星链路', () => {
       for (const args of captured) expect(args).toEqual(['--settings', '{"crossSessionInbound":"accept"}']);
       const sender = await senderOn(sh.harness.url, key('s'));
       const deliver = async (index: number, requestId: string) => {
-        sender.send({ op: 'send', id: requestId, targetMachine: `node-host:claude/${ids[index]}`, body: requestId });
+        sender.send({ tool: 'claude', op: 'send', id: requestId, targetMachine: `node-host:${ids[index]}`, body: requestId });
         expect(await sender.waitFor((frame) => (frame.op === 'receipt' || frame.op === 'error') && frame.id === requestId))
           .toMatchObject({ op: 'receipt', status: 'delivered' });
         expect(sh.state.deliveredPids.at(-1)).toBe(pids[index]);
@@ -668,7 +668,7 @@ describe('018 批二：启动器入星链路', () => {
         return roster?.some((machine) => machine.sessions?.some((session) => session.name === 'still-connected'));
       }, { timeout: 5_000 }).toBe(true);
       const sender = await senderOn(sh.harness.url, key('s'));
-      sender.send({ op: 'send', id: 'success-log-error', targetMachine: 'node-host:still-connected', body: 'still delivered' });
+      sender.send({ tool: 'claude', op: 'send', id: 'success-log-error', targetMachine: 'node-host:still-connected', body: 'still delivered' });
       expect(await sender.waitFor((frame) => (frame.op === 'receipt' || frame.op === 'error') && frame.id === 'success-log-error'))
         .toMatchObject({ op: 'receipt', status: 'delivered' });
       expect(out).toEqual([]);
@@ -702,7 +702,7 @@ describe('018 批二：启动器入星链路', () => {
       ];
       const sender = await senderOn(sh.harness.url, key('s'));
       const deliver = async (id: string, target: string): Promise<Frame> => {
-        sender.send({ op: 'send', id, targetMachine: target, body: 'hi' });
+        sender.send({ tool: 'claude', op: 'send', id, targetMachine: target, body: 'hi' });
         return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
       };
       // attach 完成（自动拉起聚合器→管道→attach→重播）：三段直达命中
@@ -773,7 +773,7 @@ describe('018 批二：启动器入星链路', () => {
         shB.state.claude = shA.state.claude; // 同一物理机的同一份扫描（两星夹具共享视图）
         const probe = async (sh: StarHarness, id: string): Promise<Frame> => {
           const sender = await senderOn(sh.harness.url, key('s'));
-          sender.send({ op: 'send', id, targetMachine: 'win-box:boss', body: 'x' });
+          sender.send({ tool: 'claude', op: 'send', id, targetMachine: 'win-box:boss', body: 'x' });
           return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
         };
         let okA: Frame | undefined;
@@ -822,7 +822,7 @@ describe('018 批二：启动器入星链路', () => {
       ];
       const sender = await senderOn(sh.harness.url, key('s'));
       const deliver = async (id: string): Promise<Frame> => {
-        sender.send({ op: 'send', id, targetMachine: 'node-host:boss', body: 'x' });
+        sender.send({ tool: 'claude', op: 'send', id, targetMachine: 'node-host:boss', body: 'x' });
         return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
       };
       let attached = false;
@@ -884,7 +884,7 @@ describe('018 批二：启动器入星链路', () => {
       ];
       const sender = await senderOn(sh.harness.url, key('s'));
       const deliver = async (id: string): Promise<Frame> => {
-        sender.send({ op: 'send', id, targetMachine: 'node-host:boss', body: 'x' });
+        sender.send({ tool: 'claude', op: 'send', id, targetMachine: 'node-host:boss', body: 'x' });
         return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
       };
       let attached = false;
@@ -921,13 +921,13 @@ describe('018 批二：三段寻址命令面（send --via tcp:<星>:<机器>:<�
       sh.state.claude = [{ sessionId: 'sess-boss', name: 'boss' }];
       await sh.aggregator();
       const pipe = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
-      expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss' })).ok).toBe(true);
+      expect((await pipe.send({ op: 'attach', tool: 'claude', endpointType: 'cli', sessionId: 'sess-boss', name: 'boss' })).ok).toBe(true);
       // 等成员表上行后再走真实 CLI 命令面
       let out = '';
       for (let i = 0; i < 40; i++) {
         try {
           out = await runSend(
-            { via: 'tcp:sl-t3:node-host:boss', bodyArg: '三段直达', json: true },
+            { tool: 'claude', via: 'tcp:sl-t3:node-host:boss', bodyArg: '三段直达', json: true },
             { ...scanDeps(sh.state), tcpBaseDir: sh.baseDir, sshConfigText: () => undefined },
           );
           break;
@@ -941,7 +941,7 @@ describe('018 批二：三段寻址命令面（send --via tcp:<星>:<机器>:<�
       // 非成员名：三段报 SESSION_NOT_MEMBER（教学指向启动器入星）
       await expect(
         runSend(
-          { via: 'tcp:sl-t3:node-host:ghost', bodyArg: 'x', json: true },
+          { tool: 'claude', via: 'tcp:sl-t3:node-host:ghost', bodyArg: 'x', json: true },
           { ...scanDeps(sh.state), tcpBaseDir: sh.baseDir, sshConfigText: () => undefined },
         ),
       ).rejects.toThrow('不是星成员');
@@ -958,10 +958,11 @@ describe('018 批二：extends 四级校验', () => {
     '分支一：旧名仍是星内活成员 → 拒绝并教学（不锁死：指明出路）',
     async () => {
       const sh = await startStarStar('sl-e1');
+      sh.state.claude = [{ sessionId: 'sess-old', name: 'old' }];
       await sh.aggregator();
       const conn = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
       try {
-        const reply = await conn.send({ op: 'attach', sessionId: 'sess-old', name: 'old' });
+        const reply = await conn.send({ op: 'attach', tool: 'claude', endpointType: 'cli', sessionId: 'sess-old', name: 'old' });
         expect(reply.ok).toBe(true);
         // 等成员表上行（attach→sessions 帧→broker 聚合进 roster）
         for (let i = 0; i < 40; i++) {
@@ -1015,11 +1016,11 @@ describe('统一恢复入口（启动器重声明或显式管理，册落盘不�
       ];
       const aggA = await sh.aggregator();
       const pipe = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
-      expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', selectionOwned: true, claimId: 'window-boss' })).ok).toBe(true);
-      expect((await pipe.send({ op: 'attach', sessionId: 'sess-gone', name: 'gone', tool: 'claude', selectionOwned: true, claimId: 'window-gone' })).ok).toBe(true);
+      expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', endpointType: 'cli', selectionOwned: true, claimId: 'window-boss' })).ok).toBe(true);
+      expect((await pipe.send({ op: 'attach', sessionId: 'sess-gone', name: 'gone', tool: 'claude', endpointType: 'cli', selectionOwned: true, claimId: 'window-gone' })).ok).toBe(true);
       const sender = await senderOn(sh.harness.url, key('s'));
       const send3 = async (id: string, target: string): Promise<Frame> => {
-        sender.send({ op: 'send', id, targetMachine: target, body: 'x' });
+        sender.send({ tool: 'claude', op: 'send', id, targetMachine: target, body: 'x' });
         return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
       };
       expect((await send3('r1', 'lin-box:boss')).op).toBe('receipt'); // 成员在册
@@ -1034,7 +1035,9 @@ describe('统一恢复入口（启动器重声明或显式管理，册落盘不�
       expect(await send3('still-offline', 'lin-box:boss')).toMatchObject({ code: 'SESSION_OFFLINE' });
       const next = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
       clients.push(next);
-      expect((await next.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', claimId: 'new-window', selectionOwned: true })).ok).toBe(true);
+      expect((await next.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', endpointType: 'cli', claimId: 'new-window', selectionOwned: true })).ok).toBe(true);
+      await expect.poll(async () => (await fetchRosterFor(sh.baseDir, sh.entry))?.flatMap((machine) => machine.sessions ?? []), { timeout: 5_000 })
+        .toContainEqual(expect.objectContaining({ sessionId: 'sess-boss', tool: 'claude', endpointType: 'cli' }));
       expect(await send3('selected-again', 'lin-box:boss')).toMatchObject({ status: 'delivered' });
       const gone = await send3('r2', 'lin-box:gone');
       expect(gone).toMatchObject({ op: 'error', code: 'SESSION_OFFLINE' }); // 不再除名——下线等复活
@@ -1049,7 +1052,10 @@ describe('统一恢复入口（启动器重声明或显式管理，册落盘不�
       sh.state.claude = [{ sessionId: 'sess-boss', name: 'boss' }];
       const aggA = await sh.aggregator();
       const pipe = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
-      expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', selectionOwned: true, claimId: 'window' })).ok).toBe(true);
+      expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', endpointType: 'cli', selectionOwned: true, claimId: 'window' })).ok).toBe(true);
+      const declared = (sessionId: string) => expect.poll(async () => (await fetchRosterFor(sh.baseDir, sh.entry))?.flatMap((machine) => machine.sessions ?? []), { timeout: 5_000 })
+        .toContainEqual(expect.objectContaining({ sessionId, tool: 'claude', endpointType: 'cli' }));
+      await declared('sess-boss');
       await aggA.stop();
       await pipe.close();
       // broker 重启——roster.json 落盘（018 双失忆边角由册根治）
@@ -1074,10 +1080,11 @@ describe('统一恢复入口（启动器重声明或显式管理，册落盘不�
       await aggC.waitForState('online');
       const sender = await senderOn(`ws://127.0.0.1:${port}`, key('s'));
       await new Promise((resolve) => setTimeout(resolve, 250));
-      sender.send({ op: 'send', id: 'am-offline', targetMachine: 'node-host:boss', body: 'x' });
+      sender.send({ tool: 'claude', op: 'send', id: 'am-offline', targetMachine: 'node-host:boss', body: 'x' });
       expect(await sender.waitFor((f) => f.op === 'error' && f.id === 'am-offline')).toMatchObject({ code: 'SESSION_OFFLINE' });
       expect(await runAdopt({ connect: 'sl-r2', adopt: 'boss' }, starJoinDeps(sh))).toBe(0);
-      sender.send({ op: 'send', id: 'am-selected', targetMachine: 'node-host:boss', body: 'x' });
+      await declared('sess-boss');
+      sender.send({ tool: 'claude', op: 'send', id: 'am-selected', targetMachine: 'node-host:boss', body: 'x' });
       expect(await sender.waitFor((f) => f.op === 'receipt' && f.id === 'am-selected')).toMatchObject({ status: 'delivered' });
       // 册外活进程（从未入册）仍走 adopt 收编
       sh.state.claude = [
@@ -1091,7 +1098,8 @@ describe('统一恢复入口（启动器重声明或显式管理，册落盘不�
       );
       expect(rc).toBe(0);
       expect(out.some((l) => l.includes('已收编 orphan'))).toBe(true);
-      sender.send({ op: 'send', id: 'am2', targetMachine: 'node-host:orphan', body: 'back' });
+      await declared('sess-orphan');
+      sender.send({ tool: 'claude', op: 'send', id: 'am2', targetMachine: 'node-host:orphan', body: 'back' });
       const back = await sender.waitFor((f) => f.op === 'receipt' && f.id === 'am2');
       expect(back).toMatchObject({ status: 'delivered' });
       // 幂等：再次 adopt → 提示已是成员
@@ -1132,11 +1140,11 @@ describe('018 批二：adopt 错误路径', () => {
       );
       expect(rcExtends).toBe(0);
       const sender = await senderOn(sh.harness.url, key('s'));
-      sender.send({ op: 'send', id: 'ex1', targetMachine: 'node-host:retired', body: 'x' });
+      sender.send({ tool: 'claude', op: 'send', id: 'ex1', targetMachine: 'node-host:retired', body: 'x' });
       const superseded = await sender.waitFor((f) => f.op === 'error' && f.id === 'ex1');
       expect(superseded).toMatchObject({ code: 'SESSION_SUPERSEDED' });
-      // 020：adopt 收编声明带 tool——指路地址带工具限定词
-      expect(superseded.op === 'error' && superseded.message).toContain('node-host:claude/alice');
+      // C14：接任者教学包含完整原生 ID 与独立 --tool。
+      expect(superseded.op === 'error' && superseded.message).toContain('node-host:sess-alice --tool claude');
     },
     15_000,
   );
@@ -1255,6 +1263,21 @@ describe('018 批二：9b 降级告警（不只日志）', () => {
 // ---- 改名跟随（裁定 1） ------------------------------------------------------------------
 
 describe('018 批二：/rename 自动跟随（claude 扫描 + codex 名字回填）', () => {
+  it('publishes the CLI launcher endpoint and uses it again when releasing its selected session', async () => {
+    const sh = await startStarStar('sl-type');
+    await sh.aggregator();
+    sh.state.claude = [{ sessionId: 'selected-cli', name: 'selected' }];
+    const joiner = new StarJoiner({ deps: starJoinDeps(sh), side: 'claude', connects: ['sl-type'],
+      selectedSession: { sessionId: 'selected-cli', name: 'selected' }, rm: true });
+    try {
+      await joiner.begin();
+      await expect.poll(async () => (await fetchRosterFor(sh.baseDir, sh.entry))?.flatMap((machine) => machine.sessions ?? []), { timeout: 3000 }).toEqual([
+        expect.objectContaining({ sessionId: 'selected-cli', tool: 'claude', endpointType: 'cli' }),
+      ]);
+    } finally { await joiner.stop(); }
+    await expect.poll(async () => (await fetchRosterFor(sh.baseDir, sh.entry))?.flatMap((machine) => machine.sessions ?? []), { timeout: 3000 }).toEqual([]);
+  });
+
   it(
     'claude 改名→成员名跟随重播；codex 未命名成员→线程表名字回填',
     async () => {
@@ -1263,11 +1286,11 @@ describe('018 批二：/rename 自动跟随（claude 扫描 + codex 名字回填
       sh.state.claude = [{ sessionId: 'sess-1', name: 'boss' }];
       sh.state.codex = [{ id: CODEX_THREAD, name: null }];
       const pipe = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
-      expect((await pipe.send({ op: 'attach', sessionId: 'sess-1', name: 'boss' })).ok).toBe(true);
-      expect((await pipe.send({ op: 'attach', sessionId: CODEX_THREAD })).ok).toBe(true); // codex 无名入星（id 先行）
+      expect((await pipe.send({ op: 'attach', sessionId: 'sess-1', name: 'boss', tool: 'claude', endpointType: 'cli' })).ok).toBe(true);
+      expect((await pipe.send({ op: 'attach', sessionId: CODEX_THREAD, tool: 'codex', endpointType: 'cli' })).ok).toBe(true);
       const sender = await senderOn(sh.harness.url, key('s'));
-      const send3 = async (id: string, target: string): Promise<Frame> => {
-        sender.send({ op: 'send', id, targetMachine: target, body: 'x' });
+      const send3 = async (id: string, target: string, tool: string): Promise<Frame> => {
+        sender.send({ tool, op: 'send', id, targetMachine: target, body: 'x' });
         return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
       };
       // 改名：claude boss→boss2；codex 线程获名 cname（/rename）
@@ -1277,11 +1300,11 @@ describe('018 批二：/rename 自动跟随（claude 扫描 + codex 名字回填
       let codexNamed = false;
       for (let i = 0; i < 150; i++) {
         if (!renamed) {
-          const r = await send3(`n1${i}`, 'node-host:boss2');
+          const r = await send3(`n1${i}`, 'node-host:boss2', 'claude');
           if (r.op === 'receipt' && r.status === 'delivered') renamed = true;
         }
         if (!codexNamed) {
-          const r = await send3(`n2${i}`, 'node-host:cname');
+          const r = await send3(`n2${i}`, 'node-host:cname', 'codex-cli');
           if (r.op === 'receipt' && r.status === 'delivered') codexNamed = true;
         }
         if (renamed && codexNamed) break;
@@ -1289,7 +1312,7 @@ describe('018 批二：/rename 自动跟随（claude 扫描 + codex 名字回填
       }
       expect(renamed).toBe(true); // 新名直达
       expect(codexNamed).toBe(true); // codex 名字从线程表回填
-      expect(await send3('n3', 'node-host:boss')).toMatchObject({ op: 'error', code: 'SESSION_NOT_MEMBER' }); // 旧名退位
+      expect(await send3('n3', 'node-host:boss', 'claude')).toMatchObject({ op: 'error', code: 'SESSION_NOT_MEMBER' }); // 旧名退位
       await pipe.close();
     },
     // CI 慢速 runner（Windows）上每轮两次 WS 往返显著慢于本机——窗口放宽到 60s（本机 15s 压线过的同款时序）
@@ -1343,14 +1366,14 @@ describe('028 双模式与命令面', () => {
       await sh.aggregator();
       sh.state.claude = [{ sessionId: 'sess-base', name: 'old', updatedAt: 1 }];
       const sender = await senderOn(sh.harness.url, key('s'));
-      const deliver = async (id: string, target: string): Promise<Frame> => {
-        sender.send({ op: 'send', id, targetMachine: target, body: 'x' });
+      const deliver = async (id: string, target: string, tool: string): Promise<Frame> => {
+        sender.send({ tool, op: 'send', id, targetMachine: target, body: 'x' });
         return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
       };
       const pollFor = async (target: string, want: 'delivered' | string, prefix: string): Promise<Frame> => {
         let last = 'none';
         for (let i = 0; i < 60; i++) {
-          const r = await deliver(`${prefix}${i}`, target);
+          const r = await deliver(`${prefix}${i}`, target, 'claude');
           last = r.op === 'error' ? `${r.op}:${r.code}` : `${r.op}:${(r as { status?: string }).status ?? ''}`;
           if (want === 'delivered' && r.op === 'receipt' && r.status === 'delivered') return r;
           if (want !== 'delivered' && r.op === 'error' && r.code === want) return r;
@@ -1376,7 +1399,7 @@ describe('028 双模式与命令面', () => {
         { sessionId: 'sess-kid', name: 'boss', updatedAt: 100 },
       ];
       await new Promise((resolve) => setTimeout(resolve, 300));
-      expect(await deliver('bare-not-selected', 'node-host:boss')).toMatchObject({ code: 'SESSION_OFFLINE' });
+      expect(await deliver('bare-not-selected', 'node-host:boss', 'claude')).toMatchObject({ code: 'SESSION_OFFLINE' });
       expect(await runAdopt({ connect: 'sl-dm', adopt: 'boss' }, starJoinDeps(sh))).toBe(0);
       await pollFor('node-host:boss', 'delivered', 'd3');
       // --rm 模式：退出即离册零痕迹——会话进程仍活也册外无名
@@ -1401,7 +1424,7 @@ describe('028 双模式与命令面', () => {
       sh.state.claude = [{ sessionId: 'sess-boss', name: 'boss' }];
       await sh.aggregator();
       const pipe = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
-      expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss' })).ok).toBe(true);
+      expect((await pipe.send({ op: 'attach', tool: 'claude', endpointType: 'cli', sessionId: 'sess-boss', name: 'boss' })).ok).toBe(true);
       for (let i = 0; i < 40; i++) {
         const roster = await fetchRosterFor(sh.baseDir, sh.entry);
         if (roster?.some((m) => m.sessions?.some((s) => s.name === 'boss'))) break;
@@ -1426,7 +1449,7 @@ describe('028 双模式与命令面', () => {
       const sender = await senderOn(sh.harness.url, key('s'));
       let gone: Frame | undefined;
       for (let i = 0; i < 30; i++) {
-        sender.send({ op: 'send', id: `mr${i}`, targetMachine: 'node-host:boss', body: 'x' });
+        sender.send({ tool: 'claude', op: 'send', id: `mr${i}`, targetMachine: 'node-host:boss', body: 'x' });
         const r = await sender.waitFor((f) => (f.op === 'error' || f.op === 'receipt') && f.id === `mr${i}`);
         if (r.op === 'error' && r.code === 'SESSION_NOT_MEMBER') {
           gone = r;
@@ -1468,15 +1491,15 @@ describe('020 工具限定词：启动器声明与 spawn 前预警', () => {
   }, 15_000);
 
   it(
-    'attach 带 tool；星内已有异工具同名成员→spawn 前打预警行；限定地址直达、裸名报碰撞列两地址',
+    'C14 工具声明独立：同名 Claude/Codex 成员按显式工具各自直达，斜杠不作类型前缀',
     async () => {
       const sh = await startStarStar('sl-t1');
       await sh.aggregator(); // 聚合器先在（预警探针的管道面）
       // 既有成员 codex/boss（attach 管道直声明，带 tool）
-      const pipe = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')));
-      const reply = await pipe.send({ op: 'attach', sessionId: CODEX_THREAD, name: 'boss', tool: 'codex' });
-      expect(reply.ok).toBe(true);
       sh.state.codex = [{ id: CODEX_THREAD, name: 'boss' }];
+      const pipe = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')));
+      const reply = await pipe.send({ op: 'attach', sessionId: CODEX_THREAD, name: 'boss', tool: 'codex', endpointType: 'cli' });
+      expect(reply.ok).toBe(true);
       const out: string[] = [];
       const err: string[] = [];
       const joiner = new StarJoiner({
@@ -1486,29 +1509,31 @@ describe('020 工具限定词：启动器声明与 spawn 前预警', () => {
         spawnName: 'boss',
       });
       await joiner.begin(); // 差分基线=空表（预警后快照）
-      // 保留实际同名预警，但不再打印入星预告。
+      // 同名提示使用独立工具参数，不将可区分的工具类型称作路由碰撞。
       expect(out).toHaveLength(1);
-      expect(out[0]).toMatch(/^预警:/);
-      expect(out[0]).toContain('codex/boss');
-      expect(out[0]).toContain('claude/boss');
+      expect(out[0]).toMatch(/^同名提示:/);
+      expect(out[0]).toContain('--tool codex-cli');
+      expect(out[0]).toContain('--tool claude');
+      expect(out[0]).not.toContain('claude/boss');
       // 模拟 spawn 出新会话（claude/boss）→ attach（带 tool=claude）生效
       sh.state.claude = [{ sessionId: 'sess-new', name: 'boss', updatedAt: 99 }];
       const sender = await senderOn(sh.harness.url, key('s'));
-      const deliver = async (id: string, target: string): Promise<Frame> => {
-        sender.send({ op: 'send', id, targetMachine: target, body: 'x' });
+      const deliver = async (id: string, target: string, tool: string): Promise<Frame> => {
+        sender.send({ tool, op: 'send', id, targetMachine: target, body: 'x' });
         return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
       };
       for (let i = 0; i < 50; i++) {
-        const r = await deliver(`tq${i}`, 'node-host:claude/boss');
+        const r = await deliver(`tq${i}`, 'node-host:boss', 'claude');
         if (r.op === 'receipt' && r.status === 'delivered') break;
-        if (i === 49) throw new Error('claude/boss 限定直达未生效');
+        if (i === 49) throw new Error('Claude 显式工具直达未生效');
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
-      // 裸名 boss 现在跨工具撞名 → NAME_COLLISION 列两个限定地址
-      const col = await deliver('tq-col', 'node-host:boss');
-      expect(col).toMatchObject({ op: 'error', code: 'NAME_COLLISION' });
-      expect(col.op === 'error' && col.message).toContain('node-host:claude/boss');
-      expect(col.op === 'error' && col.message).toContain('node-host:codex/boss');
+      expect(await deliver('tq-codex', 'node-host:boss', 'codex-cli')).toMatchObject({
+        op: 'receipt', status: 'delivered',
+      });
+      expect(await deliver('tq-literal', 'node-host:claude/boss', 'claude')).toMatchObject({
+        op: 'error', code: 'SESSION_NOT_MEMBER',
+      });
       await joiner.stop();
       pipe.close();
     },

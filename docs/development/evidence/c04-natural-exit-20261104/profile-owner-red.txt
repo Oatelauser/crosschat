@@ -1,0 +1,86 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ❯ test/dsh-desktop-exit-observer.test.ts (16 tests | 3 failed) 383ms
+   ✓ formal Desktop natural-exit observation boundary > accepts the actual owner, ordered private acknowledgement, close and independent held Host handle 1ms
+   ✓ formal Desktop natural-exit observation boundary > keeps a zero OS exit unknown without the real shutdown acknowledgement and stop completion 0ms
+   ✓ formal Desktop natural-exit observation boundary > rejects changed source, another parent/profile/binary and an unrelated Host handle 0ms
+   ✓ formal Desktop natural-exit observation boundary > refuses any kill, non-graceful completion, missing stream close or abnormal main exit 0ms
+   ✓ formal Desktop natural-exit observation boundary > requires continuous observation, one exact Host and the actual lifecycle order 0ms
+   ✓ formal Desktop natural-exit observation boundary > does not infer complete process release from a truncated or unresolved owning Desktop record 0ms
+   ✓ formal Desktop natural-exit observation boundary > refuses breakpoint relocation into any main script other than the pinned official bytes 1ms
+   ✓ formal Desktop natural-exit observation boundary > redacts native authentication URLs in both structured facts and embedded process logs before writing evidence 0ms
+   × owned native Desktop profile reuse > creates only a canonical child of the exact task-owned root for native initialization or reuse 7ms
+     → ENOENT: no such file or directory, stat 'C:\Users\yangsheng\AppData\Local\Temp\crosschat-dsh-exit-unit-dXT70u\round\native'
+   × owned native Desktop profile reuse > rejects the task root itself and outside paths before creating or writing a native profile 5ms
+     → promise resolved "'C:\Users\yangsheng\AppData\Local\Temp…'" instead of rejecting
+   × owned native Desktop profile reuse > requires the current owner marker before any new profile writes 3ms
+     → promise resolved "'C:\Users\yangsheng\AppData\Local\Temp…'" instead of rejecting
+   ✓ owned Desktop inspector transport > reads the owned process synchronously while paused, without waiting for blocked promise microtasks 162ms
+   ✓ owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies ([]) 70ms
+   ✓ owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies (null) 61ms
+   ✓ owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies (true) 64ms
+   ✓ owned Desktop inspector transport > correlates actual responses and rejects pending reads when the owned connection closes 6ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-desktop-exit-observer.test.ts > owned native Desktop profile reuse > creates only a canonical child of the exact task-owned root for native initialization or reuse
+Error: ENOENT: no such file or directory, stat 'C:\Users\yangsheng\AppData\Local\Temp\crosschat-dsh-exit-unit-dXT70u\round\native'
+ ❯ test/dsh-desktop-exit-observer.test.ts:94:13
+     92|     const root = await fixture(), profile = join(root, 'round', 'nativ…
+     93|     expect(await resolveOwnedDshDesktopProfile(root, profile)).toBe(pr…
+     94|     expect((await stat(profile)).isDirectory()).toBe(true);
+       |             ^
+     95|     expect(await resolveOwnedDshDesktopProfile(root, profile)).toBe(pr…
+     96|     expect(JSON.parse(await readFile(join(root, 'ownership.json'), 'ut…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  test/dsh-desktop-exit-observer.test.ts > owned native Desktop profile reuse > rejects the task root itself and outside paths before creating or writing a native profile
+AssertionError: promise resolved "'C:\Users\yangsheng\AppData\Local\Temp…'" instead of rejecting
+
+- Expected: 
+Error {
+  "message": "rejected promise",
+}
+
++ Received: 
+"C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-dsh-exit-unit-n5EBCq"
+
+ ❯ test/dsh-desktop-exit-observer.test.ts:101:105
+     99|   it('rejects the task root itself and outside paths before creating o…
+    100|     const root = await fixture(), outside = join(root, '..', `${basena…
+    101|     for (const requested of [root, outside]) await expect(resolveOwned…
+       |                                                                                                         ^
+    102|     await expect(stat(outside)).rejects.toMatchObject({ code: 'ENOENT'…
+    103|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  test/dsh-desktop-exit-observer.test.ts > owned native Desktop profile reuse > requires the current owner marker before any new profile writes
+AssertionError: promise resolved "'C:\Users\yangsheng\AppData\Local\Temp…'" instead of rejecting
+
+- Expected: 
+Error {
+  "message": "rejected promise",
+}
+
++ Received: 
+"C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-dsh-exit-unit-YADPG9\\native"
+
+ ❯ test/dsh-desktop-exit-observer.test.ts:108:62
+    106|     const root = await fixture(), profile = join(root, 'native');
+    107|     await writeFile(join(root, 'ownership.json'), JSON.stringify({ tas…
+    108|     await expect(resolveOwnedDshDesktopProfile(root, profile)).rejects…
+       |                                                              ^
+    109|     await expect(stat(profile)).rejects.toMatchObject({ code: 'ENOENT'…
+    110|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 13 passed (16)
+   Start at  11:57:40
+   Duration  842ms (transform 53ms, setup 0ms, collect 85ms, tests 383ms, environment 0ms, prepare 93ms)
+

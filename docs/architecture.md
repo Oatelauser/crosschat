@@ -1,7 +1,7 @@
 # crosschat 底层原理
 
 > 本文讲清楚一条消息从发送到被处理的完整路径，以及每个设计决策背后的机制事实。
-> 原生通道机制来自 [research/](research/) 与 [drill-reports/](drill-reports/) 中的实测；当前模块和兼容边界以源码及测试为准。2026-10-21 对照 `dfd2362` 更新。本文中的 Codex TUI 指原生客户端，crosschat 管理 TUI 尚未实施。
+> 原生通道机制来自 [research/](research/) 与 [drill-reports/](drill-reports/) 中的实测；当前模块和兼容边界以源码及测试为准。原通道图以 2026-10-21 的 `dfd2362` 为基线，发送合同已按 2026-10-28 的 C14 更新。本文中的 Codex TUI 指原生客户端；crosschat 管理 TUI 见[终端界面](tui.md)。
 
 ## 1. 总览
 
@@ -19,7 +19,16 @@
                     （消息注入为用户消息）           （模型直接被驱动干活）
 ```
 
-本机 CLI 每次调用独立完成发现、鉴权和投递。SSH 通过远端 CLI 执行；可选 TCP 形态另有常驻 broker（按星转发、管理、维护成员表）和 node 聚合器（本机投递、星籍对账），协议与三层权限见 [broker.md](broker.md)。原生会话及聊天仍由 Claude Code/Codex 管理。
+上图保留 Claude/Codex 两条通道的示例。当前四个工具家族使用同一发现、类型寻址和发送应用层，各自的原生传输留在 Adapter：
+
+| 家族 | 原生通道与接收端 | 接入范围 |
+| --- | --- | --- |
+| Claude Code | 原生注册记录、named pipe 与 peer 鉴权 | 已运行的 Claude 会话 |
+| Codex | App Server 与原生端点 | CLI/Desktop 按实际端点分别寻址 |
+| OpenCode | 已运行服务的 HTTP API 与原生会话 | CLI/Desktop 共用服务时使用共享类型 |
+| DeepSeek Harness | 官方 Host 插件桥、Bearer loopback HTTP 与原生根 Agent | `dsh` Host 与 `dsh-desktop` 分别寻址，profile/实例独立核实 |
+
+本机 CLI 每次调用独立完成发现、鉴权和投递。SSH 通过远端 CLI 执行；可选 TCP 形态另有常驻 broker（按星转发、管理、维护成员表）和 node 聚合器（本机投递、星籍对账），协议与三层权限见 [broker.md](broker.md)。会话与聊天由各自原生工具管理；crosschat 的接入边界见[工具类型](tool-types.md)和[Harness 指南](deepseek-harness.md)。
 
 crosschat 有持久状态：`~/.crosschat` 保存对话分片/短柄、发送日志、outbox/mailbox、机器标识和 TCP 配置/台账；broker/node 的活性快照写入 `status-*.json`。待投队列由按需启动、箱空即退的 watchdog 重试。路由和轮次保存在完整引用中，不依赖中央对话服务。
 
@@ -49,23 +58,29 @@ crosschat 有持久状态：`~/.crosschat` 保存对话分片/短柄、发送日
 每条消息的正文被包进信封：
 
 ```
-<cross-session-message from-name="发送方" turn="N">
-<crosschat-reply-hint reply-as="接收方">回复请运行: crosschat send --conversation mc2_… --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>
+<cross-session-message from-name="发送方" turn="N" from-tool="claude">
+<crosschat-reply-hint reply-as="接收方">回复请运行: crosschat send --conversation mc2_… --tool claude --body "<你的回复>"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>
 <正文（保留字标签已中性化，防伪造信封）>
 </cross-session-message>
 ```
 
-回信命令**不带 `--via`**：`--conversation` 引用自含路由（tcp 对话的 ref 尾部带星标识、端点带机器指纹，CLI 自动选路；ssh 对话按机器别名走既有补全）——跨机/单机一种句式，agent 照抄即可。
+回信命令**不带 `--via`、必须带收件 `--tool`**：`--conversation` 引用自含路由（tcp 对话的 ref 尾部带星标识、端点带机器指纹，CLI 自动选路；ssh 对话按机器别名走既有补全）。`from-tool` 展示本次已知来源，未知为 `pending`；固定返回端点可继续生成完整 hint。返回端点未知时只保留引用并说明待核实，不生成缺 tool 的可执行命令。`from-addr` 使用完整原生 ID，不再夹带工具前缀。
 
-新引用使用二进制 `mc2_`（旧 `mc1_` JSON 编码仍可读），包括两端原生身份、nonce、轮次和可选机器/星路由。回复解码引用并校验调用方，目标取另一端、轮次加一。本机 `cN` 短柄需查对话分片后转换成完整引用；跨机传递完整引用。持久对话状态还参与连续轮次、短柄和回执记录，不能把整个发送流程视为无持久读取。
+新引用使用二进制 `mc2_`（旧 `mc1_` JSON 编码仍可读），包括两端原生身份、endpointType、nonce、轮次和可选机器/星路由。回复解码引用并校验调用方，目标取另一端；显式 tool 与固定收件类型冲突则拒绝，不跨端点回落。未知类型补齐保留有效短柄、nonce 和连续轮次，旧未知引用不能覆盖已确认类型。本机短柄需查对话分片后转换成完整引用，跨机传递完整引用；引用不自动携带聊天历史。持久对话状态还参与短柄和回执记录，不能把整个发送流程视为无持久读取。
+
+短柄为 `cA000`～`cZ999`，在现有机器级会话写锁内递增分配，最高进度 `handleSequence` 与新柄同次原子保存到现有 pair 分片，无独立账本。仅最近 1000 次分配有效，每分片仍受 LRU8 限制；解析和状态展示共用窗口/歧义规则。普通清理保留一份最高进度分片；强清/手动删除属于命名空间重置。到 `cZ999` 后不回到 A，需新柄或无法安全读写状态时回退完整 ref；旧数字柄拒绝，旧全局文件不再读取。详见[批准规格与验证](development/c14-short-handle-ring-20261029.md)。
 
 ## 5. 身份反查（我是谁）
 
 发送方身份不靠传参，靠**环境变量反查**：
 - Claude 会话内：`CLAUDE_CODE_MESSAGING_SOCKET` → 按管道路径匹配注册表 → sessionId
 - Codex turn 内：`CODEX_THREAD_ID`（优先）/`CODEX_SESSION_ID` → 线程身份
+- OpenCode 原生 shell：`OPENCODE_SESSION_ID` → 会话身份；通信类型统一为共享服务 `shared`
+- Harness 原生 shell：`DSH_SESSION_ID` → 会话身份；已安装 bridge 的逐执行来源字段供 Host 实例核验
 - 都没有 → 身份 `human`（可发送，不能被回复）
 - 同时存在两族 → `CALLER_IDENTITY_CONFLICT`（典型根因：daemon 从带 Claude 环境的终端启动，污染了它派生的所有 shell）
+
+原生 ID 与来源类型分开核验。可选 `SendDeps.enrichCallerIdentity` 只补充有可靠依据的来源 endpointType，不补造 provider/ID；普通 Codex shell 的 CLI/Desktop 来源关联仍可能待核实。Q8 保留：原生 ID 匹配引用且收件端明确时，来源类型未知或只读来源暂不可用仍可回复，不用候选扫描增加 owner 自证门槛。无法可靠关联的具体入口及人工确认范围先交用户审阅，当前未开放通用兜底询问，不能声称多会话来源复用已通过全部原生验收。
 
 ## 6. 发件箱（outbox）与看门狗（B12–B14）
 
@@ -76,11 +91,12 @@ daemon ≥0.160 上**忙线程不再等待**：turn/start 被接受并按线程�
 ## 7. 一次 `send` 的完整流程
 
 ```
-crosschat send --to X --body "…"
+crosschat send --to X --tool codex-cli --body "…"
+  ├─ 前置校验显式收件 tool（只有一个候选、按引用回复及文件发送也必填）
   ├─ 排涝 outbox（入口机会式补投，加锁）
   ├─ 校验正文额度（默认16KiB；参数/环境可调，受端点硬顶约束）
   ├─ 身份反查（env）→ 限流检查（30 条/60s/对端点）
-  ├─ 解析 X：claude 注册表精确名 / codex thread/list 名（未找到/碰撞 → 错误+候选清单）
+  ├─ 在所选类型内解析 X：完整原生 ID 优先，再名称/前缀；斜杠只作原值
   ├─ 组信封（from/turn/reply-ref/教学提示/中性化）
   ├─ 目标是 claude → 读注册表拿管道 → key 文件取 token → auth 行+帧 一次写入
   ├─ 目标是 codex → spawn proxy（连 daemon control socket，环境剥离双身份残留）→ resume → 处置：
@@ -107,19 +123,20 @@ crosschat send --to X --body "…"
 | `platform/process-inspector.ts` 进程函数 | `process.kill(pid,0)` / CIM | 平台进程检查 |
 | `state-root.ts` 等路径函数 | `~/.crosschat`、`~/.claude`、`~/.codex` | 同左（无 XDG 分叉） |
 
-命令面（`send`/`status`）形状稳定承诺：内部架构演进（无状态 → 常驻 broker）不改变 agent 侧用法。
+内部架构演进保持已批准的命令合同；C14 的用户面变更已获批准：所有 send 显式要求收件 `--tool`，TCP 使用 `tcp:<星>:<机器>:<会话>` 加独立 tool，取消公开发送的 `<工具>/<会话>` 选型语法。内部 ref/origin 编码和管理选择器不因此删除。
 
 ## 10. 核心改造的功能契约
 
-应用接口提供结构化结果，命令入口负责文本/JSON和退出码；配置、选择器不导入命令或 NodeClient。工具差异封装在 Provider，连接差异封装在 Context；内部会话键包含上下文、Provider、完整原生引用。新增纯读取路径与旧命令副作用分离，不反向从 CLI 文本恢复数据。
+应用接口提供结构化结果，命令入口负责文本/JSON和退出码；配置、选择器不导入命令或 NodeClient。工具差异封装在 Provider，连接差异封装在 Context；内部会话键包含上下文、Provider、完整原生引用及已核实的 endpointType。新增纯读取路径与旧命令副作用分离，不反向从 CLI 文本恢复数据。
 
 本轮保留以下现状，修改功能须先获用户同意：
 
-- 旧 CLI 文本、JSON、退出码、Codex 默认 `thread/list` 20 条及未知状态报错不变。新读取接口保留原始状态、分页、部分结果与来源错误。
+- 除已批准的 C14 显式 tool、回信 hint、来源展示及 TUI 复制命令，以及 C10 的 Harness 技能/桥诊断新增结果外，原 CLI 文本/JSON/退出码合同保持；Codex 默认 `thread/list` 20 条及未知状态报错不变。严格类型选择读取完整分页，新读取接口保留原始状态、部分结果与来源错误。
+- doctor 文本/JSON与TUI使用同一隔离诊断进程。Harness桥检查复用原生Adapter的只读登记和/v1/info鉴权/owner/协议/版本核对；没有活桥为info，核实后的安全元数据为pass，异常为固定原因的warn。当前home与活桥核实的profile还只读检查引用、实际安装元数据与随包文件差异；安装副本和运行中加载分别核实。活桥与profile共享5秒预算，取消回收本次子进程与请求；不读取聊天、启动原生工具或修改登记。新增warn本身不令退出1。
 - CLI `status` 入口仍可能补投；新查询不得补投、修复/备份配置或启动原生会话。`broker.json` 静态台账不保存 online，活性由快照/roster 判断。
 - broker 运行期是台账唯一写者；热管理连接收到失败或无回执，不能冷回退写盘。冷路径仍调用现有 registry 原子 mutation。
 - 用户已批准直接升级：SSH/TCP共用新完整只读发现接口（匿名、完整ID、分页、来源错误/详情），不做旧端回退。删节点/吊管理钥按星和实际认证凭证立即使已有连接失效；明确撤权暂停该星节点与启动器保障链，换钥后显式重连，普通断网仍自动恢复。改星名的独立应用接口不借用会继续启动服务的 `runServe --name` 入口。
 - 清理保留5日/512MiB/30日与 `--force` 原规则；预览只读，执行使用同一计划。默认额度16KiB，Claude端点64KiB、Codex端点1MiB硬顶等限制不变。
-- 原有 ref/origin、成员册键、权限、投递/排队/寄存、回执及 watchdog 生命周期不迁移；wire增加新发现与明确撤权帧。OpenCode/zcode只预留扩展接缝，尚无真实接入。模块与当前契约见[核心应用接口](development/core-api.md)。
+- 用户随后批准按实际通信端点区分工具类型：typed ref/origin、成员键、队列/速率窗口与 SSH/TCP 保留 endpointType，显式选择不跨类型回落。旧无类型记录不能推断窗口归属，但可经明确选择和核验补齐而保留通信关系。会话 send wire 要求收件 tool 与端点能力；文件/管理 wire 语义保持。权限及写不明零自动重发规则保持。OpenCode 共享服务和 Harness Host 已有通信接入，正式 Harness Desktop、完整接入 CI 与 ZCode 的限制另列，三平台原生组合尚未全部验收。合同与范围见[类型寻址](tool-types.md)和[核心应用接口](development/core-api.md)。
 
 验证采用现有回归加接口边界测试：只读无副作用、匿名分页/未知状态、第三测试 Provider、取消释放、热写失败不回退和清理预览。基线 `lint/build` 通过，778测试通过/11跳过；基线未启用真实会话 live 测试。渐进 lint 和 AST 导入图门禁随模块迁移启用，约定见 [代码规范](development/code-standards.md)，实施证据见 [核心改造记录](development/core-refactor-progress.md)。

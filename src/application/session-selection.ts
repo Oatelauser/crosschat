@@ -1,4 +1,4 @@
-export type SessionSelectionEvent = { kind: 'selected' | 'empty'; sessionId: string; name?: string };
+export type SessionSelectionEvent = { kind: 'selected' | 'empty'; sessionId: string; name?: string; endpointType?: string };
 export interface SessionSelectionLease { close(): Promise<void> }
 export interface LauncherSessionBinding { args: readonly string[]; env?: NodeJS.ProcessEnv; close(): Promise<void> }
 type Start = (selection: SessionSelectionEvent, signal: AbortSignal) => Promise<SessionSelectionLease>;
@@ -13,7 +13,7 @@ export function createSessionSelectionFollower(start: Start, onError: (error: un
   let work = Promise.resolve();
   return {
     select(event: SessionSelectionEvent): void {
-      if (closed || !event.sessionId || (selected?.kind === event.kind && selected.sessionId === event.sessionId)) return;
+      if (closed || !event.sessionId || (selected?.kind === event.kind && selected.sessionId === event.sessionId && selected.endpointType === event.endpointType)) return;
       selected = { ...event };
       controller?.abort();
       const turn = ++generation;

@@ -1,0 +1,1 @@
+{"run": "round-eZRxoY", "mainSpawned": false, "mainFailed": true, "oldArtifactRelativeWorkspaceExists": false, "reusedProfileWorkspaceExists": true, "diagnosis": "C1 launch still used the per-artifact cwd after the profile was moved to the validated reuse root; native app was not spawned"}

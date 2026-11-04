@@ -1,0 +1,16 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-int-20261104
+
+ ✓ test/conversation-handle-ring.test.ts (9 tests) 165ms
+ ✓ test/c14-explicit-send.test.ts (29 tests) 100ms
+ ✓ test/conversation-state-concurrency.test.ts (11 tests) 9123ms
+   ✓ conversation state cross-process writes > a live writer on an aliased path blocks every other write path until it releases  2163ms
+   ✓ conversation state cross-process writes > a send that cannot take the lock delivers nothing, then succeeds once released  1141ms
+   ✓ conversation state cross-process writes > a stuck holder still exits within its barrier deadline  5085ms
+ ✓ test/send-handle.test.ts (10 tests) 103ms
+
+ Test Files  4 passed (4)
+      Tests  59 passed (59)
+   Start at  15:46:07
+   Duration  9.94s (transform 647ms, setup 0ms, collect 1.23s, tests 9.49s, environment 1ms, prepare 285ms)
+

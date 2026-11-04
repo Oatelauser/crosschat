@@ -2,17 +2,22 @@ import process from 'node:process';
 import { MultichatError } from './errors.js';
 import type { ClaudeRegistryScan } from './claude/registry.js';
 import type { RefEndpoint } from './ref.js';
+import { isEndpointTypeFor, nativeTargetKey } from './tool-types.js';
 
 /**
  * Caller identity from environment variables (ticket 003, stateless CLI):
  * - CLAUDE_CODE_MESSAGING_SOCKET -> match the pipe path against the registry
  * - CODEX_THREAD_ID || CODEX_SESSION_ID -> codex thread identity
- * - neither -> human (may send, cannot receive)
+ * - OPENCODE_SESSION_ID (native shell), or explicit CROSSCHAT_OPENCODE_SESSION_ID -> OpenCode session identity
+ * - DSH_SESSION_ID (native shell) -> DeepSeek Harness session identity
+ * - no native identity -> human (may send, cannot receive)
  */
 
 export type CallerIdentity =
-  | { p: 'claude'; id: string; name?: string }
-  | { p: 'codex'; id: string }
+  | { p: 'claude'; id: string; name?: string; endpointType?: string }
+  | { p: 'codex'; id: string; endpointType?: string }
+  | { p: 'opencode'; id: string; endpointType?: string }
+  | { p: 'dsh'; id: string; endpointType?: string }
   | { p: 'human' };
 
 /**
@@ -22,12 +27,19 @@ export type CallerIdentity =
  * 清单）。启动器据此剥"另一家族"，把报错里的人工自纠机构化做掉；配置变量
  * （CODEX_HOME 等）绝不在此列。
  *
- * 扩展路径：将来不止 claude/codex 两家（如 opencode）——注册表加一行 + 写
- * 其启动器，其余启动器零改动自动剥它。resolveCallerIdentity 的第三家族
- * 识别分支不在本票：那是未来新适配器票的事（先走原生通道可行性调研，同
- * codex/claude 先例）。
+ * 新工具在注册表加一行并提供身份识别，其余启动器自动剥其身份环境。
  */
-export type IdentityFamily = 'claude' | 'codex';
+export type IdentityFamily = 'claude' | 'codex' | 'opencode' | 'dsh';
+
+/** OpenCode's shell tool injects and overwrites this key per native session. */
+export const OPENCODE_SESSION_ID_ENV = 'OPENCODE_SESSION_ID';
+/** Explicit integration/test fallback; disagreement with the native key is rejected. */
+export const CROSSCHAT_OPENCODE_SESSION_ID_ENV = 'CROSSCHAT_OPENCODE_SESSION_ID';
+/** Harness owns this identity in each native shell tool invocation. */
+export const DSH_SESSION_ID_ENV = 'DSH_SESSION_ID';
+/** Managed by the existing Harness bridge's per-execution shell contributor. */
+export const DSH_CROSSCHAT_INSTANCE_ID_ENV = 'DSH_CROSSCHAT_INSTANCE_ID';
+export const DSH_CROSSCHAT_HOME_ENV = 'DSH_CROSSCHAT_HOME';
 
 export const IDENTITY_ENV_FAMILIES: Record<IdentityFamily, readonly string[]> = {
   claude: [
@@ -36,6 +48,8 @@ export const IDENTITY_ENV_FAMILIES: Record<IdentityFamily, readonly string[]> = 
     'CLAUDE_CODE_SESSION_ID',
   ],
   codex: ['CODEX_THREAD_ID', 'CODEX_SESSION_ID'],
+  opencode: [OPENCODE_SESSION_ID_ENV, CROSSCHAT_OPENCODE_SESSION_ID_ENV],
+  dsh: [DSH_SESSION_ID_ENV, DSH_CROSSCHAT_INSTANCE_ID_ENV, DSH_CROSSCHAT_HOME_ENV],
 };
 
 /** 复制 env 并删除给定键（不改动原对象）。 */
@@ -57,19 +71,45 @@ export function stripOtherFamilies(env: NodeJS.ProcessEnv, own: IdentityFamily):
   return stripEnvKeys(env, otherIdentityKeys(own));
 }
 
-/** Canonical key used for rate-limit buckets ("claude:<id>" / "codex:<id>" / "human"). */
-export function identityKey(identity: { p: string; id?: string }): string {
-  return identity.p === 'human' || identity.id === undefined ? identity.p : `${identity.p}:${identity.id}`;
+/** Typed identity buckets stay separate; unknown types preserve existing persisted keys. */
+export function identityKey(identity: { p: string; id?: string; endpointType?: string }): string {
+  if (identity.p === 'human' || identity.id === undefined) return identity.p;
+  return identity.endpointType === undefined ? `${identity.p}:${identity.id}`
+    : nativeTargetKey({ providerId: identity.p, nativeId: identity.id, endpointType: identity.endpointType });
+}
+
+export interface ParsedIdentityKey { p: string; id?: string; endpointType?: string }
+
+/** Decode persisted identity keys without assigning an endpoint to an older unknown source. */
+export function parseIdentityKey(key: string): ParsedIdentityKey | undefined {
+  if (key === 'human') return { p: 'human' };
+  if (key.startsWith('[')) {
+    let value: unknown;
+    try { value = JSON.parse(key); } catch { return undefined; }
+    if (!Array.isArray(value) || value.length !== 3) return undefined;
+    const [p, endpointType, id] = value;
+    if (typeof p !== 'string' || p === '' || p === 'human' || typeof id !== 'string' || id === '' ||
+      !isEndpointTypeFor(p, endpointType)) return undefined;
+    return { p, id, endpointType };
+  }
+  const separator = key.indexOf(':');
+  if (separator < 1 || separator === key.length - 1) return undefined;
+  const p = key.slice(0, separator);
+  return p === 'human' ? undefined : { p, id: key.slice(separator + 1) };
 }
 
 export function endpointOfIdentity(identity: CallerIdentity): RefEndpoint {
-  return identity.p === 'human' ? { p: 'human' } : { p: identity.p, id: identity.id };
+  return identity.p === 'human' ? { p: 'human' } : {
+    p: identity.p, id: identity.id,
+    ...(identity.endpointType === undefined ? {} : { endpointType: identity.endpointType }),
+  };
 }
 
 export function identityMatchesEndpoint(identity: CallerIdentity, endpoint: RefEndpoint): boolean {
   if (endpoint.p === 'human') return identity.p === 'human';
   if (identity.p === 'human') return false;
-  return identity.p === endpoint.p && identity.id === endpoint.id;
+  return identity.p === endpoint.p && identity.id === endpoint.id &&
+    (identity.endpointType === undefined || endpoint.endpointType === undefined || identity.endpointType === endpoint.endpointType);
 }
 
 export function resolveCallerIdentity(
@@ -79,6 +119,32 @@ export function resolveCallerIdentity(
   const socket = env.CLAUDE_CODE_MESSAGING_SOCKET ?? '';
   const claude = socket !== '' ? claudeIdentity(socket, scan) : undefined;
   const codexId = env.CODEX_THREAD_ID || env.CODEX_SESSION_ID || '';
+  const nativeOpenCodeId = env[OPENCODE_SESSION_ID_ENV] ?? '';
+  const explicitOpenCodeId = env[CROSSCHAT_OPENCODE_SESSION_ID_ENV] ?? '';
+  if (nativeOpenCodeId !== '' && explicitOpenCodeId !== '' && nativeOpenCodeId !== explicitOpenCodeId) {
+    throw new MultichatError(
+      'CALLER_IDENTITY_CONFLICT',
+      `${OPENCODE_SESSION_ID_ENV} and ${CROSSCHAT_OPENCODE_SESSION_ID_ENV} identify different OpenCode sessions; ` +
+        `remove the stale explicit integration key and retry from the current native OpenCode shell.`,
+    );
+  }
+  const opencodeId = nativeOpenCodeId || explicitOpenCodeId;
+  const dshId = env[DSH_SESSION_ID_ENV] ?? '';
+  if (dshId !== '' && (claude !== undefined || codexId !== '' || opencodeId !== '')) {
+    throw new MultichatError(
+      'CALLER_IDENTITY_CONFLICT',
+      `Caller identity conflict: DeepSeek Harness and another native tool's identity variables are present. ` +
+        `Start the intended tool from a clean terminal or through its crosschat launcher; preserve the current native session identity.`,
+    );
+  }
+  if (opencodeId !== '' && (claude !== undefined || codexId !== '')) {
+    throw new MultichatError(
+      'CALLER_IDENTITY_CONFLICT',
+      `Caller identity conflict: OpenCode and another native tool's identity variables are present. ` +
+        `Start the intended tool through its crosschat launcher from a clean terminal to remove inherited foreign identities; ` +
+        `preserve that tool's current session identity.`,
+    );
+  }
   if (claude !== undefined && codexId !== '') {
     const unsetHint =
       process.platform === 'win32'
@@ -95,6 +161,8 @@ export function resolveCallerIdentity(
   }
   if (claude !== undefined) return claude;
   if (codexId !== '') return { p: 'codex', id: codexId };
+  if (opencodeId !== '') return { p: 'opencode', id: opencodeId };
+  if (dshId !== '') return { p: 'dsh', id: dshId };
   return { p: 'human' };
 }
 

@@ -1,0 +1,106 @@
+{
+  "schema": 1,
+  "runId": "71bfe4fb-b611-4b62-8f8a-f494bced8f18",
+  "scope": "manual native Windows Desktop integration; user-retained installed software",
+  "installedRoot": "D:/soft/DeepSeek Harness",
+  "version": "0.2.1-rc.2",
+  "packageBuildCommit": "332895e0f7c9d4dbfb29729f5eb367fa263ff986",
+  "checks": {
+    "officialPackageHashAndObservedValidSignature": true,
+    "desktopProfileAndBuiltInCliVerified": true,
+    "actualSkillToolLoad": true,
+    "nativeSource": {
+      "status": "identified",
+      "tool": "dsh-desktop",
+      "basis": "native",
+      "association": "verified"
+    },
+    "completeNativeShellRoundtrip": true,
+    "typedReplyHandle": "cA000",
+    "idleModes": [
+      {
+        "mode": "queue",
+        "statusBefore": {
+          "type": "idle"
+        },
+        "nativeModelObserved": true,
+        "visibleInActualUi": true
+      },
+      {
+        "mode": "steer",
+        "statusBefore": {
+          "type": "idle"
+        },
+        "nativeModelObserved": true,
+        "visibleInActualUi": true
+      }
+    ],
+    "busyPhases": [
+      {
+        "index": 0,
+        "main": true,
+        "hasQueue": false,
+        "hasSteer": false,
+        "hasIdleSteer": false,
+        "tool": "pwsh"
+      },
+      {
+        "index": 1,
+        "main": true,
+        "hasQueue": false,
+        "hasSteer": true,
+        "hasIdleSteer": false,
+        "text": "C04_BUSY_STEER_ACK_71bfe4fb"
+      },
+      {
+        "index": 2,
+        "main": true,
+        "hasQueue": true,
+        "hasSteer": true,
+        "hasIdleSteer": false,
+        "text": "C04_BUSY_QUEUE_ACK_71bfe4fb"
+      }
+    ],
+    "pluginDisableRegistrationRemoved": true,
+    "pluginNewInstanceId": "d3d0d17b-1f50-42a9-93fd-22c2765d5fec",
+    "sessionIdsPreserved": [
+      "session-9230a824-378b-4276-9594-05c20b244912",
+      "session-d617e6b6-b486-45c2-a7ba-8f30df5a4499"
+    ],
+    "pluginReferenceRemovedByNativeCli": true,
+    "applicationExitedZero": true,
+    "hostExitCode": 0,
+    "hostNaturalExitProof": "unverified-private-ipc-not-observed"
+  },
+  "cleanup": {
+    "ownedNativeProcesses": 0,
+    "knownTestListeners": 0,
+    "testHomeAndProfileRemoved": true,
+    "downloadedInstallerRemoved": true,
+    "userSoftwarePreserved": true,
+    "userUninstallRegistrationPreserved": true,
+    "userPathPreserved": true,
+    "defaultDshHomePreserved": true,
+    "temporaryEvidenceRootRemoved": true
+  },
+  "notValidated": [
+    "official uninstall (user explicitly retains DSH)",
+    "independent clean runner",
+    "host private graceful-completion observer",
+    "hosted Actions",
+    "other OS platforms"
+  ],
+  "fixtureFailuresRetained": [
+    "UI session-switch race sent the first receiver marker to the previous session; corrected with a new marker after binding actual UI request",
+    "initial persistent model callback did not change across REPL cells; corrected using an owned external model process",
+    "plugin UI checkbox lagged behind deregistration; resumed only after observing disabled state",
+    "pnpm remove rejects offline/ignore-scripts; documented plain remove then succeeded"
+  ],
+  "completedAt": "2026-11-03T14:34:44.794Z",
+  "evidence": {
+    "userApprovedPaths": true,
+    "archiveSha256": "b1ea7b7936c2d788983f8f37f7ea27cca8f1a7be92acbc6fb1631f54d2a5cab6",
+    "redactedJsonFiles": 45,
+    "screenshots": 3
+  }
+}

@@ -11,11 +11,18 @@ import { MultichatError } from './errors.js';
 import { runSend, type SendArgs, type SendDeps } from './commands/send.js';
 import { runStatus, type StatusDeps, type StatusFilters } from './commands/status.js';
 import { runInstallSkills, type InstallSkillsArgs } from './commands/install-skills.js';
-import { runDoctor, runDoctorDiagnostics } from './commands/doctor.js';
+import { skillPlan } from './application/maintenance/skills.js';
+import { queryDoctorDiagnostics } from './application/diagnostics/query.js';
+import { renderDoctorDiagnostics } from './application/diagnostics/render.js';
 import { runDiscover } from './commands/discover.js';
 import { DISCOVERY_MAX_BYTES } from './application/discovery/boundary.js';
 import { runClaudeWrapper } from './commands/claude-wrapper.js';
 import { runCodexWrapper } from './commands/codex-wrapper.js';
+import { runOpenCodeWrapper } from './commands/opencode-wrapper.js';
+import { listOpenCodeThreads } from './opencode/client.js';
+import { deliverToOpenCodeSession } from './opencode/deliver.js';
+import { listDshThreads } from './dsh/client.js';
+import { deliverToDshSession } from './dsh/deliver.js';
 import { defaultOutboxDir, drain } from './outbox.js';
 import type { DrainDeliverFn } from './outbox.js';
 import { legacyStateRoots, stateRoot } from './state-root.js';
@@ -37,6 +44,11 @@ import { fetchRosterFor, runViaTcpStatus } from './serve/via-tcp.js';
 import { DEFAULT_PORT } from './serve/broker.js';
 import { resolveDeliveryMode } from './delivery-mode.js';
 import type { DeliveryMode } from './delivery-mode.js';
+import { parseToolType, TOOL_TYPES } from './tool-types.js';
+import { resolveCallerIdentity } from './identity.js';
+import { probeCallerSource } from './application/caller-source/providers.js';
+import { enrichCallerSource } from './application/caller-source/service.js';
+import { runIdentity } from './commands/identity.js';
 
 const version: string = (
   JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
@@ -48,10 +60,13 @@ const usage = `usage: crosschat <command> [options]
 
 commands:
   tui                       open the interactive terminal interface
-  send --to <name> | --conversation <ref>
-                            send a message to a claude/codex session
+  send --tool <type> (--to <name-or-ID> | --conversation <ref>)
+                            send a message to a claude/codex/opencode/dsh session
                             (quote <name> if it contains spaces);
                             options:
+                              --tool <type>        required recipient delivery type
+                                (${TOOL_TYPES.map((tool) => tool.id).join(', ')})
+                                use with --to <name or full ID>, or --conversation
                               --body <text>        message text
                                 (default: read stdin)
                               --delivery queue|steer
@@ -78,9 +93,10 @@ commands:
                               --max-turn <N>       stamp a soft turn budget
                                 into the envelope
                                 (env CROSSCHAT_MAX_TURN)
-  status [--conversations]  show claude/codex session status, or per-pair
+  status [--conversations]  show native session status, or per-pair
                             conversation overview with --conversations
-                              --claude | --codex    pick one main-view section
+                              --claude | --codex | --opencode | --dsh
+                                pick one main-view section
                                 (mutually exclusive, not with --conversations)
                               --name <substr>       filter rows by display name
                                 (case-insensitive)
@@ -102,7 +118,13 @@ commands:
                             optional JSON list/detail request on stdin
                             (includes unnamed sessions and full IDs;
                             paged, no message delivery or repair)
-  doctor [--json]           environment health check (exits 1 on any ❌)
+  identity                  inspect this native caller's source classification (JSON);
+                            automatic detection first; entry limitations need review
+  identity confirm --tool <self type> --context <generated reference>
+                            save a requested source classification, not a recipient
+  dsh-bridge-path           print the packaged DeepSeek Harness bridge path;
+                            enable it in the intended native runtime explicitly
+  doctor [--json]           environment and Harness bridge checks (exits 1 on any ❌)
   serve [options]           run/manage the tcp broker (star topology,
                             default port ${DEFAULT_PORT}; a non-default
                             port is a hand-edited broker.json field —
@@ -190,18 +212,25 @@ commands:
                                 daemon (default: all nodes, then
                                 the broker)
   install-skills [--dir <root>]
-                            install the agent skill into <root>/.claude and
-                            <root>/.codex (default root: home directory)
+                            install the agent skill for Claude, Codex and
+                            Harness: <root>/.claude, <root>/.codex and the
+                            Harness home (default <root>/.dsh; an absolute
+                            DSH_HOME replaces it); default root: home
+                            directory; --dir replaces the root and ignores
+                            DSH_HOME
   clean [--force]           clean tcp file-channel leftovers (inbox/parts)
                             and 30-day-stale conversation shards: default =
                             lazy rules (items older than 5 days, or inbox
                             over 512MiB oldest-first; shards untouched for
-                            30 days); --force deletes everything without
-                            confirmation
+                            30 days, keeping one numbering-progress shard);
+                            --force deletes all these files without
+                            confirmation and resets conversation handles
   uninstall [--yes]         remove crosschat data: ~/.crosschat (state
-                            included), pre-014 legacy state dirs, and both
-                            agent skills (refuses while "crosschat serve"
-                            runs; asks y/n unless --yes)
+                            included), pre-014 legacy state dirs, and the
+                            Claude, Codex and Harness skill copies (default
+                            Harness home ~/.dsh, or an absolute DSH_HOME;
+                            refuses while "crosschat serve" runs; asks y/n
+                            unless --yes)
   claude [any native args]  start the real claude CLI with inbound peer
                             messaging enabled; any native claude args
                             (e.g. -c, --model <m>, --help) pass through
@@ -243,6 +272,12 @@ commands:
                             the thread with /rename — the aggregator
                             picks it up):
                               --connect <星> / --extend-session <旧名>
+  opencode [native args]    start OpenCode V2 CLI with native arguments;
+                            configure the model in OpenCode itself
+                            (crosschat uses its registered local service)
+                            supports --max-body-kb / --max-turn and
+                            --connect <星> / --extend-session <旧名> / --rm
+                            target: --to <full-session-id or title> --tool opencode
 
 options:
   --json                    single-line JSON output (send/status/doctor)
@@ -253,7 +288,7 @@ options:
 /** Hand-rolled send arg parsing (no dependency): --to/--conversation/--body/--via/--file/--origin/--max-body-kb/--max-turn take values, --json is a flag. --origin is machine-injected (008) and stays out of usage. Raw values only — numeric validation lives in limits.ts (invalid silently degrades, ticket A). */
 export function parseSendArgs(argv: readonly string[]): SendArgs {
   const args: SendArgs = {};
-  const valueOpts = new Set(['--to', '--conversation', '--body', '--via', '--file', '--origin', '--max-body-kb', '--max-turn', '--delivery']);
+  const valueOpts = new Set(['--tool', '--to', '--conversation', '--body', '--via', '--file', '--origin', '--max-body-kb', '--max-turn', '--delivery']);
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === undefined || !token.startsWith('--')) {
@@ -270,7 +305,8 @@ export function parseSendArgs(argv: readonly string[]): SendArgs {
     if (!valueOpts.has(name)) throw new MultichatError('USAGE', `send: unknown option: ${name}`);
     const value = inline !== undefined ? inline : argv[++i];
     if (value === undefined) throw new MultichatError('USAGE', `send: ${name} requires a value`);
-    if (name === '--to') args.to = value;
+    if (name === '--tool') args.tool = value;
+    else if (name === '--to') args.to = value;
     else if (name === '--conversation') args.conversation = value;
     else if (name === '--via') args.via = value;
     else if (name === '--file') args.fileArg = value;
@@ -280,12 +316,14 @@ export function parseSendArgs(argv: readonly string[]): SendArgs {
     else if (name === '--delivery') args.delivery = resolveDeliveryMode(value);
     else args.bodyArg = value;
   }
+  if (args.tool === undefined) throw new MultichatError('USAGE', 'send requires --tool <recipient type>, including --conversation replies.');
+  if (parseToolType(args.tool) === undefined) throw new MultichatError('USAGE', `Unknown --tool type. Use ${TOOL_TYPES.map((tool) => tool.id).join(', ')}.`);
   return args;
 }
 
 /**
- * status accepts --json/--conversations/--stars/--claude/--codex/--name <v>/--via <v>/--all
- * (flags at most once). Validation: --claude/--codex are mutually exclusive and
+ * status accepts --json/--conversations/--stars/--claude/--codex/--opencode/--dsh/--name <v>/--via <v>/--all
+ * (flags at most once). Tool sections are mutually exclusive and
  * main-view only; bare --via (tcp|ssh) only combines with --conversations;
  * --via tcp:<机器> (E1) only combines with the main view (remote enumeration);
  * --stars (G0) only combines with --json (its own grouped view).
@@ -303,7 +341,7 @@ export function parseStatusArgs(argv: readonly string[]): {
   let json = false;
   let conversations = false;
   let stars = false;
-  let section: 'claude' | 'codex' | undefined;
+  let section: 'claude' | 'codex' | 'opencode' | 'dsh' | undefined;
   let name: string | undefined;
   let via: 'tcp' | 'ssh' | undefined;
   let viaTarget: string | undefined;
@@ -317,6 +355,8 @@ export function parseStatusArgs(argv: readonly string[]): {
     else if (token === '--stars' && !stars) stars = true;
     else if (token === '--claude' && section === undefined) section = 'claude';
     else if (token === '--codex' && section === undefined) section = 'codex';
+    else if (token === '--opencode' && section === undefined) section = 'opencode';
+    else if (token === '--dsh' && section === undefined) section = 'dsh';
     else if (token === '--all' && !all) all = true;
     else if (token === '--name' || token.startsWith('--name=')) {
       const value = inline ?? argv[++i];
@@ -333,12 +373,12 @@ export function parseStatusArgs(argv: readonly string[]): {
     } else {
       throw new MultichatError(
         'USAGE',
-        `status takes only --json/--conversations/--stars/--claude/--codex/--name/--via/--all; got: ${argv.join(' ')}`,
+        `status takes only --json/--conversations/--stars/--claude/--codex/--opencode/--dsh/--name/--via/--all; got: ${argv.join(' ')}`,
       );
     }
   }
   if (section !== undefined && conversations) {
-    throw new MultichatError('USAGE', 'status: --claude/--codex 选段不与 --conversations 组合');
+    throw new MultichatError('USAGE', 'status: --claude/--codex/--opencode/--dsh 选段不与 --conversations 组合');
   }
   if (via !== undefined && !conversations) {
     throw new MultichatError('USAGE', 'status: --via 仅与 --conversations 组合');
@@ -516,18 +556,26 @@ function readStdinText(options: { maxBytes?: number; signal?: AbortSignal } = {}
 function realSendDeps(stdinText: string | undefined): SendDeps {
   return {
     env: process.env,
+    enrichCallerIdentity: (caller) => enrichCallerSource(caller, {
+      directory: join(stateRoot(), 'caller-sources'),
+      probe: (nativeCaller) => probeCallerSource(nativeCaller),
+    }),
     stdinText,
     listClaudeSessions: () => listClaudeSessions(),
-    listCodexThreads: () => listCodexThreads(),
+    listCodexThreads: (options) => listCodexThreads(options),
+    listOpenCodeThreads: () => listOpenCodeThreads(),
+    listDshThreads: (options) => listDshThreads(options),
     diagnoseCodexTarget: (query) => diagnoseCodexTarget(query),
     deliverClaude: (target, content, options) => deliverToClaudeSession(target, content, options),
     deliverCodex: (threadId, content, options) => deliverToCodexThread(threadId, content, options),
+    deliverOpenCode: (sessionId, content, options) => deliverToOpenCodeSession(sessionId, content, options),
+    deliverDsh: (sessionId, content, options) => deliverToDshSession(sessionId, content, options),
     sendLogFile: defaultSendLogFile(),
     outboxDir: defaultOutboxDir(),
     now: () => Date.now(),
     spawnWatchdog: () => ensureWatchdog(defaultOutboxDir()),
     appendLog: (entry) => appendSendLog(defaultSendLogFile(), entry),
-    confirmReceipt: (threadId, marker) => confirmInRollout(codexHomeDir(), threadId, marker),
+    confirmReceipt: (threadId, marker, endpointType) => confirmInRollout(codexHomeDir(), threadId, marker, {}, endpointType),
     conversationStateFile: defaultConversationsFile(),
     // Federation (008/B1): real transport + machine name for --origin.
     sshExec: (argv, input, timeoutMs) => defaultSshExec(argv, input, timeoutMs),
@@ -549,13 +597,15 @@ function realStatusDeps(): StatusDeps {
   return {
     listClaudeSessions: () => listClaudeSessions(),
     listCodexThreads: () => listCodexThreads(),
+    listOpenCodeThreads: () => listOpenCodeThreads(),
+    listDshThreads: () => listDshThreads(),
     // 006: TUI occupancy markers come straight from the filesystem.
     listWriterLocks: () => listWriterLocks(codexHomeDir()),
     listConversations: () => conversationSummaries(),
     // B22: bounded recheck budget (2 polls × 200ms per unconfirmed row) so the
     // conversations view stays snappy while catching slow rollout flushes.
-    confirmReceipt: (threadId, marker) =>
-      confirmInRollout(codexHomeDir(), threadId, marker, { tries: 2, delayMs: 200 }),
+    confirmReceipt: (threadId, marker, endpointType) =>
+      confirmInRollout(codexHomeDir(), threadId, marker, { tries: 2, delayMs: 200 }, endpointType),
     // B2: tcp forwarder status files live under ~/.crosschat/tcp.
     tcpDir: join(homedir(), '.crosschat', 'tcp'),
     // B2.1：成员机在线表——有 node.json 才拉（broker 机 status-broker.json 新鲜时不会走到）。
@@ -629,7 +679,7 @@ export async function drainOutboxAtEntry(deps: DrainEntryDeps): Promise<void> {
   }
 }
 
-async function main(argv: string[]): Promise<number> {
+export async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
   if (command === undefined || command === '') {
     process.stderr.write(usage);
@@ -670,6 +720,24 @@ async function main(argv: string[]): Promise<number> {
     } else {
       await drainAtEntry();
     }
+    return 0;
+  }
+  if (command === 'identity') {
+    if (rest.length === 1 && rest[0] === '--help') { process.stdout.write(usage); return 0; }
+    try {
+      const output = await runIdentity(rest, {
+        directory: join(stateRoot(), 'caller-sources'),
+        resolveCaller: () => resolveCallerIdentity(process.env, listClaudeSessions()),
+        probe: (caller) => probeCallerSource(caller),
+      });
+      process.stdout.write(`${JSON.stringify(output)}\n`);
+      return 0;
+    } catch (error) { return printFailure(error); }
+  }
+  if (command === 'dsh-bridge-path') {
+    if (rest.length === 1 && rest[0] === '--help') { process.stdout.write(usage); return 0; }
+    if (rest.length !== 0) return printFailure(new MultichatError('USAGE', 'dsh-bridge-path takes no options.'));
+    process.stdout.write(`${fileURLToPath(new URL('../integrations/dsh', import.meta.url))}\n`);
     return 0;
   }
   if (command === 'send') {
@@ -737,14 +805,19 @@ async function main(argv: string[]): Promise<number> {
       process.stderr.write(usage);
       return 1;
     }
-    if (json) {
-      const result = runDoctorDiagnostics();
-      process.stdout.write(`${JSON.stringify(result)}\n`);
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    process.on('SIGINT', abort);
+    process.on('SIGTERM', abort);
+    try {
+      const result = await queryDoctorDiagnostics({ signal: controller.signal });
+      process.stdout.write(json ? `${JSON.stringify(result)}\n` : `${renderDoctorDiagnostics(result).output}\n`);
       return result.summary.failed ? 1 : 0;
+    } catch (err) { return printFailure(err); }
+    finally {
+      process.off('SIGINT', abort);
+      process.off('SIGTERM', abort);
     }
-    const report = runDoctor();
-    process.stdout.write(`${report.output}\n`);
-    return report.failed ? 1 : 0;
   }
   if (command === 'install-skills') {
     if (rest.includes('--help')) {
@@ -798,7 +871,7 @@ async function main(argv: string[]): Promise<number> {
         crosschatHome: join(home, '.crosschat'),
         stateRoot: stateRoot(),
         legacyStateRoots: legacyStateRoots(),
-        skillDirs: [join(home, '.claude', 'skills', 'crosschat'), join(home, '.codex', 'skills', 'crosschat')],
+        skills: skillPlan(home, { DSH_HOME: process.env.DSH_HOME }),
         now: () => Date.now(),
         stdout: (line) => process.stdout.write(`${line}\n`),
         confirm: () =>
@@ -829,6 +902,10 @@ async function main(argv: string[]): Promise<number> {
     } catch (err) {
       return printFailure(err);
     }
+  }
+  if (command === 'opencode') {
+    try { return await runOpenCodeWrapper(rest); }
+    catch (err) { return printFailure(err); }
   }
   process.stderr.write(`crosschat: USAGE: unknown command: ${command}\n\n`);
   process.stderr.write(usage);

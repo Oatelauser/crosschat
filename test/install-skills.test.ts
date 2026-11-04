@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,12 +23,13 @@ function snapshot(dir: string): Map<string, string> {
 }
 
 describe('runInstallSkills', () => {
-  it('installs into .claude and .codex under the injected root with identical content', () => {
+  it('installs into .claude, .codex and .dsh under the injected root with identical content', () => {
     const root = join(tmpRoot, 'default-root');
     const paths = runInstallSkills({}, { sourceDir: () => realSourceDir, defaultRoot: () => root });
     expect(paths).toEqual([
       join(root, '.claude', 'skills', 'crosschat'),
       join(root, '.codex', 'skills', 'crosschat'),
+      join(root, '.dsh', 'skills', 'crosschat'),
     ]);
     const source = snapshot(realSourceDir);
     expect(source.size).toBeGreaterThan(0);
@@ -44,16 +45,79 @@ describe('runInstallSkills', () => {
     expect(snapshot(join(root, '.claude', 'skills', 'crosschat'))).toEqual(first);
   });
 
-  it('honors --dir override for the root', () => {
+  it('honors --dir override for the root and ignores the host DSH_HOME', () => {
     const alt = join(tmpRoot, 'alt-root');
-    const paths = runInstallSkills({ dir: alt }, { sourceDir: () => realSourceDir, defaultRoot: () => join(tmpRoot, 'should-not-exist') });
+    const hostDsh = join(tmpRoot, 'host-dsh');
+    const paths = runInstallSkills({ dir: alt }, { sourceDir: () => realSourceDir, defaultRoot: () => join(tmpRoot, 'should-not-exist'), env: { DSH_HOME: hostDsh } });
     expect(paths).toEqual([
       join(alt, '.claude', 'skills', 'crosschat'),
       join(alt, '.codex', 'skills', 'crosschat'),
+      join(alt, '.dsh', 'skills', 'crosschat'),
     ]);
     expect(existsSync(join(alt, '.claude', 'skills', 'crosschat', 'SKILL.md'))).toBe(true);
     expect(existsSync(join(alt, '.codex', 'skills', 'crosschat', 'SKILL.md'))).toBe(true);
+    expect(existsSync(join(alt, '.dsh', 'skills', 'crosschat', 'SKILL.md'))).toBe(true);
     expect(existsSync(join(tmpRoot, 'should-not-exist'))).toBe(false);
+    expect(existsSync(hostDsh)).toBe(false);
+  });
+
+  it('uses an absolute DSH_HOME for the Harness target and leaves the default .dsh absent', () => {
+    const root = join(tmpRoot, 'dsh-root');
+    const dshHome = join(tmpRoot, 'custom-dsh');
+    const paths = runInstallSkills({}, { sourceDir: () => realSourceDir, defaultRoot: () => root, env: { DSH_HOME: dshHome } });
+    expect(paths[2]).toBe(join(dshHome, 'skills', 'crosschat'));
+    expect(existsSync(join(dshHome, 'skills', 'crosschat', 'references', 'send.md'))).toBe(true);
+    expect(existsSync(join(root, '.dsh'))).toBe(false);
+  });
+
+  it('treats an empty DSH_HOME as unset', () => {
+    const root = join(tmpRoot, 'empty-dsh-root');
+    const paths = runInstallSkills({}, { sourceDir: () => realSourceDir, defaultRoot: () => root, env: { DSH_HOME: '' } });
+    expect(paths[2]).toBe(join(root, '.dsh', 'skills', 'crosschat'));
+  });
+
+  it('rejects a relative DSH_HOME with its concrete value instead of guessing a working directory', () => {
+    const root = join(tmpRoot, 'relative-dsh-root');
+    expect(() => runInstallSkills({}, { sourceDir: () => realSourceDir, defaultRoot: () => root, env: { DSH_HOME: 'relative/dsh' } })).toThrowError(/DSH_HOME/);
+    expect(() => runInstallSkills({}, { sourceDir: () => realSourceDir, defaultRoot: () => root, env: { DSH_HOME: 'relative/dsh' } })).toThrowError(/relative\/dsh/);
+    expect(existsSync(join(root, '.claude'))).toBe(false);
+  });
+
+  it('writes one copy when the Harness home resolves to an existing skill destination', () => {
+    const root = join(tmpRoot, 'dedupe-root');
+    const paths = runInstallSkills({}, { sourceDir: () => realSourceDir, defaultRoot: () => root, env: { DSH_HOME: join(root, '.claude') } });
+    expect(paths).toEqual([
+      join(root, '.claude', 'skills', 'crosschat'),
+      join(root, '.codex', 'skills', 'crosschat'),
+    ]);
+    expect(existsSync(join(root, '.claude', 'skills', 'crosschat', 'SKILL.md'))).toBe(true);
+  });
+
+  it('writes one copy when two spellings name the same existing directory', () => {
+    const root = join(tmpRoot, 'alias-dir-root');
+    const claude = join(root, '.claude');
+    mkdirSync(join(claude, 'skills'), { recursive: true });
+    // Windows folds .CLAUDE onto .claude; elsewhere an explicit directory link has the same identity.
+    const alias = process.platform === 'win32' ? join(root, '.CLAUDE') : join(root, '.claude-alias');
+    if (process.platform !== 'win32') symlinkSync(claude, alias, 'dir');
+    const paths = runInstallSkills({}, { sourceDir: () => realSourceDir, defaultRoot: () => root, env: { DSH_HOME: alias } });
+    expect(paths).toEqual([
+      join(root, '.claude', 'skills', 'crosschat'),
+      join(root, '.codex', 'skills', 'crosschat'),
+    ]);
+    expect(readFileSync(join(claude, 'skills', 'crosschat', 'SKILL.md'), 'utf8')).toContain('crosschat');
+  });
+
+  it('installs a not-yet-created case alias once on Windows and keeps POSIX case-different directories', () => {
+    const root = join(tmpRoot, 'fresh-alias-root');
+    // Fresh home: .claude does not exist yet, so only platform path semantics can tell the spellings apart.
+    const paths = runInstallSkills({}, { sourceDir: () => realSourceDir, defaultRoot: () => root, env: { DSH_HOME: join(root, '.CLAUDE') } });
+    const claude = join(root, '.claude', 'skills', 'crosschat');
+    const codex = join(root, '.codex', 'skills', 'crosschat');
+    const harness = join(root, '.CLAUDE', 'skills', 'crosschat');
+    if (process.platform === 'win32') expect(paths).toEqual([claude, codex]);
+    else expect(paths).toEqual([claude, codex, harness]);
+    expect(readFileSync(join(claude, 'SKILL.md'), 'utf8')).toContain('crosschat');
   });
 
   it('copies the whole source directory, not just SKILL.md', () => {

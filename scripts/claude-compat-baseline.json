@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "package": {
+    "name": "@anthropic-ai/claude-code-win32-x64",
+    "version": "2.1.309",
+    "dist": {
+      "tarball": "https://registry.npmjs.org/@anthropic-ai/claude-code-win32-x64/-/claude-code-win32-x64-2.1.309.tgz",
+      "integrity": "sha512-b4Ju2gf1VliNsF9dONk/G1xZEW3Zg+G4TgpOS5oXPHSsMIciczcF267//7RvtjEXghflc3Lwrqe+Q4iNMf2ukQ=="
+    }
+  }
+}

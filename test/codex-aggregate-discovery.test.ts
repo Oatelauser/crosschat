@@ -33,7 +33,7 @@ describe('read-only Desktop and CLI aggregate discovery', () => {
     expect(live.steerTurn).not.toHaveBeenCalled();
   });
 
-  it('merges pages without duplicate IDs and retains anonymous sessions and native raw status', async () => {
+  it('keeps same-ID Desktop and CLI targets distinct across pages and retains native raw status', async () => {
     const session = cli();
     session.listThreadPage = vi.fn(async ({ cursor }) => cursor === undefined
       ? { data: [{ id: 'shared', name: 'CLI duplicate', rawStatus: { type: 'idle' }, attributes: {} }], nextCursor: 'cli-2' }
@@ -45,13 +45,13 @@ describe('read-only Desktop and CLI aggregate discovery', () => {
     do {
       const page = await reader.list({ contextId: 'local', cursor, limit: 1 });
       ids.push(...page.items.map((item) => item.ref.nativeId));
-      for (const item of page.items) expect(item.attributes.transport).toBe(item.ref.nativeId === 'cli-only' ? 'cli' : 'desktop');
+      for (const item of page.items) expect(item.attributes.transport).toBe(item.ref.endpointType);
       expect(page.observedAt).toBe(12);
       expect(page.errors).toEqual([]);
       if (page.nextCursor === null) expect(page.completeness).toBe('complete');
       cursor = page.nextCursor ?? undefined;
     } while (cursor !== undefined);
-    expect(ids).toEqual(['shared', 'desktop-only', 'cli-only']);
+    expect(ids).toEqual(['shared', 'desktop-only', 'shared', 'cli-only']);
     expect(session.resumeThread).not.toHaveBeenCalled();
     expect(session.startTurn).not.toHaveBeenCalled();
     expect(session.close).toHaveBeenCalledTimes(2);

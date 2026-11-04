@@ -18,6 +18,8 @@ import { checkSendLogRate } from './rate-limit.js';
 import { stateRoot } from './state-root.js';
 import type { DeliveryMode, DeliveryOptions } from './delivery-mode.js';
 import { isProcessAlive } from './platform/process-inspector.js';
+import { identityKey } from './identity.js';
+import { isEndpointTypeFor } from './tool-types.js';
 
 /**
  * Opportunistic outbox (B10/B11, reworked B12): when a codex delivery fails
@@ -48,6 +50,8 @@ export interface OutboxItem {
   /** Caller identity key at park time ("claude:<id>" / "codex:<id>" / "human"); rebuilds the rate-limit pair on drain. */
   callerKey?: string;
   deliveryMode?: DeliveryMode;
+  /** Verified Codex endpoint; omitted for existing unqualified queues. */
+  endpointType?: string;
   /** A persisted claim prevents concurrent workers and crash recovery from replaying a write. */
   deliveryState?: 'in-flight' | 'uncertain';
   claim?: { id: string; ownerPid: number };
@@ -59,8 +63,30 @@ interface OutboxFile {
   items: OutboxItem[];
 }
 
+type StoredOutboxItem = Omit<OutboxItem, 'id'> & { id?: string };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStoredOutboxItem(value: unknown): value is StoredOutboxItem {
+  if (!isRecord(value) || typeof value.envelope !== 'string' || typeof value.toName !== 'string' ||
+    typeof value.parkedAt !== 'number' || !Number.isFinite(value.parkedAt) ||
+    typeof value.attempts !== 'number' || !Number.isInteger(value.attempts) || value.attempts < 0) return false;
+  if (value.id !== undefined && (typeof value.id !== 'string' || value.id === '')) return false;
+  if (value.callerKey !== undefined && typeof value.callerKey !== 'string') return false;
+  if (value.deliveryMode !== undefined && value.deliveryMode !== 'queue' && value.deliveryMode !== 'steer') return false;
+  if (value.endpointType !== undefined && !isEndpointTypeFor('codex', value.endpointType)) return false;
+  if (value.deliveryState !== undefined && value.deliveryState !== 'in-flight' && value.deliveryState !== 'uncertain') return false;
+  if (value.claim !== undefined && (!isRecord(value.claim) || typeof value.claim.id !== 'string' ||
+    value.claim.id === '' || typeof value.claim.ownerPid !== 'number' || !Number.isInteger(value.claim.ownerPid) ||
+    value.claim.ownerPid < 0)) return false;
+  return true;
+}
+
 export interface DrainResult {
   threadId: string;
+  endpointType?: string;
   /** Display name of the most recently delivered item (falls back to threadId). */
   toName: string;
   delivered: number;
@@ -94,8 +120,41 @@ export function mailboxDirFor(outboxDir: string): string {
   return join(outboxDir, '..', 'mailbox');
 }
 
-export function mailboxFileFor(outboxDir: string, threadId: string): string {
-  return threadPath(mailboxDirFor(outboxDir), threadId, '.md');
+export function mailboxFileFor(outboxDir: string, threadId: string, endpointType?: string): string {
+  return threadPath(endpointDirectory(mailboxDirFor(outboxDir), endpointType), threadId, '.md');
+}
+
+/** Typed stores isolate the queue, claims, locks and mirror as one unit. */
+function endpointDirectory(dir: string, endpointType?: string): string {
+  if (endpointType === undefined) return dir;
+  if (!isEndpointTypeFor('codex', endpointType)) throw new MultichatError('USAGE', 'Outbox Codex endpoint type is not registered.');
+  return join(dir, 'types', endpointType);
+}
+
+interface QueueLocation { directory: string; threadId: string; endpointType?: string }
+
+/** Enumerate only the flat legacy store and registered typed store children. */
+function queueLocations(dir: string): QueueLocation[] {
+  const locations: QueueLocation[] = [];
+  const collect = (directory: string, endpointType?: string) => {
+    let files: string[];
+    try { files = readdirSync(directory); } catch { return; }
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue;
+      const threadId = file.slice(0, -5);
+      if (safeThreadComponent(threadId)) locations.push({ directory, threadId, ...(endpointType === undefined ? {} : { endpointType }) });
+    }
+  };
+  collect(dir);
+  let types: string[];
+  try { types = readdirSync(join(dir, 'types')); } catch { return locations; }
+  for (const type of types) if (isEndpointTypeFor('codex', type)) collect(endpointDirectory(dir, type), type);
+  return locations;
+}
+
+function scopedItems(location: QueueLocation): OutboxItem[] | undefined {
+  const items = readItems(location.directory, location.threadId);
+  return items?.every((item) => item.endpointType === location.endpointType) ? items : undefined;
 }
 
 /** Native IDs stay opaque; the flat-file store accepts one path component. */
@@ -122,32 +181,34 @@ function isoOf(nowMs: number): string {
 export function park(
   dir: string,
   threadId: string,
-  item: Pick<OutboxItem, 'envelope' | 'toName' | 'callerKey' | 'deliveryMode'>,
+  item: Pick<OutboxItem, 'envelope' | 'toName' | 'callerKey' | 'deliveryMode' | 'endpointType'>,
   nowMs: number = Date.now(),
   mailboxDir: string = mailboxDirFor(dir),
 ): OutboxItem {
-  const locked = acquireThreadLock(dir, threadId, Date.now());
+  const queueDir = endpointDirectory(dir, item.endpointType);
+  const mirrorDir = endpointDirectory(mailboxDir, item.endpointType);
+  const locked = acquireThreadLock(queueDir, threadId, Date.now());
   if (!locked) throw new MultichatError('OUTBOX_BUSY', `Outbox lock is busy for Codex thread ${threadId}; nothing was parked.`);
   try {
-    const items = readItems(dir, threadId) ?? []; // missing/corrupt: self-heal as empty
+    const items = scopedItems({ directory: queueDir, threadId, endpointType: item.endpointType }) ?? []; // missing/corrupt: self-heal as empty
     if (items.length >= OUTBOX_MAX_PER_THREAD) {
       throw new MultichatError(
         'OUTBOX_FULL',
         `Outbox full for codex thread ${threadId} (${OUTBOX_MAX_PER_THREAD} parked). ` +
-          `对方线程持续忙或已死：读 ${threadPath(mailboxDir, threadId, '.md')} 取回内容，` +
+          `对方线程持续忙或已死：读 ${threadPath(mirrorDir, threadId, '.md')} 取回内容，` +
           `或确认线程仍存在后重发。`,
       );
     }
     const parked: OutboxItem = { ...item, id: genId(nowMs), parkedAt: nowMs, attempts: 0 };
-    writeItems(dir, threadId, [...items, parked]);
+    writeItems(queueDir, threadId, [...items, parked]);
     appendMailbox(
-      mailboxDir,
+      mirrorDir,
       threadId,
       `\n## ${parked.id} 寄存 ${isoOf(nowMs)}（队列第 ${items.length + 1} 位）\n${parked.envelope}\n`,
     );
     return parked;
   } finally {
-    if (locked) releaseThreadLock(dir, threadId);
+    if (locked) releaseThreadLock(queueDir, threadId);
   }
 }
 
@@ -180,28 +241,21 @@ export interface DrainOpts {
  * can run before any command without failing it.
  */
 export async function drain(
-  dir: string,
+  rootDir: string,
   deliverFn: DrainDeliverFn,
   opts: DrainOpts = {},
 ): Promise<DrainResult[]> {
   const busyTimeoutMs = opts.busyTimeoutMs ?? DEFAULT_DRAIN_BUSY_TIMEOUT_MS;
   const maxItems = opts.maxItems ?? DEFAULT_DRAIN_MAX_ITEMS;
   const budgetMs = opts.budgetMs ?? DEFAULT_DRAIN_BUDGET_MS;
-  const mailboxDir = opts.mailboxDir ?? mailboxDirFor(dir);
+  const mailboxRoot = opts.mailboxDir ?? mailboxDirFor(rootDir);
   const now = opts.now ?? Date.now;
   const deadline = now() + budgetMs;
   let allowance = maxItems;
-  let files: string[];
-  try {
-    files = readdirSync(dir);
-  } catch {
-    return []; // no outbox yet: nothing parked anywhere
-  }
   const results: DrainResult[] = [];
-  for (const file of files) {
-    if (!file.endsWith('.json')) continue;
-    const threadId = file.slice(0, -'.json'.length);
-    if (!safeThreadComponent(threadId)) continue;
+  for (const location of queueLocations(rootDir)) {
+    const { directory: dir, threadId, endpointType } = location;
+    const mailboxDir = endpointDirectory(mailboxRoot, endpointType);
     // Items to ignore for the rest of this round (rate-window full, unknown
     // delivery error): kept verbatim, retried by the next round.
     const skipIds = new Set<string>();
@@ -211,7 +265,7 @@ export async function drain(
     for (;;) {
       if (allowance <= 0 || now() >= deadline) break;
       const head = await withThreadLock(dir, threadId, 2_000, () => {
-        const items = readItems(dir, threadId);
+        const items = scopedItems(location);
         if (items === undefined || items.length === 0) return undefined;
         const item = items.find((candidate) => !skipIds.has(candidate.id));
         if (item === undefined || item.deliveryState === 'uncertain') return undefined;
@@ -225,7 +279,7 @@ export async function drain(
         }
         if (opts.sendLogFile !== undefined) {
           try {
-            checkSendLogRate(opts.sendLogFile, item.callerKey ?? 'human', `codex:${threadId}`, now());
+            checkSendLogRate(opts.sendLogFile, item.callerKey ?? 'human', identityKey({ p: 'codex', id: threadId, endpointType }), now());
           } catch (err) {
             if (err instanceof MultichatError && err.code === 'RATE_LIMITED') {
               skipIds.add(item.id);
@@ -244,7 +298,10 @@ export async function drain(
       toName = head.item.toName;
       allowance -= 1;
       try {
-        await deliverFn(threadId, head.item.envelope, busyTimeoutMs, { mode: head.item.deliveryMode ?? 'queue' });
+        await deliverFn(threadId, head.item.envelope, busyTimeoutMs, {
+          mode: head.item.deliveryMode ?? 'queue',
+          ...(head.item.endpointType === undefined ? {} : { endpointType: head.item.endpointType }),
+        });
         delivered++;
         appendMailbox(mailboxDir, threadId, `> ${head.item.id} 送达 ${isoOf(now())}\n`);
         await withThreadLock(dir, threadId, 2_000, () => {
@@ -290,6 +347,7 @@ export async function drain(
     if (delivered > 0 || remaining > 0 || dropped > 0) {
       results.push({
         threadId,
+        ...(endpointType === undefined ? {} : { endpointType }),
         toName: toName || shortThread(threadId),
         delivered,
         remaining,
@@ -301,22 +359,15 @@ export async function drain(
 }
 
 /** Parked item count + oldest age per thread (doctor display); corrupt files are skipped. */
-export function outboxSummary(dir: string): { threadId: string; count: number; oldestParkedAt?: number }[] {
-  let files: string[];
-  try {
-    files = readdirSync(dir);
-  } catch {
-    return [];
-  }
-  const summary: { threadId: string; count: number; oldestParkedAt?: number }[] = [];
-  for (const file of files) {
-    if (!file.endsWith('.json')) continue;
-    const threadId = file.slice(0, -'.json'.length);
-    if (!safeThreadComponent(threadId)) continue;
-    const items = readItems(dir, threadId);
+export function outboxSummary(dir: string): { threadId: string; endpointType?: string; count: number; oldestParkedAt?: number }[] {
+  const summary: { threadId: string; endpointType?: string; count: number; oldestParkedAt?: number }[] = [];
+  for (const location of queueLocations(dir)) {
+    const { threadId, endpointType } = location;
+    const items = scopedItems(location);
     if (items !== undefined && items.length > 0) {
       summary.push({
         threadId,
+        ...(endpointType === undefined ? {} : { endpointType }),
         count: items.length,
         oldestParkedAt: Math.min(...items.map((item) => item.parkedAt)),
       });
@@ -326,21 +377,16 @@ export function outboxSummary(dir: string): { threadId: string; count: number; o
 }
 
 /** Queue depth for one thread (0 when nothing is parked). */
-export function outboxCount(dir: string, threadId: string): number {
-  return readItems(dir, threadId)?.length ?? 0;
+export function outboxCount(dir: string, threadId: string, endpointType?: string): number {
+  return scopedItems({ directory: endpointDirectory(dir, endpointType), threadId, endpointType })?.length ?? 0;
 }
 
 /** Uncertain heads require manual reconciliation; a worker must neither replay nor skip them. */
 export function retryableOutbox(dir: string): { pending: boolean; prompt: boolean } {
-  let files: string[];
-  try { files = readdirSync(dir); } catch { return { pending: false, prompt: false }; }
   let pending = false;
   let prompt = false;
-  for (const file of files) {
-    if (!file.endsWith('.json')) continue;
-    const threadId = file.slice(0, -5);
-    if (!safeThreadComponent(threadId)) continue;
-    const head = readItems(dir, threadId)?.[0];
+  for (const location of queueLocations(dir)) {
+    const head = scopedItems(location)?.[0];
     if (head === undefined || head.deliveryState === 'uncertain') continue;
     if (head.deliveryState === 'in-flight' && !isProcessAlive(head.claim?.ownerPid ?? 0)) continue;
     pending = true;
@@ -356,19 +402,11 @@ export function retryableOutbox(dir: string): { pending: boolean; prompt: boolea
  * fallback the drain's rate limiter uses. Corrupt files are skipped.
  */
 export function outboxPairCounts(dir: string): Map<string, number> {
-  let files: string[];
-  try {
-    files = readdirSync(dir);
-  } catch {
-    return new Map();
-  }
   const counts = new Map<string, number>();
-  for (const file of files) {
-    if (!file.endsWith('.json')) continue;
-    const threadId = file.slice(0, -'.json'.length);
-    if (!safeThreadComponent(threadId)) continue;
-    for (const item of readItems(dir, threadId) ?? []) {
-      const key = [item.callerKey ?? 'human', `codex:${threadId}`].sort().join('\n');
+  for (const location of queueLocations(dir)) {
+    const { threadId, endpointType } = location;
+    for (const item of scopedItems(location) ?? []) {
+      const key = [item.callerKey ?? 'human', identityKey({ p: 'codex', id: threadId, endpointType })].sort().join('\n');
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
   }
@@ -390,12 +428,12 @@ function lockFile(dir: string, threadId: string): string {
 function readItems(dir: string, threadId: string): OutboxItem[] | undefined {
   const file = threadFile(dir, threadId);
   try {
-    const parsed = JSON.parse(readFileSync(file, 'utf8')) as OutboxFile;
-    if (!Array.isArray(parsed.items)) return undefined;
+    const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'));
+    if (!isRecord(parsed) || !Array.isArray(parsed.items) || !parsed.items.every(isStoredOutboxItem)) return undefined;
     // Pre-B12 files carry no id: synthesize a stable one from parkedAt+index.
-    return parsed.items.map((item, index) =>
-      item.id === undefined ? { ...item, id: `${item.parkedAt.toString(36)}-${index.toString(36)}` } : item,
-    );
+    return parsed.items.map((item, index) => ({
+      ...item, id: item.id ?? `${item.parkedAt.toString(36)}-${index.toString(36)}`,
+    }));
   } catch {
     return undefined;
   }

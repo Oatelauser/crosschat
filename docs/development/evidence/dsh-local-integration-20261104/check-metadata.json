@@ -1,0 +1,8 @@
+{
+  "Start": "2026-11-04T13:29:16.9114487+08:00",
+  "End": "2026-11-04T13:31:24.0353553+08:00",
+  "ExitCode": 1,
+  "CROSSCHAT_LIVE_Enabled": false,
+  "MaxWorkers": 2,
+  "MinWorkers": 1
+}

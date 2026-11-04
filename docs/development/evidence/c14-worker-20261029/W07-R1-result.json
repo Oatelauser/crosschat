@@ -1,0 +1,121 @@
+{
+  "generatedAt": "2026-10-29T08:59:35.771Z",
+  "node": "v25.0.0",
+  "wrote": true,
+  "experiments": [
+    {
+      "id": "E1",
+      "question": "Does a historical cross-shard c14 collision leave handleForRef without a hint, and does the envelope fall back to the full ref?",
+      "pass": true,
+      "observed": {
+        "handleForRef": null,
+        "fallbackHint": "回复请运行: crosschat send --conversation mc2_NARjcy0xA3QtMQhoAYsDGiMi_QI --tool codex-cli --body \"<你的回复>\"（长文/特殊字符走 stdin）",
+        "shortHintForComparison": "回复请运行: crosschat send --conversation c15 --tool codex-cli --body \"<你的回复>\"（长文/特殊字符走 stdin）"
+      }
+    },
+    {
+      "id": "E2",
+      "question": "Is the colliding number still rejected at consumption time, listing both candidates?",
+      "pass": true,
+      "observed": {
+        "code": "INVALID_CONVERSATION_REF",
+        "message": "c14 撞号指向多个对话：mc2_NARjcy0xA3QtMQj2BsLqASSXOwE mc2_NARjcy0yA3QtMghygOiGYkq3ogE——用 --to <名> --tool <收件类型> 接续或开新对话"
+      }
+    },
+    {
+      "id": "E3",
+      "question": "Counterexample to \"just claim a new handle\": does claimHandle(file, ref, 15) drop the same-nonce c14 and make the foreign c14 suddenly unique?",
+      "pass": true,
+      "observed": {
+        "claimed": "c15",
+        "shardAHandlesBefore": {
+          "c14": "mc2_NARjcy0xA3QtMQjCvhSW1OkJ_wE"
+        },
+        "shardAHandlesAfter": {
+          "c15": "mc2_NARjcy0xA3QtMQjCvhSW1OkJ_wI"
+        },
+        "shardALineUnchanged": true,
+        "foreignShardBytesUnchanged": true,
+        "c14AfterRecovery": {
+          "resolvesToNonce": "3a42411783f72e2d",
+          "isForeign": true
+        },
+        "c15ResolvesToOurs": true
+      }
+    },
+    {
+      "id": "E4",
+      "question": "Would keeping both handles survive normal accounting? Does recordConversation collapse same-nonce aliases to the last one?",
+      "pass": true,
+      "observed": {
+        "handlesBefore": {
+          "c14": "mc2_NARjcy0xA3QtMQh-QoU_QKMjLAE",
+          "c15": "mc2_NARjcy0xA3QtMQh-QoU_QKMjLAE"
+        },
+        "handlesAfter": {
+          "c15": "mc2_NARjcy0xA3QtMQh-QoU_QKMjLAI"
+        },
+        "c14AfterRefresh": {
+          "resolvesToForeign": true
+        }
+      }
+    },
+    {
+      "id": "E5",
+      "question": "Is a failed allocation write atomic — old c14 copy intact, no ghost handle, no scratch?",
+      "pass": true,
+      "observed": {
+        "claimOutcome": {
+          "code": "CONVERSATION_STATE_WRITE_FAILED",
+          "message": "Conversation state could not be saved; no message was sent."
+        },
+        "shardBytesUnchanged": true,
+        "handlesAfter": {
+          "c14": "mc2_NARjcy0xA3QtMQhwrvXQS5ycCAE"
+        },
+        "c14StillColliding": true,
+        "scratchLeftovers": []
+      },
+      "notes": "Only the Windows read-only-target failure path; it does not cover every write failure or crash."
+    },
+    {
+      "id": "E6",
+      "question": "Does the existing LRU rule evict the oldest of 8 handles on a ninth different-nonce claim, and does that immediately make the other side's c14 unique?",
+      "pass": true,
+      "observed": {
+        "handlesBefore": [
+          "c14",
+          "c15",
+          "c16",
+          "c17",
+          "c18",
+          "c19",
+          "c20",
+          "c21"
+        ],
+        "collidingBefore": "INVALID_CONVERSATION_REF",
+        "claimedNinth": "c22",
+        "handlesAfter": [
+          "c15",
+          "c16",
+          "c17",
+          "c18",
+          "c19",
+          "c20",
+          "c21",
+          "c22"
+        ],
+        "c14AfterEviction": {
+          "resolvesToForeign": true
+        },
+        "foreignShardBytesUnchanged": true
+      },
+      "notes": "Proves the existing HANDLE_MAX eviction order; an append-only alias allocator would hit this on a full shard at recovery time."
+    }
+  ],
+  "cleanup": {
+    "root": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\w07-probe-1793264375771-52970dd9",
+    "underCache": true,
+    "removed": true
+  }
+}

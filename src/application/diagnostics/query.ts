@@ -1,10 +1,11 @@
-import { execFile, fork } from 'node:child_process';
+import { fork } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import process from 'node:process';
 import type { Worker } from 'node:worker_threads';
-import { diagnosticCheck, summarizeDiagnosticChecks } from './model.js';
+import { diagnosticCheck, HARNESS_BRIDGE_WARNING_REASONS, HARNESS_PROFILE_ISSUES, summarizeDiagnosticChecks } from './model.js';
 import type { DiagnosticCode, DiagnosticGroup, DiagnosticInput, DiagnosticResult } from './model.js';
+import { terminateOwnedProcessTree } from '../services/owned-process.js';
 
 export interface DiagnosticQueryOptions {
   signal?: AbortSignal;
@@ -19,13 +20,19 @@ export interface DiagnosticQueryOptions {
   createProcess?(options: { env: NodeJS.ProcessEnv }): ChildProcess;
 }
 
-type FieldType = 'text' | 'number' | 'boolean' | 'strings' | 'side' | 'nullable-number';
+type FieldType = 'text' | 'number' | 'boolean' | 'strings' | 'side' | 'nullable-number' | 'positive-integer' | 'harness-reason' | 'path' | 'profile-issue';
 const schemas: Record<DiagnosticCode, Record<string, FieldType>> = {
   'node-supported': { version: 'text' }, 'node-unsupported': { version: 'text' },
   'claude-ready': { executable: 'text', count: 'number' }, 'claude-empty': { executable: 'text' }, 'claude-missing': {}, 'claude-registry-malformed': { count: 'number' },
   'codex-missing': {}, 'codex-unparsed': { firstLine: 'text', status: 'nullable-number' }, 'codex-cli-old': { version: 'text' }, 'codex-cli-ready': { version: 'text' },
   'codex-daemon-missing': {}, 'codex-daemon-old': { version: 'text' }, 'codex-daemon-ready': { version: 'text' },
   'skill-missing': { side: 'side', path: 'text' }, 'skill-installed': { side: 'side' }, 'skill-match': { side: 'side' }, 'skill-mismatch': { side: 'side', paths: 'strings' },
+  'harness-home-invalid': { value: 'text' },
+  'harness-bridge-inactive': {}, 'harness-bridge-ready': { instanceId: 'text', pid: 'positive-integer', runtimeVersion: 'text' },
+  'harness-bridge-warning': { reason: 'harness-reason' },
+  'harness-profile-not-declared': { profileDir: 'path' },
+  'harness-profile-plugin-ready': { profileDir: 'path', packageDir: 'path', version: 'text' },
+  'harness-profile-plugin-warning': { path: 'path', reason: 'profile-issue' },
   'identity-conflict': {}, 'identity-clear': {}, 'node-config-invalid': { path: 'text' }, 'node-config-ready': {}, 'node-star-id-missing': { label: 'text' },
   'node-star-id-duplicate': { first: 'text', label: 'text', starId: 'text' }, 'broker-reachable': { host: 'text', port: 'number' }, 'broker-unreachable': { host: 'text', port: 'number' },
   'broker-empty': {}, 'broker-ready': { stars: 'number', nodes: 'number' }, 'broker-port-custom': { port: 'number', defaultPort: 'number', path: 'text' }, 'broker-invalid': {},
@@ -40,7 +47,11 @@ function field(value: unknown, type: FieldType): unknown {
   if ((type === 'number' || type === 'nullable-number') && typeof value === 'number' && Number.isFinite(value)) return value;
   if (type === 'nullable-number' && value === null) return value;
   if (type === 'boolean' && typeof value === 'boolean') return value;
-  if (type === 'side' && (value === 'claude' || value === 'codex')) return value;
+  if (type === 'positive-integer' && typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return value;
+  if (type === 'harness-reason' && HARNESS_BRIDGE_WARNING_REASONS.some((reason) => reason === value)) return value;
+  if (type === 'path' && typeof value === 'string' && value.length <= 65_536 && isAbsolute(value)) return value;
+  if (type === 'profile-issue' && HARNESS_PROFILE_ISSUES.some((reason) => reason === value)) return value;
+  if (type === 'side' && (value === 'claude' || value === 'codex' || value === 'harness')) return value;
   if (type === 'strings' && Array.isArray(value) && value.length <= 2000 && value.every((item) => typeof item === 'string' && item.length <= 65_536)) return [...value];
   return invalid();
 }
@@ -64,6 +75,22 @@ export function parseDiagnosticResult(input: unknown): DiagnosticResult {
       for (const [name, type] of Object.entries(schemas[code])) data[name] = field(check.data[name], type);
       if (code === 'status-process-unavailable' && check.data.pid !== undefined) data.pid = field(check.data.pid, 'number');
       if (code === 'outbox-parked' && check.data.ageMinutes !== undefined) data.ageMinutes = field(check.data.ageMinutes, 'number');
+      if (code === 'harness-profile-plugin-warning') {
+        for (const name of ['profileDir', 'packageDir']) if (check.data[name] !== undefined) data[name] = field(check.data[name], 'path');
+        if (check.data.version !== undefined) data.version = field(check.data.version, 'text');
+      }
+      if (code === 'harness-bridge-ready') {
+        if (check.data.profile !== undefined || check.data.endpointType !== undefined) {
+          if (typeof check.data.profile !== 'string' || check.data.profile.trim() === '' || check.data.profile.length > 256
+            || check.data.endpointType !== (check.data.profile === 'desktop' ? 'desktop' : 'host')) invalid();
+          data.profile = check.data.profile;
+          data.endpointType = check.data.endpointType;
+        }
+        if (check.data.profileDir !== undefined) {
+          if (typeof check.data.profileDir !== 'string' || check.data.profileDir.length > 65_536 || !isAbsolute(check.data.profileDir)) invalid();
+          data.profileDir = check.data.profileDir;
+        }
+      }
       // Every discriminant and schema field was checked above; this restores the correlated union.
       const validated = diagnosticCheck({ code, data } as DiagnosticInput);
       if (check.level !== validated.level) invalid();
@@ -81,8 +108,8 @@ function environment(options: DiagnosticQueryOptions): NodeJS.ProcessEnv {
   const env = { ...process.env, ...options.env };
   if (options.home === undefined) return env;
   if (options.nativeEnvironment === 'inherit') return { ...env, CROSSCHAT_DIAGNOSTIC_HOME: options.home };
-  for (const key of Object.keys(env)) if (['HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'CODEX_HOME', 'CODEX_SQLITE_HOME', 'CLAUDE_CONFIG_DIR'].includes(key.toUpperCase())) delete env[key];
-  return { ...env, HOME: options.home, USERPROFILE: options.home, CODEX_HOME: join(options.home, '.codex'), CLAUDE_CONFIG_DIR: join(options.home, '.claude'), CROSSCHAT_DIAGNOSTIC_HOME: options.home };
+  for (const key of Object.keys(env)) if (['HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'CODEX_HOME', 'CODEX_SQLITE_HOME', 'CLAUDE_CONFIG_DIR', 'DSH_HOME'].includes(key.toUpperCase())) delete env[key];
+  return { ...env, HOME: options.home, USERPROFILE: options.home, CODEX_HOME: join(options.home, '.codex'), CLAUDE_CONFIG_DIR: join(options.home, '.claude'), DSH_HOME: join(options.home, '.dsh'), CROSSCHAT_DIAGNOSTIC_HOME: options.home };
 }
 
 function abortError(): Error {
@@ -139,28 +166,8 @@ export async function queryDoctorDiagnostics(options: DiagnosticQueryOptions = {
     clearTimeout(timer);
     detach();
     if (thread !== undefined) await thread.terminate();
-    else await terminateProcessTree(child!);
+    else await terminateOwnedProcessTree(child!);
   }
   if (signal?.aborted) throw abortError();
   return result;
-}
-
-async function terminateProcessTree(child: ChildProcess): Promise<void> {
-  if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
-  const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
-  if (process.platform === 'win32') {
-    const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
-    await new Promise<void>((resolve, reject) => {
-      execFile(taskkill, ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, (error) => {
-        if (error === null || child.exitCode !== null || child.signalCode !== null) resolve();
-        else reject(error);
-      });
-    });
-  } else {
-    try { process.kill(-child.pid, 'SIGKILL'); }
-    catch (error) {
-      if (child.exitCode === null && child.signalCode === null) throw error;
-    }
-  }
-  await exited;
 }

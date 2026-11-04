@@ -1,0 +1,96 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ❯ test/dsh-live-fixture.test.ts (26 tests | 2 failed) 104ms
+   ✓ DSH stored-chat preservation evidence > verifies actual text from a compressed native session while hashing its original stored bytes 9ms
+   ✓ DSH stored-chat preservation evidence > does not accept empty data or unrelated files as proof that the test conversation was retained 3ms
+   ✓ DSH stored-chat preservation evidence > accepts native uncompressed JSONL and detects later changes through the original-byte hashes 4ms
+   ✓ DSH stored-chat preservation evidence > treats unreadable compressed conversation content as a fixture failure 6ms
+   ✓ DSH stored-chat preservation evidence > reads later native append frames rather than stopping after the first valid frame 2ms
+   ✓ DSH stored-chat preservation evidence > does not hide a corrupted trailing frame behind an earlier valid conversation 2ms
+   ✓ DSH real-runtime profile isolation > keeps native home, shared skills, temporary files and credentials inside a new fixture profile 66ms
+   ✓ DSH real-runtime profile isolation > rejects a non-fixture model endpoint before preparing https://api.deepseek.com/v1 1ms
+   ✓ DSH real-runtime profile isolation > rejects a non-fixture model endpoint before preparing http://localhost:12345/v1 1ms
+   ✓ DSH real-runtime profile isolation > rejects a non-fixture model endpoint before preparing http://127.0.0.1:12345/v1?token=x 1ms
+   ✓ DSH real-runtime profile isolation > rejects a non-fixture model endpoint before preparing http://user:secret@127.0.0.1:12345/v1 1ms
+   ✓ DSH startup failure evidence > keeps a broken fixture import distinct from a broken production bridge import 0ms
+   ✓ DSH startup failure evidence > treats a missing test controller as infrastructure while keeping transient process readiness inconclusive 0ms
+   ✓ DSH native shell identity evidence > accepts only the exact identity returned by a real tool-result shape 0ms
+   ✓ DSH native shell identity evidence > reports removed or changed native DSH fields as compatibility after a successful JSON shell result 0ms
+   × DSH native shell identity evidence > verifies an explicitly expected Desktop endpoint while preserving the default Host-only boundary 4ms
+     → expected { ready: false, …(2) } to deeply equal { ready: true, source: { …(6) } }
+   × DSH native shell identity evidence > treats a foreign expected tool as a fixture configuration error 2ms
+     → expected { ready: false, …(2) } to match object { ready: false, …(1) }
+(1 matching property omitted from actual)
+   ✓ DSH native shell identity evidence > requires the real native shell and read-only identity observation in the same tool result 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: undefined 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: {"status":"identified","sourceTool":"dsh-desktop","basis":"native","association":"verified","scope":"instance","shouldAsk":false} 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: {"status":"confirmed","sourceTool":"dsh","basis":"user","association":"verified","scope":"instance","shouldAsk":false} 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: {"status":"identified","sourceTool":"dsh","basis":"native","association":"unavailable","scope":"instance","shouldAsk":false} 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: {"status":"identified","sourceTool":"dsh","basis":"native","association":"verified","scope":"origin","shouldAsk":false} 0ms
+   ✓ DSH native shell identity evidence > does not manufacture the missing native shellEnv source association: {"status":"identified","sourceTool":"dsh","basis":"native","association":"verified","scope":"instance","shouldAsk":true,"context":"manual-confirmation-context"} 0ms
+   ✓ DSH native shell identity evidence > distinguishes a broken shell JSON bootstrap from an unavailable native source probe 0ms
+   ✓ DSH native shell identity evidence > retains structured source failures and presence facts without token, directory or free-form values 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-live-fixture.test.ts > DSH native shell identity evidence > verifies an explicitly expected Desktop endpoint while preserving the default Host-only boundary
+AssertionError: expected { ready: false, …(2) } to deeply equal { ready: true, source: { …(6) } }
+
+- Expected
++ Received
+
+  {
+-   "ready": true,
+-   "source": {
+-     "association": "verified",
+-     "basis": "native",
+-     "scope": "instance",
+-     "shouldAsk": false,
+-     "sourceTool": "dsh-desktop",
+-     "status": "identified",
+-   },
++   "category": "compatibility",
++   "check": "native-shell-caller-source",
++   "ready": false,
+  }
+
+ ❯ test/dsh-live-fixture.test.ts:138:94
+    136|     const desktop = { ...expected, profile: 'desktop' }, desktopSource…
+    137|     const values = requests({ ...desktop, callerSourceExit: 0, callerS…
+    138|     expect(assessDshCallerSourceIdentity(values, { ...desktop, sourceT…
+       |                                                                                              ^
+    139|     expect(assessDshCallerSourceIdentity(values, desktop).ready).toBe(…
+    140|     expect(assessDshCallerSourceIdentity(requests({ ...desktop, caller…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/dsh-live-fixture.test.ts > DSH native shell identity evidence > treats a foreign expected tool as a fixture configuration error
+AssertionError: expected { ready: false, …(2) } to match object { ready: false, …(1) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "category": "infrastructure",
++   "category": "compatibility",
+    "ready": false,
+  }
+
+ ❯ test/dsh-live-fixture.test.ts:145:92
+    143|   it('treats a foreign expected tool as a fixture configuration error'…
+    144|     const values = requests({ ...expected, callerSourceExit: 0, caller…
+    145|     expect(assessDshCallerSourceIdentity(values, { ...expected, source…
+       |                                                                                            ^
+    146|   });
+    147| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 24 passed (26)
+   Start at  12:15:43
+   Duration  536ms (transform 52ms, setup 0ms, collect 63ms, tests 104ms, environment 0ms, prepare 113ms)
+

@@ -8,6 +8,7 @@ import type { DesktopIpcOptions, DesktopThreadSession } from './desktop-ipc.js';
 import { listDesktopMetadata } from './desktop-metadata.js';
 import type { DesktopMetadataOptions, DesktopMetadataPage, DesktopMetadataRow } from './desktop-metadata.js';
 import { codexHomeDir } from './rollout-meta.js';
+import { isEndpointTypeFor, nativeTargetKey } from '../tool-types.js';
 
 export interface DesktopDiscoveryOptions {
   listMetadata?: (options: DesktopMetadataOptions) => Promise<DesktopMetadataPage>;
@@ -31,6 +32,7 @@ export interface CodexDiscoveryPage {
 }
 
 export interface CodexDiscoveryOptions {
+  endpointType?: string;
   sessionFactory?: CodexSessionFactory;
   codexHome?: string;
   desktop?: DesktopDiscoveryOptions;
@@ -128,8 +130,9 @@ function nextNative(state: CursorState, next: unknown): boolean {
 function deduplicate(state: CursorState, data: CodexRawThreadSummary[]): CodexRawThreadSummary[] {
   const seen = new Set(state.seen);
   const unique = data.filter((item) => {
-    if (seen.has(item.id)) return false;
-    seen.add(item.id);
+    const key = nativeTargetKey({ providerId: 'codex', nativeId: item.id, endpointType: item.endpointType });
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
   state.seen = [...seen];
@@ -154,7 +157,7 @@ export async function readDesktopCandidates(
       const current = index++;
       if (current >= rows.length) return;
       const row = rows[current];
-      if (seen.has(row.id)) continue;
+      if (seen.has(nativeTargetKey({ providerId: 'codex', nativeId: row.id, endpointType: 'desktop' }))) continue;
       const work = async (): Promise<void> => {
         let session: DesktopThreadSession | null = null;
         let stage: 'owner' | 'snapshot' = 'owner';
@@ -171,7 +174,7 @@ export async function readDesktopCandidates(
           const snapshot = await untilAborted(session.snapshot(), options.signal);
           checkAbort(options.signal);
           if (snapshot.id !== row.id || session.threadId !== row.id) throw malformed();
-          data[current] = { id: row.id, name: row.name, rawStatus: snapshot.rawStatus, attributes: { cwd: row.cwd, originator: row.originator,
+          data[current] = { id: row.id, endpointType: 'desktop', name: row.name, rawStatus: snapshot.rawStatus, attributes: { cwd: row.cwd, originator: row.originator,
             source: row.source, createdAt: row.createdAtMs, updatedAt: row.updatedAtMs, transport: 'desktop', ownerId: session.ownerId } };
           diagnostics[current] = { id: row.id, name: row.name, status: 'available' };
         } catch (error) {
@@ -205,7 +208,7 @@ async function readCli(options: CodexDiscoveryOptions, state: CursorState, limit
       await untilAborted(session.initialize(), options.signal);
       checkAbort(options.signal);
       if (options.legacyCli || session.listThreadPage === undefined) {
-        const data = (await untilAborted(session.listThreads(), options.signal)).map((thread) => ({ id: thread.id, name: thread.name, rawStatus: thread.status, attributes: { transport: 'cli' } }));
+        const data = (await untilAborted(session.listThreads(), options.signal)).map((thread) => ({ id: thread.id, endpointType: 'cli', name: thread.name, rawStatus: thread.status, attributes: { transport: 'cli' } }));
         issue(state, 'cli', 'legacy-limit');
         state.sourceRead = true;
         return { data, more: false };
@@ -215,20 +218,22 @@ async function readCli(options: CodexDiscoveryOptions, state: CursorState, limit
       const more = nextNative(state, page.nextCursor);
       if (page.completeness === 'partial') issue(state, 'cli', 'legacy-limit');
       state.sourceRead = true;
-      return { data: page.data.map((thread) => ({ ...thread, attributes: { ...thread.attributes, transport: 'cli' } })), more };
+      return { data: page.data.map((thread) => ({ ...thread, endpointType: 'cli', attributes: { ...thread.attributes, transport: 'cli' } })), more };
     } finally { await session?.close().catch(() => undefined); }
   };
   return untilAborted(work(), options.signal);
 }
 
-/** Read-only pages: Desktop owners first, then CLI, with exact cross-page ID deduplication. */
+/** Read-only pages: deduplicate only within a verified delivery domain. */
 export async function listCodexThreadPage(options: CodexDiscoveryOptions = {}): Promise<CodexDiscoveryPage> {
   checkAbort(options.signal);
+  if (options.endpointType !== undefined && !isEndpointTypeFor('codex', options.endpointType)) throw new MultichatError('CODEX_ENDPOINT_TYPE_UNSUPPORTED', 'This Codex endpoint type is not supported.');
   const limit = options.limit ?? 100;
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1_000) throw malformed();
-  const desktopEnabled = options.desktop !== undefined || options.sessionFactory === undefined;
+  const desktopEnabled = options.endpointType !== 'cli' && (options.desktop !== undefined || options.sessionFactory === undefined);
+  const cliEnabled = options.endpointType !== 'desktop';
   const binding = createHash('sha256').update(JSON.stringify([resolve(options.codexHome ?? codexHomeDir()), options.desktop?.sqliteHome ?? process.env.CODEX_SQLITE_HOME ?? null,
-    options.desktop?.pipePath ?? null, options.cursorScope ?? null, options.legacyCli === true, desktopEnabled])).digest('hex');
+    options.desktop?.pipePath ?? null, options.cursorScope ?? null, options.legacyCli === true, desktopEnabled, options.endpointType ?? null])).digest('hex');
   const state = parseCursor(options.cursor, binding, desktopEnabled);
   if (state.stage === 'desktop') {
     try {
@@ -243,6 +248,7 @@ export async function listCodexThreadPage(options: CodexDiscoveryOptions = {}): 
       const data = deduplicate(state, inspected.data);
       state.sourceRead = true;
       if (more) return finish(state, binding, data, true);
+      if (!cliEnabled) return finish(state, binding, data, false);
       state.stage = 'cli'; state.nativeCursor = undefined; state.sourceCursors = [];
       if (data.length > 0) return finish(state, binding, data, true);
     } catch (error) {
@@ -251,6 +257,7 @@ export async function listCodexThreadPage(options: CodexDiscoveryOptions = {}): 
       state.stage = 'cli'; state.nativeCursor = undefined; state.sourceCursors = [];
     }
   }
+  if (!cliEnabled) return finish(state, binding, [], false);
   try {
     const page = await readCli(options, state, limit);
     return finish(state, binding, deduplicate(state, page.data), page.more);

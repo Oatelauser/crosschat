@@ -11,8 +11,11 @@ import { Buffer } from 'node:buffer';
 import * as net from 'node:net';
 import { WebSocket, WebSocketServer } from 'ws';
 import { PIPE_PREFIX } from '../platform/pipe-transport.js';
+import { isEndpointTypeFor, nativeTargetKey, parseToolType, toolTypeFor } from '../tool-types.js';
+import type { EndpointConstraint } from '../tool-types.js';
 import {
   CAP_CHALLENGE_AUTH,
+  CAP_ENDPOINT_TYPES,
   CAP_MULTI_STAR,
   CAP_SESSION_MEMBERS,
   ERR,
@@ -83,6 +86,7 @@ import type { DiscoveryEndpoint, DiscoveryRequest, DiscoveryResponse } from '../
 import type { DiscoverQueryFrame, DiscoverResultFrame } from './protocol.js';
 import { NodeNameChanges } from './node-naming.js';
 import { SessionOperationRoutes } from './session-operations.js';
+import { sendRequiresEndpointTypes } from './endpoint-identity.js';
 
 /**
  * 默认端口 7260。IANA service-names-port-numbers 核对（2026-10-10 实查）：
@@ -158,6 +162,7 @@ interface Session {
   /** 022：ws.WebSocket 或本进程自挂聚合器的虚拟 socket（SocketLike 同形状）。 */
   ws: SocketLike;
   authed: boolean;
+  caps?: string[];
   machineId?: string;
   machineName?: string;
   lastPong: number;
@@ -203,8 +208,12 @@ type RouteOutcome =
 type ResolvedTarget =
   | { kind: 'local' }
   | { kind: 'node'; ws: SocketLike }
-  | { kind: 'session'; ws: SocketLike; sessionId: string }
+  | { kind: 'session'; ws: SocketLike; sessionId: string; targetProviderId?: string; targetEndpointType?: string }
   | { kind: 'error'; code: string; message: string };
+
+function memberKey(member: { sessionId: string; tool?: string; endpointType?: string }): string {
+  return nativeTargetKey({ providerId: member.tool ?? '', nativeId: member.sessionId, endpointType: member.endpointType });
+}
 
 interface PendingResult {
   senderWs: SocketLike;
@@ -829,7 +838,7 @@ export class Broker {
       server: `crosschat/${this.d.version}`,
       // 034：challenge-auth additive——管理连接（星管理钥）握手走挑战应答；
       // 客户端见此 cap 缺席即拒连无降级。星钥连接行为不变。
-      caps: [CAP_SESSION_MEMBERS, CAP_MULTI_STAR, CAP_CHALLENGE_AUTH],
+      caps: [CAP_SESSION_MEMBERS, CAP_MULTI_STAR, CAP_CHALLENGE_AUTH, CAP_ENDPOINT_TYPES],
     });
     session.connectTimer = setTimeout(() => {
       this.log('connect-timeout 关闭未握手连接');
@@ -856,7 +865,7 @@ export class Broker {
       op: 'info',
       proto: PROTOCOL_VERSION,
       server: `crosschat/${this.d.version}`,
-      caps: [CAP_SESSION_MEMBERS, CAP_MULTI_STAR, CAP_CHALLENGE_AUTH],
+      caps: [CAP_SESSION_MEMBERS, CAP_MULTI_STAR, CAP_CHALLENGE_AUTH, CAP_ENDPOINT_TYPES],
     });
     session.connectTimer = setTimeout(() => {
       this.log('connect-timeout 关闭本进程聚合器连接（握手未完成——异常形态）');
@@ -1016,18 +1025,20 @@ export class Broker {
     if (frame.op === 'session-operation') {
       const star = this.starOf(session);
       const target = star?.online.get(frame.machineId);
-      const existing = star?.roster.find((entry) => entry.sessionId === frame.nativeId);
+      const key = nativeTargetKey(frame);
+      const existing = star?.roster.find((entry) => memberKey(entry) === key);
       if (!star || star.starId !== frame.starId || !target || target.revoked
+        || (frame.endpointType !== undefined && !hasCap(target.caps, CAP_ENDPOINT_TYPES))
         || (existing && (existing.machine !== frame.machineId || existing.tool !== frame.providerId))) {
-        this.send(session.ws, { op: 'session-operation-result', id: frame.id, starId: frame.starId, machineId: frame.machineId, providerId: frame.providerId, nativeId: frame.nativeId,
+        this.send(session.ws, { op: 'session-operation-result', id: frame.id, starId: frame.starId, machineId: frame.machineId, providerId: frame.providerId, nativeId: frame.nativeId, endpointType: frame.endpointType,
           result: { kind: 'rejected', message: '星、节点连接或册位完整身份已变化；请刷新后重新选择。' } });
         return;
       }
       this.sessionOperations.request(session.ws, target.ws, { ...frame, membership: existing
         ? { temporary: existing.temporary === true, selectionOwned: existing.selectionOwned === true } : undefined }, (receipt) => {
         if (receipt.result?.kind !== 'applied' || frame.request.kind !== 'apply') return receipt;
-        const actual = star.roster.find((entry) => entry.sessionId === frame.nativeId);
-        const declared = target.members?.get(frame.nativeId);
+        const actual = star.roster.find((entry) => memberKey(entry) === key);
+        const declared = target.members?.get(key);
         const confirmed = star.online.get(frame.machineId) === target && !target.revoked && actual?.machine === frame.machineId
           && actual.tool === frame.providerId && declared?.tool === frame.providerId
           && (frame.request.operation !== 'rename' || (actual.name === frame.request.name && declared.name === frame.request.name));
@@ -1144,11 +1155,17 @@ export class Broker {
       // 020：tool 容错归一（聚合器侧已严校验；坏值剥离降级为无 tool，不拒帧）
       const { tool: rawTool, ...rest } = decl as SessionMemberDecl & { tool?: unknown };
       const tool = sanitizeTool(rawTool);
-      members.set(decl.sessionId, { ...rest, ...(tool === undefined ? {} : { tool }) });
+      if (decl.endpointType !== undefined && !hasCap(session.caps, CAP_ENDPOINT_TYPES)) {
+        this.send(session.ws, { op: 'error', code: ERR.BAD_PROTO, message: '端点类型成员声明需要 endpoint-types-v1 能力，已拒绝修改' });
+        return;
+      }
+      if (decl.endpointType !== undefined && (tool === undefined || !isEndpointTypeFor(tool, decl.endpointType))) continue;
+      const member = { ...rest, ...(tool === undefined ? {} : { tool }) };
+      members.set(memberKey(member), member);
     }
     session.members = new Map(
       this.applyRosterUpdate(star, normalizeMid(session.machineId), session.machineName, [...members.values()], session)
-        .map((d) => [d.sessionId, d]),
+        .map((d) => [memberKey(d), d]),
     );
     this.log(`sessions ${session.machineName ?? session.machineId.slice(0, 8)}: ${session.members.size} 成员`);
   }
@@ -1163,9 +1180,9 @@ export class Broker {
   private applyRosterUpdate(star: StarState, mid: string, machineName: string | undefined, decls: SessionMemberDecl[], from: Session): SessionMemberDecl[] {
     let changed = false;
     const effective: SessionMemberDecl[] = [];
-    const declared = new Set(decls.map((d) => d.sessionId));
+    const declared = new Set(decls.map(memberKey));
     for (const decl of decls) {
-      const existing = star.roster.find((e) => e.sessionId === decl.sessionId);
+      const existing = star.roster.find((e) => memberKey(e) === memberKey(decl));
       // 边界1：跨机 resume——册位绑原机器，异机声明拒绝复活+教学（迁移走显式操作）
       if (existing !== undefined && existing.machine !== mid) {
         const bound = existing.machineName ?? existing.machine.slice(0, 8);
@@ -1181,7 +1198,7 @@ export class Broker {
       // 边界6（extends 胜复活）：名字已被接任——原会话回归不夺回，名字剥离只留 id 寻址
       if (name !== undefined) {
         const successor = star.roster.find(
-          (e) => e.extendsName === name && e.sessionId !== decl.sessionId && (e.tool ?? undefined) === (decl.tool ?? undefined),
+          (e) => e.extendsName === name && memberKey(e) !== memberKey(decl) && e.tool === decl.tool && e.endpointType === decl.endpointType,
         );
         if (successor !== undefined) {
           const succMachine = successor.machineName ?? successor.machine.slice(0, 8);
@@ -1202,7 +1219,7 @@ export class Broker {
         const oldName = typeof decl.extends === 'string' ? decl.extends : decl.extends.name;
         const oldMachine = typeof decl.extends === 'string' ? undefined : decl.extends.machine;
         const clash = star.roster.find(
-          (e) => e.extendsName === oldName && e.sessionId !== decl.sessionId && (e.tool ?? undefined) === (decl.tool ?? undefined),
+          (e) => e.extendsName === oldName && memberKey(e) !== memberKey(decl) && e.tool === decl.tool && e.endpointType === decl.endpointType,
         );
         if (clash !== undefined) {
           const holder = clash.machineName ?? clash.machine.slice(0, 8);
@@ -1223,6 +1240,7 @@ export class Broker {
         sessionId: decl.sessionId,
         ...(name === undefined ? {} : { name }),
         ...(decl.tool === undefined ? {} : { tool: decl.tool }),
+        ...(decl.endpointType === undefined ? {} : { endpointType: decl.endpointType }),
         machine: mid,
         ...(machineName === undefined ? {} : { machineName }),
         online: true,
@@ -1246,7 +1264,7 @@ export class Broker {
     }
     // 下线：该机在册但未声明（死/退出）——册位保留，翻 offline（--rm 走 member-remove 删条）
     for (const entry of star.roster) {
-      if (entry.machine === mid && entry.online && !declared.has(entry.sessionId)) {
+      if (entry.machine === mid && entry.online && !declared.has(memberKey(entry))) {
         entry.online = false;
         changed = true;
         this.log(`member-offline ${entry.name ?? entry.sessionId.slice(0, 8)}（未声明，册位保留）`);
@@ -1303,6 +1321,7 @@ export class Broker {
         sessionId: e.sessionId,
         ...(e.name === undefined ? {} : { name: e.name }),
         ...(e.tool === undefined ? {} : { tool: e.tool }),
+        ...(e.endpointType === undefined ? {} : { endpointType: e.endpointType }),
         ...(e.extendsName === undefined ? {} : { extends: e.extendsMachine === undefined ? e.extendsName : { machine: e.extendsMachine, name: e.extendsName } }),
         ...(e.temporary === true ? { temporary: true } : {}),
         ...(e.selectionOwned === true ? { selectionOwned: true } : {}),
@@ -1324,14 +1343,16 @@ export class Broker {
     // 匹配泳道（先specific后模糊）：精确会话 id（--rm erase 上报全量 id）→
     // id 前缀（≥8 位 hex 形态，命令面 id8）→ 名字精确。首泳道命中即定。
     const lower = target.toLowerCase();
-    const exact = star.roster.filter((e) => e.sessionId === target);
+    const candidates = star.roster.filter((entry) => frame.tool === undefined
+      || (entry.tool === frame.tool && entry.endpointType === frame.endpointType));
+    const exact = candidates.filter((entry) => entry.sessionId === target);
     const hits = frame.temporaryOnly === true ? exact.filter((entry) => entry.temporary === true
       && session.machineId !== undefined && entry.machine === normalizeMid(session.machineId)) :
       exact.length > 0
         ? exact
         : target.length >= 8 && /^[0-9a-fA-F-]+$/.test(target)
-          ? star.roster.filter((e) => e.sessionId.toLowerCase().startsWith(lower))
-          : star.roster.filter((e) => e.name === target);
+          ? candidates.filter((entry) => entry.sessionId.toLowerCase().startsWith(lower))
+          : candidates.filter((entry) => entry.name === target);
     const reply = (ok: boolean, removed: string[], error?: string): void => {
       const res: MemberRemoveResultFrame = { op: 'member-remove-result', ...(frame.id === undefined ? {} : { id: frame.id }), ok, removed, ...(error === undefined ? {} : { error }) };
       this.send(session.ws, res);
@@ -1348,8 +1369,8 @@ export class Broker {
       removed.push(entry.name ?? entry.sessionId.slice(0, 8));
       // 归属机聚合器在线则转发清本地表（否则其重播会把条目带回册——幂等无害但噪音）
       const owner = star.online.get(entry.machine);
-      owner?.members?.delete(entry.sessionId);
-      if (owner !== undefined && owner !== session) this.send(owner.ws, { op: 'member-remove', target: entry.sessionId });
+      owner?.members?.delete(memberKey(entry));
+      if (owner !== undefined && owner !== session) this.send(owner.ws, { op: 'member-remove', target: entry.sessionId, tool: entry.tool, endpointType: entry.endpointType });
     }
     if (removed.length > 0) this.persistRoster(star);
     reply(true, removed, removed.length === 0 ? `成员 ${target} 本不在册（幂等成功）` : undefined);
@@ -1359,7 +1380,7 @@ export class Broker {
   private onMemberRemoveExact(session: Session, frame: MemberRemoveExactFrame): void {
     const star = this.starOf(session);
     if (star === undefined) return;
-    const matches = star.roster.filter((entry) => entry.sessionId === frame.sessionId);
+    const matches = star.roster.filter((entry) => entry.sessionId === frame.sessionId && entry.tool === frame.tool && entry.endpointType === frame.endpointType);
     const entry = matches.length === 1 ? matches[0] : undefined;
     const machine = normalizeMid(frame.machine);
     if (entry === undefined || !/^[0-9a-fA-F-]+$/.test(frame.machine) || machine.length !== 32 || entry.machine !== machine || entry.tool !== frame.tool) {
@@ -1369,8 +1390,8 @@ export class Broker {
     }
     star.roster.splice(star.roster.indexOf(entry), 1);
     const owner = star.online.get(entry.machine);
-    owner?.members?.delete(entry.sessionId);
-    if (owner !== undefined && owner !== session) this.send(owner.ws, { op: 'member-remove', target: entry.sessionId });
+    owner?.members?.delete(memberKey(entry));
+    if (owner !== undefined && owner !== session) this.send(owner.ws, { op: 'member-remove', target: entry.sessionId, tool: entry.tool, endpointType: entry.endpointType });
     if (!this.persistRoster(star)) {
       this.send(session.ws, { op: 'member-remove-exact-result', id: frame.id, ok: false, removed: true,
         code: 'PERSIST_FAILED', error: '册位内存已修改，但持久化未确认，请检查星册存储并重新读取核实' });
@@ -1403,6 +1424,7 @@ export class Broker {
       session.ws.close(4000, 'legacy client');
       return;
     }
+    session.caps = frame.caps;
     // 注册表每笔连接现读（文件小，不缓存）：gen/remove 即时生效。022：钥匙
     // 反查星籍——遍历托管星域的节点表，命中即连接绑星（同 broker 机多星同端口）。
     if (frame.admin === true) {
@@ -1649,6 +1671,7 @@ export class Broker {
           sessionId: e.sessionId,
           ...(e.name === undefined ? {} : { name: e.name }),
           ...(e.tool === undefined ? {} : { tool: e.tool }),
+          ...(e.endpointType === undefined ? {} : { endpointType: e.endpointType }),
           machine: e.machine,
           ...(e.machineName === undefined ? {} : { machineName: e.machineName }),
           ...(e.online === true ? { online: true } : {}),
@@ -1832,6 +1855,7 @@ export class Broker {
       if (result.op === 'detail' && entry.request.op === 'detail' && result.detail.item !== null) {
         const ref = result.detail.item.ref;
         if (ref.providerId !== entry.request.providerId || ref.nativeId !== entry.request.nativeId
+          || (entry.request.endpointType !== undefined && ref.endpointType !== entry.request.endpointType)
           || (ref.referenceKind ?? 'native') !== (entry.request.referenceKind ?? 'native')) throw new Error('wrong session');
       }
       const frame: DiscoverResultFrame = { op: 'discover-result', id: entry.requestId, ok: true, result };
@@ -1857,8 +1881,16 @@ export class Broker {
     };
     // 018：含冒号的目标先整段按机器名解析（零回归锚点：冒号机器名照旧机器级），
     // 失败再拆最后一段作会话名（机器段可含冒号，会话名聚合器侧已禁冒号）。
-    const resolved = target.includes(':') ? this.resolveTargetWithSession(target, star) : this.resolveTarget(target, star);
+    const selected = frame.tool === undefined ? undefined : parseToolType(frame.tool);
+    if (selected === undefined) return fail('USAGE', '会话投递必须明确登记的收件工具类型 tool，未执行投递');
+    const resolved = target.includes(':') ? this.resolveTargetWithSession(target, star, selected) : this.resolveTarget(target, star);
     if (resolved.kind === 'error') return fail(resolved.code, resolved.message);
+    if (resolved.kind === 'node' || resolved.kind === 'session') {
+      const node = this.sessionByWs(resolved.ws);
+      if ((sendRequiresEndpointTypes(frame) || (resolved.kind === 'session' && resolved.targetEndpointType !== undefined)) && !hasCap(node?.caps, CAP_ENDPOINT_TYPES)) {
+        return fail(ERR.BAD_PROTO, '目标节点不支持端点类型，已拒绝投递；升级目标 crosschat 后重试');
+      }
+    }
     if (resolved.kind === 'local') {
       // 目标是 broker 本机：本机投递处理器（B2 起 serve 接线真实现）。
       // F1：本机投递同带发送方 roster 真名——远端来件在 broker 机上的信封
@@ -1908,7 +1940,8 @@ export class Broker {
       to: frame.to,
       conversation: frame.conversation,
       origin: frame.origin,
-      ...(resolved.kind === 'session' ? { sessionId: resolved.sessionId } : {}),
+      tool: frame.tool,
+      ...(resolved.kind === 'session' ? { sessionId: resolved.sessionId, targetProviderId: resolved.targetProviderId, targetEndpointType: resolved.targetEndpointType } : {}),
     });
     const outcome = await waiting;
     if (sender.revoked) return;
@@ -2055,6 +2088,7 @@ export class Broker {
         sessionId: entry.sessionId,
         ...(entry.name === undefined ? {} : { name: entry.name }),
         ...(entry.tool === undefined ? {} : { tool: entry.tool }),
+        ...(entry.endpointType === undefined ? {} : { endpointType: entry.endpointType }),
         ...(entry.extendsName === undefined
           ? {}
           : { extends: entry.extendsMachine === undefined ? entry.extendsName : { machine: entry.extendsMachine, name: entry.extendsName } }),
@@ -2132,7 +2166,7 @@ export class Broker {
    * 会话段查该机器聚合器连接的成员表：命中→会话轨（sessionId 随 deliver 注入）；
    * 非成员→extends 指路或教学报错。alive-wins：活成员在则正常投递，extends 休眠。
    */
-  private resolveTargetWithSession(spec: string, star: StarState): ResolvedTarget {
+  private resolveTargetWithSession(spec: string, star: StarState, selected?: EndpointConstraint): ResolvedTarget {
     const whole = this.resolveTarget(spec, star);
     if (whole.kind !== 'error') return whole;
     const idx = spec.lastIndexOf(':');
@@ -2150,11 +2184,11 @@ export class Broker {
       if (conn === undefined) {
         return { kind: 'error', code: ERR.NOT_READY, message: 'broker 本机聚合器未挂——本机跑 crosschat serve（内挂）即可会话级投递' };
       }
-      return this.resolveSessionMember(conn, sessionName, star);
+      return this.resolveSessionMember(conn, sessionName, star, selected);
     }
     const conn = this.sessionByWs(machine.ws);
     if (conn === undefined) return machine; // 防御：解析出的 ws 不在会话表——按机器级走
-    return this.resolveSessionMember(conn, sessionName, star);
+    return this.resolveSessionMember(conn, sessionName, star, selected);
   }
 
   /**
@@ -2167,33 +2201,17 @@ export class Broker {
    * （册内在册未在线→SESSION_OFFLINE 教学，绝不静默改投）；册外无名照旧
    * SESSION_NOT_MEMBER。
    */
-  private resolveSessionMember(target: Session, sessionName: string, star: StarState): ResolvedTarget {
-    const members = [...target.members?.values() ?? []];
-    const declaredTools = new Set(members.flatMap((m) => (m.tool === undefined ? [] : [m.tool])));
+  private resolveSessionMember(target: Session, sessionName: string, star: StarState, selected?: EndpointConstraint): ResolvedTarget {
+    const compatible = (member: { tool?: string; endpointType?: string }, constraint?: EndpointConstraint): boolean => constraint === undefined
+      || (member.tool === constraint.providerId && (constraint.endpointType === undefined || member.endpointType === constraint.endpointType));
+    const members = [...target.members?.values() ?? []].filter((member) => compatible(member, selected));
     const machine = target.machineName ?? target.machineId?.slice(0, 8) ?? '?';
-    const hit = (m: SessionMemberDecl): ResolvedTarget => ({ kind: 'session', ws: target.ws, sessionId: m.sessionId });
-    // 1) 全串裸名精确（名字或全量会话 id——今日全量 id 寻址零回归）
-    const exact = members.filter((m) => m.name === sessionName || m.sessionId === sessionName);
+    const hit = (m: SessionMemberDecl): ResolvedTarget => ({ kind: 'session', ws: target.ws, sessionId: m.sessionId, targetProviderId: m.tool, targetEndpointType: m.endpointType });
+    // 完整原生 ID 优先；名称中的斜杠等字符仅作字面值，不解释为工具选择器。
+    const exactId = members.filter((m) => m.sessionId === sessionName);
+    const exact = exactId.length ? exactId : members.filter((m) => m.name === sessionName);
     if (exact.length === 1) return hit(exact[0]!);
     if (exact.length > 1) return this.sessionCollision(sessionName, exact, machine, star);
-    // 2) 限定词拆解（仅当命中该机已声明 tool 集；否则整体视为会话名，落到 3/4）
-    const slash = sessionName.indexOf('/');
-    if (slash > 0 && slash < sessionName.length - 1) {
-      const tool = sessionName.slice(0, slash).toLowerCase();
-      const rest = sessionName.slice(slash + 1);
-      if (declaredTools.has(tool)) {
-        const qualified = members.filter((m) => m.tool === tool && (m.name === rest || m.sessionId === rest));
-        if (qualified.length === 1) return hit(qualified[0]!);
-        if (qualified.length > 1) return this.sessionCollision(rest, qualified, machine, star);
-        const sup = this.extendsHit(tool, rest, star);
-        if (sup !== undefined) return sup;
-        return {
-          kind: 'error',
-          code: ERR.SESSION_NOT_MEMBER,
-          message: `会话 ${sessionName} 不是星成员——会话须经启动器入星（crosschat claude/codex --connect <星>）才能按名投递`,
-        };
-      }
-    }
     // 3) 会话 id 前缀（id8 短前缀寻址；多命中教加长——照机器段 mid8 规则）
     const idLike = sessionName.length >= 8 && /^[0-9a-fA-F-]+$/.test(sessionName);
     if (idLike) {
@@ -2206,12 +2224,12 @@ export class Broker {
       }
     }
     // 4) extends 旧名（roster 接任者优先——含 028 复活不夺回；裸名收全部血统）
-    const sup = this.extendsHit(undefined, sessionName, star);
+    const sup = this.extendsHit(selected?.providerId, sessionName, star, selected?.endpointType);
     if (sup !== undefined) return sup;
     // 5) 028 下线成员（该机在册、当前未在线）——报错等上线，绝不静默改投
     const down = star.roster.find(
-      (e) => e.machine === normalizeMid(target.machineId ?? '') && !e.online &&
-        (e.name === sessionName || (idLike && e.sessionId.toLowerCase().startsWith(sessionName.toLowerCase()))),
+      (e) => e.machine === normalizeMid(target.machineId ?? '') && !e.online && compatible(e, selected) &&
+        (e.name === sessionName || e.sessionId === sessionName || (idLike && e.sessionId.toLowerCase().startsWith(sessionName.toLowerCase()))),
     );
     if (down !== undefined) {
       return {
@@ -2227,11 +2245,7 @@ export class Broker {
     };
   }
 
-  /**
-   * 020 撞名错误构造：跨工具（全部带 tool 且 ≥2 种）列限定地址、教改投限定；
-   * 同工具同名或混老聚合器（无 tool）限定地址相同——列 id8 行、教 id 前缀照抄，
-   * 后者加"对端聚合器版本旧"升级教学。
-   */
+  /** 同类型重名列完整原生 ID，工具选择器始终独立于地址。 */
   private sessionCollision(
     name: string,
     hits: SessionMemberDecl[],
@@ -2239,20 +2253,12 @@ export class Broker {
     star: StarState,
   ): ResolvedTarget {
     const starName = star.name ?? '<星>';
-    const anyToolless = hits.some((h) => h.tool === undefined);
-    const distinctTools = new Set(hits.flatMap((h) => (h.tool === undefined ? [] : [h.tool])));
-    const qualifiedUnique = !anyToolless && distinctTools.size >= 2;
+    const selector = (member: SessionMemberDecl) => member.tool === undefined ? undefined : toolTypeFor(member.tool, member.endpointType);
     const lines = hits
-      .map((h) =>
-        qualifiedUnique
-          ? `  tcp:${starName}:${machine}:${h.tool}/${name}`
-          : `  ${h.tool === undefined ? '' : `${h.tool}/`}${name}(${h.sessionId.slice(0, 8)})`,
-      )
+      .map((h) => `  tcp:${starName}:${machine}:${h.sessionId} --tool ${selector(h) ?? '<待核实>'}`)
       .join('\n');
-    const teach = qualifiedUnique
-      ? '改投限定地址即可'
-      : `限定地址相同（${anyToolless ? '对端聚合器未声明 tool' : '同工具同名'}）——改投 id 前缀：tcp:${starName}:${machine}:<id 前 8 位>（括号内照抄）`;
-    const note = anyToolless ? '；部分成员未声明 tool——对端聚合器版本旧，升级后可用 工具/名 限定词消歧' : '';
+    const teach = '使用完整原生ID和独立的 --tool 选择收件类型';
+    const note = hits.some((h) => selector(h) === undefined) ? '；部分成员类型待核实，请升级或重新核验目标节点crosschat后刷新' : '';
     return {
       kind: 'error',
       code: ERR.NAME_COLLISION,
@@ -2261,17 +2267,17 @@ export class Broker {
   }
 
   /** extends 旧名命中（028 起查落盘 roster——接任随册持久；1 血统→SUPERSEDED 指路；多血统→碰撞列接任者地址）。 */
-  private extendsHit(tool: string | undefined, oldName: string, star: StarState): ResolvedTarget | undefined {
+  private extendsHit(tool: string | undefined, oldName: string, star: StarState, endpointType?: string): ResolvedTarget | undefined {
     const entries = star.roster.filter((e) => e.extendsName === oldName);
-    const hits = tool === undefined ? entries : entries.filter((e) => (e.tool ?? undefined) === tool);
+    const hits = tool === undefined ? entries : entries.filter((e) => e.tool === tool && (endpointType === undefined || e.endpointType === endpointType));
     if (hits.length === 0) return undefined;
     if (hits.length === 1) return this.superseded(oldName, hits[0]!, star);
     const starName = star.name ?? '<星>';
     const lines = hits
       .map((e) => {
         const m = e.machineName ?? e.machine.slice(0, 8);
-        const n = e.name ?? e.sessionId.slice(0, 8);
-        return `  tcp:${starName}:${m}:${e.tool === undefined ? '' : `${e.tool}/`}${n}`;
+        const n = e.sessionId;
+        return `  tcp:${starName}:${m}:${n} --tool ${e.tool === undefined ? '<待核实>' : toolTypeFor(e.tool, e.endpointType) ?? '<待核实>'}`;
       })
       .join('\n');
     return {
@@ -2281,15 +2287,15 @@ export class Broker {
     };
   }
 
-  /** SESSION_SUPERSEDED 指路（020：接任者带工具限定词；无 tool 同旧形态）。 */
+  /** SESSION_SUPERSEDED 指路使用完整原生 ID 和独立工具类型。 */
   private superseded(oldName: string, entry: RosterEntry, star: StarState): ResolvedTarget {
     const succMachine = entry.machineName ?? entry.machine.slice(0, 8);
-    const succName = entry.name ?? entry.sessionId.slice(0, 8);
-    const succTool = entry.tool === undefined ? '' : `${entry.tool}/`;
+    const succName = entry.sessionId;
+    const succTool = entry.tool === undefined ? undefined : toolTypeFor(entry.tool, entry.endpointType);
     return {
       kind: 'error',
       code: ERR.SESSION_SUPERSEDED,
-      message: `会话 ${oldName} 已由 ${succMachine}:${succTool}${succName} 接续——改投接任者 tcp:${star.name ?? '<星>'}:${succMachine}:${succTool}${succName}`,
+      message: `会话 ${oldName} 已由 ${succMachine}:${succName} 接续——改投接任者 tcp:${star.name ?? '<星>'}:${succMachine}:${succName} --tool ${succTool ?? '<待核实>'}`,
     };
   }
 

@@ -1,0 +1,37 @@
+{
+  "recordedAt": "2026-10-28T08:47:39.842Z",
+  "task": "C14",
+  "native": {
+    "classification": {
+      "kind": "compatible",
+      "notify": false
+    },
+    "installationCleanup": "removed",
+    "baseline": {
+      "runtimeStopped": true,
+      "registrationRemoved": true,
+      "removed": true,
+      "forced": false
+    },
+    "candidate": {
+      "runtimeStopped": true,
+      "registrationRemoved": true,
+      "removed": true,
+      "forced": false
+    }
+  },
+  "ownedDownloadCache": {
+    "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-c14-native-dsh-20261028",
+    "exists": true,
+    "contains": "npm-cache and ownership.json; no installed runtime",
+    "cleanup": "rejected by automatic approval review",
+    "reason": "blocked by policy",
+    "disposition": "retained for user-approved final D-drive cleanup; no alternate deletion attempted"
+  },
+  "terminalTemporaryRoot": {
+    "path": "C:/Users/YANGSH~1/AppData/Local/Temp/crosschat-c14-tui-33DkGy",
+    "exists": false
+  },
+  "globalSoftwareInstalled": false,
+  "productionConfigurationChanged": false
+}

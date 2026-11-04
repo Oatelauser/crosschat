@@ -1,6 +1,8 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { drainOutboxAtEntry, parseSendArgs, parseStatusArgs } from '../src/cli.js';
 import { outboxCount, park } from '../src/outbox.js';
@@ -20,14 +22,16 @@ function expectUsage(fn: () => unknown, needle: string): void {
 
 describe('parseSendArgs', () => {
   it('parses space-separated values', () => {
-    expect(parseSendArgs(['--to', 'alpha', '--body', 'hello there'])).toEqual({
+    expect(parseSendArgs(['--tool', 'claude', '--to', 'alpha', '--body', 'hello there'])).toEqual({
+      tool: 'claude',
       to: 'alpha',
       bodyArg: 'hello there',
     });
   });
 
   it('parses --opt=value forms', () => {
-    expect(parseSendArgs(['--to=alpha', '--body=hi', '--conversation=mc1_x'])).toEqual({
+    expect(parseSendArgs(['--tool=claude', '--to=alpha', '--body=hi', '--conversation=mc1_x'])).toEqual({
+      tool: 'claude',
       to: 'alpha',
       bodyArg: 'hi',
       conversation: 'mc1_x',
@@ -35,16 +39,16 @@ describe('parseSendArgs', () => {
   });
 
   it('parses --json as a flag', () => {
-    expect(parseSendArgs(['--json'])).toEqual({ json: true });
-    expect(parseSendArgs(['--to', 'a', '--json'])).toEqual({ to: 'a', json: true });
+    expect(parseSendArgs(['--tool', 'claude', '--json'])).toEqual({ tool: 'claude', json: true });
+    expect(parseSendArgs(['--tool', 'claude', '--to', 'a', '--json'])).toEqual({ tool: 'claude', to: 'a', json: true });
   });
 
   it('keeps the last value when an option repeats', () => {
-    expect(parseSendArgs(['--to', 'a', '--to', 'b'])).toEqual({ to: 'b' });
+    expect(parseSendArgs(['--tool', 'claude', '--to', 'a', '--to', 'b'])).toEqual({ tool: 'claude', to: 'b' });
   });
 
   it('accepts an empty --body value (runtime rejects it as BODY_REQUIRED)', () => {
-    expect(parseSendArgs(['--to', 'a', '--body='])).toEqual({ to: 'a', bodyArg: '' });
+    expect(parseSendArgs(['--tool', 'claude', '--to', 'a', '--body='])).toEqual({ tool: 'claude', to: 'a', bodyArg: '' });
   });
 
   it('rejects unknown options, missing values, and positionals', () => {
@@ -57,12 +61,14 @@ describe('parseSendArgs', () => {
 
   it('parses --max-body-kb / --max-turn as raw strings (space and = forms)', () => {
     // 数值校验在 limits.ts（非法静默降级），解析层只留原文。
-    expect(parseSendArgs(['--to', 'a', '--max-body-kb', '32', '--max-turn', '40'])).toEqual({
+    expect(parseSendArgs(['--tool', 'claude', '--to', 'a', '--max-body-kb', '32', '--max-turn', '40'])).toEqual({
+      tool: 'claude',
       to: 'a',
       maxBodyKb: '32',
       maxTurn: '40',
     });
-    expect(parseSendArgs(['--max-body-kb=64', '--max-turn=60'])).toEqual({
+    expect(parseSendArgs(['--tool=claude', '--max-body-kb=64', '--max-turn=60'])).toEqual({
+      tool: 'claude',
       maxBodyKb: '64',
       maxTurn: '60',
     });
@@ -193,5 +199,33 @@ describe('drainOutboxAtEntry', () => {
     });
     expect(lines).toEqual(['outbox: 线程 t-cli-dead 已不存在，丢弃 2 条暂存消息']);
     expect(existsSync(join(outboxDir, 't-cli-dead.json'))).toBe(false);
+  });
+});
+
+describe('usage help scope', () => {
+  const cliPath = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
+  function help(): string {
+    const out = spawnSync(process.execPath, [cliPath, '--help'], { encoding: 'utf8' });
+    expect(out.status).toBe(0);
+    return out.stdout;
+  }
+  function section(text: string, command: string, next: string): string {
+    const from = text.indexOf(`\n  ${command}`);
+    const to = text.indexOf(`\n  ${next}`, from);
+    expect(from).toBeGreaterThanOrEqual(0);
+    expect(to).toBeGreaterThan(from);
+    return text.slice(from, to).replace(/\s+/g, ' ');
+  }
+  it('describes install-skills as Claude, Codex and Harness with its roots', () => {
+    const install = section(help(), 'install-skills', 'clean [--force]');
+    expect(install).toContain('Claude, Codex and Harness');
+    expect(install).toContain('DSH_HOME');
+    expect(install).toContain('--dir');
+  });
+  it('describes uninstall as removing all three skill copies', () => {
+    const uninstall = section(help(), 'uninstall [--yes]', 'claude [any native args]');
+    expect(uninstall).toContain('Claude, Codex and Harness');
+    expect(uninstall).toContain('DSH_HOME');
+    expect(uninstall).not.toContain('both agent skills');
   });
 });

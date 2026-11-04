@@ -1,0 +1,2110 @@
+diff --cc CHANGELOG.md
+index 5e6efad,59e57aa..0000000
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@@ -4,7 -4,85 +4,89 @@@
+  
+  ## [Unreleased]
+  
+++<<<<<<< HEAD
+ +- 会话短柄改为固定五字符 `cA000`～`cZ999`，保留最近 1000 次分配窗口及每对端点 LRU8；同一对话往返复用，耗尽或状态无法安全读写时回退完整引用。进度复用现有分片，普通清理保留最高进度；强清/手动删除状态会重置编号。旧数字柄已停用，旧全局会话文件不再读取；完整 `mc1_` / `mc2_` 引用继续支持。
+++=======
++ ## [1.13.1] - 2026-10-27
++ 
++ ### 修复
++ 
++ - 同步打包 skill 的星成员指引与 1.13.0 行为：启动器跟随首条输入与 `/resume`；直接原生/桌面/Web 由 TUI 选择，裸 `/resume` 不自动归队。
++ - 补齐 `--rm` 保护已有永久成员、多窗口释放、守护重启、TUI 入星/删册及改名能力说明；移除用 id8 绕过下线状态的错误指引。产品实现与 1.13.0 相同。
++ 
++ ## [1.13.0] - 2026-10-27
++ 
++ ### 会话选择与入星
++ 
++ - 同目录启动多个匿名 Claude 会话时，按各窗口所属原生会话独立入星、收发和退出，避免差分发现把其他窗口的会话认作自己。
++ - 通过 `crosschat claude/codex --connect <星>` 启动后，空白窗口先等待，首条输入或确认 `/resume` 后跟随完整会话 ID 入星。切换 A→B 只释放当前窗口对 A 的声明，其他窗口独立工作。
++ - `--rm` 两种参数顺序等效；仅将新成员设为临时，最后一个窗口释放后删册，不能悄悄改变已有永久成员。永久成员退出后保留册位。
++ - 统一恢复入口：直接运行原生工具、桌面/Web 时由 TUI 明确选择会话入星；裸 `/resume` 不自动恢复星内在线声明。node 重启后永久册位保留，存活启动器重声明当前选择，手动成员由 TUI 或显式 adopt 恢复。
++ 
++ ### TUI 成员管理与改名
++ 
++ - 可在指定 node 的发现会话列表选择具体会话入星，并实时查询、删除星籍；手动入星为永久成员，删除星籍不结束原生聊天。
++ - 新增可扩展的原生操作接口，按实际来源核验能力并定时刷新。Codex CLI 已接入原生改名，核对同一 profile、已加载会话与 owner 后写入，再验证原生名称、星册及路由同步；协议基线为 0.163.0。
++ - Claude 官方 SDK 尚不能同步活窗口与通信名称，Codex 桌面版当前协同接口未提供改名入口，TUI 对这两类来源禁用改名并说明原因；不增加星内别名。
++ 
++ ### 启动诊断与升级
++ 
++ - 移除容易被误认为报错的“attach 自动，异常见日志”正常提示。真正入星失败时直接显示具体原因与完整日志路径，正常连接确认仍写入日志。
++ - 保留 1.12.0 的 POSIX 进程组回收和 macOS 测试修复；仅纳入本聊天的实现与验收材料，未增加 OpenCode、DSH 或其他工具适配。
++ - Node.js 仍要求 >=22。更新后需重启现有 broker/node 服务；本轮成员选择与管理协议要求相关端使用新版，不增加旧端降级。完整范围与检查见 `docs/development/release-1.13.0.md`。
++ 
++ ## [1.12.0] - 2026-10-23
++ 
++ ### 修复
++ 
++ - 修复POSIX服务辅助进程组的回收竞态：取消、超时或完成后，在同一有界预算内等待owner退出及整个组消失；清理失败返回明确错误，不把owner退出当成全部后代已回收。Windows停机行为和外部服务停止策略保持。
++ - 修复macOS两组双星测试的临时socket路径过长问题，增加Unix路径预算检查，并在失败时释放joiner，避免后续测试被遗留监督链干扰。
++ 
++ ### TUI 工作区与操作
++ 
++ - `ctx` 改为全局只读看板，新增独立 `:local`、`:ssh`、`:tcp` 工作区；TCP 支持选择本机 broker 或远程星连接，再次进入恢复上次目标的星列表。
++ - 进入星默认成员列表，`1/2/3` 切换成员、机器节点与完整发现会话。列表直接提供管理动作，详情保持只读；发节点钥、发管理钥及撤销凭证无需先进入凭证列表。
++ - 新增 CC 紧凑标识、资源关键按键与完整帮助、限宽主表及独立筛选行。跨星历史返回重新核验角色，核验中禁写，失败或取消明确显示上次身份。
++ 
++ ### TCP 与 SSH
++ 
++ - 删除节点原子核对本星该机器的全部绑定节点凭证并立即断开对应连接，保留永久成员册、原生会话及其他星。
++ - 在线远程修改节点当前星名称，写入对端 `brokers[].showName`；保存与运行生效均收到确认后才报告完成。全局默认和其他星保持，失联结果不明时不自动重发。
++ - TCP 保存连接支持导入、编辑和移除，最后一项移除保留合法空配置；星列表可直接精确起停所属整个 broker。
++ - SSH 支持 TUI 受管连接增删改、遮蔽密码/私钥口令、活动连接内存复用和首次完整主机指纹确认；已知指纹变化拒绝。外部 SSH Host 继续只读，秘密不写入配置、日志、argv 或环境变量。
++ 
++ ### 发布范围
++ 
++ - 保留 1.11.0 及上述已验收 macOS 修复，只新增本轮 TUI 改动；其他会话的 OpenCode、DSH、Claude 兼容性工作及未提交 README/研究文件未纳入。
++ - 维护边界测试改用虚拟文件夹具，严格验证枚举上限及句柄回收，避免重复真实磁盘访问造成并发超时；产品检查、超时和跳过规则保持。
++ - Node.js 仍要求 >=22。远程节点改名需要两端新版，不提供旧端降级；仅运行 Claude Code 的远端无需安装 Codex。范围与验收见 `docs/development/release-1.12.0.md`。
++ 
++ ## [1.11.0] - 2026-10-23
++ 
++ ### 终端管理界面
++ 
++ - 新增 `crosschat tui`，从连接上下文 `ctx` 进入本机、已有 SSH Host 或 TCP 星。命令栏同时支持资源补全与筛选；列表限宽，详情保留完整身份，状态显示中文与原值，帮助和操作键共用资源登记。
++ - 本机可浏览会话（含匿名）、状态、体检、通信对、暂存、日志、服务、文件及维护；SSH 提供真实远端发现与逐项体检；TCP 提供星、机器、全星/单机两种会话范围、成员及凭证元数据。增删改从对应资源列表确认，详情只读。
++ - 管理确认绑定完整目标、权限和影响版本；变化即拒绝，结果不明不自动重放。秘密配置仅在显式发钥结果展示，支持复制与清屏退出。TUI 不代替 Claude Code/Codex 原生聊天，也不接管原生会话生命周期；OpenCode、zcode 尚未接入。
++ 
++ ### 完整发现与精确管理
++ 
++ - 新增只读 `crosschat discover` JSON 接口与 `crosschat doctor --json`；本机、SSH、TCP 共用可扩展 Provider 和应用接口，保留完整引用、匿名条目、分页、来源错误、部分结果和取消状态。原 CLI 默认扫描范围及无参 doctor 文本、规则和退出码保持。
++ - 新增按完整会话引用精确收编、broker 原子精确删册；会话同名、匿名或目标变化不再依赖名字/前缀回落。
++ - 新增本星只读快照，提供完整机器身份、连接、成员与凭证元数据；新快照不返回钥匙且不写管理审计，原 list 读取审计保持。删节点、吊管理钥及删星在删除同一步核对确认版本，目标替换或影响变化时拒绝；管理审计追加完整 starId。
++ - 撤节点、吊管理钥立即关闭对应已有连接；明确撤权后暂停该星自动重连/拉起，保留会话与配置，更新凭证后显式恢复。普通断网继续使用原退避重连。
++ 
++ ### 原生投递与核心结构
++ 
++ - 新增逐条 `--delivery queue|steer`，默认 `queue`：忙时等待原任务结束；`steer` 忙时追加当前任务、空闲时唤醒。Desktop 连接原生 owner，CLI 使用 app-server；不明写入不自动重放，回执区分受理、暂存和确认。
++ - 配置、只读查询、诊断、服务/维护、发现、投递与管理应用层解耦，CLI/TUI 共用结构化接口，Provider 差异留在适配层，并增加类型规范与运行时依赖方向检查。
++ - 修复发现范围丢失离线册位、TCP 失联空页指引不可达、精确成员管理 IPv6 地址、服务/诊断取消回收及维护目标核验等边界。
++ 
++ ### 升级与验证
++ 
++ - Node.js 最低要求仍为 22。本轮直接升级，相关远端发现/快照接口要求两端使用新版，不提供旧端降级。更新安装与 skill 后重启已有常驻服务；无需在仅运行 Claude Code 的节点安装 Codex。
++ - 隔离验收 1657 项通过、11 项既有跳过，16 场 Windows ConPTY 通过；真实 Linux SSH/TCP（经 SSH 隧道）及 Windows 默认 TUI 主链通过。公网 TCP 直连、真实非空远端会话及 macOS live 未覆盖，详见 `docs/development/tui-remote-validation-20261023.md`。
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  
+  ## [1.10.0] - 2026-10-21
+  
+diff --cc README.md
+index d718d25,1b25f90..0000000
+--- a/README.md
++++ b/README.md
+@@@ -187,9 -167,9 +187,15 @@@ crosschat send --via tcp:<星>:<机器>
+                        └───────────────────── tcp 通道
+  ```
+  
+++<<<<<<< HEAD
+ +- 三段形态**免 `--to`、必填 `--tool`**（会话段就是收件人）；回信照抄信封中的完整 reply-hint
+ +- 同机同名按 `--tool claude`、`--tool codex-cli`、`--tool codex-desktop` 等选择；所选类型内仍重名时用完整原生 ID。完整 ID 优先于另一会话的同形名称。`<工具>/<会话>` 不再作发送选型语法，斜杠属于名称/ID 原值
+ +- 非成员名 → `SESSION_NOT_MEMBER`（教学入星）；在册但下线 → `SESSION_OFFLINE`（通过启动器 `/resume` 或 TUI 选择恢复，也可 extends 接任）；死名有接任者 → `SESSION_SUPERSEDED`（报错给出接任者的完整 ID 地址和独立 `--tool`，改投即可）；旧名还活着 → alive-wins，照投旧会话本尊
+++=======
++ - 三段形态**免 `--to`**（会话段就是收件人）；回信照旧走信封 reply-hint，零配置
++ - 同机 claude/codex 同名（多适配器常态）会话段带工具限定词消歧：`tcp:<星>:<机器>:claude/<名>` 与 `…:codex/<名>` 各达各的；裸名唯一照旧可用（撞名报 `NAME_COLLISION` 列全部限定地址，同工具同名改列 id8 投短前缀）
++ - 非成员名 → `SESSION_NOT_MEMBER`（教学入星）；在册但下线 → `SESSION_OFFLINE`（通过启动器 `/resume` 或 TUI 选择恢复，也可 extends 接任；id8 寻址同样需要成员在线）；死名有接任者 → `SESSION_SUPERSEDED`（报错给出接任者的三段地址——带工具限定词，改投即可）；旧名还活着 → alive-wins，照投旧会话本尊
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  
+  ### adopt 收编（会话活着但不在星里）
+  
+@@@ -231,14 -211,17 +237,27 @@@ ssh 配置方向一句话：**每台机
+  
+  完整参数、启动器与环境变量说明见 [命令手册](docs/commands.md)。
+  
++ 运行 `crosschat tui` 可从连接上下文进入本机、SSH 或 TCP 资源，使用命令补全、筛选、只读详情和列表管理操作；布局及完整按键见 [终端界面](docs/tui.md)。原生聊天仍在 Claude Code/Codex 中进行。
++ 
+  ```
+++<<<<<<< HEAD
+ +crosschat send --to <名字或完整ID> --tool <收件类型> --body "<正文>" # 新消息（目标有空格或特殊字符时按 shell 规则引用）
+ +crosschat send --to <名字或完整ID> --tool <收件类型> --delivery steer --body "<追加内容>" # 忙时追加当前任务，空闲时唤醒
+ +crosschat send --conversation <ref|c柄> --tool <收件类型> --body "<正文>" # 回复（照抄信封里的完整命令）
+ +crosschat send --via ssh:<对端hostname> --to <名或完整ID> --tool <收件类型> --body "…" # 跨机发送
+ +crosschat send --via tcp:<星>:<机器>:<会话> --tool <收件类型> --body "…" # tcp 三段直达星成员（免 --to）
+ +crosschat send --via tcp:<星>:<机器>:<会话> --tool <收件类型> --file <路径> # tcp 文件与会话通知；正文自动生成"已送达"
+ +echo … | crosschat send --to <名字或完整ID> --tool <收件类型> # 正文走 stdin
+++=======
++ crosschat tui                                       # 终端管理界面：本机 / SSH / TCP
++ crosschat send --to <名字> --body "<正文>"          # 新消息（名字含空格加引号；未命名 codex 线程可用 id8 或完整 id 寻址，status 可见）
++ crosschat send --to <名字> --delivery steer --body "<追加内容>" # 忙时追加当前任务，空闲时唤醒
++ crosschat send --conversation <ref|c柄> --body "<正文>" # 回复（照抄信封里的命令或 delivered 行尾的 cN）
++ crosschat send --via ssh:<对端hostname> --to <名/id8> --body "…"  # 跨机发送（见 📡 通信方式）
++ crosschat send --via tcp:<星>:<机器>:<会话> --body "…"   # tcp 三段直达星成员（免 --to；见跨机通信手册）
++ crosschat send --via tcp:<机器名/mid8> --to <名> --file <路径>  # tcp 文件通道（机器级；正文自动生成"已送达"）
++ echo … | crosschat send --to <名字>                 # 正文走 stdin
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  crosschat status [--json] [--conversations] [--stars] [--claude|--codex] [--name <子串>] [--all]   # 裸跑三段式摘要；旗标在场=明细视图（--via tcp|ssh 配 --conversations 按传输滤）
+  crosschat discover                                  # 新只读JSON发现；stdin可传list/detail请求，包含匿名/完整ID/分页，不补投
+  crosschat doctor                                    # 一键环境体检（有 ❌ 时退出码 1）
+diff --cc docs/development/session-selection-membership-design-20261026.md
+index 4a987dc,74a2139..0000000
+--- a/docs/development/session-selection-membership-design-20261026.md
++++ b/docs/development/session-selection-membership-design-20261026.md
+@@@ -150,8 -150,8 +150,13 @@@ Provider 以稳定 `providerId` 注册�
+  
+  - [Claude Hooks](https://code.claude.com/docs/en/hooks.md)、[单次 settings](https://code.claude.com/docs/en/settings.md)。
+  - [Codex Hooks](https://developers.openai.com/codex/hooks)、[配置参考](https://developers.openai.com/codex/config-reference)、[App Server](https://developers.openai.com/codex/app-server)。协议具有某个方法不等于能观察任意已有窗口。
+++<<<<<<< HEAD
+ +- [OpenCode V2 调研](../research/crosschat-opencode-integration-20261022.md)、[桌面窗口与 active 的区别](../research/opencode-desktop-runtime-20261023.md)。
+ +- [Harness 调研](../research/crosschat-deepseek-harness-integration-20261022.md)、[固定上游 Agent API](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/core/agent/README.md)。本轮重新读取该 README，确认 create/resume 与 agent 事件依据；这些不证明 UI 当前选择。
+++=======
++ - OpenCode V2、桌面窗口与 active 区别的调研材料归已交接的后续适配聊天，本次发布不纳入。
++ - Harness 的[固定上游 Agent API](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/core/agent/README.md)。本轮重新读取该 README，确认 create/resume 与 agent 事件依据；这些不证明 UI 当前选择。其余调研材料归后续适配聊天。
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  
+  ## 非侵入式改名的可行性
+  
+diff --cc docs/development/tui-progress.md
+index 62e46b9,53be9c9..0000000
+--- a/docs/development/tui-progress.md
++++ b/docs/development/tui-progress.md
+@@@ -4,14 -4,13 +4,18 @@@
+  
+  ## 当前授权与下一步
+  
+++<<<<<<< HEAD
+ +- 2026-10-28（用户端时间）用户在全量任务重排后要求“开始下一个任务”，C14按[已批准收敛稿](c14-explicit-tool-design-20261028.md)恢复整改。本轮公共整改最终`npm run check`2416通过/11原有跳过，202模块/677边；Windows ConPTY三场、Harness正式npm/Web来源两轮通过。send各路入口必填独立收件tool、旧前缀作原值、Q8及来源待核实边界、完整命令复制和技能教学已接通；来源确认公共机制不等于各原生入口已经支持一次确认长期复用，C14整体仍保留。新[实施与续接记录](c14-explicit-tool-validation-20261028.md)保存结果、未完入口和清理边界；[旧技术验证](tool-type-validation-20261028.md)仅作历史。全量25项及所有CI待办继续见[任务总表](tool-compatibility-ci-tasks.md)。本轮不启动成员增强，不发布或全局安装，混合工作区改动保留。
+ +
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  - 2026-10-27 原生改名补验完成：[实际能力与证据](native-rename-validation-20261027.md)。Codex CLI 已接入并通过真实 TUI、同一原生 owner/窗口、星册和改名后寻址验证；Claude SDK 持久标题修改未同步活窗口，Desktop 当前协同端点无改名入口，两者按批准的条件能力规则禁用并说明。最终 `npm run check` 2137通过/11原有跳过，194模块/611边；此前仅通用接口就宣布三家收尾过早的结论已更正。活动记录及引用清除，证据保留；没有剩余本轮必需开发/验收项。未提交、发布或全局安装。
+  - 2026-10-27 会话选择与成员管理已完成开发验收：[批准设计](session-selection-membership-design-20261026.md)、[完整验证与能力边界](session-selection-membership-validation-20261026.md)。最终 `npm run check` 2130通过/11跳过，192模块/602边；Claude/Codex真实受控选择及最终构建TUI四场通过，暂停后的文档统一与审阅完成，本轮没有剩余活动任务。统一规则为crosschat启动器跟随首条输入与 `/resume`，直接原生/桌面/Web由TUI选择，所有工具取消裸resume自动归队，永久册位保留。原生改名未核实则禁用；其他工具适配仍归已交接的后续计划。未提交、发布或全局安装；工作区混有其他聊天修改，必须保留。
+  - 2026-10-23 用户批准的新版工作区改造已完成验收：ctx 只读看板、独立 local/ssh/tcp 工作区、star 三视图和列表直接动作、CC 布局；整机原子删除、在线远程修改对端本星节点名、SSH 受管连接/临时认证/指纹确认及 TCP 配置 CRUD。当前规格见[工作区规格](tui-workspace-spec.md)，结果及验证边界见[本轮验收](tui-workspace-validation-20261023.md)，[改造记录](tui-workspace-progress.md)中的已验收活动任务已删除。2041 项通过/11 原有跳过，Windows 终端16场及本机原生 SSH 8项通过。本节之后旧验收记录保留为历史；本轮不恢复生产远端验收或发布。
+  - 用户已明确“开始实现T06”，并要求正常开发流程，不赶时间/进度。该项已于2026-10-22完成验收并删除。
+ -- 各批TUI资源及T14隔离整体开发验收均已完成，最后活动清单已删除。用户于2026-10-23恢复真实SSH/TCP远端补验，剩余检查已通过；范围、环境限制及本机测试凭证清理被自动审批阻断的记录见[真实远端验收](tui-remote-validation-20261023.md)。远端临时目录/服务及隧道已清除；禁止在远端安装Codex，现有Claude Code与生产crosschat保持原状。正常流程、不赶时间，现有功能变化先确认。
+ +- 各批TUI资源及T14隔离整体开发验收均已完成，最后活动清单已删除。用户于2026-10-23恢复真实SSH/TCP远端补验，剩余检查已通过；范围、环境限制及清理历史见[真实远端验收](tui-remote-validation-20261023.md)。17:01 本机只读复核确认原私有临时根已不存在，旧本机凭证残留关闭；不恢复远端验证。远端临时目录/服务及隧道已清除；禁止在远端安装Codex，现有Claude Code与生产crosschat保持原状。正常流程、不赶时间，现有功能变化先确认。
+  - 本轮明确批准：新增doctor --json供SSH逐项诊断；无参doctor输出/检查/严重度/退出码保持，远端失败不回落本机，不做混版降级。
++ - 1.11.0发布后的macOS三项CI失败修复与后续验收见[macOS CI记录](macos-ci-validation-20261023.md)：两项为测试socket路径过长，一项为POSIX辅助进程组回收竞态；不修改IPC命名、CLI或外部服务停止策略。
+  - 两项明确获批功能扩展：按完整SessionRef精确收编；broker原子核对完整ID/机器/工具的精确删册，目标变化即拒绝，保留原CLI选择器/权限，不做旧端兼容或降级。
+  - TCP三项明确获批并已验收：本星只读快照、原子版本删除、审计追加完整starIds。长期合同见[TCP规格](tui-tcp-spec.md)，证据见[TCP验收](tui-tcp-validation-20261022.md)。
+  - 读取顺序：本记录 → [最终验收](tui-final-validation-20261022.md) → [代码规范](code-standards.md) → 需要变更资源的长期规格及分批验收。历史“等待后续任务”描述仅记录当时状态，当前以本节为准。
+diff --cc docs/development/tui-workspace-progress.md
+index 1275bf7,e704f21..0000000
+--- a/docs/development/tui-workspace-progress.md
++++ b/docs/development/tui-workspace-progress.md
+@@@ -1,14 -1,14 +1,25 @@@
+  # TUI 工作区改造记录
+  
+++<<<<<<< HEAD
+ +当前用户实测反馈正在收集：见[待评估反馈](tui-testing-feedback.md)。先记录，待测试完成后统一评估；取得用户明确“开始”指令后实施。以下为上一轮已完成记录。
+ +
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  2026-10-23。本轮已完成开发验收，活动任务及依赖引用已删除。分支 `codex/tui-workspaces`，独立工作树 `D:/workspace/CC/multichat-tui-workspaces`，基线 `4239960`。原工作区其他会话的未提交 README/research 修改保留；root 唯一 stage/commit。
+  
+  批准范围见 [工作区规格](tui-workspace-spec.md)。用户已授权全部实施，正常开发、不赶时间；范围外功能变化先确认。不发布、不部署、不访问真实用户会话/秘密、不恢复远端验收。
+  
+++<<<<<<< HEAD
+ +## 上一轮验收状态
+ +
+ +上一轮批准范围全部实施并通过验收，活动任务已删除。完整交付、独立复核、失效回归和证据边界见[本轮验收](tui-workspace-validation-20261023.md)。使用入口见[终端界面](../tui.md)，各资源操作见[完整按键表](tui-workspace-keys.md)。后续用户测试反馈以本页顶部链接的等待清单为准。
+++=======
++ 后续授权：用户于 2026-10-23 明确要求发布新版本、只提交自身改动，并清理任务垃圾/临时文件。按此整理独立 1.12.0 发布分支，见[发布记录](release-1.12.0.md)；原开发阶段“不发布”的范围在此被用户更新，生产远端验收不恢复。
++ 
++ ## 当前状态
++ 
++ 已批准范围全部实施并通过验收，无待拍板事项。完整交付、独立复核、失效回归和证据边界见[本轮验收](tui-workspace-validation-20261023.md)。使用入口见[终端界面](../tui.md)，各资源操作见[完整按键表](tui-workspace-keys.md)。没有新活动任务，不恢复生产远端测试，不发布。
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  
+  ## 实施时的共享接缝
+  
+diff --cc docs/development/tui-workspace-validation-20261023.md
+index 10a6851,0da32a0..0000000
+--- a/docs/development/tui-workspace-validation-20261023.md
++++ b/docs/development/tui-workspace-validation-20261023.md
+@@@ -2,6 -2,8 +2,11 @@@
+  
+  2026-10-23。用户完成界面与能力访谈并明确批准实施，范围以[工作区规格](tui-workspace-spec.md)为准。本轮开发验收完成，无待拍板事项。已验收活动任务及依赖引用删除；长期规格、协议合同和验证证据保留。
+  
+++<<<<<<< HEAD
+++=======
++ 发布范围补充：本记录的 2041 项是原开发分支的组合验收，该分支同时包含其他会话的工具接入。用户随后要求只发布自身改动，因此 1.12.0 从已发布 1.11.0 与已验收 macOS 修复重新整理本轮 TUI，未纳入其他工具工作；正式发布版本的独立检查以[1.12.0 发布记录](release-1.12.0.md)为准。
++ 
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  ## 已交付行为
+  
+  | 范围 | 验收结果 |
+@@@ -24,7 -26,7 +29,11 @@@
+  - TUI 规格复核实际复跑 8 文件 85 项，发现跨星历史返回仍把旧身份标已核验。补成功、失败、取消与界面标记回归后，相关 6 文件 81 项通过，独立复核 2 文件 18 项通过。没有后端权限绕过；现已在返回时重新读取，核验期间禁写，失败/取消标上次身份并禁写。
+  - 全量检查暴露既有可执行 ESM 脚本的 Windows CRLF 导入问题，最小修复仅 `.gitattributes` 的 `scripts/*.mjs text eol=lf`，没有脚本业务改动、插件、依赖补丁或 skip；见[换行证据](tui-script-line-endings-validation-20261023.md)。
+  - 独立工作树起点含另一会话 DSH 功能的 RED stub；通过 `30b8a6d` 合并原仓库已提交 `e928f82` 纳入该会话 GREEN，没有代做 DSH 或复制未提交文件。DSH/OpenCode 两套标准检查 27 项通过。
+++<<<<<<< HEAD
+ +- 并行检查还复现了既有桌面测试工装的 CIM 快照竞态：无关短路径临时进程在采样后退出并删除文件。只在路径 ENOENT 且对应 PID 明确 ESRCH 时忽略过期记录，存活或权限不明仍拒绝清理；原真实 occupied/clear 断言保持。新增 3 边界及原 suite 共 16 项通过，见[快照证据](desktop-process-snapshot-race-validation-20261023.md)。原首次失败日志未保留 unknown.error，不追认其唯一原因。
+++=======
++ - 原组合开发分支还复现并修复其他会话桌面测试工装的 CIM 快照竞态；原真实 occupied/clear 断言保持，新增 3 边界及原 suite 共 16 项通过（检查点 `8dfffc8`、`f9519f2`）。该他人工装与对应修复不属于干净 1.12.0 发布范围。原首次失败日志未保留 unknown.error，不追认其唯一原因。
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  
+  ## 最终仓库检查
+  
+@@@ -45,6 -47,8 +54,11 @@@
+  
+  以下目录均位于 `C:/Users/YANGSH~1/AppData/Local/Temp/`，含业务 JSONL 与 PTY 原始记录：
+  
+++<<<<<<< HEAD
+++=======
++ 用户要求清理后，23 个本轮终端临时目录及 6 份日志已完整归档至 `C:/Users/yangsheng/.codex/artifacts/crosschat/tui-workspaces-20261023/validation-evidence.zip`，同目录 `manifest.json` 记录全部 180 文件的长度与 SHA256；逐文件解压验证通过。归档 SHA256：`ae6035e8d4676595160a8109d1ceb1d82c50dddda04502243bacdb46a2a51531`。下表保留原始证据位置作为档案索引；自动审批拒绝了批量递归删除及单个日志删除（均为 blocked by policy），原临时文件尚未删除。
++ 
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  | 组别 | 场景数 | 完整首轮证据目录 |
+  |---|---:|---|
+  | 外壳 | 3 | crosschat-tui-validation-Cp2AT7 |
+@@@ -65,6 -69,4 +79,10 @@@
+  
+  ## 集成与收尾
+  
+++<<<<<<< HEAD
+ +本轮实现、规范检查、独立复核、隔离真实协议、原生 SSH 和终端验收已完成，活动任务清单删除。已通过 `56fd442` 合并至 `D:/workspace/CC/multichat` 的 `codex/core-refactor-pre-tui`，该工作区重新 build 与 import 检查通过。合并前检查本轮文件与其他会话未提交文件无交集；合并后原 11 个未提交文件的内容 SHA256 及状态全部一致，README、Claude 兼容性开发及 research 文件均未暂存或覆盖。
+ +
+ +原工作区同期另有 `abe1d7b` 开始的 Claude 兼容性 RED/GREEN 工作及未提交文件；2041 项全量结果对应本轮隔离固定版本，不声称验收了该会话尚在变化的工作。工作区改造没有触发 npm 发布或远端部署。
+++=======
++ 本轮实现、规范检查、独立复核、隔离真实协议、原生 SSH 和终端验收已完成，活动任务清单删除。集成至原工作区时保留其他会话的 README 未提交修改及 research 文档，不暂存、不覆盖；只集成本轮提交并重新构建。工作区改造不触发 npm 发布或远端部署。
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+diff --cc src/application/session-operations.ts
+index cdbf021,b3e8f74..0000000
+--- a/src/application/session-operations.ts
++++ b/src/application/session-operations.ts
+@@@ -67,7 -67,7 +67,11 @@@ export function createNativeSessionOper
+    }
+    async function read(ref: SessionRef, signal?: AbortSignal): Promise<DiscoverySession> {
+      const response = parseDiscoveryResponse(await bounded(signal, (owned) => options.discovery.execute({ op: 'detail', providerId: ref.providerId,
+++<<<<<<< HEAD
+ +      nativeId: ref.nativeId, endpointType: ref.endpointType, referenceKind: ref.referenceKind }, { contextId: ref.contextId, signal: owned })));
+++=======
++       nativeId: ref.nativeId, referenceKind: ref.referenceKind }, { contextId: ref.contextId, signal: owned })));
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      if (response.op !== 'detail' || response.detail.completeness !== 'complete' || response.detail.errors.length > 0
+        || !response.detail.item || sessionKey(response.detail.item.ref) !== sessionKey(ref)) throw new Error('Native target unavailable');
+      return response.detail.item;
+diff --cc src/application/session-selection.ts
+index 95a6297,24d66a4..0000000
+--- a/src/application/session-selection.ts
++++ b/src/application/session-selection.ts
+@@@ -1,4 -1,4 +1,8 @@@
+++<<<<<<< HEAD
+ +export type SessionSelectionEvent = { kind: 'selected' | 'empty'; sessionId: string; name?: string; endpointType?: string };
+++=======
++ export type SessionSelectionEvent = { kind: 'selected' | 'empty'; sessionId: string; name?: string };
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  export interface SessionSelectionLease { close(): Promise<void> }
+  export interface LauncherSessionBinding { args: readonly string[]; env?: NodeJS.ProcessEnv; close(): Promise<void> }
+  type Start = (selection: SessionSelectionEvent, signal: AbortSignal) => Promise<SessionSelectionLease>;
+@@@ -13,7 -13,7 +17,11 @@@ export function createSessionSelectionF
+    let work = Promise.resolve();
+    return {
+      select(event: SessionSelectionEvent): void {
+++<<<<<<< HEAD
+ +      if (closed || !event.sessionId || (selected?.kind === event.kind && selected.sessionId === event.sessionId && selected.endpointType === event.endpointType)) return;
+++=======
++       if (closed || !event.sessionId || (selected?.kind === event.kind && selected.sessionId === event.sessionId)) return;
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        selected = { ...event };
+        controller?.abort();
+        const turn = ++generation;
+diff --cc src/application/sessions/codex-reader.ts
+index 0a7730b,12a7c1a..0000000
+--- a/src/application/sessions/codex-reader.ts
++++ b/src/application/sessions/codex-reader.ts
+@@@ -65,7 -63,7 +65,11 @@@ export function createCodexSessionReade
+          const partial = legacy || page.completeness === 'partial';
+          return {
+            items: page.data.map((thread) => {
+++<<<<<<< HEAD
+ +            const ref = { contextId: request.contextId, providerId: 'codex', endpointType: 'cli', nativeId: thread.id };
+++=======
++             const ref = { contextId: request.contextId, providerId: 'codex', nativeId: thread.id };
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+              return { ref, key: sessionKey(ref), name: thread.name, rawStatus: thread.rawStatus, capabilities, attributes: { ...thread.attributes, transport: 'cli' } };
+            }),
+            nextCursor: page.nextCursor,
+diff --cc src/application/tcp/management.ts
+index 9cec420,85e76a4..0000000
+--- a/src/application/tcp/management.ts
++++ b/src/application/tcp/management.ts
+@@@ -21,7 -21,6 +21,10 @@@ import type { ManagementRequest, Manage
+  import type { MemberRemoveExactResultFrame } from '../../serve/protocol.js';
+  import { createTcpSessionOperation } from './session-operations.js';
+  import type { TcpSessionOperation, TcpSessionTarget } from './session-operations.js';
+++<<<<<<< HEAD
+ +import { isEndpointTypeFor } from '../../tool-types.js';
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  
+  export type TcpManagementAction = 'add-star' | 'rename-star' | 'remove-star' | 'set-show-name' | 'rename-node'
+    | 'generate-node-key' | 'generate-admin-key' | 'remove-node' | 'revoke-credential' | 'remove-member' | 'adopt-session' | 'rename-session';
+@@@ -38,7 -37,7 +41,11 @@@ export interface TcpManagementRequest 
+    starId?: string;
+    targetId?: string;
+    targetRevision?: string;
+++<<<<<<< HEAD
+ +  sessionTarget?: Pick<TcpSessionTarget, 'machineId' | 'providerId' | 'nativeId' | 'endpointType'>;
+++=======
++   sessionTarget?: Pick<TcpSessionTarget, 'machineId' | 'providerId' | 'nativeId'>;
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    values: Readonly<Record<string, string>>;
+    signal?: AbortSignal;
+  }
+@@@ -274,7 -273,6 +281,10 @@@ export function createTcpManagement(opt
+              if (request.sessionTarget) {
+                const selected = request.sessionTarget;
+                if (fullTcpMachineId(selected.machineId) !== selected.machineId || !selected.nativeId || sanitizeTool(selected.providerId) !== selected.providerId
+++<<<<<<< HEAD
+ +                || (selected.endpointType !== undefined && !isEndpointTypeFor(selected.providerId, selected.endpointType))
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+                  || !current.machines.some((node) => node.machineId === selected.machineId && node.presence === 'online')) throw new Denied('所选完整节点当前不在线或原生引用无效。');
+                const target = { ...selected, contextId: request.contextId, starId: star.starId };
+                const response = await operateSession(target, { kind: 'describe' }, request.signal);
+diff --cc src/application/tcp/session-operations.ts
+index 6136de6,0d7fe75..0000000
+--- a/src/application/tcp/session-operations.ts
++++ b/src/application/tcp/session-operations.ts
+@@@ -4,7 -4,7 +4,11 @@@ import type { SessionOperationFrame, Se
+  import { resolveTcpContext } from './reading.js';
+  import { checkAbort } from '../queries/reading.js';
+  
+++<<<<<<< HEAD
+ +export interface TcpSessionTarget { contextId: string; starId: string; machineId: string; providerId: string; nativeId: string; endpointType?: string }
+++=======
++ export interface TcpSessionTarget { contextId: string; starId: string; machineId: string; providerId: string; nativeId: string }
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  export type TcpSessionOperation = (target: TcpSessionTarget, request: SessionOperationFrame['request'], signal?: AbortSignal) => Promise<SessionOperationResultFrame>;
+  
+  /** Every call rereads configuration, binds the actual star, and owns its transient connection. */
+@@@ -23,10 -23,10 +27,17 @@@ export function createTcpSessionOperati
+        checkAbort(signal);
+        if (conn.starId !== target.starId) throw new Error('连接到的星已改变。');
+        const id = randomUUID();
+++<<<<<<< HEAD
+ +      await conn.send({ op: 'session-operation', id, starId: target.starId, machineId: target.machineId, providerId: target.providerId, nativeId: target.nativeId, endpointType: target.endpointType, request });
+ +      const reply = await conn.waitFor((frame) => frame.op === 'session-operation-result' && frame.id === id, timeoutMs);
+ +      if (reply.op !== 'session-operation-result' || reply.starId !== target.starId || reply.machineId !== target.machineId
+ +        || reply.providerId !== target.providerId || reply.nativeId !== target.nativeId || reply.endpointType !== target.endpointType) throw new Error('节点操作回执身份不一致。');
+++=======
++       await conn.send({ op: 'session-operation', id, starId: target.starId, machineId: target.machineId, providerId: target.providerId, nativeId: target.nativeId, request });
++       const reply = await conn.waitFor((frame) => frame.op === 'session-operation-result' && frame.id === id, timeoutMs);
++       if (reply.op !== 'session-operation-result' || reply.starId !== target.starId || reply.machineId !== target.machineId
++         || reply.providerId !== target.providerId || reply.nativeId !== target.nativeId) throw new Error('节点操作回执身份不一致。');
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        return reply;
+      } finally { signal?.removeEventListener('abort', abort); conn.close(); }
+    };
+diff --cc src/codex/aggregate-discovery.ts
+index 96096d6,9056151..0000000
+--- a/src/codex/aggregate-discovery.ts
++++ b/src/codex/aggregate-discovery.ts
+@@@ -208,7 -205,7 +208,11 @@@ async function readCli(options: CodexDi
+        await untilAborted(session.initialize(), options.signal);
+        checkAbort(options.signal);
+        if (options.legacyCli || session.listThreadPage === undefined) {
+++<<<<<<< HEAD
+ +        const data = (await untilAborted(session.listThreads(), options.signal)).map((thread) => ({ id: thread.id, endpointType: 'cli', name: thread.name, rawStatus: thread.status, attributes: { transport: 'cli' } }));
+++=======
++         const data = (await untilAborted(session.listThreads(), options.signal)).map((thread) => ({ id: thread.id, name: thread.name, rawStatus: thread.status, attributes: { transport: 'cli' } }));
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+          issue(state, 'cli', 'legacy-limit');
+          state.sourceRead = true;
+          return { data, more: false };
+@@@ -218,7 -215,7 +222,11 @@@
+        const more = nextNative(state, page.nextCursor);
+        if (page.completeness === 'partial') issue(state, 'cli', 'legacy-limit');
+        state.sourceRead = true;
+++<<<<<<< HEAD
+ +      return { data: page.data.map((thread) => ({ ...thread, endpointType: 'cli', attributes: { ...thread.attributes, transport: 'cli' } })), more };
+++=======
++       return { data: page.data.map((thread) => ({ ...thread, attributes: { ...thread.attributes, transport: 'cli' } })), more };
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      } finally { await session?.close().catch(() => undefined); }
+    };
+    return untilAborted(work(), options.signal);
+diff --cc src/codex/client.ts
+index 99af8fb,d397a4e..0000000
+--- a/src/codex/client.ts
++++ b/src/codex/client.ts
+@@@ -157,96 -155,94 +157,257 @@@ export function openCodexSession(option
+    return async () => {
+      const proxy = await openCodexProxySession(options);
+      return createCodexSession(proxy, options.requestTimeoutMs);
+++<<<<<<< HEAD
+++=======
+    };
+  }
+  
++ /** Use an already owned native endpoint; the returned session owns its connection. */
++ export function createCodexSession(proxy: CodexProxySession, requestTimeoutMs?: number): CodexThreadPageSession {
++   const rpc = new CodexRpcClient(proxy.channel, requestTimeoutMs);
++   const input = (text: string) => [{ text, type: 'text' }];
++   let identity: CodexNativeIdentity | undefined;
++   const session: CodexThreadPageSession = {
++     get nativeIdentity() { return identity; },
++     async initialize(): Promise<void> {
++       const result = await rpc.request('initialize', {
++         capabilities: { experimentalApi: true },
++         clientInfo: { name: 'crosschat', title: 'crosschat', version: '1.0.0' },
++       });
++       identity = isRecord(result) && typeof result.userAgent === 'string' && typeof result.codexHome === 'string'
++         ? { userAgent: result.userAgent, codexHome: result.codexHome } : undefined;
++       rpc.notify('initialized', {});
++     },
++     async readThreadMetadata(threadId: string): Promise<CodexThreadSummary> {
++       const result = await rpc.request('thread/read', { threadId, includeTurns: false });
++       if (!isRecord(result) || !isRecord(result.thread) || result.thread.id !== threadId
++         || (result.thread.name !== null && result.thread.name !== undefined && typeof result.thread.name !== 'string')) {
++         throw protocolError('thread/read response missing matching thread metadata.');
++       }
++       return { id: threadId, name: typeof result.thread.name === 'string' ? result.thread.name : null,
++         status: normalizeThreadStatus(result.thread.status) };
++     },
++     async renameThread(threadId: string, name: string): Promise<void> {
++       const result = await rpc.request('thread/name/set', { threadId, name });
++       if (!isRecord(result)) throw protocolError('thread/name/set response malformed.');
++     },
++     async listThreads(): Promise<CodexThreadSummary[]> {
++       // Absent sourceKinds, the server defaults to interactive-only sources
++       // (cli/vscode — app-server filters.rs INTERACTIVE_SESSION_SOURCES), so
++       // `codex exec` threads (source=exec, B19/B20 drill §5.1) would never be
++       // listed. Legal values = ThreadSourceKind enum (v2 protocol schema).
++       const result = await rpc.request('thread/list', {
++         archived: false,
++         limit: 20,
++         sortKey: 'recency_at',
++         sourceKinds: ['cli', 'vscode', 'exec'],
++         useStateDbOnly: true,
++       });
++       if (!isRecord(result) || !Array.isArray(result.data)) {
++         throw protocolError('thread/list response missing data array.');
++       }
++       return result.data.map((raw) => {
++         if (!isRecord(raw) || typeof raw.id !== 'string') {
++           throw protocolError('thread/list item missing id.');
++         }
++         return {
++           id: raw.id,
++           name: typeof raw.name === 'string' ? raw.name : null,
++           status: normalizeThreadStatus(raw.status),
++         };
++       });
++     },
++     async listThreadPage(page: CodexThreadPageOptions): Promise<CodexThreadPage> {
++       if (page.signal?.aborted) throw new DOMException('Codex page read cancelled.', 'AbortError');
++       const limit = page.limit ?? 100;
++       if (!Number.isSafeInteger(limit) || limit < 1) throw protocolError('thread/list page limit must be a positive integer.');
++       const result = await awaitPage(rpc.request('thread/list', {
++         archived: false,
++         limit,
++         ...(page.cursor === undefined ? {} : { cursor: page.cursor }),
++         sortKey: 'recency_at',
++         sourceKinds: ['cli', 'vscode', 'exec'],
++         useStateDbOnly: true,
++       }), page.signal);
++       if (page.signal?.aborted) throw new DOMException('Codex page read cancelled.', 'AbortError');
++       if (!isRecord(result) || !Array.isArray(result.data)) throw protocolError('thread/list response missing data array.');
++       if (result.nextCursor !== undefined && result.nextCursor !== null && typeof result.nextCursor !== 'string') throw protocolError('thread/list response has malformed cursor.');
++       return {
++         data: result.data.map((raw) => {
++           if (!isRecord(raw) || typeof raw.id !== 'string') throw protocolError('thread/list item missing id.');
++           return {
++             id: raw.id,
++             name: typeof raw.name === 'string' ? raw.name : null,
++             rawStatus: raw.status,
++             attributes: { cwd: raw.cwd, path: raw.path, createdAt: raw.createdAt, updatedAt: raw.updatedAt, source: raw.source, originator: raw.originator },
++           };
++         }),
++         nextCursor: typeof result.nextCursor === 'string' ? result.nextCursor : null,
++         completeness: result.nextCursor === undefined ? 'partial' : 'complete',
++       };
++     },
++     async resumeThread(threadId: string): Promise<CodexThreadStatus> {
+++      const result = await rpc.request('thread/resume', {
+++        excludeTurns: true,
+++        threadId,
+++      });
+++      if (!isRecord(result) || !isRecord(result.thread) || result.thread.id !== threadId) {
+++        throw protocolError('thread/resume response missing matching thread.');
+++      }
+++      return normalizeThreadStatus(result.thread.status);
+++    },
+++    async startTurn(threadId: string, text: string): Promise<CodexTurn> {
+++      const result = await rpc.request('turn/start', {
+++        input: input(text),
+++        threadId,
+++        turnTrigger: 'crosschat',
+++      });
+++      if (
+++        !isRecord(result) ||
+++        !isRecord(result.turn) ||
+++        typeof result.turn.id !== 'string' ||
+++        typeof result.turn.status !== 'string'
+++      ) {
+++        throw protocolError('turn/start response missing turn.');
+++      }
+++      return { id: result.turn.id, status: result.turn.status };
+++    },
+++    async readThreadState(threadId: string): Promise<CodexThreadState> {
+++      const result = await rpc.request('thread/read', { threadId, includeTurns: true });
+++      if (!isRecord(result) || !isRecord(result.thread) || result.thread.id !== threadId || !Array.isArray(result.thread.turns)) {
+++        throw protocolError('thread/read response missing matching thread and turns.');
+++      }
+++      const active: string[] = [];
+++      for (const turn of result.thread.turns) {
+++        if (!isRecord(turn) || typeof turn.id !== 'string' || turn.id === '' || typeof turn.status !== 'string') throw protocolError('thread/read returned a malformed turn.');
+++        if (turn.status === 'inProgress') active.push(turn.id);
+++      }
+++      if (active.length > 1) throw protocolError('thread/read returned multiple active turns.');
+++      return { status: normalizeThreadStatus(result.thread.status), activeTurnId: active[0] ?? null };
+++    },
+++    async steerTurn(threadId: string, expectedTurnId: string, text: string): Promise<string> {
+++      const result = await rpc.request('turn/steer', {
+++        expectedTurnId,
+++        input: input(text),
+++        threadId,
+++      });
+++      if (!isRecord(result) || typeof result.turnId !== 'string') {
+++        throw protocolError('turn/steer response missing turnId.');
+++      }
+++      return result.turnId;
+++    },
+++    async unsubscribe(threadId: string): Promise<void> {
+++      await rpc.request('thread/unsubscribe', { threadId });
+++    },
+++    async startThread(cwd: string): Promise<string> {
+++      const result = await rpc.request('thread/start', { cwd });
+++      if (!isRecord(result) || !isRecord(result.thread) || typeof result.thread.id !== 'string') {
+++        throw protocolError('thread/start response missing thread id.');
+++      }
+++      return result.thread.id;
+++    },
+++    async deleteThread(threadId: string): Promise<void> {
+++      await rpc.request('thread/delete', { threadId });
+++    },
+++    notifications(): readonly CodexRpcNotification[] {
+++      return rpc.notifications;
+++    },
+++    async close(): Promise<void> {
+++      rpc.dispose();
+++      await proxy.close();
+++    },
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+++  };
+++  return session;
+++}
+++
+ +/** Use an already owned native endpoint; the returned session owns its connection. */
+ +export function createCodexSession(proxy: CodexProxySession, requestTimeoutMs?: number): CodexThreadPageSession {
+ +  const rpc = new CodexRpcClient(proxy.channel, requestTimeoutMs);
+ +  const input = (text: string) => [{ text, type: 'text' }];
+ +  let identity: CodexNativeIdentity | undefined;
+ +  const session: CodexThreadPageSession = {
+ +    get nativeIdentity() { return identity; },
+ +    async initialize(): Promise<void> {
+ +      const result = await rpc.request('initialize', {
+ +        capabilities: { experimentalApi: true },
+ +        clientInfo: { name: 'crosschat', title: 'crosschat', version: '1.0.0' },
+ +      });
+ +      identity = isRecord(result) && typeof result.userAgent === 'string' && typeof result.codexHome === 'string'
+ +        ? { userAgent: result.userAgent, codexHome: result.codexHome } : undefined;
+ +      rpc.notify('initialized', {});
+ +    },
+ +    async readThreadMetadata(threadId: string): Promise<CodexThreadSummary> {
+ +      const result = await rpc.request('thread/read', { threadId, includeTurns: false });
+ +      if (!isRecord(result) || !isRecord(result.thread) || result.thread.id !== threadId
+ +        || (result.thread.name !== null && result.thread.name !== undefined && typeof result.thread.name !== 'string')) {
+ +        throw protocolError('thread/read response missing matching thread metadata.');
+ +      }
+ +      return { id: threadId, endpointType: 'cli', name: typeof result.thread.name === 'string' ? result.thread.name : null,
+ +        status: normalizeThreadStatus(result.thread.status) };
+ +    },
+ +    async renameThread(threadId: string, name: string): Promise<void> {
+ +      const result = await rpc.request('thread/name/set', { threadId, name });
+ +      if (!isRecord(result)) throw protocolError('thread/name/set response malformed.');
+ +    },
+ +    async listThreads(): Promise<CodexThreadSummary[]> {
+ +      // Absent sourceKinds, the server defaults to interactive-only sources
+ +      // (cli/vscode — app-server filters.rs INTERACTIVE_SESSION_SOURCES), so
+ +      // `codex exec` threads (source=exec, B19/B20 drill §5.1) would never be
+ +      // listed. Legal values = ThreadSourceKind enum (v2 protocol schema).
+ +      const result = await rpc.request('thread/list', {
+ +        archived: false,
+ +        limit: 20,
+ +        sortKey: 'recency_at',
+ +        sourceKinds: ['cli', 'vscode', 'exec'],
+ +        useStateDbOnly: true,
+ +      });
+ +      if (!isRecord(result) || !Array.isArray(result.data)) {
+ +        throw protocolError('thread/list response missing data array.');
+ +      }
+ +      return result.data.map((raw) => {
+ +        if (!isRecord(raw) || typeof raw.id !== 'string') {
+ +          throw protocolError('thread/list item missing id.');
+ +        }
+ +        return {
+ +          id: raw.id,
+ +          endpointType: 'cli',
+ +          name: typeof raw.name === 'string' ? raw.name : null,
+ +          status: normalizeThreadStatus(raw.status),
+ +        };
+ +      });
+ +    },
+ +    async listThreadPage(page: CodexThreadPageOptions): Promise<CodexThreadPage> {
+ +      if (page.signal?.aborted) throw new DOMException('Codex page read cancelled.', 'AbortError');
+ +      const limit = page.limit ?? 100;
+ +      if (!Number.isSafeInteger(limit) || limit < 1) throw protocolError('thread/list page limit must be a positive integer.');
+ +      const result = await awaitPage(rpc.request('thread/list', {
+ +        archived: false,
+ +        limit,
+ +        ...(page.cursor === undefined ? {} : { cursor: page.cursor }),
+ +        sortKey: 'recency_at',
+ +        sourceKinds: ['cli', 'vscode', 'exec'],
+ +        useStateDbOnly: true,
+ +      }), page.signal);
+ +      if (page.signal?.aborted) throw new DOMException('Codex page read cancelled.', 'AbortError');
+ +      if (!isRecord(result) || !Array.isArray(result.data)) throw protocolError('thread/list response missing data array.');
+ +      if (result.nextCursor !== undefined && result.nextCursor !== null && typeof result.nextCursor !== 'string') throw protocolError('thread/list response has malformed cursor.');
+ +      return {
+ +        data: result.data.map((raw) => {
+ +          if (!isRecord(raw) || typeof raw.id !== 'string') throw protocolError('thread/list item missing id.');
+ +          return {
+ +            id: raw.id,
+ +            endpointType: 'cli',
+ +            name: typeof raw.name === 'string' ? raw.name : null,
+ +            rawStatus: raw.status,
+ +            attributes: { cwd: raw.cwd, path: raw.path, createdAt: raw.createdAt, updatedAt: raw.updatedAt, source: raw.source, originator: raw.originator },
+ +          };
+ +        }),
+ +        nextCursor: typeof result.nextCursor === 'string' ? result.nextCursor : null,
+ +        completeness: result.nextCursor === undefined ? 'partial' : 'complete',
+ +      };
+ +    },
+ +    async resumeThread(threadId: string): Promise<CodexThreadStatus> {
+        const result = await rpc.request('thread/resume', {
+          excludeTurns: true,
+          threadId,
+diff --cc src/commands/serve.ts
+index 62ad487,a3a954a..0000000
+--- a/src/commands/serve.ts
++++ b/src/commands/serve.ts
+@@@ -1021,8 -1019,6 +1021,11 @@@ async function runAdoptServe(args: Serv
+      throw new MultichatError('INTERNAL', 'makeSendDeps 未接线（测试环境不支持 adopt）');
+    }
+    const send = deps.makeSendDeps();
+++<<<<<<< HEAD
+ +  const selected = qualifiedToolTarget(args.adopt!)?.tool;
+ +  const listDshThreads = send.listDshThreads;
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    return runAdopt(
+      {
+        connect: args.connect ?? '',
+diff --cc src/commands/session-star.ts
+index 8607252,5195d5a..0000000
+--- a/src/commands/session-star.ts
++++ b/src/commands/session-star.ts
+@@@ -24,12 -24,7 +24,16 @@@ import { decodeRef } from '../ref.js'
+  import { readSendLogTail, defaultSendLogFile } from '../send-log.js';
+  import { defaultClaudeSessionsDir, listClaudeSessions as listClaudeSessionsReal } from '../claude/registry.js';
+  import { listCodexThreads as listCodexThreadsReal } from '../codex/discovery.js';
+++<<<<<<< HEAD
+ +import { listOpenCodeThreads as listOpenCodeThreadsReal } from '../opencode/client.js';
+ +import type { OpenCodeThread } from '../opencode/client.js';
+ +import { listDshThreads as listDshThreadsReal } from '../dsh/client.js';
+ +import type { DshThread } from '../dsh/client.js';
+  import { createSessionSelectionFollower } from '../application/session-selection.js';
+ +import { isEndpointTypeFor, nativeTargetKey, toolTypeFor } from '../tool-types.js';
+++=======
+++import { createSessionSelectionFollower } from '../application/session-selection.js';
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  
+  import { connectAttachPipe, ensureAggregator, queryAttachStatus, spawnServeDetachReal } from '../serve/attach-client.js';
+  import type { AttachPipeClient } from '../serve/attach-client.js';
+@@@ -113,9 -108,7 +117,13 @@@ export interface StarJoinDeps 
+    /** 入星诊断日志；写失败可抛出，调用方按成功/失败场景处理。真值 ~/.crosschat/tcp/launcher.log。 */
+    log(line: string): void;
+    listClaudeSessions(): { sessions: Array<{ sessionId: string; pid?: number; name?: string; updatedAt?: number; startedAt?: number }> };
+++<<<<<<< HEAD
+ +  listCodexThreads(): Promise<Array<{ id: string; endpointType?: string; name: string | null; createdAt?: number }>>;
+ +  listOpenCodeThreads?(): Promise<OpenCodeThread[]>;
+ +  listDshThreads?(): Promise<DshThread[]>;
+++=======
++   listCodexThreads(): Promise<Array<{ id: string; name: string | null; createdAt?: number }>>;
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    /** 自动拉聚合器（serve --connect <selector> --detach）；013 双开护栏在其内部在位。 */
+    spawnServeDetach(selector: string): void;
+    /** extends 证据源（本机 send-log 名字史）；缺省不查。 */
+@@@ -267,7 -256,7 +275,11 @@@ export class StarJoiner 
+        /** Claude 启动器所属的原生子进程；未就绪时等待，绝不猜其他新增会话。 */
+        claudeProcessId?(): number | undefined;
+        /** Exact selection supplied by a window-owned native adapter; no global discovery. */
+++<<<<<<< HEAD
+ +      selectedSession?: { sessionId: string; name?: string; endpointType?: string };
+++=======
++       selectedSession?: { sessionId: string; name?: string };
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        extendSession?: string;
+        /** spawn 时已知的会话名（claude -n 原生透传），用于异工具同名预警。 */
+        spawnName?: string;
+@@@ -281,13 -270,6 +293,16 @@@
+    }
+  
+    /** spawn 前调用：解析星目标、核对同名预警；需要差分的来源单独建立基线。 */
+++<<<<<<< HEAD
+ +  private get endpointType(): string {
+ +    const selected = this.opts.selectedSession?.endpointType;
+ +    if (selected !== undefined && !isEndpointTypeFor(this.opts.side, selected)) throw new MultichatError('USAGE', '所选会话的端点类型与工具不匹配');
+ +    return selected ?? (this.opts.side === 'opencode' ? 'shared' : 'cli');
+ +  }
+ +
+ +  /** Prepare exact star targets before the native process starts. */
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    async begin(): Promise<void> {
+      this.resolveTargets();
+      if (this.targets.length === 0) return;
+@@@ -304,13 -286,6 +319,16 @@@
+          // codex daemon 未起：空基线（子进程会拉起 daemon，新线程即差分命中）
+        }
+      }
+++<<<<<<< HEAD
+ +    if (this.opts.selectedSession === undefined && this.opts.side === 'opencode') {
+ +      try {
+ +        for (const thread of await this.opts.deps.listOpenCodeThreads?.() ?? []) this.knownOpenCode.add(thread.id);
+ +      } catch {
+ +        // OpenCode may not have registered its service before this launcher starts it.
+ +      }
+ +    }
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      void this.run().catch((err: unknown) => { this.reportFailure(err); });
+    }
+  
+@@@ -394,8 -366,7 +412,12 @@@
+        for (const pipe of this.pipes.values()) {
+          try {
+            await Promise.race([
+++<<<<<<< HEAD
+ +            pipe.send({ op: 'detach', sessionId: this.sessionId, tool: this.opts.side, endpointType: this.endpointType,
+ +              claimId: this.claimId, ...(this.opts.rm === true ? { erase: true } : {}) }),
+++=======
++             pipe.send({ op: 'detach', sessionId: this.sessionId, claimId: this.claimId, ...(this.opts.rm === true ? { erase: true } : {}) }),
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+              sleep(800),
+            ]);
+          } catch {
+@@@ -542,8 -509,7 +564,12 @@@
+  /** CLI/Desktop-specific adapters only publish selection; star policy stays shared here. */
+  export function createStarSelectionFollower(options: ConstructorParameters<typeof StarJoiner>[0]) {
+    return createSessionSelectionFollower(async (selection, signal) => {
+++<<<<<<< HEAD
+ +    const joiner = new StarJoiner({ ...options, selectedSession: { sessionId: selection.sessionId,
+ +      ...(selection.endpointType === undefined ? {} : { endpointType: selection.endpointType }), ...(selection.name === undefined ? {} : { name: selection.name }) } });
+++=======
++     const joiner = new StarJoiner({ ...options, selectedSession: { sessionId: selection.sessionId, ...(selection.name === undefined ? {} : { name: selection.name }) } });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      const abort = () => { void joiner.stop(); };
+      signal.addEventListener('abort', abort, { once: true });
+      if (signal.aborted) abort();
+@@@ -579,52 -545,15 +605,58 @@@ export async function runAdopt(args: Ad
+    const config = readNodeConfig(join(tcpDir(deps.tcpBaseDir), 'node.json'));
+    const { entry, selector } = selectConnectEntry(args.connect, config);
+    const machineName = entry.showName ?? config.showName ?? deps.machineName;
+++<<<<<<< HEAD
+ +  const qualifiedProvider = qualifiedToolTarget(args.adopt)?.tool.providerId;
+ +  // A literal existing name may begin with "claude/"; retain that established
+ +  // resolution rule while new endpoint qualifiers constrain the actual source.
+ +  const selectedProvider = qualifiedProvider === 'claude' ? undefined : qualifiedProvider;
+ +  const sessions = selectedProvider === undefined ? deps.listClaudeSessions().sessions : [];
+ +  const threads = selectedProvider === undefined || selectedProvider === 'codex' ? await deps.listCodexThreads() : [];
+ +  let openCode: OpenCodeThread[] = [];
+ +  try { if (selectedProvider === undefined || selectedProvider === 'opencode') openCode = await deps.listOpenCodeThreads?.() ?? []; }
+ +  catch (error) {
+ +    const missing = error instanceof MultichatError && error.code === 'OPENCODE_NOT_CONFIGURED';
+ +    let previousTarget = false;
+ +    if (!args.adopt.startsWith('opencode/')) {
+ +      try { resolveTargetByName(args.adopt, sessions, threads); previousTarget = true; }
+ +      catch { /* A failed unrelated source is ignorable only for a verified target. */ }
+ +    }
+ +    if (selectedProvider === 'opencode' || !missing && !previousTarget) {
+ +      deps.stderr(`adopt: ${error instanceof Error ? error.message : 'OpenCode session source unavailable.'}`);
+ +      return 1;
+ +    }
+ +  }
+ +  let dsh: DshThread[] = [];
+ +  try { if (selectedProvider === undefined || selectedProvider === 'dsh') dsh = await deps.listDshThreads?.() ?? []; }
+ +  catch (error) {
+ +    const missing = error instanceof MultichatError && error.code === 'DSH_NOT_CONFIGURED';
+ +    let previousTarget = false;
+ +    if (!args.adopt.startsWith('dsh/')) {
+ +      try { resolveTargetByName(args.adopt, sessions, threads, openCode); previousTarget = true; }
+ +      catch { /* An unresolved or ambiguous legacy selector cannot justify ignoring this source failure. */ }
+ +    }
+ +    if (selectedProvider === 'dsh' || !missing && !previousTarget) {
+ +      deps.stderr(`adopt: ${error instanceof Error ? error.message : 'DeepSeek Harness session source unavailable.'}`);
+ +      return 1;
+ +    }
+ +  }
+ +  let hit: { sessionId: string; name?: string; side: 'claude' | 'codex' | 'opencode' | 'dsh'; endpointType?: string };
+++=======
++   const sessions = deps.listClaudeSessions().sessions;
++   const threads = await deps.listCodexThreads();
++   let hit: { sessionId: string; name?: string; side: 'claude' | 'codex' };
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    try {
+ -    const resolved = resolveTargetByName(args.adopt, sessions, threads);
+ +    const resolved = resolveTargetByName(args.adopt, sessions, threads, openCode, dsh);
+      hit =
+        resolved.side === 'claude'
+ -        ? { sessionId: resolved.session.sessionId, ...(resolved.session.name === undefined ? {} : { name: resolved.session.name }), side: 'claude' }
+ -        : { sessionId: resolved.thread.id, ...(resolved.thread.name === null || resolved.thread.name === '' ? {} : { name: resolved.thread.name }), side: 'codex' };
+ +        ? { sessionId: resolved.session.sessionId, endpointType: 'cli', ...(resolved.session.name === undefined ? {} : { name: resolved.session.name }), side: 'claude' }
+ +        : { sessionId: resolved.thread.id, ...(resolved.thread.name === null || resolved.thread.name === '' ? {} : { name: resolved.thread.name }), side: resolved.side,
+ +          endpointType: resolved.side === 'opencode' ? 'shared' : resolved.thread.endpointType };
+ +    if (hit.endpointType === undefined && dsh.some((thread) => thread.id === hit.sessionId) && (sessions.some((session) => session.sessionId === hit.sessionId)
+ +      || threads.some((thread) => thread.id === hit.sessionId) || openCode.some((thread) => thread.id === hit.sessionId))) {
+ +      throw new MultichatError('NAME_COLLISION', 'This native session ID exists in Harness and another tool; current star membership cannot safely distinguish them.');
+ +    }
+    } catch (err) {
+      if (err instanceof MultichatError) {
+        deps.stderr(`adopt: ${err.message}`);
+diff --cc src/serve/broker.ts
+index f68ac73,2389c37..0000000
+--- a/src/serve/broker.ts
++++ b/src/serve/broker.ts
+@@@ -86,7 -83,6 +86,10 @@@ import type { DiscoveryEndpoint, Discov
+  import type { DiscoverQueryFrame, DiscoverResultFrame } from './protocol.js';
+  import { NodeNameChanges } from './node-naming.js';
+  import { SessionOperationRoutes } from './session-operations.js';
+++<<<<<<< HEAD
+ +import { sendRequiresEndpointTypes } from './endpoint-identity.js';
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  
+  /**
+   * 默认端口 7260。IANA service-names-port-numbers 核对（2026-10-10 实查）：
+@@@ -1025,20 -1016,18 +1028,32 @@@ export class Broker 
+      if (frame.op === 'session-operation') {
+        const star = this.starOf(session);
+        const target = star?.online.get(frame.machineId);
+++<<<<<<< HEAD
+ +      const key = nativeTargetKey(frame);
+ +      const existing = star?.roster.find((entry) => memberKey(entry) === key);
+ +      if (!star || star.starId !== frame.starId || !target || target.revoked
+ +        || (frame.endpointType !== undefined && !hasCap(target.caps, CAP_ENDPOINT_TYPES))
+ +        || (existing && (existing.machine !== frame.machineId || existing.tool !== frame.providerId))) {
+ +        this.send(session.ws, { op: 'session-operation-result', id: frame.id, starId: frame.starId, machineId: frame.machineId, providerId: frame.providerId, nativeId: frame.nativeId, endpointType: frame.endpointType,
+++=======
++       const existing = star?.roster.find((entry) => entry.sessionId === frame.nativeId);
++       if (!star || star.starId !== frame.starId || !target || target.revoked
++         || (existing && (existing.machine !== frame.machineId || existing.tool !== frame.providerId))) {
++         this.send(session.ws, { op: 'session-operation-result', id: frame.id, starId: frame.starId, machineId: frame.machineId, providerId: frame.providerId, nativeId: frame.nativeId,
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+            result: { kind: 'rejected', message: '星、节点连接或册位完整身份已变化；请刷新后重新选择。' } });
+          return;
+        }
+        this.sessionOperations.request(session.ws, target.ws, { ...frame, membership: existing
+          ? { temporary: existing.temporary === true, selectionOwned: existing.selectionOwned === true } : undefined }, (receipt) => {
+          if (receipt.result?.kind !== 'applied' || frame.request.kind !== 'apply') return receipt;
+++<<<<<<< HEAD
+ +        const actual = star.roster.find((entry) => memberKey(entry) === key);
+ +        const declared = target.members?.get(key);
+++=======
++         const actual = star.roster.find((entry) => entry.sessionId === frame.nativeId);
++         const declared = target.members?.get(frame.nativeId);
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+          const confirmed = star.online.get(frame.machineId) === target && !target.revoked && actual?.machine === frame.machineId
+            && actual.tool === frame.providerId && declared?.tool === frame.providerId
+            && (frame.request.operation !== 'rename' || (actual.name === frame.request.name && declared.name === frame.request.name));
+@@@ -1343,9 -1324,7 +1358,13 @@@
+      // 匹配泳道（先specific后模糊）：精确会话 id（--rm erase 上报全量 id）→
+      // id 前缀（≥8 位 hex 形态，命令面 id8）→ 名字精确。首泳道命中即定。
+      const lower = target.toLowerCase();
+++<<<<<<< HEAD
+ +    const candidates = star.roster.filter((entry) => frame.tool === undefined
+ +      || (entry.tool === frame.tool && entry.endpointType === frame.endpointType));
+ +    const exact = candidates.filter((entry) => entry.sessionId === target);
+++=======
++     const exact = star.roster.filter((e) => e.sessionId === target);
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      const hits = frame.temporaryOnly === true ? exact.filter((entry) => entry.temporary === true
+        && session.machineId !== undefined && entry.machine === normalizeMid(session.machineId)) :
+        exact.length > 0
+@@@ -1369,8 -1348,8 +1388,13 @@@
+        removed.push(entry.name ?? entry.sessionId.slice(0, 8));
+        // 归属机聚合器在线则转发清本地表（否则其重播会把条目带回册——幂等无害但噪音）
+        const owner = star.online.get(entry.machine);
+++<<<<<<< HEAD
+ +      owner?.members?.delete(memberKey(entry));
+ +      if (owner !== undefined && owner !== session) this.send(owner.ws, { op: 'member-remove', target: entry.sessionId, tool: entry.tool, endpointType: entry.endpointType });
+++=======
++       owner?.members?.delete(entry.sessionId);
++       if (owner !== undefined && owner !== session) this.send(owner.ws, { op: 'member-remove', target: entry.sessionId });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      }
+      if (removed.length > 0) this.persistRoster(star);
+      reply(true, removed, removed.length === 0 ? `成员 ${target} 本不在册（幂等成功）` : undefined);
+@@@ -1390,8 -1369,8 +1414,13 @@@
+      }
+      star.roster.splice(star.roster.indexOf(entry), 1);
+      const owner = star.online.get(entry.machine);
+++<<<<<<< HEAD
+ +    owner?.members?.delete(memberKey(entry));
+ +    if (owner !== undefined && owner !== session) this.send(owner.ws, { op: 'member-remove', target: entry.sessionId, tool: entry.tool, endpointType: entry.endpointType });
+++=======
++     owner?.members?.delete(entry.sessionId);
++     if (owner !== undefined && owner !== session) this.send(owner.ws, { op: 'member-remove', target: entry.sessionId });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      if (!this.persistRoster(star)) {
+        this.send(session.ws, { op: 'member-remove-exact-result', id: frame.id, ok: false, removed: true,
+          code: 'PERSIST_FAILED', error: '册位内存已修改，但持久化未确认，请检查星册存储并重新读取核实' });
+diff --cc src/serve/node.ts
+index b736a2b,862e5a0..0000000
+--- a/src/serve/node.ts
++++ b/src/serve/node.ts
+@@@ -237,10 -207,6 +237,13 @@@ interface MemberEntry 
+    /** 029 --rm：临时成员——对账验死即报 member-remove（零痕迹），不留下线册位。 */
+    temporary?: boolean;
+    selectionOwned?: boolean;
+++<<<<<<< HEAD
+ +}
+ +
+ +function memberKey(member: { sessionId: string; tool?: string; endpointType?: string }): string {
+ +  return nativeTargetKey({ providerId: member.tool ?? '', nativeId: member.sessionId, endpointType: member.endpointType });
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  }
+  
+  /**
+@@@ -261,7 -227,7 +264,11 @@@ export function attachPipePath(entry: B
+   */
+  function parseMemberDecl(raw: unknown): { ok: true; entry: MemberEntry } | { ok: false; error: string } {
+    if (raw === null || typeof raw !== 'object') return { ok: false, error: '成员声明形状错误（须为对象）' };
+++<<<<<<< HEAD
+ +  const r = raw as { sessionId?: unknown; name?: unknown; tool?: unknown; endpointType?: unknown; extends?: unknown; temporary?: unknown; selectionOwned?: unknown };
+++=======
++   const r = raw as { sessionId?: unknown; name?: unknown; tool?: unknown; extends?: unknown; temporary?: unknown; selectionOwned?: unknown };
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    if (typeof r.sessionId !== 'string' || r.sessionId === '') {
+      return { ok: false, error: '成员声明缺 sessionId（成员键=会话 ID，启动器 spawn 后必持有）' };
+    }
+@@@ -692,14 -651,10 +699,21 @@@ export class NodeClient 
+      if (frame.op === 'member-remove') {
+        // 028：broker 册删除的归属机清表推送（管理删/member-remove 命令侧）——
+        // 本地移出声明集并重播，防下次全量重播把条目带回册；墓碑挡对账复活
+++<<<<<<< HEAD
+ +      const hits = [...this.members.entries()].filter(([, entry]) => entry.sessionId === frame.target
+ +        && (frame.tool === undefined || (entry.tool === frame.tool && entry.endpointType === frame.endpointType)));
+ +      if (hits.length !== 1) return;
+ +      const key = hits[0]![0];
+ +      this.erased.add(key);
+ +      this.membershipModes.delete(key);
+ +      this.memberClaims.delete(key);
+ +      if (this.members.delete(key)) {
+++=======
++       this.erased.add(frame.target);
++       this.membershipModes.delete(frame.target);
++       this.memberClaims.delete(frame.target);
++       if (this.members.delete(frame.target)) {
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+          this.log(`member-removed ${frame.target.slice(0, 8)}（broker 册删除推送）`);
+          this.sendSessions();
+        }
+@@@ -750,29 -705,28 +764,51 @@@
+      const operations = createNativeSessionOperations({ discovery: { execute: this.d.discover }, providers: this.d.operationProviders,
+        adopt: async (item, tool) => {
+          if (!current()) throw new Error('Node context changed');
+++<<<<<<< HEAD
+ +        const key = nativeTargetKey(item.ref);
+ +        const previous = this.members.get(key);
+ +        if (previous?.tool !== undefined && previous.tool !== tool) throw new Error('Native provider conflict');
+ +        const temporary = frame.membership?.temporary ?? this.membershipModes.get(key) ?? previous?.temporary;
+ +        this.members.set(key, { sessionId: item.ref.nativeId, tool, endpointType: item.ref.endpointType,
+ +          ...(item.name === null ? {} : { name: item.name }), ...(temporary === true ? { temporary: true } : {}) });
+ +        // Repeating adoption cannot turn a temporary launch into a manual lifetime.
+ +        if (temporary !== true) {
+ +          const claims = this.memberClaims.get(key) ?? new Map<string, Socket | undefined>();
+ +          claims.set('manual', undefined); this.memberClaims.set(key, claims);
+ +        } else if (previous?.selectionOwned || frame.membership?.selectionOwned) this.members.get(key)!.selectionOwned = true;
+ +        this.erased.delete(key); this.pendingErases.delete(key);
+++=======
++         const previous = this.members.get(item.ref.nativeId);
++         if (previous?.tool !== undefined && previous.tool !== tool) throw new Error('Native provider conflict');
++         const temporary = frame.membership?.temporary ?? this.membershipModes.get(item.ref.nativeId) ?? previous?.temporary;
++         this.members.set(item.ref.nativeId, { sessionId: item.ref.nativeId, tool,
++           ...(item.name === null ? {} : { name: item.name }), ...(temporary === true ? { temporary: true } : {}) });
++         // Repeating adoption cannot turn a temporary launch into a manual lifetime.
++         if (temporary !== true) {
++           const claims = this.memberClaims.get(item.ref.nativeId) ?? new Map<string, Socket | undefined>();
++           claims.set('manual', undefined); this.memberClaims.set(item.ref.nativeId, claims);
++         } else if (previous?.selectionOwned || frame.membership?.selectionOwned) this.members.get(item.ref.nativeId)!.selectionOwned = true;
++         this.erased.delete(item.ref.nativeId); this.pendingErases.delete(item.ref.nativeId);
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+          this.sendSessions();
+        },
+        renamed: async (item) => {
+          if (!current()) throw new Error('Node context changed');
+++<<<<<<< HEAD
+ +        const member = this.members.get(nativeTargetKey(item.ref));
+++=======
++         const member = this.members.get(item.ref.nativeId);
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+          if (!member || member.tool !== item.ref.providerId || item.name === null) throw new Error('Member changed');
+          member.name = item.name; this.sendSessions();
+        },
+      });
+      try {
+++<<<<<<< HEAD
+ +      const ref = { contextId: 'local', providerId: frame.providerId, nativeId: frame.nativeId, endpointType: frame.endpointType };
+++=======
++       const ref = { contextId: 'local', providerId: frame.providerId, nativeId: frame.nativeId };
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        if (request.kind === 'describe') {
+          const description = await operations.describe(ref, controller.signal);
+          if (current()) reply({ description });
+@@@ -957,26 -911,24 +993,44 @@@
+      if (req === null || typeof req !== 'object') {
+        return reply({ ok: false, error: 'attach 帧形状错误' });
+      }
+++<<<<<<< HEAD
+ +    const r = req as { op?: unknown; sessionId?: unknown; tool?: unknown; endpointType?: unknown; sessions?: unknown; erase?: unknown; claimId?: unknown };
+++=======
++     const r = req as { op?: unknown; sessionId?: unknown; sessions?: unknown; erase?: unknown; claimId?: unknown };
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      if (r.claimId !== undefined && (typeof r.claimId !== 'string' || r.claimId.length === 0 || r.claimId.length > 128)) {
+        return reply({ ok: false, error: 'claimId 必须是有效的窗口声明标识' });
+      }
+      if (r.op === 'attach') {
+        const parsed = parseMemberDecl(r);
+        if (!parsed.ok) return reply({ ok: false, error: parsed.error });
+++<<<<<<< HEAD
+ +      if (parsed.entry.endpointType !== undefined && !this.brokerEndpointCap) return reply({ ok: false, error: 'broker 不支持端点类型，未发送类型化成员声明；升级后重试' });
+ +      const key = memberKey(parsed.entry);
+ +      const previous = this.members.get(key);
+ +      const mode = this.membershipModes.get(key) ?? (previous === undefined ? undefined : previous.temporary === true);
+ +      if (mode !== undefined) parsed.entry.temporary = mode;
+ +      this.membershipModes.set(key, parsed.entry.temporary === true);
+ +      this.pendingErases.delete(key);
+ +      const claims = this.memberClaims.get(key) ?? new Map<string, Socket | undefined>();
+ +      claims.set(typeof r.claimId === 'string' ? r.claimId : 'manual', typeof r.claimId === 'string' ? socket : undefined);
+ +      parsed.entry.selectionOwned = !claims.has('manual') && (parsed.entry.selectionOwned === true || previous?.selectionOwned === true);
+ +      this.memberClaims.set(key, claims);
+ +      this.members.set(key, parsed.entry);
+ +      this.erased.delete(key); // 显式再注册解除 --rm 墓碑
+++=======
++       const previous = this.members.get(parsed.entry.sessionId);
++       const mode = this.membershipModes.get(parsed.entry.sessionId) ?? (previous === undefined ? undefined : previous.temporary === true);
++       if (mode !== undefined) parsed.entry.temporary = mode;
++       this.membershipModes.set(parsed.entry.sessionId, parsed.entry.temporary === true);
++       this.pendingErases.delete(parsed.entry.sessionId);
++       const claims = this.memberClaims.get(parsed.entry.sessionId) ?? new Map<string, Socket | undefined>();
++       claims.set(typeof r.claimId === 'string' ? r.claimId : 'manual', typeof r.claimId === 'string' ? socket : undefined);
++       parsed.entry.selectionOwned = !claims.has('manual') && (parsed.entry.selectionOwned === true || previous?.selectionOwned === true);
++       this.memberClaims.set(parsed.entry.sessionId, claims);
++       this.members.set(parsed.entry.sessionId, parsed.entry);
++       this.erased.delete(parsed.entry.sessionId); // 显式再注册解除 --rm 墓碑
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        this.log(`member-up ${parsed.entry.name ?? parsed.entry.sessionId.slice(0, 8)}`);
+        this.sendSessions();
+        return reply({ ok: true });
+@@@ -985,14 -937,7 +1039,18 @@@
+        if (typeof r.sessionId !== 'string' || r.sessionId === '') {
+          return reply({ ok: false, error: 'detach 缺 sessionId' });
+        }
+++<<<<<<< HEAD
+ +      if (r.tool !== undefined && sanitizeTool(r.tool) !== r.tool) return reply({ ok: false, error: 'detach 工具身份无效' });
+ +      if (r.endpointType !== undefined && (typeof r.tool !== 'string' || !isEndpointTypeFor(r.tool, r.endpointType))) return reply({ ok: false, error: 'detach 端点身份无效' });
+ +      const hits = [...this.members.entries()].filter(([, member]) => member.sessionId === r.sessionId
+ +        && (r.tool === undefined || (member.tool === r.tool && member.endpointType === r.endpointType)));
+ +      if (hits.length > 1) return reply({ ok: false, error: 'detach 完整会话 ID 命中多个端点，请指定工具与类型' });
+ +      const key = hits[0]?.[0];
+ +      if (key === undefined) return reply({ ok: true });
+ +      this.releaseMemberClaim(key, typeof r.claimId === 'string' ? r.claimId : 'manual',
+++=======
++       this.releaseMemberClaim(r.sessionId, typeof r.claimId === 'string' ? r.claimId : 'manual',
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+          typeof r.claimId === 'string' ? socket : undefined, r.erase === true);
+        return reply({ ok: true }); // 幂等：不在表内也算成功
+      }
+@@@ -1009,7 -953,7 +1067,11 @@@
+        }
+        this.members.clear();
+        this.memberClaims.clear();
+++<<<<<<< HEAD
+ +      for (const e of entries) this.members.set(memberKey(e), e);
+++=======
++       for (const e of entries) this.members.set(e.sessionId, e);
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        this.log(`sync 成员表：${entries.length} 条`);
+        this.sendSessions();
+        return reply({ ok: true });
+@@@ -1043,7 -987,7 +1105,11 @@@
+      this.memberClaims.delete(id);
+      const member = this.members.get(id);
+      const gone = this.members.delete(id);
+++<<<<<<< HEAD
+ +    if ((erase || member?.temporary === true) && member !== undefined) this.eraseTemporary(member);
+++=======
++     if (erase || member?.temporary === true) this.eraseTemporary(id);
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      if (gone) { this.log(`member-down ${id.slice(0, 8)}（窗口声明释放）`); this.sendSessions(); }
+    }
+  
+@@@ -1072,22 -1014,11 +1138,29 @@@
+        } catch {
+          // 查不回：本轮只做本地活性（下轮再查）
+        }
+ +      if (sliceConfirmed) {
+ +        const current = new Set(slice.map(memberKey));
+ +        for (const key of this.pendingErases.keys()) {
+ +          if (current.has(key)) continue;
+ +          this.pendingErases.delete(key);
+ +          this.erased.add(key);
+ +          this.membershipModes.delete(key);
+ +        }
+ +      }
+        // 2) Provider capabilities own native liveness, source selection and name lookup.
+++<<<<<<< HEAD
+ +      const declarations = [...this.members.values(), ...slice];
+ +      const request = { contextId: 'local', nativeIds: [...new Set(declarations.map((decl) => decl.sessionId))],
+ +        targets: declarations.filter((decl) => decl.tool !== undefined).map((decl) => ({ providerId: decl.tool!, nativeId: decl.sessionId, endpointType: decl.endpointType })) };
+ +      for (const decl of slice) {
+ +        this.membershipModes.set(memberKey(decl), decl.temporary === true);
+ +        const member = this.members.get(memberKey(decl));
+++=======
++       const request = { contextId: 'local', nativeIds: [...new Set([...this.members.keys(), ...slice.map((decl) => decl.sessionId)])] };
++       for (const decl of slice) {
++         this.membershipModes.set(decl.sessionId, decl.temporary === true);
++         const member = this.members.get(decl.sessionId);
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+          if (member !== undefined) member.temporary = decl.temporary === true;
+        }
+        let providers: readonly MemberProvider[];
+@@@ -1105,21 -1036,21 +1178,35 @@@
+        // 3.5) 029 死临时成员清册：切片里 temporary 而本地验死（含聚合器重启后
+        // 声明表为空的形态）——报 member-remove + 墓碑，零痕迹不留下线册位
+        for (const decl of slice) {
+++<<<<<<< HEAD
+ +        if (decl.temporary !== true || decl.tool === undefined || this.members.has(memberKey(decl))) continue;
+ +        if ((decl.selectionOwned !== true && matchesTool(decl)) || this.erased.has(memberKey(decl))) continue;
+ +        this.eraseTemporary(decl);
+++=======
++         if (decl.temporary !== true || this.members.has(decl.sessionId)) continue;
++         if ((decl.selectionOwned !== true && toolOf(decl.sessionId) !== undefined) || this.erased.has(decl.sessionId)) continue;
++         this.eraseTemporary(decl.sessionId);
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+          this.log(`member-erase ${decl.sessionId.slice(0, 8)}（临时成员死亡清册——未上报则滞留下线态）`);
+        }
+        // 4) 下线：已声明而本地查无——永久成员移出声明集（broker 册位保留，不再除名）；
+        //    临时成员（029）改走 member-remove + 墓碑（异常死亡同零痕迹）
+        for (const [id, entry] of [...this.members.entries()]) {
+          if (entry.selectionOwned && this.memberClaims.get(id)?.size) continue;
+++<<<<<<< HEAD
+ +        if (entry.tool === undefined || matchesTool(entry)) continue;
+++=======
++         if (toolOf(id) !== undefined) continue;
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+          this.members.delete(id);
+          this.memberClaims.delete(id);
+          changed = true;
+          if (entry.temporary === true) {
+++<<<<<<< HEAD
+ +          this.eraseTemporary(entry);
+++=======
++           this.eraseTemporary(id);
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+            this.log(`member-erase ${entry.name ?? id.slice(0, 8)}（临时成员死亡清册，零痕迹）`);
+          } else {
+            this.log(`member-offline ${id.slice(0, 8)}（本地验活无此会话，上报下线——册位保留）`);
+@@@ -1144,21 -1075,20 +1231,38 @@@
+    }
+  
+    /** 018：全量重播 sessions 帧（上线时 & 成员表变化时；老 broker/离线不发）。 */
+++<<<<<<< HEAD
+ +  private eraseTemporary(member: { sessionId: string; tool?: string; endpointType?: string }): void {
+ +    const key = memberKey(member);
+ +    if (this.state !== 'online' || !this.brokerSessionCap || this.pendingErases.has(key)) return;
+ +    const id = randomUUID();
+ +    this.pendingErases.set(key, id);
+ +    this.send({ op: 'member-remove', target: member.sessionId, tool: member.tool, endpointType: member.endpointType, temporaryOnly: true, id });
+ +    void this.nextFrame((frame) => frame.op === 'member-remove-result' && frame.id === id, 5_000)
+ +      .then((frame) => {
+ +        if (this.pendingErases.get(key) !== id) return;
+ +        if (frame.op === 'member-remove-result' && frame.ok && frame.removed.length > 0) {
+ +          this.erased.add(key);
+ +          this.membershipModes.delete(key);
+ +          this.pendingErases.delete(key);
+ +        }
+ +      }).catch(() => { /* Keep the pending write until readonly absence or explicit reattachment; never replay uncertainty. */ });
+++=======
++   private eraseTemporary(sessionId: string): void {
++     if (this.state !== 'online' || !this.brokerSessionCap || this.pendingErases.has(sessionId)) return;
++     const id = randomUUID();
++     this.pendingErases.set(sessionId, id);
++     this.send({ op: 'member-remove', target: sessionId, temporaryOnly: true, id });
++     void this.nextFrame((frame) => frame.op === 'member-remove-result' && frame.id === id, 5_000)
++       .then((frame) => {
++         if (this.pendingErases.get(sessionId) !== id) return;
++         if (frame.op === 'member-remove-result' && frame.ok && frame.removed.length > 0) {
++           this.erased.add(sessionId);
++           this.membershipModes.delete(sessionId);
++         }
++       }).catch(() => { /* Next liveness check revalidates; no uncertain write replay. */ })
++       .finally(() => { if (this.pendingErases.get(sessionId) === id) this.pendingErases.delete(sessionId); });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    }
+  
+    /** Full current declaration, independent of launcher defaults. */
+diff --cc src/serve/protocol.ts
+index eb09e84,e1d8cbf..0000000
+--- a/src/serve/protocol.ts
++++ b/src/serve/protocol.ts
+@@@ -407,8 -380,6 +407,11 @@@ export interface MemberRemoveFrame 
+    op: 'member-remove';
+    /** 名字精确或会话 id 前缀（≥8 位）。 */
+    target: string;
+++<<<<<<< HEAD
+ +  tool?: string;
+ +  endpointType?: string;
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    /** Lifecycle cleanup: exact native ID, own machine, temporary members only. */
+    temporaryOnly?: boolean;
+    id?: string;
+@@@ -442,7 -412,6 +445,10 @@@ export interface SessionOperationFrame 
+    machineId: string;
+    providerId: string;
+    nativeId: string;
+++<<<<<<< HEAD
+ +  endpointType?: string;
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    /** Broker replaces caller input with authoritative current-star membership. */
+    membership?: { temporary: boolean; selectionOwned: boolean };
+    request: { kind: 'describe' } | { kind: 'apply'; operation: 'adopt' | 'rename'; expectedRevision: string; name?: string };
+@@@ -454,7 -423,6 +460,10 @@@ export interface SessionOperationResult
+    machineId: string;
+    providerId: string;
+    nativeId: string;
+++<<<<<<< HEAD
+ +  endpointType?: string;
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    description?: SessionOperationDescription;
+    result?: MembershipResult;
+  }
+@@@ -677,13 -644,9 +686,19 @@@ export function parseFrame(text: string
+      }
+    }
+    if ((op === 'send' || op === 'deliver') && 'delivery' in obj && !isDeliveryMode(obj.delivery)) return undefined;
+++<<<<<<< HEAD
+ +  if (op === 'deliver' && (('targetProviderId' in obj && (typeof obj.targetProviderId !== 'string' || sanitizeTool(obj.targetProviderId) !== obj.targetProviderId))
+ +    || ('targetEndpointType' in obj && (!('targetProviderId' in obj) || typeof obj.targetProviderId !== 'string' || !isEndpointTypeFor(obj.targetProviderId, obj.targetEndpointType))))) return undefined;
+ +  if ((op === 'session-operation' || op === 'session-operation-result') && !validSessionOperation(obj as Record<string, unknown>)) return undefined;
+ +  if (op === 'session-operation-cancel' && (!('id' in obj) || typeof obj.id !== 'string' || obj.id.length === 0 || obj.id.length > 128)) return undefined;
+ +  if (op === 'member-remove' && (('temporaryOnly' in obj && typeof obj.temporaryOnly !== 'boolean')
+ +    || ('tool' in obj && (typeof obj.tool !== 'string' || sanitizeTool(obj.tool) !== obj.tool))
+ +    || ('endpointType' in obj && (!('tool' in obj) || typeof obj.tool !== 'string' || !isEndpointTypeFor(obj.tool, obj.endpointType)))
+++=======
++   if ((op === 'session-operation' || op === 'session-operation-result') && !validSessionOperation(obj as Record<string, unknown>)) return undefined;
++   if (op === 'session-operation-cancel' && (!('id' in obj) || typeof obj.id !== 'string' || obj.id.length === 0 || obj.id.length > 128)) return undefined;
++   if (op === 'member-remove' && (('temporaryOnly' in obj && typeof obj.temporaryOnly !== 'boolean')
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      || ('id' in obj && (typeof obj.id !== 'string' || obj.id.length === 0 || obj.id.length > 128)))) return undefined;
+    if (op === 'credential-revoked' && !isCredentialRevoked(obj as Record<string, unknown>)) return undefined;
+    if (op === 'member-remove-exact' || op === 'member-remove-exact-result') {
+@@@ -707,7 -669,6 +722,10 @@@ function validSessionOperation(value: R
+    const text = (input: unknown, max: number): input is string => typeof input === 'string' && input.length > 0 && input.length <= max;
+    if (!text(value.id, 128) || !text(value.starId, 256) || !text(value.machineId, 32) || !/^[a-f0-9]{32}$/.test(value.machineId)
+      || !text(value.providerId, 64) || sanitizeTool(value.providerId) !== value.providerId || !text(value.nativeId, 4096)) return false;
+++<<<<<<< HEAD
+ +  if (value.endpointType !== undefined && !isEndpointTypeFor(value.providerId, value.endpointType)) return false;
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    if (value.op === 'session-operation') {
+      if (value.membership !== undefined && (!record(value.membership) || typeof value.membership.temporary !== 'boolean' || typeof value.membership.selectionOwned !== 'boolean')) return false;
+      const request = value.request;
+@@@ -718,7 -679,7 +736,11 @@@
+    if (value.result !== undefined) return record(value.result) && ['applied', 'rejected', 'uncertain'].includes(String(value.result.kind)) && text(value.result.message, 4096);
+    const description = value.description;
+    if (!record(description) || !record(description.ref) || !text(description.ref.contextId, 1024) || description.ref.providerId !== value.providerId
+++<<<<<<< HEAD
+ +    || description.ref.nativeId !== value.nativeId || description.ref.endpointType !== value.endpointType || !Number.isFinite(description.observedAt) || typeof description.revision !== 'string'
+++=======
++     || description.ref.nativeId !== value.nativeId || !Number.isFinite(description.observedAt) || typeof description.revision !== 'string'
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      || description.revision.length > 128 || !record(description.actions)) return false;
+    return ['adopt', 'rename'].every((operation) => {
+      const action = description.actions && record(description.actions) ? description.actions[operation] : undefined;
+diff --cc src/serve/registry.ts
+index 5b668cb,f56283a..0000000
+--- a/src/serve/registry.ts
++++ b/src/serve/registry.ts
+@@@ -17,7 -17,6 +17,10 @@@ import { MultichatError } from '../erro
+  import { normalizeMid } from '../platform/machine-id.js';
+  import { credentialRevision, machineCredentialRevision, starRevision } from './management-state.js';
+  import { parseNodeConfig } from './node-config.js';
+++<<<<<<< HEAD
+ +import { isEndpointTypeFor, nativeTargetKey } from '../tool-types.js';
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  
+  export interface NodeEntry {
+    label: string;
+@@@ -564,11 -562,7 +567,15 @@@ function readManagementBroker(file: str
+          || typeof member.machine !== 'string' || !completeMachine(member.machine) || !optionalText(member, ['name', 'tool', 'machineName', 'extendsName', 'extendsMachine'])
+          || (member.temporary !== undefined && typeof member.temporary !== 'boolean')
+          || (member.selectionOwned !== undefined && typeof member.selectionOwned !== 'boolean')) invalidManagementSource();
+++<<<<<<< HEAD
+ +      if (member.endpointType !== undefined && (typeof member.tool !== 'string' || !isEndpointTypeFor(member.tool, member.endpointType))) invalidManagementSource();
+ +      const key = nativeTargetKey({ providerId: typeof member.tool === 'string' ? member.tool : '', nativeId: member.sessionId,
+ +        ...(typeof member.endpointType === 'string' ? { endpointType: member.endpointType } : {}) });
+ +      if (members.has(key)) invalidManagementSource();
+ +      members.add(key);
+++=======
++       members.add(member.sessionId);
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        return { ...member, sessionId: member.sessionId, machine: member.machine,
+          ...(typeof member.name === 'string' ? { name: member.name } : {}), ...(typeof member.tool === 'string' ? { tool: member.tool } : {}),
+          ...(typeof member.machineName === 'string' ? { machineName: member.machineName } : {}), ...(typeof member.extendsName === 'string' ? { extendsName: member.extendsName } : {}),
+diff --cc src/serve/session-operations.ts
+index 273e4c3,c6a2260..0000000
+--- a/src/serve/session-operations.ts
++++ b/src/serve/session-operations.ts
+@@@ -25,14 -25,14 +25,23 @@@ export class SessionOperationRoutes 
+    }
+    receive(target: SocketLike, frame: SessionOperationResultFrame): void {
+      const entry = this.pending.get(frame.id);
+++<<<<<<< HEAD
+ +    if (!entry || entry.target !== target || ['starId', 'machineId', 'providerId', 'nativeId', 'endpointType'].some((key) => frame[key as 'starId'] !== entry.request[key as 'starId'])) return;
+++=======
++     if (!entry || entry.target !== target || ['starId', 'machineId', 'providerId', 'nativeId'].some((key) => frame[key as 'starId'] !== entry.request[key as 'starId'])) return;
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      this.pending.delete(frame.id); clearTimeout(entry.timer);
+      try { entry.sender.send(JSON.stringify({ ...entry.confirm(frame), id: entry.request.id })); }
+      catch { /* A disconnected caller must verify the result instead of replaying. */ }
+    }
+    private reply(socket: SocketLike, request: SessionOperationFrame, kind: 'rejected' | 'uncertain', message: string): void {
+++<<<<<<< HEAD
+ +    const { id, starId, machineId, providerId, nativeId, endpointType } = request;
+ +    try { socket.send(JSON.stringify({ id, starId, machineId, providerId, nativeId, endpointType, op: 'session-operation-result', result: { kind, message } })); }
+++=======
++     const { id, starId, machineId, providerId, nativeId } = request;
++     try { socket.send(JSON.stringify({ id, starId, machineId, providerId, nativeId, op: 'session-operation-result', result: { kind, message } })); }
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      catch { /* Caller disconnected. */ }
+    }
+    private finish(id: string, message: string): void {
+diff --cc src/tui/resources/ssh.ts
+index 1935ffe,6f6e19f..0000000
+--- a/src/tui/resources/ssh.ts
++++ b/src/tui/resources/ssh.ts
+@@@ -187,11 -186,10 +187,16 @@@ export function createSshSessionsResour
+      return { ...page, actionAvailability: { ...page.actionAvailability, adopt: localOnly, 'remove-member': localOnly, deliveries: localOnly, logs: localOnly,
+        'filter-scope': disabled('SSH 发现没有可核验的当前星成员范围。', '本页展示此 SSH 用户可发现的会话；TCP 星范围在对应 TCP 上下文查看。') },
+        rows: page.rows.map((row) => {
+ -        const address = row.copyValue;
+ +        const nativeId = row.copyValues?.nativeId;
+ +        const tool = row.copyValues?.tool;
+          let copyValue: string | undefined;
+++<<<<<<< HEAD
+ +        if (!managed && row.copyValue && nativeId && tool) {
+ +          try { validateRemoteFlagValues({ to: nativeId, tool }); copyValue = formatSendCommand({ via: `ssh:${host}`, to: nativeId, tool }); } catch { /* The remote selector must accept the exact native ID. */ }
+++=======
++         if (!managed && address && /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(address)) {
++           try { validateRemoteFlagValues({ to: address }); copyValue = `crosschat send --via ssh:${host} --to ${address}`; } catch { /* Existing remote selector cannot accept this address. */ }
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+          }
+          const original = row.detailViews?.['native-guide'];
+          const fields = (original?.fields ?? []).filter((field) => field.label !== '寻址指引');
+diff --cc src/tui/resources/tcp.ts
+index 1743feb,cde1d87..0000000
+--- a/src/tui/resources/tcp.ts
++++ b/src/tui/resources/tcp.ts
+@@@ -7,7 -6,6 +7,10 @@@ import type { TuiAction, TuiActionAvail
+  import { createStatusRegistry } from './status.js';
+  import type { StatusRegistry } from './status.js';
+  import { withTcpBrokerServices } from './tcp-services.js';
+++<<<<<<< HEAD
+ +import { formatSendCommand } from '../send-command.js';
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  
+  export interface TcpResourcesOptions { tcp: TcpApplication; management?: TcpManagement; statusRegistry?: StatusRegistry; services?: LocalServices }
+  type ResourceId = 'stars' | 'machines' | 'members' | 'keys' | 'sessions';
+@@@ -43,11 -41,11 +46,19 @@@ function definitions(owner: ResourceId
+    if (owner === 'keys') return [detailAction(owner), ...views, ...issuance, copyAction(owner, '复制凭证 label'), infoAction(owner)];
+    const provider = action(owner, 'filter-provider', '工具筛选', 't', 'filter', { filterId: 'provider', selectionPolicy: 'none' });
+    const named = action(owner, 'filter-named', '所有会话 / 仅命名', 'u', 'filter', { filterId: 'named', selectionPolicy: 'none' });
+++<<<<<<< HEAD
+ +  if (owner === 'members') return [detailAction(owner), ...views, action(owner, 'adopt-session', '选择会话入星', 'a', 'navigate', { selectionPolicy: 'none' }), mutation(owner, 'rename-session', '原生改名', 'e'), mutation(owner, 'remove-member', '删除成员', 'Ctrl+D'), ...issuance, provider, named, action(owner, 'filter-presence', '星籍状态筛选', 's', 'filter', { filterId: 'presence', selectionPolicy: 'none' }), copyAction(owner, '复制发送命令'), infoAction(owner)];
+ +  return [nodeSessions ? detailAction(owner) : action(owner, 'open', '进入所属节点会话', 'Enter', 'navigate'), ...(!nodeSessions ? [detailAction(owner, 'd')] : []),
+ +    ...views, action(owner, 'machines', '切回节点列表', 'v', 'navigate', { selectionPolicy: 'none' }), action(owner, 'scope', '星内成员 / 可发现会话', 'b', 'route-choice', { selectionPolicy: 'none' }), provider, named,
+ +    action(owner, 'filter-status', '原生状态筛选', 's', 'filter', { filterId: 'status', selectionPolicy: 'none' }), mutation(owner, 'adopt-session', '所选会话入星', 'a'), mutation(owner, 'rename-session', '原生改名', 'e'), mutation(owner, 'remove-member', '删除成员', 'Ctrl+D'), ...issuance,
+ +    action(owner, 'deliveries', '本机已知的相关投递', 'o', 'navigate'), action(owner, 'guide', '原生工具 / 寻址指引', 'g', 'detail', { viewId: 'guide' }), action(owner, 'logs', '相关 crosschat 日志', 'l', 'navigate'), copyAction(owner, '复制发送命令'),
+++=======
++   if (owner === 'members') return [detailAction(owner), ...views, action(owner, 'adopt-session', '选择会话入星', 'a', 'navigate', { selectionPolicy: 'none' }), mutation(owner, 'rename-session', '原生改名', 'e'), mutation(owner, 'remove-member', '删除成员', 'Ctrl+D'), ...issuance, provider, named, action(owner, 'filter-presence', '星籍状态筛选', 's', 'filter', { filterId: 'presence', selectionPolicy: 'none' }), copyAction(owner, '复制可用成员地址'), infoAction(owner)];
++   return [nodeSessions ? detailAction(owner) : action(owner, 'open', '进入所属节点会话', 'Enter', 'navigate'), ...(!nodeSessions ? [detailAction(owner, 'd')] : []),
++     ...views, action(owner, 'machines', '切回节点列表', 'v', 'navigate', { selectionPolicy: 'none' }), action(owner, 'scope', '星内成员 / 可发现会话', 'b', 'route-choice', { selectionPolicy: 'none' }), provider, named,
++     action(owner, 'filter-status', '原生状态筛选', 's', 'filter', { filterId: 'status', selectionPolicy: 'none' }), mutation(owner, 'adopt-session', '所选会话入星', 'a'), mutation(owner, 'rename-session', '原生改名', 'e'), mutation(owner, 'remove-member', '删除成员', 'Ctrl+D'), ...issuance,
++     action(owner, 'deliveries', '本机已知的相关投递', 'o', 'navigate'), action(owner, 'guide', '原生工具 / 寻址指引', 'g', 'detail', { viewId: 'guide' }), action(owner, 'logs', '相关 crosschat 日志', 'l', 'navigate'), copyAction(owner, '复制可用会话地址'),
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      action(owner, 'copy-ref', '复制完整会话引用', 'Y', 'copy', { copyKey: 'ref' }), infoAction(owner)];
+  }
+  function route(resourceId: ResourceId | 'logs', contextId: string, starId?: string, extra: Record<string, string> = {}): TuiRoute {
+@@@ -74,8 -72,8 +85,13 @@@ function readInfo(result: TcpReadResult
+      { label: '来源与下一步', value: result.errors.length ? result.errors.map((error) => `${error.source} <${error.kind}>：${error.message}\n${error.nextStep}`).join('\n\n') : '无来源错误。' }] };
+  }
+  function target(rowId: string, targetId: string, starId: string, revision?: string): string { return json({ rowId, targetId, starId, ...(revision ? { revision } : {}) }); }
+++<<<<<<< HEAD
+ +function operationTarget(rowId: string, starId: string, item: { machineId: string; providerId: string | null; nativeId: string; endpointType?: string }): string {
+ +  return json({ rowId, starId, machineId: item.machineId, providerId: item.providerId, nativeId: item.nativeId, ...(item.endpointType === undefined ? {} : { endpointType: item.endpointType }) });
+++=======
++ function operationTarget(rowId: string, starId: string, item: { machineId: string; providerId: string | null; nativeId: string }): string {
++   return json({ rowId, starId, machineId: item.machineId, providerId: item.providerId, nativeId: item.nativeId });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  }
+  function memberDetails(member: TcpMember): TuiField[] {
+    return [{ label: '完整册位标识', value: member.id }, { label: '星标识', value: member.starId }, { label: '完整机器标识', value: member.machineId }, { label: '所属节点', value: member.machineName ?? '未提供' },
+@@@ -151,10 -145,9 +167,16 @@@ export function createTcpResources(opti
+          try {
+            const value: unknown = JSON.parse(request.target?.copyValues?.operationTarget ?? '');
+            if (!isRecord(value) || value.rowId !== request.target?.id || value.starId !== request.route?.query?.starId
+++<<<<<<< HEAD
+ +            || typeof value.machineId !== 'string' || typeof value.providerId !== 'string' || typeof value.nativeId !== 'string'
+ +            || value.endpointType !== undefined && !isEndpointTypeFor(value.providerId, value.endpointType)) return undefined;
+ +          return { contextId: request.context!.id, action: request.action.id, starId: String(value.starId), targetId: request.target!.id,
+ +            sessionTarget: { machineId: value.machineId, providerId: value.providerId, nativeId: value.nativeId, ...(typeof value.endpointType === 'string' ? { endpointType: value.endpointType } : {}) }, values: { ...request.values }, signal: request.signal };
+++=======
++             || typeof value.machineId !== 'string' || typeof value.providerId !== 'string' || typeof value.nativeId !== 'string') return undefined;
++           return { contextId: request.context!.id, action: request.action.id, starId: String(value.starId), targetId: request.target!.id,
++             sessionTarget: { machineId: value.machineId, providerId: value.providerId, nativeId: value.nativeId }, values: { ...request.values }, signal: request.signal };
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+          } catch { return undefined; }
+        }
+        let rowTarget: RowTarget | undefined;
+@@@ -283,14 -276,13 +305,19 @@@
+    }
+    function sessionRow(item: TcpSession, current: TcpStar, contextId: string): TuiRow {
+      const ref = item.ref ? json(item.ref) : undefined;
+ +    const command = sendCommand(item);
+      const scope = `${current.name ?? current.starId} / ${item.machineName ?? item.mid8} (${item.machineId})`;
+      const memberState = item.membership === 'member' ? `成员 · ${currentPresence(item.presence)}` : item.membership === 'not-member' ? '未入星<not-member>' : '星籍未核实<unknown>';
+ -    return { id: item.id, contextId, cells: { name: item.name || '匿名', provider: item.providerId ?? '未提供', machine: item.machineName ?? item.mid8, mid8: item.mid8, status: statuses.format(item.providerId ?? '', item.rawStatus), membership: memberState, directory: typeof item.attributes.cwd === 'string' ? item.attributes.cwd : '—' },
+ -      facets: { provider: item.providerId ?? '', named: item.name ? 'named' : 'anonymous', status: JSON.stringify(item.rawStatus), presence: item.presence },
+ +    return { id: item.id, contextId, cells: { name: item.name || '匿名', provider: item.providerId === null ? '未提供' : toolTypeFor(item.providerId, item.endpointType) ?? item.providerId, machine: item.machineName ?? item.mid8, mid8: item.mid8, status: statuses.format(item.providerId ?? '', item.rawStatus), membership: memberState, directory: typeof item.attributes.cwd === 'string' ? item.attributes.cwd : '—' },
+ +      facets: { provider: item.providerId === null ? '' : toolTypeFor(item.providerId, item.endpointType) ?? item.providerId, named: item.name ? 'named' : 'anonymous', status: JSON.stringify(item.rawStatus), presence: item.presence },
+        searchText: `${item.name ?? ''} ${item.providerId ?? ''} ${item.nativeId} ${item.machineId} ${item.machineName ?? ''} ${json(item.rawStatus)} ${item.presence} ${item.membership}`,
+++<<<<<<< HEAD
+ +      copyValue: command, copyValues: { operationTarget: operationTarget(item.id, current.starId, item), ...(ref ? { ref } : {}), ...(item.member ? { target: target(item.id, item.member.id, current.starId) } : {}) },
+ +      actionAvailability: { ...copyAvailability(command, item.addressReason), ...(!item.member ? { 'remove-member': disabled('此行没有可核验的星册位；不会删除原生会话。') } : {}), ...(!ref ? { 'copy-ref': disabled('成员册未提供足够信息来构造完整原生会话引用。') } : {}) },
+++=======
++       copyValue: item.address, copyValues: { operationTarget: operationTarget(item.id, current.starId, item), ...(ref ? { ref } : {}), ...(item.member ? { target: target(item.id, item.member.id, current.starId) } : {}) },
++       actionAvailability: { ...copyAvailability(item.address, item.addressReason), ...(!item.member ? { 'remove-member': disabled('此行没有可核验的星册位；不会删除原生会话。') } : {}), ...(!ref ? { 'copy-ref': disabled('成员册未提供足够信息来构造完整原生会话引用。') } : {}) },
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+         actionRoutes: { open: route('sessions', contextId, current.starId, { machineId: item.machineId, scope: 'discoverable' }) },
+        detail: [{ label: '名称', value: item.name || '匿名' }, { label: '星 / 所属节点', value: scope }, { label: '完整原生 ID', value: item.nativeId }, { label: '完整会话引用', value: ref ?? '来源不足；未伪造引用' }, { label: '原生状态', value: json(item.rawStatus) }, { label: '星籍', value: memberState }, { label: '目录', value: typeof item.attributes.cwd === 'string' ? item.attributes.cwd : '未提供' }, ...(item.member ? memberDetails(item.member) : [])],
+        detailViews: { guide: { title: '原生工具与寻址指引', fields: [{ label: '目标', value: scope }, { label: '原生操作', value: `请回到该节点同一用户的 ${item.providerId ?? '对应工具'} 原生窗口继续聊天。若要恢复，在该节点原生工具中按完整 ID 核对；不要在本机另开窗口冒充该会话。` },
+@@@ -309,8 -301,8 +336,13 @@@
+          actionAvailability: item.presence === 'online' ? {} : { 'rename-node': disabled('修改本星节点名需要目标机器在线。', '等待该机器上线后刷新；不会只改 broker 的名字副本。') },
+          detail: [{ label: '所属星', value: `${current.name ?? current.starId} (${current.starId})` }, { label: '完整机器标识', value: item.machineId }, { label: '节点名称', value: item.name ?? '未提供' }, { label: '节点凭证 label', value: item.labels.join('\n') }, { label: '机器连接', value: currentPresence(item.presence) }, { label: '登记时间', value: item.addedAt ?? '未提供' }] };
+      });
+++<<<<<<< HEAD
+ +    else if (owner === 'members') rows = groupPresence(result.members).map((item) => ({ id: item.id, contextId, cells: { name: item.name || '匿名', provider: item.providerId === null ? '未提供' : toolTypeFor(item.providerId, item.endpointType) ?? item.providerId, machine: item.machineName ?? item.machineId.slice(0, 8), presence: currentPresence(item.presence), succession: item.extendsName ? `接任 ${item.extendsName}` : '—' }, facets: { provider: item.providerId === null ? '' : toolTypeFor(item.providerId, item.endpointType) ?? item.providerId, named: item.name ? 'named' : 'anonymous', presence: item.presence },
+ +      copyValue: sendCommand(item), copyValues: { target: target(item.id, item.id, current.starId), operationTarget: operationTarget(item.id, current.starId, item) }, actionAvailability: copyAvailability(sendCommand(item), item.addressReason), searchText: `${item.name ?? ''} ${item.providerId ?? ''} ${item.machineId} ${item.nativeId} ${item.presence} ${item.extendsName ?? ''} ${item.extendsMachine ?? ''}`, detail: memberDetails(item) }));
+++=======
++     else if (owner === 'members') rows = groupPresence(result.members).map((item) => ({ id: item.id, contextId, cells: { name: item.name || '匿名', provider: item.providerId ?? '未提供', machine: item.machineName ?? item.machineId.slice(0, 8), presence: currentPresence(item.presence), succession: item.extendsName ? `接任 ${item.extendsName}` : '—' }, facets: { provider: item.providerId ?? '', named: item.name ? 'named' : 'anonymous', presence: item.presence },
++       copyValue: item.address, copyValues: { target: target(item.id, item.id, current.starId), operationTarget: operationTarget(item.id, current.starId, item) }, actionAvailability: copyAvailability(item.address, item.addressReason), searchText: `${item.name ?? ''} ${item.providerId ?? ''} ${item.machineId} ${item.nativeId} ${item.presence} ${item.extendsName ?? ''} ${item.extendsMachine ?? ''}`, detail: memberDetails(item) }));
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      else rows = result.credentials.map((item): TuiRow => ({ id: item.id, contextId, cells: { name: item.label, kind: item.kind === 'admin' ? '星管理钥<admin>' : '节点钥匙<node>', machine: item.kind === 'admin' ? '管理权限（非机器）' : item.machineName ?? (item.machineId === null ? '尚未绑定机器' : item.machineId.slice(0, 8)), mid8: item.machineId?.slice(0, 8) ?? '—', addedAt: item.addedAt },
+        copyValue: item.label, copyValues: { target: target(item.id, item.id, current.starId, item.revision) }, searchText: `${item.label} ${item.kind} ${item.machineId ?? ''} ${item.machineName ?? ''} ${item.addedAt}`,
+        actionAvailability: item.kind === 'admin' && current.role !== 'broker-owner' ? { 'revoke-credential': disabled('星管理员不能撤销同侪管理钥。', '请 broker 主在本机接入凭证列表撤销该管理钥。') } : {}, detail: credentialDetails(item) }));
+diff --cc test/codex-aggregate-discovery.test.ts
+index 51081d2,061a086..0000000
+--- a/test/codex-aggregate-discovery.test.ts
++++ b/test/codex-aggregate-discovery.test.ts
+@@@ -45,7 -45,7 +45,11 @@@ describe('read-only Desktop and CLI agg
+      do {
+        const page = await reader.list({ contextId: 'local', cursor, limit: 1 });
+        ids.push(...page.items.map((item) => item.ref.nativeId));
+++<<<<<<< HEAD
+ +      for (const item of page.items) expect(item.attributes.transport).toBe(item.ref.endpointType);
+++=======
++       for (const item of page.items) expect(item.attributes.transport).toBe(item.ref.nativeId === 'cli-only' ? 'cli' : 'desktop');
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        expect(page.observedAt).toBe(12);
+        expect(page.errors).toEqual([]);
+        if (page.nextCursor === null) expect(page.completeness).toBe('complete');
+diff --cc test/codex-pagination.test.ts
+index fb377ab,2557836..0000000
+--- a/test/codex-pagination.test.ts
++++ b/test/codex-pagination.test.ts
+@@@ -43,7 -43,7 +43,11 @@@ describe('Codex internal paged read con
+        const read = session.readThreadMetadata('exact-thread');
+        expect(fake.sent.at(-1)).toMatchObject({ method: 'thread/read', params: { threadId: 'exact-thread', includeTurns: false } });
+        fake.respond({ thread: { id: 'exact-thread', name: 'before', status: { type: 'idle' } } });
+++<<<<<<< HEAD
+ +      expect(await read).toEqual({ id: 'exact-thread', endpointType: 'cli', name: 'before', status: 'idle' });
+++=======
++       expect(await read).toEqual({ id: 'exact-thread', name: 'before', status: 'idle' });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        const rename = session.renameThread('exact-thread', 'after');
+        expect(fake.sent.at(-1)).toMatchObject({ method: 'thread/name/set', params: { threadId: 'exact-thread', name: 'after' } });
+        fake.respond({});
+diff --cc test/helpers/claude-rename-native-validation.mjs
+index 262aa59,eb14036..0000000
+--- a/test/helpers/claude-rename-native-validation.mjs
++++ b/test/helpers/claude-rename-native-validation.mjs
+@@@ -8,8 -8,7 +8,12 @@@ import process from 'node:process'
+  import console from 'node:console';
+  import { listClaudeSessions } from '../../dist/claude/registry.js';
+  import { resolveClaudeExe } from '../../dist/claude/resolve-exe.js';
+++<<<<<<< HEAD
+ +import { prepareClaudeProfile, runClaudeCommand } from './claude-live-fixture.mjs';
+ +import { createClaudeMockModel } from './claude-mock-model.mjs';
+++=======
++ import { prepareClaudeProfile, runClaudeCommand, createClaudeMockModel } from './native-claude-fixture.mjs';
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  import { launchPty } from './tui-pty-driver.mjs';
+  
+  const sdk = process.env.CROSSCHAT_NATIVE_CLAUDE_SDK;
+diff --cc test/helpers/session-selection-native-validation.mjs
+index 8662ec6,a000bff..0000000
+--- a/test/helpers/session-selection-native-validation.mjs
++++ b/test/helpers/session-selection-native-validation.mjs
+@@@ -6,8 -6,7 +6,12 @@@ import { tmpdir } from 'node:os'
+  import { join } from 'node:path';
+  import { randomUUID } from 'node:crypto';
+  import { createClaudeSessionBinding } from '../../dist/claude/session-events.js';
+++<<<<<<< HEAD
+ +import { prepareClaudeProfile, runClaudeCommand } from './claude-live-fixture.mjs';
+ +import { createClaudeMockModel } from './claude-mock-model.mjs';
+++=======
++ import { prepareClaudeProfile, runClaudeCommand, createClaudeMockModel } from './native-claude-fixture.mjs';
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  import { launchPty } from './tui-pty-driver.mjs';
+  import { listClaudeSessions } from '../../dist/claude/registry.js';
+  import { setTimeout as delay } from 'node:timers/promises';
+diff --cc test/serve-sessions.test.ts
+index db13d9b,9ccbaf5..0000000
+--- a/test/serve-sessions.test.ts
++++ b/test/serve-sessions.test.ts
+@@@ -527,10 -535,10 +535,17 @@@ describe('018 NodeClient 聚合器：at
+      const { harness, attach, capture } = await startNodeStar('permanent-rm', {
+        claude: [{ sessionId: 'permanent-a', name: 'A' }],
+      }, { memberCheckMs: 80 });
+++<<<<<<< HEAD
+ +    await attach.send({ op: 'attach', sessionId: 'permanent-a', tool: 'claude', endpointType: 'cli', name: 'A' });
+ +    await vi.waitFor(() => expect(loadBrokerFile(harness.registryFile).stars[0]?.roster).toHaveLength(1));
+ +    await attach.send({ op: 'detach', sessionId: 'permanent-a' });
+ +    await attach.send({ op: 'attach', sessionId: 'permanent-a', tool: 'claude', endpointType: 'cli', name: 'A', temporary: true });
+++=======
++     await attach.send({ op: 'attach', sessionId: 'permanent-a', tool: 'claude', name: 'A' });
++     await vi.waitFor(() => expect(loadBrokerFile(harness.registryFile).stars[0]?.roster).toHaveLength(1));
++     await attach.send({ op: 'detach', sessionId: 'permanent-a' });
++     await attach.send({ op: 'attach', sessionId: 'permanent-a', tool: 'claude', name: 'A', temporary: true });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      await vi.waitFor(() => expect(loadBrokerFile(harness.registryFile).stars[0]?.roster?.[0]?.temporary).toBeUndefined());
+      await attach.send({ op: 'detach', sessionId: 'permanent-a', erase: true });
+      await vi.waitFor(() => expect(loadBrokerFile(harness.registryFile).stars[0]?.roster).toEqual([
+@@@ -539,20 -547,20 +554,33 @@@
+      const sender = await senderOn(harness.url, key('s'));
+      await new Promise((resolve) => setTimeout(resolve, 180));
+      expect(await attach.send({ op: 'status' })).toMatchObject({ members: [] });
+++<<<<<<< HEAD
+ +    await attach.send({ op: 'attach', sessionId: 'permanent-a', tool: 'claude', endpointType: 'cli', name: 'A', temporary: true });
+++=======
++     await attach.send({ op: 'attach', sessionId: 'permanent-a', tool: 'claude', name: 'A', temporary: true });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      await vi.waitFor(async () => {
+        const status = await attach.send({ op: 'status' });
+        expect(status).toMatchObject({ members: [expect.objectContaining({ sessionId: 'permanent-a' })] });
+      });
+++<<<<<<< HEAD
+ +    sender.send({ op: 'send', tool: 'claude', id: 'after-rm-resume', targetMachine: 'node-host:A', body: 'still here' });
+++=======
++     sender.send({ op: 'send', id: 'after-rm-resume', targetMachine: 'node-host:A', body: 'still here' });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      expect(await sender.waitFor((f) => f.op === 'receipt' && f.id === 'after-rm-resume')).toMatchObject({ status: 'delivered' });
+      expect(capture.delivered).toHaveLength(1);
+    });
+  
+    it('两个窗口声明同一临时会话时，只释放退出窗口自己的声明', async () => {
+      const { harness, attach } = await startNodeStar('shared-claims', { claude: [{ sessionId: 'shared-a' }] });
+++<<<<<<< HEAD
+ +    await attach.send({ op: 'attach', sessionId: 'shared-a', tool: 'claude', endpointType: 'cli', temporary: true, claimId: 'window-one' });
+ +    await attach.send({ op: 'attach', sessionId: 'shared-a', tool: 'claude', endpointType: 'cli', temporary: true, claimId: 'window-two' });
+++=======
++     await attach.send({ op: 'attach', sessionId: 'shared-a', tool: 'claude', temporary: true, claimId: 'window-one' });
++     await attach.send({ op: 'attach', sessionId: 'shared-a', tool: 'claude', temporary: true, claimId: 'window-two' });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      await attach.send({ op: 'detach', sessionId: 'shared-a', erase: true, claimId: 'window-one' });
+      expect(await attach.send({ op: 'status' })).toMatchObject({ members: [expect.objectContaining({ sessionId: 'shared-a' })] });
+      await attach.send({ op: 'detach', sessionId: 'shared-a', erase: true, claimId: 'not-an-owner' });
+@@@ -565,14 -573,14 +593,25 @@@
+      const history: MemberProvider = { providerId: 'codex', liveness: { probe: async ({ nativeId }) => ({ nativeId,
+        presence: 'present', name: null, completeness: 'complete', errors: [], observedAt: Date.now() }) }, readName: async () => undefined };
+      const { harness, attach } = await startNodeStar('selected-release', {}, { memberCheckMs: 40, memberProviders: () => [history] });
+++<<<<<<< HEAD
+ +    await attach.send({ op: 'attach', sessionId: 'selected-a', tool: 'codex', endpointType: 'cli', claimId: 'one', selectionOwned: true });
+ +    await vi.waitFor(() => expect(loadBrokerFile(harness.registryFile).stars[0]?.roster?.[0]).toMatchObject({ selectionOwned: true }));
+ +    await attach.send({ op: 'detach', sessionId: 'selected-a', claimId: 'one' });
+ +    await attach.send({ op: 'attach', sessionId: 'selected-b', tool: 'codex', endpointType: 'cli', claimId: 'one', selectionOwned: true });
+ +    await new Promise((resolve) => setTimeout(resolve, 180));
+ +    expect(await attach.send({ op: 'status' })).toMatchObject({ members: [expect.objectContaining({ sessionId: 'selected-b' })] });
+ +    expect(loadBrokerFile(harness.registryFile).stars[0]?.roster).toHaveLength(2);
+ +    await attach.send({ op: 'attach', sessionId: 'selected-a', tool: 'codex', endpointType: 'cli', claimId: 'two', temporary: true });
+++=======
++     await attach.send({ op: 'attach', sessionId: 'selected-a', tool: 'codex', claimId: 'one', selectionOwned: true });
++     await vi.waitFor(() => expect(loadBrokerFile(harness.registryFile).stars[0]?.roster?.[0]).toMatchObject({ selectionOwned: true }));
++     await attach.send({ op: 'detach', sessionId: 'selected-a', claimId: 'one' });
++     await attach.send({ op: 'attach', sessionId: 'selected-b', tool: 'codex', claimId: 'one', selectionOwned: true });
++     await new Promise((resolve) => setTimeout(resolve, 180));
++     expect(await attach.send({ op: 'status' })).toMatchObject({ members: [expect.objectContaining({ sessionId: 'selected-b' })] });
++     expect(loadBrokerFile(harness.registryFile).stars[0]?.roster).toHaveLength(2);
++     await attach.send({ op: 'attach', sessionId: 'selected-a', tool: 'codex', claimId: 'two', temporary: true });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      expect(await attach.send({ op: 'status' })).toMatchObject({ members: expect.arrayContaining([expect.objectContaining({ sessionId: 'selected-a' })]) });
+      expect(loadBrokerFile(harness.registryFile).stars[0]?.roster?.find((item) => item.sessionId === 'selected-a')?.temporary).toBeUndefined();
+    });
+@@@ -581,7 -589,7 +620,11 @@@
+      const native: { claude: Array<{ sessionId: string }> } = { claude: [{ sessionId: 'resume-selected' }] };
+      const { harness, attach, capture } = await startNodeStar('selected-raw-resume', native, { memberCheckMs: 40 });
+      const scans = vi.spyOn(capture.deps, 'listClaudeSessions');
+++<<<<<<< HEAD
+ +    await attach.send({ op: 'attach', sessionId: 'resume-selected', tool: 'claude', endpointType: 'cli', claimId: 'window', selectionOwned: true });
+++=======
++     await attach.send({ op: 'attach', sessionId: 'resume-selected', tool: 'claude', claimId: 'window', selectionOwned: true });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      await vi.waitFor(() => expect(loadBrokerFile(harness.registryFile).stars[0]?.roster?.[0]).toMatchObject({ selectionOwned: true }));
+      native.claude = [];
+      await attach.send({ op: 'detach', sessionId: 'resume-selected', claimId: 'window' });
+@@@ -590,7 -598,7 +633,11 @@@
+      const before = scans.mock.calls.length;
+      await vi.waitFor(() => expect(scans.mock.calls.length).toBeGreaterThan(before + 2));
+      expect(await attach.send({ op: 'status' })).toMatchObject({ members: [] });
+++<<<<<<< HEAD
+ +    await attach.send({ op: 'attach', sessionId: 'resume-selected', tool: 'claude', endpointType: 'cli', claimId: 'new-window', selectionOwned: true, temporary: true });
+++=======
++     await attach.send({ op: 'attach', sessionId: 'resume-selected', tool: 'claude', claimId: 'new-window', selectionOwned: true, temporary: true });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      expect(await attach.send({ op: 'status' })).toMatchObject({ members: [expect.objectContaining({ sessionId: 'resume-selected', selectionOwned: true })] });
+      expect(loadBrokerFile(harness.registryFile).stars[0]?.roster?.[0]?.temporary).toBeUndefined();
+      native.claude = [];
+@@@ -602,8 -610,8 +649,13 @@@
+    it('窗口断线只释放所属声明，旧连接关闭不能释放转移到新连接的声明', async () => {
+      const { harness, attach, entry, dir } = await startNodeStar('claim-sockets', { claude: [{ sessionId: 'shared-a' }] });
+      const second = await attachTalk(attachPipePath(entry, dir, 'claim-sockets'));
+++<<<<<<< HEAD
+ +    await attach.send({ op: 'attach', sessionId: 'shared-a', tool: 'claude', endpointType: 'cli', claimId: 'same', temporary: true });
+ +    await second.send({ op: 'attach', sessionId: 'shared-a', tool: 'claude', endpointType: 'cli', claimId: 'same', temporary: true });
+++=======
++     await attach.send({ op: 'attach', sessionId: 'shared-a', tool: 'claude', claimId: 'same', temporary: true });
++     await second.send({ op: 'attach', sessionId: 'shared-a', tool: 'claude', claimId: 'same', temporary: true });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      attach.close();
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      expect(await second.send({ op: 'status' })).toMatchObject({ members: [expect.objectContaining({ sessionId: 'shared-a' })] });
+@@@ -859,9 -872,9 +911,15 @@@ describe('028 册（roster）：落盘/
+      seed(registryFile, [{ key: key('w'), machineId: WIN_MID }, { key: key('l'), machineId: LINUX_MID }]);
+      const node = await nodeOn(url, key('w'), WIN_MID);
+      const other = await nodeOn(url, key('l'), LINUX_MID);
+++<<<<<<< HEAD
+ +    node.send(sessionsFrame([{ sessionId: 'permanent', tool: 'claude', endpointType: 'cli' }, { sessionId: 'temporary', tool: 'codex', endpointType: 'cli', temporary: true }]));
+ +    await vi.waitFor(() => expect(loadBrokerFile(registryFile).stars[0]?.roster).toHaveLength(2));
+ +    node.send(sessionsFrame([{ sessionId: 'permanent', tool: 'claude', endpointType: 'cli', temporary: true }, { sessionId: 'temporary', tool: 'codex', endpointType: 'cli' }]));
+++=======
++     node.send(sessionsFrame([{ sessionId: 'permanent', tool: 'claude' }, { sessionId: 'temporary', tool: 'codex', temporary: true }]));
++     await vi.waitFor(() => expect(loadBrokerFile(registryFile).stars[0]?.roster).toHaveLength(2));
++     node.send(sessionsFrame([{ sessionId: 'permanent', tool: 'claude', temporary: true }, { sessionId: 'temporary', tool: 'codex' }]));
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      node.send({ op: 'member-remove', id: 'permanent-clean', target: 'permanent', temporaryOnly: true });
+      expect(await node.waitFor((f) => f.op === 'member-remove-result' && f.id === 'permanent-clean')).toMatchObject({ removed: [] });
+      other.send({ op: 'member-remove', id: 'other-clean', target: 'temporary', temporaryOnly: true });
+diff --cc test/session-selection.test.ts
+index 7546c67,1330f0b..0000000
+--- a/test/session-selection.test.ts
++++ b/test/session-selection.test.ts
+@@@ -2,20 -2,6 +2,23 @@@ import { describe, expect, it, vi } fro
+  import { createSessionSelectionFollower } from '../src/application/session-selection.js';
+  
+  describe('window-owned native selection membership', () => {
+++<<<<<<< HEAD
+ +  it('releases a same-ID claim before accepting a different verified endpoint', async () => {
+ +    const calls: string[] = [];
+ +    const follower = createSessionSelectionFollower(async (selection) => {
+ +      calls.push(`join:${selection.endpointType}`);
+ +      return { close: async () => { calls.push(`release:${selection.endpointType}`); } };
+ +    });
+ +    follower.select({ kind: 'selected', sessionId: 'same-id', endpointType: 'cli' });
+ +    await follower.idle();
+ +    follower.select({ kind: 'selected', sessionId: 'same-id', endpointType: 'desktop' });
+ +    await follower.idle();
+ +    expect(calls).toEqual(['join:cli', 'release:cli', 'join:desktop']);
+ +    await follower.close();
+ +  });
+ +
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    it('waits for input, selects a resumed ID, and releases A before B without reopening stale selections', async () => {
+      const calls: string[] = [];
+      const follower = createSessionSelectionFollower(async (session, signal) => {
+diff --cc test/session-star.test.ts
+index a309f57,7df4725..0000000
+--- a/test/session-star.test.ts
++++ b/test/session-star.test.ts
+@@@ -180,7 -182,7 +182,11 @@@ function scanDeps(state: ScanState): Se
+        })),
+        malformed: 0,
+      }),
+++<<<<<<< HEAD
+ +    listCodexThreads: async () => state.codex.map((t) => ({ id: t.id, name: t.name, status: 'idle' as const, endpointType: 'cli' })),
+++=======
++     listCodexThreads: async () => state.codex.map((t) => ({ id: t.id, name: t.name, status: 'idle' as const })),
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+      deliverClaude: async (target, content) => {
+        state.delivered.push(content);
+        state.deliveredPids.push(target.pid);
+@@@ -447,7 -455,7 +459,11 @@@ describe('018 批二：启动器入星�
+        for (const args of captured) expect(args).toEqual(['--settings', '{"crossSessionInbound":"accept"}']);
+        const sender = await senderOn(sh.harness.url, key('s'));
+        const deliver = async (index: number, requestId: string) => {
+++<<<<<<< HEAD
+ +        sender.send({ tool: 'claude', op: 'send', id: requestId, targetMachine: `node-host:${ids[index]}`, body: requestId });
+++=======
++         sender.send({ op: 'send', id: requestId, targetMachine: `node-host:claude/${ids[index]}`, body: requestId });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+          expect(await sender.waitFor((frame) => (frame.op === 'receipt' || frame.op === 'error') && frame.id === requestId))
+            .toMatchObject({ op: 'receipt', status: 'delivered' });
+          expect(sh.state.deliveredPids.at(-1)).toBe(pids[index]);
+@@@ -660,7 -668,7 +676,11 @@@
+          return roster?.some((machine) => machine.sessions?.some((session) => session.name === 'still-connected'));
+        }, { timeout: 5_000 }).toBe(true);
+        const sender = await senderOn(sh.harness.url, key('s'));
+++<<<<<<< HEAD
+ +      sender.send({ tool: 'claude', op: 'send', id: 'success-log-error', targetMachine: 'node-host:still-connected', body: 'still delivered' });
+++=======
++       sender.send({ op: 'send', id: 'success-log-error', targetMachine: 'node-host:still-connected', body: 'still delivered' });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        expect(await sender.waitFor((frame) => (frame.op === 'receipt' || frame.op === 'error') && frame.id === 'success-log-error'))
+          .toMatchObject({ op: 'receipt', status: 'delivered' });
+        expect(out).toEqual([]);
+@@@ -756,33 -764,36 +776,60 @@@
+        // 基线=旧会话；spawn 后新会话 sess-multi 出现（夹具曾把两者写反，靠旗标强塞名侥幸过——现按差分语义修正）
+        shA.state.claude = [{ sessionId: 'sess-base', name: 'x', updatedAt: 1 }];
+        const joiner = new StarJoiner({ deps, side: 'claude', connects: ['sl-ma', 'sl-mb'] });
+++<<<<<<< HEAD
+ +      await joiner.begin();
+ +      shA.state.claude = [
+ +        { sessionId: 'sess-base', name: 'x', updatedAt: 1 },
+ +        { sessionId: 'sess-multi', name: 'boss', updatedAt: 99 },
+ +      ];
+ +      shB.state.claude = shA.state.claude; // 同一物理机的同一份扫描（两星夹具共享视图）
+ +      const probe = async (sh: StarHarness, id: string): Promise<Frame> => {
+ +        const sender = await senderOn(sh.harness.url, key('s'));
+ +        sender.send({ tool: 'claude', op: 'send', id, targetMachine: 'win-box:boss', body: 'x' });
+ +        return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
+ +      };
+ +      let okA: Frame | undefined;
+ +      let okB: Frame | undefined;
+ +      for (let i = 0; i < 50; i++) {
+ +        if (okA === undefined) {
+ +          const r = await probe(shA, `ma${i}`);
+ +          if (r.op === 'receipt' && r.status === 'delivered') okA = r;
+++=======
++       try {
++         await joiner.begin();
++         shA.state.claude = [
++           { sessionId: 'sess-base', name: 'x', updatedAt: 1 },
++           { sessionId: 'sess-multi', name: 'boss', updatedAt: 99 },
++         ];
++         shB.state.claude = shA.state.claude; // 同一物理机的同一份扫描（两星夹具共享视图）
++         const probe = async (sh: StarHarness, id: string): Promise<Frame> => {
++           const sender = await senderOn(sh.harness.url, key('s'));
++           sender.send({ op: 'send', id, targetMachine: 'win-box:boss', body: 'x' });
++           return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
++         };
++         let okA: Frame | undefined;
++         let okB: Frame | undefined;
++         for (let i = 0; i < 50; i++) {
++           if (okA === undefined) {
++             const r = await probe(shA, `ma${i}`);
++             if (r.op === 'receipt' && r.status === 'delivered') okA = r;
++           }
++           if (okB === undefined) {
++             const r = await probe(shB, `mb${i}`);
++             if (r.op === 'receipt' && r.status === 'delivered') okB = r;
++           }
++           if (okA !== undefined && okB !== undefined) break;
++           if (i === 49) throw new Error('双星 attach 未全部生效');
++           await new Promise((resolve) => setTimeout(resolve, 300));
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+          }
+-         if (okB === undefined) {
+-           const r = await probe(shB, `mb${i}`);
+-           if (r.op === 'receipt' && r.status === 'delivered') okB = r;
+-         }
+-         if (okA !== undefined && okB !== undefined) break;
+-         if (i === 49) throw new Error('双星 attach 未全部生效');
+-         await new Promise((resolve) => setTimeout(resolve, 300));
++       } finally {
++         await joiner.stop();
+        }
+++<<<<<<< HEAD
+ +      await joiner.stop();
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        expect(out).toEqual([]);
+        expect(err).toEqual([]);
+      },
+@@@ -1004,11 -1015,11 +1051,16 @@@ describe('统一恢复入口（启动�
+        ];
+        const aggA = await sh.aggregator();
+        const pipe = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
+++<<<<<<< HEAD
+ +      expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', endpointType: 'cli', selectionOwned: true, claimId: 'window-boss' })).ok).toBe(true);
+ +      expect((await pipe.send({ op: 'attach', sessionId: 'sess-gone', name: 'gone', tool: 'claude', endpointType: 'cli', selectionOwned: true, claimId: 'window-gone' })).ok).toBe(true);
+++=======
++       expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', selectionOwned: true, claimId: 'window-boss' })).ok).toBe(true);
++       expect((await pipe.send({ op: 'attach', sessionId: 'sess-gone', name: 'gone', tool: 'claude', selectionOwned: true, claimId: 'window-gone' })).ok).toBe(true);
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        const sender = await senderOn(sh.harness.url, key('s'));
+        const send3 = async (id: string, target: string): Promise<Frame> => {
+ -        sender.send({ op: 'send', id, targetMachine: target, body: 'x' });
+ +        sender.send({ tool: 'claude', op: 'send', id, targetMachine: target, body: 'x' });
+          return sender.waitFor((f) => (f.op === 'receipt' || f.op === 'error') && f.id === id);
+        };
+        expect((await send3('r1', 'lin-box:boss')).op).toBe('receipt'); // 成员在册
+@@@ -1023,7 -1034,7 +1075,11 @@@
+        expect(await send3('still-offline', 'lin-box:boss')).toMatchObject({ code: 'SESSION_OFFLINE' });
+        const next = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
+        clients.push(next);
+++<<<<<<< HEAD
+ +      expect((await next.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', endpointType: 'cli', claimId: 'new-window', selectionOwned: true })).ok).toBe(true);
+++=======
++       expect((await next.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', claimId: 'new-window', selectionOwned: true })).ok).toBe(true);
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        expect(await send3('selected-again', 'lin-box:boss')).toMatchObject({ status: 'delivered' });
+        const gone = await send3('r2', 'lin-box:gone');
+        expect(gone).toMatchObject({ op: 'error', code: 'SESSION_OFFLINE' }); // 不再除名——下线等复活
+@@@ -1038,7 -1049,7 +1094,11 @@@
+        sh.state.claude = [{ sessionId: 'sess-boss', name: 'boss' }];
+        const aggA = await sh.aggregator();
+        const pipe = await connectAttachPipe(attachPipePath(sh.entry, join(sh.baseDir, 'tcp')), 30, 200);
+++<<<<<<< HEAD
+ +      expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', endpointType: 'cli', selectionOwned: true, claimId: 'window' })).ok).toBe(true);
+++=======
++       expect((await pipe.send({ op: 'attach', sessionId: 'sess-boss', name: 'boss', tool: 'claude', selectionOwned: true, claimId: 'window' })).ok).toBe(true);
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        await aggA.stop();
+        await pipe.close();
+        // broker 重启——roster.json 落盘（018 双失忆边角由册根治）
+@@@ -1063,10 -1074,10 +1123,17 @@@
+        await aggC.waitForState('online');
+        const sender = await senderOn(`ws://127.0.0.1:${port}`, key('s'));
+        await new Promise((resolve) => setTimeout(resolve, 250));
+++<<<<<<< HEAD
+ +      sender.send({ tool: 'claude', op: 'send', id: 'am-offline', targetMachine: 'node-host:boss', body: 'x' });
+ +      expect(await sender.waitFor((f) => f.op === 'error' && f.id === 'am-offline')).toMatchObject({ code: 'SESSION_OFFLINE' });
+ +      expect(await runAdopt({ connect: 'sl-r2', adopt: 'boss' }, starJoinDeps(sh))).toBe(0);
+ +      sender.send({ tool: 'claude', op: 'send', id: 'am-selected', targetMachine: 'node-host:boss', body: 'x' });
+++=======
++       sender.send({ op: 'send', id: 'am-offline', targetMachine: 'node-host:boss', body: 'x' });
++       expect(await sender.waitFor((f) => f.op === 'error' && f.id === 'am-offline')).toMatchObject({ code: 'SESSION_OFFLINE' });
++       expect(await runAdopt({ connect: 'sl-r2', adopt: 'boss' }, starJoinDeps(sh))).toBe(0);
++       sender.send({ op: 'send', id: 'am-selected', targetMachine: 'node-host:boss', body: 'x' });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        expect(await sender.waitFor((f) => f.op === 'receipt' && f.id === 'am-selected')).toMatchObject({ status: 'delivered' });
+        // 册外活进程（从未入册）仍走 adopt 收编
+        sh.state.claude = [
+@@@ -1380,7 -1376,7 +1447,11 @@@ describe('028 双模式与命令面', (
+          { sessionId: 'sess-kid', name: 'boss', updatedAt: 100 },
+        ];
+        await new Promise((resolve) => setTimeout(resolve, 300));
+++<<<<<<< HEAD
+ +      expect(await deliver('bare-not-selected', 'node-host:boss', 'claude')).toMatchObject({ code: 'SESSION_OFFLINE' });
+++=======
++       expect(await deliver('bare-not-selected', 'node-host:boss')).toMatchObject({ code: 'SESSION_OFFLINE' });
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        expect(await runAdopt({ connect: 'sl-dm', adopt: 'boss' }, starJoinDeps(sh))).toBe(0);
+        await pollFor('node-host:boss', 'delivered', 'd3');
+        // --rm 模式：退出即离册零痕迹——会话进程仍活也册外无名
+@@@ -1490,12 -1486,11 +1561,20 @@@ describe('020 工具限定词：启动�
+          spawnName: 'boss',
+        });
+        await joiner.begin(); // 差分基线=空表（预警后快照）
+++<<<<<<< HEAD
+ +      // 同名提示使用独立工具参数，不将可区分的工具类型称作路由碰撞。
+ +      expect(out).toHaveLength(1);
+ +      expect(out[0]).toMatch(/^同名提示:/);
+ +      expect(out[0]).toContain('--tool codex-cli');
+ +      expect(out[0]).toContain('--tool claude');
+ +      expect(out[0]).not.toContain('claude/boss');
+++=======
++       // 保留实际同名预警，但不再打印入星预告。
++       expect(out).toHaveLength(1);
++       expect(out[0]).toMatch(/^预警:/);
++       expect(out[0]).toContain('codex/boss');
++       expect(out[0]).toContain('claude/boss');
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+        // 模拟 spawn 出新会话（claude/boss）→ attach（带 tool=claude）生效
+        sh.state.claude = [{ sessionId: 'sess-new', name: 'boss', updatedAt: 99 }];
+        const sender = await senderOn(sh.harness.url, key('s'));
+diff --cc test/tcp-configuration-management.test.ts
+index 83071c6,0f0e3aa..0000000
+--- a/test/tcp-configuration-management.test.ts
++++ b/test/tcp-configuration-management.test.ts
+@@@ -1,4 -1,4 +1,8 @@@
+++<<<<<<< HEAD
+ +import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+++=======
++ import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  import { tmpdir } from 'node:os';
+  import { join } from 'node:path';
+  import { afterEach, describe, expect, it } from 'vitest';
+@@@ -9,7 -9,7 +13,11 @@@ afterEach(async () => { for (const dire
+  const first = { host: 'first.invalid', port: 7260, starId: 'first-star', key: 'PRIVATE-NODE-KEY', adminKey: 'PRIVATE-ADMIN-KEY', showName: 'per-star', keep: { entry: true } };
+  const second = { host: 'second.invalid', port: 7261, starId: 'second-star', key: 'OTHER-PRIVATE-KEY' };
+  async function fixture() {
+++<<<<<<< HEAD
+ +  const home = await mkdtemp(join(tmpdir(), 'crosschat-tcp-config-'));
+++=======
++   const home = await realpath(await mkdtemp(join(tmpdir(), 'crosschat-tcp-config-')));
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    cleanup.push(home);
+    const baseDir = join(home, '.crosschat');
+    const directory = join(baseDir, 'tcp');
+diff --cc test/tcp-session-operations.test.ts
+index 1711be9,cbe8bfa..0000000
+--- a/test/tcp-session-operations.test.ts
++++ b/test/tcp-session-operations.test.ts
+@@@ -1,6 -1,8 +1,14 @@@
+++<<<<<<< HEAD
+ +import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+ +import { tmpdir } from 'node:os';
+ +import { join } from 'node:path';
+++=======
++ import { Buffer } from 'node:buffer';
++ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
++ import { tmpdir } from 'node:os';
++ import { join } from 'node:path';
++ import process from 'node:process';
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+  import { afterEach, describe, expect, it, vi } from 'vitest';
+  import { Broker } from '../src/serve/broker.js';
+  import { attachPipePath, NodeClient } from '../src/serve/node.js';
+@@@ -16,7 -18,8 +24,12 @@@ const cleanups: Array<() => void | Prom
+  afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
+  const machineId = 'a'.repeat(32);
+  async function fixture(rename?: 'normal' | 'lost') {
+++<<<<<<< HEAD
+ +  const dir = await mkdtemp(join(tmpdir(), 'cc-session-ops-'));
+++=======
++   const fixtureTmpDir = process.platform === 'darwin' ? await realpath('/tmp') : tmpdir();
++   const dir = await mkdtemp(join(fixtureTmpDir, 'cc-session-ops-'));
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    cleanups.push(() => rm(dir, { recursive: true, force: true }));
+    const registryFile = join(dir, 'broker.json');
+    writeBrokerFile(registryFile, { stars: [{ starId: 'star-a', name: 'alpha', nodes: [{ label: 'node', key: 'fixture-key', addedAt: '2026-10-26' }], roster: [] },
+@@@ -36,6 -39,11 +49,14 @@@
+        detail: { item: state.item?.ref.nativeId === request.nativeId ? state.item : null, completeness: 'complete', errors: [], observedAt: Date.now() } };
+    };
+    const attachLabel = dir.split(/[\\/]/).at(-1)!;
+++<<<<<<< HEAD
+++=======
++   const attachPath = attachPipePath(entry, join(dir, 'tcp'), attachLabel);
++   if (process.platform !== 'win32') {
++     expect(Buffer.byteLength(attachPath), `Fixture attach path exceeds the Unix socket limit: ${attachPath}`)
++       .toBeLessThanOrEqual(process.platform === 'darwin' ? 103 : 107);
++   }
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    const node = new NodeClient({ config: { entries: [entry] }, configFile, machineId: () => machineId,
+      fileInbox: new FileInbox({ inboxDir: join(dir, 'inbox'), partsDir: join(dir, 'parts') }), now: Date.now, log: () => undefined,
+      makeSendDeps: () => { throw new Error('Operations must not send messages'); }, memberProviders: () => [], memberCheckMs: 60_000,
+@@@ -56,48 -64,10 +77,55 @@@
+      await selected.send({ op: 'session-operation', id, starId, machineId, providerId: 'claude', nativeId, request: input });
+      return selected.waitFor((frame) => (frame.op === 'session-operation-result' || frame.op === 'error') && frame.id === id, 2_000);
+    };
+++<<<<<<< HEAD
+ +  return { dir, registryFile, state, request, other, node, attachPath: attachPipePath(entry, join(dir, 'tcp'), attachLabel) };
+ +}
+ +
+ +describe('exact node session operations over real broker/node transport', () => {
+ +  it('keeps same-ID CLI and Desktop claims separate through attach, status and typed detach', async () => {
+ +    const f = await fixture();
+ +    const window = await connectAttachPipe(f.attachPath);
+ +    cleanups.push(() => window.close());
+ +    const base = { sessionId: 'shared-native-id', tool: 'codex', selectionOwned: true };
+ +    expect(await window.send({ op: 'attach', ...base, endpointType: 'cli', claimId: 'cli-window' })).toMatchObject({ ok: true });
+ +    expect(await window.send({ op: 'attach', ...base, endpointType: 'desktop', claimId: 'desktop-window', temporary: true })).toMatchObject({ ok: true });
+ +    const status = await window.send({ op: 'status' });
+ +    expect(status.members).toEqual(expect.arrayContaining([
+ +      expect.objectContaining({ sessionId: base.sessionId, endpointType: 'cli', selectionOwned: true }),
+ +      expect.objectContaining({ sessionId: base.sessionId, endpointType: 'desktop', temporary: true, selectionOwned: true }),
+ +    ]));
+ +    await vi.waitFor(() => expect(loadBrokerFile(f.registryFile).stars[0]?.roster).toHaveLength(2));
+ +    expect(await window.send({ op: 'detach', sessionId: base.sessionId })).toMatchObject({ ok: false });
+ +    expect(await window.send({ op: 'detach', ...base, endpointType: 'desktop', claimId: 'desktop-window', erase: true })).toMatchObject({ ok: true });
+ +    await vi.waitFor(() => expect(loadBrokerFile(f.registryFile).stars[0]?.roster).toEqual([
+ +      expect.objectContaining({ sessionId: base.sessionId, tool: 'codex', endpointType: 'cli' }),
+ +    ]));
+ +    expect((await window.send({ op: 'status' })).members).toEqual([
+ +      expect.objectContaining({ sessionId: base.sessionId, endpointType: 'cli' }),
+ +    ]);
+ +  });
+ +
+ +  it('preserves the verified endpoint in application transport, node detail and roster confirmation', async () => {
+ +    const f = await fixture();
+ +    if (!f.state.item) throw new Error('Missing native fixture');
+ +    Object.assign(f.state.item.ref, { endpointType: 'cli' });
+ +    const operate = createTcpSessionOperation({ baseDir: f.dir, timeoutMs: 1500 });
+ +    const target = { contextId: 'local', starId: 'star-a', machineId, providerId: 'claude', endpointType: 'cli', nativeId: 'exact-session-a' };
+ +    const described = await operate(target, { kind: 'describe' });
+ +    expect(described).toMatchObject({ endpointType: 'cli', description: { ref: { endpointType: 'cli' }, actions: { adopt: { state: 'executable' } } } });
+ +    const result = await operate(target, { kind: 'apply', operation: 'adopt', expectedRevision: described.description!.revision });
+ +    expect(result).toMatchObject({ endpointType: 'cli', result: { kind: 'applied' } });
+ +    expect(loadBrokerFile(f.registryFile).stars[0]?.roster).toEqual([
+ +      expect.objectContaining({ sessionId: target.nativeId, tool: 'claude', endpointType: 'cli' }),
+ +    ]);
+ +  });
+ +
+++=======
++   return { dir, registryFile, state, request, other, node, attachPath };
++ }
++ 
++ describe('exact node session operations over real broker/node transport', () => {
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    it('repeating TUI adoption preserves a temporary window membership and releases it with the final window', async () => {
+      const f = await fixture();
+      const window = await connectAttachPipe(f.attachPath);
+diff --cc test/tui-tcp.test.ts
+index 474c3f1,748cfdd..0000000
+--- a/test/tui-tcp.test.ts
++++ b/test/tui-tcp.test.ts
+@@@ -50,23 -50,6 +50,26 @@@ function request(resource: TuiResource
+  }
+  
+  describe('TCP resource lists and readonly navigation', () => {
+++<<<<<<< HEAD
+ +  it('preserves the selected delivery type in member and session views and operation preflight', async () => {
+ +    const f = fixtures();
+ +    f.current.members = ['cli', 'desktop'].map((endpointType, index) => member(index, { id: `typed-${endpointType}`, providerId: 'codex', endpointType,
+ +      address: `tcp:${star.starId}:${machines[index % 2].machineId}:same-native-id` }));
+ +    f.sessions.items = f.current.members.map((value, index) => session(index, { id: value.id, providerId: 'codex', endpointType: value.endpointType,
+ +      member: value, address: value.address, ref: { contextId: 'local', providerId: 'codex', nativeId: value.nativeId, endpointType: value.endpointType } }));
+ +    const route = { resourceId: 'sessions', contextId: context.id, query: { starId: star.starId, scope: 'discoverable' } };
+ +    const page = await f.resources.sessions.adapter.read({ context, route, signal: signal() });
+ +    expect(page.rows.map((row) => row.cells.provider)).toEqual(['codex-cli', 'codex-desktop']);
+ +    expect(page.rows.map((row) => row.copyValue)).toEqual(f.current.members.map((value) => `crosschat send --via ${value.address} --tool codex-${value.endpointType} --body "<正文>"`));
+ +    const selected = request(f.resources.sessions.resource, page, 'adopt-session', 1);
+ +    await f.resources.sessions.adapter.checkAction!(selected);
+ +    expect(f.management.preview).toHaveBeenCalledWith(expect.objectContaining({ sessionTarget: expect.objectContaining({ endpointType: 'desktop' }) }));
+ +    const members = await f.resources.members.adapter.read({ context, route: { resourceId: 'members', contextId: context.id, query: { starId: star.starId } }, signal: signal() });
+ +    expect(members.rows.map((row) => row.cells.provider)).toEqual(['codex-cli', 'codex-desktop']);
+ +    expect(members.rows[1].copyValue).toBe(`crosschat send --via ${f.current.members[1].address} --tool codex-desktop --body "<正文>"`);
+ +  });
+++=======
+++>>>>>>> 874461ae9ecdb799d880c28c1db30999c2c51555
+    it('adopts the selected remote native session and keeps member/session lists live', async () => {
+      const f = fixtures();
+      f.sessions.items = [session(0, { member: null, membership: 'not-member', discovered: true })];

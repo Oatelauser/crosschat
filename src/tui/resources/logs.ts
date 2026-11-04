@@ -2,6 +2,7 @@ import type { LogCheckpoint, ManagedLogOptions, ManagedLogResult } from '../../a
 import { isRecord, untilAborted } from '../../application/sessions/reading.js';
 import type { SessionRef } from '../../application/sessions/model.js';
 import type { TuiAction, TuiPage, TuiReadRequest, TuiResource, TuiResourceAdapter } from '../model.js';
+import { isEndpointTypeFor } from '../../tool-types.js';
 
 export interface LogsResourceOptions {
   read(options: Omit<ManagedLogOptions, 'baseDir' | 'now'> & { sourceId: string; signal: AbortSignal }): Promise<ManagedLogResult>;
@@ -45,8 +46,11 @@ function scope(request: TuiReadRequest): Omit<ManagedLogOptions, 'baseDir' | 'no
     try { raw = JSON.parse(query.sessionRef); } catch { return undefined; }
     if (!isRecord(raw) || raw.contextId !== request.context.id || typeof raw.providerId !== 'string' || raw.providerId === ''
       || typeof raw.nativeId !== 'string' || raw.nativeId === '' || (raw.referenceKind !== undefined && raw.referenceKind !== 'native')
-      || Object.keys(raw).some((key) => !['contextId', 'providerId', 'nativeId', 'referenceKind'].includes(key))) return undefined;
-    sessionRef = { contextId: request.context.id, providerId: raw.providerId, nativeId: raw.nativeId, ...(raw.referenceKind === 'native' ? { referenceKind: 'native' as const } : {}) };
+      || (raw.endpointType !== undefined && !isEndpointTypeFor(raw.providerId, raw.endpointType))
+      || Object.keys(raw).some((key) => !['contextId', 'providerId', 'nativeId', 'endpointType', 'referenceKind'].includes(key))) return undefined;
+    sessionRef = { contextId: request.context.id, providerId: raw.providerId, nativeId: raw.nativeId,
+      ...(typeof raw.endpointType === 'string' ? { endpointType: raw.endpointType } : {}),
+      ...(raw.referenceKind === 'native' ? { referenceKind: 'native' as const } : {}) };
   }
   if (query.pairId !== undefined && (!query.pairId || query.pairId.length > 16_384)) return undefined;
   return { contextId: request.context.id, sourceId: query.source ?? 'send-log', ...(sessionRef ? { sessionRef } : {}), ...(query.pairId ? { pairId: query.pairId } : {}), ...(query.audit ? { audit: 'admin-op' as const } : {}), ...(query.starId ? { starId: query.starId } : {}) };

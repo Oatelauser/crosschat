@@ -1,0 +1,38 @@
+{
+  "at": "2026-10-23T02:35:44.9455097Z",
+  "userConfirmedCliCleanup": true,
+  "processes": [],
+  "uninstallEntries": [],
+  "paths": [
+    {
+      "path": "C:\\Users\\yangsheng\\.local\\state\\opencode",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\.local\\share\\opencode",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\.config\\opencode",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\AppData\\Local\\OpenCode",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\AppData\\Roaming\\OpenCode",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\AppData\\Local\\Programs\\OpenCode",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-20261023-f7760fd441ab47ffba88d1be752f5e93",
+      "exists": false
+    }
+  ],
+  "protocolExisted": false,
+  "command": []
+}

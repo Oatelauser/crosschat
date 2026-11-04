@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "checkedAt": "2026-10-23T08:02:22.9900228Z",
+  "owner": "crosschat-claude-compat-20261023",
+  "ownedProcessCount": 0,
+  "remainingExecutableCount": 1,
+  "retainedExecutable": {
+    "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291\\claude-compat-20261023-b118f74c76a441009eed1e03c1a9932c\\runtime-bootstrap\\profile\\appdata\\npm\\node_modules\\@anthropic-ai\\claude-code\\node_modules\\@anthropic-ai\\claude-code-win32-x64\\claude.exe",
+    "sha256": "5441781F2B6BBD07354B4A74560EE88C68C9BF05D6DB3C7E24C452C91673DC53",
+    "kind": "isolated portable bootstrap copy; no global installation",
+    "reason": "automatic approval review rejected deletion: blocked by policy; retained under the user-approved D-drive test parent"
+  },
+  "dataParentRetainedByUser": true,
+  "archiveRetained": true,
+  "preExistingClaudeCommandUnchanged": true,
+  "userSoftwareUninstalled": false,
+  "systemRegistrationWritten": false
+}

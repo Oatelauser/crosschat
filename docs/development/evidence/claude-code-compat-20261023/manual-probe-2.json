@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "tool": "claude-code-cli",
+  "platform": "win32",
+  "arch": "x64",
+  "runId": "159fcc1e-046d-47e4-942c-0512c9262e94",
+  "version": "2.1.309",
+  "scope": {
+    "officialNativeCLI": true,
+    "productionWrapper": true,
+    "scriptedLocalModel": true,
+    "streamJSON": true,
+    "interactiveTUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "startedAt": "2026-10-23T07:29:44.264Z",
+  "status": "failed",
+  "category": "infrastructure",
+  "stage": "model-fixture",
+  "check": "messages-model-and-native-bash-identity",
+  "checks": [
+    {
+      "name": "official-wrapper-and-native-session-registration",
+      "status": "passed",
+      "elapsedMs": 1953
+    }
+  ],
+  "sessions": [
+    {
+      "id": "00f00e9e-216c-41d5-84cd-4f56893d78b0",
+      "name": "CC_CI_159fcc1e046d47e4942c0512c9262e94_sender",
+      "wrapperPid": 36668,
+      "nativePid": 36904
+    },
+    {
+      "id": "ef6ba03e-1048-4867-aed3-a21b5189b220",
+      "name": "CC_CI_159fcc1e046d47e4942c0512c9262e94_receiver",
+      "wrapperPid": 45864,
+      "nativePid": 44756
+    }
+  ],
+  "error": "Unexpected non-whitespace character after JSON at position 343 (line 3 column 1)",
+  "modelRequestCount": 4,
+  "nativeResults": [
+    {
+      "id": "00f00e9e-216c-41d5-84cd-4f56893d78b0",
+      "count": 1,
+      "errors": 0
+    },
+    {
+      "id": "ef6ba03e-1048-4867-aed3-a21b5189b220",
+      "count": 1,
+      "errors": 0
+    }
+  ],
+  "stderr": [
+    {
+      "id": "00f00e9e-216c-41d5-84cd-4f56893d78b0",
+      "text": ""
+    },
+    {
+      "id": "ef6ba03e-1048-4867-aed3-a21b5189b220",
+      "text": ""
+    }
+  ],
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "modelClosed": true,
+    "removed": true,
+    "forced": false,
+    "errors": []
+  },
+  "finishedAt": "2026-10-23T07:29:47.150Z"
+}

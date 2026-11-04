@@ -1,0 +1,43 @@
+{
+  "version": "1.13.1",
+  "entries": 427,
+  "requiredAssets": [
+    "integrations/dsh/bridge.js",
+    "integrations/dsh/cordis.patch.yml",
+    "integrations/dsh/icon.svg",
+    "integrations/dsh/index.js",
+    "integrations/dsh/locale/en.json",
+    "integrations/dsh/locale/zh.json",
+    "integrations/dsh/package.json",
+    "skills/crosschat/SKILL.md",
+    "skills/crosschat/references/advanced.md",
+    "skills/crosschat/references/delivery.md",
+    "skills/crosschat/references/errors.md",
+    "skills/crosschat/references/remote.md",
+    "skills/crosschat/references/reply.md",
+    "skills/crosschat/references/send.md",
+    "skills/crosschat/references/stars.md"
+  ],
+  "missingAssets": [],
+  "priorPreviewEntries": 433,
+  "omittedFromFreshBuild": [
+    "dist/application/caller-source/state-lock.js",
+    "dist/application/caller-source/state-lock.js.map",
+    "dist/application/diagnostics/worker.js",
+    "dist/application/diagnostics/worker.js.map",
+    "dist/codex/queue.js",
+    "dist/codex/queue.js.map"
+  ],
+  "correspondingSources": [
+    "src/application/caller-source/state-lock.ts",
+    "src/application/diagnostics/worker.ts",
+    "src/codex/queue.ts"
+  ],
+  "allOmittedSourcesAbsent": true,
+  "initialAudit": {
+    "result": "incorrect expected list",
+    "explanation": "assumed .mjs filenames instead of inspecting the tracked bridge assets; no assets were actually missing"
+  },
+  "tgzWritten": false,
+  "packageInstallationValidated": false
+}

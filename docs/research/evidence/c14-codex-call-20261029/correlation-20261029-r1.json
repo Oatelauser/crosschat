@@ -1,0 +1,297 @@
+{
+  "record": "codex-call-correlation",
+  "version": 2,
+  "collectedAt": "2026-10-29T07:34:39.401Z",
+  "platform": "win32",
+  "node": "v25.0.0",
+  "runtime": {
+    "cliPackage": "0.163.0",
+    "cliEntry": "npm @openai/codex/bin/codex.js"
+  },
+  "isolation": {
+    "root": "owned exclusive temp dir, removed after the run",
+    "codexHome": "owned temp profile, empty at start",
+    "userConfigRead": false,
+    "userAuthRead": false,
+    "modelEndpoint": "127.0.0.1 loopback fixture"
+  },
+  "plan": {
+    "calls": [
+      "86694b834b22",
+      "efd6100a41ec"
+    ],
+    "expectedCalls": 2,
+    "expectedHooks": 2
+  },
+  "run": {
+    "status": "complete",
+    "reasons": [],
+    "outcome": "correlated",
+    "exitCode": 0,
+    "signal": null,
+    "timedOut": false,
+    "killedTree": false,
+    "spawnError": null,
+    "modelRequests": 3,
+    "offeredTools": [
+      "exec_command",
+      "write_stdin",
+      "request_user_input",
+      "view_image",
+      "multi_agent_v1",
+      "get_goal",
+      "create_goal",
+      "update_goal",
+      "web_search"
+    ],
+    "usedTools": [
+      "exec_command"
+    ],
+    "shellSamples": 2,
+    "hookRecords": 2,
+    "rejectedHookLines": [],
+    "rejectedShellLines": [],
+    "reads": {
+      "hookLog": {
+        "ok": true,
+        "truncated": false,
+        "error": null
+      },
+      "shell-1": {
+        "ok": true,
+        "truncated": false,
+        "error": null
+      },
+      "shell-2": {
+        "ok": true,
+        "truncated": false,
+        "error": null
+      }
+    }
+  },
+  "calls": [
+    {
+      "tagDigest": "86694b834b22",
+      "shell": {
+        "pid": 5624,
+        "ppid": 24436,
+        "ancestry": [
+          {
+            "pid": 5624,
+            "name": "node.exe",
+            "createdAt": 134377328685280740,
+            "exeDigest": "1e9d7fdac6b0"
+          },
+          {
+            "pid": 24436,
+            "name": "powershell.exe",
+            "createdAt": 134377328683752620,
+            "exeDigest": "97ec90eb3eb6"
+          },
+          {
+            "pid": 17712,
+            "name": "codex.exe",
+            "createdAt": 134377328638372900,
+            "exeDigest": "03966c62c075"
+          },
+          {
+            "pid": 33620,
+            "name": "node.exe",
+            "createdAt": 134377328637752580,
+            "exeDigest": "1e9d7fdac6b0"
+          }
+        ],
+        "malformedAncestryRows": 0,
+        "threadId": {
+          "present": true,
+          "length": 36,
+          "sha256": "7d57892d257a"
+        },
+        "sessionId": {
+          "present": true,
+          "length": 36,
+          "sha256": "7d57892d257a"
+        },
+        "toolCallId": {
+          "present": true,
+          "length": 10,
+          "sha256": "86694b834b22"
+        },
+        "codexVersion": "0.163.0"
+      },
+      "verdict": "correlated",
+      "toolCallIdEqual": true,
+      "threadIdEqual": true,
+      "sessionIdEqual": true,
+      "hook": {
+        "pid": 33616,
+        "ppid": 12852,
+        "ancestry": [
+          {
+            "pid": 33616,
+            "name": "node.exe",
+            "createdAt": 134377328648038860,
+            "exeDigest": "1e9d7fdac6b0"
+          },
+          {
+            "pid": 12852,
+            "name": "powershell.exe",
+            "createdAt": 134377328646540260,
+            "exeDigest": "97ec90eb3eb6"
+          },
+          {
+            "pid": 17712,
+            "name": "codex.exe",
+            "createdAt": 134377328638372900,
+            "exeDigest": "03966c62c075"
+          },
+          {
+            "pid": 33620,
+            "name": "node.exe",
+            "createdAt": 134377328637752580,
+            "exeDigest": "1e9d7fdac6b0"
+          }
+        ],
+        "malformedAncestryRows": 0,
+        "sessionId": {
+          "present": true,
+          "length": 36,
+          "sha256": "7d57892d257a"
+        },
+        "turnId": {
+          "present": true,
+          "length": 36,
+          "sha256": "1b4dda10a40b"
+        },
+        "toolUseId": {
+          "present": true,
+          "length": 10,
+          "sha256": "86694b834b22"
+        },
+        "toolName": "Bash"
+      },
+      "executorVerdict": "same",
+      "executorReason": null,
+      "sameExecutorInstance": true,
+      "sharedAncestor": {
+        "pid": 17712,
+        "name": "codex.exe",
+        "createdAt": 134377328638372900,
+        "exeDigest": "03966c62c075"
+      }
+    },
+    {
+      "tagDigest": "efd6100a41ec",
+      "shell": {
+        "pid": 21612,
+        "ppid": 29076,
+        "ancestry": [
+          {
+            "pid": 21612,
+            "name": "node.exe",
+            "createdAt": 134377328757531800,
+            "exeDigest": "1e9d7fdac6b0"
+          },
+          {
+            "pid": 29076,
+            "name": "powershell.exe",
+            "createdAt": 134377328755865470,
+            "exeDigest": "97ec90eb3eb6"
+          },
+          {
+            "pid": 17712,
+            "name": "codex.exe",
+            "createdAt": 134377328638372900,
+            "exeDigest": "03966c62c075"
+          },
+          {
+            "pid": 33620,
+            "name": "node.exe",
+            "createdAt": 134377328637752580,
+            "exeDigest": "1e9d7fdac6b0"
+          }
+        ],
+        "malformedAncestryRows": 0,
+        "threadId": {
+          "present": true,
+          "length": 36,
+          "sha256": "7d57892d257a"
+        },
+        "sessionId": {
+          "present": true,
+          "length": 36,
+          "sha256": "7d57892d257a"
+        },
+        "toolCallId": {
+          "present": true,
+          "length": 10,
+          "sha256": "efd6100a41ec"
+        },
+        "codexVersion": "0.163.0"
+      },
+      "verdict": "correlated",
+      "toolCallIdEqual": true,
+      "threadIdEqual": true,
+      "sessionIdEqual": true,
+      "hook": {
+        "pid": 33068,
+        "ppid": 44300,
+        "ancestry": [
+          {
+            "pid": 33068,
+            "name": "node.exe",
+            "createdAt": 134377328721113220,
+            "exeDigest": "1e9d7fdac6b0"
+          },
+          {
+            "pid": 44300,
+            "name": "powershell.exe",
+            "createdAt": 134377328719935980,
+            "exeDigest": "97ec90eb3eb6"
+          },
+          {
+            "pid": 17712,
+            "name": "codex.exe",
+            "createdAt": 134377328638372900,
+            "exeDigest": "03966c62c075"
+          },
+          {
+            "pid": 33620,
+            "name": "node.exe",
+            "createdAt": 134377328637752580,
+            "exeDigest": "1e9d7fdac6b0"
+          }
+        ],
+        "malformedAncestryRows": 0,
+        "sessionId": {
+          "present": true,
+          "length": 36,
+          "sha256": "7d57892d257a"
+        },
+        "turnId": {
+          "present": true,
+          "length": 36,
+          "sha256": "1b4dda10a40b"
+        },
+        "toolUseId": {
+          "present": true,
+          "length": 10,
+          "sha256": "efd6100a41ec"
+        },
+        "toolName": "Bash"
+      },
+      "executorVerdict": "same",
+      "executorReason": null,
+      "sameExecutorInstance": true,
+      "sharedAncestor": {
+        "pid": 17712,
+        "name": "codex.exe",
+        "createdAt": 134377328638372900,
+        "exeDigest": "03966c62c075"
+      }
+    }
+  ],
+  "orphanHooks": [],
+  "unusedShells": [],
+  "limits": "One Windows host, one isolated CODEX_HOME, one native CLI process tree, non-interactive exec with a loopback fixture model. No Desktop, no shared daemon, no IPC owner, no write_stdin, no second thread, no subagent."
+}

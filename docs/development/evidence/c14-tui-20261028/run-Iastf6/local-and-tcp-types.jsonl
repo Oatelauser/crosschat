@@ -1,0 +1,35 @@
+{"at":1793150805011,"event":"fixture-ready","nativeId":"11111111-2222-3333-4444-555555555555","starId":"c14-full-star-identity","machineId":"12345678123456781234567812345678","remoteId":"tcp:c14-fixture"}
+{"at":1793150805083,"event":"local-read","generation":1}
+{"at":1793150805123,"event":"clipboard","value":"{\n  \"contextId\": \"local\",\n  \"providerId\": \"codex\",\n  \"nativeId\": \"11111111-2222-3333-4444-555555555555\",\n  \"endpointType\": \"cli\",\n  \"referenceKind\": \"native\"\n}"}
+{"at":1793150805177,"event":"clipboard","value":"{\n  \"contextId\": \"local\",\n  \"providerId\": \"codex\",\n  \"nativeId\": \"11111111-2222-3333-4444-555555555555\",\n  \"endpointType\": \"desktop\",\n  \"referenceKind\": \"native\"\n}"}
+{"at":1793150805187,"event":"clipboard","value":"codex-desktop/11111111-2222-3333-4444-555555555555"}
+{"at":1793150805218,"event":"local-read","generation":2}
+{"at":1793150805375,"event":"clipboard","value":"{\n  \"contextId\": \"local\",\n  \"providerId\": \"codex\",\n  \"nativeId\": \"11111111-2222-3333-4444-555555555555\",\n  \"endpointType\": \"desktop\",\n  \"referenceKind\": \"native\"\n}"}
+{"at":1793150805489,"event":"clipboard","value":"{\n  \"contextId\": \"local\",\n  \"providerId\": \"codex\",\n  \"nativeId\": \"11111111-2222-3333-4444-555555555555\",\n  \"endpointType\": \"desktop\",\n  \"referenceKind\": \"native\"\n}"}
+{"at":1793150805598,"event":"clipboard","value":"{\n  \"contextId\": \"local\",\n  \"providerId\": \"codex\",\n  \"nativeId\": \"11111111-2222-3333-4444-555555555555\",\n  \"endpointType\": \"cli\",\n  \"referenceKind\": \"native\"\n}"}
+{"at":1793150805765,"event":"tcp-stars","contextId":"tcp:c14-fixture"}
+{"at":1793150805858,"event":"tcp-star","contextId":"tcp:c14-fixture"}
+{"at":1793150805872,"event":"tcp-preview","action":"rename-session","sessionTarget":{"machineId":"12345678123456781234567812345678","providerId":"codex","nativeId":"11111111-2222-3333-4444-555555555555","endpointType":"cli"}}
+{"at":1793150805950,"event":"clipboard","value":"12345678:codex-cli/11111111-2222-3333-4444-555555555555"}
+{"at":1793150805982,"event":"tcp-sessions","contextId":"tcp:c14-fixture","scope":"discoverable","generation":1}
+{"at":1793150805991,"event":"tcp-preview","action":"adopt-session","sessionTarget":{"machineId":"12345678123456781234567812345678","providerId":"codex","nativeId":"11111111-2222-3333-4444-555555555555","endpointType":"cli"}}
+{"at":1793150805991,"event":"tcp-preview","action":"rename-session","sessionTarget":{"machineId":"12345678123456781234567812345678","providerId":"codex","nativeId":"11111111-2222-3333-4444-555555555555","endpointType":"cli"}}
+{"at":1793150806060,"event":"clipboard","value":"{\n  \"contextId\": \"tcp-node:tcp:c14-fixture:c14-full-star-identity:12345678123456781234567812345678\",\n  \"providerId\": \"codex\",\n  \"endpointType\": \"cli\",\n  \"nativeId\": \"11111111-2222-3333-4444-555555555555\",\n  \"referenceKind\": \"native\"\n}"}
+{"at":1793150806091,"event":"tcp-preview","action":"adopt-session","sessionTarget":{"machineId":"12345678123456781234567812345678","providerId":"codex","nativeId":"11111111-2222-3333-4444-555555555555","endpointType":"desktop"}}
+{"at":1793150806091,"event":"tcp-preview","action":"rename-session","sessionTarget":{"machineId":"12345678123456781234567812345678","providerId":"codex","nativeId":"11111111-2222-3333-4444-555555555555","endpointType":"desktop"}}
+{"at":1793150806107,"event":"clipboard","value":"{\n  \"contextId\": \"tcp-node:tcp:c14-fixture:c14-full-star-identity:12345678123456781234567812345678\",\n  \"providerId\": \"codex\",\n  \"endpointType\": \"desktop\",\n  \"nativeId\": \"11111111-2222-3333-4444-555555555555\",\n  \"referenceKind\": \"native\"\n}"}
+{"at":1793150806122,"event":"clipboard","value":"12345678:codex-desktop/11111111-2222-3333-4444-555555555555"}
+{"at":1793150806152,"event":"tcp-sessions","contextId":"tcp:c14-fixture","scope":"discoverable","generation":2}
+{"at":1793150806167,"event":"tcp-preview","action":"adopt-session","sessionTarget":{"machineId":"12345678123456781234567812345678","providerId":"codex","nativeId":"11111111-2222-3333-4444-555555555555","endpointType":"desktop"}}
+{"at":1793150806167,"event":"tcp-preview","action":"rename-session","sessionTarget":{"machineId":"12345678123456781234567812345678","providerId":"codex","nativeId":"11111111-2222-3333-4444-555555555555","endpointType":"desktop"}}
+{"at":1793150806309,"event":"clipboard","value":"{\n  \"contextId\": \"tcp-node:tcp:c14-fixture:c14-full-star-identity:12345678123456781234567812345678\",\n  \"providerId\": \"codex\",\n  \"endpointType\": \"desktop\",\n  \"nativeId\": \"11111111-2222-3333-4444-555555555555\",\n  \"referenceKind\": \"native\"\n}"}
+{"at":1793150806418,"event":"tcp-preview","action":"adopt-session","sessionTarget":{"machineId":"12345678123456781234567812345678","providerId":"codex","nativeId":"11111111-2222-3333-4444-555555555555","endpointType":"desktop"}}
+{"at":1793150806418,"event":"tcp-preview","action":"rename-session","sessionTarget":{"machineId":"12345678123456781234567812345678","providerId":"codex","nativeId":"11111111-2222-3333-4444-555555555555","endpointType":"desktop"}}
+{"at":1793150806436,"event":"clipboard","value":"{\n  \"contextId\": \"tcp-node:tcp:c14-fixture:c14-full-star-identity:12345678123456781234567812345678\",\n  \"providerId\": \"codex\",\n  \"endpointType\": \"desktop\",\n  \"nativeId\": \"11111111-2222-3333-4444-555555555555\",\n  \"referenceKind\": \"native\"\n}"}
+{"at":1793150806505,"event":"tcp-preview","action":"adopt-session","sessionTarget":{"machineId":"12345678123456781234567812345678","providerId":"codex","nativeId":"11111111-2222-3333-4444-555555555555","endpointType":"cli"}}
+{"at":1793150806505,"event":"tcp-preview","action":"rename-session","sessionTarget":{"machineId":"12345678123456781234567812345678","providerId":"codex","nativeId":"11111111-2222-3333-4444-555555555555","endpointType":"cli"}}
+{"at":1793150806528,"event":"clipboard","value":"{\n  \"contextId\": \"tcp-node:tcp:c14-fixture:c14-full-star-identity:12345678123456781234567812345678\",\n  \"providerId\": \"codex\",\n  \"endpointType\": \"cli\",\n  \"nativeId\": \"11111111-2222-3333-4444-555555555555\",\n  \"referenceKind\": \"native\"\n}"}
+{"at":1793150806559,"event":"resize","columns":48,"rows":16}
+{"at":1793150806582,"event":"resize","columns":140,"rows":32}
+{"at":1793150806595,"event":"clipboard","value":"{\n  \"contextId\": \"tcp-node:tcp:c14-fixture:c14-full-star-identity:12345678123456781234567812345678\",\n  \"providerId\": \"codex\",\n  \"endpointType\": \"cli\",\n  \"nativeId\": \"11111111-2222-3333-4444-555555555555\",\n  \"referenceKind\": \"native\"\n}"}
+{"at":1793150806636,"event":"exit","code":0,"before":{"raw":false,"listeners":{"SIGINT":1,"SIGTERM":1,"uncaughtException":0,"unhandledRejection":0},"resize":0},"after":{"raw":false,"listeners":{"SIGINT":1,"SIGTERM":1,"uncaughtException":0,"unhandledRejection":0},"resize":0}}

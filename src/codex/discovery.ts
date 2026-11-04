@@ -15,6 +15,9 @@ export interface CodexThreadWithMeta extends CodexThreadSummary {
 }
 
 export interface CodexThreadDiscoveryOptions {
+  endpointType?: string;
+  /** Strict selectors read every native page; ordinary CLI calls retain limit 20. */
+  complete?: boolean;
   sessionFactory?: CodexSessionFactory;
   codexHome?: string;
   desktop?: DesktopDiscoveryOptions;
@@ -123,17 +126,21 @@ export async function listCodexThreads(
   options: CodexThreadDiscoveryOptions = {},
 ): Promise<CodexThreadWithMeta[]> {
   // Existing injected CLI adapters remain isolated from the user's DB and pipe.
-  if (options.sessionFactory === undefined || options.desktop !== undefined) {
+  const complete = options.complete === true;
+  if (complete || options.sessionFactory === undefined || options.desktop !== undefined) {
     const threads: CodexThreadWithMeta[] = [];
     let cursor: string | undefined;
     let available = false;
     let cliUnavailable = false;
     do {
-      const page = await listCodexThreadPage({ ...options, cursor, limit: 20, legacyCli: true });
+      const page = await listCodexThreadPage({ ...options, cursor, limit: complete ? 100 : 20, legacyCli: !complete });
+      if (complete && (page.errors.length > 0 || page.nextCursor === null && page.completeness !== 'complete')) {
+        throw new MultichatError('CODEX_DISCOVERY_INCOMPLETE', 'The selected Codex source could not confirm a complete native session list. Refresh after restoring that source; no target was selected.');
+      }
       available ||= page.completeness !== 'unavailable';
       cliUnavailable ||= page.errors.some((error) => error.source === 'cli' && error.kind !== 'legacy-limit');
       for (const thread of page.data) {
-        if (threads.length === 20) break;
+        if (!complete && threads.length === 20) break;
         let status: CodexThreadSummary['status'];
         if (typeof thread.rawStatus === 'string' && ['idle', 'busy', 'not_loaded', 'waiting_approval', 'system_error'].includes(thread.rawStatus)) status = thread.rawStatus as CodexThreadSummary['status'];
         else {
@@ -147,19 +154,21 @@ export async function listCodexThreads(
           createdAt: typeof attributes.createdAt === 'number' ? new Date(attributes.createdAt).toISOString() : undefined,
         };
         threads.push({ id: thread.id, name: thread.name, status,
+          ...(thread.endpointType === undefined ? {} : { endpointType: thread.endpointType }),
           ...(meta.cwd !== undefined || meta.originator !== undefined || meta.createdAt !== undefined ? { meta } : {}) });
       }
       cursor = page.nextCursor ?? undefined;
-    } while (threads.length < 20 && cursor !== undefined);
+    } while ((complete || threads.length < 20) && cursor !== undefined);
     if (!available || threads.length === 0 && cliUnavailable) throw new MultichatError('CODEX_PROXY_SPAWN_FAILED', 'No live Codex Desktop thread was found and the CLI app-server could not be read.');
     let metas = new Map<string, RolloutMeta>();
-    try { metas = lookupRolloutMetas(options.codexHome ?? codexHomeDir(), threads.filter((thread) => thread.meta === undefined).map((thread) => thread.id)); }
+    try { metas = lookupRolloutMetas(options.codexHome ?? codexHomeDir(), threads.filter((thread) => thread.endpointType === 'cli' && thread.meta === undefined).map((thread) => thread.id)); }
     catch { /* Existing CLI rollout enrichment remains best effort. */ }
     return threads.map((thread) => {
-      const meta = metas.get(thread.id);
+      const meta = thread.endpointType === 'cli' ? metas.get(thread.id) : undefined;
       return meta === undefined ? thread : { ...thread, meta };
     });
   }
+  if (options.endpointType !== undefined && options.endpointType !== 'cli') return [];
   const sessionFactory = options.sessionFactory ?? openCodexSession();
   let session;
   try {
@@ -183,7 +192,7 @@ export async function listCodexThreads(
     }
     return threads.map((thread) => {
       const meta = metas.get(thread.id);
-      return meta === undefined ? thread : { ...thread, meta };
+      return { ...thread, endpointType: 'cli', ...(meta === undefined ? {} : { meta }) };
     });
   } catch (err) {
     if (err instanceof MultichatError) throw err;

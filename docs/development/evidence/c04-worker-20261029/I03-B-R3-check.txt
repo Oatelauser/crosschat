@@ -1,0 +1,894 @@
+VITEST_MAX_FORKS=2
+VITEST_MIN_FORKS=1
+VITEST_MAX_THREADS=2
+VITEST_MIN_THREADS=1
+COMMAND: npx vitest run test/dsh-compat-ci.test.ts --maxWorkers=2 --minWorkers=1  # RED
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mD:/workspace/CC/multichat[39m
+
+ [31m❯[39m test/dsh-compat-ci.test.ts [2m([22m[2m76 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 12024[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official npm artifact constraints[2m > [22mpins the scoped npm artifact, package manager and the supported prerelease window[32m 5[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official npm artifact constraints[2m > [22mrejects unrelated or mutable sources, malformed SRI and package-manager drift[32m 0[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official npm artifact constraints[2m > [22mverifies the exact downloaded archive bytes using canonical SHA-512 SRI[32m 0[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness isolated npm download cache[2m > [22muses a shared run-owned default and marks an explicit existing external cache for retention[32m 4[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness isolated npm download cache[2m > [22mrejects relative paths, URLs, network paths, files and externally labelled owned paths[32m 4[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness isolated npm download cache[2m > [22mrejects directory links and linked ancestors before using an external cache[32m 3[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness fresh process and cleanup evidence[2m > [22mruns only controlled child processes and reports normal and timed-out termination distinctly[32m 213[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness fresh process and cleanup evidence[2m > [22muses a unique empty report location and a caller-chosen UUID for every attempt[32m 6[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness fresh process and cleanup evidence[2m > [22mrejects wrong run IDs, incomplete PASS evidence, timeout/signal and process/report disagreement[32m 28[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness fresh process and cleanup evidence[2m > [22mrequires all four exact cleanup booleans and refuses forced or unknown release[32m 0[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness baseline and candidate lifecycle[2m > [22mremoves each released install before the next and retries the same pinned candidate[32m 1[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness baseline and candidate lifecycle[2m > [22mretains unknown runtime state and never advances or removes it[32m 0[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness baseline and candidate lifecycle[2m > [22mkeeps the web retainedInstallation shape unchanged when a probe fails[32m 0[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness baseline and candidate lifecycle[2m > [22mdoes not turn installation, readiness, cleanup, baseline failure or flaky checks into issues[32m 0[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness independent issue reporter[2m > [22mcreates only one deduplicated issue after independently verifying genuine scoped regression evidence[32m 9[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22maccepts a fresh desktop report bound to this install, native instance, session and artifact[32m 3[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mbinds the report to the caller launch instead of the report claim[32m 16[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mrejects web, stale, foreign and incomplete desktop evidence[32m 28[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mignores reports outside the exclusive attempt location and never reuses an earlier report[32m 6[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mrejects a well formed report above the read budget and keeps release unknown[32m 6[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mnever binds two missing artifact identities[32m 2[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mkeeps release unknown when the session times out, is killed, truncates output or disagrees[32m 18[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mrequires the Host exit, official uninstall and both registration cleanups for desktop release[32m 0[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22minstalls the candidate only after a released baseline bound to this run[32m 0[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mrefuses to reuse an installation identity across attempts[32m 0[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mkeeps the desktop summary out of the web reporter[32m 0[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mretains the first desktop installation and stops when release is unverified[32m 0[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mnever closes blindly after a thrown desktop operation and keeps ownership when the close fails[32m 0[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mkeeps the owned root of a partially created installation that throws[32m 2[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mkeeps the web entry closed to desktop reports and the desktop entry closed to web reports[32m 0[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mrejects array UUID identities and never lets equal arrays bypass instance dedup[32m 0[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mretains the full ownership after a normal install when release is unknown[32m 2[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mretains the full ownership with the real reason when the desktop probe throws[32m 2[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mretains the full ownership when the official close fails[32m 2[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mkeeps String(value) as the real reason when the probe throws a falsy value[32m 6[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mprojects the pinned research metadata and refuses masquerading or inexact desktop sources[32m 2[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mstreams the exact pinned bytes into the exclusive directory and proves only the transfer[32m 16[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mrejects redirect, error and missing-body responses and size or digest disagreements without keeping partials[32m 5[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22menforces the total deadline over headers and body and honors external cancellation [33m 447[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mrejects short and zero-progress disk writes instead of trusting the stream digest[32m 4[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mvoids delivery when cancellation or the total deadline lands during the close[32m 151[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mwraps frozen and falsy close failures with the retained path and the original cause[32m 4[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mkeeps late responses and late handles owned after the deadline [33m 638[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mkeeps the cause and the retained path when a falsy read failure meets an unclear release[32m 124[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mrefuses delivery when cancellation or the total deadline lands during cleanup[32m 127[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mreports a late file close failure with the path and keeps the file owned [33m 1114[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mreports a late file close that never settles as undecided at return [33m 2025[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mreports a late partial removal failure with the path and keeps the file owned[32m 264[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mremoves a late-created file exactly once and never deletes a replacement[32m 266[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mdoes not report a partial path after a successful late close and removal[32m 263[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mcloses a real late handle that arrives after the product returned even when its close was replaced[32m 124[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mreports a late response whose cancel is still undecided when cleanup returns[32m 279[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mcancels a late response, releases its lock and reports it as undecided at return [33m 390[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mkeeps falsy and frozen stream failures as real failures and still cleans the owned partial[32m 8[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mnever overwrites an existing file and re-checks the projection before any network call[32m 3[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22madmits the exact verified file and matching publisher without writing an installation[32m 3[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mrejects a missing or malformed publisher policy before any file read or child process[32m 2[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mrejects inexact artifact identities and file size or digest disagreements[32m 3[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mrejects links and non-regular files[32m 5[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mrejects a file replaced between the read and the final state check[32m 2[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mrejects a signature status, subject or thumbprint that disagrees with the policy[32m 7[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mrejects pre-cancelled, timed-out and externally cancelled admissions without success[32m 61[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22muses the bounded Windows Authenticode adapter with the path in an environment field[32m 4[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mrejects default-adapter output, JSON and process failures[32m 75[2mms[22m[39m
+[31m   [31m×[31m DeepSeek Harness desktop installer admission[2m > [22mrejects same-fingerprint content rewritten while its signature is being read[39m[32m 11[2mms[22m[39m
+[31m     → promise resolved "{ …(6) }" instead of rejecting[39m
+[31m   [31m×[31m DeepSeek Harness desktop installer admission[2m > [22mbounds the post-signature content read and still closes the handle[39m[32m 5[2mms[22m[39m
+[31m     → expected { …(6) } to match object { stage: 'cancelled' }
+(9 matching properties omitted from actual)[39m
+   [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mbounds a stalled open, owns the late handle and closes it once[32m 60[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mbounds a stalled metadata read[32m 48[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mreports an unconfirmed signature child release and clears parent pipes [33m 1011[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mreports an unconfirmed signature child release on cancellation [33m 1049[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mstarts the real file close only once when it rejects[32m 3[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mpreserves a frozen signature failure alongside the close failure[32m 2[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mowns a spawned child error without a close instead of returning early [33m 1019[2mms[22m[39m
+   [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mfinishes a spawned child error once its close is observed[32m 4[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mkeeps the overflow failure when a failed stop reports an error [33m 1011[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mkeeps the signature failure and release state across the total deadline [33m 1012[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/dsh-compat-ci.test.ts[2m > [22mDeepSeek Harness desktop installer admission[2m > [22mrejects same-fingerprint content rewritten while its signature is being read
+[31m[1mAssertionError[22m: promise resolved "{ …(6) }" instead of rejecting[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- Error {[39m
+[32m-   "message": "rejected promise",[39m
+[31m+ {[39m
+[31m+   "filename": "deepseek-harness-0.2.1-rc.2-win-x64.exe",[39m
+[31m+   "integrity": "sha512-l2Zk9b6wYrffwP5Sl3MSe4LSMfwCK7uJro1Fn92D0nO37LszegJv8x3fiZncM5WdEfPvE6U+umsA8dWZow5DGw==",[39m
+[31m+   "path": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-dsh-ci-test-JA2vb9\\deepseek-harness-0.2.1-rc.2-win-x64.exe",[39m
+[31m+   "publisher": {[39m
+[31m+     "status": "Valid",[39m
+[31m+     "subject": "CN=DeepSeek, O=DeepSeek, C=CN",[39m
+[31m+     "thumbprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",[39m
+[31m+   },[39m
+[31m+   "size": 46,[39m
+[31m+   "version": "0.2.1-rc.2",[39m
+[2m  }[22m
+
+[36m [2m❯[22m test/dsh-compat-ci.test.ts:[2m1501:13[22m[39m
+    [90m1499| [39m          await writeFile(target, replacement);
+    [90m1500| [39m          return signature;
+    [90m1501| [39m        } })).rejects.toMatchObject({ stage: 'file' });
+    [90m   | [39m            [31m^[39m
+    [90m1502| [39m        expect(reads).toBe(1);
+    [90m1503| [39m        expect(await readFile(path)).toEqual(replacement);
+[90m [2m❯[22m isolated test/dsh-compat-ci.test.ts:[2m58:9[22m[39m
+[90m [2m❯[22m test/dsh-compat-ci.test.ts:[2m1483:5[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/dsh-compat-ci.test.ts[2m > [22mDeepSeek Harness desktop installer admission[2m > [22mbounds the post-signature content read and still closes the handle
+[31m[1mAssertionError[22m: expected { …(6) } to match object { stage: 'cancelled' }
+(9 matching properties omitted from actual)[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[32m-   "stage": "cancelled",[39m
+[31m+   "filename": "deepseek-harness-0.2.1-rc.2-win-x64.exe",[39m
+[31m+   "integrity": "sha512-l2Zk9b6wYrffwP5Sl3MSe4LSMfwCK7uJro1Fn92D0nO37LszegJv8x3fiZncM5WdEfPvE6U+umsA8dWZow5DGw==",[39m
+[31m+   "path": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-dsh-ci-test-zi5s3m\\deepseek-harness-0.2.1-rc.2-win-x64.exe",[39m
+[31m+   "publisher": {[39m
+[31m+     "status": "Valid",[39m
+[31m+     "subject": "CN=DeepSeek, O=DeepSeek, C=CN",[39m
+[31m+     "thumbprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",[39m
+[31m+   },[39m
+[31m+   "size": 46,[39m
+[31m+   "version": "0.2.1-rc.2",[39m
+[2m  }[22m
+
+[36m [2m❯[22m test/dsh-compat-ci.test.ts:[2m1523:25[22m[39m
+    [90m1521| [39m      try {
+    [90m1522| [39m        const outcome = await call(path, { timeoutMs: 30 }).catch((val…
+    [90m1523| [39m        expect(outcome).toMatchObject({ stage: 'cancelled' });
+    [90m   | [39m                        [31m^[39m
+    [90m1524| [39m        expect(outcome.unresolvedResources).toEqual(expect.arrayContai…
+    [90m1525| [39m        expect(closeCalls).toBe(1);
+[90m [2m❯[22m isolated test/dsh-compat-ci.test.ts:[2m58:9[22m[39m
+[90m [2m❯[22m test/dsh-compat-ci.test.ts:[2m1509:5[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m74 passed[39m[22m[90m (76)[39m
+[2m   Start at [22m 13:55:07
+[2m   Duration [22m 12.48s[2m (transform 183ms, setup 0ms, collect 232ms, tests 12.02s, environment 0ms, prepare 99ms)[22m
+
+RED_EXIT=1
+
+COMMAND: npx vitest run test/dsh-compat-ci.test.ts --maxWorkers=2 --minWorkers=1  # GREEN
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mD:/workspace/CC/multichat[39m
+
+ [32m✓[39m test/dsh-compat-ci.test.ts [2m([22m[2m76 tests[22m[2m)[22m[33m 12049[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22menforces the total deadline over headers and body and honors external cancellation [33m 442[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mkeeps late responses and late handles owned after the deadline [33m 647[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mreports a late file close failure with the path and keeps the file owned [33m 1106[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mreports a late file close that never settles as undecided at return [33m 2019[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mcancels a late response, releases its lock and reports it as undecided at return [33m 390[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mreports an unconfirmed signature child release and clears parent pipes [33m 1014[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mreports an unconfirmed signature child release on cancellation [33m 1059[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mowns a spawned child error without a close instead of returning early [33m 1020[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mkeeps the overflow failure when a failed stop reports an error [33m 1005[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mkeeps the signature failure and release state across the total deadline [33m 1011[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m76 passed[39m[22m[90m (76)[39m
+[2m   Start at [22m 13:55:43
+[2m   Duration [22m 12.47s[2m (transform 158ms, setup 0ms, collect 209ms, tests 12.05s, environment 0ms, prepare 76ms)[22m
+
+GREEN_EXIT=0
+
+COMMAND: npm run check  # VITEST_MAX_FORKS=2 VITEST_MIN_FORKS=1 VITEST_MAX_THREADS=2 VITEST_MIN_THREADS=1, CROSSCHAT_LIVE unset
+
+> @oatelauser/crosschat@1.10.0 check
+> npm run lint && npm run check:imports && npm run build && npm test
+
+
+> @oatelauser/crosschat@1.10.0 lint
+> eslint src test
+
+
+> @oatelauser/crosschat@1.10.0 check:imports
+> node scripts/runtime-import-graph.mjs
+
+Runtime import graph: 203 modules, 682 edges; no cycles or boundary violations.
+
+> @oatelauser/crosschat@1.10.0 build
+> tsc
+
+
+> @oatelauser/crosschat@1.10.0 test
+> vitest run --dir test
+
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mD:/workspace/CC/multichat[39m
+
+ [31m❯[39m test/conversation-handle-ring.test.ts [2m([22m[2m9 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 6147[2mms[22m[39m
+   [32m✓[39m five-character conversation handle ring[2m > [22mallocates a fixed five-character handle and reuses it across turns without adding state files[32m 32[2mms[22m[39m
+[31m   [31m×[31m five-character conversation handle ring[2m > [22mkeeps allocation progress after eight-slot eviction and accounting when rereading stored state[39m[33m 5012[2mms[22m[39m
+[31m     → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+   [32m✓[39m five-character conversation handle ring[2m > [22mrejects old numeric handles even when a legacy binding is present[32m 6[2mms[22m[39m
+   [32m✓[39m five-character conversation handle ring[2m > [22mwraps a slot into its next generation and expires the old token while its original shard remains[32m 14[2mms[22m[39m
+[31m   [31m×[31m five-character conversation handle ring[2m > [22mstops after cZ999, preserves reusable current handles, and does not rewrite state on exhaustion[39m[33m 1017[2mms[22m[39m
+[31m     → expected undefined to be 'cZ999' // Object.is equality[39m
+   [32m✓[39m five-character conversation handle ring[2m > [22mdoes not allocate or overwrite numbering state when a shard is corrupt[32m 9[2mms[22m[39m
+   [32m✓[39m five-character conversation handle ring[2m > [22mfails closed if a malformed handle entry has lost its allocation progress[32m 12[2mms[22m[39m
+   [32m✓[39m five-character conversation handle ring[2m > [22mshows only current unambiguous handles in read-only summaries[32m 8[2mms[22m[39m
+   [32m✓[39m five-character conversation handle ring[2m > [22mnormal cleanup keeps one highest-progress shard and force cleanup explicitly resets the namespace[32m 29[2mms[22m[39m
+ [32m✓[39m test/c14-conversation-refinement.test.ts [2m([22m[2m24 tests[22m[2m)[22m[33m 321[2mms[22m[39m
+ [31m❯[39m test/conversation-state-concurrency.test.ts [2m([22m[2m11 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 10159[2mms[22m[39m
+   [32m✓[39m conversation state cross-process writes[2m > [22mconcurrent allocators cross generations without sharing a slot or reviving the expired token[32m 199[2mms[22m[39m
+   [32m✓[39m conversation state cross-process writes[2m > [22mindependent processes allocating at once never share a handle and each resolves to its own ref[32m 279[2mms[22m[39m
+[31m   [31m×[31m conversation state cross-process writes[2m > [22mconcurrent processes reusing one nonce all get its single handle[39m[33m 1118[2mms[22m[39m
+[31m     → expected { ok: false, …(2) } to deeply equal { ok: true, …(1) }[39m
+   [33m[2m✓[22m[39m conversation state cross-process writes[2m > [22ma live writer on an aliased path blocks every other write path until it releases [33m 2162[2mms[22m[39m
+   [33m[2m✓[22m[39m conversation state cross-process writes[2m > [22ma send that cannot take the lock delivers nothing, then succeeds once released [33m 1161[2mms[22m[39m
+   [33m[2m✓[22m[39m conversation state cross-process writes[2m > [22ma stuck holder still exits within its barrier deadline [33m 5106[2mms[22m[39m
+   [32m✓[39m conversation state cross-process writes[2m > [22ma child that cannot load its script settles instead of hanging[32m 54[2mms[22m[39m
+   [32m✓[39m conversation state cross-process writes[2m > [22mallocation and accounting on one pair keep both handles[32m 55[2mms[22m[39m
+   [32m✓[39m conversation state cross-process writes[2m > [22man existing handle collision never becomes a hint and never blocks the full ref[32m 7[2mms[22m[39m
+   [32m✓[39m conversation state cross-process writes[2m > [22ma failed allocation write returns no ghost handle and leaves no scratch[32m 6[2mms[22m[39m
+   [32m✓[39m conversation state cross-process writes[2m > [22mpost-delivery accounting never rejects when the shard cannot be written[32m 4[2mms[22m[39m
+ [32m✓[39m test/send-handle.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 89[2mms[22m[39m
+ [32m✓[39m test/send-command.test.ts [2m([22m[2m57 tests[22m[2m)[22m[33m 325[2mms[22m[39m
+ [32m✓[39m test/c14-explicit-send.test.ts [2m([22m[2m29 tests[22m[2m)[22m[32m 132[2mms[22m[39m
+ [31m❯[39m test/caller-source-service.test.ts [2m([22m[2m11 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 1095[2mms[22m[39m
+   [32m✓[39m caller source application boundary[2m > [22menriches only a native type matching the caller Provider[32m 3[2mms[22m[39m
+   [32m✓[39m caller source application boundary[2m > [22mnever creates questions when called from send, including unresolved and unavailable origins[32m 3[2mms[22m[39m
+   [32m✓[39m caller source application boundary[2m > [22mrequires per-entry review before enabling an unapproved manual fallback[32m 2[2mms[22m[39m
+   [32m✓[39m caller source application boundary[2m > [22mdoes not open an approved manual fallback without a native prompt-owner lifecycle probe[32m 33[2mms[22m[39m
+   [32m✓[39m caller source application boundary[2m > [22mcannot turn a user choice into a persistent origin when invocation association is absent[32m 2[2mms[22m[39m
+   [32m✓[39m caller source application boundary[2m > [22mreuses an approved origin confirmation across sessions without polluting recipient selection[32m 13[2mms[22m[39m
+   [32m✓[39m caller source application boundary[2m > [22mdoes not replace a known source type with a contradictory observation[32m 1[2mms[22m[39m
+   [32m✓[39m caller source application boundary[2m > [22mdoes not let a shared manual classification override an already known caller endpoint[32m 21[2mms[22m[39m
+[31m   [31m×[31m caller source application boundary[2m > [22mrejects a user answer conflicting with the current known caller endpoint before saving it[39m[33m 1013[2mms[22m[39m
+[31m     → Source confirmation is temporarily busy; no new question or write was issued.[39m
+   [32m✓[39m caller source application boundary[2m > [22mtemporary probe failures do not block existing native identity or Q8 replies[32m 1[2mms[22m[39m
+   [32m✓[39m caller source application boundary[2m > [22mhuman terminals remain human and cannot confirm a missing native identity[32m 1[2mms[22m[39m
+ [31m❯[39m test/conversations.test.ts [2m([22m[2m26 tests[22m[2m | [22m[31m4 failed[39m[2m)[22m[33m 7483[2mms[22m[39m
+   [32m✓[39m pairKeyOf[2m > [22mis order-independent[32m 1[2mms[22m[39m
+   [32m✓[39m continueConversation / recordConversation[2m > [22mstarts fresh without state, then increments per recorded turn[32m 22[2mms[22m[39m
+[31m   [31m×[31m continueConversation / recordConversation[2m > [22mcontinues from either endpoint (the other party replying via --to)[39m[33m 1009[2mms[22m[39m
+[31m     → expected 1 to be 2 // Object.is equality[39m
+   [32m✓[39m continueConversation / recordConversation[2m > [22mself-heals a corrupt state file as a fresh conversation[32m 1[2mms[22m[39m
+   [33m[2m✓[22m[39m continueConversation / recordConversation[2m > [22mignores a stored ref that belongs to different endpoints [33m 1010[2mms[22m[39m
+   [32m✓[39m sharded storage (B20)[2m > [22mstores each pair as its own shard file and reads it back[32m 4[2mms[22m[39m
+   [32m✓[39m sharded storage (B20)[2m > [22mignores the retired global file and only writes the current shard[32m 3[2mms[22m[39m
+[31m   [31m×[31m sharded storage (B20)[2m > [22mwriting one pair leaves the other pair shard bytes unchanged[39m[33m 1007[2mms[22m[39m
+[31m     → ENOENT: no such file or directory, open 'C:\Users\YANGSH~1\AppData\Local\Temp\crosschat-conv-qnJlNZ\case-Z7sYUn\conversations\9b4e8bf1bfd5fdf6454b91bcf40a3ff2e35ee954ddf05ddb1d83dc7d562d3115.json'[39m
+   [32m✓[39m sharded storage (B20)[2m > [22mself-heals a corrupt shard as a fresh conversation[32m 2[2mms[22m[39m
+   [32m✓[39m continueFromRef (B22: stale --conversation refs cannot roll back)[2m > [22mfollows the shard line when it has moved at or past the passed ref[32m 10[2mms[22m[39m
+   [32m✓[39m continueFromRef (B22: stale --conversation refs cannot roll back)[2m > [22mkeeps the passed ref when it is ahead of the shard line[32m 6[2mms[22m[39m
+   [32m✓[39m continueFromRef (B22: stale --conversation refs cannot roll back)[2m > [22mkeeps the passed ref when no record exists[32m 3[2mms[22m[39m
+   [32m✓[39m continueFromRef (B22: stale --conversation refs cannot roll back)[2m > [22mkeeps the passed ref when the shard holds a different conversation or endpoints[32m 6[2mms[22m[39m
+[31m   [31m×[31m continueFromRef (B22: stale --conversation refs cannot roll back)[2m > [22mmulti-sender repeats of one old base no longer collide on the turn number[39m[33m 2032[2mms[22m[39m
+[31m     → Conversation state is locked by another crosschat process; no message was sent. Retry the send.[39m
+   [32m✓[39m conversation short handles (F2)[2m > [22mreuses one handle per nonce and allocates machine-wide max+1 for a new nonce[32m 38[2mms[22m[39m
+   [32m✓[39m conversation short handles (F2)[2m > [22mrefreshes the handle ref as the conversation advances (rides recordConversation)[32m 27[2mms[22m[39m
+[31m   [31m×[31m conversation short handles (F2)[2m > [22mCAS: a raced max+1 claim rewrites once and both conversations stay uniquely resolvable[39m[33m 2019[2mms[22m[39m
+[31m     → expected undefined not to be undefined // Object.is equality[39m
+   [32m✓[39m conversation short handles (F2)[2m > [22mcaps a shard at 8 handles, evicting the least recently touched[32m 166[2mms[22m[39m
+   [32m✓[39m conversation short handles (F2)[2m > [22mresolveHandle: unknown handle teaches --to; a forged collision lists candidates[32m 7[2mms[22m[39m
+   [32m✓[39m conversation short handles (F2)[2m > [22man allocation write never advances the shard conversation line (failed sends leave --to untouched)[32m 9[2mms[22m[39m
+   [32m✓[39m 016① machines 字段（跨机回执机器标识持久化，additive）[2m > [22mrecordConversation 写入 mid8→名 并按对话查询命中[32m 3[2mms[22m[39m
+   [32m✓[39m 016① machines 字段（跨机回执机器标识持久化，additive）[2m > [22m后续写合并不丢既有机器条目；不含 machines 的写保留旧表[32m 15[2mms[22m[39m
+   [32m✓[39m 016① machines 字段（跨机回执机器标识持久化，additive）[2m > [22m017 改名自愈：机器改名后同 mid8 新信封经 machines merge 覆盖旧名（{...existing, ...machines}）[32m 40[2mms[22m[39m
+   [32m✓[39m 016① machines 字段（跨机回执机器标识持久化，additive）[2m > [22m新版读旧状态（无 machines 字段）：查询 undefined，接续行为不变[32m 3[2mms[22m[39m
+   [32m✓[39m 016① machines 字段（跨机回执机器标识持久化，additive）[2m > [22m旧版安全忽略新字段：新写分片仍满足旧版解析契约（四字段健全，machines 为额外键）[32m 5[2mms[22m[39m
+   [32m✓[39m 016① machines 字段（跨机回执机器标识持久化，additive）[2m > [22m形状防守：machines 里非字符串值被丢弃[32m 20[2mms[22m[39m
+ [32m✓[39m test/dsh-compat-ci.test.ts [2m([22m[2m76 tests[22m[2m)[22m[33m 12050[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22menforces the total deadline over headers and body and honors external cancellation [33m 436[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mkeeps late responses and late handles owned after the deadline [33m 648[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mreports a late file close failure with the path and keeps the file owned [33m 1105[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mreports a late file close that never settles as undecided at return [33m 2023[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mcancels a late response, releases its lock and reports it as undecided at return [33m 392[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mreports an unconfirmed signature child release and clears parent pipes [33m 1015[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mreports an unconfirmed signature child release on cancellation [33m 1060[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mowns a spawned child error without a close instead of returning early [33m 1017[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mkeeps the overflow failure when a failed stop reports an error [33m 1005[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mkeeps the signature failure and release state across the total deadline [33m 1011[2mms[22m[39m
+ [32m✓[39m test/serve-star-lifecycle.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 17022[2mms[22m[39m
+   [33m[2m✓[22m[39m 033 热加星：不重启即托管即收发[2m > [22m在跑 serve + CLI --add-star 经管理插座：回执生效、自登记落位、聚合器播种、新星上 node/sender 完整收发 [33m 1573[2mms[22m[39m
+   [33m[2m✓[22m[39m 033 删星：即时收尾 + 直报已删 + 最后一颗可删[2m > [22m热删 beta：在跑连接收"星已删除"断开、node.json 摘条、死钥直报、邻星零中断 [33m 2354[2mms[22m[39m
+   [33m[2m✓[22m[39m 033 插座冷热路径与 stop 收口[2m > [22m回执超时绝不回落直写：插座连上但无回执 → 报错重试、台账零改动 [33m 10017[2mms[22m[39m
+   [33m[2m✓[22m[39m 033 插座冷热路径与 stop 收口[2m > [22mstop 收口：serve 停机后状态 stopped、插座随进程撤（CLI 退冷路径） [33m 1517[2mms[22m[39m
+   [33m[2m✓[22m[39m 036 按星机器名（--star --show-name）热闭环[2m > [22m按星只重挂该星：条目覆盖落 node.json、注册表该星 machineName 更新、邻星回落全局不变；--list 显示随条目；'' 清除回落全局 [33m 1535[2mms[22m[39m
+ [32m✓[39m test/session-star.test.ts [2m([22m[2m40 tests[22m[2m)[22m[33m 6852[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 批二：启动器入星链路[2m > [22mspawn 会话→自动拉聚合器→attach→三段直达；退出即 detach [33m 634[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 批二：启动器入星链路[2m > [22m多星：--connect 可重复，两会话成员表各自 attach（win 带杠 mid 形态） [33m 677[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 批二：启动器入星链路[2m > [22m021 断连静默：聚合器被杀→重连提示落日志、控制台零输出、成员籍自动恢复 [33m 1595[2mms[22m[39m
+   [33m[2m✓[22m[39m 统一恢复入口（启动器重声明或显式管理，册落盘不丢）[2m > [22m聚合器重启保留离线册位，存活的原生会话也须明确重声明（linux 32-hex 形态） [33m 334[2mms[22m[39m
+   [33m[2m✓[22m[39m 统一恢复入口（启动器重声明或显式管理，册落盘不丢）[2m > [22mbroker/node 重启册位不丢，已有成员与新会话统一由显式 adopt 恢复 [33m 362[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 批二：9b 降级告警（不只日志）[2m > [22mNodeClient.warn 直打一行；warnIfBrokerLacksSessionCaps 对老 broker 出声、新 broker 静默 [33m 351[2mms[22m[39m
+   [33m[2m✓[22m[39m 028 双模式与命令面[2m > [22m双模式集成：永久退出留册、裸 resume 不归队、明确选择恢复；--rm 退出清册 [33m 896[2mms[22m[39m
+probe failed: root-not-exclusive:C:\Users\YANGSH~1\AppData\Local\Temp\c14w05-test-XoSMAJ\previous-run
+ [32m✓[39m test/serve-admin-key.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 6145[2mms[22m[39m
+   [33m[2m✓[22m[39m 034 挑战应答全链与角色矩阵[2m > [22madmin 握手（钥匙永不过线）→ 读/发/删全过 → 成员/星管逐格 → 重放拒绝 → 被吊钥 BAD_AUTH → 审计在场 [33m 2890[2mms[22m[39m
+   [33m[2m✓[22m[39m 034 挑战应答全链与角色矩阵[2m > [22mCLI 远程管理路由：--via tcp:<星> 成员读（星钥）+ 星管写（adminKey 挑战应答） [33m 1541[2mms[22m[39m
+   [33m[2m✓[22m[39m 034 set-port 无命令回归（旗标+插座 op 全删）[2m > [22m管理插座 set-port op 已删（未知 op 拒绝、台账零改动） [33m 1510[2mms[22m[39m
+usage: node scripts/codex-call-correlation-probe.mjs --root <owned temp dir> [--evidence <json>]
+ [32m✓[39m test/codex-call-correlation-probe.test.ts [2m([22m[2m56 tests[22m[2m)[22m[33m 5609[2mms[22m[39m
+   [33m[2m✓[22m[39m codex call correlation probe: bounded reads and processes[2m > [22mkills a timed-out child together with its descendant and waits for close [33m 1920[2mms[22m[39m
+   [33m[2m✓[22m[39m codex call correlation probe: bounded reads and processes[2m > [22mstops a cancelled child through the abort signal [33m 557[2mms[22m[39m
+   [33m[2m✓[22m[39m codex call correlation probe: run root and main chain[2m > [22mkeeps the root when the run is cancelled [33m 697[2mms[22m[39m
+   [33m[2m✓[22m[39m codex call correlation probe: run root and main chain[2m > [22mkeeps the run root when the launched process never closed [33m 1528[2mms[22m[39m
+ [32m✓[39m test/endpoint-protocol.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 5452[2mms[22m[39m
+   [33m[2m✓[22m[39m endpoint identity capability guard[2m > [22mdoes not replay an uncertain lifecycle removal while readonly roster still reports the same temporary member [33m 5411[2mms[22m[39m
+ [32m✓[39m test/serve-sessions.test.ts [2m([22m[2m37 tests[22m[2m)[22m[33m 5129[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 NodeClient 聚合器：attach IPC / 重播 / 双活性[2m > [22m028 claude 活性：扫描核验——死 claude 成员转下线（教学）、活成员续投 [33m 541[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 NodeClient 聚合器：attach IPC / 重播 / 双活性[2m > [22mC14 Codex 活性：核实实际 CLI 端点后续投，原生不存在的同类成员转下线 [33m 547[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 NodeClient 聚合器：attach IPC / 重播 / 双活性[2m > [22m029 临时成员异常死亡：对账验死报 member-remove 清册零痕迹（不留下线态） [33m 719[2mms[22m[39m
+   [33m[2m✓[22m[39m 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove[2m > [22m028 下线成员随 roster 帧下发（offlineSessions 单列；sessions 保持活成员语义） [33m 455[2mms[22m[39m
+   [33m[2m✓[22m[39m 018 9b：老 broker（proto:1）降级的协议侧[2m > [22mconnect 携带 caps；info.caps 缺端点能力时拒绝类型化 attach，且不发 sessions 帧 [33m 312[2mms[22m[39m
+ [32m✓[39m test/dsh-cli.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 2092[2mms[22m[39m
+   [33m[2m✓[22m[39m DeepSeek Harness CLI composition[2m > [22mconnects real send dependencies to Harness delivery with an explicit mode [33m 2084[2mms[22m[39m
+ [32m✓[39m test/serve-multistar.test.ts [2m([22m[2m20 tests[22m[2m)[22m[33m 4443[2mms[22m[39m
+   [33m[2m✓[22m[39m 032 多星握手与星域隔离[2m > [22m钥匙不属任何星 → BAD_AUTH（跨星错钥匙不放行） [33m 520[2mms[22m[39m
+   [33m[2m✓[22m[39m 032 bootstrap 与 CLI[2m > [22m033 serve 永不造星：空表首启零星合法（不建星、不写 node.json），教学指 --add-star [33m 1506[2mms[22m[39m
+   [33m[2m✓[22m[39m 032 bootstrap 与 CLI[2m > [22m内挂聚合器不写 status-node 文件（非独立进程） [33m 1537[2mms[22m[39m
+ [32m✓[39m test/broker-revocation.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 4154[2mms[22m[39m
+   [33m[2m✓[22m[39m broker credential revocation[2m > [22mlocal remove-node immediately revokes every node/sender using that credential and retains offline permanent members in its star [33m 905[2mms[22m[39m
+   [33m[2m✓[22m[39m broker credential revocation[2m > [22mremote remove-node has the same immediate effect while members and star admins retain their three-layer limits [33m 681[2mms[22m[39m
+   [33m[2m✓[22m[39m broker credential revocation[2m > [22mlocal remove-admin-key closes only authenticated sessions of the removed credential, including unique-prefix selection [33m 1122[2mms[22m[39m
+   [33m[2m✓[22m[39m broker credential revocation[2m > [22mmarks a revoked session unusable before close completes without affecting another credential [33m 361[2mms[22m[39m
+   [33m[2m✓[22m[39m broker credential revocation[2m > [22mfinishes target pending work and file routes on revocation before the close callback, ignoring late target results [33m 327[2mms[22m[39m
+ [32m✓[39m test/local-service-inspection.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 3823[2mms[22m[39m
+   [33m[2m✓[22m[39m owned service inspection and guard workers[2m > [22mreclaims an inspector blocked in spawnSync, including its owned probe child, before cancellation returns [33m 611[2mms[22m[39m
+   [33m[2m✓[22m[39m owned service inspection and guard workers[2m > [22muses the real process wrapper for successful inspection/guard IPC and releases it before returning [33m 1009[2mms[22m[39m
+   [33m[2m✓[22m[39m owned service inspection and guard workers[2m > [22mreclaims a real wrapper and its controlled blocked probe when its read timeout expires [33m 1945[2mms[22m[39m
+ [32m✓[39m test/local-service-owned-stop.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 3320[2mms[22m[39m
+   [33m[2m✓[22m[39m TUI owned service stop process trees[2m > [22mreleases a hung OS scanner and its helper before completing cancellation without claiming the external stop was undone [33m 509[2mms[22m[39m
+   [33m[2m✓[22m[39m TUI owned service stop process trees[2m > [22mbounds a nonresponding stop job and reclaims its full scanner tree on timeout [33m 1375[2mms[22m[39m
+   [33m[2m✓[22m[39m TUI owned service stop process trees[2m > [22mruns the actual stop process wrapper and prior stop worker with the same fixed target, then releases the wrapper [33m 511[2mms[22m[39m
+   [33m[2m✓[22m[39m TUI owned service stop process trees[2m > [22mretains prior request validation inside the real wrapper before any stop business call [33m 474[2mms[22m[39m
+   [33m[2m✓[22m[39m TUI owned service stop process trees[2m > [22muses the owned stop default from the managed task and waits for tree cleanup before returning an uncertain issued result [33m 447[2mms[22m[39m
+ [32m✓[39m test/serve-node.test.ts [2m([22m[2m30 tests[22m[2m)[22m[33m 3001[2mms[22m[39m
+   [33m[2m✓[22m[39m B0 starId handshake[2m > [22m036 无 id 星（手编形状）：连接按 BAD_AUTH 拒——broker 机跑一次 serve 补 id [33m 584[2mms[22m[39m
+   [33m[2m✓[22m[39m B1 multi-star: delivery pipeline stamps starId into issued refs[2m > [22mbroker queue self-delivery: the receipt ref carries the registry starId [33m 854[2mms[22m[39m
+   [33m[2m✓[22m[39m B1 multi-star: delivery pipeline stamps starId into issued refs[2m > [22mbroker steer self-delivery: the receipt ref carries the registry starId [33m 661[2mms[22m[39m
+ [32m✓[39m test/via-send.test.ts [2m([22m[2m42 tests[22m[2m)[22m[33m 2109[2mms[22m[39m
+   [33m[2m✓[22m[39m runViaSend mapping[2m > [22mkeeps a remote-accepted receipt delivered when local accounting cannot write [33m 2015[2mms[22m[39m
+ [32m✓[39m test/tui-controller.test.ts [2m([22m[2m25 tests[22m[2m)[22m[33m 2072[2mms[22m[39m
+ [32m✓[39m test/caller-source-confirmations.test.ts [2m([22m[2m21 tests[22m[2m)[22m[33m 1835[2mms[22m[39m
+   [33m[2m✓[22m[39m source classification shared across native sessions[2m > [22mreports bounded busy without mutating state when an unrelated listener occupies its mutex port [33m 1053[2mms[22m[39m
+ [32m✓[39m test/opencode-desktop-fixture.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 2953[2mms[22m[39m
+   [33m[2m✓[22m[39m official desktop test environment[2m > [22mreports an unregistered executable under the owned run before allowing cleanup [33m 2452[2mms[22m[39m
+ [32m✓[39m test/ssh-native-authentication.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 1999[2mms[22m[39m
+   [33m[2m✓[22m[39m SSH application native ASKPASS integration[2m > [22mreuses authentication across refreshes, retains strict host checking and forgets credentials when configuration changes [33m 1161[2mms[22m[39m
+   [33m[2m✓[22m[39m SSH application native ASKPASS integration[2m > [22mpreserves full Windows ASKPASS fingerprints and offers no approval for a changed known host [33m 411[2mms[22m[39m
+   [33m[2m✓[22m[39m SSH application native ASKPASS integration[2m > [22mcancels a pending native authentication helper when the active connection closes [33m 426[2mms[22m[39m
+ [32m✓[39m test/outbox.test.ts [2m([22m[2m24 tests[22m[2m)[22m[33m 1715[2mms[22m[39m
+   [33m[2m✓[22m[39m park[2m > [22mrefuses honestly at the per-thread cap and leaves the file untouched [33m 1195[2mms[22m[39m
+ [32m✓[39m test/revocation-pause.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 1600[2mms[22m[39m
+   [33m[2m✓[22m[39m explicit credential revocation pauses this star[2m > [22mstops one launcher supervisor without restarting it or disrupting another star [33m 1193[2mms[22m[39m
+ [32m✓[39m test/session-membership.test.ts [2m([22m[2m16 tests[22m[2m)[22m[33m 1558[2mms[22m[39m
+   [33m[2m✓[22m[39m session membership application boundary[2m > [22madopts an anonymous full native ref through the shared aggregator and verifies broker roster authority [33m 529[2mms[22m[39m
+   [33m[2m✓[22m[39m session membership application boundary[2m > [22madopts and removes a typed Codex member without overwriting the same native ID on another endpoint [33m 529[2mms[22m[39m
+ [32m✓[39m test/core-code-standards.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 1727[2mms[22m[39m
+   [33m[2m✓[22m[39m progressive typed lint rules[2m > [22mrejects floating promises, async void callbacks and value imports used only as types [33m 1708[2mms[22m[39m
+ [32m✓[39m test/send-log.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 1598[2mms[22m[39m
+   [33m[2m✓[22m[39m appendSendLog[2m > [22mrotates past 5MiB instead of truncating: the bulk moves whole to .old, the new entry starts a fresh file [33m 1468[2mms[22m[39m
+ [32m✓[39m test/ssh-target-lifecycle.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 1280[2mms[22m[39m
+   [33m[2m✓[22m[39m SSH target identity and process completion[2m > [22mbounds a child that never closes, reports incomplete cleanup, and removes its owned listeners [33m 1069[2mms[22m[39m
+ [32m✓[39m test/tui-workspaces.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 1237[2mms[22m[39m
+   [33m[2m✓[22m[39m independent TUI workspaces[2m > [22mrechecks the role when history returns to a different star (updated) [33m 372[2mms[22m[39m
+   [33m[2m✓[22m[39m independent TUI workspaces[2m > [22mrechecks the role when history returns to a different star (failed) [33m 370[2mms[22m[39m
+   [33m[2m✓[22m[39m independent TUI workspaces[2m > [22mrechecks the role when history returns to a different star (cancelled) [33m 308[2mms[22m[39m
+ [32m✓[39m test/tui-cli.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 1104[2mms[22m[39m
+ [32m✓[39m test/tui-composition.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 1196[2mms[22m[39m
+ [32m✓[39m test/ssh-askpass-bridge.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 1138[2mms[22m[39m
+   [33m[2m✓[22m[39m owned native SSH ASKPASS bridge[2m > [22muses a real local helper to pass one bounded prompt without storing the password in files, argv or environment [33m 398[2mms[22m[39m
+   [33m[2m✓[22m[39m owned native SSH ASKPASS bridge[2m > [22mcloses a pending helper and cancels its challenge when the owned bridge is disposed [33m 406[2mms[22m[39m
+   [33m[2m✓[22m[39m owned native SSH ASKPASS bridge[2m > [22mrejects an oversized or cancelled answer without writing any secret material to stderr [33m 333[2mms[22m[39m
+ [32m✓[39m test/observation-overview.test.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 892[2mms[22m[39m
+   [33m[2m✓[22m[39m safe isolated diagnostics for observation pages[2m > [22mbinds the isolated process environment to explicit HOME instead of inherited native data overrides [33m 385[2mms[22m[39m
+   [33m[2m✓[22m[39m safe isolated diagnostics for observation pages[2m > [22mretains native data environment overrides in inherit mode while binding crosschat sources to the requested HOME [33m 342[2mms[22m[39m
+ [32m✓[39m test/runtime-import-graph.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 1074[2mms[22m[39m
+   [33m[2m✓[22m[39m core source architecture[2m > [22mhas no runtime dependency cycle or broken local import [33m 420[2mms[22m[39m
+   [33m[2m✓[22m[39m core source architecture[2m > [22mkeeps node configuration and connection selection independent of commands and clients [33m 319[2mms[22m[39m
+ [32m✓[39m test/ssh-application.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 943[2mms[22m[39m
+ [32m✓[39m test/via-tcp.test.ts [2m([22m[2m36 tests[22m[2m)[22m[33m 3059[2mms[22m[39m
+   [33m[2m✓[22m[39m runViaTcpSend against a real broker[2m > [22mtimes out with TCP_TRANSPORT_FAILED and the 勿盲目重发 wording [33m 420[2mms[22m[39m
+   [33m[2m✓[22m[39m 016① 跨机回执机器段统一 name(mid8)[2m > [22m按名发送（无状态）→ 名字取自输入，指纹取自回执 ref [33m 2024[2mms[22m[39m
+ [32m✓[39m test/tui-filters.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 946[2mms[22m[39m
+ [32m✓[39m test/status-remote.test.ts [2m([22m[2m16 tests[22m[2m)[22m[33m 829[2mms[22m[39m
+   [33m[2m✓[22m[39m CLI：runViaTcpStatus 传输腿[2m > [22m版本偏差：旧 broker 对 status-query 无行为 → 超时教学 [33m 418[2mms[22m[39m
+ [32m✓[39m test/tui-main-observations.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 842[2mms[22m[39m
+   [33m[2m✓[22m[39m default local observation wiring[2m > [22mpreserves native environment paths when the caller has not requested an isolated home [33m 340[2mms[22m[39m
+   [33m[2m✓[22m[39m default local observation wiring[2m > [22minstalls the five real readonly resources lazily and preserves exact related routes [33m 374[2mms[22m[39m
+ [32m✓[39m test/tui-observation-navigation.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 811[2mms[22m[39m
+   [33m[2m✓[22m[39m observation resource routes[2m > [22mkeeps related route caches separate, canonicalizes query order, clears associations on direct commands and restores the source [33m 375[2mms[22m[39m
+ [32m✓[39m test/tui-send-command.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 783[2mms[22m[39m
+   [33m[2m✓[22m[39m TUI send command templates[2m > [22mround-trips opaque arguments through the current platform shell [33m 780[2mms[22m[39m
+ [32m✓[39m test/doctor-json-cli.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 745[2mms[22m[39m
+   [33m[2m✓[22m[39m doctor JSON CLI extension[2m > [22mreturns the structured checks and preserves the existing default report and exit severity [33m 303[2mms[22m[39m
+   [33m[2m✓[22m[39m doctor JSON CLI extension[2m > [22memits valid structured findings with exit one for a failed check and rejects extra options [33m 441[2mms[22m[39m
+ [32m✓[39m test/core-diagnostics.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 591[2mms[22m[39m
+   [33m[2m✓[22m[39m isolated cancellable diagnostics[2m > [22mterminates a real probe child through the default built isolation path on cancellation [33m 488[2mms[22m[39m
+ [32m✓[39m test/serve-broker.test.ts [2m([22m[2m33 tests[22m[2m)[22m[33m 717[2mms[22m[39m
+ [32m✓[39m test/maintenance.test.ts [2m([22m[2m21 tests[22m[2m)[22m[33m 646[2mms[22m[39m
+   [33m[2m✓[22m[39m owned maintenance worker lifecycle[2m > [22mruns actual plans and filesystem effects through the default built worker using only isolated fixture paths [33m 403[2mms[22m[39m
+ [32m✓[39m test/codex-session-events.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 579[2mms[22m[39m
+   [33m[2m✓[22m[39m Codex per-window native protocol selection[2m > [22monly successful native selection and first accepted input affect this window, never global notifications or failed resume [33m 372[2mms[22m[39m
+ [32m✓[39m test/remote-discovery-cli.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 581[2mms[22m[39m
+   [33m[2m✓[22m[39m built discover CLI endpoint[2m > [22mrejects invalid JSON and oversized input before provider execution [33m 435[2mms[22m[39m
+ [32m✓[39m test/claude-session-events.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 571[2mms[22m[39m
+   [33m[2m✓[22m[39m Claude window session event binding[2m > [22mkeeps blank startup unregistered, resumes exact IDs, ignores end/compact and never persists prompt content [33m 314[2mms[22m[39m
+ [32m✓[39m test/tui-form.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 537[2mms[22m[39m
+ [32m✓[39m test/dsh-adapter.test.ts [2m([22m[2m44 tests[22m[2m)[22m[33m 484[2mms[22m[39m
+ [32m✓[39m test/tui-sensitive-result.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 449[2mms[22m[39m
+   [33m[2m✓[22m[39m one-time sensitive mutation results[2m > [22muses a constant safe copy error, discards the result on interrupt and clears it on disposal [33m 308[2mms[22m[39m
+ [32m✓[39m test/tui-main-sessions.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 418[2mms[22m[39m
+ [32m✓[39m test/maintenance-boundaries.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 415[2mms[22m[39m
+   [33m[2m✓[22m[39m TUI maintenance source and copy boundaries[2m > [22mcloses unreadable sources and bounds directory enumeration before accepting a skill plan [33m 370[2mms[22m[39m
+ [32m✓[39m test/tcp-peer-naming-transport.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 474[2mms[22m[39m
+ [32m✓[39m test/tui-follow.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 372[2mms[22m[39m
+ [32m✓[39m test/pipe-transport.test.ts [2m([22m[2m6 tests[22m[2m | [22m[33m3 skipped[39m[2m)[22m[33m 376[2mms[22m[39m
+   [33m[2m✓[22m[39m WindowsNamedPipeTransport[2m > [22mreports PIPE_WRITE_UNCERTAIN when the server cuts the connection mid-write [33m 311[2mms[22m[39m
+ [32m✓[39m test/cli-args.test.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 356[2mms[22m[39m
+ [32m✓[39m test/serve-b21.test.ts [2m([22m[2m29 tests[22m[2m)[22m[33m 330[2mms[22m[39m
+ [32m✓[39m test/tui-input.test.tsx [2m([22m[2m21 tests[22m[2m)[22m[33m 349[2mms[22m[39m
+ [32m✓[39m test/dsh-bridge.test.ts [2m([22m[2m32 tests[22m[2m)[22m[33m 320[2mms[22m[39m
+ [32m✓[39m test/tui-context-source.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 315[2mms[22m[39m
+ [32m✓[39m test/remote-discovery-tcp.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 344[2mms[22m[39m
+ [32m✓[39m test/tui-layout-paging.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 316[2mms[22m[39m
+ [32m✓[39m test/revocation-auth-race.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 308[2mms[22m[39m
+ [32m✓[39m test/serve-f0.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 281[2mms[22m[39m
+ [32m✓[39m test/smoke.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 273[2mms[22m[39m
+ [32m✓[39m test/remote-discovery-node.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 266[2mms[22m[39m
+ [32m✓[39m test/tcp-session-operations.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 285[2mms[22m[39m
+ [32m✓[39m test/claude-compat-ci.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 245[2mms[22m[39m
+ [32m✓[39m test/opencode-adapter.test.ts [2m([22m[2m26 tests[22m[2m)[22m[32m 257[2mms[22m[39m
+ [32m✓[39m test/local-service-worker-boundary.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 257[2mms[22m[39m
+ [32m✓[39m test/codex-aggregate-discovery.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 188[2mms[22m[39m
+ [32m✓[39m test/tcp-exact-transport.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 210[2mms[22m[39m
+ [32m✓[39m test/core-sessions-readers.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 188[2mms[22m[39m
+ [32m✓[39m test/claude-compat-fixture.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 196[2mms[22m[39m
+ [32m✓[39m test/watchdog.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 201[2mms[22m[39m
+ [32m✓[39m test/dsh-node-members.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 169[2mms[22m[39m
+ [32m✓[39m test/core-services-background.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 185[2mms[22m[39m
+ [32m✓[39m test/caller-source-state-lock.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 190[2mms[22m[39m
+ [32m✓[39m test/broker-discovery.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 220[2mms[22m[39m
+ [31m❯[39m test/tool-type-routing-state.test.ts [2m([22m[2m32 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 2190[2mms[22m[39m
+   [32m✓[39m typed conversation endpoint codec[2m > [22mpreserves the verified endpoint and machine through refs and turns: {"p":"claude","id":"native-a","endpointType":"cli"}[32m 2[2mms[22m[39m
+   [32m✓[39m typed conversation endpoint codec[2m > [22mpreserves the verified endpoint and machine through refs and turns: {"p":"codex","id":"same-native-id","endpointType":"cli"}[32m 0[2mms[22m[39m
+   [32m✓[39m typed conversation endpoint codec[2m > [22mpreserves the verified endpoint and machine through refs and turns: {"p":"codex","id":"same-native-id","endpointType":"desktop"}[32m 0[2mms[22m[39m
+   [32m✓[39m typed conversation endpoint codec[2m > [22mpreserves the verified endpoint and machine through refs and turns: {"p":"opencode","id":"opaque/session@雪","endpointType":"shared"}[32m 0[2mms[22m[39m
+   [32m✓[39m typed conversation endpoint codec[2m > [22mpreserves the verified endpoint and machine through refs and turns: {"p":"dsh","id":"session-host","endpointType":"host"}[32m 0[2mms[22m[39m
+   [32m✓[39m typed conversation endpoint codec[2m > [22mpreserves the verified endpoint and machine through refs and turns: {"p":"dsh","id":"session-desktop","endpointType":"desktop"}[32m 0[2mms[22m[39m
+   [32m✓[39m typed conversation endpoint codec[2m > [22mdoes not collapse CLI and Desktop refs with the same native IDs[32m 0[2mms[22m[39m
+   [32m✓[39m typed conversation endpoint codec[2m > [22mrejects a type unsupported by its provider rather than dropping it: {"p":"claude","id":"a","endpointType":"desktop"}[32m 0[2mms[22m[39m
+   [32m✓[39m typed conversation endpoint codec[2m > [22mrejects a type unsupported by its provider rather than dropping it: {"p":"codex","id":"a","endpointType":"shared"}[32m 0[2mms[22m[39m
+   [32m✓[39m typed conversation endpoint codec[2m > [22mrejects a type unsupported by its provider rather than dropping it: {"p":"opencode","id":"a","endpointType":"cli"}[32m 0[2mms[22m[39m
+   [32m✓[39m typed conversation endpoint codec[2m > [22mrejects a type unsupported by its provider rather than dropping it: {"p":"dsh","id":"a","endpointType":"unregistered"}[32m 0[2mms[22m[39m
+   [32m✓[39m typed conversation endpoint codec[2m > [22mkeeps the established no-type encoding byte-for-byte[32m 0[2mms[22m[39m
+   [32m✓[39m typed conversation endpoint codec[2m > [22mrejects an unknown or truncated type field in a typed mc2 payload[32m 0[2mms[22m[39m
+   [32m✓[39m typed conversation endpoint codec[2m > [22mrejects endpoint types attached to a human in legacy JSON refs[32m 0[2mms[22m[39m
+   [32m✓[39m typed identity, pair continuity and provenance[2m > [22mretains known caller types and prevents a known other endpoint from matching[32m 0[2mms[22m[39m
+   [32m✓[39m typed identity, pair continuity and provenance[2m > [22mdoes not infer Codex CLI from the native ID alone[32m 0[2mms[22m[39m
+   [32m✓[39m typed identity, pair continuity and provenance[2m > [22mseparates pair state and handles for two endpoint types with the same ID[32m 25[2mms[22m[39m
+   [32m✓[39m typed identity, pair continuity and provenance[2m > [22mkeeps endpoint type through both SSH and TCP origin codecs: {"p":"codex","id":"same-native-id","endpointType":"cli"}[32m 0[2mms[22m[39m
+   [32m✓[39m typed identity, pair continuity and provenance[2m > [22mkeeps endpoint type through both SSH and TCP origin codecs: {"p":"codex","id":"same-native-id","endpointType":"desktop"}[32m 0[2mms[22m[39m
+   [32m✓[39m typed identity, pair continuity and provenance[2m > [22mkeeps endpoint type through both SSH and TCP origin codecs: {"p":"claude","id":"sender","endpointType":"cli","name":"sender/name@雪"}[32m 0[2mms[22m[39m
+   [32m✓[39m typed identity, pair continuity and provenance[2m > [22mkeeps endpoint type through both SSH and TCP origin codecs: {"p":"opencode","id":"opaque/session@雪","endpointType":"shared"}[32m 0[2mms[22m[39m
+   [32m✓[39m typed identity, pair continuity and provenance[2m > [22mkeeps endpoint type through both SSH and TCP origin codecs: {"p":"dsh","id":"harness/host@雪","endpointType":"host"}[32m 0[2mms[22m[39m
+   [32m✓[39m typed identity, pair continuity and provenance[2m > [22mkeeps endpoint type through both SSH and TCP origin codecs: {"p":"dsh","id":"harness/desktop@雪","endpointType":"desktop"}[32m 0[2mms[22m[39m
+[31m   [31m×[31m typed identity, pair continuity and provenance[2m > [22mdoes not reuse a handle when an equal nonce identifies another typed pair[39m[33m 2020[2mms[22m[39m
+[31m     → expected undefined not to be undefined // Object.is equality[39m
+   [32m✓[39m typed identity, pair continuity and provenance[2m > [22mpasses an explicit tool type to the authoritative SSH command[32m 1[2mms[22m[39m
+   [32m✓[39m typed delayed delivery state[2m > [22mpersists the original type and passes it to every delayed attempt[32m 13[2mms[22m[39m
+   [32m✓[39m typed delayed delivery state[2m > [22mkeeps queues, mailbox files and uncertain claims isolated by endpoint type[32m 60[2mms[22m[39m
+   [32m✓[39m typed delayed delivery state[2m > [22muses typed endpoint attribution for queue counters[32m 4[2mms[22m[39m
+   [32m✓[39m typed delayed delivery state[2m > [22mkeeps a full CLI rate window from blocking a Desktop queue with the same native ID[32m 45[2mms[22m[39m
+   [32m✓[39m typed delayed delivery state[2m > [22mskips malformed persisted queues before claiming or delivering them[32m 1[2mms[22m[39m
+   [32m✓[39m typed delayed delivery state[2m > [22mbinds receipts to the requested endpoint type while preserving legacy markers[32m 0[2mms[22m[39m
+   [32m✓[39m typed delayed delivery state[2m > [22mconfirms a typed receipt only for the originally requested endpoint[32m 10[2mms[22m[39m
+ [32m✓[39m test/tui-view.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[32m 173[2mms[22m[39m
+ [32m✓[39m test/install-skills.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 165[2mms[22m[39m
+ [32m✓[39m test/tui-clipboard.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 154[2mms[22m[39m
+ [32m✓[39m test/serve-tool-type-bridge.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 184[2mms[22m[39m
+ [32m✓[39m test/caller-source-providers.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 148[2mms[22m[39m
+ [32m✓[39m test/serve-cli.test.ts [2m([22m[2m32 tests[22m[2m)[22m[32m 147[2mms[22m[39m
+ [32m✓[39m test/tui-mutation-navigation.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 142[2mms[22m[39m
+ [32m✓[39m test/tui-terminal.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 120[2mms[22m[39m
+ [32m✓[39m test/tui-main-preferences.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 127[2mms[22m[39m
+ [32m✓[39m test/tui-session-view.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 125[2mms[22m[39m
+ [32m✓[39m test/codex-deliver.test.ts [2m([22m[2m26 tests[22m[2m)[22m[32m 116[2mms[22m[39m
+ [32m✓[39m test/outbox-ownership.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 141[2mms[22m[39m
+ [32m✓[39m test/session-membership-exact.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 125[2mms[22m[39m
+ [32m✓[39m test/file-channel.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 117[2mms[22m[39m
+ [32m✓[39m test/tui-workspace-layout.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[32m 102[2mms[22m[39m
+ [32m✓[39m test/ssh-managed-profiles.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 99[2mms[22m[39m
+(node:632) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ [32m✓[39m test/desktop-metadata.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 89[2mms[22m[39m
+ [32m✓[39m test/tcp-application.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 91[2mms[22m[39m
+ [31m❯[39m test/tool-type-observations.test.ts [2m([22m[2m7 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 2050[2mms[22m[39m
+   [32m✓[39m typed communication observations[2m > [22mparses registered typed and legacy identities without guessing unknown types[32m 1[2mms[22m[39m
+   [32m✓[39m typed communication observations[2m > [22mcarries exact receipt evidence into the later status confirmation[32m 2[2mms[22m[39m
+   [32m✓[39m typed communication observations[2m > [22muses typed fallback labels and the exact native name for equal-ID owners[32m 1[2mms[22m[39m
+   [32m✓[39m typed communication observations[2m > [22mobserves typed queues and mirror files independently without exposing bodies[32m 9[2mms[22m[39m
+   [32m✓[39m typed communication observations[2m > [22mrefuses a typed store whose parent directory is a link to another source[32m 3[2mms[22m[39m
+[31m   [31m×[31m typed communication observations[2m > [22mkeeps typed queue counts, routed audit attribution and local session links separate[39m[33m 2026[2mms[22m[39m
+[31m     → expected [] to have a length of 2 but got +0[39m
+   [32m✓[39m typed communication observations[2m > [22mscopes local logs by verified endpoint type with and without an embedded ref[32m 4[2mms[22m[39m
+ [32m✓[39m test/core-queries.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 87[2mms[22m[39m
+ [32m✓[39m test/tcp-transport.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 82[2mms[22m[39m
+ [32m✓[39m test/desktop-ipc.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 82[2mms[22m[39m
+ [32m✓[39m test/observation-logs.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 76[2mms[22m[39m
+ [32m✓[39m test/state-paths.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 77[2mms[22m[39m
+ [32m✓[39m test/session-operations.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 58[2mms[22m[39m
+ [32m✓[39m test/tui-sessions.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 81[2mms[22m[39m
+ [32m✓[39m test/discovery-service.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 80[2mms[22m[39m
+ [32m✓[39m test/codex-routing.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 65[2mms[22m[39m
+ [32m✓[39m test/tui-context-actions.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 71[2mms[22m[39m
+ [32m✓[39m test/tcp-configuration-management.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 94[2mms[22m[39m
+ [32m✓[39m test/claude-compat-lifecycle.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 65[2mms[22m[39m
+ [32m✓[39m test/tcp-configuration.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 55[2mms[22m[39m
+ [32m✓[39m test/dsh-live-fixture.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 63[2mms[22m[39m
+ [32m✓[39m test/opencode-compat-fixture.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 60[2mms[22m[39m
+ [32m✓[39m test/codex-target-diagnostics.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 64[2mms[22m[39m
+ [32m✓[39m test/codex-rpc.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 62[2mms[22m[39m
+ [32m✓[39m test/tcp-machine-transaction.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 62[2mms[22m[39m
+ [32m✓[39m test/dsh-runtime-driver.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 58[2mms[22m[39m
+ [32m✓[39m test/session-selection.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 64[2mms[22m[39m
+ [32m✓[39m test/dsh-send.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 63[2mms[22m[39m
+ [32m✓[39m test/dsh-mock-model.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 53[2mms[22m[39m
+ [31m❯[39m test/conversation-summary.test.ts [2m([22m[2m15 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 1057[2mms[22m[39m
+   [32m✓[39m readSendLogTail[2m > [22mreads only the trailing window of a 500-line file[32m 4[2mms[22m[39m
+   [32m✓[39m readSendLogTail[2m > [22mparses a final line without a trailing newline[32m 1[2mms[22m[39m
+   [32m✓[39m readSendLogTail[2m > [22mdrops the fragment cut at the window edge[32m 2[2mms[22m[39m
+   [32m✓[39m readSendLogTail[2m > [22mskips unparsable lines and reads a missing file as empty[32m 6[2mms[22m[39m
+   [32m✓[39m aggregateSummaries[2m > [22mmerges both directions: max turn, ts-latest status/from, entry-based names[32m 1[2mms[22m[39m
+   [32m✓[39m aggregateSummaries[2m > [22myields null fields and id8-style descriptor names for a pair absent from the tail[32m 0[2mms[22m[39m
+   [32m✓[39m aggregateSummaries[2m > [22mdrops send-log traffic for pairs not recorded in conversations.json[32m 0[2mms[22m[39m
+   [32m✓[39m aggregateSummaries[2m > [22mresolves a never-addressed sender from its recorded fromName (B21)[32m 0[2mms[22m[39m
+   [32m✓[39m aggregateSummaries[2m > [22mstill prefers a to-addressing entry over fromName (B21)[32m 0[2mms[22m[39m
+   [32m✓[39m aggregateSummaries[2m > [22mattributes pre-B16 entries (no from) via their embedded replyRef[32m 1[2mms[22m[39m
+   [32m✓[39m aggregateSummaries[2m > [22msurfaces the latest delivered entry receipt, null for non-delivered or absent (B22)[32m 0[2mms[22m[39m
+   [32m✓[39m conversationSummaries[2m > [22mjoins all three sources from disk (conversations + send-log + outbox)[32m 12[2mms[22m[39m
+   [32m✓[39m conversationSummaries[2m > [22mreturns no rows when conversations.json is missing[32m 1[2mms[22m[39m
+[31m   [31m×[31m conversationSummaries[2m > [22maggregates current shards while a retired global snapshot produces no rows[39m[33m 1022[2mms[22m[39m
+[31m     → expected [] to deeply equal [ { …(10) } ][39m
+   [32m✓[39m conversationSummaries[2m > [22mdoes not resurrect global-only pairs when a current shard exists[32m 3[2mms[22m[39m
+ [32m✓[39m test/tui-contexts.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 54[2mms[22m[39m
+ [32m✓[39m test/identity-command.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m test/status-conversations.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 56[2mms[22m[39m
+ [32m✓[39m test/tcp-snapshot-transport.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+ [32m✓[39m test/local-services.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 50[2mms[22m[39m
+ [32m✓[39m test/opencode-members.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 54[2mms[22m[39m
+ [32m✓[39m test/opencode-desktop-ci.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 45[2mms[22m[39m
+ [32m✓[39m test/delivery-mode.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 57[2mms[22m[39m
+ [32m✓[39m test/status-doctor-tcp.test.ts [2m([22m[2m27 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+ [32m✓[39m test/tui-registry.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 45[2mms[22m[39m
+ [32m✓[39m test/observation-communications.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 43[2mms[22m[39m
+ [32m✓[39m test/serve-registry.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m test/claude-wrapper.test.ts [2m([22m[2m16 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m test/opencode-desktop-probe.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 40[2mms[22m[39m
+ [32m✓[39m test/core-cleanup.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+ [32m✓[39m test/tcp-management-exact.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m test/core-management.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 50[2mms[22m[39m
+ [32m✓[39m test/tui-tcp.test.ts [2m([22m[2m24 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m test/tcp-cold-management.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [32m✓[39m test/uninstall.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+ [32m✓[39m test/status-summary.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m test/tui-table.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+ [32m✓[39m test/rollout-meta.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 45[2mms[22m[39m
+ [32m✓[39m test/native-rename-providers.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 35[2mms[22m[39m
+ [32m✓[39m test/status-filters.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 36[2mms[22m[39m
+ [32m✓[39m test/tcp-management-boundaries.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 35[2mms[22m[39m
+ [32m✓[39m test/c14-native-send-seams.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m test/dsh-members.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 58[2mms[22m[39m
+ [32m✓[39m test/tcp-local-management.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+ [32m✓[39m test/tui-text.test.ts [2m([22m[2m52 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m test/clean.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 32[2mms[22m[39m
+ [32m✓[39m test/discovery-ssh.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m test/opencode-send.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+ [32m✓[39m test/node-config.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m test/tcp-management.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m test/tui-tcp-targets.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m test/core-services.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m test/rate-limit.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m test/c14-tool-addressing.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m test/tui-ssh.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m test/core-send-diagnostics.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m test/tui-logs.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m test/core-send.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m test/native-endpoint-types.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m test/opencode-tui.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m test/serve-management-errors.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m test/session-membership-machine.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m test/session-star-logging.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m test/tcp-machine-workspace.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m test/tui-star-audit.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m test/tcp-node-naming-lifecycle.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m test/tui-connections.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m test/tui-communications.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m test/codex-pagination.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m test/ref.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m test/star-snapshot.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m test/dsh-identity.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m test/tcp-empty-node-config.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m test/dsh-composition.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m test/tui-page-presentation.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m test/tui-overview.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m test/session-membership-ipv6.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m test/opencode-composition.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m test/tui-maintenance.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m test/tool-type-discovery-state.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m test/tui-ssh-management.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m test/opencode-identity.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m test/core-members.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m test/codex-proxy-env.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m test/dsh-reader.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m test/tui-services.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m test/doctor.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m test/c14-discovery-tui.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m test/core-sessions.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m test/key-file.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m test/dsh-status.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m test/codex-caller-source-probe.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m test/core-local-discovery.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m test/ssh-interaction.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m test/resolve.test.ts [2m([22m[2m24 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m test/deliver.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m test/dsh-tui.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m test/opencode-status.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m test/registry.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m test/envelope.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m test/opencode-desktop-process-race.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m test/discovery-command.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m test/local-service-stop-target.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m test/codex-launcher-owner.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m test/opencode-wrapper.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m test/tcp-management-state.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m test/compat-reply.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m test/codex-wrapper.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m test/limits.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m test/claude-compat-evidence.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m test/frame.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m test/remote-discovery-protocol.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m test/credential-revoked-protocol.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m test/serve-protocol.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m test/local-service-readiness.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m test/tui-status.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m test/c14-envelope-tool.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m test/opencode-ref-boundary.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m test/tui-ssh-authentication-prompt.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 2[2mms[22m[39m
+ [2m[90m↓[39m[22m test/live/claude-live.test.ts [2m([22m[2m2 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m
+ [2m[90m↓[39m[22m test/live/codex-live.test.ts [2m([22m[2m2 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m
+ [2m[90m↓[39m[22m test/live/status-live.test.ts [2m([22m[2m2 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 11 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/caller-source-service.test.ts[2m > [22mcaller source application boundary[2m > [22mrejects a user answer conflicting with the current known caller endpoint before saving it
+[31m[1mMultichatError[22m: Source confirmation is temporarily busy; no new question or write was issued.[39m
+[36m [2m❯[22m withRecord src/application/caller-source/confirmations.ts:[2m102:31[22m[39m
+    [90m100| [39m  [35mawait[39m [34mmkdir[39m(options[33m.[39mdirectory[33m,[39m { recursive[33m:[39m [35mtrue[39m[33m,[39m mode[33m:[39m [34m0o700[39m })[33m;[39m
+    [90m101| [39m  [35mconst[39m result [33m=[39m [35mawait[39m [34mwithStateLock[39m(options[33m.[39mdirectory[33m,[39m key[33m,[39m work)[33m;[39m
+    [90m102| [39m  if (!result.acquired) throw new MultichatError('SOURCE_STATE_BUSY', …
+    [90m   | [39m                              [31m^[39m
+    [90m103| [39m  [35mreturn[39m result[33m.[39mvalue[33m;[39m
+    [90m104| [39m}
+[90m [2m❯[22m inspectCallerSource src/application/caller-source/service.ts:[2m79:40[22m[39m
+[90m [2m❯[22m test/caller-source-service.test.ts:[2m87:22[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/conversation-handle-ring.test.ts[2m > [22mfive-character conversation handle ring[2m > [22mkeeps allocation progress after eight-slot eviction and accounting when rereading stored state
+[31m[1mError[22m: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+[36m [2m❯[22m test/conversation-handle-ring.test.ts:[2m39:3[22m[39m
+    [90m 37| [39m  })[33m;[39m
+    [90m 38| [39m
+    [90m 39| [39m  it('keeps allocation progress after eight-slot eviction and accounti…
+    [90m   | [39m  [31m^[39m
+    [90m 40| [39m    [35mconst[39m file [33m=[39m [34mfreshFile[39m()[33m;[39m
+    [90m 41| [39m    [35mfor[39m ([35mlet[39m i [33m=[39m [34m0[39m[33m;[39m i [33m<[39m [34m9[39m[33m;[39m i[33m++[39m) {
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/conversation-handle-ring.test.ts[2m > [22mfive-character conversation handle ring[2m > [22mstops after cZ999, preserves reusable current handles, and does not rewrite state on exhaustion
+[31m[1mAssertionError[22m: expected undefined to be 'cZ999' // Object.is equality[39m
+
+[32m- Expected:[39m 
+"cZ999"
+
+[31m+ Received:[39m 
+undefined
+
+[36m [2m❯[22m test/conversation-handle-ring.test.ts:[2m84:56[22m[39m
+    [90m 82| [39m    [35mconst[39m path [33m=[39m [34mseed[39m(file[33m,[39m ref[33m,[39m [32m'cZ999'[39m[33m,[39m [34m26000[39m)[33m;[39m
+    [90m 83| [39m    [35mconst[39m before [33m=[39m [34mreadFileSync[39m(path)[33m;[39m
+    [90m 84| [39m    [34mexpect[39m([35mawait[39m [34mhandleForRef[39m(file[33m,[39m [34mnextTurnRef[39m(ref)))[33m.[39m[34mtoBe[39m([32m'cZ999'[39m)[33m;[39m
+    [90m   | [39m                                                       [31m^[39m
+    [90m 85| [39m    expect(await handleForRef(file, newConversationRef(first, second))…
+    [90m 86| [39m    [34mexpect[39m([34mreadFileSync[39m(path))[33m.[39m[34mtoEqual[39m(before)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/conversation-state-concurrency.test.ts[2m > [22mconversation state cross-process writes[2m > [22mconcurrent processes reusing one nonce all get its single handle
+[31m[1mAssertionError[22m: expected { ok: false, …(2) } to deeply equal { ok: true, …(1) }[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[32m-   "ok": true,[39m
+[32m-   "ref": "mc2_tDAFYWxwaGEEYmV0YQg4ft3mDBj0OgEDY2xpA2NsaQ",[39m
+[31m+   "code": "INVALID_CONVERSATION_REF",[39m
+[31m+   "message": "undefined 已过期或未知——用 --to <名> --tool <收件类型> 接续或开新对话",[39m
+[31m+   "ok": false,[39m
+[2m  }[22m
+
+[36m [2m❯[22m test/conversation-state-concurrency.test.ts:[2m201:58[22m[39m
+    [90m199| [39m    })[33m;[39m
+    [90m200| [39m    expect(new Set(results.map((result) => result.handle)).size).toBe(…
+    [90m201| [39m    for (const result of results) expect(result.resolve).toEqual({ ok:…
+    [90m   | [39m                                                         [31m^[39m
+    [90m202| [39m    expect(resolveHandle(file, results[0]!.handle)).toBe(encodeRef(ref…
+    [90m203| [39m  }[33m,[39m [34m60_000[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/conversation-summary.test.ts[2m > [22mconversationSummaries[2m > [22maggregates current shards while a retired global snapshot produces no rows
+[31m[1mAssertionError[22m: expected [] to deeply equal [ { …(10) } ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [[39m
+[32m-   {[39m
+[32m-     "endpoints": [[39m
+[32m-       "claude:cs-1",[39m
+[32m-       "codex:t-1",[39m
+[32m-     ],[39m
+[32m-     "handle": null,[39m
+[32m-     "lastFrom": null,[39m
+[32m-     "lastStatus": null,[39m
+[32m-     "pair": [[39m
+[32m-       "claude/cs-1",[39m
+[32m-       "codex/t-1",[39m
+[32m-     ],[39m
+[32m-     "parked": 0,[39m
+[32m-     "receipt": null,[39m
+[32m-     "ref": "mc2_NARjcy0xA3QtMQg2xDIElCCjUgE",[39m
+[32m-     "turn": null,[39m
+[32m-     "updatedAt": 5000,[39m
+[32m-   },[39m
+[32m- ][39m
+[31m+ [][39m
+
+[36m [2m❯[22m test/conversation-summary.test.ts:[2m279:7[22m[39m
+    [90m277| [39m        outboxDir[33m:[39m [34mjoin[39m(shardDir[33m,[39m [32m'outbox'[39m)[33m,[39m
+    [90m278| [39m      })[33m,[39m
+    [90m279| [39m    )[33m.[39m[34mtoEqual[39m(expected)[33m;[39m
+    [90m   | [39m      [31m^[39m
+    [90m280| [39m    [34mexpect[39m(expected)[33m.[39m[34mtoHaveLength[39m([34m1[39m)[33m;[39m
+    [90m281| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/conversations.test.ts[2m > [22mcontinueConversation / recordConversation[2m > [22mcontinues from either endpoint (the other party replying via --to)
+[31m[1mAssertionError[22m: expected 1 to be 2 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 2[39m
+[31m+ 1[39m
+
+[36m [2m❯[22m test/conversations.test.ts:[2m60:24[22m[39m
+    [90m 58| [39m    [35mawait[39m [34mrecordConversation[39m(file[33m,[39m first[33m.[39mref[33m,[39m [34m1_000[39m)[33m;[39m
+    [90m 59| [39m    const reply = continueConversation(file, codexB, claudeA); // code…
+    [90m 60| [39m    [34mexpect[39m(reply[33m.[39mturn)[33m.[39m[34mtoBe[39m([34m2[39m)[33m;[39m
+    [90m   | [39m                       [31m^[39m
+    [90m 61| [39m    expect(reply.ref.f.p).toBe('claude'); // initiator order stays fix…
+    [90m 62| [39m    [34mexpect[39m(reply[33m.[39mref[33m.[39mn)[33m.[39m[34mtoBe[39m(first[33m.[39mref[33m.[39mn)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/conversations.test.ts[2m > [22msharded storage (B20)[2m > [22mwriting one pair leaves the other pair shard bytes unchanged
+[31m[1mError[22m: ENOENT: no such file or directory, open 'C:\Users\YANGSH~1\AppData\Local\Temp\crosschat-conv-qnJlNZ\case-Z7sYUn\conversations\9b4e8bf1bfd5fdf6454b91bcf40a3ff2e35ee954ddf05ddb1d83dc7d562d3115.json'[39m
+[36m [2m❯[22m test/conversations.test.ts:[2m120:20[22m[39m
+    [90m118| [39m    await recordConversation(file, newConversationRef(claudeA, codexB)…
+    [90m119| [39m    [35mconst[39m shardA [33m=[39m [34mshardPath[39m(file[33m,[39m [34mpairKeyOf[39m(claudeA[33m,[39m codexB))[33m;[39m
+    [90m120| [39m    [35mconst[39m bytesA [33m=[39m [34mreadFileSync[39m(shardA)[33m;[39m
+    [90m   | [39m                   [31m^[39m
+    [90m121| [39m    await recordConversation(file, newConversationRef(claudeC, codexD)…
+    [90m122| [39m    [34mexpect[39m([34mreadFileSync[39m(shardA)[33m.[39m[34mequals[39m(bytesA))[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/conversations.test.ts[2m > [22mcontinueFromRef (B22: stale --conversation refs cannot roll back)[2m > [22mmulti-sender repeats of one old base no longer collide on the turn number
+[31m[1mMultichatError[22m: Conversation state is locked by another crosschat process; no message was sent. Retry the send.[39m
+[36m [2m❯[22m conversationStateBusy src/conversations.ts:[2m622:10[22m[39m
+    [90m620| [39m
+    [90m621| [39m[35mfunction[39m [34mconversationStateBusy[39m()[33m:[39m [33mMultichatError[39m {
+    [90m622| [39m  return new MultichatError('CONVERSATION_STATE_BUSY', 'Conversation s…
+    [90m   | [39m         [31m^[39m
+    [90m623| [39m}
+    [90m624| [39m
+[90m [2m❯[22m continueFromRef src/conversations.ts:[2m280:31[22m[39m
+[90m [2m❯[22m test/conversations.test.ts:[2m187:15[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/conversations.test.ts[2m > [22mconversation short handles (F2)[2m > [22mCAS: a raced max+1 claim rewrites once and both conversations stay uniquely resolvable
+[31m[1mAssertionError[22m: expected undefined not to be undefined // Object.is equality[39m
+[36m [2m❯[22m test/conversations.test.ts:[2m225:23[22m[39m
+    [90m223| [39m    // The loser scanned max=0 before the winner's write landed -> cla…
+    [90m224| [39m    [35mconst[39m loser [33m=[39m [35mawait[39m [34mclaimHandle[39m(file[33m,[39m b[33m,[39m [34m1[39m)[33m;[39m
+    [90m225| [39m    [34mexpect[39m(loser)[33m.[39mnot[33m.[39m[34mtoBe[39m(winner)[33m;[39m
+    [90m   | [39m                      [31m^[39m
+    [90m226| [39m    expect(loser).toBe('cA001'); // the lock advances past the already…
+    [90m227| [39m    [34mexpect[39m([34mresolveHandle[39m(file[33m,[39m winner))[33m.[39m[34mtoBe[39m([34mencodeRef[39m(a))[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/tool-type-observations.test.ts[2m > [22mtyped communication observations[2m > [22mkeeps typed queue counts, routed audit attribution and local session links separate
+[31m[1mAssertionError[22m: expected [] to have a length of 2 but got +0[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 2[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m test/tool-type-observations.test.ts:[2m108:26[22m[39m
+    [90m106| [39m    const result = await queryCommunications({ baseDir, contextId: 'lo…
+    [90m107| [39m    [34mexpect[39m(result[33m.[39mcompleteness)[33m.[39m[34mtoBe[39m([32m'complete'[39m)[33m;[39m
+    [90m108| [39m    [34mexpect[39m(result[33m.[39mitems)[33m.[39m[34mtoHaveLength[39m([34m2[39m)[33m;[39m
+    [90m   | [39m                         [31m^[39m
+    [90m109| [39m    expect(result.items.every((item) => item.parked === 1 && item.stat…
+    [90m110| [39m    expect(result.items.flatMap((item) => item.localSessionRefs)).toEq…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/tool-type-routing-state.test.ts[2m > [22mtyped identity, pair continuity and provenance[2m > [22mdoes not reuse a handle when an equal nonce identifies another typed pair
+[31m[1mAssertionError[22m: expected undefined not to be undefined // Object.is equality[39m
+[36m [2m❯[22m test/tool-type-routing-state.test.ts:[2m134:24[22m[39m
+    [90m132| [39m    [35mconst[39m first [33m=[39m [35mawait[39m [34mhandleForRef[39m(file[33m,[39m cliRef)[33m;[39m
+    [90m133| [39m    [35mconst[39m second [33m=[39m [35mawait[39m [34mhandleForRef[39m(file[33m,[39m desktopRef)[33m;[39m
+    [90m134| [39m    [34mexpect[39m(second)[33m.[39mnot[33m.[39m[34mtoBe[39m(first)[33m;[39m
+    [90m   | [39m                       [31m^[39m
+    [90m135| [39m    [34mexpect[39m([34mdecodeRef[39m([34mresolveHandle[39m(file[33m,[39m first))[33m.[39mt)[33m.[39m[34mtoEqual[39m(cli)[33m;[39m
+    [90m136| [39m    [34mexpect[39m([34mdecodeRef[39m([34mresolveHandle[39m(file[33m,[39m second))[33m.[39mt)[33m.[39m[34mtoEqual[39m(desktop)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m7 failed[39m[22m[2m | [22m[1m[32m224 passed[39m[22m[2m | [22m[33m3 skipped[39m[90m (234)[39m
+[2m      Tests [22m [1m[31m11 failed[39m[22m[2m | [22m[1m[32m2595 passed[39m[22m[2m | [22m[33m11 skipped[39m[90m (2617)[39m
+[2m   Start at [22m 13:56:57
+[2m   Duration [22m 114.64s[2m (transform 3.81s, setup 0ms, collect 22.64s, tests 165.52s, environment 27ms, prepare 14.66s)[22m
+
+FULL_CHECK_EXIT=1
+
+COMMAND: node --check scripts/dsh-compat-ci.mjs
+NODE_CHECK_EXIT=0
+
+COMMAND: npx eslint scripts/dsh-compat-ci.mjs test/dsh-compat-ci.test.ts
+ESLINT_EXIT=0
+
+COMMAND: npm run build
+
+> @oatelauser/crosschat@1.10.0 build
+> tsc
+
+BUILD_EXIT=0
+
+COMMAND: git diff --check
+warning: in the working copy of 'docs/development/evidence/c04-worker-20261029/I03-review-input.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/research/c04-windows-installer-contract-20261102.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'test/dsh-compat-ci.test.ts', LF will be replaced by CRLF the next time Git touches it
+DIFF_CHECK_EXIT=0

@@ -1,0 +1,125 @@
+{
+  "probe": "c14-desktop-os-source-anchor",
+  "version": 1,
+  "generatedAt": "2026-10-29T09:28:10.308Z",
+  "node": "v25.0.0",
+  "platform": "win32",
+  "self": {
+    "pid": 47768,
+    "chain": [
+      {
+        "pid": 47768,
+        "name": "node.exe",
+        "shape": "node",
+        "createdAt": 134377396902698960,
+        "exeDigest": "1e9d7fdac6b0"
+      },
+      {
+        "pid": 31232,
+        "name": "pwsh.exe",
+        "shape": "shell",
+        "createdAt": 134377396899312740,
+        "exeDigest": "866b72c4c34a"
+      },
+      {
+        "pid": 24716,
+        "name": "codex.exe",
+        "shape": "desktop-bundle",
+        "createdAt": 134377104251445780,
+        "exeDigest": "4ff0c97c5201"
+      },
+      {
+        "pid": 14368,
+        "name": "ChatGPT.exe",
+        "shape": "app",
+        "createdAt": 134377103343007550,
+        "exeDigest": "c183109d3295"
+      }
+    ],
+    "stopReason": "missing-parent"
+  },
+  "pipes": [
+    {
+      "label": "codex-ipc",
+      "pipe": {
+        "name": "codex-ipc"
+      },
+      "query": {
+        "ok": true,
+        "stage": "query",
+        "serverPid": 14368
+      },
+      "anchor": {
+        "relation": "server-is-ancestor",
+        "depth": 3,
+        "reasons": [],
+        "serverPid": 14368,
+        "server": {
+          "pid": 14368,
+          "name": "ChatGPT.exe",
+          "shape": "app",
+          "createdAt": 134377103343007550,
+          "exeDigest": "c183109d3295"
+        },
+        "selfChain": [
+          {
+            "pid": 47768,
+            "name": "node.exe",
+            "shape": "node",
+            "createdAt": 134377396902698960,
+            "exeDigest": "1e9d7fdac6b0"
+          },
+          {
+            "pid": 31232,
+            "name": "pwsh.exe",
+            "shape": "shell",
+            "createdAt": 134377396899312740,
+            "exeDigest": "866b72c4c34a"
+          },
+          {
+            "pid": 24716,
+            "name": "codex.exe",
+            "shape": "desktop-bundle",
+            "createdAt": 134377104251445780,
+            "exeDigest": "4ff0c97c5201"
+          },
+          {
+            "pid": 14368,
+            "name": "ChatGPT.exe",
+            "shape": "app",
+            "createdAt": 134377103343007550,
+            "exeDigest": "c183109d3295"
+          }
+        ],
+        "selfStopReason": "missing-parent"
+      }
+    }
+  ],
+  "limits": {
+    "connectTimeoutMs": 3000,
+    "psTimeoutMs": 20000,
+    "tableTimeoutMs": 10000
+  },
+  "owner": {
+    "requested": true,
+    "known": true,
+    "namespace": "client-id",
+    "length": 36,
+    "digest": "bf34358a80e4",
+    "osPidEquivalent": false
+  },
+  "processTable": {
+    "ok": true
+  },
+  "conclusion": {
+    "osServerRelation": "server-is-ancestor",
+    "logicalOwnerSeparateNamespace": true,
+    "productStatusUnchanged": "CODEX_SOURCE_ASSOCIATION_UNVERIFIED",
+    "note": "The pipe server pid is independent OS evidence. When the pipe is a shared hub it does not identify the logical owner, and a tools-pipe path inherited through the environment does not prove this call used it."
+  },
+  "cleanup": {
+    "created": true,
+    "removed": true
+  },
+  "wrote": true
+}

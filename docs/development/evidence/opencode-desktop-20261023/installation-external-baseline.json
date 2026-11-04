@@ -1,0 +1,32 @@
+{
+  "at": "2026-10-23T02:41:22.4381707Z",
+  "installRoot": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-20261023-988a66bc46cd42609ca8a12db062e168\\install",
+  "registry": [
+    {
+      "path": "HKCU:\\Software\\d074f30d-5f88-5885-b075-be1348cc7676",
+      "exists": false
+    },
+    {
+      "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\d074f30d-5f88-5885-b075-be1348cc7676",
+      "exists": false
+    },
+    {
+      "path": "HKCU:\\Software\\Classes\\opencode",
+      "exists": false
+    }
+  ],
+  "externalPaths": [
+    {
+      "path": "C:\\Users\\yangsheng\\AppData\\Local\\@opencodedesktop-updater",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\Desktop\\OpenCode.lnk",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\OpenCode.lnk",
+      "exists": false
+    }
+  ]
+}

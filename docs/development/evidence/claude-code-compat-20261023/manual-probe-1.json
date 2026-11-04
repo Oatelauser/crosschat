@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "tool": "claude-code-cli",
+  "platform": "win32",
+  "arch": "x64",
+  "runId": "60cfd3b9-8561-4998-984d-accc21368efa",
+  "version": "2.1.309",
+  "scope": {
+    "officialNativeCLI": true,
+    "productionWrapper": true,
+    "scriptedLocalModel": true,
+    "streamJSON": true,
+    "interactiveTUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "startedAt": "2026-10-23T07:26:22.942Z",
+  "status": "failed",
+  "category": "infrastructure",
+  "stage": "setup",
+  "check": "official-wrapper-and-native-session-registration",
+  "checks": [],
+  "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'workspace-1e'\n- 'CC_CI_60cfd3b985614998984daccc21368efa_sender'\n",
+  "modelRequestCount": 1,
+  "nativeResults": [
+    {
+      "id": "33a738f4-6a03-4650-a8b2-98e2979e707a",
+      "count": 0,
+      "errors": 0
+    },
+    {
+      "id": "308ec61a-620b-44d4-b8bc-dfb1faa472b1",
+      "count": 0,
+      "errors": 0
+    }
+  ],
+  "stderr": [
+    {
+      "id": "33a738f4-6a03-4650-a8b2-98e2979e707a",
+      "text": ""
+    },
+    {
+      "id": "308ec61a-620b-44d4-b8bc-dfb1faa472b1",
+      "text": ""
+    }
+  ],
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "modelClosed": true,
+    "removed": true,
+    "forced": false,
+    "errors": []
+  },
+  "finishedAt": "2026-10-23T07:26:26.179Z"
+}

@@ -17,8 +17,8 @@ function fixture() {
     const parent = area === 'conversations' ? conversationsDir : join(tcpDir, area);
     mkdirSync(parent, { recursive: true });
     const file = join(parent, name);
-    writeFileSync(file, '');
-    truncateSync(file, size);
+    if (area === 'conversations') writeFileSync(file, JSON.stringify({ pair: name, ref: 'fixture-ref', updatedAt: 1 }));
+    else { writeFileSync(file, ''); truncateSync(file, size); }
     const time = new Date(NOW - age);
     utimesSync(file, time, time);
     return file;

@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "tool": "dsh-onboarding",
+  "platform": "win32",
+  "arch": "x64",
+  "runId": "5030cd49-940a-4d8e-ac63-8732dc64c5c8",
+  "version": "0.2.1-rc.2",
+  "scope": {
+    "officialNpmRuntime": true,
+    "officialPluginManager": true,
+    "ordinaryWebSessions": true,
+    "scriptedLocalModel": true,
+    "skillLifecycle": true,
+    "diagnostics": true,
+    "tui": true,
+    "browserUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "status": "failed",
+  "category": "compatibility",
+  "stage": "onboarding",
+  "check": "skill-update-and-profile-preserving-shutdown",
+  "startedAt": "2026-11-04T02:27:16.965Z",
+  "checks": [
+    {
+      "name": "official-profile-plugin-and-skill-installation",
+      "status": "passed",
+      "elapsedMs": 5421
+    },
+    {
+      "name": "native-skill-load-and-current-source",
+      "status": "passed",
+      "elapsedMs": 1568
+    },
+    {
+      "name": "native-roundtrip-and-typed-discovery",
+      "status": "passed",
+      "elapsedMs": 3189
+    },
+    {
+      "name": "same-source-diagnostics-and-real-terminal",
+      "status": "passed",
+      "elapsedMs": 3761
+    }
+  ],
+  "source": {
+    "status": "identified",
+    "sourceTool": "dsh",
+    "basis": "native",
+    "association": "verified",
+    "scope": "instance",
+    "shouldAsk": false
+  },
+  "error": "fixture.stop is not a function",
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  },
+  "finishedAt": "2026-11-04T02:27:31.228Z"
+}

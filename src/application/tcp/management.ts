@@ -21,6 +21,7 @@ import type { ManagementRequest, ManagementResult } from '../management/local.js
 import type { MemberRemoveExactResultFrame } from '../../serve/protocol.js';
 import { createTcpSessionOperation } from './session-operations.js';
 import type { TcpSessionOperation, TcpSessionTarget } from './session-operations.js';
+import { isEndpointTypeFor } from '../../tool-types.js';
 
 export type TcpManagementAction = 'add-star' | 'rename-star' | 'remove-star' | 'set-show-name' | 'rename-node'
   | 'generate-node-key' | 'generate-admin-key' | 'remove-node' | 'revoke-credential' | 'remove-member' | 'adopt-session' | 'rename-session';
@@ -37,7 +38,7 @@ export interface TcpManagementRequest {
   starId?: string;
   targetId?: string;
   targetRevision?: string;
-  sessionTarget?: Pick<TcpSessionTarget, 'machineId' | 'providerId' | 'nativeId'>;
+  sessionTarget?: Pick<TcpSessionTarget, 'machineId' | 'providerId' | 'nativeId' | 'endpointType'>;
   values: Readonly<Record<string, string>>;
   signal?: AbortSignal;
 }
@@ -81,7 +82,7 @@ export interface TcpManagementOptions {
 export interface TcpManagementConnection {
   starId?: string;
   request(action: string, params: Readonly<Record<string, unknown>>): Promise<unknown>;
-  removeMember(target: { sessionId: string; machine: string; tool: string }): Promise<MemberRemoveExactResultFrame>;
+  removeMember(target: { sessionId: string; machine: string; tool: string; endpointType?: string }): Promise<MemberRemoveExactResultFrame>;
   close(): void;
 }
 
@@ -89,7 +90,7 @@ interface Prepared {
   preview: TcpManagementPreview;
   star?: TcpStar;
   local?: ManagementRequest;
-  member?: { sessionId: string; machine: string; tool: string };
+  member?: { sessionId: string; machine: string; tool: string; endpointType?: string };
   adopt?: SessionRef;
   sessionOperation?: { target: TcpSessionTarget; revision: string };
   machine?: { machineId: string; labels: string[] };
@@ -263,7 +264,7 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
           case 'remove-member': {
             const item = current.members.find((candidate) => candidate.id === request.targetId);
             if (item === undefined || !item.nativeId || fullTcpMachineId(item.machineId) !== item.machineId || item.providerId === null || sanitizeTool(item.providerId) !== item.providerId) throw new Denied('所选册位缺少可核实的完整会话、机器或工具身份，不能精确删册。');
-            member = { sessionId: item.nativeId, machine: item.machineId, tool: item.providerId };
+            member = { sessionId: item.nativeId, machine: item.machineId, tool: item.providerId, ...(item.endpointType === undefined ? {} : { endpointType: item.endpointType }) };
             state = { state, member };
             impact.push({ label: '完整会话', value: item.nativeId }, { label: '机器', value: item.machineId }, { label: '工具', value: item.providerId }, { label: '操作', value: '仅删除此精确册位；不删除原生会话、不结束原生工具。' });
             break;
@@ -273,6 +274,7 @@ export function createTcpManagement(options: TcpManagementOptions): TcpManagemen
             if (request.sessionTarget) {
               const selected = request.sessionTarget;
               if (fullTcpMachineId(selected.machineId) !== selected.machineId || !selected.nativeId || sanitizeTool(selected.providerId) !== selected.providerId
+                || (selected.endpointType !== undefined && !isEndpointTypeFor(selected.providerId, selected.endpointType))
                 || !current.machines.some((node) => node.machineId === selected.machineId && node.presence === 'online')) throw new Denied('所选完整节点当前不在线或原生引用无效。');
               const target = { ...selected, contextId: request.contextId, starId: star.starId };
               const response = await operateSession(target, { kind: 'describe' }, request.signal);

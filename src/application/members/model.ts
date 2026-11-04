@@ -11,11 +11,14 @@ export interface MemberProvider {
 export interface MemberSnapshotRequest {
   contextId: string;
   nativeIds: readonly string[];
+  /** Exact declared identities; raw nativeIds stay available to existing factories. */
+  targets?: readonly { providerId: string; nativeId: string; endpointType?: string }[];
   signal?: AbortSignal;
 }
 
 export interface MemberObservation {
   providerId: string;
+  endpointType?: string;
   readName(): Promise<string | undefined>;
 }
 

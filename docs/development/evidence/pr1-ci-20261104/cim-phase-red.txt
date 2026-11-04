@@ -1,0 +1,33 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-int-20261104
+
+ ❯ test/opencode-desktop-process-race.test.ts (4 tests | 1 failed) 7ms
+   × desktop executable snapshot races > reports the bounded CIM timeout without trusting a partial process table 6ms
+     → expected 'CIM query timed out after 5000ms; pro…' to contain 'crosschat-cim:started'
+   ✓ desktop executable snapshot races > ignores an unrelated short-path executable only after the sampled process has explicitly exited 1ms
+   ✓ desktop executable snapshot races > retains unknown when a missing executable path still belongs to a live sampled PID 0ms
+   ✓ desktop executable snapshot races > retains unknown when the PID zero-signal check is denied or otherwise cannot establish exit 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/opencode-desktop-process-race.test.ts > desktop executable snapshot races > reports the bounded CIM timeout without trusting a partial process table
+AssertionError: expected 'CIM query timed out after 5000ms; pro…' to contain 'crosschat-cim:started'
+
+Expected: "crosschat-cim:started"
+Received: "CIM query timed out after 5000ms; process ownership remains unknown"
+
+ ❯ test/opencode-desktop-process-race.test.ts:35:26
+     33|     const result = await inspectDesktopRunProcesses(root, env);
+     34|     expect(result).toMatchObject({ state: 'unknown', processes: [], er…
+     35|     expect(result.error).toContain('crosschat-cim:started');
+       |                          ^
+     36|     expect(boundary.realpath).toHaveBeenCalledExactlyOnceWith(root);
+     37|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  14:43:50
+   Duration  305ms (transform 71ms, setup 0ms, collect 95ms, tests 7ms, environment 0ms, prepare 81ms)

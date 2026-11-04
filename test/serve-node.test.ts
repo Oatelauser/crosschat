@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { type RawData } from 'ws';
 import { Broker, type BrokerDeps } from '../src/serve/broker.js';
-import { encodeFrame, parseFrame, type Frame } from '../src/serve/protocol.js';
+import { CAP_ENDPOINT_TYPES, encodeFrame, parseFrame, type Frame } from '../src/serve/protocol.js';
 import { registryFileOf, writeBrokerFile, type NodeEntry } from '../src/serve/registry.js';
 import { seedBroker } from './helpers/broker-seed.js';
 import { NodeClient, deliverViaRunSend, readNodeConfig, NOT_JOINED_MESSAGE } from '../src/serve/node.js';
@@ -131,7 +131,7 @@ async function senderOn(url: string, auth: string): Promise<TestClient> {
   const client = new TestClient(url);
   await client.opened();
   await client.waitFor((f) => f.op === 'info');
-  client.send({ op: 'connect', proto: 1, role: 'sender', auth, caps: ['multi-star'] });
+  client.send({ op: 'connect', proto: 1, role: 'sender', auth, caps: ['multi-star', CAP_ENDPOINT_TYPES] });
   await client.waitFor((f) => f.op === 'connected');
   return client;
 }
@@ -223,7 +223,7 @@ describe('node client lifecycle', () => {
     void client.run();
     await client.waitForState('online');
     const sender = await senderOn(harness.url, key('n'));
-    sender.send({ op: 'send', id: 's1', targetMachine: 'node-host', to: 'boss', body: 'hello via tcp', origin: undefined, delivery });
+    sender.send({ op: 'send', tool: 'claude', id: 's1', targetMachine: 'node-host', to: 'boss', body: 'hello via tcp', origin: undefined, delivery });
     const receipt = await sender.waitFor((f) => f.op === 'receipt' && f.id === 's1');
     expect(receipt).toMatchObject({ op: 'receipt', id: 's1', status: 'delivered' });
     if (receipt.op === 'receipt') {
@@ -249,7 +249,7 @@ describe('node client lifecycle', () => {
     void client.run();
     await client.waitForState('online');
     const sender = await senderOn(harness.url, key('n'));
-    sender.send({ op: 'send', id: 's2', targetMachine: 'node-host', to: 'nobody', body: 'x' });
+    sender.send({ op: 'send', tool: 'claude', id: 's2', targetMachine: 'node-host', to: 'nobody', body: 'x' });
     const err = await sender.waitFor((f) => f.op === 'error' && f.id === 's2');
     expect(err).toMatchObject({ op: 'error', id: 's2', code: 'NAME_NOT_FOUND' });
     await client.stop();
@@ -543,7 +543,7 @@ describe('B1 multi-star: delivery pipeline stamps starId into issued refs', () =
     void client.run();
     await client.waitForState('online');
     const sender = await senderOn(harness.url, key('n'));
-    sender.send({ op: 'send', id: 'b1', targetMachine: 'node-host', to: 'boss', body: 'star hello' });
+    sender.send({ op: 'send', tool: 'claude', id: 'b1', targetMachine: 'node-host', to: 'boss', body: 'star hello' });
     const receipt = await sender.waitFor((f) => f.op === 'receipt' && f.id === 'b1');
     if (receipt.op !== 'receipt') throw new Error('expected receipt');
     expect(decodeRef(receipt.replyRef ?? '').starId).toBe(STAR);
@@ -589,7 +589,7 @@ describe('B1 multi-star: delivery pipeline stamps starId into issued refs', () =
       }
     }
     expect(sender).toBeDefined();
-    sender!.send({ op: 'send', id: 's1', targetMachine: 'broker-host', to: 'boss', body: 'self hello', delivery });
+    sender!.send({ op: 'send', tool: 'claude', id: 's1', targetMachine: 'broker-host', to: 'boss', body: 'self hello', delivery });
     const receipt = await sender!.waitFor((f) => f.op === 'receipt' && f.id === 's1');
     if (receipt.op !== 'receipt') throw new Error('expected receipt');
     expect(decodeRef(receipt.replyRef ?? '').starId).toBe(STAR);
@@ -809,7 +809,7 @@ describe('F1 跨机信封 from-machine（投递管线真值链）', () => {
     await client.waitForState('online');
     // sender 用节点同款钥匙（注册表 machineName=node-host）→ deliver.fromMachine=node-host
     const sender = await senderOn(harness.url, key('n'));
-    sender.send({ op: 'send', id: 'f1a', targetMachine: 'node-host', to: 'boss', body: 'hello', origin: encodeOrigin({ p: 'claude', id: 'sender-s9', name: 'wsl-boss' }, 'nodemid', 'NODE-MID', 'tcp') });
+    sender.send({ op: 'send', tool: 'claude', id: 'f1a', targetMachine: 'node-host', to: 'boss', body: 'hello', origin: encodeOrigin({ p: 'claude', id: 'sender-s9', name: 'wsl-boss' }, 'nodemid', 'NODE-MID', 'tcp') });
     await sender.waitFor((f) => f.op === 'receipt' && f.id === 'f1a');
     expect(capture.delivered).toHaveLength(1);
     expect(capture.delivered[0]).toContain('from-name="wsl-boss"');
@@ -829,7 +829,7 @@ describe('F1 跨机信封 from-machine（投递管线真值链）', () => {
     void client.run();
     await client.waitForState('online');
     const sender = await senderOn(harness.url, key('anon'));
-    sender.send({ op: 'send', id: 'f1b', targetMachine: 'node-host', to: 'boss', body: 'hello', origin: encodeOrigin({ p: 'claude', id: 'sender-s9', name: 'wsl-boss' }, 'nodemid', 'NODE-MID', 'tcp') });
+    sender.send({ op: 'send', tool: 'claude', id: 'f1b', targetMachine: 'node-host', to: 'boss', body: 'hello', origin: encodeOrigin({ p: 'claude', id: 'sender-s9', name: 'wsl-boss' }, 'nodemid', 'NODE-MID', 'tcp') });
     await sender.waitFor((f) => f.op === 'receipt' && f.id === 'f1b');
     expect(capture.delivered).toHaveLength(1);
     expect(capture.delivered[0]).not.toContain('from-machine');
@@ -850,6 +850,7 @@ describe('F1 跨机信封 from-machine（投递管线真值链）', () => {
             to: frame.to,
             conversation: frame.conversation,
             origin: frame.origin,
+            tool: frame.tool,
           },
           capture.deps,
         ),
@@ -859,7 +860,7 @@ describe('F1 跨机信封 from-machine（投递管线真值链）', () => {
       { key: key('b'), machineId: 'BROKER-MID', machineName: 'self-host' },
     ]);
     const sender = await senderOn(harness.url, key('s'));
-    sender.send({ op: 'send', id: 'f1c', targetMachine: 'self-host', to: 'boss', body: 'to broker machine', origin: encodeOrigin({ p: 'claude', id: 'sender-s9', name: 'wsl-boss' }, 'sendermi', 'SENDER-MID', 'tcp') });
+    sender.send({ op: 'send', tool: 'claude', id: 'f1c', targetMachine: 'self-host', to: 'boss', body: 'to broker machine', origin: encodeOrigin({ p: 'claude', id: 'sender-s9', name: 'wsl-boss' }, 'sendermi', 'SENDER-MID', 'tcp') });
     const receipt = await sender.waitFor((f) => f.op === 'receipt' && f.id === 'f1c');
     expect(receipt).toMatchObject({ op: 'receipt', id: 'f1c', status: 'delivered' });
     expect(capture.delivered).toHaveLength(1);

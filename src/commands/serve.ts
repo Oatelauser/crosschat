@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import process from 'node:process';
 import { MultichatError } from '../errors.js';
+import { qualifiedToolTarget } from '../resolve.js';
 import { createLocalDiscoveryService } from './discover.js';
 import type { DiscoveryEndpoint } from '../application/discovery/model.js';
 import { appendWithRotate } from '../log-rotate.js';
@@ -794,6 +795,7 @@ async function runForegroundBroker(deps: ServeDeps): Promise<number> {
           to: frame.to,
           conversation: frame.conversation,
           origin: frame.origin,
+          tool: frame.tool,
         };
         const r = await deliverViaRunSend(deliver, {
           ...deps.makeSendDeps!(),
@@ -1019,6 +1021,8 @@ async function runAdoptServe(args: ServeArgs, deps: ServeDeps): Promise<number> 
     throw new MultichatError('INTERNAL', 'makeSendDeps 未接线（测试环境不支持 adopt）');
   }
   const send = deps.makeSendDeps();
+  const selected = qualifiedToolTarget(args.adopt!)?.tool;
+  const listDshThreads = send.listDshThreads;
   return runAdopt(
     {
       connect: args.connect ?? '',
@@ -1031,7 +1035,14 @@ async function runAdoptServe(args: ServeArgs, deps: ServeDeps): Promise<number> 
       stderr: (line) => (deps.stderr ?? deps.stdout)(line),
       log: () => {}, // adopt 是前台命令，输出留控制台——无静默路径
       listClaudeSessions: () => send.listClaudeSessions(),
-      listCodexThreads: async () => (await send.listCodexThreads()).map((thread) => ({ id: thread.id, name: thread.name })),
+      listCodexThreads: async () => (await send.listCodexThreads({
+        complete: true,
+        ...(selected?.providerId === 'codex' ? { endpointType: selected.endpointType } : {}),
+      })).map((thread) => ({ id: thread.id, name: thread.name, endpointType: thread.endpointType })),
+      ...(send.listOpenCodeThreads === undefined ? {} : { listOpenCodeThreads: send.listOpenCodeThreads }),
+      ...(listDshThreads === undefined ? {} : { listDshThreads: () => listDshThreads(
+        selected?.providerId === 'dsh' ? { endpointType: selected.endpointType } : undefined,
+      ) }),
       spawnServeDetach: spawnServeDetachReal,
       machineName: deps.hostname(), // runAdopt resolves the selected entry override before the global fallback.
       now: deps.now,

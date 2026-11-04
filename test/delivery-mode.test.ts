@@ -21,7 +21,7 @@ function fixture(): SendDeps {
   return {
     env: { CODEX_THREAD_ID: 'sender' },
     listClaudeSessions: () => ({ sessions: [{ pid: 1, sessionId: 'claude-target', name: 'claude-worker', kind: 'interactive', status: 'busy', messagingSocketPath: 'fake' }], malformed: 0 }),
-    listCodexThreads: async () => [{ id: 'codex-target', name: 'worker', status: 'busy' }],
+    listCodexThreads: async () => [{ id: 'codex-target', name: 'worker', status: 'busy', endpointType: 'cli' }],
     deliverClaude: vi.fn(async () => ({ status: 'delivered' as const })),
     deliverCodex: vi.fn(async () => ({ status: 'accepted' as const, turnId: 'native-turn' })),
     sendLogFile: join(directory, 'send-log.jsonl'), outboxDir: join(directory, 'outbox'), tcpBaseDir: directory, now: () => 100,
@@ -30,67 +30,67 @@ function fixture(): SendDeps {
 
 describe('per-message delivery mode', () => {
   it('parses both option forms and rejects unknown mode values', () => {
-    expect(parseSendArgs(['--to', 'worker', '--delivery', 'steer'])).toMatchObject({ delivery: 'steer' });
-    expect(parseSendArgs(['--delivery=queue'])).toMatchObject({ delivery: 'queue' });
+    expect(parseSendArgs(['--tool', 'codex-cli', '--to', 'worker', '--delivery', 'steer'])).toMatchObject({ delivery: 'steer' });
+    expect(parseSendArgs(['--tool=codex-cli', '--delivery=queue'])).toMatchObject({ delivery: 'queue' });
     expect(() => parseSendArgs(['--delivery=interrupt'])).toThrow(expect.objectContaining({ code: 'USAGE' }));
     expect(() => parseSendArgs(['--delivery'])).toThrow(/requires a value/);
   });
 
   it('defaults each send and reply to queue while forwarding explicit steer', async () => {
     const deps = fixture();
-    const first = await sendMessage({ to: 'claude-worker', bodyArg: 'append', delivery: 'steer' }, deps);
-    expect(deps.deliverClaude).toHaveBeenLastCalledWith(expect.any(Object), expect.any(String), { mode: 'steer' });
-    await sendMessage({ conversation: first.receipt.replyRef, bodyArg: 'next independent message' }, deps);
-    expect(deps.deliverClaude).toHaveBeenLastCalledWith(expect.any(Object), expect.any(String), { mode: 'queue' });
+    const first = await sendMessage({ tool: 'claude', to: 'claude-worker', bodyArg: 'append', delivery: 'steer' }, deps);
+    expect(deps.deliverClaude).toHaveBeenLastCalledWith(expect.any(Object), expect.any(String), { mode: 'steer', endpointType: 'cli' });
+    await sendMessage({ tool: 'claude', conversation: first.receipt.replyRef, bodyArg: 'next independent message' }, deps);
+    expect(deps.deliverClaude).toHaveBeenLastCalledWith(expect.any(Object), expect.any(String), { mode: 'queue', endpointType: 'cli' });
   });
 
   it('steers immediately past parked queue items without consuming them', async () => {
     const deps = fixture();
-    park(deps.outboxDir, 'codex-target', { envelope: 'older queue item', toName: 'worker' }, 1);
-    const result = await sendMessage({ to: 'worker', bodyArg: 'append now', delivery: 'steer' }, deps);
+    park(deps.outboxDir, 'codex-target', { envelope: 'older queue item', toName: 'worker', endpointType: 'cli' }, 1);
+    const result = await sendMessage({ tool: 'codex-cli', to: 'worker', bodyArg: 'append now', delivery: 'steer' }, deps);
     expect(result.status).toBe('delivered');
     expect(result.deliveryMode).toBe('steer');
-    expect(deps.deliverCodex).toHaveBeenCalledWith('codex-target', expect.any(String), { mode: 'steer' });
-    expect(outboxCount(deps.outboxDir, 'codex-target')).toBe(1);
+    expect(deps.deliverCodex).toHaveBeenCalledWith('codex-target', expect.any(String), { mode: 'steer', endpointType: 'cli' });
+    expect(outboxCount(deps.outboxDir, 'codex-target', 'cli')).toBe(1);
   });
 
   it('keeps queue FIFO and does not park a rejected steer', async () => {
     const deps = fixture();
-    park(deps.outboxDir, 'codex-target', { envelope: 'older', toName: 'worker' }, 1);
-    expect((await sendMessage({ to: 'worker', bodyArg: 'queue default' }, deps)).status).toBe('parked');
+    park(deps.outboxDir, 'codex-target', { envelope: 'older', toName: 'worker', endpointType: 'cli' }, 1);
+    expect((await sendMessage({ tool: 'codex-cli', to: 'worker', bodyArg: 'queue default' }, deps)).status).toBe('parked');
     expect(deps.deliverCodex).not.toHaveBeenCalled();
     const rejected = { ...deps, deliverCodex: vi.fn(async () => { throw new MultichatError('CODEX_THREAD_LOCKED', 'not writable'); }) };
-    await expect(sendMessage({ to: 'worker', bodyArg: 'steer refused', delivery: 'steer' }, rejected)).rejects.toMatchObject({ code: 'CODEX_THREAD_LOCKED' });
+    await expect(sendMessage({ tool: 'codex-cli', to: 'worker', bodyArg: 'steer refused', delivery: 'steer' }, rejected)).rejects.toMatchObject({ code: 'CODEX_THREAD_LOCKED' });
     expect(rejected.deliverCodex).toHaveBeenCalledOnce();
-    expect(outboxCount(deps.outboxDir, 'codex-target')).toBe(2);
+    expect(outboxCount(deps.outboxDir, 'codex-target', 'cli')).toBe(2);
   });
 
   it('rejects an invalid programmatic mode before discovery or delivery', async () => {
     const deps = fixture();
-    const invalid = { to: 'worker', bodyArg: 'body', delivery: 'queue' as const };
+    const invalid = { tool: 'codex-cli', to: 'worker', bodyArg: 'body', delivery: 'queue' as const };
     Object.assign(invalid, { delivery: 'interrupt' });
     await expect(sendMessage(invalid, deps)).rejects.toMatchObject({ code: 'USAGE' });
     expect(deps.deliverCodex).not.toHaveBeenCalled();
   });
 
   it('rejects invalid mode at the public TCP entry before opening config or a connection', async () => {
-    const invalid = { via: 'tcp:missing', conversation: 'mc1_x', delivery: 'queue' as const };
+    const invalid = { tool: 'codex-cli', via: 'tcp:missing', conversation: 'mc1_x', delivery: 'queue' as const };
     Object.assign(invalid, { delivery: 'interrupt' });
     await expect(sendViaTcp(invalid, 'body', fixture())).rejects.toThrow('--delivery must be queue or steer');
   });
 
   it('forwards an explicit mode through the SSH command whitelist', () => {
-    const args = { to: 'worker', delivery: 'steer' as const };
+    const args = { tool: 'codex-cli', to: 'worker', delivery: 'steer' as const };
     expect(buildSshArgv('host', args, 'origin')).toContain('--delivery');
     expect(buildSshArgv('host', args, 'origin')).toContain('steer');
   });
 
   it('preserves a mode through the receiving TCP bridge', async () => {
     const deps = fixture();
-    const frame = { op: 'deliver' as const, id: 'message', payload: 'append', to: 'worker', delivery: 'steer' as const };
+    const frame = { op: 'deliver' as const, tool: 'codex-cli', id: 'message', payload: 'append', to: 'worker', delivery: 'steer' as const };
     const result = await deliverViaRunSend(frame, deps);
     expect(result.status).toBe('delivered');
-    expect(deps.deliverCodex).toHaveBeenCalledWith('codex-target', expect.any(String), { mode: 'steer' });
+    expect(deps.deliverCodex).toHaveBeenCalledWith('codex-target', expect.any(String), { mode: 'steer', endpointType: 'cli' });
   });
 
   it.each(['send', 'deliver'])('rejects unknown delivery enums in %s network frames', (op) => {

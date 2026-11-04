@@ -67,7 +67,7 @@ export function createNativeSessionOperations(options: Options): NativeSessionOp
   }
   async function read(ref: SessionRef, signal?: AbortSignal): Promise<DiscoverySession> {
     const response = parseDiscoveryResponse(await bounded(signal, (owned) => options.discovery.execute({ op: 'detail', providerId: ref.providerId,
-      nativeId: ref.nativeId, referenceKind: ref.referenceKind }, { contextId: ref.contextId, signal: owned })));
+      nativeId: ref.nativeId, endpointType: ref.endpointType, referenceKind: ref.referenceKind }, { contextId: ref.contextId, signal: owned })));
     if (response.op !== 'detail' || response.detail.completeness !== 'complete' || response.detail.errors.length > 0
       || !response.detail.item || sessionKey(response.detail.item.ref) !== sessionKey(ref)) throw new Error('Native target unavailable');
     return response.detail.item;

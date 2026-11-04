@@ -1,4 +1,33 @@
-import type { DiagnosticCheck, DiagnosticCode, DiagnosticGroup, DiagnosticResult } from './model.js';
+import type { DiagnosticCheck, DiagnosticCode, DiagnosticGroup, DiagnosticResult, HarnessBridgeWarningReason } from './model.js';
+import type { DshPluginIssue } from '../../dsh/diagnostics.js';
+
+const harnessProfileGuidance: Record<DshPluginIssue, string> = {
+  'profiles-unreadable': '核对当前 Harness home 的 profiles 目录与读取权限，再刷新。',
+  'profile-limit': 'profiles 超过本次有界读取范围；核对实际使用的原生 profile 后再诊断。',
+  'profile-location': 'profile 路径已变化、不是目录或是未核实的链接；先在原生工具核对实际位置。',
+  'profile-unreadable': '无法读取 profile 的安装清单；核对目录和读取权限，保留原文件。',
+  'profile-invalid': 'profile 安装清单格式不符合预期；核对原生插件管理结果，保留原文件。',
+  'installation-missing': '已保存桥引用，但未找到安装目录；在该 profile 的原生插件管理器核对安装结果。',
+  'package-invalid': '安装目录的包名或版本元数据不符合桥包合同；核对插件来源与实际安装。',
+  'installation-unreadable': '桥安装文件缺失或不可读；核对该 profile 的原生插件安装结果。',
+  'content-differs': '安装文件与当前 crosschat 随包桥不同；核对是否保留定制，或通过原生插件管理器更新后刷新。',
+  'read-limit': '所需文件超过有界读取限制；核对插件来源与安装文件，不自动读取完整内容。',
+  'source-unavailable': '当前 crosschat 随包桥源不可读；核对 crosschat 安装是否完整。',
+  timeout: 'profile 检查超过与活桥共享的 5 秒预算；核对存储和原生工具响应后刷新。',
+};
+
+const harnessBridgeGuidance: Record<HarnessBridgeWarningReason, string> = {
+  DSH_REGISTRATION_UNREADABLE: '核对当前用户的 Harness 桥登记目录权限，再刷新诊断。',
+  DSH_REGISTRATION_MALFORMED: '核对当前 profile 的桥登记与插件配置；保留损坏条目，确认后由原生插件重新登记。',
+  DSH_INVALID_ENDPOINT: '核对原生插件来源；桥必须使用带端口的 127.0.0.1 HTTP 地址。',
+  DSH_AUTH_REQUIRED: '桥拒绝鉴权；核对当前 profile 的插件状态，刷新其最新实例登记后重试诊断。',
+  DSH_OWNER_MISMATCH: '桥响应与登记的 owner 不一致；核对原生 profile 和实例，刷新登记后重试诊断。',
+  DSH_UNSUPPORTED_PROTOCOL: '核对 crosschat 与该 profile 中桥插件的版本，再按兼容说明处理。',
+  DSH_UNSUPPORTED_VERSION: '核对原生 Harness 版本及已验证的兼容范围，再刷新诊断。',
+  DSH_PROTOCOL_ERROR: '桥身份响应不符合当前协议；核对原生插件版本及其日志。',
+  DSH_UNAVAILABLE: '已登记的桥不可达；核对原生 Harness 与该 profile 的插件状态，再刷新。',
+  DSH_TIMEOUT: '桥检查超过共享 5 秒预算；核对原生 Harness 响应和插件状态，再刷新。',
+};
 
 export interface DoctorReport {
   output: string;
@@ -31,6 +60,17 @@ function checkLine(check: DiagnosticCheck): string {
     case 'skill-installed': return `✅ ${check.data.side} 侧 skill 已安装（安装源 skill 目录未定位到，跳过版本比对）`;
     case 'skill-match': return `✅ ${check.data.side} 侧 skill 与安装源一致`;
     case 'skill-mismatch': return `⚠️ ${check.data.side} 侧 skill 与安装源不一致（${check.data.paths.slice(0, 3).join('、')}）；重跑 crosschat install-skills`;
+    case 'harness-home-invalid': return `⚠️ harness 侧 skill 目录无法核实：DSH_HOME 必须是绝对路径（${check.data.value}）`;
+    case 'harness-bridge-inactive': return 'ℹ️ 当前未发现运行中的 Harness 桥';
+    case 'harness-bridge-ready': {
+      const { instanceId, pid, runtimeVersion, profile, endpointType, profileDir } = check.data;
+      const source = profile === undefined ? 'profile/类型未核实' : `profile=${profile}，类型=${endpointType === 'desktop' ? 'dsh-desktop' : 'dsh'}`;
+      return `✅ Harness 桥 ${instanceId}；Host PID ${pid}；runtime ${runtimeVersion}；${source}${profileDir === undefined ? '' : `；profile目录=${profileDir}`}`;
+    }
+    case 'harness-bridge-warning': return `⚠️ Harness 桥 ${check.data.reason}——${harnessBridgeGuidance[check.data.reason]}`;
+    case 'harness-profile-not-declared': return `ℹ️ Harness profile 未声明 crosschat 桥引用：${check.data.profileDir}`;
+    case 'harness-profile-plugin-ready': return `✅ Harness 插件文件与随包源一致；profile=${check.data.profileDir}；安装=${check.data.packageDir}；版本=${check.data.version}`;
+    case 'harness-profile-plugin-warning': return `⚠️ Harness 插件 ${check.data.reason}（${check.data.path}）——${harnessProfileGuidance[check.data.reason]}`;
     case 'identity-conflict': return '⚠️ 双身份残留：CLAUDE_CODE_* 与 CODEX_* 并存（CALLER_IDENTITY_CONFLICT 风险）；'
       + '临时自纠: env -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_SESSION_ID <命令>';
     case 'identity-clear': return '✅ 无双身份残留';
@@ -57,6 +97,9 @@ const labels: Record<DiagnosticCode, string> = {
   'claude-missing': 'Claude CLI', 'claude-registry-malformed': 'Claude 注册表', 'codex-missing': 'Codex CLI', 'codex-unparsed': 'Codex CLI 版本',
   'codex-cli-old': 'Codex CLI 版本', 'codex-cli-ready': 'Codex CLI 版本', 'codex-daemon-missing': 'Codex daemon', 'codex-daemon-old': 'Codex daemon 版本', 'codex-daemon-ready': 'Codex daemon 版本',
   'skill-missing': '工具技能', 'skill-installed': '工具技能', 'skill-match': '工具技能', 'skill-mismatch': '工具技能', 'identity-conflict': '调用身份', 'identity-clear': '调用身份',
+  'harness-home-invalid': 'Harness 技能目录',
+  'harness-bridge-inactive': 'Harness 桥', 'harness-bridge-ready': 'Harness 桥版本与身份', 'harness-bridge-warning': 'Harness 桥异常',
+  'harness-profile-not-declared': 'Harness 插件引用', 'harness-profile-plugin-ready': 'Harness 插件安装文件', 'harness-profile-plugin-warning': 'Harness 插件配置异常',
   'node-config-invalid': '节点配置', 'node-config-ready': '节点配置', 'node-star-id-missing': '星身份', 'node-star-id-duplicate': '星身份',
   'broker-reachable': 'broker 连通性', 'broker-unreachable': 'broker 连通性', 'broker-empty': 'broker 星配置', 'broker-ready': 'broker 注册表', 'broker-port-custom': 'broker 监听口', 'broker-invalid': 'broker 注册表',
   'status-stale': '状态文件时效', 'status-process-unavailable': '状态进程证据', 'resident-version-mismatch': '常驻版本', 'outbox-empty': '发件箱', 'outbox-parked': '发件箱暂存',
@@ -73,6 +116,13 @@ export function formatDiagnosticCheck(check: DiagnosticCheck): { label: string; 
     case 'codex-missing': case 'codex-daemon-missing': guidance = '需要 Codex 通道时先确认已安装 Codex CLI，再由用户在当前机器执行：codex app-server daemon start'; break;
     case 'codex-unparsed': case 'codex-cli-old': case 'codex-daemon-old': guidance = '在当前机器核对 Codex CLI 与 daemon 版本；按原生工具的升级和重启指引处理后重新体检。'; break;
     case 'skill-missing': case 'skill-mismatch': guidance = '由用户在当前机器执行：crosschat install-skills'; break;
+    case 'harness-home-invalid': guidance = '核对当前机器的 DSH_HOME，使用 Harness 实际的绝对路径后重新体检；不会自动修改环境或复制技能。'; break;
+    case 'harness-bridge-inactive': guidance = '当前没有活桥可核实；需要通信时在所需原生 profile 中启用桥，再刷新诊断。'; break;
+    case 'harness-bridge-ready': guidance = '已核实本次桥的鉴权、owner 与版本；这不证明技能已被当前会话加载。'; break;
+    case 'harness-bridge-warning': guidance = harnessBridgeGuidance[check.data.reason]; break;
+    case 'harness-profile-not-declared': guidance = '此 profile 未声明桥引用；需要通信时按原生插件管理流程处理，再刷新。'; break;
+    case 'harness-profile-plugin-ready': guidance = '这里只核实安装文件；当前是否加载这版桥，另查看活桥握手或原生 Plugins 页面。'; break;
+    case 'harness-profile-plugin-warning': guidance = harnessProfileGuidance[check.data.reason]; break;
     case 'identity-conflict': guidance = '在当前机器核对 Claude/Codex 调用身份环境；清理不属于当前调用方的身份变量后重新运行命令。'; break;
     case 'node-config-invalid': guidance = '检查当前机器的 node.json；向该星管理员索取正确配置，确认后显式覆盖。'; break;
     case 'node-star-id-missing': case 'node-star-id-duplicate': guidance = '核对当前机器配置中的完整星 ID 与目标；消除缺失或重复绑定后重新体检。'; break;

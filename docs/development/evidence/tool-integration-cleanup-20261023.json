@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "checkedAt": "2026-10-23T09:01:06.0484805Z",
+  "method": "read-only Test-Path, top-level Temp enumeration, scoped Win32_Process scan; no removal or software execution",
+  "scope": "Previously reported owned tool test roots and historical crosschat-* entries in the local Temp directory; not a whole-disk audit",
+  "paths": [
+    {
+      "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291",
+      "exists": false
+    },
+    {
+      "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-20261023-988a66bc46cd42609ca8a12db062e168",
+      "exists": false
+    },
+    {
+      "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-uia-probe-20261023",
+      "exists": false
+    },
+    {
+      "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-uia-probe-20261023-r2",
+      "exists": false
+    },
+    {
+      "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-uia-probe-20261023-r3",
+      "exists": false
+    },
+    {
+      "path": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-uia-probe-20261023-r4",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-20261023-f7760fd441ab47ffba88d1be752f5e93",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-dsh-ci-HQUjru",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-dsh-ci-Y22mpv",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-live-tui-82ee26d8ed",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-live-tui-resume-0e02f667c3",
+      "exists": false
+    }
+  ],
+  "knownRemainingPathCount": 0,
+  "repositoryCacheExists": false,
+  "tempRoot": "C:\\Users\\yangsheng\\AppData\\Local\\Temp",
+  "tempPattern": "crosschat-*",
+  "tempMatchingFileCount": 0,
+  "tempMatchingDirectoryCount": 0,
+  "ownedProcessScan": {
+    "count": 0,
+    "commandLinePattern": "crosschat-(dsh|opencode|claude-compat|claude-ci|live-tui|desktop-uia)",
+    "names": "node,claude,opencode,dsh,pnpm,python,pythonw,bash,zcode,OpenCode"
+  },
+  "retainedClaudeBootstrapAbsentByParent": true,
+  "historicalEvidence": "Prior cleanup JSON and refusal records are retained unchanged; this snapshot supersedes their remaining-path status only",
+  "remoteValidation": "Not resumed; no remote connection or credential read"
+}

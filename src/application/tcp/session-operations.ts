@@ -4,7 +4,7 @@ import type { SessionOperationFrame, SessionOperationResultFrame } from '../../s
 import { resolveTcpContext } from './reading.js';
 import { checkAbort } from '../queries/reading.js';
 
-export interface TcpSessionTarget { contextId: string; starId: string; machineId: string; providerId: string; nativeId: string }
+export interface TcpSessionTarget { contextId: string; starId: string; machineId: string; providerId: string; nativeId: string; endpointType?: string }
 export type TcpSessionOperation = (target: TcpSessionTarget, request: SessionOperationFrame['request'], signal?: AbortSignal) => Promise<SessionOperationResultFrame>;
 
 /** Every call rereads configuration, binds the actual star, and owns its transient connection. */
@@ -23,10 +23,10 @@ export function createTcpSessionOperation(options: { baseDir: string; timeoutMs?
       checkAbort(signal);
       if (conn.starId !== target.starId) throw new Error('连接到的星已改变。');
       const id = randomUUID();
-      await conn.send({ op: 'session-operation', id, starId: target.starId, machineId: target.machineId, providerId: target.providerId, nativeId: target.nativeId, request });
+      await conn.send({ op: 'session-operation', id, starId: target.starId, machineId: target.machineId, providerId: target.providerId, nativeId: target.nativeId, endpointType: target.endpointType, request });
       const reply = await conn.waitFor((frame) => frame.op === 'session-operation-result' && frame.id === id, timeoutMs);
       if (reply.op !== 'session-operation-result' || reply.starId !== target.starId || reply.machineId !== target.machineId
-        || reply.providerId !== target.providerId || reply.nativeId !== target.nativeId) throw new Error('节点操作回执身份不一致。');
+        || reply.providerId !== target.providerId || reply.nativeId !== target.nativeId || reply.endpointType !== target.endpointType) throw new Error('节点操作回执身份不一致。');
       return reply;
     } finally { signal?.removeEventListener('abort', abort); conn.close(); }
   };

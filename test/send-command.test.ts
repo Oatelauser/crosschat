@@ -36,8 +36,8 @@ const sessions: ClaudeSessionEntry[] = [
 ];
 const scan: ClaudeRegistryScan = { sessions, malformed: 0 };
 const threads: CodexThreadSummary[] = [
-  { id: 'team1111-aaaa', name: 'workteam', status: 'idle' },
-  { id: 'other222-bbbb', name: null, status: 'idle' },
+  { id: 'team1111-aaaa', name: 'workteam', status: 'idle', endpointType: 'cli' },
+  { id: 'other222-bbbb', name: null, status: 'idle', endpointType: 'cli' },
 ];
 
 const sendLogDir = mkdtempSync(join(tmpdir(), 'crosschat-send-'));
@@ -66,6 +66,7 @@ const codexDeliveries: { threadId: string; content: string }[] = [];
 function makeDeps(env: Record<string, string | undefined> = {}, stdinText?: string): SendDeps {
   return {
     env,
+    enrichCallerIdentity: async (caller) => caller.p === 'claude' ? { ...caller, endpointType: 'cli' } : caller,
     stdinText,
     listClaudeSessions: () => scan,
     listCodexThreads: async () => threads,
@@ -116,32 +117,32 @@ describe('runSend happy paths', () => {
   it('delivers an exact conversation target when optional discovery is unavailable', async () => {
     const deps = makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' });
     deps.listCodexThreads = async () => { throw new Error('CLI daemon unavailable'); };
-    const ref = encodeRef(newConversationRef({ p: 'claude', id: 'cs-alpha' }, { p: 'codex', id: 'desktop-thread' }));
-    const result = await runSend({ conversation: ref, delivery: 'steer', bodyArg: 'exact route' }, deps);
+    const ref = encodeRef(newConversationRef({ p: 'claude', id: 'cs-alpha' }, { p: 'codex', id: 'desktop-thread', endpointType: 'desktop' }));
+    const result = await runSend({ tool: 'codex-desktop', conversation: ref, delivery: 'steer', bodyArg: 'exact route' }, deps);
     expect(result).toContain('delivered');
     expect(codexDeliveries.at(-1)?.threadId).toBe('desktop-thread');
   });
 
   it('delivers to a claude session by name and returns a usable reply ref', async () => {
-    const out = await send({ to: 'alpha', bodyArg: 'hello world' });
+    const out = await send({ tool: 'claude', to: 'alpha', bodyArg: 'hello world' });
     expect(out).toContain('delivered to alpha (turn 1)');
     const ref = decodeRef(out.match(REF_RE)![0]);
     expect(ref.f).toEqual({ p: 'human' });
-    expect(ref.t).toEqual({ p: 'claude', id: 'cs-alpha' });
+    expect(ref.t).toEqual({ p: 'claude', id: 'cs-alpha', endpointType: 'cli' });
     expect(ref.c).toBe(1);
     expect(claudeDeliveries.at(-1)?.pid).toBe(101);
     const content = claudeDeliveries.at(-1)!.content;
-    expect(content.startsWith('<cross-session-message from-name="human" turn="1">')).toBe(true);
+    expect(content.startsWith('<cross-session-message from-name="human" turn="1" from-tool="pending">')).toBe(true);
     expect(content).toContain('<crosschat-reply-hint reply-as="alpha">');
     expect(content).toContain('reply-as="alpha"');
-    expect(content).toContain('crosschat send --conversation mc2_');
+    expect(content).not.toContain('回复请运行: crosschat send');
     expect(content).toContain('hello world');
     expect(content.endsWith('</cross-session-message>')).toBe(true);
   });
 
   it('delivers to a codex thread and names the sender from env identity', async () => {
     const out = await send(
-      { to: 'workteam', bodyArg: 'ping' },
+      { tool: 'codex-cli', to: 'workteam', bodyArg: 'ping' },
       { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' },
     );
     expect(out).toContain('delivered to workteam (turn 1)');
@@ -149,18 +150,18 @@ describe('runSend happy paths', () => {
     expect(codexDeliveries.at(-1)!.content).toContain('from-name="alpha" turn="1"');
     expect(codexDeliveries.at(-1)!.content).toContain('reply-as="workteam"');
     const ref = decodeRef(out.match(REF_RE)![0]);
-    expect(ref.f).toEqual({ p: 'claude', id: 'cs-alpha' });
+    expect(ref.f).toEqual({ p: 'claude', id: 'cs-alpha', endpointType: 'cli' });
   });
 
   it('reads the body from stdin when --body is absent', async () => {
-    const out = await send({ to: 'beta' }, undefined, 'piped body');
+    const out = await send({ tool: 'claude', to: 'beta' }, undefined, 'piped body');
     expect(out).toContain('delivered to beta (turn 1)');
     expect(claudeDeliveries.at(-1)!.content.startsWith('<cross-session-message')).toBe(true);
     expect(claudeDeliveries.at(-1)!.content).toContain('piped body');
   });
 
   it('emits single-line closed JSON with --json', async () => {
-    const out = await send({ to: 'alpha', bodyArg: 'j', json: true });
+    const out = await send({ tool: 'claude', to: 'alpha', bodyArg: 'j', json: true });
     const parsed = JSON.parse(out) as { status: string; to: string; turn: number; replyRef: string };
     expect(parsed).toMatchObject({ status: 'delivered', to: 'alpha', turn: 1 });
     expect(out).not.toContain('\n');
@@ -168,12 +169,12 @@ describe('runSend happy paths', () => {
   });
 
   it('accepts a body of exactly 16KiB', async () => {
-    const out = await send({ to: 'alpha', bodyArg: 'x'.repeat(MAX_BODY_BYTES) });
+    const out = await send({ tool: 'claude', to: 'alpha', bodyArg: 'x'.repeat(MAX_BODY_BYTES) });
     expect(out).toContain('delivered to alpha');
   });
 
   it('codex delivery reports the single delivered state, never queued', async () => {
-    const out = await send({ to: 'workteam', bodyArg: 'single state' });
+    const out = await send({ tool: 'codex-cli', to: 'workteam', bodyArg: 'single state' });
     expect(out).toContain('delivered to workteam (turn 1)');
     expect(out).not.toContain('queued');
     expect(out).not.toContain('live window');
@@ -183,28 +184,29 @@ describe('runSend happy paths', () => {
 describe('runSend validation', () => {
   it('rejects a body over 16KiB without delivering', async () => {
     const deliveriesBefore = claudeDeliveries.length;
-    await expectCode(send({ to: 'alpha', bodyArg: 'x'.repeat(MAX_BODY_BYTES + 1) }), 'MESSAGE_TOO_LARGE');
+    await expectCode(send({ tool: 'claude', to: 'alpha', bodyArg: 'x'.repeat(MAX_BODY_BYTES + 1) }), 'MESSAGE_TOO_LARGE');
     expect(claudeDeliveries.length).toBe(deliveriesBefore);
   });
 
   it('rejects --to together with --conversation', async () => {
-    await expectCode(send({ to: 'alpha', conversation: 'mc1_x', bodyArg: 'h' }), 'TARGET_CONFLICT');
+    await expectCode(send({ tool: 'claude', to: 'alpha', conversation: 'mc1_x', bodyArg: 'h' }), 'TARGET_CONFLICT');
   });
 
   it('requires a target', async () => {
-    await expectCode(send({ bodyArg: 'h' }), 'TARGET_REQUIRED');
+    await expectCode(send({ tool: 'claude', bodyArg: 'h' }), 'TARGET_REQUIRED');
   });
 
   it('rejects body given twice and body given never', async () => {
-    await expectCode(send({ to: 'alpha', bodyArg: 'h' }, undefined, 'piped'), 'BODY_CONFLICT');
-    await expectCode(send({ to: 'alpha' }), 'BODY_REQUIRED');
-    await expectCode(send({ to: 'alpha', bodyArg: '' }), 'BODY_REQUIRED');
+    await expectCode(send({ tool: 'claude', to: 'alpha', bodyArg: 'h' }, undefined, 'piped'), 'BODY_CONFLICT');
+    await expectCode(send({ tool: 'claude', to: 'alpha' }), 'BODY_REQUIRED');
+    await expectCode(send({ tool: 'claude', to: 'alpha', bodyArg: '' }), 'BODY_REQUIRED');
   });
 
   it('surfaces name resolution failures with available names', async () => {
-    const err = await expectCode(send({ to: 'definitely-missing', bodyArg: 'hi' }), 'NAME_NOT_FOUND');
+    const err = await expectCode(send({ tool: 'claude', to: 'definitely-missing', bodyArg: 'hi' }), 'NAME_NOT_FOUND');
     expect(err.message).toContain('alpha');
-    expect(err.message).toContain('workteam');
+    expect(err.message).toContain('beta');
+    expect(err.message).not.toContain('workteam');
   });
 });
 
@@ -212,7 +214,7 @@ describe('runSend identity rules', () => {
   it('refuses when both identity families are present in env, with self-fix guidance', async () => {
     const err = await expectCode(
       send(
-        { to: 'alpha', bodyArg: 'h' },
+        { tool: 'claude', to: 'alpha', bodyArg: 'h' },
         { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha', CODEX_THREAD_ID: 'team1111-aaaa' },
       ),
       'CALLER_IDENTITY_CONFLICT',
@@ -228,14 +230,14 @@ describe('runSend identity rules', () => {
 
   it('refuses when the claude socket matches no routable session', async () => {
     await expectCode(
-      send({ to: 'alpha', bodyArg: 'h' }, { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-ghost' }),
+      send({ tool: 'claude', to: 'alpha', bodyArg: 'h' }, { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-ghost' }),
       'IDENTITY_UNRESOLVED',
     );
   });
 
   it('prefers CODEX_THREAD_ID over CODEX_SESSION_ID', async () => {
     const out = await send(
-      { to: 'alpha', bodyArg: 'h' },
+      { tool: 'claude', to: 'alpha', bodyArg: 'h' },
       { CODEX_THREAD_ID: 'team1111-aaaa', CODEX_SESSION_ID: 't-other' },
     );
     const ref = decodeRef(out.match(REF_RE)![0]);
@@ -248,7 +250,7 @@ describe('runSend reply routing via --conversation', () => {
 
   it('routes a reply to the other endpoint and increments the turn', async () => {
     const out = await send(
-      { to: 'workteam', bodyArg: 'round one' },
+      { tool: 'codex-cli', to: 'workteam', bodyArg: 'round one' },
       { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' },
     );
     firstRef = out.match(REF_RE)![0];
@@ -256,7 +258,7 @@ describe('runSend reply routing via --conversation', () => {
     // The codex side replies using the ref embedded in the delivered envelope.
     const embeddedRef = codexDeliveries.at(-1)!.content.match(REF_RE)![0];
     const reply = await send(
-      { conversation: embeddedRef, bodyArg: 'round two' },
+      { tool: 'claude', conversation: embeddedRef, bodyArg: 'round two' },
       { CODEX_THREAD_ID: 'team1111-aaaa' },
     );
     expect(reply).toContain('(turn 2)');
@@ -265,30 +267,30 @@ describe('runSend reply routing via --conversation', () => {
     expect(claudeDeliveries.at(-1)!.content).toContain('reply-as="alpha"');
     const next = decodeRef(reply.match(REF_RE)![0]);
     expect(next.c).toBe(2);
-    expect(next.f).toEqual({ p: 'claude', id: 'cs-alpha' });
-    expect(next.t).toEqual({ p: 'codex', id: 'team1111-aaaa' });
+    expect(next.f).toEqual({ p: 'claude', id: 'cs-alpha', endpointType: 'cli' });
+    expect(next.t).toEqual({ p: 'codex', id: 'team1111-aaaa', endpointType: 'cli' });
   });
 
   it('rejects a caller outside the conversation', async () => {
     await expectCode(
-      send({ conversation: firstRef, bodyArg: 'h' }, { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-beta' }),
+      send({ tool: 'claude', conversation: firstRef, bodyArg: 'h' }, { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-beta' }),
       'CALLER_NOT_IN_CONVERSATION',
     );
-    await expectCode(send({ conversation: firstRef, bodyArg: 'h' }), 'CALLER_NOT_IN_CONVERSATION');
+    await expectCode(send({ tool: 'claude', conversation: firstRef, bodyArg: 'h' }), 'CALLER_NOT_IN_CONVERSATION');
   });
 
   it('refuses to route a reply back to a human initiator', async () => {
     const humanInitiated = encodeRef(newConversationRef({ p: 'human' }, { p: 'claude', id: 'cs-alpha' }));
     await expectCode(
-      send({ conversation: humanInitiated, bodyArg: 'h' }, { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }),
+      send({ tool: 'claude', conversation: humanInitiated, bodyArg: 'h' }, { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }),
       'CANNOT_REPLY_TO_HUMAN',
     );
   });
 
   it('rejects a target session that left the registry', async () => {
-    const gone = encodeRef(newConversationRef({ p: 'codex', id: 'team1111-aaaa' }, { p: 'claude', id: 'cs-gone' }));
+    const gone = encodeRef(newConversationRef({ p: 'codex', id: 'team1111-aaaa' }, { p: 'claude', id: 'cs-gone', endpointType: 'cli' }));
     const err = await expectCode(
-      send({ conversation: gone, bodyArg: 'h' }, { CODEX_THREAD_ID: 'team1111-aaaa' }),
+      send({ tool: 'claude', conversation: gone, bodyArg: 'h' }, { CODEX_THREAD_ID: 'team1111-aaaa' }),
       'TARGET_NOT_FOUND',
     );
     // 027-A+：单机对话教学不回归——仍是 --to 同名即续，不出现 tcp 地址
@@ -299,11 +301,11 @@ describe('runSend reply routing via --conversation', () => {
   it('027-A+：tcp 腿对端死亡报错拼可照抄三段 id8 地址（含 SUPERSEDED 指路预告）', async () => {
     const ref = newConversationRef(
       { p: 'codex', id: 'team1111-aaaa' },
-      { p: 'claude', id: 'cs-gone', m: 'peer-host' },
+      { p: 'claude', id: 'cs-gone', m: 'peer-host', endpointType: 'cli' },
     );
     const err = await expectCode(
       runSend(
-        { conversation: encodeRef(ref), bodyArg: 'h' },
+        { tool: 'claude', conversation: encodeRef(ref), bodyArg: 'h' },
         {
           ...makeDeps({ CODEX_THREAD_ID: 'team1111-aaaa' }),
           hostname: () => 'peer-host', // 对端就住在"本机"（tcp 接收腿语境）——不选路，落本地解析
@@ -317,7 +319,7 @@ describe('runSend reply routing via --conversation', () => {
   });
 
   it('rejects malformed refs', async () => {
-    await expectCode(send({ conversation: 'garbage', bodyArg: 'h' }), 'INVALID_CONVERSATION_REF');
+    await expectCode(send({ tool: 'claude', conversation: 'garbage', bodyArg: 'h' }), 'INVALID_CONVERSATION_REF');
   });
 });
 
@@ -333,12 +335,12 @@ describe('runSend rate limiting', () => {
       appendLog: (entry: SendLogEntry) => appendSendLog(file, entry),
     };
     for (let i = 0; i < 30; i++) {
-      await runSend({ to: 'workteam', bodyArg: `spam ${i}` }, deps);
+      await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: `spam ${i}` }, deps);
     }
-    const err = await expectCode(runSend({ to: 'workteam', bodyArg: 'one too many' }, deps), 'RATE_LIMITED');
+    const err = await expectCode(runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'one too many' }, deps), 'RATE_LIMITED');
     expect(err.message).toContain('Retry');
     // Other pairs are unaffected (alpha is a different pair in the same file).
-    const ok = await runSend({ to: 'alpha', bodyArg: 'fine' }, deps);
+    const ok = await runSend({ tool: 'claude', to: 'alpha', bodyArg: 'fine' }, deps);
     expect(ok).toContain('delivered to alpha');
   });
 });
@@ -356,17 +358,17 @@ describe('runSend --to conversation continuity (B15)', () => {
       conversationStateFile: state,
       appendLog: (entry: SendLogEntry) => entries.push(entry),
     };
-    const first = await runSend({ to: 'workteam', bodyArg: 'one' }, deps);
-    const second = await runSend({ to: 'workteam', bodyArg: 'two' }, deps);
-    const third = await runSend({ to: 'workteam', bodyArg: 'three' }, deps);
+    const first = await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'one' }, deps);
+    const second = await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'two' }, deps);
+    const third = await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'three' }, deps);
     expect(first).toContain('delivered to workteam (turn 1)');
     expect(second).toContain('delivered to workteam (turn 2)');
     expect(third).toContain('delivered to workteam (turn 3)');
     // B16: audit entries carry the sender identity, not just the recipient.
     expect(entries.map((entry) => entry.from)).toEqual([
-      'claude:cs-alpha',
-      'claude:cs-alpha',
-      'claude:cs-alpha',
+      '["claude","cli","cs-alpha"]',
+      '["claude","cli","cs-alpha"]',
+      '["claude","cli","cs-alpha"]',
     ]);
     // B21: entries also carry the sender's display name (source-side accounting).
     expect(entries.map((entry) => entry.fromName)).toEqual(['alpha', 'alpha', 'alpha']);
@@ -375,7 +377,7 @@ describe('runSend --to conversation continuity (B15)', () => {
   it('a parked send still records the conversation for later continuation', async () => {
     const state = freshState();
     const okDeps = { ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }), conversationStateFile: state };
-    await runSend({ to: 'workteam', bodyArg: 'hello' }, okDeps);
+    await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'hello' }, okDeps);
     const busyDeps = {
       ...okDeps,
       outboxDir: freshOutbox(),
@@ -383,9 +385,9 @@ describe('runSend --to conversation continuity (B15)', () => {
         throw new MultichatError('CODEX_THREAD_BUSY_TIMEOUT', 'busy');
       },
     };
-    const parked = await runSend({ to: 'workteam', bodyArg: 'queued up' }, busyDeps);
+    const parked = await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'queued up' }, busyDeps);
     expect(parked).toContain('已寄存给 workteam');
-    const again = await runSend({ to: 'workteam', bodyArg: 'next' }, okDeps);
+    const again = await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'next' }, okDeps);
     expect(again).toContain('delivered to workteam (turn 3)'); // 1 + parked 2 + this 3
   });
 });
@@ -407,7 +409,7 @@ describe('runSend outbox parking (B10)', () => {
 
   it('parks on CODEX_THREAD_BUSY_TIMEOUT with the honest B12 output (exit 0 path)', async () => {
     const out = await runSend(
-      { to: 'workteam', bodyArg: 'stuck message' },
+      { tool: 'codex-cli', to: 'workteam', bodyArg: 'stuck message' },
       failingDeps('CODEX_THREAD_BUSY_TIMEOUT', freshOutbox()),
     );
     expect(out).toContain('已寄存给 workteam（对方忙，未送达）');
@@ -417,7 +419,7 @@ describe('runSend outbox parking (B10)', () => {
 
   it('parks on CODEX_THREAD_LOCKED as well', async () => {
     const out = await runSend(
-      { to: 'workteam', bodyArg: 'locked out' },
+      { tool: 'codex-cli', to: 'workteam', bodyArg: 'locked out' },
       failingDeps('CODEX_THREAD_LOCKED', freshOutbox()),
     );
     expect(out).toContain('已寄存给 workteam');
@@ -426,7 +428,7 @@ describe('runSend outbox parking (B10)', () => {
   it('joins the queue instead of jumping it when older items are parked (B12)', async () => {
     const dir = freshOutbox();
     // Seed one parked item straight into the outbox.
-    park(dir, 'team1111-aaaa', { envelope: 'older', toName: 'workteam' }, 1_000);
+    park(dir, 'team1111-aaaa', { envelope: 'older', toName: 'workteam', endpointType: 'cli' }, 1_000);
     const calls: string[] = [];
     const deps = {
       ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }),
@@ -435,17 +437,17 @@ describe('runSend outbox parking (B10)', () => {
         calls.push(content);
       },
     };
-    const out = await runSend({ to: 'workteam', bodyArg: 'fresh' }, deps);
+    const out = await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'fresh' }, deps);
     // The fresh send must NOT go direct while the queue is non-empty.
     expect(calls).toEqual([]);
     expect(out).toContain('队列共 2 条');
-    const items = (JSON.parse(readFileSync(join(dir, 'team1111-aaaa.json'), 'utf8')) as { items: { envelope: string }[] }).items;
+    const items = (JSON.parse(readFileSync(join(dir, 'types', 'cli', 'team1111-aaaa.json'), 'utf8')) as { items: { envelope: string }[] }).items;
     expect(items.map((item) => item.envelope)).toEqual(['older', expect.stringContaining('fresh')]);
   });
 
   it('reports status parked as single-line JSON with --json', async () => {
     const out = await runSend(
-      { to: 'workteam', bodyArg: 'j', json: true },
+      { tool: 'codex-cli', to: 'workteam', bodyArg: 'j', json: true },
       failingDeps('CODEX_THREAD_BUSY_TIMEOUT', freshOutbox()),
     );
     const parsed = JSON.parse(out) as { status: string; to: string; turn: number };
@@ -455,8 +457,8 @@ describe('runSend outbox parking (B10)', () => {
 
   it('parks the composed envelope verbatim and a drain delivers it unchanged', async () => {
     const dir = freshOutbox();
-    await runSend({ to: 'workteam', bodyArg: 'round trip' }, failingDeps('CODEX_THREAD_BUSY_TIMEOUT', dir));
-    const file = join(dir, 'team1111-aaaa.json');
+    await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'round trip' }, failingDeps('CODEX_THREAD_BUSY_TIMEOUT', dir));
+    const file = join(dir, 'types', 'cli', 'team1111-aaaa.json');
     const parked = JSON.parse(readFileSync(file, 'utf8')) as { items: { envelope: string; toName: string }[] };
     expect(parked.items).toHaveLength(1);
     expect(parked.items[0]!.toName).toBe('workteam');
@@ -473,10 +475,10 @@ describe('runSend outbox parking (B10)', () => {
   it('does not park other codex errors', async () => {
     const dir = freshOutbox();
     await expectCode(
-      runSend({ to: 'workteam', bodyArg: 'h' }, failingDeps('CODEX_APPROVAL_REQUIRED', dir)),
+      runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'h' }, failingDeps('CODEX_APPROVAL_REQUIRED', dir)),
       'CODEX_APPROVAL_REQUIRED',
     );
-    expect(existsSync(join(dir, 'team1111-aaaa.json'))).toBe(false);
+    expect(existsSync(join(dir, 'types', 'cli', 'team1111-aaaa.json'))).toBe(false);
   });
 });
 
@@ -502,7 +504,7 @@ describe('runSend receipt probing (B19: queued never probes)', () => {
 
   it('queued skips the receipt probe and points at status --conversations', async () => {
     const probes: Array<[string, string]> = [];
-    const out = await runSend({ to: 'workteam', bodyArg: 'behind your turn' }, probingDeps(true, probes));
+    const out = await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'behind your turn' }, probingDeps(true, probes));
     // Never probed: the message sits behind the recipient's running turn, so
     // the 1.5s probe is structurally unconfirmable.
     expect(probes).toEqual([]);
@@ -513,10 +515,10 @@ describe('runSend receipt probing (B19: queued never probes)', () => {
 
   it('delivered still probes the receipt', async () => {
     const probes: Array<[string, string]> = [];
-    const out = await runSend({ to: 'workteam', bodyArg: 'straight through' }, probingDeps(false, probes));
+    const out = await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'straight through' }, probingDeps(false, probes));
     expect(probes).toHaveLength(1);
     expect(probes[0]![0]).toBe('team1111-aaaa');
-    expect(probes[0]![1]).toBe(createReceiptMarker('team1111-aaaa', codexDeliveries.at(-1)!.content));
+    expect(probes[0]![1]).toBe(createReceiptMarker('team1111-aaaa', codexDeliveries.at(-1)!.content, 'cli'));
     expect(out).toContain('delivered to workteam (turn 1)');
     expect(out).not.toContain('回执'); // confirmed → no caveat line
   });
@@ -530,17 +532,17 @@ describe('runSend --conversation stale-ref guard (B22)', () => {
     const state = freshState();
     const base = { ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }), conversationStateFile: state };
     // claude alpha opens: turn 1, shard line c=1, envelope carries that ref.
-    const first = await runSend({ to: 'workteam', bodyArg: 'one' }, base);
+    const first = await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'one' }, base);
     expect(first).toContain('(turn 1)');
     const baseRef = shardRef(state);
     // codex replies via the copied ref: turn 2, shard advances to c=2.
     const reply = await runSend(
-      { conversation: baseRef, bodyArg: 'two' },
+      { tool: 'claude', conversation: baseRef, bodyArg: 'two' },
       { ...base, env: { CODEX_THREAD_ID: 'team1111-aaaa' } },
     );
     expect(reply).toContain('(turn 2)');
     // claude alpha answers from the SAME stale baseRef: turn 3 (was 2 before B22 — collision).
-    const late = await runSend({ conversation: baseRef, bodyArg: 'three' }, base);
+    const late = await runSend({ tool: 'codex-cli', conversation: baseRef, bodyArg: 'three' }, base);
     expect(late).toContain('(turn 3)');
     const lateRef = decodeRef(shardRef(state));
     expect(lateRef.c).toBe(3);
@@ -549,7 +551,7 @@ describe('runSend --conversation stale-ref guard (B22)', () => {
   it('without wired state the --conversation path keeps the exact legacy nextTurnRef behavior', async () => {
     const deps = makeDeps({ CODEX_THREAD_ID: 'team1111-aaaa' });
     const ref = newConversationRef({ p: 'claude', id: 'cs-alpha' }, { p: 'codex', id: 'team1111-aaaa' });
-    const out = await runSend({ conversation: encodeRef(nextTurnRef(ref)), bodyArg: 'legacy' }, deps);
+    const out = await runSend({ tool: 'claude', conversation: encodeRef(nextTurnRef(ref)), bodyArg: 'legacy' }, deps);
     expect(out).toContain('(turn 3)'); // passed c=2 -> 3, no state consulted
   });
 });
@@ -563,7 +565,7 @@ describe('runSend with codex entirely absent (B2 unix deploy)', () => {
       },
     };
     const before = claudeDeliveries.length;
-    const out = await runSend({ to: 'alpha', bodyArg: 'hello from unix' }, deps);
+    const out = await runSend({ tool: 'claude', to: 'alpha', bodyArg: 'hello from unix' }, deps);
     expect(out).toContain('alpha');
     expect(claudeDeliveries.length).toBe(before + 1);
   });
@@ -572,27 +574,27 @@ describe('runSend with codex entirely absent (B2 unix deploy)', () => {
 describe('runSend configurable body cap (票A)', () => {
   it('--max-body-kb 32 lets a 32KiB body through to codex', async () => {
     const out = await send(
-      { to: 'workteam', bodyArg: 'x'.repeat(32 * 1_024), maxBodyKb: '32' },
+      { tool: 'codex-cli', to: 'workteam', bodyArg: 'x'.repeat(32 * 1_024), maxBodyKb: '32' },
       { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' },
     );
     expect(out).toContain('delivered to workteam');
   });
 
   it('env CROSSCHAT_MAX_BODY_KIB raises the cap when the flag is absent', async () => {
-    const out = await send({ to: 'alpha', bodyArg: 'x'.repeat(20_000) }, { CROSSCHAT_MAX_BODY_KIB: '64' });
+    const out = await send({ tool: 'claude', to: 'alpha', bodyArg: 'x'.repeat(20_000) }, { CROSSCHAT_MAX_BODY_KIB: '64' });
     expect(out).toContain('delivered to alpha');
   });
 
   it('an invalid flag value silently falls to env, then to the default', async () => {
-    const out = await send({ to: 'alpha', bodyArg: 'x'.repeat(20_000), maxBodyKb: 'wat' }, { CROSSCHAT_MAX_BODY_KIB: '64' });
+    const out = await send({ tool: 'claude', to: 'alpha', bodyArg: 'x'.repeat(20_000), maxBodyKb: 'wat' }, { CROSSCHAT_MAX_BODY_KIB: '64' });
     expect(out).toContain('delivered to alpha');
-    await expectCode(send({ to: 'alpha', bodyArg: 'x'.repeat(20_000), maxBodyKb: 'wat' }, {}), 'MESSAGE_TOO_LARGE');
+    await expectCode(send({ tool: 'claude', to: 'alpha', bodyArg: 'x'.repeat(20_000), maxBodyKb: 'wat' }, {}), 'MESSAGE_TOO_LARGE');
   });
 
   it('--max-body-kb 1024 still hits the claude 64KiB endpoint cap with hard-cap teaching', async () => {
     const before = claudeDeliveries.length;
     const err = await expectCode(
-      send({ to: 'alpha', bodyArg: 'x'.repeat(100 * 1_024), maxBodyKb: '1024' }),
+      send({ tool: 'claude', to: 'alpha', bodyArg: 'x'.repeat(100 * 1_024), maxBodyKb: '1024' }),
       'MESSAGE_TOO_LARGE',
     );
     expect(err.message).toContain('claude 端点硬顶 64KiB——提额无效');
@@ -609,7 +611,7 @@ describe('runSend configurable body cap (票A)', () => {
       },
     };
     const err = await expectCode(
-      runSend({ to: 'worker2', via: 'ssh:peer', bodyArg: 'x'.repeat(1_100_000), maxBodyKb: '2048' }, deps),
+      runSend({ tool: 'claude', to: 'worker2', via: 'ssh:peer', bodyArg: 'x'.repeat(1_100_000), maxBodyKb: '2048' }, deps),
       'MESSAGE_TOO_LARGE',
     );
     expect(err.message).toContain('1MiB');
@@ -619,7 +621,7 @@ describe('runSend configurable body cap (票A)', () => {
 
   it('envelope carries no size teaching line even when the cap was raised (D0 删行)', async () => {
     await send(
-      { to: 'workteam', bodyArg: 'y'.repeat(40 * 1_024), maxBodyKb: '64' },
+      { tool: 'codex-cli', to: 'workteam', bodyArg: 'y'.repeat(40 * 1_024), maxBodyKb: '64' },
       { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' },
     );
     // 大小数字是发方的事——信封不教，教学只住 hint 命令与各侧报错。
@@ -632,7 +634,7 @@ describe('runSend configurable body cap (票A)', () => {
   it('remote-origin rejections teach scp + receiver-side operator, never --max-body-kb (第六单)', async () => {
     const before = claudeDeliveries.length;
     const err = await expectCode(
-      send({ to: 'alpha', bodyArg: 'x'.repeat(20_000), origin: 'ZmFrZUBvc3Q' }),
+      send({ tool: 'claude', to: 'alpha', bodyArg: 'x'.repeat(20_000), origin: 'ZmFrZUBvc3Q' }),
       'MESSAGE_TOO_LARGE',
     );
     expect(err.message).toContain('scp');
@@ -647,7 +649,7 @@ describe('runSend configurable body cap (票A)', () => {
     // 远端来件过了发送方的 1MiB 提额，但 claude 端点 64KiB 硬顶挡下：硬顶
     // 事实保留，尾巴换 scp 三步；接收方提额也过不了端点硬顶，绝不指那条路。
     const err = await expectCode(
-      send({
+      send({ tool: 'claude',
         to: 'alpha',
         bodyArg: 'x'.repeat(100 * 1_024),
         maxBodyKb: '1024',
@@ -663,12 +665,12 @@ describe('runSend configurable body cap (票A)', () => {
   });
 
   it('max-turn: --max-turn beats CROSSCHAT_MAX_TURN; unset keeps a bare turn number', async () => {
-    await send({ to: 'alpha', bodyArg: 'flag wins', maxTurn: '40' }, { CROSSCHAT_MAX_TURN: '60' });
+    await send({ tool: 'claude', to: 'alpha', bodyArg: 'flag wins', maxTurn: '40' }, { CROSSCHAT_MAX_TURN: '60' });
     expect(claudeDeliveries.at(-1)!.content).toContain('turn="1/40"');
-    await send({ to: 'alpha', bodyArg: 'env only' }, { CROSSCHAT_MAX_TURN: '60' });
+    await send({ tool: 'claude', to: 'alpha', bodyArg: 'env only' }, { CROSSCHAT_MAX_TURN: '60' });
     expect(claudeDeliveries.at(-1)!.content).toContain('turn="1/60"');
-    await send({ to: 'alpha', bodyArg: 'no budget' });
-    expect(claudeDeliveries.at(-1)!.content).toContain('turn="1">');
+    await send({ tool: 'claude', to: 'alpha', bodyArg: 'no budget' });
+    expect(claudeDeliveries.at(-1)!.content).toContain('turn="1" from-tool=');
     expect(claudeDeliveries.at(-1)!.content).not.toContain('budget=');
   });
 });
@@ -742,7 +744,7 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
       );
       const ref = starRef('abcd00001111');
       const out = await runSend(
-        { conversation: ref, bodyArg: 'hi' },
+        { tool: 'claude', conversation: ref, bodyArg: 'hi' },
         tcpDeps(baseDir, { CODEX_THREAD_ID: 'team1111-aaaa' }),
       );
       expect(out).toContain('delivered to workteam@aaaa0000 (turn 2)'); // 016①：mid 寻址回执机器段=mid8
@@ -760,7 +762,7 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
       JSON.stringify({ brokers: [{ host: '127.0.0.1', port: 1, name: 'dead', starId: 'ffff00000000', key: 'k' }] }),
     );
     const err = await expectCode(
-      runSend({ conversation: starRef('abcd00001111'), bodyArg: 'hi' }, tcpDeps(baseDir, { CODEX_THREAD_ID: 'team1111-aaaa' })),
+      runSend({ tool: 'claude', conversation: starRef('abcd00001111'), bodyArg: 'hi' }, tcpDeps(baseDir, { CODEX_THREAD_ID: 'team1111-aaaa' })),
       'USAGE',
     );
     expect(err.message).toContain('starId abcd00001111');
@@ -772,7 +774,7 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
     // 若误上 tcp：tcpBaseDir 指向空目录 → "本机未入网" 报错，测试即刻红
     const emptyDir = scratch('empty-');
     const origin = encodeOrigin({ p: 'claude', id: 'cs-remote' }, 'aaaa0000', 'aaaa0000ef12', 'tcp');
-    const out = await runSend({ conversation: starRef('abcd00001111'), bodyArg: 'pong', origin }, tcpDeps(emptyDir));
+    const out = await runSend({ tool: 'codex-cli', conversation: starRef('abcd00001111'), bodyArg: 'pong', origin }, tcpDeps(emptyDir));
     expect(out).toContain('delivered to workteam (turn 2)');
     expect(codexDeliveries.at(-1)!.threadId).toBe('team1111-aaaa');
     expect(codexDeliveries.at(-1)!.content).toContain('pong');
@@ -793,7 +795,7 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
       conversationStateFile: stateFile,
       fromMachine: 'cloudleg',
     };
-    const out = await runSend({ conversation: starRef('abcd00001111'), bodyArg: 'pong', origin }, deps);
+    const out = await runSend({ tool: 'codex-cli', conversation: starRef('abcd00001111'), bodyArg: 'pong', origin }, deps);
     expect(out).toContain('delivered to workteam (turn 2)');
     const shardDir = join(emptyDir, 'conversations');
     const shard = JSON.parse(
@@ -814,7 +816,7 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
       n: '0011223344556677',
       c: 1,
     });
-    const err = await expectCode(runSend({ conversation: ancient, bodyArg: 'hi' }, makeDeps()), 'USAGE');
+    const err = await expectCode(runSend({ tool: 'claude', conversation: ancient, bodyArg: 'hi' }, makeDeps()), 'USAGE');
     expect(err.message).toContain('此对话引用过旧（无机器指纹）');
     expect(err.message).toContain('--via tcp:<机器>');
     expect(err.message).toContain('--via ssh:<别名>');
@@ -829,7 +831,7 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
       c: 1,
     });
     await expectCode(
-      runSend({ conversation: localAncient, bodyArg: 'h' }, makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-beta' })),
+      runSend({ tool: 'claude', conversation: localAncient, bodyArg: 'h' }, makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-beta' })),
       'CALLER_NOT_IN_CONVERSATION',
     );
   });
@@ -843,7 +845,7 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
         return { code: 0, stdout: JSON.stringify({ status: 'delivered', to: 'workteam', turn: 2, replyRef: 'mc1_x' }), stderr: '' };
       },
     };
-    const out = await runSend({ conversation: starRef('abcd00001111'), via: 'ssh:peer-host', bodyArg: 'hi' }, deps);
+    const out = await runSend({ tool: 'claude', conversation: starRef('abcd00001111'), via: 'ssh:peer-host', bodyArg: 'hi' }, deps);
     expect(sshArgv).toHaveLength(1);
     expect(sshArgv[0]!.slice(0, 2)).toEqual(['ssh', 'peer-host']);
     expect(out).toContain('delivered to workteam@peer-host');
@@ -851,13 +853,13 @@ describe('runSend execution-side auto-routing (信封瘦身 A+)', () => {
 
   it('端到端：信封命令即完整回信指令——从投递内容提取命令里的标识直接回信（无状态=完整 ref 回退）', async () => {
     // 无 conversationStateFile：hint 回退完整 mc2_ ref——照抄即路由（F2 保底腿）
-    await send({ to: 'workteam', bodyArg: 'round one' }, { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' });
+    await send({ tool: 'codex-cli', to: 'workteam', bodyArg: 'round one' }, { CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' });
     const envelope = codexDeliveries.at(-1)!.content;
     const command = envelope.match(/回复请运行: (crosschat send[^\n<]+)</)![1]!;
     expect(command.startsWith('crosschat send --conversation mc2_')).toBe(true);
     expect(command).not.toContain('--via');
     const ref = command.match(/--conversation (\S+)/)![1]!;
-    const reply = await send({ conversation: ref, bodyArg: 'round two' }, { CODEX_THREAD_ID: 'team1111-aaaa' });
+    const reply = await send({ tool: 'claude', conversation: ref, bodyArg: 'round two' }, { CODEX_THREAD_ID: 'team1111-aaaa' });
     expect(reply).toContain('(turn 2)');
     expect(claudeDeliveries.at(-1)!.content).toContain('round two');
   });
@@ -867,47 +869,47 @@ describe('runSend conversation short handles (F2)', () => {
   const freshState = (): string =>
     join(mkdtempSync(join(outboxDir, 'state-')), 'conversations.json');
 
-  it('照抄端到端：落信 hint 带 c1 → 按 c1 回信 → delivered；柄跨轮复用', async () => {
+  it('照抄端到端：落信 hint 带 cA000 → 按 cA000 回信 → delivered；柄跨轮复用', async () => {
     const state = freshState();
     const deps = { ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }), conversationStateFile: state };
-    const first = await runSend({ to: 'workteam', bodyArg: 'one' }, deps);
+    const first = await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'one' }, deps);
     expect(first).toContain('delivered to workteam (turn 1)');
-    // 落信的 hint 只带两字符短柄，完整 ref 一个字节不出现
+    // 落信的 hint 只带五字符短柄，完整 ref 一个字节不出现
     const envelope = codexDeliveries.at(-1)!.content;
     const command = envelope.match(/回复请运行: (crosschat send[^\n<]+)</)![1]!;
-    expect(command).toContain('--conversation c1 ');
+    expect(command).toContain('--conversation cA000 ');
     expect(envelope).not.toMatch(REF_RE);
-    // 对端照抄命令里的 c1 回信
+    // 对端照抄命令里的 cA000 回信
     const reply = await runSend(
-      { conversation: command.match(/--conversation (\S+)/)![1]!, bodyArg: 'two' },
+      { tool: 'claude', conversation: command.match(/--conversation (\S+)/)![1]!, bodyArg: 'two' },
       { ...deps, env: { CODEX_THREAD_ID: 'team1111-aaaa' } },
     );
     expect(reply).toContain('delivered to alpha (turn 2)');
     expect(claudeDeliveries.at(-1)!.content).toContain('two');
-    // 同 nonce 复用同柄：回信的 hint 仍是 c1
-    expect(claudeDeliveries.at(-1)!.content).toContain('--conversation c1 ');
+    // 同 nonce 复用同柄：回信的 hint 仍是 cA000
+    expect(claudeDeliveries.at(-1)!.content).toContain('--conversation cA000 ');
   });
 
   it('an unknown handle teaches the --to continuation with the exact wording', async () => {
     const deps = { ...makeDeps({ CODEX_THREAD_ID: 'team1111-aaaa' }), conversationStateFile: freshState() };
-    const err = await expectCode(runSend({ conversation: 'c7', bodyArg: 'h' }, deps), 'INVALID_CONVERSATION_REF');
-    expect(err.message).toContain('c7 已过期或未知');
-    expect(err.message).toContain('--to <名> 接续或开新对话');
+    const err = await expectCode(runSend({ tool: 'claude', conversation: 'cA006', bodyArg: 'h' }, deps), 'INVALID_CONVERSATION_REF');
+    expect(err.message).toContain('cA006 已过期或未知');
+    expect(err.message).toContain('--to <名> --tool <收件类型> 接续或开新对话');
   });
 
   it('a handle without wired state resolves to the same teaching error (no crash)', async () => {
     const err = await expectCode(
-      send({ conversation: 'c1', bodyArg: 'h' }, { CODEX_THREAD_ID: 'team1111-aaaa' }),
+      send({ tool: 'claude', conversation: 'cA000', bodyArg: 'h' }, { CODEX_THREAD_ID: 'team1111-aaaa' }),
       'INVALID_CONVERSATION_REF',
     );
-    expect(err.message).toContain('c1 已过期或未知');
+    expect(err.message).toContain('cA000 已过期或未知');
   });
 
   it('a full mc2_ ref still routes directly (双形态永续)', async () => {
     const deps = { ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }), conversationStateFile: freshState() };
-    await runSend({ to: 'workteam', bodyArg: 'one' }, deps);
+    await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'one' }, deps);
     const reply = await runSend(
-      { conversation: shardRef(deps.conversationStateFile!), bodyArg: 'two' },
+      { tool: 'claude', conversation: shardRef(deps.conversationStateFile!), bodyArg: 'two' },
       { ...deps, env: { CODEX_THREAD_ID: 'team1111-aaaa' } },
     );
     expect(reply).toContain('(turn 2)');
@@ -916,20 +918,17 @@ describe('runSend conversation short handles (F2)', () => {
   it('an ambiguous handle (forged same number in two shards) lists the candidate refs', async () => {
     const state = freshState();
     const deps = { ...makeDeps({ CLAUDE_CODE_MESSAGING_SOCKET: 'sock-alpha' }), conversationStateFile: state };
-    await runSend({ to: 'workteam', bodyArg: 'one' }, deps); // c1 -> pair alpha/workteam
-    // Hand-forge a second shard holding c1 for another conversation (CAS lost twice).
-    // Filename is irrelevant to enumeration: loadAllPairs keys shards by their `pair` field.
+    await runSend({ tool: 'codex-cli', to: 'workteam', bodyArg: 'one' }, deps); // cA000 -> pair alpha/workteam
+    // Hand-forge a second shard holding cA000 for another conversation (CAS lost twice).
+    // Use the current shard filename contract so the collision is the only fault.
     const imposter = encodeRef(newConversationRef({ p: 'claude', id: 'cs-beta' }, { p: 'codex', id: 'other222-bbbb' }));
-    writeFileSync(
-      join(state, '..', 'conversations', 'foreign.json'),
-      JSON.stringify({ pair: 'claude:cs-beta\ncodex:other222-bbbb', ref: imposter, updatedAt: 1, handles: { c1: imposter } }),
-      'utf8',
-    );
+    const { writeConversationShards } = await import('./helpers/conversation-shards.js');
+    writeConversationShards(state, { 'claude:cs-beta\ncodex:other222-bbbb': { ref: imposter, updatedAt: 1, handleSequence: 1, handles: { cA000: imposter } } });
     const err = await expectCode(
-      runSend({ conversation: 'c1', bodyArg: 'h' }, { ...deps, env: { CODEX_THREAD_ID: 'team1111-aaaa' } }),
+      runSend({ tool: 'claude', conversation: 'cA000', bodyArg: 'h' }, { ...deps, env: { CODEX_THREAD_ID: 'team1111-aaaa' } }),
       'INVALID_CONVERSATION_REF',
     );
-    expect(err.message).toContain('c1 撞号指向多个对话');
+    expect(err.message).toContain('cA000 撞号指向多个对话');
     expect(err.message).toContain(imposter);
   });
 });

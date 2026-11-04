@@ -1,5 +1,6 @@
 import { Worker } from 'node:worker_threads';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { ChildProcess, spawn } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -30,7 +31,61 @@ function fixture(overrides: Partial<DoctorDeps> = {}): DoctorDeps {
 }
 
 describe('structured diagnostics', () => {
-  it('separates typed checks and severity counts from the unchanged synchronous CLI rendering', async () => {
+  it('validates static plugin facts, fixed reasons and severities without carrying private fields', async () => {
+    const { parseDiagnosticResult, formatDiagnosticCheck } = await import('../src/application/diagnostics/index.js');
+    const profileDir = join(tmpdir(), 'owned-harness-profile');
+    const packageDir = join(tmpdir(), 'owned-installed-bridge');
+    const checks = [
+      { code: 'harness-profile-plugin-ready', level: 'pass', data: { profileDir, packageDir, version: '0.1.0' } },
+      { code: 'harness-profile-plugin-warning', level: 'warn', data: { path: packageDir, profileDir, packageDir, version: '0.1.0', reason: 'content-differs' } },
+      { code: 'harness-profile-not-declared', level: 'info', data: { profileDir } },
+    ];
+    const input = { groups: [{ context: { kind: 'environment' }, checks: checks.map((check) => ({ ...check, data: { ...check.data, token: 'private-token', rawConfig: 'private-config' } })) }],
+      summary: { pass: 1, warn: 1, error: 0, failed: false } };
+    const parsed = parseDiagnosticResult(input);
+    expect(parsed.groups[0]!.checks).toEqual(checks);
+    expect(formatDiagnosticCheck(parsed.groups[0]!.checks[0]!).guidance).toContain('加载');
+    for (const data of [{ path: packageDir, reason: 'private-raw-error' }, { path: 'relative', reason: 'content-differs' }]) {
+      expect(() => parseDiagnosticResult({ ...input, groups: [{ context: { kind: 'environment' }, checks: [{ ...checks[1], data }] }] })).toThrow('malformed');
+    }
+  });
+
+  it('validates native bridge facts and strips secret fields across the diagnostic IPC boundary', async () => {
+    const { parseDiagnosticResult, formatDiagnosticCheck } = await import('../src/application/diagnostics/index.js');
+    const check = { code: 'harness-bridge-ready', level: 'pass', data: { instanceId: 'f61b7f24-b2cb-4d32-960f-38b877c12ccd',
+      pid: 123, runtimeVersion: '0.2.1-rc.2', profile: 'desktop', endpointType: 'desktop', profileDir: join(tmpdir(), 'owned-desktop-profile') } };
+    const input = { groups: [{ context: { kind: 'environment' }, checks: [{ ...check, data: { ...check.data, token: 'private-token', url: 'private-url' } }] }],
+      summary: { pass: 1, warn: 0, error: 0, failed: false } };
+    const parsed = parseDiagnosticResult(input);
+    expect(parsed.groups[0]!.checks).toEqual([check]);
+    expect(formatDiagnosticCheck(parsed.groups[0]!.checks[0]!).description).toContain('dsh-desktop');
+    for (const data of [{ ...check.data, pid: -1 }, { ...check.data, pid: 1.5 }, { ...check.data, endpointType: 'host' },
+      { ...check.data, profile: undefined }, { ...check.data, profileDir: 'relative' }]) {
+      expect(() => parseDiagnosticResult({ ...input, groups: [{ context: { kind: 'environment' }, checks: [{ ...check, data }] }] })).toThrow('malformed');
+    }
+    expect(() => parseDiagnosticResult({ ...input, groups: [{ context: { kind: 'environment' }, checks: [{ ...check, level: 'warn' }] }] })).toThrow('malformed');
+  });
+
+  it('accepts only fixed native warning reasons and supplies the same guidance to TUI details', async () => {
+    const { parseDiagnosticResult, formatDiagnosticCheck } = await import('../src/application/diagnostics/index.js');
+    const input = { groups: [{ context: { kind: 'environment' }, checks: [{ code: 'harness-bridge-warning', level: 'warn', data: { reason: 'DSH_AUTH_REQUIRED' } }] }],
+      summary: { pass: 0, warn: 1, error: 0, failed: false } };
+    const parsed = parseDiagnosticResult(input);
+    expect(formatDiagnosticCheck(parsed.groups[0]!.checks[0]!).guidance).toContain('鉴权');
+    expect(() => parseDiagnosticResult({ ...input, groups: [{ context: { kind: 'environment' }, checks: [{ code: 'harness-bridge-warning', level: 'warn', data: { reason: 'secret-untrusted-detail' } }] }] })).toThrow('malformed');
+  });
+
+  it('preserves Harness findings across the JSON boundary and rejects an unknown skill side', async () => {
+    const { parseDiagnosticResult, formatDiagnosticCheck } = await import('../src/application/diagnostics/index.js');
+    const check = { code: 'skill-mismatch', level: 'warn', data: { side: 'harness', paths: ['references/send.md'] } };
+    const input = { groups: [{ context: { kind: 'environment' }, checks: [check] }], summary: { pass: 0, warn: 1, error: 0, failed: false } };
+    const parsed = parseDiagnosticResult(input);
+    expect(parsed).toEqual(input);
+    expect(formatDiagnosticCheck(parsed.groups[0]!.checks[0]!).description).toContain('harness 侧 skill');
+    expect(() => parseDiagnosticResult({ ...input, groups: [{ context: { kind: 'environment' }, checks: [{ ...check, data: { ...check.data, side: 'unknown' } }] }] })).toThrow('malformed');
+  });
+
+  it('separates typed checks and severity counts from the shared synchronous CLI rendering', async () => {
     const { collectDoctorDiagnostics, renderDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
     const deps = fixture({ nodeVersion: '20.0.0' });
     const result = collectDoctorDiagnostics(deps);
@@ -41,7 +96,7 @@ describe('structured diagnostics', () => {
     expect(checks.find((check) => check.code === 'claude-registry-malformed')).toMatchObject({
       level: 'warn', data: { count: 1 },
     });
-    expect(result.summary).toEqual({ pass: 5, warn: 3, error: 1, failed: true });
+    expect(result.summary).toEqual({ pass: 6, warn: 3, error: 1, failed: true });
     expect(renderDoctorDiagnostics(result)).toEqual(runDoctor(deps));
     expect(renderDoctorDiagnostics(result).output).toBe([
       '环境',
@@ -52,10 +107,11 @@ describe('structured diagnostics', () => {
       '  ⚠️ codex daemon 未运行；要用 codex 通道时先执行: codex app-server daemon start',
       '  ✅ claude 侧 skill 已安装（安装源 skill 目录未定位到，跳过版本比对）',
       '  ✅ codex 侧 skill 已安装（安装源 skill 目录未定位到，跳过版本比对）',
+      '  ✅ harness 侧 skill 已安装（安装源 skill 目录未定位到，跳过版本比对）',
       '  ✅ 无双身份残留',
       '其他',
       '  ✅ 发件箱空（无暂存消息）',
-      '结论: 5 项通过，3 项警告，1 项错误',
+      '结论: 6 项通过，3 项警告，1 项错误',
     ].join('\n'));
   });
 
@@ -69,7 +125,7 @@ describe('structured diagnostics', () => {
     }));
     const checks = result.groups.flatMap((group) => group.checks);
     expect(checks.find((check) => check.code === 'status-stale')).toMatchObject({ level: 'info', data: { file: 'status-broker.json' } });
-    expect(result.summary).toEqual({ pass: 6, warn: 3, error: 0, failed: false });
+    expect(result.summary).toEqual({ pass: 7, warn: 3, error: 0, failed: false });
     expect(JSON.stringify(result)).not.toContain('secret-');
   });
 
@@ -96,9 +152,77 @@ describe('structured diagnostics', () => {
 });
 
 describe('isolated cancellable diagnostics', () => {
+  it('keeps a cancelled POSIX query pending until both its owner and probe group disappear', async () => {
+    const { queryDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
+    const platform = process.platform;
+    const child = new ChildProcess();
+    const pid = 424242;
+    Object.defineProperty(child, 'pid', { value: pid });
+    let groupPresent = true;
+    let finished = false;
+    let settled: Promise<string> | undefined;
+    vi.useFakeTimers();
+    Object.defineProperty(process, 'platform', { value: 'linux' });
+    const kill = vi.spyOn(process, 'kill').mockImplementation((target, signal) => {
+      expect(target).toBe(-pid);
+      if (signal === 'SIGKILL') {
+        setTimeout(() => { child.signalCode = 'SIGKILL'; child.emit('exit', null, 'SIGKILL'); }, 10);
+        return true;
+      }
+      if (signal !== 0) throw new Error('Unexpected diagnostic cleanup signal');
+      if (groupPresent) return true;
+      throw Object.assign(new Error('No such group'), { code: 'ESRCH' });
+    });
+    try {
+      const controller = new AbortController();
+      settled = queryDoctorDiagnostics({ signal: controller.signal, createProcess: () => child })
+        .then(() => 'resolved', (error: Error) => error.name).then((value) => { finished = true; return value; });
+      controller.abort();
+      await vi.advanceTimersByTimeAsync(20);
+      expect(child.signalCode).toBe('SIGKILL');
+      expect(finished).toBe(false);
+      groupPresent = false;
+      await vi.advanceTimersByTimeAsync(20);
+      expect(await settled).toBe('AbortError');
+      expect(kill.mock.calls.filter(([, signal]) => signal === 'SIGKILL')).toHaveLength(1);
+      expect(child.listenerCount('exit')).toBe(0);
+    } finally {
+      groupPresent = false;
+      if (child.signalCode === null) { child.signalCode = 'SIGKILL'; child.emit('exit', null, 'SIGKILL'); }
+      await vi.advanceTimersByTimeAsync(20);
+      await settled;
+      vi.restoreAllMocks();
+      Object.defineProperty(process, 'platform', { value: platform });
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([undefined, 'isolated', 'inherit'] as const)('keeps Harness home inside the selected diagnostic environment (%s)', async (nativeEnvironment) => {
+    const { queryDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');
+    const home = join(tmpdir(), 'crosschat-diagnostic-scoped-home');
+    const dshHome = join(tmpdir(), 'crosschat-diagnostic-host-harness');
+    const report = { groups: [], summary: { pass: 0, warn: 0, error: 0, failed: false } };
+    let actualHome: string | undefined;
+    const result = await queryDoctorDiagnostics({
+      home, nativeEnvironment, env: { DSH_HOME: dshHome },
+      createProcess: ({ env }) => {
+        actualHome = env.DSH_HOME;
+        return spawn(process.execPath, ['-e', `process.on('disconnect',()=>process.exit(0));process.send(${JSON.stringify(report)});`], {
+          env, stdio: ['ignore', 'ignore', 'ignore', 'ipc'], windowsHide: true, detached: process.platform !== 'win32',
+        });
+      },
+    });
+    expect(result).toEqual(report);
+    expect(actualHome).toBe(nativeEnvironment === 'inherit' ? dshHome : join(home, '.dsh'));
+  });
+
   it('terminates a real probe child through the default built isolation path on cancellation', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'crosschat-diagnostic-tree-'));
     const marker = join(dir, 'probe-pid');
+    const diagnosticDir = join(dir, 'diagnostics');
+    const servicesDir = join(dir, 'services');
+    mkdirSync(diagnosticDir);
+    mkdirSync(servicesDir);
     let probePid: number | undefined;
     let settled: Promise<string> | undefined;
     try {
@@ -109,16 +233,20 @@ describe('isolated cancellable diagnostics', () => {
         compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2023 },
       }).outputText;
       writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
-      writeFileSync(join(dir, 'query.js'), built);
+      writeFileSync(join(diagnosticDir, 'query.js'), built);
       const modelSource = readFileSync(new URL('../src/application/diagnostics/model.ts', import.meta.url), 'utf8');
-      writeFileSync(join(dir, 'model.js'), ts.transpileModule(modelSource, {
+      writeFileSync(join(diagnosticDir, 'model.js'), ts.transpileModule(modelSource, {
+        compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2023 },
+      }).outputText);
+      const processSource = readFileSync(new URL('../src/application/services/owned-process.ts', import.meta.url), 'utf8');
+      writeFileSync(join(servicesDir, 'owned-process.js'), ts.transpileModule(processSource, {
         compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2023 },
       }).outputText);
       const childScript = `require('node:fs').writeFileSync(${JSON.stringify(marker)},String(process.pid));setInterval(()=>{},1000);`;
       const isolatedScript = `import {spawnSync} from 'node:child_process'; spawnSync(process.execPath,['-e',${JSON.stringify(childScript)}]);`;
-      writeFileSync(join(dir, 'worker.js'), isolatedScript);
-      writeFileSync(join(dir, 'isolated.js'), isolatedScript);
-      const { queryDoctorDiagnostics } = await import(pathToFileURL(join(dir, 'query.js')).href);
+      writeFileSync(join(diagnosticDir, 'worker.js'), isolatedScript);
+      writeFileSync(join(diagnosticDir, 'isolated.js'), isolatedScript);
+      const { queryDoctorDiagnostics } = await import(pathToFileURL(join(diagnosticDir, 'query.js')).href);
       const controller = new AbortController();
       const pending = queryDoctorDiagnostics({ signal: controller.signal });
       settled = pending.then(() => 'resolved', (error: Error) => error.name);
@@ -129,11 +257,8 @@ describe('isolated cancellable diagnostics', () => {
       expect(existsSync(marker)).toBe(true);
       probePid = Number(readFileSync(marker, 'utf8'));
       controller.abort();
-      const outcome = await Promise.race([
-        settled,
-        new Promise<string>((resolve) => setTimeout(() => resolve('still waiting for blocking probe'), 500)),
-      ]);
-      expect(outcome).toBe('AbortError');
+      // The owner awaits taskkill /T /F and the probe exit before rejecting; the API promises no fixed latency.
+      expect(await settled).toBe('AbortError');
       expect(() => process.kill(probePid!, 0)).toThrow();
     } finally {
       if (probePid !== undefined) {
@@ -142,7 +267,7 @@ describe('isolated cancellable diagnostics', () => {
       await settled;
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, 10_000);
 
   it('rejects an already-cancelled query before creating a worker', async () => {
     const { queryDoctorDiagnostics } = await import('../src/application/diagnostics/index.js');

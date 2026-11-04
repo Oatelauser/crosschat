@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-23T05:43:37.6750543Z",
+  "status": "failed",
+  "method": "user manual removal followed by agent readonly verification",
+  "ownedRoot": "D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291",
+  "ownedRootRemoved": false,
+  "failedCiRoot": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-dsh-ci-HQUjru",
+  "failedCiRootRemoved": true,
+  "secondCiRoot": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-dsh-ci-Y22mpv",
+  "secondCiRootRemoved": true,
+  "userDshHomeExists": false,
+  "userAgentsHomeExists": true,
+  "dshProtocolExists": false,
+  "globalDshCommands": [],
+  "opencodePriorCleanupUntouched": true,
+  "priorAutomaticRejectionRetained": "cleanup-review.json"
+}

@@ -1,0 +1,41 @@
+{
+  "ticket": "C14-W04-R1",
+  "branch": "codex/core-refactor-pre-tui",
+  "baselineSha": "be41d98220e48d67f68fc40f57e625f82bcd1618",
+  "environment": "Windows 11 Pro for Workstations 26200 x64, Node v25.0.0",
+  "scope": "W04-review.md P1 (refinement collision winner-picking), P2 (child lifecycle + wiring regressions), tmp-residue gap, writers-claim narrowing",
+  "red": {
+    "p1StateLevel": "test 'refinement leaves a foreign same-number handle and the collision untouched': typed shard c1 was overwritten by the current nonce (foreign binding replaced) and both shard files changed — exactly root's replay",
+    "p1SendPath": "test 'a full-ref send through a foreign-handle conflict delivers once and hints a safe handle': sent.handle was 'c1' (the colliding handle) instead of a fresh safe 'c2'",
+    "tmpResidue": "test 'a delivered send stays delivered...': one *.tmp scratch file survived the failed rename"
+  },
+  "fixes": {
+    "reconcileRefinement": "a handle whose destination key already binds a foreign conversation is not migrated at all (both sides kept byte-identical, collision still INVALID_CONVERSATION_REF); per-record migrated tracking makes old-copy cleanup remove only entries that actually moved",
+    "savePair": "finally-clause removes this write's own uniquely named tmp when the rename did not consume it; target shard and foreign files untouched; best-effort semantics unchanged",
+    "runChild": "independent 30s timeout (kill+reject), error-event reject, settles on close (pipes drained), 64KiB output cap, CROSSCHAT_LIVE cleared from child env",
+    "holderHook": "bounded 5s deadline in the generated preload instead of an unbounded spin",
+    "afterAll": "kills remaining children, awaits close (5s cap) before recursively deleting owned roots (tmpdir-direct-child + crosschat-conv-lock- prefix check)"
+  },
+  "wiringRegressions": [
+    "full-ref send through a foreign-handle conflict: delivered exactly once to the correct target, hint is a fresh safe handle c2, ambiguous c1 rejected with zero delivery",
+    "same-nonce three-process concurrent reuse: one handle, every child resolves it back to the same full ref",
+    "refinement vs same-nonce refresh race (Promise.all): exactly one c1 remains, resolving to the typed conversation, no stale copy in the old shard",
+    "pre-lock failure: sendMessage rejects CONVERSATION_STATE_BUSY with zero native delivery while a real holder occupies the lock; after release the same send delivers exactly once",
+    "post-delivery accounting failure (local): delivery side-effect turns the shard path into a directory — status stays delivered, exactly one delivery, no resend, no tmp residue",
+    "SSH receipt then local accounting+handle failure: sendViaSsh keeps delivered, handle undefined, exactly one ssh leg, no tmp residue",
+    "TCP receipt then local accounting+handle failure: sendViaTcp keeps delivered, handle undefined, exactly one broker delivery (counted), no tmp residue",
+    "stuck holder exits within its own deadline and still completes its allocation; unloadable child script settles non-zero instead of hanging"
+  ],
+  "green": {
+    "targeted": "11 affected files, 229 tests passed",
+    "eslint": "clean (src test)",
+    "npmCheck": { "command": "npm run check", "exit": 0, "files": "228 passed | 3 skipped (231)", "tests": "2433 passed | 11 skipped (2444)" },
+    "firstRoundTests": "2423 passed | 11 skipped (delta +10 = new regressions)"
+  },
+  "writersClaim": "The lock domain covers exactly the four conversation write APIs (handleForRef, claimHandle, continueFromRef incl. reconcileRefinement, recordConversation). Concurrent maintenance deletion (cleanup/force-clean in src/commands/clean.ts via maintenance/operations.ts) is an explicitly excluded pre-existing boundary: its contract already allows deleting files mid-write when no transport is running; W04-R1 did not change clean/force-clean parameters, execution semantics, output or preview.",
+  "limits": [
+    "Windows x64 / Node v25.0.0 only; Linux/macOS not executed (platform CI task remains root's).",
+    "Single-machine mutex; a network-shared state root across machines remains out of scope.",
+    "Multi-process contention tests are real-process regressions; the deterministic lock-discipline evidence is the holder test."
+  ]
+}

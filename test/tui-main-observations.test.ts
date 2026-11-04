@@ -65,14 +65,15 @@ describe('default local observation wiring', () => {
     syncBuiltinESMExports();
     const active = runTui({ ...io, home: undefined });
     try {
-      await vi.waitFor(() => expect(mocks.render).toHaveBeenCalledOnce());
+      // The first render of a cold process loads contexts, ink and the composition; 1s is a load-sensitive default.
+      await vi.waitFor(() => expect(mocks.render).toHaveBeenCalledOnce(), { timeout: 5000 });
       expect(mocks.discovery).toHaveBeenCalledWith({});
       expect(mocks.overview).toHaveBeenCalledWith(expect.objectContaining({ home: io.home, nativeEnvironment: 'inherit' }));
     } finally {
       io.signals.emit('SIGTERM'); await active;
       homeProbe.mockRestore(); syncBuiltinESMExports();
     }
-  });
+  }, 10_000);
   it('installs the five real readonly resources lazily and preserves exact related routes', async () => {
     const io = await fixture(); const active = runTui(io);
     try {

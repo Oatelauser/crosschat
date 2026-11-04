@@ -21,7 +21,8 @@
 | TCP管理任务 | `src/application/tcp/management.ts` | preview/apply绑定完整目标与确认版本；本机冷热、远程挑战权限、精确册位与一次性秘密结果 |
 | 已有TCP配置导入 | `src/application/tcp/configuration.ts` | 当前brokers[]只追加新星；确认指纹、原子替换前复核、私密输入与安全DTO；不联网或启动 |
 | 清理 | `src/application/cleanup/index.ts` | `planCleanup` 只读，`executeCleanup` 执行既定目标，保留原规则和 CLI 计数语义 |
-| 发送 | `src/application/send/index.ts`、`types.ts` | `sendMessage` 返回 typed 结果；`format.ts` 负责旧文本/JSON，TCP 本机桥直接使用结果 |
+| 发送 | `src/application/send/index.ts`、`types.ts` | `sendMessage` 要求显式收件 tool、返回 typed 结果；`format.ts` 负责文本/JSON，TCP 本机桥直接使用结果 |
+| 调用来源分类 | `src/application/caller-source/service.ts`、`providers.ts`、`confirmations.ts` | provider/原生 ID 与来源类型分开；只读探测、来源及运行核验、受策略控制的确认状态，不用候选列表猜窗口 |
 | 成员对账 | `src/application/members/index.ts` | 有序 Provider 能力委派，保留现有活性/查名策略；unknown 不当成 absent |
 | 精确册位操作 | `src/application/session-membership/index.ts` | 只读列出配置星；按完整 SessionRef 检查/收编/删册，目标变化拒绝，未确认写入不自动重试 |
 | 原生选择与窗口声明 | `src/application/session-selection.ts`、`commands/session-star.ts` | 每窗口接收 empty/selected；选择代次取消旧连接，释放本窗口 claim，不猜最新历史 |
@@ -29,9 +30,9 @@
 
 ## 读取与生命周期
 
-`SessionRef` 包含 contextId、providerId、nativeId；旧登记没有原生会话 ID 时，referenceKind 为 process，其他默认 native。内部键包含引用种类，显示短值不参与寻址。详情传完整 ref，不能拿截断值或名字作唯一键。
+`SessionRef` 包含 contextId、providerId、nativeId 与可选 endpointType；旧登记没有原生会话 ID 时，referenceKind 为 process，其他默认 native。内部键包含引用种类及端点类型，显示短值不参与寻址。详情传完整 ref，不能拿截断值或名字作唯一键。端点来自原生适配器事实；未知类型不推定为 CLI，已指定类型不跨端点回落。用户命令与各入口边界见[类型寻址](../tool-types.md)。
 
-分页结果的 complete 表示当前来源声明完整；partial/unavailable/cancelled 均不能显示成“没有会话”。Claude 目录清单变化会令游标失效并要求刷新；Codex 聚合 Desktop owner 与 CLI 来源，游标绑定上下文并按完整 ID 跨页去重，保留各来源错误。新查询保持原始未知状态；旧 CLI 的20条默认和状态校验保持。当前发现范围仍是各原生来源可发现的非归档会话，未新增历史归档扫描。
+分页结果的 complete 表示当前来源声明完整；partial/unavailable/cancelled 均不能显示成“没有会话”。Claude 目录清单变化会令游标失效并要求刷新；Codex 聚合 Desktop owner 与 CLI 来源，游标绑定上下文和端点选择，按完整 ID＋端点跨页去重，保留各来源错误。新查询保持原始未知状态；旧 CLI 的20条默认和状态校验保持，严格类型寻址及 typed 成员核验要求完整分页。当前发现范围仍是各原生来源可发现的非归档会话，未新增历史归档扫描。
 
 取消读取后丢弃迟到结果，Adapter 负责释放自己的连接、监听器和子进程。诊断查询在 finally 回收 owner 后再次检查取消。服务启动、管理和清理是写操作；停止等待不能表示回滚，超时应核实结果后再重试。旧 CLI 继续使用原同步 doctor/stop 边界；展示入口应使用异步应用接缝。
 
@@ -97,12 +98,20 @@ TUI删除带expected：节点/管理钥为`{credentialRevision,machineId:string|
 
 发送支持逐条 `SendArgs.delivery?: 'queue' | 'steer'`，默认 queue。Provider 第三参数为 `DeliveryOptions.mode`；SSH、TCP、broker 本机桥与文件通知原样传递。`SendResult.deliveryMode` 表示请求意图，与实际投递结果、历史回执分开；`deliveryModes` 能力须有对应原生验收证据，不能由 `delivery: true` 推断。
 
+C14 的所有应用发送入口及 CLI 都校验 `SendArgs.tool`，缺少/未知类型在发现或传输前拒绝，`--conversation` 和文件外层 send 同样必填。`--to` 与 `--conversation` 继续互斥；公开 send 不再解析 `<工具>/<会话>`，名称/ID 的斜杠按原值处理，所选类型内完整原生 ID 优先于同形名称。TCP 地址为 `tcp:<星>:<机器>:<会话>` 加独立 tool，会话 send 帧缺 tool 或目标不支持端点能力时拒绝；文件/控制 wire 帧不增加会话 tool 约束。SSH 透传收件类型，沿用原有字符限制。
+
+`SendDeps.enrichCallerIdentity` 是可选来源观察接缝，仅补充可靠来源 endpointType，不改变原生 provider/ID。Q8 保留：调用者原生 ID 匹配引用、收件端明确时，来源未知或来源探测暂不可用仍可回信，不引入来源候选 owner 自证。普通 Codex shell 的来源仍可能 pending，具体无法关联入口与人工确认范围须先获用户审阅；当前真实组合未启用通用兜底询问。
+
+信封分别传 `fromTool` 与 `replyTool`：前者反映本次观察，未知为 pending；后者可使用引用内已固定的返回端点生成完整 `--conversation ... --tool ...` hint。返回端未知时不生成缺 tool 命令。`from-addr` 使用完整原生 ID，不夹工具前缀。引用未知类型经选择和核验补齐时保留有效五字符短柄、nonce、机器名及连续轮次，旧未知引用不能覆盖已确认类型；同 ID 不同实际端点继续独立通信、册位和队列。TUI 的 `y` 从这些事实复制完整发送命令，不自动发送。
+
+`PairRecord.handleSequence` 保存本分片提交过的最高机器级分配序号（1～26000），与 `handles` 原子写入并在刷新/细化时保留。`readConversationState` 返回分片及完整性；不完整时短柄分配/展示停用，完整 ref 发送保留。`handleForRef` / `claimHandle` 的可选失败返回 `undefined`，调用方回退完整引用；`resolveHandle` 拒绝旧数字柄、过期、歧义或不可核验状态。`cA000`～`cZ999` 的有效窗口、清理与重置合同见[批准规格](c14-short-handle-ring-20261029.md)。
+
 Desktop 投递绑定真实 owner，不依赖 CLI daemon；owner 绑定后的失败不改投其他通道。忙时 queue 本机寄存，空闲后交给原宿主；steer 追加当前轮，明确无活跃轮且新快照证实空闲时才允许启动新轮。写入不明不重放，outbox 持久认领与未知状态阻止并发/崩溃恢复重复发送；回执摘要绑定目标与实际完整输入。
 
 `SendDeps.diagnoseCodexTarget` 仅在普通 `--to` 解析报 `NAME_NOT_FOUND` 后提供只读补查；已命中、歧义、`targetSessionId` 和 conversation/ref 路径不变。`src/codex/discovery.ts` 的 `diagnoseCodexTarget` 遍历当前非归档 metadata，仅探测匹配候选，区分真实未找到、保存记录、歧义和来源失败；保存记录不加入可发送列表。结构结果保留 owner/snapshot/metadata 阶段与安全错误码，不携带原生错误正文；`scope: 'desktop'`、`cliStatus: 'not-checked'` 明确结果不能推断 CLI 不可达。补查不恢复原生会话、不调整既有超时、不自动发送或换路由。
 
 第三工具的读取接入实现 SessionReader，注册进 SessionCatalog；ContextReader 提供连接描述。工具能力声明与实现分开，第三测试 Provider 已验证通用筛选/详情/成员委派无需添加工具分支。
 
-真实 OpenCode/zcode 尚未接入。第三工具可复用上述发现传输，核心不按工具分支分发；投递、启动和诊断能力分别登记。原有身份/ref/origin/成员持久键尚未迁移，未来功能变化仍须用户确认；本次直接升级，不增加旧版适配。
+OpenCode 共享 HTTP 服务（`endpointType:'shared'`）与 Harness Host 已有通信/发现接入，正式 Harness Desktop 原生入口及三平台组合仍须专项验证；ZCode 暂缓。第三工具复用上述发现传输，核心不按工具分支分发；投递、启动和诊断能力分别登记。身份/ref/origin/成员键已按批准范围携带类型，未知记录不推定类型。完整接入、技能安装及兼容 CI 仍按[全量计划](tool-compatibility-ci-tasks.md)推进，不由协议接线推定完成；不增加旧版适配。
 
 `npm run check` 包含现有 lint、AST 导入图、构建与测试。应用模块禁止运行时依赖 commands/TUI，配置模块禁止依赖命令/NodeClient；新增应用模块自动继承门禁。迁移模块启用类型导入、未处理 Promise 和异步回调检查，合法与违规 fixture 均验证规则生效。实施与验收证据见 [核心改造记录](core-refactor-progress.md)。

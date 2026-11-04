@@ -25,14 +25,14 @@ export class SessionOperationRoutes {
   }
   receive(target: SocketLike, frame: SessionOperationResultFrame): void {
     const entry = this.pending.get(frame.id);
-    if (!entry || entry.target !== target || ['starId', 'machineId', 'providerId', 'nativeId'].some((key) => frame[key as 'starId'] !== entry.request[key as 'starId'])) return;
+    if (!entry || entry.target !== target || ['starId', 'machineId', 'providerId', 'nativeId', 'endpointType'].some((key) => frame[key as 'starId'] !== entry.request[key as 'starId'])) return;
     this.pending.delete(frame.id); clearTimeout(entry.timer);
     try { entry.sender.send(JSON.stringify({ ...entry.confirm(frame), id: entry.request.id })); }
     catch { /* A disconnected caller must verify the result instead of replaying. */ }
   }
   private reply(socket: SocketLike, request: SessionOperationFrame, kind: 'rejected' | 'uncertain', message: string): void {
-    const { id, starId, machineId, providerId, nativeId } = request;
-    try { socket.send(JSON.stringify({ id, starId, machineId, providerId, nativeId, op: 'session-operation-result', result: { kind, message } })); }
+    const { id, starId, machineId, providerId, nativeId, endpointType } = request;
+    try { socket.send(JSON.stringify({ id, starId, machineId, providerId, nativeId, endpointType, op: 'session-operation-result', result: { kind, message } })); }
     catch { /* Caller disconnected. */ }
   }
   private finish(id: string, message: string): void {

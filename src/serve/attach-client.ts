@@ -14,6 +14,7 @@ import { MAX_PAYLOAD_BYTES } from './protocol.js';
 import type { SessionMemberDecl } from './protocol.js';
 import { tcpDir } from './registry.js';
 import { assertNodeNotRevoked } from './revocation.js';
+import { isEndpointTypeFor } from '../tool-types.js';
 
 export interface AttachStatusReply {
   online: boolean;
@@ -52,6 +53,7 @@ function parseReply(input: unknown): AttachReply {
     for (const item of input.members) {
       if (!isRecord(item) || typeof item.sessionId !== 'string' || item.sessionId === '') return invalid();
       if ((item.name !== undefined && typeof item.name !== 'string') || (item.tool !== undefined && typeof item.tool !== 'string')) return invalid();
+      if (item.endpointType !== undefined && (typeof item.tool !== 'string' || !isEndpointTypeFor(item.tool, item.endpointType))) return invalid();
       let extendsValue: SessionMemberDecl['extends'];
       if (typeof item.extends === 'string') extendsValue = item.extends;
       else if (item.extends !== undefined) {
@@ -60,7 +62,9 @@ function parseReply(input: unknown): AttachReply {
       }
       members.push({ sessionId: item.sessionId,
         ...(typeof item.name === 'string' ? { name: item.name } : {}), ...(typeof item.tool === 'string' ? { tool: item.tool } : {}),
-        ...(extendsValue === undefined ? {} : { extends: extendsValue }), ...(item.temporary === true ? { temporary: true } : {}) });
+        ...(typeof item.endpointType === 'string' ? { endpointType: item.endpointType } : {}),
+        ...(extendsValue === undefined ? {} : { extends: extendsValue }), ...(item.temporary === true ? { temporary: true } : {}),
+        ...(item.selectionOwned === true ? { selectionOwned: true } : {}) });
     }
     reply.members = members;
   }

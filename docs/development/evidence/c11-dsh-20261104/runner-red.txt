@@ -1,0 +1,106 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ❯ test/dsh-onboarding-ci.test.ts (17 tests | 4 failed) 15ms
+   ✓ DSH from-zero onboarding report boundary > accepts a complete fresh onboarding report independently of the communication schema 1ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"tool":"dsh-web-runtime"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"platform":"linux"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"arch":"arm64"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"version":"0.2.1-rc.3"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"runId":"11111111-1111-1111-1111-111111111111"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"runId":"22222222-2222-4222-8222-222222222222"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects omitted or expanded evidence claims instead of treating them as a full onboarding pass 0ms
+   ✓ DSH from-zero onboarding report boundary > requires every successful phase once, in order, with valid timing 0ms
+   ✓ DSH from-zero onboarding report boundary > retains a real failure at the next phase without claiming a complete pass or inventing release 0ms
+   ✓ DSH from-zero onboarding report boundary > requires explicit cleanup observations instead of coercing unknown values 0ms
+   ✓ DSH from-zero onboarding report boundary > checks normal process completion against the report outcome 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a failed claim that omits the failed phase after all phases passed 0ms
+   × onboarding fresh attempts and serial resource ownership > accepts only the freshly minted report and never reuses a preceding PASS 5ms
+     → Cannot read properties of undefined (reading 'status')
+   × onboarding fresh attempts and serial resource ownership > rejects a linked report before accepting its otherwise valid contents 4ms
+     → expected undefined to match object { category: 'infrastructure', …(1) }
+   × onboarding fresh attempts and serial resource ownership > retains an installation with incomplete release and never enters the next build or removes it 1ms
+     → expected [] to deeply equal [ 'install:baseline', 'probe' ]
+   × onboarding fresh attempts and serial resource ownership > uses the same candidate twice only after both observed runtime and installation releases 0ms
+     → expected undefined to match object { tool: 'dsh-onboarding', …(2) }
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-onboarding-ci.test.ts > onboarding fresh attempts and serial resource ownership > accepts only the freshly minted report and never reuses a preceding PASS
+TypeError: Cannot read properties of undefined (reading 'status')
+ ❯ test/dsh-onboarding-ci.test.ts:93:18
+     91|       previousId = runId; await writeFile(reportPath, JSON.stringify({…
+     92|     });
+     93|     expect(first.status).toBe('passed');
+       |                  ^
+     94|     const stale = await runDshOnboardingAttempt({ output, label: 'base…
+     95|       await writeFile(reportPath, JSON.stringify({ ...passed(), runId:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  test/dsh-onboarding-ci.test.ts > onboarding fresh attempts and serial resource ownership > rejects a linked report before accepting its otherwise valid contents
+AssertionError: expected undefined to match object { category: 'infrastructure', …(1) }
+
+- Expected: 
+{
+  "category": "infrastructure",
+  "check": "probe-report",
+}
+
++ Received: 
+undefined
+
+ ❯ test/dsh-onboarding-ci.test.ts:107:20
+    105|       await symlink(target, reportPath, 'file'); return processResult;
+    106|     });
+    107|     expect(result).toMatchObject({ category: 'infrastructure', check: …
+       |                    ^
+    108|   });
+    109| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  test/dsh-onboarding-ci.test.ts > onboarding fresh attempts and serial resource ownership > retains an installation with incomplete release and never enters the next build or removes it
+AssertionError: expected [] to deeply equal [ 'install:baseline', 'probe' ]
+
+- Expected
++ Received
+
+- [
+-   "install:baseline",
+-   "probe",
+- ]
++ []
+
+ ❯ test/dsh-onboarding-ci.test.ts:118:20
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  test/dsh-onboarding-ci.test.ts > onboarding fresh attempts and serial resource ownership > uses the same candidate twice only after both observed runtime and installation releases
+AssertionError: expected undefined to match object { tool: 'dsh-onboarding', …(2) }
+
+- Expected: 
+{
+  "classification": {
+    "kind": "regression",
+    "notify": true,
+  },
+  "installationCleanup": "removed",
+  "tool": "dsh-onboarding",
+}
+
++ Received: 
+undefined
+
+ ❯ test/dsh-onboarding-ci.test.ts:133:20
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 13 passed (17)
+   Start at  10:13:37
+   Duration  319ms (transform 72ms, setup 0ms, collect 96ms, tests 15ms, environment 0ms, prepare 79ms)
+

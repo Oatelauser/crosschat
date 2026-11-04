@@ -1,12 +1,12 @@
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { TCP_STATUS_FRESH_MS } from '../status/status-files.js';
+import type { SkillTarget } from './skills.js';
 
 export interface UninstallEnvironment {
   crosschatHome: string;
   stateRoot: string;
   legacyStateRoots: string[];
-  skillDirs: string[];
   now(): number;
 }
 export interface UninstallTarget { label: string; path: string }
@@ -29,13 +29,12 @@ export function uninstallServeRunning(deps: UninstallEnvironment): boolean {
   });
 }
 /** Preserve the command's ordered scope and exact-string deduplication. */
-export function uninstallTargets(deps: UninstallEnvironment): UninstallTarget[] {
+export function uninstallTargets(deps: UninstallEnvironment, skills: readonly SkillTarget[]): UninstallTarget[] {
   const items = [
     { label: 'crosschat 配置、转发器与状态（tcp 注册表/status/log/inbox/parts + outbox/send-log/conversations/mailbox）', path: deps.crosschatHome },
     { label: '状态目录（outbox/send-log/conversations/mailbox）', path: deps.stateRoot },
     ...deps.legacyStateRoots.map((path) => ({ label: '旧版状态目录（014 前路径）', path })),
-    { label: 'claude 侧 skill', path: deps.skillDirs[0] ?? '' },
-    { label: 'codex 侧 skill', path: deps.skillDirs[1] ?? '' },
+    ...skills.map(({ label, path }) => ({ label, path })),
   ];
   const seen = new Set<string>();
   return items.filter((item) => {

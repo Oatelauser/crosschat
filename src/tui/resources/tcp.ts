@@ -1,3 +1,4 @@
+import { isEndpointTypeFor, toolTypeFor } from '../../tool-types.js';
 import type { TcpApplication, TcpCredential, TcpMember, TcpReadResult, TcpRole, TcpSession, TcpStar, TcpStarResult } from '../../application/tcp/model.js';
 import type { TcpManagement, TcpManagementAction, TcpManagementRequest, TcpManagementSecret } from '../../application/tcp/management.js';
 import type { LocalServices } from '../../application/services/managed.js';
@@ -6,6 +7,7 @@ import type { TuiAction, TuiActionAvailability, TuiActionRequest, TuiColumn, Tui
 import { createStatusRegistry } from './status.js';
 import type { StatusRegistry } from './status.js';
 import { withTcpBrokerServices } from './tcp-services.js';
+import { formatSendCommand } from '../send-command.js';
 
 export interface TcpResourcesOptions { tcp: TcpApplication; management?: TcpManagement; statusRegistry?: StatusRegistry; services?: LocalServices }
 type ResourceId = 'stars' | 'machines' | 'members' | 'keys' | 'sessions';
@@ -41,11 +43,11 @@ function definitions(owner: ResourceId, nodeSessions = false): readonly TuiActio
   if (owner === 'keys') return [detailAction(owner), ...views, ...issuance, copyAction(owner, '复制凭证 label'), infoAction(owner)];
   const provider = action(owner, 'filter-provider', '工具筛选', 't', 'filter', { filterId: 'provider', selectionPolicy: 'none' });
   const named = action(owner, 'filter-named', '所有会话 / 仅命名', 'u', 'filter', { filterId: 'named', selectionPolicy: 'none' });
-  if (owner === 'members') return [detailAction(owner), ...views, action(owner, 'adopt-session', '选择会话入星', 'a', 'navigate', { selectionPolicy: 'none' }), mutation(owner, 'rename-session', '原生改名', 'e'), mutation(owner, 'remove-member', '删除成员', 'Ctrl+D'), ...issuance, provider, named, action(owner, 'filter-presence', '星籍状态筛选', 's', 'filter', { filterId: 'presence', selectionPolicy: 'none' }), copyAction(owner, '复制可用成员地址'), infoAction(owner)];
+  if (owner === 'members') return [detailAction(owner), ...views, action(owner, 'adopt-session', '选择会话入星', 'a', 'navigate', { selectionPolicy: 'none' }), mutation(owner, 'rename-session', '原生改名', 'e'), mutation(owner, 'remove-member', '删除成员', 'Ctrl+D'), ...issuance, provider, named, action(owner, 'filter-presence', '星籍状态筛选', 's', 'filter', { filterId: 'presence', selectionPolicy: 'none' }), copyAction(owner, '复制发送命令'), infoAction(owner)];
   return [nodeSessions ? detailAction(owner) : action(owner, 'open', '进入所属节点会话', 'Enter', 'navigate'), ...(!nodeSessions ? [detailAction(owner, 'd')] : []),
     ...views, action(owner, 'machines', '切回节点列表', 'v', 'navigate', { selectionPolicy: 'none' }), action(owner, 'scope', '星内成员 / 可发现会话', 'b', 'route-choice', { selectionPolicy: 'none' }), provider, named,
     action(owner, 'filter-status', '原生状态筛选', 's', 'filter', { filterId: 'status', selectionPolicy: 'none' }), mutation(owner, 'adopt-session', '所选会话入星', 'a'), mutation(owner, 'rename-session', '原生改名', 'e'), mutation(owner, 'remove-member', '删除成员', 'Ctrl+D'), ...issuance,
-    action(owner, 'deliveries', '本机已知的相关投递', 'o', 'navigate'), action(owner, 'guide', '原生工具 / 寻址指引', 'g', 'detail', { viewId: 'guide' }), action(owner, 'logs', '相关 crosschat 日志', 'l', 'navigate'), copyAction(owner, '复制可用会话地址'),
+    action(owner, 'deliveries', '本机已知的相关投递', 'o', 'navigate'), action(owner, 'guide', '原生工具 / 寻址指引', 'g', 'detail', { viewId: 'guide' }), action(owner, 'logs', '相关 crosschat 日志', 'l', 'navigate'), copyAction(owner, '复制发送命令'),
     action(owner, 'copy-ref', '复制完整会话引用', 'Y', 'copy', { copyKey: 'ref' }), infoAction(owner)];
 }
 function route(resourceId: ResourceId | 'logs', contextId: string, starId?: string, extra: Record<string, string> = {}): TuiRoute {
@@ -72,8 +74,8 @@ function readInfo(result: TcpReadResult, additional: readonly TuiField[] = []): 
     { label: '来源与下一步', value: result.errors.length ? result.errors.map((error) => `${error.source} <${error.kind}>：${error.message}\n${error.nextStep}`).join('\n\n') : '无来源错误。' }] };
 }
 function target(rowId: string, targetId: string, starId: string, revision?: string): string { return json({ rowId, targetId, starId, ...(revision ? { revision } : {}) }); }
-function operationTarget(rowId: string, starId: string, item: { machineId: string; providerId: string | null; nativeId: string }): string {
-  return json({ rowId, starId, machineId: item.machineId, providerId: item.providerId, nativeId: item.nativeId });
+function operationTarget(rowId: string, starId: string, item: { machineId: string; providerId: string | null; nativeId: string; endpointType?: string }): string {
+  return json({ rowId, starId, machineId: item.machineId, providerId: item.providerId, nativeId: item.nativeId, ...(item.endpointType === undefined ? {} : { endpointType: item.endpointType }) });
 }
 function memberDetails(member: TcpMember): TuiField[] {
   return [{ label: '完整册位标识', value: member.id }, { label: '星标识', value: member.starId }, { label: '完整机器标识', value: member.machineId }, { label: '所属节点', value: member.machineName ?? '未提供' },
@@ -85,7 +87,11 @@ function credentialDetails(item: TcpCredential): TuiField[] {
     { label: '绑定机器', value: item.machineId ?? '尚未绑定' }, { label: '节点名称', value: item.machineName ?? '未提供' }, { label: '登记时间', value: item.addedAt }, { label: '秘密', value: '列表与详情不回显 key/adminKey；仅显式发钥结果提供一次性材料。' }];
 }
 function copyAvailability(address?: string, reason?: string): Record<string, TuiActionAvailability> {
-  return address ? {} : { copy: disabled(reason ?? '此条记录没有可核实的现有发送地址。', '使用完整标识在对应原生工具核对身份；不把裸名称或短 ID 当成唯一地址。') };
+  return address ? {} : { copy: disabled(reason ?? '此条记录缺少已核实的收件类型或完整发送地址。', '核对完整原生标识、入口类型与星成员资格后刷新。') };
+}
+function sendCommand(item: Pick<TcpMember, 'providerId' | 'endpointType' | 'address'>): string | undefined {
+  const tool = item.providerId === null ? undefined : toolTypeFor(item.providerId, item.endpointType);
+  return tool === undefined || item.address === undefined ? undefined : formatSendCommand({ tool, via: item.address });
 }
 function groupPresence<T extends { presence: keyof typeof presenceLabels }>(items: readonly T[]): T[] {
   const order = { online: 0, offline: 1, unknown: 2 };
@@ -99,9 +105,9 @@ function refreshPause(signal: AbortSignal): Promise<void> {
     if (signal.aborted) finish();
   });
 }
-function filters(items: readonly { providerId: string | null; name: string | null }[], presence = false): TuiFilter[] {
+function filters(items: readonly { providerId: string | null; name: string | null; endpointType?: string }[], presence = false): TuiFilter[] {
   return [
-    { id: 'provider', label: '工具', mode: 'select', defaultValue: '', options: [{ value: '', label: '所有工具' }, ...[...new Set(items.flatMap((item) => item.providerId === null ? [] : [item.providerId]))].sort().map((providerId) => ({ value: providerId, label: providerId }))] },
+    { id: 'provider', label: '工具', mode: 'select', defaultValue: '', options: [{ value: '', label: '所有工具' }, ...[...new Set(items.flatMap((item) => item.providerId === null ? [] : [toolTypeFor(item.providerId, item.endpointType) ?? item.providerId]))].sort().map((providerId) => ({ value: providerId, label: providerId }))] },
     { id: 'named', label: '匿名', mode: 'toggle', defaultValue: '', options: [{ value: '', label: '所有会话（含匿名）' }, { value: 'named', label: '仅命名会话' }] },
     ...(presence ? [{ id: 'presence', label: '星籍状态', mode: 'select' as const, defaultValue: '', options: [{ value: '', label: '全部星籍状态' }, ...Object.entries(presenceLabels).map(([value, label]) => ({ value, label }))] }] : []),
   ];
@@ -145,9 +151,10 @@ export function createTcpResources(options: TcpResourcesOptions): Record<Resourc
         try {
           const value: unknown = JSON.parse(request.target?.copyValues?.operationTarget ?? '');
           if (!isRecord(value) || value.rowId !== request.target?.id || value.starId !== request.route?.query?.starId
-            || typeof value.machineId !== 'string' || typeof value.providerId !== 'string' || typeof value.nativeId !== 'string') return undefined;
+            || typeof value.machineId !== 'string' || typeof value.providerId !== 'string' || typeof value.nativeId !== 'string'
+            || value.endpointType !== undefined && !isEndpointTypeFor(value.providerId, value.endpointType)) return undefined;
           return { contextId: request.context!.id, action: request.action.id, starId: String(value.starId), targetId: request.target!.id,
-            sessionTarget: { machineId: value.machineId, providerId: value.providerId, nativeId: value.nativeId }, values: { ...request.values }, signal: request.signal };
+            sessionTarget: { machineId: value.machineId, providerId: value.providerId, nativeId: value.nativeId, ...(typeof value.endpointType === 'string' ? { endpointType: value.endpointType } : {}) }, values: { ...request.values }, signal: request.signal };
         } catch { return undefined; }
       }
       let rowTarget: RowTarget | undefined;
@@ -276,17 +283,18 @@ export function createTcpResources(options: TcpResourcesOptions): Record<Resourc
   }
   function sessionRow(item: TcpSession, current: TcpStar, contextId: string): TuiRow {
     const ref = item.ref ? json(item.ref) : undefined;
+    const command = sendCommand(item);
     const scope = `${current.name ?? current.starId} / ${item.machineName ?? item.mid8} (${item.machineId})`;
     const memberState = item.membership === 'member' ? `成员 · ${currentPresence(item.presence)}` : item.membership === 'not-member' ? '未入星<not-member>' : '星籍未核实<unknown>';
-    return { id: item.id, contextId, cells: { name: item.name || '匿名', provider: item.providerId ?? '未提供', machine: item.machineName ?? item.mid8, mid8: item.mid8, status: statuses.format(item.providerId ?? '', item.rawStatus), membership: memberState, directory: typeof item.attributes.cwd === 'string' ? item.attributes.cwd : '—' },
-      facets: { provider: item.providerId ?? '', named: item.name ? 'named' : 'anonymous', status: JSON.stringify(item.rawStatus), presence: item.presence },
+    return { id: item.id, contextId, cells: { name: item.name || '匿名', provider: item.providerId === null ? '未提供' : toolTypeFor(item.providerId, item.endpointType) ?? item.providerId, machine: item.machineName ?? item.mid8, mid8: item.mid8, status: statuses.format(item.providerId ?? '', item.rawStatus), membership: memberState, directory: typeof item.attributes.cwd === 'string' ? item.attributes.cwd : '—' },
+      facets: { provider: item.providerId === null ? '' : toolTypeFor(item.providerId, item.endpointType) ?? item.providerId, named: item.name ? 'named' : 'anonymous', status: JSON.stringify(item.rawStatus), presence: item.presence },
       searchText: `${item.name ?? ''} ${item.providerId ?? ''} ${item.nativeId} ${item.machineId} ${item.machineName ?? ''} ${json(item.rawStatus)} ${item.presence} ${item.membership}`,
-      copyValue: item.address, copyValues: { operationTarget: operationTarget(item.id, current.starId, item), ...(ref ? { ref } : {}), ...(item.member ? { target: target(item.id, item.member.id, current.starId) } : {}) },
-      actionAvailability: { ...copyAvailability(item.address, item.addressReason), ...(!item.member ? { 'remove-member': disabled('此行没有可核验的星册位；不会删除原生会话。') } : {}), ...(!ref ? { 'copy-ref': disabled('成员册未提供足够信息来构造完整原生会话引用。') } : {}) },
+      copyValue: command, copyValues: { operationTarget: operationTarget(item.id, current.starId, item), ...(ref ? { ref } : {}), ...(item.member ? { target: target(item.id, item.member.id, current.starId) } : {}) },
+      actionAvailability: { ...copyAvailability(command, item.addressReason), ...(!item.member ? { 'remove-member': disabled('此行没有可核验的星册位；不会删除原生会话。') } : {}), ...(!ref ? { 'copy-ref': disabled('成员册未提供足够信息来构造完整原生会话引用。') } : {}) },
        actionRoutes: { open: route('sessions', contextId, current.starId, { machineId: item.machineId, scope: 'discoverable' }) },
       detail: [{ label: '名称', value: item.name || '匿名' }, { label: '星 / 所属节点', value: scope }, { label: '完整原生 ID', value: item.nativeId }, { label: '完整会话引用', value: ref ?? '来源不足；未伪造引用' }, { label: '原生状态', value: json(item.rawStatus) }, { label: '星籍', value: memberState }, { label: '目录', value: typeof item.attributes.cwd === 'string' ? item.attributes.cwd : '未提供' }, ...(item.member ? memberDetails(item.member) : [])],
       detailViews: { guide: { title: '原生工具与寻址指引', fields: [{ label: '目标', value: scope }, { label: '原生操作', value: `请回到该节点同一用户的 ${item.providerId ?? '对应工具'} 原生窗口继续聊天。若要恢复，在该节点原生工具中按完整 ID 核对；不要在本机另开窗口冒充该会话。` },
-        { label: '现有地址', value: item.address ?? item.addressReason ?? '此来源没有可核验的现有地址；完整标识仅用于核对身份。' }, { label: '完整原生 ID', value: item.nativeId }, { label: 'TUI 边界', value: '只读与管理明确册位；不代任何原生会话发言、不结束原生进程。' }] } },
+        { label: '发送命令', value: command ?? item.addressReason ?? '此来源缺少已核实的收件类型或地址；完整标识仅用于核对身份。' }, { label: '完整原生 ID', value: item.nativeId }, { label: 'TUI 边界', value: '只复制发送命令并管理明确册位；不代任何原生会话发言、不结束原生进程。' }] } },
     };
   }
   function starPage(owner: 'machines' | 'members' | 'keys', result: TcpStarResult, contextId: string, local: boolean): TuiPage {
@@ -301,8 +309,8 @@ export function createTcpResources(options: TcpResourcesOptions): Record<Resourc
         actionAvailability: item.presence === 'online' ? {} : { 'rename-node': disabled('修改本星节点名需要目标机器在线。', '等待该机器上线后刷新；不会只改 broker 的名字副本。') },
         detail: [{ label: '所属星', value: `${current.name ?? current.starId} (${current.starId})` }, { label: '完整机器标识', value: item.machineId }, { label: '节点名称', value: item.name ?? '未提供' }, { label: '节点凭证 label', value: item.labels.join('\n') }, { label: '机器连接', value: currentPresence(item.presence) }, { label: '登记时间', value: item.addedAt ?? '未提供' }] };
     });
-    else if (owner === 'members') rows = groupPresence(result.members).map((item) => ({ id: item.id, contextId, cells: { name: item.name || '匿名', provider: item.providerId ?? '未提供', machine: item.machineName ?? item.machineId.slice(0, 8), presence: currentPresence(item.presence), succession: item.extendsName ? `接任 ${item.extendsName}` : '—' }, facets: { provider: item.providerId ?? '', named: item.name ? 'named' : 'anonymous', presence: item.presence },
-      copyValue: item.address, copyValues: { target: target(item.id, item.id, current.starId), operationTarget: operationTarget(item.id, current.starId, item) }, actionAvailability: copyAvailability(item.address, item.addressReason), searchText: `${item.name ?? ''} ${item.providerId ?? ''} ${item.machineId} ${item.nativeId} ${item.presence} ${item.extendsName ?? ''} ${item.extendsMachine ?? ''}`, detail: memberDetails(item) }));
+    else if (owner === 'members') rows = groupPresence(result.members).map((item) => ({ id: item.id, contextId, cells: { name: item.name || '匿名', provider: item.providerId === null ? '未提供' : toolTypeFor(item.providerId, item.endpointType) ?? item.providerId, machine: item.machineName ?? item.machineId.slice(0, 8), presence: currentPresence(item.presence), succession: item.extendsName ? `接任 ${item.extendsName}` : '—' }, facets: { provider: item.providerId === null ? '' : toolTypeFor(item.providerId, item.endpointType) ?? item.providerId, named: item.name ? 'named' : 'anonymous', presence: item.presence },
+      copyValue: sendCommand(item), copyValues: { target: target(item.id, item.id, current.starId), operationTarget: operationTarget(item.id, current.starId, item) }, actionAvailability: copyAvailability(sendCommand(item), item.addressReason), searchText: `${item.name ?? ''} ${item.providerId ?? ''} ${item.machineId} ${item.nativeId} ${item.presence} ${item.extendsName ?? ''} ${item.extendsMachine ?? ''}`, detail: memberDetails(item) }));
     else rows = result.credentials.map((item): TuiRow => ({ id: item.id, contextId, cells: { name: item.label, kind: item.kind === 'admin' ? '星管理钥<admin>' : '节点钥匙<node>', machine: item.kind === 'admin' ? '管理权限（非机器）' : item.machineName ?? (item.machineId === null ? '尚未绑定机器' : item.machineId.slice(0, 8)), mid8: item.machineId?.slice(0, 8) ?? '—', addedAt: item.addedAt },
       copyValue: item.label, copyValues: { target: target(item.id, item.id, current.starId, item.revision) }, searchText: `${item.label} ${item.kind} ${item.machineId ?? ''} ${item.machineName ?? ''} ${item.addedAt}`,
       actionAvailability: item.kind === 'admin' && current.role !== 'broker-owner' ? { 'revoke-credential': disabled('星管理员不能撤销同侪管理钥。', '请 broker 主在本机接入凭证列表撤销该管理钥。') } : {}, detail: credentialDetails(item) }));

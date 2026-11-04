@@ -1,0 +1,114 @@
+{
+  "schema": 1,
+  "tool": "claude-code-cli",
+  "platform": "win32",
+  "arch": "x64",
+  "runId": "b896574d-ca87-4e58-8357-f7c48d1c67ee",
+  "version": "2.1.309",
+  "scope": {
+    "officialNativeCLI": true,
+    "productionWrapper": true,
+    "scriptedLocalModel": true,
+    "streamJSON": true,
+    "interactiveTUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "startedAt": "2026-10-23T07:34:42.514Z",
+  "status": "failed",
+  "category": "compatibility",
+  "stage": "contract",
+  "check": "busy-steer-step-boundary",
+  "checks": [
+    {
+      "name": "official-wrapper-and-native-session-registration",
+      "status": "passed",
+      "elapsedMs": 1921
+    },
+    {
+      "name": "messages-model-and-native-bash-identity",
+      "status": "passed",
+      "elapsedMs": 310
+    },
+    {
+      "name": "production-discovery-and-idle-queue-steer",
+      "status": "passed",
+      "elapsedMs": 5585
+    },
+    {
+      "name": "busy-queue-step-boundary",
+      "status": "passed",
+      "elapsedMs": 2646
+    }
+  ],
+  "sessions": [
+    {
+      "id": "822d3440-95b3-4c61-9a6b-09c9fb187c45",
+      "name": "CC_CI_b896574dca874e588357f7c48d1c67ee_sender",
+      "wrapperPid": 37952,
+      "nativePid": 43940
+    },
+    {
+      "id": "37a2db21-5975-4d8c-80db-03ec174417d4",
+      "name": "CC_CI_b896574dca874e588357f7c48d1c67ee_receiver",
+      "wrapperPid": 1808,
+      "nativePid": 40584
+    }
+  ],
+  "nativeIdentity": {
+    "sessionsVerified": 2,
+    "actualBash": true,
+    "sessionAndSocketMatchRegistry": true,
+    "isolatedHome": true,
+    "isolatedCwd": true
+  },
+  "idleDelivery": {
+    "discoveryCount": 2,
+    "pageLimit": 1,
+    "queue": true,
+    "steer": true,
+    "deliveriesPerMode": 1
+  },
+  "queueBoundary": {
+    "nativeToolCompleted": true,
+    "gatePid": 34980,
+    "enteredAfterTool": false,
+    "resultCount": 2,
+    "deliveryCount": 1,
+    "originalAckInQueuedHistory": true,
+    "observedResultsAtQueuedRequest": 4
+  },
+  "error": "Queue waits until turn completion; steer joins after the original tool step\n\nfalse !== true\n",
+  "modelRequestCount": 11,
+  "nativeResults": [
+    {
+      "id": "822d3440-95b3-4c61-9a6b-09c9fb187c45",
+      "count": 1,
+      "errors": 0
+    },
+    {
+      "id": "37a2db21-5975-4d8c-80db-03ec174417d4",
+      "count": 6,
+      "errors": 0
+    }
+  ],
+  "stderr": [
+    {
+      "id": "822d3440-95b3-4c61-9a6b-09c9fb187c45",
+      "text": ""
+    },
+    {
+      "id": "37a2db21-5975-4d8c-80db-03ec174417d4",
+      "text": ""
+    }
+  ],
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "modelClosed": true,
+    "removed": true,
+    "forced": false,
+    "errors": []
+  },
+  "finishedAt": "2026-10-23T07:34:56.598Z"
+}

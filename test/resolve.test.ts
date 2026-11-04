@@ -54,6 +54,32 @@ describe('resolveTargetById', () => {
 });
 
 describe('resolveTargetByName', () => {
+  it('prioritizes a full native ID in an explicitly selected type so a same-shaped name cannot shadow copied commands', () => {
+    const first = { id: '01234567-0000-4000-8000-000000000000', name: 'first', endpointType: 'cli' };
+    const second = { id: '11234567-0000-4000-8000-000000000000', name: first.id, endpointType: 'cli' };
+    const selected = { providerId: 'codex', endpointType: 'cli' };
+    expect(resolveTargetByName(first.id, [], [first, second])).toMatchObject({ thread: second });
+    expect(resolveTargetByName(first.id, [], [first, second], [], [], selected)).toMatchObject({ thread: first });
+    expect(resolveTargetByName(`codex-cli/${first.id}`, [], [first, second])).toMatchObject({ thread: first });
+    expect(resolveTargetById(first.id, [], [first, second], [], [], selected)).toMatchObject({ thread: first });
+  });
+
+  it.each(['01234567-0000-4000-8000-000000000000', 'codex/01234567-0000-4000-8000-000000000000'])(
+    'requires a delivery type when a full native ID exists in both Codex endpoints: %s', (query) => {
+      const id = '01234567-0000-4000-8000-000000000000';
+      const endpoints = [
+        { id, name: null, endpointType: 'desktop' },
+        { id, name: null, endpointType: 'cli' },
+      ];
+      const error = expectCode(() => resolveTargetByName(query, [], endpoints), 'NAME_COLLISION');
+      expect(error.message).toContain('--tool');
+      expect(error.message).toContain('codex-cli');
+      expect(error.message).toContain('codex-desktop');
+      expect(resolveTargetByName(id, [], endpoints, [], [], { providerId: 'codex', endpointType: 'cli' }))
+        .toMatchObject({ side: 'codex', thread: { id, endpointType: 'cli' } });
+    },
+  );
+
   it('resolves a unique claude name', () => {
     const resolved = resolveTargetByName('alpha', sessions, threads);
     expect(resolved.side).toBe('claude');

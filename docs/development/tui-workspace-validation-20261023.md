@@ -26,7 +26,9 @@
 - TUI 规格复核实际复跑 8 文件 85 项，发现跨星历史返回仍把旧身份标已核验。补成功、失败、取消与界面标记回归后，相关 6 文件 81 项通过，独立复核 2 文件 18 项通过。没有后端权限绕过；现已在返回时重新读取，核验期间禁写，失败/取消标上次身份并禁写。
 - 全量检查暴露既有可执行 ESM 脚本的 Windows CRLF 导入问题，最小修复仅 `.gitattributes` 的 `scripts/*.mjs text eol=lf`，没有脚本业务改动、插件、依赖补丁或 skip；见[换行证据](tui-script-line-endings-validation-20261023.md)。
 - 独立工作树起点含另一会话 DSH 功能的 RED stub；通过 `30b8a6d` 合并原仓库已提交 `e928f82` 纳入该会话 GREEN，没有代做 DSH 或复制未提交文件。DSH/OpenCode 两套标准检查 27 项通过。
-- 原组合开发分支还复现并修复其他会话桌面测试工装的 CIM 快照竞态；原真实 occupied/clear 断言保持，新增 3 边界及原 suite 共 16 项通过（检查点 `8dfffc8`、`f9519f2`）。该他人工装与对应修复不属于干净 1.12.0 发布范围。原首次失败日志未保留 unknown.error，不追认其唯一原因。
+- 并行检查还复现了既有桌面测试工装的 CIM 快照竞态：无关短路径临时进程在采样后退出并删除文件。只在路径 ENOENT 且对应 PID 明确 ESRCH 时忽略过期记录，存活或权限不明仍拒绝清理；原真实 occupied/clear 断言保持。新增 3 边界及原 suite 共 16 项通过，见[快照证据](desktop-process-snapshot-race-validation-20261023.md)。原首次失败日志未保留 unknown.error，不追认其唯一原因。
+
+历史发布范围补记：上述其他会话的工装与修复未纳入1.12.0干净发布，原组合开发验收与发布验收分别保留。
 
 ## 最终仓库检查
 
@@ -47,7 +49,7 @@
 
 以下目录均位于 `C:/Users/YANGSH~1/AppData/Local/Temp/`，含业务 JSONL 与 PTY 原始记录：
 
-用户要求清理后，23 个本轮终端临时目录及 6 份日志已完整归档至 `C:/Users/yangsheng/.codex/artifacts/crosschat/tui-workspaces-20261023/validation-evidence.zip`，同目录 `manifest.json` 记录全部 180 文件的长度与 SHA256；逐文件解压验证通过。归档 SHA256：`ae6035e8d4676595160a8109d1ceb1d82c50dddda04502243bacdb46a2a51531`。下表保留原始证据位置作为档案索引；自动审批拒绝了批量递归删除及单个日志删除（均为 blocked by policy），原临时文件尚未删除。
+历史归档/删除状态（2026-10-23，现状未重新核实）：用户要求清理后，23 个本轮终端临时目录及 6 份日志已完整归档至 `C:/Users/yangsheng/.codex/artifacts/crosschat/tui-workspaces-20261023/validation-evidence.zip`，同目录 `manifest.json` 记录全部 180 文件的长度与 SHA256；逐文件解压验证通过。归档 SHA256：`ae6035e8d4676595160a8109d1ceb1d82c50dddda04502243bacdb46a2a51531`。下表保留原始证据位置作为档案索引；自动审批拒绝了批量递归删除及单个日志删除（均为 blocked by policy），原临时文件尚未删除。
 
 | 组别 | 场景数 | 完整首轮证据目录 |
 |---|---:|---|
@@ -69,4 +71,6 @@
 
 ## 集成与收尾
 
-本轮实现、规范检查、独立复核、隔离真实协议、原生 SSH 和终端验收已完成，活动任务清单删除。集成至原工作区时保留其他会话的 README 未提交修改及 research 文档，不暂存、不覆盖；只集成本轮提交并重新构建。工作区改造不触发 npm 发布或远端部署。
+本轮实现、规范检查、独立复核、隔离真实协议、原生 SSH 和终端验收已完成，活动任务清单删除。已通过 `56fd442` 合并至 `D:/workspace/CC/multichat` 的 `codex/core-refactor-pre-tui`，该工作区重新 build 与 import 检查通过。合并前检查本轮文件与其他会话未提交文件无交集；合并后原 11 个未提交文件的内容 SHA256 及状态全部一致，README、Claude 兼容性开发及 research 文件均未暂存或覆盖。
+
+原工作区同期另有 `abe1d7b` 开始的 Claude 兼容性 RED/GREEN 工作及未提交文件；2041 项全量结果对应本轮隔离固定版本，不声称验收了该会话尚在变化的工作。工作区改造没有触发 npm 发布或远端部署。

@@ -1,0 +1,13 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-int-20261104
+
+ ✓ test/opencode-command-fixture.test.ts (7 tests) 10ms
+ ✓ test/opencode-desktop-fixture.test.ts (13 tests) 1739ms
+   ✓ official desktop test environment > reports an unregistered executable under the owned run before allowing cleanup  1204ms
+ ✓ test/opencode-desktop-process-race.test.ts (6 tests) 4ms
+
+ Test Files  3 passed (3)
+      Tests  26 passed (26)
+   Start at  15:34:25
+   Duration  2.29s (transform 153ms, setup 0ms, collect 263ms, tests 1.75s, environment 0ms, prepare 232ms)
+

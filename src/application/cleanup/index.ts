@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { FILE_STALE_MS, INBOX_MAX_BYTES } from '../../serve/file-channel.js';
+import { readConversationShard } from '../../conversations.js';
 
 /** Keep the CLI's existing thirty-day conversation-shard retention rule. */
 export const SHARD_STALE_MS = 30 * 24 * 3_600_000;
@@ -105,8 +106,22 @@ export function planCleanup(args: CleanupArgs, deps: CleanupDeps): CleanupPlan {
     total -= entry.size;
     targets.push({ ...entry, reason: 'inbox-capacity' });
   }
+  // Keep one copy of the highest allocation progress, even if all pairs are
+  // stale. An unreadable shard might carry a higher value: only an explicit
+  // force reset may discard numbering state that cannot be verified.
+  let highest = 0;
+  let keeper: string | undefined;
+  let complete = true;
   for (const entry of shards) {
-    if (entry.mtime < shardCutoff) targets.push({ ...entry, reason: 'shard-expired' });
+    const record = readConversationShard(entry.file);
+    if (record === undefined) { complete = false; continue; }
+    if ((record.handleSequence ?? 0) > highest) {
+      highest = record.handleSequence!;
+      keeper = entry.file;
+    }
+  }
+  if (complete) for (const entry of shards) {
+    if (entry.file !== keeper && entry.mtime < shardCutoff) targets.push({ ...entry, reason: 'shard-expired' });
   }
   return { ...plan, targets };
 }

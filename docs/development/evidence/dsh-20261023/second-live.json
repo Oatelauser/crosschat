@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "tool": "dsh-web-runtime",
+  "platform": "win32",
+  "arch": "x64",
+  "runId": "98ca39b6-7196-421c-bbd0-400ff84411f0",
+  "version": "0.2.1-rc.2",
+  "startedAt": "2026-10-23T05:11:14.088Z",
+  "status": "passed",
+  "category": null,
+  "stage": "done",
+  "checks": [
+    {
+      "name": "official-plugin-installation-and-owned-web-runtime",
+      "status": "passed",
+      "elapsedMs": 2
+    },
+    {
+      "name": "public-web-session-controller-creates-interactive-sessions",
+      "status": "passed",
+      "elapsedMs": 256
+    },
+    {
+      "name": "messages-model-and-native-shell-identity-bootstrap",
+      "status": "passed",
+      "elapsedMs": 1197
+    },
+    {
+      "name": "authenticated-production-discovery-and-pagination",
+      "status": "passed",
+      "elapsedMs": 386
+    },
+    {
+      "name": "idle-production-delivery-wakes-the-existing-session",
+      "status": "passed",
+      "elapsedMs": 2547
+    },
+    {
+      "name": "busy-native-queue-and-steer-step-boundaries",
+      "status": "passed",
+      "elapsedMs": 5375
+    },
+    {
+      "name": "native-shell-send-and-conversation-reply-have-full-session-identities",
+      "status": "passed",
+      "elapsedMs": 5841
+    },
+    {
+      "name": "missing-target-does-not-create-or-resume-a-replacement",
+      "status": "passed",
+      "elapsedMs": 505
+    }
+  ],
+  "scope": {
+    "officialNpmRuntime": true,
+    "officialPluginManager": true,
+    "ordinaryWebSessions": true,
+    "scriptedLocalModel": true,
+    "browserUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "installation": {
+    "code": 0,
+    "timedOut": false,
+    "stdout": "Progress: resolved 1, reused 0, downloaded 0, added 0\nPackages: +1\n+\nPackages are hard linked from the content-addressable store to the virtual store.\n  Content-addressable store is at: D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291\\run-hDFq3m\\pnpm-home\\store\\v11\n  Virtual store is at:             node_modules/.pnpm\nProgress: resolved 1, reused 1, downloaded 0, added 1, done\n\ndependencies:\n+ @crosschat/dsh-bridge @crosschat/dsh-bridge@file:../../../../../../../integrations/dsh\n\nDone in 545ms using pnpm v11.28.5\n",
+    "stderr": "dsh: initialized profile web at D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291\\run-hDFq3m\\dsh-home\\profiles\\web\n"
+  },
+  "runtimePid": 41808,
+  "webPort": 54861,
+  "sessionIds": {
+    "idle": "session-96f200a6-1e9d-401f-8380-a43db5536483",
+    "busy": "session-31bedf31-9046-415c-b953-0316269df9d2",
+    "sender": "session-64759604-2455-4cb0-a330-111436e838af",
+    "receiver": "session-e04173bf-ae9d-4326-bda0-fbe9dab1793b"
+  },
+  "bootstrapModelRequests": 2,
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  },
+  "logs": {
+    "stdout": "dsh web: http://127.0.0.1:54861/?token=[redacted]\n",
+    "stderr": ""
+  },
+  "finishedAt": "2026-10-23T05:11:34.981Z"
+}

@@ -1,0 +1,245 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-int-20261104
+
+ ❯ test/opencode-desktop-process-race.test.ts (6 tests | 2 failed) 11ms
+   ✓ desktop executable snapshot races > reports the bounded CIM timeout without trusting a partial process table 2ms
+   × desktop executable snapshot races > keeps startup expiry distinct from an expired metadata query 6ms
+     → expected { state: 'unknown', …(2) } to match object { state: 'unknown', …(1) }
+(1 matching property omitted from actual)
+   × desktop executable snapshot races > rejects a complete-looking table if module readiness was never confirmed 1ms
+     → expected { state: 'occupied', …(1) } to match object { state: 'unknown', …(2) }
+   ✓ desktop executable snapshot races > ignores an unrelated short-path executable only after the sampled process has explicitly exited 0ms
+   ✓ desktop executable snapshot races > retains unknown when a missing executable path still belongs to a live sampled PID 0ms
+   ✓ desktop executable snapshot races > retains unknown when the PID zero-signal check is denied or otherwise cannot establish exit 0ms
+ ❯ test/opencode-command-fixture.test.ts (7 tests | 6 failed) 17ms
+   × owned fixture command readiness and operation budgets > allows bounded startup then gives the ready command its full operation budget 7ms
+     → expected "kill" to not be called at all, but actually been called 1 times
+
+Received: 
+
+  1st kill call:
+
+    Array []
+
+
+Number of calls: 1
+
+   × owned fixture command readiness and operation budgets > bounds missing readiness and ignores a marker that arrives after expiry 4ms
+     → expected { code: null, signal: 'SIGTERM', …(3) } to match object { timedOut: true, ready: false, …(1) }
+(4 matching properties omitted from actual)
+   × owned fixture command readiness and operation budgets > does not extend an operation when readiness is repeated 2ms
+     → expected { code: null, signal: 'SIGTERM', …(3) } to match object { timedOut: true, ready: true, …(1) }
+(4 matching properties omitted from actual)
+   × owned fixture command readiness and operation budgets > requires the complete readiness line rather than a substring or an overlong suffix 1ms
+     → expected "kill" to not be called at all, but actually been called 1 times
+
+Received: 
+
+  1st kill call:
+
+    Array []
+
+
+Number of calls: 1
+
+   × owned fixture command readiness and operation budgets > does not infer readiness from a successful exit or JSON-looking output 1ms
+     → expected { code: +0, signal: null, …(3) } to match object { code: +0, ready: false, …(1) }
+(3 matching properties omitted from actual)
+   ✓ owned fixture command readiness and operation budgets > preserves the original single timeout and result shape without readiness options 1ms
+   × owned fixture command readiness and operation budgets > releases timers and only its own listeners when spawn fails 2ms
+     → expected [ [Function unrelated], [Function] ] to deeply equal [ [Function unrelated] ]
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/opencode-command-fixture.test.ts > owned fixture command readiness and operation budgets > allows bounded startup then gives the ready command its full operation budget
+AssertionError: expected "kill" to not be called at all, but actually been called 1 times
+
+Received: 
+
+  1st kill call:
+
+    Array []
+
+
+Number of calls: 1
+
+ ❯ test/opencode-command-fixture.test.ts:39:22
+     37|     const pending = runCommand('owned', [], options);
+     38|     await vi.advanceTimersByTimeAsync(100);
+     39|     expect(kill).not.toHaveBeenCalled();
+       |                      ^
+     40|     stderr.write('starting\nrea');
+     41|     await vi.advanceTimersByTimeAsync(20);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  test/opencode-command-fixture.test.ts > owned fixture command readiness and operation budgets > bounds missing readiness and ignores a marker that arrives after expiry
+AssertionError: expected { code: null, signal: 'SIGTERM', …(3) } to match object { timedOut: true, ready: false, …(1) }
+(4 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "ready": false,
+    "timedOut": true,
+-   "timeoutStage": "startup",
+  }
+
+ ❯ test/opencode-command-fixture.test.ts:54:27
+     52|     await vi.advanceTimersByTimeAsync(200);
+     53|     stderr.write('ready\n');
+     54|     expect(await pending).toMatchObject({ timedOut: true, ready: false…
+       |                           ^
+     55|     expect(kill).toHaveBeenCalledOnce();
+     56|     expect(vi.getTimerCount()).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  test/opencode-command-fixture.test.ts > owned fixture command readiness and operation budgets > does not extend an operation when readiness is repeated
+AssertionError: expected { code: null, signal: 'SIGTERM', …(3) } to match object { timedOut: true, ready: true, …(1) }
+(4 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "ready": true,
+    "timedOut": true,
+-   "timeoutStage": "command",
+  }
+
+ ❯ test/opencode-command-fixture.test.ts:65:27
+     63|     stderr.write('ready\n');
+     64|     await vi.advanceTimersByTimeAsync(10);
+     65|     expect(await pending).toMatchObject({ timedOut: true, ready: true,…
+       |                           ^
+     66|     expect(kill).toHaveBeenCalledOnce();
+     67|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  test/opencode-command-fixture.test.ts > owned fixture command readiness and operation budgets > requires the complete readiness line rather than a substring or an overlong suffix
+AssertionError: expected "kill" to not be called at all, but actually been called 1 times
+
+Received: 
+
+  1st kill call:
+
+    Array []
+
+
+Number of calls: 1
+
+ ❯ test/opencode-command-fixture.test.ts:73:22
+     71|     stderr.write('not-ready\n' + 'x'.repeat(2000)); stderr.write('read…
+     72|     await vi.advanceTimersByTimeAsync(60);
+     73|     expect(kill).not.toHaveBeenCalled();
+       |                      ^
+     74|     stderr.write('ready\n');
+     75|     child.emit('close', 0, null);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  test/opencode-command-fixture.test.ts > owned fixture command readiness and operation budgets > does not infer readiness from a successful exit or JSON-looking output
+AssertionError: expected { code: +0, signal: null, …(3) } to match object { code: +0, ready: false, …(1) }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "code": 0,
+-   "ready": false,
+    "timedOut": false,
+  }
+
+ ❯ test/opencode-command-fixture.test.ts:82:27
+     80|     const pending = runCommand('owned', [], options);
+     81|     stdout.write('[]'); child.emit('close', 0, null);
+     82|     expect(await pending).toMatchObject({ code: 0, ready: false, timed…
+       |                           ^
+     83|   });
+     84| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  test/opencode-command-fixture.test.ts > owned fixture command readiness and operation budgets > releases timers and only its own listeners when spawn fails
+AssertionError: expected [ [Function unrelated], [Function] ] to deeply equal [ [Function unrelated] ]
+
+- Expected
++ Received
+
+  [
+    [Function unrelated],
++   [Function anonymous],
+  ]
+
+ ❯ test/opencode-command-fixture.test.ts:100:38
+     98|     await rejected;
+     99|     expect(vi.getTimerCount()).toBe(0);
+    100|     expect(stderr.listeners('data')).toEqual([unrelated]);
+       |                                      ^
+    101|     expect(stdout.listenerCount('data')).toBe(0);
+    102|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  test/opencode-desktop-process-race.test.ts > desktop executable snapshot races > keeps startup expiry distinct from an expired metadata query
+AssertionError: expected { state: 'unknown', …(2) } to match object { state: 'unknown', …(1) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "error": StringContaining "module initialization timed out after 30000ms",
++   "error": "CIM query timed out after 5000ms; process ownership remains unknown; crosschat-cim:started",
+    "state": "unknown",
+  }
+
+ ❯ test/opencode-desktop-process-race.test.ts:41:57
+     39|   it('keeps startup expiry distinct from an expired metadata query', a…
+     40|     boundary.runCommand.mockResolvedValue({ code: null, timedOut: true…
+     41|     expect(await inspectDesktopRunProcesses(root, env)).toMatchObject(…
+       |                                                         ^
+     42|   });
+     43| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  test/opencode-desktop-process-race.test.ts > desktop executable snapshot races > rejects a complete-looking table if module readiness was never confirmed
+AssertionError: expected { state: 'occupied', …(1) } to match object { state: 'unknown', …(2) }
+
+- Expected
++ Received
+
+  {
+-   "error": StringContaining "module readiness",
+-   "processes": [],
+-   "state": "unknown",
++   "processes": [
++     {
++       "executablePath": "D:\\workspace\\CC\\cc-int-20261104\\fixture-owned-desktop-run\\native\\desktop.exe",
++       "parentPid": 61000,
++       "pid": 61001,
++     },
++   ],
++   "state": "occupied",
+  }
+
+ ❯ test/opencode-desktop-process-race.test.ts:46:57
+     44|   it('rejects a complete-looking table if module readiness was never c…
+     45|     boundary.runCommand.mockResolvedValue({ code: 0, timedOut: false, …
+     46|     expect(await inspectDesktopRunProcesses(root, env)).toMatchObject(…
+       |                                                         ^
+     47|   });
+     48| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  8 failed | 5 passed (13)
+   Start at  15:09:47
+   Duration  306ms (transform 104ms, setup 0ms, collect 160ms, tests 28ms, environment 0ms, prepare 154ms)

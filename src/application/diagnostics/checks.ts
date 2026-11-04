@@ -1,5 +1,5 @@
 import { readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { defaultOutboxDir, mailboxFileFor } from '../../outbox.js';
 import { watchdogStatus } from '../../watchdog.js';
 import { parseNodeConfig } from '../../serve/node-config.js';
@@ -7,12 +7,59 @@ import type { BrokerEntry } from '../../serve/node-config.js';
 import { DEFAULT_PORT } from '../../serve/broker.js';
 import { isProcessAlive } from '../../platform/process-inspector.js';
 import { listNodeStatusFiles, nodeStatusSelector, TCP_STATUS_FRESH_MS } from '../status/status-files.js';
+import { skillPlan } from '../maintenance/skills.js';
+import { inspectDshBridges } from '../../dsh/client.js';
+import type { DshBridgeInfo } from '../../dsh/client.js';
+import { inspectDshProfiles } from '../../dsh/diagnostics.js';
+import { MultichatError } from '../../errors.js';
 import type { DoctorDeps } from './deps.js';
 import { DoctorSourceReadError } from './deps.js';
-import { diagnosticCheck, summarizeDiagnosticChecks } from './model.js';
+import { diagnosticCheck, HARNESS_BRIDGE_WARNING_REASONS, summarizeDiagnosticChecks } from './model.js';
 import type { DiagnosticCheckGroup, DiagnosticGroup, DiagnosticInput, DiagnosticResult } from './model.js';
 
 const CODEX_MIN_VERSION: readonly [number, number, number] = [0, 160, 0];
+
+/** Native IO stays inside the query-owned process; all faces consume this result. */
+export async function collectLiveDoctorDiagnostics(deps: DoctorDeps): Promise<DiagnosticResult> {
+  const result = collectDoctorDiagnostics(deps);
+  const environment = result.groups.find((group) => group.context.kind === 'environment')!;
+  const dshDeadline = Date.now() + 5000;
+  let bridges: DshBridgeInfo[] = [];
+  let findings: DiagnosticInput[];
+  try {
+    bridges = await inspectDshBridges({ home: deps.homeDir(), timeoutMs: 5000 });
+    findings = bridges.length === 0 ? [{ code: 'harness-bridge-inactive', data: {} }]
+      : bridges.map((bridge) => ({ code: 'harness-bridge-ready', data: bridge }));
+  } catch (error) {
+    const code = error instanceof MultichatError ? error.code : undefined;
+    if (code === 'DSH_CANCELLED') throw error;
+    if (code === 'DSH_NOT_CONFIGURED') findings = [{ code: 'harness-bridge-inactive', data: {} }];
+    else {
+      const reason = HARNESS_BRIDGE_WARNING_REASONS.find((candidate) => candidate === code) ?? 'DSH_UNAVAILABLE';
+      findings = [{ code: 'harness-bridge-warning', data: { reason } }];
+    }
+  }
+  environment.checks.push(...findings.map(diagnosticCheck));
+  const remaining = dshDeadline - Date.now();
+  const dshHome = deps.env.DSH_HOME;
+  if (remaining > 0 && (dshHome === undefined || dshHome === '' || isAbsolute(dshHome))) {
+    const profiles = await inspectDshProfiles({ home: deps.homeDir(), dshHome, timeoutMs: remaining,
+      verifiedProfileDirs: bridges.flatMap((bridge) => bridge.profileDir === undefined ? [] : [bridge.profileDir]) });
+    for (const profile of profiles) {
+      if (profile.state === 'not-declared') environment.checks.push(diagnosticCheck({ code: 'harness-profile-not-declared', data: { profileDir: profile.profileDir } }));
+      else if (profile.state === 'ready') environment.checks.push(diagnosticCheck({ code: 'harness-profile-plugin-ready', data: {
+        profileDir: profile.profileDir, packageDir: profile.packageDir, version: profile.version,
+      } }));
+      else environment.checks.push(diagnosticCheck({ code: 'harness-profile-plugin-warning', data: {
+        path: profile.path, reason: profile.reason,
+        ...(profile.profileDir === undefined ? {} : { profileDir: profile.profileDir }),
+        ...(profile.packageDir === undefined ? {} : { packageDir: profile.packageDir }),
+        ...(profile.version === undefined ? {} : { version: profile.version }),
+      } }));
+    }
+  }
+  return { groups: result.groups, summary: summarizeDiagnosticChecks(result.groups) };
+}
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -66,9 +113,11 @@ export function collectDoctorDiagnostics(deps: DoctorDeps): DiagnosticResult {
   }
 
   const repo = deps.repoSkillFiles();
-  for (const root of ['.claude', '.codex'] as const) {
-    const side = root === '.claude' ? 'claude' : 'codex';
-    const skillDir = join(deps.homeDir(), root, 'skills', 'crosschat');
+  const dshHome = deps.env.DSH_HOME;
+  const invalidDshHome = dshHome !== undefined && dshHome !== '' && !isAbsolute(dshHome);
+  const targets = skillPlan(deps.homeDir(), { DSH_HOME: invalidDshHome ? undefined : dshHome });
+  for (const { side, path: skillDir } of targets) {
+    if (side === 'harness' && invalidDshHome) continue;
     const path = join(skillDir, 'SKILL.md');
     if (!deps.exists(path)) {
       add({ code: 'skill-missing', data: { side, path } });
@@ -82,6 +131,7 @@ export function collectDoctorDiagnostics(deps: DoctorDeps): DiagnosticResult {
     if (paths.length === 0) add({ code: 'skill-match', data: { side } });
     else add({ code: 'skill-mismatch', data: { side, paths } });
   }
+  if (invalidDshHome) add({ code: 'harness-home-invalid', data: { value: dshHome } });
 
   const claudeSide = (deps.env.CLAUDE_CODE_MESSAGING_SOCKET ?? '') !== '';
   const codexSide = (deps.env.CODEX_THREAD_ID ?? '') !== '' || (deps.env.CODEX_SESSION_ID ?? '') !== '';

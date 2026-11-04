@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "name": "exact PID, executable, start time and HWND identify the owned UI tree",
+      "passed": true
+    },
+    {
+      "name": "SetValue, bounded text reading and Invoke operate on an owned WPF control without keyboard input",
+      "passed": true
+    },
+    {
+      "name": "PrintWindow captures only the owned HWND without foreground or desktop fallback",
+      "passed": true
+    },
+    {
+      "name": "stale PID start-time evidence refuses an action before UI mutation",
+      "passed": true
+    }
+  ],
+  "fixturePid": 42676,
+  "stopped": true
+}

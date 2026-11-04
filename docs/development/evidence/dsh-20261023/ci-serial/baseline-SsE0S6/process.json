@@ -1,0 +1,8 @@
+{
+  "code": 0,
+  "signal": null,
+  "timedOut": false,
+  "stdout": "PASS official-plugin-installation-and-owned-web-runtime\nPASS public-web-session-controller-creates-interactive-sessions\nPASS messages-model-and-native-shell-identity-bootstrap\nPASS authenticated-production-discovery-and-pagination\nPASS idle-production-delivery-wakes-the-existing-session\nPASS busy-native-queue-and-steer-step-boundaries\nPASS native-shell-send-and-conversation-reply-have-full-session-identities\nPASS missing-target-does-not-create-or-resume-a-replacement\n{\"status\":\"passed\",\"version\":\"0.2.1-rc.2\",\"checks\":8,\"report\":\"D:\\\\workspace\\\\CC\\\\multichat\\\\node_modules\\\\.cache\\\\crosschat-dsh-20261023-0975b6b93f724fec95264ad45903f291\\\\ci-second-evidence\\\\baseline-SsE0S6\\\\report.json\"}\n",
+  "stderr": "",
+  "pid": 41616
+}

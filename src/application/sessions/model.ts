@@ -5,13 +5,15 @@ export interface SessionRef {
   contextId: string;
   providerId: string;
   nativeId: string;
+  /** Verified native delivery domain; omission means the source did not attest it. */
+  endpointType?: string;
   /** Process references are temporary; omission means a native session ID. */
   referenceKind?: 'native' | 'process';
 }
 
 /** Collision-free internal key. This does not replace any wire or persisted key. */
 export function sessionKey(ref: SessionRef): string {
-  return JSON.stringify([ref.contextId, ref.providerId, ref.referenceKind ?? 'native', ref.nativeId]);
+  return JSON.stringify([ref.contextId, ref.providerId, ref.referenceKind ?? 'native', ref.nativeId, ref.endpointType ?? '']);
 }
 
 /** Serializable metadata. Implementations of optional capabilities live separately. */
@@ -67,6 +69,7 @@ export interface SessionDetail extends ReadResult {
 
 export interface SessionListRequest {
   contextId: string;
+  endpointType?: string;
   cursor?: string;
   /** Per-provider page bound; providers may return fewer items. */
   limit?: number;
@@ -76,6 +79,7 @@ export interface SessionListRequest {
 export interface SessionGetRequest {
   contextId: string;
   nativeId: string;
+  endpointType?: string;
   referenceKind?: 'native' | 'process';
   signal?: AbortSignal;
 }

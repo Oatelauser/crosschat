@@ -1,0 +1,49 @@
+{
+  "ticket": "C14-W04",
+  "branch": "codex/core-refactor-pre-tui",
+  "baselineSha": "fe1f79ee3c1727fbf5cf0fed4d71d4b7b1c98e77",
+  "environment": "Windows 11 Pro for Workstations 26200 x64, Node v25.0.0",
+  "lock": {
+    "module": "src/state-lock.ts (sunk from src/application/caller-source/state-lock.ts)",
+    "identity": "sha256([realpath(stateDir/conversations) lowercased on win32, 'conversation-state']) -> loopback port 20000+hash%20000, exclusive listen",
+    "timeoutMs": 1000,
+    "heldAcrossNativeDelivery": false
+  },
+  "red": {
+    "method": "Rebuilt dist/conversations.js with withConversationLock replaced by an unlocked passthrough (build artifact only; src untouched), then ran the new suite and a 4-process manual repro.",
+    "suite": "test/conversation-state-concurrency.test.ts: 2 failed | 4 passed (6)",
+    "failures": [
+      "independent processes allocating at once never share a handle ... -> child exit 2 (expected 0)",
+      "a live writer on an aliased path blocks every other write path until it releases -> expected ['resolved','resolved'] to deeply equal ['CONVERSATION_STATE_BUSY', ...]"
+    ],
+    "manual4Process": "4 concurrent allocators on one pair: 3 handles persisted, 1 child failed with MultichatError CONVERSATION_STATE_WRITE_FAILED at claimHandleLocked (its handle was overwritten by another process); distinct from the W03 duplicate-handle/撞号 symptom class.",
+    "restored": "npm run build regenerated dist byte-identical to the pre-probe build (diff -q clean)"
+  },
+  "green": {
+    "newSuite": "test/conversation-state-concurrency.test.ts: 6 passed",
+    "npmCheck": { "command": "npm run check", "exit": 0, "files": "228 passed | 3 skipped (231)", "tests": "2423 passed | 11 skipped (2434)" },
+    "baselineTests": "2417 passed | 11 skipped",
+    "eslint": "clean (src test)",
+    "importGraph": "202 modules, 678 edges; no cycles or boundary violations"
+  },
+  "writePathsUnderLock": [
+    "handleForRef -> handleForRefLocked",
+    "claimHandle -> claimHandleLocked",
+    "continueFromRef -> continueFromRefLocked (includes reconcileRefinement)",
+    "recordConversation -> recordConversationLocked (failures swallowed by contract)"
+  ],
+  "readOnlyUnlocked": ["resolveHandle", "loadAllPairs", "loadPair", "machineNameOfPair", "latestKnownConversationRef", "conversationSummaries"],
+  "behaviour": {
+    "multiProcessUnique": "6 allocators (3 on one pair, 3 pairs across 3 more) -> 6 distinct handles, each resolveHandle returns its own full ref",
+    "lockDiscipline": "holder blocked inside a real allocation's rename (alias/junction path) -> handleForRef and continueFromRef both CONVERSATION_STATE_BUSY, recordConversation resolves, no shard written; after release the holder's handle resolves and a new allocation succeeds",
+    "samePairAccounting": "allocation + recordConversation keep both handles",
+    "existingCollision": "c1 in two shards with different nonces -> handleForRef resolves undefined (no ambiguous hint, send unaffected), resolveHandle('c1') still rejects INVALID_CONVERSATION_REF with candidates, both shard files stay byte-identical (no winner chosen, no historical repair)",
+    "ghostHandle": "shard path occupied by a directory -> CONVERSATION_STATE_WRITE_FAILED, no handles persisted, c1 unresolvable",
+    "postDeliveryFailure": "recordConversation resolves even when the shard cannot be written"
+  },
+  "limits": [
+    "Windows x64 / Node v25.0.0 only; Linux/macOS not executed.",
+    "The lock is an in-machine mutex: separate machines sharing one state root over a network filesystem are out of scope.",
+    "Multi-process contention is a real-process regression test, not a deterministic barrier; the deterministic lock-discipline case is the holder test."
+  ]
+}

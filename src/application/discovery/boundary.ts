@@ -2,6 +2,7 @@ import type { Completeness, ProviderCapabilities, ReadResult, SessionRef, Source
 import { isRecord } from '../sessions/reading.js';
 import type { DiscoveryJson, DiscoveryProvider, DiscoveryRequest, DiscoveryResponse, DiscoverySession } from './model.js';
 import { isDeliveryMode } from '../../delivery-mode.js';
+import { isEndpointTypeFor } from '../../tool-types.js';
 
 export const DISCOVERY_MAX_BYTES = 2 * 1024 * 1024;
 const MAX_ARRAY_LENGTH = 2000;
@@ -27,6 +28,12 @@ function referenceKind(value: unknown): 'native' | 'process' | undefined {
   return invalid();
 }
 
+function endpointType(providerId: string, value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (!isEndpointTypeFor(providerId, value)) invalid();
+  return value;
+}
+
 function boundedRequest(request: DiscoveryRequest): DiscoveryRequest {
   if (Buffer.byteLength(JSON.stringify(request)) > DISCOVERY_MAX_BYTES) invalid();
   return request;
@@ -35,9 +42,12 @@ function boundedRequest(request: DiscoveryRequest): DiscoveryRequest {
 export function parseDiscoveryRequest(input: unknown): DiscoveryRequest {
   if (!isRecord(input)) invalid();
   if (input.op === 'detail') {
-    keys(input, ['op', 'providerId', 'nativeId', 'referenceKind']);
+    keys(input, ['op', 'providerId', 'nativeId', 'endpointType', 'referenceKind']);
     const kind = referenceKind(input.referenceKind);
-    return boundedRequest({ op: 'detail', providerId: text(input.providerId), nativeId: text(input.nativeId), ...(kind === undefined ? {} : { referenceKind: kind }) });
+    const providerId = text(input.providerId);
+    const type = endpointType(providerId, input.endpointType);
+    return boundedRequest({ op: 'detail', providerId, nativeId: text(input.nativeId),
+      ...(type === undefined ? {} : { endpointType: type }), ...(kind === undefined ? {} : { referenceKind: kind }) });
   }
   if (input.op !== 'list') invalid();
   keys(input, ['op', 'cursor', 'limit', 'filter']);
@@ -100,7 +110,10 @@ function capabilities(input: unknown): ProviderCapabilities {
 function ref(input: unknown): SessionRef {
   if (!isRecord(input)) invalid();
   const kind = referenceKind(input.referenceKind);
-  return { contextId: text(input.contextId), providerId: text(input.providerId), nativeId: text(input.nativeId), ...(kind === undefined ? {} : { referenceKind: kind }) };
+  const providerId = text(input.providerId);
+  const type = endpointType(providerId, input.endpointType);
+  return { contextId: text(input.contextId), providerId, nativeId: text(input.nativeId),
+    ...(type === undefined ? {} : { endpointType: type }), ...(kind === undefined ? {} : { referenceKind: kind }) };
 }
 
 function session(input: unknown, budget: { nodes: number; bytes: number }): DiscoverySession {

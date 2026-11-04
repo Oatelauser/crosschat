@@ -381,7 +381,7 @@ describe('listCodexThreads (read-only discovery)', () => {
   it('lists threads without any resume or turn calls', async () => {
     const { session, calls } = makeFakeSession({});
     const threads = await listCodexThreads({ sessionFactory: factoryFor(async () => session) });
-    expect(threads).toEqual([{ id: 't-listed', name: 'work', status: 'idle' }]);
+    expect(threads).toEqual([{ id: 't-listed', endpointType: 'cli', name: 'work', status: 'idle' }]);
     expect(calls).toEqual(['initialize', 'thread/list', 'close']);
   });
 
@@ -497,7 +497,7 @@ describe('openCodexSession thread/list wire shape (B21: exec visibility)', () =>
     try {
       await session.initialize();
       const threads = await session.listThreads();
-      expect(threads).toEqual([{ id: 't-exec', name: 'execbox', status: 'idle' }]);
+      expect(threads).toEqual([{ id: 't-exec', endpointType: 'cli', name: 'execbox', status: 'idle' }]);
       const list = frames.find((f) => f.method === 'thread/list');
       expect(list?.params).toMatchObject({
         archived: false,

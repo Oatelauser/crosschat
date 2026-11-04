@@ -2,7 +2,7 @@
   "name": "@oatelauser/crosschat",
   "version": "1.13.1",
   "type": "module",
-  "description": "Let Claude Code and Codex CLI talk to each other on your machine: native delivery via named pipe and app-server, stateless CLI, no daemon.",
+  "description": "Native messaging between existing AI CLI and desktop sessions, with local, SSH and TCP routing.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Oatelauser/crosschat.git"
@@ -17,6 +17,7 @@
   "files": [
     "dist",
     "skills",
+    "integrations/dsh",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"

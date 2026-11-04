@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ✓ test/dsh-live-fixture.test.ts (24 tests) 112ms
+
+ Test Files  1 passed (1)
+      Tests  24 passed (24)
+   Start at  11:03:08
+   Duration  600ms (transform 57ms, setup 0ms, collect 72ms, tests 112ms, environment 0ms, prepare 126ms)
+

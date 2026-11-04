@@ -1,0 +1,25 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-int-20261104
+
+ ✓ test/core-diagnostics.test.ts (17 tests) 1858ms
+   ✓ isolated cancellable diagnostics > keeps Harness home inside the selected diagnostic environment (undefined)  362ms
+   ✓ isolated cancellable diagnostics > keeps Harness home inside the selected diagnostic environment (isolated)  369ms
+   ✓ isolated cancellable diagnostics > keeps Harness home inside the selected diagnostic environment (inherit)  419ms
+   ✓ isolated cancellable diagnostics > terminates a real probe child through the default built isolation path on cancellation  587ms
+ ✓ test/local-service-inspection.test.ts (6 tests) 3461ms
+   ✓ owned service inspection and guard workers > reclaims an inspector blocked in spawnSync, including its owned probe child, before cancellation returns  531ms
+   ✓ owned service inspection and guard workers > uses the real process wrapper for successful inspection/guard IPC and releases it before returning  795ms
+   ✓ owned service inspection and guard workers > reclaims a real wrapper and its controlled blocked probe when its read timeout expires  1892ms
+ ✓ test/local-service-owned-process.test.ts (7 tests) 13ms
+ ✓ test/local-service-owned-stop.test.ts (6 tests) 3042ms
+   ✓ TUI owned service stop process trees > releases a hung OS scanner and its helper before completing cancellation without claiming the external stop was undone  477ms
+   ✓ TUI owned service stop process trees > bounds a nonresponding stop job and reclaims its full scanner tree on timeout  1318ms
+   ✓ TUI owned service stop process trees > runs the actual stop process wrapper and prior stop worker with the same fixed target, then releases the wrapper  448ms
+   ✓ TUI owned service stop process trees > retains prior request validation inside the real wrapper before any stop business call  400ms
+   ✓ TUI owned service stop process trees > uses the owned stop default from the managed task and waits for tree cleanup before returning an uncertain issued result  395ms
+ ✓ test/codex-caller-source-probe.test.ts (14 tests) 5ms
+
+ Test Files  5 passed (5)
+      Tests  50 passed (50)
+   Start at  14:03:43
+   Duration  6.54s (transform 406ms, setup 0ms, collect 1.46s, tests 8.38s, environment 1ms, prepare 343ms)

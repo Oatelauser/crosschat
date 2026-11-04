@@ -5,6 +5,8 @@ export type DeliveryMode = 'queue' | 'steer';
 
 export interface DeliveryOptions {
   mode?: DeliveryMode;
+  /** A verified native delivery domain. Explicit constraints never fall back to another domain. */
+  endpointType?: string;
 }
 
 export function isDeliveryMode(value: unknown): value is DeliveryMode {

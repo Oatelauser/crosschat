@@ -1,0 +1,45 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-int-20261104
+
+ ✓ test/opencode-command-fixture.test.ts (7 tests) 11ms
+ ❯ test/opencode-desktop-fixture.test.ts (13 tests | 1 failed) 796ms
+   ✓ official desktop test environment > keeps the desktop initial state and Windows post-initialization fallback in the same owned profile 80ms
+   × official desktop test environment > reports an unregistered executable under the owned run before allowing cleanup 286ms
+     → {"state":"unknown","processes":[],"error":"CIM query failed: crosschat-cim:started\r\nImport-Module : 无法将“Set-Alias”项识别为 cmdlet、函数、脚本文件或可运行程序的名称。请检查名称的拼写，如果包括路径，请确保路径正确，然后再试一次。\r\n所在位置 行:6 字符: 1\r\n+ Import-Module ([System.IO.Path]::Combine($PSHOME, \"Modules\", \"CimCmdl ...\r\n+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : ObjectNotFound: (Set-Alias:String) [Import-Module], CommandNotFoundException\r\n    + FullyQualifiedErrorId : CommandNotFoundException,Microsoft.PowerShell.Commands.ImportModuleCommand"}: expected 'unknown' to be 'occupied' // Object.is equality
+   ✓ official desktop test environment > classifies actual desktop HTTP 401 failures without hiding wire changes as infrastructure 37ms
+   ✓ official desktop test environment > classifies actual desktop HTTP 403 failures without hiding wire changes as infrastructure 7ms
+   ✓ official desktop test environment > classifies actual desktop HTTP 404 failures without hiding wire changes as infrastructure 7ms
+   ✓ official desktop test environment > classifies actual desktop HTTP 405 failures without hiding wire changes as infrastructure 6ms
+   ✓ official desktop test environment > classifies actual desktop HTTP 200 failures without hiding wire changes as infrastructure 7ms
+   ✓ official desktop test environment > classifies actual desktop HTTP 200 failures without hiding wire changes as infrastructure 6ms
+   ✓ official desktop test environment > classifies actual desktop HTTP 503 failures without hiding wire changes as infrastructure 6ms
+   ✓ official desktop test environment > distinguishes a missing desktop registration from a published malformed registration 6ms
+   ✓ official desktop test environment > accepts only authenticated health belonging to the registered process 6ms
+   ✓ official desktop test environment > keeps an interrupted successful HTTP body distinct from malformed completed JSON 119ms
+   ✓ official desktop test environment > retains a locked-log diagnostic while collecting remaining logs for teardown 221ms
+ ✓ test/opencode-desktop-process-race.test.ts (6 tests) 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/opencode-desktop-fixture.test.ts > official desktop test environment > reports an unregistered executable under the owned run before allowing cleanup
+AssertionError: {"state":"unknown","processes":[],"error":"CIM query failed: crosschat-cim:started\r\nImport-Module : 无法将“Set-Alias”项识别为 cmdlet、函数、脚本文件或可运行程序的名称。请检查名称的拼写，如果包括路径，请确保路径正确，然后再试一次。\r\n所在位置 行:6 字符: 1\r\n+ Import-Module ([System.IO.Path]::Combine($PSHOME, \"Modules\", \"CimCmdl ...\r\n+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\r\n    + CategoryInfo          : ObjectNotFound: (Set-Alias:String) [Import-Module], CommandNotFoundException\r\n    + FullyQualifiedErrorId : CommandNotFoundException,Microsoft.PowerShell.Commands.ImportModuleCommand"}: expected 'unknown' to be 'occupied' // Object.is equality
+
+Expected: "occupied"
+Received: "unknown"
+
+ ❯ test/opencode-desktop-fixture.test.ts:103:60
+    101|       expect(child.exitCode).toBeNull();
+    102|       const inspection = await inspectDesktopRunProcesses(root, env);
+    103|       expect(inspection.state, JSON.stringify(inspection)).toBe('occup…
+       |                                                            ^
+    104|       expect(inspection.processes).toContainEqual({ pid: child.pid, pa…
+    105|     } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 25 passed (26)
+   Start at  15:33:59
+   Duration  1.32s (transform 133ms, setup 0ms, collect 224ms, tests 812ms, environment 0ms, prepare 241ms)
+

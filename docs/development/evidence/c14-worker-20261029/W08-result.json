@@ -1,0 +1,207 @@
+{
+  "probe": "c14-desktop-os-source-anchor-checks",
+  "version": 1,
+  "generatedAt": "2026-10-29T09:26:40.394Z",
+  "node": "v25.0.0",
+  "platform": "win32",
+  "checks": [
+    {
+      "id": "C1",
+      "question": "Does the probe return the pid of the process that created the live pipe server?",
+      "pass": true,
+      "observed": {
+        "exitCode": 0,
+        "query": {
+          "ok": true,
+          "stage": "query",
+          "serverPid": 40536
+        },
+        "expectedPid": 40536,
+        "cleanup": {
+          "created": true,
+          "removed": true
+        }
+      }
+    },
+    {
+      "id": "C2",
+      "question": "Is a missing pipe reported as absent rather than as an empty success?",
+      "pass": true,
+      "observed": {
+        "exitCode": 0,
+        "query": {
+          "ok": false,
+          "stage": "wait",
+          "errorKind": "absent",
+          "nativeError": 2
+        }
+      }
+    },
+    {
+      "id": "C3",
+      "question": "Does the probe close its own connection after reading the pid?",
+      "pass": true,
+      "observed": {
+        "accepted": 1,
+        "open": 0
+      }
+    },
+    {
+      "id": "C4",
+      "question": "Does a pipe whose only instance is taken fail with a bounded timeout instead of hanging?",
+      "pass": true,
+      "observed": {
+        "taken": true,
+        "elapsedMs": 3341,
+        "exitCode": 0,
+        "query": {
+          "ok": false,
+          "stage": "wait",
+          "errorKind": "timeout",
+          "nativeError": 121
+        }
+      }
+    },
+    {
+      "id": "C5",
+      "question": "Does an instance comparison refuse a reused pid and incomplete metadata?",
+      "pass": true,
+      "observed": {
+        "same": {
+          "same": true,
+          "reason": "pid-and-creation-time"
+        },
+        "reusedPid": {
+          "same": false,
+          "reason": "pid-reused"
+        },
+        "noCreationTime": {
+          "same": false,
+          "reason": "missing-creation-time"
+        },
+        "differentPid": {
+          "same": false,
+          "reason": "different-pid"
+        },
+        "missing": {
+          "same": false,
+          "reason": "missing-metadata"
+        }
+      }
+    },
+    {
+      "id": "C6",
+      "question": "Does an OS anchor distinguish same instance, shared ancestor only, unrelated and unverifiable?",
+      "pass": true,
+      "observed": {
+        "sameProcess": "same-process",
+        "ancestor": {
+          "relation": "server-is-ancestor",
+          "depth": 1,
+          "reasons": [],
+          "serverPid": 200,
+          "server": {
+            "pid": 200,
+            "name": "node.exe",
+            "shape": "node",
+            "createdAt": 20,
+            "exeDigest": "dddddddddddd"
+          },
+          "selfChain": [
+            {
+              "pid": 300,
+              "name": "node.exe",
+              "shape": "node",
+              "createdAt": 30,
+              "exeDigest": "dddddddddddd"
+            },
+            {
+              "pid": 200,
+              "name": "node.exe",
+              "shape": "node",
+              "createdAt": 20,
+              "exeDigest": "dddddddddddd"
+            }
+          ],
+          "selfStopReason": "root"
+        },
+        "sharedOnly": "shared-ancestor-only",
+        "unrelated": "unrelated",
+        "absentPid": {
+          "relation": "unverifiable",
+          "reasons": [
+            "server-pid-not-in-process-table"
+          ],
+          "serverPid": 999,
+          "server": null,
+          "selfChain": [
+            {
+              "pid": 300,
+              "name": "node.exe",
+              "shape": "node",
+              "createdAt": 30,
+              "exeDigest": "dddddddddddd"
+            },
+            {
+              "pid": 200,
+              "name": "node.exe",
+              "shape": "node",
+              "createdAt": 20,
+              "exeDigest": "dddddddddddd"
+            }
+          ],
+          "selfStopReason": "root"
+        },
+        "noPid": "unverifiable"
+      }
+    },
+    {
+      "id": "C7",
+      "question": "Is an existing --out refused before any pipe is opened?",
+      "pass": true,
+      "observed": {
+        "exitCode": 3,
+        "bytesUnchanged": true,
+        "report": {
+          "error": "refusing to overwrite an existing output",
+          "out": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\w08-check-r3gQV4\\existing.json",
+          "wrote": false
+        }
+      }
+    },
+    {
+      "id": "C8",
+      "question": "Does a pipe path reduce to the pipe name?",
+      "pass": true,
+      "observed": {
+        "win": "codex-ipc",
+        "bare": "codex-ipc",
+        "empty": ""
+      }
+    },
+    {
+      "id": "C9",
+      "question": "Does owner discovery send only initialize and thread-owner-discovery, and keep the owner id redacted?",
+      "pass": true,
+      "observed": {
+        "exitCode": 0,
+        "methods": [
+          "initialize",
+          "thread-owner-discovery"
+        ],
+        "owner": {
+          "requested": true,
+          "known": true,
+          "namespace": "client-id",
+          "length": 10,
+          "digest": "e82f7b1d99e3",
+          "osPidEquivalent": false
+        },
+        "ownerIdLeaked": false
+      }
+    }
+  ],
+  "passed": 9,
+  "failed": 0,
+  "wrote": true
+}

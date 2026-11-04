@@ -1,0 +1,94 @@
+{
+  "schema": 1,
+  "scope": "C10 static Harness profile diagnostics; controlled fixtures and built CLI/TUI, no live DSH runtime acceptance",
+  "productCommit": "e3b777e",
+  "check": {
+    "exitCode": 0,
+    "passed": 2696,
+    "existingSkipped": 11,
+    "filesPassed": 232,
+    "filesSkipped": 3,
+    "runtimeModules": 204,
+    "runtimeEdges": 688
+  },
+  "targeted": {
+    "initialRed": {
+      "failed": 14,
+      "passed": 1
+    },
+    "boundaryRed": {
+      "failed": 2,
+      "passed": 16
+    },
+    "wiringRed": {
+      "failed": 3,
+      "passed": 33
+    },
+    "sharedGreen": 114,
+    "finalStaticSuite": 20
+  },
+  "terminalRounds": [
+    [
+      {
+        "scenario": "matching",
+        "code": 0,
+        "terminalRestored": true,
+        "profileUnchanged": true,
+        "privateFieldsHidden": true
+      },
+      {
+        "scenario": "different",
+        "code": 0,
+        "terminalRestored": true,
+        "profileUnchanged": true,
+        "privateFieldsHidden": true
+      },
+      {
+        "scenario": "not-declared",
+        "code": 0,
+        "terminalRestored": true,
+        "profileUnchanged": true,
+        "privateFieldsHidden": true
+      }
+    ],
+    [
+      {
+        "scenario": "matching",
+        "code": 0,
+        "terminalRestored": true,
+        "profileUnchanged": true,
+        "privateFieldsHidden": true
+      },
+      {
+        "scenario": "different",
+        "code": 0,
+        "terminalRestored": true,
+        "profileUnchanged": true,
+        "privateFieldsHidden": true
+      },
+      {
+        "scenario": "not-declared",
+        "code": 0,
+        "terminalRestored": true,
+        "profileUnchanged": true,
+        "privateFieldsHidden": true
+      }
+    ]
+  ],
+  "constraints": {
+    "runtimeStorageAdded": false,
+    "commandSyntaxChanged": false,
+    "nativeDshStarted": false,
+    "scope": "current Harness home profiles and native-attested directories; installation contents do not prove loaded/enabled state"
+  },
+  "archive": {
+    "file": "raw-evidence-redacted.zip",
+    "bytes": 65946,
+    "sha256": "4825755b498bc4b502d54f527572fca52613a6888fd6d9522908d71966cc4793",
+    "files": 27
+  },
+  "cleanup": {
+    "ownedFixtureRemoved": true,
+    "userDshRetained": true
+  }
+}

@@ -1,0 +1,258 @@
+{
+  "ticket": "C14-W03",
+  "generatedAt": "2026-10-29T04:01:47.576Z",
+  "baseline": {
+    "head": "e009b637396180e3ba7b49cb99310a5341c67a98",
+    "node": "v25.0.0",
+    "platform": "win32",
+    "arch": "x64",
+    "dist": "D:\\workspace\\CC\\multichat\\dist\\conversations.js"
+  },
+  "scenario": {
+    "candidate": 1,
+    "repeats": 5,
+    "barrier": "CJS preload wraps fs.renameSync: r1 = both first shard writes visible before either scan; r2 = both retry writes withheld until both callers computed max+2",
+    "endpoints": "synthetic ids (w03-claude-a/b, w03-codex-a/b); no real state or network"
+  },
+  "concurrentRuns": [
+    {
+      "repeat": 1,
+      "concurrent": true,
+      "workers": [
+        {
+          "id": "a",
+          "exit": 0,
+          "signal": null,
+          "handle": "c3",
+          "nonce": "92136e72046fc12f"
+        },
+        {
+          "id": "b",
+          "exit": 0,
+          "signal": null,
+          "handle": "c3",
+          "nonce": "788bc7a3d5bc4df7"
+        }
+      ],
+      "returnedHandles": [
+        "c3"
+      ],
+      "sameHandleReturned": true,
+      "shardEntriesForHandle": [
+        {
+          "shard": "8cd07bfa",
+          "refPrefix": "mc2_NAx3MDMtY2xhdWRlLWEL…"
+        },
+        {
+          "shard": "ebb3ed55",
+          "refPrefix": "mc2_NAx3MDMtY2xhdWRlLWIL…"
+        }
+      ],
+      "resolve": {
+        "resolved": false,
+        "code": "INVALID_CONVERSATION_REF",
+        "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIkhNucgRvwS8B mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIeIvHo9W8TfcB——用 --to <名> --tool <收件类型> 接续或开新对话"
+      },
+      "barrierTimeouts": [],
+      "tempRoot": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-w03-lcMtiD",
+      "cleaned": true
+    },
+    {
+      "repeat": 2,
+      "concurrent": true,
+      "workers": [
+        {
+          "id": "a",
+          "exit": 0,
+          "signal": null,
+          "handle": "c3",
+          "nonce": "b1a9cf105b19160b"
+        },
+        {
+          "id": "b",
+          "exit": 0,
+          "signal": null,
+          "handle": "c3",
+          "nonce": "90f170607e3fee09"
+        }
+      ],
+      "returnedHandles": [
+        "c3"
+      ],
+      "sameHandleReturned": true,
+      "shardEntriesForHandle": [
+        {
+          "shard": "8cd07bfa",
+          "refPrefix": "mc2_NAx3MDMtY2xhdWRlLWEL…"
+        },
+        {
+          "shard": "ebb3ed55",
+          "refPrefix": "mc2_NAx3MDMtY2xhdWRlLWIL…"
+        }
+      ],
+      "resolve": {
+        "resolved": false,
+        "code": "INVALID_CONVERSATION_REF",
+        "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEIsanPEFsZFgsB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIkPFwYH4_7gkB——用 --to <名> --tool <收件类型> 接续或开新对话"
+      },
+      "barrierTimeouts": [],
+      "tempRoot": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-w03-IlXF5W",
+      "cleaned": true
+    },
+    {
+      "repeat": 3,
+      "concurrent": true,
+      "workers": [
+        {
+          "id": "a",
+          "exit": 0,
+          "signal": null,
+          "handle": "c3",
+          "nonce": "2e5c1d05a34ef8db"
+        },
+        {
+          "id": "b",
+          "exit": 0,
+          "signal": null,
+          "handle": "c3",
+          "nonce": "d9c696565e59a8d9"
+        }
+      ],
+      "returnedHandles": [
+        "c3"
+      ],
+      "sameHandleReturned": true,
+      "shardEntriesForHandle": [
+        {
+          "shard": "8cd07bfa",
+          "refPrefix": "mc2_NAx3MDMtY2xhdWRlLWEL…"
+        },
+        {
+          "shard": "ebb3ed55",
+          "refPrefix": "mc2_NAx3MDMtY2xhdWRlLWIL…"
+        }
+      ],
+      "resolve": {
+        "resolved": false,
+        "code": "INVALID_CONVERSATION_REF",
+        "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEILlwdBaNO-NsB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII2caWVl5ZqNkB——用 --to <名> --tool <收件类型> 接续或开新对话"
+      },
+      "barrierTimeouts": [],
+      "tempRoot": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-w03-WXq38e",
+      "cleaned": true
+    },
+    {
+      "repeat": 4,
+      "concurrent": true,
+      "workers": [
+        {
+          "id": "a",
+          "exit": 0,
+          "signal": null,
+          "handle": "c3",
+          "nonce": "da0c072f6bc2aeeb"
+        },
+        {
+          "id": "b",
+          "exit": 0,
+          "signal": null,
+          "handle": "c3",
+          "nonce": "168c664fdcfbc5c5"
+        }
+      ],
+      "returnedHandles": [
+        "c3"
+      ],
+      "sameHandleReturned": true,
+      "shardEntriesForHandle": [
+        {
+          "shard": "8cd07bfa",
+          "refPrefix": "mc2_NAx3MDMtY2xhdWRlLWEL…"
+        },
+        {
+          "shard": "ebb3ed55",
+          "refPrefix": "mc2_NAx3MDMtY2xhdWRlLWIL…"
+        }
+      ],
+      "resolve": {
+        "resolved": false,
+        "code": "INVALID_CONVERSATION_REF",
+        "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI2gwHL2vCrusB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWIIFoxmT9z7xcUB——用 --to <名> --tool <收件类型> 接续或开新对话"
+      },
+      "barrierTimeouts": [],
+      "tempRoot": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-w03-MdQ4jd",
+      "cleaned": true
+    },
+    {
+      "repeat": 5,
+      "concurrent": true,
+      "workers": [
+        {
+          "id": "a",
+          "exit": 0,
+          "signal": null,
+          "handle": "c3",
+          "nonce": "d70f27f2e942b2bb"
+        },
+        {
+          "id": "b",
+          "exit": 0,
+          "signal": null,
+          "handle": "c3",
+          "nonce": "eaaf74fba736d03f"
+        }
+      ],
+      "returnedHandles": [
+        "c3"
+      ],
+      "sameHandleReturned": true,
+      "shardEntriesForHandle": [
+        {
+          "shard": "8cd07bfa",
+          "refPrefix": "mc2_NAx3MDMtY2xhdWRlLWEL…"
+        },
+        {
+          "shard": "ebb3ed55",
+          "refPrefix": "mc2_NAx3MDMtY2xhdWRlLWIL…"
+        }
+      ],
+      "resolve": {
+        "resolved": false,
+        "code": "INVALID_CONVERSATION_REF",
+        "message": "c3 撞号指向多个对话：mc2_NAx3MDMtY2xhdWRlLWELdzAzLWNvZGV4LWEI1w8n8ulCsrsB mc2_NAx3MDMtY2xhdWRlLWILdzAzLWNvZGV4LWII6q90-6c20D8B——用 --to <名> --tool <收件类型> 接续或开新对话"
+      },
+      "barrierTimeouts": [],
+      "tempRoot": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-w03-8dYpY0",
+      "cleaned": true
+    }
+  ],
+  "serialControl": {
+    "concurrent": false,
+    "workers": [
+      {
+        "id": "solo",
+        "exit": 0,
+        "signal": null,
+        "handle": "c1",
+        "nonce": "74b691df1ce33c68"
+      }
+    ],
+    "returnedHandles": [
+      "c1"
+    ],
+    "sameHandleReturned": true,
+    "shardEntriesForHandle": [
+      {
+        "shard": "8cd07bfa",
+        "refPrefix": "mc2_NAx3MDMtY2xhdWRlLWEL…"
+      }
+    ],
+    "resolve": {
+      "resolved": true,
+      "refPrefix": "mc2_NAx3MDMtY2xhdWRlLWEL…"
+    },
+    "barrierTimeouts": [],
+    "tempRoot": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-w03-udGnwk",
+    "cleaned": true
+  }
+}

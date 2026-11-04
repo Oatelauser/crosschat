@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { CommunicationSummary, OutboxThreadMetadata } from '../src/application/observations/communications.js';
 import { createCommunicationResources } from '../src/tui/resources/communications.js';
 import { encodeRef } from '../src/ref.js';
+import { identityKey } from '../src/identity.js';
 
 const context = { id: 'local', label: '本机', kind: 'local' };
 const sessionRef = { contextId: 'local', providerId: 'codex', nativeId: 'full-thread-id' };
@@ -17,6 +18,51 @@ function resources(communicationItems = [item], queueItems = [queue]) {
 const request = () => ({ context, signal: new AbortController().signal });
 
 describe('read-only TUI communication resources', () => {
+  it('keeps equal-ID endpoint scopes, typed queue labels and copy references exact', async () => {
+    const selected = { ...sessionRef, endpointType: 'desktop' };
+    const typedPair = ['claude:sender-full-id', identityKey({ p: 'codex', id: selected.nativeId, endpointType: 'desktop' })].sort().join('\n');
+    const typedSaved = encodeRef({ v: 1, f: { p: 'claude', id: 'sender-full-id' },
+      t: { p: 'codex', id: selected.nativeId, endpointType: 'desktop' }, n: '01020304', c: 3 });
+    const selectedItem = { ...item, id: 'desktop-delivery', pairId: typedPair, ref: typedSaved, localSessionRefs: [selected] };
+    const selectedQueue = { ...queue, id: 'desktop-queue', endpointType: 'desktop',
+      items: queue.items.map((entry) => ({ ...entry, endpointType: 'desktop' })) };
+    const otherQueue = { ...queue, id: 'cli-queue', endpointType: 'cli', items: queue.items.map((entry) => ({ ...entry, endpointType: 'cli' })) };
+    const factory = resources([{ ...item, localSessionRefs: [{ ...sessionRef, endpointType: 'cli' }] }, selectedItem], [otherQueue, selectedQueue]);
+    const query = { sessionRef: JSON.stringify(selected) };
+    const delivery = await factory.deliveries.adapter.read({ ...request(), route: { resourceId: 'deliveries', contextId: 'local', query } });
+    expect(delivery.rows.map((row) => row.id)).toEqual(['desktop-delivery']);
+    expect(delivery.rows[0].copyValue).toBe(typedSaved);
+    const parked = await factory.outbox.adapter.read({ ...request(), route: { resourceId: 'outbox', contextId: 'local', query } });
+    expect(parked.rows.map((row) => row.id)).toEqual(['desktop-queue']);
+    expect(parked.rows[0].cells.provider).toBe('codex-desktop');
+    expect(JSON.parse(parked.rows[0].copyValues!.ref!)).toEqual(selected);
+    expect(parked.rows[0].detail).toContainEqual({ label: '完整会话引用', value: JSON.stringify(selected, null, 2) });
+    expect(parked.rows[0].actionRoutes?.deliveries?.query?.pairId).toBe(typedPair);
+  });
+
+  it('keeps pair-scoped unknown queue sources within the selected endpoint type', async () => {
+    const typedPair = ['claude:sender-full-id', identityKey({ p: 'codex', id: sessionRef.nativeId, endpointType: 'desktop' })].sort().join('\n');
+    const factory = resources([item], [
+      { ...queue, id: 'cli-unknown', endpointType: 'cli', count: null, state: 'oversized', items: [] },
+      { ...queue, id: 'desktop-unknown', endpointType: 'desktop', count: null, state: 'oversized', items: [] },
+    ]);
+    const page = await factory.outbox.adapter.read({ ...request(), route: { resourceId: 'outbox', contextId: 'local', query: { pairId: typedPair } } });
+    expect(page.rows.map((row) => row.id)).toEqual(['desktop-unknown']);
+    expect(page.rows[0].cells.count).toBe('未知');
+    expect(page.rows[0].actionRoutes?.deliveries?.query?.pairId).toBe(typedPair);
+  });
+
+  it('refuses malformed or mismatched typed scopes before reading application data', async () => {
+    const factory = resources();
+    for (const endpointType of ['shared', '', '../desktop', 'x'.repeat(33)]) {
+      const route = { resourceId: 'deliveries', contextId: 'local', query: { sessionRef: JSON.stringify({ ...sessionRef, endpointType }) } };
+      expect((await factory.deliveries.adapter.read({ ...request(), route })).completeness).toBe('unavailable');
+      expect((await factory.outbox.adapter.read({ ...request(), route: { ...route, resourceId: 'outbox' } })).completeness).toBe('unavailable');
+    }
+    expect(factory.readCommunications).not.toHaveBeenCalled();
+    expect(factory.readOutbox).not.toHaveBeenCalled();
+  });
+
   it('renders audit facts, full metadata and exact routes without describing task completion or permitting resend', async () => {
     const factory = resources();
     const page = await factory.deliveries.adapter.read(request());

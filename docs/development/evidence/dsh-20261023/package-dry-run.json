@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-23T05:24:13.0973064Z",
+  "command": "npm pack --dry-run --json",
+  "exitCode": 0,
+  "package": "@oatelauser/crosschat@1.10.0",
+  "entryCount": 371,
+  "size": 674678,
+  "unpackedSize": 2975068,
+  "integrity": "sha512-wH3RgNLsrUPTiUl7H2I33g0YZfSlOCmmcQ20U+hVrGt8SllDt8zLoG+bkopktmk5BLRAT+6F5c/lf7tkDUrIgA==",
+  "verified": [
+    "integrations/dsh/package.json",
+    "integrations/dsh/index.js",
+    "integrations/dsh/bridge.js",
+    "integrations/dsh/cordis.patch.yml",
+    "integrations/dsh/icon.svg",
+    "integrations/dsh/locale/en.json",
+    "integrations/dsh/locale/zh.json",
+    "dist/dsh/client.js",
+    "dist/dsh/deliver.js",
+    "skills/crosschat/SKILL.md",
+    "skills/crosschat/references/send.md",
+    "skills/crosschat/references/errors.md"
+  ],
+  "published": false,
+  "note": "Dry run used the existing working tree README; unrelated README changes were not staged by this task."
+}

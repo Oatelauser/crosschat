@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { Broker, defaultDeliverLocal } from '../src/serve/broker.js';
 import type { BrokerDeps } from '../src/serve/broker.js';
-import { CAP_MULTI_STAR, CAP_SESSION_MEMBERS } from '../src/serve/protocol.js';
+import { CAP_MULTI_STAR, CAP_SESSION_MEMBERS, CAP_ENDPOINT_TYPES } from '../src/serve/protocol.js';
 import type { ResultFrame, SocketLike, StatusPayload } from '../src/serve/protocol.js';
 import { loadBrokerFile, mutateBrokerFile, registryFileOf } from '../src/serve/registry.js';
 import { seedBroker } from './helpers/broker-seed.js';
@@ -132,7 +132,7 @@ async function fixture(overrides: Partial<BrokerDeps> = {}): Promise<{
     broker, file, statusFile, logs, beginAdmin,
     connect: async (auth, machineId) => {
       const c = await client();
-      c.send({ op: 'connect', proto: 1, role: machineId === undefined ? 'sender' : 'node', auth, machineId, caps: [CAP_MULTI_STAR, CAP_SESSION_MEMBERS] });
+      c.send({ op: 'connect', proto: 1, role: machineId === undefined ? 'sender' : 'node', auth, machineId, caps: [CAP_MULTI_STAR, CAP_SESSION_MEMBERS, CAP_ENDPOINT_TYPES] });
       await c.wait('connected');
       return c;
     },
@@ -162,7 +162,7 @@ async function fixture(overrides: Partial<BrokerDeps> = {}): Promise<{
       const socket = new DeferredCloseSocket();
       controlled.push(socket);
       broker.admitLocal(socket, STAR_A);
-      socket.receive({ op: 'connect', proto: 1, role: machineId === undefined ? 'sender' : 'node', machineId, auth, caps: [CAP_MULTI_STAR, CAP_SESSION_MEMBERS] });
+      socket.receive({ op: 'connect', proto: 1, role: machineId === undefined ? 'sender' : 'node', machineId, auth, caps: [CAP_MULTI_STAR, CAP_SESSION_MEMBERS, CAP_ENDPOINT_TYPES] });
       expect(socket.frames).toContainEqual(expect.objectContaining({ op: 'connected' }));
       return socket;
     },
@@ -262,7 +262,7 @@ describe('broker credential revocation', () => {
     victim.receive({ op: 'sessions', sessions: [{ sessionId: 'after-revoke', name: 'must-not-register' }] });
     victim.receive({ op: 'admin-op', id: 'after-revoke-read', action: 'list-nodes' });
     victim.receive({ op: 'member-remove', target: 'before-revoke' });
-    victim.receive({ op: 'send', id: 'after-revoke-send', targetMachine: MID_KEEP, body: 'must-not-forward' });
+    victim.receive({ tool: 'claude', op: 'send', id: 'after-revoke-send', targetMachine: MID_KEEP, body: 'must-not-forward' });
     expect(victim.frames).toContainEqual(expect.objectContaining({ op: 'credential-revoked' }));
     expect(victim.frames.some((p) => p.id === 'after-revoke-read')).toBe(false);
     expect(replacement.frames.some((p) => p.id === 'after-revoke-send')).toBe(false);
@@ -289,7 +289,7 @@ describe('broker credential revocation', () => {
     const f = await fixture();
     const target = f.controlled(KEY_A, MID_A);
     const sender = await f.connect(KEY_KEEP);
-    sender.send({ op: 'send', id: 'pending-message', targetMachine: MID_A, body: 'already-forwarded' });
+    sender.send({ tool: 'claude', op: 'send', id: 'pending-message', targetMachine: MID_A, body: 'already-forwarded' });
     sender.send({ op: 'file-begin', id: 'pending-file', targetMachine: MID_A, sha256: '0'.repeat(64), name: 'test.txt', size: 1 });
     await expect.poll(() => target.frames.filter((p) => p.op === 'deliver' || p.op === 'file-begin').length).toBe(2);
     expect(await f.local({ op: 'remove-node', starId: STAR_A, label: 'victim' })).toMatchObject({ removed: true });
@@ -309,7 +309,7 @@ describe('broker credential revocation', () => {
     const f = await fixture();
     const sender = f.controlled(KEY_A);
     const target = f.controlled(KEY_KEEP, MID_KEEP);
-    sender.receive({ op: 'send', id: 'sender-pending', targetMachine: MID_KEEP, body: 'already-forwarded' });
+    sender.receive({ tool: 'claude', op: 'send', id: 'sender-pending', targetMachine: MID_KEEP, body: 'already-forwarded' });
     sender.receive({ op: 'file-begin', id: 'sender-file', targetMachine: MID_KEEP, sha256: '0'.repeat(64), name: 'test.txt', size: 1 });
     expect(target.frames).toContainEqual(expect.objectContaining({ op: 'deliver', id: 'sender-pending' }));
     expect(await f.local({ op: 'remove-node', starId: STAR_A, label: 'victim' })).toMatchObject({ removed: true });
@@ -331,7 +331,7 @@ describe('broker credential revocation', () => {
         admin.receive({ op: 'admin-op', id: 'synchronous-remove', action: 'remove-node', label: 'victim' });
       }
     });
-    sender.receive({ op, id: 'synchronous-request', targetMachine: MID_A, body: 'possibly-forwarded' });
+    sender.receive({ tool: 'claude', op, id: 'synchronous-request', targetMachine: MID_A, body: 'possibly-forwarded' });
     await expect.poll(() => sender.frames.find((frame) => frame.id === 'synchronous-request'), { timeout: 500 }).toMatchObject({ op: 'error', code: 'CREDENTIAL_REVOKED' });
   });
 
@@ -349,7 +349,7 @@ describe('broker credential revocation', () => {
     const status = new Promise<StatusPayload>((resolve) => { finishStatus = resolve; });
     const f = await fixture({ deliverLocal: () => delivery, scanStatus: () => status });
     const sender = f.controlled(KEY_A);
-    sender.receive({ op: 'send', id: 'local-send', targetMachine: '9999999900000000', body: 'already-started' });
+    sender.receive({ tool: 'claude', op: 'send', id: 'local-send', targetMachine: '9999999900000000', body: 'already-started' });
     sender.receive({ op: 'status-query', id: 'local-status', targetMachine: '9999999900000000' });
     expect(await f.local({ op: 'remove-node', starId: STAR_A, label: 'victim' })).toMatchObject({ removed: true });
     finishDelivery({ op: 'result', id: 'local-send', status: 'delivered' });

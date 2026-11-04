@@ -1,0 +1,25 @@
+{
+  "record": "desktop-ipc-initialize",
+  "capture": "desktop-ipc-initialize-capture.txt",
+  "captureNote": "The .txt holds the original terminal capture bytes, including the leading `connected` line, which is not JSON. This file is the parseable restatement of the same response; no field was added or changed.",
+  "method": "Read-only client on the named pipe \\\\.\\pipe\\codex-ipc: read frames, send one initialize request, read the response. No other method was called and no state was written.",
+  "framing": "4-byte little-endian length prefix followed by a JSON body",
+  "stage": "response",
+  "topKeys": [
+    "type",
+    "requestId",
+    "resultType",
+    "method",
+    "handledByClientId",
+    "result"
+  ],
+  "resultKeys": [
+    "clientId"
+  ],
+  "result": {
+    "clientId": "8feff53d-1e37-4b15-a4b7-882ed7833f9e"
+  },
+  "resultType": "success",
+  "handledMatchesSelf": true,
+  "limits": "One initialize response from one Desktop session at one moment. It shows this response carries no pid, version or instance field; it does not enumerate other IPC methods, other connections, or OS-level handle metadata."
+}

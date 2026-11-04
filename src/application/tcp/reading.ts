@@ -8,6 +8,7 @@ import type { BrokerFile, NodeEntry, RosterEntry, StarRecord } from '../../serve
 import { checkAbort, isRecord, readParsed } from '../queries/reading.js';
 import type { ReadResult, TextOptions } from '../queries/reading.js';
 import type { TcpRole } from './model.js';
+import { isEndpointTypeFor, nativeTargetKey } from '../../tool-types.js';
 
 export interface TcpConfigurationOptions extends TextOptions { baseDir: string }
 export interface TcpConfiguration { broker: ReadResult<BrokerFile>; node: ReadResult<NodeConfig> }
@@ -58,10 +59,12 @@ function parseMember(value: unknown): RosterEntry {
   if (!isRecord(value) || typeof value.sessionId !== 'string' || !value.sessionId || fullTcpMachineId(value.machine) === undefined
     || !['name', 'tool', 'machineName', 'extendsName', 'extendsMachine'].every((field) => optionalText(value[field]))
     || (value.temporary !== undefined && typeof value.temporary !== 'boolean')) invalid();
+  if (value.endpointType !== undefined && (typeof value.tool !== 'string' || !isEndpointTypeFor(value.tool, value.endpointType))) invalid();
   const copy: Record<string, unknown> = { ...value };
   delete copy.online;
   return { ...copy, sessionId: value.sessionId, machine: value.machine as string,
     ...(typeof value.name === 'string' ? { name: value.name } : {}), ...(typeof value.tool === 'string' ? { tool: value.tool } : {}),
+    ...(typeof value.endpointType === 'string' ? { endpointType: value.endpointType } : {}),
     ...(typeof value.machineName === 'string' ? { machineName: value.machineName } : {}), ...(typeof value.extendsName === 'string' ? { extendsName: value.extendsName } : {}),
     ...(typeof value.extendsMachine === 'string' ? { extendsMachine: value.extendsMachine } : {}), ...(typeof value.temporary === 'boolean' ? { temporary: value.temporary } : {}) };
 }
@@ -76,7 +79,7 @@ function parseBroker(raw: string): BrokerFile {
     const nodes = star.nodes.map(parseNode);
     if (new Set(nodes.map((node) => node.label)).size !== nodes.length) invalid();
     const roster = (star.roster ?? []).map(parseMember);
-    if (new Set(roster.map((member) => member.sessionId)).size !== roster.length) invalid();
+    if (new Set(roster.map((member) => nativeTargetKey({ providerId: member.tool ?? '', nativeId: member.sessionId, endpointType: member.endpointType }))).size !== roster.length) invalid();
     return { ...star, starId: star.starId, ...(typeof star.name === 'string' ? { name: star.name } : {}), nodes, roster };
   });
   return { ...value, ...(typeof value.port === 'number' ? { port: value.port } : {}), stars };

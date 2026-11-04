@@ -9,6 +9,7 @@ import { checkAbort, isRecord, queryError } from '../queries/reading.js';
 import type { QueryError } from '../queries/reading.js';
 import type { CollectionResult } from '../queries/services.js';
 import type { SessionRef } from '../sessions/model.js';
+import { identityKey } from '../../identity.js';
 
 export interface ManagedLogSource { id: string; label: string; path: string }
 export interface ManagedLogLine { id: string; offset: number; text: string; terminated: boolean }
@@ -92,10 +93,11 @@ function matches(raw: string, options: ManagedLogOptions): boolean {
   if (replyRef) {
     try {
       const decoded = decodeRef(replyRef);
-      return [decoded.f, decoded.t].some((endpoint) => endpoint.p !== 'human' && !endpoint.m && !endpoint.mid && endpoint.p === ref.providerId && endpoint.id === ref.nativeId);
+      return [decoded.f, decoded.t].some((endpoint) => endpoint.p !== 'human' && !endpoint.m && !endpoint.mid && endpoint.p === ref.providerId
+        && endpoint.id === ref.nativeId && (ref.endpointType === undefined || endpoint.endpointType === ref.endpointType));
     } catch { return false; }
   }
-  const identity = `${ref.providerId}:${ref.nativeId}`;
+  const identity = identityKey({ p: ref.providerId, id: ref.nativeId, endpointType: ref.endpointType });
   // Receiver-side logs may record a remote sender with the same opaque native ID.
   // Without a reply reference, only a direct local target proves this scope.
   return entry.target === identity;

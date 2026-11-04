@@ -1,0 +1,49 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-int-20261104
+
+ ❯ test/core-diagnostics.test.ts (17 tests | 1 failed | 16 skipped) 25ms
+   ↓ structured diagnostics > validates static plugin facts, fixed reasons and severities without carrying private fields
+   ↓ structured diagnostics > validates native bridge facts and strips secret fields across the diagnostic IPC boundary
+   ↓ structured diagnostics > accepts only fixed native warning reasons and supplies the same guidance to TUI details
+   ↓ structured diagnostics > preserves Harness findings across the JSON boundary and rejects an unknown skill side
+   ↓ structured diagnostics > separates typed checks and severity counts from the shared synchronous CLI rendering
+   ↓ structured diagnostics > keeps stopped-daemon info out of counters and never exposes credential fields in check data
+   ↓ structured diagnostics > parses node configuration from the injected read without opening a real config path or exposing keys
+   × isolated cancellable diagnostics > keeps a cancelled POSIX query pending until both its owner and probe group disappear 24ms
+     → expected true to be false // Object.is equality
+   ↓ isolated cancellable diagnostics > keeps Harness home inside the selected diagnostic environment (undefined)
+   ↓ isolated cancellable diagnostics > keeps Harness home inside the selected diagnostic environment (isolated)
+   ↓ isolated cancellable diagnostics > keeps Harness home inside the selected diagnostic environment (inherit)
+   ↓ isolated cancellable diagnostics > terminates a real probe child through the default built isolation path on cancellation
+   ↓ isolated cancellable diagnostics > rejects an already-cancelled query before creating a worker
+   ↓ isolated cancellable diagnostics > runs blocking work off the caller loop and terminates its worker on cancellation
+   ↓ isolated cancellable diagnostics > releases the worker after success and propagates worker errors without producing a healthy report
+   ↓ isolated cancellable diagnostics > rejects an isolated task that exits without a diagnostic result
+   ↓ isolated cancellable diagnostics > does not return a completed result when cancellation arrives during owner disposal
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/core-diagnostics.test.ts > isolated cancellable diagnostics > keeps a cancelled POSIX query pending until both its owner and probe group disappear
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ test/core-diagnostics.test.ts:183:24
+    181|       await vi.advanceTimersByTimeAsync(20);
+    182|       expect(child.signalCode).toBe('SIGKILL');
+    183|       expect(finished).toBe(false);
+       |                        ^
+    184|       groupPresent = false;
+    185|       await vi.advanceTimersByTimeAsync(20);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 skipped (17)
+   Start at  14:03:13
+   Duration  1.00s (transform 304ms, setup 0ms, collect 735ms, tests 25ms, environment 0ms, prepare 97ms)

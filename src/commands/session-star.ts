@@ -19,12 +19,17 @@ import { assertNodeNotRevoked } from '../serve/revocation.js';
 import { tcpDir } from '../serve/registry.js';
 import { fetchBrokerCaps, fetchRosterFor } from '../serve/via-tcp.js';
 import { selectConnectEntry } from '../serve/connect-selector.js';
-import { resolveTargetByName } from '../resolve.js';
+import { qualifiedToolTarget, resolveTargetByName } from '../resolve.js';
 import { decodeRef } from '../ref.js';
 import { readSendLogTail, defaultSendLogFile } from '../send-log.js';
 import { defaultClaudeSessionsDir, listClaudeSessions as listClaudeSessionsReal } from '../claude/registry.js';
 import { listCodexThreads as listCodexThreadsReal } from '../codex/discovery.js';
+import { listOpenCodeThreads as listOpenCodeThreadsReal } from '../opencode/client.js';
+import type { OpenCodeThread } from '../opencode/client.js';
+import { listDshThreads as listDshThreadsReal } from '../dsh/client.js';
+import type { DshThread } from '../dsh/client.js';
 import { createSessionSelectionFollower } from '../application/session-selection.js';
+import { isEndpointTypeFor, nativeTargetKey, toolTypeFor } from '../tool-types.js';
 
 import { connectAttachPipe, ensureAggregator, queryAttachStatus, spawnServeDetachReal } from '../serve/attach-client.js';
 import type { AttachPipeClient } from '../serve/attach-client.js';
@@ -108,7 +113,9 @@ export interface StarJoinDeps {
   /** 入星诊断日志；写失败可抛出，调用方按成功/失败场景处理。真值 ~/.crosschat/tcp/launcher.log。 */
   log(line: string): void;
   listClaudeSessions(): { sessions: Array<{ sessionId: string; pid?: number; name?: string; updatedAt?: number; startedAt?: number }> };
-  listCodexThreads(): Promise<Array<{ id: string; name: string | null; createdAt?: number }>>;
+  listCodexThreads(): Promise<Array<{ id: string; endpointType?: string; name: string | null; createdAt?: number }>>;
+  listOpenCodeThreads?(): Promise<OpenCodeThread[]>;
+  listDshThreads?(): Promise<DshThread[]>;
   /** 自动拉聚合器（serve --connect <selector> --detach）；013 双开护栏在其内部在位。 */
   spawnServeDetach(selector: string): void;
   /** extends 证据源（本机 send-log 名字史）；缺省不查。 */
@@ -139,9 +146,12 @@ export function realStarJoinDeps(env: NodeJS.ProcessEnv = process.env): StarJoin
     listClaudeSessions: () => listClaudeSessionsReal(defaultClaudeSessionsDir(env)),
     listCodexThreads: async () => (await listCodexThreadsReal()).map((thread) => ({
       id: thread.id,
+      endpointType: thread.endpointType,
       name: thread.name,
       createdAt: thread.meta?.createdAt === undefined ? undefined : Date.parse(thread.meta.createdAt),
     })),
+    listOpenCodeThreads: () => listOpenCodeThreadsReal(),
+    listDshThreads: () => listDshThreadsReal(),
     spawnServeDetach: spawnServeDetachReal,
     sendLogFile: defaultSendLogFile(),
     machineName: realMachineName(),
@@ -247,16 +257,17 @@ export class StarJoiner {
   private readonly targets: StarTarget[] = [];
   private readonly knownClaude = new Set<string>();
   private readonly knownCodex = new Set<string>();
+  private readonly knownOpenCode = new Set<string>();
 
   constructor(
     private readonly opts: {
       deps: StarJoinDeps;
-      side: 'claude' | 'codex';
+      side: 'claude' | 'codex' | 'opencode';
       connects: string[];
       /** Claude 启动器所属的原生子进程；未就绪时等待，绝不猜其他新增会话。 */
       claudeProcessId?(): number | undefined;
       /** Exact selection supplied by a window-owned native adapter; no global discovery. */
-      selectedSession?: { sessionId: string; name?: string };
+      selectedSession?: { sessionId: string; name?: string; endpointType?: string };
       extendSession?: string;
       /** spawn 时已知的会话名（claude -n 原生透传），用于异工具同名预警。 */
       spawnName?: string;
@@ -270,6 +281,13 @@ export class StarJoiner {
   }
 
   /** spawn 前调用：解析星目标、核对同名预警；需要差分的来源单独建立基线。 */
+  private get endpointType(): string {
+    const selected = this.opts.selectedSession?.endpointType;
+    if (selected !== undefined && !isEndpointTypeFor(this.opts.side, selected)) throw new MultichatError('USAGE', '所选会话的端点类型与工具不匹配');
+    return selected ?? (this.opts.side === 'opencode' ? 'shared' : 'cli');
+  }
+
+  /** Prepare exact star targets before the native process starts. */
   async begin(): Promise<void> {
     this.resolveTargets();
     if (this.targets.length === 0) return;
@@ -284,6 +302,13 @@ export class StarJoiner {
         for (const thread of await deps.listCodexThreads()) this.knownCodex.add(thread.id);
       } catch {
         // codex daemon 未起：空基线（子进程会拉起 daemon，新线程即差分命中）
+      }
+    }
+    if (this.opts.selectedSession === undefined && this.opts.side === 'opencode') {
+      try {
+        for (const thread of await this.opts.deps.listOpenCodeThreads?.() ?? []) this.knownOpenCode.add(thread.id);
+      } catch {
+        // OpenCode may not have registered its service before this launcher starts it.
       }
     }
     void this.run().catch((err: unknown) => { this.reportFailure(err); });
@@ -308,8 +333,8 @@ export class StarJoiner {
   }
 
   /**
-   * 020 启动期同名预警（spawn 前打）：-n 名与星内既有成员异工具同名时打一行
-   * "你的地址将是 工具/名"——把发送期碰撞提前到启动期可见。尽力而为：attach
+   * 启动前的同名提示使用显式工具参数；不同类型已能独立寻址，不报路由碰撞。
+   * 尽力而为：attach
    * 管道已在才查（聚合器不在静默跳过不延迟 spawn），status 探针 ~2s 超时上限
    * 预警仍在 spawn 前走 stdout，不与正常入星预告混用。
    */
@@ -323,7 +348,10 @@ export class StarJoiner {
         const status = await Promise.race([queryAttachStatus(pipe), sleep(2_000).then(() => undefined)]);
         const other = status?.members.find((m) => m.name === spawnName && m.tool !== undefined && m.tool !== side);
         if (other !== undefined) {
-          deps.stdout(`预警: 星内已有 ${other.tool}/${spawnName}，你的地址将是 ${side}/${spawnName}（同名异工具，发送方需带工具限定词）`);
+          const existingTool = toolTypeFor(other.tool!, other.endpointType);
+          const currentTool = toolTypeFor(side, this.endpointType);
+          const existing = existingTool === undefined ? `${other.tool}（类型待核实）` : `--tool ${existingTool}`;
+          deps.stdout(`同名提示: 星内已有会话 ${spawnName}（${existing}）；本次使用 --tool ${currentTool}，发送时分别指定收件类型。`);
         }
       } catch {
         // 聚合器不在/管道未起——预警尽力而为，跳过
@@ -366,7 +394,8 @@ export class StarJoiner {
       for (const pipe of this.pipes.values()) {
         try {
           await Promise.race([
-            pipe.send({ op: 'detach', sessionId: this.sessionId, claimId: this.claimId, ...(this.opts.rm === true ? { erase: true } : {}) }),
+            pipe.send({ op: 'detach', sessionId: this.sessionId, tool: this.opts.side, endpointType: this.endpointType,
+              claimId: this.claimId, ...(this.opts.rm === true ? { erase: true } : {}) }),
             sleep(800),
           ]);
         } catch {
@@ -424,12 +453,15 @@ export class StarJoiner {
             const top = fresh[0]!;
             return { sessionId: top.sessionId, ...(top.name === undefined || top.name === null ? {} : { name: top.name }) };
           }
-        } else {
+        } else if (side === 'codex') {
           const fresh = (await deps.listCodexThreads()).filter((thread) => !this.knownCodex.has(thread.id));
           if (fresh.length > 0) {
             fresh.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
             return { sessionId: fresh[0]!.id }; // codex 名字天然后置（/rename），attach 不带名，扫描回填
           }
+        } else {
+          const fresh = (await deps.listOpenCodeThreads?.() ?? []).find((thread) => !this.knownOpenCode.has(thread.id));
+          if (fresh !== undefined) return { sessionId: fresh.id, ...(fresh.name === null ? {} : { name: fresh.name }) };
         }
       } catch {
         // 扫描抖动/daemon 未起：下一轮再试
@@ -475,6 +507,7 @@ export class StarJoiner {
           claimId: this.claimId,
           ...(this.opts.selectedSession === undefined ? {} : { selectionOwned: true }),
           tool: side, // 020：启动器天然知道 side——同机跨工具同名消歧的声明源
+          endpointType: this.endpointType,
           ...(attachName === undefined ? {} : { name: attachName }),
           ...(this.opts.extendSession === undefined ? {} : { extends: this.opts.extendSession }),
           ...(this.opts.rm === true ? { temporary: true } : {}), // 029：临时位随声明入册（死亡即删）
@@ -509,7 +542,8 @@ export class StarJoiner {
 /** CLI/Desktop-specific adapters only publish selection; star policy stays shared here. */
 export function createStarSelectionFollower(options: ConstructorParameters<typeof StarJoiner>[0]) {
   return createSessionSelectionFollower(async (selection, signal) => {
-    const joiner = new StarJoiner({ ...options, selectedSession: { sessionId: selection.sessionId, ...(selection.name === undefined ? {} : { name: selection.name }) } });
+    const joiner = new StarJoiner({ ...options, selectedSession: { sessionId: selection.sessionId,
+      ...(selection.endpointType === undefined ? {} : { endpointType: selection.endpointType }), ...(selection.name === undefined ? {} : { name: selection.name }) } });
     const abort = () => { void joiner.stop(); };
     signal.addEventListener('abort', abort, { once: true });
     if (signal.aborted) abort();
@@ -545,15 +579,52 @@ export async function runAdopt(args: AdoptArgs, deps: StarJoinDeps): Promise<num
   const config = readNodeConfig(join(tcpDir(deps.tcpBaseDir), 'node.json'));
   const { entry, selector } = selectConnectEntry(args.connect, config);
   const machineName = entry.showName ?? config.showName ?? deps.machineName;
-  const sessions = deps.listClaudeSessions().sessions;
-  const threads = await deps.listCodexThreads();
-  let hit: { sessionId: string; name?: string; side: 'claude' | 'codex' };
+  const qualifiedProvider = qualifiedToolTarget(args.adopt)?.tool.providerId;
+  // A literal existing name may begin with "claude/"; retain that established
+  // resolution rule while new endpoint qualifiers constrain the actual source.
+  const selectedProvider = qualifiedProvider === 'claude' ? undefined : qualifiedProvider;
+  const sessions = selectedProvider === undefined ? deps.listClaudeSessions().sessions : [];
+  const threads = selectedProvider === undefined || selectedProvider === 'codex' ? await deps.listCodexThreads() : [];
+  let openCode: OpenCodeThread[] = [];
+  try { if (selectedProvider === undefined || selectedProvider === 'opencode') openCode = await deps.listOpenCodeThreads?.() ?? []; }
+  catch (error) {
+    const missing = error instanceof MultichatError && error.code === 'OPENCODE_NOT_CONFIGURED';
+    let previousTarget = false;
+    if (!args.adopt.startsWith('opencode/')) {
+      try { resolveTargetByName(args.adopt, sessions, threads); previousTarget = true; }
+      catch { /* A failed unrelated source is ignorable only for a verified target. */ }
+    }
+    if (selectedProvider === 'opencode' || !missing && !previousTarget) {
+      deps.stderr(`adopt: ${error instanceof Error ? error.message : 'OpenCode session source unavailable.'}`);
+      return 1;
+    }
+  }
+  let dsh: DshThread[] = [];
+  try { if (selectedProvider === undefined || selectedProvider === 'dsh') dsh = await deps.listDshThreads?.() ?? []; }
+  catch (error) {
+    const missing = error instanceof MultichatError && error.code === 'DSH_NOT_CONFIGURED';
+    let previousTarget = false;
+    if (!args.adopt.startsWith('dsh/')) {
+      try { resolveTargetByName(args.adopt, sessions, threads, openCode); previousTarget = true; }
+      catch { /* An unresolved or ambiguous legacy selector cannot justify ignoring this source failure. */ }
+    }
+    if (selectedProvider === 'dsh' || !missing && !previousTarget) {
+      deps.stderr(`adopt: ${error instanceof Error ? error.message : 'DeepSeek Harness session source unavailable.'}`);
+      return 1;
+    }
+  }
+  let hit: { sessionId: string; name?: string; side: 'claude' | 'codex' | 'opencode' | 'dsh'; endpointType?: string };
   try {
-    const resolved = resolveTargetByName(args.adopt, sessions, threads);
+    const resolved = resolveTargetByName(args.adopt, sessions, threads, openCode, dsh);
     hit =
       resolved.side === 'claude'
-        ? { sessionId: resolved.session.sessionId, ...(resolved.session.name === undefined ? {} : { name: resolved.session.name }), side: 'claude' }
-        : { sessionId: resolved.thread.id, ...(resolved.thread.name === null || resolved.thread.name === '' ? {} : { name: resolved.thread.name }), side: 'codex' };
+        ? { sessionId: resolved.session.sessionId, endpointType: 'cli', ...(resolved.session.name === undefined ? {} : { name: resolved.session.name }), side: 'claude' }
+        : { sessionId: resolved.thread.id, ...(resolved.thread.name === null || resolved.thread.name === '' ? {} : { name: resolved.thread.name }), side: resolved.side,
+          endpointType: resolved.side === 'opencode' ? 'shared' : resolved.thread.endpointType };
+    if (hit.endpointType === undefined && dsh.some((thread) => thread.id === hit.sessionId) && (sessions.some((session) => session.sessionId === hit.sessionId)
+      || threads.some((thread) => thread.id === hit.sessionId) || openCode.some((thread) => thread.id === hit.sessionId))) {
+      throw new MultichatError('NAME_COLLISION', 'This native session ID exists in Harness and another tool; current star membership cannot safely distinguish them.');
+    }
   } catch (err) {
     if (err instanceof MultichatError) {
       deps.stderr(`adopt: ${err.message}`);
@@ -572,7 +643,12 @@ export async function runAdopt(args: AdoptArgs, deps: StarJoinDeps): Promise<num
       deps.stderr('adopt: broker 不支持会话成员（proto:3），已降级机器级——收编无意义，请先升级 broker 机 crosschat');
       return 1;
     }
-    const alreadyMember = status.members.some((decl) => decl.sessionId === hit.sessionId);
+    const key = nativeTargetKey({ providerId: hit.side, nativeId: hit.sessionId, endpointType: hit.endpointType });
+    const alreadyMember = status.members.some((decl) => nativeTargetKey({ providerId: decl.tool ?? '', nativeId: decl.sessionId, endpointType: decl.endpointType }) === key);
+    if (hit.endpointType === undefined && status.members.some((decl) => decl.sessionId === hit.sessionId && (hit.side === 'dsh' || decl.tool === 'dsh') && decl.tool !== hit.side)) {
+      deps.stderr('adopt: 此完整会话 ID 已绑定其他工具，不能覆盖或作为幂等收编');
+      return 1;
+    }
     if (alreadyMember && args.extendSession === undefined) {
       deps.stdout(`会话 ${hit.name ?? hit.sessionId.slice(0, 8)} 已是星 ${entry.name ?? selector} 成员（幂等，无需收编）`);
       return 0;
@@ -592,6 +668,7 @@ export async function runAdopt(args: AdoptArgs, deps: StarJoinDeps): Promise<num
       op: 'attach',
       sessionId: hit.sessionId,
       tool: hit.side, // 020：adopt 收编天然知道 side（resolve 结果）
+      ...(hit.endpointType === undefined ? {} : { endpointType: hit.endpointType }),
       ...(hit.name === undefined ? {} : { name: hit.name }),
       ...(args.extendSession === undefined ? {} : { extends: args.extendSession }),
     });

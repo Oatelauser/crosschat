@@ -13,6 +13,20 @@ function provider(providerId: string, presence: 'present' | 'absent' | 'unknown'
 }
 
 describe('provider member capabilities', () => {
+  it('probes a qualified native target only through its Provider and keeps same-ID endpoint observations distinct', async () => {
+    const claude = provider('claude');
+    const codex = provider('codex');
+    const targets = [{ providerId: 'codex', endpointType: 'cli', nativeId: 'same-id' },
+      { providerId: 'codex', endpointType: 'desktop', nativeId: 'same-id' }];
+    const snapshot = await readMemberSnapshot([claude, codex], Object.assign({ contextId: 'local', nativeIds: ['same-id'] }, { targets }));
+    expect(claude.liveness.probe).not.toHaveBeenCalled();
+    expect(codex.liveness.probe).toHaveBeenCalledTimes(2);
+    expect(codex.liveness.probe).toHaveBeenCalledWith({ contextId: 'local', nativeId: 'same-id', endpointType: 'cli', signal: undefined });
+    expect(codex.liveness.probe).toHaveBeenCalledWith({ contextId: 'local', nativeId: 'same-id', endpointType: 'desktop', signal: undefined });
+    expect(snapshot.get(JSON.stringify(['codex', 'cli', 'same-id']))).toMatchObject({ providerId: 'codex', endpointType: 'cli' });
+    expect(snapshot.get(JSON.stringify(['codex', 'desktop', 'same-id']))).toMatchObject({ providerId: 'codex', endpointType: 'desktop' });
+  });
+
   it('delegates native IDs and names to an arbitrary provider and preserves provider priority', async () => {
     const first = provider('thirdtool');
     const second = provider('otherprovider');
@@ -65,5 +79,40 @@ describe('provider member capabilities', () => {
     const snapshot = await readMemberSnapshot(providers, { contextId: 'local', nativeIds: ['codex-id'] });
     expect(snapshot.get('codex-id')?.providerId).toBe('codex');
     expect(await snapshot.get('codex-id')?.readName()).toBeUndefined();
+  });
+
+  it('verifies typed Codex members beyond the default list limit through independent complete endpoint snapshots', async () => {
+    const oldId = 'older-than-twenty';
+    const firstPage = Array.from({ length: 20 }, (_, index) => ({ id: `recent-${index}`, endpointType: 'cli', name: `Recent ${index}`, status: 'idle' as const }));
+    const listCodexThreads = vi.fn(async (options?: { endpointType?: string; complete?: boolean }) => {
+      if (options?.complete !== true) return firstPage;
+      return [...(options.endpointType === 'cli' ? firstPage : []), { id: oldId, endpointType: options.endpointType, name: `${options.endpointType} title`, status: 'idle' as const }];
+    });
+    const providers = createLegacyMemberProviders({ listClaudeSessions: () => ({ sessions: [], malformed: 0 }), listCodexThreads,
+      lookupRolloutMetas: () => new Map(), codexHome: 'fixture-home' }, [oldId]);
+    const targets = ['cli', 'desktop'].map((endpointType) => ({ providerId: 'codex', nativeId: oldId, endpointType }));
+    const snapshot = await readMemberSnapshot(providers, { contextId: 'local', nativeIds: [oldId], targets });
+    expect(snapshot.size).toBe(2);
+    for (const target of targets) {
+      const observation = snapshot.get(JSON.stringify(['codex', target.endpointType, oldId]));
+      expect(observation).toMatchObject({ providerId: 'codex', endpointType: target.endpointType });
+      expect(await observation?.readName()).toBe(`${target.endpointType} title`);
+    }
+    expect(listCodexThreads.mock.calls).toEqual([[{ endpointType: 'cli', complete: true }], [{ endpointType: 'desktop', complete: true }]]);
+  });
+
+  it('retains an unverifiable typed member and does not reuse a different Codex endpoint as its fallback', async () => {
+    const listCodexThreads = vi.fn(async (options?: { endpointType?: string; complete?: boolean }) => {
+      if (options?.endpointType === 'cli') throw new Error('CLI source incomplete');
+      return [{ id: 'shared-id', endpointType: 'desktop', name: 'Desktop title', status: 'idle' as const }];
+    });
+    const providers = createLegacyMemberProviders({ listClaudeSessions: () => ({ sessions: [], malformed: 0 }), listCodexThreads,
+      lookupRolloutMetas: () => new Map(), codexHome: 'fixture-home' }, ['shared-id']);
+    await expect(readMemberSnapshot(providers, { contextId: 'local', nativeIds: ['shared-id'],
+      targets: [{ providerId: 'codex', nativeId: 'shared-id', endpointType: 'cli' }] })).rejects.toThrow('unknown');
+    const desktop = await readMemberSnapshot(providers, { contextId: 'local', nativeIds: ['shared-id'],
+      targets: [{ providerId: 'codex', nativeId: 'shared-id', endpointType: 'desktop' }] });
+    expect(desktop.get(JSON.stringify(['codex', 'desktop', 'shared-id']))?.endpointType).toBe('desktop');
+    expect(listCodexThreads.mock.calls).toEqual([[{ endpointType: 'cli', complete: true }], [{ endpointType: 'desktop', complete: true }]]);
   });
 });

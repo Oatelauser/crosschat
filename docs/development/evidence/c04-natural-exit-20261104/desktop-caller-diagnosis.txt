@@ -1,0 +1,1 @@
+{"storedFiles":1,"completeFrameDecode":true,"observed":[{"session":"session-e287799a-c778-4446-bdaa-cca5c73f2842","profile":"desktop","dshHomeMatches":true,"sourceExit":0,"source":{"status":"identified","shouldAsk":false,"sourceTool":"dsh-desktop","basis":"native","scope":"instance","association":"verified"}}]}

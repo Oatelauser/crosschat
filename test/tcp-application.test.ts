@@ -36,6 +36,34 @@ function response(contextId: string, ids: string[], nextCursor: string | null = 
 }
 
 describe('TCP readonly application', () => {
+  it('preserves same-ID endpoint roster rows and exact endpoint references through snapshot projection', async () => {
+    const { createTcpApplication } = await import('../src/application/tcp/index.js');
+    const { tcpContextId } = await import('../src/application/tcp/reading.js');
+    const f = await fixture();
+    const raw = { ...snapshot(), members: ['cli', 'desktop'].map((endpointType) => ({ sessionId: 'same-native-id', tool: 'codex', endpointType, name: 'same-name', machine: midA, online: true })) };
+    const app = createTcpApplication({ ...f, readSnapshot: async () => raw });
+    const result = await app.readSessions({ contextId: tcpContextId(entry), scope: 'members' });
+    expect(result.completeness).toBe('complete');
+    expect(result.items).toHaveLength(2);
+    expect(new Set(result.items.map((item) => item.id)).size).toBe(2);
+    expect(result.items).toEqual(expect.arrayContaining(['cli', 'desktop'].map((endpointType) => expect.objectContaining({ endpointType,
+      ref: expect.objectContaining({ providerId: 'codex', nativeId: 'same-native-id', endpointType }), address: `tcp:star-a:${midA}:same-native-id` }))));
+  });
+
+  it('keeps opaque full IDs copyable when another member name looks identical or like a former tool qualifier', async () => {
+    const { createTcpApplication } = await import('../src/application/tcp/index.js');
+    const { tcpContextId } = await import('../src/application/tcp/reading.js');
+    const f = await fixture();
+    const ids = ['codex-cli/native-id', 'tcp:opaque:native-id'];
+    const members = ids.flatMap((sessionId, index) => [
+      { sessionId, tool: 'codex', endpointType: 'cli', name: `target-${index}`, machine: midA, online: true },
+      { sessionId: `other-${index}`, tool: 'codex', endpointType: 'cli', name: sessionId, machine: midA, online: true },
+    ]);
+    const app = createTcpApplication({ ...f, readSnapshot: async () => ({ ...snapshot(), members }) });
+    const result = await app.readSessions({ contextId: tcpContextId(entry), scope: 'members' });
+    for (const nativeId of ids) expect(result.items.find((item) => item.nativeId === nativeId)?.address).toBe(`tcp:star-a:${midA}:${nativeId}`);
+  });
+
   it('caps explicit fan-out at the agreed three nodes before any IO', async () => {
     const { createTcpApplication } = await import('../src/application/tcp/index.js');
     const readSnapshot = vi.fn();

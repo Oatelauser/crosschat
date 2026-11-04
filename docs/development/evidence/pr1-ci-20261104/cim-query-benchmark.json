@@ -1,0 +1,38 @@
+{
+  "scope": "local Windows only; no hosted timing claim",
+  "timeoutMs": 5000,
+  "rows": [
+    {
+      "projected": false,
+      "elapsedMs": 938,
+      "code": 0,
+      "timedOut": false,
+      "stdoutBytes": 42857,
+      "rowCount": 416
+    },
+    {
+      "projected": true,
+      "elapsedMs": 749,
+      "code": 0,
+      "timedOut": false,
+      "stdoutBytes": 42857,
+      "rowCount": 416
+    },
+    {
+      "projected": false,
+      "elapsedMs": 722,
+      "code": 0,
+      "timedOut": false,
+      "stdoutBytes": 42857,
+      "rowCount": 416
+    },
+    {
+      "projected": true,
+      "elapsedMs": 759,
+      "code": 0,
+      "timedOut": false,
+      "stdoutBytes": 42857,
+      "rowCount": 416
+    }
+  ]
+}

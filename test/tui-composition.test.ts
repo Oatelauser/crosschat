@@ -167,7 +167,7 @@ describe('default local and SSH resource composition', () => {
     expect(composed.shouldSavePreferences()).toBe(outcome === 'blocked');
   });
   it('constructs lazily and binds explicit home child environments to the isolated scope', () => {
-    vi.stubEnv('LOCALAPPDATA', '/outside/local'); vi.stubEnv('CODEX_HOME', '/outside/native');
+    vi.stubEnv('LOCALAPPDATA', '/outside/local'); vi.stubEnv('CODEX_HOME', '/outside/native'); vi.stubEnv('DSH_HOME', '/outside/dsh');
     createDefaultResources({ home: '/isolated', isolatedHome: true });
     for (const read of [mocks.localRead, mocks.serviceRead, mocks.preview, mocks.execute, mocks.remoteRead, mocks.remoteDoctor, mocks.inspect, mocks.files, mocks.list]) expect(read).not.toHaveBeenCalled();
     const serviceOptions = mocks.services.mock.calls[0][0];
@@ -175,8 +175,15 @@ describe('default local and SSH resource composition', () => {
     expect(serviceOptions.env.LOCALAPPDATA).not.toBe('/outside/local');
     expect(serviceOptions.env.CODEX_HOME).not.toBe('/outside/native');
     expect(mocks.maintenance.mock.calls[0][0].env.LOCALAPPDATA).not.toBe('/outside/local');
+    expect(mocks.maintenance.mock.calls[0][0].env.DSH_HOME).toBeUndefined();
     expect(mocks.ssh.mock.calls[0][0].configFile).toBe(join('/isolated', '.ssh', 'config'));
     expect(mocks.ssh.mock.calls[0][0].env.HOME).toBe('/isolated');
+  });
+
+  it('keeps the caller DSH_HOME for a composition that inherits the native environment', () => {
+    vi.stubEnv('DSH_HOME', '/real/dsh');
+    createDefaultResources({ home: '/real', isolatedHome: false });
+    expect(mocks.maintenance.mock.calls[0][0].env.DSH_HOME).toBe('/real/dsh');
   });
 
   it('installs local services/files/maintenance and preserves related navigation without executing a task', async () => {

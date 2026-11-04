@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ✓ test/dsh-desktop-exit-observer.test.ts (5 tests) 4ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  11:20:24
+   Duration  510ms (transform 51ms, setup 0ms, collect 52ms, tests 4ms, environment 0ms, prepare 205ms)
+

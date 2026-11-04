@@ -1,0 +1,30 @@
+{
+  "development": "1b49d7eccd916dc53658aef4a6672f022db9a0ec",
+  "main": "874461ae9ecdb799d880c28c1db30999c2c51555",
+  "sourceDeltaPaths": [
+    "src/application/services/owned-process.ts"
+  ],
+  "mainPosixFixExactRepositoryBlob": true,
+  "mainPosixFixBlob": "409ce760cd057c1280421072c2e4be736e173330",
+  "unchangedDevelopmentPaths": [
+    "src/dsh",
+    "integrations/dsh",
+    "scripts/dsh-onboarding.mjs",
+    "scripts/dsh-onboarding-contract.mjs",
+    "scripts/dsh-compat-ci.mjs",
+    ".github/workflows/dsh-compat.yml",
+    ".github/workflows/dsh-onboarding-compat.yml",
+    "src/tool-types.ts",
+    "src/ref.ts",
+    "src/conversations.ts",
+    "src/tui",
+    "src/cli.ts"
+  ],
+  "conflictedSourceFilesPreserved": 16,
+  "initialRawByteAudit": {
+    "result": "mismatch",
+    "diagnosis": "working tree CRLF versus Git LF; canonical git hash-object matches exact main blob",
+    "workingTreeContainsCRLF": true,
+    "lfNormalizedContentEqual": true
+  }
+}

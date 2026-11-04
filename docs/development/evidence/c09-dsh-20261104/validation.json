@@ -1,0 +1,228 @@
+{
+  "schema": 1,
+  "date": "2026-11-04",
+  "task": "C09-DSH-npm-Web-terminal",
+  "sourceHead": "fde344757238ef3173923e88612432aa8106aebd",
+  "accepted": {
+    "scope": "Official npm/Web Host + production bridge/reader + built TUI in Windows ConPTY; no browser or Desktop UI",
+    "checks": [
+      "authenticated-live-native-roots",
+      "exact-full-copy-details-guide-filter-refresh-selection",
+      "native-plugin-disable-source-failure-and-reenable-recovery",
+      "real-maintenance-worker-default-cancel-then-install-profile-preserved",
+      "real-owned-broker-node-native-member-list-full-typed-command",
+      "resize-normal-exit-terminal-raw-and-listeners-restored"
+    ],
+    "identity": {
+      "ready": true,
+      "source": {
+        "status": "identified",
+        "sourceTool": "dsh",
+        "basis": "native",
+        "association": "verified",
+        "scope": "instance",
+        "shouldAsk": false
+      }
+    },
+    "version": "0.2.1-rc.2",
+    "pid": 7928,
+    "sessions": [
+      "session-bfa6b40d-62bb-4950-8b03-1b02e5b65470",
+      "session-a2a62982-db3b-440b-8afa-d2c4eac0c2d3"
+    ],
+    "starId": "c09-dsh-owned-star",
+    "machineId": "11111111222233334444555555555555",
+    "status": "passed",
+    "cleanup": {
+      "runtimeStopped": true,
+      "registrationRemoved": true,
+      "removed": true,
+      "forced": false
+    }
+  },
+  "archive": {
+    "path": "raw-evidence-redacted.zip",
+    "sha256": "d32fea87d2143b175bbd8a1141c88650408611c1b453ae4879dd64da456593d4",
+    "files": [
+      {
+        "path": "install.json",
+        "sha256": "46cb8076e7adf0d5abe5045992ebc25a20fa1f532fbd63be2b5e3f6dd33a9d1d",
+        "bytes": 444
+      },
+      {
+        "path": "tui-0ZChtn/application.jsonl",
+        "sha256": "6db0b5f34e2119568cc5b3c494d93ff9ed54ba3176f9f153db832b09c28867e1",
+        "bytes": 45286
+      },
+      {
+        "path": "tui-0ZChtn/runtime-logs.json",
+        "sha256": "e7a20de5638f5ee94b17dcf5c6d689c8c8b7a721a693df7bc0078e0f75fbaf06",
+        "bytes": 90
+      },
+      {
+        "path": "tui-0ZChtn/summary.json",
+        "sha256": "83bd53ff5a5bd84e6ced8daf2a9fe1547a2ebfcbec39b92eb641a618752c502f",
+        "bytes": 1559
+      },
+      {
+        "path": "tui-0ZChtn/terminal.jsonl",
+        "sha256": "4d4c02bc2dc28581a5076cd133b3d9422ed851605ae794db7831d9cbccbd50ae",
+        "bytes": 261309
+      },
+      {
+        "path": "tui-attempt-1.log",
+        "sha256": "230a4db23e356bbb2872f3e2507db1a4dab9ae250391eb1db79cc282944043ab",
+        "bytes": 8707
+      },
+      {
+        "path": "tui-attempt-2.log",
+        "sha256": "7627d87889b88a001430c576fa12eb62455e7d83ae73171d6027edd47ce06b6c",
+        "bytes": 8960
+      },
+      {
+        "path": "tui-attempt-3.log",
+        "sha256": "f54baf6740ae897c01d6d669966620ec60ded79de1fa9312187a8fd81361a1a8",
+        "bytes": 9141
+      },
+      {
+        "path": "tui-attempt-4.log",
+        "sha256": "4c1dfd0e7c24278879c5a06abb66dc2e4e4aa5ce06e8a4a4c6e2251bd46879d8",
+        "bytes": 1979
+      },
+      {
+        "path": "tui-attempt-5.log",
+        "sha256": "b003d0eb90b6e760cabd42b6a291eb12b95502218e2540d754e1c41f2fcc85a4",
+        "bytes": 991
+      },
+      {
+        "path": "tui-emVr8U/application.jsonl",
+        "sha256": "12093e3b3766b5b46fe1b6ed37c8f481847763734e7529fda1364eb82d561841",
+        "bytes": 36761
+      },
+      {
+        "path": "tui-emVr8U/runtime-logs.json",
+        "sha256": "244b9d238764343af88729ce0f039fd106506189195de5ff298e50a38ba3b8af",
+        "bytes": 90
+      },
+      {
+        "path": "tui-emVr8U/summary.json",
+        "sha256": "7504b91447892342834440a155a843514c034d5ba7da8f573a3e15ae6fe1cd26",
+        "bytes": 6273
+      },
+      {
+        "path": "tui-emVr8U/terminal.jsonl",
+        "sha256": "4a8326c09ed9a6a46ab2f50c670ad08a20eb70d1c8e19a5f8f52b7c1c4ecbf3d",
+        "bytes": 225237
+      },
+      {
+        "path": "tui-fTZCuQ/application.jsonl",
+        "sha256": "ea98ba58874f2f5e7281b644bd9f508c36314584cbc465d154df75e9e5b4d560",
+        "bytes": 10252
+      },
+      {
+        "path": "tui-fTZCuQ/runtime-logs.json",
+        "sha256": "e03e52c1c5b05b09a4fd495eb4f3067fb9ac773d002992bb70653c898a6a270b",
+        "bytes": 90
+      },
+      {
+        "path": "tui-fTZCuQ/summary.json",
+        "sha256": "5d63659d2c5e7cdd191dd8b2dc6a7821e05b47276102baaf41a107a07f0e7f9a",
+        "bytes": 6055
+      },
+      {
+        "path": "tui-fTZCuQ/terminal.jsonl",
+        "sha256": "2f947f2531c05e96a3309638021a734844ce8ab28c61c0033a66b7829e350639",
+        "bytes": 23588
+      },
+      {
+        "path": "tui-goPuoG/application.jsonl",
+        "sha256": "1f85675a02d80b7cd4bd50f4f45e14fa3b0f7010dc5bb11569f29da6f6dae903",
+        "bytes": 79386
+      },
+      {
+        "path": "tui-goPuoG/runtime-logs.json",
+        "sha256": "d25195eedce5927aa48af8cccb049d1ebe2b4347cf37267b14e7dbfc53608bf7",
+        "bytes": 90
+      },
+      {
+        "path": "tui-goPuoG/summary.json",
+        "sha256": "343171758e480044f178a5b70f3e5f5ddd8866f3fd407e42f6bd29f3a0b7ca18",
+        "bytes": 6456
+      },
+      {
+        "path": "tui-goPuoG/terminal.jsonl",
+        "sha256": "832b0b6f105b3b5451b3680c6ca8d913c3b273625b61543bc6b531e9c4b7ddd5",
+        "bytes": 336899
+      },
+      {
+        "path": "tui-tXTkLv/application.jsonl",
+        "sha256": "220c07098ccae82649ff247acf6797442eaeb31d0b6251e8c6ed980901518843",
+        "bytes": 45780
+      },
+      {
+        "path": "tui-tXTkLv/runtime-logs.json",
+        "sha256": "29e9781923c8e3d77aa59d6ab0fc4aad6e10839b5d3aaaca65d7d66f90f9b9e9",
+        "bytes": 90
+      },
+      {
+        "path": "tui-tXTkLv/summary.json",
+        "sha256": "4011c82055e40059403ea856edb64adb97730644961df15cf6d8999c1dbb9017",
+        "bytes": 1137
+      },
+      {
+        "path": "tui-tXTkLv/terminal.jsonl",
+        "sha256": "e4b3dec05c257902d4992907b227daa64b14f3705f58195fc575ad9769cbb976",
+        "bytes": 291806
+      },
+      {
+        "path": "full-check.log",
+        "bytes": 30233,
+        "sha256": "f8ba160bc71997624320976d443d234f2f85dd9ef88498cc9c46cc7a896f2650"
+      }
+    ]
+  },
+  "boundaries": [
+    "Official npm Web Host; no browser UI or formal Desktop TUI in this round",
+    "No product code or public command change",
+    "Fixture clipboard captured; system clipboard unchanged",
+    "First three helper failures were outdated UI label expectations; fourth fixture omitted native endpoint type and correctly could not copy; final fixture uses actual authenticated native type",
+    "Parent C09 and CI/platform tasks remain open"
+  ],
+  "cleanup": {
+    "acceptedNativeFixtureRemoved": true,
+    "ownedInstallationRootRemoved": true,
+    "userDshRetained": true,
+    "removedBy": "user",
+    "agentReadOnlyAbsenceVerified": true,
+    "automaticDeletion": "rejected: blocked by policy; no alternate deletion retried",
+    "ownedProcessCountBeforeUserDeletion": 0
+  },
+  "verification": {
+    "targeted": {
+      "files": 3,
+      "passed": 19
+    },
+    "check": {
+      "exitCode": 0,
+      "passed": 2698,
+      "skipped": 11,
+      "filesPassed": 232,
+      "filesSkipped": 3,
+      "runtimeModules": 204,
+      "runtimeEdges": 688,
+      "maxWorkers": 2,
+      "CROSSCHAT_LIVE": false
+    }
+  },
+  "sourceFiles": [
+    {
+      "path": "test/helpers/dsh-tui-pty-validation.mjs",
+      "sha256": "58294b7c976daa54f7a104b34099d0dcef7e9071ac45ac27ded3c244d073e4aa"
+    },
+    {
+      "path": "test/dsh-tui.test.ts",
+      "sha256": "7d38c1494448d48b1df99003d84bfee76b7a7ffb7fbf94ecbfd61dc8e282f3b0"
+    }
+  ],
+  "acceptanceCommit": "75ffc7b"
+}

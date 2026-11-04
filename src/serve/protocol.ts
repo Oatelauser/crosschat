@@ -7,6 +7,7 @@ import type { SessionOperationDescription } from '../application/session-operati
 import type { MembershipResult } from '../application/session-membership/types.js';
 import { isDeliveryMode } from '../delivery-mode.js';
 import type { DeliveryMode } from '../delivery-mode.js';
+import { isEndpointTypeFor } from '../tool-types.js';
 
 export const PROTOCOL_VERSION = 1;
 export const MAX_PAYLOAD_BYTES = 2 * 1024 * 1024;
@@ -46,6 +47,8 @@ export const ERR = {
  * caps 缺省/不含 = 老节点（proto:1 行为不变）；后续能力（如 010 TLS）沿此数组追加。
  */
 export const CAP_SESSION_MEMBERS = 'session-members';
+/** Typed writes must never be interpreted by a peer that drops endpoint identity. */
+export const CAP_ENDPOINT_TYPES = 'endpoint-types-v1';
 
 /**
  * 022 多星能力标识：broker 一进程一端口托管多颗星。多星 broker 的 info 帧
@@ -158,6 +161,7 @@ export interface SendFrame {
   conversation?: string;
   body: string;
   origin?: string;
+  tool?: string;
   delivery?: DeliveryMode;
 }
 export interface ReceiptFrame {
@@ -179,8 +183,11 @@ export interface DeliverFrame {
   to?: string;
   conversation?: string;
   origin?: string;
+  tool?: string;
   /** 018：会话级投递目标（三段寻址命中成员的会话 ID）——聚合器本地按它注入投递，不再经名字解析。 */
   sessionId?: string;
+  targetProviderId?: string;
+  targetEndpointType?: string;
   delivery?: DeliveryMode;
 }
 export interface ResultFrame {
@@ -269,9 +276,28 @@ export interface StatusCodexRow {
   originator: string | null;
 }
 /** E1 远程枚举载荷：分段镜像本地语义——codex daemon 没跑时给 unavailable 段而非整体失败。 */
+export interface StatusOpenCodeRow {
+  name: string | null;
+  id: string;
+  cwd: string;
+  rawStatus: unknown;
+  attributes: Readonly<Record<string, unknown>>;
+}
+
 export interface StatusPayload {
+  opencode?: StatusOpenCodeRow[] | { unavailable: string };
+  /** Optional live-root Harness metadata; existing sections retain their shape. */
+  dsh?: StatusDshRow[] | { unavailable: string };
   claude: StatusClaudeRow[];
   codex: StatusCodexRow[] | { unavailable: string };
+}
+
+export interface StatusDshRow {
+  name: string | null;
+  id: string;
+  cwd: string;
+  rawStatus: { type: 'idle' | 'running' };
+  attributes: Readonly<Record<string, unknown>>;
 }
 
 /** E1 远程会话枚举（票012）：请求方→broker；目标是节点时 broker 原帧转发。 */
@@ -326,6 +352,7 @@ export type ExtendsRef = string | { machine: string; name: string };
 /** 018 会话成员声明（sessions 帧元素）：成员键=会话 ID（claude sessionId / codex thread id），名字仅显示/寻址句柄。 */
 export interface SessionMemberDecl {
   sessionId: string;
+  endpointType?: string;
   name?: string;
   /**
    * 020：工具限定词（claude/codex/未来适配器；值规约=小写字母数字 ≤16，禁冒号禁斜杠）。
@@ -380,6 +407,8 @@ export interface MemberRemoveFrame {
   op: 'member-remove';
   /** 名字精确或会话 id 前缀（≥8 位）。 */
   target: string;
+  tool?: string;
+  endpointType?: string;
   /** Lifecycle cleanup: exact native ID, own machine, temporary members only. */
   temporaryOnly?: boolean;
   id?: string;
@@ -402,6 +431,7 @@ export interface MemberRemoveExactFrame {
   sessionId: string;
   machine: string;
   tool: string;
+  endpointType?: string;
 }
 
 /** Separate from read-only discovery: routed to one authenticated, exact node. */
@@ -412,6 +442,7 @@ export interface SessionOperationFrame {
   machineId: string;
   providerId: string;
   nativeId: string;
+  endpointType?: string;
   /** Broker replaces caller input with authoritative current-star membership. */
   membership?: { temporary: boolean; selectionOwned: boolean };
   request: { kind: 'describe' } | { kind: 'apply'; operation: 'adopt' | 'rename'; expectedRevision: string; name?: string };
@@ -423,6 +454,7 @@ export interface SessionOperationResultFrame {
   machineId: string;
   providerId: string;
   nativeId: string;
+  endpointType?: string;
   description?: SessionOperationDescription;
   result?: MembershipResult;
 }
@@ -511,6 +543,7 @@ export interface AdminMemberRow {
   sessionId: string;
   name?: string;
   tool?: string;
+  endpointType?: string;
   machine: string;
   machineName?: string;
   online?: boolean;
@@ -644,9 +677,13 @@ export function parseFrame(text: string): Frame | undefined {
     }
   }
   if ((op === 'send' || op === 'deliver') && 'delivery' in obj && !isDeliveryMode(obj.delivery)) return undefined;
+  if (op === 'deliver' && (('targetProviderId' in obj && (typeof obj.targetProviderId !== 'string' || sanitizeTool(obj.targetProviderId) !== obj.targetProviderId))
+    || ('targetEndpointType' in obj && (!('targetProviderId' in obj) || typeof obj.targetProviderId !== 'string' || !isEndpointTypeFor(obj.targetProviderId, obj.targetEndpointType))))) return undefined;
   if ((op === 'session-operation' || op === 'session-operation-result') && !validSessionOperation(obj as Record<string, unknown>)) return undefined;
   if (op === 'session-operation-cancel' && (!('id' in obj) || typeof obj.id !== 'string' || obj.id.length === 0 || obj.id.length > 128)) return undefined;
   if (op === 'member-remove' && (('temporaryOnly' in obj && typeof obj.temporaryOnly !== 'boolean')
+    || ('tool' in obj && (typeof obj.tool !== 'string' || sanitizeTool(obj.tool) !== obj.tool))
+    || ('endpointType' in obj && (!('tool' in obj) || typeof obj.tool !== 'string' || !isEndpointTypeFor(obj.tool, obj.endpointType)))
     || ('id' in obj && (typeof obj.id !== 'string' || obj.id.length === 0 || obj.id.length > 128)))) return undefined;
   if (op === 'credential-revoked' && !isCredentialRevoked(obj as Record<string, unknown>)) return undefined;
   if (op === 'member-remove-exact' || op === 'member-remove-exact-result') {
@@ -655,6 +692,7 @@ export function parseFrame(text: string): Frame | undefined {
       if (!('sessionId' in obj) || typeof obj.sessionId !== 'string' || obj.sessionId.length === 0 || obj.sessionId.length > 4096) return undefined;
       if (!('machine' in obj) || typeof obj.machine !== 'string' || obj.machine.length === 0 || obj.machine.length > 128) return undefined;
       if (!('tool' in obj) || typeof obj.tool !== 'string' || sanitizeTool(obj.tool) !== obj.tool) return undefined;
+      if ('endpointType' in obj && !isEndpointTypeFor(obj.tool, obj.endpointType)) return undefined;
     } else {
       if (!('ok' in obj) || typeof obj.ok !== 'boolean' || !('removed' in obj) || typeof obj.removed !== 'boolean') return undefined;
       if (('code' in obj && typeof obj.code !== 'string') || ('error' in obj && typeof obj.error !== 'string')) return undefined;
@@ -669,6 +707,7 @@ function validSessionOperation(value: Record<string, unknown>): boolean {
   const text = (input: unknown, max: number): input is string => typeof input === 'string' && input.length > 0 && input.length <= max;
   if (!text(value.id, 128) || !text(value.starId, 256) || !text(value.machineId, 32) || !/^[a-f0-9]{32}$/.test(value.machineId)
     || !text(value.providerId, 64) || sanitizeTool(value.providerId) !== value.providerId || !text(value.nativeId, 4096)) return false;
+  if (value.endpointType !== undefined && !isEndpointTypeFor(value.providerId, value.endpointType)) return false;
   if (value.op === 'session-operation') {
     if (value.membership !== undefined && (!record(value.membership) || typeof value.membership.temporary !== 'boolean' || typeof value.membership.selectionOwned !== 'boolean')) return false;
     const request = value.request;
@@ -679,7 +718,7 @@ function validSessionOperation(value: Record<string, unknown>): boolean {
   if (value.result !== undefined) return record(value.result) && ['applied', 'rejected', 'uncertain'].includes(String(value.result.kind)) && text(value.result.message, 4096);
   const description = value.description;
   if (!record(description) || !record(description.ref) || !text(description.ref.contextId, 1024) || description.ref.providerId !== value.providerId
-    || description.ref.nativeId !== value.nativeId || !Number.isFinite(description.observedAt) || typeof description.revision !== 'string'
+    || description.ref.nativeId !== value.nativeId || description.ref.endpointType !== value.endpointType || !Number.isFinite(description.observedAt) || typeof description.revision !== 'string'
     || description.revision.length > 128 || !record(description.actions)) return false;
   return ['adopt', 'rename'].every((operation) => {
     const action = description.actions && record(description.actions) ? description.actions[operation] : undefined;

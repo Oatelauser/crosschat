@@ -165,7 +165,7 @@ class WsProbe {
   async handshake(auth: string, machineId?: string): Promise<void> {
     await this.opened();
     await this.waitFor((f) => f.op === 'info');
-    this.send({ op: 'connect', proto: 1, role: machineId === undefined ? 'sender' : 'node', machineId, auth, caps: ['multi-star'] });
+    this.send({ op: 'connect', proto: 1, role: machineId === undefined ? 'sender' : 'node', machineId, auth, caps: ['multi-star', 'endpoint-types-v1'] });
     await this.waitFor((f) => f.op === 'connected');
   }
 
@@ -273,7 +273,7 @@ describe('file channel end-to-end through the broker', () => {
     const src = join(baseDir, '数据 report.txt');
     writeFileSync(src, 'file content here');
     const { runSend } = await import('../src/commands/send.js');
-    const result = await runSend({ via: 'tcp:broker-host', conversation: 'mc1_x', fileArg: src }, deps);
+    const result = await runSend({ tool: 'claude', via: 'tcp:broker-host', conversation: 'mc1_x', fileArg: src }, deps);
     expect(result).toContain('delivered to boss@broker-host');
     // 对端 inbox 已落盘（sha 前 8 + 安全化原名，内容一致）
     const landed = readdirSync(h.inboxDir);
@@ -292,7 +292,7 @@ describe('file channel end-to-end through the broker', () => {
     const src = join(baseDir, 'note.md');
     writeFileSync(src, 'see attachment');
     const { runSend } = await import('../src/commands/send.js');
-    await runSend({ via: 'tcp:broker-host', conversation: 'mc1_x', fileArg: src, bodyArg: '附言见文件' }, deps);
+    await runSend({ tool: 'claude', via: 'tcp:broker-host', conversation: 'mc1_x', fileArg: src, bodyArg: '附言见文件' }, deps);
     expect(h.bodies[0]).toBe('附言见文件');
   }, 15_000);
 

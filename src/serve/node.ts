@@ -14,8 +14,10 @@ import { dirname, join } from 'node:path';
 import process from 'node:process';
 import { WebSocket } from 'ws';
 import { MultichatError } from '../errors.js';
+import { isEndpointTypeFor, nativeTargetKey } from '../tool-types.js';
 import {
   CAP_MULTI_STAR,
+  CAP_ENDPOINT_TYPES,
   CAP_SESSION_MEMBERS,
   encodeFrame,
   hasCap,
@@ -72,9 +74,12 @@ export async function deliverViaRunSend(frame: DeliverFrame, deps: SendDeps): Pr
       {
         to: frame.sessionId === undefined ? frame.to : (frame.to ?? frame.sessionId),
         ...(frame.sessionId === undefined ? {} : { targetSessionId: frame.sessionId }),
+        ...(frame.targetProviderId === undefined ? {} : { targetProviderId: frame.targetProviderId }),
+        ...(frame.targetEndpointType === undefined ? {} : { targetEndpointType: frame.targetEndpointType }),
         conversation: frame.conversation,
         bodyArg: frame.payload,
         origin: frame.origin,
+        tool: frame.tool,
         delivery: frame.delivery,
       },
       frame.fromMachine === undefined ? deps : { ...deps, fromMachine: frame.fromMachine },
@@ -102,7 +107,7 @@ export async function deliverViaRunSend(frame: DeliverFrame, deps: SendDeps): Pr
  * 不让整次查询失败。节点守护应答与 broker 本机应答（serve 注线）共用。
  */
 export async function buildStatusPayload(
-  deps: Pick<SendDeps, 'listClaudeSessions' | 'listCodexThreads'>,
+  deps: Pick<SendDeps, 'listClaudeSessions' | 'listCodexThreads' | 'listOpenCodeThreads' | 'listDshThreads'>,
 ): Promise<StatusPayload> {
   const scan = deps.listClaudeSessions();
   let codex: StatusPayload['codex'];
@@ -126,6 +131,28 @@ export async function buildStatusPayload(
       : `INTERNAL: ${err instanceof Error ? err.message : String(err)}`;
     codex = { unavailable: message };
   }
+  let opencode: StatusPayload['opencode'];
+  if (deps.listOpenCodeThreads !== undefined) {
+    try {
+      const threads = await deps.listOpenCodeThreads();
+      if (threads.length > 0) opencode = threads.map(({ id, name, cwd, rawStatus, attributes }) => ({ id, name, cwd, rawStatus, attributes }));
+    } catch (error) {
+      if (!(error instanceof MultichatError && error.code === 'OPENCODE_NOT_CONFIGURED')) {
+        opencode = { unavailable: error instanceof MultichatError ? `${error.code}: ${error.message}` : 'INTERNAL: OpenCode session source could not be read.' };
+      }
+    }
+  }
+  let dsh: StatusPayload['dsh'];
+  if (deps.listDshThreads !== undefined) {
+    try {
+      const threads = await deps.listDshThreads();
+      if (threads.length > 0) dsh = threads.map(({ id, name, cwd, rawStatus, attributes }) => ({ id, name, cwd, rawStatus, attributes }));
+    } catch (error) {
+      if (!(error instanceof MultichatError && error.code === 'DSH_NOT_CONFIGURED')) {
+        dsh = { unavailable: error instanceof MultichatError ? `${error.code}: ${error.message}` : 'INTERNAL: DeepSeek Harness session source could not be read.' };
+      }
+    }
+  }
   return {
     claude: scan.sessions.map((session) => ({
       name: session.name ?? null,
@@ -135,6 +162,8 @@ export async function buildStatusPayload(
       cwd: session.cwd ?? null,
     })),
     codex,
+    ...(opencode === undefined ? {} : { opencode }),
+    ...(dsh === undefined ? {} : { dsh }),
   };
 }
 
@@ -202,11 +231,16 @@ interface MemberEntry {
   name?: string;
   /** 020：工具限定词（claude/codex/未来适配器；启动器/adopt 天然知道 side 直接填）。 */
   tool?: string;
+  endpointType?: string;
   /** 机器限定旧名（machine 缺省=同机旧名）。 */
   extends?: { machine?: string; name: string };
   /** 029 --rm：临时成员——对账验死即报 member-remove（零痕迹），不留下线册位。 */
   temporary?: boolean;
   selectionOwned?: boolean;
+}
+
+function memberKey(member: { sessionId: string; tool?: string; endpointType?: string }): string {
+  return nativeTargetKey({ providerId: member.tool ?? '', nativeId: member.sessionId, endpointType: member.endpointType });
 }
 
 /**
@@ -227,7 +261,7 @@ export function attachPipePath(entry: BrokerEntry, dir: string, labelOverride?: 
  */
 function parseMemberDecl(raw: unknown): { ok: true; entry: MemberEntry } | { ok: false; error: string } {
   if (raw === null || typeof raw !== 'object') return { ok: false, error: '成员声明形状错误（须为对象）' };
-  const r = raw as { sessionId?: unknown; name?: unknown; tool?: unknown; extends?: unknown; temporary?: unknown; selectionOwned?: unknown };
+  const r = raw as { sessionId?: unknown; name?: unknown; tool?: unknown; endpointType?: unknown; extends?: unknown; temporary?: unknown; selectionOwned?: unknown };
   if (typeof r.sessionId !== 'string' || r.sessionId === '') {
     return { ok: false, error: '成员声明缺 sessionId（成员键=会话 ID，启动器 spawn 后必持有）' };
   }
@@ -244,6 +278,9 @@ function parseMemberDecl(raw: unknown): { ok: true; entry: MemberEntry } | { ok:
     }
   }
   let ext: { machine?: string; name: string } | undefined;
+  if (r.endpointType !== undefined && (tool === undefined || !isEndpointTypeFor(tool, r.endpointType))) {
+    return { ok: false, error: '端点类型须对应已核实的 Provider 类型' };
+  }
   if (r.extends !== undefined) {
     if (typeof r.extends === 'string') {
       const oldName = sanitizeName(r.extends);
@@ -269,6 +306,7 @@ function parseMemberDecl(raw: unknown): { ok: true; entry: MemberEntry } | { ok:
       sessionId: r.sessionId,
       ...(name === undefined ? {} : { name }),
       ...(tool === undefined ? {} : { tool }),
+      ...(typeof r.endpointType === 'string' ? { endpointType: r.endpointType } : {}),
       ...(ext === undefined ? {} : { extends: ext }),
       ...(r.temporary === true ? { temporary: true } : {}),
       ...(r.selectionOwned === true ? { selectionOwned: true } : {}),
@@ -282,6 +320,7 @@ function memberToDecl(m: MemberEntry): SessionMemberDecl {
     sessionId: m.sessionId,
     ...(m.name === undefined ? {} : { name: m.name }),
     ...(m.tool === undefined ? {} : { tool: m.tool }),
+    ...(m.endpointType === undefined ? {} : { endpointType: m.endpointType }),
     ...(m.extends === undefined
       ? {}
       : { extends: m.extends.machine === undefined ? m.extends.name : { machine: m.extends.machine, name: m.extends.name } }),
@@ -343,6 +382,7 @@ export class NodeClient {
   private memberTimer?: ReturnType<typeof setInterval>;
   /** 018：broker 会话级能力（info.caps 协商；false=老 broker，成员声明不发送）。 */
   private brokerSessionCap = false;
+  private brokerEndpointCap = false;
   /** Identity belongs to one authenticated WS lifetime, never a config snapshot. */
   private attachIdentity?: { socket: SocketLike; starId: string; machine: string };
   /** 018（9b）：降级告警只出声一次（重连老 broker 不刷屏；升级 broker 后按新能力行事）。 */
@@ -478,6 +518,7 @@ export class NodeClient {
       // 018（9b）：caps 协商——info.caps 不含会话成员标识=老 broker（proto:1），
       // 成员声明不发送（发了也被静默丢），日志显性留痕；命令面告警批二接。
       this.brokerSessionCap = hasCap((info as InfoFrame).caps, CAP_SESSION_MEMBERS);
+      this.brokerEndpointCap = hasCap((info as InfoFrame).caps, CAP_ENDPOINT_TYPES);
       if (!this.brokerSessionCap) {
         this.log('broker 不支持会话级星成员（proto:1）——已降级机器级，本机成员声明不发送');
         if (!this.warnedNoCap) {
@@ -497,7 +538,7 @@ export class NodeClient {
         // 036：自报名取条目级覆盖 ?? 顶层全局（修订 017 单一事实源为双态）
         name: cfg.showName ?? this.d.config.showName ?? '',
         // 032 非兼容升级：multi-star 能力声明是新版腿的通行证（无它即旧版被拒）
-        caps: [CAP_SESSION_MEMBERS, CAP_MULTI_STAR],
+        caps: [CAP_SESSION_MEMBERS, CAP_MULTI_STAR, CAP_ENDPOINT_TYPES],
       }));
       const verdict = await this.nextFrame((f) => f.op === 'connected' || f.op === 'error', 10_000);
       if (this.stopped) return false;
@@ -651,10 +692,14 @@ export class NodeClient {
     if (frame.op === 'member-remove') {
       // 028：broker 册删除的归属机清表推送（管理删/member-remove 命令侧）——
       // 本地移出声明集并重播，防下次全量重播把条目带回册；墓碑挡对账复活
-      this.erased.add(frame.target);
-      this.membershipModes.delete(frame.target);
-      this.memberClaims.delete(frame.target);
-      if (this.members.delete(frame.target)) {
+      const hits = [...this.members.entries()].filter(([, entry]) => entry.sessionId === frame.target
+        && (frame.tool === undefined || (entry.tool === frame.tool && entry.endpointType === frame.endpointType)));
+      if (hits.length !== 1) return;
+      const key = hits[0]![0];
+      this.erased.add(key);
+      this.membershipModes.delete(key);
+      this.memberClaims.delete(key);
+      if (this.members.delete(key)) {
         this.log(`member-removed ${frame.target.slice(0, 8)}（broker 册删除推送）`);
         this.sendSessions();
       }
@@ -705,28 +750,29 @@ export class NodeClient {
     const operations = createNativeSessionOperations({ discovery: { execute: this.d.discover }, providers: this.d.operationProviders,
       adopt: async (item, tool) => {
         if (!current()) throw new Error('Node context changed');
-        const previous = this.members.get(item.ref.nativeId);
+        const key = nativeTargetKey(item.ref);
+        const previous = this.members.get(key);
         if (previous?.tool !== undefined && previous.tool !== tool) throw new Error('Native provider conflict');
-        const temporary = frame.membership?.temporary ?? this.membershipModes.get(item.ref.nativeId) ?? previous?.temporary;
-        this.members.set(item.ref.nativeId, { sessionId: item.ref.nativeId, tool,
+        const temporary = frame.membership?.temporary ?? this.membershipModes.get(key) ?? previous?.temporary;
+        this.members.set(key, { sessionId: item.ref.nativeId, tool, endpointType: item.ref.endpointType,
           ...(item.name === null ? {} : { name: item.name }), ...(temporary === true ? { temporary: true } : {}) });
         // Repeating adoption cannot turn a temporary launch into a manual lifetime.
         if (temporary !== true) {
-          const claims = this.memberClaims.get(item.ref.nativeId) ?? new Map<string, Socket | undefined>();
-          claims.set('manual', undefined); this.memberClaims.set(item.ref.nativeId, claims);
-        } else if (previous?.selectionOwned || frame.membership?.selectionOwned) this.members.get(item.ref.nativeId)!.selectionOwned = true;
-        this.erased.delete(item.ref.nativeId); this.pendingErases.delete(item.ref.nativeId);
+          const claims = this.memberClaims.get(key) ?? new Map<string, Socket | undefined>();
+          claims.set('manual', undefined); this.memberClaims.set(key, claims);
+        } else if (previous?.selectionOwned || frame.membership?.selectionOwned) this.members.get(key)!.selectionOwned = true;
+        this.erased.delete(key); this.pendingErases.delete(key);
         this.sendSessions();
       },
       renamed: async (item) => {
         if (!current()) throw new Error('Node context changed');
-        const member = this.members.get(item.ref.nativeId);
+        const member = this.members.get(nativeTargetKey(item.ref));
         if (!member || member.tool !== item.ref.providerId || item.name === null) throw new Error('Member changed');
         member.name = item.name; this.sendSessions();
       },
     });
     try {
-      const ref = { contextId: 'local', providerId: frame.providerId, nativeId: frame.nativeId };
+      const ref = { contextId: 'local', providerId: frame.providerId, nativeId: frame.nativeId, endpointType: frame.endpointType };
       if (request.kind === 'describe') {
         const description = await operations.describe(ref, controller.signal);
         if (current()) reply({ description });
@@ -760,7 +806,7 @@ export class NodeClient {
       if (result.op !== request.op) { fail('INVALID_RESULT'); return; }
       if (result.op === 'detail' && request.op === 'detail' && result.detail.item !== null) {
         const ref = result.detail.item.ref;
-        if (ref.providerId !== request.providerId || ref.nativeId !== request.nativeId || (ref.referenceKind ?? 'native') !== (request.referenceKind ?? 'native')) { fail('INVALID_RESULT'); return; }
+        if (ref.providerId !== request.providerId || ref.nativeId !== request.nativeId || (request.endpointType !== undefined && ref.endpointType !== request.endpointType) || (ref.referenceKind ?? 'native') !== (request.referenceKind ?? 'native')) { fail('INVALID_RESULT'); return; }
       }
       const payload = encodeFrame({ op: 'discover-result', id: frame.id, ok: true, result });
       if (Buffer.byteLength(payload) > MAX_PAYLOAD_BYTES) { fail('INVALID_RESULT'); return; }
@@ -911,24 +957,26 @@ export class NodeClient {
     if (req === null || typeof req !== 'object') {
       return reply({ ok: false, error: 'attach 帧形状错误' });
     }
-    const r = req as { op?: unknown; sessionId?: unknown; sessions?: unknown; erase?: unknown; claimId?: unknown };
+    const r = req as { op?: unknown; sessionId?: unknown; tool?: unknown; endpointType?: unknown; sessions?: unknown; erase?: unknown; claimId?: unknown };
     if (r.claimId !== undefined && (typeof r.claimId !== 'string' || r.claimId.length === 0 || r.claimId.length > 128)) {
       return reply({ ok: false, error: 'claimId 必须是有效的窗口声明标识' });
     }
     if (r.op === 'attach') {
       const parsed = parseMemberDecl(r);
       if (!parsed.ok) return reply({ ok: false, error: parsed.error });
-      const previous = this.members.get(parsed.entry.sessionId);
-      const mode = this.membershipModes.get(parsed.entry.sessionId) ?? (previous === undefined ? undefined : previous.temporary === true);
+      if (parsed.entry.endpointType !== undefined && !this.brokerEndpointCap) return reply({ ok: false, error: 'broker 不支持端点类型，未发送类型化成员声明；升级后重试' });
+      const key = memberKey(parsed.entry);
+      const previous = this.members.get(key);
+      const mode = this.membershipModes.get(key) ?? (previous === undefined ? undefined : previous.temporary === true);
       if (mode !== undefined) parsed.entry.temporary = mode;
-      this.membershipModes.set(parsed.entry.sessionId, parsed.entry.temporary === true);
-      this.pendingErases.delete(parsed.entry.sessionId);
-      const claims = this.memberClaims.get(parsed.entry.sessionId) ?? new Map<string, Socket | undefined>();
+      this.membershipModes.set(key, parsed.entry.temporary === true);
+      this.pendingErases.delete(key);
+      const claims = this.memberClaims.get(key) ?? new Map<string, Socket | undefined>();
       claims.set(typeof r.claimId === 'string' ? r.claimId : 'manual', typeof r.claimId === 'string' ? socket : undefined);
       parsed.entry.selectionOwned = !claims.has('manual') && (parsed.entry.selectionOwned === true || previous?.selectionOwned === true);
-      this.memberClaims.set(parsed.entry.sessionId, claims);
-      this.members.set(parsed.entry.sessionId, parsed.entry);
-      this.erased.delete(parsed.entry.sessionId); // 显式再注册解除 --rm 墓碑
+      this.memberClaims.set(key, claims);
+      this.members.set(key, parsed.entry);
+      this.erased.delete(key); // 显式再注册解除 --rm 墓碑
       this.log(`member-up ${parsed.entry.name ?? parsed.entry.sessionId.slice(0, 8)}`);
       this.sendSessions();
       return reply({ ok: true });
@@ -937,7 +985,14 @@ export class NodeClient {
       if (typeof r.sessionId !== 'string' || r.sessionId === '') {
         return reply({ ok: false, error: 'detach 缺 sessionId' });
       }
-      this.releaseMemberClaim(r.sessionId, typeof r.claimId === 'string' ? r.claimId : 'manual',
+      if (r.tool !== undefined && sanitizeTool(r.tool) !== r.tool) return reply({ ok: false, error: 'detach 工具身份无效' });
+      if (r.endpointType !== undefined && (typeof r.tool !== 'string' || !isEndpointTypeFor(r.tool, r.endpointType))) return reply({ ok: false, error: 'detach 端点身份无效' });
+      const hits = [...this.members.entries()].filter(([, member]) => member.sessionId === r.sessionId
+        && (r.tool === undefined || (member.tool === r.tool && member.endpointType === r.endpointType)));
+      if (hits.length > 1) return reply({ ok: false, error: 'detach 完整会话 ID 命中多个端点，请指定工具与类型' });
+      const key = hits[0]?.[0];
+      if (key === undefined) return reply({ ok: true });
+      this.releaseMemberClaim(key, typeof r.claimId === 'string' ? r.claimId : 'manual',
         typeof r.claimId === 'string' ? socket : undefined, r.erase === true);
       return reply({ ok: true }); // 幂等：不在表内也算成功
     }
@@ -949,11 +1004,12 @@ export class NodeClient {
       for (const raw of r.sessions) {
         const parsed = parseMemberDecl(raw);
         if (!parsed.ok) return reply({ ok: false, error: parsed.error });
+        if (parsed.entry.endpointType !== undefined && !this.brokerEndpointCap) return reply({ ok: false, error: 'broker 不支持端点类型，未发送类型化成员声明' });
         entries.push(parsed.entry);
       }
       this.members.clear();
       this.memberClaims.clear();
-      for (const e of entries) this.members.set(e.sessionId, e);
+      for (const e of entries) this.members.set(memberKey(e), e);
       this.log(`sync 成员表：${entries.length} 条`);
       this.sendSessions();
       return reply({ ok: true });
@@ -987,7 +1043,7 @@ export class NodeClient {
     this.memberClaims.delete(id);
     const member = this.members.get(id);
     const gone = this.members.delete(id);
-    if (erase || member?.temporary === true) this.eraseTemporary(id);
+    if ((erase || member?.temporary === true) && member !== undefined) this.eraseTemporary(member);
     if (gone) { this.log(`member-down ${id.slice(0, 8)}（窗口声明释放）`); this.sendSessions(); }
   }
 
@@ -1003,10 +1059,12 @@ export class NodeClient {
     try {
       // 1) 读取本机册位切片；超时保留已知属性，不据缺失结果改变永久/临时。
       let slice: SessionMemberDecl[] = [];
+      let sliceConfirmed = false;
       try {
         this.send({ op: 'members-query' });
         const frame = await this.nextFrame((f) => f.op === 'members-result', 5_000);
         if (frame.op === 'members-result' && Array.isArray(frame.members)) {
+          sliceConfirmed = true;
           slice = frame.members.filter(
             (decl) => decl !== null && typeof decl === 'object' && typeof decl.sessionId === 'string' && decl.sessionId !== '',
           );
@@ -1014,11 +1072,22 @@ export class NodeClient {
       } catch {
         // 查不回：本轮只做本地活性（下轮再查）
       }
+      if (sliceConfirmed) {
+        const current = new Set(slice.map(memberKey));
+        for (const key of this.pendingErases.keys()) {
+          if (current.has(key)) continue;
+          this.pendingErases.delete(key);
+          this.erased.add(key);
+          this.membershipModes.delete(key);
+        }
+      }
       // 2) Provider capabilities own native liveness, source selection and name lookup.
-      const request = { contextId: 'local', nativeIds: [...new Set([...this.members.keys(), ...slice.map((decl) => decl.sessionId)])] };
+      const declarations = [...this.members.values(), ...slice];
+      const request = { contextId: 'local', nativeIds: [...new Set(declarations.map((decl) => decl.sessionId))],
+        targets: declarations.filter((decl) => decl.tool !== undefined).map((decl) => ({ providerId: decl.tool!, nativeId: decl.sessionId, endpointType: decl.endpointType })) };
       for (const decl of slice) {
-        this.membershipModes.set(decl.sessionId, decl.temporary === true);
-        const member = this.members.get(decl.sessionId);
+        this.membershipModes.set(memberKey(decl), decl.temporary === true);
+        const member = this.members.get(memberKey(decl));
         if (member !== undefined) member.temporary = decl.temporary === true;
       }
       let providers: readonly MemberProvider[];
@@ -1026,31 +1095,31 @@ export class NodeClient {
         providers = this.d.memberProviders(request);
       } else {
         const deps = this.d.makeSendDeps();
-        providers = createLegacyMemberProviders({ listClaudeSessions: deps.listClaudeSessions, listCodexThreads: deps.listCodexThreads, codexHome: this.d.codexHome, now: this.d.now }, request.nativeIds);
+        providers = createLegacyMemberProviders({ listClaudeSessions: deps.listClaudeSessions, listCodexThreads: deps.listCodexThreads,
+          listOpenCodeThreads: deps.listOpenCodeThreads, listDshThreads: deps.listDshThreads, codexHome: this.d.codexHome, now: this.d.now }, request.nativeIds);
       }
       const observations = await readMemberSnapshot(providers, request);
-      const toolOf = (id: string): string | undefined =>
-        observations.get(id)?.providerId;
+      const matchesTool = (decl: { sessionId: string; tool?: string; endpointType?: string }): boolean => observations.has(memberKey(decl));
       let changed = false;
       // Uniform enrollment: native discovery cannot reactivate an offline roster entry.
       // 3.5) 029 死临时成员清册：切片里 temporary 而本地验死（含聚合器重启后
       // 声明表为空的形态）——报 member-remove + 墓碑，零痕迹不留下线册位
       for (const decl of slice) {
-        if (decl.temporary !== true || this.members.has(decl.sessionId)) continue;
-        if ((decl.selectionOwned !== true && toolOf(decl.sessionId) !== undefined) || this.erased.has(decl.sessionId)) continue;
-        this.eraseTemporary(decl.sessionId);
+        if (decl.temporary !== true || decl.tool === undefined || this.members.has(memberKey(decl))) continue;
+        if ((decl.selectionOwned !== true && matchesTool(decl)) || this.erased.has(memberKey(decl))) continue;
+        this.eraseTemporary(decl);
         this.log(`member-erase ${decl.sessionId.slice(0, 8)}（临时成员死亡清册——未上报则滞留下线态）`);
       }
       // 4) 下线：已声明而本地查无——永久成员移出声明集（broker 册位保留，不再除名）；
       //    临时成员（029）改走 member-remove + 墓碑（异常死亡同零痕迹）
       for (const [id, entry] of [...this.members.entries()]) {
         if (entry.selectionOwned && this.memberClaims.get(id)?.size) continue;
-        if (toolOf(id) !== undefined) continue;
+        if (entry.tool === undefined || matchesTool(entry)) continue;
         this.members.delete(id);
         this.memberClaims.delete(id);
         changed = true;
         if (entry.temporary === true) {
-          this.eraseTemporary(id);
+          this.eraseTemporary(entry);
           this.log(`member-erase ${entry.name ?? id.slice(0, 8)}（临时成员死亡清册，零痕迹）`);
         } else {
           this.log(`member-offline ${id.slice(0, 8)}（本地验活无此会话，上报下线——册位保留）`);
@@ -1075,25 +1144,27 @@ export class NodeClient {
   }
 
   /** 018：全量重播 sessions 帧（上线时 & 成员表变化时；老 broker/离线不发）。 */
-  private eraseTemporary(sessionId: string): void {
-    if (this.state !== 'online' || !this.brokerSessionCap || this.pendingErases.has(sessionId)) return;
+  private eraseTemporary(member: { sessionId: string; tool?: string; endpointType?: string }): void {
+    const key = memberKey(member);
+    if (this.state !== 'online' || !this.brokerSessionCap || this.pendingErases.has(key)) return;
     const id = randomUUID();
-    this.pendingErases.set(sessionId, id);
-    this.send({ op: 'member-remove', target: sessionId, temporaryOnly: true, id });
+    this.pendingErases.set(key, id);
+    this.send({ op: 'member-remove', target: member.sessionId, tool: member.tool, endpointType: member.endpointType, temporaryOnly: true, id });
     void this.nextFrame((frame) => frame.op === 'member-remove-result' && frame.id === id, 5_000)
       .then((frame) => {
-        if (this.pendingErases.get(sessionId) !== id) return;
+        if (this.pendingErases.get(key) !== id) return;
         if (frame.op === 'member-remove-result' && frame.ok && frame.removed.length > 0) {
-          this.erased.add(sessionId);
-          this.membershipModes.delete(sessionId);
+          this.erased.add(key);
+          this.membershipModes.delete(key);
+          this.pendingErases.delete(key);
         }
-      }).catch(() => { /* Next liveness check revalidates; no uncertain write replay. */ })
-      .finally(() => { if (this.pendingErases.get(sessionId) === id) this.pendingErases.delete(sessionId); });
+      }).catch(() => { /* Keep the pending write until readonly absence or explicit reattachment; never replay uncertainty. */ });
   }
 
   /** Full current declaration, independent of launcher defaults. */
   private sendSessions(): void {
     if (this.state !== 'online' || !this.brokerSessionCap) return;
+    if (!this.brokerEndpointCap && [...this.members.values()].some((member) => member.endpointType !== undefined)) return;
     this.send({ op: 'sessions', sessions: [...this.members.values()].map(memberToDecl) });
   }
 

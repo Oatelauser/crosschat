@@ -1,0 +1,74 @@
+{
+  "probe": "codex-caller-source",
+  "version": 1,
+  "platform": "win32",
+  "env": [],
+  "ancestry": [
+    {
+      "pid": 22156,
+      "ppid": 29248,
+      "createdAt": 134377277383651860,
+      "name": "node.exe",
+      "shape": "node",
+      "exeDigest": "1e9d7fdac6b0"
+    },
+    {
+      "pid": 29248,
+      "ppid": 27592,
+      "createdAt": 134377277383525340,
+      "name": "bash.exe",
+      "shape": "shell",
+      "exeDigest": "2336626c8711"
+    },
+    {
+      "pid": 27592,
+      "ppid": 19732,
+      "createdAt": 134377277383202480,
+      "name": "bash.exe",
+      "shape": "shell",
+      "exeDigest": "2336626c8711"
+    },
+    {
+      "pid": 19732,
+      "ppid": 33044,
+      "createdAt": 134377277383053150,
+      "name": "bash.exe",
+      "shape": "shell",
+      "exeDigest": "a54219413118"
+    },
+    {
+      "pid": 33044,
+      "ppid": 11624,
+      "createdAt": 134377261813410820,
+      "name": "claude.exe",
+      "shape": "other",
+      "exeDigest": "7b2841072769"
+    },
+    {
+      "pid": 11624,
+      "ppid": 2948,
+      "createdAt": 134377160522349730,
+      "name": "cmd.exe",
+      "shape": "shell",
+      "exeDigest": "07442caeec7e"
+    },
+    {
+      "pid": 2948,
+      "ppid": 21516,
+      "createdAt": 134377096211437730,
+      "name": "explorer.exe",
+      "shape": "other",
+      "exeDigest": "accf70c6491f"
+    }
+  ],
+  "stopReason": "missing-parent",
+  "verdict": {
+    "entry": "unknown",
+    "basis": "no-codex-ancestor"
+  },
+  "limits": {
+    "maxDepth": 12,
+    "tableTimeoutMs": 10000,
+    "maxTableBytes": 4194304
+  }
+}

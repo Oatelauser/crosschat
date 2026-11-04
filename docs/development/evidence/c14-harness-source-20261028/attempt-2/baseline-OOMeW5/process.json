@@ -1,0 +1,8 @@
+{
+  "code": 1,
+  "signal": null,
+  "timedOut": false,
+  "stdout": "PASS official-plugin-installation-and-owned-web-runtime\nPASS public-web-session-controller-creates-interactive-sessions\n{\"status\":\"failed\",\"version\":\"0.2.1-rc.2\",\"checks\":2,\"check\":\"native-shell-caller-source\",\"report\":\"D:\\\\workspace\\\\CC\\\\multichat\\\\docs\\\\development\\\\evidence\\\\c14-harness-source-20261028\\\\attempt-2\\\\baseline-OOMeW5\\\\report.json\"}\n",
+  "stderr": "",
+  "pid": 40912
+}

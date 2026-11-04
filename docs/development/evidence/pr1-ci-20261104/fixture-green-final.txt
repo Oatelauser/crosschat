@@ -1,0 +1,34 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-int-20261104
+
+ ✓ test/opencode-desktop-process-race.test.ts (4 tests) 4ms
+ ✓ test/session-star.test.ts (40 tests) 6411ms
+   ✓ 018 批二：启动器入星链路 > spawn 会话→自动拉聚合器→attach→三段直达；退出即 detach  634ms
+   ✓ 018 批二：启动器入星链路 > 多星：--connect 可重复，两会话成员表各自 attach（win 带杠 mid 形态）  674ms
+   ✓ 018 批二：启动器入星链路 > 021 断连静默：聚合器被杀→重连提示落日志、控制台零输出、成员籍自动恢复  1612ms
+   ✓ 统一恢复入口（启动器重声明或显式管理，册落盘不丢） > 聚合器重启保留离线册位，存活的原生会话也须明确重声明（linux 32-hex 形态）  309ms
+   ✓ 018 批二：9b 降级告警（不只日志） > NodeClient.warn 直打一行；warnIfBrokerLacksSessionCaps 对老 broker 出声、新 broker 静默  321ms
+   ✓ 028 双模式与命令面 > 双模式集成：永久退出留册、裸 resume 不归队、明确选择恢复；--rm 退出清册  862ms
+ ✓ test/dsh-compat-ci.test.ts (107 tests) 18151ms
+   ✓ DeepSeek Harness controlled desktop process > uses one bounded release after child and pipe failures without replacing the first cause  1006ms
+   ✓ DeepSeek Harness controlled desktop process > records later pipe, child and release problems without replacing the first cause  1012ms
+   ✓ DeepSeek Harness controlled desktop process > keeps late pipe errors owned after return without changing the snapshot  1012ms
+   ✓ DeepSeek Harness controlled desktop process > records a pipe error raised synchronously while releasing the pipes  1004ms
+   ✓ DeepSeek Harness controlled desktop process > lets the fixture end and await its own real child when the product cannot confirm release  1117ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > enforces the total deadline over headers and body and honors external cancellation  437ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > keeps late responses and late handles owned after the deadline  646ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late file close failure with the path and keeps the file owned  1118ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late file close that never settles as undecided at return  2035ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > cancels a late response, releases its lock and reports it as undecided at return  393ms
+   ✓ DeepSeek Harness desktop installer admission > reports an unconfirmed signature child release and clears parent pipes  1012ms
+   ✓ DeepSeek Harness desktop installer admission > reports an unconfirmed signature child release on cancellation  1061ms
+   ✓ DeepSeek Harness desktop installer admission > owns a spawned child error without a close instead of returning early  1019ms
+   ✓ DeepSeek Harness desktop installer admission > keeps the overflow failure when a failed stop reports an error  1025ms
+   ✓ DeepSeek Harness desktop installer admission > keeps the signature failure and release state across the total deadline  1023ms
+ ✓ test/opencode-desktop-fixture.test.ts (13 tests) 2113ms
+   ✓ official desktop test environment > reports an unregistered executable under the owned run before allowing cleanup  1599ms
+
+ Test Files  4 passed (4)
+      Tests  164 passed (164)
+   Start at  14:22:23
+   Duration  20.88s (transform 831ms, setup 0ms, collect 1.38s, tests 26.68s, environment 0ms, prepare 294ms)

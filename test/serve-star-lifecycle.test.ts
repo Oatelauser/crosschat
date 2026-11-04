@@ -16,7 +16,7 @@ import { runServe, type ServeDeps } from '../src/commands/serve.js';
 import { runDoctor, type DoctorDeps } from '../src/commands/doctor.js';
 import { runStatus, type StatusDeps } from '../src/commands/status.js';
 import { loadBrokerFile, registryFileOf, writeBrokerFile, type NodeEntry, type RosterEntry } from '../src/serve/registry.js';
-import { encodeFrame, parseFrame, CAP_MULTI_STAR, type Frame } from '../src/serve/protocol.js';
+import { encodeFrame, parseFrame, CAP_ENDPOINT_TYPES, CAP_MULTI_STAR, type Frame } from '../src/serve/protocol.js';
 import type { SendDeps } from '../src/commands/send.js';
 
 const root = mkdtempSync(join(tmpdir(), 'crosschat-star-lifecycle-'));
@@ -148,7 +148,7 @@ async function handshake(url: string, auth: string, role: 'node' | 'sender', mac
     ...(machineId === undefined ? {} : { machineId }),
     auth,
     ...(name === undefined ? {} : { name }),
-    caps: [CAP_MULTI_STAR],
+    caps: [CAP_MULTI_STAR, CAP_ENDPOINT_TYPES],
   });
   const frame = await c.waitFor((f) => f.op === 'connected' || f.op === 'error');
   return { c, frame };
@@ -208,8 +208,8 @@ describe('033 热加星：不重启即托管即收发', () => {
     expect(node.frame.op).toBe('connected');
     const sender = await handshake(url, betaSelf!.key, 'sender');
     expect(sender.frame.op).toBe('connected');
-    node.c.send({ op: 'send', id: 'hi-1', targetMachine: 'cli-host', body: 'ping from ext' }); // 反向腿也过新星路由（deliverLocal 接线，回执不在此断言）
-    sender.c.send({ op: 'send', id: 'hi-2', targetMachine: 'ext-node', body: 'pong to ext' });
+    node.c.send({ op: 'send', tool: 'claude', id: 'hi-1', targetMachine: 'cli-host', body: 'ping from ext' }); // 反向腿也过新星路由（deliverLocal 接线，回执不在此断言）
+    sender.c.send({ op: 'send', tool: 'claude', id: 'hi-2', targetMachine: 'ext-node', body: 'pong to ext' });
     // ext-node 收 deliver 即回 result —— sender 得 receipt（收发闭环）
     const deliver = await node.c.waitFor((f) => f.op === 'deliver' && (f as { id?: string }).id === 'hi-2');
     expect((deliver as { payload?: string }).payload).toBe('pong to ext');

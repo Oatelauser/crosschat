@@ -1,0 +1,71 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ❯ test/dsh-onboarding-ci.test.ts (17 tests | 1 failed) 24ms
+   ✓ DSH from-zero onboarding report boundary > accepts a complete fresh onboarding report independently of the communication schema 1ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"tool":"dsh-web-runtime"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"platform":"linux"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"arch":"arm64"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"version":"0.2.1-rc.3"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"runId":"11111111-1111-1111-1111-111111111111"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"runId":"22222222-2222-4222-8222-222222222222"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects omitted or expanded evidence claims instead of treating them as a full onboarding pass 0ms
+   ✓ DSH from-zero onboarding report boundary > requires every successful phase once, in order, with valid timing 0ms
+   ✓ DSH from-zero onboarding report boundary > retains a real failure at the next phase without claiming a complete pass or inventing release 0ms
+   ✓ DSH from-zero onboarding report boundary > requires explicit cleanup observations instead of coercing unknown values 0ms
+   ✓ DSH from-zero onboarding report boundary > checks normal process completion against the report outcome 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a failed claim that omits the failed phase after all phases passed 0ms
+   ✓ onboarding fresh attempts and serial resource ownership > accepts only the freshly minted report and never reuses a preceding PASS 8ms
+   × onboarding fresh attempts and serial resource ownership > rejects a linked report before accepting its otherwise valid contents 10ms
+     → expected { schema: 1, …(9) } to match object { category: 'infrastructure', …(1) }
+(8 matching properties omitted from actual)
+   ✓ onboarding fresh attempts and serial resource ownership > retains an installation with incomplete release and never enters the next build or removes it 1ms
+   ✓ onboarding fresh attempts and serial resource ownership > uses the same candidate twice only after both observed runtime and installation releases 1ms
+ ✓ test/dsh-compat-ci.test.ts (107 tests) 18217ms
+   ✓ DeepSeek Harness controlled desktop process > uses one bounded release after child and pipe failures without replacing the first cause  1010ms
+   ✓ DeepSeek Harness controlled desktop process > records later pipe, child and release problems without replacing the first cause  1012ms
+   ✓ DeepSeek Harness controlled desktop process > keeps late pipe errors owned after return without changing the snapshot  1012ms
+   ✓ DeepSeek Harness controlled desktop process > records a pipe error raised synchronously while releasing the pipes  1001ms
+   ✓ DeepSeek Harness controlled desktop process > lets the fixture end and await its own real child when the product cannot confirm release  1125ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > enforces the total deadline over headers and body and honors external cancellation  433ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > keeps late responses and late handles owned after the deadline  658ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late file close failure with the path and keeps the file owned  1108ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late file close that never settles as undecided at return  2023ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > cancels a late response, releases its lock and reports it as undecided at return  386ms
+   ✓ DeepSeek Harness desktop installer admission > reports an unconfirmed signature child release and clears parent pipes  1011ms
+   ✓ DeepSeek Harness desktop installer admission > reports an unconfirmed signature child release on cancellation  1059ms
+   ✓ DeepSeek Harness desktop installer admission > owns a spawned child error without a close instead of returning early  1016ms
+   ✓ DeepSeek Harness desktop installer admission > keeps the overflow failure when a failed stop reports an error  1020ms
+   ✓ DeepSeek Harness desktop installer admission > keeps the signature failure and release state across the total deadline  1013ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-onboarding-ci.test.ts > onboarding fresh attempts and serial resource ownership > rejects a linked report before accepting its otherwise valid contents
+AssertionError: expected { schema: 1, …(9) } to match object { category: 'infrastructure', …(1) }
+(8 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "category": "infrastructure",
+-   "check": "probe-report",
++   "check": "probe-process",
+  }
+
+ ❯ test/dsh-onboarding-ci.test.ts:107:20
+    105|       await symlink(target, reportPath, 'file'); return processResult;
+    106|     });
+    107|     expect(result).toMatchObject({ category: 'infrastructure', check: …
+       |                    ^
+    108|   });
+    109| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 123 passed (124)
+   Start at  10:14:30
+   Duration  18.60s (transform 181ms, setup 0ms, collect 342ms, tests 18.24s, environment 0ms, prepare 145ms)
+

@@ -1,0 +1,5 @@
+PASS official-profile-plugin-and-skill-installation
+PASS native-skill-load-and-current-source
+PASS native-roundtrip-and-typed-discovery
+PASS same-source-diagnostics-and-real-terminal
+{"status":"failed","check":"skill-update-and-profile-preserving-shutdown","passed":4,"reportPath":"[owned-root]\\native-red-2\\report.json"}

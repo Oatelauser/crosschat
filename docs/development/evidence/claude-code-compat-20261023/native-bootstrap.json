@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "recordedAt": "2026-10-23T07:21:15.9003674Z",
+  "scope": "official isolated Windows x64 bootstrap; not full adapter acceptance",
+  "package": "@anthropic-ai/claude-code-win32-x64",
+  "version": "2.1.309",
+  "metadataUrl": "https://registry.npmjs.org/@anthropic-ai%2fclaude-code-win32-x64/2.1.309",
+  "archiveUrl": "https://registry.npmjs.org/@anthropic-ai/claude-code-win32-x64/-/claude-code-win32-x64-2.1.309.tgz",
+  "archiveBytes": 136346595,
+  "integrity": "sha512-b4Ju2gf1VliNsF9dONk/G1xZEW3Zg+G4TgpOS5oXPHSsMIciczcF267//7RvtjEXghflc3Lwrqe+Q4iNMf2ukQ==",
+  "integrityVerified": true,
+  "archiveEntriesVerified": true,
+  "executableSha256": "5441781f2b6bbd07354b4a74560ee88c68c9bf05d6db3c7e24c452c91673dc53",
+  "versionOutput": "2.1.309 (Claude Code)",
+  "safeModeProbe": {
+    "sessionId": "c5a493ae-914b-4db3-8bc5-a58b96243810",
+    "http": [
+      {
+        "method": "POST",
+        "path": "/v1/messages",
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/v1/messages",
+        "status": 200
+      }
+    ],
+    "requestCount": 2,
+    "stream": [
+      true,
+      true
+    ],
+    "actualToolSchemaProperties": [
+      "command",
+      "timeout",
+      "description",
+      "run_in_background",
+      "dangerouslyDisableSandbox"
+    ],
+    "assertions": {
+      "resultSuccess": true,
+      "modelRequests": 2,
+      "registered": true,
+      "keyExists": true,
+      "pipeConnected": true,
+      "bashToolExecuted": true,
+      "bashSessionMatches": true,
+      "bashSocketMatches": true,
+      "bashHomeMatches": true
+    },
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "cleanup": {
+      "normalStdinEnd": true,
+      "registryAfterExit": [],
+      "childAlive": false,
+      "proxyClosed": true,
+      "modelClosed": true
+    },
+    "errors": [],
+    "mockErrors": []
+  },
+  "ownedProcessesAfterProbe": []
+}
