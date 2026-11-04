@@ -29,9 +29,10 @@ beforeEach(() => {
 describe('desktop executable snapshot races', () => {
   it('reports the bounded CIM timeout without trusting a partial process table', async () => {
     boundary.runCommand.mockResolvedValue({ code: null, signal: 'SIGTERM', timedOut: true,
-      stdout: JSON.stringify([owned]), stderr: '' });
+      stdout: JSON.stringify([owned]), stderr: 'crosschat-cim:started' });
     const result = await inspectDesktopRunProcesses(root, env);
     expect(result).toMatchObject({ state: 'unknown', processes: [], error: expect.stringContaining('timed out after 5000ms') });
+    expect(result.error).toContain('crosschat-cim:started');
     expect(boundary.realpath).toHaveBeenCalledExactlyOnceWith(root);
   });
 
