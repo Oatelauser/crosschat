@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { assessDshDesktopNaturalExit, connectDshExitInspector, DSH_DESKTOP_MAIN_SHA256, locateDshDesktopExitBreakpoints, resolveOwnedDshDesktopProfile, serializeDshExitEvidence } from './helpers/dsh-desktop-exit-observer.mjs';
 import { pollDsh } from './helpers/dsh-live-fixture.mjs';
 
-const profileWrites = vi.hoisted(() => ({ paths: [] as string[] }));
+const profileWrites = vi.hoisted((): { paths: string[] } => ({ paths: [] }));
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   return { ...actual, mkdir: async (...args: Parameters<typeof actual.mkdir>) => { profileWrites.paths.push(String(args[0])); return actual.mkdir(...args); } };

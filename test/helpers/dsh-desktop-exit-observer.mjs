@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, realpath } from 'node:fs/promises';
+import { mkdir, readFile, realpath, stat } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { setTimeout, clearTimeout } from 'node:timers';
 import { WebSocket } from 'ws';
@@ -13,8 +13,17 @@ export async function resolveOwnedDshDesktopProfile(root, requested) {
     throw new Error('Native profile reuse requires the exact current task owner');
   const target = resolve(requested), child = relative(canonical, target);
   if (!child || isAbsolute(child) || child === '..' || child.startsWith(`..${sep}`)) throw new Error('Native profile must stay within the owned task root');
-  await mkdir(target, { recursive: true });
-  if (await realpath(target) !== target) throw new Error('Native profile path must not redirect through a filesystem link');
+  let current = canonical;
+  for (const part of child.split(sep)) {
+    current = resolve(current, part);
+    let actual;
+    try { actual = await realpath(current); }
+    catch (failure) {
+      if (failure.code !== 'ENOENT') throw failure;
+      await mkdir(current); actual = await realpath(current);
+    }
+    if (actual !== current || !(await stat(actual)).isDirectory()) throw new Error('Native profile path must not redirect through a filesystem link');
+  }
   return target;
 }
 
