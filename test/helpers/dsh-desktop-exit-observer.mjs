@@ -92,7 +92,7 @@ export async function connectDshExitInspector(url, onEvent) {
     },
     async value(expression, callFrameId) {
       const result = await client.call(callFrameId ? 'Debugger.evaluateOnCallFrame' : 'Runtime.evaluate', {
-        expression, returnByValue: true, ...(callFrameId ? { callFrameId } : { awaitPromise: true }),
+        expression, returnByValue: true, ...(callFrameId ? { callFrameId } : {}),
       });
       if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text);
       return result.result.value;

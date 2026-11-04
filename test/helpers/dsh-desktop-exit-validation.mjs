@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
@@ -118,9 +119,11 @@ try {
   }
   await step('bind-pinned-main-lifecycle');
   const script = await pollDsh(officialScript, 'official main script before Host spawn', 10000);
-  assert.equal(await main.value('process.pid'), child.pid);
+  const startupPause = [...protocol].reverse().find((entry) => entry.method === 'Debugger.paused');
+  assert.equal(await main.value('process.pid', startupPause.params.callFrames[0].callFrameId), child.pid);
   report.mainScriptId = script.params.scriptId;
   const source = await main.call('Debugger.getScriptSource', { scriptId: report.mainScriptId });
+  report.observedScriptSha256 = createHash('sha256').update(source.scriptSource).digest('hex');
   const breakpoints = locateDshDesktopExitBreakpoints(source.scriptSource);
   report.sourceSha256 = DSH_DESKTOP_MAIN_SHA256;
   report.boundBreakpoints = [];
@@ -134,6 +137,7 @@ try {
   await step('await-real-native-host-and-window');
   observing = true; await main.call('Debugger.resume');
   await pollDsh(() => report.ready && report.events.find((entry) => entry.kind === 'birth'), 'native Host ready under continuous observation', 60000);
+  await queue;
   const facts = await main.value(`({pid:process.pid,dshHome:process.env.DSH_HOME,userData:${electron}.app.getPath('userData'),version:${electron}.app.getVersion()})`);
   assert.equal(facts.pid, child.pid); assert.equal(facts.dshHome, env.DSH_HOME); assert.equal(facts.userData, join(artifacts, 'electron-user-data')); assert.equal(facts.version, '0.2.1-rc.2');
   await pollDsh(() => main.value(`${electron}.BrowserWindow.getAllWindows().some(w=>w.webContents.getURL()==='dsh-app://app/'&&!w.webContents.isLoadingMainFrame())`), 'loaded formal app window', 30000);
@@ -143,6 +147,7 @@ try {
 finally {
   if (!observing && main && ownMain) {
     try { await main.call('Runtime.runIfWaitingForDebugger'); } catch (failure) { error('release startup gate', failure); }
+    try { await main.call('Debugger.resume'); } catch (failure) { error('release startup execution', failure); }
     try { await main.call('Debugger.disable'); } catch (failure) { error('release startup pause', failure); }
   }
   try { await quit(); } catch (failure) { error('normal Quit request', failure); }
