@@ -32,8 +32,11 @@ export function serializeDshExitEvidence(value) {
 }
 
 export function hasDshOwnedRegistrationRelease(before, after, instanceId) {
-  void before; void instanceId;
-  return Object.keys(after).length === 0;
+  const valid = (value) => record(value) && Object.values(value).every((hash) => typeof hash === 'string' && /^[a-f0-9]{64}$/.test(hash));
+  if (!valid(before) || !valid(after) || typeof instanceId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(instanceId)) return false;
+  const current = `${instanceId}.json`;
+  return !Object.hasOwn(before, current) && !Object.hasOwn(after, current) && Object.keys(before).length === Object.keys(after).length
+    && Object.keys(before).every((name) => Object.hasOwn(after, name) && after[name] === before[name]);
 }
 
 export function locateDshDesktopExitBreakpoints(source) {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import process from 'node:process';
@@ -9,7 +9,7 @@ import { performance } from 'node:perf_hooks';
 import { runDshDesktopProcess } from '../../scripts/dsh-compat-ci.mjs';
 import { assessDshCallerSourceIdentity, dshIdentityBootstrapCommand, prepareDshProfile, pollDsh, repositoryRoot, runDshCommand, snapshotDshStoredChats } from './dsh-live-fixture.mjs';
 import { createDshMockModel } from './dsh-mock-model.mjs';
-import { assessDshDesktopNaturalExit, connectDshExitInspector, DSH_DESKTOP_MAIN_SHA256, locateDshDesktopExitBreakpoints, resolveOwnedDshDesktopProfile, serializeDshExitEvidence } from './dsh-desktop-exit-observer.mjs';
+import { assessDshDesktopNaturalExit, connectDshExitInspector, DSH_DESKTOP_MAIN_SHA256, hasDshOwnedRegistrationRelease, locateDshDesktopExitBreakpoints, resolveOwnedDshDesktopProfile, serializeDshExitEvidence } from './dsh-desktop-exit-observer.mjs';
 import { inspectDshBridges, listDshThreads } from '../../dist/dsh/client.js';
 
 assert.equal(process.env.CROSSCHAT_LIVE, '1'); assert.equal(process.platform, 'win32');
@@ -44,6 +44,7 @@ const report = { expectedSourceSha256: DSH_DESKTOP_MAIN_SHA256, continuous: true
 const electron = `process.getBuiltinModule('node:module').createRequire(${JSON.stringify(appPackage)})('electron')`;
 const protocol = []; const points = new Map();
 let main, renderer, child, mainResult, hostMonitor, hostReady, finishing, queue = Promise.resolve(), observing = false, ownMain = false, quitRequested = false, mainExited = false;
+let registrationBaseline = {};
 
 async function freePort() {
   const server = createServer(); await new Promise((done, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', done); });
@@ -59,6 +60,16 @@ async function step(phase) { report.phase = phase; await save('progress.json', {
 async function bridgeRegistrations() {
   try { return await readdir(join(env.HOME, '.crosschat', 'dsh', 'instances')); }
   catch (failure) { if (failure.code !== 'ENOENT') throw failure; return []; }
+}
+async function registrationHashes() {
+  const hashes = {};
+  for (const name of await bridgeRegistrations()) {
+    if (!name.endsWith('.json')) continue;
+    const path = join(env.HOME, '.crosschat', 'dsh', 'instances', name), info = await lstat(path);
+    assert(info.isFile() && !info.isSymbolicLink() && info.size <= 65536);
+    hashes[name] = createHash('sha256').update(await readFile(path)).digest('hex');
+  }
+  return hashes;
 }
 async function ownedListener(port) {
   const systemRoot = process.env.SystemRoot ?? process.env.WINDIR; assert(systemRoot);
@@ -83,6 +94,9 @@ async function nativeUiTurn(rendererPort) {
   assert(identityIssued);
   const bridges = await inspectDshBridges({ home: env.HOME }); assert.equal(bridges.length, 1);
   assert.equal(bridges[0].endpointType, 'desktop'); assert.equal(bridges[0].pid, report.events[0].pid);
+  const instanceId = bridges[0].instanceId, registrationName = `${instanceId}.json`, during = await registrationHashes();
+  assert(!Object.hasOwn(registrationBaseline, registrationName)); assert(Object.hasOwn(during, registrationName));
+  report.currentRegistration = { instanceId, pid: bridges[0].pid, filename: registrationName, sha256: during[registrationName] };
   const threads = await listDshThreads({ home: env.HOME }); assert.equal(threads.length, 1);
   const native = threads[0]; assert.equal(native.endpointType, 'desktop');
   const requests = model.requests.map((body) => ({ messages: body.messages.map((message) => ({ ...message,
@@ -185,6 +199,7 @@ try {
       { env: { ...env, ELECTRON_RUN_AS_NODE: '1' }, cwd: join(profileRoot, 'workspace'), timeout: 120000 });
     await save('official-plugin-install.json', installed);
     assert.equal(installed.timedOut, false); assert.equal(installed.signal, null); assert.equal(installed.code, 0);
+    registrationBaseline = await registrationHashes(); report.registrationBaseline = registrationBaseline;
   }
   port = await freePort(); if (live) { rendererPort = await freePort(); assert.notEqual(rendererPort, port); }
 } catch (failure) { error('prelaunch preparation', failure); await model.close(); await save('prelaunch-failure.json', report); throw failure; }
@@ -265,8 +280,9 @@ finally {
       const files = await snapshotDshStoredChats(join(env.DSH_HOME, 'sessions'), [marker]);
       assert(Object.keys(files).some((name) => name.includes(`/${report.nativeSessionIdentity.nativeId}/`)));
       report.retainedSessionFiles = files;
-      const registrations = await bridgeRegistrations();
-      assert.equal(registrations.filter((name) => name.endsWith('.json')).length, 0); report.bridgeRegistrationRemoved = true;
+      const after = await registrationHashes(); report.registrationAfterRelease = after;
+      assert(hasDshOwnedRegistrationRelease(registrationBaseline, after, report.currentRegistration.instanceId));
+      report.bridgeRegistrationRemoved = true; report.otherRegistrationsPreserved = true;
     } catch (failure) { error('native session and bridge teardown evidence', failure); }
   }
   report.assessment = assessDshDesktopNaturalExit(report, { parentPid: child.pid, projectDir: project, binary, sourceSha256: DSH_DESKTOP_MAIN_SHA256 });
