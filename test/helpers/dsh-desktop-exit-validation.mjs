@@ -9,7 +9,7 @@ import { performance } from 'node:perf_hooks';
 import { runDshDesktopProcess } from '../../scripts/dsh-compat-ci.mjs';
 import { prepareDshProfile, pollDsh, runDshCommand } from './dsh-live-fixture.mjs';
 import { createDshMockModel } from './dsh-mock-model.mjs';
-import { assessDshDesktopNaturalExit, connectDshExitInspector, DSH_DESKTOP_MAIN_SHA256, locateDshDesktopExitBreakpoints } from './dsh-desktop-exit-observer.mjs';
+import { assessDshDesktopNaturalExit, connectDshExitInspector, DSH_DESKTOP_MAIN_SHA256, locateDshDesktopExitBreakpoints, serializeDshExitEvidence } from './dsh-desktop-exit-observer.mjs';
 
 assert.equal(process.env.CROSSCHAT_LIVE, '1'); assert.equal(process.platform, 'win32');
 const root = await realpath(process.env.DSH_DESKTOP_EXIT_ROOT);
@@ -37,7 +37,7 @@ async function freePort() {
   const address = server.address(); assert(address && typeof address !== 'string');
   await new Promise((done, reject) => server.close((error) => error ? reject(error) : done())); return address.port;
 }
-async function save(name, value) { await writeFile(join(artifacts, name), JSON.stringify(value, null, 2) + '\n'); }
+async function save(name, value) { await writeFile(join(artifacts, name), serializeDshExitEvidence(value)); }
 function error(label, failure) {
   const message = failure instanceof Error ? failure.message : String(failure);
   report.errors.push({ label, message }); process.stderr.write(`${label}: ${message}\n`);
@@ -56,7 +56,7 @@ async function paused(params) {
   const started = performance.now(), frame = params.callFrames[0];
   const expressions = {
     birth: '({parentPid:process.pid,pid:child.pid,projectDir:this.projectDir,binary:child.spawnfile,spawnargs:child.spawnargs})',
-    ready: '({pid:child.pid,url:message.url})',
+    ready: '({pid:child.pid,urlOrigin:new URL(message.url).origin})',
     shutdown: '({pid:child.pid,connected:child.connected,stopping:this.stopping})',
     ack: '({pid:child.pid,type:message.type,stopping:this.stopping})',
     close: '({pid:child.pid,code,signal:child.signalCode})',
@@ -89,7 +89,7 @@ async function quit() {
 }
 async function finish() {
   return finishing ??= (async () => {
-    await step('request-normal-quit');
+    try { await step('request-normal-quit'); } catch (failure) { error('Quit progress evidence', failure); }
     try { await quit(); } catch (failure) { error('normal Quit request', failure); }
     if (observing) {
       try {
@@ -99,9 +99,9 @@ async function finish() {
     }
     // An attached Node inspector can itself hold process exit open. Release it only after the exact Host
     // completed, or explicitly mark the incomplete observation above; never wait for main close first.
-    await step('release-observer-connection');
+    try { await step('release-observer-connection'); } catch (failure) { error('disconnect progress evidence', failure); }
     try { await main?.close(); } catch (failure) { error('inspector close', failure); }
-    mainResult = await application;
+    try { mainResult = await application; } catch (failure) { error('main process result', failure); mainResult = { failed: true }; }
   })();
 }
 
@@ -110,7 +110,7 @@ const application = runDshDesktopProcess(binary, [`--inspect-brk=127.0.0.1:${por
   cwd: join(artifacts, 'native', 'workspace'), env, timeoutMs: 180000,
   spawnImpl: (...args) => { child = spawn(...args); return child; },
 });
-void application.then(() => { mainExited = true; });
+void application.then(() => { mainExited = true; }, (failure) => { mainExited = true; error('main process runner', failure); });
 try {
   const target = await pollDsh(async () => {
     const response = await globalThis.fetch(`http://127.0.0.1:${port}/json/list`, { signal: globalThis.AbortSignal.timeout(1000) });

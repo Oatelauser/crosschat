@@ -6,7 +6,7 @@ export const DSH_DESKTOP_MAIN_SHA256 = '6f3d1ddd1106371452c2204be6dfb2e5460a8e82
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 export function serializeDshExitEvidence(value) {
-  return JSON.stringify(value, null, 2) + '\n';
+  return JSON.stringify(value, null, 2).replace(/([?&]token=)[^&\s"'\\]+/g, '$1[fixture-token-redacted]') + '\n';
 }
 
 export function locateDshDesktopExitBreakpoints(source) {
