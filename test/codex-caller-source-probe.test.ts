@@ -152,7 +152,7 @@ describe('codex caller source probe', () => {
       seen.timeoutMs = timeoutMs;
       return Promise.resolve('');
     };
-    await readProcessTable({ run, timeoutMs: 250 });
+    await readProcessTable({ run, timeoutMs: 250, platform: 'win32' });
     expect(seen).toEqual({ command: 'powershell.exe', timeoutMs: 250 });
   });
 

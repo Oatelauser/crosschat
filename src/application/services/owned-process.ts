@@ -53,12 +53,13 @@ export async function runOwnedServiceProcess(payload: object, options: OwnedServ
         catch { onError(); }
       }
     });
-  } finally { clearTimeout(timer); detach(); await terminateOwnedTree(child); }
+  } finally { clearTimeout(timer); detach(); await terminateOwnedProcessTree(child); }
   if (options.signal?.aborted) throw new OwnedServiceProcessError('cancelled');
   return result;
 }
 
-async function terminateOwnedTree(child: ChildProcess): Promise<void> {
+/** Release only this helper's owned tree before its caller settles. */
+export async function terminateOwnedProcessTree(child: ChildProcess): Promise<void> {
   if (child.pid === undefined) return;
   if (process.platform !== 'win32') {
     await terminateOwnedPosixGroup(child, child.pid);

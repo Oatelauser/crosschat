@@ -1,10 +1,11 @@
-import { execFile, fork } from 'node:child_process';
+import { fork } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { isAbsolute, join } from 'node:path';
 import process from 'node:process';
 import type { Worker } from 'node:worker_threads';
 import { diagnosticCheck, HARNESS_BRIDGE_WARNING_REASONS, HARNESS_PROFILE_ISSUES, summarizeDiagnosticChecks } from './model.js';
 import type { DiagnosticCode, DiagnosticGroup, DiagnosticInput, DiagnosticResult } from './model.js';
+import { terminateOwnedProcessTree } from '../services/owned-process.js';
 
 export interface DiagnosticQueryOptions {
   signal?: AbortSignal;
@@ -165,28 +166,8 @@ export async function queryDoctorDiagnostics(options: DiagnosticQueryOptions = {
     clearTimeout(timer);
     detach();
     if (thread !== undefined) await thread.terminate();
-    else await terminateProcessTree(child!);
+    else await terminateOwnedProcessTree(child!);
   }
   if (signal?.aborted) throw abortError();
   return result;
-}
-
-async function terminateProcessTree(child: ChildProcess): Promise<void> {
-  if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
-  const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
-  if (process.platform === 'win32') {
-    const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
-    await new Promise<void>((resolve, reject) => {
-      execFile(taskkill, ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, (error) => {
-        if (error === null || child.exitCode !== null || child.signalCode !== null) resolve();
-        else reject(error);
-      });
-    });
-  } else {
-    try { process.kill(-child.pid, 'SIGKILL'); }
-    catch (error) {
-      if (child.exitCode === null && child.signalCode === null) throw error;
-    }
-  }
-  await exited;
 }
