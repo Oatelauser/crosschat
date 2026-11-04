@@ -1,0 +1,43 @@
+
+ RUN  v3.2.7 D:/workspace/CC/multichat
+
+ ❯ test/dsh-desktop-exit-observer.test.ts (17 tests | 1 failed) 389ms
+   ✓ formal Desktop natural-exit observation boundary > accepts the actual owner, ordered private acknowledgement, close and independent held Host handle 2ms
+   ✓ formal Desktop natural-exit observation boundary > keeps a zero OS exit unknown without the real shutdown acknowledgement and stop completion 0ms
+   ✓ formal Desktop natural-exit observation boundary > rejects changed source, another parent/profile/binary and an unrelated Host handle 0ms
+   ✓ formal Desktop natural-exit observation boundary > refuses any kill, non-graceful completion, missing stream close or abnormal main exit 0ms
+   ✓ formal Desktop natural-exit observation boundary > requires continuous observation, one exact Host and the actual lifecycle order 0ms
+   ✓ formal Desktop natural-exit observation boundary > does not infer complete process release from a truncated or unresolved owning Desktop record 0ms
+   ✓ formal Desktop natural-exit observation boundary > refuses breakpoint relocation into any main script other than the pinned official bytes 1ms
+   ✓ formal Desktop natural-exit observation boundary > redacts native authentication URLs in both structured facts and embedded process logs before writing evidence 0ms
+   ✓ owned native Desktop profile reuse > creates only a canonical child of the exact task-owned root for native initialization or reuse 8ms
+   ✓ owned native Desktop profile reuse > rejects the task root itself and outside paths before creating or writing a native profile 3ms
+   ✓ owned native Desktop profile reuse > requires the current owner marker before any new profile writes 3ms
+   × owned native Desktop profile reuse > refuses an existing directory redirect before creating anything beneath its outside target 12ms
+     → expected [ Array(1) ] to not include 'C:\Users\yangsheng\AppData\Local\Temp…'
+   ✓ owned Desktop inspector transport > reads the owned process synchronously while paused, without waiting for blocked promise microtasks 160ms
+   ✓ owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies ([]) 70ms
+   ✓ owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies (null) 62ms
+   ✓ owned Desktop inspector transport > rejects malformed protocol values explicitly instead of treating them as missing or late replies (true) 62ms
+   ✓ owned Desktop inspector transport > correlates actual responses and rejects pending reads when the owned connection closes 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-desktop-exit-observer.test.ts > owned native Desktop profile reuse > refuses an existing directory redirect before creating anything beneath its outside target
+AssertionError: expected [ Array(1) ] to not include 'C:\Users\yangsheng\AppData\Local\Temp…'
+ ❯ test/dsh-desktop-exit-observer.test.ts:123:50
+    121|     const target = join(root, 'redirect', 'new-profile'), after = prof…
+    122|     await expect(resolveOwnedDshDesktopProfile(root, target)).rejects.…
+    123|     expect(profileWrites.paths.slice(after)).not.toContain(target);
+       |                                                  ^
+    124|     await expect(stat(join(outside, 'new-profile'))).rejects.toMatchOb…
+    125|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 passed (17)
+   Start at  12:00:49
+   Duration  975ms (transform 73ms, setup 0ms, collect 101ms, tests 389ms, environment 0ms, prepare 127ms)
+

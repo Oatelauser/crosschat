@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { resolve } from 'node:path';
+import { mkdir, readFile, realpath } from 'node:fs/promises';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { setTimeout, clearTimeout } from 'node:timers';
 import { WebSocket } from 'ws';
 
@@ -7,8 +8,14 @@ export const DSH_DESKTOP_MAIN_SHA256 = '6f3d1ddd1106371452c2204be6dfb2e5460a8e82
 const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 export async function resolveOwnedDshDesktopProfile(root, requested) {
-  void root;
-  return resolve(requested);
+  const canonical = await realpath(root), owner = JSON.parse(await readFile(resolve(canonical, 'ownership.json'), 'utf8'));
+  if (canonical !== root || !record(owner) || owner.task !== 'c04-native-natural-exit' || owner.root !== canonical)
+    throw new Error('Native profile reuse requires the exact current task owner');
+  const target = resolve(requested), child = relative(canonical, target);
+  if (!child || isAbsolute(child) || child === '..' || child.startsWith(`..${sep}`)) throw new Error('Native profile must stay within the owned task root');
+  await mkdir(target, { recursive: true });
+  if (await realpath(target) !== target) throw new Error('Native profile path must not redirect through a filesystem link');
+  return target;
 }
 
 export function serializeDshExitEvidence(value) {

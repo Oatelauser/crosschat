@@ -1,12 +1,18 @@
 import { once } from 'node:events';
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { WebSocketServer } from 'ws';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { assessDshDesktopNaturalExit, connectDshExitInspector, DSH_DESKTOP_MAIN_SHA256, locateDshDesktopExitBreakpoints, resolveOwnedDshDesktopProfile, serializeDshExitEvidence } from './helpers/dsh-desktop-exit-observer.mjs';
 import { pollDsh } from './helpers/dsh-live-fixture.mjs';
+
+const profileWrites = vi.hoisted(() => ({ paths: [] as string[] }));
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, mkdir: async (...args: Parameters<typeof actual.mkdir>) => { profileWrites.paths.push(String(args[0])); return actual.mkdir(...args); } };
+});
 
 const expected = { parentPid: 4100, projectDir: 'D:/owned/profiles/desktop', binary: 'D:/soft/DeepSeek Harness/DeepSeek Harness.exe', sourceSha256: DSH_DESKTOP_MAIN_SHA256 };
 const roots: string[] = [];
@@ -107,6 +113,15 @@ describe('owned native Desktop profile reuse', () => {
     await writeFile(join(root, 'ownership.json'), JSON.stringify({ task: 'foreign-task', root }));
     await expect(resolveOwnedDshDesktopProfile(root, profile)).rejects.toThrow();
     await expect(stat(profile)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('refuses an existing directory redirect before creating anything beneath its outside target', async () => {
+    const root = await fixture(), outside = await fixture();
+    await symlink(outside, join(root, 'redirect'), 'junction');
+    const target = join(root, 'redirect', 'new-profile'), after = profileWrites.paths.length;
+    await expect(resolveOwnedDshDesktopProfile(root, target)).rejects.toThrow();
+    expect(profileWrites.paths.slice(after)).not.toContain(target);
+    await expect(stat(join(outside, 'new-profile'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
 
