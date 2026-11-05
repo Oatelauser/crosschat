@@ -19,7 +19,7 @@ assert(/^[a-f0-9]{32}$/u.test(config.machineId));assert.equal(await realpath(con
 const homePath=relative(root,config.home);assert(homePath&&!homePath.startsWith('..')&&!isAbsolute(homePath));
 const baseDir=join(config.home,'.crosschat'),tcpDir=join(baseDir,'tcp'),configFile=join(tcpDir,'node.json');
 const nodeConfig=JSON.parse(await readFile(configFile,'utf8'));assert.equal(nodeConfig.brokers.length,2);
-const attachLabel='c22-'+owner+'-'+config.machineId.slice(0,8);
+const attachLabel=entry=>'c22-'+owner+'-'+config.machineId.slice(0,8)+'-'+entry.starId;
 const discovery=createLocalDiscoveryService({home:config.home}),states=[];let closing;
 const close=()=>closing??=(async()=>{
  const failures=[];
@@ -31,7 +31,7 @@ process.once('disconnect',()=>{void close();});
 try{
  await mkdir(join(baseDir,'inbox'),{recursive:true});
  for(const entry of nodeConfig.brokers){
-  const node=new NodeClient({config:{entries:[entry]},configFile,machineId:()=>config.machineId,now:Date.now,log:()=>{},memberCheckMs:500,attachLabel,
+  const node=new NodeClient({config:{entries:[entry]},configFile,machineId:()=>config.machineId,now:Date.now,log:()=>{},memberCheckMs:500,attachLabel:attachLabel(entry),
    codexHome:join(config.home,'.codex'),fileInbox:new FileInbox({inboxDir:join(baseDir,'inbox'),partsDir:join(baseDir,'parts')}),
    discover:(request,context)=>discovery.execute(request,context),operationProviders:createNativeOperationProviders({dsh:{home:config.home}}),
    makeSendDeps:()=>({env:process.env,listClaudeSessions:()=>({sessions:[],malformed:0}),listCodexThreads:async()=>[],listDshThreads:()=>listDshThreads({home:config.home}),
@@ -39,5 +39,5 @@ try{
     sendLogFile:join(baseDir,'send-log.jsonl'),outboxDir:join(baseDir,'outbox'),now:Date.now})});
   const state={node};states.push(state);state.running=node.run().catch(error=>{state.failure=error;});await node.waitForState('online',10000);
  }
- process.send({event:'ready',pid:process.pid,machineId:config.machineId,pipes:nodeConfig.brokers.map(entry=>({starId:entry.starId,path:attachPipePath(entry,tcpDir,attachLabel)}))});
+ process.send({event:'ready',pid:process.pid,machineId:config.machineId,pipes:nodeConfig.brokers.map(entry=>({starId:entry.starId,path:attachPipePath(entry,tcpDir,attachLabel(entry))}))});
 }catch(error){process.send?.({event:'failure',message:error.message});process.exitCode=1;await close();}

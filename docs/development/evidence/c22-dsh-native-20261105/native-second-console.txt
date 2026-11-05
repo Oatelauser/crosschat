@@ -1,0 +1,22 @@
+{"status":"failed","checks":0,"error":"Logical nodes require distinct owned attach namespaces on this shared Windows host\n\n2 !== 4\n","outerRemoved":true,"unsafe":false}
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Logical nodes require distinct owned attach namespaces on this shared Windows host
+
+2 !== 4
+
+
+'failed' !== 'passed'
+
+    at file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:143:8 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'failed',
+  expected: 'passed',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.23.4

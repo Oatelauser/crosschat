@@ -1,0 +1,113 @@
+{
+  "schema": 1,
+  "scope": "Two same-host independent logical node processes, two formal npm/Web Hosts, two isolated terminal operators; not physical cross-machine acceptance",
+  "platform": "win32",
+  "node": "v22.23.4",
+  "root": "D:\\workspace\\CC\\cc-c22-unaSJk",
+  "productHead": "d304bebc85ec735f7a5d71bb0221ba6abcf75838",
+  "checks": [],
+  "status": "failed",
+  "error": {
+    "name": "AssertionError",
+    "message": "Logical nodes require distinct owned attach namespaces on this shared Windows host\n\n2 !== 4\n",
+    "stack": "AssertionError [ERR_ASSERTION]: Logical nodes require distinct owned attach namespaces on this shared Windows host\n\n2 !== 4\n\n    at file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:56:9"
+  },
+  "terminals": [],
+  "nodes": [
+    {
+      "index": 0,
+      "pid": 43748,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "messages": [
+        {
+          "event": "ready",
+          "pid": 43748,
+          "machineId": "11111111111111111111111111111111",
+          "pipes": [
+            {
+              "starId": "c22-alpha",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-1854ed1a-a543-4c1d-8211-a3be32d4599b-11111111"
+            },
+            {
+              "starId": "c22-beta",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-1854ed1a-a543-4c1d-8211-a3be32d4599b-11111111"
+            }
+          ]
+        },
+        {
+          "event": "stopped",
+          "pid": 43748,
+          "failures": []
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "index": 1,
+      "pid": 9976,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "messages": [
+        {
+          "event": "ready",
+          "pid": 9976,
+          "machineId": "22222222222222222222222222222222",
+          "pipes": [
+            {
+              "starId": "c22-alpha",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-1854ed1a-a543-4c1d-8211-a3be32d4599b-22222222"
+            },
+            {
+              "starId": "c22-beta",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-1854ed1a-a543-4c1d-8211-a3be32d4599b-22222222"
+            }
+          ]
+        },
+        {
+          "event": "stopped",
+          "pid": 9976,
+          "failures": []
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "hosts": [
+    {
+      "pid": 31164,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "logs": {
+        "stdout": "dsh web: http://127.0.0.1:57554/?token=[fixture-token-redacted]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "pid": 19628,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "logs": {
+        "stdout": "dsh web: http://127.0.0.1:57546/?token=[fixture-token-redacted]\n",
+        "stderr": ""
+      }
+    }
+  ],
+  "cleanupFailures": [],
+  "unsafe": false,
+  "outerRemoved": true
+}
