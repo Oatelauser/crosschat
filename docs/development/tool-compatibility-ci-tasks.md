@@ -1,5 +1,9 @@
-<!-- 本会话已按用户要求暂停；历史阶段状态按对应证据保留。 -->
+<!-- 本会话已按用户继续恢复；历史阶段状态按对应证据保留。 -->
 # 工具完整接入与兼容验证待办
+
+2026-11-05当前：C18/C24入星及[C20 Windows rc.5原生改名本地切片](dsh-native-rename-progress-20261105.md#windows-rc5本地切片验收)已验收，候选680e391；真实Web＋生产Node/Broker＋ConPTY取消/确认＋权威星册/新名称TCP投递通过，同一Agent不变，Host/浏览器/登记/run根正常回收。完整2871通过/11原有跳过，服务代理RED及全部失败保留。该已验切片移出活动；rc.2、Desktop、其它平台与C22双node/双操作端/增强CI保留，25父项/11CI索引及原负责人保持。当前待新候选推送/草稿PR决定，未执行新外部操作，下方暂停/未验证描述为阶段历史。
+
+2026-11-05已按用户“继续”恢复。当前[C20续接](dsh-native-rename-progress-20261105.md#恢复与服务生命周期修复)已保存服务代理身份RED并修复为原生依赖scope生命周期，产品80ed53f；定向71通过、build及相关lint通过，真实Web复验进行中，用户操作仍未启用改名。只读导航工装禁止原生文件夹选择，不再触发该系统对话框；25父项/11CI索引、既有负责人及外部执行批准边界保持。下方暂停为阶段历史。
 
 2026-11-05 18:06后用户明确暂停，本会话已停止开发与原生测试，相关进程/worker为0。当前源代码检查点0b10b115（产品fc065c1、完整2865通过/11原有跳过）；C20真实Web选中了同一已有会话，但改名被旧revision守卫拒绝、标题未改，生产Provider仍禁用改名。详细[暂停断点与下一步](dsh-native-rename-progress-20261105.md#用户暂停断点)及[证据索引](evidence/c20-dsh-rename-20261105/pause-validation.json)已保存。没有推送、发布或新Actions；25父项/11CI索引、其它负责人及日用DSH保持。等待用户明确继续，不自动恢复。
 
@@ -89,7 +93,7 @@ C09/C10/C11/C12 的**基础接入部分不依赖 C15—C24**；后者只在增�
 | 12 | C21 | 准备并持续补充增强隔离回归：选择/多窗多星、永久保护、未知Provider、端点差异、能力失效恢复、owner/版本变化、迟到响应、写不明零重发、资源回收。 | C15明确合同后开始，贯穿C24/C16—C20，C22前收口；复用共享测试，不复制状态机 | DSH原生事实/四态恢复/实例版本变化/迟到登记/uncertain零重发及第三Provider隔离回归已随836b379通过；完整2845/11。多窗永久/临时、未知Provider和C22所需组合继续保留 |
 | 13 | C24 | 扩展OpenCode/Harness既有Provider：端点/owner/版本、逐操作四态能力、有界只读重核与恢复，applied/rejected/uncertain；删册沿用独立精确通道。 | C15、共享S06及C21相应用例；先接框架与对应能力，不等待所有改名实现 | DSH Windows npm/Web入星探测/最终确认/四态恢复已本地验收836b379，定向105、完整2845/11与原生七项；C20改名未启用，Desktop/其它平台/工具仍保留 |
 | 14 | C18 | Harness原Host bridge接统一手动成员管理；区分实例/profile/类型，live roots不当作选中会话，不假定有dsh wrapper。 | C15/C24、共享层、C09/C13与C14；Desktop还依赖C04，本会话先DSH，OpenCode后续 | Windows npm/Web正式rc.5手动入星/两星隔离/精确删册/断桥恢复及真实ConPTY已本地验收，见[增强证据](dsh-native-operations-progress-20261105.md#2026-11-05原生与终端切片收口)，切片移出活动；正式Desktop/其它平台与更完整组合保留 |
-| 15 | C20 | Harness原Host接sessionTitle.rename，核实exact live session、原生界面、node及路由同步，不换owner或改数据库。 | C15、C18目标核验、C24和共享名称链；npm/Web、Desktop分别验证 | 条件能力待核实，未实施 |
+| 15 | C20 | Harness原Host接sessionTitle.rename，核实exact live session、原生界面、node及路由同步，不换owner或改数据库。 | C15、C18目标核验、C24和共享名称链；npm/Web、Desktop分别验证 | Windows npm/Web rc.5本地切片已验收，真实Web/生产Node/ConPTY/星册及新名称投递通过，完整2871/11，见[改名证据](dsh-native-rename-progress-20261105.md#windows-rc5本地切片验收)；rc.2、Desktop、其它平台与CI边界保留 |
 | 16 | C22 | 新选择/成员/改名/能力恢复的真实受控验收及CI增量，多node/操作端，正式工具＋本机mock，平台复用基础矩阵。 | 对应增强接线及C21收口；复用C11/C12/O06c/C04，不反向阻塞基础CI | DSH切片优先；尚未实施；旧通信/TUI结果不算本批通过；其它工具部分保留 |
 | 17 | C23 | 同步自动/手动管理、恢复规则、逐操作能力与改名限制、实际平台证据及新Provider接入门槛。 | C15起草，随接线更新，C22等对应增强证据齐备后最终收口；基础教学仍由C10完成 | DSH切片优先；尚未实施，不等所有代码完成才写文档；其它工具部分保留 |
 | 18 | C02 | 开发Codex CLI正式工具＋runner本机mock兼容CI，覆盖发现、完整thread ID、身份/回信、忙闲、服务重启与清理。 | Codex/Claude工具会话负责；相应入口实现与隔离合同；平台扩展按C00，可并行 | 原负责人独立推进，本会话不接管；CI待开发 |

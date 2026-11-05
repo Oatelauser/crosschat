@@ -1,0 +1,19 @@
+{"status":"failed","error":"Timed out waiting for native title rendered in true Web UI","cleanup":{"runtimeStopped":true,"registrationRemoved":true,"removed":true,"forced":false},"browserExit":{"code":0,"signal":null},"browserProcessesAfter":0,"unsafe":false}
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+'failed' !== 'passed'
+
+    at file:///D:/workspace/CC/cc-dsh-rename-20261105/node_modules/.cache/c20-dsh-20261105/service-scope-native.mjs:79:8 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: 'failed',
+  expected: 'passed',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.23.4

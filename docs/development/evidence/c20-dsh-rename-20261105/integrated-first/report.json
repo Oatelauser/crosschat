@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "scope": "Windows rc.5 real Web UI, production Node/Broker, ConPTY rename, roster and typed by-name delivery",
+  "root": "D:\\workspace\\CC\\cc-c20-web-srbMap",
+  "status": "failed",
+  "productHead": "7f4443fdab42bce7c8125e1815b3fbc8c1b8c214",
+  "version": "0.2.1-rc.5",
+  "hostPid": 32532,
+  "nativeId": "session-1b9fad3b-2c3f-4b97-8a46-2fd585eedd2f",
+  "initialModelRequests": 1,
+  "browser": "existing Playwright Chromium 1243",
+  "browserPid": 27224,
+  "browserEndpointOwnerVerified": true,
+  "setup": {
+    "schema": 1,
+    "pid": 32532,
+    "version": "0.2.1-rc.5",
+    "webPort": 63496,
+    "registeredWorkspace": {
+      "id": "3531faac-069d-455e-99e5-ba317eaf363d",
+      "path": "D:\\workspace\\CC\\cc-c20-web-srbMap\\run-CfK2Qh\\workspace"
+    }
+  },
+  "browserVersion": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/153.0.8010.12",
+    "revision": "@971a7443b0c9b0a9b2860529b33331b76077ec62",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "jsVersion": "15.3.76.4"
+  },
+  "lastBody": "新会话\nCtrl\n+\nAlt\n+\nN\n插件\n自动化任务\n更多\n工作区\nworkspace\n新会话\nC20 Before 1793886755503\n刚刚\n更多\n探索未至之境\n预览版\nworkspace\n标准模式\n描述你想要构建的内容, / 调用指令, @ 文件或对话\nDeepSeek-V4.1-Flash\n1017\nOff",
+  "beforeTitleVisible": true,
+  "selectedExactNativeId": "session-1b9fad3b-2c3f-4b97-8a46-2fd585eedd2f",
+  "newName": "C20After1793886760166",
+  "error": {
+    "message": "Timed out waiting for native rename terminal event",
+    "stack": "Error: Timed out waiting for native rename terminal event\n    at pollDsh (file:///D:/workspace/CC/cc-dsh-rename-20261105/test/helpers/dsh-live-fixture.mjs:154:9)\n    at async file:///D:/workspace/CC/cc-dsh-rename-20261105/test/helpers/dsh-native-rename-validation.mjs:83:2"
+  },
+  "browserExit": {
+    "code": 0,
+    "signal": null
+  },
+  "browserProcessesAfter": 0,
+  "nativeLogs": {
+    "stdout": "dsh web: http://127.0.0.1:63496/?token=[fixture-token-redacted]\n",
+    "stderr": ""
+  },
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  },
+  "browserLogs": "\r\nDevTools listening on ws://127.0.0.1:63502/devtools/browser/ba67d706-55fa-4f52-9eb3-67ffd4052a48\r\n[27224:34380:1105/215236.211:ERROR:content\\browser\\network_service_instance_impl.cc:655] Network service crashed or was terminated, restarting service.\r\n[27224:34380:1105/215236.340:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[27224:34380:1105/215236.340:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[27224:34380:1105/215238.710:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[27224:34380:1105/215238.710:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[27224:7936:1105/215239.941:ERROR:google_apis\\gcm\\engine\\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\r\n",
+  "unsafe": false
+}

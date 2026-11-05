@@ -1,41 +1,27 @@
-# DSH原生改名：C20条件能力续接
+# DSH原生改名：C20续接
 
-2026-11-05。用户持续开发授权，root独立。工作区D:/workspace/CC/cc-dsh-rename-20261105、分支codex/dsh-native-rename-20261105，基线948e58f（DSH Windows npm/Web入星切片已验收）。权威总表在原工作区，25父项/11CI索引与其它负责人保持。没有推送、发布、外部Actions或Desktop操作授权扩展。
+2026-11-05已恢复并完成Windows rc.5本地开发验收。工作区D:/workspace/CC/cc-dsh-rename-20261105，分支codex/dsh-native-rename-20261105；当前审阅候选680e391221179b3dbcce8b7cb49840c1410f72c2。原仓库仅同步文档/证据；源代码位于独立分支。main与PR #4合入基线仍为d26aa2b。尚未推送、建PR或新增Actions。root独立，无worker。
 
-已核实官方rc.2/rc.5的SessionTitleService.rename(session,title)为同步调用：检查同一live session，追加原生session/title事件，再返回接受快照。来源与发行物摘要见[C15原生模块索引](evidence/c15-dsh-operations-20261105/module-index.json)。外部sessionController.rename先resolveAgent，可能激活历史会话；本适配不走它，不创建/恢复替代目标，不改数据库。
+## Windows rc.5本地切片验收
 
-## 本轮实现与验收边界
+DSH正式npm 0.2.1-rc.5、锁定pnpm11.28.5、Node22.23.4、loopback模型及现有独立Playwright Chromium1243。已有普通交互会话经原生workspaceRegistry注册并由sessionController.create(workspaceId)关联，完成首条mock消息后，在真正Web界面选中完整原生ID；不以界面自动空白会话替换目标，不调用原生文件夹选择框。
 
-- 沿用已批准TUI原生改名动作、名称校验及applied/rejected/uncertain；不新增用户命令/参数、必需步骤或crosschat持久数据文件。原生标题事件属于已有DSH会话存储。
-- 只在已验证的npm/Web入口核实后启用；Desktop、未知profile/版本或缺服务的入口单独禁用，不因同家族或方法存在而继承。保留入星等独立能力。
-- 现有Bearer loopback桥增加完整会话的title子资源：GET只读核实当前实例/原生创建信息及能力，并给出内存中的活Agent代次；POST只接受有界名称与预期实例/创建信息/活代次。代次用WeakMap跟随原对象回收，不新增账本或数据文件，避免相同Host/ID/原生创建时间但Agent被恢复替换时复用旧确认。认证、Host/Origin、完整不透明ID、当前root身份和类型均沿现有合同；读取不产生标题事件。
-- 通过当前Host的ctx.get('sessionTitle').rename(agent.session,name)写入，执行前再次核实同一root；不在最终身份校验与同步写入之间await。缺目标、旧实例/创建信息、输入错误在写前拒绝；原生调用后异常/丢回执保持uncertain，零盲重试。读取恢复不重放写入。
-- Adapter复用既有登记/握手/完整目标与上下文核验，TUI最终确认绑定实际端点/owner/版本。实际返回名称与请求不同或后续同步未确认时，不能宣称applied。
-- 真实验收须覆盖同一live Agent的原生快照、真正Web界面、node/星册及新名称寻址；不能以HTTP字段、直接Adapter调用或历史基础CI替代。模型只用loopback桩。未实测前保持改名禁用，C20父项不关闭。
+通过生产Node/Broker及既有ConPTY原生改名动作，先取消零写，再输入并确认：同一Agent、Web当前标题与侧边栏、node声明及权威星册同步。改名只追加一条session/title事件，既有事件前缀相同、没有新增模型调用。随后按新名称经真实TCP CLI投递到同一Agent，loopback桩另响应一次。终端缩放/退出、raw状态和监听恢复通过；Host与浏览器正常退出、浏览器余留进程0、桥登记和run根回收。见[正式端到端报告](evidence/c20-dsh-rename-20261105/integrated-second/report.json)。
 
-本机有Edge可执行文件，但尚未启动浏览器或安装自动化依赖。计划使用独占profile的受控本地Web界面；不连接用户浏览器或日用Desktop。上一切片的锁定官方npm runtime暂保留为本轮测试依赖，各次Host/run数据均已正常回收。下一步先保存桥/Adapter行为RED，再实现与验证。
+服务代理RED7903634复现同一已加载服务每次ctx.get生成新代理导致旧确认失效。80ed53f改为公共ctx.inject加载/卸载scope绑定代次，活Agent变化继续撤销确认，迟到旧scope清理不影响新scope，释放失败仍关闭HTTP/撤登记。既有shellEnv故障fixture只向其原依赖注入故障，原断言保持，另补title scope释放失败检查。所有RED和首次扩大失败raw保留。
 
-## 桥子资源第一段
+默认Provider已接通rc.5 Web；rc.2、Desktop和其它版本为needs-verification，入星独立可用。名称校验、四态、applied/rejected/uncertain、最终上下文核验与零盲重试沿用共享机制。不新增用户命令/参数、必需步骤、crosschat持久数据文件或外部Hook。服务/目标变化需新确认；只读恢复不重放写入。
 
-487f0a1保存行为RED：首次12失败/2通过，补活Agent代次后13失败/2通过。产品**bd0779c**已实现GET/POST title子资源，使用当前Host的同步SessionTitle服务，不走resolveAgent；WeakMap只保留对象活代次，不写文件。输入、鉴权/Origin、Host/profile/版本、实例/创建信息/活对象变化、读取零写、原生异常后uncertain零重试共15条新用例通过。首次扩大到旧Adapter测试时，新worktree尚无dist，13条旧诊断用例因MODULE_NOT_FOUND失败；原始输出保留，不当作桥的行为RED。随后npm run build及相关ESLint通过，四文件定向119通过，见[原始定向结果](evidence/c20-dsh-rename-20261105/bridge-targeted-green.txt)。本段未运行完整check，尚有客户端/原生界面等开发待办。
+完整npm run check在7f4443f退出0：2871通过/11原有跳过，242文件通过/3跳过，206模块/699边无环/无越界，lint/build通过。其后680e391只订正原生验收工装的就绪等待，相关ESLint及正式端到端通过，产品src/integrations无变化。[完整raw](evidence/c20-dsh-rename-20261105/full-check-qualified.txt)。
 
-GET里的executable只说明这个底层桥可以对当前活对象调用已核实的原生方法；用户操作Provider尚未登记rename，仍按待核实禁用。不能把15条模拟Host或119条定向检查当作真正DSH/Web界面通过。下一步为Adapter四态/context/revision/最终确认与错误回执、正式Web界面及node/星册/按名寻址证据；未推送/发布或启用用户操作，无活DSH测试Host或浏览器。
+## 当前剩余与继续顺序
 
-## 客户端接线检查点
+C18/C24的Windows入星切片已验收，C20 Windows rc.5本地切片移出活动开发；父项保留rc.2、正式Desktop及其它入口/平台。C21/C22继续保留两个独立node、两个操作端刷新、永久/临时多窗保护、受控丢回执/版本组合与增强托管CI；现有基础四目标验收不重开。C23已同步当前指南和skill reference，剩余入口随后更新。全量仍为25父项/11CI索引，不换算总体百分比。
 
-32e073e保存Adapter行为RED（4失败/16通过），最终产品**fc065c14bb1f722340b63946dd20bed0234680a3**已实现src/dsh/rename.ts；当前仅受控验收显式注入，生产Provider工厂仍未登记。共同原生事实收在DSH Adapter的withVerifiedDshTarget单次有界生命周期，入星检查与改名共用，未另造状态/恢复机制。标题确认同时绑定活Agent及当前原生标题服务的内存代次；服务失效/恢复后旧确认不沿用。服务错误、明示写前拒绝和写不明分别保留，零自动重试；其它端点与未核实版本不继承Web能力。
+下一步先提交当前本地审阅候选给用户决定推送/草稿PR及普通CI；旧PR #4授权已履行，不复用到新外部执行。候选合入、发布、追加原生Actions另按实际方案决定。C00跨机组合、C04干净runner/官方卸载和公共通信故障归属保持。
 
-新桥＋Adapter共20例通过，含C18边界/旧Adapter的三文件92通过；首次build、相关lint通过，随后单次完整npm run check退出0：**2865通过/11原有跳过，242文件通过/3跳过**，lint/import graph/build均通过，见[完整原始检查](evidence/c20-dsh-rename-20261105/full-check-adapter.txt)。本轮真实Web界面正在独占profile/loopback桩中探测；尚未有原生通过结论，node/星册/按名寻址、最终TUI改名及两平台版本组合仍未完成，不能据此启用生产改名或关闭C20。
+## 现场与历史
 
-## 用户暂停断点
+所有本轮Host、浏览器、TUI、Node/Broker进程均已回收。保留开发worktree、归档证据及C22后续可复用的独占npm安装/工具缓存。D:/soft/DeepSeek Harness与用户未跟踪文档保持。前两处失败浏览器根经用户删除后已核实不存在，不再追删；CFT下载助手已停止且没有执行下载包，直接复用现有测试Chromium。
 
-2026-11-05 18:06后用户明确暂停，本会话已停止开发与原生测试，相关进程/worker为0。当前源代码检查点0b10b115（产品fc065c1、完整2865通过/11原有跳过）；C20真实Web选中了同一已有会话，但改名被旧revision守卫拒绝、标题未改，生产Provider仍禁用改名。详细[暂停断点与下一步](dsh-native-rename-progress-20261105.md#用户暂停断点)及[证据索引](evidence/c20-dsh-rename-20261105/pause-validation.json)已保存。没有推送、发布或新Actions；25父项/11CI索引、其它负责人及日用DSH保持。等待用户明确继续，不自动恢复。
-
-- 已完成的C18/C24 Windows npm/Web入星切片见948e58f，定向105、完整2845/11及七项正式Host/ConPTY通过，切片不重开。
-- C20当前生产Provider尚未登记rename；20条模拟Host/Adapter用例通过、最后产品完整检查在fc065c1通过。其后cf43d67/0b10b11仅改隔离工装，ESLint通过，未重跑完整check。
-- 真实rc.5 Web通过公开workspaceRegistry.create及sessionController.create(workspaceId)建立独占工作区；同一目标先用loopback桩完成首条普通消息，随后在Web选中精确data-row-key原生ID。不要用前端自动空白会话替代目标。control4中的rename结果为rejected、sameAgent=true，未修改标题；两张截图为失败前后原件，不能当GREEN。
-- 下一步先以每次ctx.get都返回新服务代理的fixture保存RED。当前桥将服务对象指针当作代次；已读官方Cordis getTraceable每次createTraceable/new Proxy，怀疑导致真实确认持续变化。核实后沿既有公共ctx.inject服务加载/卸载生命周期绑定代次，保留活Agent代次、失效恢复及独立cleanup；尚未实施修复。再做真实Web同步、node/星册/按名寻址与TUI；新旧版本/其它平台/双node双操作端及C22继续保留。
-- 普通Edge/Chrome调试未启动；实际复用现有Playwright Chromium1243，不修改其缓存。CFT下载助手未在时限内收口，已核实并停止其独占Node13908，没有执行下载包，不续跑该下载。
-- 一次工作区选择触发原生文件夹框，测试profile缺Desktop导致用户看到位置不可用。已停止该路径，保存用户截图；Host/浏览器正常退出，精确匹配错误窗口0。现有工装改用公开工作区API，受控click禁止添加/选择工作区按钮，不再调系统文件夹选择框。
-- 前两处浏览器失败目录删除曾被自动审批仅以blocked by policy拒绝；用户已手动删除，已核实两处均不存在，清理项关闭。所有后续Host/run根由fixture正常回收，浏览器code0、相关进程0。仅保留开发worktree、证据与后续可复用的独占npm安装/工具缓存；不动D:/soft/DeepSeek Harness及用户未跟踪文档。
-- 新用户命令/必需交互及crosschat持久数据文件仍等用户决定；普通代码/tests/docs/skills允许。外部推送/PR/Actions不复用旧PR批准。root独立、不派worker。
+曾触发原生文件夹选择并出现测试profile/Desktop不存在的系统窗口，用户截图及处理记录保留。后续工装采用公开工作区API及明确禁止选择/添加工作区按钮的导航，不再触发该窗口。暂停前真实改名rejected、浏览器启动失败、界面导航/表单等待工装失败及其正常回收均留原始证据。[阶段历史快照](evidence/c20-dsh-rename-20261105/development-history-before-local-acceptance.txt)。
