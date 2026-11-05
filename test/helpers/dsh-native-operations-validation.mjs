@@ -113,7 +113,7 @@ try {
       env: fixture.env, columns: 140, rows: 36, logPath: terminalLog });
     const send = async (keys, expected) => { const mark = pty.output.length; pty.write(keys); if (expected) await pty.waitForOutput(expected, 10000, mark); };
     await pty.waitForOutput('C18-NATIVE-MEMBERS'); await send(':stars\r', 'native-a'); await send('/native-a\r', /1\/1/);
-    await send('\r', '<members>'); await send('a', native.title);
+    await send('\r', '按在线 / 下线分组'); await send('a', native.title);
     await event((entry) => entry.event === 'availability' && entry.result['adopt-session']?.enabled);
     await send('a', '确认提交'); await send('\r', '已取消操作'); assert.equal(roster('native-a').length, 0);
     assert(!(await events()).some((entry) => entry.event === 'mutation'));
