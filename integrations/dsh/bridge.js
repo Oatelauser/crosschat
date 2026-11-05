@@ -93,6 +93,8 @@ export async function mountDshBridge(ctx, host, options = {}) {
   let temporaryOwned = false;
   let releaseCallerIdentity;
   let callerIdentityScope;
+  let titleScope;
+  let titleEpoch;
   const file = join(directory, `${instanceId}.json`);
   const temporary = join(directory, `${instanceId}.tmp`);
   const info = { schema: 1, protocol: 1, provider: 'dsh', instanceId, pid: process.pid, runtimeVersion, ...endpoint,
@@ -104,13 +106,12 @@ export async function mountDshBridge(ctx, host, options = {}) {
   };
   const titleTargets = new WeakMap();
   const titleTarget = (agent) => {
-    const service = ctx.get('sessionTitle');
     let current = titleTargets.get(agent);
-    if (current === undefined || current.service !== service) { current = { service, revision: randomUUID() }; titleTargets.set(agent, current); }
+    if (current === undefined || current.epoch !== titleEpoch) { current = { epoch: titleEpoch, revision: randomUUID() }; titleTargets.set(agent, current); }
     return current.revision;
   };
   const titleAvailability = () => profile === 'web' && ['0.2.1-rc.2', '0.2.1-rc.5'].includes(runtimeVersion)
-    && typeof ctx.get('sessionTitle')?.rename === 'function' ? { state: 'executable' }
+    && titleEpoch !== undefined && typeof ctx.get('sessionTitle')?.rename === 'function' ? { state: 'executable' }
       : { state: 'needs-verification', reason: 'This native profile, version or title service is not qualified.' };
   const root = (id) => {
     const agent = ctx.agents.get(id);
@@ -200,6 +201,8 @@ export async function mountDshBridge(ctx, host, options = {}) {
     releaseCallerIdentity = undefined;
     await attempt(() => release?.());
     await attempt(() => callerIdentityScope?.dispose());
+    titleEpoch = undefined;
+    await attempt(() => titleScope?.dispose());
     await attempt(async () => {
       const stopped = new Promise((resolve) => server.close(() => resolve()));
       server.closeAllConnections();
@@ -223,6 +226,15 @@ export async function mountDshBridge(ctx, host, options = {}) {
     const address = server.address();
     if (address === null || typeof address === 'string') throw failure('UNAVAILABLE', 'Harness bridge did not acquire a loopback port.');
     url = `http://127.0.0.1:${address.port}`;
+    // Cordis returns fresh traced service proxies. Dependency scope lifetime,
+    // rather than proxy equality, identifies one actual loaded title service.
+    if (profile === 'web' && ['0.2.1-rc.2', '0.2.1-rc.5'].includes(runtimeVersion) && typeof ctx.inject === 'function') {
+      titleScope = ctx.inject(['sessionTitle'], (scope) => {
+        if (closed || typeof scope.get('sessionTitle')?.rename !== 'function') return;
+        const epoch = randomUUID(); titleEpoch = epoch;
+        scope.effect(() => () => { if (titleEpoch === epoch) titleEpoch = undefined; });
+      });
+    }
     if (callerIdentity !== undefined) {
       const contribute = (scope) => {
         if (closed) return;

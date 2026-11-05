@@ -18,6 +18,8 @@ async function fixture(profile = 'web', version = '0.2.1-rc.5', serviceAvailable
   const id = 'root/+?雪', session = { id, header: { id, createdAt: 123, cwd: '/original' } };
   let title = 'before';
   let available = serviceAvailable;
+  let disposeFailure = false;
+  let expectedCloseFailure: unknown;
   const agent = { id, status: 'idle', session };
   const agents = new Map([[id, agent]]);
   const rename = vi.fn((target: typeof session, name: string) => {
@@ -39,12 +41,15 @@ async function fixture(profile = 'web', version = '0.2.1-rc.5', serviceAvailable
     get,
     inject: (dependencies: string[], callback: (scope: Scope) => unknown) => {
       const binding: Binding = { dependencies, callback, effects: [], active: false }; bindings.add(binding); activate(binding);
-      return { dispose: async () => { for (const close of binding.effects.splice(0).reverse()) close(); bindings.delete(binding); } };
+      return { dispose: async () => {
+        for (const close of binding.effects.splice(0).reverse()) close(); bindings.delete(binding);
+        if (disposeFailure && dependencies.includes('sessionTitle')) { disposeFailure = false; throw new Error('title scope dispose rejected'); }
+      } };
     },
     effect: () => undefined,
   };
   const bridge = await mountDshBridge(ctx, { getDshRuntimeVersion: () => version, createUserMessage: () => ({ id: randomUUID(), role: 'user' }) }, { home });
-  cleanup.push(() => bridge.close());
+  cleanup.push(async () => { try { await bridge.close(); } catch (error) { if (error !== expectedCloseFailure) throw error; } });
   const directory = join(home, '.crosschat/dsh/instances'), [file] = await readdir(directory);
   const registration = JSON.parse(await readFile(join(directory, file), 'utf8')) as { url: string; token: string; instanceId: string };
   const headers = { authorization: `Bearer ${registration.token}`, 'content-type': 'application/json' };
@@ -58,6 +63,12 @@ async function fixture(profile = 'web', version = '0.2.1-rc.5', serviceAvailable
   const operations = createNativeSessionOperations({ discovery: createLocalDiscoveryService({ home }), providers, adopt, renamed });
   const ref = { contextId: 'local', providerId: 'dsh', nativeId: id, endpointType: profile === 'desktop' ? 'desktop' : 'host' };
   return { path, headers, input, rename, agents, session, ctx, title: () => title, operations, ref, adopt, renamed,
+    bridge, directory, failDispose: () => { disposeFailure = true; }, expectCloseFailure: (error: unknown) => { expectedCloseFailure = error; },
+    replaceWithLateCleanup: () => {
+      const previous: Array<() => void> = [];
+      for (const binding of bindings) { previous.push(...binding.effects.splice(0)); binding.active = false; activate(binding); }
+      for (const close of previous) close();
+    },
     setService: (value: boolean) => {
       for (const binding of bindings) { for (const close of binding.effects.splice(0).reverse()) close(); binding.active = false; }
       available = value; for (const binding of bindings) activate(binding);
@@ -122,6 +133,29 @@ describe('Harness exact live native title bridge', () => {
 });
 
 describe('production DSH title operation adapter', () => {
+  it('qualifies a late loaded title service without replaying a write', async () => {
+    const f = await fixture('web', '0.2.1-rc.5', false, true);
+    expect((await f.operations.describe(f.ref)).actions.rename.state).toBe('needs-verification');
+    f.setService(true);
+    const ready = await f.operations.describe(f.ref); expect(ready.actions.rename.state).toBe('executable');
+    expect(f.rename).not.toHaveBeenCalled();
+  });
+
+  it('does not let stale scope cleanup disable a newer title service generation', async () => {
+    const f = await fixture('web', '0.2.1-rc.5', true, true), previous = await f.operations.describe(f.ref);
+    f.replaceWithLateCleanup();
+    const current = await f.operations.describe(f.ref); expect(current.actions.rename.state).toBe('executable'); expect(current.revision).not.toBe(previous.revision);
+    expect(await f.operations.apply({ ref: f.ref, operation: 'rename', name: 'after', expectedRevision: previous.revision })).toMatchObject({ kind: 'rejected' });
+    expect(f.rename).not.toHaveBeenCalled();
+  });
+
+  it('still closes HTTP and removes its registration if the title dependency scope cannot dispose', async () => {
+    const f = await fixture(); f.failDispose();
+    const failure: unknown = await f.bridge.close().then(() => undefined, (error: unknown) => error); f.expectCloseFailure(failure);
+    expect(failure).toBeInstanceOf(Error); expect((failure as Error).message).toBe('title scope dispose rejected');
+    await expect(fetch(f.path, { headers: f.headers })).rejects.toThrow(); expect(await readdir(f.directory)).toEqual([]);
+    expect(f.rename).not.toHaveBeenCalled();
+  });
   it('keeps confirmation stable across fresh Cordis service proxies for the same loaded service', async () => {
     const f = await fixture('web', '0.2.1-rc.5', true, true);
     expect(f.ctx.get('sessionTitle')).not.toBe(f.ctx.get('sessionTitle'));
