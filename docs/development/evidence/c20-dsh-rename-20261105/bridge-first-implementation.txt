@@ -1,0 +1,237 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-rename-20261105
+
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > binds a late native shell service, releases unloaded ownership and binds its replacement 49ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > does not retain a source contribution after the native shell service unloads 13ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > contributes this bridge instance only to the actual live root execution and releases it on close 9ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > does not advertise caller association without the public per-execution shell service 9ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > reports the native desktop profile without inferring frontend ownership 13ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > keeps same-ID Host and Desktop sessions separate and selects type before owner ambiguity 74ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > does not reinterpret an unclassified owner as Host or fall back from an absent requested type 9ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > rejects a changed native profile or endpoint type during the authenticated owner handshake 10ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > reports the native web profile without inferring frontend ownership 12ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > reports the native custom-profile profile without inferring frontend ownership 11ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > does not invent host or Desktop type without a valid native profile (0) 11ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > does not invent host or Desktop type without a valid native profile (1) 10ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > does not invent host or Desktop type without a valid native profile (2) 10ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > does not invent host or Desktop type without a valid native profile (3) 8ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > does not invent host or Desktop type without a valid native profile (4) 8ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > publishes a private owned registration matching the authenticated service identity 11ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > requires authentication and refuses browser-origin requests 12ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > rejects caller-association metadata changed by the responding owner 10ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > does not probe an unrelated type and still rejects duplicate owners within the selected type 27ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > discovers authenticated live sessions under the isolated common state root without writes 12ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > gets the exact opaque native identity and returns null only for an authoritative absent item 12ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > preserves unknown names and cwd without inventing a current directory 11ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > pages deterministically and rejects a cursor after the source membership changes 15ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > refuses duplicate native identities across live instances for list, get and send 21ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > lists existing roots and resolves exact opaque session ids without creating sessions 18ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > never discovers or admits input to a live subagent addressed directly 16ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > reads the public title projection without replaying history through the snapshot getter 12ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > admits one native queue message and returns its generated identity 11ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > admits one native steer message and returns its generated identity 10ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > does not create or replace an absent target and rejects invalid content before admission 16ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > distinguishes missing registration from malformed records without leaking content 7ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > ignores a confirmed dead owner record without removing it 10ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > rejects unsafe registration url before network access (0) 6ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > rejects unsafe registration url before network access (1) 6ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > rejects unsafe registration url before network access (2) 7ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > rejects unsafe registration protocol before network access (3) 6ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > rejects unsafe registration instanceId before network access (4) 8ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > rejects unsafe registration token before network access (5) 9ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > never writes after a failed live service identity handshake (0) 9ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > never writes after a failed live service identity handshake (1) 9ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > never writes after a failed live service identity handshake (2) 11ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > never writes after a failed live service identity handshake (3) 7ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > never writes after a failed live service identity handshake (4) 8ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > accepts all legal escaped text within the content budget instead of truncating JSON 66ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > rejects an oversized body and unknown routes without native side effects 22ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > disposes the bridge socket and only its owned registration while leaving native agents live 15ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > still stops the listener and removes its own registration when the contributor release fails 9ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > still stops the listener and removes its own registration when the dependency scope disposal rejects 9ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > shares one closing attempt between concurrent closes without releasing twice 10ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > closes through the plugin effect that owns the bridge 9ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > leaves a replacement registration, other instances and borrowed agents untouched while closing 13ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > keeps the mount failure as the reason and removes the temporary registration it left behind 9ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > keeps the mount failure and its cleanup failure when the error refuses a cause 7ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > keeps the primary error, its own cause and every cleanup reason 10ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > leaves a pre-existing temporary file untouched when its own creation is refused 6ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > treats an unavailable live owner and malformed session response as errors, not empty discovery 25ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > does not coerce a structured status value into the native idle/running contract 8ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > admits the experimental runtime window after exact owner confirmation (0.2.1-rc.2) 8ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > admits the experimental runtime window after exact owner confirmation (0.2.1-rc.10) 8ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > admits the experimental runtime window after exact owner confirmation (0.2.1) 10ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > admits the experimental runtime window after exact owner confirmation (0.2.2-alpha.1) 9ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > admits the experimental runtime window after exact owner confirmation (0.2.99+build.1) 8ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > refuses an unsupported or malformed runtime before reads (0.2.0) 7ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > refuses an unsupported or malformed runtime before reads (0.2.1-beta.1) 7ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > refuses an unsupported or malformed runtime before reads (0.2.1-rc.1) 6ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > refuses an unsupported or malformed runtime before reads (0.3.0-alpha.1) 7ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > refuses an unsupported or malformed runtime before reads (0.3.0) 8ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > refuses an unsupported or malformed runtime before reads (0.1.99) 7ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > refuses an unsupported or malformed runtime before reads (0.2.01) 7ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > refuses an unsupported or malformed runtime before reads (0.2.1-rc.02) 7ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > sends queue exactly once and checks the admission receipt 9ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > sends steer exactly once and checks the admission receipt 10ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > rejects empty identities, empty messages, invalid mode and invalid paging before writes 5ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > cancels before I/O and bounds a stalled read 75ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > does not retry a write with a lost or wrong-session receipt, or leak server text 12ms
+ ✓ test/dsh-adapter.test.ts > DSH native bridge adapter > reports timed-out writes as uncertain and leaves them unretied 107ms
+ × test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > reports no live bridge as info without creating or repairing registrations 61ms
+   → Diagnostic isolated task exited without a diagnostic result
+ × test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > verifies every instance without listing or creating sessions and publishes only safe facts 60ms
+   → Diagnostic isolated task exited without a diagnostic result
+ × test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_AUTH_REQUIRED' 59ms
+   → Diagnostic isolated task exited without a diagnostic result
+ × test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_OWNER_MISMATCH' 61ms
+   → Diagnostic isolated task exited without a diagnostic result
+ × test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_UNSUPPORTED_VERSION' 55ms
+   → Diagnostic isolated task exited without a diagnostic result
+ × test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_UNSUPPORTED_PROTOCOL' 54ms
+   → Diagnostic isolated task exited without a diagnostic result
+ × test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_PROTOCOL_ERROR' 56ms
+   → Diagnostic isolated task exited without a diagnostic result
+ × test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_UNAVAILABLE' 55ms
+   → Diagnostic isolated task exited without a diagnostic result
+ × test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > reports a corrupt registration without leaking or replacing its original bytes 54ms
+   → Diagnostic isolated task exited without a diagnostic result
+ × test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > bounds a stalled handshake to one shared five-second budget without retrying 52ms
+   → Diagnostic isolated task exited without a diagnostic result
+ × test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > cancels an in-flight handshake and releases the owned process and connection 57ms
+   → expected 'Error' to be 'entered' // Object.is equality
+ × test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > uses the same native facts in the actual CLI text and JSON, HTTP 200 69ms
+   → node:internal/modules/cjs/loader:1433
+  throw err;
+  ^
+
+Error: Cannot find module 'D:\workspace\CC\cc-dsh-rename-20261105\dist\cli.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1430:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1040:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1045:22)
+    at Function._load (node:internal/modules/cjs/loader:1216:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:254:19)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.23.4
+: expected 1 to be +0 // Object.is equality
+ × test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > uses the same native facts in the actual CLI text and JSON, HTTP 401 76ms
+   → node:internal/modules/cjs/loader:1433
+  throw err;
+  ^
+
+Error: Cannot find module 'D:\workspace\CC\cc-dsh-rename-20261105\dist\cli.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1430:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1040:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1045:22)
+    at Function._load (node:internal/modules/cjs/loader:1216:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:254:19)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.23.4
+: expected 1 to be +0 // Object.is equality
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > reads capabilities without a write and calls the public title service with the same live session 56ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > does not enable desktop solely because a native rename method exists 16ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > does not enable custom solely because a native rename method exists 18ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > keeps an unverified version or unavailable native service disabled 21ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed instance before a native write 10ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed creation before a native write 10ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed live-object before a native write 11ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed missing before a native write 14ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 11ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 12ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 10ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 10ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 10ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > requires the existing authentication and forbids browser-origin writes 12ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > keeps a native error after admission uncertain and never repeats the public call 12ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > reports no live bridge as info without creating or repairing registrations
+ FAIL  test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > verifies every instance without listing or creating sessions and publishes only safe facts
+ FAIL  test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_AUTH_REQUIRED'
+ FAIL  test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_OWNER_MISMATCH'
+ FAIL  test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_UNSUPPORTED_VERSION'
+ FAIL  test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_UNSUPPORTED_PROTOCOL'
+ FAIL  test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_PROTOCOL_ERROR'
+ FAIL  test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_UNAVAILABLE'
+ FAIL  test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > reports a corrupt registration without leaking or replacing its original bytes
+ FAIL  test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > bounds a stalled handshake to one shared five-second budget without retrying
+Error: Diagnostic isolated task exited without a diagnostic result
+ ❯ ChildProcess.onExit src/application/diagnostics/query.ts:151:43
+    149|       };
+    150|       const onError = (error: Error): void => { reject(error); };
+    151|       const onExit = (): void => { reject(new Error('Diagnostic isolat…
+       |                                           ^
+    152|       detach = () => {
+    153|         signal?.removeEventListener('abort', onAbort);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > cancels an in-flight handshake and releases the owned process and connection
+AssertionError: expected 'Error' to be 'entered' // Object.is equality
+
+Expected: "entered"
+Received: "Error"
+
+ ❯ test/dsh-adapter.test.ts:384:21
+    382|     try {
+    383|       const state = await Promise.race([entered.then(() => 'entered'),…
+    384|       expect(state).toBe('entered');
+       |                     ^
+    385|       controller.abort();
+    386|       expect(await pending).toBe('AbortError');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > uses the same native facts in the actual CLI text and JSON, HTTP 200
+ FAIL  test/dsh-adapter.test.ts > Harness read-only bridge diagnostics > uses the same native facts in the actual CLI text and JSON, HTTP 401
+AssertionError: node:internal/modules/cjs/loader:1433
+  throw err;
+  ^
+
+Error: Cannot find module 'D:\workspace\CC\cc-dsh-rename-20261105\dist\cli.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1430:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1040:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1045:22)
+    at Function._load (node:internal/modules/cjs/loader:1216:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:254:19)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.23.4
+: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ test/dsh-adapter.test.ts:403:38
+    401|     });
+    402|     const json = await run(['--json']);
+    403|     expect(json.status, json.stderr).toBe(0);
+       |                                      ^
+    404|     const result = JSON.parse(json.stdout);
+    405|     expect(result.groups.flatMap((group: { checks: Array<{ code: strin…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  13 failed | 91 passed (104)
+   Start at  16:45:32
+   Duration  2.28s (transform 227ms, setup 0ms, collect 318ms, tests 2.11s, environment 0ms, prepare 228ms)
+
