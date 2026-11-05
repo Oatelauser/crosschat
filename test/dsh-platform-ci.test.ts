@@ -25,9 +25,11 @@ function communicationReport(platform: string, arch: string, version: string, ru
 function regressionSummary(platform: string, arch: string) {
   const baseline = parseDshNpmManifest(pinned.package, platform, arch);
   const candidate = { ...baseline, version: '0.2.1-rc.5', url: 'https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.5.tgz' };
-  const failed = () => ({ ...communicationReport(platform, arch, candidate.version), status: 'failed', category: 'compatibility',
-    stage: 'native-delivery', check: 'busy-native-queue-and-steer-step-boundaries',
-    process: { code: 1, signal: null, timedOut: false } });
+  const failed = () => {
+    const report = communicationReport(platform, arch, candidate.version);
+    return { ...report, status: 'failed', category: 'compatibility', checks: report.checks.slice(0, 5),
+      stage: 'native-delivery', check: 'busy-native-queue-and-steer-step-boundaries', process: { code: 1, signal: null, timedOut: false } };
+  };
   const report = communicationReport(platform, arch, baseline.version);
   return { schema: 1, tool: 'dsh-web-runtime', platform, arch, scope: report.scope,
     builds: { baseline, candidate, packageManager: parsePnpmManifest(pinned.packageManager) },
@@ -128,5 +130,13 @@ describe('DSH regression identity separates OS and architecture', () => {
   it('preserves the established Windows marker', () => {
     expect(dshRegressionIdentity(regressionSummary('win32', 'x64'))?.marker)
       .toBe('<!-- dsh-compat:0.2.1-rc.5:win32:busy-native-queue-and-steer-step-boundaries -->');
+  });
+
+  it('rejects reports from a different OS or architecture instead of sharing their notification', () => {
+    const report = regressionSummary('darwin', 'arm64');
+    for (const changed of [{ ...report.baseline, platform: 'linux' }, { ...report.baseline, arch: 'x64' }]) {
+      expect(dshRegressionIdentity({ ...report, baseline: changed })).toBeUndefined();
+    }
+    expect(dshRegressionIdentity({ ...report, platform: 'linux', arch: 'arm64' })).toBeUndefined();
   });
 });

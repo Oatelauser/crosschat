@@ -1200,17 +1200,18 @@ export function runDshDesktopSequence(builds, operations) {
 }
 
 export function dshRegressionIdentity(summary) {
-  if (!record(summary) || summary.schema !== 1 || summary.tool !== tool || summary.platform !== 'win32' || summary.arch !== 'x64' || !validScope(summary.scope)
+  if (!record(summary) || summary.schema !== 1 || summary.tool !== tool || !isDshNpmTarget(summary.platform, summary.arch) || !validScope(summary.scope)
     || summary.installationCleanup !== 'removed' || summary.classification?.kind !== 'regression' || summary.classification?.notify !== true || !record(summary.builds)) return;
   const { builds, baseline, candidate, retry } = summary;
   try {
-    for (const artifact of [builds.baseline, builds.candidate]) parseDshNpmManifest({ ...artifact, dist: { tarball: artifact.url, integrity: artifact.integrity } }, 'win32', 'x64');
+    for (const artifact of [builds.baseline, builds.candidate]) parseDshNpmManifest({ ...artifact, dist: { tarball: artifact.url, integrity: artifact.integrity } }, summary.platform, summary.arch);
     parsePnpmManifest({ ...builds.packageManager, dist: { tarball: builds.packageManager.url, integrity: builds.packageManager.integrity } });
   } catch { return; }
-  if (!validReport(baseline, builds.baseline) || !validReport(candidate, builds.candidate) || !validReport(retry, builds.candidate)
+  if (!validReport(baseline, builds.baseline, undefined, summary) || !validReport(candidate, builds.candidate, undefined, summary) || !validReport(retry, builds.candidate, undefined, summary)
     || [baseline, candidate, retry].some((item) => !processMatches(item) || !hasDshRuntimeReleaseProof(item.cleanup))
     || new Set([baseline.runId, candidate.runId, retry.runId]).size !== 3 || classify(baseline, candidate, retry).kind !== 'regression') return;
-  return { marker: `<!-- dsh-compat:${candidate.version}:win32:${candidate.check} -->`, title: `DeepSeek Harness ${candidate.version}: ${candidate.check} compatibility regression (win32)` };
+  const targetKey = summary.platform === 'win32' ? 'win32' : `${summary.platform}-${summary.arch}`;
+  return { marker: `<!-- dsh-compat:${candidate.version}:${targetKey}:${candidate.check} -->`, title: `DeepSeek Harness ${candidate.version}: ${candidate.check} compatibility regression (${targetKey})` };
 }
 
 export function dshOnboardingRegressionIdentity(summary) {
