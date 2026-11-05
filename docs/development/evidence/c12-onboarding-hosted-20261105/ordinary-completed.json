@@ -1,0 +1,32 @@
+{
+  "observedAt": "2026-11-05T06:08:30.376Z",
+  "run": {
+    "id": 41977889894,
+    "url": "https://github.com/Oatelauser/crosschat/actions/runs/41977889894",
+    "head": "0d0f91a81bbb7264cd2bca830013d64b40fa2c0a",
+    "event": "pull_request",
+    "attempt": 1,
+    "status": "completed",
+    "conclusion": "failure"
+  },
+  "jobs": [
+    {
+      "id": 127080925760,
+      "name": "check (windows-latest)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 127080925956,
+      "name": "check (ubuntu-latest)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 127080926005,
+      "name": "check (macos-latest)",
+      "status": "completed",
+      "conclusion": "failure"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "workflow": 406659158,
+  "path": ".github/workflows/dsh-onboarding-compat.yml",
+  "ref": "codex/dsh-posix-onboarding-20261105",
+  "head": "0d0f91a81bbb7264cd2bca830013d64b40fa2c0a",
+  "pr": 4,
+  "targets": [
+    "win32/x64",
+    "linux/x64",
+    "darwin/x64",
+    "darwin/arm64"
+  ],
+  "perNativeJobMinutes": 75,
+  "totalNativeRunnerMinuteCap": 300,
+  "at": "2026-11-05T06:05:07.913Z"
+}

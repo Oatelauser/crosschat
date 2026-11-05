@@ -1,0 +1,12 @@
+{
+  "number": 4,
+  "url": "https://github.com/Oatelauser/crosschat/pull/4",
+  "state": "open",
+  "draft": true,
+  "merged": false,
+  "head": "0d0f91a81bbb7264cd2bca830013d64b40fa2c0a",
+  "branch": "codex/dsh-posix-onboarding-20261105",
+  "base": "a1e6464bd6eb28f12f51609cd637dd8518c5222b",
+  "bodySha256": "c1cf74a4a30095ba23cd8f75bb552c165bb9030e1e7d593ad3e05f5248623772",
+  "createdAt": "2026-11-05T06:03:31Z"
+}

@@ -1,0 +1,104 @@
+{
+  "node": "v22.23.4",
+  "platform": "win32",
+  "queryDeadlineMs": 20,
+  "completionGuardMs": 250,
+  "observations": [
+    {
+      "ready": false,
+      "sample": 0,
+      "onlineMs": null,
+      "queryAndReapMs": 27.2646,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": false,
+      "sample": 1,
+      "onlineMs": null,
+      "queryAndReapMs": 22.920900000000003,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": false,
+      "sample": 2,
+      "onlineMs": 22.358999999999995,
+      "queryAndReapMs": 22.9122,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": false,
+      "sample": 3,
+      "onlineMs": 18.409499999999994,
+      "queryAndReapMs": 19.9007,
+      "result": "Error",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": false,
+      "sample": 4,
+      "onlineMs": 18.574799999999996,
+      "queryAndReapMs": 19.555200000000013,
+      "result": "Error",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": false,
+      "sample": 5,
+      "onlineMs": 18.137599999999992,
+      "queryAndReapMs": 19.2354,
+      "result": "Error",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": true,
+      "sample": 0,
+      "onlineMs": 18.63070000000002,
+      "queryAndReapMs": 28.281499999999994,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": true,
+      "sample": 1,
+      "onlineMs": 18.846100000000007,
+      "queryAndReapMs": 27.27460000000002,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": true,
+      "sample": 2,
+      "onlineMs": 18.875499999999988,
+      "queryAndReapMs": 27.70429999999999,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": true,
+      "sample": 3,
+      "onlineMs": 18.773199999999974,
+      "queryAndReapMs": 26.583399999999983,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": true,
+      "sample": 4,
+      "onlineMs": 18.85359999999997,
+      "queryAndReapMs": 26.535799999999995,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": true,
+      "sample": 5,
+      "onlineMs": 18.53480000000002,
+      "queryAndReapMs": 27.734500000000025,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    }
+  ]
+}
