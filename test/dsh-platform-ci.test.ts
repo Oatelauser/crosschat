@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { parseDshDesktopWindowsManifest, parseDshNpmManifest, runDshBuildSequence, runDshProbeAttempt } from '../scripts/dsh-compat-ci.mjs';
+import { dshRegressionIdentity, parseDshDesktopWindowsManifest, parseDshNpmManifest, parsePnpmManifest, runDshBuildSequence, runDshProbeAttempt } from '../scripts/dsh-compat-ci.mjs';
 
 const pinned = JSON.parse(await readFile(new URL('../scripts/dsh-compat-baseline.json', import.meta.url), 'utf8'));
 const roots: string[] = [];
@@ -20,6 +20,19 @@ function communicationReport(platform: string, arch: string, version: string, ru
       .map(name => ({ name, status: 'passed', elapsedMs: 1 })),
     cleanup: { runtimeStopped: true, registrationRemoved: true, removed: true, forced: false },
   };
+}
+
+function regressionSummary(platform: string, arch: string) {
+  const baseline = parseDshNpmManifest(pinned.package, platform, arch);
+  const candidate = { ...baseline, version: '0.2.1-rc.5', url: 'https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.5.tgz' };
+  const failed = () => ({ ...communicationReport(platform, arch, candidate.version), status: 'failed', category: 'compatibility',
+    stage: 'native-delivery', check: 'busy-native-queue-and-steer-step-boundaries',
+    process: { code: 1, signal: null, timedOut: false } });
+  const report = communicationReport(platform, arch, baseline.version);
+  return { schema: 1, tool: 'dsh-web-runtime', platform, arch, scope: report.scope,
+    builds: { baseline, candidate, packageManager: parsePnpmManifest(pinned.packageManager) },
+    classification: { kind: 'regression', notify: true }, installationCleanup: 'removed',
+    baseline: { ...report, process: { code: 0, signal: null, timedOut: false } }, candidate: failed(), retry: failed() };
 }
 
 describe('DSH npm platform boundaries', () => {
@@ -101,5 +114,19 @@ describe('DSH communication sequence keeps the runner identity across builds', (
       installationCleanup: 'incomplete', retainedInstallation: { label: 'candidate', root: 'candidate' },
       candidate: { platform: 'linux', arch: 'x64', category: 'infrastructure', status: 'failed' } });
     expect(installed).toEqual(['baseline', 'candidate']); expect(removed).toEqual(['baseline']);
+  });
+});
+
+describe('DSH regression identity separates OS and architecture', () => {
+  it.each([
+    ['linux', 'x64', 'linux-x64'], ['darwin', 'x64', 'darwin-x64'], ['darwin', 'arm64', 'darwin-arm64'],
+  ])('makes a scoped notification identity for %s/%s', (platform, arch, key) => {
+    const identity = dshRegressionIdentity(regressionSummary(platform, arch));
+    expect(identity?.marker).toBe(`<!-- dsh-compat:0.2.1-rc.5:${key}:busy-native-queue-and-steer-step-boundaries -->`);
+  });
+
+  it('preserves the established Windows marker', () => {
+    expect(dshRegressionIdentity(regressionSummary('win32', 'x64'))?.marker)
+      .toBe('<!-- dsh-compat:0.2.1-rc.5:win32:busy-native-queue-and-steer-step-boundaries -->');
   });
 });
