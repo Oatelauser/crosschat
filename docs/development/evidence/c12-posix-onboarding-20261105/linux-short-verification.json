@@ -1,0 +1,209 @@
+{
+  "schema": 1,
+  "source": "3ebf6ca5d8c54939bb4290c064baed5c647f73ff",
+  "environment": {
+    "node": "v22.23.4",
+    "platform": "linux",
+    "arch": "x64",
+    "tmpdir": "/tmp"
+  },
+  "verifiedCompatible": true,
+  "scope": {
+    "officialNpmRuntime": true,
+    "officialPluginManager": true,
+    "ordinaryWebSessions": true,
+    "scriptedLocalModel": true,
+    "skillLifecycle": true,
+    "diagnostics": true,
+    "tui": true,
+    "browserUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "builds": {
+    "baseline": {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.2",
+      "url": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.2.tgz",
+      "integrity": "sha512-tvY+yhfKRifthbqPe/OK0AYxM5ZkvqfYq/jMYgJcEUxiRRL1Vwra3Ti5TB6AXgSWQdiPHYh/Vp6SJa9yHwMNuw=="
+    },
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.28.5",
+      "url": "https://registry.npmjs.org/pnpm/-/pnpm-11.28.5.tgz",
+      "integrity": "sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng=="
+    },
+    "candidate": {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.5",
+      "url": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.5.tgz",
+      "integrity": "sha512-WkyJZv4zl9sCAxSzRctGm58m0rilGqwR6pniBiLOz5CPDfHfDuAUicg0AAazXI7oj/Cph6/cjNTncA/rpLTXpw=="
+    }
+  },
+  "attempts": [
+    {
+      "label": "baseline",
+      "version": "0.2.1-rc.2",
+      "runId": "c3ab866a-280c-4f1c-a4df-450e0bc0b490",
+      "checks": [
+        {
+          "name": "official-profile-plugin-and-skill-installation",
+          "status": "passed",
+          "elapsedMs": 2680
+        },
+        {
+          "name": "native-skill-load-and-current-source",
+          "status": "passed",
+          "elapsedMs": 393
+        },
+        {
+          "name": "native-roundtrip-and-typed-discovery",
+          "status": "passed",
+          "elapsedMs": 644
+        },
+        {
+          "name": "same-source-diagnostics-and-real-terminal",
+          "status": "passed",
+          "elapsedMs": 1859
+        },
+        {
+          "name": "skill-update-and-profile-preserving-shutdown",
+          "status": "passed",
+          "elapsedMs": 147
+        },
+        {
+          "name": "official-plugin-and-crosschat-removal-with-owned-cleanup",
+          "status": "passed",
+          "elapsedMs": 523
+        }
+      ],
+      "source": {
+        "status": "identified",
+        "sourceTool": "dsh",
+        "basis": "native",
+        "association": "verified",
+        "scope": "instance",
+        "shouldAsk": false
+      },
+      "terminal": {
+        "kind": "posix-pty",
+        "cleanup": {
+          "event": "cleanup",
+          "forced": false,
+          "groupReleased": true
+        }
+      },
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "process": {
+        "code": 0,
+        "signal": null,
+        "timedOut": false
+      },
+      "installTimings": [
+        370989
+      ],
+      "retainedSessionIds": [
+        "session-ebf87c4a-fce1-46c1-a6b9-c69697c61f4b",
+        "session-c410157a-bdc3-429c-850d-3ef5ee35c223"
+      ],
+      "profileSha256": "207430228a8315c78dd73ee35c0f4ca6a2092121880031863ac15b38ed3ce5a8",
+      "chatFileCount": 4
+    },
+    {
+      "label": "candidate",
+      "version": "0.2.1-rc.5",
+      "runId": "cbd2dbe3-257d-4bc0-a65a-ff0dc4eee3ed",
+      "checks": [
+        {
+          "name": "official-profile-plugin-and-skill-installation",
+          "status": "passed",
+          "elapsedMs": 2610
+        },
+        {
+          "name": "native-skill-load-and-current-source",
+          "status": "passed",
+          "elapsedMs": 354
+        },
+        {
+          "name": "native-roundtrip-and-typed-discovery",
+          "status": "passed",
+          "elapsedMs": 503
+        },
+        {
+          "name": "same-source-diagnostics-and-real-terminal",
+          "status": "passed",
+          "elapsedMs": 1619
+        },
+        {
+          "name": "skill-update-and-profile-preserving-shutdown",
+          "status": "passed",
+          "elapsedMs": 148
+        },
+        {
+          "name": "official-plugin-and-crosschat-removal-with-owned-cleanup",
+          "status": "passed",
+          "elapsedMs": 504
+        }
+      ],
+      "source": {
+        "status": "identified",
+        "sourceTool": "dsh",
+        "basis": "native",
+        "association": "verified",
+        "scope": "instance",
+        "shouldAsk": false
+      },
+      "terminal": {
+        "kind": "posix-pty",
+        "cleanup": {
+          "event": "cleanup",
+          "forced": false,
+          "groupReleased": true
+        }
+      },
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "process": {
+        "code": 0,
+        "signal": null,
+        "timedOut": false
+      },
+      "installTimings": [
+        103039
+      ],
+      "retainedSessionIds": [
+        "session-dab1c29e-3a2c-443d-9287-3dbfb854a952",
+        "session-0e7b532f-9c69-46b9-8167-115afde1221b"
+      ],
+      "profileSha256": "207430228a8315c78dd73ee35c0f4ca6a2092121880031863ac15b38ed3ce5a8",
+      "chatFileCount": 4
+    }
+  ],
+  "disposition": {
+    "scope": "Observed within the same WSL execution before its exit",
+    "innerRoot": "/tmp/crosschat-dsh-ci-HZzJ4M",
+    "innerRootExists": false,
+    "npmCacheExists": false,
+    "processesMatchingOwnedRoots": [],
+    "installationCleanup": "removed",
+    "reportedReleaseIsNotInferredFromLaterRootAbsence": true
+  },
+  "baselineDependencyVersionsAndIntegritySameAsFirstRun": true,
+  "archive": {
+    "file": "linux-short-onboarding-evidence.tgz",
+    "bytes": 219297,
+    "sha256": "e4c8eea6ebac4fc8d619bb7d4fcc78c14fcb8807860e69bc81c49be4f20acafe"
+  },
+  "problems": [],
+  "macosExecuted": false,
+  "hostedExecuted": false
+}

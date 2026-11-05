@@ -1,0 +1,574 @@
+{
+  "schema": 1,
+  "date": "2026-11-05",
+  "baseMain": "a1e6464bd6eb28f12f51609cd637dd8518c5222b",
+  "branch": "codex/dsh-posix-onboarding-20261105",
+  "ptyCheckpointIndex": "pty-validation-resolved.json",
+  "nativeSource": "3ebf6ca5d8c54939bb4290c064baed5c647f73ff",
+  "nativeSourceCorrelation": "native-source-correlation.json",
+  "nativeLinux": {
+    "versions": [
+      "0.2.1-rc.2",
+      "0.2.1-rc.5"
+    ],
+    "checksPerVersion": 6,
+    "verifiedCompatible": true,
+    "forced": false,
+    "retry": false,
+    "baselineDependencyGraphSameAsFirstRun": true
+  },
+  "fullCheck": {
+    "codeCheckpoint": "5ec0b5e",
+    "node": "22.23.4",
+    "exit": 0,
+    "testsPassed": 2827,
+    "testsSkipped": 11,
+    "filesPassed": 240,
+    "filesSkipped": 3,
+    "lint": true,
+    "build": true,
+    "liveEnabled": false
+  },
+  "targetedWorkflowAndPlatformChecks": 78,
+  "firstNativeFailurePreserved": true,
+  "firstReleaseIsNotReclassifiedByLaterRootAbsence": true,
+  "macosFromZeroExecuted": false,
+  "newHostedFromZeroExecuted": false,
+  "actualScheduledEventValidated": false,
+  "mainKnownCiFailure": {
+    "run": 41969350805,
+    "test": "test/caller-source-service.test.ts:78",
+    "code": "SOURCE_STATE_BUSY",
+    "fixed": false,
+    "ownership": "Existing public communication owner"
+  },
+  "proposedPosixWeekly": "Friday 14:07 Asia/Shanghai; only after native first-runs and explicit main merge",
+  "existingWindowsWeeklyPreserved": "Friday 13:07 Asia/Shanghai",
+  "candidatePushOrHostedFirstRunApproved": false,
+  "mainMergeForThisCandidateApproved": false,
+  "releaseCreated": false,
+  "productCommandsOrPersistentStorageChanged": false,
+  "sourceBlobs": [
+    {
+      "file": "scripts/dsh-onboarding-contract.mjs",
+      "blob": "4e0289e180628b4c33567f57de5dbdf29671675d"
+    },
+    {
+      "file": "scripts/dsh-compat-ci.mjs",
+      "blob": "8b803ba13c464fad40959c30c4401a9507c1a185"
+    },
+    {
+      "file": "scripts/dsh-onboarding.mjs",
+      "blob": "875cbf0f3ffca5f21ba9ee12a718371e7abaad40"
+    },
+    {
+      "file": "test/helpers/tui-pty-driver.mjs",
+      "blob": "9496131e534582e776a0c3c8d6f653e8ebe36109"
+    },
+    {
+      "file": "test/helpers/tui-pty-host.py",
+      "blob": "d407d113168018a09c5b5eb23b641cd1ae27598f"
+    },
+    {
+      "file": "test/helpers/tui-pty-selftest.mjs",
+      "blob": "2985bf815f1aff3e51bd88f57bf35c5629ba5a30"
+    },
+    {
+      "file": "test/helpers/tui-posix-pty-selftest.mjs",
+      "blob": "c8c228167b90322ecd40158aac64c21e5c8ac5b5"
+    },
+    {
+      "file": "test/dsh-onboarding-platform.test.ts",
+      "blob": "f407e355f2fd4cd004f2c18ad7b62572e6e5c875"
+    },
+    {
+      "file": "test/dsh-onboarding-workflow-platform.test.ts",
+      "blob": "5e44500f87ae79709b67bf277ea99dcbe3897e0b"
+    },
+    {
+      "file": "test/dsh-onboarding-ci.test.ts",
+      "blob": "4e2178d85fac4b9132e2c200c67eb555a1e8d982"
+    },
+    {
+      "file": ".github/workflows/dsh-onboarding-compat.yml",
+      "blob": "0e1dcd9cb17d6ff45e853e7899cefb78ed18c457"
+    }
+  ],
+  "artifacts": [
+    {
+      "file": ".gitattributes",
+      "bytes": 294,
+      "sha256": "da4f533beca60b228e5b1ba6525fddb135c65bfbe665a759c53c925afc24dd57"
+    },
+    {
+      "file": "archive-short.mjs",
+      "bytes": 3107,
+      "sha256": "8044f6e22f9d93ddad21d72bb1c148a9cb10dab6fd07a73d3c79b8ff74f7a009"
+    },
+    {
+      "file": "audit-short.py",
+      "bytes": 1433,
+      "sha256": "00622e9fb588c60610eee0afd9c81ec4422d33bfc82b175774e1bc55a742a586"
+    },
+    {
+      "file": "check-final.txt",
+      "bytes": 31795,
+      "sha256": "514890f81b4da8bd1810385530ef0b05ec1f5adaa79982f164642d538b8a2bce"
+    },
+    {
+      "file": "inspect-tar.py",
+      "bytes": 3466,
+      "sha256": "fa81d4e7a84bf146c1aab9d9f7c08f5b1202bd4e492e8c967e67dc148c240917"
+    },
+    {
+      "file": "lint-first.txt",
+      "bytes": 230,
+      "sha256": "25f43ef9b19afc151a94b2dcb47efbc895a0ce20fec714d0d7c7c96ba744a93a"
+    },
+    {
+      "file": "linux-first-driver.sh",
+      "bytes": 1809,
+      "sha256": "12bad3ea47920f66dbcf312090488b1821aaf96cb715884b48ff53de4183564f"
+    },
+    {
+      "file": "linux-first-environment.json",
+      "bytes": 52,
+      "sha256": "263883ac867e5ef62a0fc87f164a8fc9f69ae1c516f994b4001c823ed208bdf1"
+    },
+    {
+      "file": "linux-first-evidence.tgz",
+      "bytes": 90419,
+      "sha256": "ab9ad4d6d66ad2584030203df11d1312ea886d8184e910ad8d55f7cb7870892d"
+    },
+    {
+      "file": "linux-first-exit-code.txt",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "file": "linux-first-inspection/baseline-install.json",
+      "bytes": 116076,
+      "sha256": "4de839201df2404794871e19412f96ce8844f5293f10a6c4d0f9cb14198abea0"
+    },
+    {
+      "file": "linux-first-inspection/baseline-package-lock.json",
+      "bytes": 408833,
+      "sha256": "ccc2f90262726b49db659f6a0213e924e0b7e90fee74dc33f5d3ba4417dad150"
+    },
+    {
+      "file": "linux-first-inspection/baseline-process.json",
+      "bytes": 1827,
+      "sha256": "f5fd0d096e7a61c802d3db7f8e7dbba5616a85051121d4b1f9916ed4a90fd6ae"
+    },
+    {
+      "file": "linux-first-inspection/index.json",
+      "bytes": 1983,
+      "sha256": "37440f739634804d5af1f84b0dd53c7451a07519150c42b8c91802b288b64ed4"
+    },
+    {
+      "file": "linux-first-inspection/summary.json",
+      "bytes": 2489,
+      "sha256": "b5693d53394f3304258f9685faf0beb45552311458f844440fbc661ff30ea0bf"
+    },
+    {
+      "file": "linux-first-run.txt",
+      "bytes": 477,
+      "sha256": "92cd12a74fd9a86aca558cfeb86f0db12669e54f164557dff0503b32c1df02b4"
+    },
+    {
+      "file": "linux-first-source.json",
+      "bytes": 162,
+      "sha256": "05cf5cb29de51c39b937a2a72a89c72783b20c18fc6fd05c5ddbd7b6acddf452"
+    },
+    {
+      "file": "linux-later-disposition.json",
+      "bytes": 350,
+      "sha256": "0036a31ea8bdf102c37a1ce7714163410f98a122863ddfe4ad18e0d9923673f8"
+    },
+    {
+      "file": "linux-short-disposition.json",
+      "bytes": 291,
+      "sha256": "cde42cc60fb41b2f5b09f8967e20523a2b4f99e360a11a625fc6bf10031dcfac"
+    },
+    {
+      "file": "linux-short-environment.json",
+      "bytes": 68,
+      "sha256": "d834cdbad096d6738d2659b8bc5c398c2b17f16fb62f43d6685a33659de79b9f"
+    },
+    {
+      "file": "linux-short-exit-code.txt",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "linux-short-inspection/baseline-doctor-json.json",
+      "bytes": 1187,
+      "sha256": "536b993599992ea93eb44c3ce4e8b83418d94b92503f28996c787665b89d4f9f"
+    },
+    {
+      "file": "linux-short-inspection/baseline-install-skills.json",
+      "bytes": 323,
+      "sha256": "b493d8ff20a85f9bf7decf6d64701be6c49c0948428a73641f220ee82285f985"
+    },
+    {
+      "file": "linux-short-inspection/baseline-install.json",
+      "bytes": 116037,
+      "sha256": "823a7b78cf20256fc695ba879ec54cb5516c5b86721db58151f0c434a5341513"
+    },
+    {
+      "file": "linux-short-inspection/baseline-native-skill-and-identity.json",
+      "bytes": 7600,
+      "sha256": "c1a28915dbc5942e82ba3dc70f5ad100ad4b79d8309ca5e1acbbf9bfce09ec88"
+    },
+    {
+      "file": "linux-short-inspection/baseline-package-lock.json",
+      "bytes": 408743,
+      "sha256": "0443bcbff560b6a7779ef843d54984f447c8299d0240c56fd49b8fa7a01a9f74"
+    },
+    {
+      "file": "linux-short-inspection/baseline-process.json",
+      "bytes": 567,
+      "sha256": "04fca2fc9b46511c3406f2c4f9dc77abbccedb2addc61b7a04ee5528e79e6d35"
+    },
+    {
+      "file": "linux-short-inspection/baseline-remove-plugin.json",
+      "bytes": 236,
+      "sha256": "31326cd5a560a0df92a62ff30419c13adf922234f5430380756f1db35599e379"
+    },
+    {
+      "file": "linux-short-inspection/baseline-report.json",
+      "bytes": 1810,
+      "sha256": "5951259ac0dffa1116bd26dcce41016849bd1d960b6522345686b6358375c0de"
+    },
+    {
+      "file": "linux-short-inspection/baseline-retained-profile-chat-hashes.json",
+      "bytes": 1036,
+      "sha256": "fe6f3afef310458f3f1dfecf6833d8f5bd8a0b0e5d7af7636918baf703cf83c2"
+    },
+    {
+      "file": "linux-short-inspection/baseline-tui-application.jsonl",
+      "bytes": 41913,
+      "sha256": "ad994d481378a2cb0cf422de41ed6eee8f72ea5e7346c2c62d3b3ea9808d2140"
+    },
+    {
+      "file": "linux-short-inspection/baseline-tui-terminal.jsonl",
+      "bytes": 187139,
+      "sha256": "fd915a1061d4af7f77bce9e1a5c6951eb7ab9a4821b02e5590925d115c8169ab"
+    },
+    {
+      "file": "linux-short-inspection/baseline-uninstall-crosschat-data.json",
+      "bytes": 1352,
+      "sha256": "c44cafa302139942a676c442ae8d478094156abaeb92f43c17f1d9cde87fb583"
+    },
+    {
+      "file": "linux-short-inspection/baseline-update-skills.json",
+      "bytes": 323,
+      "sha256": "1039ffe5404f755739456132c58223984dd9086017b97111be3fd4462a9e6a46"
+    },
+    {
+      "file": "linux-short-inspection/candidate-doctor-json.json",
+      "bytes": 1188,
+      "sha256": "4fe3ed4e33acf94fc99d70fa2df5ec0974f541166f962c96bda5d5c2217ff76f"
+    },
+    {
+      "file": "linux-short-inspection/candidate-install-skills.json",
+      "bytes": 324,
+      "sha256": "91f1ba98029bfc0da7f8a0e336a0813b5c03472d85a06b3fc7b453e9c7fc921d"
+    },
+    {
+      "file": "linux-short-inspection/candidate-install.json",
+      "bytes": 115959,
+      "sha256": "c3c1858bad1da9018bbba3d76f79c1a76e061be48f1eb451a2c0ac376dfa45ee"
+    },
+    {
+      "file": "linux-short-inspection/candidate-native-skill-and-identity.json",
+      "bytes": 7600,
+      "sha256": "18878d3fed00a5e27e1f2267b8ba8ab44a48076ea2b0194d497f358b1cd6808c"
+    },
+    {
+      "file": "linux-short-inspection/candidate-package-lock.json",
+      "bytes": 409182,
+      "sha256": "70bc929de5717458cfabfa4b26e07daf509ca8ecb01a765002ce670549d3ef59"
+    },
+    {
+      "file": "linux-short-inspection/candidate-process.json",
+      "bytes": 568,
+      "sha256": "641a0df3520aaf4307ebb00cc74afa52dc9400e8178bc60c57f9b8b9d6d7d463"
+    },
+    {
+      "file": "linux-short-inspection/candidate-remove-plugin.json",
+      "bytes": 237,
+      "sha256": "44244889135000ff7c200276db48e2912729612c82ccdfabe99d4258324a2cf6"
+    },
+    {
+      "file": "linux-short-inspection/candidate-report.json",
+      "bytes": 1810,
+      "sha256": "96b43d0eb99ce7146496b8705cb3c91301a706328de74259ecc2f3722e740c0d"
+    },
+    {
+      "file": "linux-short-inspection/candidate-retained-profile-chat-hashes.json",
+      "bytes": 1036,
+      "sha256": "bfd5b422f6bc867553bd58bdf3e1466992c9e3e98095ee1e9295e8807c4d840d"
+    },
+    {
+      "file": "linux-short-inspection/candidate-tui-application.jsonl",
+      "bytes": 41917,
+      "sha256": "4709cddb36eb7c3f066a940f754bae28fed1964c81d524d16a8c4b18d239a389"
+    },
+    {
+      "file": "linux-short-inspection/candidate-tui-terminal.jsonl",
+      "bytes": 179258,
+      "sha256": "c91afb3571c12cc505491797401ad74839245f7bb33da44e619b146426e10c35"
+    },
+    {
+      "file": "linux-short-inspection/candidate-uninstall-crosschat-data.json",
+      "bytes": 1353,
+      "sha256": "9bfd1d988120825c3c1a3eb895498db1ddd4c4a767a31d32b8400a05dd1e1d0e"
+    },
+    {
+      "file": "linux-short-inspection/candidate-update-skills.json",
+      "bytes": 324,
+      "sha256": "0ea5770905f0209051c82e1a246a6fb15afd52183cc3cbb6d791fd8b50135945"
+    },
+    {
+      "file": "linux-short-inspection/index.json",
+      "bytes": 12905,
+      "sha256": "b5f97103a7fc82abecc793b292c3b51feb60837483fc50ea85005d287834521e"
+    },
+    {
+      "file": "linux-short-inspection/summary.json",
+      "bytes": 5630,
+      "sha256": "e850440e7bce3720acdbc2dd3dcd6075a9e741e3762154ba10377babbcbfb95a"
+    },
+    {
+      "file": "linux-short-onboarding-evidence.tgz",
+      "bytes": 219297,
+      "sha256": "e4c8eea6ebac4fc8d619bb7d4fcc78c14fcb8807860e69bc81c49be4f20acafe"
+    },
+    {
+      "file": "linux-short-run.txt",
+      "bytes": 586,
+      "sha256": "5d9138fcb9403db1101f0acd860749295f867abde85a6cebadc03eee023d3159"
+    },
+    {
+      "file": "linux-short-verification.json",
+      "bytes": 5956,
+      "sha256": "93d86299d5f90c476f41d916d151c14ed76f2ab9d0cc5360fccef4e6e3418ce8"
+    },
+    {
+      "file": "native-source-correlation.json",
+      "bytes": 2045,
+      "sha256": "3163672a7f35a76e1cb8b576b6d4238b457fe579778834412011f4fd28ea0752"
+    },
+    {
+      "file": "node22-checksum-source.txt",
+      "bytes": 145,
+      "sha256": "24f4303e7188ccbe112b53a8a8f0d38dd3ecc63ede3a1389acd2a549617f648a"
+    },
+    {
+      "file": "node22-linux-validation.json",
+      "bytes": 275,
+      "sha256": "0beefbf4cef441fa72098fc35fe3154851b9a9d948e2afd0b73744431cb196a3"
+    },
+    {
+      "file": "onboarding-entry-red.txt",
+      "bytes": 898,
+      "sha256": "392fa52464c98395c3958387c7957b1e8947cf6efadcc0995a0d73c7f5c17c81"
+    },
+    {
+      "file": "platform-green.txt",
+      "bytes": 614,
+      "sha256": "8fa03de23e055d81209692a72434f1fcb58cf55cb7872bcb769fe867f05c4010"
+    },
+    {
+      "file": "platform-red.txt",
+      "bytes": 14942,
+      "sha256": "b2aab76a5b2b82dcdfcd33883c31ea3581604432fe5279f084dcb7addef763fb"
+    },
+    {
+      "file": "pty-check.txt",
+      "bytes": 31429,
+      "sha256": "45df8879b4eeaf0f09d46e10b898c3163be200b19ce9df8a5904026505c0844a"
+    },
+    {
+      "file": "pty-linux-arguments.jsonl",
+      "bytes": 1271,
+      "sha256": "73050305c79185839004b8cd6e4445e2251272f3a4f9490aae86158d712fd09c"
+    },
+    {
+      "file": "pty-linux-control.jsonl",
+      "bytes": 542,
+      "sha256": "20281e214c37addb8176c295ddfd4d77fe4c194a46c4cd179c6c9182fccc34b5"
+    },
+    {
+      "file": "pty-linux-dispose.jsonl",
+      "bytes": 443,
+      "sha256": "d50eee29bc602c043c3b5028b32363647cd611fd690172559691c80a19d2b677"
+    },
+    {
+      "file": "pty-linux-final-arguments.jsonl",
+      "bytes": 1200,
+      "sha256": "6adf4e75685d00c135a7520e83c4eca317cf2de7e5f26553bb70af8fa4d2d848"
+    },
+    {
+      "file": "pty-linux-final-control.jsonl",
+      "bytes": 542,
+      "sha256": "1901f1ab3fff90dd3da70e327eb5c5c93e79d103e452a04241f194ce9bfb18d0"
+    },
+    {
+      "file": "pty-linux-final-dispose.jsonl",
+      "bytes": 443,
+      "sha256": "44ed47c2ae3ea24f7af0af2195f5fc15aa8381446a019f3c6e51d5df379d9f51"
+    },
+    {
+      "file": "pty-linux-final-force.jsonl",
+      "bytes": 441,
+      "sha256": "4cb2d61891c96b85f70a48a5c1ce3b715bc474195354d60e2c3a08dc1844e479"
+    },
+    {
+      "file": "pty-linux-final-green.txt",
+      "bytes": 946,
+      "sha256": "b2d11d28297c37fbdf2a2c179f90b77736f4d5a2bda2ae507c65bc3e4d598ada"
+    },
+    {
+      "file": "pty-linux-final-nonzero.jsonl",
+      "bytes": 374,
+      "sha256": "b0a43c088343a832dc9e3cad022778bd2669699e61e97ee968455f32c3af003c"
+    },
+    {
+      "file": "pty-linux-final-report.json",
+      "bytes": 837,
+      "sha256": "90f7b55662a7dae00f447c7f10c76a8620a8f00aa04bc495e32516c52d0eeb37"
+    },
+    {
+      "file": "pty-linux-final-startup.jsonl",
+      "bytes": 305,
+      "sha256": "f0adc5a81f1ae579426e34bc5e7a192acb67abb1e46ad53760a01960c031acbb"
+    },
+    {
+      "file": "pty-linux-final-terminal.jsonl",
+      "bytes": 1051,
+      "sha256": "31f058576a0e6d344d65061f52f11c4df8ba0130e038e8842fe6d6618e861b2d"
+    },
+    {
+      "file": "pty-linux-force.jsonl",
+      "bytes": 441,
+      "sha256": "3ef4f106adb91e856034c8fb52f39368fd81779d6eae682315b3ff5dfe6c39c9"
+    },
+    {
+      "file": "pty-linux-green.txt",
+      "bytes": 946,
+      "sha256": "b2d11d28297c37fbdf2a2c179f90b77736f4d5a2bda2ae507c65bc3e4d598ada"
+    },
+    {
+      "file": "pty-linux-nonzero.jsonl",
+      "bytes": 374,
+      "sha256": "294d02f03c982f7c11ac626056d36b327311fa12e2c61a0a824e2570b65a0612"
+    },
+    {
+      "file": "pty-linux-report.json",
+      "bytes": 837,
+      "sha256": "90f7b55662a7dae00f447c7f10c76a8620a8f00aa04bc495e32516c52d0eeb37"
+    },
+    {
+      "file": "pty-linux-startup.jsonl",
+      "bytes": 305,
+      "sha256": "e97946b34647fbed5aa8bbab355033eab9c7d0a14e93a73a2f11d01513d32365"
+    },
+    {
+      "file": "pty-linux-terminal.jsonl",
+      "bytes": 1051,
+      "sha256": "c778fb1708d3257bf8efd4b0de79f3e6c45fc85b640cfc9e430d36f623a7b8ad"
+    },
+    {
+      "file": "pty-red-report.json",
+      "bytes": 213,
+      "sha256": "23df57a54637ff688086af4543fd35f7402d8f36077b37e87b165a0a55eb38c0"
+    },
+    {
+      "file": "pty-red.txt",
+      "bytes": 184,
+      "sha256": "a9f9183f1ebd92989518f1e3c70792014a568c512ccbb84cc2103e7bbf15cbd1"
+    },
+    {
+      "file": "pty-stage-development.md",
+      "bytes": 2571,
+      "sha256": "db08d1fc83aa624fe10f40ec4f771e379cc9fe88f30f0b1b0ec8b56716cdc703"
+    },
+    {
+      "file": "pty-validation-resolved.json",
+      "bytes": 5415,
+      "sha256": "7f3616a9dbb3ab996948c75043c898020e6e5fe4ce797d74a81a3af065c61fdf"
+    },
+    {
+      "file": "pty-validation.json",
+      "bytes": 5152,
+      "sha256": "c2db90ef88844eb9d51fbf063c051917679864d82eb7e5b0569ad3fbfd06ced8"
+    },
+    {
+      "file": "resolve-pty-index.mjs",
+      "bytes": 1834,
+      "sha256": "066d2cbbada9fd537dc5398f09e056a1028ebcab45e1bd86f047c3313cfd8dbd"
+    },
+    {
+      "file": "run-linux-onboarding-short.sh",
+      "bytes": 2018,
+      "sha256": "0836063b0cf9fe1f9cce7aed9a29518bb11877e1714ff298dd8383c0876ae74e"
+    },
+    {
+      "file": "socket-repro-initial-hypothesis.txt",
+      "bytes": 688,
+      "sha256": "e492261f0464542157b802070e7cf8ec4df0a25e0180612c96b17d1376aaf8db"
+    },
+    {
+      "file": "socket-repro-missing-runtime.txt",
+      "bytes": 175,
+      "sha256": "b76cee5ed9794390021712685130b7c2e3aa78a3c197e8f5e31ed88e9c4fa51e"
+    },
+    {
+      "file": "socket-repro-partial.txt",
+      "bytes": 1112,
+      "sha256": "ecdab5fb9234eadaa0d5e2425f11866a0e03c851cd36053456d06168e3a6e0cd"
+    },
+    {
+      "file": "verify-short.mjs",
+      "bytes": 8515,
+      "sha256": "cac2b264f038386f7867930b41dfeeb6873e6aae8e10cbd29f1bfc3f4a8d475f"
+    },
+    {
+      "file": "windows-conpty.jsonl",
+      "bytes": 1638,
+      "sha256": "2ca303ea5b67417d1c0e4b737c7ed8e2529843dece67d0cb8dbbe3676b8afef3"
+    },
+    {
+      "file": "windows-conpty.txt",
+      "bytes": 202,
+      "sha256": "161c5d3f8b5feeb1601d440ab84eeb1bcb0c0ca9fa112924075a169d5277adee"
+    },
+    {
+      "file": "wiring-targeted.txt",
+      "bytes": 3107,
+      "sha256": "ade9d7d87b1ca864ded59fb8dc8ee8c0996553f1e536ea38a491d5937e5a8344"
+    },
+    {
+      "file": "workflow-first-pin-typo.txt",
+      "bytes": 10117,
+      "sha256": "9bdb3cd7de0ed32ed6cb8f630e394c30f4039faeea68b496801a5b30551aacd4"
+    },
+    {
+      "file": "workflow-green.txt",
+      "bytes": 728,
+      "sha256": "448e408384eba2d59c3afc04bb64754b99fc10338d6bf1668cfe4d1794a2b2a7"
+    },
+    {
+      "file": "workflow-old-policy.txt",
+      "bytes": 5538,
+      "sha256": "fa17948ee8990badb83a7bdff8081c50aa2a90639e295597f27902e6694478b4"
+    },
+    {
+      "file": "workflow-red.txt",
+      "bytes": 6115,
+      "sha256": "aa21f7de1a78c27e0cc2f7b0f4a34dff17dc5ce8f0668bfa0bd433ea399c3dbb"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{"code":0,"signal":null,"timedOut":false,"stdout":"✓ Lockfile passes supply-chain policies (verified 5s ago)\nAlready up to date\n\ndependencies:\n- @crosschat/dsh-bridge\n\nDone in 305ms using pnpm v11.28.5\n","stderr":"","pid":1216}

@@ -1,0 +1,18 @@
+node.tar.xz: OK
+Python 3.10.12
+
+added 203 packages in 20s
+npm notice
+npm notice New major version of npm available! 10.9.9 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
+
+> @oatelauser/crosschat@1.13.1 build
+> tsc
+
+[dsh-ci] baseline npm install started; limit=1200000ms
+[dsh-ci] baseline npm install exited 0 after 365306ms
+[dsh-ci] candidate npm install started; limit=1200000ms
+[dsh-ci] candidate npm install exited 0 after 102198ms
+{"kind":"compatible","notify":false}

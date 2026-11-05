@@ -1,0 +1,8 @@
+{
+  "code": 0,
+  "signal": null,
+  "timedOut": false,
+  "stdout": "PASS official-profile-plugin-and-skill-installation\nPASS native-skill-load-and-current-source\nPASS native-roundtrip-and-typed-discovery\nPASS same-source-diagnostics-and-real-terminal\nPASS skill-update-and-profile-preserving-shutdown\nPASS official-plugin-and-crosschat-removal-with-owned-cleanup\n{\"status\":\"passed\",\"passed\":6,\"reportPath\":\"/tmp/crosschat-c12-onboarding-short-20261105-ZMkZYL/repo/dsh-onboarding-evidence/candidate-baJcXr/report.json\"}\n",
+  "stderr": "",
+  "pid": 977
+}

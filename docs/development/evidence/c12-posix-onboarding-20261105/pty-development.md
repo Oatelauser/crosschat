@@ -21,3 +21,5 @@
 下一次只改变runner临时根选择到短/tmp，沿同一3ebf6ca源码、版本窗口、安装预算、清理和完整断言做一次新隔离验证；这是待验证的环境修正，不连续重跑旧布局，也不修改生产Broker/IPC命名或其错误处理。该异步error路径供原通信负责人消费，不能用本单后续通过宣称生产问题修复。
 
 工作流/报告另经5c04859的9项行为测试RED（6失败/3既有边界通过），增加四目标手动矩阵、独立POSIX周更和实际YAML逐目标报告。首次pnpm SRI抄写遗漏导致6项合法报告被拒，已恢复原固定值并保留[首次结果](workflow-first-pin-typo.txt)；随后只有旧“全工作流仅一个周更”的断言失败，[旧策略结果](workflow-old-policy.txt)保留。按A的分平台周更合同改为两个各每周一次的计划后，[78项定向GREEN](workflow-green.txt)通过；既有Windows周五13:07保持，POSIX拟周五14:07，只在原生首验和后续明确合入批准后生效。actions/setup-python@v6及x64/arm64输入已从[官方v6 README](https://github.com/actions/setup-python/tree/v6)核实（README blob 7cf695cfa2af3584a3aca271954dabb254b012b7、当时tag commit ece7cb06caefa5fff74198d8649806c4678c61a1）；仅CI工装依赖，不新增产品用户安装步骤。当前没有推送/外部运行。
+
+上述短根复核现已完成：[独立核验](linux-short-verification.json)通过，rc.2/rc.5各六阶段、原生skill/来源、诊断/真实PTY、维护/聊天保留和释放均核对；同一WSL内退出前安装根/默认缓存已移除、匹配自有根进程0。候选9个原生相关源码blob与实际执行3ebf6ca相同，后续工作流变更不算托管通过。最终[完整check](check-final.txt)退出0，2827通过/11原有跳过、240文件通过/3跳过，未启用CROSSCHAT_LIVE。源初期PTY索引把持续追加的本文列入文件摘要；[修复后的路径索引](pty-validation-resolved.json)将原25项中的说明字节冻结为d408b0f时的pty-stage-development.md，原索引与原始字节均保留，不覆盖为后续说明内容。

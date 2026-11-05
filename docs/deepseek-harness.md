@@ -8,7 +8,9 @@ crosschat 通过官方 Host 插件桥发现并投递到 Harness 当前运行的�
 
 ## 安装桥
 
-Linux x64已在本机WSL、官方Node22.23.4下验证rc.2与rc.5各八项npm/Web通信及隔离清理，覆盖原生Bash身份、精确发现、queue/steer、完整回信与插件启停，见[Linux与平台候选记录](development/evidence/c12-dsh-platforms-20261105/validation.json)。这不是Linux六阶段从零接入、浏览器UI或正式Desktop验收；macOS两架构及新的托管矩阵仍待原生首验。首次候选下载失败与成功的独立复核均保留。
+Windows/Linux x64与macOS Intel/ARM已完成[四目标npm/Web通信托管首验](https://github.com/Oatelauser/crosschat/actions/runs/41961856141)：rc.2与rc.5每目标各八项通过，包含原生身份、精确发现、queue/steer、完整回信、插件启停及隔离清理。此范围不含浏览器聊天界面或正式Desktop。
+
+Linux x64另已在本机WSL、官方Node22.23.4下完成rc.2与rc.5六阶段从零验证，覆盖实际skill加载、同源诊断与真实终端、更新、官方插件移除和crosschat卸载后的profile/聊天保留，见[本地六阶段证据](development/evidence/c12-posix-onboarding-20261105/linux-short-verification.json)。新版六阶段工作流的四目标托管首验与macOS从零仍待验证；历史失败与验证边界保留在[本轮说明](development/evidence/c12-posix-onboarding-20261105/review.md)。
 
 先按[官方指引](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/apps/cli/README.md)安装 Harness 及其插件管理所需的 pnpm，并安装本次开发版本的 crosschat。确认 `crosschat dsh-bridge-path` 能输出实际存在的 bundle 目录。
 

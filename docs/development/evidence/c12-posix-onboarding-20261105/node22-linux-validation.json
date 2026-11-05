@@ -1,0 +1,9 @@
+{
+  "version": "22.23.4",
+  "platform": "linux",
+  "arch": "x64",
+  "url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-x64.tar.xz",
+  "sha256": "1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca76337e9ce",
+  "bytes": 31029996,
+  "globalInstallation": false
+}
