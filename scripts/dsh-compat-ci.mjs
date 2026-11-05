@@ -11,7 +11,7 @@ import { clearTimeout, setTimeout } from 'node:timers';
 import { pathToFileURL, URL } from 'node:url';
 import { prepareDshProfile, repositoryRoot } from '../test/helpers/dsh-live-fixture.mjs';
 import { DSH_ONBOARDING_SCOPE, DSH_ONBOARDING_TOOL, validDshOnboardingProcessReport, validDshOnboardingReport } from './dsh-onboarding-contract.mjs';
-import { isDshNpmTarget } from './dsh-npm-target.mjs';
+import { DEFAULT_DSH_NPM_TARGET, isDshNpmTarget } from './dsh-npm-target.mjs';
 
 const tool = 'dsh-web-runtime';
 const pnpmVersion = '11.28.5';
@@ -501,8 +501,9 @@ export async function installDshNpmDependencies({ npmCLI, runtime, env, existing
 }
 
 function validScope(value) { return record(value) && Object.entries(scope).every(([key, expected]) => value[key] === expected); }
-function validReport(report, artifact, runId) {
-  if (!record(report) || report.schema !== 1 || report.tool !== tool || report.platform !== 'win32' || report.arch !== 'x64'
+function validReport(report, artifact, runId, target = DEFAULT_DSH_NPM_TARGET) {
+  if (!isDshNpmTarget(target?.platform, target?.arch)
+    || !record(report) || report.schema !== 1 || report.tool !== tool || report.platform !== target.platform || report.arch !== target.arch
     || report.version !== artifact.version || !uuid.test(report.runId ?? '') || (runId !== undefined && report.runId !== runId) || !validScope(report.scope)
     || !Array.isArray(report.checks) || report.checks.some((check) => !record(check) || !requiredChecks.includes(check.name) || check.status !== 'passed' || !Number.isFinite(check.elapsedMs) || check.elapsedMs < 0)
     || new Set(report.checks.map((check) => check.name)).size !== report.checks.length) return false;
@@ -511,7 +512,7 @@ function validReport(report, artifact, runId) {
 }
 function normalProcess(result) { return record(result) && result.timedOut === false && result.signal === null && [0, 1].includes(result.code); }
 function processMatches(report) { return normalProcess(report.process) && report.process.code === (report.status === 'passed' ? 0 : 1); }
-function infrastructure(version, stage, error) { return { schema: 1, tool, platform: 'win32', arch: 'x64', version, status: 'failed', category: 'infrastructure', stage, check: stage, error: message(error) }; }
+function infrastructure(version, stage, error, target = DEFAULT_DSH_NPM_TARGET) { return { schema: 1, tool, platform: target.platform, arch: target.arch, version, status: 'failed', category: 'infrastructure', stage, check: stage, error: message(error) }; }
 
 export function hasDshRuntimeReleaseProof(cleanup) {
   return record(cleanup) && cleanup.runtimeStopped === true && cleanup.registrationRemoved === true && cleanup.removed === true && cleanup.forced === false
@@ -1051,8 +1052,12 @@ export async function runDshDesktopAttempt({ output, label, artifact, installati
 }
 
 /** Every child gets a new directory and UUID; stale PASS files are never read. */
-export async function runDshProbeAttempt({ output, label, artifact }, execute) {
-  return runNpmProbeAttempt({ output, label, artifact }, execute, { valid: validReport, fail: infrastructure });
+export async function runDshProbeAttempt({ output, label, artifact, target = DEFAULT_DSH_NPM_TARGET }, execute) {
+  if (!isDshNpmTarget(target?.platform, target?.arch)) throw new Error('Unplanned Harness npm probe target');
+  return runNpmProbeAttempt({ output, label, artifact }, execute, {
+    valid: (report, build, runId) => validReport(report, build, runId, target),
+    fail: (version, stage, error) => infrastructure(version, stage, error, target),
+  });
 }
 
 function onboardingInfrastructure(version, stage) {

@@ -72,7 +72,7 @@ describe('DeepSeek Harness official npm artifact constraints', () => {
     expect(parseDshNpmManifest(manifest(), 'win32', 'x64')).toEqual(artifact());
     for (const version of ['0.2.1-rc.3', '0.2.1-rc.10', '0.2.1', '0.2.2', '0.2.99-preview.1']) expect(parseDshNpmManifest(manifest(version), 'win32', 'x64').version).toBe(version);
     for (const version of ['0.2.1-rc.1', '0.3.0-0', '0.3.0', '1.0.0']) expect(() => parseDshNpmManifest(manifest(version), 'win32', 'x64')).toThrow(expect.objectContaining({ category: 'unsupported', version }));
-    expect(() => parseDshNpmManifest(manifest(), 'linux', 'x64')).toThrow();
+    expect(() => parseDshNpmManifest(manifest(), 'linux', 'arm64')).toThrow();
     expect(parsePnpmManifest({ name: pnpm.name, version: pnpm.version, dist: { tarball: pnpm.url, integrity: pnpm.integrity } })).toEqual(pnpm);
     const pinned = JSON.parse(await readFile(new URL('../scripts/dsh-compat-baseline.json', import.meta.url), 'utf8'));
     expect(parseDshNpmManifest(pinned.package, 'win32', 'x64').version).toBe('0.2.1-rc.2');

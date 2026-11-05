@@ -54,4 +54,16 @@ describe('fresh DSH communication reports for an explicit runner target', () => 
         });
       expect(result).toMatchObject({ status: 'passed', platform, arch, process: { code: 0, signal: null, timedOut: false } });
     });
+
+  it.each([['win32', 'x64'], ['darwin', 'x64'], ['linux', 'arm64']])(
+    'rejects a foreign %s/%s report on a Linux x64 runner and keeps the failure identity', async (platform, arch) => {
+      const output = await mkdtemp(join(tmpdir(), 'crosschat-dsh-platform-')); roots.push(output);
+      const artifact = parseDshNpmManifest(pinned.package, 'linux', 'x64');
+      const result = await runDshProbeAttempt({ output, artifact, label: 'baseline', target: { platform: 'linux', arch: 'x64' } },
+        async ({ reportPath, runId }: { reportPath: string; runId: string }) => {
+          await writeFile(reportPath, JSON.stringify(communicationReport(platform, arch, artifact.version, runId)));
+          return { code: 0, signal: null, timedOut: false };
+        });
+      expect(result).toMatchObject({ status: 'failed', category: 'infrastructure', stage: 'probe-report', platform: 'linux', arch: 'x64' });
+    });
 });

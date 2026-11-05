@@ -1,0 +1,130 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-platform-20261105
+
+ ✓ test/dsh-onboarding-ci.test.ts (28 tests) 51ms
+ ❯ test/dsh-compat-ci.test.ts (107 tests | 1 failed) 18299ms
+   × DeepSeek Harness official npm artifact constraints > pins the scoped npm artifact, package manager and the supported prerelease window 15ms
+     → expected [Function] to throw an error
+   ✓ DeepSeek Harness official npm artifact constraints > rejects unrelated or mutable sources, malformed SRI and package-manager drift 1ms
+   ✓ DeepSeek Harness official npm artifact constraints > verifies the exact downloaded archive bytes using canonical SHA-512 SRI 0ms
+   ✓ DeepSeek Harness isolated npm download cache > uses a shared run-owned default and marks an explicit existing external cache for retention 15ms
+   ✓ DeepSeek Harness isolated npm download cache > rejects relative paths, URLs, network paths, files and externally labelled owned paths 12ms
+   ✓ DeepSeek Harness isolated npm download cache > rejects directory links and linked ancestors before using an external cache 12ms
+   ✓ DeepSeek Harness controlled desktop process > validates execution inputs and honors pre-cancellation without spawning 2ms
+   ✓ DeepSeek Harness controlled desktop process > returns stdout, stderr and exit facts only after close 1ms
+   ✓ DeepSeek Harness controlled desktop process > runs a real controlled Node child and reports only its own close 231ms
+   ✓ DeepSeek Harness controlled desktop process > preserves nonzero and signal exit facts 1ms
+   ✓ DeepSeek Harness controlled desktop process > keeps cancellation and timeout primary even if close later reports zero 40ms
+   ✓ DeepSeek Harness controlled desktop process > shares one byte budget across stdout and stderr and marks truncation 1ms
+   ✓ DeepSeek Harness controlled desktop process > uses one bounded release after child and pipe failures without replacing the first cause  1012ms
+   ✓ DeepSeek Harness controlled desktop process > waits for close when kill throws and reports the stop request separately 1ms
+   ✓ DeepSeek Harness controlled desktop process > counts the spawn attempt against the deadline and refuses an overdue success 153ms
+   ✓ DeepSeek Harness controlled desktop process > keeps only bounded copies of the bytes inside the output budget 3ms
+   ✓ DeepSeek Harness controlled desktop process > keeps falsy first causes and marks the failure explicitly 1ms
+   ✓ DeepSeek Harness controlled desktop process > records later pipe, child and release problems without replacing the first cause  1003ms
+   ✓ DeepSeek Harness controlled desktop process > keeps late pipe errors owned after return without changing the snapshot  1010ms
+   ✓ DeepSeek Harness controlled desktop process > clears the fixture cleanup wait once the real child is known closed 44ms
+   ✓ DeepSeek Harness controlled desktop process > records a pipe error raised synchronously while releasing the pipes  1016ms
+   ✓ DeepSeek Harness controlled desktop process > lets the fixture end and await its own real child when the product cannot confirm release  1125ms
+   ✓ DeepSeek Harness guarded desktop uninstall > never calls uninstall without a complete natural exit observation for this Host 1ms
+   ✓ DeepSeek Harness guarded desktop uninstall > binds every identity to the caller and returns process facts without claiming cleanup 2ms
+   ✓ DeepSeek Harness guarded desktop uninstall > refuses pre-cancellation and a Host observation that consumes the total deadline 55ms
+   ✓ DeepSeek Harness guarded desktop uninstall > preserves a runner failure and installation ownership even for falsy causes 3ms
+   ✓ DeepSeek Harness guarded desktop uninstall > ignores a late Host observation after cancellation and releases its abort listener 2ms
+   ✓ DeepSeek Harness guarded desktop uninstall > bounds both runner waits and records when uninstall was already invoked 58ms
+   ✓ DeepSeek Harness guarded desktop uninstall > classifies its own fired deadline even when the wall clock has not reached it (observe) 31ms
+   ✓ DeepSeek Harness guarded desktop uninstall > classifies its own fired deadline even when the wall clock has not reached it (uninstall) 32ms
+   ✓ DeepSeek Harness guarded desktop uninstall > rejects abnormal uninstall records and preserves executor causes without retrying 2ms
+   ✓ DeepSeek Harness guarded desktop uninstall > validates caller identities before either operation and keeps the captured binding 2ms
+   ✓ DeepSeek Harness guarded desktop uninstall > refuses an incomplete process observation before invoking uninstall 2ms
+   ✓ DeepSeek Harness fresh process and cleanup evidence > runs only controlled child processes and reports normal and timed-out termination distinctly 243ms
+   ✓ DeepSeek Harness fresh process and cleanup evidence > uses a unique empty report location and a caller-chosen UUID for every attempt 12ms
+   ✓ DeepSeek Harness fresh process and cleanup evidence > rejects wrong run IDs, incomplete PASS evidence, timeout/signal and process/report disagreement 24ms
+   ✓ DeepSeek Harness fresh process and cleanup evidence > requires all four exact cleanup booleans and refuses forced or unknown release 0ms
+   ✓ DeepSeek Harness baseline and candidate lifecycle > removes each released install before the next and retries the same pinned candidate 1ms
+   ✓ DeepSeek Harness baseline and candidate lifecycle > retains unknown runtime state and never advances or removes it 1ms
+   ✓ DeepSeek Harness baseline and candidate lifecycle > keeps the web retainedInstallation shape unchanged when a probe fails 0ms
+   ✓ DeepSeek Harness baseline and candidate lifecycle > does not turn installation, readiness, cleanup, baseline failure or flaky checks into issues 1ms
+   ✓ DeepSeek Harness independent issue reporter > creates only one deduplicated issue after independently verifying genuine scoped regression evidence 14ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > accepts a fresh desktop report bound to this install, native instance, session and artifact 10ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > binds the report to the caller launch instead of the report claim 15ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > rejects web, stale, foreign and incomplete desktop evidence 67ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > ignores reports outside the exclusive attempt location and never reuses an earlier report 20ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > rejects a well formed report above the read budget and keeps release unknown 25ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > never binds two missing artifact identities 12ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > keeps release unknown when the session times out, is killed, truncates output or disagrees 23ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > requires the Host exit, official uninstall and both registration cleanups for desktop release 1ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > installs the candidate only after a released baseline bound to this run 1ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > refuses to reuse an installation identity across attempts 0ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > keeps the desktop summary out of the web reporter 0ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > retains the first desktop installation and stops when release is unverified 1ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > never closes blindly after a thrown desktop operation and keeps ownership when the close fails 1ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > keeps the owned root of a partially created installation that throws 8ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > keeps the web entry closed to desktop reports and the desktop entry closed to web reports 1ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > rejects array UUID identities and never lets equal arrays bypass instance dedup 1ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > retains the full ownership after a normal install when release is unknown 9ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > retains the full ownership with the real reason when the desktop probe throws 10ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > retains the full ownership when the official close fails 9ms
+   ✓ DeepSeek Harness formal desktop report and lifecycle > keeps String(value) as the real reason when the probe throws a falsy value 48ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > projects the pinned research metadata and refuses masquerading or inexact desktop sources 4ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > streams the exact pinned bytes into the exclusive directory and proves only the transfer 34ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > rejects redirect, error and missing-body responses and size or digest disagreements without keeping partials 15ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > enforces the total deadline over headers and body and honors external cancellation  461ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > rejects short and zero-progress disk writes instead of trusting the stream digest 6ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > voids delivery when cancellation or the total deadline lands during the close 7ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > wraps frozen and falsy close failures with the retained path and the original cause 5ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > keeps late responses and late handles owned after the deadline  637ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > keeps the cause and the retained path when a falsy read failure meets an unclear release 110ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > refuses delivery when cancellation or the total deadline lands during cleanup 8ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late file close failure with the path and keeps the file owned  1118ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late file close that never settles as undecided at return  2023ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late partial removal failure with the path and keeps the file owned 264ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > removes a late-created file exactly once and never deletes a replacement 271ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > does not report a partial path after a successful late close and removal 259ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > closes a real late handle that arrives after the product returned even when its close was replaced 121ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late response whose cancel is still undecided when cleanup returns 280ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > cancels a late response, releases its lock and reports it as undecided at return  388ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > keeps falsy and frozen stream failures as real failures and still cleans the owned partial 12ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > never overwrites an existing file and re-checks the projection before any network call 4ms
+   ✓ DeepSeek Harness desktop installer admission > admits the exact verified file and matching publisher without writing an installation 4ms
+   ✓ DeepSeek Harness desktop installer admission > rejects a missing or malformed publisher policy before any file read or child process 2ms
+   ✓ DeepSeek Harness desktop installer admission > rejects inexact artifact identities and file size or digest disagreements 4ms
+   ✓ DeepSeek Harness desktop installer admission > rejects links and non-regular files 7ms
+   ✓ DeepSeek Harness desktop installer admission > rejects a file replaced between the read and the final state check 3ms
+   ✓ DeepSeek Harness desktop installer admission > rejects a signature status, subject or thumbprint that disagrees with the policy 12ms
+   ✓ DeepSeek Harness desktop installer admission > rejects pre-cancelled, timed-out and externally cancelled admissions without success 61ms
+   ✓ DeepSeek Harness desktop installer admission > uses the bounded Windows Authenticode adapter with the path in an environment field 5ms
+   ✓ DeepSeek Harness desktop installer admission > keeps the native signature reader independent of inherited PSModulePath without changing the caller environment 4ms
+   ✓ DeepSeek Harness desktop installer admission > keeps the native signature reader independent of inherited psmodulepath without changing the caller environment 4ms
+   ✓ DeepSeek Harness desktop installer admission > uses native Windows signature modules rather than executing an inherited shadow module  356ms
+   ✓ DeepSeek Harness desktop installer admission > rejects default-adapter output, JSON and process failures 69ms
+   ✓ DeepSeek Harness desktop installer admission > rejects same-fingerprint content rewritten while its signature is being read 11ms
+   ✓ DeepSeek Harness desktop installer admission > bounds the post-signature content read and still closes the handle 49ms
+   ✓ DeepSeek Harness desktop installer admission > rejects a path replaced while the post-signature content is being re-read 7ms
+   ✓ DeepSeek Harness desktop installer admission > bounds a stalled open, owns the late handle and closes it once 57ms
+   ✓ DeepSeek Harness desktop installer admission > bounds a stalled metadata read 43ms
+   ✓ DeepSeek Harness desktop installer admission > reports an unconfirmed signature child release and clears parent pipes  1015ms
+   ✓ DeepSeek Harness desktop installer admission > reports an unconfirmed signature child release on cancellation  1064ms
+   ✓ DeepSeek Harness desktop installer admission > starts the real file close only once when it rejects 6ms
+   ✓ DeepSeek Harness desktop installer admission > preserves a frozen signature failure alongside the close failure 5ms
+   ✓ DeepSeek Harness desktop installer admission > owns a spawned child error without a close instead of returning early  1008ms
+   ✓ DeepSeek Harness desktop installer admission > finishes a spawned child error once its close is observed 5ms
+   ✓ DeepSeek Harness desktop installer admission > keeps the overflow failure when a failed stop reports an error  1008ms
+   ✓ DeepSeek Harness desktop installer admission > keeps the signature failure and release state across the total deadline  1012ms
+ ✓ test/dsh-platform-ci.test.ts (12 tests) 17ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-compat-ci.test.ts > DeepSeek Harness official npm artifact constraints > pins the scoped npm artifact, package manager and the supported prerelease window
+AssertionError: expected [Function] to throw an error
+ ❯ test/dsh-compat-ci.test.ts:75:67
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 146 passed (147)
+   Start at  10:01:49
+   Duration  19.01s (transform 265ms, setup 0ms, collect 446ms, tests 18.37s, environment 0ms, prepare 250ms)
+
