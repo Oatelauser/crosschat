@@ -1,0 +1,60 @@
+{
+  "executedSource": "3ebf6ca5d8c54939bb4290c064baed5c647f73ff",
+  "nativeFiles": [
+    {
+      "file": "scripts/dsh-compat-ci.mjs",
+      "executed": "8b803ba13c464fad40959c30c4401a9507c1a185",
+      "candidate": "8b803ba13c464fad40959c30c4401a9507c1a185",
+      "identical": true
+    },
+    {
+      "file": "scripts/dsh-onboarding.mjs",
+      "executed": "875cbf0f3ffca5f21ba9ee12a718371e7abaad40",
+      "candidate": "875cbf0f3ffca5f21ba9ee12a718371e7abaad40",
+      "identical": true
+    },
+    {
+      "file": "scripts/dsh-onboarding-contract.mjs",
+      "executed": "4e0289e180628b4c33567f57de5dbdf29671675d",
+      "candidate": "4e0289e180628b4c33567f57de5dbdf29671675d",
+      "identical": true
+    },
+    {
+      "file": "test/helpers/tui-pty-driver.mjs",
+      "executed": "9496131e534582e776a0c3c8d6f653e8ebe36109",
+      "candidate": "9496131e534582e776a0c3c8d6f653e8ebe36109",
+      "identical": true
+    },
+    {
+      "file": "test/helpers/tui-pty-host.py",
+      "executed": "d407d113168018a09c5b5eb23b641cd1ae27598f",
+      "candidate": "d407d113168018a09c5b5eb23b641cd1ae27598f",
+      "identical": true
+    },
+    {
+      "file": "test/helpers/dsh-live-fixture.mjs",
+      "executed": "6efb6328429a51e74d7527c0997cc97b2f70ad87",
+      "candidate": "6efb6328429a51e74d7527c0997cc97b2f70ad87",
+      "identical": true
+    },
+    {
+      "file": "test/helpers/dsh-tui-pty-validation.mjs",
+      "executed": "c2eb75bd7a11765892333b7528636e756e9a4b27",
+      "candidate": "c2eb75bd7a11765892333b7528636e756e9a4b27",
+      "identical": true
+    },
+    {
+      "file": "test/helpers/dsh-owned-node.mjs",
+      "executed": "6e49385d58fcfd80266ca29849bdd24a1e8068a4",
+      "candidate": "6e49385d58fcfd80266ca29849bdd24a1e8068a4",
+      "identical": true
+    },
+    {
+      "file": "skills/crosschat/SKILL.md",
+      "executed": "9c8f85532bb3e76b81f32daddd69ab0231056b90",
+      "candidate": "9c8f85532bb3e76b81f32daddd69ab0231056b90",
+      "identical": true
+    }
+  ],
+  "nativeExecutionDoesNotValidateLaterWorkflowChanges": true
+}

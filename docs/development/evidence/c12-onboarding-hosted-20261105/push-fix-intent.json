@@ -1,0 +1,9 @@
+{
+  "recordedAt": "2026-11-05T06:27:38.413Z",
+  "pr": 4,
+  "branch": "codex/dsh-posix-onboarding-20261105",
+  "previous": "0d0f91a81bbb7264cd2bca830013d64b40fa2c0a",
+  "head": "e1f4d00810216605c6eb340e6d7ca36bd4d2b959",
+  "base": "a1e6464bd6eb28f12f51609cd637dd8518c5222b",
+  "scope": "Maintain authorized draft PR with two test-fixture timing fixes plus immutable RED/GREEN evidence; ordinary CI from push only. No native dispatch, main merge, weekly activation, issue or release."
+}

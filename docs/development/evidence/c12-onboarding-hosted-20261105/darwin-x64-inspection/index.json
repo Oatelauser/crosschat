@@ -1,0 +1,210 @@
+{
+  "zip": "dsh-onboarding-darwin-x64.zip",
+  "members": [
+    {
+      "file": "baseline-install.json",
+      "bytes": 116110,
+      "sha256": "453ecb09e1f5c4675bb44bd01522059ba594dda7671d029e5d1e208c51e31a87"
+    },
+    {
+      "file": "baseline-snyueY/discovery.json",
+      "bytes": 1465,
+      "sha256": "c55c6ead84486e4cc350a996af11a31fbf60174184eff5e07f9472a207d5ad73"
+    },
+    {
+      "file": "baseline-package-lock.json",
+      "bytes": 408759,
+      "sha256": "b97c9954150a0f6b059e3298b66c50cfe8466ef6ed14be20dba59a6688ee4a2a"
+    },
+    {
+      "file": "baseline-snyueY/doctor-json.json",
+      "bytes": 1212,
+      "sha256": "577abd017023cdcab034a1a301057e9bd8f75ce525027e076c01a6ea6f87ec97"
+    },
+    {
+      "file": "baseline-snyueY/doctor-text.json",
+      "bytes": 1104,
+      "sha256": "40124528f4ae976adca38764b95d0157272b8f9dc92291a276445db004cd4595"
+    },
+    {
+      "file": "baseline-snyueY/install-skills.json",
+      "bytes": 348,
+      "sha256": "0c0ee37c913bff03b2d7769f33d4f1ac3ad1ce013d9a43c824e62990d3636a14"
+    },
+    {
+      "file": "baseline-snyueY/native-skill-and-identity.json",
+      "bytes": 7496,
+      "sha256": "4ee91378c25fe9db409df2e5f3ec2d63f3cb79fde5b8d14059fe744f0f1a4125"
+    },
+    {
+      "file": "baseline-snyueY/process.json",
+      "bytes": 550,
+      "sha256": "86d66735b7dc3a3ccf1b6d2d1634f0c2fd4fa1882cfb62b5dfe0cfcf7ee537df"
+    },
+    {
+      "file": "baseline-snyueY/remove-plugin.json",
+      "bytes": 238,
+      "sha256": "f299bd8b6ed892ae0e26cd42b82ded9f5bca03735f3cdcfc5027f448a5866da5"
+    },
+    {
+      "file": "baseline-snyueY/report.json",
+      "bytes": 1814,
+      "sha256": "f4ec8af079918e6fd4e81ce1a47457dbb3d36709b3e272597a6e904b6379ed50"
+    },
+    {
+      "file": "baseline-snyueY/retained-profile-chat-hashes.json",
+      "bytes": 1068,
+      "sha256": "5e5acbefa2a6757a2644c569c6ce035998798a1a0abbf6c690f291e066facc77"
+    },
+    {
+      "file": "baseline-snyueY/runtime-logs.json",
+      "bytes": 91,
+      "sha256": "b7a4e66995f2b5b3dd4fb13a2ca1d49170cf91a2cf541b27f47946c254777a5a"
+    },
+    {
+      "file": "baseline-snyueY/tui-application.jsonl",
+      "bytes": 50786,
+      "sha256": "dabd0555ee01167ffb83bb7aa7d732d2298daf2aadc2c12a2348722ec59f029b"
+    },
+    {
+      "file": "baseline-snyueY/tui-terminal.jsonl",
+      "bytes": 204599,
+      "sha256": "228ecde54069832e6f5e5fc5493ec45dbefdcce208a0becb2bff1277fd099254"
+    },
+    {
+      "file": "baseline-snyueY/uninstall-crosschat-data.json",
+      "bytes": 1449,
+      "sha256": "e64b1ad69a2e4c0b8af2d9a5e194ad4a5afa36b5e4271d57af080791e7bbd661"
+    },
+    {
+      "file": "baseline-snyueY/update-skills.json",
+      "bytes": 348,
+      "sha256": "0da9d336f8d471b4511d9002e169116aaf6a5291175120a93db544ef48f26c86"
+    },
+    {
+      "file": "candidate-1jgSIp/discovery.json",
+      "bytes": 1465,
+      "sha256": "a70cea4b46e9fdf34633d10b31fa56df9783cb81583acaf084f6c6a67f416a28"
+    },
+    {
+      "file": "candidate-1jgSIp/doctor-json.json",
+      "bytes": 1212,
+      "sha256": "9809e83493c83ec336a6a63b4332ac7476f24e8e0694e694a1582c42ffb14a36"
+    },
+    {
+      "file": "candidate-1jgSIp/doctor-text.json",
+      "bytes": 1104,
+      "sha256": "2a0c250cda282da30bde590a2368f4c7e3a2ddd85092d7772d3a488f7f82b97d"
+    },
+    {
+      "file": "candidate-1jgSIp/install-skills.json",
+      "bytes": 348,
+      "sha256": "a497096c0c8162f871ea2498b0ae9c63bc8852c0b438454dead08988b7d13453"
+    },
+    {
+      "file": "candidate-1jgSIp/native-skill-and-identity.json",
+      "bytes": 7496,
+      "sha256": "722caa3bf58ce6685818fc5686090fd243b1267c3b6d8e725f12176a2c14eb26"
+    },
+    {
+      "file": "candidate-1jgSIp/process.json",
+      "bytes": 551,
+      "sha256": "5d579d14d89cac222551c0f1f9878875c4baa491bdfb0a66155a7233889094a9"
+    },
+    {
+      "file": "candidate-1jgSIp/remove-plugin.json",
+      "bytes": 238,
+      "sha256": "96e23a3f2a9904779d29dbd5a046f2a9c86143ea67cf7d25f981e53e220c7951"
+    },
+    {
+      "file": "candidate-1jgSIp/report.json",
+      "bytes": 1815,
+      "sha256": "d5769e6c6ae2460da56afd0cd42d7e9a5e263be425f6727729b5409db7dc0f84"
+    },
+    {
+      "file": "candidate-1jgSIp/retained-profile-chat-hashes.json",
+      "bytes": 1068,
+      "sha256": "52a1b75f7becf470089b948adae680ad49443ace29d52916f57e13e06222163a"
+    },
+    {
+      "file": "candidate-1jgSIp/runtime-logs.json",
+      "bytes": 91,
+      "sha256": "f69086352295b53c31d0c9198cb200ac7b951a6bece29b0c893666f09c8c01ef"
+    },
+    {
+      "file": "candidate-1jgSIp/tui-application.jsonl",
+      "bytes": 50786,
+      "sha256": "c0745a666589670abe647abbeda7381216ea237e53a9c5b56b31e6cc25eaad1d"
+    },
+    {
+      "file": "candidate-1jgSIp/tui-terminal.jsonl",
+      "bytes": 211854,
+      "sha256": "42970069a68c100e55f1889ac6b18a6d7a9cb2a195b467bc717ad01b5fa5110f"
+    },
+    {
+      "file": "candidate-1jgSIp/uninstall-crosschat-data.json",
+      "bytes": 1449,
+      "sha256": "3db0fe43a5bd9ea9061409ff1268f4087884195c42b7c77c24685cace2b89443"
+    },
+    {
+      "file": "candidate-1jgSIp/update-skills.json",
+      "bytes": 348,
+      "sha256": "342e89a32773f745a083dce6af55ad12441bd81da67ccd7cbb3db10df03bcc4b"
+    },
+    {
+      "file": "candidate-install.json",
+      "bytes": 116272,
+      "sha256": "b292bc64779832adcd511d9d52896bfa43aed58e744345f74e2571ec6037b108"
+    },
+    {
+      "file": "candidate-package-lock.json",
+      "bytes": 409198,
+      "sha256": "bcb39583a1c10f8ff08ec435f00b3c51eeebf0bc275e96578d7545aa2495f7d8"
+    },
+    {
+      "file": "summary.json",
+      "bytes": 5648,
+      "sha256": "b530bcfc893432d78af9682b29300e608a547fcec97f20ec0559d2529bdce621"
+    },
+    {
+      "file": "terminal-preflight/arguments.jsonl",
+      "bytes": 1201,
+      "sha256": "36c499d5f23d7ff787c93de5feef1bd53f2b0e9ab09981fa39a664440017480d"
+    },
+    {
+      "file": "terminal-preflight/control.jsonl",
+      "bytes": 543,
+      "sha256": "7e24fc21e28cb9bf27841eb46a8619ec6bf67033167858f096c4d23c99cdbb41"
+    },
+    {
+      "file": "terminal-preflight/dispose.jsonl",
+      "bytes": 444,
+      "sha256": "f40f66040173d5a103982265e60b7a678d8cda41aa2b675981ee64179b6b1277"
+    },
+    {
+      "file": "terminal-preflight/force.jsonl",
+      "bytes": 442,
+      "sha256": "6835afc2f619cc2d4c25e0f87d9251ad8b510e82135168e3506ab0bf82694839"
+    },
+    {
+      "file": "terminal-preflight/nonzero.jsonl",
+      "bytes": 375,
+      "sha256": "a972089f7177286de0336e2795651f9d68fcf2b235e35fea51b5a2e9b8cd3562"
+    },
+    {
+      "file": "terminal-preflight/report.json",
+      "bytes": 838,
+      "sha256": "38afad2ecabb87f98cd347d0191cb6e9f4a859a9f458333a9f48b0dc4de23263"
+    },
+    {
+      "file": "terminal-preflight/startup.jsonl",
+      "bytes": 282,
+      "sha256": "c94ba8bf99efab56e7be2c8b4b0e9822c0def28f17aa16dc3f801984ecd01a43"
+    },
+    {
+      "file": "terminal-preflight/terminal.jsonl",
+      "bytes": 1052,
+      "sha256": "6d5da06a15ad1d973598211c3b40849ec45a9dc7e8eaa58b30d894a1d2e20afc"
+    }
+  ]
+}

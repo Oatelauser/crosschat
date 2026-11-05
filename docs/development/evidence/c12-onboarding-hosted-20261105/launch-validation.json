@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "date": "2026-11-05",
+  "authorization": "用户明确批准推送0d0f91a、建立草稿PR并运行候选分支C11四目标从零首验",
+  "head": "0d0f91a81bbb7264cd2bca830013d64b40fa2c0a",
+  "base": "a1e6464bd6eb28f12f51609cd637dd8518c5222b",
+  "branch": "codex/dsh-posix-onboarding-20261105",
+  "pr": {
+    "number": 4,
+    "url": "https://github.com/Oatelauser/crosschat/pull/4",
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "head": "0d0f91a81bbb7264cd2bca830013d64b40fa2c0a",
+    "branch": "codex/dsh-posix-onboarding-20261105",
+    "base": "a1e6464bd6eb28f12f51609cd637dd8518c5222b",
+    "bodySha256": "c1cf74a4a30095ba23cd8f75bb552c165bb9030e1e7d593ad3e05f5248623772",
+    "createdAt": "2026-11-05T06:03:31Z"
+  },
+  "run": {
+    "id": 41978059319,
+    "url": "https://github.com/Oatelauser/crosschat/actions/runs/41978059319",
+    "head": "0d0f91a81bbb7264cd2bca830013d64b40fa2c0a",
+    "branch": "codex/dsh-posix-onboarding-20261105",
+    "event": "workflow_dispatch",
+    "workflowId": 406659158,
+    "attempt": 1,
+    "createdAt": "2026-11-05T06:05:09Z",
+    "status": "queued",
+    "conclusion": null
+  },
+  "ordinaryRun": 41977889894,
+  "mainMergeAuthorized": false,
+  "newPosixWeeklyActivationAuthorized": false,
+  "releaseAuthorized": false,
+  "crossMachineScope": "R1/R2/R3 pending",
+  "artifacts": [
+    {
+      "file": "preflight.json",
+      "bytes": 706,
+      "sha256": "08776c4066f9e3714fb893a3ed4b17777cc56bbaf3ea13d5f133ad60baea01c3"
+    },
+    {
+      "file": "push-intent.json",
+      "bytes": 278,
+      "sha256": "41bb94591ebc016a4f0eb6d61d50263b4cba8f379a6e00e4837ced3395338189"
+    },
+    {
+      "file": "pr-body.md",
+      "bytes": 3459,
+      "sha256": "c1cf74a4a30095ba23cd8f75bb552c165bb9030e1e7d593ad3e05f5248623772"
+    },
+    {
+      "file": "pr-intent.json",
+      "bytes": 3831,
+      "sha256": "cb494de5ee92ca1aad8f9c78e46e6951452263ec954b8396f3ec1107b4602d99"
+    },
+    {
+      "file": "pr-create-response.json",
+      "bytes": 115,
+      "sha256": "43b9c18e5bdb2210e17227072158b32cba117669579ac9149a66bf95928a41e4"
+    },
+    {
+      "file": "pr-verification.json",
+      "bytes": 414,
+      "sha256": "1c0ceb03885194ae0efb359b36e722cd7a23f9b875378416dca0baa2d52d8230"
+    },
+    {
+      "file": "dispatch-intent.json",
+      "bytes": 391,
+      "sha256": "7e93db27d5e0fc1a3512b7d02e284c11a85bcbf45a2e8dc6aed997d101313197"
+    },
+    {
+      "file": "dispatch-response.json",
+      "bytes": 256,
+      "sha256": "201ff0ac266d7cc49c1adabcb6038ebbbbe8c7a79e8e10001d71f79e43c8d25e"
+    },
+    {
+      "file": "run.json",
+      "bytes": 364,
+      "sha256": "2929c77cd2131841d08548a35aa476c84c4b0a5f971b40172378810eaa61f547"
+    },
+    {
+      "file": "ordinary-start.json",
+      "bytes": 811,
+      "sha256": "1e43d90f11381fc05127ff83d1f5e4854151c9f1c630823c467eead515c976df"
+    }
+  ]
+}

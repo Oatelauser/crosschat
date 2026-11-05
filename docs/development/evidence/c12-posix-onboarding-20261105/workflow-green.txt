@@ -1,0 +1,17 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test --maxWorkers=2 --minWorkers=1 test/dsh-onboarding-workflow-platform.test.ts test/dsh-onboarding-ci.test.ts test/dsh-onboarding-platform.test.ts test/dsh-platform-ci.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-onboarding-posix-20261105
+
+ ✓ test/dsh-onboarding-ci.test.ts (28 tests) 34ms
+ ✓ test/dsh-platform-ci.test.ts (26 tests) 44ms
+ ✓ test/dsh-onboarding-workflow-platform.test.ts (9 tests) 22ms
+ ✓ test/dsh-onboarding-platform.test.ts (15 tests) 27ms
+
+ Test Files  4 passed (4)
+      Tests  78 passed (78)
+   Start at  13:14:45
+   Duration  642ms (transform 208ms, setup 0ms, collect 334ms, tests 127ms, environment 1ms, prepare 283ms)
+

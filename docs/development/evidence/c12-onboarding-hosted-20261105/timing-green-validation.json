@@ -1,0 +1,116 @@
+{
+  "schema": 1,
+  "redCheckpoint": "f83a54d",
+  "nativeExecutedHead": "0d0f91a81bbb7264cd2bca830013d64b40fa2c0a",
+  "files": [
+    {
+      "file": "test/dsh-compat-ci.test.ts",
+      "blob": "30e27f6a4d69dd6da0e3fa8f9709e4662ce7d8f2"
+    },
+    {
+      "file": "test/observation-overview.test.ts",
+      "blob": "cabd934d5ee554ff19840bca2f5eec471da8091d"
+    }
+  ],
+  "scope": "Tests only: explicit Worker fixture readiness with original 20ms/250ms and reaped-owner assertions; real PowerShell integration budget 20s under an outer 25s fixture budget. Production deadlines, schemas, commands and cleanup code unchanged.",
+  "uncertainty": "Unchanged real signature case passed locally; corrected 12-sample Worker probe also passed both cold and ready arms. These establish the old test budget/readiness ambiguity, not the cause of each hosted delay. Hosted ordinary checks still require a fresh result on this test patch.",
+  "targeted": {
+    "exit": 0,
+    "passed": 125,
+    "files": 2
+  },
+  "full": {
+    "node": "22.23.4",
+    "exit": 0,
+    "passed": 2827,
+    "skipped": 11,
+    "filesPassed": 240,
+    "filesSkipped": 3,
+    "lint": true,
+    "build": true,
+    "importGraph": {
+      "modules": 204,
+      "edges": 689
+    }
+  },
+  "nativeSourceBlobsUnchanged": [
+    {
+      "file": "scripts/dsh-compat-ci.mjs",
+      "executed": "8b803ba13c464fad40959c30c4401a9507c1a185",
+      "current": "8b803ba13c464fad40959c30c4401a9507c1a185"
+    },
+    {
+      "file": "scripts/dsh-onboarding.mjs",
+      "executed": "875cbf0f3ffca5f21ba9ee12a718371e7abaad40",
+      "current": "875cbf0f3ffca5f21ba9ee12a718371e7abaad40"
+    },
+    {
+      "file": "scripts/dsh-onboarding-contract.mjs",
+      "executed": "4e0289e180628b4c33567f57de5dbdf29671675d",
+      "current": "4e0289e180628b4c33567f57de5dbdf29671675d"
+    },
+    {
+      "file": "test/helpers/tui-pty-driver.mjs",
+      "executed": "9496131e534582e776a0c3c8d6f653e8ebe36109",
+      "current": "9496131e534582e776a0c3c8d6f653e8ebe36109"
+    },
+    {
+      "file": "test/helpers/tui-pty-host.py",
+      "executed": "d407d113168018a09c5b5eb23b641cd1ae27598f",
+      "current": "d407d113168018a09c5b5eb23b641cd1ae27598f"
+    },
+    {
+      "file": "test/helpers/dsh-live-fixture.mjs",
+      "executed": "6efb6328429a51e74d7527c0997cc97b2f70ad87",
+      "current": "6efb6328429a51e74d7527c0997cc97b2f70ad87"
+    },
+    {
+      "file": "test/helpers/dsh-tui-pty-validation.mjs",
+      "executed": "c2eb75bd7a11765892333b7528636e756e9a4b27",
+      "current": "c2eb75bd7a11765892333b7528636e756e9a4b27"
+    },
+    {
+      "file": "test/helpers/dsh-owned-node.mjs",
+      "executed": "6e49385d58fcfd80266ca29849bdd24a1e8068a4",
+      "current": "6e49385d58fcfd80266ca29849bdd24a1e8068a4"
+    },
+    {
+      "file": "skills/crosschat/SKILL.md",
+      "executed": "9c8f85532bb3e76b81f32daddd69ab0231056b90",
+      "current": "9c8f85532bb3e76b81f32daddd69ab0231056b90"
+    },
+    {
+      "file": ".github/workflows/dsh-onboarding-compat.yml",
+      "executed": "0e1dcd9cb17d6ff45e853e7899cefb78ed18c457",
+      "current": "0e1dcd9cb17d6ff45e853e7899cefb78ed18c457"
+    }
+  ],
+  "srcAndPackageFilesUnchangedFromMain": true,
+  "artifacts": [
+    {
+      "file": "timing-targeted-green.txt",
+      "bytes": 22057,
+      "sha256": "8dff2673eedfa94135fcd790d2cf381dd2461b7656c089e06ec1eac475aaeea1"
+    },
+    {
+      "file": "timing-full-check.txt",
+      "bytes": 31656,
+      "sha256": "af8df29f28632414bcf0c45d39b7f54594b3ccc63155c10ae13ce156878f4632"
+    },
+    {
+      "file": "timing-probe-v2.mjs",
+      "bytes": 1743,
+      "sha256": "e96f56cdf0f500f9d4b9cce22dea8c833c9cc6408ef21a3cc95cf6f52b55264b"
+    },
+    {
+      "file": "timing-probe-v2.json",
+      "bytes": 2465,
+      "sha256": "0e771af4f76913e24190e0f4420b756fb2cff683cdbebe41864d7cd673d428a3"
+    },
+    {
+      "file": "timing-fix.patch",
+      "bytes": 3519,
+      "sha256": "c16587c4bb5819e2dee3336223c963ee39e377629ca0a46762a31077407d9258"
+    }
+  ]
+}

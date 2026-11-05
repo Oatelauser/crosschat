@@ -1,0 +1,33 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test --maxWorkers=2 --minWorkers=1 test/dsh-onboarding-platform.test.ts test/dsh-onboarding-ci.test.ts test/dsh-platform-ci.test.ts test/dsh-compat-ci.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-onboarding-posix-20261105
+
+ ✓ test/dsh-platform-ci.test.ts (26 tests) 47ms
+ ✓ test/dsh-onboarding-ci.test.ts (28 tests) 34ms
+ ✓ test/dsh-compat-ci.test.ts (107 tests) 18181ms
+   ✓ DeepSeek Harness controlled desktop process > uses one bounded release after child and pipe failures without replacing the first cause  1015ms
+   ✓ DeepSeek Harness controlled desktop process > records later pipe, child and release problems without replacing the first cause  1008ms
+   ✓ DeepSeek Harness controlled desktop process > keeps late pipe errors owned after return without changing the snapshot  1014ms
+   ✓ DeepSeek Harness controlled desktop process > records a pipe error raised synchronously while releasing the pipes  1003ms
+   ✓ DeepSeek Harness controlled desktop process > lets the fixture end and await its own real child when the product cannot confirm release  1123ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > enforces the total deadline over headers and body and honors external cancellation  449ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > keeps late responses and late handles owned after the deadline  658ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late file close failure with the path and keeps the file owned  1124ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late file close that never settles as undecided at return  2026ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > cancels a late response, releases its lock and reports it as undecided at return  391ms
+   ✓ DeepSeek Harness desktop installer admission > uses native Windows signature modules rather than executing an inherited shadow module  332ms
+   ✓ DeepSeek Harness desktop installer admission > reports an unconfirmed signature child release and clears parent pipes  1013ms
+   ✓ DeepSeek Harness desktop installer admission > reports an unconfirmed signature child release on cancellation  1060ms
+   ✓ DeepSeek Harness desktop installer admission > owns a spawned child error without a close instead of returning early  1025ms
+   ✓ DeepSeek Harness desktop installer admission > keeps the overflow failure when a failed stop reports an error  1024ms
+   ✓ DeepSeek Harness desktop installer admission > keeps the signature failure and release state across the total deadline  1013ms
+ ✓ test/dsh-onboarding-platform.test.ts (15 tests) 25ms
+
+ Test Files  4 passed (4)
+      Tests  176 passed (176)
+   Start at  13:06:16
+   Duration  18.87s (transform 249ms, setup 0ms, collect 530ms, tests 18.29s, environment 1ms, prepare 268ms)
+

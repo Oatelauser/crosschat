@@ -1,6 +1,7 @@
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { fork } from 'node:child_process';
 import childProcess from 'node:child_process';
+import { once } from 'node:events';
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { Worker } from 'node:worker_threads';
@@ -307,11 +308,18 @@ describe('safe isolated diagnostics for observation pages', () => {
   });
 
   it('times out and reaps the query owner instead of leaving a blocked probe alive', async () => {
-    const worker = new Worker('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0);', { eval: true });
-    const pending = queryDoctorDiagnostics({ timeoutMs: 20, createWorker: () => worker });
-    const outcome = await Promise.race([pending.then(() => 'healthy', (error: Error) => error.name), new Promise<string>((resolve) => setTimeout(() => resolve('still-running'), 250))]);
-    if (outcome === 'still-running') await worker.terminate();
-    expect(outcome).toBe('TimeoutError');
-    expect(worker.threadId).toBe(-1);
+    const worker = new Worker('require("node:worker_threads").parentPort.postMessage("ready");Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0);', { eval: true });
+    let guard: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // Measure a blocked query and its actual reap after the fixture has started.
+      // Cold Worker startup belongs to fixture setup, not the 20ms query deadline.
+      const [ready] = await once(worker, 'message', { signal: AbortSignal.timeout(2000) });
+      expect(ready).toBe('ready');
+      const pending = queryDoctorDiagnostics({ timeoutMs: 20, createWorker: () => worker });
+      const outcome = await Promise.race([pending.then(() => 'healthy', (error: Error) => error.name),
+        new Promise<string>((resolve) => { guard = setTimeout(() => resolve('still-running'), 250); })]);
+      expect(outcome).toBe('TimeoutError');
+      expect(worker.threadId).toBe(-1);
+    } finally { clearTimeout(guard); await worker.terminate(); }
   });
 });

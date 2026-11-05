@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "head": "e1f4d00810216605c6eb340e6d7ca36bd4d2b959",
+  "run": {
+    "id": 41980572627,
+    "url": "https://github.com/Oatelauser/crosschat/actions/runs/41980572627",
+    "head": "e1f4d00810216605c6eb340e6d7ca36bd4d2b959",
+    "event": "pull_request",
+    "attempt": 1,
+    "status": "completed",
+    "conclusion": "success"
+  },
+  "allThreeJobsSuccess": true,
+  "initialFailureRun": 41977889894,
+  "initialFailuresPreserved": true,
+  "nativeHead": "0d0f91a81bbb7264cd2bca830013d64b40fa2c0a",
+  "nativeSourceUnchanged": true,
+  "sourceAndDependencyFilesUnchanged": true,
+  "summaries": [
+    {
+      "job": 127089473319,
+      "name": "check (macos-latest)",
+      "conclusion": "success",
+      "summary": [
+        "2026-11-05T06:31:46.6869060Z  Test Files  240 passed | 3 skipped (243)",
+        "2026-11-05T06:31:46.6871210Z       Tests  2822 passed | 16 skipped (2838)"
+      ],
+      "signalTests": []
+    },
+    {
+      "job": 127089473565,
+      "name": "check (windows-latest)",
+      "conclusion": "success",
+      "summary": [
+        "2026-11-05T06:31:38.8925479Z  Test Files  240 passed | 3 skipped (243)",
+        "2026-11-05T06:31:38.8947695Z       Tests  2827 passed | 11 skipped (2838)"
+      ],
+      "signalTests": [
+        "2026-11-05T06:30:07.5121075Z    ✓ DeepSeek Harness desktop installer admission > uses native Windows signature modules rather than executing an inherited shadow module  580ms"
+      ]
+    },
+    {
+      "job": 127089473739,
+      "name": "check (ubuntu-latest)",
+      "conclusion": "success",
+      "summary": [
+        "2026-11-05T06:30:42.7012775Z  Test Files  240 passed | 3 skipped (243)",
+        "2026-11-05T06:30:42.7036747Z       Tests  2822 passed | 16 skipped (2838)"
+      ],
+      "signalTests": []
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "fixed-completed.json",
+      "bytes": 933,
+      "sha256": "a8b5f6d98799393c94ce5b5ec11a4a8ad4869f09f5479f7f58839bddc8784414"
+    },
+    {
+      "file": "fixed-observations.json",
+      "bytes": 6512,
+      "sha256": "e8cfbfe04eddd8595f6bf132bfe4bc188f1d5bbab1a460e11bacc38028c3e4d9"
+    },
+    {
+      "file": "push-fix-intent.json",
+      "bytes": 485,
+      "sha256": "3440d14d3db4ff849a14274ab852396492bd850a6d5c68cabfa16b9feb7354a5"
+    },
+    {
+      "file": "fixed-job-127089473319.txt",
+      "bytes": 67621,
+      "sha256": "535831c516854c5a9f588c05ebb71215812e64cfb03eb591afb50eeadfa1ad0f"
+    },
+    {
+      "file": "fixed-job-127089473565.txt",
+      "bytes": 76142,
+      "sha256": "6d3deeefe003032cea32a88543067702c2f83012b6e93228910687026bb40fc6"
+    },
+    {
+      "file": "fixed-job-127089473739.txt",
+      "bytes": 67999,
+      "sha256": "edcdd2148bae8f6af8ecdd8cb6f26ebfb2e5341c182737510cf9ab57e1945e51"
+    }
+  ]
+}

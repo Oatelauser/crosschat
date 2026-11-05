@@ -1,0 +1,66 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test --maxWorkers=2 --minWorkers=1 test/dsh-onboarding-workflow-platform.test.ts test/dsh-onboarding-ci.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-onboarding-posix-20261105
+
+ ✓ test/dsh-onboarding-workflow-platform.test.ts (9 tests) 26ms
+ ❯ test/dsh-onboarding-ci.test.ts (28 tests | 1 failed) 40ms
+   ✓ DSH from-zero onboarding report boundary > accepts a complete fresh onboarding report independently of the communication schema 1ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"tool":"dsh-web-runtime"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"platform":"linux"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"arch":"arm64"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"version":"0.2.1-rc.3"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"runId":"11111111-1111-1111-1111-111111111111"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a mismatched producer, build or fresh attempt: {"runId":"22222222-2222-4222-8222-222222222222"} 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects omitted or expanded evidence claims instead of treating them as a full onboarding pass 0ms
+   ✓ DSH from-zero onboarding report boundary > requires every successful phase once, in order, with valid timing 0ms
+   ✓ DSH from-zero onboarding report boundary > retains a real failure at the next phase without claiming a complete pass or inventing release 0ms
+   ✓ DSH from-zero onboarding report boundary > requires explicit cleanup observations instead of coercing unknown values 0ms
+   ✓ DSH from-zero onboarding report boundary > checks normal process completion against the report outcome 0ms
+   ✓ DSH from-zero onboarding report boundary > rejects a failed claim that omits the failed phase after all phases passed 0ms
+   ✓ onboarding fresh attempts and serial resource ownership > accepts only the freshly minted report and never reuses a preceding PASS 8ms
+   ✓ onboarding fresh attempts and serial resource ownership > rejects filesystem link metadata before accepting otherwise valid report bytes 3ms
+   ✓ onboarding fresh attempts and serial resource ownership > retains an installation with incomplete release and never enters the next build or removes it 1ms
+   ✓ onboarding fresh attempts and serial resource ownership > uses the same candidate twice only after both observed runtime and installation releases 0ms
+   ✓ independent communication and onboarding CI entry points > preserves the existing communication default (undefined) 0ms
+   ✓ independent communication and onboarding CI entry points > preserves the existing communication default (communication) 0ms
+   ✓ independent communication and onboarding CI entry points > binds onboarding to its complete report and independent artifact directory 0ms
+   ✓ independent communication and onboarding CI entry points > rejects an unknown suite instead of running the communication default () 1ms
+   ✓ independent communication and onboarding CI entry points > rejects an unknown suite instead of running the communication default (desktop) 0ms
+   ✓ independent communication and onboarding CI entry points > rejects an unknown suite instead of running the communication default (ONBOARDING) 0ms
+   ✓ independent communication and onboarding CI entry points > rejects an unknown suite instead of running the communication default (false) 0ms
+   × from-zero onboarding independent issue report > independently admits and deduplicates only a fully released repeated candidate failure 11ms
+     → expected [ 'cron:', 'cron:' ] to have a length of 1 but got 2
+   ✓ from-zero onboarding independent issue report > refuses partial scope, incomplete cleanup, altered candidates, reused runs and infrastructure outcomes in both verifiers 9ms
+   ✓ from-zero onboarding independent issue report > bounds the summary before loading or parsing artifact content 1ms
+   ✓ from-zero onboarding independent issue report > never treats cleanup-stage failures as compatibility regressions, even when the summary claims one 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-onboarding-ci.test.ts > from-zero onboarding independent issue report > independently admits and deduplicates only a fully released repeated candidate failure
+AssertionError: expected [ 'cron:', 'cron:' ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ test/dsh-onboarding-ci.test.ts:198:45
+    196|     expect(report.workflow.split('  report:')[1]).not.toMatch(/checkou…
+    197|     expect(report.workflow).toContain('workflow_dispatch:');
+    198|     expect(report.workflow.match(/cron:/g)).toHaveLength(1);
+       |                                             ^
+    199|     expect(report.workflow).toMatch(/cron: '(?:[0-5]?\d) (?:[01]?\d|2[…
+    200|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 36 passed (37)
+   Start at  13:14:29
+   Duration  396ms (transform 153ms, setup 0ms, collect 217ms, tests 66ms, environment 0ms, prepare 176ms)
+

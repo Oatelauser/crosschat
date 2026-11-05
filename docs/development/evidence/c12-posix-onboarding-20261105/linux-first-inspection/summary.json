@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "tool": "dsh-onboarding",
+  "platform": "linux",
+  "arch": "x64",
+  "builds": {
+    "baseline": {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.2",
+      "url": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.2.tgz",
+      "integrity": "sha512-tvY+yhfKRifthbqPe/OK0AYxM5ZkvqfYq/jMYgJcEUxiRRL1Vwra3Ti5TB6AXgSWQdiPHYh/Vp6SJa9yHwMNuw=="
+    },
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.28.5",
+      "url": "https://registry.npmjs.org/pnpm/-/pnpm-11.28.5.tgz",
+      "integrity": "sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng=="
+    },
+    "candidate": {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.5",
+      "url": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.5.tgz",
+      "integrity": "sha512-WkyJZv4zl9sCAxSzRctGm58m0rilGqwR6pniBiLOz5CPDfHfDuAUicg0AAazXI7oj/Cph6/cjNTncA/rpLTXpw=="
+    }
+  },
+  "scope": {
+    "officialNpmRuntime": true,
+    "officialPluginManager": true,
+    "ordinaryWebSessions": true,
+    "scriptedLocalModel": true,
+    "skillLifecycle": true,
+    "diagnostics": true,
+    "tui": true,
+    "browserUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "installationCleanup": "retained",
+  "baseline": {
+    "schema": 1,
+    "tool": "dsh-onboarding",
+    "platform": "linux",
+    "arch": "x64",
+    "version": "0.2.1-rc.2",
+    "status": "failed",
+    "category": "infrastructure",
+    "stage": "probe-report",
+    "check": "probe-report",
+    "error": "The from-zero probe did not provide valid fresh process/report evidence; inspect its owned artifacts."
+  },
+  "retainedInstallation": {
+    "label": "baseline",
+    "version": "0.2.1-rc.2",
+    "root": "/tmp/crosschat-c12-onboarding-20261105-FjFOdG/tmp/crosschat-dsh-ci-Xbi1il/install-baseline",
+    "reason": "Owned runtime release is unknown; do not remove or start another build"
+  },
+  "error": "Owned runtime release is unknown; do not remove or start another build",
+  "classification": {
+    "kind": "infrastructure",
+    "notify": false
+  },
+  "retainedTaskRoot": "/tmp/crosschat-c12-onboarding-20261105-FjFOdG/tmp/crosschat-dsh-ci-Xbi1il",
+  "cleanupError": "An installer or runtime has unknown release state; the owned CI directory is retained",
+  "npmCache": {
+    "path": "/tmp/crosschat-c12-onboarding-20261105-FjFOdG/tmp/crosschat-dsh-ci-Xbi1il/npm-cache",
+    "external": false,
+    "disposition": "retained-with-task-root"
+  }
+}

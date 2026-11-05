@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "head": "ef8ef988a7d9e839e53d4644d46db4833cf15a5e",
+  "run": 41981774584,
+  "workflowConclusion": "success",
+  "jobs": [
+    {
+      "id": 127093271925,
+      "name": "check (macos-latest)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 127093272165,
+      "name": "check (ubuntu-latest)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 127093272203,
+      "name": "check (windows-latest)",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "warning": "Existing macOS continue-on-error makes run success despite one failed macOS job; inspect every job.",
+  "failure": "Timer-based late response resolved during bounded cleanup under delayed scheduling, so there was no undecided response at return.",
+  "controlledReproduction": "Original 150ms response/30ms budget retains the note normally. Blocking the parent 200ms inside fetch creates the hosted empty-note failure shape while the response is canceled and files remain absent. Production unchanged; does not prove that exact stall duration occurred on hosted runner.",
+  "probeCaveat": "The first probe snapshots body.locked immediately on its cancellation hook; the owner may not have completed releaseLock yet. The repaired test must observe release, not equate cancel-hook entry with completion.",
+  "artifacts": [
+    {
+      "file": "final-completed.json",
+      "bytes": 933,
+      "sha256": "aa079bbad5f37e2b92f7b857b791f1f6628fa45985664545388dbf84589eb387"
+    },
+    {
+      "file": "final-failure-report.json",
+      "bytes": 6535,
+      "sha256": "131d1922621a657d03ff2fdd903b8b838643fe24acbbb51c219b71ea77797ff6"
+    },
+    {
+      "file": "late-response-repro.mjs",
+      "bytes": 2416,
+      "sha256": "cadf3174420cdead97ef5771a55dfd0f7cf35cacca3a3e988b07167da8f03341"
+    },
+    {
+      "file": "late-response-repro.json",
+      "bytes": 761,
+      "sha256": "67d1b1f9b34cd36faaa0c44f2001e60275e4732f28e78d26423e3749b6af367d"
+    },
+    {
+      "file": "final-job-127093271925.txt",
+      "bytes": 88126,
+      "sha256": "a6a533f40135e70cbfe037780b0c33b984136b264f799cc389d4c2441c745c85"
+    },
+    {
+      "file": "final-job-127093272165.txt",
+      "bytes": 68681,
+      "sha256": "8a8865befac7ea6225057c6a1abd6eec67663f056146602a8f39f4c3cd103469"
+    },
+    {
+      "file": "final-job-127093272203.txt",
+      "bytes": 76367,
+      "sha256": "e5b93d497180f7e753a15b6f2c5a1905edd607b1b87d8a71d2acff4f9e82aca5"
+    }
+  ]
+}

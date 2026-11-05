@@ -2,13 +2,15 @@
 
 crosschat 通过官方 Host 插件桥发现并投递到 Harness 当前运行的根 Agent。它支持完整 ID、名称消歧、空闲唤醒、忙时 `queue/steer`、原生 shell 发信、会话回信，以及既有跨机器路由。无需把模型 API key 交给 crosschat。
 
-桥依赖上游的面集中在官方插件入口；crosschat client 使用自有 protocol=1。Harness 仍处预发布，实验宿主窗口为 `>=0.2.1-rc.2 <0.3.0-0`，窗口内的新版本仍需逐版行为验证。Windows 官方 npm `0.2.1-rc.2` 与 `0.2.1-rc.5` 已通过本地从零接入序列，覆盖 Web Host 普通交互会话、实际技能加载、收发、维护及诊断/TUI，见[本地证据](development/evidence/c11-dsh-20261104/validation.json)。这里的 Web Host 验收不包含浏览器聊天界面。
+桥依赖上游的面集中在官方插件入口；crosschat client 使用自有 protocol=1。Harness 仍处预发布，实验宿主窗口为 `>=0.2.1-rc.2 <0.3.0-0`，窗口内的新版本仍需逐版行为验证。Windows 官方 npm `0.2.1-rc.2` 与 `0.2.1-rc.5` 已通过本地及Windows托管从零接入序列，覆盖 Web Host 普通交互会话、实际技能加载、收发、维护、诊断/TUI及隔离清理，见[本地证据](development/evidence/c11-dsh-20261104/validation.json)与[托管六阶段运行](https://github.com/Oatelauser/crosschat/actions/runs/41947761724)。这里的 Web Host 验收不包含浏览器聊天界面或正式Desktop。
 
 正式 Windows Desktop `0.2.1-rc.2` 已用隔离 profile 和 loopback 模型桩验证真实 UI 收发、技能加载、原生来源及插件开关；固定包的测试观察器又核实了同一 UI 会话原生身份调用后的 Host 与主进程正常退出、本次桥登记撤销及聊天保留，见[退出证据](development/evidence/c04-natural-exit-20261104/validation.json)。该观察器尚未接入完整安装/卸载 CI，也不覆盖所有忙时退出或其它版本。用户保留 Desktop 安装，官方卸载未测；独立干净 runner、GitHub 托管首轮和 Linux/macOS 仍待验收。
 
 ## 安装桥
 
-Linux x64已在本机WSL、官方Node22.23.4下验证rc.2与rc.5各八项npm/Web通信及隔离清理，覆盖原生Bash身份、精确发现、queue/steer、完整回信与插件启停，见[Linux与平台候选记录](development/evidence/c12-dsh-platforms-20261105/validation.json)。这不是Linux六阶段从零接入、浏览器UI或正式Desktop验收；macOS两架构及新的托管矩阵仍待原生首验。首次候选下载失败与成功的独立复核均保留。
+Windows/Linux x64与macOS Intel/ARM已完成[四目标npm/Web通信托管首验](https://github.com/Oatelauser/crosschat/actions/runs/41961856141)：rc.2与rc.5每目标各八项通过，包含原生身份、精确发现、queue/steer、完整回信、插件启停及隔离清理。此范围不含浏览器聊天界面或正式Desktop。
+
+Windows/Linux x64与macOS Intel/ARM还已通过[四目标六阶段从零托管首验](https://github.com/Oatelauser/crosschat/actions/runs/41978059319)：每目标rc.2与rc.5各六阶段，覆盖实际skill加载、原生来源与双向回信、同源诊断/真实终端、更新、官方插件移除和crosschat卸载后的profile/聊天保留。四份artifact、八个独立运行身份及原生/登记/安装/缓存正常清理已核对，无强停或兼容性重试，见[托管证据](development/evidence/c12-onboarding-hosted-20261105/native-validation.json)。Linux本机WSL的[六阶段证据](development/evidence/c12-posix-onboarding-20261105/linux-short-verification.json)另行保留。浏览器UI、正式Desktop完整生命周期、真实定时事件与其它版本不计为本次通过；历史失败及边界保留在[本轮说明](development/evidence/c12-posix-onboarding-20261105/review.md)。
 
 先按[官方指引](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/apps/cli/README.md)安装 Harness 及其插件管理所需的 pnpm，并安装本次开发版本的 crosschat。确认 `crosschat dsh-bridge-path` 能输出实际存在的 bundle 目录。
 

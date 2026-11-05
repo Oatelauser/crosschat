@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "redCheckpoint": "0ad2d1e",
+  "failedHostedRun": 41981774584,
+  "failedHostedHead": "ef8ef988a7d9e839e53d4644d46db4833cf15a5e",
+  "testFile": "test/dsh-compat-ci.test.ts",
+  "testBlob": "e455ef6b440c4793b44e529e32d1ce8d7af2ccb7",
+  "scope": "Hold response headers until after product return; assert original deadline and undecided note, then release in finally and await cancellation plus actual unlocked body. Exercise normal scheduling and a 200ms parent stall. Production unchanged.",
+  "targeted": {
+    "passed": 126,
+    "exit": 0
+  },
+  "full": {
+    "node": "22.23.4",
+    "passed": 2828,
+    "skipped": 11,
+    "filesPassed": 240,
+    "filesSkipped": 3,
+    "exit": 0,
+    "lint": true,
+    "build": true,
+    "importGraph": {
+      "modules": 204,
+      "edges": 689
+    }
+  },
+  "nativeSourceAndWorkflowBlobsUnchanged": 10,
+  "srcAndPackageFilesUnchanged": true,
+  "hostedOrdinaryAfterPatch": "Not yet run; verify actual new head after push.",
+  "artifacts": [
+    {
+      "file": "late-targeted-green.txt",
+      "bytes": 22059,
+      "sha256": "aa5eb65182cc219cb5d6605408c4c159724921370839c337fa99224ab80d28eb"
+    },
+    {
+      "file": "late-stall-targeted-green.txt",
+      "bytes": 22299,
+      "sha256": "b9d34277f51c1ef7c2c119fcf6e050aa3d7734f988b0475f13419cde6682feba"
+    },
+    {
+      "file": "late-full-check.txt",
+      "bytes": 32006,
+      "sha256": "a171f178e32384e183edf6c42b3006edf5f428877910ba09621d0b805be046a7"
+    },
+    {
+      "file": "late-response-fix.patch",
+      "bytes": 2450,
+      "sha256": "5f28daf07d8bbcc630a450c926c21d19d59d52967d0d2b642185ea70c8c6a42b"
+    }
+  ]
+}

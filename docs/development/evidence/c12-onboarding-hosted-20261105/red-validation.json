@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "head": "0d0f91a81bbb7264cd2bca830013d64b40fa2c0a",
+  "ordinaryRun": 41977889894,
+  "attempt": 1,
+  "windows": {
+    "passed": 2826,
+    "failed": 1,
+    "skipped": 11,
+    "failure": "Real native signature test exceeded outer Vitest 5000ms; operation helper also uses 5000ms."
+  },
+  "ubuntu": {
+    "passed": 2822,
+    "failed": 0,
+    "skipped": 16
+  },
+  "macos": {
+    "passed": 2821,
+    "failed": 1,
+    "skipped": 16,
+    "failure": "Timeout/reap completion lost race against outer 250ms guard."
+  },
+  "localSignature": "Unchanged test passed in 327ms on Windows Node22.23.4; hosted delay root cause not established.",
+  "probeCaveat": "Initial timing probe posts a ready message even in its unready control: Error outcomes in that arm are malformed diagnostic payloads, not the original bug. Preserve as exploratory evidence only; no hosted root-cause claim.",
+  "artifacts": [
+    {
+      "file": "ordinary-completed.json",
+      "bytes": 750,
+      "sha256": "638c77a40ce425df3b5a656729906ff06ddbd8e531749a4aef45a15d1b8e3669"
+    },
+    {
+      "file": "ordinary-job-127080925760.txt",
+      "bytes": 99438,
+      "sha256": "b09748c7039a35ede0f4fc121713f68a7251737bf5ba27fbfc6c2dc77070b8ea"
+    },
+    {
+      "file": "ordinary-job-127080925956.txt",
+      "bytes": 68472,
+      "sha256": "c6e5d870391ba0be1c23db6ac00cecf67f09aaf74ca06444021e94c7f8fee423"
+    },
+    {
+      "file": "ordinary-job-127080926005.txt",
+      "bytes": 76430,
+      "sha256": "04e6d931f4efaaaf3da3a0b2a00ff9cd10859a42dbc11a3273a30a5f42f3aaa1"
+    },
+    {
+      "file": "signature-before.txt",
+      "bytes": 18274,
+      "sha256": "d337d59e53ef17b67cc3cb1abd808abed530c9a4d3bd3fc2847dd8d311b48ea3"
+    },
+    {
+      "file": "timing-probe.mjs",
+      "bytes": 1473,
+      "sha256": "86f4b520f5f0953cb94fff103c6cbfd04708a9f0f40fc755565b4cd6d4d4a0e5"
+    },
+    {
+      "file": "timing-probe.json",
+      "bytes": 2385,
+      "sha256": "385114a80d6aef5bf2a6fc548f6814eac2cf669f9a0703977d2d99a7f1810411"
+    }
+  ]
+}

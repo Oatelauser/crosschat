@@ -1,0 +1,10 @@
+{"platform":"linux","node":"v22.14.0","first":{"bytes":153,"status":"listening"},"second":{"bytes":154,"status":"error","code":"EADDRINUSE"},"existingDirectoryPrefix":{"bytes":125,"status":"listening"},"short":{"bytes":32,"status":"listening"},"scope":"Only fixture-owned UNIX sockets; no TCP state locks or user data"}
+file:///mnt/d/workspace/CC/cc-dsh-onboarding-posix-20261105/node_modules/.cache/c12-posix-pty-20261105/socket-repro.mjs:17
+if(result.first.status!=='listening'||result.second.code!=='EADDRINUSE'||result.existingDirectoryPrefix.code!=='EADDRINUSE'||result.short.status!=='listening')throw new Error('Socket-length hypothesis not reproduced');
+                                                                                                                                                                     ^
+
+Error: Socket-length hypothesis not reproduced
+    at file:///mnt/d/workspace/CC/cc-dsh-onboarding-posix-20261105/node_modules/.cache/c12-posix-pty-20261105/socket-repro.mjs:17:166
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+
+Node.js v22.14.0

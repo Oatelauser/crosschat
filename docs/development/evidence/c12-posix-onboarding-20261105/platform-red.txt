@@ -1,0 +1,289 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test --maxWorkers=2 --minWorkers=1 test/dsh-onboarding-platform.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-onboarding-posix-20261105
+
+ ❯ test/dsh-onboarding-platform.test.ts (15 tests | 14 failed) 32ms
+   × from-zero evidence binds the expected native target > accepts a complete fresh {"platform":"linux","arch":"x64"} report only for its explicit target 6ms
+     → expected false to be true // Object.is equality
+   × from-zero evidence binds the expected native target > accepts a complete fresh {"platform":"darwin","arch":"x64"} report only for its explicit target 0ms
+     → expected false to be true // Object.is equality
+   × from-zero evidence binds the expected native target > accepts a complete fresh {"platform":"darwin","arch":"arm64"} report only for its explicit target 0ms
+     → expected false to be true // Object.is equality
+   ✓ from-zero evidence binds the expected native target > preserves the Windows default and rejects unplanned axes 0ms
+   × from-zero evidence binds the expected native target > accepts only a fresh {"platform":"linux","arch":"x64"} child and retains its actual target on invalid evidence 8ms
+     → expected { schema: 1, …(9) } to match object { Object (platform, arch, ...) }
+(7 matching properties omitted from actual)
+   × from-zero evidence binds the expected native target > accepts only a fresh {"platform":"darwin","arch":"x64"} child and retains its actual target on invalid evidence 4ms
+     → expected { schema: 1, …(9) } to match object { platform: 'darwin', …(2) }
+(7 matching properties omitted from actual)
+   × from-zero evidence binds the expected native target > accepts only a fresh {"platform":"darwin","arch":"arm64"} child and retains its actual target on invalid evidence 3ms
+     → expected { schema: 1, …(9) } to match object { platform: 'darwin', …(2) }
+(7 matching properties omitted from actual)
+   × from-zero evidence binds the expected native target > snapshots the target before awaiting a fresh child 4ms
+     → expected { schema: 1, …(9) } to match object { platform: 'darwin', …(2) }
+(7 matching properties omitted from actual)
+   × from-zero evidence binds the expected native target > serializes {"platform":"linux","arch":"x64"} baseline/candidate using the same release owner 1ms
+     → expected { schema: 1, …(10) } to match object { Object (platform, arch, ...) }
+(33 matching properties omitted from actual)
+   × from-zero evidence binds the expected native target > serializes {"platform":"darwin","arch":"x64"} baseline/candidate using the same release owner 1ms
+     → expected { schema: 1, …(10) } to match object { platform: 'darwin', …(3) }
+(33 matching properties omitted from actual)
+   × from-zero evidence binds the expected native target > serializes {"platform":"darwin","arch":"arm64"} baseline/candidate using the same release owner 0ms
+     → expected { schema: 1, …(10) } to match object { platform: 'darwin', …(3) }
+(33 matching properties omitted from actual)
+   × from-zero evidence binds the expected native target > stops without removal or a second install when the target identity is wrong 1ms
+     → expected { schema: 1, …(9) } to match object { Object (platform, arch, ...) }
+(57 matching properties omitted from actual)
+   × from-zero regression reports stay separate per OS and architecture > recognizes only independently repeated and fully released {"platform":"linux","arch":"x64"} failures 1ms
+     → expected undefined to be '<!-- dsh-onboarding-compat:0.2.2:linu…' // Object.is equality
+   × from-zero regression reports stay separate per OS and architecture > recognizes only independently repeated and fully released {"platform":"darwin","arch":"x64"} failures 0ms
+     → expected undefined to be '<!-- dsh-onboarding-compat:0.2.2:darw…' // Object.is equality
+   × from-zero regression reports stay separate per OS and architecture > recognizes only independently repeated and fully released {"platform":"darwin","arch":"arm64"} failures 0ms
+     → expected undefined to be '<!-- dsh-onboarding-compat:0.2.2:darw…' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 14 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-onboarding-platform.test.ts > from-zero evidence binds the expected native target > accepts a complete fresh {"platform":"linux","arch":"x64"} report only for its explicit target
+ FAIL  test/dsh-onboarding-platform.test.ts > from-zero evidence binds the expected native target > accepts a complete fresh {"platform":"darwin","arch":"x64"} report only for its explicit target
+ FAIL  test/dsh-onboarding-platform.test.ts > from-zero evidence binds the expected native target > accepts a complete fresh {"platform":"darwin","arch":"arm64"} report only for its explicit target
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ test/dsh-onboarding-platform.test.ts:25:78
+     23|   it.each(targets)('accepts a complete fresh %j report only for its ex…
+     24|     const report = passed(target);
+     25|     expect(validDshOnboardingReport(report, artifact, report.runId, ta…
+       |                                                                              ^
+     26|     expect(validDshOnboardingProcessReport(report, artifact, target)).…
+     27|     expect(validDshOnboardingReport(report, artifact, report.runId)).t…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/14]⎯
+
+ FAIL  test/dsh-onboarding-platform.test.ts > from-zero evidence binds the expected native target > accepts only a fresh {"platform":"linux","arch":"x64"} child and retains its actual target on invalid evidence
+AssertionError: expected { schema: 1, …(9) } to match object { Object (platform, arch, ...) }
+(7 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "arch": "x64",
+-   "platform": "linux",
+-   "status": "passed",
++   "platform": "win32",
++   "status": "failed",
+  }
+
+ ❯ test/dsh-onboarding-platform.test.ts:43:20
+     41|       await writeFile(reportPath, JSON.stringify(passed(target, artifa…
+     42|     });
+     43|     expect(result).toMatchObject({ ...target, status: 'passed' });
+       |                    ^
+     44|     const wrong = await runDshOnboardingAttempt({ output, label: 'cand…
+     45|       await writeFile(reportPath, JSON.stringify(passed(windows, artif…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/14]⎯
+
+ FAIL  test/dsh-onboarding-platform.test.ts > from-zero evidence binds the expected native target > accepts only a fresh {"platform":"darwin","arch":"x64"} child and retains its actual target on invalid evidence
+ FAIL  test/dsh-onboarding-platform.test.ts > from-zero evidence binds the expected native target > accepts only a fresh {"platform":"darwin","arch":"arm64"} child and retains its actual target on invalid evidence
+AssertionError: expected { schema: 1, …(9) } to match object { platform: 'darwin', …(2) }
+(7 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "arch": "x64",
+-   "platform": "darwin",
+-   "status": "passed",
++   "platform": "win32",
++   "status": "failed",
+  }
+
+ ❯ test/dsh-onboarding-platform.test.ts:43:20
+     41|       await writeFile(reportPath, JSON.stringify(passed(target, artifa…
+     42|     });
+     43|     expect(result).toMatchObject({ ...target, status: 'passed' });
+       |                    ^
+     44|     const wrong = await runDshOnboardingAttempt({ output, label: 'cand…
+     45|       await writeFile(reportPath, JSON.stringify(passed(windows, artif…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/14]⎯
+
+ FAIL  test/dsh-onboarding-platform.test.ts > from-zero evidence binds the expected native target > snapshots the target before awaiting a fresh child
+AssertionError: expected { schema: 1, …(9) } to match object { platform: 'darwin', …(2) }
+(7 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "arch": "arm64",
+-   "platform": "darwin",
+-   "status": "passed",
++   "arch": "x64",
++   "platform": "win32",
++   "status": "failed",
+  }
+
+ ❯ test/dsh-onboarding-platform.test.ts:57:20
+     55|       target.arch = 'x64'; await writeFile(reportPath, JSON.stringify(…
+     56|     });
+     57|     expect(result).toMatchObject({ platform: 'darwin', arch: 'arm64', …
+       |                    ^
+     58|   });
+     59| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/14]⎯
+
+ FAIL  test/dsh-onboarding-platform.test.ts > from-zero evidence binds the expected native target > serializes {"platform":"linux","arch":"x64"} baseline/candidate using the same release owner
+AssertionError: expected { schema: 1, …(10) } to match object { Object (platform, arch, ...) }
+(33 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "arch": "x64",
+    "classification": {
+-     "kind": "compatible",
++     "kind": "infrastructure",
+      "notify": false,
+    },
+-   "installationCleanup": "removed",
+-   "platform": "linux",
++   "installationCleanup": "incomplete",
++   "platform": "win32",
+  }
+
+ ❯ test/dsh-onboarding-platform.test.ts:67:20
+     65|       async remove(_installation: unknown, _build: typeof artifact, la…
+     66|     }, target);
+     67|     expect(result).toMatchObject({ ...target, classification: { kind: …
+       |                    ^
+     68|     expect(events).toEqual(['install:baseline', 'probe:baseline', 'rem…
+     69|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/14]⎯
+
+ FAIL  test/dsh-onboarding-platform.test.ts > from-zero evidence binds the expected native target > serializes {"platform":"darwin","arch":"x64"} baseline/candidate using the same release owner
+ FAIL  test/dsh-onboarding-platform.test.ts > from-zero evidence binds the expected native target > serializes {"platform":"darwin","arch":"arm64"} baseline/candidate using the same release owner
+AssertionError: expected { schema: 1, …(10) } to match object { platform: 'darwin', …(3) }
+(33 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "arch": "x64",
+    "classification": {
+-     "kind": "compatible",
++     "kind": "infrastructure",
+      "notify": false,
+    },
+-   "installationCleanup": "removed",
+-   "platform": "darwin",
++   "installationCleanup": "incomplete",
++   "platform": "win32",
+  }
+
+ ❯ test/dsh-onboarding-platform.test.ts:67:20
+     65|       async remove(_installation: unknown, _build: typeof artifact, la…
+     66|     }, target);
+     67|     expect(result).toMatchObject({ ...target, classification: { kind: …
+       |                    ^
+     68|     expect(events).toEqual(['install:baseline', 'probe:baseline', 'rem…
+     69|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/14]⎯
+
+ FAIL  test/dsh-onboarding-platform.test.ts > from-zero evidence binds the expected native target > stops without removal or a second install when the target identity is wrong
+AssertionError: expected { schema: 1, …(9) } to match object { Object (platform, arch, ...) }
+(57 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "arch": "x64",
+    "baseline": {
+      "arch": "x64",
+-     "category": "infrastructure",
+-     "platform": "linux",
++     "category": null,
++     "platform": "win32",
+    },
+    "classification": {
+-     "kind": "infrastructure",
++     "kind": "compatible",
+      "notify": false,
+    },
+-   "installationCleanup": "incomplete",
+-   "platform": "linux",
++   "installationCleanup": "removed",
++   "platform": "win32",
+  }
+
+ ❯ test/dsh-onboarding-platform.test.ts:78:20
+     76|       async remove() { events.push('remove'); },
+     77|     }, target);
+     78|     expect(result).toMatchObject({ ...target, classification: { kind: …
+       |                    ^
+     79|     expect(events).toEqual(['install', 'probe']);
+     80|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/14]⎯
+
+ FAIL  test/dsh-onboarding-platform.test.ts > from-zero regression reports stay separate per OS and architecture > recognizes only independently repeated and fully released {"platform":"linux","arch":"x64"} failures
+AssertionError: expected undefined to be '<!-- dsh-onboarding-compat:0.2.2:linu…' // Object.is equality
+
+- Expected: 
+"<!-- dsh-onboarding-compat:0.2.2:linux-x64:native-skill-load-and-current-source -->"
+
++ Received: 
+undefined
+
+ ❯ test/dsh-onboarding-platform.test.ts:92:62
+     90|       builds: { baseline, candidate, packageManager: manifest(pinned.p…
+     91|     const expected = `<!-- dsh-onboarding-compat:0.2.2:${target.platfo…
+     92|     expect(dshOnboardingRegressionIdentity(summary)?.marker).toBe(expe…
+       |                                                              ^
+     93|     expect(dshOnboardingRegressionIdentity({ ...summary, retry: { ...s…
+     94|     expect(dshOnboardingRegressionIdentity({ ...summary, retry: { ...s…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/14]⎯
+
+ FAIL  test/dsh-onboarding-platform.test.ts > from-zero regression reports stay separate per OS and architecture > recognizes only independently repeated and fully released {"platform":"darwin","arch":"x64"} failures
+ FAIL  test/dsh-onboarding-platform.test.ts > from-zero regression reports stay separate per OS and architecture > recognizes only independently repeated and fully released {"platform":"darwin","arch":"arm64"} failures
+AssertionError: expected undefined to be '<!-- dsh-onboarding-compat:0.2.2:darw…' // Object.is equality
+
+- Expected: 
+"<!-- dsh-onboarding-compat:0.2.2:darwin-x64:native-skill-load-and-current-source -->"
+
++ Received: 
+undefined
+
+ ❯ test/dsh-onboarding-platform.test.ts:92:62
+     90|       builds: { baseline, candidate, packageManager: manifest(pinned.p…
+     91|     const expected = `<!-- dsh-onboarding-compat:0.2.2:${target.platfo…
+     92|     expect(dshOnboardingRegressionIdentity(summary)?.marker).toBe(expe…
+       |                                                              ^
+     93|     expect(dshOnboardingRegressionIdentity({ ...summary, retry: { ...s…
+     94|     expect(dshOnboardingRegressionIdentity({ ...summary, retry: { ...s…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/14]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  14 failed | 1 passed (15)
+   Start at  13:02:35
+   Duration  351ms (transform 89ms, setup 0ms, collect 116ms, tests 32ms, environment 0ms, prepare 77ms)
+

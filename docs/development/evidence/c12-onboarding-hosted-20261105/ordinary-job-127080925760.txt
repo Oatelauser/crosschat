@@ -1,0 +1,690 @@
+﻿2026-11-05T06:03:39.1560311Z Current runner version: '2.338.2'
+2026-11-05T06:03:39.1586751Z ##[group]Runner Image Provisioner
+2026-11-05T06:03:39.1587674Z Hosted Compute Agent
+2026-11-05T06:03:39.1588245Z Version: 20261021.618
+2026-11-05T06:03:39.1588830Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-11-05T06:03:39.1589506Z Build Date: 2026-10-21T00:45:21Z
+2026-11-05T06:03:39.1590192Z Worker ID: {fd44a056-3964-40a9-9daa-cba8f2478535}
+2026-11-05T06:03:39.1590842Z Region: westus
+2026-11-05T06:03:39.1591321Z Cloud: Azure
+2026-11-05T06:03:39.1591828Z ##[endgroup]
+2026-11-05T06:03:39.1593276Z ##[group]Operating System
+2026-11-05T06:03:39.1594216Z Microsoft Windows Server 2025
+2026-11-05T06:03:39.1594796Z 10.0.26100
+2026-11-05T06:03:39.1595284Z Datacenter
+2026-11-05T06:03:39.1595774Z ##[endgroup]
+2026-11-05T06:03:39.1596277Z ##[group]Runner Image
+2026-11-05T06:03:39.1596818Z Image: windows-2025-vs2026
+2026-11-05T06:03:39.1597384Z Version: 20261030.294.1
+2026-11-05T06:03:39.1599132Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20261030.294/images/windows/Windows2025-VS2026-Readme.md
+2026-11-05T06:03:39.1600775Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20261030.294
+2026-11-05T06:03:39.1601710Z ##[endgroup]
+2026-11-05T06:03:39.1602858Z ##[group]GITHUB_TOKEN Permissions
+2026-11-05T06:03:39.1604660Z Contents: read
+2026-11-05T06:03:39.1605239Z Metadata: read
+2026-11-05T06:03:39.1605741Z Packages: read
+2026-11-05T06:03:39.1606301Z ##[endgroup]
+2026-11-05T06:03:39.1608373Z Secret source: Actions
+2026-11-05T06:03:39.1609254Z Cache mode: write
+2026-11-05T06:03:39.1609914Z Prepare workflow directory
+2026-11-05T06:03:39.1981840Z Prepare all required actions
+2026-11-05T06:03:39.2030263Z Getting action download info
+2026-11-05T06:03:39.5420789Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-11-05T06:03:39.6787442Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-11-05T06:03:39.9890004Z Complete job name: check (windows-latest)
+2026-11-05T06:03:40.1718768Z ##[group]Run actions/checkout@v4
+2026-11-05T06:03:40.1719875Z with:
+2026-11-05T06:03:40.1720359Z   repository: Oatelauser/crosschat
+2026-11-05T06:03:40.1724775Z   token: ***
+2026-11-05T06:03:40.1725261Z   ssh-strict: true
+2026-11-05T06:03:40.1725741Z   ssh-user: git
+2026-11-05T06:03:40.1726213Z   persist-credentials: true
+2026-11-05T06:03:40.1726733Z   clean: true
+2026-11-05T06:03:40.1727215Z   sparse-checkout-cone-mode: true
+2026-11-05T06:03:40.1727779Z   fetch-depth: 1
+2026-11-05T06:03:40.1728252Z   fetch-tags: false
+2026-11-05T06:03:40.1729189Z   show-progress: true
+2026-11-05T06:03:40.1729697Z   lfs: false
+2026-11-05T06:03:40.1730142Z   submodules: false
+2026-11-05T06:03:40.1730627Z   set-safe-directory: true
+2026-11-05T06:03:40.1731177Z   allow-unsafe-pr-checkout: false
+2026-11-05T06:03:40.1732033Z ##[endgroup]
+2026-11-05T06:03:40.3324825Z Syncing repository: Oatelauser/crosschat
+2026-11-05T06:03:40.3326968Z ##[group]Getting Git version info
+2026-11-05T06:03:40.3327800Z Working directory is 'D:\a\crosschat\crosschat'
+2026-11-05T06:03:40.4357329Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-05T06:03:40.8161889Z git version 2.56.0.windows.4
+2026-11-05T06:03:40.8219731Z ##[endgroup]
+2026-11-05T06:03:40.8240993Z Temporarily overriding HOME='D:\a\_temp\58d9ef6e-398e-46d3-bce7-82f8fbda3c35' before making global git config changes
+2026-11-05T06:03:40.8242563Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-05T06:03:40.8252450Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\crosschat\crosschat
+2026-11-05T06:03:40.8913417Z Deleting the contents of 'D:\a\crosschat\crosschat'
+2026-11-05T06:03:40.8919978Z ##[group]Initializing the repository
+2026-11-05T06:03:40.8928948Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\crosschat\crosschat
+2026-11-05T06:03:40.9986716Z Initialized empty Git repository in D:/a/crosschat/crosschat/.git/
+2026-11-05T06:03:41.0033919Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/Oatelauser/crosschat
+2026-11-05T06:03:41.0704598Z ##[endgroup]
+2026-11-05T06:03:41.0705941Z ##[group]Disabling automatic garbage collection
+2026-11-05T06:03:41.0713009Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-11-05T06:03:41.1100571Z ##[endgroup]
+2026-11-05T06:03:41.1102189Z ##[group]Setting up auth
+2026-11-05T06:03:41.1113367Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-05T06:03:41.1520207Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-05T06:03:42.7774130Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-05T06:03:42.8181305Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-05T06:03:43.3976094Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-05T06:03:43.4380698Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-05T06:03:44.0135673Z [command]"C:\Program Files\Git\bin\git.exe" config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+2026-11-05T06:03:44.0543889Z ##[endgroup]
+2026-11-05T06:03:44.0544729Z ##[group]Fetching the repository
+2026-11-05T06:03:44.0557672Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +ee82404f45a43e54eaaad38d48fb78c7e5edb54d:refs/remotes/pull/4/merge
+2026-11-05T06:03:45.7861549Z From https://github.com/Oatelauser/crosschat
+2026-11-05T06:03:45.7862969Z  * [new ref]         ee82404f45a43e54eaaad38d48fb78c7e5edb54d -> pull/4/merge
+2026-11-05T06:03:45.7899797Z ##[endgroup]
+2026-11-05T06:03:45.7900550Z ##[group]Determining the checkout info
+2026-11-05T06:03:45.7904467Z ##[endgroup]
+2026-11-05T06:03:45.7912856Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-11-05T06:03:45.8514504Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-11-05T06:03:45.8907464Z ##[group]Checking out the ref
+2026-11-05T06:03:45.8917677Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force refs/remotes/pull/4/merge
+2026-11-05T06:03:46.4026863Z Note: switching to 'refs/remotes/pull/4/merge'.
+2026-11-05T06:03:46.4027456Z 
+2026-11-05T06:03:46.4028314Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-11-05T06:03:46.4030642Z changes and commit them, and you can discard any commits you make in this
+2026-11-05T06:03:46.4031239Z state without impacting any branches by switching back to a branch.
+2026-11-05T06:03:46.4031546Z 
+2026-11-05T06:03:46.4031752Z If you want to create a new branch to retain commits you create, you may
+2026-11-05T06:03:46.4032593Z do so (now or later) by using -c with the switch command. Example:
+2026-11-05T06:03:46.4032885Z 
+2026-11-05T06:03:46.4033067Z   git switch -c <new-branch-name>
+2026-11-05T06:03:46.4033304Z 
+2026-11-05T06:03:46.4033410Z Or undo this operation with:
+2026-11-05T06:03:46.4033607Z 
+2026-11-05T06:03:46.4033774Z   git switch -
+2026-11-05T06:03:46.4033900Z 
+2026-11-05T06:03:46.4034114Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-11-05T06:03:46.4034428Z 
+2026-11-05T06:03:46.4034767Z HEAD is now at ee82404 Merge 0d0f91a81bbb7264cd2bca830013d64b40fa2c0a into a1e6464bd6eb28f12f51609cd637dd8518c5222b
+2026-11-05T06:03:46.4115807Z ##[endgroup]
+2026-11-05T06:03:46.4621140Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-11-05T06:03:46.4974718Z ee82404f45a43e54eaaad38d48fb78c7e5edb54d
+2026-11-05T06:03:46.5475857Z ##[group]Run actions/setup-node@v4
+2026-11-05T06:03:46.5476194Z with:
+2026-11-05T06:03:46.5476385Z   node-version: 22
+2026-11-05T06:03:46.5476605Z   always-auth: false
+2026-11-05T06:03:46.5476817Z   check-latest: false
+2026-11-05T06:03:46.5479809Z   token: ***
+2026-11-05T06:03:46.5480019Z ##[endgroup]
+2026-11-05T06:03:46.7464208Z Found in cache @ C:\hostedtoolcache\windows\node\22.23.4\x64
+2026-11-05T06:03:46.7471499Z (node:1956) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-05T06:03:46.7472324Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-05T06:03:46.7474883Z ##[group]Environment details
+2026-11-05T06:03:52.0828828Z node: v22.23.4
+2026-11-05T06:03:52.0829115Z npm: 10.9.9
+2026-11-05T06:03:52.0829301Z yarn: 1.22.22
+2026-11-05T06:03:52.0829858Z ##[endgroup]
+2026-11-05T06:03:52.1140569Z ##[group]Run npm ci
+2026-11-05T06:03:52.1141118Z [36;1mnpm ci[0m
+2026-11-05T06:03:52.1979539Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-05T06:03:52.1980041Z ##[endgroup]
+2026-11-05T06:04:40.6215938Z 
+2026-11-05T06:04:40.6225178Z added 202 packages, and audited 203 packages in 48s
+2026-11-05T06:04:40.6225656Z 
+2026-11-05T06:04:40.6225947Z 77 packages are looking for funding
+2026-11-05T06:04:40.6226437Z   run `npm fund` for details
+2026-11-05T06:04:40.8027351Z 
+2026-11-05T06:04:40.8028490Z 11 vulnerabilities (8 moderate, 1 high, 2 critical)
+2026-11-05T06:04:40.8028881Z 
+2026-11-05T06:04:40.8029139Z To address issues that do not require attention, run:
+2026-11-05T06:04:40.8029556Z   npm audit fix
+2026-11-05T06:04:40.8029709Z 
+2026-11-05T06:04:40.8029970Z To address all issues (including breaking changes), run:
+2026-11-05T06:04:40.8030437Z   npm audit fix --force
+2026-11-05T06:04:40.8030614Z 
+2026-11-05T06:04:40.8030828Z Run `npm audit` for details.
+2026-11-05T06:04:42.3276098Z ##[group]Run npm run check
+2026-11-05T06:04:42.3276509Z [36;1mnpm run check[0m
+2026-11-05T06:04:42.3349464Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-05T06:04:42.3349856Z ##[endgroup]
+2026-11-05T06:04:43.0939032Z 
+2026-11-05T06:04:43.0939999Z > @oatelauser/crosschat@1.13.1 check
+2026-11-05T06:04:43.0940890Z > npm run lint && npm run check:imports && npm run build && npm test
+2026-11-05T06:04:43.0941399Z 
+2026-11-05T06:04:43.3997846Z 
+2026-11-05T06:04:43.3998605Z > @oatelauser/crosschat@1.13.1 lint
+2026-11-05T06:04:43.3999016Z > eslint src test
+2026-11-05T06:04:43.3999180Z 
+2026-11-05T06:05:04.2424618Z 
+2026-11-05T06:05:04.2426388Z > @oatelauser/crosschat@1.13.1 check:imports
+2026-11-05T06:05:04.2427031Z > node scripts/runtime-import-graph.mjs
+2026-11-05T06:05:04.2427372Z 
+2026-11-05T06:05:05.6266806Z Runtime import graph: 204 modules, 689 edges; no cycles or boundary violations.
+2026-11-05T06:05:05.9477194Z 
+2026-11-05T06:05:05.9478013Z > @oatelauser/crosschat@1.13.1 build
+2026-11-05T06:05:05.9478557Z > tsc
+2026-11-05T06:05:05.9478749Z 
+2026-11-05T06:05:19.4860983Z 
+2026-11-05T06:05:19.4861747Z > @oatelauser/crosschat@1.13.1 test
+2026-11-05T06:05:19.4862477Z > vitest run --dir test
+2026-11-05T06:05:19.4862761Z 
+2026-11-05T06:05:20.7265486Z 
+2026-11-05T06:05:20.7270323Z [1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mD:/a/crosschat/crosschat[39m
+2026-11-05T06:05:20.7270740Z 
+2026-11-05T06:05:36.2254659Z  [32m✓[39m test/serve-sessions.test.ts [2m([22m[2m37 tests[22m[2m)[22m[33m 13321[2mms[22m[39m
+2026-11-05T06:05:36.2259429Z    [33m[2m✓[22m[39m 018 NodeClient 聚合器：attach IPC / 重播 / 双活性[2m > [22m028 claude 活性：扫描核验——死 claude 成员转下线（教学）、活成员续投 [33m 557[2mms[22m[39m
+2026-11-05T06:05:36.2263815Z    [33m[2m✓[22m[39m 018 NodeClient 聚合器：attach IPC / 重播 / 双活性[2m > [22mC14 Codex 活性：核实实际 CLI 端点后续投，原生不存在的同类成员转下线 [33m 589[2mms[22m[39m
+2026-11-05T06:05:36.2267336Z    [33m[2m✓[22m[39m 018 NodeClient 聚合器：attach IPC / 重播 / 双活性[2m > [22m029 临时成员异常死亡：对账验死报 member-remove 清册零痕迹（不留下线态） [33m 1487[2mms[22m[39m
+2026-11-05T06:05:36.2270631Z    [33m[2m✓[22m[39m 018 NodeClient 聚合器：attach IPC / 重播 / 双活性[2m > [22mdelegates name following to a third provider without reviving a released manual membership [33m 2568[2mms[22m[39m
+2026-11-05T06:05:36.2274293Z    [33m[2m✓[22m[39m 018 NodeClient 聚合器：attach IPC / 重播 / 双活性[2m > [22mleaves temporary members declared when provider liveness is unknown [33m 1073[2mms[22m[39m
+2026-11-05T06:05:36.2288674Z    [33m[2m✓[22m[39m C14 broker: explicit recipient tools and literal session names[2m > [22mselects same-name members independently by explicit tool and full native ID [33m 744[2mms[22m[39m
+2026-11-05T06:05:36.2302157Z    [33m[2m✓[22m[39m C14 broker: explicit recipient tools and literal session names[2m > [22mkeeps cross-tool successor lineages independent and teaches explicit tool commands [33m 387[2mms[22m[39m
+2026-11-05T06:05:36.2308153Z    [33m[2m✓[22m[39m 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove[2m > [22m重声明保留星端原属性；临时清理只接受归属节点的精确临时 ID [33m 836[2mms[22m[39m
+2026-11-05T06:05:36.2313695Z    [33m[2m✓[22m[39m 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove[2m > [22m028 下线成员随 roster 帧下发（offlineSessions 单列；sessions 保持活成员语义） [33m 430[2mms[22m[39m
+2026-11-05T06:05:36.2317127Z    [33m[2m✓[22m[39m 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove[2m > [22mextends 胜复活：接任后原会话同 id 回归不夺回（名字剥离教学；id8 点对点直达） [33m 345[2mms[22m[39m
+2026-11-05T06:05:36.2323403Z    [33m[2m✓[22m[39m 018 9b：老 broker（proto:1）降级的协议侧[2m > [22mconnect 携带 caps；info.caps 缺端点能力时拒绝类型化 attach，且不发 sessions 帧 [33m 346[2mms[22m[39m
+2026-11-05T06:05:37.2554600Z  [32m✓[39m test/send-command.test.ts [2m([22m[2m57 tests[22m[2m)[22m[33m 461[2mms[22m[39m
+2026-11-05T06:05:39.2648570Z  [32m✓[39m test/session-star.test.ts [2m([22m[2m40 tests[22m[2m)[22m[33m 15443[2mms[22m[39m
+2026-11-05T06:05:39.2652907Z    [33m[2m✓[22m[39m 018 批二：启动器入星链路[2m > [22mattach 拒绝：stderr 显示聚合器返回的具体原因和日志完整路径，错误落日志并正常收线 [33m 1070[2mms[22m[39m
+2026-11-05T06:05:39.2654369Z    [33m[2m✓[22m[39m 018 批二：启动器入星链路[2m > [22m成功日志写入抛异常：已入星会话仍可直达，不显示入星失败 [33m 1591[2mms[22m[39m
+2026-11-05T06:05:39.2655872Z    [33m[2m✓[22m[39m 018 批二：启动器入星链路[2m > [22mspawn 会话→自动拉聚合器→attach→三段直达；退出即 detach [33m 3145[2mms[22m[39m
+2026-11-05T06:05:39.2657427Z    [33m[2m✓[22m[39m 018 批二：启动器入星链路[2m > [22m多星：--connect 可重复，两会话成员表各自 attach（win 带杠 mid 形态） [33m 1604[2mms[22m[39m
+2026-11-05T06:05:39.2658746Z    [33m[2m✓[22m[39m 018 批二：启动器入星链路[2m > [22m021 断连静默：聚合器被杀→重连提示落日志、控制台零输出、成员籍自动恢复 [33m 2013[2mms[22m[39m
+2026-11-05T06:05:39.2660558Z    [33m[2m✓[22m[39m 018 批二：extends 四级校验[2m > [22m分支一：旧名仍是星内活成员 → 拒绝并教学（不锁死：指明出路） [33m 1504[2mms[22m[39m
+2026-11-05T06:05:39.2661984Z    [33m[2m✓[22m[39m 统一恢复入口（启动器重声明或显式管理，册落盘不丢）[2m > [22m聚合器重启保留离线册位，存活的原生会话也须明确重声明（linux 32-hex 形态） [33m 336[2mms[22m[39m
+2026-11-05T06:05:39.2664145Z    [33m[2m✓[22m[39m 统一恢复入口（启动器重声明或显式管理，册落盘不丢）[2m > [22mbroker/node 重启册位不丢，已有成员与新会话统一由显式 adopt 恢复 [33m 333[2mms[22m[39m
+2026-11-05T06:05:39.2666477Z    [33m[2m✓[22m[39m 018 批二：9b 降级告警（不只日志）[2m > [22mNodeClient.warn 直打一行；warnIfBrokerLacksSessionCaps 对老 broker 出声、新 broker 静默 [33m 327[2mms[22m[39m
+2026-11-05T06:05:39.2667691Z    [33m[2m✓[22m[39m 028 双模式与命令面[2m > [22m双模式集成：永久退出留册、裸 resume 不归队、明确选择恢复；--rm 退出清册 [33m 1047[2mms[22m[39m
+2026-11-05T06:05:41.7694372Z  [32m✓[39m test/tui-controller.test.ts [2m([22m[2m25 tests[22m[2m)[22m[33m 1991[2mms[22m[39m
+2026-11-05T06:05:44.9089744Z probe failed: root-not-exclusive:C:\Users\RUNNER~1\AppData\Local\Temp\c14w05-test-055nho\previous-run
+2026-11-05T06:05:46.1481327Z  [32m✓[39m test/serve-node.test.ts [2m([22m[2m30 tests[22m[2m)[22m[33m 8327[2mms[22m[39m
+2026-11-05T06:05:46.1482393Z    [33m[2m✓[22m[39m B0 starId handshake[2m > [22m036 无 id 星（手编形状）：连接按 BAD_AUTH 拒——broker 机跑一次 serve 补 id [33m 634[2mms[22m[39m
+2026-11-05T06:05:46.1483973Z    [33m[2m✓[22m[39m B1 multi-star: delivery pipeline stamps starId into issued refs[2m > [22mbroker queue self-delivery: the receipt ref carries the registry starId [33m 5641[2mms[22m[39m
+2026-11-05T06:05:46.1485409Z    [33m[2m✓[22m[39m B1 multi-star: delivery pipeline stamps starId into issued refs[2m > [22mbroker steer self-delivery: the receipt ref carries the registry starId [33m 445[2mms[22m[39m
+2026-11-05T06:05:46.6056509Z  [32m✓[39m test/tui-tcp.test.ts [2m([22m[2m24 tests[22m[2m)[22m[32m 76[2mms[22m[39m
+2026-11-05T06:05:46.9369213Z usage: node scripts/codex-call-correlation-probe.mjs --root <owned temp dir> [--evidence <json>]
+2026-11-05T06:05:46.9417985Z  [32m✓[39m test/codex-call-correlation-probe.test.ts [2m([22m[2m56 tests[22m[2m)[22m[33m 4782[2mms[22m[39m
+2026-11-05T06:05:46.9421961Z    [33m[2m✓[22m[39m codex call correlation probe: bounded reads and processes[2m > [22mkills a timed-out child together with its descendant and waits for close [33m 1695[2mms[22m[39m
+2026-11-05T06:05:46.9424364Z    [33m[2m✓[22m[39m codex call correlation probe: run root and main chain[2m > [22mkeeps the root when the run is cancelled [33m 376[2mms[22m[39m
+2026-11-05T06:05:46.9426565Z    [33m[2m✓[22m[39m codex call correlation probe: run root and main chain[2m > [22mkeeps the run root when the launched process never closed [33m 1334[2mms[22m[39m
+2026-11-05T06:05:47.8842534Z  [32m✓[39m test/serve-b21.test.ts [2m([22m[2m29 tests[22m[2m)[22m[33m 304[2mms[22m[39m
+2026-11-05T06:05:48.5894070Z  [32m✓[39m test/via-send.test.ts [2m([22m[2m42 tests[22m[2m)[22m[32m 118[2mms[22m[39m
+2026-11-05T06:05:49.2339705Z  [31m❯[39m test/dsh-compat-ci.test.ts [2m([22m[2m107 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 27186[2mms[22m[39m
+2026-11-05T06:05:49.2341977Z    [32m✓[39m DeepSeek Harness official npm artifact constraints[2m > [22mpins the scoped npm artifact, package manager and the supported prerelease window[32m 9[2mms[22m[39m
+2026-11-05T06:05:49.2344514Z    [32m✓[39m DeepSeek Harness official npm artifact constraints[2m > [22mrejects unrelated or mutable sources, malformed SRI and package-manager drift[32m 5[2mms[22m[39m
+2026-11-05T06:05:49.2347310Z    [32m✓[39m DeepSeek Harness official npm artifact constraints[2m > [22mverifies the exact downloaded archive bytes using canonical SHA-512 SRI[32m 4[2mms[22m[39m
+2026-11-05T06:05:49.2349978Z    [32m✓[39m DeepSeek Harness isolated npm download cache[2m > [22muses a shared run-owned default and marks an explicit existing external cache for retention[32m 29[2mms[22m[39m
+2026-11-05T06:05:49.2352630Z    [32m✓[39m DeepSeek Harness isolated npm download cache[2m > [22mrejects relative paths, URLs, network paths, files and externally labelled owned paths[32m 11[2mms[22m[39m
+2026-11-05T06:05:49.2356493Z    [32m✓[39m DeepSeek Harness isolated npm download cache[2m > [22mrejects directory links and linked ancestors before using an external cache[32m 10[2mms[22m[39m
+2026-11-05T06:05:49.2358571Z    [32m✓[39m DeepSeek Harness controlled desktop process[2m > [22mvalidates execution inputs and honors pre-cancellation without spawning[32m 5[2mms[22m[39m
+2026-11-05T06:05:49.2359773Z    [32m✓[39m DeepSeek Harness controlled desktop process[2m > [22mreturns stdout, stderr and exit facts only after close[32m 5[2mms[22m[39m
+2026-11-05T06:05:49.2360928Z    [32m✓[39m DeepSeek Harness controlled desktop process[2m > [22mruns a real controlled Node child and reports only its own close[32m 254[2mms[22m[39m
+2026-11-05T06:05:49.2362004Z    [32m✓[39m DeepSeek Harness controlled desktop process[2m > [22mpreserves nonzero and signal exit facts[32m 2[2mms[22m[39m
+2026-11-05T06:05:49.2363117Z    [32m✓[39m DeepSeek Harness controlled desktop process[2m > [22mkeeps cancellation and timeout primary even if close later reports zero[32m 37[2mms[22m[39m
+2026-11-05T06:05:49.2364327Z    [32m✓[39m DeepSeek Harness controlled desktop process[2m > [22mshares one byte budget across stdout and stderr and marks truncation[32m 1[2mms[22m[39m
+2026-11-05T06:05:49.2365628Z    [33m[2m✓[22m[39m DeepSeek Harness controlled desktop process[2m > [22muses one bounded release after child and pipe failures without replacing the first cause [33m 1006[2mms[22m[39m
+2026-11-05T06:05:49.2366930Z    [32m✓[39m DeepSeek Harness controlled desktop process[2m > [22mwaits for close when kill throws and reports the stop request separately[32m 1[2mms[22m[39m
+2026-11-05T06:05:49.2368223Z    [32m✓[39m DeepSeek Harness controlled desktop process[2m > [22mcounts the spawn attempt against the deadline and refuses an overdue success[32m 142[2mms[22m[39m
+2026-11-05T06:05:49.2369421Z    [32m✓[39m DeepSeek Harness controlled desktop process[2m > [22mkeeps only bounded copies of the bytes inside the output budget[32m 3[2mms[22m[39m
+2026-11-05T06:05:49.2370767Z    [32m✓[39m DeepSeek Harness controlled desktop process[2m > [22mkeeps falsy first causes and marks the failure explicitly[32m 2[2mms[22m[39m
+2026-11-05T06:05:49.2372025Z    [33m[2m✓[22m[39m DeepSeek Harness controlled desktop process[2m > [22mrecords later pipe, child and release problems without replacing the first cause [33m 1004[2mms[22m[39m
+2026-11-05T06:05:49.2373327Z    [33m[2m✓[22m[39m DeepSeek Harness controlled desktop process[2m > [22mkeeps late pipe errors owned after return without changing the snapshot [33m 1004[2mms[22m[39m
+2026-11-05T06:05:49.2374546Z    [32m✓[39m DeepSeek Harness controlled desktop process[2m > [22mclears the fixture cleanup wait once the real child is known closed[32m 52[2mms[22m[39m
+2026-11-05T06:05:49.2375753Z    [33m[2m✓[22m[39m DeepSeek Harness controlled desktop process[2m > [22mrecords a pipe error raised synchronously while releasing the pipes [33m 1002[2mms[22m[39m
+2026-11-05T06:05:49.2377166Z    [33m[2m✓[22m[39m DeepSeek Harness controlled desktop process[2m > [22mlets the fixture end and await its own real child when the product cannot confirm release [33m 1105[2mms[22m[39m
+2026-11-05T06:05:49.2378972Z    [32m✓[39m DeepSeek Harness guarded desktop uninstall[2m > [22mnever calls uninstall without a complete natural exit observation for this Host[32m 3[2mms[22m[39m
+2026-11-05T06:05:49.2380252Z    [32m✓[39m DeepSeek Harness guarded desktop uninstall[2m > [22mbinds every identity to the caller and returns process facts without claiming cleanup[32m 5[2mms[22m[39m
+2026-11-05T06:05:49.2381536Z    [32m✓[39m DeepSeek Harness guarded desktop uninstall[2m > [22mrefuses pre-cancellation and a Host observation that consumes the total deadline[32m 41[2mms[22m[39m
+2026-11-05T06:05:49.2382790Z    [32m✓[39m DeepSeek Harness guarded desktop uninstall[2m > [22mpreserves a runner failure and installation ownership even for falsy causes[32m 2[2mms[22m[39m
+2026-11-05T06:05:49.2384203Z    [32m✓[39m DeepSeek Harness guarded desktop uninstall[2m > [22mignores a late Host observation after cancellation and releases its abort listener[32m 2[2mms[22m[39m
+2026-11-05T06:05:49.2385433Z    [32m✓[39m DeepSeek Harness guarded desktop uninstall[2m > [22mbounds both runner waits and records when uninstall was already invoked[32m 53[2mms[22m[39m
+2026-11-05T06:05:49.2386676Z    [32m✓[39m DeepSeek Harness guarded desktop uninstall[2m > [22mclassifies its own fired deadline even when the wall clock has not reached it (observe)[32m 26[2mms[22m[39m
+2026-11-05T06:05:49.2387971Z    [32m✓[39m DeepSeek Harness guarded desktop uninstall[2m > [22mclassifies its own fired deadline even when the wall clock has not reached it (uninstall)[32m 26[2mms[22m[39m
+2026-11-05T06:05:49.2389243Z    [32m✓[39m DeepSeek Harness guarded desktop uninstall[2m > [22mrejects abnormal uninstall records and preserves executor causes without retrying[32m 3[2mms[22m[39m
+2026-11-05T06:05:49.2390530Z    [32m✓[39m DeepSeek Harness guarded desktop uninstall[2m > [22mvalidates caller identities before either operation and keeps the captured binding[32m 1[2mms[22m[39m
+2026-11-05T06:05:49.2391800Z    [32m✓[39m DeepSeek Harness guarded desktop uninstall[2m > [22mrefuses an incomplete process observation before invoking uninstall[32m 1[2mms[22m[39m
+2026-11-05T06:05:49.2393163Z    [32m✓[39m DeepSeek Harness fresh process and cleanup evidence[2m > [22mruns only controlled child processes and reports normal and timed-out termination distinctly[32m 225[2mms[22m[39m
+2026-11-05T06:05:49.2394563Z    [33m[2m✓[22m[39m DeepSeek Harness fresh process and cleanup evidence[2m > [22muses a unique empty report location and a caller-chosen UUID for every attempt [33m 1625[2mms[22m[39m
+2026-11-05T06:05:49.2396133Z    [33m[2m✓[22m[39m DeepSeek Harness fresh process and cleanup evidence[2m > [22mrejects wrong run IDs, incomplete PASS evidence, timeout/signal and process/report disagreement [33m 1260[2mms[22m[39m
+2026-11-05T06:05:49.2397624Z    [32m✓[39m DeepSeek Harness fresh process and cleanup evidence[2m > [22mrequires all four exact cleanup booleans and refuses forced or unknown release[32m 0[2mms[22m[39m
+2026-11-05T06:05:49.2399271Z    [32m✓[39m DeepSeek Harness baseline and candidate lifecycle[2m > [22mremoves each released install before the next and retries the same pinned candidate[32m 2[2mms[22m[39m
+2026-11-05T06:05:49.2400524Z    [32m✓[39m DeepSeek Harness baseline and candidate lifecycle[2m > [22mretains unknown runtime state and never advances or removes it[32m 1[2mms[22m[39m
+2026-11-05T06:05:49.2401764Z    [32m✓[39m DeepSeek Harness baseline and candidate lifecycle[2m > [22mkeeps the web retainedInstallation shape unchanged when a probe fails[32m 0[2mms[22m[39m
+2026-11-05T06:05:49.2403110Z    [32m✓[39m DeepSeek Harness baseline and candidate lifecycle[2m > [22mdoes not turn installation, readiness, cleanup, baseline failure or flaky checks into issues[32m 1[2mms[22m[39m
+2026-11-05T06:05:49.2404539Z    [32m✓[39m DeepSeek Harness independent issue reporter[2m > [22mcreates only one deduplicated issue after independently verifying genuine scoped regression evidence[32m 19[2mms[22m[39m
+2026-11-05T06:05:49.2405955Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22maccepts a fresh desktop report bound to this install, native instance, session and artifact[32m 171[2mms[22m[39m
+2026-11-05T06:05:49.2407249Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mbinds the report to the caller launch instead of the report claim[32m 13[2mms[22m[39m
+2026-11-05T06:05:49.2408468Z    [33m[2m✓[22m[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mrejects web, stale, foreign and incomplete desktop evidence [33m 514[2mms[22m[39m
+2026-11-05T06:05:49.2409793Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mignores reports outside the exclusive attempt location and never reuses an earlier report[32m 18[2mms[22m[39m
+2026-11-05T06:05:49.2411276Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mrejects a well formed report above the read budget and keeps release unknown[32m 18[2mms[22m[39m
+2026-11-05T06:05:49.2412459Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mnever binds two missing artifact identities[32m 5[2mms[22m[39m
+2026-11-05T06:05:49.2413687Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mkeeps release unknown when the session times out, is killed, truncates output or disagrees[32m 16[2mms[22m[39m
+2026-11-05T06:05:49.2415091Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mrequires the Host exit, official uninstall and both registration cleanups for desktop release[32m 0[2mms[22m[39m
+2026-11-05T06:05:49.2416437Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22minstalls the candidate only after a released baseline bound to this run[32m 1[2mms[22m[39m
+2026-11-05T06:05:49.2417628Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mrefuses to reuse an installation identity across attempts[32m 1[2mms[22m[39m
+2026-11-05T06:05:49.2419135Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mkeeps the desktop summary out of the web reporter[32m 1[2mms[22m[39m
+2026-11-05T06:05:49.2420340Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mretains the first desktop installation and stops when release is unverified[32m 2[2mms[22m[39m
+2026-11-05T06:05:49.2421701Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mnever closes blindly after a thrown desktop operation and keeps ownership when the close fails[32m 1[2mms[22m[39m
+2026-11-05T06:05:49.2423676Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mkeeps the owned root of a partially created installation that throws[32m 5[2mms[22m[39m
+2026-11-05T06:05:49.2425084Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mkeeps the web entry closed to desktop reports and the desktop entry closed to web reports[32m 1[2mms[22m[39m
+2026-11-05T06:05:49.2426443Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mrejects array UUID identities and never lets equal arrays bypass instance dedup[32m 1[2mms[22m[39m
+2026-11-05T06:05:49.2427789Z    [33m[2m✓[22m[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mretains the full ownership after a normal install when release is unknown [33m 781[2mms[22m[39m
+2026-11-05T06:05:49.2429121Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mretains the full ownership with the real reason when the desktop probe throws[32m 48[2mms[22m[39m
+2026-11-05T06:05:49.2430346Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mretains the full ownership when the official close fails[32m 5[2mms[22m[39m
+2026-11-05T06:05:49.2431557Z    [32m✓[39m DeepSeek Harness formal desktop report and lifecycle[2m > [22mkeeps String(value) as the real reason when the probe throws a falsy value[32m 95[2mms[22m[39m
+2026-11-05T06:05:49.2433137Z    [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mprojects the pinned research metadata and refuses masquerading or inexact desktop sources[32m 13[2mms[22m[39m
+2026-11-05T06:05:49.2434854Z    [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mstreams the exact pinned bytes into the exclusive directory and proves only the transfer[32m 75[2mms[22m[39m
+2026-11-05T06:05:49.2436622Z    [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mrejects redirect, error and missing-body responses and size or digest disagreements without keeping partials[32m 19[2mms[22m[39m
+2026-11-05T06:05:49.2438999Z    [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22menforces the total deadline over headers and body and honors external cancellation [33m 414[2mms[22m[39m
+2026-11-05T06:05:49.2440701Z    [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mrejects short and zero-progress disk writes instead of trusting the stream digest[32m 16[2mms[22m[39m
+2026-11-05T06:05:49.2442310Z    [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mvoids delivery when cancellation or the total deadline lands during the close[32m 9[2mms[22m[39m
+2026-11-05T06:05:49.2443918Z    [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mwraps frozen and falsy close failures with the retained path and the original cause[32m 7[2mms[22m[39m
+2026-11-05T06:05:49.2445493Z    [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mkeeps late responses and late handles owned after the deadline [33m 606[2mms[22m[39m
+2026-11-05T06:05:49.2447099Z    [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mkeeps the cause and the retained path when a falsy read failure meets an unclear release[32m 128[2mms[22m[39m
+2026-11-05T06:05:49.2449096Z    [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mrefuses delivery when cancellation or the total deadline lands during cleanup[32m 7[2mms[22m[39m
+2026-11-05T06:05:49.2450857Z    [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mreports a late file close failure with the path and keeps the file owned [33m 1106[2mms[22m[39m
+2026-11-05T06:05:49.2452593Z    [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mreports a late file close that never settles as undecided at return [33m 2014[2mms[22m[39m
+2026-11-05T06:05:49.2455994Z    [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mreports a late partial removal failure with the path and keeps the file owned[32m 266[2mms[22m[39m
+2026-11-05T06:05:49.2457936Z    [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mremoves a late-created file exactly once and never deletes a replacement[32m 271[2mms[22m[39m
+2026-11-05T06:05:49.2459923Z    [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mdoes not report a partial path after a successful late close and removal[32m 255[2mms[22m[39m
+2026-11-05T06:05:49.2461983Z    [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mcloses a real late handle that arrives after the product returned even when its close was replaced[32m 122[2mms[22m[39m
+2026-11-05T06:05:49.2464937Z    [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mreports a late response whose cancel is still undecided when cleanup returns[32m 272[2mms[22m[39m
+2026-11-05T06:05:49.2466674Z    [33m[2m✓[22m[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mcancels a late response, releases its lock and reports it as undecided at return [33m 376[2mms[22m[39m
+2026-11-05T06:05:49.2468363Z    [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mkeeps falsy and frozen stream failures as real failures and still cleans the owned partial[32m 12[2mms[22m[39m
+2026-11-05T06:05:49.2474108Z    [32m✓[39m DeepSeek Harness official Windows desktop installer metadata and streaming verification[2m > [22mnever overwrites an existing file and re-checks the projection before any network call[32m 12[2mms[22m[39m
+2026-11-05T06:05:49.2476486Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22madmits the exact verified file and matching publisher without writing an installation[32m 10[2mms[22m[39m
+2026-11-05T06:05:49.2477935Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mrejects a missing or malformed publisher policy before any file read or child process[32m 4[2mms[22m[39m
+2026-11-05T06:05:49.2479255Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mrejects inexact artifact identities and file size or digest disagreements[32m 5[2mms[22m[39m
+2026-11-05T06:05:49.2480767Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mrejects links and non-regular files[32m 37[2mms[22m[39m
+2026-11-05T06:05:49.2481890Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mrejects a file replaced between the read and the final state check[32m 4[2mms[22m[39m
+2026-11-05T06:05:49.2483332Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mrejects a signature status, subject or thumbprint that disagrees with the policy[32m 19[2mms[22m[39m
+2026-11-05T06:05:49.2484651Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mrejects pre-cancelled, timed-out and externally cancelled admissions without success[32m 57[2mms[22m[39m
+2026-11-05T06:05:49.2485970Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22muses the bounded Windows Authenticode adapter with the path in an environment field[32m 6[2mms[22m[39m
+2026-11-05T06:05:49.2487606Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mkeeps the native signature reader independent of inherited PSModulePath without changing the caller environment[32m 6[2mms[22m[39m
+2026-11-05T06:05:49.2489161Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mkeeps the native signature reader independent of inherited psmodulepath without changing the caller environment[32m 6[2mms[22m[39m
+2026-11-05T06:05:49.2490711Z [31m   [31m×[31m DeepSeek Harness desktop installer admission[2m > [22muses native Windows signature modules rather than executing an inherited shadow module[39m[33m 5003[2mms[22m[39m
+2026-11-05T06:05:49.2491554Z [31m     → Test timed out in 5000ms.
+2026-11-05T06:05:49.2492297Z If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+2026-11-05T06:05:49.2493351Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mrejects default-adapter output, JSON and process failures[32m 77[2mms[22m[39m
+2026-11-05T06:05:49.2495567Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mrejects same-fingerprint content rewritten while its signature is being read[32m 5[2mms[22m[39m
+2026-11-05T06:05:49.2496842Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mbounds the post-signature content read and still closes the handle[32m 33[2mms[22m[39m
+2026-11-05T06:05:49.2498061Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mrejects a path replaced while the post-signature content is being re-read[32m 7[2mms[22m[39m
+2026-11-05T06:05:49.2499238Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mbounds a stalled open, owns the late handle and closes it once[32m 50[2mms[22m[39m
+2026-11-05T06:05:49.2500236Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mbounds a stalled metadata read[32m 55[2mms[22m[39m
+2026-11-05T06:05:49.2501343Z    [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mreports an unconfirmed signature child release and clears parent pipes [33m 1008[2mms[22m[39m
+2026-11-05T06:05:49.2502825Z    [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mreports an unconfirmed signature child release on cancellation [33m 1045[2mms[22m[39m
+2026-11-05T06:05:49.2503967Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mstarts the real file close only once when it rejects[32m 5[2mms[22m[39m
+2026-11-05T06:05:49.2505080Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mpreserves a frozen signature failure alongside the close failure[32m 4[2mms[22m[39m
+2026-11-05T06:05:49.2506302Z    [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mowns a spawned child error without a close instead of returning early [33m 1005[2mms[22m[39m
+2026-11-05T06:05:49.2507457Z    [32m✓[39m DeepSeek Harness desktop installer admission[2m > [22mfinishes a spawned child error once its close is observed[32m 6[2mms[22m[39m
+2026-11-05T06:05:49.2508627Z    [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mkeeps the overflow failure when a failed stop reports an error [33m 1018[2mms[22m[39m
+2026-11-05T06:05:49.2509867Z    [33m[2m✓[22m[39m DeepSeek Harness desktop installer admission[2m > [22mkeeps the signature failure and release state across the total deadline [33m 1013[2mms[22m[39m
+2026-11-05T06:05:51.0195247Z  [32m✓[39m test/dsh-bridge.test.ts [2m([22m[2m32 tests[22m[2m)[22m[33m 1413[2mms[22m[39m
+2026-11-05T06:05:51.7648956Z  [32m✓[39m test/serve-multistar.test.ts [2m([22m[2m20 tests[22m[2m)[22m[33m 4559[2mms[22m[39m
+2026-11-05T06:05:51.7650619Z    [33m[2m✓[22m[39m 032 多星握手与星域隔离[2m > [22m钥匙不属任何星 → BAD_AUTH（跨星错钥匙不放行） [33m 587[2mms[22m[39m
+2026-11-05T06:05:51.7652283Z    [33m[2m✓[22m[39m 032 bootstrap 与 CLI[2m > [22m033 serve 永不造星：空表首启零星合法（不建星、不写 node.json），教学指 --add-star [33m 1511[2mms[22m[39m
+2026-11-05T06:05:51.7654428Z    [33m[2m✓[22m[39m 032 bootstrap 与 CLI[2m > [22m内挂聚合器不写 status-node 文件（非独立进程） [33m 1515[2mms[22m[39m
+2026-11-05T06:05:51.8494419Z  [32m✓[39m test/via-tcp.test.ts [2m([22m[2m36 tests[22m[2m)[22m[33m 2832[2mms[22m[39m
+2026-11-05T06:05:51.8496275Z    [33m[2m✓[22m[39m runViaTcpSend against a real broker[2m > [22mtimes out with TCP_TRANSPORT_FAILED and the 勿盲目重发 wording [33m 419[2mms[22m[39m
+2026-11-05T06:05:51.8498579Z    [33m[2m✓[22m[39m send --via tcp: branch in runSend[2m > [22mD0: body over 64MiB still fails FILE_TOO_LARGE, keeping the原文 temp file with its path [33m 1563[2mms[22m[39m
+2026-11-05T06:05:52.8362193Z  [32m✓[39m test/serve-cli.test.ts [2m([22m[2m32 tests[22m[2m)[22m[33m 314[2mms[22m[39m
+2026-11-05T06:05:54.2790596Z  [32m✓[39m test/serve-broker.test.ts [2m([22m[2m33 tests[22m[2m)[22m[33m 941[2mms[22m[39m
+2026-11-05T06:05:56.8305385Z  [32m✓[39m test/maintenance.test.ts [2m([22m[2m21 tests[22m[2m)[22m[33m 1503[2mms[22m[39m
+2026-11-05T06:05:56.8306853Z    [33m[2m✓[22m[39m owned maintenance worker lifecycle[2m > [22mruns actual plans and filesystem effects through the default built worker using only isolated fixture paths [33m 1015[2mms[22m[39m
+2026-11-05T06:06:03.0603385Z  [32m✓[39m test/dsh-adapter.test.ts [2m([22m[2m57 tests[22m[2m)[22m[33m 11704[2mms[22m[39m
+2026-11-05T06:06:03.0605236Z    [33m[2m✓[22m[39m Harness read-only bridge diagnostics[2m > [22mreports no live bridge as info without creating or repairing registrations [33m 403[2mms[22m[39m
+2026-11-05T06:06:03.0607914Z    [33m[2m✓[22m[39m Harness read-only bridge diagnostics[2m > [22mverifies every instance without listing or creating sessions and publishes only safe facts [33m 362[2mms[22m[39m
+2026-11-05T06:06:03.0610289Z    [33m[2m✓[22m[39m Harness read-only bridge diagnostics[2m > [22mkeeps other findings and warns without failing doctor for 'DSH_AUTH_REQUIRED' [33m 361[2mms[22m[39m
+2026-11-05T06:06:03.0613116Z    [33m[2m✓[22m[39m Harness read-only bridge diagnostics[2m > [22mkeeps other findings and warns without failing doctor for 'DSH_OWNER_MISMATCH' [33m 318[2mms[22m[39m
+2026-11-05T06:06:03.0615533Z    [33m[2m✓[22m[39m Harness read-only bridge diagnostics[2m > [22mkeeps other findings and warns without failing doctor for 'DSH_UNSUPPORTED_VERSION' [33m 304[2mms[22m[39m
+2026-11-05T06:06:03.0617953Z    [33m[2m✓[22m[39m Harness read-only bridge diagnostics[2m > [22mkeeps other findings and warns without failing doctor for 'DSH_UNSUPPORTED_PROTOCOL' [33m 333[2mms[22m[39m
+2026-11-05T06:06:03.0620432Z    [33m[2m✓[22m[39m Harness read-only bridge diagnostics[2m > [22mkeeps other findings and warns without failing doctor for 'DSH_PROTOCOL_ERROR' [33m 366[2mms[22m[39m
+2026-11-05T06:06:03.0622728Z    [33m[2m✓[22m[39m Harness read-only bridge diagnostics[2m > [22mkeeps other findings and warns without failing doctor for 'DSH_UNAVAILABLE' [33m 312[2mms[22m[39m
+2026-11-05T06:06:03.0624211Z    [33m[2m✓[22m[39m Harness read-only bridge diagnostics[2m > [22mbounds a stalled handshake to one shared five-second budget without retrying [33m 5278[2mms[22m[39m
+2026-11-05T06:06:03.0625491Z    [33m[2m✓[22m[39m Harness read-only bridge diagnostics[2m > [22muses the same native facts in the actual CLI text and JSON, HTTP 200 [33m 1081[2mms[22m[39m
+2026-11-05T06:06:03.0627178Z    [33m[2m✓[22m[39m Harness read-only bridge diagnostics[2m > [22muses the same native facts in the actual CLI text and JSON, HTTP 401 [33m 1023[2mms[22m[39m
+2026-11-05T06:06:03.5930876Z  [32m✓[39m test/status-doctor-tcp.test.ts [2m([22m[2m27 tests[22m[2m)[22m[32m 124[2mms[22m[39m
+2026-11-05T06:06:03.6245618Z  [32m✓[39m test/serve-admin-key.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 6272[2mms[22m[39m
+2026-11-05T06:06:03.6247863Z    [33m[2m✓[22m[39m 034 挑战应答全链与角色矩阵[2m > [22madmin 握手（钥匙永不过线）→ 读/发/删全过 → 成员/星管逐格 → 重放拒绝 → 被吊钥 BAD_AUTH → 审计在场 [33m 2888[2mms[22m[39m
+2026-11-05T06:06:03.6250663Z    [33m[2m✓[22m[39m 034 挑战应答全链与角色矩阵[2m > [22mCLI 远程管理路由：--via tcp:<星> 成员读（星钥）+ 星管写（adminKey 挑战应答） [33m 1546[2mms[22m[39m
+2026-11-05T06:06:03.6252270Z    [33m[2m✓[22m[39m 034 set-port 无命令回归（旗标+插座 op 全删）[2m > [22m管理插座 set-port op 已删（未知 op 拒绝、台账零改动） [33m 1513[2mms[22m[39m
+2026-11-05T06:06:05.1628484Z  [32m✓[39m test/status-remote.test.ts [2m([22m[2m16 tests[22m[2m)[22m[33m 859[2mms[22m[39m
+2026-11-05T06:06:05.1629480Z    [33m[2m✓[22m[39m CLI：runViaTcpStatus 传输腿[2m > [22m版本偏差：旧 broker 对 status-query 无行为 → 超时教学 [33m 408[2mms[22m[39m
+2026-11-05T06:06:05.9376433Z  [32m✓[39m test/revocation-pause.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 1682[2mms[22m[39m
+2026-11-05T06:06:05.9378632Z    [33m[2m✓[22m[39m explicit credential revocation pauses this star[2m > [22mstops one launcher supervisor without restarting it or disrupting another star [33m 1204[2mms[22m[39m
+2026-11-05T06:06:06.3158935Z  [32m✓[39m test/observation-overview.test.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 733[2mms[22m[39m
+2026-11-05T06:06:06.8575766Z  [32m✓[39m test/tui-sessions.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 123[2mms[22m[39m
+2026-11-05T06:06:07.3341211Z  [32m✓[39m test/codex-deliver.test.ts [2m([22m[2m26 tests[22m[2m)[22m[32m 118[2mms[22m[39m
+2026-11-05T06:06:07.9775737Z  [32m✓[39m test/claude-compat-ci.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 323[2mms[22m[39m
+2026-11-05T06:06:08.2970441Z  [32m✓[39m test/session-membership.test.ts [2m([22m[2m16 tests[22m[2m)[22m[33m 1801[2mms[22m[39m
+2026-11-05T06:06:08.2973766Z    [33m[2m✓[22m[39m session membership application boundary[2m > [22madopts an anonymous full native ref through the shared aggregator and verifies broker roster authority [33m 543[2mms[22m[39m
+2026-11-05T06:06:08.2976461Z    [33m[2m✓[22m[39m session membership application boundary[2m > [22madopts and removes a typed Codex member without overwriting the same native ID on another endpoint [33m 539[2mms[22m[39m
+2026-11-05T06:06:09.1700285Z  [32m✓[39m test/c14-conversation-refinement.test.ts [2m([22m[2m24 tests[22m[2m)[22m[33m 445[2mms[22m[39m
+2026-11-05T06:06:09.7947162Z  [32m✓[39m test/serve-star-lifecycle.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 17071[2mms[22m[39m
+2026-11-05T06:06:09.7949076Z    [33m[2m✓[22m[39m 033 热加星：不重启即托管即收发[2m > [22m在跑 serve + CLI --add-star 经管理插座：回执生效、自登记落位、聚合器播种、新星上 node/sender 完整收发 [33m 1593[2mms[22m[39m
+2026-11-05T06:06:09.7950874Z    [33m[2m✓[22m[39m 033 删星：即时收尾 + 直报已删 + 最后一颗可删[2m > [22m热删 beta：在跑连接收"星已删除"断开、node.json 摘条、死钥直报、邻星零中断 [33m 2363[2mms[22m[39m
+2026-11-05T06:06:09.7952368Z    [33m[2m✓[22m[39m 033 插座冷热路径与 stop 收口[2m > [22m回执超时绝不回落直写：插座连上但无回执 → 报错重试、台账零改动 [33m 10016[2mms[22m[39m
+2026-11-05T06:06:09.7953908Z    [33m[2m✓[22m[39m 033 插座冷热路径与 stop 收口[2m > [22mstop 收口：serve 停机后状态 stopped、插座随进程撤（CLI 退冷路径） [33m 1522[2mms[22m[39m
+2026-11-05T06:06:09.7956718Z    [33m[2m✓[22m[39m 036 按星机器名（--star --show-name）热闭环[2m > [22m按星只重挂该星：条目覆盖落 node.json、注册表该星 machineName 更新、邻星回落全局不变；--list 显示随条目；'' 清除回落全局 [33m 1532[2mms[22m[39m
+2026-11-05T06:06:10.2694071Z  [32m✓[39m test/core-queries.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 160[2mms[22m[39m
+2026-11-05T06:06:10.9568123Z  [32m✓[39m test/tui-composition.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 1178[2mms[22m[39m
+2026-11-05T06:06:11.8003393Z  [32m✓[39m test/opencode-adapter.test.ts [2m([22m[2m26 tests[22m[2m)[22m[33m 441[2mms[22m[39m
+2026-11-05T06:06:12.3052047Z  [32m✓[39m test/broker-revocation.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 3900[2mms[22m[39m
+2026-11-05T06:06:12.3053645Z    [33m[2m✓[22m[39m broker credential revocation[2m > [22mlocal remove-node immediately revokes every node/sender using that credential and retains offline permanent members in its star [33m 832[2mms[22m[39m
+2026-11-05T06:06:12.3055614Z    [33m[2m✓[22m[39m broker credential revocation[2m > [22mremote remove-node has the same immediate effect while members and star admins retain their three-layer limits [33m 623[2mms[22m[39m
+2026-11-05T06:06:12.3057218Z    [33m[2m✓[22m[39m broker credential revocation[2m > [22mlocal remove-admin-key closes only authenticated sessions of the removed credential, including unique-prefix selection [33m 1057[2mms[22m[39m
+2026-11-05T06:06:12.3058658Z    [33m[2m✓[22m[39m broker credential revocation[2m > [22mmarks a revoked session unusable before close completes without affecting another credential [33m 345[2mms[22m[39m
+2026-11-05T06:06:12.3060078Z    [33m[2m✓[22m[39m broker credential revocation[2m > [22mfinishes target pending work and file routes on revocation before the close callback, ignoring late target results [33m 322[2mms[22m[39m
+2026-11-05T06:06:12.3693877Z  [32m✓[39m test/core-diagnostics.test.ts [2m([22m[2m17 tests[22m[2m)[22m[33m 1260[2mms[22m[39m
+2026-11-05T06:06:12.3696548Z    [33m[2m✓[22m[39m isolated cancellable diagnostics[2m > [22mterminates a real probe child through the default built isolation path on cancellation [33m 508[2mms[22m[39m
+2026-11-05T06:06:13.0035404Z  [32m✓[39m test/tcp-application.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 336[2mms[22m[39m
+2026-11-05T06:06:13.2817723Z  [32m✓[39m test/tui-filters.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 1020[2mms[22m[39m
+2026-11-05T06:06:13.9110941Z  [32m✓[39m test/tcp-management.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 59[2mms[22m[39m
+2026-11-05T06:06:14.4253628Z  [32m✓[39m test/serve-f0.test.ts [2m([22m[2m19 tests[22m[2m)[22m[33m 362[2mms[22m[39m
+2026-11-05T06:06:15.1648556Z  [32m✓[39m test/c14-explicit-send.test.ts [2m([22m[2m29 tests[22m[2m)[22m[32m 142[2mms[22m[39m
+2026-11-05T06:06:15.3932995Z  [32m✓[39m test/ssh-application.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 991[2mms[22m[39m
+2026-11-05T06:06:15.9084013Z  [32m✓[39m test/conversations.test.ts [2m([22m[2m26 tests[22m[2m)[22m[33m 393[2mms[22m[39m
+2026-11-05T06:06:16.1830659Z  [32m✓[39m test/broker-discovery.test.ts [2m([22m[2m17 tests[22m[2m)[22m[33m 325[2mms[22m[39m
+2026-11-05T06:06:16.3864504Z  [32m✓[39m test/dsh-onboarding-ci.test.ts [2m([22m[2m28 tests[22m[2m)[22m[32m 73[2mms[22m[39m
+2026-11-05T06:06:16.7524477Z  [32m✓[39m test/opencode-desktop-ci.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 86[2mms[22m[39m
+2026-11-05T06:06:17.3010036Z  [32m✓[39m test/c14-native-send-seams.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+2026-11-05T06:06:17.5822910Z  [32m✓[39m test/tcp-peer-naming-transport.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 586[2mms[22m[39m
+2026-11-05T06:06:19.7991005Z  [32m✓[39m test/caller-source-confirmations.test.ts [2m([22m[2m21 tests[22m[2m)[22m[33m 2135[2mms[22m[39m
+2026-11-05T06:06:19.7992705Z    [33m[2m✓[22m[39m source classification shared across native sessions[2m > [22mreports bounded busy without mutating state when an unrelated listener occupies its mutex port [33m 1075[2mms[22m[39m
+2026-11-05T06:06:20.3564414Z  [32m✓[39m test/status-conversations.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 114[2mms[22m[39m
+2026-11-05T06:06:21.0285810Z  [32m✓[39m test/dsh-diagnostics.test.ts [2m([22m[2m20 tests[22m[2m)[22m[33m 3097[2mms[22m[39m
+2026-11-05T06:06:21.0287860Z    [33m[2m✓[22m[39m Harness profile plugin diagnostics[2m > [22muses saved profile facts in the actual doctor CLI text and JSON (matching) [33m 1038[2mms[22m[39m
+2026-11-05T06:06:21.0290358Z    [33m[2m✓[22m[39m Harness profile plugin diagnostics[2m > [22muses saved profile facts in the actual doctor CLI text and JSON (different) [33m 1089[2mms[22m[39m
+2026-11-05T06:06:21.5503839Z  [32m✓[39m test/desktop-ipc.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 118[2mms[22m[39m
+2026-11-05T06:06:21.6947907Z  [32m✓[39m test/outbox.test.ts [2m([22m[2m24 tests[22m[2m)[22m[33m 909[2mms[22m[39m
+2026-11-05T06:06:21.6949632Z    [33m[2m✓[22m[39m park[2m > [22mrefuses honestly at the per-thread cap and leaves the file untouched [33m 527[2mms[22m[39m
+2026-11-05T06:06:22.2368257Z  [32m✓[39m test/doctor.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 40[2mms[22m[39m
+2026-11-05T06:06:22.2506042Z  [32m✓[39m test/file-channel.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 226[2mms[22m[39m
+2026-11-05T06:06:22.7634853Z  [32m✓[39m test/status-filters.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 97[2mms[22m[39m
+2026-11-05T06:06:22.7639505Z  [32m✓[39m test/conversation-state-concurrency.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 9892[2mms[22m[39m
+2026-11-05T06:06:22.7641875Z    [33m[2m✓[22m[39m conversation state cross-process writes[2m > [22mindependent processes allocating at once never share a handle and each resolves to its own ref [33m 533[2mms[22m[39m
+2026-11-05T06:06:22.7644766Z    [33m[2m✓[22m[39m conversation state cross-process writes[2m > [22mconcurrent processes reusing one nonce all get its single handle [33m 368[2mms[22m[39m
+2026-11-05T06:06:22.7647277Z    [33m[2m✓[22m[39m conversation state cross-process writes[2m > [22ma live writer on an aliased path blocks every other write path until it releases [33m 2223[2mms[22m[39m
+2026-11-05T06:06:22.7649947Z    [33m[2m✓[22m[39m conversation state cross-process writes[2m > [22ma send that cannot take the lock delivers nothing, then succeeds once released [33m 1204[2mms[22m[39m
+2026-11-05T06:06:22.7652215Z    [33m[2m✓[22m[39m conversation state cross-process writes[2m > [22ma stuck holder still exits within its barrier deadline [33m 5149[2mms[22m[39m
+2026-11-05T06:06:22.7662238Z  [32m✓[39m test/tui-contexts.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 159[2mms[22m[39m
+2026-11-05T06:06:23.3395592Z  [32m✓[39m test/status-summary.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 92[2mms[22m[39m
+2026-11-05T06:06:23.4511815Z  [32m✓[39m test/dsh-live-fixture.test.ts [2m([22m[2m26 tests[22m[2m)[22m[32m 231[2mms[22m[39m
+2026-11-05T06:06:23.5625983Z  [32m✓[39m test/tool-type-routing-state.test.ts [2m([22m[2m32 tests[22m[2m)[22m[32m 239[2mms[22m[39m
+2026-11-05T06:06:23.9747764Z  [32m✓[39m test/tui-communications.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 34[2mms[22m[39m
+2026-11-05T06:06:24.4091900Z  [32m✓[39m test/dsh-desktop-exit-observer.test.ts [2m([22m[2m19 tests[22m[2m)[22m[33m 558[2mms[22m[39m
+2026-11-05T06:06:24.5026756Z  [32m✓[39m test/core-sessions-readers.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 382[2mms[22m[39m
+2026-11-05T06:06:25.4208964Z  [32m✓[39m test/claude-compat-fixture.test.ts [2m([22m[2m20 tests[22m[2m)[22m[33m 381[2mms[22m[39m
+2026-11-05T06:06:25.5574055Z  [32m✓[39m test/tcp-session-operations.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 533[2mms[22m[39m
+2026-11-05T06:06:26.2281679Z  [32m✓[39m test/discovery-service.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 280[2mms[22m[39m
+2026-11-05T06:06:26.7971207Z  [32m✓[39m test/dsh-send.test.ts [2m([22m[2m16 tests[22m[2m)[22m[32m 102[2mms[22m[39m
+2026-11-05T06:06:26.8429780Z  [32m✓[39m test/tui-form.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 661[2mms[22m[39m
+2026-11-05T06:06:27.2867038Z  [32m✓[39m test/uninstall.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 2574[2mms[22m[39m
+2026-11-05T06:06:27.2880429Z    [33m[2m✓[22m[39m runUninstall[2m > [22mpreserves native, historical and project data across actual CLI skill update/uninstall (default Harness home) [33m 1301[2mms[22m[39m
+2026-11-05T06:06:27.2883004Z    [33m[2m✓[22m[39m runUninstall[2m > [22mpreserves native, historical and project data across actual CLI skill update/uninstall (custom Harness home) [33m 1153[2mms[22m[39m
+2026-11-05T06:06:27.3364412Z  [32m✓[39m test/ref.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+2026-11-05T06:06:27.7071462Z  [32m✓[39m test/envelope.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+2026-11-05T06:06:27.7662646Z  [32m✓[39m test/dsh-platform-ci.test.ts [2m([22m[2m26 tests[22m[2m)[22m[32m 82[2mms[22m[39m
+2026-11-05T06:06:28.3369303Z  [32m✓[39m test/local-services.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 118[2mms[22m[39m
+2026-11-05T06:06:28.5283864Z  [32m✓[39m test/tui-workspaces.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 1198[2mms[22m[39m
+2026-11-05T06:06:28.5287742Z    [33m[2m✓[22m[39m independent TUI workspaces[2m > [22mrechecks the role when history returns to a different star (updated) [33m 345[2mms[22m[39m
+2026-11-05T06:06:28.5289771Z    [33m[2m✓[22m[39m independent TUI workspaces[2m > [22mrechecks the role when history returns to a different star (failed) [33m 352[2mms[22m[39m
+2026-11-05T06:06:28.5292956Z    [33m[2m✓[22m[39m independent TUI workspaces[2m > [22mrechecks the role when history returns to a different star (cancelled) [33m 301[2mms[22m[39m
+2026-11-05T06:06:28.8939752Z  [32m✓[39m test/conversation-summary.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 112[2mms[22m[39m
+2026-11-05T06:06:29.2670578Z  [32m✓[39m test/codex-aggregate-discovery.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 197[2mms[22m[39m
+2026-11-05T06:06:29.5108132Z  [32m✓[39m test/observation-communications.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 124[2mms[22m[39m
+2026-11-05T06:06:29.7257191Z  [32m✓[39m test/resolve.test.ts [2m([22m[2m24 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+2026-11-05T06:06:30.1772818Z  [32m✓[39m test/opencode-desktop-fixture.test.ts [2m([22m[2m13 tests[22m[2m)[22m[33m 2007[2mms[22m[39m
+2026-11-05T06:06:30.1774998Z    [33m[2m✓[22m[39m official desktop test environment[2m > [22mreports an unregistered executable under the owned run before allowing cleanup [33m 1181[2mms[22m[39m
+2026-11-05T06:06:30.1777430Z    [33m[2m✓[22m[39m official desktop test environment[2m > [22mretains a locked-log diagnostic while collecting remaining logs for teardown [33m 347[2mms[22m[39m
+2026-11-05T06:06:30.3827335Z  [32m✓[39m test/remote-discovery-node.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 326[2mms[22m[39m
+2026-11-05T06:06:30.5782467Z  [32m✓[39m test/dsh-members.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 72[2mms[22m[39m
+2026-11-05T06:06:30.8100815Z  [32m✓[39m test/core-management.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 88[2mms[22m[39m
+2026-11-05T06:06:31.2264050Z  [32m✓[39m test/observation-logs.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 165[2mms[22m[39m
+2026-11-05T06:06:31.3830755Z  [32m✓[39m test/codex-target-diagnostics.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 75[2mms[22m[39m
+2026-11-05T06:06:31.3866762Z  [32m✓[39m test/tui-context-source.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 414[2mms[22m[39m
+2026-11-05T06:06:32.0072417Z  [32m✓[39m test/rollout-meta.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 121[2mms[22m[39m
+2026-11-05T06:06:32.5978859Z  [32m✓[39m test/cli-args.test.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 623[2mms[22m[39m
+2026-11-05T06:06:33.1451284Z  [32m✓[39m test/codex-routing.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 84[2mms[22m[39m
+2026-11-05T06:06:33.1694257Z  [32m✓[39m test/tui-observation-navigation.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 735[2mms[22m[39m
+2026-11-05T06:06:33.1696632Z    [33m[2m✓[22m[39m observation resource routes[2m > [22mkeeps related route caches separate, canonicalizes query order, clears associations on direct commands and restores the source [33m 332[2mms[22m[39m
+2026-11-05T06:06:34.5383784Z  [32m✓[39m test/tui-cli.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 2499[2mms[22m[39m
+2026-11-05T06:06:34.5385457Z    [33m[2m✓[22m[39m CLI TUI command isolation[2m > [22mkeeps "--help" independent from TUI and Ink modules [33m 438[2mms[22m[39m
+2026-11-05T06:06:34.5387519Z    [33m[2m✓[22m[39m CLI TUI command isolation[2m > [22mkeeps "--version" independent from TUI and Ink modules [33m 476[2mms[22m[39m
+2026-11-05T06:06:34.5388772Z    [33m[2m✓[22m[39m CLI TUI command isolation[2m > [22mkeeps "tui" independent from TUI and Ink modules [33m 625[2mms[22m[39m
+2026-11-05T06:06:34.5389847Z    [33m[2m✓[22m[39m CLI TUI command isolation[2m > [22mrejects unsupported TUI arguments without importing the renderer [33m 494[2mms[22m[39m
+2026-11-05T06:06:34.6048086Z  [32m✓[39m test/remote-discovery-tcp.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 744[2mms[22m[39m
+2026-11-05T06:06:34.6050133Z    [33m[2m✓[22m[39m TCP complete read-only discovery[2m > [22mreads 100 anonymous sessions across real broker/node WebSockets and resolves full-ID details [33m 479[2mms[22m[39m
+2026-11-05T06:06:35.0607635Z  [32m✓[39m test/tui-ssh.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+2026-11-05T06:06:35.1512012Z  [32m✓[39m test/serve-registry.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 83[2mms[22m[39m
+2026-11-05T06:06:35.8132039Z  [32m✓[39m test/session-membership-exact.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 239[2mms[22m[39m
+2026-11-05T06:06:35.8604773Z  [32m✓[39m test/claude-wrapper.test.ts [2m([22m[2m16 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m[32m 89[2mms[22m[39m
+2026-11-05T06:06:36.4999737Z  [32m✓[39m test/tcp-configuration.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 127[2mms[22m[39m
+2026-11-05T06:06:36.5732926Z  [32m✓[39m test/tcp-transport.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 187[2mms[22m[39m
+2026-11-05T06:06:37.4218020Z  [32m✓[39m test/tui-follow.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 387[2mms[22m[39m
+2026-11-05T06:06:37.8426259Z  [32m✓[39m test/tui-main-observations.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 747[2mms[22m[39m
+2026-11-05T06:06:37.8428460Z    [33m[2m✓[22m[39m default local observation wiring[2m > [22minstalls the five real readonly resources lazily and preserves exact related routes [33m 366[2mms[22m[39m
+2026-11-05T06:06:39.2677269Z  [32m✓[39m test/send-log.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 5603[2mms[22m[39m
+2026-11-05T06:06:39.2679653Z    [33m[2m✓[22m[39m appendSendLog[2m > [22mrotates past 5MiB instead of truncating: the bulk moves whole to .old, the new entry starts a fresh file [33m 5352[2mms[22m[39m
+2026-11-05T06:06:39.7467876Z  [32m✓[39m test/native-rename-providers.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 43[2mms[22m[39m
+2026-11-05T06:06:39.7562965Z  [32m✓[39m test/tcp-machine-transaction.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 1373[2mms[22m[39m
+2026-11-05T06:06:39.7564401Z    [33m[2m✓[22m[39m fixed peer configuration naming transaction[2m > [22msaves the exact connected current-star entry and clears only its override [33m 781[2mms[22m[39m
+2026-11-05T06:06:39.7567143Z    [33m[2m✓[22m[39m fixed peer configuration naming transaction[2m > [22mkeeps the previous configuration when final persistence fails [33m 518[2mms[22m[39m
+2026-11-05T06:06:40.1471145Z  [32m✓[39m test/core-members.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+2026-11-05T06:06:40.1698449Z  [32m✓[39m test/opencode-tui.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+2026-11-05T06:06:40.8443803Z  [32m✓[39m test/tcp-machine-workspace.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 34[2mms[22m[39m
+2026-11-05T06:06:41.7296606Z  [32m✓[39m test/caller-source-providers.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 480[2mms[22m[39m
+2026-11-05T06:06:42.2224855Z  [32m✓[39m test/opencode-members.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 63[2mms[22m[39m
+2026-11-05T06:06:42.9741655Z  [32m✓[39m test/serve-tool-type-bridge.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 266[2mms[22m[39m
+2026-11-05T06:06:43.2796170Z  [32m✓[39m test/local-service-inspection.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 4864[2mms[22m[39m
+2026-11-05T06:06:43.2798780Z    [33m[2m✓[22m[39m owned service inspection and guard workers[2m > [22mreclaims an inspector blocked in spawnSync, including its owned probe child, before cancellation returns [33m 1086[2mms[22m[39m
+2026-11-05T06:06:43.2805623Z    [33m[2m✓[22m[39m owned service inspection and guard workers[2m > [22muses the real process wrapper for successful inspection/guard IPC and releases it before returning [33m 1382[2mms[22m[39m
+2026-11-05T06:06:43.2859606Z    [33m[2m✓[22m[39m owned service inspection and guard workers[2m > [22mreclaims a real wrapper and its controlled blocked probe when its read timeout expires [33m 2019[2mms[22m[39m
+2026-11-05T06:06:43.6121099Z  [32m✓[39m test/watchdog.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 179[2mms[22m[39m
+2026-11-05T06:06:43.6315848Z  [32m✓[39m test/local-service-owned-stop.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 2325[2mms[22m[39m
+2026-11-05T06:06:43.6319672Z    [33m[2m✓[22m[39m TUI owned service stop process trees[2m > [22mbounds a nonresponding stop job and reclaims its full scanner tree on timeout [33m 1101[2mms[22m[39m
+2026-11-05T06:06:43.6322152Z    [33m[2m✓[22m[39m TUI owned service stop process trees[2m > [22mruns the actual stop process wrapper and prior stop worker with the same fixed target, then releases the wrapper [33m 351[2mms[22m[39m
+2026-11-05T06:06:43.6325038Z    [33m[2m✓[22m[39m TUI owned service stop process trees[2m > [22mretains prior request validation inside the real wrapper before any stop business call [33m 301[2mms[22m[39m
+2026-11-05T06:06:43.7594644Z  [32m✓[39m test/tui-connections.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+2026-11-05T06:06:44.2933412Z  [32m✓[39m test/tool-type-observations.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 151[2mms[22m[39m
+2026-11-05T06:06:44.4185976Z  [32m✓[39m test/tcp-configuration-management.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 166[2mms[22m[39m
+2026-11-05T06:06:45.0265269Z  [32m✓[39m test/install-skills.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 646[2mms[22m[39m
+2026-11-05T06:06:45.0853725Z  [32m✓[39m test/conversation-handle-ring.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 317[2mms[22m[39m
+2026-11-05T06:06:45.5242914Z  [32m✓[39m test/revocation-auth-race.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 547[2mms[22m[39m
+2026-11-05T06:06:45.5245549Z    [33m[2m✓[22m[39m revocation during current process lifecycles[2m > [22ma corrupt self-aggregator pause does not become an unhandled rejection in the broker [33m 495[2mms[22m[39m
+2026-11-05T06:06:45.5275942Z  [32m✓[39m test/dsh-onboarding-workflow-platform.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 64[2mms[22m[39m
+2026-11-05T06:06:46.0738354Z  [32m✓[39m test/tcp-management-exact.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 90[2mms[22m[39m
+2026-11-05T06:06:46.1029005Z  [32m✓[39m test/native-endpoint-types.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+2026-11-05T06:06:46.2026569Z  [32m✓[39m test/maintenance-boundaries.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 633[2mms[22m[39m
+2026-11-05T06:06:46.2029035Z    [33m[2m✓[22m[39m TUI maintenance source and copy boundaries[2m > [22mcloses unreadable sources and bounds directory enumeration before accepting a skill plan [33m 485[2mms[22m[39m
+2026-11-05T06:06:46.5290861Z  [2m[90m↓[39m[22m test/live/claude-live.test.ts [2m([22m[2m2 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m
+2026-11-05T06:06:46.5543250Z  [32m✓[39m test/codex-caller-source-probe.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+2026-11-05T06:06:46.8530212Z  [32m✓[39m test/caller-source-service.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 186[2mms[22m[39m
+2026-11-05T06:06:47.0532495Z  [32m✓[39m test/dsh-onboarding-platform.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 64[2mms[22m[39m
+2026-11-05T06:06:47.3578841Z  [32m✓[39m test/clean.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 57[2mms[22m[39m
+2026-11-05T06:06:47.8395878Z  [32m✓[39m test/send-handle.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 361[2mms[22m[39m
+2026-11-05T06:06:47.9053729Z  [32m✓[39m test/discovery-ssh.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 63[2mms[22m[39m
+2026-11-05T06:06:47.9147630Z  [32m✓[39m test/delivery-mode.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 84[2mms[22m[39m
+2026-11-05T06:06:48.3429557Z  [32m✓[39m test/opencode-identity.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+2026-11-05T06:06:48.5453393Z  [32m✓[39m test/tui-text.test.ts [2m([22m[2m52 tests[22m[2m)[22m[32m 78[2mms[22m[39m
+2026-11-05T06:06:48.6484743Z  [32m✓[39m test/tcp-management-boundaries.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 60[2mms[22m[39m
+2026-11-05T06:06:48.8439871Z  [32m✓[39m test/codex-rpc.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 55[2mms[22m[39m
+2026-11-05T06:06:49.0691365Z  [32m✓[39m test/tui-terminal.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 129[2mms[22m[39m
+2026-11-05T06:06:49.2662588Z  [32m✓[39m test/ssh-managed-profiles.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 156[2mms[22m[39m
+2026-11-05T06:06:49.3099125Z  [32m✓[39m test/node-config.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 34[2mms[22m[39m
+2026-11-05T06:06:49.6035276Z  [32m✓[39m test/core-sessions.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+2026-11-05T06:06:49.7924729Z  [32m✓[39m test/tui-maintenance.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 25[2mms[22m[39m
+2026-11-05T06:06:49.8036806Z  [2m[90m↓[39m[22m test/live/codex-live.test.ts [2m([22m[2m2 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m
+2026-11-05T06:06:50.4592557Z  [32m✓[39m test/dsh-identity.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+2026-11-05T06:06:51.1059309Z  [32m✓[39m test/claude-compat-lifecycle.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 192[2mms[22m[39m
+2026-11-05T06:06:52.0368551Z  [32m✓[39m test/tui-input.test.tsx [2m([22m[2m21 tests[22m[2m)[22m[33m 1129[2mms[22m[39m
+2026-11-05T06:06:52.0370382Z    [33m[2m✓[22m[39m Ink input batches[2m > [22mfeeds one real useInput batch across the list and command editor modes [33m 379[2mms[22m[39m
+2026-11-05T06:06:52.7997803Z  [32m✓[39m test/tcp-exact-transport.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 244[2mms[22m[39m
+2026-11-05T06:06:53.3021666Z (node:2624) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+2026-11-05T06:06:53.3023748Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-11-05T06:06:53.5218137Z  [32m✓[39m test/desktop-metadata.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 352[2mms[22m[39m
+2026-11-05T06:06:53.5221029Z    [33m[2m✓[22m[39m Desktop metadata candidates[2m > [22mreads an isolated SQLite file through the worker, excludes archived/noninteractive rows, and never creates a missing DB [33m 339[2mms[22m[39m
+2026-11-05T06:06:53.9612512Z  [32m✓[39m test/codex-pagination.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 35[2mms[22m[39m
+2026-11-05T06:06:54.6745418Z  [32m✓[39m test/runtime-import-graph.test.ts [2m([22m[2m9 tests[22m[2m)[22m[33m 3716[2mms[22m[39m
+2026-11-05T06:06:54.6747193Z    [33m[2m✓[22m[39m core source architecture[2m > [22mhas no runtime dependency cycle or broken local import [33m 1668[2mms[22m[39m
+2026-11-05T06:06:54.6749380Z    [33m[2m✓[22m[39m core source architecture[2m > [22mkeeps node configuration and connection selection independent of commands and clients [33m 978[2mms[22m[39m
+2026-11-05T06:06:54.6751982Z    [33m[2m✓[22m[39m core source architecture[2m > [22mkeeps every application adapter independent of command and UI entry points [33m 946[2mms[22m[39m
+2026-11-05T06:06:55.1402076Z  [32m✓[39m test/tui-table.test.ts [2m([22m[2m23 tests[22m[2m)[22m[32m 66[2mms[22m[39m
+2026-11-05T06:06:55.2961027Z  [32m✓[39m test/ssh-native-authentication.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 972[2mms[22m[39m
+2026-11-05T06:06:55.2963741Z    [33m[2m✓[22m[39m SSH application native ASKPASS integration[2m > [22mreuses authentication across refreshes, retains strict host checking and forgets credentials when configuration changes [33m 594[2mms[22m[39m
+2026-11-05T06:06:55.5622428Z  [32m✓[39m test/core-cleanup.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 85[2mms[22m[39m
+2026-11-05T06:06:55.6972240Z  [32m✓[39m test/local-service-owned-process.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 40[2mms[22m[39m
+2026-11-05T06:06:56.0641144Z  [32m✓[39m test/opencode-send.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+2026-11-05T06:06:56.0922023Z  [32m✓[39m test/tui-logs.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+2026-11-05T06:06:56.5378978Z  [32m✓[39m test/opencode-compat-fixture.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 112[2mms[22m[39m
+2026-11-05T06:06:56.5613969Z  [32m✓[39m test/dsh-mock-model.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 128[2mms[22m[39m
+2026-11-05T06:06:56.9231989Z  [32m✓[39m test/tui-overview.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+2026-11-05T06:06:57.0373752Z  [32m✓[39m test/outbox-ownership.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 105[2mms[22m[39m
+2026-11-05T06:06:57.2674460Z  [32m✓[39m test/endpoint-protocol.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 5517[2mms[22m[39m
+2026-11-05T06:06:57.2677253Z    [33m[2m✓[22m[39m endpoint identity capability guard[2m > [22mdoes not replay an uncertain lifecycle removal while readonly roster still reports the same temporary member [33m 5432[2mms[22m[39m
+2026-11-05T06:06:57.3490715Z  [32m✓[39m test/tool-type-discovery-state.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 23[2mms[22m[39m
+2026-11-05T06:06:57.7099198Z  [32m✓[39m test/ssh-interaction.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+2026-11-05T06:06:58.0681568Z  [32m✓[39m test/tcp-cold-management.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 85[2mms[22m[39m
+2026-11-05T06:06:58.4059108Z  [32m✓[39m test/limits.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+2026-11-05T06:06:58.8223235Z  [32m✓[39m test/ssh-target-lifecycle.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 1343[2mms[22m[39m
+2026-11-05T06:06:58.8228914Z    [33m[2m✓[22m[39m SSH target identity and process completion[2m > [22mbounds a child that never closes, reports incomplete cleanup, and removes its owned listeners [33m 1120[2mms[22m[39m
+2026-11-05T06:06:58.9091692Z  [32m✓[39m test/core-services.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+2026-11-05T06:06:59.3199228Z  [32m✓[39m test/tcp-node-naming-lifecycle.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+2026-11-05T06:06:59.3947426Z  [32m✓[39m test/tui-view.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 719[2mms[22m[39m
+2026-11-05T06:06:59.5524736Z  [32m✓[39m test/dsh-status.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+2026-11-05T06:07:00.2123531Z  [32m✓[39m test/tcp-snapshot-transport.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 99[2mms[22m[39m
+2026-11-05T06:07:00.2704695Z  [32m✓[39m test/pipe-transport.test.ts [2m([22m[2m6 tests[22m[2m | [22m[33m3 skipped[39m[2m)[22m[33m 376[2mms[22m[39m
+2026-11-05T06:07:00.2706808Z    [33m[2m✓[22m[39m WindowsNamedPipeTransport[2m > [22mreports PIPE_WRITE_UNCERTAIN when the server cuts the connection mid-write [33m 306[2mms[22m[39m
+2026-11-05T06:07:00.8685737Z  [32m✓[39m test/opencode-desktop-probe.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 118[2mms[22m[39m
+2026-11-05T06:07:01.2781537Z  [32m✓[39m test/codex-session-events.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 592[2mms[22m[39m
+2026-11-05T06:07:01.2784424Z    [33m[2m✓[22m[39m Codex per-window native protocol selection[2m > [22monly successful native selection and first accepted input affect this window, never global notifications or failed resume [33m 363[2mms[22m[39m
+2026-11-05T06:07:01.2960071Z  [32m✓[39m test/deliver.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+2026-11-05T06:07:01.8031135Z  [32m✓[39m test/dsh-tui.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+2026-11-05T06:07:02.2803083Z  [32m✓[39m test/opencode-desktop-process-race.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+2026-11-05T06:07:02.4353259Z  [32m✓[39m test/tui-main-sessions.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 556[2mms[22m[39m
+2026-11-05T06:07:02.4355756Z    [33m[2m✓[22m[39m default local sessions wiring[2m > [22minstalls the real session resource through injectable safe application sources after entering local [33m 389[2mms[22m[39m
+2026-11-05T06:07:02.7520911Z  [32m✓[39m test/dsh-reader.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+2026-11-05T06:07:03.0265097Z  [32m✓[39m test/session-operations.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 90[2mms[22m[39m
+2026-11-05T06:07:03.3859408Z  [32m✓[39m test/core-send-diagnostics.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 27[2mms[22m[39m
+2026-11-05T06:07:03.7388253Z  [32m✓[39m test/tcp-local-management.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 55[2mms[22m[39m
+2026-11-05T06:07:03.8950491Z  [32m✓[39m test/tui-services.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+2026-11-05T06:07:04.3482566Z  [32m✓[39m test/opencode-command-fixture.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 29[2mms[22m[39m
+2026-11-05T06:07:04.5300448Z  [32m✓[39m test/tui-ssh-management.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+2026-11-05T06:07:05.1462750Z  [32m✓[39m test/opencode-status.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+2026-11-05T06:07:05.3469454Z  [32m✓[39m test/tui-sensitive-result.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 466[2mms[22m[39m
+2026-11-05T06:07:05.6497445Z  [32m✓[39m test/doctor-json-cli.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 5873[2mms[22m[39m
+2026-11-05T06:07:05.6500698Z    [33m[2m✓[22m[39m doctor JSON CLI extension[2m > [22mdiagnoses the exact custom Harness copy installed by the shared maintenance plan without repairing it [33m 2924[2mms[22m[39m
+2026-11-05T06:07:05.6503390Z    [33m[2m✓[22m[39m doctor JSON CLI extension[2m > [22mreturns the structured checks and preserves the existing default report and exit severity [33m 1602[2mms[22m[39m
+2026-11-05T06:07:05.6512129Z    [33m[2m✓[22m[39m doctor JSON CLI extension[2m > [22memits valid structured findings with exit one for a failed check and rejects extra options [33m 1345[2mms[22m[39m
+2026-11-05T06:07:05.7189492Z  [32m✓[39m test/core-send.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 34[2mms[22m[39m
+2026-11-05T06:07:05.8825025Z  [32m✓[39m test/rate-limit.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 36[2mms[22m[39m
+2026-11-05T06:07:06.2660012Z  [32m✓[39m test/tui-page-presentation.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 58[2mms[22m[39m
+2026-11-05T06:07:06.5431962Z  [32m✓[39m test/c14-tool-addressing.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+2026-11-05T06:07:06.7268575Z  [32m✓[39m test/tui-clipboard.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 352[2mms[22m[39m
+2026-11-05T06:07:06.7271227Z    [33m[2m✓[22m[39m explicit clipboard copy[2m > [22mpreserves complete UTF-8 stdin in Windows PowerShell without touching the real clipboard [33m 329[2mms[22m[39m
+2026-11-05T06:07:07.3802387Z  [32m✓[39m test/dsh-node-members.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 233[2mms[22m[39m
+2026-11-05T06:07:07.8954879Z  [32m✓[39m test/tui-registry.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 134[2mms[22m[39m
+2026-11-05T06:07:08.3860212Z  [32m✓[39m test/local-service-worker-boundary.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 946[2mms[22m[39m
+2026-11-05T06:07:08.4506193Z  [32m✓[39m test/tui-session-view.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 590[2mms[22m[39m
+2026-11-05T06:07:08.4619619Z  [32m✓[39m test/state-paths.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 99[2mms[22m[39m
+2026-11-05T06:07:08.9758460Z  [32m✓[39m test/tui-tcp-targets.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 40[2mms[22m[39m
+2026-11-05T06:07:08.9760392Z  [32m✓[39m test/dsh-npm-install.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 40[2mms[22m[39m
+2026-11-05T06:07:08.9761881Z  [32m✓[39m test/registry.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 28[2mms[22m[39m
+2026-11-05T06:07:09.5274381Z  [32m✓[39m test/opencode-composition.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+2026-11-05T06:07:09.5690125Z  [32m✓[39m test/tui-context-actions.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 77[2mms[22m[39m
+2026-11-05T06:07:09.8603797Z  [32m✓[39m test/core-services-background.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 447[2mms[22m[39m
+2026-11-05T06:07:10.0629626Z  [32m✓[39m test/claude-compat-evidence.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+2026-11-05T06:07:10.1366592Z  [32m✓[39m test/codex-wrapper.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+2026-11-05T06:07:10.4059541Z  [32m✓[39m test/core-local-discovery.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+2026-11-05T06:07:10.5890931Z  [32m✓[39m test/key-file.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+2026-11-05T06:07:11.0437975Z  [32m✓[39m test/codex-proxy-env.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+2026-11-05T06:07:11.2964152Z  [32m✓[39m test/ssh-askpass-bridge.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 813[2mms[22m[39m
+2026-11-05T06:07:11.7386727Z  [32m✓[39m test/compat-reply.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+2026-11-05T06:07:11.8485857Z  [32m✓[39m test/dsh-cli.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 97[2mms[22m[39m
+2026-11-05T06:07:11.8588004Z  [32m✓[39m test/caller-source-state-lock.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 380[2mms[22m[39m
+2026-11-05T06:07:12.3068162Z  [32m✓[39m test/dsh-runtime-driver.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 162[2mms[22m[39m
+2026-11-05T06:07:12.3199910Z  [32m✓[39m test/c14-discovery-tui.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+2026-11-05T06:07:12.6809414Z  [32m✓[39m test/tcp-management-state.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+2026-11-05T06:07:12.6969885Z  [32m✓[39m test/session-membership-machine.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+2026-11-05T06:07:12.8793644Z  [32m✓[39m test/claude-session-events.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 543[2mms[22m[39m
+2026-11-05T06:07:13.1872943Z  [32m✓[39m test/tui-star-audit.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 29[2mms[22m[39m
+2026-11-05T06:07:13.7020492Z  [32m✓[39m test/session-selection.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 71[2mms[22m[39m
+2026-11-05T06:07:14.3024227Z  [32m✓[39m test/dsh-composition.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+2026-11-05T06:07:14.9367143Z  [32m✓[39m test/remote-discovery-cli.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 1608[2mms[22m[39m
+2026-11-05T06:07:14.9369785Z    [33m[2m✓[22m[39m built discover CLI endpoint[2m > [22mreads only JSON stdin and emits full anonymous metadata without draining outbox or exposing sockets [33m 442[2mms[22m[39m
+2026-11-05T06:07:14.9372095Z    [33m[2m✓[22m[39m built discover CLI endpoint[2m > [22mrejects invalid JSON and oversized input before provider execution [33m 1164[2mms[22m[39m
+2026-11-05T06:07:14.9962851Z  [32m✓[39m test/tui-send-command.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 1884[2mms[22m[39m
+2026-11-05T06:07:14.9965144Z    [33m[2m✓[22m[39m TUI send command templates[2m > [22mround-trips opaque arguments through the current platform shell [33m 1874[2mms[22m[39m
+2026-11-05T06:07:15.0328305Z  [32m✓[39m test/tui-main-preferences.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 134[2mms[22m[39m
+2026-11-05T06:07:15.6183737Z  [32m✓[39m test/tcp-empty-node-config.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+2026-11-05T06:07:15.6477262Z  [32m✓[39m test/serve-management-errors.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+2026-11-05T06:07:16.2884555Z  [32m✓[39m test/session-star-logging.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+2026-11-05T06:07:16.7303543Z  [32m✓[39m test/tui-status.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+2026-11-05T06:07:16.8114114Z  [32m✓[39m test/tui-workspace-layout.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 434[2mms[22m[39m
+2026-11-05T06:07:17.2390849Z  [32m✓[39m test/identity-command.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 95[2mms[22m[39m
+2026-11-05T06:07:17.4268359Z  [32m✓[39m test/tui-layout-paging.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 552[2mms[22m[39m
+2026-11-05T06:07:17.4706088Z  [32m✓[39m test/tui-mutation-navigation.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 175[2mms[22m[39m
+2026-11-05T06:07:17.6360076Z  [32m✓[39m test/frame.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+2026-11-05T06:07:17.8479106Z  [2m[90m↓[39m[22m test/live/status-live.test.ts [2m([22m[2m2 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m
+2026-11-05T06:07:18.1373600Z  [32m✓[39m test/session-membership-ipv6.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+2026-11-05T06:07:18.1408434Z  [32m✓[39m test/serve-protocol.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+2026-11-05T06:07:18.2431842Z  [32m✓[39m test/star-snapshot.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 16[2mms[22m[39m
+2026-11-05T06:07:18.5541543Z  [32m✓[39m test/c14-envelope-tool.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+2026-11-05T06:07:18.6653736Z  [32m✓[39m test/local-service-stop-target.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+2026-11-05T06:07:19.0289021Z  [32m✓[39m test/opencode-wrapper.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+2026-11-05T06:07:19.2473959Z  [32m✓[39m test/discovery-command.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+2026-11-05T06:07:19.5143279Z  [32m✓[39m test/codex-launcher-owner.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+2026-11-05T06:07:19.6710352Z  [32m✓[39m test/credential-revoked-protocol.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+2026-11-05T06:07:19.9369975Z  [32m✓[39m test/remote-discovery-protocol.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+2026-11-05T06:07:20.1257870Z  [32m✓[39m test/opencode-ref-boundary.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+2026-11-05T06:07:20.5143520Z  [32m✓[39m test/tui-ssh-authentication-prompt.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
+2026-11-05T06:07:21.0820900Z  [32m✓[39m test/smoke.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 740[2mms[22m[39m
+2026-11-05T06:07:21.0822278Z    [33m[2m✓[22m[39m --version prints the package.json version [33m 330[2mms[22m[39m
+2026-11-05T06:07:21.0823943Z    [33m[2m✓[22m[39m unknown command exits non-zero and reports to stderr with the crosschat prefix [33m 407[2mms[22m[39m
+2026-11-05T06:07:21.1280072Z  [32m✓[39m test/local-service-readiness.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 7[2mms[22m[39m
+2026-11-05T06:07:23.8069949Z  [32m✓[39m test/core-code-standards.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 4396[2mms[22m[39m
+2026-11-05T06:07:23.8071205Z    [33m[2m✓[22m[39m progressive typed lint rules[2m > [22mrejects floating promises, async void callbacks and value imports used only as types [33m 4360[2mms[22m[39m
+2026-11-05T06:07:23.8505985Z 
+2026-11-05T06:07:23.8507233Z [31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+2026-11-05T06:07:23.8507721Z 
+2026-11-05T06:07:23.8512906Z [41m[1m FAIL [22m[49m test/dsh-compat-ci.test.ts[2m > [22mDeepSeek Harness desktop installer admission[2m > [22muses native Windows signature modules rather than executing an inherited shadow module
+2026-11-05T06:07:23.8546436Z [31m[1mError[22m: Test timed out in 5000ms.
+2026-11-05T06:07:23.8547729Z If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+2026-11-05T06:07:23.8549078Z [36m [2m❯[22m test/dsh-compat-ci.test.ts:[2m1925:40[22m[39m
+2026-11-05T06:07:23.8571616Z     [90m1923| [39m  });
+2026-11-05T06:07:23.8572077Z     [90m1924| [39m
+2026-11-05T06:07:23.8572869Z     [90m1925| [39m  it.runIf(process.platform === 'win32')('uses native Windows signatur…
+2026-11-05T06:07:23.8573749Z     [90m   | [39m                                       [31m^[39m
+2026-11-05T06:07:23.8574431Z     [90m1926| [39m    await isolated(async (output) => {
+2026-11-05T06:07:23.8575154Z     [90m1927| [39m      const path = await writeInstaller(output);
+2026-11-05T06:07:23.8575875Z 
+2026-11-05T06:07:23.8579384Z [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+2026-11-05T06:07:23.8579746Z 
+2026-11-05T06:07:23.8582811Z 
+2026-11-05T06:07:23.8608477Z [2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m239 passed[39m[22m[2m | [22m[33m3 skipped[39m[90m (243)[39m
+2026-11-05T06:07:23.8628684Z [2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m2826 passed[39m[22m[2m | [22m[33m11 skipped[39m[90m (2838)[39m
+2026-11-05T06:07:23.8630342Z [2m   Start at [22m 06:05:20
+2026-11-05T06:07:23.8638964Z [2m   Duration [22m 123.12s[2m (transform 6.97s, setup 0ms, collect 42.29s, tests 229.35s, environment 91ms, prepare 35.95s)[22m
+2026-11-05T06:07:23.8639897Z 
+2026-11-05T06:07:23.8689336Z 
+2026-11-05T06:07:23.8730738Z ##[error]Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ test/dsh-compat-ci.test.ts:1925:40
+
+
+2026-11-05T06:07:24.1460068Z ##[error]Process completed with exit code 1.
+2026-11-05T06:07:24.1732041Z Post job cleanup.
+2026-11-05T06:07:24.3763357Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-05T06:07:24.4165970Z git version 2.56.0.windows.4
+2026-11-05T06:07:24.4254337Z Temporarily overriding HOME='D:\a\_temp\66237605-9773-4b42-a89c-2a6314e084c0' before making global git config changes
+2026-11-05T06:07:24.4255819Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-05T06:07:24.4269209Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\crosschat\crosschat
+2026-11-05T06:07:24.4715859Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-05T06:07:24.5144361Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-05T06:07:25.1194546Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-05T06:07:25.1554338Z http.https://github.com/.extraheader
+2026-11-05T06:07:25.1613039Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all http.https://github.com/.extraheader
+2026-11-05T06:07:25.2033658Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-05T06:07:25.7883258Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-05T06:07:25.8280356Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-05T06:07:26.4247077Z Cleaning up orphan processes
+2026-11-05T06:07:26.4683179Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

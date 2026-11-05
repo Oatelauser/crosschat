@@ -1,0 +1,176 @@
+{
+  "schema": 1,
+  "date": "2026-11-05",
+  "base": "a1e6464bd6eb28f12f51609cd637dd8518c5222b",
+  "red": "bb85147",
+  "nativePosix": {
+    "platform": "linux",
+    "arch": "x64",
+    "environment": "Local WSL Ubuntu-22.04; existing Node22.14.0/Python3.10.12",
+    "checks": 7,
+    "firstAndFinalSourcePassed": true,
+    "macosExecuted": false,
+    "officialDshExecuted": false
+  },
+  "windowsConpty": {
+    "node": "v22.23.4",
+    "passed": true,
+    "childCode": 0,
+    "hostCode": 0
+  },
+  "check": {
+    "node": "v22.23.4",
+    "exit": 0,
+    "passed": 2803,
+    "skipped": 11,
+    "filesPassed": 238,
+    "filesSkipped": 3
+  },
+  "mainUbuntuSourceBusyFixed": false,
+  "externalExecution": false,
+  "sources": [
+    {
+      "file": "test/helpers/tui-pty-driver.mjs",
+      "blob": "9496131e534582e776a0c3c8d6f653e8ebe36109"
+    },
+    {
+      "file": "test/helpers/tui-pty-host.py",
+      "blob": "d407d113168018a09c5b5eb23b641cd1ae27598f"
+    },
+    {
+      "file": "test/helpers/tui-posix-pty-selftest.mjs",
+      "blob": "c8c228167b90322ecd40158aac64c21e5c8ac5b5"
+    },
+    {
+      "file": "test/helpers/tui-pty-selftest.mjs",
+      "blob": "2985bf815f1aff3e51bd88f57bf35c5629ba5a30"
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "lint-first.txt",
+      "bytes": 230,
+      "sha256": "25f43ef9b19afc151a94b2dcb47efbc895a0ce20fec714d0d7c7c96ba744a93a"
+    },
+    {
+      "file": "pty-check.txt",
+      "bytes": 31429,
+      "sha256": "45df8879b4eeaf0f09d46e10b898c3163be200b19ce9df8a5904026505c0844a"
+    },
+    {
+      "file": "pty-development.md",
+      "bytes": 2571,
+      "sha256": "db08d1fc83aa624fe10f40ec4f771e379cc9fe88f30f0b1b0ec8b56716cdc703"
+    },
+    {
+      "file": "pty-linux-arguments.jsonl",
+      "bytes": 1271,
+      "sha256": "73050305c79185839004b8cd6e4445e2251272f3a4f9490aae86158d712fd09c"
+    },
+    {
+      "file": "pty-linux-control.jsonl",
+      "bytes": 542,
+      "sha256": "20281e214c37addb8176c295ddfd4d77fe4c194a46c4cd179c6c9182fccc34b5"
+    },
+    {
+      "file": "pty-linux-dispose.jsonl",
+      "bytes": 443,
+      "sha256": "d50eee29bc602c043c3b5028b32363647cd611fd690172559691c80a19d2b677"
+    },
+    {
+      "file": "pty-linux-final-arguments.jsonl",
+      "bytes": 1200,
+      "sha256": "6adf4e75685d00c135a7520e83c4eca317cf2de7e5f26553bb70af8fa4d2d848"
+    },
+    {
+      "file": "pty-linux-final-control.jsonl",
+      "bytes": 542,
+      "sha256": "1901f1ab3fff90dd3da70e327eb5c5c93e79d103e452a04241f194ce9bfb18d0"
+    },
+    {
+      "file": "pty-linux-final-dispose.jsonl",
+      "bytes": 443,
+      "sha256": "44ed47c2ae3ea24f7af0af2195f5fc15aa8381446a019f3c6e51d5df379d9f51"
+    },
+    {
+      "file": "pty-linux-final-force.jsonl",
+      "bytes": 441,
+      "sha256": "4cb2d61891c96b85f70a48a5c1ce3b715bc474195354d60e2c3a08dc1844e479"
+    },
+    {
+      "file": "pty-linux-final-green.txt",
+      "bytes": 946,
+      "sha256": "b2d11d28297c37fbdf2a2c179f90b77736f4d5a2bda2ae507c65bc3e4d598ada"
+    },
+    {
+      "file": "pty-linux-final-nonzero.jsonl",
+      "bytes": 374,
+      "sha256": "b0a43c088343a832dc9e3cad022778bd2669699e61e97ee968455f32c3af003c"
+    },
+    {
+      "file": "pty-linux-final-report.json",
+      "bytes": 837,
+      "sha256": "90f7b55662a7dae00f447c7f10c76a8620a8f00aa04bc495e32516c52d0eeb37"
+    },
+    {
+      "file": "pty-linux-final-startup.jsonl",
+      "bytes": 305,
+      "sha256": "f0adc5a81f1ae579426e34bc5e7a192acb67abb1e46ad53760a01960c031acbb"
+    },
+    {
+      "file": "pty-linux-final-terminal.jsonl",
+      "bytes": 1051,
+      "sha256": "31f058576a0e6d344d65061f52f11c4df8ba0130e038e8842fe6d6618e861b2d"
+    },
+    {
+      "file": "pty-linux-force.jsonl",
+      "bytes": 441,
+      "sha256": "3ef4f106adb91e856034c8fb52f39368fd81779d6eae682315b3ff5dfe6c39c9"
+    },
+    {
+      "file": "pty-linux-green.txt",
+      "bytes": 946,
+      "sha256": "b2d11d28297c37fbdf2a2c179f90b77736f4d5a2bda2ae507c65bc3e4d598ada"
+    },
+    {
+      "file": "pty-linux-nonzero.jsonl",
+      "bytes": 374,
+      "sha256": "294d02f03c982f7c11ac626056d36b327311fa12e2c61a0a824e2570b65a0612"
+    },
+    {
+      "file": "pty-linux-report.json",
+      "bytes": 837,
+      "sha256": "90f7b55662a7dae00f447c7f10c76a8620a8f00aa04bc495e32516c52d0eeb37"
+    },
+    {
+      "file": "pty-linux-startup.jsonl",
+      "bytes": 305,
+      "sha256": "e97946b34647fbed5aa8bbab355033eab9c7d0a14e93a73a2f11d01513d32365"
+    },
+    {
+      "file": "pty-linux-terminal.jsonl",
+      "bytes": 1051,
+      "sha256": "c778fb1708d3257bf8efd4b0de79f3e6c45fc85b640cfc9e430d36f623a7b8ad"
+    },
+    {
+      "file": "pty-red-report.json",
+      "bytes": 213,
+      "sha256": "23df57a54637ff688086af4543fd35f7402d8f36077b37e87b165a0a55eb38c0"
+    },
+    {
+      "file": "pty-red.txt",
+      "bytes": 184,
+      "sha256": "a9f9183f1ebd92989518f1e3c70792014a568c512ccbb84cc2103e7bbf15cbd1"
+    },
+    {
+      "file": "windows-conpty.jsonl",
+      "bytes": 1638,
+      "sha256": "2ca303ea5b67417d1c0e4b737c7ed8e2529843dece67d0cb8dbbe3676b8afef3"
+    },
+    {
+      "file": "windows-conpty.txt",
+      "bytes": 202,
+      "sha256": "161c5d3f8b5feeb1601d440ab84eeb1bcb0c0ca9fa112924075a169d5277adee"
+    }
+  ]
+}

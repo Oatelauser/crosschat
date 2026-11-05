@@ -1,0 +1,15 @@
+{"at":1793854852526,"direction":"host","event":"ready","pid":596}
+{"at":1793854852545,"direction":"host","event":"output","data":"eyJhcmdzIjpbImFyZ3VtZW50IHdpdGggc3BhY2VzIiwibGl0ZXJhbCAkSE9NRSAkKHByaW50ZiBTSE9VTERfTk9UX1JVTikiLCLkuK3mlofwn5iAIl19DQo="}
+{"at":1793854852551,"direction":"host","event":"output","data":"5A=="}
+{"at":1793854852557,"direction":"host","event":"output","data":"uA=="}
+{"at":1793854852565,"direction":"host","event":"output","data":"rQ=="}
+{"at":1793854852573,"direction":"host","event":"output","data":"5g=="}
+{"at":1793854852580,"direction":"host","event":"output","data":"lg=="}
+{"at":1793854852587,"direction":"host","event":"output","data":"hw=="}
+{"at":1793854852593,"direction":"host","event":"output","data":"8A=="}
+{"at":1793854852601,"direction":"host","event":"output","data":"nw=="}
+{"at":1793854852609,"direction":"host","event":"output","data":"mA=="}
+{"at":1793854852616,"direction":"host","event":"output","data":"gENPTVBMRVRF"}
+{"at":1793854852623,"direction":"host","event":"cleanup","forced":false,"groupReleased":true}
+{"at":1793854852630,"direction":"host","event":"exit","code":0}
+{"at":1793854852636,"direction":"driver","event":"host-exit","code":0}

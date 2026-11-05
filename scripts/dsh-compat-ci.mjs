@@ -1061,14 +1061,19 @@ export async function runDshProbeAttempt({ output, label, artifact, target = DEF
   });
 }
 
-function onboardingInfrastructure(version, stage) {
-  return { schema: 1, tool: DSH_ONBOARDING_TOOL, platform: 'win32', arch: 'x64', version,
+function onboardingInfrastructure(version, stage, target = DEFAULT_DSH_NPM_TARGET) {
+  return { schema: 1, tool: DSH_ONBOARDING_TOOL, platform: target.platform, arch: target.arch, version,
     status: 'failed', category: 'infrastructure', stage, check: stage,
     error: 'The from-zero probe did not provide valid fresh process/report evidence; inspect its owned artifacts.' };
 }
 
-export async function runDshOnboardingAttempt(options, execute) {
-  return runNpmProbeAttempt(options, execute, { valid: validDshOnboardingReport, fail: onboardingInfrastructure, maxReportBytes: 1024 * 1024 });
+export async function runDshOnboardingAttempt({ output, label, artifact, target = DEFAULT_DSH_NPM_TARGET }, execute) {
+  if (!isDshNpmTarget(target?.platform, target?.arch)) throw new Error('Unplanned Harness onboarding probe target');
+  const expected = { platform: target.platform, arch: target.arch };
+  return runNpmProbeAttempt({ output, label, artifact }, execute, {
+    valid: (report, build, runId) => validDshOnboardingReport(report, build, runId, expected),
+    fail: (version, stage) => onboardingInfrastructure(version, stage, expected), maxReportBytes: 1024 * 1024,
+  });
 }
 
 async function runNpmProbeAttempt({ output, label, artifact }, execute, contract) {
@@ -1154,11 +1159,13 @@ export function runDshBuildSequence(builds, operations, target = DEFAULT_DSH_NPM
   });
 }
 
-export function runDshOnboardingSequence(builds, operations) {
+export function runDshOnboardingSequence(builds, operations, target = DEFAULT_DSH_NPM_TARGET) {
+  if (!isDshNpmTarget(target?.platform, target?.arch)) throw new Error('Unplanned Harness onboarding sequence target');
+  const expected = { platform: target.platform, arch: target.arch };
   return serialSequence(builds, {
-    tool: DSH_ONBOARDING_TOOL, scope: DSH_ONBOARDING_SCOPE, operations,
-    verify: validDshOnboardingProcessReport, released: hasDshRuntimeReleaseProof,
-    fail: (version, phase) => onboardingInfrastructure(version, phase === 'process' ? 'probe-process' : 'probe-report'),
+    tool: DSH_ONBOARDING_TOOL, scope: DSH_ONBOARDING_SCOPE, operations, target: expected,
+    verify: (report, artifact) => validDshOnboardingProcessReport(report, artifact, expected), released: hasDshRuntimeReleaseProof,
+    fail: (version, phase) => onboardingInfrastructure(version, phase === 'process' ? 'probe-process' : 'probe-report', expected),
   });
 }
 
@@ -1215,20 +1222,22 @@ export function dshRegressionIdentity(summary) {
 }
 
 export function dshOnboardingRegressionIdentity(summary) {
-  if (!record(summary) || summary.schema !== 1 || summary.tool !== DSH_ONBOARDING_TOOL || summary.platform !== 'win32' || summary.arch !== 'x64'
+  if (!record(summary) || summary.schema !== 1 || summary.tool !== DSH_ONBOARDING_TOOL || !isDshNpmTarget(summary.platform, summary.arch)
     || !record(summary.scope) || Object.keys(summary.scope).length !== Object.keys(DSH_ONBOARDING_SCOPE).length
     || !Object.entries(DSH_ONBOARDING_SCOPE).every(([key, value]) => Object.hasOwn(summary.scope, key) && summary.scope[key] === value)
     || summary.installationCleanup !== 'removed' || summary.classification?.kind !== 'regression' || summary.classification?.notify !== true || !record(summary.builds)) return;
   const { builds, baseline, candidate, retry } = summary;
+  const target = { platform: summary.platform, arch: summary.arch };
   try {
-    for (const artifact of [builds.baseline, builds.candidate]) parseDshNpmManifest({ ...artifact, dist: { tarball: artifact.url, integrity: artifact.integrity } }, 'win32', 'x64');
+    for (const artifact of [builds.baseline, builds.candidate]) parseDshNpmManifest({ ...artifact, dist: { tarball: artifact.url, integrity: artifact.integrity } }, target.platform, target.arch);
     parsePnpmManifest({ ...builds.packageManager, dist: { tarball: builds.packageManager.url, integrity: builds.packageManager.integrity } });
   } catch { return; }
-  if (!validDshOnboardingProcessReport(baseline, builds.baseline) || !validDshOnboardingProcessReport(candidate, builds.candidate) || !validDshOnboardingProcessReport(retry, builds.candidate)
+  if (!validDshOnboardingProcessReport(baseline, builds.baseline, target) || !validDshOnboardingProcessReport(candidate, builds.candidate, target) || !validDshOnboardingProcessReport(retry, builds.candidate, target)
     || [baseline, candidate, retry].some((item) => !hasDshRuntimeReleaseProof(item.cleanup))
     || new Set([baseline.runId, candidate.runId, retry.runId]).size !== 3 || classify(baseline, candidate, retry).kind !== 'regression') return;
-  return { marker: `<!-- dsh-onboarding-compat:${candidate.version}:win32:${candidate.check} -->`,
-    title: `DeepSeek Harness ${candidate.version}: ${candidate.check} from-zero compatibility regression (win32)` };
+  const targetKey = target.platform === 'win32' ? 'win32' : `${target.platform}-${target.arch}`;
+  return { marker: `<!-- dsh-onboarding-compat:${candidate.version}:${targetKey}:${candidate.check} -->`,
+    title: `DeepSeek Harness ${candidate.version}: ${candidate.check} from-zero compatibility regression (${targetKey})` };
 }
 
 async function fetchBytes(url, maxBytes) {
@@ -1251,7 +1260,6 @@ async function main() {
   const suite = resolveDshCiSuite(process.env.DSH_COMPAT_SUITE);
   const target = { platform: process.platform, arch: process.arch };
   if (!isDshNpmTarget(target.platform, target.arch)) throw new Error('Unplanned Harness npm runner platform/architecture');
-  if (suite.tool === DSH_ONBOARDING_TOOL && target.platform !== 'win32') throw new Error('POSIX from-zero onboarding awaits real terminal wiring; no installation started');
   const output = resolve(process.env.DSH_COMPAT_EVIDENCE ?? suite.evidenceDirectory); await mkdir(output, { recursive: true });
   const temp = await realpath(tmpdir()); const root = await realpath(await mkdtemp(join(temp, 'crosschat-dsh-ci-'))); const owner = randomUUID();
   await writeFile(join(root, '.fixture-owner'), owner);

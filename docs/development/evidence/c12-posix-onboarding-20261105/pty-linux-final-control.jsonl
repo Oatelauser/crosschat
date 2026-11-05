@@ -1,0 +1,7 @@
+{"at":1793854852807,"direction":"host","event":"ready","pid":612}
+{"at":1793854852827,"direction":"host","event":"output","data":"Q09OVFJPTF9SRUFEWQ0K"}
+{"at":1793854852834,"direction":"driver","op":"write","data":"Aw=="}
+{"at":1793854852848,"direction":"host","event":"output","data":"Q09OVFJPTF9SRVNUT1JFRA0K"}
+{"at":1793854852857,"direction":"host","event":"cleanup","forced":false,"groupReleased":true}
+{"at":1793854852875,"direction":"host","event":"exit","code":0}
+{"at":1793854852884,"direction":"driver","event":"host-exit","code":0}

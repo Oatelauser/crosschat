@@ -1,0 +1,20 @@
+{
+  "authorization": "用户明确批准推送0d0f91a、建立草稿PR并运行候选分支C11四目标从零首验",
+  "observedAt": "2026-11-05T06:02:14.706Z",
+  "head": "0d0f91a81bbb7264cd2bca830013d64b40fa2c0a",
+  "base": "a1e6464bd6eb28f12f51609cd637dd8518c5222b",
+  "branch": "codex/dsh-posix-onboarding-20261105",
+  "matchingPrs": 0,
+  "remoteBranchAbsent": true,
+  "workflow": {
+    "id": 406659158,
+    "path": ".github/workflows/dsh-onboarding-compat.yml",
+    "state": "active"
+  },
+  "rawArtifactsVerified": 95,
+  "sourceBlobsVerified": 11,
+  "mainMergeAuthorized": false,
+  "newPosixWeeklyActivationAuthorized": false,
+  "releaseAuthorized": false,
+  "crossMachineScope": "R1/R2/R3 pending"
+}
