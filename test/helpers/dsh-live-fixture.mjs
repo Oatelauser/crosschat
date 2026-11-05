@@ -288,7 +288,8 @@ export async function createDshFixture(options, respond) {
     const patch = [
       { id: 'session-title-llm', disabled: true },
       { id: 'crosschat-dsh-bridge', config: { home: env.HOME } },
-      { insert: [{ id: 'crosschat-dsh-test-driver', name: pathToFileURL(driver).href, config: { path: controllerPath, token, workspace } }] },
+      { insert: [{ id: 'crosschat-dsh-test-driver', name: pathToFileURL(driver).href, config: { path: controllerPath, token, workspace,
+        ...(options.registerWorkspace === true ? { registerWorkspace: true } : {}) } }] },
     ];
     const patchPath = join(root, 'fixture.patch.yml');
     await writeFile(patchPath, JSON.stringify(patch));

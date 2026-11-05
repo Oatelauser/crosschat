@@ -10,6 +10,16 @@ export const inject = ['agents', 'sessionController', 'webServer', 'pluginManage
 
 export async function apply(ctx, config) {
   const version = getDshRuntimeVersion();
+  let registeredWorkspace;
+  // UI qualification starts from an explicitly owned existing directory. This
+  // fixture setup uses the public registry; it neither opens a native picker nor
+  // creates/restores an Agent on behalf of the operation under test.
+  if (config.registerWorkspace === true) {
+    const registry = ctx.get('workspaceRegistry');
+    if (typeof registry?.create !== 'function') throw new Error('Native workspace registry is unavailable');
+    const workspace = await registry.create(config.workspace);
+    registeredWorkspace = { id: workspace.id, path: workspace.path };
+  }
   const originalAgents = new Map();
   const send = (response, value, status = 200) => { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify(value)); };
   const snapshot = async (id) => {
@@ -28,7 +38,8 @@ export async function apply(ctx, config) {
         body = JSON.parse(text);
       }
       const path = request.url ?? '';
-      if (request.method === 'GET' && path === '/health') return send(response, { schema: 1, pid: process.pid, version, webPort: ctx.webServer.port });
+      if (request.method === 'GET' && path === '/health') return send(response, { schema: 1, pid: process.pid, version, webPort: ctx.webServer.port,
+        ...(registeredWorkspace === undefined ? {} : { registeredWorkspace }) });
       if (request.method === 'POST' && path === '/shutdown') { send(response, { accepted: true }); setImmediate(() => process.emit('SIGTERM')); return; }
       if (request.method === 'POST' && path === '/bridge') {
         if (body === null || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== 1 || typeof body.enabled !== 'boolean') return send(response, { error: 'INVALID_BRIDGE_TOGGLE' }, 400);
