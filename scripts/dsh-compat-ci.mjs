@@ -11,6 +11,7 @@ import { clearTimeout, setTimeout } from 'node:timers';
 import { pathToFileURL, URL } from 'node:url';
 import { prepareDshProfile, repositoryRoot } from '../test/helpers/dsh-live-fixture.mjs';
 import { DSH_ONBOARDING_SCOPE, DSH_ONBOARDING_TOOL, validDshOnboardingProcessReport, validDshOnboardingReport } from './dsh-onboarding-contract.mjs';
+import { isDshNpmTarget } from './dsh-npm-target.mjs';
 
 const tool = 'dsh-web-runtime';
 const pnpmVersion = '11.28.5';
@@ -80,7 +81,7 @@ function supported(version) {
 export function parseDshNpmManifest(input, platform, arch) {
   if (!record(input) || input.name !== '@deepseek-ai/dsh' || !semver(input.version) || !record(input.dist)) throw new Error('Invalid official Harness npm metadata');
   if (!supported(input.version)) throw Object.assign(new Error('Harness release is outside the approved >=0.2.1-rc.2 <0.3.0-0 window'), { category: 'unsupported', version: input.version });
-  if (platform !== 'win32' || arch !== 'x64') throw new Error('This compatibility probe is configured for Windows x64 only');
+  if (!isDshNpmTarget(platform, arch)) throw new Error('Unplanned Harness npm compatibility platform/architecture');
   const url = `https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-${input.version}.tgz`;
   if (input.dist.tarball !== url || !sri.test(input.dist.integrity ?? '')) throw new Error('Invalid official Harness archive URL or SHA-512 SRI');
   return { name: input.name, version: input.version, url, integrity: input.dist.integrity };
