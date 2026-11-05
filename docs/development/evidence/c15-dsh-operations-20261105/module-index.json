@@ -1,0 +1,134 @@
+{
+  "observedAt": "2026-11-05T07:34:51.417Z",
+  "scope": "Read-only inspection of official version-pinned modules; SRI matches previously accepted native package locks. No install or module execution.",
+  "records": [
+    {
+      "label": "baseline",
+      "name": "@deepseek-ai/dsh-agent",
+      "version": "0.2.1-rc.2",
+      "file": "dsh-agent-0.2.1-rc.2.tgz",
+      "metadataUrl": "https://registry.npmjs.org/@deepseek-ai/dsh-agent/0.2.1-rc.2",
+      "bytes": 46870,
+      "sha256": "af5b9a603732bb690535f3d9da6228d447a32bfe6080cbe67ef75f53bc1623a9",
+      "integrity": "sha512-e96Tnq8g/RNCDDUW7kAypY/4cho5QxjLHMhk86BGGIEu9b31XEkSFqwqQIwtYXQez3cDR5z7LZpAM8Uqx9Y8KA==",
+      "gitHead": null,
+      "repository": {
+        "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+        "type": "git",
+        "directory": "packages/core/agent"
+      }
+    },
+    {
+      "label": "baseline",
+      "name": "@deepseek-ai/dsh-api-session-controller",
+      "version": "0.2.1-rc.2",
+      "file": "dsh-api-session-controller-0.2.1-rc.2.tgz",
+      "metadataUrl": "https://registry.npmjs.org/@deepseek-ai/dsh-api-session-controller/0.2.1-rc.2",
+      "bytes": 272969,
+      "sha256": "abf9c880844aa2b6f1a49d1e655ee4d61e8f36e3cb8626acef094d7b4c455e6c",
+      "integrity": "sha512-AvYB5Seza/91BAKzataRn/5UYUqxNHU6W9ryH0JL0gslWkcURbGFFhvkRe9SXNo6DO0Jlv66NbBHME2t0XRPKA==",
+      "gitHead": null,
+      "repository": {
+        "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+        "type": "git",
+        "directory": "packages/api/session-controller"
+      }
+    },
+    {
+      "label": "baseline",
+      "name": "@deepseek-ai/dsh-session-title",
+      "version": "0.2.1-rc.2",
+      "file": "dsh-session-title-0.2.1-rc.2.tgz",
+      "metadataUrl": "https://registry.npmjs.org/@deepseek-ai/dsh-session-title/0.2.1-rc.2",
+      "bytes": 26871,
+      "sha256": "03e9122792173a81001df75f3dbece21aa28f83e52709f18f426778960fb088e",
+      "integrity": "sha512-QSJGQ6+QAO73wNGmyP6GwT04zaHWw/RwPQOguW+tTNtL+q0zdifIu5ek3iJF5caBI+vlvh7SPN5+WDKZt0anOg==",
+      "gitHead": null,
+      "repository": {
+        "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+        "type": "git",
+        "directory": "packages/session/session-title"
+      }
+    },
+    {
+      "label": "baseline",
+      "name": "@deepseek-ai/dsh-session-projection",
+      "version": "0.2.1-rc.2",
+      "file": "dsh-session-projection-0.2.1-rc.2.tgz",
+      "metadataUrl": "https://registry.npmjs.org/@deepseek-ai/dsh-session-projection/0.2.1-rc.2",
+      "bytes": 23877,
+      "sha256": "6d68b9b5a38f7906f15268b81d67847627603783c27edca01aa6c1a9c2c534d6",
+      "integrity": "sha512-GBGgIAaC+Cw1rV7tpyGy9aaENUOkQCosP+LJHcmzqPWg64Ufts36mDEU3f0lC/nyGb0z66Ov+RbyaLLsCnZMwA==",
+      "gitHead": null,
+      "repository": {
+        "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+        "type": "git",
+        "directory": "packages/session/session-projection"
+      }
+    },
+    {
+      "label": "candidate",
+      "name": "@deepseek-ai/dsh-agent",
+      "version": "0.2.1-rc.5",
+      "file": "dsh-agent-0.2.1-rc.5.tgz",
+      "metadataUrl": "https://registry.npmjs.org/@deepseek-ai/dsh-agent/0.2.1-rc.5",
+      "bytes": 46870,
+      "sha256": "2d9b3f2df391f030b7848a4294e8f80009c448e2225d3c7ac67004e9ff4d1142",
+      "integrity": "sha512-mHNbxag0rZVNHaXZvr4OhiveaTTGMNPEpzO4nS8ohOQiQL0MWqA7brwtjBbaAlB3aMZ13tbHGHINpFlXdu8J3Q==",
+      "gitHead": null,
+      "repository": {
+        "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+        "type": "git",
+        "directory": "packages/core/agent"
+      }
+    },
+    {
+      "label": "candidate",
+      "name": "@deepseek-ai/dsh-api-session-controller",
+      "version": "0.2.1-rc.5",
+      "file": "dsh-api-session-controller-0.2.1-rc.5.tgz",
+      "metadataUrl": "https://registry.npmjs.org/@deepseek-ai/dsh-api-session-controller/0.2.1-rc.5",
+      "bytes": 272968,
+      "sha256": "538be90f901b4725483f77d45da3e2af97be542a49259052dd9f3e291214e6f5",
+      "integrity": "sha512-9kcolv2E00fuMMXWDbMn4K2JRMdAf8Ql5wME1CaGxgManvLjPM2Ymc46o2TJnwH4kO2gUtVKUrP9hcreHd148g==",
+      "gitHead": null,
+      "repository": {
+        "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+        "type": "git",
+        "directory": "packages/api/session-controller"
+      }
+    },
+    {
+      "label": "candidate",
+      "name": "@deepseek-ai/dsh-session-title",
+      "version": "0.2.1-rc.5",
+      "file": "dsh-session-title-0.2.1-rc.5.tgz",
+      "metadataUrl": "https://registry.npmjs.org/@deepseek-ai/dsh-session-title/0.2.1-rc.5",
+      "bytes": 26871,
+      "sha256": "26beee5847984b85e9219f3e28af716627714973b513add1abe58270dae70260",
+      "integrity": "sha512-o/nfDkGWjlVt0HrcHdrlWeWxqBmUZx3sQlJ3zrU8jdjuAduHUHHWsygJz3c9uK8fFwhlHQdL5vdMbdDxiF2nSw==",
+      "gitHead": null,
+      "repository": {
+        "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+        "type": "git",
+        "directory": "packages/session/session-title"
+      }
+    },
+    {
+      "label": "candidate",
+      "name": "@deepseek-ai/dsh-session-projection",
+      "version": "0.2.1-rc.5",
+      "file": "dsh-session-projection-0.2.1-rc.5.tgz",
+      "metadataUrl": "https://registry.npmjs.org/@deepseek-ai/dsh-session-projection/0.2.1-rc.5",
+      "bytes": 23877,
+      "sha256": "518e4422893f10f9f86d4b5b765b6c5353d453427fcfdbd15c43c0062b51bb3f",
+      "integrity": "sha512-YGrTGZXqPVPc1lF3jeCITgrgTovr5JZyKC6vHeKpb6Wlyoyu60Yfeerd36wuGNLcs9ydJsUKP6pV5B/zpNv74g==",
+      "gitHead": null,
+      "repository": {
+        "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+        "type": "git",
+        "directory": "packages/session/session-projection"
+      }
+    }
+  ]
+}

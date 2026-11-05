@@ -1,0 +1,212 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-capabilities-20261105
+
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > enables verified host adoption independently of unimplemented rename and exposes no bridge credentials 57ms
+   → expected [] to deep equally contain { method: 'GET', path: '/v1/info' }
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > keeps an untyped or unattested live record in needs-verification despite its delivery flag 13ms
+   → expected 'executable' to be 'needs-verification' // Object.is equality
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rechecks auth and owner, then recovers read-only without submitting adoption 11ms
+   → expected 'executable' to be 'unavailable' // Object.is equality
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > invalidates confirmation when the concrete URL changes even if UUID, pid and version do not 10ms
+   → expected '358d8650d156ceb447b23a6b2262d7a759133…' not to be '358d8650d156ceb447b23a6b2262d7a759133…' // Object.is equality
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects a version change until discovery and confirmation are refreshed 17ms
+   → expected { kind: 'applied', …(1) } to match object { kind: 'rejected' }
+(1 matching property omitted from actual)
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > reports the current unsupported runtime window and recovers after a supported version returns 9ms
+   → expected 'executable' to be 'unsupported' // Object.is equality
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects same-type duplicate instances while isolating an identical ID on a different endpoint type 11ms
+   → expected 'executable' to be 'unavailable' // Object.is equality
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > does not cross from the selected host endpoint to an available desktop owner 8ms
+   → expected 'executable' to be 'unavailable' // Object.is equality
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rechecks the native target immediately before the claim and rejects a disappearance without calling the writer 8ms
+   → expected { kind: 'applied', …(1) } to match object { kind: 'rejected' }
+(1 matching property omitted from actual)
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > cancels a blocked native read and owns the late response without issuing a claim 224ms
+   → expected false to be true // Object.is equality
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > keeps an unknown claim result uncertain and never repeats it during capability recovery 8ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > enables verified host adoption independently of unimplemented rename and exposes no bridge credentials
+AssertionError: expected [] to deep equally contain { method: 'GET', path: '/v1/info' }
+
+- Expected: 
+{
+  "method": "GET",
+  "path": "/v1/info",
+}
+
++ Received: 
+[]
+
+ ❯ test/dsh-native-operations.test.ts:109:24
+    107|     const result = await f.operations.describe(f.ref);
+    108|     expect(result.actions).toMatchObject({ adopt: { state: 'executable…
+    109|     expect(f.requests).toContainEqual({ method: 'GET', path: '/v1/info…
+       |                        ^
+    110|     expect(f.requests).toContainEqual({ method: 'GET', path: '/v1/sess…
+    111|     expect(JSON.stringify(result)).not.toContain(f.registration.token);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > keeps an untyped or unattested live record in needs-verification despite its delivery flag
+AssertionError: expected 'executable' to be 'needs-verification' // Object.is equality
+
+Expected: "needs-verification"
+Received: "executable"
+
+ ❯ test/dsh-native-operations.test.ts:121:43
+    119|     f.setItem(item => ({ ...item, ref: { ...item.ref, endpointType: un…
+    120|     const described = await f.operations.describe({ ...f.ref, endpoint…
+    121|     expect(described.actions.adopt.state).toBe('needs-verification');
+       |                                           ^
+    122|     expect(f.requests).toEqual([]);
+    123|     expect(f.adopt).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rechecks auth and owner, then recovers read-only without submitting adoption
+AssertionError: expected 'executable' to be 'unavailable' // Object.is equality
+
+Expected: "unavailable"
+Received: "executable"
+
+ ❯ test/dsh-native-operations.test.ts:130:70
+    128|     const healthy = await f.operations.describe(f.ref);
+    129|     f.state.unauthorized = true;
+    130|     expect((await f.operations.describe(f.ref)).actions.adopt.state).t…
+       |                                                                      ^
+    131|     f.state.unauthorized = false; f.state.infoPid++;
+    132|     expect((await f.operations.describe(f.ref)).actions.adopt.state).t…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > invalidates confirmation when the concrete URL changes even if UUID, pid and version do not
+AssertionError: expected '358d8650d156ceb447b23a6b2262d7a759133…' not to be '358d8650d156ceb447b23a6b2262d7a759133…' // Object.is equality
+ ❯ test/dsh-native-operations.test.ts:145:32
+    143|     const after = await f.operations.describe(f.ref);
+    144|     expect(after.actions.adopt.state).toBe('executable');
+    145|     expect(after.revision).not.toBe(before.revision);
+       |                                ^
+    146|     expect(await f.operations.apply({ ref: f.ref, operation: 'adopt', …
+    147|     expect(f.adopt).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects a version change until discovery and confirmation are refreshed
+AssertionError: expected { kind: 'applied', …(1) } to match object { kind: 'rejected' }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "kind": "rejected",
++   "kind": "applied",
+  }
+
+ ❯ test/dsh-native-operations.test.ts:154:109
+    152|     const before = await f.operations.describe(f.ref);
+    153|     f.registration.runtimeVersion = '0.2.1-rc.5'; await f.publish();
+    154|     expect(await f.operations.apply({ ref: f.ref, operation: 'adopt', …
+       |                                                                                                             ^
+    155|     await f.refresh();
+    156|     expect((await f.operations.describe(f.ref)).actions.adopt.state).t…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > reports the current unsupported runtime window and recovers after a supported version returns
+AssertionError: expected 'executable' to be 'unsupported' // Object.is equality
+
+Expected: "unsupported"
+Received: "executable"
+
+ ❯ test/dsh-native-operations.test.ts:163:70
+    161|     const f = await fixture();
+    162|     f.registration.runtimeVersion = '0.3.0'; await f.publish();
+    163|     expect((await f.operations.describe(f.ref)).actions.adopt.state).t…
+       |                                                                      ^
+    164|     f.registration.runtimeVersion = '0.2.1-rc.2'; await f.publish();
+    165|     expect((await f.operations.describe(f.ref)).actions.adopt.state).t…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects same-type duplicate instances while isolating an identical ID on a different endpoint type
+AssertionError: expected 'executable' to be 'unavailable' // Object.is equality
+
+Expected: "unavailable"
+Received: "executable"
+
+ ❯ test/dsh-native-operations.test.ts:174:70
+    172|     expect((await f.operations.describe(f.ref)).actions.adopt.state).t…
+    173|     await f.duplicate('host');
+    174|     expect((await f.operations.describe(f.ref)).actions.adopt.state).t…
+       |                                                                      ^
+    175|     expect(f.adopt).not.toHaveBeenCalled();
+    176|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > does not cross from the selected host endpoint to an available desktop owner
+AssertionError: expected 'executable' to be 'unavailable' // Object.is equality
+
+Expected: "unavailable"
+Received: "executable"
+
+ ❯ test/dsh-native-operations.test.ts:181:70
+    179|     const f = await fixture();
+    180|     f.registration.profile = 'desktop'; f.registration.endpointType = …
+    181|     expect((await f.operations.describe(f.ref)).actions.adopt.state).t…
+       |                                                                      ^
+    182|     expect(f.adopt).not.toHaveBeenCalled();
+    183|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/10]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rechecks the native target immediately before the claim and rejects a disappearance without calling the writer
+AssertionError: expected { kind: 'applied', …(1) } to match object { kind: 'rejected' }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "kind": "rejected",
++   "kind": "applied",
+  }
+
+ ❯ test/dsh-native-operations.test.ts:189:109
+    187|     const before = await f.operations.describe(f.ref);
+    188|     f.state.onDetail = () => { if (f.state.details === 3) f.state.miss…
+    189|     expect(await f.operations.apply({ ref: f.ref, operation: 'adopt', …
+       |                                                                                                             ^
+    190|     expect(f.state.details).toBe(3);
+    191|     expect(f.adopt).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/10]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > cancels a blocked native read and owns the late response without issuing a claim
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ vi.waitFor.timeout test/dsh-native-operations.test.ts:197:92
+    195|     const f = await fixture(), held = f.holdInfo(), controller = new A…
+    196|     const pending = f.operations.describe(f.ref, controller.signal);
+    197|     await vi.waitFor(() => expect(f.requests.some(request => request.p…
+       |                                                                                            ^
+    198|     await held.started;
+    199|     controller.abort();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  10 failed | 1 passed (11)
+   Start at  15:53:17
+   Duration  794ms (transform 125ms, setup 0ms, collect 197ms, tests 377ms, environment 0ms, prepare 80ms)
+

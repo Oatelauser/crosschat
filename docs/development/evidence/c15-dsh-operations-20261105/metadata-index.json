@@ -1,0 +1,82 @@
+{
+  "observedAt": "2026-11-05T07:32:57.842Z",
+  "scope": "Official immutable version metadata only; no DSH install or execution",
+  "facts": [
+    {
+      "label": "baseline",
+      "file": "dsh-0.2.1-rc.2-metadata.json",
+      "url": "https://registry.npmjs.org/@deepseek-ai/dsh/0.2.1-rc.2",
+      "bytes": 8506,
+      "sha256": "eda3722e121a9cb4079f09be3fd727ac184e95f7ea6b0e6228d51ee3080820e6",
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.2",
+      "integrity": "sha512-tvY+yhfKRifthbqPe/OK0AYxM5ZkvqfYq/jMYgJcEUxiRRL1Vwra3Ti5TB6AXgSWQdiPHYh/Vp6SJa9yHwMNuw==",
+      "gitHead": null,
+      "repository": {
+        "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+        "type": "git",
+        "directory": "apps/cli"
+      },
+      "modules": [
+        [
+          "@deepseek-ai/dsh-web-app",
+          "0.2.1-rc.2"
+        ],
+        [
+          "@deepseek-ai/dsh-app-boot",
+          "0.2.1-rc.2"
+        ],
+        [
+          "@deepseek-ai/dsh-tool-subagent",
+          "0.2.1-rc.2"
+        ],
+        [
+          "@deepseek-ai/dsh-session-projection",
+          "0.2.1-rc.2"
+        ],
+        [
+          "@deepseek-ai/dsh-experimental-session-titles-bundle",
+          "0.2.1-rc.2"
+        ]
+      ]
+    },
+    {
+      "label": "candidate",
+      "file": "dsh-0.2.1-rc.5-metadata.json",
+      "url": "https://registry.npmjs.org/@deepseek-ai/dsh/0.2.1-rc.5",
+      "bytes": 8506,
+      "sha256": "14b6cbfa61d2c026262a75eef4a92b4984b3172d92cb046f246b48fde7d92124",
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.5",
+      "integrity": "sha512-WkyJZv4zl9sCAxSzRctGm58m0rilGqwR6pniBiLOz5CPDfHfDuAUicg0AAazXI7oj/Cph6/cjNTncA/rpLTXpw==",
+      "gitHead": null,
+      "repository": {
+        "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+        "type": "git",
+        "directory": "apps/cli"
+      },
+      "modules": [
+        [
+          "@deepseek-ai/dsh-web-app",
+          "0.2.1-rc.5"
+        ],
+        [
+          "@deepseek-ai/dsh-app-boot",
+          "0.2.1-rc.5"
+        ],
+        [
+          "@deepseek-ai/dsh-tool-subagent",
+          "0.2.1-rc.5"
+        ],
+        [
+          "@deepseek-ai/dsh-session-projection",
+          "0.2.1-rc.5"
+        ],
+        [
+          "@deepseek-ai/dsh-experimental-session-titles-bundle",
+          "0.2.1-rc.5"
+        ]
+      ]
+    }
+  ]
+}
