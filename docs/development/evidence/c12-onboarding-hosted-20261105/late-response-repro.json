@@ -1,0 +1,29 @@
+{
+  "node": "v22.23.4",
+  "platform": "win32",
+  "productionCodeUnchanged": true,
+  "observations": [
+    {
+      "blockMs": 0,
+      "elapsedMs": 65,
+      "message": "Desktop installer exceeded its 30ms deadline",
+      "undecidedResources": [
+        "the official response had not settled at return; its body stays owned"
+      ],
+      "canceledAtReturn": false,
+      "canceledAfterArrival": true,
+      "lockedAfterArrival": true,
+      "remainingFiles": 0
+    },
+    {
+      "blockMs": 200,
+      "elapsedMs": 201,
+      "message": "Desktop installer exceeded its 30ms deadline",
+      "undecidedResources": [],
+      "canceledAtReturn": true,
+      "canceledAfterArrival": true,
+      "lockedAfterArrival": false,
+      "remainingFiles": 0
+    }
+  ]
+}
