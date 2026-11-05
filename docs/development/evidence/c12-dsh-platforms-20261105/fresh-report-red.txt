@@ -1,0 +1,63 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-platform-20261105
+
+ ❯ test/dsh-platform-ci.test.ts (12 tests | 3 failed) 30ms
+   ✓ DSH npm platform boundaries > verifies the same pinned official npm archive for linux/x64 without claiming native execution 2ms
+   ✓ DSH npm platform boundaries > verifies the same pinned official npm archive for darwin/x64 without claiming native execution 0ms
+   ✓ DSH npm platform boundaries > verifies the same pinned official npm archive for darwin/arm64 without claiming native execution 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: linux/arm64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: win32/arm64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: freebsd/x64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: darwin/ia32 0ms
+   ✓ DSH npm platform boundaries > keeps Windows Desktop artifacts isolated from npm target expansion: linux/x64 0ms
+   ✓ DSH npm platform boundaries > keeps Windows Desktop artifacts isolated from npm target expansion: darwin/arm64 0ms
+   × fresh DSH communication reports for an explicit runner target > accepts only the freshly executed linux/x64 report for that runner 17ms
+     → expected { schema: 1, …(9) } to match object { status: 'passed', …(3) }
+(7 matching properties omitted from actual)
+   × fresh DSH communication reports for an explicit runner target > accepts only the freshly executed darwin/x64 report for that runner 4ms
+     → expected { schema: 1, …(9) } to match object { status: 'passed', …(3) }
+(7 matching properties omitted from actual)
+   × fresh DSH communication reports for an explicit runner target > accepts only the freshly executed darwin/arm64 report for that runner 4ms
+     → expected { schema: 1, …(9) } to match object { status: 'passed', …(3) }
+(7 matching properties omitted from actual)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-platform-ci.test.ts > fresh DSH communication reports for an explicit runner target > accepts only the freshly executed linux/x64 report for that runner
+ FAIL  test/dsh-platform-ci.test.ts > fresh DSH communication reports for an explicit runner target > accepts only the freshly executed darwin/x64 report for that runner
+ FAIL  test/dsh-platform-ci.test.ts > fresh DSH communication reports for an explicit runner target > accepts only the freshly executed darwin/arm64 report for that runner
+AssertionError: expected { schema: 1, …(9) } to match object { status: 'passed', …(3) }
+(7 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "arch": "x64",
+-   "platform": "linux",
+-   "process": {
+-     "code": 0,
+-     "signal": null,
+-     "timedOut": false,
+-   },
+-   "status": "passed",
++   "platform": "win32",
++   "status": "failed",
+  }
+
+ ❯ test/dsh-platform-ci.test.ts:55:22
+     53|           return { code: 0, signal: null, timedOut: false };
+     54|         });
+     55|       expect(result).toMatchObject({ status: 'passed', platform, arch,…
+       |                      ^
+     56|     });
+     57| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 9 passed (12)
+   Start at  10:01:23
+   Duration  411ms (transform 90ms, setup 0ms, collect 132ms, tests 30ms, environment 0ms, prepare 86ms)
+
