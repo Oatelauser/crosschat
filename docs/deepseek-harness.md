@@ -2,7 +2,7 @@
 
 crosschat 通过官方 Host 插件桥发现并投递到 Harness 当前运行的根 Agent。它支持完整 ID、名称消歧、空闲唤醒、忙时 `queue/steer`、原生 shell 发信、会话回信，以及既有跨机器路由。无需把模型 API key 交给 crosschat。
 
-桥依赖上游的面集中在官方插件入口；crosschat client 使用自有 protocol=1。Harness 仍处预发布，实验宿主窗口为 `>=0.2.1-rc.2 <0.3.0-0`，窗口内的新版本仍需逐版行为验证。Windows 官方 npm `0.2.1-rc.2` 与 `0.2.1-rc.5` 已通过本地从零接入序列，覆盖 Web Host 普通交互会话、实际技能加载、收发、维护及诊断/TUI，见[本地证据](development/evidence/c11-dsh-20261104/validation.json)。这里的 Web Host 验收不包含浏览器聊天界面。
+桥依赖上游的面集中在官方插件入口；crosschat client 使用自有 protocol=1。Harness 仍处预发布，实验宿主窗口为 `>=0.2.1-rc.2 <0.3.0-0`，窗口内的新版本仍需逐版行为验证。Windows 官方 npm `0.2.1-rc.2` 与 `0.2.1-rc.5` 已通过本地及Windows托管从零接入序列，覆盖 Web Host 普通交互会话、实际技能加载、收发、维护、诊断/TUI及隔离清理，见[本地证据](development/evidence/c11-dsh-20261104/validation.json)与[托管六阶段运行](https://github.com/Oatelauser/crosschat/actions/runs/41947761724)。这里的 Web Host 验收不包含浏览器聊天界面或正式Desktop。
 
 正式 Windows Desktop `0.2.1-rc.2` 已用隔离 profile 和 loopback 模型桩验证真实 UI 收发、技能加载、原生来源及插件开关；固定包的测试观察器又核实了同一 UI 会话原生身份调用后的 Host 与主进程正常退出、本次桥登记撤销及聊天保留，见[退出证据](development/evidence/c04-natural-exit-20261104/validation.json)。该观察器尚未接入完整安装/卸载 CI，也不覆盖所有忙时退出或其它版本。用户保留 Desktop 安装，官方卸载未测；独立干净 runner、GitHub 托管首轮和 Linux/macOS 仍待验收。
 
