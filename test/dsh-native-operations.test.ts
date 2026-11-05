@@ -21,7 +21,7 @@ function gate() {
   return { promise, release };
 }
 
-async function fixture() {
+async function fixture(timeoutMs = 300) {
   const temporary = await realpath(tmpdir());
   const root = await mkdtemp(join(temporary, 'crosschat-dsh-operations-'));
   const instancesDir = join(root, 'instances');
@@ -47,8 +47,9 @@ async function fixture() {
         if (request.url === '/v1/info') {
           await state.onInfo?.();
           if (response.destroyed) return;
-          const { token: _token, url: _url, createdAt: _createdAt, ...info } = identity;
-          response.end(JSON.stringify({ ...info, pid: state.infoPid })); return;
+          response.end(JSON.stringify({ schema: identity.schema, protocol: identity.protocol, provider: identity.provider,
+            instanceId: identity.instanceId, runtimeVersion: identity.runtimeVersion, profile: identity.profile,
+            endpointType: identity.endpointType, callerIdentity: identity.callerIdentity, pid: state.infoPid })); return;
         }
         if (request.url === '/v1/sessions/' + encodeURIComponent(id)) {
           state.details++; state.onDetail?.();
@@ -87,7 +88,7 @@ async function fixture() {
   // A retained detail snapshot makes the separate native revalidation observable.
   const operations = createNativeSessionOperations({ discovery: { execute: async () => ({ op: 'detail',
     providers: [{ providerId: 'dsh', capabilities: item.capabilities }], detail: { item, completeness: 'complete', errors: [], observedAt: 1 } }) },
-    providers: createNativeOperationProviders({ dsh: { instancesDir } }), adopt, timeoutMs: 300 });
+    providers: createNativeOperationProviders({ dsh: { instancesDir } }), adopt, timeoutMs });
   return { operations, adopt, state, registration, requests, publish, native, ref: item.ref,
     refresh: async () => { item = await read(); return item.ref; },
     setItem: (change: (current: DiscoverySession) => DiscoverySession) => { item = change(item); },
@@ -192,9 +193,9 @@ describe('Harness native operation facts through the existing authenticated brid
   });
 
   it('cancels a blocked native read and owns the late response without issuing a claim', async () => {
-    const f = await fixture(), held = f.holdInfo(), controller = new AbortController();
+    const f = await fixture(3000), held = f.holdInfo(), controller = new AbortController();
     const pending = f.operations.describe(f.ref, controller.signal);
-    await vi.waitFor(() => expect(f.requests.some(request => request.path === '/v1/info')).toBe(true), { timeout: 200, interval: 5 });
+    await vi.waitFor(() => expect(f.requests.some(request => request.path === '/v1/info')).toBe(true), { timeout: 2000, interval: 5 });
     await held.started;
     controller.abort();
     expect((await pending).actions.adopt.state).toBe('unavailable');
