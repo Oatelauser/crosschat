@@ -11,7 +11,7 @@ import type { DshConnection } from './service.js';
 const rejected = (message: string) => new MultichatError('NATIVE_OPERATION_REJECTED', message);
 const unqualified = (): OperationAvailability => ({ state: 'needs-verification', reason: '此 Harness 端点的原生改名及活界面同步尚未核实。', nextStep: '使用原生界面改名后刷新；不更换 owner 或恢复替代会话。' });
 const eligible = (item: DiscoverySession) => item.ref.endpointType === 'host' && item.attributes.profile === 'web'
-  && ['0.2.1-rc.2', '0.2.1-rc.5'].includes(String(item.attributes.runtimeVersion));
+  && item.attributes.runtimeVersion === '0.2.1-rc.5';
 const contextKey = (owner: string, target: string) => createHash('sha256').update(JSON.stringify([owner, target])).digest('hex');
 
 async function titleFacts(connection: DshConnection, thread: DshThread): Promise<{ targetRevision: string; availability: OperationAvailability }> {
@@ -26,7 +26,7 @@ async function titleFacts(connection: DshConnection, thread: DshThread): Promise
   return { targetRevision: value.targetRevision, availability: state === 'executable' ? { state } : { ...unqualified(), state } };
 }
 
-/** Native implementation stays separate from Provider registration until C20 UI qualification passes. */
+/** Only the qualified Web release enables writes; other endpoints retain independent adoption. */
 export function createDshRenameAdapter(options: DshOptions = {}): NonNullable<NativeOperationProvider['rename']> {
   return {
     contextKey: async (item, signal) => {
