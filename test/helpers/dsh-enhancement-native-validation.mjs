@@ -15,6 +15,7 @@ import {loadBrokerFile,writeBrokerFile} from '../../dist/serve/registry.js';
 import {SenderConn,requestMemberRemoveExact} from '../../dist/serve/via-tcp.js';
 import {createDshFixture,pollDsh} from './dsh-live-fixture.mjs';
 import {launchPty} from './tui-pty-driver.mjs';
+import {withLostDshTitleReceipt} from './dsh-enhancement-faults.mjs';
 
 assert.equal(process.env.CROSSCHAT_LIVE,'1');assert.equal(process.version,'v22.23.4');
 for(const name of ['DSH_C22_REPORT','DSH_RUNTIME_DIR','DSH_TASK_ROOT'])assert(isAbsolute(process.env[name]??''),name+' must be absolute');
@@ -107,6 +108,17 @@ try{
   const after=await fixtures[0].snapshot(native[0].id);assert.equal(after.sameAgent,true);assert.deepEqual(after.events.slice(0,snapshots[0].events.length),snapshots[0].events);assert.equal(after.events.length,snapshots[0].events.length+1);assert.equal(after.events.at(-1).type,'session/title');
   assert.deepEqual((await fixtures[1].snapshot(native[1].id)).events,snapshots[1].events);report.renamed=name;
  });
+ await check('lost-native-write-receipt-is-uncertain-and-readonly-recovery-never-replays',async()=>{
+  const name='C22LostAck'+Date.now(),before=await fixtures[0].snapshot(native[0].id);
+  report.nativeReceiptFault=await withLostDshTitleReceipt({home:fixtures[0].env.HOME,expectedPid:fixtures[0].pid},async fault=>{
+   const description=await describe(0),result=await operators[0].operate(target(0),{kind:'apply',operation:'rename',name,expectedRevision:description.revision});
+   assert.equal(result.result.kind,'uncertain');assert.equal(fault.state.titlePosts,1);assert.equal(fault.state.acceptedWrites,1);assert.equal(fault.state.droppedReceipts,1);report.lostReceiptResult=result.result;
+   const after=await fixtures[0].snapshot(native[0].id);assert.equal(after.sameAgent,true);assert.deepEqual(after.events.slice(0,before.events.length),before.events);assert.equal(after.events.length,before.events.length+1);assert.equal(after.events.at(-1).type,'session/title');
+   fault.recover();for(let index=0;index<2;index++)assert.equal((await describe(0,stars[0],index)).actions.rename.state,'executable');await expectTerminals([name,native[1].title]);
+   assert.equal(fault.state.titlePosts,1);assert.equal((await fixtures[0].snapshot(native[0].id)).events.length,after.events.length);assert.deepEqual((await fixtures[1].snapshot(native[1].id)).events,snapshots[1].events);report.renamed=name;
+  });
+  assert.equal(report.nativeReceiptFault.registrationRestored,true);assert.equal(report.nativeReceiptFault.proxyClosed,true);
+ });
  await check('bridge-loss-and-recovery-stay-local-and-reject-old-confirmations',async()=>{
   const original=await describe(0);await fixtures[0].controller('/bridge',{enabled:false});assert.equal((await describe(0)).actions.adopt.state,'unavailable');assert.equal((await describe(1)).actions.adopt.state,'executable');
   await fixtures[0].controller('/bridge',{enabled:true});const recovered=await pollDsh(async()=>{const d=await describe(0);return d.actions.adopt.state==='executable'&&d;},'source recovery');assert.notEqual(recovered.revision,original.revision);
@@ -115,7 +127,7 @@ try{
  await check('exact-removal-does-not-change-other-node-or-native-chat',async()=>{
   const conn=await SenderConn.open('ws://127.0.0.1:'+port,keys[0][3],undefined,10000);sockets.push(conn);
   assert.equal((await requestMemberRemoveExact(conn,{sessionId:native[0].id,machine:machineIds[0],tool:'dsh',endpointType:'host'},10000)).ok,true);await pollDsh(()=>!member(stars[0],0),'selected exact roster removed');assert(member(stars[0],1));
-  const first=await fixtures[0].snapshot(native[0].id),second=await fixtures[1].snapshot(native[1].id);assert.equal(first.sameAgent,true);assert.equal(second.sameAgent,true);assert.equal(first.events.length,snapshots[0].events.length+1);assert.deepEqual(second.events,snapshots[1].events);assert.equal(fixtures[0].model.requests.length,0);assert.equal(fixtures[1].model.requests.length,0);
+  const first=await fixtures[0].snapshot(native[0].id),second=await fixtures[1].snapshot(native[1].id);assert.equal(first.sameAgent,true);assert.equal(second.sameAgent,true);assert.equal(first.events.length,snapshots[0].events.length+2);assert.deepEqual(second.events,snapshots[1].events);assert.equal(fixtures[0].model.requests.length,0);assert.equal(fixtures[1].model.requests.length,0);
  });
  report.rosters=stars.map(starId=>({starId,members:roster(starId)}));report.status='passed';
 }catch(error){report.error={name:error.name,message:error.message,stack:error.stack};}
