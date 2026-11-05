@@ -14,3 +14,9 @@
 - 真实验收须覆盖同一live Agent的原生快照、真正Web界面、node/星册及新名称寻址；不能以HTTP字段、直接Adapter调用或历史基础CI替代。模型只用loopback桩。未实测前保持改名禁用，C20父项不关闭。
 
 本机有Edge可执行文件，但尚未启动浏览器或安装自动化依赖。计划使用独占profile的受控本地Web界面；不连接用户浏览器或日用Desktop。上一切片的锁定官方npm runtime暂保留为本轮测试依赖，各次Host/run数据均已正常回收。下一步先保存桥/Adapter行为RED，再实现与验证。
+
+## 桥子资源第一段
+
+487f0a1保存行为RED：首次12失败/2通过，补活Agent代次后13失败/2通过。产品**bd0779c**已实现GET/POST title子资源，使用当前Host的同步SessionTitle服务，不走resolveAgent；WeakMap只保留对象活代次，不写文件。输入、鉴权/Origin、Host/profile/版本、实例/创建信息/活对象变化、读取零写、原生异常后uncertain零重试共15条新用例通过。首次扩大到旧Adapter测试时，新worktree尚无dist，13条旧诊断用例因MODULE_NOT_FOUND失败；原始输出保留，不当作桥的行为RED。随后npm run build及相关ESLint通过，四文件定向119通过，见[原始定向结果](evidence/c20-dsh-rename-20261105/bridge-targeted-green.txt)。本段未运行完整check，尚有客户端/原生界面等开发待办。
+
+GET里的executable只说明这个底层桥可以对当前活对象调用已核实的原生方法；用户操作Provider尚未登记rename，仍按待核实禁用。不能把15条模拟Host或119条定向检查当作真正DSH/Web界面通过。下一步为Adapter四态/context/revision/最终确认与错误回执、正式Web界面及node/星册/按名寻址证据；未推送/发布或启用用户操作，无活DSH测试Host或浏览器。

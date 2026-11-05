@@ -1,5 +1,7 @@
 # DSH 优先完成计划
 
+2026-11-05改名续接：[C20独立本地工作区](dsh-native-rename-progress-20261105.md)基于入星验收948e58f继续，桥子资源检查点bd0779c，15条新边界/四文件119定向通过，RED及新工作区未build时的旧测试失败保留。用户Provider仍未启用改名；下一步Adapter和真正Web界面/node/星册/按名寻址核实。没有新命令/步骤、持久数据文件或外部执行，25父项/11CI索引及既有归属保持。
+
 2026-11-05增强收口：独立分支产品836b379已完成[C15/C24/C18的Windows npm/Web入星切片](dsh-native-operations-progress-20261105.md#2026-11-05原生与终端切片收口)：正式rc.5、生产桥/reader/真实broker与两星同机node连接、真实ConPTY取消/确认/恢复七项通过，原生Agent/聊天不变且Host正常退出/登记与run根回收。定向105、完整2845通过/11原有跳过；全部RED、终端工装失败及[证据索引](evidence/c15-dsh-operations-20261105/validation.json)保留。该已验切片移出活动，下一步条件C20原生改名；目前仍禁用。其它平台/版本、Desktop与C22双node/双操作端/CI组合继续保留，无新外部执行/用户命令或持久文件，25父项/11CI索引与公共负责人不变。
 
 2026-11-05后续：ef8ef98文档提交的普通41981774584为Windows/Ubuntu成功、macOS一项迟到响应测试失败；macOS既有continue-on-error使run总体success，不等于三job全绿。[托管RED与受控时序复现](evidence/c12-onboarding-hosted-20261105/late-response-red-validation.json)保留。0ad2d1e保存RED，现只把该测试的150ms猜测改为返回后显式释放响应，finally等待真实取消/锁释放；正常及父线程停顿200ms两例都通过，30ms产品截止/未决记录/清理断言不放宽。[126项定向、完整2828通过/11原有跳过](evidence/c12-onboarding-hosted-20261105/late-response-green-validation.json)及原生10个blob相同已核验。最新修复推送后的普通CI按新head逐job确认，不能用e1旧绿或ef总体success追认；四目标原生通过保持，不追加原生dispatch，main合入/新周更仍未授权。
