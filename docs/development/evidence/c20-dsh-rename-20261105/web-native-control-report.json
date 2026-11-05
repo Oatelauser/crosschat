@@ -1,0 +1,230 @@
+{
+  "schema": 1,
+  "scope": "Exploratory true DSH Web UI and adapter qualification; not node/star acceptance",
+  "root": "D:\\workspace\\CC\\cc-c20-web-sR0x9Z",
+  "status": "failed",
+  "productHead": "fc065c14bb1f722340b63946dd20bed0234680a3",
+  "version": "0.2.1-rc.5",
+  "hostPid": 19168,
+  "nativeId": "session-0a19114c-5b2f-4e84-89af-776e6bbe6285",
+  "browser": "existing Playwright Chromium 1243",
+  "browserPid": 7856,
+  "browserEndpointOwnerVerified": true,
+  "browserVersion": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/153.0.8010.12",
+    "revision": "@971a7443b0c9b0a9b2860529b33331b76077ec62",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "jsVersion": "15.3.76.4"
+  },
+  "commands": [
+    {
+      "command": {
+        "op": "eval",
+        "expression": "({text:document.body.innerText,buttons:[...document.querySelectorAll('button')].map(e=>({text:e.innerText,aria:e.getAttribute('aria-label')}))})"
+      },
+      "answer": {
+        "text": "探索未至之境\n预览版\n选择工作区\n标准模式\n选择一个工作区开始\n预览版说明\n\nDeepSeek Harness 目前的 0.2 版本仍处于预览阶段，还有许多地方需要持续改进和打磨，希望听取广大开发者和用户的反馈建议。现在，新的桌面端面向广泛用户，开发者相关的进阶功能可在配置中开启使用。预计 DeepSeek Harness 的产品功能以及插件 API 都会继续快速迭代、持续演化，并逐渐趋于稳定。\n\n我们期待与全球用户和开发者一起，在开源、可复用、可组合的基础设施之上，共同探索智能上限。欢迎大家用 DeepSeek Harness 将想法变成现实，与社区一起丰富插件生态。\n\n继续",
+        "buttons": [
+          {
+            "text": "",
+            "aria": "打开侧边栏"
+          },
+          {
+            "text": "",
+            "aria": "新建会话"
+          },
+          {
+            "text": "",
+            "aria": "插件"
+          },
+          {
+            "text": "",
+            "aria": "自动化任务"
+          },
+          {
+            "text": "",
+            "aria": "更多"
+          },
+          {
+            "text": "",
+            "aria": "添加工作区"
+          },
+          {
+            "text": "",
+            "aria": "搜索会话"
+          },
+          {
+            "text": "",
+            "aria": "账号菜单"
+          },
+          {
+            "text": "选择工作区",
+            "aria": "选择工作区"
+          },
+          {
+            "text": "标准模式",
+            "aria": null
+          },
+          {
+            "text": "",
+            "aria": "添加文件或调用指令"
+          },
+          {
+            "text": "",
+            "aria": "发送消息"
+          },
+          {
+            "text": "继续",
+            "aria": null
+          }
+        ]
+      }
+    },
+    {
+      "command": {
+        "op": "eval",
+        "expression": "[...document.querySelectorAll('button')].find(e=>e.innerText==='继续').click(); true"
+      },
+      "answer": true
+    },
+    {
+      "command": {
+        "op": "eval",
+        "expression": "document.querySelector('button[aria-label=\"选择工作区\"]').click(); true"
+      },
+      "answer": true
+    },
+    {
+      "command": {
+        "op": "eval",
+        "expression": "({body:document.body.innerText,inputs:[...document.querySelectorAll('input')].map(e=>({type:e.type,placeholder:e.placeholder,value:e.value})),buttons:[...document.querySelectorAll('button')].map(e=>({text:e.innerText,aria:e.getAttribute('aria-label')}))})"
+      },
+      "answer": {
+        "body": "探索未至之境\n预览版\n选择工作区\n标准模式\n选择一个工作区开始",
+        "inputs": [
+          {
+            "type": "file",
+            "placeholder": "",
+            "value": ""
+          }
+        ],
+        "buttons": [
+          {
+            "text": "",
+            "aria": "打开侧边栏"
+          },
+          {
+            "text": "",
+            "aria": "新建会话"
+          },
+          {
+            "text": "",
+            "aria": "插件"
+          },
+          {
+            "text": "",
+            "aria": "自动化任务"
+          },
+          {
+            "text": "",
+            "aria": "更多"
+          },
+          {
+            "text": "",
+            "aria": "添加工作区"
+          },
+          {
+            "text": "",
+            "aria": "搜索会话"
+          },
+          {
+            "text": "",
+            "aria": "账号菜单"
+          },
+          {
+            "text": "选择工作区",
+            "aria": "选择工作区"
+          },
+          {
+            "text": "标准模式",
+            "aria": null
+          },
+          {
+            "text": "",
+            "aria": "添加文件或调用指令"
+          },
+          {
+            "text": "",
+            "aria": "发送消息"
+          }
+        ]
+      }
+    },
+    {
+      "command": {
+        "op": "eval",
+        "expression": "document.querySelector('button[aria-label=\"打开侧边栏\"]').click(); true"
+      },
+      "answer": true
+    },
+    {
+      "command": {
+        "op": "eval",
+        "expression": "({body:document.body.innerText,input:[...document.querySelectorAll('input')].map(e=>({type:e.type,directory:e.webkitdirectory,outer:e.outerHTML.slice(0,800)})),choose:document.querySelector('button[aria-label=\"选择工作区\"]')?.outerHTML.slice(0,1000)})"
+      },
+      "answer": {
+        "body": "新会话\nCtrl\n+\nAlt\n+\nN\n插件\n自动化任务\n更多\n工作区\n暂无会话\n更多\n探索未至之境\n预览版\n选择工作区\n标准模式\n选择一个工作区开始",
+        "input": [
+          {
+            "type": "text",
+            "directory": false,
+            "outer": "<input class=\"bhn1Oq_searchInput\" type=\"text\" placeholder=\"搜索会话名称\" maxlength=\"500\" tabindex=\"-1\" value=\"\">"
+          },
+          {
+            "type": "file",
+            "directory": false,
+            "outer": "<input type=\"file\" multiple=\"\" hidden=\"\">"
+          }
+        ],
+        "choose": "<button type=\"button\" class=\"pXSMma_workspace\" aria-label=\"选择工作区\" aria-haspopup=\"menu\" aria-expanded=\"false\"><svg width=\"16\" height=\"16\" class=\"pXSMma_folder\" viewBox=\"0 0 16 16\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\" stroke-width=\"1\"><path d=\"M1.50439 3.11059C1.50439 2.55831 1.95211 2.1106 2.50439 2.1106H5.43389C5.67773 2.1106 5.91318 2.19969 6.09593 2.36113L7.71649 3.79265C7.89924 3.95409 8.1347 4.04319 8.3785 4.04319H13.4958C14.0481 4.04319 14.4958 4.4909 14.4958 5.04319V12.8894C14.4958 13.4417 14.0481 13.8894 13.4958 13.8894H2.50439C1.95211 13.8894 1.50439 13.4417 1.50439 12.8894V4.04319V3.11059Z\" stroke=\"currentColor\"></path><path d=\"M3.63501 7.66614H12.3647\" stroke=\"currentColor\"></path></svg><span class=\"pXSMma_workspaceLabel\">选择工作区</span><svg width=\"12\" height=\"12\" class=\"pXSMma_chevron\" viewBox=\"0 0 16 16\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\" stroke-width=\"1\"><path d=\"M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8"
+      }
+    },
+    {
+      "command": {
+        "op": "eval",
+        "expression": "(()=>{const e=document.querySelector('button[aria-label=\"选择工作区\"]');e.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,button:0,pointerType:'mouse'}));return true})()"
+      },
+      "answer": true
+    },
+    {
+      "command": {
+        "op": "eval",
+        "expression": "({body:document.body.innerText,menus:[...document.querySelectorAll('[role=menu],[role=menuitem]')].map(e=>({role:e.getAttribute('role'),text:e.innerText}))})"
+      },
+      "answer": {
+        "body": "新会话\nCtrl\n+\nAlt\n+\nN\n插件\n自动化任务\n更多\n工作区\n暂无会话\n更多\n探索未至之境\n预览版\n选择工作区\n标准模式\n选择一个工作区开始",
+        "menus": []
+      }
+    }
+  ],
+  "lastBody": "新会话\nCtrl\n+\nAlt\n+\nN\n插件\n自动化任务\n更多\n工作区\n暂无会话\n更多\n探索未至之境\n预览版\n选择工作区\n标准模式\n选择一个工作区开始",
+  "sameAgent": true,
+  "browserExit": {
+    "code": 0,
+    "signal": null
+  },
+  "browserProcessesAfter": 0,
+  "nativeLogs": {
+    "stdout": "dsh web: http://127.0.0.1:53652/?token=[fixture-token-redacted]\n",
+    "stderr": ""
+  },
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  },
+  "browserLogs": "\r\nDevTools listening on ws://127.0.0.1:53660/devtools/browser/c6a3d574-61a5-4a10-864d-b3103703967f\r\n[7856:34636:1105/173731.893:ERROR:content\\browser\\network_service_instance_impl.cc:655] Network service crashed or was terminated, restarting service.\r\n[7856:34636:1105/173731.967:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[7856:34636:1105/173731.967:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[7856:34636:1105/173734.028:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[7856:34636:1105/173734.028:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[7856:20216:1105/173739.831:ERROR:google_apis\\gcm\\engine\\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\r\n[7856:20216:1105/173808.683:ERROR:google_apis\\gcm\\engine\\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\r\n[7856:20216:1105/173902.156:ERROR:google_apis\\gcm\\engine\\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\r\n",
+  "unsafe": false
+}

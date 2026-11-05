@@ -1,0 +1,149 @@
+{
+  "schema": 1,
+  "scope": "DSH npm/Web local native manual membership and source recovery; no Desktop or rename acceptance",
+  "runId": "5e31541e-d4bb-400d-ba3a-ca77c0e54d4e",
+  "platform": "win32",
+  "arch": "x64",
+  "node": "v22.23.4",
+  "checks": [
+    {
+      "name": "authenticated-source-and-readonly-description",
+      "status": "passed"
+    },
+    {
+      "name": "exact-manual-adoption-and-independent-stars",
+      "status": "passed"
+    },
+    {
+      "name": "exact-removal-is-independent-of-native-capability",
+      "status": "passed"
+    },
+    {
+      "name": "bridge-loss-rejects-old-confirmation-without-claim",
+      "status": "passed"
+    },
+    {
+      "name": "native-source-recovery-requires-new-confirmation",
+      "status": "passed"
+    },
+    {
+      "name": "unverified-rename-remains-disabled-and-chat-is-unchanged",
+      "status": "passed"
+    },
+    {
+      "name": "real-terminal-cancel-confirm-exact-membership-and-restoration",
+      "status": "passed"
+    }
+  ],
+  "status": "passed",
+  "version": "0.2.1-rc.5",
+  "nativeId": "session-f63c3f0f-b497-46a4-aee5-9396bffbdb2e",
+  "pid": 41172,
+  "confirmations": {
+    "original": {
+      "ref": {
+        "contextId": "local",
+        "providerId": "dsh",
+        "nativeId": "session-f63c3f0f-b497-46a4-aee5-9396bffbdb2e",
+        "endpointType": "host"
+      },
+      "observedAt": 1793867407547,
+      "revision": "74daca08b21bfea35fae13bb3f1c64d2b1436e7ffb7a8bfd468092d01f9ae4af",
+      "actions": {
+        "adopt": {
+          "state": "executable"
+        },
+        "rename": {
+          "state": "needs-verification",
+          "reason": "尚未验证此端点的原生改名接口及活会话同步。",
+          "nextStep": "先在原生工具中改名；刷新后星内名称会跟随原生名称。"
+        }
+      }
+    },
+    "recovered": {
+      "ref": {
+        "contextId": "local",
+        "providerId": "dsh",
+        "nativeId": "session-f63c3f0f-b497-46a4-aee5-9396bffbdb2e",
+        "endpointType": "host"
+      },
+      "observedAt": 1793867408409,
+      "revision": "4f4b9f6ca703fdcef0bd23705a38dd2b5169b1c37bfa19fff83724217fece3a4",
+      "actions": {
+        "adopt": {
+          "state": "executable"
+        },
+        "rename": {
+          "state": "needs-verification",
+          "reason": "尚未验证此端点的原生改名接口及活会话同步。",
+          "nextStep": "先在原生工具中改名；刷新后星内名称会跟随原生名称。"
+        }
+      }
+    }
+  },
+  "rosters": [
+    {
+      "starId": "native-a",
+      "members": [
+        {
+          "sessionId": "session-f63c3f0f-b497-46a4-aee5-9396bffbdb2e",
+          "name": "C24-5e31541e",
+          "tool": "dsh",
+          "endpointType": "host",
+          "machine": "11111111111111111111111111111111"
+        }
+      ]
+    },
+    {
+      "starId": "native-b",
+      "members": [
+        {
+          "sessionId": "session-f63c3f0f-b497-46a4-aee5-9396bffbdb2e",
+          "name": "C24-5e31541e",
+          "tool": "dsh",
+          "endpointType": "host",
+          "machine": "11111111111111111111111111111111"
+        }
+      ]
+    }
+  ],
+  "terminal": {
+    "kind": "ConPTY",
+    "terminalLog": "D:\\workspace\\CC\\cc-dsh-capabilities-20261105\\node_modules\\.cache\\c15-dsh-20261105\\terminal-5e31541e-d4bb-400d-ba3a-ca77c0e54d4e.jsonl",
+    "terminalEvents": "D:\\workspace\\CC\\cc-dsh-capabilities-20261105\\node_modules\\.cache\\c15-dsh-20261105\\terminal-application-5e31541e-d4bb-400d-ba3a-ca77c0e54d4e.jsonl",
+    "exit": {
+      "event": "exit",
+      "code": 0,
+      "before": {
+        "raw": false,
+        "resize": 0,
+        "listeners": {
+          "SIGINT": 1,
+          "SIGTERM": 1,
+          "uncaughtException": 0,
+          "unhandledRejection": 0
+        }
+      },
+      "after": {
+        "raw": false,
+        "resize": 0,
+        "listeners": {
+          "SIGINT": 1,
+          "SIGTERM": 1,
+          "uncaughtException": 0,
+          "unhandledRejection": 0
+        }
+      }
+    }
+  },
+  "nativeLogs": {
+    "stdout": "dsh web: http://127.0.0.1:60509/?token=[fixture-token-redacted]\n",
+    "stderr": ""
+  },
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  }
+}

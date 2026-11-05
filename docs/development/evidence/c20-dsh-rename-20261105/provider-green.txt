@@ -1,0 +1,63 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-rename-20261105
+
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > enables verified host adoption independently of unimplemented rename and exposes no bridge credentials 81ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > keeps an untyped or unattested live record in needs-verification despite its delivery flag 16ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > reads capabilities without a write and calls the public title service with the same live session 81ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rechecks auth and owner, then recovers read-only without submitting adoption 33ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > invalidates confirmation when the concrete URL changes even if UUID, pid and version do not 28ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects a version change until discovery and confirmation are refreshed 38ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > reports the current unsupported runtime window and recovers after a supported version returns 25ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > does not enable desktop solely because a native rename method exists 30ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > does not enable custom solely because a native rename method exists 26ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > keeps an unverified version or unavailable native service disabled 35ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed instance before a native write 21ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > preserves the unsupported source result through fresh production discovery and recovers without a write 30ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects same-type duplicate instances while isolating an identical ID on a different endpoint type 32ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > does not cross from the selected host endpoint to an available desktop owner 39ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed creation before a native write 39ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed live-object before a native write 20ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed missing before a native write 18ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 18ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 20ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rechecks the native target immediately before the claim and rejects a disappearance without calling the writer 26ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects changed native title metadata until the discovery snapshot is refreshed 33ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects changed native creation metadata until the discovery snapshot is refreshed 34ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects a registration move that occurs while the final native response is awaited 25ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > cancels a blocked native read and owns the late response without issuing a claim 37ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > keeps an unknown claim result uncertain and never repeats it during capability recovery 25ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 17ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 16ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 17ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > requires the existing authentication and forbids browser-origin writes 15ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > keeps a native error after admission uncertain and never repeats the public call 16ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > registers the qualified rc.5 Web adapter in the production provider plan 119ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > keeps rc.2 rename awaiting its own UI qualification while adoption remains executable 27ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > qualifies a late loaded title service without replaying a write 72ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > does not let stale scope cleanup disable a newer title service generation 96ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > still closes HTTP and removes its registration if the title dependency scope cannot dispose 18ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > keeps confirmation stable across fresh Cordis service proxies for the same loaded service 139ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > qualifies a concrete native target, writes once and confirms the native name before updating node metadata 97ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > invalidates an old confirmation if the live Agent is replaced under identical native identity metadata 94ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > recovers a missing native service read-only without disabling adoption or replaying a pending rename 150ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > does not inherit native Web rename capability in the Desktop endpoint 23ms
+ ✓ test/tcp-session-operations.test.ts > exact node session operations over real broker/node transport > keeps same-ID CLI and Desktop claims separate through attach, status and typed detach 90ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > keeps an admitted native setter failure uncertain with zero automatic repeats 93ms
+ ✓ test/tcp-session-operations.test.ts > exact node session operations over real broker/node transport > preserves the verified endpoint in application transport, node detail and roster confirmation 49ms
+ ✓ test/tcp-session-operations.test.ts > exact node session operations over real broker/node transport > repeating TUI adoption preserves a temporary window membership and releases it with the final window 35ms
+ ✓ test/tcp-session-operations.test.ts > exact node session operations over real broker/node transport > the configured application transport adopts the exact target and synchronizes a verified native rename 51ms
+ ✓ test/tcp-session-operations.test.ts > exact node session operations over real broker/node transport > disconnect after a native write returns uncertain; read recovery never replays the write 89ms
+ ✓ test/tcp-session-operations.test.ts > exact node session operations over real broker/node transport > describes then adopts an exact remote session permanently, with broker roster confirmation 28ms
+ ✓ test/tcp-session-operations.test.ts > exact node session operations over real broker/node transport > rejects stale native targets and cross-star requests without adding a roster entry 20ms
+ ✓ test/native-rename-providers.test.ts > production native rename providers > rejects a target that disappears before the setter without claiming a write was sent 7ms
+ ✓ test/native-rename-providers.test.ts > production native rename providers > recovers from a missing native daemon identity without starting a service or replaying a write 8ms
+ ✓ test/native-rename-providers.test.ts > production native rename providers > distinguishes a native rejection from a lost setter response and never replays either 4ms
+ ✓ test/native-rename-providers.test.ts > production native rename providers > rejects stale owner confirmation and a service replacement immediately before the write 4ms
+ ✓ test/native-rename-providers.test.ts > production native rename providers > keeps Desktop and Claude usable for membership but never sends an unverified rename 1ms
+ ✓ test/native-rename-providers.test.ts > production native rename providers > renames a loaded Codex CLI thread on its current owner and verifies the native name 2ms
+
+ Test Files  4 passed (4)
+      Tests  54 passed (54)
+   Start at  21:48:32
+   Duration  2.55s (transform 658ms, setup 0ms, collect 1.24s, tests 2.21s, environment 1ms, prepare 393ms)
+

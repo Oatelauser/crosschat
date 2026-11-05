@@ -1,0 +1,122 @@
+{
+  "schema": 1,
+  "scope": "DSH npm/Web local native manual membership and source recovery; no Desktop or rename acceptance",
+  "runId": "75b44ff5-0067-4e94-85d9-c4c3450690d6",
+  "platform": "win32",
+  "arch": "x64",
+  "node": "v22.23.4",
+  "checks": [
+    {
+      "name": "authenticated-source-and-readonly-description",
+      "status": "passed"
+    },
+    {
+      "name": "exact-manual-adoption-and-independent-stars",
+      "status": "passed"
+    },
+    {
+      "name": "exact-removal-is-independent-of-native-capability",
+      "status": "passed"
+    },
+    {
+      "name": "bridge-loss-rejects-old-confirmation-without-claim",
+      "status": "passed"
+    },
+    {
+      "name": "native-source-recovery-requires-new-confirmation",
+      "status": "passed"
+    },
+    {
+      "name": "unverified-rename-remains-disabled-and-chat-is-unchanged",
+      "status": "passed"
+    }
+  ],
+  "status": "failed",
+  "version": "0.2.1-rc.5",
+  "nativeId": "session-d0f3451c-42b9-4226-82e3-f7fe31e973a2",
+  "pid": 33104,
+  "confirmations": {
+    "original": {
+      "ref": {
+        "contextId": "local",
+        "providerId": "dsh",
+        "nativeId": "session-d0f3451c-42b9-4226-82e3-f7fe31e973a2",
+        "endpointType": "host"
+      },
+      "observedAt": 1793867304954,
+      "revision": "1b608ec038924fa620c6e946d718ff3962eb1f6a5c724c7716b5143c439dfdb1",
+      "actions": {
+        "adopt": {
+          "state": "executable"
+        },
+        "rename": {
+          "state": "needs-verification",
+          "reason": "尚未验证此端点的原生改名接口及活会话同步。",
+          "nextStep": "先在原生工具中改名；刷新后星内名称会跟随原生名称。"
+        }
+      }
+    },
+    "recovered": {
+      "ref": {
+        "contextId": "local",
+        "providerId": "dsh",
+        "nativeId": "session-d0f3451c-42b9-4226-82e3-f7fe31e973a2",
+        "endpointType": "host"
+      },
+      "observedAt": 1793867305872,
+      "revision": "218679b9174acc9a3f21be6a4b5fb601a912383dfeb29ddd3c6980bff31f5503",
+      "actions": {
+        "adopt": {
+          "state": "executable"
+        },
+        "rename": {
+          "state": "needs-verification",
+          "reason": "尚未验证此端点的原生改名接口及活会话同步。",
+          "nextStep": "先在原生工具中改名；刷新后星内名称会跟随原生名称。"
+        }
+      }
+    }
+  },
+  "rosters": [
+    {
+      "starId": "native-a",
+      "members": [
+        {
+          "sessionId": "session-d0f3451c-42b9-4226-82e3-f7fe31e973a2",
+          "name": "C24-75b44ff5",
+          "tool": "dsh",
+          "endpointType": "host",
+          "machine": "11111111111111111111111111111111"
+        }
+      ]
+    },
+    {
+      "starId": "native-b",
+      "members": [
+        {
+          "sessionId": "session-d0f3451c-42b9-4226-82e3-f7fe31e973a2",
+          "name": "C24-75b44ff5",
+          "tool": "dsh",
+          "endpointType": "host",
+          "machine": "11111111111111111111111111111111"
+        }
+      ]
+    }
+  ],
+  "error": {
+    "name": "Error",
+    "message": "ConPTY output did not match 确认提交; log: D:\\workspace\\CC\\cc-dsh-capabilities-20261105\\node_modules\\.cache\\c15-dsh-20261105\\terminal-75b44ff5-0067-4e94-85d9-c4c3450690d6.jsonl; output tail:                                                 │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\r\n<sessions> 1/1 · 部分结果 · 自动刷新\u001b[K\r\n1 个已读取会话（默认含匿名）；节点可发现范围；星籍在线不代表原生忙闲。\u001b[K\r\n:资源  /筛选  Esc返回  q退出\u001b[K\u001b[112C",
+    "stack": "Error: ConPTY output did not match 确认提交; log: D:\\workspace\\CC\\cc-dsh-capabilities-20261105\\node_modules\\.cache\\c15-dsh-20261105\\terminal-75b44ff5-0067-4e94-85d9-c4c3450690d6.jsonl; output tail:                                                 │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\r\n<sessions> 1/1 · 部分结果 · 自动刷新\u001b[K\r\n1 个已读取会话（默认含匿名）；节点可发现范围；星籍在线不代表原生忙闲。\u001b[K\r\n:资源  /筛选  Esc返回  q退出\u001b[K\u001b[112C\n    at Timeout._onTimeout (file:///D:/workspace/CC/cc-dsh-capabilities-20261105/test/helpers/tui-pty-driver.mjs:140:18)\n    at listOnTimeout (node:internal/timers:585:17)\n    at process.processTimers (node:internal/timers:521:7)"
+  },
+  "failedTerminalApplication": "D:\\workspace\\CC\\cc-dsh-capabilities-20261105\\node_modules\\.cache\\c15-dsh-20261105\\terminal-failed-application-75b44ff5-0067-4e94-85d9-c4c3450690d6.jsonl",
+  "nativeLogs": {
+    "stdout": "dsh web: http://127.0.0.1:62222/?token=[fixture-token-redacted]\n",
+    "stderr": ""
+  },
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  }
+}

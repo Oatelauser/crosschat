@@ -1,0 +1,23 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-capabilities-20261105
+
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > enables verified host adoption independently of unimplemented rename and exposes no bridge credentials 55ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > keeps an untyped or unattested live record in needs-verification despite its delivery flag 12ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rechecks auth and owner, then recovers read-only without submitting adoption 22ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > invalidates confirmation when the concrete URL changes even if UUID, pid and version do not 21ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects a version change until discovery and confirmation are refreshed 18ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > reports the current unsupported runtime window and recovers after a supported version returns 13ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects same-type duplicate instances while isolating an identical ID on a different endpoint type 18ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > does not cross from the selected host endpoint to an available desktop owner 9ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rechecks the native target immediately before the claim and rejects a disappearance without calling the writer 15ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects changed native title metadata until the discovery snapshot is refreshed 23ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects changed native creation metadata until the discovery snapshot is refreshed 20ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects a registration move that occurs while the final native response is awaited 16ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > cancels a blocked native read and owns the late response without issuing a claim 23ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > keeps an unknown claim result uncertain and never repeats it during capability recovery 20ms
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  16:05:13
+   Duration  697ms (transform 122ms, setup 0ms, collect 199ms, tests 286ms, environment 0ms, prepare 83ms)
+

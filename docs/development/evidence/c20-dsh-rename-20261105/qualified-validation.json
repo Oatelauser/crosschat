@@ -1,0 +1,391 @@
+{
+  "schema": 1,
+  "observedAt": "2026-11-05T14:02:26.757Z",
+  "sourceHead": "680e391221179b3dbcce8b7cb49840c1410f72c2",
+  "sourceFiles": [
+    {
+      "file": "integrations/dsh/bridge.js",
+      "blob": "52304348ce8b2e88f121f18a14ca468c5a196dcf"
+    },
+    {
+      "file": "src/application/session-operations.ts",
+      "blob": "7506c96ba40d4c9a2c5ddcab37d31822b0737486"
+    },
+    {
+      "file": "src/application/native-operation-providers.ts",
+      "blob": "a3b8126030ac8a5214804dc93b855d72136d6813"
+    },
+    {
+      "file": "src/dsh/native-operations.ts",
+      "blob": "8df300a95b4010790c15beb107f11250e993d319"
+    },
+    {
+      "file": "src/dsh/rename.ts",
+      "blob": "3d3c24d0402db032a8ab71f25b9c61b60923ae00"
+    },
+    {
+      "file": "src/dsh/service.ts",
+      "blob": "ddb61c44ae8fbed8eb87ce5a633a3196e450f81e"
+    },
+    {
+      "file": "test/helpers/dsh-native-rename-validation.mjs",
+      "blob": "60a232d8d2e6daa8b7187515e1c7de5bb4ffb584"
+    },
+    {
+      "file": "test/helpers/dsh-owned-node.mjs",
+      "blob": "ba833e4fb428eb051152be173519f0e6bd40b5a2"
+    }
+  ],
+  "scope": "Windows rc.5 real Web UI, production Node/Broker, ConPTY rename, roster and typed by-name delivery",
+  "native": {
+    "version": "0.2.1-rc.5",
+    "status": "passed",
+    "sameAgent": true,
+    "deliverySameAgent": true,
+    "selectedAfter": true,
+    "modelCalls": [
+      1,
+      1,
+      2
+    ],
+    "cleanup": {
+      "runtimeStopped": true,
+      "registrationRemoved": true,
+      "removed": true,
+      "forced": false
+    },
+    "browserProcessesAfter": 0
+  },
+  "tests": {
+    "fullPassed": 2871,
+    "fullSkipped": 11,
+    "fullExitCode": 0
+  },
+  "artifacts": [
+    {
+      "file": ".gitattributes",
+      "bytes": 26,
+      "sha256": "11b9f1f626d619b3bf9fd7f000e86a0cd80c42552203ec6dde71d737eddeddfb"
+    },
+    {
+      "file": "adapter-build-first.txt",
+      "bytes": 49,
+      "sha256": "caee18acaf6cfeac30a8769f25fbefd2a722f1499048ebd53a6a1d2c55e3ba95"
+    },
+    {
+      "file": "adapter-first-green.txt",
+      "bytes": 14618,
+      "sha256": "6cca345ee240c20f2908c825db1bb4796c79b6cb83b3917cee471091022283f3"
+    },
+    {
+      "file": "adapter-first-lint.txt",
+      "bytes": 60,
+      "sha256": "db86ce6ad53857ae24c5f41fd80a9f4c005c659f56790f5cf7457b9f04586e96"
+    },
+    {
+      "file": "adapter-red.txt",
+      "bytes": 7721,
+      "sha256": "9088ad1c32dcf413116cd9099099ab3d576b39955c7185c773d963090579ee2f"
+    },
+    {
+      "file": "bridge-first-implementation.txt",
+      "bytes": 21425,
+      "sha256": "62ea4151e572c7ce6511ca7ed331f68c67df0c4d5bb101bce22ec3281af5a2e4"
+    },
+    {
+      "file": "bridge-first-red.txt",
+      "bytes": 8626,
+      "sha256": "bce990c73c62e1208bd5892910829186440c3b36cf1f2e561aec6bccd4f459d8"
+    },
+    {
+      "file": "bridge-live-generation-red.txt",
+      "bytes": 8947,
+      "sha256": "3e28cb9e4b152ee869d1e506ae7a3510debad00f4ae7bb253f0a03cd9ec99fbf"
+    },
+    {
+      "file": "bridge-targeted-green.txt",
+      "bytes": 17997,
+      "sha256": "03c5be47c2eba89102b151c7fd89d32daf5e9e4a1415c51ee178c182c2c7a360"
+    },
+    {
+      "file": "browser-startup-cleanup.json",
+      "bytes": 419,
+      "sha256": "5dee8ba5c652f261d92bf39f85979ba8bcbbac3c679b7ee0cdb759eff7039510"
+    },
+    {
+      "file": "cft-download-supervision.json",
+      "bytes": 113,
+      "sha256": "e08b0547a7b8351eed23385943b8c2423418b811dc0eccad1f645efdd49c8759"
+    },
+    {
+      "file": "cft-install-state.json",
+      "bytes": 231,
+      "sha256": "ad8d21fe3097eeaf68f8309099d78ecc70283762d112d9cea7f13042ec0cc6be"
+    },
+    {
+      "file": "cft-manifest.json",
+      "bytes": 10450,
+      "sha256": "8127cd5d1314b0ab202c399fec45fbf8ca81e0bad22e231f00ad7ed4e4105873"
+    },
+    {
+      "file": "close-owned-picker.ps1.source.txt",
+      "bytes": 2547,
+      "sha256": "c2207ba5997a188601a7ea3ad0c9a1655ea9308d335248e63dcd644b1fbd2c71"
+    },
+    {
+      "file": "development-history-before-local-acceptance.txt",
+      "bytes": 9687,
+      "sha256": "bb58e6593e519d60b89b25f28c7b26877bb7642cc8b4925de34d84cf4e3dfc97"
+    },
+    {
+      "file": "first-build.txt",
+      "bytes": 49,
+      "sha256": "caee18acaf6cfeac30a8769f25fbefd2a722f1499048ebd53a6a1d2c55e3ba95"
+    },
+    {
+      "file": "full-check-adapter.txt",
+      "bytes": 31880,
+      "sha256": "6b7a33eea48664828041074cea2dce1e2b9bc6c5e7c0c8f35a00c743c982d511"
+    },
+    {
+      "file": "full-check-qualified.txt",
+      "bytes": 32026,
+      "sha256": "08c503e6f0de0b99f2955ad40cf954b0c1a894185e0c6546e53c705c172983ca"
+    },
+    {
+      "file": "integrated-first/native-rename-before.png",
+      "bytes": 36575,
+      "sha256": "cb7f378f361af79c4ab736dfbb92a3ce236f7a942b95fe0ff3775d31d5518c02"
+    },
+    {
+      "file": "integrated-first/native-rename-terminal-application.jsonl",
+      "bytes": 14666,
+      "sha256": "6d7677b3249a9d2c1aecadf926d39330d945bc5fff52865d7e86bfa5ca0764f9"
+    },
+    {
+      "file": "integrated-first/native-rename-terminal.jsonl",
+      "bytes": 70002,
+      "sha256": "cc25d5f35af65e8d7665cf33b07e2949bb78050aca7e68fd66ec7ff88774c6c8"
+    },
+    {
+      "file": "integrated-first/report.json",
+      "bytes": 3561,
+      "sha256": "4718221d2ffa137725e8ae3e997e097ba8d820d54364c1655d7c487219e1a6cb"
+    },
+    {
+      "file": "integrated-first-console.txt",
+      "bytes": 702,
+      "sha256": "3458877d8bb21126d062cce48bed505f79ee3b11a55bc175f937a950d00eece4"
+    },
+    {
+      "file": "integrated-second/native-rename-after.png",
+      "bytes": 41261,
+      "sha256": "26914b05af5453a264066619dab846f3bb34ee23661cacc511f6fcb0128eca11"
+    },
+    {
+      "file": "integrated-second/native-rename-before.png",
+      "bytes": 36672,
+      "sha256": "e20b6949a65146f6d189fe7bae49ab47388596b90dd56c7421a09e1d3fa3556c"
+    },
+    {
+      "file": "integrated-second/native-rename-terminal-application.jsonl",
+      "bytes": 23451,
+      "sha256": "690afa16649714733cd76afbe3943f614c917df9cd9309f859f29179dbd07e8a"
+    },
+    {
+      "file": "integrated-second/native-rename-terminal.jsonl",
+      "bytes": 135319,
+      "sha256": "4d1e85d1e4107784aab2aa297718232282f1d32edb07adaa8aba0e1108f4cee6"
+    },
+    {
+      "file": "integrated-second/report.json",
+      "bytes": 146194,
+      "sha256": "980cccc9f347eb1be4394ca3005df5e0b870102cdea5dfb8f2aee1cb1a26d9bd"
+    },
+    {
+      "file": "integrated-second-console.txt",
+      "bytes": 192,
+      "sha256": "83a10bfad8d714b230bbb0a3e09c4a34dcdf682413d693387cde758cddb92677"
+    },
+    {
+      "file": "native-after-rejected.png",
+      "bytes": 41313,
+      "sha256": "c40ba27f011748ae768906e575e317513eb484334464d72e60b52d623f4a9947"
+    },
+    {
+      "file": "native-before-rejected.png",
+      "bytes": 41313,
+      "sha256": "c40ba27f011748ae768906e575e317513eb484334464d72e60b52d623f4a9947"
+    },
+    {
+      "file": "native-picker-user-reported.png",
+      "bytes": 99813,
+      "sha256": "8bc4a6fee64062552115ec15dcfee21484e7a00fd224556ec813db94bb1259fc"
+    },
+    {
+      "file": "pause-validation.json",
+      "bytes": 6230,
+      "sha256": "96f72eb01e7727515ed2bb971cac878404dc870fc9746e64e875a4f02f363e2b"
+    },
+    {
+      "file": "probe-web.mjs.source.txt",
+      "bytes": 8809,
+      "sha256": "960a4a01d909f3d2ed4b9b3cee3113587b4e7d3559682227a2c58f924ac29110"
+    },
+    {
+      "file": "provider-green.txt",
+      "bytes": 9964,
+      "sha256": "7896bab514320164cf9b407342486ded92bc6509bcada82cf9a172cb76b0b5c1"
+    },
+    {
+      "file": "provider-red.txt",
+      "bytes": 5333,
+      "sha256": "67b181dad1f4218edf83b4d3a1b1fc4e7099d9eedbbd9afd41def495bf430935"
+    },
+    {
+      "file": "service-proxy-red.txt",
+      "bytes": 4788,
+      "sha256": "e948481d4d05d6e0d1f1173792493d67c792a5d019c65136e1aa994c4c778390"
+    },
+    {
+      "file": "service-scope-build.txt",
+      "bytes": 49,
+      "sha256": "caee18acaf6cfeac30a8769f25fbefd2a722f1499048ebd53a6a1d2c55e3ba95"
+    },
+    {
+      "file": "service-scope-final-targeted.txt",
+      "bytes": 11441,
+      "sha256": "989157839f6279b8b0079ac3a9ff7c6546c4fb366becf98e301e98d0171f7aaf"
+    },
+    {
+      "file": "service-scope-first-green.txt",
+      "bytes": 12124,
+      "sha256": "e8eca71b35b28c39479fd3e9957f2417c5f47fe5b447ab1f4fb37a8d417649ea"
+    },
+    {
+      "file": "service-scope-green.txt",
+      "bytes": 10954,
+      "sha256": "4d934595d27bd3fc28b8877af372616e3fcb75c8a8cd53d6789b1d21e5132740"
+    },
+    {
+      "file": "service-scope-native-console.txt",
+      "bytes": 725,
+      "sha256": "32f9fe63c90158464b6111452ea342b2788db2c1626e91a8bc1163798ee6cde4"
+    },
+    {
+      "file": "service-scope-native-report.json",
+      "bytes": 3342,
+      "sha256": "6f7ca103242b9da81e144b0fc2a75b824a4b28cf817c038c2367777db0155cb3"
+    },
+    {
+      "file": "service-scope-native2-console.txt",
+      "bytes": 726,
+      "sha256": "83c477df86e0cb4aaadbe66e510cb50e408885b21e049d9438a8aab71cb3ce9d"
+    },
+    {
+      "file": "service-scope-native2-report.json",
+      "bytes": 3344,
+      "sha256": "f937e99a7803651f09927053411932774f0facceca12105cec4e8649f08b00f8"
+    },
+    {
+      "file": "service-scope-native3-after.png",
+      "bytes": 40288,
+      "sha256": "d97a98b8de07c3f0694867881a8c3761de4c9828280562684768a1941ee6b76f"
+    },
+    {
+      "file": "service-scope-native3-before.png",
+      "bytes": 36588,
+      "sha256": "738805521b177f8e93c1634be03e6fa3837dd220a35d2585c4e511eebd8aaebd"
+    },
+    {
+      "file": "service-scope-native3-console.txt",
+      "bytes": 192,
+      "sha256": "83a10bfad8d714b230bbb0a3e09c4a34dcdf682413d693387cde758cddb92677"
+    },
+    {
+      "file": "service-scope-native3-report.json",
+      "bytes": 138987,
+      "sha256": "34e88d9dedfda786e6a5a56b0abc9c4b3f6dddf501d7c878dcc0764617d1958b"
+    },
+    {
+      "file": "service-scope-native3.mjs.source.txt",
+      "bytes": 11253,
+      "sha256": "b92c3088c0431bf4c91ebff3bd93b307fd80d640ba328739df57cc9dde48a337"
+    },
+    {
+      "file": "testing-browser-facts.json",
+      "bytes": 318,
+      "sha256": "026bebd2f8b9833e7f39f1a90f9372e1e93c7ba02c58b8f0d5d2127d4692813a"
+    },
+    {
+      "file": "web-control4.mjs.source.txt",
+      "bytes": 10199,
+      "sha256": "02fb5f245b2b93b924067c1211864dc72e14fb49215217c29ce439d53971c758"
+    },
+    {
+      "file": "web-native-control-report.json",
+      "bytes": 10264,
+      "sha256": "491e624dab7982b22c0aa92a5429df3dc890bfbce57ddd5e5e426e09a58365f0"
+    },
+    {
+      "file": "web-native-control2-report.json",
+      "bytes": 9534,
+      "sha256": "15cd695257331b5e9420d2d66d56fd74e3065a111f299afd49a4c3d52369f846"
+    },
+    {
+      "file": "web-native-control3-report.json",
+      "bytes": 11176,
+      "sha256": "86e87fc3ed2d1c3229b4312f4bc8b8caa5bacdfca2380367cb00cfac40b8a06c"
+    },
+    {
+      "file": "web-native-control4-report.json",
+      "bytes": 88440,
+      "sha256": "79979fb9f56c3c8db782c7fc5a90fda555b0796a67ad16eef8f596dc8129ff39"
+    },
+    {
+      "file": "web-native-first-console.txt",
+      "bytes": 668,
+      "sha256": "4e468fe4ca21fefd92a1bd65a1a4cb324025b6ead90ae1e96503589a327611f9"
+    },
+    {
+      "file": "web-native-first-report.json",
+      "bytes": 1187,
+      "sha256": "e8adefcbe365e84db9af8949e7dc826fdbe3b8d5debd768c16ed122871d3d16b"
+    },
+    {
+      "file": "web-native-qualified-console.txt",
+      "bytes": 722,
+      "sha256": "1c6eb475aa24624663bad13c5b18938fcdd2eca23733da442f33b52a2c56ee2a"
+    },
+    {
+      "file": "web-native-qualified-report.json",
+      "bytes": 3983,
+      "sha256": "afbf9d2addc4e902fb768ad0e726d5a01824f4a1cfc19ad053bc9cc14fa70c14"
+    },
+    {
+      "file": "web-native-second-console.txt",
+      "bytes": 668,
+      "sha256": "4e468fe4ca21fefd92a1bd65a1a4cb324025b6ead90ae1e96503589a327611f9"
+    },
+    {
+      "file": "web-native-second-report.json",
+      "bytes": 3717,
+      "sha256": "dbf4cf0765aedce2b1e73a5cb532a403c9cd061eedf8ebb810dfa01f2c48f994"
+    },
+    {
+      "file": "web-native-third-console.txt",
+      "bytes": 714,
+      "sha256": "ca33307120f5aeb3c5ef5ca451f9fcad4ee2e7f386beb9518bee09ffa24af536"
+    },
+    {
+      "file": "web-native-third-report.json",
+      "bytes": 3245,
+      "sha256": "89f0b3ac03f7cc3e49245062cae85f353e09dce84669d2db89f186bec8b2a885"
+    },
+    {
+      "file": "web-qualification.mjs.source.txt",
+      "bytes": 10521,
+      "sha256": "c68fbe624097d134db6c1e01881083234f2936ab698a6f6ef72f21568102764b"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+authenticated-source-and-readonly-description
+exact-manual-adoption-and-independent-stars
+exact-removal-is-independent-of-native-capability
+bridge-loss-rejects-old-confirmation-without-claim
+native-source-recovery-requires-new-confirmation
+unverified-rename-remains-disabled-and-chat-is-unchanged

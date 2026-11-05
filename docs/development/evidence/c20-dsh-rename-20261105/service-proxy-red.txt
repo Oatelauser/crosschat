@@ -1,0 +1,50 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-rename-20261105
+
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > reads capabilities without a write and calls the public title service with the same live session 78ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > does not enable desktop solely because a native rename method exists 23ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > does not enable custom solely because a native rename method exists 21ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > keeps an unverified version or unavailable native service disabled 24ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed instance before a native write 13ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed creation before a native write 13ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed live-object before a native write 14ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed missing before a native write 13ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 15ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 13ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 14ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 14ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 15ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > requires the existing authentication and forbids browser-origin writes 14ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > keeps a native error after admission uncertain and never repeats the public call 12ms
+ × test/dsh-rename-bridge.test.ts > production DSH title operation adapter > keeps confirmation stable across fresh Cordis service proxies for the same loaded service 70ms
+   → expected '7c60392fa69f713b73a4ca685e327bcfe8732…' to be 'da9eb8cf9c3571f5e24817ad6a174de90f28c…' // Object.is equality
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > qualifies a concrete native target, writes once and confirms the native name before updating node metadata 82ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > invalidates an old confirmation if the live Agent is replaced under identical native identity metadata 72ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > recovers a missing native service read-only without disabling adoption or replaying a pending rename 148ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > does not inherit native Web rename capability in the Desktop endpoint 31ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > keeps an admitted native setter failure uncertain with zero automatic repeats 98ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-rename-bridge.test.ts > production DSH title operation adapter > keeps confirmation stable across fresh Cordis service proxies for the same loaded service
+AssertionError: expected '7c60392fa69f713b73a4ca685e327bcfe8732…' to be 'da9eb8cf9c3571f5e24817ad6a174de90f28c…' // Object.is equality
+
+Expected: "da9eb8cf9c3571f5e24817ad6a174de90f28c601fe509c6fef95c8dc2e209ca5"
+Received: "7c60392fa69f713b73a4ca685e327bcfe87324d3b1154dbd727f3e45322b4f41"
+
+ ❯ test/dsh-rename-bridge.test.ts:128:85
+    126|     expect(f.ctx.get('sessionTitle')).not.toBe(f.ctx.get('sessionTitle…
+    127|     const first = await f.operations.describe(f.ref), second = await f…
+    128|     expect(second.actions.rename.state).toBe('executable'); expect(sec…
+       |                                                                                     ^
+    129|     expect(await f.operations.apply({ ref: f.ref, operation: 'rename',…
+    130|     expect(f.rename).toHaveBeenCalledTimes(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 20 passed (21)
+   Start at  21:37:59
+   Duration  1.60s (transform 334ms, setup 0ms, collect 490ms, tests 798ms, environment 0ms, prepare 129ms)
+

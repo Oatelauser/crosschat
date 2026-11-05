@@ -1,0 +1,55 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-rename-20261105
+
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > reads capabilities without a write and calls the public title service with the same live session 124ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > does not enable desktop solely because a native rename method exists 40ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > does not enable custom solely because a native rename method exists 37ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > keeps an unverified version or unavailable native service disabled 54ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed instance before a native write 23ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed creation before a native write 25ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed live-object before a native write 27ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed missing before a native write 27ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 28ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 29ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 27ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 26ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 27ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > requires the existing authentication and forbids browser-origin writes 27ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > keeps a native error after admission uncertain and never repeats the public call 29ms
+ × test/dsh-rename-bridge.test.ts > production DSH title operation adapter > registers the qualified rc.5 Web adapter in the production provider plan 58ms
+   → expected 'needs-verification' to be 'executable' // Object.is equality
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > keeps rc.2 rename awaiting its own UI qualification while adoption remains executable 38ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > qualifies a late loaded title service without replaying a write 106ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > does not let stale scope cleanup disable a newer title service generation 136ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > still closes HTTP and removes its registration if the title dependency scope cannot dispose 24ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > keeps confirmation stable across fresh Cordis service proxies for the same loaded service 164ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > qualifies a concrete native target, writes once and confirms the native name before updating node metadata 78ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > invalidates an old confirmation if the live Agent is replaced under identical native identity metadata 65ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > recovers a missing native service read-only without disabling adoption or replaying a pending rename 101ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > does not inherit native Web rename capability in the Desktop endpoint 20ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > keeps an admitted native setter failure uncertain with zero automatic repeats 82ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-rename-bridge.test.ts > production DSH title operation adapter > registers the qualified rc.5 Web adapter in the production provider plan
+AssertionError: expected 'needs-verification' to be 'executable' // Object.is equality
+
+Expected: "executable"
+Received: "needs-verification"
+
+ ❯ test/dsh-rename-bridge.test.ts:139:44
+    137|   it('registers the qualified rc.5 Web adapter in the production provi…
+    138|     const f = await fixture('web', '0.2.1-rc.5', true, true, true), de…
+    139|     expect(described.actions.rename.state).toBe('executable');
+       |                                            ^
+    140|     expect(await f.operations.apply({ ref: f.ref, operation: 'rename',…
+    141|     expect(f.rename).toHaveBeenCalledTimes(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 25 passed (26)
+   Start at  21:48:05
+   Duration  2.27s (transform 334ms, setup 0ms, collect 565ms, tests 1.43s, environment 0ms, prepare 102ms)
+

@@ -34,17 +34,22 @@ function send(response, value, status = 200) {
   response.end(JSON.stringify(value));
 }
 
-async function body(request) {
+async function jsonBody(request, limit = MAX_JSON_BYTES) {
   const chunks = [];
   let bytes = 0;
   for await (const chunk of request) {
     bytes += chunk.length;
-    if (bytes > MAX_JSON_BYTES) throw failure('INPUT_REJECTED', 'Harness bridge JSON body exceeds its input budget.', 413);
+    if (bytes > limit) throw failure('INPUT_REJECTED', 'Harness bridge JSON body exceeds its input budget.', 413);
     chunks.push(chunk);
   }
   let value;
   try { value = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
   catch { throw failure('INPUT_REJECTED', 'Harness bridge requires a valid JSON message.', 400); }
+  return value;
+}
+
+async function body(request) {
+  const value = await jsonBody(request);
   if (!isRecord(value) || Object.keys(value).some((key) => key !== 'text' && key !== 'mode')
     || typeof value.text !== 'string' || value.text.trim() === '' || !['queue', 'steer'].includes(value.mode)) {
     throw failure('INPUT_REJECTED', 'Harness bridge accepts non-empty text and queue or steer mode only.', 400);
@@ -88,6 +93,8 @@ export async function mountDshBridge(ctx, host, options = {}) {
   let temporaryOwned = false;
   let releaseCallerIdentity;
   let callerIdentityScope;
+  let titleScope;
+  let titleEpoch;
   const file = join(directory, `${instanceId}.json`);
   const temporary = join(directory, `${instanceId}.tmp`);
   const info = { schema: 1, protocol: 1, provider: 'dsh', instanceId, pid: process.pid, runtimeVersion, ...endpoint,
@@ -97,6 +104,15 @@ export async function mountDshBridge(ctx, host, options = {}) {
     if (!Array.isArray(agents)) throw failure('PROTOCOL_ERROR', 'Harness live root registry is unavailable.');
     return agents;
   };
+  const titleTargets = new WeakMap();
+  const titleTarget = (agent) => {
+    let current = titleTargets.get(agent);
+    if (current === undefined || current.epoch !== titleEpoch) { current = { epoch: titleEpoch, revision: randomUUID() }; titleTargets.set(agent, current); }
+    return current.revision;
+  };
+  const titleAvailability = () => profile === 'web' && ['0.2.1-rc.2', '0.2.1-rc.5'].includes(runtimeVersion)
+    && titleEpoch !== undefined && typeof ctx.get('sessionTitle')?.rename === 'function' ? { state: 'executable' }
+      : { state: 'needs-verification', reason: 'This native profile, version or title service is not qualified.' };
   const root = (id) => {
     const agent = ctx.agents.get(id);
     return agent !== undefined && roots().some((item) => item === agent) ? agent : undefined;
@@ -124,13 +140,41 @@ export async function mountDshBridge(ctx, host, options = {}) {
       const path = request.url ?? '';
       if (request.method === 'GET' && path === '/v1/info') return send(response, info);
       if (request.method === 'GET' && path === '/v1/sessions') return send(response, { items: roots().map(thread) });
-      const matched = /^\/v1\/sessions\/([^/?#]+)(\/messages)?$/.exec(path);
-      if (matched === null || !['GET', 'POST'].includes(request.method ?? '') || (request.method === 'POST') !== (matched[2] === '/messages')) return send(response, { error: { code: 'DSH_ROUTE_NOT_FOUND' } }, 404);
+      const matched = /^\/v1\/sessions\/([^/?#]+)(\/(?:messages|title))?$/.exec(path);
+      const titleRoute = matched?.[2] === '/title';
+      if (matched === null || !['GET', 'POST'].includes(request.method ?? '')
+        || !titleRoute && (request.method === 'POST') !== (matched[2] === '/messages')) return send(response, { error: { code: 'DSH_ROUTE_NOT_FOUND' } }, 404);
       let id;
       try { id = decodeURIComponent(matched[1]); } catch { throw failure('INPUT_REJECTED', 'Harness native session ID is malformed.', 400); }
       if (id === '' || id === '.' || id === '..' || Buffer.byteLength(id) > 16 * 1024) throw failure('INPUT_REJECTED', 'Harness native session ID is invalid.', 400);
-      if (request.method === 'GET') { const agent = root(id); return send(response, { item: agent === undefined ? null : thread(agent) }); }
+      if (request.method === 'GET') {
+        const agent = root(id);
+        if (!titleRoute) return send(response, { item: agent === undefined ? null : thread(agent) });
+        if (agent === undefined) return send(response, { error: { code: 'DSH_SESSION_NOT_FOUND', sessionId: id } }, 404);
+        return send(response, { instanceId, sessionId: id, createdAt: thread(agent).createdAt, targetRevision: titleTarget(agent), availability: titleAvailability() });
+      }
       if (request.headers['content-type']?.split(';', 1)[0].trim().toLowerCase() !== 'application/json') throw failure('INPUT_REJECTED', 'Harness bridge requires application/json.', 415);
+      if (titleRoute) {
+        const input = await jsonBody(request, 4096);
+        if (!isRecord(input) || Object.keys(input).some((key) => !['name', 'instanceId', 'createdAt', 'targetRevision'].includes(key))
+          || typeof input.name !== 'string' || !input.name.trim() || input.name.length > 256 || input.name.includes(':')
+          || [...input.name].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)
+          || typeof input.instanceId !== 'string' || !Number.isSafeInteger(input.createdAt) || input.createdAt < 0 || typeof input.targetRevision !== 'string') {
+          throw failure('INPUT_REJECTED', 'Harness title requires a bounded name and exact observed target identity.', 400);
+        }
+        if (closed || request.aborted) return;
+        const agent = root(id);
+        if (agent === undefined) return send(response, { error: { code: 'DSH_SESSION_NOT_FOUND', sessionId: id } }, 404);
+        if (input.instanceId !== instanceId || input.createdAt !== thread(agent).createdAt || input.targetRevision !== titleTarget(agent)
+          || titleAvailability().state !== 'executable') return send(response, { error: { code: 'DSH_TARGET_CHANGED', sessionId: id } }, 409);
+        const service = ctx.get('sessionTitle');
+        // No await or restore between this last live-object check and the public synchronous native call.
+        if (root(id) !== agent) return send(response, { error: { code: 'DSH_SESSION_NOT_FOUND', sessionId: id } }, 404);
+        try { service.rename(agent.session, input.name); }
+        catch { throw failure('WRITE_UNCERTAIN', 'Harness native title completion could not be confirmed.'); }
+        if (root(id) !== agent) throw failure('WRITE_UNCERTAIN', 'Harness native title target changed after admission.');
+        return send(response, { accepted: true, instanceId, sessionId: id, targetRevision: titleTarget(agent), name: thread(agent).name });
+      }
       const input = await body(request);
       if (closed || request.aborted) return;
       const agent = root(id);
@@ -157,6 +201,8 @@ export async function mountDshBridge(ctx, host, options = {}) {
     releaseCallerIdentity = undefined;
     await attempt(() => release?.());
     await attempt(() => callerIdentityScope?.dispose());
+    titleEpoch = undefined;
+    await attempt(() => titleScope?.dispose());
     await attempt(async () => {
       const stopped = new Promise((resolve) => server.close(() => resolve()));
       server.closeAllConnections();
@@ -180,6 +226,15 @@ export async function mountDshBridge(ctx, host, options = {}) {
     const address = server.address();
     if (address === null || typeof address === 'string') throw failure('UNAVAILABLE', 'Harness bridge did not acquire a loopback port.');
     url = `http://127.0.0.1:${address.port}`;
+    // Cordis returns fresh traced service proxies. Dependency scope lifetime,
+    // rather than proxy equality, identifies one actual loaded title service.
+    if (profile === 'web' && ['0.2.1-rc.2', '0.2.1-rc.5'].includes(runtimeVersion) && typeof ctx.inject === 'function') {
+      titleScope = ctx.inject(['sessionTitle'], (scope) => {
+        if (closed || typeof scope.get('sessionTitle')?.rename !== 'function') return;
+        const epoch = randomUUID(); titleEpoch = epoch;
+        scope.effect(() => () => { if (titleEpoch === epoch) titleEpoch = undefined; });
+      });
+    }
     if (callerIdentity !== undefined) {
       const contribute = (scope) => {
         if (closed) return;

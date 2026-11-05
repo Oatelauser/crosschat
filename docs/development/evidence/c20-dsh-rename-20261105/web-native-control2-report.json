@@ -1,0 +1,245 @@
+{
+  "schema": 1,
+  "scope": "Exploratory true DSH Web UI and adapter qualification; not node/star acceptance",
+  "root": "D:\\workspace\\CC\\cc-c20-web-8JQOXf",
+  "status": "explored",
+  "productHead": "fc065c14bb1f722340b63946dd20bed0234680a3",
+  "version": "0.2.1-rc.5",
+  "hostPid": 11000,
+  "nativeId": "session-57196695-c4a2-4058-a6a4-d7d630b9d069",
+  "browser": "existing Playwright Chromium 1243",
+  "browserPid": 31368,
+  "browserEndpointOwnerVerified": true,
+  "browserVersion": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/153.0.8010.12",
+    "revision": "@971a7443b0c9b0a9b2860529b33331b76077ec62",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "jsVersion": "15.3.76.4"
+  },
+  "commands": [
+    {
+      "command": {
+        "op": "describe"
+      },
+      "answer": {
+        "ref": {
+          "contextId": "local",
+          "providerId": "dsh",
+          "nativeId": "session-57196695-c4a2-4058-a6a4-d7d630b9d069",
+          "endpointType": "host"
+        },
+        "observedAt": 1793871764141,
+        "revision": "7fad8a12af31427ea88fddb4ac3cbd577883f4adf6d6fd50a77a3ffaaf9013ab",
+        "actions": {
+          "adopt": {
+            "state": "executable"
+          },
+          "rename": {
+            "state": "executable"
+          }
+        }
+      }
+    },
+    {
+      "command": {
+        "op": "eval",
+        "expression": "[...document.querySelectorAll('button')].find(e=>e.innerText==='继续')?.setAttribute('data-c20-continue','true'); true"
+      },
+      "answer": true
+    },
+    {
+      "command": {
+        "op": "click",
+        "selector": "button[data-c20-continue]"
+      },
+      "answer": {
+        "clicked": "button[data-c20-continue]"
+      }
+    },
+    {
+      "command": {
+        "op": "click",
+        "selector": "button[aria-label=\"选择工作区\"]"
+      },
+      "answer": {
+        "clicked": "button[aria-label=\"选择工作区\"]"
+      }
+    },
+    {
+      "command": {
+        "op": "eval",
+        "expression": "({body:document.body.innerText,inputs:[...document.querySelectorAll('input')].map(e=>({type:e.type,placeholder:e.placeholder,value:e.value})),menus:[...document.querySelectorAll('[role=menuitem],button')].map(e=>({text:e.innerText,aria:e.getAttribute('aria-label')}))})"
+      },
+      "answer": {
+        "body": "探索未至之境\n预览版\n选择工作区\n标准模式\n选择一个工作区开始",
+        "inputs": [
+          {
+            "type": "file",
+            "placeholder": "",
+            "value": ""
+          }
+        ],
+        "menus": [
+          {
+            "text": "",
+            "aria": "打开侧边栏"
+          },
+          {
+            "text": "",
+            "aria": "新建会话"
+          },
+          {
+            "text": "",
+            "aria": "插件"
+          },
+          {
+            "text": "",
+            "aria": "自动化任务"
+          },
+          {
+            "text": "",
+            "aria": "更多"
+          },
+          {
+            "text": "",
+            "aria": "添加工作区"
+          },
+          {
+            "text": "",
+            "aria": "搜索会话"
+          },
+          {
+            "text": "",
+            "aria": "账号菜单"
+          },
+          {
+            "text": "选择工作区",
+            "aria": "选择工作区"
+          },
+          {
+            "text": "标准模式",
+            "aria": null
+          },
+          {
+            "text": "",
+            "aria": "添加文件或调用指令"
+          },
+          {
+            "text": "",
+            "aria": "发送消息"
+          }
+        ]
+      }
+    },
+    {
+      "command": {
+        "op": "eval",
+        "expression": "window.__c20Events=[]; for(const kind of ['click','pointerdown']) document.addEventListener(kind,e=>window.__c20Events.push({kind,trusted:e.isTrusted,target:e.target.closest('button')?.getAttribute('aria-label')}),true); window.__c20Errors=[]; window.addEventListener('unhandledrejection',e=>window.__c20Errors.push(String(e.reason))); ({disabled:document.querySelector('button[aria-label=\"选择工作区\"]').disabled,buttons:[...document.querySelectorAll('button')].map(e=>({aria:e.getAttribute('aria-label'),rect:JSON.stringify(e.getBoundingClientRect())}))})"
+      },
+      "answer": {
+        "disabled": false,
+        "buttons": [
+          {
+            "aria": "打开侧边栏",
+            "rect": "{\"x\":10,\"y\":18,\"width\":36,\"height\":36,\"top\":18,\"right\":46,\"bottom\":54,\"left\":10}"
+          },
+          {
+            "aria": "新建会话",
+            "rect": "{\"x\":10,\"y\":66,\"width\":36,\"height\":36,\"top\":66,\"right\":46,\"bottom\":102,\"left\":10}"
+          },
+          {
+            "aria": "插件",
+            "rect": "{\"x\":10,\"y\":114,\"width\":36,\"height\":36,\"top\":114,\"right\":46,\"bottom\":150,\"left\":10}"
+          },
+          {
+            "aria": "自动化任务",
+            "rect": "{\"x\":10,\"y\":162,\"width\":36,\"height\":36,\"top\":162,\"right\":46,\"bottom\":198,\"left\":10}"
+          },
+          {
+            "aria": "更多",
+            "rect": "{\"x\":10,\"y\":210,\"width\":36,\"height\":36,\"top\":210,\"right\":46,\"bottom\":246,\"left\":10}"
+          },
+          {
+            "aria": "添加工作区",
+            "rect": "{\"x\":10,\"y\":258,\"width\":36,\"height\":36,\"top\":258,\"right\":46,\"bottom\":294,\"left\":10}"
+          },
+          {
+            "aria": "搜索会话",
+            "rect": "{\"x\":10,\"y\":306,\"width\":36,\"height\":36,\"top\":306,\"right\":46,\"bottom\":342,\"left\":10}"
+          },
+          {
+            "aria": "账号菜单",
+            "rect": "{\"x\":9.5,\"y\":374,\"width\":36,\"height\":36,\"top\":374,\"right\":45.5,\"bottom\":410,\"left\":9.5}"
+          },
+          {
+            "aria": "选择工作区",
+            "rect": "{\"x\":76,\"y\":150,\"width\":117,\"height\":28,\"top\":150,\"right\":193,\"bottom\":178,\"left\":76}"
+          },
+          {
+            "aria": null,
+            "rect": "{\"x\":197,\"y\":150,\"width\":106,\"height\":28,\"top\":150,\"right\":303,\"bottom\":178,\"left\":197}"
+          },
+          {
+            "aria": "添加文件或调用指令",
+            "rect": "{\"x\":80,\"y\":263,\"width\":28,\"height\":28,\"top\":263,\"right\":108,\"bottom\":291,\"left\":80}"
+          },
+          {
+            "aria": "发送消息",
+            "rect": "{\"x\":693,\"y\":258,\"width\":34,\"height\":34,\"top\":258,\"right\":727,\"bottom\":292,\"left\":693}"
+          }
+        ]
+      }
+    },
+    {
+      "command": {
+        "op": "click",
+        "selector": "button[aria-label=\"添加工作区\"]"
+      },
+      "answer": {
+        "clicked": "button[aria-label=\"添加工作区\"]"
+      }
+    },
+    {
+      "command": {
+        "op": "eval",
+        "expression": "({body:document.body.innerText,errors:window.__c20Errors,events:window.__c20Events})"
+      },
+      "answer": {
+        "body": "探索未至之境\n预览版\n选择工作区\n标准模式\n选择一个工作区开始",
+        "errors": [],
+        "events": [
+          {
+            "kind": "pointerdown",
+            "trusted": true,
+            "target": "添加工作区"
+          },
+          {
+            "kind": "click",
+            "trusted": true,
+            "target": "添加工作区"
+          }
+        ]
+      }
+    }
+  ],
+  "lastBody": "探索未至之境\n预览版\n选择工作区\n标准模式\n选择一个工作区开始",
+  "sameAgent": true,
+  "browserExit": {
+    "code": 0,
+    "signal": null
+  },
+  "browserProcessesAfter": 0,
+  "nativeLogs": {
+    "stdout": "dsh web: http://127.0.0.1:58794/?token=[fixture-token-redacted]\n",
+    "stderr": ""
+  },
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  },
+  "browserLogs": "\r\nDevTools listening on ws://127.0.0.1:58799/devtools/browser/e922d7eb-ac68-49eb-9b13-8a1bd3309058\r\n[31368:37992:1105/174215.729:ERROR:content\\browser\\network_service_instance_impl.cc:655] Network service crashed or was terminated, restarting service.\r\n[31368:37992:1105/174215.816:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[31368:37992:1105/174215.816:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[31368:37992:1105/174218.420:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[31368:37992:1105/174218.420:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[31368:20240:1105/174222.165:ERROR:google_apis\\gcm\\engine\\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\r\n[31368:20240:1105/174245.263:ERROR:google_apis\\gcm\\engine\\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\r\n[31368:20240:1105/174327.007:ERROR:google_apis\\gcm\\engine\\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\r\n",
+  "unsafe": false
+}

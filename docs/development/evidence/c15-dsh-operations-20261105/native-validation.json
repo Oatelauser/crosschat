@@ -1,0 +1,295 @@
+{
+  "schema": 1,
+  "observedAt": "2026-11-05T08:37:07.346Z",
+  "productHead": "836b379d9e560ef2b8ef94b2d81848a26239d771",
+  "sourceFiles": [
+    {
+      "file": "src/application/session-operations.ts",
+      "blob": "7506c96ba40d4c9a2c5ddcab37d31822b0737486"
+    },
+    {
+      "file": "src/application/native-operation-providers.ts",
+      "blob": "d2aac45298183212d77b9a32b2824e4f28f05307"
+    },
+    {
+      "file": "src/dsh/native-operations.ts",
+      "blob": "32e5f1b4eefa99cf8586b34dd766e696a2d26351"
+    },
+    {
+      "file": "src/dsh/service.ts",
+      "blob": "cc1ccd3c31c0d413cd554a9be3a50e8ce1996ce7"
+    },
+    {
+      "file": "test/dsh-native-operations.test.ts",
+      "blob": "8ba70e64b7f644b365a5b478d8d16f055cb7e210"
+    },
+    {
+      "file": "test/session-operations.test.ts",
+      "blob": "94000253395c5744ebb1cb726dcddaa31d579b59"
+    },
+    {
+      "file": "test/helpers/dsh-native-operations-validation.mjs",
+      "blob": "358c3a81e10f4cf1e4a30d9a11f8a5c12af879c8"
+    },
+    {
+      "file": "test/helpers/dsh-native-members-pty.mjs",
+      "blob": "c6ac2654ced5711df09daf17c9ba04a919d00039"
+    },
+    {
+      "file": "integrations/dsh/bridge.js",
+      "blob": "f256ee04fafeaf6171dd04c0a06b08201316cd0b"
+    },
+    {
+      "file": "integrations/dsh/index.js",
+      "blob": "c52da1d2ee9ca2b1442b316b582ec35c7cffa81c"
+    }
+  ],
+  "scope": "DSH npm/Web local native manual membership and source recovery; no Desktop or rename acceptance",
+  "finalNative": {
+    "platform": "win32",
+    "arch": "x64",
+    "version": "0.2.1-rc.5",
+    "runId": "7663edc5-5aad-48f8-aaf1-f5d375366e52",
+    "checks": [
+      {
+        "name": "authenticated-source-and-readonly-description",
+        "status": "passed"
+      },
+      {
+        "name": "exact-manual-adoption-and-independent-stars",
+        "status": "passed"
+      },
+      {
+        "name": "exact-removal-is-independent-of-native-capability",
+        "status": "passed"
+      },
+      {
+        "name": "bridge-loss-rejects-old-confirmation-without-claim",
+        "status": "passed"
+      },
+      {
+        "name": "native-source-recovery-requires-new-confirmation",
+        "status": "passed"
+      },
+      {
+        "name": "unverified-rename-remains-disabled-and-chat-is-unchanged",
+        "status": "passed"
+      },
+      {
+        "name": "real-terminal-cancel-confirm-exact-membership-and-restoration",
+        "status": "passed"
+      }
+    ],
+    "cleanup": {
+      "runtimeStopped": true,
+      "registrationRemoved": true,
+      "removed": true,
+      "forced": false
+    }
+  },
+  "tests": {
+    "targetedPassed": 105,
+    "fullPassed": 2845,
+    "fullSkipped": 11,
+    "fullExitCode": 0
+  },
+  "history": {
+    "terminalFirst": "six native checks passed; terminal fixture omitted production management and waited on wrong event. Raw terminal retained; application events were not copied before the owned fixture was removed.",
+    "terminalSecond": "six native checks passed; keyboard input sent before member page readiness; failed application events retained.",
+    "terminalThird": "six native checks passed; second adoption key sent while capability was revalidating after cancellation; failed application events retained.",
+    "terminalFourth": "all seven checks passed, including real ConPTY; product fresh-discovery state correction was not yet present.",
+    "final": "all seven checks passed at the recorded final product checkpoint."
+  },
+  "redaction": "Owned Web URL query token and Bearer credentials removed from copies, including base64-encoded terminal chunks; original raw hashes retained. Historical raw cache is not copied verbatim.",
+  "artifacts": [
+    {
+      "file": "native-final-console.txt",
+      "bytes": 366,
+      "sha256": "28c07ab5964fe1f193efa30ac386c8dd70549528a785ccd8f95734642fe90bcc",
+      "originalSha256": "28c07ab5964fe1f193efa30ac386c8dd70549528a785ccd8f95734642fe90bcc",
+      "redacted": false
+    },
+    {
+      "file": "native-final-report.json",
+      "bytes": 4264,
+      "sha256": "0cd8f58e88808da71b84280f1635af2c6e9bce56f0b87e65d1711281276340e1",
+      "originalSha256": "0cd8f58e88808da71b84280f1635af2c6e9bce56f0b87e65d1711281276340e1",
+      "redacted": false
+    },
+    {
+      "file": "native-first-console.txt",
+      "bytes": 303,
+      "sha256": "eb98384bb3995f82d45a5fcdee4e191c74ade9b979bd72c7bf5bdd9337fdd829",
+      "originalSha256": "eb98384bb3995f82d45a5fcdee4e191c74ade9b979bd72c7bf5bdd9337fdd829",
+      "redacted": false
+    },
+    {
+      "file": "native-first-report.json",
+      "bytes": 3269,
+      "sha256": "53e2fb10cadafb6af3a5527468dd036328f50854ab27da22dab4be7eff3d579b",
+      "originalSha256": "d995dcff4971f39ad2808b0cd6a2907cb1fbcc0b44a42288ce701d0683a4111a",
+      "redacted": true
+    },
+    {
+      "file": "native-install-console-second.txt",
+      "bytes": 437,
+      "sha256": "940aff5aa5e1c6025fab7cabeecc1cc8f547a2488ab1d33b8d0ff1ff8654e9f7",
+      "originalSha256": "940aff5aa5e1c6025fab7cabeecc1cc8f547a2488ab1d33b8d0ff1ff8654e9f7",
+      "redacted": false
+    },
+    {
+      "file": "native-install-console.txt",
+      "bytes": 919,
+      "sha256": "46234071c517e8af53ef29f0ee754762b08bac55b678a5b2e1f27c6d9524b02e",
+      "originalSha256": "46234071c517e8af53ef29f0ee754762b08bac55b678a5b2e1f27c6d9524b02e",
+      "redacted": false
+    },
+    {
+      "file": "native-install-result.json",
+      "bytes": 60497,
+      "sha256": "d13cacdbf51a14d3ad95c4974d45d3809abd515db7bf1b20d2228a1f333e7633",
+      "originalSha256": "d13cacdbf51a14d3ad95c4974d45d3809abd515db7bf1b20d2228a1f333e7633",
+      "redacted": false
+    },
+    {
+      "file": "native-install-state.json",
+      "bytes": 1124,
+      "sha256": "a9720f2ebea9a96984fcd0a7f2e38669235c469c45e47a3bdfab022949670c7f",
+      "originalSha256": "a9720f2ebea9a96984fcd0a7f2e38669235c469c45e47a3bdfab022949670c7f",
+      "redacted": false
+    },
+    {
+      "file": "native-installer-entry-error.txt",
+      "bytes": 919,
+      "sha256": "46234071c517e8af53ef29f0ee754762b08bac55b678a5b2e1f27c6d9524b02e",
+      "originalSha256": "46234071c517e8af53ef29f0ee754762b08bac55b678a5b2e1f27c6d9524b02e",
+      "redacted": false
+    },
+    {
+      "file": "native-package-lock.json",
+      "bytes": 409534,
+      "sha256": "06300f505f0715e5aba78df83c0170ceeb47e8ad507cd0bcb01c87b3a15447db",
+      "originalSha256": "06300f505f0715e5aba78df83c0170ceeb47e8ad507cd0bcb01c87b3a15447db",
+      "redacted": false
+    },
+    {
+      "file": "native-terminal-first-console.txt",
+      "bytes": 780,
+      "sha256": "c94ec08568c34086056e5919c21773acbc7dea2cdccef0c2fd8be8367497d7c7",
+      "originalSha256": "c94ec08568c34086056e5919c21773acbc7dea2cdccef0c2fd8be8367497d7c7",
+      "redacted": false
+    },
+    {
+      "file": "native-terminal-first-report.json",
+      "bytes": 3946,
+      "sha256": "264b77285b002a8551d783fdcfd2c64bc5e8d61c698d3380905e5657d1d06d46",
+      "originalSha256": "36c36d082c715f7602615cb4935882e239a7ed1ecd813eeb7e4e6840a2a096c2",
+      "redacted": true
+    },
+    {
+      "file": "native-terminal-fourth-console.txt",
+      "bytes": 366,
+      "sha256": "28c07ab5964fe1f193efa30ac386c8dd70549528a785ccd8f95734642fe90bcc",
+      "originalSha256": "28c07ab5964fe1f193efa30ac386c8dd70549528a785ccd8f95734642fe90bcc",
+      "redacted": false
+    },
+    {
+      "file": "native-terminal-fourth-report.json",
+      "bytes": 4264,
+      "sha256": "31351e288800f39fb5d8c20139afc8632be310a945bfacce88111f1cc582e9b3",
+      "originalSha256": "22e038f0dc2831ca31bec8b9229dacc33f0c1ebd181d1be1cde3e8b9ce0a4435",
+      "redacted": true
+    },
+    {
+      "file": "native-terminal-second-console.txt",
+      "bytes": 3391,
+      "sha256": "f00e3f7b47790f95a3b8b800894b9385a58a89622f642d1a860797bb4aab9cef",
+      "originalSha256": "f00e3f7b47790f95a3b8b800894b9385a58a89622f642d1a860797bb4aab9cef",
+      "redacted": false
+    },
+    {
+      "file": "native-terminal-second-report.json",
+      "bytes": 9160,
+      "sha256": "6d5134cb36ea590104ec2418eab677f0ed85e0a854564d232e96901c5c49daa0",
+      "originalSha256": "6f01542a9fe79024a56ed370373ca632b20c5775081f1518c1d0aab33ab8e195",
+      "redacted": true
+    },
+    {
+      "file": "native-terminal-third-console.txt",
+      "bytes": 3385,
+      "sha256": "434ef09b9a079ccef394f3635d77e9d515b5a9d640bd4cf50886eeac8a5fe287",
+      "originalSha256": "434ef09b9a079ccef394f3635d77e9d515b5a9d640bd4cf50886eeac8a5fe287",
+      "redacted": false
+    },
+    {
+      "file": "native-terminal-third-report.json",
+      "bytes": 9148,
+      "sha256": "6c5a4ac3a72708f7912917f3e1cacc4579fb58ddf201e98fbc72b3888c45bd5c",
+      "originalSha256": "7e0854f9ac25976b935200d71b3710a10b5241676421939c360ff58abdf1a448",
+      "redacted": true
+    },
+    {
+      "file": "terminal-20c85c14-74b5-4be7-ade0-e0c7edd7f8a1.jsonl",
+      "bytes": 114487,
+      "sha256": "7a9d4d0f73d213e80edc98cb9c82b09def77a3ea9c5aee1510c710248bfd0434",
+      "originalSha256": "7a9d4d0f73d213e80edc98cb9c82b09def77a3ea9c5aee1510c710248bfd0434",
+      "redacted": false
+    },
+    {
+      "file": "terminal-5e31541e-d4bb-400d-ba3a-ca77c0e54d4e.jsonl",
+      "bytes": 128379,
+      "sha256": "39e33133bcb317cae9462a27fd069b031e4a68a40d03506084be9b52f8998d71",
+      "originalSha256": "39e33133bcb317cae9462a27fd069b031e4a68a40d03506084be9b52f8998d71",
+      "redacted": false
+    },
+    {
+      "file": "terminal-75b44ff5-0067-4e94-85d9-c4c3450690d6.jsonl",
+      "bytes": 145301,
+      "sha256": "43df337657aecf90d5932203a10479813a4bfe7664a9b81d230a33cb518b8593",
+      "originalSha256": "43df337657aecf90d5932203a10479813a4bfe7664a9b81d230a33cb518b8593",
+      "redacted": false
+    },
+    {
+      "file": "terminal-7663edc5-5aad-48f8-aaf1-f5d375366e52.jsonl",
+      "bytes": 122239,
+      "sha256": "498ae1353c19399cd343903d8a41baf958f04ea87eb1d71077b71c230073a4d3",
+      "originalSha256": "498ae1353c19399cd343903d8a41baf958f04ea87eb1d71077b71c230073a4d3",
+      "redacted": false
+    },
+    {
+      "file": "terminal-application-5e31541e-d4bb-400d-ba3a-ca77c0e54d4e.jsonl",
+      "bytes": 27814,
+      "sha256": "7d7123a026938f53e6048c2db94a8173b149b446d68fc1e1b31e4ad197358a20",
+      "originalSha256": "7d7123a026938f53e6048c2db94a8173b149b446d68fc1e1b31e4ad197358a20",
+      "redacted": false
+    },
+    {
+      "file": "terminal-application-7663edc5-5aad-48f8-aaf1-f5d375366e52.jsonl",
+      "bytes": 27814,
+      "sha256": "229262aa6fa7b568661165d91ce03f9c898f76f0f4089541aebb7be2f1118a4b",
+      "originalSha256": "229262aa6fa7b568661165d91ce03f9c898f76f0f4089541aebb7be2f1118a4b",
+      "redacted": false
+    },
+    {
+      "file": "terminal-d9ca369e-e806-4784-89e3-164aec9a5c78.jsonl",
+      "bytes": 69285,
+      "sha256": "6bda0e0f07165f0cf547720ba9da40d1e6ee6c1418e406fc036af85a4da77398",
+      "originalSha256": "6bda0e0f07165f0cf547720ba9da40d1e6ee6c1418e406fc036af85a4da77398",
+      "redacted": false
+    },
+    {
+      "file": "terminal-failed-application-75b44ff5-0067-4e94-85d9-c4c3450690d6.jsonl",
+      "bytes": 74018,
+      "sha256": "323108dd0090726a7283ee632c0fa253b82e737354b8aa5932b7a2448e6d2838",
+      "originalSha256": "323108dd0090726a7283ee632c0fa253b82e737354b8aa5932b7a2448e6d2838",
+      "redacted": false
+    },
+    {
+      "file": "terminal-failed-application-d9ca369e-e806-4784-89e3-164aec9a5c78.jsonl",
+      "bytes": 34610,
+      "sha256": "6c3f3f6f6560f7a3c1622949a429f614bc316970da2b6cd504367e924b92586b",
+      "originalSha256": "6c3f3f6f6560f7a3c1622949a429f614bc316970da2b6cd504367e924b92586b",
+      "redacted": false
+    }
+  ]
+}

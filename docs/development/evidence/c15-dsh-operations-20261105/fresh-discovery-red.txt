@@ -1,0 +1,44 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-capabilities-20261105
+
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > enables verified host adoption independently of unimplemented rename and exposes no bridge credentials 57ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > keeps an untyped or unattested live record in needs-verification despite its delivery flag 10ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rechecks auth and owner, then recovers read-only without submitting adoption 21ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > invalidates confirmation when the concrete URL changes even if UUID, pid and version do not 19ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects a version change until discovery and confirmation are refreshed 16ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > reports the current unsupported runtime window and recovers after a supported version returns 12ms
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > preserves the unsupported source result through fresh production discovery and recovers without a write 17ms
+   → expected 'unavailable' to be 'unsupported' // Object.is equality
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects same-type duplicate instances while isolating an identical ID on a different endpoint type 18ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > does not cross from the selected host endpoint to an available desktop owner 10ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rechecks the native target immediately before the claim and rejects a disappearance without calling the writer 13ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects changed native title metadata until the discovery snapshot is refreshed 20ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects changed native creation metadata until the discovery snapshot is refreshed 19ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects a registration move that occurs while the final native response is awaited 17ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > cancels a blocked native read and owns the late response without issuing a claim 28ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > keeps an unknown claim result uncertain and never repeats it during capability recovery 17ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > preserves the unsupported source result through fresh production discovery and recovers without a write
+AssertionError: expected 'unavailable' to be 'unsupported' // Object.is equality
+
+Expected: "unsupported"
+Received: "unavailable"
+
+ ❯ test/dsh-native-operations.test.ts:175:70
+    173|     expect((await f.operations.describe(f.ref)).actions.adopt.state).t…
+    174|     f.registration.runtimeVersion = '0.3.0'; await f.publish();
+    175|     expect((await f.operations.describe(f.ref)).actions.adopt.state).t…
+       |                                                                      ^
+    176|     f.registration.runtimeVersion = '0.2.1-rc.2'; await f.publish();
+    177|     expect((await f.operations.describe(f.ref)).actions.adopt.state).t…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 passed (15)
+   Start at  16:31:13
+   Duration  811ms (transform 188ms, setup 0ms, collect 263ms, tests 298ms, environment 0ms, prepare 109ms)
+

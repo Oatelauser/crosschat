@@ -1,0 +1,77 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-rename-20261105
+
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > binds a late native shell service, releases unloaded ownership and binds its replacement 93ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > does not retain a source contribution after the native shell service unloads 25ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > contributes this bridge instance only to the actual live root execution and releases it on close 18ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > does not advertise caller association without the public per-execution shell service 17ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > reports the native desktop profile without inferring frontend ownership 24ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > reports the native web profile without inferring frontend ownership 22ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > reports the native custom-profile profile without inferring frontend ownership 24ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > does not invent host or Desktop type without a valid native profile (0) 19ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > does not invent host or Desktop type without a valid native profile (1) 18ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > does not invent host or Desktop type without a valid native profile (2) 17ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > does not invent host or Desktop type without a valid native profile (3) 16ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > does not invent host or Desktop type without a valid native profile (4) 17ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > publishes a private owned registration matching the authenticated service identity 21ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > requires authentication and refuses browser-origin requests 23ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > lists existing roots and resolves exact opaque session ids without creating sessions 33ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > never discovers or admits input to a live subagent addressed directly 31ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > reads the public title projection without replaying history through the snapshot getter 19ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > admits one native queue message and returns its generated identity 21ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > admits one native steer message and returns its generated identity 20ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > does not create or replace an absent target and rejects invalid content before admission 27ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > accepts all legal escaped text within the content budget instead of truncating JSON 85ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > rejects an oversized body and unknown routes without native side effects 31ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > reads capabilities without a write and calls the public title service with the same live session 101ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > does not enable desktop solely because a native rename method exists 32ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > does not enable custom solely because a native rename method exists 33ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > disposes the bridge socket and only its owned registration while leaving native agents live 24ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > still stops the listener and removes its own registration when the contributor release fails 17ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > still stops the listener and removes its own registration when the dependency scope disposal rejects 15ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > shares one closing attempt between concurrent closes without releasing twice 15ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > closes through the plugin effect that owns the bridge 19ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > leaves a replacement registration, other instances and borrowed agents untouched while closing 22ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > keeps an unverified version or unavailable native service disabled 41ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed instance before a native write 21ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed creation before a native write 21ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed live-object before a native write 22ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed missing before a native write 20ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > keeps the mount failure as the reason and removes the temporary registration it left behind 13ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > keeps the mount failure and its cleanup failure when the error refuses a cause 11ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > keeps the primary error, its own cause and every cleanup reason 17ms
+ ✓ test/dsh-bridge.test.ts > DSH Host bridge > leaves a pre-existing temporary file untouched when its own creation is refused 13ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 20ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 22ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 19ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 16ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 16ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > requires the existing authentication and forbids browser-origin writes 17ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > keeps a native error after admission uncertain and never repeats the public call 16ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > keeps confirmation stable across fresh Cordis service proxies for the same loaded service 142ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > qualifies a concrete native target, writes once and confirms the native name before updating node metadata 85ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > invalidates an old confirmation if the live Agent is replaced under identical native identity metadata 78ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > recovers a missing native service read-only without disabling adoption or replaying a pending rename 119ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > does not inherit native Web rename capability in the Desktop endpoint 22ms
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > keeps an admitted native setter failure uncertain with zero automatic repeats 91ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > enables verified host adoption independently of unimplemented rename and exposes no bridge credentials 73ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > keeps an untyped or unattested live record in needs-verification despite its delivery flag 13ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rechecks auth and owner, then recovers read-only without submitting adoption 28ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > invalidates confirmation when the concrete URL changes even if UUID, pid and version do not 24ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects a version change until discovery and confirmation are refreshed 20ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > reports the current unsupported runtime window and recovers after a supported version returns 21ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > preserves the unsupported source result through fresh production discovery and recovers without a write 26ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects same-type duplicate instances while isolating an identical ID on a different endpoint type 73ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > does not cross from the selected host endpoint to an available desktop owner 15ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rechecks the native target immediately before the claim and rejects a disappearance without calling the writer 24ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects changed native title metadata until the discovery snapshot is refreshed 26ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects changed native creation metadata until the discovery snapshot is refreshed 26ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects a registration move that occurs while the final native response is awaited 19ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > cancels a blocked native read and owns the late response without issuing a claim 30ms
+ ✓ test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > keeps an unknown claim result uncertain and never repeats it during capability recovery 25ms
+
+ Test Files  3 passed (3)
+      Tests  68 passed (68)
+   Start at  21:39:54
+   Duration  2.70s (transform 486ms, setup 0ms, collect 869ms, tests 2.19s, environment 1ms, prepare 348ms)
+

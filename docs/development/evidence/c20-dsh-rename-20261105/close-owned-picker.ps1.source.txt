@@ -1,0 +1,39 @@
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class C20OwnedPicker {
+  public delegate bool Visit(IntPtr window, IntPtr value);
+  [DllImport("user32.dll")] static extern bool EnumWindows(Visit visit, IntPtr value);
+  [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr owner, Visit visit, IntPtr value);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr window, StringBuilder text, int max);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr window, StringBuilder text, int max);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+  [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr window, uint command);
+  [DllImport("user32.dll")] static extern bool PostMessage(IntPtr window, uint message, IntPtr w, IntPtr l);
+  static string Text(IntPtr window) { var text = new StringBuilder(4096); GetWindowText(window,text,text.Capacity); return text.ToString(); }
+  static string Class(IntPtr window) { var text = new StringBuilder(128); GetClassName(window,text,text.Capacity); return text.ToString(); }
+  public static int Close(string root) {
+    var owned = new List<IntPtr>();
+    EnumWindows((window,unused) => {
+      if (Text(window) != "位置不可用" || Class(window) != "#32770") return true;
+      bool match = false;
+      EnumChildWindows(window,(child,ignored) => { if (Text(child).IndexOf(root,StringComparison.OrdinalIgnoreCase)>=0) match=true; return true; },IntPtr.Zero);
+      if (match) owned.Add(window);
+      return true;
+    },IntPtr.Zero);
+    foreach (var window in owned) {
+      uint process; GetWindowThreadProcessId(window,out process);
+      var parent=GetWindow(window,4); uint parentProcess; GetWindowThreadProcessId(parent,out parentProcess);
+      PostMessage(window,0x0010,IntPtr.Zero,IntPtr.Zero);
+      var title=Text(parent);
+      if(parent!=IntPtr.Zero && process==parentProcess && Class(parent)=="#32770" && (title.Contains("选择") || title.Contains("文件夹"))) PostMessage(parent,0x0010,IntPtr.Zero,IntPtr.Zero);
+    }
+    return owned.Count;
+  }
+}
+'@
+$count = [C20OwnedPicker]::Close('D:\workspace\CC\cc-c20-web-8JQOXf')
+[pscustomobject]@{ matchedOwnedErrorWindows=$count; scope='only native error windows containing the exact owned test root, and their same-process picker owner' } | ConvertTo-Json

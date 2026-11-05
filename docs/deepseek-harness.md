@@ -66,6 +66,12 @@ doctor 文本、JSON 和 TUI 还会复用发现侧的桥握手，核对每个活
 
 ## 运行与维护
 
+开发候选 `836b379` 已补充 npm/Web 手动入星的原生核验：在 TUI 中进入所选星的成员页，沿既有 `a` 选择 node 的完整会话后确认。读取能力不写册；实例、端点或会话信息变化后，旧确认会被拒绝，需要刷新重核。桥恢复只恢复可用动作，不自动重新入星。新手动成员永久、两星各自管理，精确删册保留原生聊天；live roots 不代表窗口选择，也没有自动跟随 Web 标签的能力。
+
+当前分支的 Windows x64 npm `0.2.1-rc.5` 已通过正式 Host、生产桥与真实 ConPTY 的入星/退星/断桥恢复检查；这是本地开发候选，尚未发布，Desktop 和其它平台增强未因此通过。具体版本、失败记录与范围见[增强验证](development/dsh-native-operations-progress-20261105.md#2026-11-05原生与终端切片收口)。
+
+该候选还已接通 rc.5 Web 的既有 TUI `e` 原生改名动作：绑定同一活会话及实际标题服务代次，更新后核对 node、星册及原生名称，再沿新名称投递。Windows 本地已验证真实 Web 标题自动同步、ConPTY 取消零写/确认、同一 Agent 和按新名称投递；见[改名验收与证据](development/dsh-native-rename-progress-20261105.md#windows-rc5本地切片验收)。rc.2、Desktop 和其它版本显示待核实，其它平台原生增强与托管 CI 继续保留。服务失效或目标变化后刷新重核；写入结果待核实时核对原生界面与星册，不自动重试。不新增 wrapper、用户命令参数或 crosschat 持久数据文件。
+
 四类东西分开归属：crosschat npm 包（含桥目录与 skill 源）、复制进 Harness 的 skill 副本、所选 profile 里的插件引用、桥运行时登记。crosschat 只写最后一项和技能副本；登记默认在用户主目录的 `~/.crosschat/dsh/instances`，不随 Harness 的 `DSH_HOME` 迁移，插件配置里已有的显式 `home` 会原样传给桥（`options.home ?? homedir()`）；skill 副本由 `crosschat install-skills`、TUI 维护和 `crosschat uninstall` 共用同一目标计划覆盖安装或移除（Claude、Codex、Harness 三处，项目 `.agents/skills` 不在其中），插件引用由 Harness 自己的插件管理器写进 profile。
 
 插件与桥在 Host 进程内运行，几种情况要分清：同一 Host 内禁用插件会走桥的 disposer，撤销它自己的 listener 和登记；重新启用会生成新的实例登记，旧凭据随之失效；只撤销 `shellEnv` 子 scope 时仅撤身份贡献，HTTP 仍继续服务；Host 崩溃可能留下死 PID 登记，发现侧只读忽略、不删除，下次启动写新实例。npm Web 的禁用/启用实测见[第三轮真实通过](development/evidence/dsh-20261023/third-live.json)。正式 Desktop 也已通过其原生 Plugins UI 验证登记撤销/新实例和会话保留，但本轮未单独重测旧凭据失效；见[Desktop 验证边界](development/evidence/c04-worker-20261029/I03-C3-execution-plan.md#11-正式desktop人工原生验收与运行数据清理)。Web 与 Desktop 的 profile 和插件管理器各归各的，不互相代管。

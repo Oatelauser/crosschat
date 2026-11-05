@@ -1,5 +1,15 @@
-<!-- 当前已恢复；最新范围见下方，历史阶段计数按各自证据保留。 -->
+<!-- 本会话已按用户继续恢复；历史阶段状态按对应证据保留。 -->
 # 工具完整接入与兼容验证待办
+
+2026-11-05当前：C18/C24入星及[C20 Windows rc.5原生改名本地切片](dsh-native-rename-progress-20261105.md#windows-rc5本地切片验收)已验收，候选680e391；真实Web＋生产Node/Broker＋ConPTY取消/确认＋权威星册/新名称TCP投递通过，同一Agent不变，Host/浏览器/登记/run根正常回收。完整2871通过/11原有跳过，服务代理RED及全部失败保留。该已验切片移出活动；rc.2、Desktop、其它平台与C22双node/双操作端/增强CI保留，25父项/11CI索引及原负责人保持。当前待新候选推送/草稿PR决定，未执行新外部操作，下方暂停/未验证描述为阶段历史。
+
+2026-11-05已按用户“继续”恢复。当前[C20续接](dsh-native-rename-progress-20261105.md#恢复与服务生命周期修复)已保存服务代理身份RED并修复为原生依赖scope生命周期，产品80ed53f；定向71通过、build及相关lint通过，真实Web复验进行中，用户操作仍未启用改名。只读导航工装禁止原生文件夹选择，不再触发该系统对话框；25父项/11CI索引、既有负责人及外部执行批准边界保持。下方暂停为阶段历史。
+
+2026-11-05 18:06后用户明确暂停，本会话已停止开发与原生测试，相关进程/worker为0。当前源代码检查点0b10b115（产品fc065c1、完整2865通过/11原有跳过）；C20真实Web选中了同一已有会话，但改名被旧revision守卫拒绝、标题未改，生产Provider仍禁用改名。详细[暂停断点与下一步](dsh-native-rename-progress-20261105.md#用户暂停断点)及[证据索引](evidence/c20-dsh-rename-20261105/pause-validation.json)已保存。没有推送、发布或新Actions；25父项/11CI索引、其它负责人及日用DSH保持。等待用户明确继续，不自动恢复。
+
+2026-11-05改名续接：[C20独立本地工作区](dsh-native-rename-progress-20261105.md)基于入星验收948e58f继续，桥子资源检查点bd0779c，15条新边界/四文件119定向通过，RED及新工作区未build时的旧测试失败保留。用户Provider仍未启用改名；下一步Adapter和真正Web界面/node/星册/按名寻址核实。没有新命令/步骤、持久数据文件或外部执行，25父项/11CI索引及既有归属保持。
+
+2026-11-05增强收口：独立分支产品836b379已完成[C15/C24/C18的Windows npm/Web入星切片](dsh-native-operations-progress-20261105.md#2026-11-05原生与终端切片收口)：正式rc.5、生产桥/reader/真实broker与两星同机node连接、真实ConPTY取消/确认/恢复七项通过，原生Agent/聊天不变且Host正常退出/登记与run根回收。定向105、完整2845通过/11原有跳过；全部RED、终端工装失败及[证据索引](evidence/c15-dsh-operations-20261105/validation.json)保留。该已验切片移出活动，下一步条件C20原生改名；目前仍禁用。其它平台/版本、Desktop与C22双node/双操作端/CI组合继续保留，无新外部执行/用户命令或持久文件，25父项/11CI索引与公共负责人不变。
 
 2026-11-05后续：ef8ef98文档提交的普通41981774584为Windows/Ubuntu成功、macOS一项迟到响应测试失败；macOS既有continue-on-error使run总体success，不等于三job全绿。[托管RED与受控时序复现](evidence/c12-onboarding-hosted-20261105/late-response-red-validation.json)保留。0ad2d1e保存RED，现只把该测试的150ms猜测改为返回后显式释放响应，finally等待真实取消/锁释放；正常及父线程停顿200ms两例都通过，30ms产品截止/未决记录/清理断言不放宽。[126项定向、完整2828通过/11原有跳过](evidence/c12-onboarding-hosted-20261105/late-response-green-validation.json)及原生10个blob相同已核验。最新修复推送后的普通CI按新head逐job确认，不能用e1旧绿或ef总体success追认；四目标原生通过保持，不追加原生dispatch，main合入/新周更仍未授权。
 
@@ -79,11 +89,11 @@ C09/C10/C11/C12 的**基础接入部分不依赖 C15—C24**；后者只在增�
 | 8 | C11 | 从零接入CI：隔离安装→加载技能/插件→发现/身份→原生收发→基础TUI/诊断→更新/移除。正式工具＋本机mock，不以直调Adapter代替；包含Harness正式Desktop独立workflow及托管首轮。 | 各入口工装；C14、C08/C09/C10/C13及相应正式工具与C04等入口证据；不依赖增强任务 | DSH npm/Web [四目标六阶段托管41978059319](evidence/c12-onboarding-hosted-20261105/native-validation.json)已验收：Windows/Linux x64、macOS Intel/ARM各rc.2→rc.5六阶段，skill/原生身份/双向回信/doctor/真实TTY/维护/聊天保留与Host/登记/安装/缓存正常清理通过；四ZIP摘要/156成员/八UUID核对，无强停/retry。首轮普通失败与测试工装修复、e1f4d00三平台普通全绿见[终验](evidence/c12-onboarding-hosted-20261105/review.md)。该DSH切片移出活动实施；PR #4的main合入/新POSIX从零周更仍待决定，最终文档提交CI另核实；Desktop/其它工具/未覆盖格及父项继续开放  ef8ef98普通macOS迟到响应测试首败及受控复现保留；新显式gate测试126定向/完整2828通过11跳过，最新托管普通按新head逐job核实。 |
 | 9 | C00 | 讨论工具×Windows/Linux/macOS的CI支持矩阵、频率、成本与组合控制，明确是否包含源/目标跨机组合，不自行削减覆盖。 | 共用规划，用户拍板；在DSH平台扩展前决定，不冻结既定Windows基础路径 | 用户已明确批准频率A：全工具三平台目标、DSH先做，现有通信频率保持，新增完整验收首轮通过后每周一次；C05四目标随PR #3进入main并启用获批周更，C11四目标从零首验现也已通过，PR #4合入/新POSIX周更仍须单独决定。跨机R1/R2/R3仍待回答，不因预选而推定，父项不关闭 |
 | 10 | C12 | 按C00落地三平台基础接入与原生兼容检查，逐格留证；明确不支持、未验证、通过，macOS阻断策略待方案确定。 | 各工具工装＋共用调度；C00、相应入口与基础CI/C11；增强增量留C22 | [四目标八项通信41961856141](https://github.com/Oatelauser/crosschat/actions/runs/41961856141)已随PR #3进入main a1e6464并启用获批周更；新增[四目标六阶段托管41978059319](evidence/c12-onboarding-hosted-20261105/native-validation.json)四目标均通过，各rc.2/rc.5六阶段及正常释放、四artifact/156成员/八UUID已验收，DSH npm/Web该切片移出活动。PR #4仍草稿，main合入/新POSIX从零周更待具体决定；首次长根失败、普通首败/测试工装修复、Node25崩溃及main公共失败均保留。真实schedule、Desktop/其它工具及完整C12继续开放  ef8ef98普通macOS迟到响应测试首败及受控复现保留；新显式gate测试126定向/完整2828通过11跳过，最新托管普通按新head逐job核实。 |
-| 11 | C15 | 对应工具/入口基础接入及配套CI收口后，先核对Harness，再核对OpenCode窗口选择、首条输入、退出和公开原生改名等增强能力；不靠active、差分、目录或roots猜测。 | 该DSH入口基础与配套CI完成；OpenCode切片后续，接入规范和C14合同；复用共享S01—S06 | DSH基础/CI后实施；OpenCode切片保留；基础来源识别仍归C14 |
-| 12 | C21 | 准备并持续补充增强隔离回归：选择/多窗多星、永久保护、未知Provider、端点差异、能力失效恢复、owner/版本变化、迟到响应、写不明零重发、资源回收。 | C15明确合同后开始，贯穿C24/C16—C20，C22前收口；复用共享测试，不复制状态机 | DSH切片优先；尚未实施；本顺序表示开始准备，不是先验收尚未开发功能；其它工具部分保留 |
-| 13 | C24 | 扩展OpenCode/Harness既有Provider：端点/owner/版本、逐操作四态能力、有界只读重核与恢复，applied/rejected/uncertain；删册沿用独立精确通道。 | C15、共享S06及C21相应用例；先接框架与对应能力，不等待所有改名实现 | DSH切片优先；工具专属扩展待做，公共框架已有；其它工具部分保留 |
-| 14 | C18 | Harness原Host bridge接统一手动成员管理；区分实例/profile/类型，live roots不当作选中会话，不假定有dsh wrapper。 | C15/C24、共享层、C09/C13与C14；Desktop还依赖C04，本会话先DSH，OpenCode后续 | 工具接线/专属验收待做 |
-| 15 | C20 | Harness原Host接sessionTitle.rename，核实exact live session、原生界面、node及路由同步，不换owner或改数据库。 | C15、C18目标核验、C24和共享名称链；npm/Web、Desktop分别验证 | 条件能力待核实，未实施 |
+| 11 | C15 | 对应工具/入口基础接入及配套CI收口后，先核对Harness，再核对OpenCode窗口选择、首条输入、退出和公开原生改名等增强能力；不靠active、差分、目录或roots猜测。 | 该DSH入口基础与配套CI完成；OpenCode切片后续，接入规范和C14合同；复用共享S01—S06 | DSH npm/Web官方rc.2/rc.5原生模块事实与选择信号缺口已核实，见[C15续接](dsh-native-operations-progress-20261105.md)；改名仅确认公开方法，不等于活UI同步通过。OpenCode/Desktop及C14边界保留 |
+| 12 | C21 | 准备并持续补充增强隔离回归：选择/多窗多星、永久保护、未知Provider、端点差异、能力失效恢复、owner/版本变化、迟到响应、写不明零重发、资源回收。 | C15明确合同后开始，贯穿C24/C16—C20，C22前收口；复用共享测试，不复制状态机 | DSH原生事实/四态恢复/实例版本变化/迟到登记/uncertain零重发及第三Provider隔离回归已随836b379通过；完整2845/11。多窗永久/临时、未知Provider和C22所需组合继续保留 |
+| 13 | C24 | 扩展OpenCode/Harness既有Provider：端点/owner/版本、逐操作四态能力、有界只读重核与恢复，applied/rejected/uncertain；删册沿用独立精确通道。 | C15、共享S06及C21相应用例；先接框架与对应能力，不等待所有改名实现 | DSH Windows npm/Web入星探测/最终确认/四态恢复已本地验收836b379，定向105、完整2845/11与原生七项；C20改名未启用，Desktop/其它平台/工具仍保留 |
+| 14 | C18 | Harness原Host bridge接统一手动成员管理；区分实例/profile/类型，live roots不当作选中会话，不假定有dsh wrapper。 | C15/C24、共享层、C09/C13与C14；Desktop还依赖C04，本会话先DSH，OpenCode后续 | Windows npm/Web正式rc.5手动入星/两星隔离/精确删册/断桥恢复及真实ConPTY已本地验收，见[增强证据](dsh-native-operations-progress-20261105.md#2026-11-05原生与终端切片收口)，切片移出活动；正式Desktop/其它平台与更完整组合保留 |
+| 15 | C20 | Harness原Host接sessionTitle.rename，核实exact live session、原生界面、node及路由同步，不换owner或改数据库。 | C15、C18目标核验、C24和共享名称链；npm/Web、Desktop分别验证 | Windows npm/Web rc.5本地切片已验收，真实Web/生产Node/ConPTY/星册及新名称投递通过，完整2871/11，见[改名证据](dsh-native-rename-progress-20261105.md#windows-rc5本地切片验收)；rc.2、Desktop、其它平台与CI边界保留 |
 | 16 | C22 | 新选择/成员/改名/能力恢复的真实受控验收及CI增量，多node/操作端，正式工具＋本机mock，平台复用基础矩阵。 | 对应增强接线及C21收口；复用C11/C12/O06c/C04，不反向阻塞基础CI | DSH切片优先；尚未实施；旧通信/TUI结果不算本批通过；其它工具部分保留 |
 | 17 | C23 | 同步自动/手动管理、恢复规则、逐操作能力与改名限制、实际平台证据及新Provider接入门槛。 | C15起草，随接线更新，C22等对应增强证据齐备后最终收口；基础教学仍由C10完成 | DSH切片优先；尚未实施，不等所有代码完成才写文档；其它工具部分保留 |
 | 18 | C02 | 开发Codex CLI正式工具＋runner本机mock兼容CI，覆盖发现、完整thread ID、身份/回信、忙闲、服务重启与清理。 | Codex/Claude工具会话负责；相应入口实现与隔离合同；平台扩展按C00，可并行 | 原负责人独立推进，本会话不接管；CI待开发 |

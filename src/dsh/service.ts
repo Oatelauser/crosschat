@@ -5,7 +5,7 @@ import type { DshOptions } from './client.js';
 import { isEndpointTypeFor } from '../tool-types.js';
 
 export interface DshConnection { registration: DshRegistration; request(path: string, body?: unknown): Promise<unknown> }
-export interface DshOperation { connections(): Promise<DshConnection[]>; check(): void }
+export interface DshOperation { readonly signal: AbortSignal; connections(): Promise<DshConnection[]>; check(): void }
 
 /** Experimental window mirrors engines.dsh with includePrerelease enabled. */
 export function supportsDshVersion(version: string): boolean {
@@ -73,12 +73,16 @@ export async function withDshOperation<T>(options: DshOptions, use: (operation: 
               headers: { accept: 'application/json', authorization: `Bearer ${registration.token}`, ...(write ? { 'content-type': 'application/json' } : {}) },
               ...(write ? { body: JSON.stringify(body) } : {}), signal: controller.signal, redirect: 'manual' });
             if (!response.ok) {
-              if (response.status === 404 && write) {
+              if ((response.status === 404 || response.status === 409) && write) {
                 const detail = await boundedJson(response);
-                const target = /^\/v1\/sessions\/([^/]+)\/messages$/.exec(path);
+                const target = /^\/v1\/sessions\/([^/]+)\/(messages|title)$/.exec(path);
                 if (target !== null && isDshRecord(detail) && isDshRecord(detail.error)
-                  && detail.error.code === 'DSH_SESSION_NOT_FOUND' && detail.error.sessionId === decodeURIComponent(target[1])) {
+                  && response.status === 404 && detail.error.code === 'DSH_SESSION_NOT_FOUND' && detail.error.sessionId === decodeURIComponent(target[1])) {
                   throw dshError('SESSION_NOT_FOUND', 'The exact live Harness root session no longer exists.');
+                }
+                if (response.status === 409 && target?.[2] === 'title' && isDshRecord(detail) && isDshRecord(detail.error)
+                  && detail.error.code === 'DSH_TARGET_CHANGED' && detail.error.sessionId === decodeURIComponent(target[1])) {
+                  throw dshError('TARGET_CHANGED', 'The exact live Harness title target changed before admission.');
                 }
               } else { await response.body?.cancel().catch(() => undefined); }
               if (response.status === 401 || response.status === 403) throw dshError('AUTH_REQUIRED', 'Harness bridge refused instance authentication. Refresh the source after Harness restarts.');
@@ -119,7 +123,7 @@ export async function withDshOperation<T>(options: DshOptions, use: (operation: 
     return results;
   };
   try {
-    return await use({ check, connections: () => connections ??= connect() });
+    return await use({ signal: controller.signal, check, connections: () => connections ??= connect() });
   } catch (error) {
     if (error instanceof MultichatError) throw error;
     check();

@@ -1,0 +1,24 @@
+authenticated-source-and-readonly-description
+exact-manual-adoption-and-independent-stars
+exact-removal-is-independent-of-native-capability
+bridge-loss-rejects-old-confirmation-without-claim
+native-source-recovery-requires-new-confirmation
+unverified-rename-remains-disabled-and-chat-is-unchanged
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Timed out waiting for native membership terminal event
+
+'failed' !== 'passed'
+
+    at file:///D:/workspace/CC/cc-dsh-capabilities-20261105/test/helpers/dsh-native-operations-validation.mjs:152:8 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'failed',
+  expected: 'passed',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.23.4

@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "scope": "Exploratory true DSH Web UI and adapter qualification; not node/star acceptance",
+  "root": "D:\\workspace\\CC\\cc-c20-web-Vse38w",
+  "status": "failed",
+  "productHead": "fc065c14bb1f722340b63946dd20bed0234680a3",
+  "version": "0.2.1-rc.5",
+  "hostPid": 39212,
+  "nativeId": "session-f592f0a8-13fb-4bca-bb69-2ef199cb0643",
+  "browser": "Chrome",
+  "browserPid": 44752,
+  "error": {
+    "message": "Timed out waiting for owned Edge debugging endpoint",
+    "stack": "Error: Timed out waiting for owned Edge debugging endpoint\n    at pollDsh (file:///D:/workspace/CC/cc-dsh-rename-20261105/test/helpers/dsh-live-fixture.mjs:154:9)\n    at async file:///D:/workspace/CC/cc-dsh-rename-20261105/node_modules/.cache/c20-dsh-20261105/probe-web.mjs:31:15"
+  },
+  "browserForced": true,
+  "forcedBrowserExit": {
+    "code": null,
+    "signal": "SIGTERM"
+  },
+  "browserProcessesAfter": 0,
+  "nativeLogs": {
+    "stdout": "dsh web: http://127.0.0.1:57316/?token=[fixture-token-redacted]\n",
+    "stderr": ""
+  },
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": false,
+    "forced": false
+  },
+  "cleanupFailures": [
+    "Owned browser release is unknown"
+  ],
+  "browserLogs": "[44752:20624:1105/171318.472:INFO:components\\enterprise\\browser\\controller\\chrome_browser_cloud_management_controller.cc:241] No machine level policy manager exists.\r\n\r\nDevTools remote debugging requires a non-default data directory. Specify this using --user-data-dir.\r\n[44752:12000:1105/171337.526:ERROR:chrome\\updater\\ipc\\update_service_dialer_win.cc:77] Failed to open named pipe server process 40172: 拒绝访问。 (0x5)\r\n[44752:12000:1105/171337.731:ERROR:chrome\\updater\\ipc\\update_service_dialer_win.cc:77] Failed to open named pipe server process 40172: 拒绝访问。 (0x5)\r\n[44752:12000:1105/171338.134:ERROR:chrome\\updater\\ipc\\update_service_dialer_win.cc:77] Failed to open named pipe server process 40172: 拒绝访问。 (0x5)\r\n[44752:12000:1105/171338.740:ERROR:chrome\\updater\\ipc\\update_service_dialer_win.cc:77] Failed to open named pipe server process 40172: 拒绝访问。 (0x5)\r\n[44752:12000:1105/171339.547:ERROR:chrome\\updater\\ipc\\update_service_dialer_win.cc:77] Failed to open named pipe server process 40172: 拒绝访问。 (0x5)\r\n[44752:12000:1105/171340.561:ERROR:chrome\\updater\\ipc\\update_service_dialer_win.cc:77] Failed to open named pipe server process 40172: 拒绝访问。 (0x5)\r\n[44752:12000:1105/171341.574:ERROR:chrome\\updater\\ipc\\update_service_dialer_win.cc:77] Failed to open named pipe server process 40172: 拒绝访问。 (0x5)\r\nCreated TensorFlow Lite XNNPACK delegate for CPU.\r\n[44752:12000:1105/171342.584:ERROR:chrome\\updater\\ipc\\update_service_dialer_win.cc:77] Failed to open named pipe server process 40172: 拒绝访问。 (0x5)\r\n[44752:12000:1105/171343.595:ERROR:chrome\\updater\\ipc\\update_service_dialer_win.cc:77] Failed to open named pipe server process 40172: 拒绝访问。 (0x5)\r\n[44752:12000:1105/171344.611:ERROR:chrome\\updater\\ipc\\update_service_dialer_win.cc:77] Failed to open named pipe server process 40172: 拒绝访问。 (0x5)\r\n[44752:12000:1105/171345.623:ERROR:chrome\\updater\\ipc\\update_service_dialer_win.cc:77] Failed to open named pipe server process 40172: 拒绝访问。 (0x5)\r\n[44752:12000:1105/171346.634:ERROR:chrome\\updater\\ipc\\update_service_dialer_win.cc:77] Failed to open named pipe server process 40172: 拒绝访问。 (0x5)\r\n[44752:12000:1105/171347.647:ERROR:chrome\\updater\\ipc\\update_service_dialer_win.cc:77] Failed to open named pipe server process 40172: 拒绝访问。 (0x5)\r\n",
+  "unsafe": true
+}

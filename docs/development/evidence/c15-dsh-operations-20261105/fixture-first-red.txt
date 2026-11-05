@@ -1,0 +1,188 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-capabilities-20261105
+
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > enables verified host adoption independently of unimplemented rename and exposes no bridge credentials 30ms
+   → Fixture discovery unavailable
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > keeps an untyped or unattested live record in needs-verification despite its delivery flag 6ms
+   → Fixture discovery unavailable
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rechecks auth and owner, then recovers read-only without submitting adoption 5ms
+   → Fixture discovery unavailable
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > invalidates confirmation when the concrete URL changes even if UUID, pid and version do not 5ms
+   → Fixture discovery unavailable
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects a version change until discovery and confirmation are refreshed 5ms
+   → Fixture discovery unavailable
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > reports the current unsupported runtime window and recovers after a supported version returns 5ms
+   → Fixture discovery unavailable
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects same-type duplicate instances while isolating an identical ID on a different endpoint type 14ms
+   → Fixture discovery unavailable
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > does not cross from the selected host endpoint to an available desktop owner 4ms
+   → Fixture discovery unavailable
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rechecks the native target immediately before the claim and rejects a disappearance without calling the writer 5ms
+   → Fixture discovery unavailable
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > cancels a blocked native read and owns the late response without issuing a claim 5ms
+   → Fixture discovery unavailable
+ × test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > keeps an unknown claim result uncertain and never repeats it during capability recovery 5ms
+   → Fixture discovery unavailable
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > enables verified host adoption independently of unimplemented rename and exposes no bridge credentials
+Error: Fixture discovery unavailable
+ ❯ read test/dsh-native-operations.test.ts:81:29
+     79|   const read = async (endpointType = registration.endpointType) => {
+     80|     const detail = await reader.get({ contextId: 'local', nativeId: id…
+     81|     if (!detail.item) throw new Error('Fixture discovery unavailable');
+       |                             ^
+     82|     return detail.item;
+     83|   };
+ ❯ fixture test/dsh-native-operations.test.ts:84:32
+ ❯ test/dsh-native-operations.test.ts:106:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > keeps an untyped or unattested live record in needs-verification despite its delivery flag
+Error: Fixture discovery unavailable
+ ❯ read test/dsh-native-operations.test.ts:81:29
+     79|   const read = async (endpointType = registration.endpointType) => {
+     80|     const detail = await reader.get({ contextId: 'local', nativeId: id…
+     81|     if (!detail.item) throw new Error('Fixture discovery unavailable');
+       |                             ^
+     82|     return detail.item;
+     83|   };
+ ❯ fixture test/dsh-native-operations.test.ts:84:32
+ ❯ test/dsh-native-operations.test.ts:118:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rechecks auth and owner, then recovers read-only without submitting adoption
+Error: Fixture discovery unavailable
+ ❯ read test/dsh-native-operations.test.ts:81:29
+     79|   const read = async (endpointType = registration.endpointType) => {
+     80|     const detail = await reader.get({ contextId: 'local', nativeId: id…
+     81|     if (!detail.item) throw new Error('Fixture discovery unavailable');
+       |                             ^
+     82|     return detail.item;
+     83|   };
+ ❯ fixture test/dsh-native-operations.test.ts:84:32
+ ❯ test/dsh-native-operations.test.ts:127:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > invalidates confirmation when the concrete URL changes even if UUID, pid and version do not
+Error: Fixture discovery unavailable
+ ❯ read test/dsh-native-operations.test.ts:81:29
+     79|   const read = async (endpointType = registration.endpointType) => {
+     80|     const detail = await reader.get({ contextId: 'local', nativeId: id…
+     81|     if (!detail.item) throw new Error('Fixture discovery unavailable');
+       |                             ^
+     82|     return detail.item;
+     83|   };
+ ❯ fixture test/dsh-native-operations.test.ts:84:32
+ ❯ test/dsh-native-operations.test.ts:140:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects a version change until discovery and confirmation are refreshed
+Error: Fixture discovery unavailable
+ ❯ read test/dsh-native-operations.test.ts:81:29
+     79|   const read = async (endpointType = registration.endpointType) => {
+     80|     const detail = await reader.get({ contextId: 'local', nativeId: id…
+     81|     if (!detail.item) throw new Error('Fixture discovery unavailable');
+       |                             ^
+     82|     return detail.item;
+     83|   };
+ ❯ fixture test/dsh-native-operations.test.ts:84:32
+ ❯ test/dsh-native-operations.test.ts:151:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > reports the current unsupported runtime window and recovers after a supported version returns
+Error: Fixture discovery unavailable
+ ❯ read test/dsh-native-operations.test.ts:81:29
+     79|   const read = async (endpointType = registration.endpointType) => {
+     80|     const detail = await reader.get({ contextId: 'local', nativeId: id…
+     81|     if (!detail.item) throw new Error('Fixture discovery unavailable');
+       |                             ^
+     82|     return detail.item;
+     83|   };
+ ❯ fixture test/dsh-native-operations.test.ts:84:32
+ ❯ test/dsh-native-operations.test.ts:161:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rejects same-type duplicate instances while isolating an identical ID on a different endpoint type
+Error: Fixture discovery unavailable
+ ❯ read test/dsh-native-operations.test.ts:81:29
+     79|   const read = async (endpointType = registration.endpointType) => {
+     80|     const detail = await reader.get({ contextId: 'local', nativeId: id…
+     81|     if (!detail.item) throw new Error('Fixture discovery unavailable');
+       |                             ^
+     82|     return detail.item;
+     83|   };
+ ❯ fixture test/dsh-native-operations.test.ts:84:32
+ ❯ test/dsh-native-operations.test.ts:170:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > does not cross from the selected host endpoint to an available desktop owner
+Error: Fixture discovery unavailable
+ ❯ read test/dsh-native-operations.test.ts:81:29
+     79|   const read = async (endpointType = registration.endpointType) => {
+     80|     const detail = await reader.get({ contextId: 'local', nativeId: id…
+     81|     if (!detail.item) throw new Error('Fixture discovery unavailable');
+       |                             ^
+     82|     return detail.item;
+     83|   };
+ ❯ fixture test/dsh-native-operations.test.ts:84:32
+ ❯ test/dsh-native-operations.test.ts:179:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > rechecks the native target immediately before the claim and rejects a disappearance without calling the writer
+Error: Fixture discovery unavailable
+ ❯ read test/dsh-native-operations.test.ts:81:29
+     79|   const read = async (endpointType = registration.endpointType) => {
+     80|     const detail = await reader.get({ contextId: 'local', nativeId: id…
+     81|     if (!detail.item) throw new Error('Fixture discovery unavailable');
+       |                             ^
+     82|     return detail.item;
+     83|   };
+ ❯ fixture test/dsh-native-operations.test.ts:84:32
+ ❯ test/dsh-native-operations.test.ts:186:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > cancels a blocked native read and owns the late response without issuing a claim
+Error: Fixture discovery unavailable
+ ❯ read test/dsh-native-operations.test.ts:81:29
+     79|   const read = async (endpointType = registration.endpointType) => {
+     80|     const detail = await reader.get({ contextId: 'local', nativeId: id…
+     81|     if (!detail.item) throw new Error('Fixture discovery unavailable');
+       |                             ^
+     82|     return detail.item;
+     83|   };
+ ❯ fixture test/dsh-native-operations.test.ts:84:32
+ ❯ test/dsh-native-operations.test.ts:195:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯
+
+ FAIL  test/dsh-native-operations.test.ts > Harness native operation facts through the existing authenticated bridge > keeps an unknown claim result uncertain and never repeats it during capability recovery
+Error: Fixture discovery unavailable
+ ❯ read test/dsh-native-operations.test.ts:81:29
+     79|   const read = async (endpointType = registration.endpointType) => {
+     80|     const detail = await reader.get({ contextId: 'local', nativeId: id…
+     81|     if (!detail.item) throw new Error('Fixture discovery unavailable');
+       |                             ^
+     82|     return detail.item;
+     83|   };
+ ❯ fixture test/dsh-native-operations.test.ts:84:32
+ ❯ test/dsh-native-operations.test.ts:206:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  11 failed (11)
+   Start at  15:52:44
+   Duration  521ms (transform 132ms, setup 0ms, collect 206ms, tests 90ms, environment 0ms, prepare 85ms)
+

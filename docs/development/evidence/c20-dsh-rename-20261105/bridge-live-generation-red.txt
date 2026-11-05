@@ -1,0 +1,168 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-rename-20261105
+
+ × test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > reads capabilities without a write and calls the public title service with the same live session 50ms
+   → expected 404 to be 200 // Object.is equality
+ × test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > does not enable desktop solely because a native rename method exists 13ms
+   → expected 404 to be 200 // Object.is equality
+ × test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > does not enable custom solely because a native rename method exists 12ms
+   → expected 404 to be 200 // Object.is equality
+ × test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > keeps an unverified version or unavailable native service disabled 27ms
+   → expected { Object (error) } to match object { Object (availability) }
+(2 matching properties omitted from actual)
+ × test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed instance before a native write 14ms
+   → expected 404 to be 409 // Object.is equality
+ × test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed creation before a native write 11ms
+   → expected 404 to be 409 // Object.is equality
+ × test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed live-object before a native write 11ms
+   → expected 404 to be 409 // Object.is equality
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed missing before a native write 13ms
+ × test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 12ms
+   → expected 404 to be 400 // Object.is equality
+ × test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 11ms
+   → expected 404 to be 400 // Object.is equality
+ × test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 10ms
+   → expected 404 to be 400 // Object.is equality
+ × test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 10ms
+   → expected 404 to be 400 // Object.is equality
+ × test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 11ms
+   → expected 404 to be 400 // Object.is equality
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > requires the existing authentication and forbids browser-origin writes 12ms
+ × test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > keeps a native error after admission uncertain and never repeats the public call 10ms
+   → expected 404 to be 500 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > reads capabilities without a write and calls the public title service with the same live session
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ test/dsh-rename-bridge.test.ts:43:29
+     41|     const f = await fixture();
+     42|     const observed = await fetch(f.path, { headers: f.headers });
+     43|     expect(observed.status).toBe(200); expect(await observed.json()).t…
+       |                             ^
+     44|     expect(f.rename).not.toHaveBeenCalled();
+     45|     const response = await fetch(f.path, { method: 'POST', headers: f.…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > does not enable desktop solely because a native rename method exists
+ FAIL  test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > does not enable custom solely because a native rename method exists
+AssertionError: expected 404 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 404
+
+ ❯ test/dsh-rename-bridge.test.ts:53:29
+     51|     const f = await fixture(profile);
+     52|     const response = await fetch(f.path, { headers: f.headers });
+     53|     expect(response.status).toBe(200); expect(await response.json()).t…
+       |                             ^
+     54|     expect((await fetch(f.path, { method: 'POST', headers: f.headers, …
+     55|     expect(f.rename).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > keeps an unverified version or unavailable native service disabled
+AssertionError: expected { Object (error) } to match object { Object (availability) }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "availability": {
+-     "state": "needs-verification",
++   "error": {
++     "code": "DSH_ROUTE_NOT_FOUND",
+    },
+  }
+
+ ❯ test/dsh-rename-bridge.test.ts:60:74
+     58|   it('keeps an unverified version or unavailable native service disabl…
+     59|     for (const f of [await fixture('web', '0.2.9'), await fixture('web…
+     60|       expect(await (await fetch(f.path, { headers: f.headers })).json(…
+       |                                                                          ^
+     61|       expect(f.rename).not.toHaveBeenCalled();
+     62|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed instance before a native write
+ FAIL  test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed creation before a native write
+ FAIL  test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed live-object before a native write
+AssertionError: expected 404 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 404
+
+ ❯ test/dsh-rename-bridge.test.ts:72:29
+     70|     if (change === 'missing') f.agents.clear();
+     71|     const response = await fetch(f.path, { method: 'POST', headers: f.…
+     72|     expect(response.status).toBe(change === 'missing' ? 404 : 409); ex…
+       |                             ^
+     73|   });
+     74| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+ FAIL  test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service
+ FAIL  test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service
+ FAIL  test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service
+ FAIL  test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service
+ FAIL  test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service
+AssertionError: expected 404 to be 400 // Object.is equality
+
+- Expected
++ Received
+
+- 400
++ 404
+
+ ❯ test/dsh-rename-bridge.test.ts:77:128
+     75|   it.each(['', '  ', 'x:y', 'x\ny', 'x'.repeat(257)])('rejects invalid…
+     76|     const f = await fixture();
+     77|     expect((await fetch(f.path, { method: 'POST', headers: f.headers, …
+       |                                                                                                                                ^
+     78|     expect(f.rename).not.toHaveBeenCalled();
+     79|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/13]⎯
+
+ FAIL  test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > keeps a native error after admission uncertain and never repeats the public call
+AssertionError: expected 404 to be 500 // Object.is equality
+
+- Expected
++ Received
+
+- 500
++ 404
+
+ ❯ test/dsh-rename-bridge.test.ts:91:29
+     89|     const f = await fixture(); f.rename.mockImplementationOnce(() => {…
+     90|     const response = await fetch(f.path, { method: 'POST', headers: f.…
+     91|     expect(response.status).toBe(500); expect(await response.json()).t…
+       |                             ^
+     92|     expect(f.rename).toHaveBeenCalledTimes(1);
+     93|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/13]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  13 failed | 2 passed (15)
+   Start at  16:44:19
+   Duration  499ms (transform 49ms, setup 0ms, collect 58ms, tests 228ms, environment 0ms, prepare 81ms)
+

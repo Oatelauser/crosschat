@@ -28,6 +28,11 @@ export interface SessionOperationRequest {
   signal?: AbortSignal;
 }
 export interface NativeOperationProvider extends MembershipProvider {
+  /** Optional native revalidation; a discovery snapshot is not a mutation lease. */
+  inspectAdoption?(session: DiscoverySession, signal?: AbortSignal): Promise<{
+    availability: OperationAvailability;
+    contextKey?: string;
+  }>;
   /** Probe the actual endpoint/owner/version, never just the tool's display name. */
   rename?: {
     /** Stable concrete endpoint/owner/version; ordinary title timestamps are not identity. */
@@ -68,11 +73,15 @@ export function createNativeSessionOperations(options: Options): NativeSessionOp
   async function read(ref: SessionRef, signal?: AbortSignal): Promise<DiscoverySession> {
     const response = parseDiscoveryResponse(await bounded(signal, (owned) => options.discovery.execute({ op: 'detail', providerId: ref.providerId,
       nativeId: ref.nativeId, endpointType: ref.endpointType, referenceKind: ref.referenceKind }, { contextId: ref.contextId, signal: owned })));
+    if (response.op === 'detail' && response.detail.item === null && response.detail.errors.length > 0
+      && response.detail.errors.every((error) => error.kind === 'unsupported' && error.source.providerId === ref.providerId)) {
+      throw new MultichatError('NATIVE_OPERATION_UNSUPPORTED', '当前来源的原生版本或协议尚不受支持。');
+    }
     if (response.op !== 'detail' || response.detail.completeness !== 'complete' || response.detail.errors.length > 0
       || !response.detail.item || sessionKey(response.detail.item.ref) !== sessionKey(ref)) throw new Error('Native target unavailable');
     return response.detail.item;
   }
-  async function prepare(ref: SessionRef, signal?: AbortSignal): Promise<{ description: SessionOperationDescription; item?: DiscoverySession; provider?: NativeOperationProvider; context?: string }> {
+  async function prepare(ref: SessionRef, signal?: AbortSignal): Promise<{ description: SessionOperationDescription; item?: DiscoverySession; provider?: NativeOperationProvider; context?: string; adoptionContext?: string }> {
     const matching = providers.filter((entry) => entry.providerId === ref.providerId);
     const provider: NativeOperationProvider | undefined = matching.length === 1 ? matching[0] : undefined;
     const description: SessionOperationDescription = { ref: { ...ref }, observedAt: now(), revision: '',
@@ -83,6 +92,16 @@ export function createNativeSessionOperations(options: Options): NativeSessionOp
       const adoption = provider.canAdopt(item);
       description.revision = revisionOf(item);
       description.actions.adopt = adoption.allowed ? { state: 'executable' } : { state: 'unavailable', reason: adoption.reason, nextStep: adoption.nextStep };
+      let adoptionContext: string | undefined;
+      if (adoption.allowed && provider.inspectAdoption) {
+        try {
+          const native = await bounded(signal, (owned) => provider.inspectAdoption!(item, owned));
+          if (native.availability.state === 'executable' && !native.contextKey) throw new Error('Unverified adoption context');
+          adoptionContext = native.contextKey;
+          if (adoptionContext) description.revision = createHash('sha256').update(description.revision).update(adoptionContext).digest('hex');
+          description.actions.adopt = native.availability;
+        } catch { description.actions.adopt = unavailable(); }
+      }
       let context: string | undefined;
       try {
         context = provider.rename ? await bounded(signal, async (owned) => provider.rename!.contextKey(item, owned)) : undefined;
@@ -91,19 +110,31 @@ export function createNativeSessionOperations(options: Options): NativeSessionOp
         description.actions.rename = provider.rename ? await bounded(signal, (owned) => provider.rename!.probe(item, owned))
           : { state: 'needs-verification', reason: '尚未验证此端点的原生改名接口及活会话同步。', nextStep: '先在原生工具中改名；刷新后星内名称会跟随原生名称。' };
       } catch { description.actions.rename = unavailable(); }
-      return { description, item, provider, context };
-    } catch { description.actions = { adopt: unavailable(), rename: unavailable() }; return { description }; }
+      return { description, item, provider, context, adoptionContext };
+    } catch (error) {
+      const failed = () => error instanceof MultichatError && error.code === 'NATIVE_OPERATION_UNSUPPORTED' ? unsupported(error.message) : unavailable();
+      description.actions = { adopt: failed(), rename: failed() }; return { description };
+    }
   }
   return {
     describe: async (ref, signal) => (await prepare(ref, signal)).description,
     apply: async (request) => {
-      const { description, item, provider, context } = await prepare(request.ref, request.signal);
+      const { description, item, provider, context, adoptionContext } = await prepare(request.ref, request.signal);
       const availability = description.actions[request.operation];
       if (!item || !provider || availability.state !== 'executable') return { kind: 'rejected', message: availability.reason ?? '当前能力尚未核实。' };
       if (!request.expectedRevision || description.revision !== request.expectedRevision) return { kind: 'rejected', message: '会话、端点或能力已变化，请刷新后重新确认。' };
       if (request.signal?.aborted) return { kind: 'rejected', message: '操作已取消，未发送修改请求。' };
       if (request.operation === 'rename' && (!request.name?.trim() || request.name.length > 256 || request.name.includes(':')
         || [...request.name].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127))) return { kind: 'rejected', message: '名称须为 1–256 个字符，且不能包含冒号或控制字符。' };
+      if (request.operation === 'adopt' && provider.inspectAdoption) {
+        try {
+          const native = await bounded(request.signal, (owned) => provider.inspectAdoption!(item, owned));
+          if (native.availability.state !== 'executable' || !adoptionContext || native.contextKey !== adoptionContext) {
+            return { kind: 'rejected', message: native.availability.reason ?? '原生端点或 owner 已变化，请刷新后重新确认。' };
+          }
+        } catch { return { kind: 'rejected', message: '执行前未能重新核实原生目标，未提交入星声明。' }; }
+        if (request.signal?.aborted) return { kind: 'rejected', message: '操作已取消，未发送修改请求。' };
+      }
       try {
         if (request.operation === 'adopt') {
           await bounded(request.signal, (owned) => options.adopt(item, provider.tool, owned));

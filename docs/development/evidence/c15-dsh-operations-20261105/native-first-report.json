@@ -1,0 +1,116 @@
+{
+  "schema": 1,
+  "scope": "DSH npm/Web local native manual membership and source recovery; no Desktop or rename acceptance",
+  "runId": "8a099db9-367f-482e-a153-6b4f6f27e09d",
+  "platform": "win32",
+  "arch": "x64",
+  "node": "v22.23.4",
+  "checks": [
+    {
+      "name": "authenticated-source-and-readonly-description",
+      "status": "passed"
+    },
+    {
+      "name": "exact-manual-adoption-and-independent-stars",
+      "status": "passed"
+    },
+    {
+      "name": "exact-removal-is-independent-of-native-capability",
+      "status": "passed"
+    },
+    {
+      "name": "bridge-loss-rejects-old-confirmation-without-claim",
+      "status": "passed"
+    },
+    {
+      "name": "native-source-recovery-requires-new-confirmation",
+      "status": "passed"
+    },
+    {
+      "name": "unverified-rename-remains-disabled-and-chat-is-unchanged",
+      "status": "passed"
+    }
+  ],
+  "status": "passed",
+  "version": "0.2.1-rc.5",
+  "nativeId": "session-a24ce727-14c9-4e6d-a933-17a5dc46e939",
+  "pid": 16028,
+  "confirmations": {
+    "original": {
+      "ref": {
+        "contextId": "local",
+        "providerId": "dsh",
+        "nativeId": "session-a24ce727-14c9-4e6d-a933-17a5dc46e939",
+        "endpointType": "host"
+      },
+      "observedAt": 1793866943206,
+      "revision": "fdb1db3bf8b1355efe8f6dd7a1e39a4ef434f6f1dca4ff85db3579430a1c3138",
+      "actions": {
+        "adopt": {
+          "state": "executable"
+        },
+        "rename": {
+          "state": "needs-verification",
+          "reason": "尚未验证此端点的原生改名接口及活会话同步。",
+          "nextStep": "先在原生工具中改名；刷新后星内名称会跟随原生名称。"
+        }
+      }
+    },
+    "recovered": {
+      "ref": {
+        "contextId": "local",
+        "providerId": "dsh",
+        "nativeId": "session-a24ce727-14c9-4e6d-a933-17a5dc46e939",
+        "endpointType": "host"
+      },
+      "observedAt": 1793866944110,
+      "revision": "65afb1e41d73aa0935d7b25bbee860f896abaa624ad087c8c8695bb91c010db5",
+      "actions": {
+        "adopt": {
+          "state": "executable"
+        },
+        "rename": {
+          "state": "needs-verification",
+          "reason": "尚未验证此端点的原生改名接口及活会话同步。",
+          "nextStep": "先在原生工具中改名；刷新后星内名称会跟随原生名称。"
+        }
+      }
+    }
+  },
+  "rosters": [
+    {
+      "starId": "native-a",
+      "members": [
+        {
+          "sessionId": "session-a24ce727-14c9-4e6d-a933-17a5dc46e939",
+          "name": "C24-8a099db9",
+          "tool": "dsh",
+          "endpointType": "host",
+          "machine": "11111111111111111111111111111111"
+        }
+      ]
+    },
+    {
+      "starId": "native-b",
+      "members": [
+        {
+          "sessionId": "session-a24ce727-14c9-4e6d-a933-17a5dc46e939",
+          "name": "C24-8a099db9",
+          "tool": "dsh",
+          "endpointType": "host",
+          "machine": "11111111111111111111111111111111"
+        }
+      ]
+    }
+  ],
+  "nativeLogs": {
+    "stdout": "dsh web: http://127.0.0.1:53953/?token=[fixture-token-redacted]\n",
+    "stderr": ""
+  },
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  }
+}

@@ -1,0 +1,56 @@
+authenticated-source-and-readonly-description
+exact-manual-adoption-and-independent-stars
+exact-removal-is-independent-of-native-capability
+bridge-loss-rejects-old-confirmation-without-claim
+native-source-recovery-requires-new-confirmation
+unverified-rename-remains-disabled-and-chat-is-unchanged
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: ConPTY output did not match 确认提交; log: D:\workspace\CC\cc-dsh-capabilities-20261105\node_modules\.cache\c15-dsh-20261105\terminal-75b44ff5-0067-4e94-85d9-c4c3450690d6.jsonl; output tail:                                                 │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+<sessions> 1/1 · 部分结果 · 自动刷新[K
+
+1 个已读取会话（默认含匿名）；节点可发现范围；星籍在线不代表原生忙闲。[K
+
+:资源  /筛选  Esc返回  q退出[K[112C
+
+'failed' !== 'passed'
+
+    at file:///D:/workspace/CC/cc-dsh-capabilities-20261105/test/helpers/dsh-native-operations-validation.mjs:159:8 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'failed',
+  expected: 'passed',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.23.4

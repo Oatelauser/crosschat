@@ -131,7 +131,7 @@ async function environment(profileContext?: unknown, withShellEnv = false, dynam
     agents: { get: (id: string) => agents.get(id), roots: () => [...agents.values()].filter((item) => item.id !== 'child'), list: () => [...agents.values()] },
     get: (key: string) => key === 'shellEnv' && shellEnvAvailable ? shellEnv : key === 'profileContext' ? profileContext : key === 'workingDirectory' ? { get: () => '/current' } : key === 'sessionTitle' ? { get: () => null } : undefined,
     effect: (setup: () => () => void | Promise<void>) => { const disposer = setup(); effects.push(disposer); return disposer; },
-    ...(dynamicShellEnv ? { inject: (_dependencies: string[], callback: (scope: unknown) => unknown) => {
+    ...(dynamicShellEnv ? { inject: (dependencies: string[], callback: (scope: unknown) => unknown) => {
       const binding = { callback, effects: [] };
       bindings.push(binding);
       if (shellEnvAvailable) void activate(binding);
@@ -139,7 +139,7 @@ async function environment(profileContext?: unknown, withShellEnv = false, dynam
       let rejected = false;
       const dispose = async () => {
         if (disposed) return;
-        if (faults.disposeRejects === true && !rejected) { rejected = true; const error = new Error('scope dispose rejected'); expected.push(error); throw error; }
+        if (dependencies.includes('shellEnv') && faults.disposeRejects === true && !rejected) { rejected = true; const error = new Error('scope dispose rejected'); expected.push(error); throw error; }
         disposed = true;
         bindings.splice(bindings.indexOf(binding), 1);
         for (const release of binding.effects.splice(0).reverse()) await release();

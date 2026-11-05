@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "scope": "Exploratory true DSH Web UI and adapter qualification; not node/star acceptance",
+  "root": "D:\\workspace\\CC\\cc-c20-web-A05YzX",
+  "status": "failed",
+  "productHead": "80ed53f7e207d6f03384c666ad95145dbe8b487d",
+  "version": "0.2.1-rc.5",
+  "hostPid": 23624,
+  "nativeId": "session-43bbde85-1354-4177-8d97-63ea5a9e69c0",
+  "initialModelRequests": 1,
+  "browser": "existing Playwright Chromium 1243",
+  "browserPid": 16956,
+  "browserEndpointOwnerVerified": true,
+  "setup": {
+    "schema": 1,
+    "pid": 23624,
+    "version": "0.2.1-rc.5",
+    "webPort": 64420,
+    "registeredWorkspace": {
+      "id": "c32133bc-d2d9-4777-a436-1d8a35b20e60",
+      "path": "D:\\workspace\\CC\\cc-c20-web-A05YzX\\run-4b7CE9\\workspace"
+    }
+  },
+  "browserVersion": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/153.0.8010.12",
+    "revision": "@971a7443b0c9b0a9b2860529b33331b76077ec62",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "jsVersion": "15.3.76.4"
+  },
+  "lastBody": "打开侧边栏\nCtrl\n+\nAlt\n+\nB\n探索未至之境\n预览版\nworkspace\n标准模式\n描述你想要构建的内容, / 调用指令, @ 文件或对话\n完全权限\nDeepSeek-V4.1-Flash\n1017\nOff",
+  "error": {
+    "message": "Timed out waiting for native title rendered in true Web UI",
+    "stack": "Error: Timed out waiting for native title rendered in true Web UI\n    at pollDsh (file:///D:/workspace/CC/cc-dsh-rename-20261105/test/helpers/dsh-live-fixture.mjs:154:9)\n    at async file:///D:/workspace/CC/cc-dsh-rename-20261105/node_modules/.cache/c20-dsh-20261105/service-scope-native2.mjs:51:2"
+  },
+  "browserExit": {
+    "code": 0,
+    "signal": null
+  },
+  "browserProcessesAfter": 0,
+  "nativeLogs": {
+    "stdout": "dsh web: http://127.0.0.1:64420/?token=[fixture-token-redacted]\n",
+    "stderr": ""
+  },
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  },
+  "browserLogs": "\r\nDevTools listening on ws://127.0.0.1:52946/devtools/browser/47c48214-7f80-4ea2-9b9b-8231dcea54d0\r\n[16956:44000:1105/214350.563:ERROR:content\\browser\\network_service_instance_impl.cc:655] Network service crashed or was terminated, restarting service.\r\n[16956:44000:1105/214350.721:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[16956:44000:1105/214350.721:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[16956:44000:1105/214354.905:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[16956:44000:1105/214354.905:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[16956:5828:1105/214355.219:ERROR:google_apis\\gcm\\engine\\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\r\n",
+  "unsafe": false
+}
