@@ -1,0 +1,191 @@
+{
+  "schema": 1,
+  "tool": "dsh-web-runtime",
+  "platform": "linux",
+  "arch": "x64",
+  "builds": {
+    "baseline": {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.2",
+      "url": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.2.tgz",
+      "integrity": "sha512-tvY+yhfKRifthbqPe/OK0AYxM5ZkvqfYq/jMYgJcEUxiRRL1Vwra3Ti5TB6AXgSWQdiPHYh/Vp6SJa9yHwMNuw=="
+    },
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.28.5",
+      "url": "https://registry.npmjs.org/pnpm/-/pnpm-11.28.5.tgz",
+      "integrity": "sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng=="
+    },
+    "candidate": {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.5",
+      "url": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.5.tgz",
+      "integrity": "sha512-WkyJZv4zl9sCAxSzRctGm58m0rilGqwR6pniBiLOz5CPDfHfDuAUicg0AAazXI7oj/Cph6/cjNTncA/rpLTXpw=="
+    }
+  },
+  "scope": {
+    "officialNpmRuntime": true,
+    "officialPluginManager": true,
+    "ordinaryWebSessions": true,
+    "scriptedLocalModel": true,
+    "browserUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "installationCleanup": "retained",
+  "baseline": {
+    "schema": 1,
+    "tool": "dsh-web-runtime",
+    "platform": "linux",
+    "arch": "x64",
+    "runId": "e7c0b78e-8a3b-45e1-aa8f-83cf738fcd83",
+    "version": "0.2.1-rc.2",
+    "startedAt": "2026-11-05T02:17:43.891Z",
+    "status": "passed",
+    "category": null,
+    "stage": "done",
+    "checks": [
+      {
+        "name": "official-plugin-installation-and-owned-web-runtime",
+        "status": "passed",
+        "elapsedMs": 3
+      },
+      {
+        "name": "public-web-session-controller-creates-interactive-sessions",
+        "status": "passed",
+        "elapsedMs": 228
+      },
+      {
+        "name": "messages-model-and-native-shell-identity-bootstrap",
+        "status": "passed",
+        "elapsedMs": 449
+      },
+      {
+        "name": "authenticated-production-discovery-and-pagination",
+        "status": "passed",
+        "elapsedMs": 233
+      },
+      {
+        "name": "idle-production-delivery-wakes-the-existing-session",
+        "status": "passed",
+        "elapsedMs": 1039
+      },
+      {
+        "name": "busy-native-queue-and-steer-step-boundaries",
+        "status": "passed",
+        "elapsedMs": 613
+      },
+      {
+        "name": "native-shell-send-and-conversation-reply-have-full-session-identities",
+        "status": "passed",
+        "elapsedMs": 526
+      },
+      {
+        "name": "missing-target-does-not-create-or-resume-a-replacement",
+        "status": "passed",
+        "elapsedMs": 291
+      }
+    ],
+    "scope": {
+      "officialNpmRuntime": true,
+      "officialPluginManager": true,
+      "ordinaryWebSessions": true,
+      "scriptedLocalModel": true,
+      "browserUI": false,
+      "desktop": false,
+      "modelIntelligence": false
+    },
+    "installation": {
+      "code": 0,
+      "timedOut": false,
+      "stdout": "Progress: resolved 1, reused 0, downloaded 0, added 0\nPackages: +1\n+\nPackages are hard linked from the content-addressable store to the virtual store.\n  Content-addressable store is at: /tmp/crosschat-c12-dsh-20261105-cGszFj/tmp/crosschat-dsh-ci-Vnutvu/run-KbkiAc/pnpm-home/store/v11\n  Virtual store is at:             node_modules/.pnpm\nProgress: resolved 1, reused 1, downloaded 0, added 1, done\n\ndependencies:\n+ @crosschat/dsh-bridge @crosschat/dsh-bridge@file:../../../../../../repo/integrations/dsh\n\nDone in 660ms using pnpm v11.28.5\n",
+      "stderr": "dsh: initialized profile web at /tmp/crosschat-c12-dsh-20261105-cGszFj/tmp/crosschat-dsh-ci-Vnutvu/run-KbkiAc/dsh-home/profiles/web\n"
+    },
+    "runtimePid": 714,
+    "webPort": 43131,
+    "sessionIds": {
+      "idle": "session-b7430fbe-02a0-4be4-b647-847a1c39e8c4",
+      "busy": "session-58d89c2d-009c-4b91-9056-f66e490c96df",
+      "sender": "session-0038789e-0df3-4af3-b264-32601ee9f92b",
+      "receiver": "session-b9297d19-8d2d-4ff7-a70e-d4a3b9e3a428"
+    },
+    "bootstrapCallerSourceDiagnostics": {
+      "nativeIdentityMatched": true,
+      "sourceExit": 0,
+      "source": {
+        "status": "identified",
+        "sourceTool": "dsh",
+        "basis": "native",
+        "association": "verified",
+        "scope": "instance",
+        "shouldAsk": false
+      },
+      "input": {
+        "shellFlagExpected": true,
+        "instanceMarkerValid": true,
+        "stateHomeAbsolute": true,
+        "profileDirAbsolute": true
+      },
+      "bridge": {
+        "callerIdentityAdvertised": true,
+        "endpointType": "host",
+        "profileMatched": true
+      }
+    },
+    "bootstrapCallerSource": {
+      "status": "identified",
+      "sourceTool": "dsh",
+      "basis": "native",
+      "association": "verified",
+      "scope": "instance",
+      "shouldAsk": false
+    },
+    "bootstrapModelRequests": 2,
+    "lifecycle": {
+      "status": "passed",
+      "mechanism": "official-plugin-manager-bundle-disable-enable",
+      "pid": 714,
+      "retainedSessionIds": [
+        "session-b7430fbe-02a0-4be4-b647-847a1c39e8c4",
+        "session-58d89c2d-009c-4b91-9056-f66e490c96df",
+        "session-0038789e-0df3-4af3-b264-32601ee9f92b",
+        "session-b9297d19-8d2d-4ff7-a70e-d4a3b9e3a428"
+      ],
+      "previousInstanceId": "f6ca8a68-f839-41b4-b830-af0a4160d12a",
+      "newInstanceId": "3adc989b-bafa-4d96-9129-cf0c727ac37a",
+      "previousPort": 43401,
+      "newPort": 42611,
+      "previousPortClosed": true,
+      "previousCredentialRejected": true,
+      "freshAck": true
+    },
+    "cleanup": {
+      "runtimeStopped": true,
+      "registrationRemoved": true,
+      "removed": true,
+      "forced": false
+    },
+    "logs": {
+      "stdout": "dsh web: http://127.0.0.1:43131/?token=[redacted]\n",
+      "stderr": ""
+    },
+    "finishedAt": "2026-11-05T02:17:50.640Z",
+    "process": {
+      "code": 0,
+      "signal": null,
+      "timedOut": false
+    }
+  },
+  "error": "fetch failed",
+  "classification": {
+    "kind": "infrastructure",
+    "notify": false
+  },
+  "retainedTaskRoot": "/tmp/crosschat-c12-dsh-20261105-cGszFj/tmp/crosschat-dsh-ci-Vnutvu",
+  "cleanupError": "An installer or runtime has unknown release state; the owned CI directory is retained",
+  "npmCache": {
+    "path": "/tmp/crosschat-c12-dsh-20261105-cGszFj/tmp/crosschat-dsh-ci-Vnutvu/npm-cache",
+    "external": false,
+    "disposition": "retained-with-task-root"
+  }
+}

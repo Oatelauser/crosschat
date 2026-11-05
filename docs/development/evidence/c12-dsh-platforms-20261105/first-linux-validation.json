@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "date": "2026-11-05",
+  "source": {
+    "head": "d8ae0e0f7061e060d61135e402a9c97bea68410c",
+    "sha256": "86d3192354701f29fa7d7f1f1ef6662fd6274b34fed14b933c7ce49a85cda084",
+    "bytes": 22016000
+  },
+  "environment": {
+    "node": "v22.23.4",
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "scope": "Local WSL Linux npm/Web communication; not GitHub or macOS",
+  "baselinePassed": true,
+  "baselineChecks": 8,
+  "baselineCleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  },
+  "wholeSequencePassed": false,
+  "error": "fetch failed",
+  "classification": {
+    "kind": "infrastructure",
+    "notify": false
+  },
+  "installationCleanup": "retained",
+  "cleanupError": "An installer or runtime has unknown release state; the owned CI directory is retained",
+  "candidateExecuted": false,
+  "transportRootCause": "Unresolved: original fetch failed omits its underlying cause",
+  "currentCandidateDownloadVerified": true,
+  "artifacts": [
+    {
+      "file": "first-linux-communication-evidence.tgz",
+      "bytes": 87868,
+      "sha256": "c91e447144f224a63792a96f1c96dad514cafcc844fe197e18f049b8acc68ff8"
+    },
+    {
+      "file": "first-linux-environment.json",
+      "bytes": 52,
+      "sha256": "263883ac867e5ef62a0fc87f164a8fc9f69ae1c516f994b4001c823ed208bdf1"
+    },
+    {
+      "file": "first-linux-first-summary.json",
+      "bytes": 6442,
+      "sha256": "4d19175f6811611a9212e944753d508699a4eca62f48560509d182ce8d0f31e5"
+    },
+    {
+      "file": "first-linux-run.txt",
+      "bytes": 461,
+      "sha256": "18ed67bf8295fe1acc95644db85e662866c2f1a7182a7e65fa346a34306170f0"
+    },
+    {
+      "file": "first-linux-exit-code.txt",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "file": "first-source.json",
+      "bytes": 158,
+      "sha256": "560e6b513a2a84f05dafbb24479a31a855856040530a9e27df891e6728e88bad"
+    },
+    {
+      "file": "first-node-shasums.txt",
+      "bytes": 3981,
+      "sha256": "c90c3f1478fda8308b22cc1a1b0dc536169196444e67ee8b5c582fd351d02bce"
+    },
+    {
+      "file": "first-candidate-readonly-validation.json",
+      "bytes": 347,
+      "sha256": "2ac95cd54dd67a4f077d3ba2ab0b245024a0102ca6cba483173e6bb92ba4843d"
+    },
+    {
+      "file": "first-run-linux.sh",
+      "bytes": 1751,
+      "sha256": "21e1e0382b66a7af992d4da7604ac0e19f92d61461f4952592102465581d76df"
+    }
+  ]
+}

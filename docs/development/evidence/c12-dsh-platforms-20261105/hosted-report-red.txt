@@ -1,0 +1,62 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-platform-20261105
+
+ ❯ test/dsh-platform-ci.test.ts (25 tests | 3 failed) 33ms
+   ✓ DSH npm platform boundaries > verifies the same pinned official npm archive for linux/x64 without claiming native execution 2ms
+   ✓ DSH npm platform boundaries > verifies the same pinned official npm archive for darwin/x64 without claiming native execution 0ms
+   ✓ DSH npm platform boundaries > verifies the same pinned official npm archive for darwin/arm64 without claiming native execution 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: linux/arm64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: win32/arm64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: freebsd/x64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: darwin/ia32 0ms
+   ✓ DSH npm platform boundaries > keeps Windows Desktop artifacts isolated from npm target expansion: linux/x64 0ms
+   ✓ DSH npm platform boundaries > keeps Windows Desktop artifacts isolated from npm target expansion: darwin/arm64 0ms
+   ✓ fresh DSH communication reports for an explicit runner target > accepts only the freshly executed linux/x64 report for that runner 5ms
+   ✓ fresh DSH communication reports for an explicit runner target > accepts only the freshly executed darwin/x64 report for that runner 3ms
+   ✓ fresh DSH communication reports for an explicit runner target > accepts only the freshly executed darwin/arm64 report for that runner 3ms
+   ✓ fresh DSH communication reports for an explicit runner target > rejects a foreign win32/x64 report on a Linux x64 runner and keeps the failure identity 3ms
+   ✓ fresh DSH communication reports for an explicit runner target > rejects a foreign darwin/x64 report on a Linux x64 runner and keeps the failure identity 3ms
+   ✓ fresh DSH communication reports for an explicit runner target > rejects a foreign linux/arm64 report on a Linux x64 runner and keeps the failure identity 3ms
+   ✓ DSH communication sequence keeps the runner identity across builds > accepts two independent Linux x64 attempts and reports the actual runner target 1ms
+   ✓ DSH communication sequence keeps the runner identity across builds > retains a candidate with the wrong runner identity instead of deleting it or trying another build 0ms
+   ✓ DSH regression identity separates OS and architecture > makes a scoped notification identity for linux/x64 0ms
+   ✓ DSH regression identity separates OS and architecture > makes a scoped notification identity for darwin/x64 0ms
+   ✓ DSH regression identity separates OS and architecture > makes a scoped notification identity for darwin/arm64 0ms
+   ✓ DSH regression identity separates OS and architecture > preserves the established Windows marker 0ms
+   ✓ DSH regression identity separates OS and architecture > rejects reports from a different OS or architecture instead of sharing their notification 0ms
+   × the actual hosted report script consumes target-specific artifacts > reports and deduplicates a verified linux/x64 regression without executing artifact code 7ms
+     → expected [] to have a length of 1 but got +0
+   × the actual hosted report script consumes target-specific artifacts > reports and deduplicates a verified darwin/x64 regression without executing artifact code 1ms
+     → expected [] to have a length of 1 but got +0
+   × the actual hosted report script consumes target-specific artifacts > reports and deduplicates a verified darwin/arm64 regression without executing artifact code 1ms
+     → expected [] to have a length of 1 but got +0
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-platform-ci.test.ts > the actual hosted report script consumes target-specific artifacts > reports and deduplicates a verified linux/x64 regression without executing artifact code
+ FAIL  test/dsh-platform-ci.test.ts > the actual hosted report script consumes target-specific artifacts > reports and deduplicates a verified darwin/x64 regression without executing artifact code
+ FAIL  test/dsh-platform-ci.test.ts > the actual hosted report script consumes target-specific artifacts > reports and deduplicates a verified darwin/arm64 regression without executing artifact code
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ test/dsh-platform-ci.test.ts:167:43
+    165|       const summary = regressionSummary(platform, arch);
+    166|       const marker = dshRegressionIdentity(summary)!.marker;
+    167|       expect(await hostedReport(summary)).toHaveLength(1);
+       |                                           ^
+    168|       expect(await hostedReport(summary, [{ body: marker }])).toHaveLe…
+    169|       expect(await hostedReport({ ...summary, retry: { ...summary.retr…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 22 passed (25)
+   Start at  10:32:04
+   Duration  338ms (transform 71ms, setup 0ms, collect 99ms, tests 33ms, environment 0ms, prepare 77ms)
+

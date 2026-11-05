@@ -194,7 +194,9 @@ describe('from-zero onboarding independent issue report', () => {
     expect((await executeReport(summary, [{ body: identity?.marker }])).created).toHaveLength(0);
     expect(report.workflow.split('  report:')[0]).not.toContain('issues: write');
     expect(report.workflow.split('  report:')[1]).not.toMatch(/checkout@|run:|node scripts/);
-    expect(report.workflow).not.toContain('schedule:');
+    expect(report.workflow).toContain('workflow_dispatch:');
+    expect(report.workflow.match(/cron:/g)).toHaveLength(1);
+    expect(report.workflow).toMatch(/cron: '(?:[0-5]?\d) (?:[01]?\d|2[0-3]) \* \* [0-6]'/);
   });
 
   it('refuses partial scope, incomplete cleanup, altered candidates, reused runs and infrastructure outcomes in both verifiers', async () => {

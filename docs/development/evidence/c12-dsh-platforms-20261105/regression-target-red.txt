@@ -1,0 +1,94 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-platform-20261105
+
+ ❯ test/dsh-platform-ci.test.ts (21 tests | 3 failed) 31ms
+   ✓ DSH npm platform boundaries > verifies the same pinned official npm archive for linux/x64 without claiming native execution 2ms
+   ✓ DSH npm platform boundaries > verifies the same pinned official npm archive for darwin/x64 without claiming native execution 0ms
+   ✓ DSH npm platform boundaries > verifies the same pinned official npm archive for darwin/arm64 without claiming native execution 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: linux/arm64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: win32/arm64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: freebsd/x64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: darwin/ia32 0ms
+   ✓ DSH npm platform boundaries > keeps Windows Desktop artifacts isolated from npm target expansion: linux/x64 0ms
+   ✓ DSH npm platform boundaries > keeps Windows Desktop artifacts isolated from npm target expansion: darwin/arm64 0ms
+   ✓ fresh DSH communication reports for an explicit runner target > accepts only the freshly executed linux/x64 report for that runner 7ms
+   ✓ fresh DSH communication reports for an explicit runner target > accepts only the freshly executed darwin/x64 report for that runner 3ms
+   ✓ fresh DSH communication reports for an explicit runner target > accepts only the freshly executed darwin/arm64 report for that runner 3ms
+   ✓ fresh DSH communication reports for an explicit runner target > rejects a foreign win32/x64 report on a Linux x64 runner and keeps the failure identity 3ms
+   ✓ fresh DSH communication reports for an explicit runner target > rejects a foreign darwin/x64 report on a Linux x64 runner and keeps the failure identity 3ms
+   ✓ fresh DSH communication reports for an explicit runner target > rejects a foreign linux/arm64 report on a Linux x64 runner and keeps the failure identity 3ms
+   ✓ DSH communication sequence keeps the runner identity across builds > accepts two independent Linux x64 attempts and reports the actual runner target 1ms
+   ✓ DSH communication sequence keeps the runner identity across builds > retains a candidate with the wrong runner identity instead of deleting it or trying another build 0ms
+   × DSH regression identity separates OS and architecture > makes a scoped notification identity for linux/x64 4ms
+     → expected undefined to be '<!-- dsh-compat:0.2.1-rc.5:linux-x64:…' // Object.is equality
+   × DSH regression identity separates OS and architecture > makes a scoped notification identity for darwin/x64 0ms
+     → expected undefined to be '<!-- dsh-compat:0.2.1-rc.5:darwin-x64…' // Object.is equality
+   × DSH regression identity separates OS and architecture > makes a scoped notification identity for darwin/arm64 0ms
+     → expected undefined to be '<!-- dsh-compat:0.2.1-rc.5:darwin-arm…' // Object.is equality
+   ✓ DSH regression identity separates OS and architecture > preserves the established Windows marker 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-platform-ci.test.ts > DSH regression identity separates OS and architecture > makes a scoped notification identity for linux/x64
+AssertionError: expected undefined to be '<!-- dsh-compat:0.2.1-rc.5:linux-x64:…' // Object.is equality
+
+- Expected: 
+"<!-- dsh-compat:0.2.1-rc.5:linux-x64:busy-native-queue-and-steer-step-boundaries -->"
+
++ Received: 
+undefined
+
+ ❯ test/dsh-platform-ci.test.ts:125:30
+    123|   ])('makes a scoped notification identity for %s/%s', (platform, arch…
+    124|     const identity = dshRegressionIdentity(regressionSummary(platform,…
+    125|     expect(identity?.marker).toBe(`<!-- dsh-compat:0.2.1-rc.5:${key}:b…
+       |                              ^
+    126|   });
+    127| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  test/dsh-platform-ci.test.ts > DSH regression identity separates OS and architecture > makes a scoped notification identity for darwin/x64
+AssertionError: expected undefined to be '<!-- dsh-compat:0.2.1-rc.5:darwin-x64…' // Object.is equality
+
+- Expected: 
+"<!-- dsh-compat:0.2.1-rc.5:darwin-x64:busy-native-queue-and-steer-step-boundaries -->"
+
++ Received: 
+undefined
+
+ ❯ test/dsh-platform-ci.test.ts:125:30
+    123|   ])('makes a scoped notification identity for %s/%s', (platform, arch…
+    124|     const identity = dshRegressionIdentity(regressionSummary(platform,…
+    125|     expect(identity?.marker).toBe(`<!-- dsh-compat:0.2.1-rc.5:${key}:b…
+       |                              ^
+    126|   });
+    127| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  test/dsh-platform-ci.test.ts > DSH regression identity separates OS and architecture > makes a scoped notification identity for darwin/arm64
+AssertionError: expected undefined to be '<!-- dsh-compat:0.2.1-rc.5:darwin-arm…' // Object.is equality
+
+- Expected: 
+"<!-- dsh-compat:0.2.1-rc.5:darwin-arm64:busy-native-queue-and-steer-step-boundaries -->"
+
++ Received: 
+undefined
+
+ ❯ test/dsh-platform-ci.test.ts:125:30
+    123|   ])('makes a scoped notification identity for %s/%s', (platform, arch…
+    124|     const identity = dshRegressionIdentity(regressionSummary(platform,…
+    125|     expect(identity?.marker).toBe(`<!-- dsh-compat:0.2.1-rc.5:${key}:b…
+       |                              ^
+    126|   });
+    127| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 18 passed (21)
+   Start at  10:12:57
+   Duration  346ms (transform 71ms, setup 0ms, collect 103ms, tests 31ms, environment 0ms, prepare 76ms)
+

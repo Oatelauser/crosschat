@@ -1,0 +1,187 @@
+{
+  "schema": 1,
+  "verifiedCompatible": true,
+  "scope": "Local WSL Linux x64 communication; not GitHub, macOS, formal Desktop or six-stage onboarding",
+  "source": {
+    "head": "d8ae0e0f7061e060d61135e402a9c97bea68410c",
+    "sha256": "86d3192354701f29fa7d7f1f1ef6662fd6274b34fed14b933c7ce49a85cda084",
+    "bytes": 22016000
+  },
+  "environment": {
+    "node": "v22.23.4",
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "classification": {
+    "kind": "compatible",
+    "notify": false
+  },
+  "installationCleanup": "removed",
+  "npmCache": {
+    "path": "/tmp/crosschat-c12-dsh-20261105-KHWpH1/tmp/crosschat-dsh-ci-V4dzrY/npm-cache",
+    "external": false,
+    "disposition": "removed-with-task-root"
+  },
+  "attempts": [
+    {
+      "label": "baseline",
+      "version": "0.2.1-rc.2",
+      "runId": "42bd33e9-6557-4221-a007-feff4b87b599",
+      "checks": [
+        {
+          "name": "official-plugin-installation-and-owned-web-runtime",
+          "status": "passed",
+          "elapsedMs": 2
+        },
+        {
+          "name": "public-web-session-controller-creates-interactive-sessions",
+          "status": "passed",
+          "elapsedMs": 200
+        },
+        {
+          "name": "messages-model-and-native-shell-identity-bootstrap",
+          "status": "passed",
+          "elapsedMs": 363
+        },
+        {
+          "name": "authenticated-production-discovery-and-pagination",
+          "status": "passed",
+          "elapsedMs": 201
+        },
+        {
+          "name": "idle-production-delivery-wakes-the-existing-session",
+          "status": "passed",
+          "elapsedMs": 819
+        },
+        {
+          "name": "busy-native-queue-and-steer-step-boundaries",
+          "status": "passed",
+          "elapsedMs": 495
+        },
+        {
+          "name": "native-shell-send-and-conversation-reply-have-full-session-identities",
+          "status": "passed",
+          "elapsedMs": 427
+        },
+        {
+          "name": "missing-target-does-not-create-or-resume-a-replacement",
+          "status": "passed",
+          "elapsedMs": 256
+        }
+      ],
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      }
+    },
+    {
+      "label": "candidate",
+      "version": "0.2.1-rc.5",
+      "runId": "eeefbb4a-2dcf-43a8-9355-507a7426d113",
+      "checks": [
+        {
+          "name": "official-plugin-installation-and-owned-web-runtime",
+          "status": "passed",
+          "elapsedMs": 3
+        },
+        {
+          "name": "public-web-session-controller-creates-interactive-sessions",
+          "status": "passed",
+          "elapsedMs": 195
+        },
+        {
+          "name": "messages-model-and-native-shell-identity-bootstrap",
+          "status": "passed",
+          "elapsedMs": 299
+        },
+        {
+          "name": "authenticated-production-discovery-and-pagination",
+          "status": "passed",
+          "elapsedMs": 203
+        },
+        {
+          "name": "idle-production-delivery-wakes-the-existing-session",
+          "status": "passed",
+          "elapsedMs": 682
+        },
+        {
+          "name": "busy-native-queue-and-steer-step-boundaries",
+          "status": "passed",
+          "elapsedMs": 469
+        },
+        {
+          "name": "native-shell-send-and-conversation-reply-have-full-session-identities",
+          "status": "passed",
+          "elapsedMs": 410
+        },
+        {
+          "name": "missing-target-does-not-create-or-resume-a-replacement",
+          "status": "passed",
+          "elapsedMs": 256
+        }
+      ],
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      }
+    }
+  ],
+  "archive": {
+    "bytes": 173121,
+    "sha256": "fe6979ae4ca7c34d008e67189d0c7e5b39c4e053711193330ee1631b5144d6a7",
+    "expandedBytes": 1071198,
+    "entries": [
+      {
+        "name": "./candidate-install.json",
+        "bytes": 115874,
+        "sha256": "fb39e54618b930dfb8b51d503d3b0437dd68468ac5eced8d2275cbcf91d20bf6"
+      },
+      {
+        "name": "./candidate-package-lock.json",
+        "bytes": 409258,
+        "sha256": "41f9277568506972bc2ee04203012e9bc2b9ae2e58b3cf88c6da994f37dba3e2"
+      },
+      {
+        "name": "./summary.json",
+        "bytes": 10959,
+        "sha256": "093eaf2a758b8dd528e5380625682accc72a40cf8f42303f35c4a478b82db992"
+      },
+      {
+        "name": "./baseline-h3KLjP/report.json",
+        "bytes": 4371,
+        "sha256": "cc0c7f2565627408a7741b5ff69329bf533edd4608c1b3de115a61ca76bf45da"
+      },
+      {
+        "name": "./baseline-h3KLjP/process.json",
+        "bytes": 752,
+        "sha256": "3404bc8288a5329172a7205fb28699c9e3f0eec72080c8400dd7e746b2d706dd"
+      },
+      {
+        "name": "./candidate-JWYWcg/report.json",
+        "bytes": 4373,
+        "sha256": "11399191b97a6fd8695171e2ea17656d6126dc18826ac506ec8c702927ffa891"
+      },
+      {
+        "name": "./candidate-JWYWcg/process.json",
+        "bytes": 754,
+        "sha256": "e868c5df1ab5540a5c96b8de2fd972ef7ad6718392d550a04bc9051c837c59f6"
+      },
+      {
+        "name": "./baseline-package-lock.json",
+        "bytes": 408819,
+        "sha256": "d6da54227b645027e0171ef379425ce0945efb54118947cad1db478926ca389a"
+      },
+      {
+        "name": "./baseline-install.json",
+        "bytes": 116038,
+        "sha256": "8e7c7b9e2832365d468582009cd16199f8807501100ab09ab67fcf77cb93fb9c"
+      }
+    ]
+  },
+  "firstFailurePreserved": true,
+  "historicalTransportCauseProven": false
+}

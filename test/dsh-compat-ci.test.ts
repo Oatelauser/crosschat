@@ -72,7 +72,7 @@ describe('DeepSeek Harness official npm artifact constraints', () => {
     expect(parseDshNpmManifest(manifest(), 'win32', 'x64')).toEqual(artifact());
     for (const version of ['0.2.1-rc.3', '0.2.1-rc.10', '0.2.1', '0.2.2', '0.2.99-preview.1']) expect(parseDshNpmManifest(manifest(version), 'win32', 'x64').version).toBe(version);
     for (const version of ['0.2.1-rc.1', '0.3.0-0', '0.3.0', '1.0.0']) expect(() => parseDshNpmManifest(manifest(version), 'win32', 'x64')).toThrow(expect.objectContaining({ category: 'unsupported', version }));
-    expect(() => parseDshNpmManifest(manifest(), 'linux', 'x64')).toThrow();
+    expect(() => parseDshNpmManifest(manifest(), 'linux', 'arm64')).toThrow();
     expect(parsePnpmManifest({ name: pnpm.name, version: pnpm.version, dist: { tarball: pnpm.url, integrity: pnpm.integrity } })).toEqual(pnpm);
     const pinned = JSON.parse(await readFile(new URL('../scripts/dsh-compat-baseline.json', import.meta.url), 'utf8'));
     expect(parseDshNpmManifest(pinned.package, 'win32', 'x64').version).toBe('0.2.1-rc.2');
@@ -609,7 +609,10 @@ describe('DeepSeek Harness independent issue reporter', () => {
     const workflow = await readFile(new URL('../.github/workflows/dsh-compat.yml', import.meta.url), 'utf8');
     const script = workflow.split(/ {10}script: \|\r?\n/)[1].split(/\r?\n/).map((line) => line.replace(/^ {12}/, '')).join('\n');
     const created: unknown[] = [];
-    await runInNewContext(`(async()=>{${script}\n})()`, { require: (name: string) => { if (name !== 'node:fs/promises') throw new Error(`Unexpected dependency ${name}`); return { readFile: async () => JSON.stringify(summary) }; },
+    await runInNewContext(`(async()=>{${script}\n})()`, { require: (name: string) => { if (name !== 'node:fs/promises') throw new Error(`Unexpected dependency ${name}`); return {
+      readFile: async () => JSON.stringify(summary),
+      lstat: async () => ({ isFile: () => true, isSymbolicLink: () => false, size: Buffer.byteLength(JSON.stringify(summary)) }),
+    }; },
       context: { serverUrl: 'https://github.com', repo: { owner: 'fixture', repo: 'fixture' }, runId: 1 }, core: { notice: () => {} },
       github: { paginate: async () => existing, rest: { issues: { listForRepo: {}, create: async (value: unknown) => created.push(value) } } } });
     return { workflow, created };

@@ -11,6 +11,7 @@ import { clearTimeout, setTimeout } from 'node:timers';
 import { pathToFileURL, URL } from 'node:url';
 import { prepareDshProfile, repositoryRoot } from '../test/helpers/dsh-live-fixture.mjs';
 import { DSH_ONBOARDING_SCOPE, DSH_ONBOARDING_TOOL, validDshOnboardingProcessReport, validDshOnboardingReport } from './dsh-onboarding-contract.mjs';
+import { DEFAULT_DSH_NPM_TARGET, isDshNpmTarget } from './dsh-npm-target.mjs';
 
 const tool = 'dsh-web-runtime';
 const pnpmVersion = '11.28.5';
@@ -80,7 +81,7 @@ function supported(version) {
 export function parseDshNpmManifest(input, platform, arch) {
   if (!record(input) || input.name !== '@deepseek-ai/dsh' || !semver(input.version) || !record(input.dist)) throw new Error('Invalid official Harness npm metadata');
   if (!supported(input.version)) throw Object.assign(new Error('Harness release is outside the approved >=0.2.1-rc.2 <0.3.0-0 window'), { category: 'unsupported', version: input.version });
-  if (platform !== 'win32' || arch !== 'x64') throw new Error('This compatibility probe is configured for Windows x64 only');
+  if (!isDshNpmTarget(platform, arch)) throw new Error('Unplanned Harness npm compatibility platform/architecture');
   const url = `https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-${input.version}.tgz`;
   if (input.dist.tarball !== url || !sri.test(input.dist.integrity ?? '')) throw new Error('Invalid official Harness archive URL or SHA-512 SRI');
   return { name: input.name, version: input.version, url, integrity: input.dist.integrity };
@@ -500,8 +501,9 @@ export async function installDshNpmDependencies({ npmCLI, runtime, env, existing
 }
 
 function validScope(value) { return record(value) && Object.entries(scope).every(([key, expected]) => value[key] === expected); }
-function validReport(report, artifact, runId) {
-  if (!record(report) || report.schema !== 1 || report.tool !== tool || report.platform !== 'win32' || report.arch !== 'x64'
+function validReport(report, artifact, runId, target = DEFAULT_DSH_NPM_TARGET) {
+  if (!isDshNpmTarget(target?.platform, target?.arch)
+    || !record(report) || report.schema !== 1 || report.tool !== tool || report.platform !== target.platform || report.arch !== target.arch
     || report.version !== artifact.version || !uuid.test(report.runId ?? '') || (runId !== undefined && report.runId !== runId) || !validScope(report.scope)
     || !Array.isArray(report.checks) || report.checks.some((check) => !record(check) || !requiredChecks.includes(check.name) || check.status !== 'passed' || !Number.isFinite(check.elapsedMs) || check.elapsedMs < 0)
     || new Set(report.checks.map((check) => check.name)).size !== report.checks.length) return false;
@@ -510,7 +512,7 @@ function validReport(report, artifact, runId) {
 }
 function normalProcess(result) { return record(result) && result.timedOut === false && result.signal === null && [0, 1].includes(result.code); }
 function processMatches(report) { return normalProcess(report.process) && report.process.code === (report.status === 'passed' ? 0 : 1); }
-function infrastructure(version, stage, error) { return { schema: 1, tool, platform: 'win32', arch: 'x64', version, status: 'failed', category: 'infrastructure', stage, check: stage, error: message(error) }; }
+function infrastructure(version, stage, error, target = DEFAULT_DSH_NPM_TARGET) { return { schema: 1, tool, platform: target.platform, arch: target.arch, version, status: 'failed', category: 'infrastructure', stage, check: stage, error: message(error) }; }
 
 export function hasDshRuntimeReleaseProof(cleanup) {
   return record(cleanup) && cleanup.runtimeStopped === true && cleanup.registrationRemoved === true && cleanup.removed === true && cleanup.forced === false
@@ -1050,8 +1052,13 @@ export async function runDshDesktopAttempt({ output, label, artifact, installati
 }
 
 /** Every child gets a new directory and UUID; stale PASS files are never read. */
-export async function runDshProbeAttempt({ output, label, artifact }, execute) {
-  return runNpmProbeAttempt({ output, label, artifact }, execute, { valid: validReport, fail: infrastructure });
+export async function runDshProbeAttempt({ output, label, artifact, target = DEFAULT_DSH_NPM_TARGET }, execute) {
+  if (!isDshNpmTarget(target?.platform, target?.arch)) throw new Error('Unplanned Harness npm probe target');
+  const expected = { platform: target.platform, arch: target.arch };
+  return runNpmProbeAttempt({ output, label, artifact }, execute, {
+    valid: (report, build, runId) => validReport(report, build, runId, expected),
+    fail: (version, stage, error) => infrastructure(version, stage, error, expected),
+  });
 }
 
 function onboardingInfrastructure(version, stage) {
@@ -1096,7 +1103,8 @@ function classify(baseline, candidate, retry) {
 
 /** One install, evidence and removal cycle per build; the next install waits for a proven release. */
 async function serialSequence(builds, config) {
-  const summary = { schema: 1, tool: config.tool, platform: 'win32', arch: 'x64', builds, scope: config.scope, installationCleanup: 'incomplete' };
+  const target = config.target ?? DEFAULT_DSH_NPM_TARGET;
+  const summary = { schema: 1, tool: config.tool, platform: target.platform, arch: target.arch, builds, scope: config.scope, installationCleanup: 'incomplete' };
   async function attempt(artifact, label) {
     let installation;
     try { installation = await config.operations.install(artifact, label); }
@@ -1135,12 +1143,14 @@ async function serialSequence(builds, config) {
   return summary;
 }
 
-export function runDshBuildSequence(builds, operations) {
+export function runDshBuildSequence(builds, operations, target = DEFAULT_DSH_NPM_TARGET) {
+  if (!isDshNpmTarget(target?.platform, target?.arch)) throw new Error('Unplanned Harness npm sequence target');
+  const expected = { platform: target.platform, arch: target.arch };
   return serialSequence(builds, {
-    tool, scope, operations,
-    verify: (report, artifact) => validReport(report, artifact) && processMatches(report),
+    tool, scope, operations, target: expected,
+    verify: (report, artifact) => validReport(report, artifact, undefined, expected) && processMatches(report),
     released: hasDshRuntimeReleaseProof,
-    fail: (version, phase, error) => infrastructure(version, phase === 'process' ? 'probe-process' : 'probe-report', error),
+    fail: (version, phase, error) => infrastructure(version, phase === 'process' ? 'probe-process' : 'probe-report', error, expected),
   });
 }
 
@@ -1190,17 +1200,18 @@ export function runDshDesktopSequence(builds, operations) {
 }
 
 export function dshRegressionIdentity(summary) {
-  if (!record(summary) || summary.schema !== 1 || summary.tool !== tool || summary.platform !== 'win32' || summary.arch !== 'x64' || !validScope(summary.scope)
+  if (!record(summary) || summary.schema !== 1 || summary.tool !== tool || !isDshNpmTarget(summary.platform, summary.arch) || !validScope(summary.scope)
     || summary.installationCleanup !== 'removed' || summary.classification?.kind !== 'regression' || summary.classification?.notify !== true || !record(summary.builds)) return;
   const { builds, baseline, candidate, retry } = summary;
   try {
-    for (const artifact of [builds.baseline, builds.candidate]) parseDshNpmManifest({ ...artifact, dist: { tarball: artifact.url, integrity: artifact.integrity } }, 'win32', 'x64');
+    for (const artifact of [builds.baseline, builds.candidate]) parseDshNpmManifest({ ...artifact, dist: { tarball: artifact.url, integrity: artifact.integrity } }, summary.platform, summary.arch);
     parsePnpmManifest({ ...builds.packageManager, dist: { tarball: builds.packageManager.url, integrity: builds.packageManager.integrity } });
   } catch { return; }
-  if (!validReport(baseline, builds.baseline) || !validReport(candidate, builds.candidate) || !validReport(retry, builds.candidate)
+  if (!validReport(baseline, builds.baseline, undefined, summary) || !validReport(candidate, builds.candidate, undefined, summary) || !validReport(retry, builds.candidate, undefined, summary)
     || [baseline, candidate, retry].some((item) => !processMatches(item) || !hasDshRuntimeReleaseProof(item.cleanup))
     || new Set([baseline.runId, candidate.runId, retry.runId]).size !== 3 || classify(baseline, candidate, retry).kind !== 'regression') return;
-  return { marker: `<!-- dsh-compat:${candidate.version}:win32:${candidate.check} -->`, title: `DeepSeek Harness ${candidate.version}: ${candidate.check} compatibility regression (win32)` };
+  const targetKey = summary.platform === 'win32' ? 'win32' : `${summary.platform}-${summary.arch}`;
+  return { marker: `<!-- dsh-compat:${candidate.version}:${targetKey}:${candidate.check} -->`, title: `DeepSeek Harness ${candidate.version}: ${candidate.check} compatibility regression (${targetKey})` };
 }
 
 export function dshOnboardingRegressionIdentity(summary) {
@@ -1237,14 +1248,16 @@ async function ownedChild(parent, target, owner) {
 
 async function main() {
   if (process.env.CROSSCHAT_LIVE !== '1') throw new Error('CROSSCHAT_LIVE=1 is required for official Harness downloads and isolated probes');
-  if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Only Windows x64 is configured; platform matrix work remains separate');
   const suite = resolveDshCiSuite(process.env.DSH_COMPAT_SUITE);
+  const target = { platform: process.platform, arch: process.arch };
+  if (!isDshNpmTarget(target.platform, target.arch)) throw new Error('Unplanned Harness npm runner platform/architecture');
+  if (suite.tool === DSH_ONBOARDING_TOOL && target.platform !== 'win32') throw new Error('POSIX from-zero onboarding awaits real terminal wiring; no installation started');
   const output = resolve(process.env.DSH_COMPAT_EVIDENCE ?? suite.evidenceDirectory); await mkdir(output, { recursive: true });
   const temp = await realpath(tmpdir()); const root = await realpath(await mkdtemp(join(temp, 'crosschat-dsh-ci-'))); const owner = randomUUID();
   await writeFile(join(root, '.fixture-owner'), owner);
   const installations = []; const archives = new Map();
   let npmCache;
-  let summary = { schema: 1, tool: suite.tool, platform: 'win32', arch: 'x64', scope: suite.scope, builds: {}, classification: { kind: 'infrastructure', notify: false }, installationCleanup: 'incomplete' };
+  let summary = { schema: 1, tool: suite.tool, platform: target.platform, arch: target.arch, scope: suite.scope, builds: {}, classification: { kind: 'infrastructure', notify: false }, installationCleanup: 'incomplete' };
   async function archive(artifact) {
     const key = createHash('sha256').update(artifact.integrity).digest('hex');
     if (!archives.has(key)) {
@@ -1263,7 +1276,7 @@ async function main() {
     const pinned = JSON.parse(await readFile(new URL('./dsh-compat-baseline.json', import.meta.url), 'utf8'));
     const builds = { baseline: parseDshNpmManifest(pinned.package, process.platform, process.arch), packageManager: parsePnpmManifest(pinned.packageManager) }; summary.builds = builds;
     builds.candidate = parseDshNpmManifest(JSON.parse((await fetchBytes('https://registry.npmjs.org/@deepseek-ai/dsh/latest', 2 * 1024 * 1024)).toString('utf8')), process.platform, process.arch);
-    const npmCLI = join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'); await access(npmCLI);
+    const npmCLI = join(dirname(process.execPath), ...(process.platform === 'win32' ? [] : ['..', 'lib']), 'node_modules', 'npm', 'bin', 'npm-cli.js'); await access(npmCLI);
     summary = await suite.sequence(builds, {
       async install(artifact, label) {
         const runtime = join(root, `install-${label}`); await mkdir(runtime); await writeFile(join(runtime, '.fixture-owner'), owner);
@@ -1288,7 +1301,7 @@ async function main() {
       },
       async probe(installation, artifact, label) {
         installation.safe = false;
-        return suite.attempt({ output, label, artifact }, async ({ reportPath, runId, directory }) => {
+        return suite.attempt({ output, label, artifact, target }, async ({ reportPath, runId, directory }) => {
           const result = await runDshProcess(process.execPath, [join(repositoryRoot, 'scripts', suite.script), '--report', reportPath], {
             env: { ...(await prepareDshProfile(join(root, `controller-${label}`), 'http://127.0.0.1:1/v1')), CROSSCHAT_LIVE: '1', DSH_RUNTIME_DIR: installation.root,
               DSH_TASK_ROOT: root, DSH_EXPECTED_VERSION: artifact.version, DSH_EXPECTED_RUN_ID: runId }, timeout: suite.timeoutMs,
@@ -1301,7 +1314,7 @@ async function main() {
         try { await rm(await ownedChild(root, installation.root, owner), { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); installation.removed = true; }
         catch (error) { installation.safe = false; throw error; }
       },
-    });
+    }, target);
   } catch (error) {
     summary.error = message(error); summary.classification = { kind: error?.category === 'unsupported' ? 'unsupported-release' : 'infrastructure', notify: false };
     if (error?.category === 'unsupported') summary.unsupportedVersion = error.version;

@@ -1,0 +1,56 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-platform-20261105
+
+ ❯ test/dsh-platform-ci.test.ts (25 tests | 3 failed) 40ms
+   ✓ DSH npm platform boundaries > verifies the same pinned official npm archive for linux/x64 without claiming native execution 4ms
+   ✓ DSH npm platform boundaries > verifies the same pinned official npm archive for darwin/x64 without claiming native execution 1ms
+   ✓ DSH npm platform boundaries > verifies the same pinned official npm archive for darwin/arm64 without claiming native execution 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: linux/arm64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: win32/arm64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: freebsd/x64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: darwin/ia32 0ms
+   ✓ DSH npm platform boundaries > keeps Windows Desktop artifacts isolated from npm target expansion: linux/x64 0ms
+   ✓ DSH npm platform boundaries > keeps Windows Desktop artifacts isolated from npm target expansion: darwin/arm64 0ms
+   ✓ fresh DSH communication reports for an explicit runner target > accepts only the freshly executed linux/x64 report for that runner 10ms
+   ✓ fresh DSH communication reports for an explicit runner target > accepts only the freshly executed darwin/x64 report for that runner 4ms
+   ✓ fresh DSH communication reports for an explicit runner target > accepts only the freshly executed darwin/arm64 report for that runner 3ms
+   ✓ fresh DSH communication reports for an explicit runner target > rejects a foreign win32/x64 report on a Linux x64 runner and keeps the failure identity 3ms
+   ✓ fresh DSH communication reports for an explicit runner target > rejects a foreign darwin/x64 report on a Linux x64 runner and keeps the failure identity 3ms
+   ✓ fresh DSH communication reports for an explicit runner target > rejects a foreign linux/arm64 report on a Linux x64 runner and keeps the failure identity 3ms
+   ✓ DSH communication sequence keeps the runner identity across builds > accepts two independent Linux x64 attempts and reports the actual runner target 1ms
+   ✓ DSH communication sequence keeps the runner identity across builds > retains a candidate with the wrong runner identity instead of deleting it or trying another build 0ms
+   ✓ DSH regression identity separates OS and architecture > makes a scoped notification identity for linux/x64 0ms
+   ✓ DSH regression identity separates OS and architecture > makes a scoped notification identity for darwin/x64 0ms
+   ✓ DSH regression identity separates OS and architecture > makes a scoped notification identity for darwin/arm64 0ms
+   ✓ DSH regression identity separates OS and architecture > preserves the established Windows marker 0ms
+   ✓ DSH regression identity separates OS and architecture > rejects reports from a different OS or architecture instead of sharing their notification 0ms
+   × the actual hosted report script consumes target-specific artifacts > reports and deduplicates a verified linux/x64 regression without executing artifact code 3ms
+     → Cannot read properties of undefined (reading 'split')
+   × the actual hosted report script consumes target-specific artifacts > reports and deduplicates a verified darwin/x64 regression without executing artifact code 1ms
+     → Cannot read properties of undefined (reading 'split')
+   × the actual hosted report script consumes target-specific artifacts > reports and deduplicates a verified darwin/arm64 regression without executing artifact code 0ms
+     → Cannot read properties of undefined (reading 'split')
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-platform-ci.test.ts > the actual hosted report script consumes target-specific artifacts > reports and deduplicates a verified linux/x64 regression without executing artifact code
+ FAIL  test/dsh-platform-ci.test.ts > the actual hosted report script consumes target-specific artifacts > reports and deduplicates a verified darwin/x64 regression without executing artifact code
+ FAIL  test/dsh-platform-ci.test.ts > the actual hosted report script consumes target-specific artifacts > reports and deduplicates a verified darwin/arm64 regression without executing artifact code
+TypeError: Cannot read properties of undefined (reading 'split')
+ ❯ hostedReport test/dsh-platform-ci.test.ts:43:59
+     41| async function hostedReport(summary: unknown, existing: unknown[] = []…
+     42|   const workflow = await readFile(new URL('../.github/workflows/dsh-co…
+     43|   const script = workflow.split('          script: |\n')[1]!.split('\n…
+       |                                                           ^
+     44|   const created: { body: string }[] = [];
+     45|   const content = JSON.stringify(summary);
+ ❯ test/dsh-platform-ci.test.ts:167:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 22 passed (25)
+   Start at  10:31:46
+   Duration  410ms (transform 98ms, setup 0ms, collect 137ms, tests 40ms, environment 0ms, prepare 97ms)
+

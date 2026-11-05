@@ -1,0 +1,60 @@
+{
+  "schema": 1,
+  "date": "2026-11-05",
+  "verifiedCompatible": true,
+  "source": "d8ae0e0f7061e060d61135e402a9c97bea68410c",
+  "scope": "WSL Linux x64 native npm/Web communication",
+  "firstFailurePreserved": true,
+  "artifacts": [
+    {
+      "file": "linux-communication-evidence.tgz",
+      "bytes": 173121,
+      "sha256": "fe6979ae4ca7c34d008e67189d0c7e5b39c4e053711193330ee1631b5144d6a7"
+    },
+    {
+      "file": "linux-verified.json",
+      "bytes": 5574,
+      "sha256": "7942c5a0dea35b180dda31998f4936439f817bd6f3308cedc13aef4c69ddd5fe"
+    },
+    {
+      "file": "linux-summary.json",
+      "bytes": 10960,
+      "sha256": "63be60e0c36affb74959a2fc196c045e283cc00f0d955fb8f458e6c973bb1711"
+    },
+    {
+      "file": "linux-run.txt",
+      "bytes": 569,
+      "sha256": "231a0bb166a444f7e5f4db548225a7cd444f4bd80103716c0c16154d34f9bc5e"
+    },
+    {
+      "file": "linux-environment.json",
+      "bytes": 52,
+      "sha256": "263883ac867e5ef62a0fc87f164a8fc9f69ae1c516f994b4001c823ed208bdf1"
+    },
+    {
+      "file": "linux-exit-code.txt",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "linux-source.json",
+      "bytes": 158,
+      "sha256": "560e6b513a2a84f05dafbb24479a31a855856040530a9e27df891e6728e88bad"
+    },
+    {
+      "file": "linux-repeat-reason.json",
+      "bytes": 433,
+      "sha256": "7155a7c16742a3a98e29f3aaa8f69b6b9b13aa77c8d2e9667df4f882b30c6cd9"
+    },
+    {
+      "file": "linux-repeat-wrapper.sh",
+      "bytes": 1758,
+      "sha256": "66a668c80a762371ec00a68e48f2200e4bc9cda43578f77e2f3d959cb49eb7a3"
+    },
+    {
+      "file": "linux-local-disposition.json",
+      "bytes": 460,
+      "sha256": "abf837a6f8a543781138e168f417d08c6056d1150aded4b9deb58c485190bf61"
+    }
+  ]
+}
