@@ -1,2 +1,4 @@
 * -text
 *.txt -whitespace
+*-inspection/index.json whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+linux-first-source.json whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

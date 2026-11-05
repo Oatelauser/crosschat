@@ -1,0 +1,81 @@
+{
+  "entries": [
+    {
+      "name": "baseline-R9j7aJ",
+      "bytes": 0,
+      "directory": true
+    },
+    {
+      "name": "baseline-R9j7aJ/doctor-text.json",
+      "bytes": 1213,
+      "directory": false
+    },
+    {
+      "name": "baseline-R9j7aJ/install-skills.json",
+      "bytes": 458,
+      "directory": false
+    },
+    {
+      "name": "baseline-R9j7aJ/native-skill-and-identity.json",
+      "bytes": 7690,
+      "directory": false
+    },
+    {
+      "name": "baseline-R9j7aJ/process.json",
+      "bytes": 1827,
+      "directory": false
+    },
+    {
+      "name": "baseline-R9j7aJ/doctor-json.json",
+      "bytes": 1322,
+      "directory": false
+    },
+    {
+      "name": "baseline-R9j7aJ/discovery.json",
+      "bytes": 1687,
+      "directory": false
+    },
+    {
+      "name": "summary.json",
+      "bytes": 2489,
+      "directory": false
+    },
+    {
+      "name": "baseline-package-lock.json",
+      "bytes": 408833,
+      "directory": false
+    },
+    {
+      "name": "baseline-install.json",
+      "bytes": 116076,
+      "directory": false
+    }
+  ],
+  "selected": [
+    {
+      "file": "baseline-process.json",
+      "entry": "baseline-R9j7aJ/process.json",
+      "bytes": 1827,
+      "sha256": "f5fd0d096e7a61c802d3db7f8e7dbba5616a85051121d4b1f9916ed4a90fd6ae"
+    },
+    {
+      "file": "summary.json",
+      "entry": "summary.json",
+      "bytes": 2489,
+      "sha256": "b5693d53394f3304258f9685faf0beb45552311458f844440fbc661ff30ea0bf"
+    },
+    {
+      "file": "baseline-package-lock.json",
+      "entry": "baseline-package-lock.json",
+      "bytes": 408833,
+      "sha256": "ccc2f90262726b49db659f6a0213e924e0b7e90fee74dc33f5d3ba4417dad150"
+    },
+    {
+      "file": "baseline-install.json",
+      "entry": "baseline-install.json",
+      "bytes": 116076,
+      "sha256": "4de839201df2404794871e19412f96ce8844f5293f10a6c4d0f9cb14198abea0"
+    }
+  ],
+  "expandedBytes": 541595
+}

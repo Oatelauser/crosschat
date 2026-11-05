@@ -13,3 +13,11 @@
 最终单次[完整check](pty-check.txt)退出0：2803通过/11原有跳过、238文件通过/3跳过，lint/build/204模块689边通过；未启用CROSSCHAT_LIVE，未运行正式DSH。该终端工装切片验收后不重复重开；macOS实际运行、六阶段报告/原生shell与DSH从零仍待下一步。此次本地绿不追认main的Ubuntu来源确认失败已修复。
 
 下一批目标合同已按独立RED/GREEN推进：c0c56e7新增15项，其中14项因既有报告/attempt/sequence/回归marker固定Windows而失败、1项Windows默认/非法轴通过，[RED](platform-red.txt)保留。现目标参数复用四目标登记并在异步执行前快照；fresh报告、process、错误和summary绑定期望OS/架构，错目标不承认释放，不移除/开始下一安装，POSIX marker分架构，Windows旧marker保持。[定向GREEN](platform-green.txt)69/69（新增15＋原从零28＋原平台26）通过。正式onboarding脚本和主入口的POSIX阻断尚未接线/解除，未冒充原生六阶段通过；全量等待完整接线后再验，不将前一批2803项追认为本批完整检查。
+
+3ebf6ca完成原生Bash/实际OS与PTY释放接线，176项定向通过后，使用该固定源码TAR（[SHA/版本](linux-first-source.json)）在独立WSL根、官方SHA核验Node22.23.4、固定rc.2/官方候选及loopback模型运行。首次基线npm正常安装，前三阶段PASS；第四阶段createDshOwnedNode的Broker admin Unix socket报EADDRINUSE并触发未处理error，probe退出1，未产生最终report，候选未执行。整轮infrastructure/retained/notify=false，不承认释放；[原始TAR](linux-first-evidence.tgz)、[运行日志](linux-first-run.txt)、[summary/process](linux-first-inspection/index.json)保留。
+
+日志中socket路径较长。受控Node22.14实验复现两个过长路径共享前缀时，第一bind成功、第二EADDRINUSE，短路径成功；额外的“指定目录前缀也应冲突”假设未复现，实验以非零结束，[全部观察](socket-repro-partial.txt)保留，不把它叫整组通过或直接证明原故障同因。此前尝试复用首轮便携Node时外层/tmp根已不存在，未由代理删除；首次较短后缀的对照也未达到预期，分别留[缺失运行时](socket-repro-missing-runtime.txt)与[首个假设](socket-repro-initial-hypothesis.txt)。首轮retained记录不因后来根不存在而改写，未运行删除命令。
+
+下一次只改变runner临时根选择到短/tmp，沿同一3ebf6ca源码、版本窗口、安装预算、清理和完整断言做一次新隔离验证；这是待验证的环境修正，不连续重跑旧布局，也不修改生产Broker/IPC命名或其错误处理。该异步error路径供原通信负责人消费，不能用本单后续通过宣称生产问题修复。
+
+工作流/报告另经5c04859的9项行为测试RED（6失败/3既有边界通过），增加四目标手动矩阵、独立POSIX周更和实际YAML逐目标报告。首次pnpm SRI抄写遗漏导致6项合法报告被拒，已恢复原固定值并保留[首次结果](workflow-first-pin-typo.txt)；随后只有旧“全工作流仅一个周更”的断言失败，[旧策略结果](workflow-old-policy.txt)保留。按A的分平台周更合同改为两个各每周一次的计划后，[78项定向GREEN](workflow-green.txt)通过；既有Windows周五13:07保持，POSIX拟周五14:07，只在原生首验和后续明确合入批准后生效。actions/setup-python@v6及x64/arm64输入已从[官方v6 README](https://github.com/actions/setup-python/tree/v6)核实（README blob 7cf695cfa2af3584a3aca271954dabb254b012b7、当时tag commit ece7cb06caefa5fff74198d8649806c4678c61a1）；仅CI工装依赖，不新增产品用户安装步骤。当前没有推送/外部运行。

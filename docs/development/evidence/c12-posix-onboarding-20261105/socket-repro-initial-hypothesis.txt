@@ -1,0 +1,9 @@
+file:///mnt/d/workspace/CC/cc-dsh-onboarding-posix-20261105/node_modules/.cache/c12-posix-pty-20261105/socket-repro.mjs:13
+if(result.first.status!=='listening'||result.second.code!=='EADDRINUSE'||result.short.status!=='listening')throw new Error('Socket-length hypothesis not reproduced');
+                                                                                                                 ^
+
+Error: Socket-length hypothesis not reproduced
+    at file:///mnt/d/workspace/CC/cc-dsh-onboarding-posix-20261105/node_modules/.cache/c12-posix-pty-20261105/socket-repro.mjs:13:114
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+
+Node.js v22.14.0

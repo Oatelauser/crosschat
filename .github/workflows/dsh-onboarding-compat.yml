@@ -3,8 +3,9 @@ name: DeepSeek Harness from-zero onboarding
 on:
   workflow_dispatch:
   schedule:
-    # Windows first-run accepted; activated only when this candidate is approved for main.
+    # Keep the accepted Windows weekly plan; POSIX needs branch first-runs and approval before main.
     - cron: '7 5 * * 5'
+    - cron: '7 6 * * 5'
 
 concurrency:
   group: dsh-onboarding-${{ github.ref }}
@@ -15,7 +16,11 @@ permissions:
 
 jobs:
   probe:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(github.event_name != 'schedule' && '[{"runner":"windows-latest","platform":"win32","arch":"x64"},{"runner":"ubuntu-24.04","platform":"linux","arch":"x64"},{"runner":"macos-15-intel","platform":"darwin","arch":"x64"},{"runner":"macos-15","platform":"darwin","arch":"arm64"}]' || github.event.schedule == '7 5 * * 5' && '[{"runner":"windows-latest","platform":"win32","arch":"x64"}]' || github.event.schedule == '7 6 * * 5' && '[{"runner":"ubuntu-24.04","platform":"linux","arch":"x64"},{"runner":"macos-15-intel","platform":"darwin","arch":"x64"},{"runner":"macos-15","platform":"darwin","arch":"arm64"}]' || '[]') }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 75
     permissions:
       contents: read
@@ -24,16 +29,32 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          architecture: ${{ matrix.arch }}
+      - uses: actions/setup-python@v6
+        if: matrix.platform != 'win32'
+        with:
+          python-version: '3.12'
+          architecture: ${{ matrix.arch }}
+      - name: Verify actual runner target
+        run: node -e "const a=require('node:assert/strict'); a.equal(process.platform,process.env.DSH_EXPECTED_PLATFORM); a.equal(process.arch,process.env.DSH_EXPECTED_ARCH)"
+        env:
+          DSH_EXPECTED_PLATFORM: ${{ matrix.platform }}
+          DSH_EXPECTED_ARCH: ${{ matrix.arch }}
+      - name: Verify native POSIX terminal before installing DSH
+        if: matrix.platform != 'win32'
+        run: node test/helpers/tui-posix-pty-selftest.mjs dsh-onboarding-evidence/terminal-preflight
       - run: npm ci
       - run: npm run build
       - run: node scripts/dsh-compat-ci.mjs
         env:
           CROSSCHAT_LIVE: '1'
           DSH_COMPAT_SUITE: onboarding
+          # Keep private UNIX socket names within native pathname limits.
+          TMPDIR: ${{ matrix.platform != 'win32' && '/tmp' || '' }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: dsh-onboarding-win32-x64
+          name: dsh-onboarding-${{ matrix.platform }}-${{ matrix.arch }}
           path: dsh-onboarding-evidence/
           if-no-files-found: warn
           retention-days: 21
@@ -49,18 +70,13 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: dsh-onboarding-win32-x64
+          pattern: dsh-onboarding-*
+          merge-multiple: false
           path: evidence
       - uses: actions/github-script@v7
         with:
           script: |
             const fs = require('node:fs/promises');
-            let summary;
-            try {
-              const info = await fs.lstat('evidence/summary.json');
-              if (!info.isFile() || info.isSymbolicLink() || info.size > 4 * 1024 * 1024) { core.notice('Summary is not a bounded regular file; no issue created.'); return; }
-              summary = JSON.parse(await fs.readFile('evidence/summary.json', 'utf8'));
-            } catch { core.notice('No fresh summary; inspect the probe artifacts. No issue created.'); return; }
             const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
             const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
             const sri = /^sha512-[A-Za-z0-9+/]{85}[AQgw]==$/;
@@ -92,8 +108,8 @@ jobs:
               && (value.errors === undefined || (Array.isArray(value.errors) && value.errors.length === 0));
             const artifact = (value) => record(value) && value.name === '@deepseek-ai/dsh' && supported(value.version) && sri.test(value.integrity ?? '')
               && value.url === `https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-${value.version}.tgz`;
-            function valid(value, build) {
-              if (!record(value) || value.schema !== 1 || value.tool !== 'dsh-onboarding' || value.platform !== 'win32' || value.arch !== 'x64'
+            function valid(value, build, platform, arch) {
+              if (!record(value) || value.schema !== 1 || value.tool !== 'dsh-onboarding' || value.platform !== platform || value.arch !== arch
                 || value.version !== build.version || !uuid.test(value.runId ?? '') || !scoped(value.scope) || !released(value.cleanup)
                 || !record(value.process) || value.process.timedOut !== false || value.process.signal !== null
                 || value.process.code !== (value.status === 'passed' ? 0 : 1) || !Array.isArray(value.checks) || value.checks.length > checks.length
@@ -102,20 +118,33 @@ jobs:
               return value.status === 'failed' && value.category === 'compatibility' && ['setup', 'onboarding'].includes(value.stage)
                 && typeof value.check === 'string' && value.check === checks[value.checks.length];
             }
-            if (!record(summary) || summary.schema !== 1 || summary.tool !== 'dsh-onboarding' || summary.platform !== 'win32' || summary.arch !== 'x64' || !scoped(summary.scope)
-              || summary.installationCleanup !== 'removed' || summary.classification?.kind !== 'regression' || summary.classification?.notify !== true || !record(summary.builds)) return;
-            const { baseline, candidate, retry, builds } = summary;
-            if (!artifact(builds.baseline) || !artifact(builds.candidate) || !record(builds.packageManager) || builds.packageManager.name !== 'pnpm' || builds.packageManager.version !== '11.28.5'
-              || builds.packageManager.url !== 'https://registry.npmjs.org/pnpm/-/pnpm-11.28.5.tgz'
-              || builds.packageManager.integrity !== 'sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng=='
-              || !valid(baseline, builds.baseline) || !valid(candidate, builds.candidate) || !valid(retry, builds.candidate)
-              || baseline.status !== 'passed' || candidate.status !== 'failed' || retry.status !== 'failed'
-              || candidate.check !== retry.check || candidate.stage !== retry.stage || new Set([baseline.runId, candidate.runId, retry.runId]).size !== 3) return;
-            const marker = `<!-- dsh-onboarding-compat:${candidate.version}:win32:${candidate.check} -->`;
-            const issues = await github.paginate(github.rest.issues.listForRepo, { ...context.repo, state: 'all', creator: 'github-actions[bot]', per_page: 100 });
-            if (!Array.isArray(issues)) { core.notice('Issue listing is incomplete; no issue created.'); return; }
-            if (issues.some((issue) => typeof issue.body === 'string' && issue.body.includes(marker))) { core.notice('This candidate/check was already reported.'); return; }
-            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            await github.rest.issues.create({ ...context.repo,
-              title: `DeepSeek Harness ${candidate.version}: ${candidate.check} from-zero compatibility regression (win32)`,
-              body: `${marker}\nPinned baseline ${baseline.version} passed all six from-zero checks. The same official candidate failed the same compatibility phase twice with verified runtime and installation cleanup.\n\nFailed phase: \`${candidate.check}\`\nCandidate SHA-512 SRI: \`${builds.candidate.integrity}\`\n\n[Inspect workflow and retained evidence](${run}).\n\nScope: official npm Web Host, native skill loading and shell identity, typed round trip, doctor/ConPTY, update, native plugin removal and crosschat data removal with profile/chat preservation. Scripted local model only; no browser UI, formal Desktop, other platforms or model intelligence is claimed.` });
+            const targets = context.eventName !== 'schedule' ? [['win32', 'x64'], ['linux', 'x64'], ['darwin', 'x64'], ['darwin', 'arm64']]
+              : context.payload.schedule === '7 5 * * 5' ? [['win32', 'x64']]
+              : context.payload.schedule === '7 6 * * 5' ? [['linux', 'x64'], ['darwin', 'x64'], ['darwin', 'arm64']] : [];
+            for (const [platform, arch] of targets) {
+              let summary;
+              try {
+                const file = `evidence/dsh-onboarding-${platform}-${arch}/summary.json`;
+                const info = await fs.lstat(file);
+                if (!info.isFile() || info.isSymbolicLink() || info.size > 4 * 1024 * 1024) { core.notice('Summary is not a bounded regular file; no issue created.'); continue; }
+                summary = JSON.parse(await fs.readFile(file, 'utf8'));
+              } catch { core.notice('No fresh target summary; inspect the probe artifacts. No issue created.'); continue; }
+              if (!record(summary) || summary.schema !== 1 || summary.tool !== 'dsh-onboarding' || summary.platform !== platform || summary.arch !== arch || !scoped(summary.scope)
+                || summary.installationCleanup !== 'removed' || summary.classification?.kind !== 'regression' || summary.classification?.notify !== true || !record(summary.builds)) continue;
+              const { baseline, candidate, retry, builds } = summary;
+              if (!artifact(builds.baseline) || !artifact(builds.candidate) || !record(builds.packageManager) || builds.packageManager.name !== 'pnpm' || builds.packageManager.version !== '11.28.5'
+                || builds.packageManager.url !== 'https://registry.npmjs.org/pnpm/-/pnpm-11.28.5.tgz'
+                || builds.packageManager.integrity !== 'sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng=='
+                || !valid(baseline, builds.baseline, platform, arch) || !valid(candidate, builds.candidate, platform, arch) || !valid(retry, builds.candidate, platform, arch)
+                || baseline.status !== 'passed' || candidate.status !== 'failed' || retry.status !== 'failed'
+                || candidate.check !== retry.check || candidate.stage !== retry.stage || new Set([baseline.runId, candidate.runId, retry.runId]).size !== 3) continue;
+              const targetKey = platform === 'win32' ? 'win32' : `${platform}-${arch}`;
+              const marker = `<!-- dsh-onboarding-compat:${candidate.version}:${targetKey}:${candidate.check} -->`;
+              const issues = await github.paginate(github.rest.issues.listForRepo, { ...context.repo, state: 'all', creator: 'github-actions[bot]', per_page: 100 });
+              if (!Array.isArray(issues)) { core.notice('Issue listing is incomplete; no issue created.'); continue; }
+              if (issues.some((issue) => record(issue) && typeof issue.body === 'string' && issue.body.includes(marker))) { core.notice('This candidate/check was already reported.'); continue; }
+              const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+              await github.rest.issues.create({ ...context.repo,
+                title: `DeepSeek Harness ${candidate.version}: ${candidate.check} from-zero compatibility regression (${targetKey})`,
+                body: `${marker}\nPinned baseline ${baseline.version} passed all six from-zero checks. The same official candidate failed the same compatibility phase twice with verified runtime and installation cleanup.\n\nFailed phase: \`${candidate.check}\`\nCandidate SHA-512 SRI: \`${builds.candidate.integrity}\`\n\n[Inspect workflow and retained evidence](${run}).\n\nScope: official npm Web Host, native skill loading and shell identity, typed round trip, doctor/native PTY, update, native plugin removal and crosschat data removal with profile/chat preservation on ${platform}/${arch}. Scripted local model only; no browser UI, formal Desktop, cross-machine validation or model intelligence is claimed.` });
+            }
