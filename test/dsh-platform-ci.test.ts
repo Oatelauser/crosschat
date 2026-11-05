@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { dshRegressionIdentity, parseDshDesktopWindowsManifest, parseDshNpmManifest, parsePnpmManifest, runDshBuildSequence, runDshProbeAttempt } from '../scripts/dsh-compat-ci.mjs';
 
@@ -35,6 +36,23 @@ function regressionSummary(platform: string, arch: string) {
     builds: { baseline, candidate, packageManager: parsePnpmManifest(pinned.packageManager) },
     classification: { kind: 'regression', notify: true }, installationCleanup: 'removed',
     baseline: { ...report, process: { code: 0, signal: null, timedOut: false } }, candidate: failed(), retry: failed() };
+}
+
+async function hostedReport(summary: unknown, existing: unknown[] = []) {
+  const workflow = (await readFile(new URL('../.github/workflows/dsh-compat.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+  const script = workflow.split('          script: |\n')[1]!.split('\n').map(line => line.replace(/^ {12}/, '')).join('\n');
+  const created: { body: string }[] = [];
+  const content = JSON.stringify(summary);
+  await runInNewContext(`(async () => { ${script} })()`, {
+    require: (name: string) => {
+      if (name !== 'node:fs/promises') throw new Error('Unexpected writer dependency');
+      return { readFile: async () => content, lstat: async () => ({ isFile: () => true, isSymbolicLink: () => false, size: Buffer.byteLength(content) }) };
+    },
+    core: { notice: () => {} },
+    context: { repo: { owner: 'fixture', repo: 'fixture' }, serverUrl: 'https://github.com', runId: 42 },
+    github: { paginate: async () => existing, rest: { issues: { listForRepo: {}, create: async (value: { body: string }) => created.push(value) } } },
+  });
+  return created;
 }
 
 describe('DSH npm platform boundaries', () => {
@@ -139,4 +157,15 @@ describe('DSH regression identity separates OS and architecture', () => {
     }
     expect(dshRegressionIdentity({ ...report, platform: 'linux', arch: 'arm64' })).toBeUndefined();
   });
+});
+
+describe('the actual hosted report script consumes target-specific artifacts', () => {
+  it.each([['linux', 'x64'], ['darwin', 'x64'], ['darwin', 'arm64']])(
+    'reports and deduplicates a verified %s/%s regression without executing artifact code', async (platform, arch) => {
+      const summary = regressionSummary(platform, arch);
+      const marker = dshRegressionIdentity(summary)!.marker;
+      expect(await hostedReport(summary)).toHaveLength(1);
+      expect(await hostedReport(summary, [{ body: marker }])).toHaveLength(0);
+      expect(await hostedReport({ ...summary, retry: { ...summary.retry, arch: 'ia32' } })).toHaveLength(0);
+    });
 });
