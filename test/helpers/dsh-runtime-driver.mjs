@@ -47,7 +47,8 @@ export async function apply(ctx, config) {
         return send(response, { result, pid: process.pid });
       }
       if (request.method === 'POST' && path === '/sessions') {
-        const created = await ctx.sessionController.create({ cwd: config.workspace });
+        const created = await ctx.sessionController.create(registeredWorkspace === undefined
+          ? { cwd: config.workspace } : { workspaceId: registeredWorkspace.id });
         originalAgents.set(created.sessionId, ctx.agents.get(created.sessionId));
         await ctx.sessionController.rename({ sessionId: created.sessionId, title: body.title });
         await ctx.sessionController.selectModel({ sessionId: created.sessionId, provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'off' });
