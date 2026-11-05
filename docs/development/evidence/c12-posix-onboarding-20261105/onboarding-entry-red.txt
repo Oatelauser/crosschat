@@ -1,0 +1,12 @@
+file:///mnt/d/workspace/CC/cc-dsh-onboarding-posix-20261105/scripts/dsh-compat-ci.mjs:1263
+  if (suite.tool === DSH_ONBOARDING_TOOL && target.platform !== 'win32') throw new Error('POSIX from-zero onboarding awaits real terminal wiring; no installation started');
+                                                                               ^
+
+Error: POSIX from-zero onboarding awaits real terminal wiring; no installation started
+    at main (file:///mnt/d/workspace/CC/cc-dsh-onboarding-posix-20261105/scripts/dsh-compat-ci.mjs:1263:80)
+    at file:///mnt/d/workspace/CC/cc-dsh-onboarding-posix-20261105/scripts/dsh-compat-ci.mjs:1341:96
+    at ModuleJob.run (node:internal/modules/esm/module_job:271:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:578:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:116:5)
+
+Node.js v22.14.0
