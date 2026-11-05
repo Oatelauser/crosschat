@@ -1,0 +1,104 @@
+{
+  "node": "v22.23.4",
+  "platform": "win32",
+  "queryDeadlineMs": 20,
+  "completionGuardMs": 250,
+  "observations": [
+    {
+      "ready": false,
+      "sample": 0,
+      "onlineMs": 21.6054,
+      "queryAndReapMs": 23.580000000000002,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": false,
+      "sample": 1,
+      "onlineMs": 21.386200000000002,
+      "queryAndReapMs": 22.303800000000003,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": false,
+      "sample": 2,
+      "onlineMs": 18.818600000000004,
+      "queryAndReapMs": 23.586200000000005,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": false,
+      "sample": 3,
+      "onlineMs": 18.36659999999999,
+      "queryAndReapMs": 30.31110000000001,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": false,
+      "sample": 4,
+      "onlineMs": 19.097800000000007,
+      "queryAndReapMs": 31.529200000000003,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": false,
+      "sample": 5,
+      "onlineMs": 18.77109999999999,
+      "queryAndReapMs": 29.719700000000017,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": true,
+      "sample": 0,
+      "onlineMs": 18.405399999999986,
+      "queryAndReapMs": 27.92950000000002,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": true,
+      "sample": 1,
+      "onlineMs": 20.526899999999983,
+      "queryAndReapMs": 25.457600000000014,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": true,
+      "sample": 2,
+      "onlineMs": 18.79989999999998,
+      "queryAndReapMs": 27.123400000000004,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": true,
+      "sample": 3,
+      "onlineMs": 19.32239999999996,
+      "queryAndReapMs": 28.344100000000026,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": true,
+      "sample": 4,
+      "onlineMs": 18.663700000000006,
+      "queryAndReapMs": 25.797499999999957,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    },
+    {
+      "ready": true,
+      "sample": 5,
+      "onlineMs": 20.804299999999955,
+      "queryAndReapMs": 25.96980000000002,
+      "result": "TimeoutError",
+      "threadIdAtResult": -1
+    }
+  ]
+}

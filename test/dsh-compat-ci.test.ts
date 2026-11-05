@@ -1936,13 +1936,16 @@ describe('DeepSeek Harness desktop installer admission', () => {
       try {
         // This intentionally unsigned fixture must reach the genuine signature check,
         // then be refused as unsigned. A shell-module import failure is a different result.
-        await expect(call(path, { readSignature: undefined })).rejects.toMatchObject({
+        // This integration check starts a real Windows PowerShell process. Give
+        // its cold startup a separate finite budget; the injected adapter tests
+        // still exercise short operation deadlines and bounded cancellation.
+        await expect(call(path, { readSignature: undefined, timeoutMs: 20_000 })).rejects.toMatchObject({
           stage: 'signature', message: 'Authenticode status is not Valid',
         });
         expect(existsSync(marker)).toBe(false);
       } finally { vi.unstubAllEnvs(); }
     });
-  });
+  }, 25_000);
 
   it('rejects default-adapter output, JSON and process failures', async () => {
     await isolated(async (output) => {
