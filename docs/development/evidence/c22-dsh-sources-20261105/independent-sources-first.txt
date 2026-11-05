@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-enhancement-20261105
+
+ ✓ test/dsh-native-operations.test.ts (17 tests) 426ms
+
+ Test Files  1 passed (1)
+      Tests  17 passed (17)
+   Start at  22:47:27
+   Duration  966ms (transform 191ms, setup 0ms, collect 297ms, tests 426ms, environment 0ms, prepare 88ms)
+

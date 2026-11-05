@@ -104,6 +104,48 @@ async function fixture(timeoutMs = 300, freshDiscovery = false) {
 }
 
 describe('Harness native operation facts through the existing authenticated bridge', () => {
+  it('isolates confirmations for identical native IDs in independent registries and keeps the other source usable after a move', async () => {
+    const [left, right] = await Promise.all([fixture(), fixture()]);
+    expect(left.ref).toEqual(right.ref);
+    const [leftBefore, rightBefore] = await Promise.all([left.operations.describe(left.ref), right.operations.describe(right.ref)]);
+    expect(leftBefore.actions.adopt.state).toBe('executable');
+    expect(rightBefore.actions.adopt.state).toBe('executable');
+    expect(leftBefore.revision).not.toBe(rightBefore.revision);
+    expect(await left.operations.apply({ ref: left.ref, operation: 'adopt', expectedRevision: rightBefore.revision })).toMatchObject({ kind: 'rejected' });
+    expect(left.adopt).not.toHaveBeenCalled();
+    await left.move();
+    expect(await left.operations.apply({ ref: left.ref, operation: 'adopt', expectedRevision: leftBefore.revision })).toMatchObject({ kind: 'rejected' });
+    expect(await right.operations.apply({ ref: right.ref, operation: 'adopt', expectedRevision: rightBefore.revision })).toMatchObject({ kind: 'applied' });
+    expect(right.adopt).toHaveBeenCalledOnce();
+    expect(left.adopt).not.toHaveBeenCalled();
+    const recovered = await left.operations.describe(left.ref);
+    expect(recovered.actions.adopt.state).toBe('executable');
+    expect(recovered.revision).not.toBe(leftBefore.revision);
+    expect(left.adopt).not.toHaveBeenCalled();
+  });
+
+  it('cancels a blocked source without cancelling an independent same-ID source or replaying either write', async () => {
+    const [left, right] = await Promise.all([fixture(), fixture()]);
+    const rightBefore = await right.operations.describe(right.ref);
+    const held = left.holdInfo(), controller = new AbortController();
+    const pending = left.operations.describe(left.ref, controller.signal);
+    try {
+      await held.started;
+      expect(await right.operations.apply({ ref: right.ref, operation: 'adopt', expectedRevision: rightBefore.revision })).toMatchObject({ kind: 'applied' });
+      controller.abort();
+      expect((await pending).actions.adopt.state).toBe('unavailable');
+      expect(right.adopt).toHaveBeenCalledOnce();
+      expect(left.adopt).not.toHaveBeenCalled();
+    } finally {
+      controller.abort(); held.release(); await pending;
+      left.state.onInfo = undefined;
+    }
+    expect((await left.operations.describe(left.ref)).actions.adopt.state).toBe('executable');
+    expect((await right.operations.describe(right.ref)).actions.adopt.state).toBe('executable');
+    expect(left.adopt).not.toHaveBeenCalled();
+    expect(right.adopt).toHaveBeenCalledOnce();
+  });
+
   it('enables verified host adoption independently of unimplemented rename and exposes no bridge credentials', async () => {
     const f = await fixture();
     const result = await f.operations.describe(f.ref);
