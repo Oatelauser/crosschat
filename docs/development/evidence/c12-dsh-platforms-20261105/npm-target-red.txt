@@ -1,0 +1,40 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-platform-20261105
+
+ ❯ test/dsh-platform-ci.test.ts (9 tests | 3 failed) 10ms
+   × DSH npm platform boundaries > verifies the same pinned official npm archive for linux/x64 without claiming native execution 8ms
+     → This compatibility probe is configured for Windows x64 only
+   × DSH npm platform boundaries > verifies the same pinned official npm archive for darwin/x64 without claiming native execution 0ms
+     → This compatibility probe is configured for Windows x64 only
+   × DSH npm platform boundaries > verifies the same pinned official npm archive for darwin/arm64 without claiming native execution 0ms
+     → This compatibility probe is configured for Windows x64 only
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: linux/arm64 1ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: win32/arm64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: freebsd/x64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: darwin/ia32 0ms
+   ✓ DSH npm platform boundaries > keeps Windows Desktop artifacts isolated from npm target expansion: linux/x64 0ms
+   ✓ DSH npm platform boundaries > keeps Windows Desktop artifacts isolated from npm target expansion: darwin/arm64 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-platform-ci.test.ts > DSH npm platform boundaries > verifies the same pinned official npm archive for linux/x64 without claiming native execution
+ FAIL  test/dsh-platform-ci.test.ts > DSH npm platform boundaries > verifies the same pinned official npm archive for darwin/x64 without claiming native execution
+ FAIL  test/dsh-platform-ci.test.ts > DSH npm platform boundaries > verifies the same pinned official npm archive for darwin/arm64 without claiming native execution
+Error: This compatibility probe is configured for Windows x64 only
+ ❯ parseDshNpmManifest scripts/dsh-compat-ci.mjs:83:53
+     81|   if (!record(input) || input.name !== '@deepseek-ai/dsh' || !semver(i…
+     82|   if (!supported(input.version)) throw Object.assign(new Error('Harnes…
+     83|   if (platform !== 'win32' || arch !== 'x64') throw new Error('This co…
+       |                                                     ^
+     84|   const url = `https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-${inp…
+     85|   if (input.dist.tarball !== url || !sri.test(input.dist.integrity ?? …
+ ❯ test/dsh-platform-ci.test.ts:10:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 6 passed (9)
+   Start at  09:59:21
+   Duration  352ms (transform 77ms, setup 0ms, collect 111ms, tests 10ms, environment 0ms, prepare 85ms)
+
