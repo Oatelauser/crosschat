@@ -1,9 +1,10 @@
 // Local native enhancement probe; official runtime is installed separately in an owned root.
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import process from 'node:process';
+import { fileURLToPath, URL } from 'node:url';
 import { createLocalDiscoveryService } from '../../dist/application/discovery/local.js';
 import { createNativeOperationProviders } from '../../dist/application/native-operation-providers.js';
 import { createTcpSessionOperation } from '../../dist/application/tcp/session-operations.js';
@@ -14,12 +15,13 @@ import { loadBrokerFile, writeBrokerFile } from '../../dist/serve/registry.js';
 import { requestMemberRemoveExact, SenderConn } from '../../dist/serve/via-tcp.js';
 import { listDshThreads } from '../../dist/dsh/client.js';
 import { createDshFixture, pollDsh } from './dsh-live-fixture.mjs';
+import { launchPty } from './tui-pty-driver.mjs';
 
 assert.equal(process.env.CROSSCHAT_LIVE, '1');
 const reportPath = resolve(process.env.DSH_NATIVE_REPORT), runId = randomUUID();
 const report = { schema: 1, scope: 'DSH npm/Web local native manual membership and source recovery; no Desktop or rename acceptance',
   runId, platform: process.platform, arch: process.arch, node: process.version, checks: [], status: 'failed' };
-let fixture, broker;
+let fixture, broker, pty;
 const nodes = [], sockets = [];
 const check = async (name, work) => { await work(); report.checks.push({ name, status: 'passed' }); process.stdout.write(name + '\n'); };
 try {
@@ -36,6 +38,7 @@ try {
     machineId: () => '2'.repeat(32), hostname: () => 'owned-loopback', now: Date.now, log: () => {}, heartbeatMs: 60000,
     deliverLocal: async () => { throw new Error('Membership must not send a message'); } });
   const port = await broker.start();
+  await writeFile(registryFile, JSON.stringify({ ...loadBrokerFile(registryFile), port }));
   const entries = stars.map((star) => ({ host: '127.0.0.1', port, key: star.nodes[0].key, name: star.name, starId: star.starId }));
   const configFile = join(tcpDir, 'node.json'); await writeFile(configFile, JSON.stringify({ brokers: entries }));
   const discovery = createLocalDiscoveryService({ home: fixture.env.HOME });
@@ -96,11 +99,41 @@ try {
     const after = await fixture.snapshot(native.id); assert.equal(after.sameAgent, true); assert.deepEqual(after.events, before.events);
     assert.equal(fixture.model.requests.length, 0); report.rosters = stars.map((star) => ({ starId: star.starId, members: roster(star.starId) }));
   });
+  await check('real-terminal-cancel-confirm-exact-membership-and-restoration', async () => {
+    const conn = await SenderConn.open(`ws://127.0.0.1:${port}`, entries[0].key, undefined, 10000); sockets.push(conn);
+    assert.equal((await requestMemberRemoveExact(conn, { sessionId: native.id, machine: machineId, tool: 'dsh', endpointType: 'host' })).ok, true);
+    await pollDsh(async () => roster('native-a').length === 0, 'empty selected star before keyboard adoption');
+    const input = join(fixture.root, 'terminal-input.json'), eventsPath = join(fixture.root, 'terminal-events.jsonl');
+    await writeFile(input, JSON.stringify({ home: fixture.env.HOME, owner: await readFile(join(fixture.root, '.fixture-owner'), 'utf8') }));
+    const events = async () => { try { return (await readFile(eventsPath, 'utf8')).trim().split('\n').filter(Boolean).map((s) => JSON.parse(s)); } catch (error) { if (error.code === 'ENOENT') return []; throw error; } };
+    const event = (predicate, after = 0) => pollDsh(async () => (await events()).slice(after).find(predicate), 'native membership terminal event', 10000);
+    const terminalLog = join(dirname(reportPath), `terminal-${runId}.jsonl`);
+    pty = await launchPty({ executable: process.execPath, args: [fileURLToPath(new URL('./dsh-native-members-pty.mjs', import.meta.url)), fixture.root, input, eventsPath],
+      env: fixture.env, columns: 140, rows: 36, logPath: terminalLog });
+    const send = async (keys, expected) => { const mark = pty.output.length; pty.write(keys); if (expected) await pty.waitForOutput(expected, 10000, mark); };
+    await pty.waitForOutput('C18-NATIVE-MEMBERS'); await send(':stars\r', 'native-a'); await send('/native-a\r', /1\/1/);
+    await send('\r', '<members>'); await send('a', native.title);
+    await event((entry) => entry.event === 'preview' && entry.action === 'adopt-session' && entry.result.enabled);
+    await send('a', '确认提交'); await send('\r', '已取消操作'); assert.equal(roster('native-a').length, 0);
+    assert(!(await events()).some((entry) => entry.event === 'mutation'));
+    await send('a', '确认提交'); await send('\t\r'); await event((entry) => entry.event === 'mutation' && entry.action === 'adopt-session');
+    await pollDsh(async () => roster('native-a').length === 1, 'keyboard-adopted exact native roster');
+    assert.equal(roster('native-a')[0].sessionId, native.id); assert.equal(roster('native-a')[0].endpointType, 'host'); assert.equal(roster('native-b').length, 1);
+    let mark = pty.output.length; pty.resize(48, 16); await pty.waitForOutput('CC · 工作区', 10000, mark);
+    mark = pty.output.length; pty.resize(140, 36); await pty.waitForOutput('CC · 工作区', 10000, mark);
+    await send('q'); assert.deepEqual(await pty.exited, { code: 0, hostCode: 0 });
+    const exited = await event((entry) => entry.event === 'exit'); assert.deepEqual(exited.after, exited.before);
+    const terminalEvents = join(dirname(reportPath), `terminal-application-${runId}.jsonl`); await copyFile(eventsPath, terminalEvents);
+    report.terminal = { kind: process.platform === 'win32' ? 'ConPTY' : 'POSIX PTY', terminalLog, terminalEvents, exit: exited };
+    await pty.dispose(); pty = undefined;
+    assert.equal((await fixture.snapshot(native.id)).sameAgent, true); assert.deepEqual((await fixture.snapshot(native.id)).events, before.events);
+  });
   report.status = 'passed';
 } catch (error) {
   report.error = { name: error.name, message: error.message, stack: error.stack };
 } finally {
   const failures = [];
+  try { await pty?.dispose(); } catch (error) { failures.push(error.message); }
   for (const socket of sockets) try { socket.close(); } catch (error) { failures.push(error.message); }
   for (const state of nodes.reverse()) {
     try { await state.node.stop(); await state.running; } catch (error) { failures.push(error.message); }
