@@ -33,7 +33,7 @@ async function fixture(timeoutMs = 300) {
   const registration: DshRegistration = { schema: 1, protocol: 1, provider: 'dsh', instanceId: randomUUID(), pid: process.pid,
     url: '', token: 'c'.repeat(64), runtimeVersion: '0.2.1-rc.2', profile: 'web', endpointType: 'host', createdAt: 100 };
   const state = { unauthorized: false, missing: false, details: 0, infoPid: process.pid,
-    onInfo: undefined as (() => Promise<void>) | undefined, onDetail: undefined as (() => void) | undefined };
+    onInfo: undefined as (() => Promise<void>) | undefined, onDetail: undefined as (() => void | Promise<void>) | undefined };
   const native = { id, name: 'before', cwd: root, originalCwd: root, status: 'idle', createdAt: 200 };
   const publish = async () => writeFile(join(instancesDir, registration.instanceId + '.json'), JSON.stringify(registration), { mode: 0o600 });
   async function listen(identity = registration): Promise<string> {
@@ -52,7 +52,7 @@ async function fixture(timeoutMs = 300) {
             endpointType: identity.endpointType, callerIdentity: identity.callerIdentity, pid: state.infoPid })); return;
         }
         if (request.url === '/v1/sessions/' + encodeURIComponent(id)) {
-          state.details++; state.onDetail?.();
+          state.details++; await state.onDetail?.();
           response.end(JSON.stringify({ item: state.missing ? null : native })); return;
         }
         response.writeHead(404); response.end('{}');
@@ -189,6 +189,27 @@ describe('Harness native operation facts through the existing authenticated brid
     f.state.onDetail = () => { if (f.state.details === 3) f.state.missing = true; };
     expect(await f.operations.apply({ ref: f.ref, operation: 'adopt', expectedRevision: before.revision })).toMatchObject({ kind: 'rejected' });
     expect(f.state.details).toBe(3);
+    expect(f.adopt).not.toHaveBeenCalled();
+  });
+
+  it.each(['title', 'creation'] as const)('rejects changed native %s metadata until the discovery snapshot is refreshed', async (field) => {
+    const f = await fixture();
+    const before = await f.operations.describe(f.ref);
+    if (field === 'title') f.native.name = 'after'; else f.native.createdAt++;
+    expect(await f.operations.apply({ ref: f.ref, operation: 'adopt', expectedRevision: before.revision })).toMatchObject({ kind: 'rejected' });
+    expect(f.adopt).not.toHaveBeenCalled();
+    await f.refresh();
+    const after = await f.operations.describe(f.ref);
+    expect(await f.operations.apply({ ref: f.ref, operation: 'adopt', expectedRevision: after.revision })).toMatchObject({ kind: 'applied' });
+    expect(f.adopt).toHaveBeenCalledOnce();
+    expect(f.adopt.mock.calls[0]?.[0]).toMatchObject({ name: f.native.name, attributes: { createdAt: f.native.createdAt } });
+  });
+
+  it('rejects a registration move that occurs while the final native response is awaited', async () => {
+    const f = await fixture();
+    const before = await f.operations.describe(f.ref);
+    f.state.onDetail = async () => { if (f.state.details === 3) await f.move(); };
+    expect(await f.operations.apply({ ref: f.ref, operation: 'adopt', expectedRevision: before.revision })).toMatchObject({ kind: 'rejected' });
     expect(f.adopt).not.toHaveBeenCalled();
   });
 
