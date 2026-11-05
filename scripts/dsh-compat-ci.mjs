@@ -1260,7 +1260,6 @@ async function main() {
   const suite = resolveDshCiSuite(process.env.DSH_COMPAT_SUITE);
   const target = { platform: process.platform, arch: process.arch };
   if (!isDshNpmTarget(target.platform, target.arch)) throw new Error('Unplanned Harness npm runner platform/architecture');
-  if (suite.tool === DSH_ONBOARDING_TOOL && target.platform !== 'win32') throw new Error('POSIX from-zero onboarding awaits real terminal wiring; no installation started');
   const output = resolve(process.env.DSH_COMPAT_EVIDENCE ?? suite.evidenceDirectory); await mkdir(output, { recursive: true });
   const temp = await realpath(tmpdir()); const root = await realpath(await mkdtemp(join(temp, 'crosschat-dsh-ci-'))); const owner = randomUUID();
   await writeFile(join(root, '.fixture-owner'), owner);

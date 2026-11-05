@@ -7,19 +7,20 @@ import { performance } from 'node:perf_hooks';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { DSH_ONBOARDING_CHECKS, DSH_ONBOARDING_SCOPE, DSH_ONBOARDING_TOOL } from './dsh-onboarding-contract.mjs';
+import { isDshNpmTarget } from './dsh-npm-target.mjs';
 import { assessDshCallerSourceIdentity, createDshFixture, dshIdentityBootstrapCommand, dshShellCommand, pollDsh, repositoryRoot, runDshCommand, snapshotDshStoredChats } from '../test/helpers/dsh-live-fixture.mjs';
 import { replySendArgs } from '../test/helpers/compat-reply.mjs';
 import { launchPty } from '../test/helpers/tui-pty-driver.mjs';
 import { createDshOwnedNode } from '../test/helpers/dsh-owned-node.mjs';
 
-assert.equal(process.env.CROSSCHAT_LIVE, '1'); assert.equal(process.platform, 'win32'); assert.equal(process.arch, 'x64');
+assert.equal(process.env.CROSSCHAT_LIVE, '1'); assert(isDshNpmTarget(process.platform, process.arch));
 const reportIndex = process.argv.indexOf('--report'); assert(reportIndex >= 0 && process.argv[reportIndex + 1]);
 const reportPath = resolve(process.argv[reportIndex + 1]), evidence = dirname(reportPath);
 await mkdir(evidence, { recursive: true });
 const runId = process.env.DSH_EXPECTED_RUN_ID ?? randomUUID();
 assert(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(runId));
 const marker = `c11_${runId.slice(0, 8)}_`;
-const report = { schema: 1, tool: DSH_ONBOARDING_TOOL, platform: 'win32', arch: 'x64', runId,
+const report = { schema: 1, tool: DSH_ONBOARDING_TOOL, platform: process.platform, arch: process.arch, runId,
   version: process.env.DSH_EXPECTED_VERSION, scope: DSH_ONBOARDING_SCOPE, status: 'failed', category: 'infrastructure',
   stage: 'setup', check: DSH_ONBOARDING_CHECKS[0], startedAt: new Date().toISOString(), checks: [] };
 let fixture, node, pty, tuiEvents, maintenanceReleaseUnclear = false, skillIssued = false, identityIssued = false, senderIssued = false, receiverIssued = false;
@@ -27,7 +28,7 @@ const sessions = {};
 const userText = (body) => body.messages.filter((message) => message.role === 'user').flatMap((message) => typeof message.content === 'string' ? [message.content]
   : message.content.filter((part) => part.type === 'text').map((part) => part.text)).join('\n');
 const text = (value) => ({ text: value });
-const shell = (command) => ({ tool: { name: 'pwsh', id: `${marker}${randomUUID().slice(0, 8)}`, input: { command, description: 'Run a fixed isolated crosschat onboarding command' } } });
+const shell = (command) => ({ tool: { name: process.platform === 'win32' ? 'pwsh' : 'bash', id: `${marker}${randomUUID().slice(0, 8)}`, input: { command, description: 'Run a fixed isolated crosschat onboarding command' } } });
 function respond(body) {
   const input = userText(body);
   if (input.includes(`${marker}skill`) && !skillIssued) { skillIssued = true; return { tool: { name: 'skill', id: `${marker}skill-load`, input: { name: 'crosschat' } } }; }
@@ -101,8 +102,10 @@ try {
     await writeFile(input, JSON.stringify({ home: fixture.env.HOME, dshHome: fixture.env.DSH_HOME }));
     const events = async () => { try { return (await readFile(eventsPath, 'utf8')).trim().split('\n').filter(Boolean).map((line) => JSON.parse(line)); } catch (error) { if (error.code === 'ENOENT') return []; throw error; } };
     const event = (predicate, after = 0) => pollDsh(async () => (await events()).slice(after).find(predicate), 'onboarding terminal evidence', 10000);
-    pty = await launchPty({ executable: process.execPath, args: [fileURLToPath(new globalThis.URL('../test/helpers/dsh-tui-pty-validation.mjs', import.meta.url)), '--fixture', fixture.root, input, eventsPath],
-      env: fixture.env, columns: 140, rows: 36, logPath: join(evidence, 'tui-terminal.jsonl') });
+    try {
+      pty = await launchPty({ executable: process.execPath, args: [fileURLToPath(new globalThis.URL('../test/helpers/dsh-tui-pty-validation.mjs', import.meta.url)), '--fixture', fixture.root, input, eventsPath],
+        env: fixture.env, columns: 140, rows: 36, logPath: join(evidence, 'tui-terminal.jsonl') });
+    } catch (error) { throw Object.assign(error, { category: 'infrastructure' }); }
     const send = async (keys, expected) => { const mark = pty.output.length; pty.write(keys); if (expected) await pty.waitForOutput(expected, 10000, mark); };
     const copy = async () => { const after = (await events()).length; pty.write('y'); return (await event((entry) => entry.event === 'clipboard', after)).value; };
     await pty.waitForOutput('C09-HARNESS-NATIVE'); await send('\r\r', '个可发现会话'); await send(`/${sessions.sender.id}\r`, /1\/1/);
@@ -119,6 +122,11 @@ try {
     let mark = pty.output.length; pty.resize(48, 16); await pty.waitForOutput('CC · 工作区', 10000, mark);
     mark = pty.output.length; pty.resize(140, 36); await pty.waitForOutput('CC · 工作区', 10000, mark);
     await send('q'); assert.deepEqual(await pty.exited, { code: 0, hostCode: 0 });
+    if (process.platform !== 'win32') {
+      const cleanup = pty.events.find((entry) => entry.event === 'cleanup');
+      report.terminal = { kind: 'posix-pty', cleanup };
+      if (cleanup?.groupReleased !== true || cleanup.forced !== false) throw Object.assign(new Error('Owned POSIX terminal release was not normal and complete'), { category: 'infrastructure' });
+    }
     const exit = (await events()).find((entry) => entry.event === 'exit'); assert.deepEqual(exit.after, exit.before);
     for (const mode of ['1049', '2004']) assert(pty.output.lastIndexOf(`\x1b[?${mode}l`) > pty.output.lastIndexOf(`\x1b[?${mode}h`));
     await save('tui-application.jsonl', await readFile(eventsPath, 'utf8'));
