@@ -79,8 +79,8 @@ try{
  await send('e','原生会话新名称');const afterCancel=(await events()).length;await send('\x1b','已取消操作');
  assert(!(await events()).some(entry=>entry.event==='mutation'));assert.equal(roster()[0].name,native.title);
  await event(entry=>entry.event==='availability'&&entry.result['rename-session']?.enabled,afterCancel);
- await send('e','原生会话新名称');const afterInput=(await events()).length;await send(name);
- await event(entry=>entry.event==='preview'&&entry.action==='rename-session'&&entry.result.enabled,afterInput);
+ const reopened=(await events()).length;await send('e','原生会话新名称');
+ await event(entry=>entry.event==='preview'&&entry.action==='rename-session'&&entry.result.enabled,reopened);await send(name,name);
  await send('\t\t\r');report.terminalMutation=await event(entry=>entry.event==='mutation'&&entry.action==='rename-session');
  await pollDsh(()=>roster().some(member=>member.sessionId===native.id&&member.name===name),'renamed authoritative native star member');
  report.roster=roster();report.sameAgent=(await fixture.snapshot(native.id)).sameAgent;assert.equal(report.sameAgent,true);
