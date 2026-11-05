@@ -1,0 +1,104 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test --maxWorkers=2 --minWorkers=1 test/dsh-onboarding-workflow-platform.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-onboarding-posix-20261105
+
+ ❯ test/dsh-onboarding-workflow-platform.test.ts (9 tests | 6 failed) 21ms
+   × from-zero hosted target selection > runs four targets manually, preserves Windows weekly and separates POSIX weekly 4ms
+     → The from-zero workflow has no platform matrix
+   ✓ from-zero hosted target selection > keeps the privileged report isolated from checkout and probe execution 1ms
+   × actual from-zero YAML report for POSIX artifacts > admits and deduplicates only a fully released linux/x64 regression 5ms
+     → expected [] to have a length of 1 but got +0
+   × actual from-zero YAML report for POSIX artifacts > admits and deduplicates only a fully released darwin/x64 regression 1ms
+     → expected [] to have a length of 1 but got +0
+   × actual from-zero YAML report for POSIX artifacts > admits and deduplicates only a fully released darwin/arm64 regression 1ms
+     → expected [] to have a length of 1 but got +0
+   × actual from-zero YAML report for POSIX artifacts > reports each architecture separately in one run while preserving the Windows marker 2ms
+     → expected [ Object{ owner: 'fixture', …(3) } ] to have a length of 4 but got 1
+   × actual from-zero YAML report for POSIX artifacts > consumes only artifacts selected by the scheduled event 2ms
+     → expected [ Object{ owner: 'fixture', …(3) } ] to have a length of 3 but got 1
+   ✓ actual from-zero YAML report for POSIX artifacts > rejects foreign architecture, incomplete phases, reused UUIDs and uncertain release 3ms
+   ✓ actual from-zero YAML report for POSIX artifacts > bounds each file before reading it and never writes with an incomplete Issue list 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-onboarding-workflow-platform.test.ts > from-zero hosted target selection > runs four targets manually, preserves Windows weekly and separates POSIX weekly
+Error: The from-zero workflow has no platform matrix
+ ❯ matrix test/dsh-onboarding-workflow-platform.test.ts:46:20
+     44| function matrix(schedule?: string) {
+     45|   const line = workflow.split('\n').find(line => line.trimStart().star…
+     46|   if (!line) throw new Error('The from-zero workflow has no platform m…
+       |                    ^
+     47|   const expression = line.slice(line.indexOf('${{') + 3, line.lastInde…
+     48|   const values = runInNewContext(expression, { fromJSON: JSON.parse, g…
+ ❯ test/dsh-onboarding-workflow-platform.test.ts:54:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  test/dsh-onboarding-workflow-platform.test.ts > actual from-zero YAML report for POSIX artifacts > admits and deduplicates only a fully released linux/x64 regression
+ FAIL  test/dsh-onboarding-workflow-platform.test.ts > actual from-zero YAML report for POSIX artifacts > admits and deduplicates only a fully released darwin/x64 regression
+ FAIL  test/dsh-onboarding-workflow-platform.test.ts > actual from-zero YAML report for POSIX artifacts > admits and deduplicates only a fully released darwin/arm64 regression
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ test/dsh-onboarding-workflow-platform.test.ts:68:73
+     66|   it.each(posix)('admits and deduplicates only a fully released %s/%s …
+     67|     const value = summary(platform, arch); const marker = `<!-- dsh-on…
+     68|     const result = await executeReport([value]); expect(result.created…
+       |                                                                         ^
+     69|     expect(result.created[0].body).toContain(marker); expect(result.cr…
+     70|     expect(result.readPaths).toEqual([`evidence/dsh-onboarding-${platf…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  test/dsh-onboarding-workflow-platform.test.ts > actual from-zero YAML report for POSIX artifacts > reports each architecture separately in one run while preserving the Windows marker
+AssertionError: expected [ Object{ owner: 'fixture', …(3) } ] to have a length of 4 but got 1
+
+- Expected
++ Received
+
+- 4
++ 1
+
+ ❯ test/dsh-onboarding-workflow-platform.test.ts:75:28
+     73|   it('reports each architecture separately in one run while preserving…
+     74|     const result = await executeReport(all.map(([platform, arch]) => s…
+     75|     expect(result.created).toHaveLength(4); expect(new Set(result.crea…
+       |                            ^
+     76|     expect(result.created[0].body).toContain(`dsh-onboarding-compat:0.…
+     77|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  test/dsh-onboarding-workflow-platform.test.ts > actual from-zero YAML report for POSIX artifacts > consumes only artifacts selected by the scheduled event
+AssertionError: expected [ Object{ owner: 'fixture', …(3) } ] to have a length of 3 but got 1
+
+- Expected
++ Received
+
+- 3
++ 1
+
+ ❯ test/dsh-onboarding-workflow-platform.test.ts:81:109
+     79|     const inputs = all.map(([platform, arch]) => summary(platform, arc…
+     80|     expect((await executeReport(inputs, { schedule: '7 5 * * 5' })).cr…
+     81|     const posixResult = await executeReport(inputs, { schedule: '7 6 *…
+       |                                                                                                             ^
+     82|     expect(posixResult.statPaths.every(file => !file.includes('win32')…
+     83|     expect((await executeReport(inputs, { schedule: 'unexpected' })).s…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 3 passed (9)
+   Start at  13:11:29
+   Duration  276ms (transform 48ms, setup 0ms, collect 57ms, tests 21ms, environment 0ms, prepare 75ms)
+
