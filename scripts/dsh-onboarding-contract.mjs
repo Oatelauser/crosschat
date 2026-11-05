@@ -1,4 +1,5 @@
 // Separate from the existing eight-check communication report and its hosted workflow.
+import { DEFAULT_DSH_NPM_TARGET, isDshNpmTarget } from './dsh-npm-target.mjs';
 export const DSH_ONBOARDING_TOOL = 'dsh-onboarding';
 export const DSH_ONBOARDING_SCOPE = Object.freeze({ officialNpmRuntime: true, officialPluginManager: true,
   ordinaryWebSessions: true, scriptedLocalModel: true, skillLifecycle: true, diagnostics: true, tui: true,
@@ -16,9 +17,9 @@ const record = (value) => value !== null && typeof value === 'object' && !Array.
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
 /** The caller supplies the already verified official artifact and, for a fresh child, its minted UUID. */
-export function validDshOnboardingReport(input, artifact, runId) {
-  if (!record(input) || !record(artifact) || artifact.name !== '@deepseek-ai/dsh' || typeof artifact.version !== 'string'
-    || input.schema !== 1 || input.tool !== DSH_ONBOARDING_TOOL || input.platform !== 'win32' || input.arch !== 'x64'
+export function validDshOnboardingReport(input, artifact, runId, target = DEFAULT_DSH_NPM_TARGET) {
+  if (!isDshNpmTarget(target?.platform, target?.arch) || !record(input) || !record(artifact) || artifact.name !== '@deepseek-ai/dsh' || typeof artifact.version !== 'string'
+    || input.schema !== 1 || input.tool !== DSH_ONBOARDING_TOOL || input.platform !== target.platform || input.arch !== target.arch
     || input.version !== artifact.version || !uuid.test(input.runId ?? '') || (runId !== undefined && input.runId !== runId)
     || !record(input.scope) || Object.keys(input.scope).length !== Object.keys(DSH_ONBOARDING_SCOPE).length
     || !Object.entries(DSH_ONBOARDING_SCOPE).every(([key, value]) => Object.hasOwn(input.scope, key) && input.scope[key] === value)
@@ -37,7 +38,7 @@ export function validDshOnboardingReport(input, artifact, runId) {
       || (input.category === 'infrastructure' && input.stage === 'cleanup' && input.check === 'owned-cleanup'));
 }
 
-export function validDshOnboardingProcessReport(input, artifact) {
-  return validDshOnboardingReport(input, artifact) && record(input.process)
+export function validDshOnboardingProcessReport(input, artifact, target = DEFAULT_DSH_NPM_TARGET) {
+  return validDshOnboardingReport(input, artifact, undefined, target) && record(input.process)
     && input.process.code === (input.status === 'passed' ? 0 : 1) && input.process.signal === null && input.process.timedOut === false;
 }

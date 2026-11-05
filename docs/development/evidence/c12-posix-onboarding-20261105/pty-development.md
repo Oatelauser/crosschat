@@ -11,3 +11,5 @@
 首轮七项真实Linux检查通过，见[报告](pty-linux-report.json)与逐项JSONL；覆盖真实TTY、Unicode输入/逐字节UTF-8输出、resize、原样argv、code7、Ctrl+C恢复、dispose幂等/抗TERM升级和启动失败。加入显式console导入修复[首次lint错误](lint-first.txt)后，仅一次最终源码复核也七项通过，见[最终报告](pty-linux-final-report.json)，两轮原始输出分别保留。Window ConPTY真实回归通过：[结果](windows-conpty.txt)、[事件](windows-conpty.jsonl)，Node22.23.4，尺寸/中文/恢复/child0/host0通过。
 
 最终单次[完整check](pty-check.txt)退出0：2803通过/11原有跳过、238文件通过/3跳过，lint/build/204模块689边通过；未启用CROSSCHAT_LIVE，未运行正式DSH。该终端工装切片验收后不重复重开；macOS实际运行、六阶段报告/原生shell与DSH从零仍待下一步。此次本地绿不追认main的Ubuntu来源确认失败已修复。
+
+下一批目标合同已按独立RED/GREEN推进：c0c56e7新增15项，其中14项因既有报告/attempt/sequence/回归marker固定Windows而失败、1项Windows默认/非法轴通过，[RED](platform-red.txt)保留。现目标参数复用四目标登记并在异步执行前快照；fresh报告、process、错误和summary绑定期望OS/架构，错目标不承认释放，不移除/开始下一安装，POSIX marker分架构，Windows旧marker保持。[定向GREEN](platform-green.txt)69/69（新增15＋原从零28＋原平台26）通过。正式onboarding脚本和主入口的POSIX阻断尚未接线/解除，未冒充原生六阶段通过；全量等待完整接线后再验，不将前一批2803项追认为本批完整检查。
