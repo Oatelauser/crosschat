@@ -12,7 +12,7 @@ import { createLocalDiscoveryService } from '../src/application/discovery/local.
 const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); });
 
-async function fixture(profile = 'web', version = '0.2.1-rc.5', serviceAvailable = true, freshServiceProxy = false) {
+async function fixture(profile = 'web', version = '0.2.1-rc.5', serviceAvailable = true, freshServiceProxy = false, useFactory = false) {
   const home = await mkdtemp(join(tmpdir(), 'crosschat-dsh-title-'));
   cleanup.push(() => rm(home, { recursive: true, force: true }));
   const id = 'root/+?雪', session = { id, header: { id, createdAt: 123, cwd: '/original' } };
@@ -57,7 +57,8 @@ async function fixture(profile = 'web', version = '0.2.1-rc.5', serviceAvailable
   const observed: unknown = await (await fetch(path, { headers })).json();
   const targetRevision = typeof observed === 'object' && observed !== null && 'targetRevision' in observed ? observed.targetRevision : 'not-implemented';
   const input = () => ({ name: 'after', instanceId: registration.instanceId, createdAt: session.header.createdAt, targetRevision });
-  const providers = createNativeOperationProviders({ dsh: { home } }).map((provider) => provider.providerId === 'dsh'
+  const registered = createNativeOperationProviders({ dsh: { home } });
+  const providers = useFactory ? registered : registered.map((provider) => provider.providerId === 'dsh'
     ? { ...provider, rename: createDshRenameAdapter({ home }) } : provider);
   const adopt = vi.fn(), renamed = vi.fn();
   const operations = createNativeSessionOperations({ discovery: createLocalDiscoveryService({ home }), providers, adopt, renamed });
@@ -133,6 +134,18 @@ describe('Harness exact live native title bridge', () => {
 });
 
 describe('production DSH title operation adapter', () => {
+  it('registers the qualified rc.5 Web adapter in the production provider plan', async () => {
+    const f = await fixture('web', '0.2.1-rc.5', true, true, true), described = await f.operations.describe(f.ref);
+    expect(described.actions.rename.state).toBe('executable');
+    expect(await f.operations.apply({ ref: f.ref, operation: 'rename', name: 'after', expectedRevision: described.revision })).toMatchObject({ kind: 'applied' });
+    expect(f.rename).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps rc.2 rename awaiting its own UI qualification while adoption remains executable', async () => {
+    const f = await fixture('web', '0.2.1-rc.2', true, true, true);
+    expect((await f.operations.describe(f.ref)).actions).toMatchObject({ adopt: { state: 'executable' }, rename: { state: 'needs-verification' } });
+    expect(f.rename).not.toHaveBeenCalled();
+  });
   it('qualifies a late loaded title service without replaying a write', async () => {
     const f = await fixture('web', '0.2.1-rc.5', false, true);
     expect((await f.operations.describe(f.ref)).actions.rename.state).toBe('needs-verification');
