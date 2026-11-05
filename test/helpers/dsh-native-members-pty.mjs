@@ -6,6 +6,8 @@ import process from 'node:process';
 import { createElement } from 'react';
 import { render, Text } from 'ink';
 import { createTcpApplication } from '../../dist/application/tcp/index.js';
+import { createTcpManagement } from '../../dist/application/tcp/management.js';
+import { createLocalDiscoveryService } from '../../dist/application/discovery/local.js';
 import { runTui } from '../../dist/tui/main.js';
 import { createTcpResources } from '../../dist/tui/resources/tcp.js';
 import { createResourceRegistry, defaultResources } from '../../dist/tui/resources/registry.js';
@@ -19,13 +21,17 @@ for (const path of [input, events, config.home]) {
 const record = (value) => appendFile(events, JSON.stringify(value) + '\n');
 const snapshot = () => ({ raw: process.stdin.isRaw === true, resize: process.stdout.listenerCount('resize'),
   listeners: Object.fromEntries(['SIGINT', 'SIGTERM', 'uncaughtException', 'unhandledRejection'].map((name) => [name, process.listenerCount(name)])) });
-const resources = createTcpResources({ tcp: createTcpApplication({ baseDir: join(config.home, '.crosschat') }) });
+const baseDir = join(config.home, '.crosschat'), tcp = createTcpApplication({ baseDir });
+const resources = createTcpResources({ tcp, management: createTcpManagement({ baseDir, catalog: tcp, discovery: createLocalDiscoveryService({ home: config.home }) }) });
 const bindings = new Map(Object.values(resources).map((binding) => [binding.resource.id, binding]));
 for (const binding of bindings.values()) {
-  const read = binding.adapter.read, check = binding.adapter.checkAction, mutate = binding.adapter.mutate;
+  const read = binding.adapter.read, check = binding.adapter.checkAction, mutate = binding.adapter.mutate, describe = binding.adapter.describeActions;
   binding.adapter.read = async (request) => { const page = await read(request); await record({ event: 'read', resource: binding.resource.id, page }); return page; };
   if (check) binding.adapter.checkAction = async (request) => {
     const result = await check(request); await record({ event: 'preview', action: request.action.id, result }); return result;
+  };
+  if (describe) binding.adapter.describeActions = async (request) => {
+    const result = await describe(request); await record({ event: 'availability', result }); return result;
   };
   if (mutate) binding.adapter.mutate = async (request) => {
     const result = await mutate(request); await record({ event: 'mutation', action: request.action.id, result }); return result;

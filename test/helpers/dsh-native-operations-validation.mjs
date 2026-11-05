@@ -21,7 +21,7 @@ assert.equal(process.env.CROSSCHAT_LIVE, '1');
 const reportPath = resolve(process.env.DSH_NATIVE_REPORT), runId = randomUUID();
 const report = { schema: 1, scope: 'DSH npm/Web local native manual membership and source recovery; no Desktop or rename acceptance',
   runId, platform: process.platform, arch: process.arch, node: process.version, checks: [], status: 'failed' };
-let fixture, broker, pty;
+let fixture, broker, pty, terminalApplicationFile;
 const nodes = [], sockets = [];
 const check = async (name, work) => { await work(); report.checks.push({ name, status: 'passed' }); process.stdout.write(name + '\n'); };
 try {
@@ -104,6 +104,7 @@ try {
     assert.equal((await requestMemberRemoveExact(conn, { sessionId: native.id, machine: machineId, tool: 'dsh', endpointType: 'host' })).ok, true);
     await pollDsh(async () => roster('native-a').length === 0, 'empty selected star before keyboard adoption');
     const input = join(fixture.root, 'terminal-input.json'), eventsPath = join(fixture.root, 'terminal-events.jsonl');
+    terminalApplicationFile = eventsPath;
     await writeFile(input, JSON.stringify({ home: fixture.env.HOME, owner: await readFile(join(fixture.root, '.fixture-owner'), 'utf8') }));
     const events = async () => { try { return (await readFile(eventsPath, 'utf8')).trim().split('\n').filter(Boolean).map((s) => JSON.parse(s)); } catch (error) { if (error.code === 'ENOENT') return []; throw error; } };
     const event = (predicate, after = 0) => pollDsh(async () => (await events()).slice(after).find(predicate), 'native membership terminal event', 10000);
@@ -113,7 +114,7 @@ try {
     const send = async (keys, expected) => { const mark = pty.output.length; pty.write(keys); if (expected) await pty.waitForOutput(expected, 10000, mark); };
     await pty.waitForOutput('C18-NATIVE-MEMBERS'); await send(':stars\r', 'native-a'); await send('/native-a\r', /1\/1/);
     await send('\r', '<members>'); await send('a', native.title);
-    await event((entry) => entry.event === 'preview' && entry.action === 'adopt-session' && entry.result.enabled);
+    await event((entry) => entry.event === 'availability' && entry.result['adopt-session']?.enabled);
     await send('a', '确认提交'); await send('\r', '已取消操作'); assert.equal(roster('native-a').length, 0);
     assert(!(await events()).some((entry) => entry.event === 'mutation'));
     await send('a', '确认提交'); await send('\t\r'); await event((entry) => entry.event === 'mutation' && entry.action === 'adopt-session');
@@ -134,6 +135,12 @@ try {
 } finally {
   const failures = [];
   try { await pty?.dispose(); } catch (error) { failures.push(error.message); }
+  if (terminalApplicationFile && !report.terminal) {
+    try {
+      const saved = join(dirname(reportPath), `terminal-failed-application-${runId}.jsonl`);
+      await copyFile(terminalApplicationFile, saved); report.failedTerminalApplication = saved;
+    } catch (error) { failures.push('Terminal evidence: ' + error.message); }
+  }
   for (const socket of sockets) try { socket.close(); } catch (error) { failures.push(error.message); }
   for (const state of nodes.reverse()) {
     try { await state.node.stop(); await state.running; } catch (error) { failures.push(error.message); }
