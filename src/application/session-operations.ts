@@ -73,6 +73,10 @@ export function createNativeSessionOperations(options: Options): NativeSessionOp
   async function read(ref: SessionRef, signal?: AbortSignal): Promise<DiscoverySession> {
     const response = parseDiscoveryResponse(await bounded(signal, (owned) => options.discovery.execute({ op: 'detail', providerId: ref.providerId,
       nativeId: ref.nativeId, endpointType: ref.endpointType, referenceKind: ref.referenceKind }, { contextId: ref.contextId, signal: owned })));
+    if (response.op === 'detail' && response.detail.item === null && response.detail.errors.length > 0
+      && response.detail.errors.every((error) => error.kind === 'unsupported' && error.source.providerId === ref.providerId)) {
+      throw new MultichatError('NATIVE_OPERATION_UNSUPPORTED', '当前来源的原生版本或协议尚不受支持。');
+    }
     if (response.op !== 'detail' || response.detail.completeness !== 'complete' || response.detail.errors.length > 0
       || !response.detail.item || sessionKey(response.detail.item.ref) !== sessionKey(ref)) throw new Error('Native target unavailable');
     return response.detail.item;
@@ -107,7 +111,10 @@ export function createNativeSessionOperations(options: Options): NativeSessionOp
           : { state: 'needs-verification', reason: '尚未验证此端点的原生改名接口及活会话同步。', nextStep: '先在原生工具中改名；刷新后星内名称会跟随原生名称。' };
       } catch { description.actions.rename = unavailable(); }
       return { description, item, provider, context, adoptionContext };
-    } catch { description.actions = { adopt: unavailable(), rename: unavailable() }; return { description }; }
+    } catch (error) {
+      const failed = () => error instanceof MultichatError && error.code === 'NATIVE_OPERATION_UNSUPPORTED' ? unsupported(error.message) : unavailable();
+      description.actions = { adopt: failed(), rename: failed() }; return { description };
+    }
   }
   return {
     describe: async (ref, signal) => (await prepare(ref, signal)).description,

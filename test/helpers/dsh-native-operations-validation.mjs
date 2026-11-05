@@ -22,6 +22,10 @@ const reportPath = resolve(process.env.DSH_NATIVE_REPORT), runId = randomUUID();
 const report = { schema: 1, scope: 'DSH npm/Web local native manual membership and source recovery; no Desktop or rename acceptance',
   runId, platform: process.platform, arch: process.arch, node: process.version, checks: [], status: 'failed' };
 let fixture, broker, pty, terminalApplicationFile;
+const redact = (value) => {
+  const text = fixture?.info?.token ? value.replaceAll(fixture.info.token, '[fixture-token-redacted]') : value;
+  return text.replace(/([?&]token=)[^&\s"'\\]+/g, '$1[fixture-token-redacted]');
+};
 const nodes = [], sockets = [];
 const check = async (name, work) => { await work(); report.checks.push({ name, status: 'passed' }); process.stdout.write(name + '\n'); };
 try {
@@ -151,12 +155,11 @@ try {
   }
   try { await broker?.stop(); } catch (error) { failures.push(error.message); }
   if (fixture) {
-    const redact = (s) => s.replace(/([a-f0-9]{64})/gi, '<redacted-64hex>');
     report.nativeLogs = { stdout: redact(fixture.logs.stdout), stderr: redact(fixture.logs.stderr) };
     try { await fixture.close(); } catch (error) { failures.push(error.message); }
     report.cleanup = fixture.cleanup;
   }
   if (failures.length) { report.status = 'failed'; report.cleanupFailures = failures; }
-  await writeFile(reportPath, JSON.stringify(report, null, 2) + '\n');
+  await writeFile(reportPath, redact(JSON.stringify(report, null, 2)) + '\n');
 }
 assert.equal(report.status, 'passed', report.error?.message ?? report.cleanupFailures?.join('; '));
