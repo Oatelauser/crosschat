@@ -115,8 +115,11 @@ try {
     await pty.waitForOutput('C18-NATIVE-MEMBERS'); await send(':stars\r', 'native-a'); await send('/native-a\r', /1\/1/);
     await send('\r', '按在线 / 下线分组'); await send('a', native.title);
     await event((entry) => entry.event === 'availability' && entry.result['adopt-session']?.enabled);
-    await send('a', '确认提交'); await send('\r', '已取消操作'); assert.equal(roster('native-a').length, 0);
+    await send('a', '确认提交');
+    const afterCancel = (await events()).length;
+    await send('\r', '已取消操作'); assert.equal(roster('native-a').length, 0);
     assert(!(await events()).some((entry) => entry.event === 'mutation'));
+    await event((entry) => entry.event === 'availability' && entry.result['adopt-session']?.enabled, afterCancel);
     await send('a', '确认提交'); await send('\t\r'); await event((entry) => entry.event === 'mutation' && entry.action === 'adopt-session');
     await pollDsh(async () => roster('native-a').length === 1, 'keyboard-adopted exact native roster');
     assert.equal(roster('native-a')[0].sessionId, native.id); assert.equal(roster('native-a')[0].endpointType, 'host'); assert.equal(roster('native-b').length, 1);
