@@ -1,0 +1,210 @@
+{
+  "schema": 1,
+  "scope": "Two same-host independent logical node processes, two formal npm/Web Hosts, two isolated terminal operators; not physical cross-machine acceptance",
+  "platform": "win32",
+  "node": "v22.23.4",
+  "root": "D:\\workspace\\CC\\cc-c22-qmJFFC",
+  "productHead": "47b33556f416d132c606347ca4d1b87eca1b0e08",
+  "checks": [
+    {
+      "name": "two-node-identities-and-remote-exact-source-isolation",
+      "status": "passed"
+    },
+    {
+      "name": "two-independent-terminal-observers-open-the-same-authoritative-star",
+      "status": "passed"
+    },
+    {
+      "name": "explicit-adoption-refreshes-both-operators-and-isolates-the-other-star",
+      "status": "passed"
+    },
+    {
+      "name": "permanent-membership-survives-two-temporary-window-claims-and-erase-release",
+      "status": "passed"
+    },
+    {
+      "name": "temporary-window-release-is-exact-and-independent-across-stars",
+      "status": "passed"
+    },
+    {
+      "name": "native-rename-syncs-both-operators-without-changing-the-other-node",
+      "status": "passed"
+    }
+  ],
+  "status": "failed",
+  "identities": [
+    {
+      "nodePid": 34676,
+      "hostPid": 26128,
+      "machineId": "11111111111111111111111111111111",
+      "nativeId": "session-fae25845-4cd6-4650-99af-89ae4822bfc9",
+      "instanceVersion": "0.2.1-rc.5"
+    },
+    {
+      "nodePid": 31944,
+      "hostPid": 37616,
+      "machineId": "22222222222222222222222222222222",
+      "nativeId": "session-4b163500-3607-4338-9ddd-c3351f003325",
+      "instanceVersion": "0.2.1-rc.5"
+    }
+  ],
+  "renamed": "C22Renamed1793891812129",
+  "error": {
+    "name": "TypeError",
+    "message": "Cannot read properties of undefined (reading 'throwIfAborted')",
+    "stack": "TypeError: Cannot read properties of undefined (reading 'throwIfAborted')\n    at assertDshActive (file:///D:/workspace/CC/cc-dsh-enhancement-20261105/dist/dsh/registry.js:47:50)\n    at readDshRegistrations (file:///D:/workspace/CC/cc-dsh-enhancement-20261105/dist/dsh/registry.js:64:5)\n    at withLostDshTitleReceipt (file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-faults.mjs:11:28)\n    at file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:113:35\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async check (file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:27:32)\n    at async file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:111:2"
+  },
+  "terminals": [
+    {
+      "index": 0,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    },
+    {
+      "index": 1,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "index": 0,
+      "pid": 34676,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "messages": [
+        {
+          "event": "ready",
+          "pid": 34676,
+          "machineId": "11111111111111111111111111111111",
+          "pipes": [
+            {
+              "starId": "c22-alpha",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-d74d359b-aa3b-4a53-b4dd-d3ddc0768183-11111111-c22-alpha"
+            },
+            {
+              "starId": "c22-beta",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-d74d359b-aa3b-4a53-b4dd-d3ddc0768183-11111111-c22-beta"
+            }
+          ]
+        },
+        {
+          "event": "stopped",
+          "pid": 34676,
+          "failures": []
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "index": 1,
+      "pid": 31944,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "messages": [
+        {
+          "event": "ready",
+          "pid": 31944,
+          "machineId": "22222222222222222222222222222222",
+          "pipes": [
+            {
+              "starId": "c22-alpha",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-d74d359b-aa3b-4a53-b4dd-d3ddc0768183-22222222-c22-alpha"
+            },
+            {
+              "starId": "c22-beta",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-d74d359b-aa3b-4a53-b4dd-d3ddc0768183-22222222-c22-beta"
+            }
+          ]
+        },
+        {
+          "event": "stopped",
+          "pid": 31944,
+          "failures": []
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "hosts": [
+    {
+      "pid": 37616,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "logs": {
+        "stdout": "dsh web: http://127.0.0.1:54715/?token=[fixture-token-redacted]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "pid": 26128,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "logs": {
+        "stdout": "dsh web: http://127.0.0.1:63404/?token=[fixture-token-redacted]\n",
+        "stderr": ""
+      }
+    }
+  ],
+  "cleanupFailures": [],
+  "unsafe": false,
+  "outerRemoved": true
+}

@@ -8,7 +8,7 @@ import {URL} from 'node:url';
 import {readDshRegistrations} from '../../dist/dsh/registry.js';
 
 export async function withLostDshTitleReceipt({home,expectedPid},use){
- const registrations=await readDshRegistrations({home});assert.equal(registrations.length,1);
+ const registrations=await readDshRegistrations({home},globalThis.AbortSignal.timeout(5000));assert.equal(registrations.length,1);
  const registration=registrations[0];assert.equal(registration.pid,expectedPid);
  const file=join(home,'.crosschat','dsh','instances',registration.instanceId+'.json'),original=await readFile(file);
  const controllers=new Set(),pending=new Set(),cleanupFailures=[];let dropping=true,redirected=false,proxyURL,primaryError;
