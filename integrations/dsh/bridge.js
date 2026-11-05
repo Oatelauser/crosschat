@@ -104,9 +104,10 @@ export async function mountDshBridge(ctx, host, options = {}) {
   };
   const titleTargets = new WeakMap();
   const titleTarget = (agent) => {
-    let revision = titleTargets.get(agent);
-    if (revision === undefined) { revision = randomUUID(); titleTargets.set(agent, revision); }
-    return revision;
+    const service = ctx.get('sessionTitle');
+    let current = titleTargets.get(agent);
+    if (current === undefined || current.service !== service) { current = { service, revision: randomUUID() }; titleTargets.set(agent, current); }
+    return current.revision;
   };
   const titleAvailability = () => profile === 'web' && ['0.2.1-rc.2', '0.2.1-rc.5'].includes(runtimeVersion)
     && typeof ctx.get('sessionTitle')?.rename === 'function' ? { state: 'executable' }

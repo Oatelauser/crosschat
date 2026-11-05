@@ -24,8 +24,9 @@ async function fixture(profile = 'web', version = '0.2.1-rc.5', serviceAvailable
     if (target !== session) throw new Error('Must use exact live session');
     title = name; return { title: name };
   });
+  const titleService = { rename };
   const ctx = { agents: { get: (key: string) => agents.get(key), roots: () => [...agents.values()] },
-    get: (key: string) => key === 'profileContext' ? { name: profile } : key === 'sessionTitle' && available ? { rename }
+    get: (key: string) => key === 'profileContext' ? { name: profile } : key === 'sessionTitle' && available ? titleService
       : key === 'sessionProjections' ? { stateOf: () => title } : undefined,
     effect: () => undefined,
   };
@@ -126,7 +127,9 @@ describe('production DSH title operation adapter', () => {
     const f = await fixture(), description = await f.operations.describe(f.ref); f.setService(false);
     const missing = await f.operations.describe(f.ref); expect(missing.actions.adopt.state).toBe('executable'); expect(missing.actions.rename.state).not.toBe('executable');
     expect(await f.operations.apply({ ref: f.ref, operation: 'rename', name: 'after', expectedRevision: description.revision })).toMatchObject({ kind: 'rejected' });
-    f.setService(true); expect((await f.operations.describe(f.ref)).actions.rename.state).toBe('executable'); expect(f.rename).not.toHaveBeenCalled();
+    f.setService(true); expect((await f.operations.describe(f.ref)).actions.rename.state).toBe('executable');
+    expect(await f.operations.apply({ ref: f.ref, operation: 'rename', name: 'after', expectedRevision: description.revision })).toMatchObject({ kind: 'rejected' });
+    expect(f.rename).not.toHaveBeenCalled();
   });
 
   it('does not inherit native Web rename capability in the Desktop endpoint', async () => {
