@@ -1,0 +1,8 @@
+
+D:\workspace\CC\cc-dsh-enhancement-20261105\test\helpers\dsh-enhancement-faults.mjs
+  24:278  error  'Buffer' is not defined         no-undef
+  25:45   error  'Buffer' is not defined         no-undef
+  40:22   error  Unsafe usage of ThrowStatement  no-unsafe-finally
+
+✖ 3 problems (3 errors, 0 warnings)
+
