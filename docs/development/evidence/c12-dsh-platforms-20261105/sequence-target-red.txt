@@ -1,0 +1,61 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-platform-20261105
+
+ ❯ test/dsh-platform-ci.test.ts (16 tests | 1 failed) 30ms
+   ✓ DSH npm platform boundaries > verifies the same pinned official npm archive for linux/x64 without claiming native execution 2ms
+   ✓ DSH npm platform boundaries > verifies the same pinned official npm archive for darwin/x64 without claiming native execution 0ms
+   ✓ DSH npm platform boundaries > verifies the same pinned official npm archive for darwin/arm64 without claiming native execution 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: linux/arm64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: win32/arm64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: freebsd/x64 0ms
+   ✓ DSH npm platform boundaries > keeps unplanned npm targets rejected: darwin/ia32 0ms
+   ✓ DSH npm platform boundaries > keeps Windows Desktop artifacts isolated from npm target expansion: linux/x64 0ms
+   ✓ DSH npm platform boundaries > keeps Windows Desktop artifacts isolated from npm target expansion: darwin/arm64 0ms
+   ✓ fresh DSH communication reports for an explicit runner target > accepts only the freshly executed linux/x64 report for that runner 5ms
+   ✓ fresh DSH communication reports for an explicit runner target > accepts only the freshly executed darwin/x64 report for that runner 3ms
+   ✓ fresh DSH communication reports for an explicit runner target > accepts only the freshly executed darwin/arm64 report for that runner 3ms
+   ✓ fresh DSH communication reports for an explicit runner target > rejects a foreign win32/x64 report on a Linux x64 runner and keeps the failure identity 3ms
+   ✓ fresh DSH communication reports for an explicit runner target > rejects a foreign darwin/x64 report on a Linux x64 runner and keeps the failure identity 3ms
+   ✓ fresh DSH communication reports for an explicit runner target > rejects a foreign linux/arm64 report on a Linux x64 runner and keeps the failure identity 3ms
+   × DSH communication sequence keeps the runner identity across builds > accepts two independent Linux x64 attempts and reports the actual runner target 7ms
+     → expected { schema: 1, …(10) } to match object { Object (platform, arch, ...) }
+(30 matching properties omitted from actual)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-platform-ci.test.ts > DSH communication sequence keeps the runner identity across builds > accepts two independent Linux x64 attempts and reports the actual runner target
+AssertionError: expected { schema: 1, …(10) } to match object { Object (platform, arch, ...) }
+(30 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "arch": "x64",
+    "classification": {
+-     "kind": "compatible",
++     "kind": "infrastructure",
+      "notify": false,
+    },
+-   "installationCleanup": "removed",
+-   "platform": "linux",
++   "installationCleanup": "incomplete",
++   "platform": "win32",
+  }
+
+ ❯ test/dsh-platform-ci.test.ts:83:20
+     81|       remove: async (installation: { root: string }) => { removed.push…
+     82|     }, { platform: 'linux', arch: 'x64' });
+     83|     expect(result).toMatchObject({ platform: 'linux', arch: 'x64', cla…
+       |                    ^
+     84|     expect(result.baseline.runId).not.toBe(result.candidate.runId);
+     85|     expect(removed).toEqual(['baseline', 'candidate']);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 15 passed (16)
+   Start at  10:04:12
+   Duration  324ms (transform 64ms, setup 0ms, collect 93ms, tests 30ms, environment 0ms, prepare 75ms)
+

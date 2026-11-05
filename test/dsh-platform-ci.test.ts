@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { parseDshDesktopWindowsManifest, parseDshNpmManifest, runDshProbeAttempt } from '../scripts/dsh-compat-ci.mjs';
+import { parseDshDesktopWindowsManifest, parseDshNpmManifest, runDshBuildSequence, runDshProbeAttempt } from '../scripts/dsh-compat-ci.mjs';
 
 const pinned = JSON.parse(await readFile(new URL('../scripts/dsh-compat-baseline.json', import.meta.url), 'utf8'));
 const roots: string[] = [];
@@ -66,4 +66,22 @@ describe('fresh DSH communication reports for an explicit runner target', () => 
         });
       expect(result).toMatchObject({ status: 'failed', category: 'infrastructure', stage: 'probe-report', platform: 'linux', arch: 'x64' });
     });
+});
+
+describe('DSH communication sequence keeps the runner identity across builds', () => {
+  it('accepts two independent Linux x64 attempts and reports the actual runner target', async () => {
+    const baseline = parseDshNpmManifest(pinned.package, 'linux', 'x64');
+    const candidate = { ...baseline, version: '0.2.1-rc.5' };
+    const removed: string[] = [];
+    const result = await runDshBuildSequence({ baseline, candidate }, {
+      install: async (_artifact: unknown, label: string) => ({ root: label }),
+      probe: async (_installation: unknown, artifact: { version: string }) => ({
+        ...communicationReport('linux', 'x64', artifact.version), process: { code: 0, signal: null, timedOut: false },
+      }),
+      remove: async (installation: { root: string }) => { removed.push(installation.root); },
+    }, { platform: 'linux', arch: 'x64' });
+    expect(result).toMatchObject({ platform: 'linux', arch: 'x64', classification: { kind: 'compatible', notify: false }, installationCleanup: 'removed' });
+    expect(result.baseline.runId).not.toBe(result.candidate.runId);
+    expect(removed).toEqual(['baseline', 'candidate']);
+  });
 });
