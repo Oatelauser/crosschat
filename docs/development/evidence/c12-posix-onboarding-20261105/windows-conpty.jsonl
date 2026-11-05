@@ -1,0 +1,13 @@
+{"at":1793854604937,"direction":"host","event":"ready","pid":36228,"columns":80,"rows":24}
+{"at":1793854604941,"direction":"host","event":"output","data":"G1s/OTAwMWgbWz8xMDA0aA=="}
+{"at":1793854604970,"direction":"host","event":"output","data":"G1s/MjVsG1syShtbbRtbSHsiZXZlbnQiOiJkaW1lbnNpb25zIiwiY29sdW1ucyI6ODAsInJvd3MiOjI0fQ0KG10wO0Q6XHdvcmtzcGFjZVxDQ1xjYy1kc2gtcGxhdGZvcm0tMjAyNjExMDVcbm9kZV9tb2R1bGVzXC5jYWNoZVxjMTItbmF0aXZlLTIwMjYxMTA1XHdpbmRvd3Mtbm9kZTIyXG5vZGUtdjIyLjIzLjQtd2luLXg2NFxub2RlLmV4ZQcbWz8yNWg="}
+{"at":1793854604970,"direction":"driver","op":"resize","columns":40,"rows":12}
+{"at":1793854604974,"direction":"host","event":"resized","columns":40,"rows":12}
+{"at":1793854604974,"direction":"host","event":"output","data":"G1s4OzEyOzQwdA=="}
+{"at":1793854604991,"direction":"host","event":"output","data":"G1s/MjVsG1tIeyJldmVudCI6ImRpbWVuc2lvbnMiLCJjb2x1bW5zIjo4MCwicm93cyI6MjR9G1tLDQp7ImV2ZW50IjoiZGltZW5zaW9ucyIsImNvbHVtbnMiOjQwLCJyb3dzIjoxMn0bW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLG1s1OzFIG1s/MjVo"}
+{"at":1793854604992,"direction":"driver","op":"write","data":"5Lit5paH8J+YgA=="}
+{"at":1793854605007,"direction":"host","event":"output","data":"eyJldmVudCI6ImlucHV0IiwidGV4dCI6IuS4reaWh/CfmIAifQ0K"}
+{"at":1793854605007,"direction":"driver","op":"write","data":"RE9ORQ=="}
+{"at":1793854605014,"direction":"host","event":"output","data":"G1s/OTAwMWwbWz8xMDA0bHsiZXZlbnQiOiJpbnB1dCIsInRleHQiOiLkuK3mlofwn5iARE9ORSJ9DQp7ImV2ZW50IjoicmVzdG9yZWQiLCJyYXciOmZhbHNlfQ0K"}
+{"at":1793854605018,"direction":"host","event":"exit","code":0}
+{"at":1793854605096,"direction":"driver","event":"host-exit","code":0}

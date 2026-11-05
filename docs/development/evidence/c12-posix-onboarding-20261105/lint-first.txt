@@ -1,0 +1,5 @@
+D:\workspace\CC\cc-dsh-onboarding-posix-20261105\test\helpers\tui-posix-pty-selftest.mjs
+  14:64  error  'console' is not defined  no-undef
+  86:3   error  'console' is not defined  no-undef
+
+✖ 2 problems (2 errors, 0 warnings)

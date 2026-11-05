@@ -28,6 +28,7 @@ const pty = await launchPty({
   args: ['--input-type=module', '-e', script],
   columns: 80,
   rows: 24,
+  logPath: process.argv[2],
 });
 try {
   await pty.waitForOutput('"columns":80,"rows":24');

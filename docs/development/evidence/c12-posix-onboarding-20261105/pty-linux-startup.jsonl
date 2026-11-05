@@ -1,0 +1,2 @@
+{"at":1793854576002,"direction":"host","event":"error","message":"[Errno 2] No such file or directory: '/mnt/d/workspace/CC/cc-dsh-onboarding-posix-20261105/node_modules/.cache/c12-posix-pty-20261105/green-first/missing-executable'"}
+{"at":1793854576013,"direction":"driver","event":"host-exit","code":1}

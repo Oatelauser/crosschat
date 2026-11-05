@@ -9,21 +9,26 @@ import { clearTimeout, setTimeout } from 'node:timers';
 import { fileURLToPath } from 'node:url';
 
 const hostScript = join(dirname(fileURLToPath(import.meta.url)), 'tui-pty-host.ps1');
+const posixHostScript = join(dirname(fileURLToPath(import.meta.url)), 'tui-pty-host.py');
 
-/** Windows ConPTY fixture host. All inputs and outputs belong to the spawned fixture. */
+/** Native PTY fixture host. All inputs and outputs belong to the spawned fixture. */
 export async function launchPty({ executable, args = [], cwd = process.cwd(), columns = 80, rows = 24, env = {}, logPath }) {
-  if (process.platform !== 'win32') throw new Error('ConPTY fixtures require Windows.');
+  if (!['win32', 'linux', 'darwin'].includes(process.platform)) throw new Error('Unplanned PTY fixture platform.');
+  const windows = process.platform === 'win32';
+  const hostName = windows ? 'ConPTY' : 'POSIX PTY';
   const evidenceDirectory = logPath ? undefined : mkdtempSync(join(tmpdir(), 'crosschat-tui-pty-'));
   logPath ??= join(evidenceDirectory, 'events.jsonl');
   const environment = { ...process.env, ...env };
   delete environment.CROSSCHAT_LIVE;
-  const host = spawn('pwsh', [
+  const hostArgs = windows ? [
     '-NoLogo', '-NoProfile', '-NonInteractive', '-File', hostScript,
     '-Executable', executable,
     '-ArgumentsBase64', Buffer.from(JSON.stringify(args)).toString('base64'),
     '-WorkingDirectory', cwd,
     '-Columns', String(columns), '-Rows', String(rows),
-  ], { cwd, env: environment, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  ] : ['-I', '-u', posixHostScript, Buffer.from(JSON.stringify({ executable, args, cwd, columns, rows })).toString('base64')];
+  const host = spawn(windows ? 'pwsh' : 'python3', hostArgs,
+    { cwd, env: environment, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
 
   let output = '';
   let stderr = '';
@@ -80,7 +85,7 @@ export async function launchPty({ executable, args = [], cwd = process.cwd(), co
       const line = lines.slice(0, newline).trim();
       lines = lines.slice(newline + 1);
       if (!line) continue;
-      try { event(JSON.parse(line)); } catch (error) { fail(new Error(`Invalid ConPTY host event: ${line}`, { cause: error })); }
+      try { event(JSON.parse(line)); } catch (error) { fail(new Error(`Invalid ${hostName} host event: ${line}`, { cause: error })); }
     }
   });
   host.stderr.setEncoding('utf8');
@@ -93,7 +98,7 @@ export async function launchPty({ executable, args = [], cwd = process.cwd(), co
     hostClosed = true;
     record({ direction: 'driver', event: 'host-exit', code: hostCode });
     output += decoder.end();
-    if (!childExit || hostCode !== 0) fail(new Error(`ConPTY host exited ${hostCode}: ${stderr || lines || 'no child exit event'}`));
+    if (!childExit || hostCode !== 0) fail(new Error(`${hostName} host exited ${hostCode}: ${stderr || lines || 'no child exit event'}`));
     notify();
     if (failure) rejectExit(failure);
     else resolveExit({ code: childExit.code, hostCode });
@@ -109,7 +114,7 @@ export async function launchPty({ executable, args = [], cwd = process.cwd(), co
   try {
     await Promise.race([
       ready,
-      new Promise((_, reject) => { startupTimer = setTimeout(() => reject(new Error(`ConPTY startup timed out: ${stderr}`)), 20_000); }),
+      new Promise((_, reject) => { startupTimer = setTimeout(() => reject(new Error(`${hostName} startup timed out: ${stderr}`)), 20_000); }),
     ]);
   } catch (error) {
     host.stdin.end();
@@ -132,7 +137,7 @@ export async function launchPty({ executable, args = [], cwd = process.cwd(), co
         const wait = { pattern, from, resolve, reject, timer: undefined };
         wait.timer = setTimeout(() => {
           pending.delete(wait);
-          reject(new Error(`ConPTY output did not match ${String(pattern)}; log: ${logPath}; output tail: ${output.slice(-2000)}`));
+          reject(new Error(`${hostName} output did not match ${String(pattern)}; log: ${logPath}; output tail: ${output.slice(-2000)}`));
         }, timeout);
         pending.add(wait);
       });

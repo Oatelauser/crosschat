@@ -1,0 +1,1 @@
+{"result":"PASS","childPid":36228,"dimensions":[[80,24],[40,12]],"input":"中文😀","restored":true,"childCode":0,"hostCode":0,"log":"node_modules/.cache/c12-posix-pty-20261105/windows-conpty.jsonl"}
