@@ -1,0 +1,170 @@
+{
+  "zip": "dsh-onboarding-win32-x64.zip",
+  "members": [
+    {
+      "file": "baseline-0f91BB/discovery.json",
+      "bytes": 1675,
+      "sha256": "95ef255fa31bab36f507e0cd3855a6c2154dd1a7da4ee1605dd207c49a78a7d2"
+    },
+    {
+      "file": "baseline-0f91BB/doctor-json.json",
+      "bytes": 1287,
+      "sha256": "9d5c70ffbae0ee94662ad305f0bd7c1fd9a43e06473f850463dd748d2be6c6ae"
+    },
+    {
+      "file": "baseline-0f91BB/doctor-text.json",
+      "bytes": 1185,
+      "sha256": "6ef8733db933845751812a8dc78575e2bf0745e85122a864842ece338095f5e9"
+    },
+    {
+      "file": "baseline-0f91BB/install-skills.json",
+      "bytes": 461,
+      "sha256": "fa38b7f97904f88fbdc86f642817d47f912311dd51a19b5dcae7b1dcda04dce3"
+    },
+    {
+      "file": "baseline-0f91BB/native-skill-and-identity.json",
+      "bytes": 7690,
+      "sha256": "2f7821c4d91b24c7443dfe3433d99340d9bb7ee093f4db5c58dd918ed1bdd59a"
+    },
+    {
+      "file": "baseline-0f91BB/process.json",
+      "bytes": 554,
+      "sha256": "30dd89bf1ed68539d6268250a3ea74cb0441ed28b7836ba5b9c8d3b7a71cce75"
+    },
+    {
+      "file": "baseline-0f91BB/remove-plugin.json",
+      "bytes": 238,
+      "sha256": "28b1ae8156e278de3d8177c099bcb5df04f655c0cafb646d69b754940f82a5bc"
+    },
+    {
+      "file": "baseline-0f91BB/report.json",
+      "bytes": 1667,
+      "sha256": "2c840b3fd38340507452215717c48a68178558af64f06134890adb3cdf8a2bc8"
+    },
+    {
+      "file": "baseline-0f91BB/retained-profile-chat-hashes.json",
+      "bytes": 746,
+      "sha256": "f3330ecef4b6bf6aab6ffba488522282d06dfbfbb413d56e0cacb2e17a0d40bb"
+    },
+    {
+      "file": "baseline-0f91BB/runtime-logs.json",
+      "bytes": 91,
+      "sha256": "53d1184f23b8b78fcb0d2b5c5dfec64faa1918daed5afa77dbb7232a2c05969e"
+    },
+    {
+      "file": "baseline-0f91BB/tui-application.jsonl",
+      "bytes": 43914,
+      "sha256": "75787ec12072db8104be3367f48ca0f03025786a6070058000fddfc312555cac"
+    },
+    {
+      "file": "baseline-0f91BB/tui-terminal.jsonl",
+      "bytes": 201668,
+      "sha256": "8b3e3210977f66049c5578d863d9bbe2bd9b84324133b6df6a5f09603f0d055c"
+    },
+    {
+      "file": "baseline-0f91BB/uninstall-crosschat-data.json",
+      "bytes": 1893,
+      "sha256": "d2e3c4252231b71427384144b7ab517e48c4fbac74621d109a325425e7533c7d"
+    },
+    {
+      "file": "baseline-0f91BB/update-skills.json",
+      "bytes": 461,
+      "sha256": "0b3d0c0da22d34665f80980f303fa74de4fb474c42391609897d260f6d7b8419"
+    },
+    {
+      "file": "baseline-install.json",
+      "bytes": 116267,
+      "sha256": "77720aca69503e014c056b232e9001165c233bf609b9fc6df988b6531b4ae642"
+    },
+    {
+      "file": "baseline-package-lock.json",
+      "bytes": 408815,
+      "sha256": "e2dc957c19d9704aae458b499d610ea65774b0bbcbc16fe744aa01d1e4b759bf"
+    },
+    {
+      "file": "candidate-6kFfc3/discovery.json",
+      "bytes": 1675,
+      "sha256": "75fc3d2d84d03870745660a87102ccd7180664ba675879db91dcbee73a5ce9ca"
+    },
+    {
+      "file": "candidate-6kFfc3/doctor-json.json",
+      "bytes": 1287,
+      "sha256": "37a89d812559b71c7b668e64e5602c710b06f142cafbe187a12c324dca458b6d"
+    },
+    {
+      "file": "candidate-6kFfc3/doctor-text.json",
+      "bytes": 1185,
+      "sha256": "db1e0fdb08591619053898633794f4feec73d5935b7f61e0553102a01ccee6de"
+    },
+    {
+      "file": "candidate-6kFfc3/install-skills.json",
+      "bytes": 461,
+      "sha256": "e0249666bbde7c296aacb773f8f4af2970de166d6d3073d59fc979497a97dd38"
+    },
+    {
+      "file": "candidate-6kFfc3/native-skill-and-identity.json",
+      "bytes": 7690,
+      "sha256": "56719a1467069df65644336c71648f036eaf833dd1ab66cd239a19248f2a0354"
+    },
+    {
+      "file": "candidate-6kFfc3/process.json",
+      "bytes": 555,
+      "sha256": "7c36e9af70c38d54f8b1b6849c248f78565a24462baaef05a5d55be2df4ecb7d"
+    },
+    {
+      "file": "candidate-6kFfc3/remove-plugin.json",
+      "bytes": 238,
+      "sha256": "e81bc1ff1f9bc51ef841b355bc9632e3c5088c135658466281f4afebcfaa1b99"
+    },
+    {
+      "file": "candidate-6kFfc3/report.json",
+      "bytes": 1668,
+      "sha256": "0af17f7f924bee566a29fcdde7da09c6d43805b04d7880c3c9277bd60f89a962"
+    },
+    {
+      "file": "candidate-6kFfc3/retained-profile-chat-hashes.json",
+      "bytes": 746,
+      "sha256": "3f8b4cb1def4acd827a9dd20656e85b09b1f41655c3aa8751a67564235747be2"
+    },
+    {
+      "file": "candidate-6kFfc3/runtime-logs.json",
+      "bytes": 91,
+      "sha256": "f36d3ffbb1bcc709603cfb80132e7a921c268d58c6dddcff70ceddf514b2e5c1"
+    },
+    {
+      "file": "candidate-6kFfc3/tui-application.jsonl",
+      "bytes": 43914,
+      "sha256": "e6ef7ea72706448e9a35365520884e86a0ca49a5a67e656c76b38f4d8b20ea3b"
+    },
+    {
+      "file": "candidate-6kFfc3/tui-terminal.jsonl",
+      "bytes": 201514,
+      "sha256": "997bd99e6e2dbef66ac312982d33429d8e6bfcca72e77aebef4505b04c6462ca"
+    },
+    {
+      "file": "candidate-6kFfc3/uninstall-crosschat-data.json",
+      "bytes": 1893,
+      "sha256": "cf738e5ba93728dfaef3a46b8ba45fc24a23638bf2512418a610150bf8fa970b"
+    },
+    {
+      "file": "candidate-6kFfc3/update-skills.json",
+      "bytes": 461,
+      "sha256": "0ee016f6c26c368e4db2b681c9f0dee2b7a3deef2507c70a940e0d4183018db5"
+    },
+    {
+      "file": "candidate-install.json",
+      "bytes": 116453,
+      "sha256": "6076505bc9ae64b8c40f0e9fef2a37d78b73974ab9b0894e61ce892d4409a52d"
+    },
+    {
+      "file": "candidate-package-lock.json",
+      "bytes": 409254,
+      "sha256": "0196342423daaab5483de7a08e04e89e4a5c33cf0d46a5d970a3574401f4a411"
+    },
+    {
+      "file": "summary.json",
+      "bytes": 5355,
+      "sha256": "6e525ceab8a97bb2f62270b1726a02cba8baca282c668013c74e4a686f625282"
+    }
+  ]
+}

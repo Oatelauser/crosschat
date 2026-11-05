@@ -1,0 +1,369 @@
+{
+  "observedAt": "2026-11-05T06:27:32.909Z",
+  "run": {
+    "id": 41978059319,
+    "url": "https://github.com/Oatelauser/crosschat/actions/runs/41978059319",
+    "head": "0d0f91a81bbb7264cd2bca830013d64b40fa2c0a",
+    "branch": "codex/dsh-posix-onboarding-20261105",
+    "event": "workflow_dispatch",
+    "attempt": 1,
+    "status": "completed",
+    "conclusion": "success"
+  },
+  "jobs": [
+    {
+      "id": 127081474929,
+      "name": "probe (windows-latest, win32, x64)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-11-05T06:05:14Z",
+      "completedAt": "2026-11-05T06:27:05Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-python@v6",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Verify actual runner target",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify native POSIX terminal before installing DSH",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm run build",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run node scripts/dsh-compat-ci.mjs",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 127081475116,
+      "name": "probe (macos-15, darwin, arm64)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-11-05T06:05:14Z",
+      "completedAt": "2026-11-05T06:08:44Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-python@v6",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify actual runner target",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify native POSIX terminal before installing DSH",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm run build",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run node scripts/dsh-compat-ci.mjs",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-python@v6",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 127081475202,
+      "name": "probe (macos-15-intel, darwin, x64)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-11-05T06:05:16Z",
+      "completedAt": "2026-11-05T06:14:40Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-python@v6",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify actual runner target",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify native POSIX terminal before installing DSH",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm run build",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run node scripts/dsh-compat-ci.mjs",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-python@v6",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 127081475219,
+      "name": "probe (ubuntu-24.04, linux, x64)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-11-05T06:05:13Z",
+      "completedAt": "2026-11-05T06:07:56Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-python@v6",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify actual runner target",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify native POSIX terminal before installing DSH",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm run build",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run node scripts/dsh-compat-ci.mjs",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-python@v6",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 127089220870,
+      "name": "report",
+      "status": "completed",
+      "conclusion": "skipped",
+      "startedAt": "2026-11-05T06:27:06Z",
+      "completedAt": "2026-11-05T06:27:05Z",
+      "steps": []
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 13393607153,
+      "name": "dsh-onboarding-win32-x64",
+      "bytes": 231149,
+      "digest": "sha256:e90469858b9ef40a23c80ac386003cd4598782a8ec0d72463c6e2ea01e74b0b2",
+      "expired": false
+    },
+    {
+      "id": 13392861470,
+      "name": "dsh-onboarding-darwin-arm64",
+      "bytes": 229593,
+      "digest": "sha256:efaa0edff350b6defe6b92d1200f84cef2181d38455457c2ff74ae040b0fd450",
+      "expired": false
+    },
+    {
+      "id": 13392389346,
+      "name": "dsh-onboarding-linux-x64",
+      "bytes": 227548,
+      "digest": "sha256:7edd24b935b61e323daa02ab52fa455a373cc735cd7bacd58a4617be2f6de354",
+      "expired": false
+    },
+    {
+      "id": 13392214897,
+      "name": "dsh-onboarding-darwin-x64",
+      "bytes": 233035,
+      "digest": "sha256:cfed22357757f4de71d46e89c51f8fe3a897a434ca94e91b2e2095508a6edb3f",
+      "expired": false
+    }
+  ]
+}

@@ -1,0 +1,136 @@
+{
+  "schema": 1,
+  "head": "0d0f91a81bbb7264cd2bca830013d64b40fa2c0a",
+  "run": 41978059319,
+  "attempt": 1,
+  "nativeJobsSuccess": 4,
+  "branchReportSkipped": true,
+  "versionsPerTarget": 2,
+  "checksPerVersion": 6,
+  "uniqueAttemptIds": 8,
+  "zipMembers": 156,
+  "allArtifactGithubDigestsMatch": true,
+  "installationAndCacheRemoved": true,
+  "runtimeAndRegistrationReleased": true,
+  "forced": false,
+  "retry": false,
+  "notify": false,
+  "inspectionNote": "Initial independent package-lock URL assertion was incorrect: the installer first verifies the official tarball and installs its SRI-keyed local file. The preserved lock contains file:../sha256(integrity).tgz; corrected verification checks that exact value and the original SRI. No artifact bytes or production code changed.",
+  "artifacts": [
+    {
+      "file": "native-completed.json",
+      "bytes": 10005,
+      "sha256": "28d7d984e1e56755096d4598c420c9834c9affb01df09b0edaf7ee83e61d056e"
+    },
+    {
+      "file": "native-observations.json",
+      "bytes": 57400,
+      "sha256": "f69c5dde7d64cff7e962c1d1fe17b8381729fa0325589bbef445889268e08566"
+    },
+    {
+      "file": "native-download-index.json",
+      "bytes": 17198,
+      "sha256": "f901f701c6cc4093ad6214a8bb0debd7d07e868d04edbf267e80de1cb863398a"
+    },
+    {
+      "file": "native-verification.json",
+      "bytes": 17960,
+      "sha256": "0581415c5b86f1507f6c931239ba06d3fd11ec26b27b86d4575bc34646494d33"
+    },
+    {
+      "file": "verify-native.mjs",
+      "bytes": 7276,
+      "sha256": "870f572c2c0b97063f96fd36f956a05d7654e40b56afa30fe38c3fac05bdacd2"
+    },
+    {
+      "file": "extract-native.py",
+      "bytes": 1752,
+      "sha256": "4138de29f5cd65f2e7f7fb74ee02935be12d831d641df452ff24486fe824fbcb"
+    },
+    {
+      "file": "zip-inventory.py",
+      "bytes": 1811,
+      "sha256": "1374937b7754342f0b1ac9105b04cf0e4594617de723a36f13835dee1ce575ef"
+    },
+    {
+      "file": "dsh-onboarding-win32-x64.zip",
+      "bytes": 231149,
+      "sha256": "e90469858b9ef40a23c80ac386003cd4598782a8ec0d72463c6e2ea01e74b0b2"
+    },
+    {
+      "file": "dsh-onboarding-darwin-arm64.zip",
+      "bytes": 229593,
+      "sha256": "efaa0edff350b6defe6b92d1200f84cef2181d38455457c2ff74ae040b0fd450"
+    },
+    {
+      "file": "dsh-onboarding-linux-x64.zip",
+      "bytes": 227548,
+      "sha256": "7edd24b935b61e323daa02ab52fa455a373cc735cd7bacd58a4617be2f6de354"
+    },
+    {
+      "file": "dsh-onboarding-darwin-x64.zip",
+      "bytes": 233035,
+      "sha256": "cfed22357757f4de71d46e89c51f8fe3a897a434ca94e91b2e2095508a6edb3f"
+    },
+    {
+      "file": "native-job-127081474929.txt",
+      "bytes": 16495,
+      "sha256": "acd5ef93bb1e6436dd8ee187a7bab8e9b7ae5583b62bcc4d5fa60aff0d7304b1"
+    },
+    {
+      "file": "native-job-127081475116.txt",
+      "bytes": 22538,
+      "sha256": "2201d6cc1c4cf99b458415a4f56ce02ee42ed9ec3cd264827e1a6c6e0623a94b"
+    },
+    {
+      "file": "native-job-127081475202.txt",
+      "bytes": 22326,
+      "sha256": "9b91d54588898f45a698dea397d98949b5907e4b5019e7e6891949b5758305c7"
+    },
+    {
+      "file": "native-job-127081475219.txt",
+      "bytes": 22204,
+      "sha256": "b9d8d3d9899ec7edb6d3f91e19131057ef9e9e435cdadd1c3ecd6bd9d307d897"
+    },
+    {
+      "file": "win32-x64-inspection/index.json",
+      "bytes": 5632,
+      "sha256": "5027750b2f74e9f78df8f7a60637703dee2efb50585e01537ef0516f66ae643d"
+    },
+    {
+      "file": "win32-x64-inspection/summary.json",
+      "bytes": 5355,
+      "sha256": "6e525ceab8a97bb2f62270b1726a02cba8baca282c668013c74e4a686f625282"
+    },
+    {
+      "file": "linux-x64-inspection/index.json",
+      "bytes": 6963,
+      "sha256": "a07598a0c5e255ff96f978abdc83595bfd50a3f791d8cbecf927f5df71fba1d3"
+    },
+    {
+      "file": "linux-x64-inspection/summary.json",
+      "bytes": 5630,
+      "sha256": "2d7863c8fafe726b65724a4735e94914aeaf0995af0ed65ec3c0b3d3cc0000a8"
+    },
+    {
+      "file": "darwin-x64-inspection/index.json",
+      "bytes": 6964,
+      "sha256": "85646aa32d74bcd6d7fe0e643ac5f86c2a002b2a187f0925d0b9c538382c20e5"
+    },
+    {
+      "file": "darwin-x64-inspection/summary.json",
+      "bytes": 5648,
+      "sha256": "b530bcfc893432d78af9682b29300e608a547fcec97f20ec0559d2529bdce621"
+    },
+    {
+      "file": "darwin-arm64-inspection/index.json",
+      "bytes": 6966,
+      "sha256": "56d39891a4cf2070728b9e37afa9226b45ffa1eae9cde3d3d8f7b451840d8949"
+    },
+    {
+      "file": "darwin-arm64-inspection/summary.json",
+      "bytes": 5648,
+      "sha256": "6d1b48220ef921ba0837735023c3201c44e78fedb8b399211448d800d5944b28"
+    }
+  ]
+}

@@ -1,0 +1,210 @@
+{
+  "zip": "dsh-onboarding-darwin-arm64.zip",
+  "members": [
+    {
+      "file": "baseline-FJLdQs/discovery.json",
+      "bytes": 1465,
+      "sha256": "23b8d239b6ef207ceffa35089f8c13522025124bbe7eebcf4752fd5fe982bfe1"
+    },
+    {
+      "file": "baseline-FJLdQs/doctor-json.json",
+      "bytes": 1212,
+      "sha256": "334f8fa696c0bf42fa8a1b81b872ce09557d38833a58086ee963886eb9ca1061"
+    },
+    {
+      "file": "baseline-FJLdQs/doctor-text.json",
+      "bytes": 1104,
+      "sha256": "56134f2090d54c0e57fd12ac71787faa8d2aaf938ce53ad4ecbdd97721cc62b5"
+    },
+    {
+      "file": "baseline-FJLdQs/install-skills.json",
+      "bytes": 348,
+      "sha256": "086ece79d6b4af5dc3718f3afcebc842e6f4ad62262d47c3029a56ef693fdb7c"
+    },
+    {
+      "file": "baseline-FJLdQs/native-skill-and-identity.json",
+      "bytes": 7496,
+      "sha256": "61ad9f4eb197dab11c57aff7a4f6d820dc21f21b3231425371035f0163b2caff"
+    },
+    {
+      "file": "baseline-FJLdQs/process.json",
+      "bytes": 550,
+      "sha256": "61506001a0df09bb41521286991e9211ffa05e5c24721fc6b51e0aff4fbaed75"
+    },
+    {
+      "file": "baseline-FJLdQs/remove-plugin.json",
+      "bytes": 237,
+      "sha256": "5d334af1d6a14de7a06f4a3e78d649cffe899b5c628431deb215069813fb5521"
+    },
+    {
+      "file": "baseline-FJLdQs/report.json",
+      "bytes": 1813,
+      "sha256": "be4509dfd6523d6b04adfe0cad43b75fb5fec734808fbe8185ed071e4878099d"
+    },
+    {
+      "file": "baseline-FJLdQs/retained-profile-chat-hashes.json",
+      "bytes": 1068,
+      "sha256": "2525a81843419c8d29d27fddac8f4ba266c1b25ba059c2a25d51bf626cec38e8"
+    },
+    {
+      "file": "baseline-FJLdQs/runtime-logs.json",
+      "bytes": 91,
+      "sha256": "7f54d9495b4395d2a6f56222a2881af014fbda11ccbe9e4c572728b246c6c4a0"
+    },
+    {
+      "file": "baseline-FJLdQs/tui-application.jsonl",
+      "bytes": 42199,
+      "sha256": "fcf5bd0f06da8b1131b86925506e347627dad79dadd858976de5282ace829d41"
+    },
+    {
+      "file": "baseline-FJLdQs/tui-terminal.jsonl",
+      "bytes": 202651,
+      "sha256": "3fa7cca5f868077656cffcd2ff2c50b0bdac2788303a658eeb5d5d8868eb78c7"
+    },
+    {
+      "file": "baseline-FJLdQs/uninstall-crosschat-data.json",
+      "bytes": 1449,
+      "sha256": "ee32d19724ef9222993038bb979c41b5f12516cfa67929c157584531c00c57ae"
+    },
+    {
+      "file": "baseline-FJLdQs/update-skills.json",
+      "bytes": 348,
+      "sha256": "b05b06638f3bbd2e1e1878ac7689e191329eb5af0a4cfcd439203860d0d6f562"
+    },
+    {
+      "file": "baseline-install.json",
+      "bytes": 115489,
+      "sha256": "fedb71a7942b0d2edca26795c99b9d6d4d0c657017dc9082d69f662898774794"
+    },
+    {
+      "file": "baseline-package-lock.json",
+      "bytes": 408759,
+      "sha256": "1f7d497e6775fc9654834fba4d9cf1f5e881226d28dc7bb7026b57ee7e4f39d3"
+    },
+    {
+      "file": "candidate-install.json",
+      "bytes": 115759,
+      "sha256": "e8614a97f31637d5c96834d2d02138448a18d44e4674c004dac12755d3ce98d0"
+    },
+    {
+      "file": "candidate-package-lock.json",
+      "bytes": 409198,
+      "sha256": "1797af063e38229163bc31d30b07aa8fbd637f6e9da1bfc388a23b6b545f28fe"
+    },
+    {
+      "file": "candidate-uYAmfo/doctor-json.json",
+      "bytes": 1212,
+      "sha256": "2f54c1059cb6ba580734d0f677b58127430223d29db5b65427e8a8657c0135c8"
+    },
+    {
+      "file": "candidate-uYAmfo/discovery.json",
+      "bytes": 1465,
+      "sha256": "5a29aac6b711e266d0dcf6c02115e6eddb41aac165917fca91d2cc68b561da86"
+    },
+    {
+      "file": "candidate-uYAmfo/doctor-text.json",
+      "bytes": 1104,
+      "sha256": "7d37667ce55b2f59047ad53fcc5efc10f516d9201a1a735aec95f394f76efb92"
+    },
+    {
+      "file": "candidate-uYAmfo/install-skills.json",
+      "bytes": 348,
+      "sha256": "b2587c576e908d00f48736e991e44baeb851ce4afad35b48476368d88a23009f"
+    },
+    {
+      "file": "candidate-uYAmfo/native-skill-and-identity.json",
+      "bytes": 7496,
+      "sha256": "0e057365e4430cd737e521dca73d900f1f5d1433a429b637dd1d144843026c56"
+    },
+    {
+      "file": "candidate-uYAmfo/process.json",
+      "bytes": 551,
+      "sha256": "8cb3f0ab1b5d076d5be219dedb0e8d2383436772b9f944543ebd31c6604c58ec"
+    },
+    {
+      "file": "candidate-uYAmfo/remove-plugin.json",
+      "bytes": 238,
+      "sha256": "ce97c6744fc7ae8b411e04e3082c8cc95929dbd8dbb613eefd2d79442b9bf87b"
+    },
+    {
+      "file": "candidate-uYAmfo/retained-profile-chat-hashes.json",
+      "bytes": 1068,
+      "sha256": "f0eb9429f91717b3acd17877c4ba21e87ac6e13cd276e27197fd6aba66dc5530"
+    },
+    {
+      "file": "candidate-uYAmfo/report.json",
+      "bytes": 1814,
+      "sha256": "211321e8b6432860bbff088c83311922fc5668b236152bc893c122e816a56ac3"
+    },
+    {
+      "file": "candidate-uYAmfo/runtime-logs.json",
+      "bytes": 91,
+      "sha256": "e6311e2be7c7b7f1e2984724b2243a2a5989650015fa672691ecbf8233c06a15"
+    },
+    {
+      "file": "candidate-uYAmfo/tui-application.jsonl",
+      "bytes": 42199,
+      "sha256": "7879de64bdbb8b4575917bc62fa51fe601399837a48205012a752ddd4938cf14"
+    },
+    {
+      "file": "candidate-uYAmfo/tui-terminal.jsonl",
+      "bytes": 210150,
+      "sha256": "33f4e6a260f9be3416a21fd1521e8590f4c22cad99ecbba95dcd5ff4995d6184"
+    },
+    {
+      "file": "candidate-uYAmfo/uninstall-crosschat-data.json",
+      "bytes": 1449,
+      "sha256": "05d092877bc38c64fa200e02b0408ad1f50996130c3b3184d34398c5c3b6ca6a"
+    },
+    {
+      "file": "candidate-uYAmfo/update-skills.json",
+      "bytes": 348,
+      "sha256": "5beb239b0d4be1909177def6b8d2b36688b24a6a41dbe22bd9875c4f949d2dbb"
+    },
+    {
+      "file": "summary.json",
+      "bytes": 5648,
+      "sha256": "6d1b48220ef921ba0837735023c3201c44e78fedb8b399211448d800d5944b28"
+    },
+    {
+      "file": "terminal-preflight/control.jsonl",
+      "bytes": 543,
+      "sha256": "bdb4ba603bf8c7bdb54137b30d1a84db949c3174edce087e602c186c95016fb1"
+    },
+    {
+      "file": "terminal-preflight/arguments.jsonl",
+      "bytes": 1272,
+      "sha256": "4eede8db31bc56f171ba57f85319777fd04c08d7f56574559627c11baf5e61c4"
+    },
+    {
+      "file": "terminal-preflight/dispose.jsonl",
+      "bytes": 444,
+      "sha256": "e0165e79927af84673a7400102c483edca22dea64ed3821f38d26e4a93fc6e73"
+    },
+    {
+      "file": "terminal-preflight/force.jsonl",
+      "bytes": 442,
+      "sha256": "ed39e2f81767b3fc9ca350d227b6f6c1cabacdce953ad4fd0c256d465cbdfd0a"
+    },
+    {
+      "file": "terminal-preflight/nonzero.jsonl",
+      "bytes": 375,
+      "sha256": "1dcff291db6fd65d3bb642664ef6f378b015aac1922c069f143fd95787d2995d"
+    },
+    {
+      "file": "terminal-preflight/startup.jsonl",
+      "bytes": 282,
+      "sha256": "e7ac2d4b7ae0e5be964436a076a69f5f4ad95fefa84980f7db4540c53b2ada44"
+    },
+    {
+      "file": "terminal-preflight/report.json",
+      "bytes": 840,
+      "sha256": "5418fcb8b44bbad76e41eab74ad0eefc5df2ae3288aeae2aa915228016689ee4"
+    },
+    {
+      "file": "terminal-preflight/terminal.jsonl",
+      "bytes": 1052,
+      "sha256": "3fab238a0ef11d6c57d2b7114c7ec12e27cb6912b9eb7dacfaa840773d2d5ead"
+    }
+  ]
+}

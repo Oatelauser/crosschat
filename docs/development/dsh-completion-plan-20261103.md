@@ -1,5 +1,7 @@
 # DSH 优先完成计划
 
+2026-11-05当前：用户批准的推送、[草稿PR #4](https://github.com/Oatelauser/crosschat/pull/4)与C11四目标首验已完成；原生41978059319（0d0f91a、attempt1）四probe success，每目标rc.2/rc.5各六阶段、四artifact/156成员、八fresh UUID及正常清理已验收，无强停/retry/Issue。首轮普通Windows/macOS失败保留；e1f4d00仅修测试fixture启动/等待预算，本地125定向/完整2827通过11原有跳过，修复后普通41980572627三job全绿。[终验与边界](evidence/c12-onboarding-hosted-20261105/review.md)保留，实际原生源码/工作流10个blob与修复head相同。最终证据/指南提交只含文档，其普通CI按PR另核实；main合入与新POSIX从零周五14:07仍待明确决定，不发布。此DSH npm/Web四目标六阶段切片移出活动实施，25父项/11CI索引保持，main a1e6464原公共故障与C00跨机问题不追认完成。
+
 2026-11-04本地集成候选已准备：按用户明确移交，在独立worktree合并完整开发线与固定main，32处冲突全部解决；[候选说明](dsh-local-integration-20261104.md)保留取舍、首败与验证。完整check **2761通过/11原有跳过，235文件通过/3跳过，204模块688边**；相对开发线只纳入main既有POSIX产品修复，DSH桥/工装、CLI/TUI及类型源码未改，包元数据继承main已有1.13.1，不代表新发布。当前等待本地候选审阅，尚未推送/PR/main合并/Actions，C05/C11托管及C04完整生命周期仍开放。C04本轮根已由用户删除并只读核实，DSH安装保留。下方历次结果按各自证据理解。
 
 2026-11-04最新：C04正式Desktop同一UI会话的原生身份→精确Host→自然退出与当前登记撤销/聊天保留切片已验收，[摘要](evidence/c04-natural-exit-20261104/validation.json)，代码be4e743。完整check **2753通过/11原有跳过、234文件通过/3跳过、204模块688边**。这是固定0.2.1-rc.2在测试观察器下的本地结果；C2可信runner接线、官方安装/卸载、独立干净runner、默认publisher策略和托管仍保留。八轮全部原始结果已脱敏归档；用户软件保留，本轮总根自动删除被拒后由用户手动删除，已只读核实不存在，清理关闭，处置见摘要。C11 Windows npm/Web本地从零切片与C09 Windows基础TUI已完成，不重开它们的已验收实施项。

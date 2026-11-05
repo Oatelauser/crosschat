@@ -1,0 +1,565 @@
+{
+  "schema": 1,
+  "verifiedAt": "2026-11-05T06:30:47.120Z",
+  "executedHead": "0d0f91a81bbb7264cd2bca830013d64b40fa2c0a",
+  "run": 41978059319,
+  "attempt": 1,
+  "targets": [
+    {
+      "target": {
+        "platform": "darwin",
+        "arch": "arm64"
+      },
+      "members": 41,
+      "checksPerVersion": 6,
+      "classification": {
+        "kind": "compatible",
+        "notify": false
+      },
+      "installationCleanup": "removed",
+      "npmCache": {
+        "path": "/private/tmp/crosschat-dsh-ci-MYA9CH/npm-cache",
+        "external": false,
+        "disposition": "removed-with-task-root"
+      },
+      "attempts": [
+        {
+          "label": "baseline",
+          "version": "0.2.1-rc.2",
+          "integrity": "sha512-tvY+yhfKRifthbqPe/OK0AYxM5ZkvqfYq/jMYgJcEUxiRRL1Vwra3Ti5TB6AXgSWQdiPHYh/Vp6SJa9yHwMNuw==",
+          "runId": "18743eec-bd83-46ef-a7ba-7ed652f25db8",
+          "checks": [
+            "official-profile-plugin-and-skill-installation",
+            "native-skill-load-and-current-source",
+            "native-roundtrip-and-typed-discovery",
+            "same-source-diagnostics-and-real-terminal",
+            "skill-update-and-profile-preserving-shutdown",
+            "official-plugin-and-crosschat-removal-with-owned-cleanup"
+          ],
+          "source": {
+            "status": "identified",
+            "sourceTool": "dsh",
+            "basis": "native",
+            "association": "verified",
+            "scope": "instance",
+            "shouldAsk": false
+          },
+          "cleanup": {
+            "runtimeStopped": true,
+            "registrationRemoved": true,
+            "removed": true,
+            "forced": false
+          },
+          "terminal": {
+            "kind": "posix-pty",
+            "cleanup": {
+              "event": "cleanup",
+              "forced": false,
+              "groupReleased": true
+            }
+          },
+          "process": {
+            "code": 0,
+            "signal": null,
+            "timedOut": false
+          }
+        },
+        {
+          "label": "candidate",
+          "version": "0.2.1-rc.5",
+          "integrity": "sha512-WkyJZv4zl9sCAxSzRctGm58m0rilGqwR6pniBiLOz5CPDfHfDuAUicg0AAazXI7oj/Cph6/cjNTncA/rpLTXpw==",
+          "runId": "5c981eae-52e7-4e83-9c6e-ee47b5b0f2c5",
+          "checks": [
+            "official-profile-plugin-and-skill-installation",
+            "native-skill-load-and-current-source",
+            "native-roundtrip-and-typed-discovery",
+            "same-source-diagnostics-and-real-terminal",
+            "skill-update-and-profile-preserving-shutdown",
+            "official-plugin-and-crosschat-removal-with-owned-cleanup"
+          ],
+          "source": {
+            "status": "identified",
+            "sourceTool": "dsh",
+            "basis": "native",
+            "association": "verified",
+            "scope": "instance",
+            "shouldAsk": false
+          },
+          "cleanup": {
+            "runtimeStopped": true,
+            "registrationRemoved": true,
+            "removed": true,
+            "forced": false
+          },
+          "terminal": {
+            "kind": "posix-pty",
+            "cleanup": {
+              "event": "cleanup",
+              "forced": false,
+              "groupReleased": true
+            }
+          },
+          "process": {
+            "code": 0,
+            "signal": null,
+            "timedOut": false
+          }
+        }
+      ],
+      "terminalPreflight": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "node": "v22.23.4",
+        "scope": "Owned POSIX PTY fixtures; no DSH or user session",
+        "status": "passed",
+        "checks": [
+          {
+            "name": "real-tty-unicode-resize-and-normal-exit",
+            "status": "passed"
+          },
+          {
+            "name": "literal-argv-and-split-utf8-output",
+            "status": "passed"
+          },
+          {
+            "name": "nonzero-child-exit-remains-visible",
+            "status": "passed"
+          },
+          {
+            "name": "raw-control-input-restores-and-exits",
+            "status": "passed"
+          },
+          {
+            "name": "dispose-reaps-owned-child-and-is-idempotent",
+            "status": "passed"
+          },
+          {
+            "name": "dispose-escalates-an-owned-term-resistant-child",
+            "status": "passed"
+          },
+          {
+            "name": "startup-failure-does-not-return-a-controller",
+            "status": "passed"
+          }
+        ]
+      }
+    },
+    {
+      "target": {
+        "platform": "darwin",
+        "arch": "x64"
+      },
+      "members": 41,
+      "checksPerVersion": 6,
+      "classification": {
+        "kind": "compatible",
+        "notify": false
+      },
+      "installationCleanup": "removed",
+      "npmCache": {
+        "path": "/private/tmp/crosschat-dsh-ci-aujZ17/npm-cache",
+        "external": false,
+        "disposition": "removed-with-task-root"
+      },
+      "attempts": [
+        {
+          "label": "baseline",
+          "version": "0.2.1-rc.2",
+          "integrity": "sha512-tvY+yhfKRifthbqPe/OK0AYxM5ZkvqfYq/jMYgJcEUxiRRL1Vwra3Ti5TB6AXgSWQdiPHYh/Vp6SJa9yHwMNuw==",
+          "runId": "c1e4c0f9-b07a-4ef0-8ae1-12f74e4c022e",
+          "checks": [
+            "official-profile-plugin-and-skill-installation",
+            "native-skill-load-and-current-source",
+            "native-roundtrip-and-typed-discovery",
+            "same-source-diagnostics-and-real-terminal",
+            "skill-update-and-profile-preserving-shutdown",
+            "official-plugin-and-crosschat-removal-with-owned-cleanup"
+          ],
+          "source": {
+            "status": "identified",
+            "sourceTool": "dsh",
+            "basis": "native",
+            "association": "verified",
+            "scope": "instance",
+            "shouldAsk": false
+          },
+          "cleanup": {
+            "runtimeStopped": true,
+            "registrationRemoved": true,
+            "removed": true,
+            "forced": false
+          },
+          "terminal": {
+            "kind": "posix-pty",
+            "cleanup": {
+              "event": "cleanup",
+              "forced": false,
+              "groupReleased": true
+            }
+          },
+          "process": {
+            "code": 0,
+            "signal": null,
+            "timedOut": false
+          }
+        },
+        {
+          "label": "candidate",
+          "version": "0.2.1-rc.5",
+          "integrity": "sha512-WkyJZv4zl9sCAxSzRctGm58m0rilGqwR6pniBiLOz5CPDfHfDuAUicg0AAazXI7oj/Cph6/cjNTncA/rpLTXpw==",
+          "runId": "b36a9f3b-64ac-46c7-ad16-0963cac5ba2f",
+          "checks": [
+            "official-profile-plugin-and-skill-installation",
+            "native-skill-load-and-current-source",
+            "native-roundtrip-and-typed-discovery",
+            "same-source-diagnostics-and-real-terminal",
+            "skill-update-and-profile-preserving-shutdown",
+            "official-plugin-and-crosschat-removal-with-owned-cleanup"
+          ],
+          "source": {
+            "status": "identified",
+            "sourceTool": "dsh",
+            "basis": "native",
+            "association": "verified",
+            "scope": "instance",
+            "shouldAsk": false
+          },
+          "cleanup": {
+            "runtimeStopped": true,
+            "registrationRemoved": true,
+            "removed": true,
+            "forced": false
+          },
+          "terminal": {
+            "kind": "posix-pty",
+            "cleanup": {
+              "event": "cleanup",
+              "forced": false,
+              "groupReleased": true
+            }
+          },
+          "process": {
+            "code": 0,
+            "signal": null,
+            "timedOut": false
+          }
+        }
+      ],
+      "terminalPreflight": {
+        "platform": "darwin",
+        "arch": "x64",
+        "node": "v22.23.2",
+        "scope": "Owned POSIX PTY fixtures; no DSH or user session",
+        "status": "passed",
+        "checks": [
+          {
+            "name": "real-tty-unicode-resize-and-normal-exit",
+            "status": "passed"
+          },
+          {
+            "name": "literal-argv-and-split-utf8-output",
+            "status": "passed"
+          },
+          {
+            "name": "nonzero-child-exit-remains-visible",
+            "status": "passed"
+          },
+          {
+            "name": "raw-control-input-restores-and-exits",
+            "status": "passed"
+          },
+          {
+            "name": "dispose-reaps-owned-child-and-is-idempotent",
+            "status": "passed"
+          },
+          {
+            "name": "dispose-escalates-an-owned-term-resistant-child",
+            "status": "passed"
+          },
+          {
+            "name": "startup-failure-does-not-return-a-controller",
+            "status": "passed"
+          }
+        ]
+      }
+    },
+    {
+      "target": {
+        "platform": "linux",
+        "arch": "x64"
+      },
+      "members": 41,
+      "checksPerVersion": 6,
+      "classification": {
+        "kind": "compatible",
+        "notify": false
+      },
+      "installationCleanup": "removed",
+      "npmCache": {
+        "path": "/tmp/crosschat-dsh-ci-1SAUGB/npm-cache",
+        "external": false,
+        "disposition": "removed-with-task-root"
+      },
+      "attempts": [
+        {
+          "label": "baseline",
+          "version": "0.2.1-rc.2",
+          "integrity": "sha512-tvY+yhfKRifthbqPe/OK0AYxM5ZkvqfYq/jMYgJcEUxiRRL1Vwra3Ti5TB6AXgSWQdiPHYh/Vp6SJa9yHwMNuw==",
+          "runId": "03180b97-a71a-43cf-a629-f06d65ceef88",
+          "checks": [
+            "official-profile-plugin-and-skill-installation",
+            "native-skill-load-and-current-source",
+            "native-roundtrip-and-typed-discovery",
+            "same-source-diagnostics-and-real-terminal",
+            "skill-update-and-profile-preserving-shutdown",
+            "official-plugin-and-crosschat-removal-with-owned-cleanup"
+          ],
+          "source": {
+            "status": "identified",
+            "sourceTool": "dsh",
+            "basis": "native",
+            "association": "verified",
+            "scope": "instance",
+            "shouldAsk": false
+          },
+          "cleanup": {
+            "runtimeStopped": true,
+            "registrationRemoved": true,
+            "removed": true,
+            "forced": false
+          },
+          "terminal": {
+            "kind": "posix-pty",
+            "cleanup": {
+              "event": "cleanup",
+              "forced": false,
+              "groupReleased": true
+            }
+          },
+          "process": {
+            "code": 0,
+            "signal": null,
+            "timedOut": false
+          }
+        },
+        {
+          "label": "candidate",
+          "version": "0.2.1-rc.5",
+          "integrity": "sha512-WkyJZv4zl9sCAxSzRctGm58m0rilGqwR6pniBiLOz5CPDfHfDuAUicg0AAazXI7oj/Cph6/cjNTncA/rpLTXpw==",
+          "runId": "d1cb8546-c8e8-4b9c-bb8a-3b8aa96dae13",
+          "checks": [
+            "official-profile-plugin-and-skill-installation",
+            "native-skill-load-and-current-source",
+            "native-roundtrip-and-typed-discovery",
+            "same-source-diagnostics-and-real-terminal",
+            "skill-update-and-profile-preserving-shutdown",
+            "official-plugin-and-crosschat-removal-with-owned-cleanup"
+          ],
+          "source": {
+            "status": "identified",
+            "sourceTool": "dsh",
+            "basis": "native",
+            "association": "verified",
+            "scope": "instance",
+            "shouldAsk": false
+          },
+          "cleanup": {
+            "runtimeStopped": true,
+            "registrationRemoved": true,
+            "removed": true,
+            "forced": false
+          },
+          "terminal": {
+            "kind": "posix-pty",
+            "cleanup": {
+              "event": "cleanup",
+              "forced": false,
+              "groupReleased": true
+            }
+          },
+          "process": {
+            "code": 0,
+            "signal": null,
+            "timedOut": false
+          }
+        }
+      ],
+      "terminalPreflight": {
+        "platform": "linux",
+        "arch": "x64",
+        "node": "v22.23.4",
+        "scope": "Owned POSIX PTY fixtures; no DSH or user session",
+        "status": "passed",
+        "checks": [
+          {
+            "name": "real-tty-unicode-resize-and-normal-exit",
+            "status": "passed"
+          },
+          {
+            "name": "literal-argv-and-split-utf8-output",
+            "status": "passed"
+          },
+          {
+            "name": "nonzero-child-exit-remains-visible",
+            "status": "passed"
+          },
+          {
+            "name": "raw-control-input-restores-and-exits",
+            "status": "passed"
+          },
+          {
+            "name": "dispose-reaps-owned-child-and-is-idempotent",
+            "status": "passed"
+          },
+          {
+            "name": "dispose-escalates-an-owned-term-resistant-child",
+            "status": "passed"
+          },
+          {
+            "name": "startup-failure-does-not-return-a-controller",
+            "status": "passed"
+          }
+        ]
+      }
+    },
+    {
+      "target": {
+        "platform": "win32",
+        "arch": "x64"
+      },
+      "members": 33,
+      "checksPerVersion": 6,
+      "classification": {
+        "kind": "compatible",
+        "notify": false
+      },
+      "installationCleanup": "removed",
+      "npmCache": {
+        "path": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\crosschat-dsh-ci-sG1HK6\\npm-cache",
+        "external": false,
+        "disposition": "removed-with-task-root"
+      },
+      "attempts": [
+        {
+          "label": "baseline",
+          "version": "0.2.1-rc.2",
+          "integrity": "sha512-tvY+yhfKRifthbqPe/OK0AYxM5ZkvqfYq/jMYgJcEUxiRRL1Vwra3Ti5TB6AXgSWQdiPHYh/Vp6SJa9yHwMNuw==",
+          "runId": "511aeffd-7659-4637-82a1-7992df9666cb",
+          "checks": [
+            "official-profile-plugin-and-skill-installation",
+            "native-skill-load-and-current-source",
+            "native-roundtrip-and-typed-discovery",
+            "same-source-diagnostics-and-real-terminal",
+            "skill-update-and-profile-preserving-shutdown",
+            "official-plugin-and-crosschat-removal-with-owned-cleanup"
+          ],
+          "source": {
+            "status": "identified",
+            "sourceTool": "dsh",
+            "basis": "native",
+            "association": "verified",
+            "scope": "instance",
+            "shouldAsk": false
+          },
+          "cleanup": {
+            "runtimeStopped": true,
+            "registrationRemoved": true,
+            "removed": true,
+            "forced": false
+          },
+          "process": {
+            "code": 0,
+            "signal": null,
+            "timedOut": false
+          }
+        },
+        {
+          "label": "candidate",
+          "version": "0.2.1-rc.5",
+          "integrity": "sha512-WkyJZv4zl9sCAxSzRctGm58m0rilGqwR6pniBiLOz5CPDfHfDuAUicg0AAazXI7oj/Cph6/cjNTncA/rpLTXpw==",
+          "runId": "3b6db807-b286-4d89-92ce-f5d3c509a1f6",
+          "checks": [
+            "official-profile-plugin-and-skill-installation",
+            "native-skill-load-and-current-source",
+            "native-roundtrip-and-typed-discovery",
+            "same-source-diagnostics-and-real-terminal",
+            "skill-update-and-profile-preserving-shutdown",
+            "official-plugin-and-crosschat-removal-with-owned-cleanup"
+          ],
+          "source": {
+            "status": "identified",
+            "sourceTool": "dsh",
+            "basis": "native",
+            "association": "verified",
+            "scope": "instance",
+            "shouldAsk": false
+          },
+          "cleanup": {
+            "runtimeStopped": true,
+            "registrationRemoved": true,
+            "removed": true,
+            "forced": false
+          },
+          "process": {
+            "code": 0,
+            "signal": null,
+            "timedOut": false
+          }
+        }
+      ]
+    }
+  ],
+  "sourceCorrelation": [
+    {
+      "file": "scripts/dsh-compat-ci.mjs",
+      "executed": "8b803ba13c464fad40959c30c4401a9507c1a185",
+      "current": "8b803ba13c464fad40959c30c4401a9507c1a185"
+    },
+    {
+      "file": "scripts/dsh-onboarding.mjs",
+      "executed": "875cbf0f3ffca5f21ba9ee12a718371e7abaad40",
+      "current": "875cbf0f3ffca5f21ba9ee12a718371e7abaad40"
+    },
+    {
+      "file": "scripts/dsh-onboarding-contract.mjs",
+      "executed": "4e0289e180628b4c33567f57de5dbdf29671675d",
+      "current": "4e0289e180628b4c33567f57de5dbdf29671675d"
+    },
+    {
+      "file": "test/helpers/tui-pty-driver.mjs",
+      "executed": "9496131e534582e776a0c3c8d6f653e8ebe36109",
+      "current": "9496131e534582e776a0c3c8d6f653e8ebe36109"
+    },
+    {
+      "file": "test/helpers/tui-pty-host.py",
+      "executed": "d407d113168018a09c5b5eb23b641cd1ae27598f",
+      "current": "d407d113168018a09c5b5eb23b641cd1ae27598f"
+    },
+    {
+      "file": "test/helpers/dsh-live-fixture.mjs",
+      "executed": "6efb6328429a51e74d7527c0997cc97b2f70ad87",
+      "current": "6efb6328429a51e74d7527c0997cc97b2f70ad87"
+    },
+    {
+      "file": "test/helpers/dsh-tui-pty-validation.mjs",
+      "executed": "c2eb75bd7a11765892333b7528636e756e9a4b27",
+      "current": "c2eb75bd7a11765892333b7528636e756e9a4b27"
+    },
+    {
+      "file": "test/helpers/dsh-owned-node.mjs",
+      "executed": "6e49385d58fcfd80266ca29849bdd24a1e8068a4",
+      "current": "6e49385d58fcfd80266ca29849bdd24a1e8068a4"
+    },
+    {
+      "file": "skills/crosschat/SKILL.md",
+      "executed": "9c8f85532bb3e76b81f32daddd69ab0231056b90",
+      "current": "9c8f85532bb3e76b81f32daddd69ab0231056b90"
+    },
+    {
+      "file": ".github/workflows/dsh-onboarding-compat.yml",
+      "executed": "0e1dcd9cb17d6ff45e853e7899cefb78ed18c457",
+      "current": "0e1dcd9cb17d6ff45e853e7899cefb78ed18c457"
+    }
+  ],
+  "srcAndPackageFilesUnchangedFromMain": true
+}

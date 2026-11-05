@@ -1,0 +1,216 @@
+{
+  "schema": 1,
+  "tool": "dsh-onboarding",
+  "platform": "darwin",
+  "arch": "x64",
+  "builds": {
+    "baseline": {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.2",
+      "url": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.2.tgz",
+      "integrity": "sha512-tvY+yhfKRifthbqPe/OK0AYxM5ZkvqfYq/jMYgJcEUxiRRL1Vwra3Ti5TB6AXgSWQdiPHYh/Vp6SJa9yHwMNuw=="
+    },
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.28.5",
+      "url": "https://registry.npmjs.org/pnpm/-/pnpm-11.28.5.tgz",
+      "integrity": "sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng=="
+    },
+    "candidate": {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.5",
+      "url": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.5.tgz",
+      "integrity": "sha512-WkyJZv4zl9sCAxSzRctGm58m0rilGqwR6pniBiLOz5CPDfHfDuAUicg0AAazXI7oj/Cph6/cjNTncA/rpLTXpw=="
+    }
+  },
+  "scope": {
+    "officialNpmRuntime": true,
+    "officialPluginManager": true,
+    "ordinaryWebSessions": true,
+    "scriptedLocalModel": true,
+    "skillLifecycle": true,
+    "diagnostics": true,
+    "tui": true,
+    "browserUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "installationCleanup": "removed",
+  "baseline": {
+    "schema": 1,
+    "tool": "dsh-onboarding",
+    "platform": "darwin",
+    "arch": "x64",
+    "runId": "c1e4c0f9-b07a-4ef0-8ae1-12f74e4c022e",
+    "version": "0.2.1-rc.2",
+    "scope": {
+      "officialNpmRuntime": true,
+      "officialPluginManager": true,
+      "ordinaryWebSessions": true,
+      "scriptedLocalModel": true,
+      "skillLifecycle": true,
+      "diagnostics": true,
+      "tui": true,
+      "browserUI": false,
+      "desktop": false,
+      "modelIntelligence": false
+    },
+    "status": "passed",
+    "category": null,
+    "stage": "done",
+    "startedAt": "2026-11-05T06:10:22.442Z",
+    "checks": [
+      {
+        "name": "official-profile-plugin-and-skill-installation",
+        "status": "passed",
+        "elapsedMs": 9145
+      },
+      {
+        "name": "native-skill-load-and-current-source",
+        "status": "passed",
+        "elapsedMs": 1058
+      },
+      {
+        "name": "native-roundtrip-and-typed-discovery",
+        "status": "passed",
+        "elapsedMs": 1706
+      },
+      {
+        "name": "same-source-diagnostics-and-real-terminal",
+        "status": "passed",
+        "elapsedMs": 6483
+      },
+      {
+        "name": "skill-update-and-profile-preserving-shutdown",
+        "status": "passed",
+        "elapsedMs": 518
+      },
+      {
+        "name": "official-plugin-and-crosschat-removal-with-owned-cleanup",
+        "status": "passed",
+        "elapsedMs": 1704
+      }
+    ],
+    "source": {
+      "status": "identified",
+      "sourceTool": "dsh",
+      "basis": "native",
+      "association": "verified",
+      "scope": "instance",
+      "shouldAsk": false
+    },
+    "terminal": {
+      "kind": "posix-pty",
+      "cleanup": {
+        "event": "cleanup",
+        "forced": false,
+        "groupReleased": true
+      }
+    },
+    "cleanup": {
+      "runtimeStopped": true,
+      "registrationRemoved": true,
+      "removed": true,
+      "forced": false
+    },
+    "finishedAt": "2026-11-05T06:10:43.070Z",
+    "process": {
+      "code": 0,
+      "signal": null,
+      "timedOut": false
+    }
+  },
+  "candidate": {
+    "schema": 1,
+    "tool": "dsh-onboarding",
+    "platform": "darwin",
+    "arch": "x64",
+    "runId": "b36a9f3b-64ac-46c7-ad16-0963cac5ba2f",
+    "version": "0.2.1-rc.5",
+    "scope": {
+      "officialNpmRuntime": true,
+      "officialPluginManager": true,
+      "ordinaryWebSessions": true,
+      "scriptedLocalModel": true,
+      "skillLifecycle": true,
+      "diagnostics": true,
+      "tui": true,
+      "browserUI": false,
+      "desktop": false,
+      "modelIntelligence": false
+    },
+    "status": "passed",
+    "category": null,
+    "stage": "done",
+    "startedAt": "2026-11-05T06:13:45.839Z",
+    "checks": [
+      {
+        "name": "official-profile-plugin-and-skill-installation",
+        "status": "passed",
+        "elapsedMs": 12091
+      },
+      {
+        "name": "native-skill-load-and-current-source",
+        "status": "passed",
+        "elapsedMs": 1698
+      },
+      {
+        "name": "native-roundtrip-and-typed-discovery",
+        "status": "passed",
+        "elapsedMs": 2480
+      },
+      {
+        "name": "same-source-diagnostics-and-real-terminal",
+        "status": "passed",
+        "elapsedMs": 6829
+      },
+      {
+        "name": "skill-update-and-profile-preserving-shutdown",
+        "status": "passed",
+        "elapsedMs": 568
+      },
+      {
+        "name": "official-plugin-and-crosschat-removal-with-owned-cleanup",
+        "status": "passed",
+        "elapsedMs": 1487
+      }
+    ],
+    "source": {
+      "status": "identified",
+      "sourceTool": "dsh",
+      "basis": "native",
+      "association": "verified",
+      "scope": "instance",
+      "shouldAsk": false
+    },
+    "terminal": {
+      "kind": "posix-pty",
+      "cleanup": {
+        "event": "cleanup",
+        "forced": false,
+        "groupReleased": true
+      }
+    },
+    "cleanup": {
+      "runtimeStopped": true,
+      "registrationRemoved": true,
+      "removed": true,
+      "forced": false
+    },
+    "finishedAt": "2026-11-05T06:14:11.008Z",
+    "process": {
+      "code": 0,
+      "signal": null,
+      "timedOut": false
+    }
+  },
+  "classification": {
+    "kind": "compatible",
+    "notify": false
+  },
+  "npmCache": {
+    "path": "/private/tmp/crosschat-dsh-ci-aujZ17/npm-cache",
+    "external": false,
+    "disposition": "removed-with-task-root"
+  }
+}

@@ -1,0 +1,276 @@
+﻿2026-11-05T06:05:15.0812810Z Current runner version: '2.338.2'
+2026-11-05T06:05:15.0841190Z ##[group]Runner Image Provisioner
+2026-11-05T06:05:15.0842880Z Hosted Compute Agent
+2026-11-05T06:05:15.0843940Z Version: 20261021.618
+2026-11-05T06:05:15.0845120Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-11-05T06:05:15.0846600Z Build Date: 2026-10-21T00:45:21Z
+2026-11-05T06:05:15.0847120Z Worker ID: {be90ea23-e17f-4680-98ee-95a7f35517af}
+2026-11-05T06:05:15.0847590Z Region: westus
+2026-11-05T06:05:15.0847950Z Cloud: MacCloud
+2026-11-05T06:05:15.0848300Z ##[endgroup]
+2026-11-05T06:05:15.0850370Z ##[group]Operating System
+2026-11-05T06:05:15.0850780Z macOS
+2026-11-05T06:05:15.0851100Z 15.8.2
+2026-11-05T06:05:15.0851420Z 24H232
+2026-11-05T06:05:15.0851750Z ##[endgroup]
+2026-11-05T06:05:15.0852100Z ##[group]Runner Image
+2026-11-05T06:05:15.0852470Z Image: macos-15-arm64
+2026-11-05T06:05:15.0852850Z Version: 20261028.0489.1
+2026-11-05T06:05:15.0853780Z Included Software: https://github.com/actions/runner-images/blob/macos-15-arm64/20261028.0489/images/macos/macos-15-arm64-Readme.md
+2026-11-05T06:05:15.0854920Z Image Release: https://github.com/actions/runner-images/releases/tag/macos-15-arm64%2F20261028.0489
+2026-11-05T06:05:15.0855670Z ##[endgroup]
+2026-11-05T06:05:15.0856500Z ##[group]GITHUB_TOKEN Permissions
+2026-11-05T06:05:15.0858850Z Contents: read
+2026-11-05T06:05:15.0859240Z Metadata: read
+2026-11-05T06:05:15.0859630Z ##[endgroup]
+2026-11-05T06:05:15.0862280Z Secret source: Actions
+2026-11-05T06:05:15.0862910Z Cache mode: write
+2026-11-05T06:05:15.0863410Z Prepare workflow directory
+2026-11-05T06:05:15.1288850Z Prepare all required actions
+2026-11-05T06:05:15.1328140Z Getting action download info
+2026-11-05T06:05:15.4368890Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-11-05T06:05:15.6766750Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-11-05T06:05:15.7769690Z Download action repository 'actions/setup-python@v6' (SHA:ece7cb06caefa5fff74198d8649806c4678c61a1)
+2026-11-05T06:05:15.8570950Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-05T06:05:16.0342890Z Complete job name: probe (macos-15, darwin, arm64)
+2026-11-05T06:05:16.0844610Z ##[group]Run actions/checkout@v4
+2026-11-05T06:05:16.0845250Z with:
+2026-11-05T06:05:16.0845640Z   repository: Oatelauser/crosschat
+2026-11-05T06:05:16.0848440Z   token: ***
+2026-11-05T06:05:16.0848760Z   ssh-strict: true
+2026-11-05T06:05:16.0849070Z   ssh-user: git
+2026-11-05T06:05:16.0849490Z   persist-credentials: true
+2026-11-05T06:05:16.0849890Z   clean: true
+2026-11-05T06:05:16.0850260Z   sparse-checkout-cone-mode: true
+2026-11-05T06:05:16.0850630Z   fetch-depth: 1
+2026-11-05T06:05:16.0850950Z   fetch-tags: false
+2026-11-05T06:05:16.0851270Z   show-progress: true
+2026-11-05T06:05:16.0851600Z   lfs: false
+2026-11-05T06:05:16.0851910Z   submodules: false
+2026-11-05T06:05:16.0852250Z   set-safe-directory: true
+2026-11-05T06:05:16.0852700Z   allow-unsafe-pr-checkout: false
+2026-11-05T06:05:16.0853210Z ##[endgroup]
+2026-11-05T06:05:16.5465730Z Syncing repository: Oatelauser/crosschat
+2026-11-05T06:05:16.5467600Z ##[group]Getting Git version info
+2026-11-05T06:05:16.5468320Z Working directory is '/Users/runner/work/crosschat/crosschat'
+2026-11-05T06:05:16.5469200Z [command]/opt/homebrew/bin/git version
+2026-11-05T06:05:16.5790290Z git version 2.56.0
+2026-11-05T06:05:16.5818380Z ##[endgroup]
+2026-11-05T06:05:16.5829650Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/ee8c80bd-ea2c-440d-b6a7-242b9c4d09c4/.gitconfig'
+2026-11-05T06:05:16.5832500Z Temporarily overriding HOME='/Users/runner/work/_temp/ee8c80bd-ea2c-440d-b6a7-242b9c4d09c4' before making global git config changes
+2026-11-05T06:05:16.5833860Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-05T06:05:16.5837110Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/crosschat/crosschat
+2026-11-05T06:05:16.5962790Z Deleting the contents of '/Users/runner/work/crosschat/crosschat'
+2026-11-05T06:05:16.5968690Z ##[group]Initializing the repository
+2026-11-05T06:05:16.5971040Z [command]/opt/homebrew/bin/git init /Users/runner/work/crosschat/crosschat
+2026-11-05T06:05:16.6274370Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-05T06:05:16.6275520Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-05T06:05:16.6276380Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-05T06:05:16.6277150Z hint: call:
+2026-11-05T06:05:16.6277650Z hint:
+2026-11-05T06:05:16.6278260Z hint: 	git config --global init.defaultBranch <name>
+2026-11-05T06:05:16.6278830Z hint:
+2026-11-05T06:05:16.6279350Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-05T06:05:16.6280200Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-05T06:05:16.6280830Z hint:
+2026-11-05T06:05:16.6281790Z hint: 	git branch -m <name>
+2026-11-05T06:05:16.6282280Z hint:
+2026-11-05T06:05:16.6282850Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-05T06:05:16.6287260Z Initialized empty Git repository in /Users/runner/work/crosschat/crosschat/.git/
+2026-11-05T06:05:16.6297000Z [command]/opt/homebrew/bin/git remote add origin https://github.com/Oatelauser/crosschat
+2026-11-05T06:05:16.6385570Z ##[endgroup]
+2026-11-05T06:05:16.6386530Z ##[group]Disabling automatic garbage collection
+2026-11-05T06:05:16.6388560Z [command]/opt/homebrew/bin/git config --local gc.auto 0
+2026-11-05T06:05:16.6463120Z ##[endgroup]
+2026-11-05T06:05:16.6465030Z ##[group]Setting up auth
+2026-11-05T06:05:16.6467390Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-05T06:05:16.6542540Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-05T06:05:16.7717020Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-05T06:05:16.7784810Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-05T06:05:16.8670180Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-05T06:05:16.8749520Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-05T06:05:16.9871650Z [command]/opt/homebrew/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-05T06:05:16.9928720Z ##[endgroup]
+2026-11-05T06:05:16.9931230Z ##[group]Fetching the repository
+2026-11-05T06:05:16.9937500Z [command]/opt/homebrew/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +0d0f91a81bbb7264cd2bca830013d64b40fa2c0a:refs/remotes/origin/codex/dsh-posix-onboarding-20261105
+2026-11-05T06:05:17.9640720Z From https://github.com/Oatelauser/crosschat
+2026-11-05T06:05:17.9657080Z  * [new ref]         0d0f91a81bbb7264cd2bca830013d64b40fa2c0a -> origin/codex/dsh-posix-onboarding-20261105
+2026-11-05T06:05:17.9672350Z ##[endgroup]
+2026-11-05T06:05:17.9688130Z ##[group]Determining the checkout info
+2026-11-05T06:05:17.9699370Z ##[endgroup]
+2026-11-05T06:05:17.9699870Z [command]/opt/homebrew/bin/git sparse-checkout disable
+2026-11-05T06:05:17.9741450Z [command]/opt/homebrew/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-05T06:05:17.9831620Z ##[group]Checking out the ref
+2026-11-05T06:05:17.9832730Z [command]/opt/homebrew/bin/git checkout --progress --force -B codex/dsh-posix-onboarding-20261105 refs/remotes/origin/codex/dsh-posix-onboarding-20261105
+2026-11-05T06:05:18.2962140Z Switched to a new branch 'codex/dsh-posix-onboarding-20261105'
+2026-11-05T06:05:18.2972700Z branch 'codex/dsh-posix-onboarding-20261105' set up to track 'origin/codex/dsh-posix-onboarding-20261105'.
+2026-11-05T06:05:18.2974370Z ##[endgroup]
+2026-11-05T06:05:18.3086030Z [command]/opt/homebrew/bin/git log -1 --format=%H
+2026-11-05T06:05:18.3164150Z 0d0f91a81bbb7264cd2bca830013d64b40fa2c0a
+2026-11-05T06:05:18.3445470Z ##[group]Run actions/setup-node@v4
+2026-11-05T06:05:18.3445770Z with:
+2026-11-05T06:05:18.3445950Z   node-version: 22
+2026-11-05T06:05:18.3446140Z   architecture: arm64
+2026-11-05T06:05:18.3446330Z   always-auth: false
+2026-11-05T06:05:18.3446520Z   check-latest: false
+2026-11-05T06:05:18.3448550Z   token: ***
+2026-11-05T06:05:18.3448870Z ##[endgroup]
+2026-11-05T06:05:18.5112820Z Found in cache @ /Users/runner/hostedtoolcache/node/22.23.4/arm64
+2026-11-05T06:05:18.5115000Z (node:1725) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-05T06:05:18.5115890Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-05T06:05:18.5116630Z ##[group]Environment details
+2026-11-05T06:05:19.2476960Z node: v22.23.4
+2026-11-05T06:05:19.2573660Z npm: 10.9.9
+2026-11-05T06:05:19.2584000Z yarn: 1.22.22
+2026-11-05T06:05:19.2585820Z ##[endgroup]
+2026-11-05T06:05:19.2817260Z ##[group]Run actions/setup-python@v6
+2026-11-05T06:05:19.2817550Z with:
+2026-11-05T06:05:19.2817800Z   python-version: 3.12
+2026-11-05T06:05:19.2818130Z   architecture: arm64
+2026-11-05T06:05:19.2818330Z   check-latest: false
+2026-11-05T06:05:19.2820400Z   token: ***
+2026-11-05T06:05:19.2820640Z   update-environment: true
+2026-11-05T06:05:19.2820880Z   allow-prereleases: false
+2026-11-05T06:05:19.2821060Z   freethreaded: false
+2026-11-05T06:05:19.2821320Z ##[endgroup]
+2026-11-05T06:05:19.4464150Z ##[group]Installed versions
+2026-11-05T06:05:19.4552450Z Successfully set up CPython (3.12.10)
+2026-11-05T06:05:19.4553140Z ##[endgroup]
+2026-11-05T06:05:19.4632920Z ##[group]Run node -e "const a=require('node:assert/strict'); a.equal(process.platform,process.env.DSH_EXPECTED_PLATFORM); a.equal(process.arch,process.env.DSH_EXPECTED_ARCH)"
+2026-11-05T06:05:19.4634060Z [36;1mnode -e "const a=require('node:assert/strict'); a.equal(process.platform,process.env.DSH_EXPECTED_PLATFORM); a.equal(process.arch,process.env.DSH_EXPECTED_ARCH)"[0m
+2026-11-05T06:05:19.4698360Z shell: /bin/bash -e {0}
+2026-11-05T06:05:19.4698640Z env:
+2026-11-05T06:05:19.4698930Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:05:19.4699400Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.12.10/arm64/lib/pkgconfig
+2026-11-05T06:05:19.4699840Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:05:19.4700220Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:05:19.4700670Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:05:19.4701070Z   DSH_EXPECTED_PLATFORM: darwin
+2026-11-05T06:05:19.4701340Z   DSH_EXPECTED_ARCH: arm64
+2026-11-05T06:05:19.4701540Z ##[endgroup]
+2026-11-05T06:05:19.5952600Z ##[group]Run node test/helpers/tui-posix-pty-selftest.mjs dsh-onboarding-evidence/terminal-preflight
+2026-11-05T06:05:19.5953450Z [36;1mnode test/helpers/tui-posix-pty-selftest.mjs dsh-onboarding-evidence/terminal-preflight[0m
+2026-11-05T06:05:19.5988720Z shell: /bin/bash -e {0}
+2026-11-05T06:05:19.5988970Z env:
+2026-11-05T06:05:19.5989220Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:05:19.5989680Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.12.10/arm64/lib/pkgconfig
+2026-11-05T06:05:19.5990090Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:05:19.5990510Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:05:19.5990880Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:05:19.5991180Z ##[endgroup]
+2026-11-05T06:05:19.9563910Z PASS real-tty-unicode-resize-and-normal-exit
+2026-11-05T06:05:20.0920840Z PASS literal-argv-and-split-utf8-output
+2026-11-05T06:05:20.1646060Z PASS nonzero-child-exit-remains-visible
+2026-11-05T06:05:20.2451980Z PASS raw-control-input-restores-and-exits
+2026-11-05T06:05:20.3259290Z PASS dispose-reaps-owned-child-and-is-idempotent
+2026-11-05T06:05:21.4101060Z PASS dispose-escalates-an-owned-term-resistant-child
+2026-11-05T06:05:21.4474620Z PASS startup-failure-does-not-return-a-controller
+2026-11-05T06:05:21.4492750Z {"platform":"darwin","arch":"arm64","node":"v22.23.4","scope":"Owned POSIX PTY fixtures; no DSH or user session","status":"passed","checks":[{"name":"real-tty-unicode-resize-and-normal-exit","status":"passed"},{"name":"literal-argv-and-split-utf8-output","status":"passed"},{"name":"nonzero-child-exit-remains-visible","status":"passed"},{"name":"raw-control-input-restores-and-exits","status":"passed"},{"name":"dispose-reaps-owned-child-and-is-idempotent","status":"passed"},{"name":"dispose-escalates-an-owned-term-resistant-child","status":"passed"},{"name":"startup-failure-does-not-return-a-controller","status":"passed"}]}
+2026-11-05T06:05:21.4552400Z ##[group]Run npm ci
+2026-11-05T06:05:21.4552700Z [36;1mnpm ci[0m
+2026-11-05T06:05:21.4586970Z shell: /bin/bash -e {0}
+2026-11-05T06:05:21.4587240Z env:
+2026-11-05T06:05:21.4587540Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:05:21.4588090Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.12.10/arm64/lib/pkgconfig
+2026-11-05T06:05:21.4588550Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:05:21.4588990Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:05:21.4589350Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:05:21.4589640Z ##[endgroup]
+2026-11-05T06:06:06.2539790Z 
+2026-11-05T06:06:06.2546450Z added 202 packages, and audited 203 packages in 45s
+2026-11-05T06:06:06.2547680Z 
+2026-11-05T06:06:06.2550080Z 77 packages are looking for funding
+2026-11-05T06:06:06.2551510Z   run `npm fund` for details
+2026-11-05T06:06:06.3978070Z 
+2026-11-05T06:06:06.3978520Z 11 vulnerabilities (8 moderate, 1 high, 2 critical)
+2026-11-05T06:06:06.3978840Z 
+2026-11-05T06:06:06.3979160Z To address issues that do not require attention, run:
+2026-11-05T06:06:06.3979680Z   npm audit fix
+2026-11-05T06:06:06.3979860Z 
+2026-11-05T06:06:06.3980070Z To address all issues (including breaking changes), run:
+2026-11-05T06:06:06.3980560Z   npm audit fix --force
+2026-11-05T06:06:06.3980740Z 
+2026-11-05T06:06:06.3980900Z Run `npm audit` for details.
+2026-11-05T06:06:06.6290030Z ##[group]Run npm run build
+2026-11-05T06:06:06.6290480Z [36;1mnpm run build[0m
+2026-11-05T06:06:06.6588930Z shell: /bin/bash -e {0}
+2026-11-05T06:06:06.6589320Z env:
+2026-11-05T06:06:06.6589740Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:06:06.6590390Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.12.10/arm64/lib/pkgconfig
+2026-11-05T06:06:06.6590980Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:06:06.6591640Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:06:06.6592200Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:06:06.6592660Z ##[endgroup]
+2026-11-05T06:06:06.9659560Z 
+2026-11-05T06:06:06.9660200Z > @oatelauser/crosschat@1.13.1 build
+2026-11-05T06:06:06.9660700Z > tsc
+2026-11-05T06:06:06.9660780Z 
+2026-11-05T06:06:15.8581850Z ##[group]Run node scripts/dsh-compat-ci.mjs
+2026-11-05T06:06:15.8582350Z [36;1mnode scripts/dsh-compat-ci.mjs[0m
+2026-11-05T06:06:15.8636890Z shell: /bin/bash -e {0}
+2026-11-05T06:06:15.8637300Z env:
+2026-11-05T06:06:15.8637670Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:06:15.8638360Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.12.10/arm64/lib/pkgconfig
+2026-11-05T06:06:15.8638870Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:06:15.8647200Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:06:15.8647890Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:06:15.8648320Z   CROSSCHAT_LIVE: 1
+2026-11-05T06:06:15.8648700Z   DSH_COMPAT_SUITE: onboarding
+2026-11-05T06:06:15.8648900Z   TMPDIR: /tmp
+2026-11-05T06:06:15.8649230Z ##[endgroup]
+2026-11-05T06:06:16.4805180Z [dsh-ci] baseline npm install started; limit=1200000ms
+2026-11-05T06:07:16.9711200Z [dsh-ci] baseline npm install exited 0 after 60492ms
+2026-11-05T06:07:34.7486200Z [dsh-ci] candidate npm install started; limit=1200000ms
+2026-11-05T06:08:21.4705710Z [dsh-ci] candidate npm install exited 0 after 46721ms
+2026-11-05T06:08:38.4586990Z {"kind":"compatible","notify":false}
+2026-11-05T06:08:38.5045100Z ##[group]Run actions/upload-artifact@v4
+2026-11-05T06:08:38.5045420Z with:
+2026-11-05T06:08:38.5045720Z   name: dsh-onboarding-darwin-arm64
+2026-11-05T06:08:38.5046190Z   path: dsh-onboarding-evidence/
+2026-11-05T06:08:38.5046530Z   if-no-files-found: warn
+2026-11-05T06:08:38.5046770Z   retention-days: 21
+2026-11-05T06:08:38.5047040Z   compression-level: 6
+2026-11-05T06:08:38.5047340Z   overwrite: false
+2026-11-05T06:08:38.5047560Z   include-hidden-files: false
+2026-11-05T06:08:38.5047890Z env:
+2026-11-05T06:08:38.5048170Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:08:38.5048720Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.12.10/arm64/lib/pkgconfig
+2026-11-05T06:08:38.5049180Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:08:38.5049640Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:08:38.5050150Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.12.10/arm64
+2026-11-05T06:08:38.5050540Z ##[endgroup]
+2026-11-05T06:08:39.0647530Z (node:4966) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-05T06:08:39.0655080Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-05T06:08:39.0790620Z With the provided path, there will be 41 files uploaded
+2026-11-05T06:08:39.0791520Z Artifact name is valid!
+2026-11-05T06:08:39.0793960Z Root directory input is valid!
+2026-11-05T06:08:39.5007280Z Beginning upload of artifact content to blob storage
+2026-11-05T06:08:39.5110270Z (node:4966) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-05T06:08:39.8125300Z Uploaded bytes 229593
+2026-11-05T06:08:39.8529790Z Finished uploading artifact content to blob storage!
+2026-11-05T06:08:39.8629440Z SHA256 digest of uploaded artifact zip is efaa0edff350b6defe6b92d1200f84cef2181d38455457c2ff74ae040b0fd450
+2026-11-05T06:08:39.8740570Z Finalizing artifact upload
+2026-11-05T06:08:40.3011850Z Artifact dsh-onboarding-darwin-arm64.zip successfully finalized. Artifact ID 13392861470
+2026-11-05T06:08:40.3014580Z Artifact dsh-onboarding-darwin-arm64 has been successfully uploaded! Final size is 229593 bytes. Artifact ID is 13392861470
+2026-11-05T06:08:40.3046170Z Artifact download URL: https://github.com/Oatelauser/crosschat/actions/runs/41978059319/artifacts/13392861470
+2026-11-05T06:08:40.3344000Z Post job cleanup.
+2026-11-05T06:08:40.5951900Z Post job cleanup.
+2026-11-05T06:08:40.7751010Z (node:5029) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-05T06:08:40.7772770Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-05T06:08:40.7925460Z Post job cleanup.
+2026-11-05T06:08:40.9422600Z [command]/opt/homebrew/bin/git version
+2026-11-05T06:08:40.9571340Z git version 2.56.0
+2026-11-05T06:08:40.9673140Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/cbb95735-e492-46c8-9edb-358ab134d5d7/.gitconfig'
+2026-11-05T06:08:40.9696510Z Temporarily overriding HOME='/Users/runner/work/_temp/cbb95735-e492-46c8-9edb-358ab134d5d7' before making global git config changes
+2026-11-05T06:08:40.9697390Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-05T06:08:40.9698090Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/crosschat/crosschat
+2026-11-05T06:08:40.9806780Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-05T06:08:40.9965350Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-05T06:08:41.1455260Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-05T06:08:41.1539590Z http.https://github.com/.extraheader
+2026-11-05T06:08:41.1553790Z [command]/opt/homebrew/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-11-05T06:08:41.1656390Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-05T06:08:41.3267280Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-05T06:08:41.3350060Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-05T06:08:41.5442780Z Cleaning up orphan processes
+2026-11-05T06:08:43.6204700Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
