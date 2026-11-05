@@ -609,7 +609,10 @@ describe('DeepSeek Harness independent issue reporter', () => {
     const workflow = await readFile(new URL('../.github/workflows/dsh-compat.yml', import.meta.url), 'utf8');
     const script = workflow.split(/ {10}script: \|\r?\n/)[1].split(/\r?\n/).map((line) => line.replace(/^ {12}/, '')).join('\n');
     const created: unknown[] = [];
-    await runInNewContext(`(async()=>{${script}\n})()`, { require: (name: string) => { if (name !== 'node:fs/promises') throw new Error(`Unexpected dependency ${name}`); return { readFile: async () => JSON.stringify(summary) }; },
+    await runInNewContext(`(async()=>{${script}\n})()`, { require: (name: string) => { if (name !== 'node:fs/promises') throw new Error(`Unexpected dependency ${name}`); return {
+      readFile: async () => JSON.stringify(summary),
+      lstat: async () => ({ isFile: () => true, isSymbolicLink: () => false, size: Buffer.byteLength(JSON.stringify(summary)) }),
+    }; },
       context: { serverUrl: 'https://github.com', repo: { owner: 'fixture', repo: 'fixture' }, runId: 1 }, core: { notice: () => {} },
       github: { paginate: async () => existing, rest: { issues: { listForRepo: {}, create: async (value: unknown) => created.push(value) } } } });
     return { workflow, created };

@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-platform-20261105
+
+ ✓ test/dsh-onboarding-ci.test.ts (28 tests) 29ms
+
+ Test Files  1 passed (1)
+      Tests  28 passed (28)
+   Start at  10:46:33
+   Duration  345ms (transform 84ms, setup 0ms, collect 116ms, tests 29ms, environment 0ms, prepare 77ms)
+

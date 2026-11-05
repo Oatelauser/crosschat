@@ -1,0 +1,464 @@
+{
+  "schema": 1,
+  "date": "2026-11-05",
+  "branch": "codex/dsh-platforms-20261105",
+  "base": "c1040a5bc8100d4ead8527a17393b20efc7d5353",
+  "authorization": {
+    "strategy": "A",
+    "routeScope": "Pending R1/R2/R3 answer",
+    "newExternalExecutionApproved": false
+  },
+  "scope": "Local DSH npm/Web communication platform and hosted-candidate wiring; not full C12",
+  "windows": {
+    "node": "v22.23.4",
+    "fullPassed": 2803,
+    "fullSkipped": 11,
+    "filesPassed": 238,
+    "filesSkipped": 3,
+    "lint": true,
+    "build": true,
+    "imports": {
+      "modules": 204,
+      "edges": 689
+    },
+    "platformCases": 26,
+    "ciDirectedPassed": 161,
+    "weeklyPolicyDirectedPassed": 28,
+    "liveEnabled": false
+  },
+  "node25": {
+    "priorFullPassed": 2799,
+    "priorSkipped": 11,
+    "laterFullPassed": 2802,
+    "laterFullFailed": 1,
+    "laterFullSkipped": 11,
+    "failure": "Unmodified Desktop inspector child exited 3221225477 (0xC0000005)",
+    "isolatedObserverFollowupPassed": 19,
+    "node22ObserverFollowupPassed": 19,
+    "rootCauseResolved": false,
+    "productOrTestAssertionRelaxedToHideCrash": false
+  },
+  "linux": {
+    "environment": {
+      "node": "v22.23.4",
+      "platform": "linux",
+      "arch": "x64"
+    },
+    "source": {
+      "head": "d8ae0e0f7061e060d61135e402a9c97bea68410c",
+      "sha256": "86d3192354701f29fa7d7f1f1ef6662fd6274b34fed14b933c7ce49a85cda084",
+      "bytes": 22016000
+    },
+    "verifiedCompatible": true,
+    "attempts": [
+      {
+        "label": "baseline",
+        "version": "0.2.1-rc.2",
+        "runId": "42bd33e9-6557-4221-a007-feff4b87b599",
+        "checks": [
+          {
+            "name": "official-plugin-installation-and-owned-web-runtime",
+            "status": "passed",
+            "elapsedMs": 2
+          },
+          {
+            "name": "public-web-session-controller-creates-interactive-sessions",
+            "status": "passed",
+            "elapsedMs": 200
+          },
+          {
+            "name": "messages-model-and-native-shell-identity-bootstrap",
+            "status": "passed",
+            "elapsedMs": 363
+          },
+          {
+            "name": "authenticated-production-discovery-and-pagination",
+            "status": "passed",
+            "elapsedMs": 201
+          },
+          {
+            "name": "idle-production-delivery-wakes-the-existing-session",
+            "status": "passed",
+            "elapsedMs": 819
+          },
+          {
+            "name": "busy-native-queue-and-steer-step-boundaries",
+            "status": "passed",
+            "elapsedMs": 495
+          },
+          {
+            "name": "native-shell-send-and-conversation-reply-have-full-session-identities",
+            "status": "passed",
+            "elapsedMs": 427
+          },
+          {
+            "name": "missing-target-does-not-create-or-resume-a-replacement",
+            "status": "passed",
+            "elapsedMs": 256
+          }
+        ],
+        "cleanup": {
+          "runtimeStopped": true,
+          "registrationRemoved": true,
+          "removed": true,
+          "forced": false
+        }
+      },
+      {
+        "label": "candidate",
+        "version": "0.2.1-rc.5",
+        "runId": "eeefbb4a-2dcf-43a8-9355-507a7426d113",
+        "checks": [
+          {
+            "name": "official-plugin-installation-and-owned-web-runtime",
+            "status": "passed",
+            "elapsedMs": 3
+          },
+          {
+            "name": "public-web-session-controller-creates-interactive-sessions",
+            "status": "passed",
+            "elapsedMs": 195
+          },
+          {
+            "name": "messages-model-and-native-shell-identity-bootstrap",
+            "status": "passed",
+            "elapsedMs": 299
+          },
+          {
+            "name": "authenticated-production-discovery-and-pagination",
+            "status": "passed",
+            "elapsedMs": 203
+          },
+          {
+            "name": "idle-production-delivery-wakes-the-existing-session",
+            "status": "passed",
+            "elapsedMs": 682
+          },
+          {
+            "name": "busy-native-queue-and-steer-step-boundaries",
+            "status": "passed",
+            "elapsedMs": 469
+          },
+          {
+            "name": "native-shell-send-and-conversation-reply-have-full-session-identities",
+            "status": "passed",
+            "elapsedMs": 410
+          },
+          {
+            "name": "missing-target-does-not-create-or-resume-a-replacement",
+            "status": "passed",
+            "elapsedMs": 256
+          }
+        ],
+        "cleanup": {
+          "runtimeStopped": true,
+          "registrationRemoved": true,
+          "removed": true,
+          "forced": false
+        }
+      }
+    ],
+    "installationCleanup": "removed",
+    "npmCache": {
+      "path": "/tmp/crosschat-c12-dsh-20261105-KHWpH1/tmp/crosschat-dsh-ci-V4dzrY/npm-cache",
+      "external": false,
+      "disposition": "removed-with-task-root"
+    },
+    "firstFailurePreserved": true,
+    "historicalTransportCauseResolved": false,
+    "scope": "Local WSL Linux x64 communication; not GitHub, macOS, formal Desktop or six-stage onboarding"
+  },
+  "workflow": {
+    "manualTargets": [
+      "win32/x64",
+      "linux/x64",
+      "darwin/x64",
+      "darwin/arm64"
+    ],
+    "perProbeJobMinutes": 75,
+    "manualNativeUpperBoundMinutes": 300,
+    "existingWindowsCommunicationUtc": "47 3 * * 2,5",
+    "proposedPosixWeeklyUtc": "17 4 * * 5",
+    "proposedWindowsOnboardingWeeklyUtc": "7 5 * * 5",
+    "enableCondition": "Explicit future main merge approval only after POSIX candidate-branch first-runs pass",
+    "defaultBranchOnlyIssueWriter": true,
+    "writerExecutesNoCheckoutOrArtifactCode": true,
+    "syntaxAndExpressionLocallyChecked": true,
+    "githubExecutionValidated": false
+  },
+  "boundaries": {
+    "macosNativeValidated": false,
+    "posixOnboardingValidated": false,
+    "desktopLifecycleValidated": false,
+    "mainOrdinaryUbuntuFailureResolved": false,
+    "pushed": false,
+    "prCreated": false,
+    "actionsDispatched": false,
+    "mainChanged": false,
+    "releaseCreated": false,
+    "userDshInstallChanged": false,
+    "newProductStorage": false
+  },
+  "sources": [
+    {
+      "path": ".github/workflows/dsh-compat.yml",
+      "gitBlob": "cf71b07cde6967244e002c99d70a74a8b4f7f5e4"
+    },
+    {
+      "path": ".github/workflows/dsh-onboarding-compat.yml",
+      "gitBlob": "3297618ccb55da4b1c16458db02e1e3ef6cbb670"
+    },
+    {
+      "path": "scripts/dsh-compat-ci.mjs",
+      "gitBlob": "afeeafa4412f08d5e70a1fbd8baf97d780698776"
+    },
+    {
+      "path": "scripts/dsh-npm-target.mjs",
+      "gitBlob": "8fe32df5890018ea9be6b7c831f5d87d8d38be4c"
+    },
+    {
+      "path": "test/dsh-platform-ci.test.ts",
+      "gitBlob": "5bdf7496cf08469c9e7bcdbcf086547736f9c85a"
+    },
+    {
+      "path": "test/dsh-compat-ci.test.ts",
+      "gitBlob": "242e65aa6ddc300dac9972a2f9d07182cd7106c8"
+    },
+    {
+      "path": "test/dsh-onboarding-ci.test.ts",
+      "gitBlob": "ef78cf31c30d1849e0b7f68c88c5dd81b5bf51e5"
+    }
+  ],
+  "artifacts": [
+    {
+      "file": ".gitattributes",
+      "bytes": 26,
+      "sha256": "11b9f1f626d619b3bf9fd7f000e86a0cd80c42552203ec6dde71d737eddeddfb"
+    },
+    {
+      "file": "check-final.txt",
+      "bytes": 31986,
+      "sha256": "1dae232545c2abca31696d5f8f826094c7b4fff6bb307ee4f0085731f1ba4fdf"
+    },
+    {
+      "file": "check-first.txt",
+      "bytes": 31383,
+      "sha256": "81cb52297ed03bec7c9a925345a4c24a6ed50360f40543afc1f1349ce927f3b5"
+    },
+    {
+      "file": "check-hosted-first-policy-failure.txt",
+      "bytes": 45690,
+      "sha256": "0dabd43deaa819730f2bb381955919325208c98c176459f8e644a76c2237d856"
+    },
+    {
+      "file": "first-candidate-readonly-validation.json",
+      "bytes": 347,
+      "sha256": "2ac95cd54dd67a4f077d3ba2ab0b245024a0102ca6cba483173e6bb92ba4843d"
+    },
+    {
+      "file": "first-linux-communication-evidence.tgz",
+      "bytes": 87868,
+      "sha256": "c91e447144f224a63792a96f1c96dad514cafcc844fe197e18f049b8acc68ff8"
+    },
+    {
+      "file": "first-linux-environment.json",
+      "bytes": 52,
+      "sha256": "263883ac867e5ef62a0fc87f164a8fc9f69ae1c516f994b4001c823ed208bdf1"
+    },
+    {
+      "file": "first-linux-exit-code.txt",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "file": "first-linux-first-summary.json",
+      "bytes": 6442,
+      "sha256": "4d19175f6811611a9212e944753d508699a4eca62f48560509d182ce8d0f31e5"
+    },
+    {
+      "file": "first-linux-run.txt",
+      "bytes": 461,
+      "sha256": "18ed67bf8295fe1acc95644db85e662866c2f1a7182a7e65fa346a34306170f0"
+    },
+    {
+      "file": "first-linux-validation.json",
+      "bytes": 2472,
+      "sha256": "e77d29ab13093fc08960375048e387b1a891a62882bbdfadfc5cb9093605be2b"
+    },
+    {
+      "file": "first-node-shasums.txt",
+      "bytes": 3981,
+      "sha256": "c90c3f1478fda8308b22cc1a1b0dc536169196444e67ee8b5c582fd351d02bce"
+    },
+    {
+      "file": "first-run-linux.sh",
+      "bytes": 1751,
+      "sha256": "21e1e0382b66a7af992d4da7604ac0e19f92d61461f4952592102465581d76df"
+    },
+    {
+      "file": "first-source.json",
+      "bytes": 158,
+      "sha256": "560e6b513a2a84f05dafbb24479a31a855856040530a9e27df891e6728e88bad"
+    },
+    {
+      "file": "fresh-report-first-regression.txt",
+      "bytes": 16555,
+      "sha256": "cfdefb8e84dbe67aeac0521e56146ffd1531193b3b8b5de3c8a9fb8d942747bc"
+    },
+    {
+      "file": "fresh-report-green.txt",
+      "bytes": 2671,
+      "sha256": "26e7a47f90b26b60537077df97c27713974e242436f71da0b6ff22c35990a56f"
+    },
+    {
+      "file": "fresh-report-red.txt",
+      "bytes": 3507,
+      "sha256": "9b4d499343770c11928f91e0b118e6ff631ee60d89b319228e46a00f0dc47d4c"
+    },
+    {
+      "file": "hosted-report-fixture-error.txt",
+      "bytes": 5278,
+      "sha256": "95c023947fdd645ea17b67a71578eb7750241cf404aca73c446a94b613ba27f7"
+    },
+    {
+      "file": "hosted-report-green.txt",
+      "bytes": 2820,
+      "sha256": "fb358ecb5f1d23ebd453c8bb5b00db23342cc63a81ed28d8aae17b05299d8550"
+    },
+    {
+      "file": "hosted-report-red.txt",
+      "bytes": 5233,
+      "sha256": "e7cb12a4b4af11bdf8253df148df53a8db86efbb8b18fd3ce31182d562173d5a"
+    },
+    {
+      "file": "linux-archive-validation.json",
+      "bytes": 1798,
+      "sha256": "53e567562e29b763a30eafa39f7d0de5f004e0c400b548d45a2b797c1552585d"
+    },
+    {
+      "file": "linux-communication-evidence.tgz",
+      "bytes": 173121,
+      "sha256": "fe6979ae4ca7c34d008e67189d0c7e5b39c4e053711193330ee1631b5144d6a7"
+    },
+    {
+      "file": "linux-environment.json",
+      "bytes": 52,
+      "sha256": "263883ac867e5ef62a0fc87f164a8fc9f69ae1c516f994b4001c823ed208bdf1"
+    },
+    {
+      "file": "linux-exit-code.txt",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "linux-local-disposition.json",
+      "bytes": 460,
+      "sha256": "abf837a6f8a543781138e168f417d08c6056d1150aded4b9deb58c485190bf61"
+    },
+    {
+      "file": "linux-repeat-reason.json",
+      "bytes": 433,
+      "sha256": "7155a7c16742a3a98e29f3aaa8f69b6b9b13aa77c8d2e9667df4f882b30c6cd9"
+    },
+    {
+      "file": "linux-repeat-wrapper.sh",
+      "bytes": 1758,
+      "sha256": "66a668c80a762371ec00a68e48f2200e4bc9cda43578f77e2f3d959cb49eb7a3"
+    },
+    {
+      "file": "linux-run.txt",
+      "bytes": 569,
+      "sha256": "231a0bb166a444f7e5f4db548225a7cd444f4bd80103716c0c16154d34f9bc5e"
+    },
+    {
+      "file": "linux-source.json",
+      "bytes": 158,
+      "sha256": "560e6b513a2a84f05dafbb24479a31a855856040530a9e27df891e6728e88bad"
+    },
+    {
+      "file": "linux-summary.json",
+      "bytes": 10960,
+      "sha256": "63be60e0c36affb74959a2fc196c045e283cc00f0d955fb8f458e6c973bb1711"
+    },
+    {
+      "file": "linux-verified.json",
+      "bytes": 5574,
+      "sha256": "7942c5a0dea35b180dda31998f4936439f817bd6f3308cedc13aef4c69ddd5fe"
+    },
+    {
+      "file": "node22-check-hosted-final.txt",
+      "bytes": 31621,
+      "sha256": "b19aa586bd3e5e8f64112abc87c71ec0d7ef015a801855f875dfab6c1f8467c2"
+    },
+    {
+      "file": "node22-observer-followup.txt",
+      "bytes": 311,
+      "sha256": "0040b7ada558377aad3c359dd4da4b25b5d8fdf66800962a128f792904f1a12b"
+    },
+    {
+      "file": "node25-check-hosted-observer-crash.txt",
+      "bytes": 35195,
+      "sha256": "876bd81cdf21ed20a31861854d3d58d70f3ea3f74e611b351ce4083406144508"
+    },
+    {
+      "file": "node25-observer-followup.txt",
+      "bytes": 310,
+      "sha256": "cc37d2d12899ad1107d7fad749bcb622224cca03ba75167a06c12c52ee0a74c4"
+    },
+    {
+      "file": "npm-target-green.txt",
+      "bytes": 294,
+      "sha256": "2fafcd95300f9a2ed0744cc6c894404935a4d0bf260e762c00c5590e03d48170"
+    },
+    {
+      "file": "npm-target-red.txt",
+      "bytes": 2842,
+      "sha256": "9a233927862c739ce6d1ce72a3a34db69f176a4aceb684b9ff0fa69deeca28e3"
+    },
+    {
+      "file": "plan.md",
+      "bytes": 1428,
+      "sha256": "4e73f31fea474b7bfea9a0d0cbc02390eca30e019c3e18c4c51e559cb4692c13"
+    },
+    {
+      "file": "regression-target-green.txt",
+      "bytes": 299,
+      "sha256": "5175370ea99d810f62d28268ab58309b3f0070cb72ab9fd419f20414c33f8393"
+    },
+    {
+      "file": "regression-target-red.txt",
+      "bytes": 5953,
+      "sha256": "1db7966aaa71a045fd22e5512e533ec31132d0dbc7826ae3068ad29b3b5d9330"
+    },
+    {
+      "file": "review.md",
+      "bytes": 3665,
+      "sha256": "6af8068a9e6b24fe0cddf8ee87cb8c6660f7f11032c85f1cc323cc42b0f86fc9"
+    },
+    {
+      "file": "sequence-target-green.txt",
+      "bytes": 299,
+      "sha256": "407d94ba14ae7bc127e9a59987aa2abec24df1a076853e4181467cd7f7ae58b9"
+    },
+    {
+      "file": "sequence-target-red.txt",
+      "bytes": 3800,
+      "sha256": "d9f5aa497f19845c36f62ae59971d96cd03b630ee55401f6ca84851ad0f061d2"
+    },
+    {
+      "file": "weekly-policy-green.txt",
+      "bytes": 301,
+      "sha256": "ea5041a923a9c80e90df255eb0ad7fbfc13e0ebcddbbc52dbaf08418c42d724a"
+    },
+    {
+      "file": "windows-node-validation.json",
+      "bytes": 409,
+      "sha256": "363eb0a60f4fcb90aea752c17a165427b9047153557b8d92d50ff116e4a115d4"
+    },
+    {
+      "file": "workflow-matrix-validation.json",
+      "bytes": 1158,
+      "sha256": "ee869fa836bdb1814d834fd052fddf206dc9d8e59b0a39120e992ae02d1d4fa6"
+    }
+  ]
+}

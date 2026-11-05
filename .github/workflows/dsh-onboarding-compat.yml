@@ -2,6 +2,9 @@ name: DeepSeek Harness from-zero onboarding
 
 on:
   workflow_dispatch:
+  schedule:
+    # Windows first-run accepted; activated only when this candidate is approved for main.
+    - cron: '7 5 * * 5'
 
 concurrency:
   group: dsh-onboarding-${{ github.ref }}

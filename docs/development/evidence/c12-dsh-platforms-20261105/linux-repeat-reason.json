@@ -1,0 +1,6 @@
+{
+  "boundedIndependentRepeat": 1,
+  "previousFailure": "../linux-communication-evidence.tgz",
+  "source": "d8ae0e0f7061e060d61135e402a9c97bea68410c",
+  "reason": "Baseline eight native checks passed; candidate archive fetch failed before candidate execution. Current same URL downloads successfully in WSL with matching pinned SRI. Preserve first failure; one fresh run with unchanged source, timeouts, scope and release guards."
+}

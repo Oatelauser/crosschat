@@ -1,0 +1,9 @@
+{
+  "version": "22.23.4",
+  "source": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-win-x64.zip",
+  "bytes": 35604229,
+  "sha256": "cbc74b5e0982c9dbb41525fd8fb5dcd32fbee237863f7829072f4639a1ce5f20",
+  "matchedOfficialSha256": true,
+  "globalInstallation": false,
+  "priorNodeFetch": "Manually cancelled after no completion beyond its requested 120s timeout; no checksum or native Node22 test was claimed"
+}

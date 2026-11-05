@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "records": [
+    {
+      "file": "linux-root.txt",
+      "root": "/tmp/crosschat-c12-dsh-20261105-cGszFj",
+      "exists": false,
+      "disposition": "already absent on read-only lstat; no agent deletion claimed"
+    },
+    {
+      "file": "retry1/linux-root.txt",
+      "root": "/tmp/crosschat-c12-dsh-20261105-KHWpH1",
+      "exists": false,
+      "disposition": "already absent on read-only lstat; no agent deletion claimed"
+    }
+  ]
+}

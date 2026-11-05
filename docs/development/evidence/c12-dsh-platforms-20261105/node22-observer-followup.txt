@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-platform-20261105
+
+ ✓ test/dsh-desktop-exit-observer.test.ts (19 tests) 394ms
+
+ Test Files  1 passed (1)
+      Tests  19 passed (19)
+   Start at  10:58:01
+   Duration  722ms (transform 74ms, setup 0ms, collect 114ms, tests 394ms, environment 0ms, prepare 80ms)
+

@@ -8,6 +8,8 @@ crosschat 通过官方 Host 插件桥发现并投递到 Harness 当前运行的�
 
 ## 安装桥
 
+Linux x64已在本机WSL、官方Node22.23.4下验证rc.2与rc.5各八项npm/Web通信及隔离清理，覆盖原生Bash身份、精确发现、queue/steer、完整回信与插件启停，见[Linux与平台候选记录](development/evidence/c12-dsh-platforms-20261105/validation.json)。这不是Linux六阶段从零接入、浏览器UI或正式Desktop验收；macOS两架构及新的托管矩阵仍待原生首验。首次候选下载失败与成功的独立复核均保留。
+
 先按[官方指引](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/apps/cli/README.md)安装 Harness 及其插件管理所需的 pnpm，并安装本次开发版本的 crosschat。确认 `crosschat dsh-bridge-path` 能输出实际存在的 bundle 目录。
 
 对于 npm CLI 的 Web profile，完全退出该 profile 后安装本地 bundle，再正常启动 Web：

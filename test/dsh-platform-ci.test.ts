@@ -38,7 +38,7 @@ function regressionSummary(platform: string, arch: string) {
     baseline: { ...report, process: { code: 0, signal: null, timedOut: false } }, candidate: failed(), retry: failed() };
 }
 
-async function hostedReport(summary: unknown, existing: unknown[] = []) {
+async function hostedReport(summary: unknown, existing: unknown = [], file = { size: 1000, regular: true, symlink: false }) {
   const workflow = (await readFile(new URL('../.github/workflows/dsh-compat.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
   const script = workflow.split('          script: |\n')[1]!.split('\n').map(line => line.replace(/^ {12}/, '')).join('\n');
   const created: { body: string }[] = [];
@@ -46,7 +46,7 @@ async function hostedReport(summary: unknown, existing: unknown[] = []) {
   await runInNewContext(`(async () => { ${script} })()`, {
     require: (name: string) => {
       if (name !== 'node:fs/promises') throw new Error('Unexpected writer dependency');
-      return { readFile: async () => content, lstat: async () => ({ isFile: () => true, isSymbolicLink: () => false, size: Buffer.byteLength(content) }) };
+      return { readFile: async () => content, lstat: async () => ({ isFile: () => file.regular, isSymbolicLink: () => file.symlink, size: file.size }) };
     },
     core: { notice: () => {} },
     context: { repo: { owner: 'fixture', repo: 'fixture' }, serverUrl: 'https://github.com', runId: 42 },
@@ -168,4 +168,13 @@ describe('the actual hosted report script consumes target-specific artifacts', (
       expect(await hostedReport(summary, [{ body: marker }])).toHaveLength(0);
       expect(await hostedReport({ ...summary, retry: { ...summary.retry, arch: 'ia32' } })).toHaveLength(0);
     });
+
+  it('keeps architecture deduplication separate and refuses unsafe summaries or incomplete issue results', async () => {
+    const summary = regressionSummary('darwin', 'arm64');
+    expect(await hostedReport(summary, [{ body: dshRegressionIdentity(regressionSummary('darwin', 'x64'))!.marker }])).toHaveLength(1);
+    expect(await hostedReport(summary, null)).toHaveLength(0);
+    for (const file of [{ size: 4 * 1024 * 1024 + 1, regular: true, symlink: false }, { size: 100, regular: false, symlink: false }, { size: 100, regular: true, symlink: true }]) {
+      expect(await hostedReport(summary, [], file)).toHaveLength(0);
+    }
+  });
 });
