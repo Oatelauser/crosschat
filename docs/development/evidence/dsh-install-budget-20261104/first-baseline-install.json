@@ -1,0 +1,8 @@
+{
+  "code": null,
+  "signal": null,
+  "timedOut": true,
+  "stdout": "",
+  "stderr": "npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead\n",
+  "pid": 6540
+}

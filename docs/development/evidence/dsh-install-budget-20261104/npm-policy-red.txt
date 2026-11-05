@@ -1,0 +1,131 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-ci-fix-20261104
+
+ ❯ test/dsh-npm-install.test.ts (5 tests | 5 failed) 13ms
+   × isolated official npm installation policy > allows a slow cold install to finish after the former fifteen-minute deadline 8ms
+     → expected "kill" to not be called at all, but actually been called 1 times
+
+Received: 
+
+  1st kill call:
+
+    Array []
+
+
+Number of calls: 1
+
+   × isolated official npm installation policy > still bounds a stalled installer at twenty minutes without claiming release 1ms
+     → expected "kill" to not be called at all, but actually been called 1 times
+
+Received: 
+
+  1st kill call:
+
+    Array []
+
+
+Number of calls: 1
+
+   × isolated official npm installation policy > uses the exact private profile and safe npm policy with existingLock=false 2ms
+     → expected [ …(6) ] to deeply equal [ …(7) ]
+   × isolated official npm installation policy > uses the exact private profile and safe npm policy with existingLock=true 1ms
+     → expected [ …(6) ] to deeply equal [ …(7) ]
+   × isolated official npm installation policy > records bounded phase progress without printing environment secrets or changing installer output 1ms
+     → expected '' to contain 'baseline'
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-npm-install.test.ts > isolated official npm installation policy > allows a slow cold install to finish after the former fifteen-minute deadline
+AssertionError: expected "kill" to not be called at all, but actually been called 1 times
+
+Received: 
+
+  1st kill call:
+
+    Array []
+
+
+Number of calls: 1
+
+ ❯ test/dsh-npm-install.test.ts:38:28
+     36|     const pending = installDshNpmDependencies(options);
+     37|     await vi.advanceTimersByTimeAsync(16 * 60 * 1000);
+     38|     expect(child.kill).not.toHaveBeenCalled();
+       |                            ^
+     39|     stdout.write('installed'); child.emit('close', 0, null);
+     40|     expect(await pending).toMatchObject({ code: 0, signal: null, timed…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  test/dsh-npm-install.test.ts > isolated official npm installation policy > still bounds a stalled installer at twenty minutes without claiming release
+AssertionError: expected "kill" to not be called at all, but actually been called 1 times
+
+Received: 
+
+  1st kill call:
+
+    Array []
+
+
+Number of calls: 1
+
+ ❯ test/dsh-npm-install.test.ts:47:28
+     45|     const pending = installDshNpmDependencies(options);
+     46|     await vi.advanceTimersByTimeAsync(20 * 60 * 1000 - 1);
+     47|     expect(child.kill).not.toHaveBeenCalled();
+       |                            ^
+     48|     await vi.advanceTimersByTimeAsync(1);
+     49|     expect(await pending).toMatchObject({ code: null, signal: null, ti…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  test/dsh-npm-install.test.ts > isolated official npm installation policy > uses the exact private profile and safe npm policy with existingLock=false
+ FAIL  test/dsh-npm-install.test.ts > isolated official npm installation policy > uses the exact private profile and safe npm policy with existingLock=true
+AssertionError: expected [ …(6) ] to deeply equal [ …(7) ]
+
+- Expected
++ Received
+
+@@ -3,7 +3,6 @@
+    "install",
+    "--ignore-scripts",
+    "--no-audit",
+    "--no-fund",
+    "--prefer-offline",
+-   "--timing",
+  ]
+
+ ❯ test/dsh-npm-install.test.ts:58:18
+     56|     const [binary, args, spawnOptions] = boundary.spawn.mock.calls.at(…
+     57|     expect(binary).toBe(process.execPath);
+     58|     expect(args).toEqual([options.npmCLI, existingLock ? 'ci' : 'insta…
+       |                  ^
+     59|     expect(spawnOptions).toMatchObject({ env: options.env, cwd: option…
+     60|     child.emit('close', 0, null); await pending;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  test/dsh-npm-install.test.ts > isolated official npm installation policy > records bounded phase progress without printing environment secrets or changing installer output
+AssertionError: expected '' to contain 'baseline'
+
+- Expected
++ Received
+
+- baseline
+
+ ❯ test/dsh-npm-install.test.ts:68:22
+     66|     expect(await pending).toMatchObject({ stdout: 'npm-result', stderr…
+     67|     const progress = vi.mocked(process.stderr.write).mock.calls.map(ca…
+     68|     expect(progress).toContain('baseline'); expect(progress).toContain…
+       |                      ^
+     69|     expect(progress).not.toContain(options.env.FIXTURE_SECRET);
+     70|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed (5)
+   Start at  17:23:58
+   Duration  329ms (transform 77ms, setup 0ms, collect 103ms, tests 13ms, environment 0ms, prepare 85ms)
+

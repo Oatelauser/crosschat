@@ -1,0 +1,132 @@
+2026-11-04T09:16:34.9985334Z Current runner version: '2.338.2'
+2026-11-04T09:16:35.0040475Z ##[group]Runner Image Provisioner
+2026-11-04T09:16:35.0041513Z Hosted Compute Agent
+2026-11-04T09:16:35.0042181Z Version: 20261021.618
+2026-11-04T09:16:35.0042817Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-11-04T09:16:35.0043662Z Build Date: 2026-10-21T00:45:21Z
+2026-11-04T09:16:35.0044382Z Worker ID: {9d7c181d-9d75-4274-b305-c0d41748801c}
+2026-11-04T09:16:35.0045148Z Region: northcentralus
+2026-11-04T09:16:35.0045752Z Cloud: Azure
+2026-11-04T09:16:35.0046306Z ##[endgroup]
+2026-11-04T09:16:35.0048509Z ##[group]Operating System
+2026-11-04T09:16:35.0049579Z Ubuntu
+2026-11-04T09:16:35.0050143Z 24.04.5
+2026-11-04T09:16:35.0050831Z LTS
+2026-11-04T09:16:35.0051418Z ##[endgroup]
+2026-11-04T09:16:35.0052040Z ##[group]Runner Image
+2026-11-04T09:16:35.0052661Z Image: ubuntu-24.04
+2026-11-04T09:16:35.0053217Z Version: 20261025.353.1
+2026-11-04T09:16:35.0054628Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261025.353/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-04T09:16:35.0056332Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261025.353
+2026-11-04T09:16:35.0057317Z ##[endgroup]
+2026-11-04T09:16:35.0058738Z ##[group]GITHUB_TOKEN Permissions
+2026-11-04T09:16:35.0061624Z Actions: read
+2026-11-04T09:16:35.0062267Z Contents: read
+2026-11-04T09:16:35.0062937Z Issues: write
+2026-11-04T09:16:35.0063506Z Metadata: read
+2026-11-04T09:16:35.0064096Z ##[endgroup]
+2026-11-04T09:16:35.0066617Z Secret source: Actions
+2026-11-04T09:16:35.0068092Z Cache mode: write
+2026-11-04T09:16:35.0069468Z Prepare workflow directory
+2026-11-04T09:16:35.0449965Z Prepare all required actions
+2026-11-04T09:16:35.0504371Z Getting action download info
+2026-11-04T09:16:35.3791350Z Download action repository 'actions/download-artifact@v4' (SHA:d3f86a106a0bac45b974a628896c90dbdf5c8093)
+2026-11-04T09:16:35.8290251Z Download action repository 'actions/github-script@v7' (SHA:f28e40c7f34bde8b3046d885e986cb6290c5673b)
+2026-11-04T09:16:36.1493086Z Complete job name: report
+2026-11-04T09:16:36.2395919Z ##[group]Run actions/download-artifact@v4
+2026-11-04T09:16:36.2396974Z with:
+2026-11-04T09:16:36.2397482Z   name: dsh-onboarding-win32-x64
+2026-11-04T09:16:36.2398059Z   path: evidence
+2026-11-04T09:16:36.2398556Z   merge-multiple: false
+2026-11-04T09:16:36.2399328Z   repository: Oatelauser/crosschat
+2026-11-04T09:16:36.2399907Z   run-id: 41803826165
+2026-11-04T09:16:36.2400673Z ##[endgroup]
+2026-11-04T09:16:36.5870401Z Downloading single artifact
+2026-11-04T09:16:36.6079591Z (node:2138) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-04T09:16:36.6082543Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-04T09:16:36.7444115Z Preparing to download the following artifacts:
+2026-11-04T09:16:36.7448461Z - dsh-onboarding-win32-x64 (ID: 13310370306, Size: 1294, Expected Digest: sha256:58e43efb731ed6a0765de49d6304c1cc5c49ef047b928caf57acdcba219c9b5f)
+2026-11-04T09:16:36.9054533Z Redirecting to blob download url: https://productionresultssa32.blob.core.windows.net/actions-results/b13ac4c2-abef-45b3-8558-b3dbbe884b57/workflow-job-run-a99664a9-c8fc-5bbb-bab0-f2e8a0b9603c/artifacts/0ff53e2558fb9b4a5f9fc87acf46c89825c6f2bbca14a14c34e7b1041fc8102f.zip
+2026-11-04T09:16:36.9062928Z Starting download of artifact to: /home/runner/work/crosschat/crosschat/evidence
+2026-11-04T09:16:37.0307989Z (node:2138) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-11-04T09:16:37.0397396Z SHA256 digest of downloaded artifact is 58e43efb731ed6a0765de49d6304c1cc5c49ef047b928caf57acdcba219c9b5f
+2026-11-04T09:16:37.0402577Z Artifact download completed successfully.
+2026-11-04T09:16:37.0405373Z Total of 1 artifact(s) downloaded
+2026-11-04T09:16:37.0408229Z Download artifact has finished successfully
+2026-11-04T09:16:37.0810463Z ##[group]Run actions/github-script@v7
+2026-11-04T09:16:37.0812200Z with:
+2026-11-04T09:16:37.0899000Z   script: const fs = require('node:fs/promises');
+let summary;
+try {
+  const info = await fs.lstat('evidence/summary.json');
+  if (!info.isFile() || info.isSymbolicLink() || info.size > 4 * 1024 * 1024) { core.notice('Summary is not a bounded regular file; no issue created.'); return; }
+  summary = JSON.parse(await fs.readFile('evidence/summary.json', 'utf8'));
+} catch { core.notice('No fresh summary; inspect the probe artifacts. No issue created.'); return; }
+const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const sri = /^sha512-[A-Za-z0-9+/]{85}[AQgw]==$/;
+const scope = { officialNpmRuntime: true, officialPluginManager: true, ordinaryWebSessions: true, scriptedLocalModel: true,
+  skillLifecycle: true, diagnostics: true, tui: true, browserUI: false, desktop: false, modelIntelligence: false };
+const checks = ['official-profile-plugin-and-skill-installation', 'native-skill-load-and-current-source', 'native-roundtrip-and-typed-discovery',
+  'same-source-diagnostics-and-real-terminal', 'skill-update-and-profile-preserving-shutdown', 'official-plugin-and-crosschat-removal-with-owned-cleanup'];
+function supported(version) {
+  if (typeof version !== 'string' || version.length > 80) return false;
+  const parts = /^0\.2\.([1-9][0-9]*)(?:-([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*))?$/.exec(version);
+  if (!parts || !Number.isSafeInteger(Number(parts[1]))) return false;
+  const pre = parts[2]?.split('.');
+  if (pre?.some((item) => /^[0-9]+$/.test(item) && item.length > 1 && item.startsWith('0'))) return false;
+  if (Number(parts[1]) > 1 || !pre) return true;
+  const floor = ['rc', '2'];
+  for (let i = 0; i < Math.max(pre.length, floor.length); i++) {
+    if (pre[i] === undefined) return false;
+    if (floor[i] === undefined) return true;
+    if (pre[i] === floor[i]) continue;
+    const a = /^[0-9]+$/.test(pre[i]); const b = /^[0-9]+$/.test(floor[i]);
+    if (a && b) return BigInt(pre[i]) > BigInt(floor[i]);
+    return a !== b ? !a : pre[i] > floor[i];
+  }
+  return true;
+}
+const scoped = (value) => record(value) && Object.keys(value).length === Object.keys(scope).length
+  && Object.entries(scope).every(([key, expected]) => Object.hasOwn(value, key) && value[key] === expected);
+const released = (value) => record(value) && value.runtimeStopped === true && value.registrationRemoved === true && value.removed === true && value.forced === false
+  && (value.errors === undefined || (Array.isArray(value.errors) && value.errors.length === 0));
+const artifact = (value) => record(value) && value.name === '@deepseek-ai/dsh' && supported(value.version) && sri.test(value.integrity ?? '')
+  && value.url === `https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-${value.version}.tgz`;
+function valid(value, build) {
+  if (!record(value) || value.schema !== 1 || value.tool !== 'dsh-onboarding' || value.platform !== 'win32' || value.arch !== 'x64'
+    || value.version !== build.version || !uuid.test(value.runId ?? '') || !scoped(value.scope) || !released(value.cleanup)
+    || !record(value.process) || value.process.timedOut !== false || value.process.signal !== null
+    || value.process.code !== (value.status === 'passed' ? 0 : 1) || !Array.isArray(value.checks) || value.checks.length > checks.length
+    || !value.checks.every((check, index) => record(check) && check.name === checks[index] && check.status === 'passed' && Number.isFinite(check.elapsedMs) && check.elapsedMs >= 0)) return false;
+  if (value.status === 'passed') return value.category === null && value.stage === 'done' && value.check === undefined && value.error === undefined && value.checks.length === checks.length;
+  return value.status === 'failed' && value.category === 'compatibility' && ['setup', 'onboarding'].includes(value.stage)
+    && typeof value.check === 'string' && value.check === checks[value.checks.length];
+}
+if (!record(summary) || summary.schema !== 1 || summary.tool !== 'dsh-onboarding' || summary.platform !== 'win32' || summary.arch !== 'x64' || !scoped(summary.scope)
+  || summary.installationCleanup !== 'removed' || summary.classification?.kind !== 'regression' || summary.classification?.notify !== true || !record(summary.builds)) return;
+const { baseline, candidate, retry, builds } = summary;
+if (!artifact(builds.baseline) || !artifact(builds.candidate) || !record(builds.packageManager) || builds.packageManager.name !== 'pnpm' || builds.packageManager.version !== '11.28.5'
+  || builds.packageManager.url !== 'https://registry.npmjs.org/pnpm/-/pnpm-11.28.5.tgz'
+  || builds.packageManager.integrity !== 'sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng=='
+  || !valid(baseline, builds.baseline) || !valid(candidate, builds.candidate) || !valid(retry, builds.candidate)
+  || baseline.status !== 'passed' || candidate.status !== 'failed' || retry.status !== 'failed'
+  || candidate.check !== retry.check || candidate.stage !== retry.stage || new Set([baseline.runId, candidate.runId, retry.runId]).size !== 3) return;
+const marker = `<!-- dsh-onboarding-compat:${candidate.version}:win32:${candidate.check} -->`;
+const issues = await github.paginate(github.rest.issues.listForRepo, { ...context.repo, state: 'all', creator: 'github-actions[bot]', per_page: 100 });
+if (!Array.isArray(issues)) { core.notice('Issue listing is incomplete; no issue created.'); return; }
+if (issues.some((issue) => typeof issue.body === 'string' && issue.body.includes(marker))) { core.notice('This candidate/check was already reported.'); return; }
+const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+await github.rest.issues.create({ ...context.repo,
+  title: `DeepSeek Harness ${candidate.version}: ${candidate.check} from-zero compatibility regression (win32)`,
+  body: `${marker}\nPinned baseline ${baseline.version} passed all six from-zero checks. The same official candidate failed the same compatibility phase twice with verified runtime and installation cleanup.\n\nFailed phase: \`${candidate.check}\`\nCandidate SHA-512 SRI: \`${builds.candidate.integrity}\`\n\n[Inspect workflow and retained evidence](${run}).\n\nScope: official npm Web Host, native skill loading and shell identity, typed round trip, doctor/ConPTY, update, native plugin removal and crosschat data removal with profile/chat preservation. Scripted local model only; no browser UI, formal Desktop, other platforms or model intelligence is claimed.` });
+
+2026-11-04T09:16:37.1000880Z   github-token: ***
+2026-11-04T09:16:37.1002026Z   debug: false
+2026-11-04T09:16:37.1003047Z   user-agent: actions/github-script
+2026-11-04T09:16:37.1004290Z   result-encoding: json
+2026-11-04T09:16:37.1005310Z   retries: 0
+2026-11-04T09:16:37.1006400Z   retry-exempt-status-codes: 400,401,403,404,422
+2026-11-04T09:16:37.1007748Z ##[endgroup]
+2026-11-04T09:16:37.2230157Z Cleaning up orphan processes
+2026-11-04T09:16:37.2809577Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/download-artifact@v4, actions/github-script@v7. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
