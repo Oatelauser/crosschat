@@ -1,0 +1,3 @@
+[dsh-ci] C24-rc.5-locked npm ci started; limit=1200000ms
+[dsh-ci] C24-rc.5-locked npm ci exited 0 after 142415ms
+{"root":"D:\\workspace\\CC\\cc-dsh-capabilities-20261105\\node_modules\\.cache\\crosschat-c24-native-20261105-WDFfnk","runtime":"D:\\workspace\\CC\\cc-dsh-capabilities-20261105\\node_modules\\.cache\\crosschat-c24-native-20261105-WDFfnk\\runtime","version":"0.2.1-rc.5","code":0,"safe":true,"pinnedTransitiveGraph":true}

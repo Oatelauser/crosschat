@@ -1,0 +1,122 @@
+{
+  "schema": 1,
+  "scope": "DSH npm/Web local native manual membership and source recovery; no Desktop or rename acceptance",
+  "runId": "d9ca369e-e806-4784-89e3-164aec9a5c78",
+  "platform": "win32",
+  "arch": "x64",
+  "node": "v22.23.4",
+  "checks": [
+    {
+      "name": "authenticated-source-and-readonly-description",
+      "status": "passed"
+    },
+    {
+      "name": "exact-manual-adoption-and-independent-stars",
+      "status": "passed"
+    },
+    {
+      "name": "exact-removal-is-independent-of-native-capability",
+      "status": "passed"
+    },
+    {
+      "name": "bridge-loss-rejects-old-confirmation-without-claim",
+      "status": "passed"
+    },
+    {
+      "name": "native-source-recovery-requires-new-confirmation",
+      "status": "passed"
+    },
+    {
+      "name": "unverified-rename-remains-disabled-and-chat-is-unchanged",
+      "status": "passed"
+    }
+  ],
+  "status": "failed",
+  "version": "0.2.1-rc.5",
+  "nativeId": "session-69bc4e46-9ebd-4dcf-81a4-8e52a9493242",
+  "pid": 32584,
+  "confirmations": {
+    "original": {
+      "ref": {
+        "contextId": "local",
+        "providerId": "dsh",
+        "nativeId": "session-69bc4e46-9ebd-4dcf-81a4-8e52a9493242",
+        "endpointType": "host"
+      },
+      "observedAt": 1793867229165,
+      "revision": "bf517f7a33eacaab9e0746d3fc102b30a45304d840cede7f93c05d6baf4a99af",
+      "actions": {
+        "adopt": {
+          "state": "executable"
+        },
+        "rename": {
+          "state": "needs-verification",
+          "reason": "尚未验证此端点的原生改名接口及活会话同步。",
+          "nextStep": "先在原生工具中改名；刷新后星内名称会跟随原生名称。"
+        }
+      }
+    },
+    "recovered": {
+      "ref": {
+        "contextId": "local",
+        "providerId": "dsh",
+        "nativeId": "session-69bc4e46-9ebd-4dcf-81a4-8e52a9493242",
+        "endpointType": "host"
+      },
+      "observedAt": 1793867229985,
+      "revision": "6440febf9358579dca30240a76261817419302b7e7b67247142bbd8111b34ccd",
+      "actions": {
+        "adopt": {
+          "state": "executable"
+        },
+        "rename": {
+          "state": "needs-verification",
+          "reason": "尚未验证此端点的原生改名接口及活会话同步。",
+          "nextStep": "先在原生工具中改名；刷新后星内名称会跟随原生名称。"
+        }
+      }
+    }
+  },
+  "rosters": [
+    {
+      "starId": "native-a",
+      "members": [
+        {
+          "sessionId": "session-69bc4e46-9ebd-4dcf-81a4-8e52a9493242",
+          "name": "C24-d9ca369e",
+          "tool": "dsh",
+          "endpointType": "host",
+          "machine": "11111111111111111111111111111111"
+        }
+      ]
+    },
+    {
+      "starId": "native-b",
+      "members": [
+        {
+          "sessionId": "session-69bc4e46-9ebd-4dcf-81a4-8e52a9493242",
+          "name": "C24-d9ca369e",
+          "tool": "dsh",
+          "endpointType": "host",
+          "machine": "11111111111111111111111111111111"
+        }
+      ]
+    }
+  ],
+  "error": {
+    "name": "Error",
+    "message": "ConPTY output did not match C24-d9ca369e; log: D:\\workspace\\CC\\cc-dsh-capabilities-20261105\\node_modules\\.cache\\c15-dsh-20261105\\terminal-d9ca369e-e806-4784-89e3-164aec9a5c78.jsonl; output tail:                               │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\r\n<members> 0项 · 完整 · 自动刷新\u001b[K\r\n按在线 / 下线分组；a 选择节点会话入星，e 按原生能力改名，Ctrl+D 删除成员。k/K 发钥，x 撤销凭证。\u001b[K\r\n:资源  /筛选  Esc返回  q退出\u001b[K\u001b[112C",
+    "stack": "Error: ConPTY output did not match C24-d9ca369e; log: D:\\workspace\\CC\\cc-dsh-capabilities-20261105\\node_modules\\.cache\\c15-dsh-20261105\\terminal-d9ca369e-e806-4784-89e3-164aec9a5c78.jsonl; output tail:                               │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\r\n<members> 0项 · 完整 · 自动刷新\u001b[K\r\n按在线 / 下线分组；a 选择节点会话入星，e 按原生能力改名，Ctrl+D 删除成员。k/K 发钥，x 撤销凭证。\u001b[K\r\n:资源  /筛选  Esc返回  q退出\u001b[K\u001b[112C\n    at Timeout._onTimeout (file:///D:/workspace/CC/cc-dsh-capabilities-20261105/test/helpers/tui-pty-driver.mjs:140:18)\n    at listOnTimeout (node:internal/timers:585:17)\n    at process.processTimers (node:internal/timers:521:7)"
+  },
+  "failedTerminalApplication": "D:\\workspace\\CC\\cc-dsh-capabilities-20261105\\node_modules\\.cache\\c15-dsh-20261105\\terminal-failed-application-d9ca369e-e806-4784-89e3-164aec9a5c78.jsonl",
+  "nativeLogs": {
+    "stdout": "dsh web: http://127.0.0.1:63798/?token=[fixture-token-redacted]\n",
+    "stderr": ""
+  },
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  }
+}

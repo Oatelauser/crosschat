@@ -1,0 +1,121 @@
+{
+  "schema": 1,
+  "scope": "DSH npm/Web local native manual membership and source recovery; no Desktop or rename acceptance",
+  "runId": "20c85c14-74b5-4be7-ade0-e0c7edd7f8a1",
+  "platform": "win32",
+  "arch": "x64",
+  "node": "v22.23.4",
+  "checks": [
+    {
+      "name": "authenticated-source-and-readonly-description",
+      "status": "passed"
+    },
+    {
+      "name": "exact-manual-adoption-and-independent-stars",
+      "status": "passed"
+    },
+    {
+      "name": "exact-removal-is-independent-of-native-capability",
+      "status": "passed"
+    },
+    {
+      "name": "bridge-loss-rejects-old-confirmation-without-claim",
+      "status": "passed"
+    },
+    {
+      "name": "native-source-recovery-requires-new-confirmation",
+      "status": "passed"
+    },
+    {
+      "name": "unverified-rename-remains-disabled-and-chat-is-unchanged",
+      "status": "passed"
+    }
+  ],
+  "status": "failed",
+  "version": "0.2.1-rc.5",
+  "nativeId": "session-49b01dd6-d0f8-48fa-b5bd-eb5eb59e887f",
+  "pid": 26096,
+  "confirmations": {
+    "original": {
+      "ref": {
+        "contextId": "local",
+        "providerId": "dsh",
+        "nativeId": "session-49b01dd6-d0f8-48fa-b5bd-eb5eb59e887f",
+        "endpointType": "host"
+      },
+      "observedAt": 1793867091712,
+      "revision": "036cbb5dee8cf6a08b9f0502f46a7fc653d94e8fbae93546679a18e62b37646f",
+      "actions": {
+        "adopt": {
+          "state": "executable"
+        },
+        "rename": {
+          "state": "needs-verification",
+          "reason": "尚未验证此端点的原生改名接口及活会话同步。",
+          "nextStep": "先在原生工具中改名；刷新后星内名称会跟随原生名称。"
+        }
+      }
+    },
+    "recovered": {
+      "ref": {
+        "contextId": "local",
+        "providerId": "dsh",
+        "nativeId": "session-49b01dd6-d0f8-48fa-b5bd-eb5eb59e887f",
+        "endpointType": "host"
+      },
+      "observedAt": 1793867092564,
+      "revision": "aac7f09200741607519dd842c62bbacc07cfbdd7853a0007289fb3ce98688cf6",
+      "actions": {
+        "adopt": {
+          "state": "executable"
+        },
+        "rename": {
+          "state": "needs-verification",
+          "reason": "尚未验证此端点的原生改名接口及活会话同步。",
+          "nextStep": "先在原生工具中改名；刷新后星内名称会跟随原生名称。"
+        }
+      }
+    }
+  },
+  "rosters": [
+    {
+      "starId": "native-a",
+      "members": [
+        {
+          "sessionId": "session-49b01dd6-d0f8-48fa-b5bd-eb5eb59e887f",
+          "name": "C24-20c85c14",
+          "tool": "dsh",
+          "endpointType": "host",
+          "machine": "11111111111111111111111111111111"
+        }
+      ]
+    },
+    {
+      "starId": "native-b",
+      "members": [
+        {
+          "sessionId": "session-49b01dd6-d0f8-48fa-b5bd-eb5eb59e887f",
+          "name": "C24-20c85c14",
+          "tool": "dsh",
+          "endpointType": "host",
+          "machine": "11111111111111111111111111111111"
+        }
+      ]
+    }
+  ],
+  "error": {
+    "name": "Error",
+    "message": "Timed out waiting for native membership terminal event",
+    "stack": "Error: Timed out waiting for native membership terminal event\n    at pollDsh (file:///D:/workspace/CC/cc-dsh-capabilities-20261105/test/helpers/dsh-live-fixture.mjs:154:9)\n    at async file:///D:/workspace/CC/cc-dsh-capabilities-20261105/test/helpers/dsh-native-operations-validation.mjs:116:5\n    at async check (file:///D:/workspace/CC/cc-dsh-capabilities-20261105/test/helpers/dsh-native-operations-validation.mjs:26:39)\n    at async file:///D:/workspace/CC/cc-dsh-capabilities-20261105/test/helpers/dsh-native-operations-validation.mjs:102:3"
+  },
+  "nativeLogs": {
+    "stdout": "dsh web: http://127.0.0.1:56235/?token=[fixture-token-redacted]\n",
+    "stderr": ""
+  },
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  }
+}

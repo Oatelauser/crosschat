@@ -1,0 +1,56 @@
+authenticated-source-and-readonly-description
+exact-manual-adoption-and-independent-stars
+exact-removal-is-independent-of-native-capability
+bridge-loss-rejects-old-confirmation-without-claim
+native-source-recovery-requires-new-confirmation
+unverified-rename-remains-disabled-and-chat-is-unchanged
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: ConPTY output did not match C24-d9ca369e; log: D:\workspace\CC\cc-dsh-capabilities-20261105\node_modules\.cache\c15-dsh-20261105\terminal-d9ca369e-e806-4784-89e3-164aec9a5c78.jsonl; output tail:                               │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+<members> 0项 · 完整 · 自动刷新[K
+
+按在线 / 下线分组；a 选择节点会话入星，e 按原生能力改名，Ctrl+D 删除成员。k/K 发钥，x 撤销凭证。[K
+
+:资源  /筛选  Esc返回  q退出[K[112C
+
+'failed' !== 'passed'
+
+    at file:///D:/workspace/CC/cc-dsh-capabilities-20261105/test/helpers/dsh-native-operations-validation.mjs:159:8 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'failed',
+  expected: 'passed',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.23.4

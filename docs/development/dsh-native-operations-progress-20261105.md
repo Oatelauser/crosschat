@@ -31,3 +31,15 @@ C15读取官方rc.2/rc.5的agent、api-session-controller、session-title、sess
 2026-11-05本地第二轮GREEN：DSH14例通过；含第三Provider探测失败/空上下文后恢复且不影响独立改名的两例，七文件定向104通过。Node22.23.4、最多2worker的单次完整npm run check退出0：lint、205模块/694边无环/无边界违规、build、2844通过/11原有跳过，241文件通过/3跳过。实际原生读取前后核对同一完整类型/实例/版本/profile及会话元数据，读取结束再次核对选中类型的完整登记集；不把该检查称为跨进程锁或OS身份认证。记录见[本轮检查索引](evidence/c15-dsh-operations-20261105/local-validation.json)。
 
 当前已完成C24入星只读核验的本地实现和C21对应隔离回归切片，尚待正式npm/Web原生链路、C18手动成员接线及C22增强验收；不是父项关闭。C20原生改名未启用，选择事件缺口保留，CLI/JSON字段、命令/用户步骤、持久文件均未新增。下一步使用隔离正式npm runtime与loopback模型验证，不操作日用Desktop。未推送、建PR或触发外部Actions。
+
+## 2026-11-05原生与终端切片收口
+
+最终产品检查点**836b379d9e560ef2b8ef94b2d81848a26239d771**。补充真实DiscoveryService边界后发现超出版本窗口的来源错误被通用操作层折叠为unavailable；保存2e25f56的1失败/14通过RED，再保留来源明确提供的unsupported状态。恢复仍只读、不自动claim。最终七文件105通过，单次完整check退出0：2845通过/11原有跳过、241文件/3跳过，lint、205模块/694边及build通过。第一次2844绿及全部RED不覆盖，见[fresh-discovery完整检查](evidence/c15-dsh-operations-20261105/full-check-fresh-discovery.txt)。
+
+正式Windows x64 npm **0.2.1-rc.5**＋锁定pnpm11.28.5，以此前Windows候选包锁固定依赖，仅把两个本地tarball文件URL改为本轮已校验位置，npm ci正常退出0。不是运行latest，也不把rc.2的源码检查算作本轮rc.2原生增强验收。正式Host和生产桥、reader、generic operations、真实broker/两个同机node连接、既有TCP管理入口与构建TUI已串通；没有用直调Adapter代替成员修改。
+
+[原生七项与27份文件索引](evidence/c15-dsh-operations-20261105/native-validation.json)覆盖：只读描述不写册/不跨host与desktop；同一完整ID在两星分别手动永久入星；精确删册只影响所选星；桥禁用时拒绝旧确认；重启插件后原生Agent仍是同一对象，新来源使旧revision失效，新确认才入星；改名未核实时保持禁用；真实ConPTY键盘取消零写、确认入星、缩放和终端恢复。最终原生run的Host正常退出、登记撤销、自有run根删除均为true、forced=false，模型请求为0、原生事件不变。两个连接属于同一机器，不代表C22要求的两个独立node或两个操作端刷新已验收。
+
+终端工装前三次失败全部保留：漏接production management/等待错误事件、成员页未就绪即输入、取消后能力重核期间再次输入。订正只修工装接线和有证据的就绪等待，没有加猜测sleep或放宽产品检查；第一场应用事件未在清理前复制，保留其原始终端与报告并明确缺失，不补造。第四场及最终检查点的七项通过。归档副本移除了Web URL token，包含base64终端块内的值；保留原始摘要，不把携带临时凭据的缓存原样提交。
+
+本轮**C18/C24的Windows npm/Web入星与恢复切片**移出活动开发，C21相应用例和C23指南随行。正式Desktop、新旧npm版本/其它平台增强、未知Provider更完整组合、永久/临时多窗保护、两个独立node/两个操作端、写不明受控原生/CI增量仍归C21/C22等父项。全部25父项/11CI索引保留；没有推送/外部执行，C20仍禁用。独占安装根暂保留为紧接C20的测试依赖，所有已运行Host及run数据均已回收；日用DSH保持。
