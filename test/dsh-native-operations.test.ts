@@ -7,6 +7,7 @@ import { join, relative, resolve } from 'node:path';
 import process from 'node:process';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createNativeOperationProviders } from '../src/application/native-operation-providers.js';
+import { DiscoveryService } from '../src/application/discovery/service.js';
 import { createNativeSessionOperations } from '../src/application/session-operations.js';
 import { createDshSessionReader } from '../src/application/sessions/dsh-reader.js';
 import type { DiscoverySession } from '../src/application/discovery/model.js';
@@ -21,7 +22,7 @@ function gate() {
   return { promise, release };
 }
 
-async function fixture(timeoutMs = 300) {
+async function fixture(timeoutMs = 300, freshDiscovery = false) {
   const temporary = await realpath(tmpdir());
   const root = await mkdtemp(join(temporary, 'crosschat-dsh-operations-'));
   const instancesDir = join(root, 'instances');
@@ -86,7 +87,7 @@ async function fixture(timeoutMs = 300) {
   requests.length = 0; state.details = 0;
   const adopt = vi.fn<(item: DiscoverySession, tool: string, signal?: AbortSignal) => Promise<void>>(async () => undefined);
   // A retained detail snapshot makes the separate native revalidation observable.
-  const operations = createNativeSessionOperations({ discovery: { execute: async () => ({ op: 'detail',
+  const operations = createNativeSessionOperations({ discovery: freshDiscovery ? new DiscoveryService([reader]) : { execute: async () => ({ op: 'detail',
     providers: [{ providerId: 'dsh', capabilities: item.capabilities }], detail: { item, completeness: 'complete', errors: [], observedAt: 1 } }) },
     providers: createNativeOperationProviders({ dsh: { instancesDir } }), adopt, timeoutMs });
   return { operations, adopt, state, registration, requests, publish, native, ref: item.ref,
@@ -160,6 +161,16 @@ describe('Harness native operation facts through the existing authenticated brid
 
   it('reports the current unsupported runtime window and recovers after a supported version returns', async () => {
     const f = await fixture();
+    f.registration.runtimeVersion = '0.3.0'; await f.publish();
+    expect((await f.operations.describe(f.ref)).actions.adopt.state).toBe('unsupported');
+    f.registration.runtimeVersion = '0.2.1-rc.2'; await f.publish();
+    expect((await f.operations.describe(f.ref)).actions.adopt.state).toBe('executable');
+    expect(f.adopt).not.toHaveBeenCalled();
+  });
+
+  it('preserves the unsupported source result through fresh production discovery and recovers without a write', async () => {
+    const f = await fixture(300, true);
+    expect((await f.operations.describe(f.ref)).actions.adopt.state).toBe('executable');
     f.registration.runtimeVersion = '0.3.0'; await f.publish();
     expect((await f.operations.describe(f.ref)).actions.adopt.state).toBe('unsupported');
     f.registration.runtimeVersion = '0.2.1-rc.2'; await f.publish();
