@@ -1,0 +1,19 @@
+{"status":"failed","error":"Timed out waiting for owned Edge debugging endpoint","cleanup":{"runtimeStopped":true,"registrationRemoved":true,"removed":false,"forced":false},"browserProcessesAfter":0,"unsafe":true}
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+'failed' !== 'passed'
+
+    at file:///D:/workspace/CC/cc-dsh-rename-20261105/node_modules/.cache/c20-dsh-20261105/probe-web.mjs:63:8 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: 'failed',
+  expected: 'passed',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.23.4

@@ -1,5 +1,7 @@
 # DSH 优先完成计划
 
+2026-11-05 18:06后用户明确暂停，本会话已停止开发与原生测试，相关进程/worker为0。当前源代码检查点0b10b115（产品fc065c1、完整2865通过/11原有跳过）；C20真实Web选中了同一已有会话，但改名被旧revision守卫拒绝、标题未改，生产Provider仍禁用改名。详细[暂停断点与下一步](dsh-native-rename-progress-20261105.md#用户暂停断点)及[证据索引](evidence/c20-dsh-rename-20261105/pause-validation.json)已保存。没有推送、发布或新Actions；25父项/11CI索引、其它负责人及日用DSH保持。等待用户明确继续，不自动恢复。
+
 2026-11-05改名续接：[C20独立本地工作区](dsh-native-rename-progress-20261105.md)基于入星验收948e58f继续，桥子资源检查点bd0779c，15条新边界/四文件119定向通过，RED及新工作区未build时的旧测试失败保留。用户Provider仍未启用改名；下一步Adapter和真正Web界面/node/星册/按名寻址核实。没有新命令/步骤、持久数据文件或外部执行，25父项/11CI索引及既有归属保持。
 
 2026-11-05增强收口：独立分支产品836b379已完成[C15/C24/C18的Windows npm/Web入星切片](dsh-native-operations-progress-20261105.md#2026-11-05原生与终端切片收口)：正式rc.5、生产桥/reader/真实broker与两星同机node连接、真实ConPTY取消/确认/恢复七项通过，原生Agent/聊天不变且Host正常退出/登记与run根回收。定向105、完整2845通过/11原有跳过；全部RED、终端工装失败及[证据索引](evidence/c15-dsh-operations-20261105/validation.json)保留。该已验切片移出活动，下一步条件C20原生改名；目前仍禁用。其它平台/版本、Desktop与C22双node/双操作端/CI组合继续保留，无新外部执行/用户命令或持久文件，25父项/11CI索引与公共负责人不变。

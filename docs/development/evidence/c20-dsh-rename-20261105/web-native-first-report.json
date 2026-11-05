@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "scope": "Exploratory true DSH Web UI and adapter qualification; not node/star acceptance",
+  "root": "D:\\workspace\\CC\\cc-dsh-rename-20261105\\node_modules\\.cache\\c20-dsh-20261105\\web-native-cJIhID",
+  "status": "failed",
+  "productHead": "fc065c14bb1f722340b63946dd20bed0234680a3",
+  "version": "0.2.1-rc.5",
+  "hostPid": 41220,
+  "nativeId": "session-63481015-3b62-456d-b571-d5bc7d74cda4",
+  "browserPid": 29220,
+  "error": {
+    "message": "Timed out waiting for owned Edge debugging endpoint",
+    "stack": "Error: Timed out waiting for owned Edge debugging endpoint\n    at pollDsh (file:///D:/workspace/CC/cc-dsh-rename-20261105/test/helpers/dsh-live-fixture.mjs:154:9)\n    at async file:///D:/workspace/CC/cc-dsh-rename-20261105/node_modules/.cache/c20-dsh-20261105/probe-web.mjs:31:15"
+  },
+  "browserProcessesAfter": 0,
+  "nativeLogs": {
+    "stdout": "dsh web: http://127.0.0.1:62812/?token=[fixture-token-redacted]\n",
+    "stderr": ""
+  },
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": false,
+    "forced": false
+  },
+  "cleanupFailures": [
+    "Owned browser release is unknown"
+  ],
+  "unsafe": true
+}

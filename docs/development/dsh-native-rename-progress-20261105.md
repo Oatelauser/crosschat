@@ -26,3 +26,16 @@ GET里的executable只说明这个底层桥可以对当前活对象调用已核�
 32e073e保存Adapter行为RED（4失败/16通过），最终产品**fc065c14bb1f722340b63946dd20bed0234680a3**已实现src/dsh/rename.ts；当前仅受控验收显式注入，生产Provider工厂仍未登记。共同原生事实收在DSH Adapter的withVerifiedDshTarget单次有界生命周期，入星检查与改名共用，未另造状态/恢复机制。标题确认同时绑定活Agent及当前原生标题服务的内存代次；服务失效/恢复后旧确认不沿用。服务错误、明示写前拒绝和写不明分别保留，零自动重试；其它端点与未核实版本不继承Web能力。
 
 新桥＋Adapter共20例通过，含C18边界/旧Adapter的三文件92通过；首次build、相关lint通过，随后单次完整npm run check退出0：**2865通过/11原有跳过，242文件通过/3跳过**，lint/import graph/build均通过，见[完整原始检查](evidence/c20-dsh-rename-20261105/full-check-adapter.txt)。本轮真实Web界面正在独占profile/loopback桩中探测；尚未有原生通过结论，node/星册/按名寻址、最终TUI改名及两平台版本组合仍未完成，不能据此启用生产改名或关闭C20。
+
+## 用户暂停断点
+
+2026-11-05 18:06后用户明确暂停，本会话已停止开发与原生测试，相关进程/worker为0。当前源代码检查点0b10b115（产品fc065c1、完整2865通过/11原有跳过）；C20真实Web选中了同一已有会话，但改名被旧revision守卫拒绝、标题未改，生产Provider仍禁用改名。详细[暂停断点与下一步](dsh-native-rename-progress-20261105.md#用户暂停断点)及[证据索引](evidence/c20-dsh-rename-20261105/pause-validation.json)已保存。没有推送、发布或新Actions；25父项/11CI索引、其它负责人及日用DSH保持。等待用户明确继续，不自动恢复。
+
+- 已完成的C18/C24 Windows npm/Web入星切片见948e58f，定向105、完整2845/11及七项正式Host/ConPTY通过，切片不重开。
+- C20当前生产Provider尚未登记rename；20条模拟Host/Adapter用例通过、最后产品完整检查在fc065c1通过。其后cf43d67/0b10b11仅改隔离工装，ESLint通过，未重跑完整check。
+- 真实rc.5 Web通过公开workspaceRegistry.create及sessionController.create(workspaceId)建立独占工作区；同一目标先用loopback桩完成首条普通消息，随后在Web选中精确data-row-key原生ID。不要用前端自动空白会话替代目标。control4中的rename结果为rejected、sameAgent=true，未修改标题；两张截图为失败前后原件，不能当GREEN。
+- 下一步先以每次ctx.get都返回新服务代理的fixture保存RED。当前桥将服务对象指针当作代次；已读官方Cordis getTraceable每次createTraceable/new Proxy，怀疑导致真实确认持续变化。核实后沿既有公共ctx.inject服务加载/卸载生命周期绑定代次，保留活Agent代次、失效恢复及独立cleanup；尚未实施修复。再做真实Web同步、node/星册/按名寻址与TUI；新旧版本/其它平台/双node双操作端及C22继续保留。
+- 普通Edge/Chrome调试未启动；实际复用现有Playwright Chromium1243，不修改其缓存。CFT下载助手未在时限内收口，已核实并停止其独占Node13908，没有执行下载包，不续跑该下载。
+- 一次工作区选择触发原生文件夹框，测试profile缺Desktop导致用户看到位置不可用。已停止该路径，保存用户截图；Host/浏览器正常退出，精确匹配错误窗口0。现有工装改用公开工作区API，受控click禁止添加/选择工作区按钮，不再调系统文件夹选择框。
+- 前两处浏览器失败目录删除曾被自动审批仅以blocked by policy拒绝；用户已手动删除，已核实两处均不存在，清理项关闭。所有后续Host/run根由fixture正常回收，浏览器code0、相关进程0。仅保留开发worktree、证据与后续可复用的独占npm安装/工具缓存；不动D:/soft/DeepSeek Harness及用户未跟踪文档。
+- 新用户命令/必需交互及crosschat持久数据文件仍等用户决定；普通代码/tests/docs/skills允许。外部推送/PR/Actions不复用旧PR批准。root独立、不派worker。

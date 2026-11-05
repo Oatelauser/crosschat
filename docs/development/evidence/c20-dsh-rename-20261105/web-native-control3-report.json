@@ -1,0 +1,263 @@
+{
+  "schema": 1,
+  "scope": "Exploratory true DSH Web UI and adapter qualification; not node/star acceptance",
+  "root": "D:\\workspace\\CC\\cc-c20-web-sxcrjB",
+  "status": "explored",
+  "productHead": "workspace-setup-checkpoint-see-git-receipt",
+  "version": "0.2.1-rc.5",
+  "hostPid": 41536,
+  "setup": {
+    "schema": 1,
+    "pid": 41536,
+    "version": "0.2.1-rc.5",
+    "webPort": 61059,
+    "registeredWorkspace": {
+      "id": "fbdba747-10b0-46c6-ae3e-276d3f40b228",
+      "path": "D:\\workspace\\CC\\cc-c20-web-sxcrjB\\run-rklhYH\\workspace"
+    }
+  },
+  "nativeId": "session-1c31208d-5a94-41bf-9d23-26180a42dc03",
+  "browser": "existing Playwright Chromium 1243",
+  "browserPid": 39712,
+  "browserEndpointOwnerVerified": true,
+  "browserVersion": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/153.0.8010.12",
+    "revision": "@971a7443b0c9b0a9b2860529b33331b76077ec62",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "jsVersion": "15.3.76.4"
+  },
+  "commands": [
+    {
+      "command": {
+        "op": "eval",
+        "expression": "[...document.querySelectorAll('button')].find(e=>e.innerText==='继续')?.setAttribute('data-c20-continue','true'); ({body:document.body.innerText})"
+      },
+      "answer": {
+        "body": "探索未至之境\n预览版\nworkspace\n标准模式\n描述你想要构建的内容, / 调用指令, @ 文件或对话\n完全权限\nDeepSeek-V4.1-Flash\n1017\nOff\n预览版说明\n\nDeepSeek Harness 目前的 0.2 版本仍处于预览阶段，还有许多地方需要持续改进和打磨，希望听取广大开发者和用户的反馈建议。现在，新的桌面端面向广泛用户，开发者相关的进阶功能可在配置中开启使用。预计 DeepSeek Harness 的产品功能以及插件 API 都会继续快速迭代、持续演化，并逐渐趋于稳定。\n\n我们期待与全球用户和开发者一起，在开源、可复用、可组合的基础设施之上，共同探索智能上限。欢迎大家用 DeepSeek Harness 将想法变成现实，与社区一起丰富插件生态。\n\n继续"
+      }
+    },
+    {
+      "command": {
+        "op": "click",
+        "selector": "button[data-c20-continue]"
+      },
+      "answer": {
+        "clicked": "button[data-c20-continue]"
+      }
+    },
+    {
+      "command": {
+        "op": "click",
+        "selector": "button[aria-label=\"打开侧边栏\"]"
+      },
+      "answer": {
+        "clicked": "button[aria-label=\"打开侧边栏\"]"
+      }
+    },
+    {
+      "command": {
+        "op": "eval",
+        "expression": "({body:document.body.innerText,roles:[...document.querySelectorAll('[role=button],a,button')].map(e=>({tag:e.tagName,role:e.getAttribute('role'),text:e.innerText,aria:e.getAttribute('aria-label'),title:e.getAttribute('title')}))})"
+      },
+      "answer": {
+        "body": "新会话\nCtrl\n+\nAlt\n+\nN\n插件\n自动化任务\n更多\n工作区\nworkspace\n新会话\n更多\n探索未至之境\n预览版\nworkspace\n标准模式\n描述你想要构建的内容, / 调用指令, @ 文件或对话\nDeepSeek-V4.1-Flash\n1017\nOff",
+        "roles": [
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "",
+            "aria": "新建会话",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "",
+            "aria": "收起侧边栏",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "新会话\nCtrl\n+\nAlt\n+\nN",
+            "aria": "新建会话",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "插件",
+            "aria": "插件",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "自动化任务",
+            "aria": "自动化任务",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "更多",
+            "aria": "更多",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "",
+            "aria": "搜索会话",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "",
+            "aria": "视图选项",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "",
+            "aria": "添加工作区",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "",
+            "aria": "工作区“workspace”的操作",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "",
+            "aria": "在“workspace”中新建会话",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "更多",
+            "aria": "账号菜单",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "",
+            "aria": "打开右侧边栏",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "workspace",
+            "aria": "选择工作区",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "标准模式",
+            "aria": null,
+            "title": "选择新任务使用的 Agent 预设"
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "",
+            "aria": "添加文件或调用指令",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "",
+            "aria": "访问模式，当前：完全权限",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "DeepSeek-V4.1-Flash\n1017\nOff",
+            "aria": "选择模型，当前 DeepSeek-V4.1-Flash，推理等级 Off",
+            "title": "DeepSeek-V4.1-Flash · Off"
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "",
+            "aria": "发送消息",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "",
+            "aria": "新标签页",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "",
+            "aria": "分栏",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "",
+            "aria": "退出全屏",
+            "title": null
+          },
+          {
+            "tag": "BUTTON",
+            "role": null,
+            "text": "",
+            "aria": "收起右侧边栏",
+            "title": null
+          }
+        ]
+      }
+    },
+    {
+      "command": {
+        "op": "eval",
+        "expression": "({matches:[...document.querySelectorAll('*')].filter(e=>e.children.length===0&&e.textContent==='新会话').map(e=>e.parentElement.outerHTML.slice(0,2200)),idInDom:document.body.innerHTML.includes('session-1c31208d-5a94-41bf-9d23-26180a42dc03')})"
+      },
+      "answer": {
+        "matches": [
+          "<span class=\"hHd-Xa_newSessionContent\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\" stroke-width=\"1.3\"><path d=\"M2.37091 11.2501C1.58745 9.89288 1.32067 8.29835 1.61969 6.76006C1.91872 5.22177 2.76342 3.8433 3.99826 2.87846C5.2331 1.91362 6.77494 1.42737 8.33988 1.50925C9.90482 1.59113 11.3875 2.23562 12.5149 3.32406C13.6425 4.41269 14.3387 5.87206 14.4754 7.4334C14.612 8.99474 14.18 10.5529 13.2587 11.8209C12.3375 13.0888 10.9891 13.9813 9.46194 14.3337C8.18691 14.628 6.85895 14.5294 5.64989 14.0605C5.1712 13.8748 4.76962 13.4932 4.26534 13.3967C3.67413 13.2835 2.95257 13.5598 2.03794 14.3337\" stroke=\"currentColor\"></path><path d=\"M8 5V11\" stroke=\"currentColor\"></path><path d=\"M5 8H11\" stroke=\"currentColor\"></path></svg><span class=\"hHd-Xa_newSessionLabel hHd-Xa_wide\">新会话</span></span>",
+          "<div data-row-key=\"session:session-e768d0e0-8730-48ed-a240-9f7450042a5f\" class=\"YDXeBa_sessionRow YDXeBa_selected\" role=\"treeitem\" aria-selected=\"true\" draggable=\"false\"><span class=\"YDXeBa_slot\"></span><span class=\"YDXeBa_title\">新会话</span></div>"
+        ],
+        "idInDom": false
+      }
+    }
+  ],
+  "lastBody": "新会话\nCtrl\n+\nAlt\n+\nN\n插件\n自动化任务\n更多\n工作区\nworkspace\n新会话\n更多\n探索未至之境\n预览版\nworkspace\n标准模式\n描述你想要构建的内容, / 调用指令, @ 文件或对话\nDeepSeek-V4.1-Flash\n1017\nOff",
+  "sameAgent": true,
+  "browserExit": {
+    "code": 0,
+    "signal": null
+  },
+  "browserProcessesAfter": 0,
+  "nativeLogs": {
+    "stdout": "dsh web: http://127.0.0.1:61059/?token=[fixture-token-redacted]\n",
+    "stderr": ""
+  },
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  },
+  "browserLogs": "[39712:41336:1105/175203.214:ERROR:content\\browser\\network_service_instance_impl.cc:655] Network service crashed or was terminated, restarting service.\r\n\r\nDevTools listening on ws://127.0.0.1:52849/devtools/browser/43d92bd7-ce3c-4be0-ac7c-db18eb9b8b22\r\n[39712:41336:1105/175203.305:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[39712:41336:1105/175203.305:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[39712:41336:1105/175205.759:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[39712:41336:1105/175205.759:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[39712:19892:1105/175210.820:ERROR:google_apis\\gcm\\engine\\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\r\n[39712:19892:1105/175239.202:ERROR:google_apis\\gcm\\engine\\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\r\n[39712:19892:1105/175331.031:ERROR:google_apis\\gcm\\engine\\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\r\n",
+  "unsafe": false
+}

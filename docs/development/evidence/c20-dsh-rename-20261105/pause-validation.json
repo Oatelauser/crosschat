@@ -1,0 +1,196 @@
+{
+  "schema": 1,
+  "pausedAt": "2026-11-05T10:09:56.158Z",
+  "request": "用户明确暂停任务",
+  "sourceHead": "0b10b115fc1b6fa3a359d756bfffb2751bfd0385",
+  "productCheckpoint": "fc065c14bb1f722340b63946dd20bed0234680a3",
+  "fullCheck": {
+    "passed": 2865,
+    "skipped": 11,
+    "filesPassed": 242,
+    "filesSkipped": 3,
+    "modules": 206,
+    "edges": 698,
+    "exitCode": 0
+  },
+  "nativeResult": "Exact existing Web UI target selected; rename rejected before write due changing revision. Not accepted.",
+  "ownedActiveProcessesAtPause": 0,
+  "workers": 0,
+  "artifacts": [
+    {
+      "file": ".gitattributes",
+      "bytes": 26,
+      "sha256": "11b9f1f626d619b3bf9fd7f000e86a0cd80c42552203ec6dde71d737eddeddfb"
+    },
+    {
+      "file": "adapter-build-first.txt",
+      "bytes": 49,
+      "sha256": "caee18acaf6cfeac30a8769f25fbefd2a722f1499048ebd53a6a1d2c55e3ba95"
+    },
+    {
+      "file": "adapter-first-green.txt",
+      "bytes": 14618,
+      "sha256": "6cca345ee240c20f2908c825db1bb4796c79b6cb83b3917cee471091022283f3"
+    },
+    {
+      "file": "adapter-first-lint.txt",
+      "bytes": 60,
+      "sha256": "db86ce6ad53857ae24c5f41fd80a9f4c005c659f56790f5cf7457b9f04586e96"
+    },
+    {
+      "file": "adapter-red.txt",
+      "bytes": 7721,
+      "sha256": "9088ad1c32dcf413116cd9099099ab3d576b39955c7185c773d963090579ee2f"
+    },
+    {
+      "file": "bridge-first-implementation.txt",
+      "bytes": 21425,
+      "sha256": "62ea4151e572c7ce6511ca7ed331f68c67df0c4d5bb101bce22ec3281af5a2e4"
+    },
+    {
+      "file": "bridge-first-red.txt",
+      "bytes": 8626,
+      "sha256": "bce990c73c62e1208bd5892910829186440c3b36cf1f2e561aec6bccd4f459d8"
+    },
+    {
+      "file": "bridge-live-generation-red.txt",
+      "bytes": 8947,
+      "sha256": "3e28cb9e4b152ee869d1e506ae7a3510debad00f4ae7bb253f0a03cd9ec99fbf"
+    },
+    {
+      "file": "bridge-targeted-green.txt",
+      "bytes": 17997,
+      "sha256": "03c5be47c2eba89102b151c7fd89d32daf5e9e4a1415c51ee178c182c2c7a360"
+    },
+    {
+      "file": "browser-startup-cleanup.json",
+      "bytes": 419,
+      "sha256": "5dee8ba5c652f261d92bf39f85979ba8bcbbac3c679b7ee0cdb759eff7039510"
+    },
+    {
+      "file": "cft-download-supervision.json",
+      "bytes": 113,
+      "sha256": "e08b0547a7b8351eed23385943b8c2423418b811dc0eccad1f645efdd49c8759"
+    },
+    {
+      "file": "cft-install-state.json",
+      "bytes": 231,
+      "sha256": "ad8d21fe3097eeaf68f8309099d78ecc70283762d112d9cea7f13042ec0cc6be"
+    },
+    {
+      "file": "cft-manifest.json",
+      "bytes": 10450,
+      "sha256": "8127cd5d1314b0ab202c399fec45fbf8ca81e0bad22e231f00ad7ed4e4105873"
+    },
+    {
+      "file": "close-owned-picker.ps1.source.txt",
+      "bytes": 2547,
+      "sha256": "c2207ba5997a188601a7ea3ad0c9a1655ea9308d335248e63dcd644b1fbd2c71"
+    },
+    {
+      "file": "first-build.txt",
+      "bytes": 49,
+      "sha256": "caee18acaf6cfeac30a8769f25fbefd2a722f1499048ebd53a6a1d2c55e3ba95"
+    },
+    {
+      "file": "full-check-adapter.txt",
+      "bytes": 31880,
+      "sha256": "6b7a33eea48664828041074cea2dce1e2b9bc6c5e7c0c8f35a00c743c982d511"
+    },
+    {
+      "file": "native-after-rejected.png",
+      "bytes": 41313,
+      "sha256": "c40ba27f011748ae768906e575e317513eb484334464d72e60b52d623f4a9947"
+    },
+    {
+      "file": "native-before-rejected.png",
+      "bytes": 41313,
+      "sha256": "c40ba27f011748ae768906e575e317513eb484334464d72e60b52d623f4a9947"
+    },
+    {
+      "file": "native-picker-user-reported.png",
+      "bytes": 99813,
+      "sha256": "8bc4a6fee64062552115ec15dcfee21484e7a00fd224556ec813db94bb1259fc"
+    },
+    {
+      "file": "probe-web.mjs.source.txt",
+      "bytes": 8809,
+      "sha256": "960a4a01d909f3d2ed4b9b3cee3113587b4e7d3559682227a2c58f924ac29110"
+    },
+    {
+      "file": "testing-browser-facts.json",
+      "bytes": 318,
+      "sha256": "026bebd2f8b9833e7f39f1a90f9372e1e93c7ba02c58b8f0d5d2127d4692813a"
+    },
+    {
+      "file": "web-control4.mjs.source.txt",
+      "bytes": 10199,
+      "sha256": "02fb5f245b2b93b924067c1211864dc72e14fb49215217c29ce439d53971c758"
+    },
+    {
+      "file": "web-native-control-report.json",
+      "bytes": 10264,
+      "sha256": "491e624dab7982b22c0aa92a5429df3dc890bfbce57ddd5e5e426e09a58365f0"
+    },
+    {
+      "file": "web-native-control2-report.json",
+      "bytes": 9534,
+      "sha256": "15cd695257331b5e9420d2d66d56fd74e3065a111f299afd49a4c3d52369f846"
+    },
+    {
+      "file": "web-native-control3-report.json",
+      "bytes": 11176,
+      "sha256": "86e87fc3ed2d1c3229b4312f4bc8b8caa5bacdfca2380367cb00cfac40b8a06c"
+    },
+    {
+      "file": "web-native-control4-report.json",
+      "bytes": 88440,
+      "sha256": "79979fb9f56c3c8db782c7fc5a90fda555b0796a67ad16eef8f596dc8129ff39"
+    },
+    {
+      "file": "web-native-first-console.txt",
+      "bytes": 668,
+      "sha256": "4e468fe4ca21fefd92a1bd65a1a4cb324025b6ead90ae1e96503589a327611f9"
+    },
+    {
+      "file": "web-native-first-report.json",
+      "bytes": 1187,
+      "sha256": "e8adefcbe365e84db9af8949e7dc826fdbe3b8d5debd768c16ed122871d3d16b"
+    },
+    {
+      "file": "web-native-qualified-console.txt",
+      "bytes": 722,
+      "sha256": "1c6eb475aa24624663bad13c5b18938fcdd2eca23733da442f33b52a2c56ee2a"
+    },
+    {
+      "file": "web-native-qualified-report.json",
+      "bytes": 3983,
+      "sha256": "afbf9d2addc4e902fb768ad0e726d5a01824f4a1cfc19ad053bc9cc14fa70c14"
+    },
+    {
+      "file": "web-native-second-console.txt",
+      "bytes": 668,
+      "sha256": "4e468fe4ca21fefd92a1bd65a1a4cb324025b6ead90ae1e96503589a327611f9"
+    },
+    {
+      "file": "web-native-second-report.json",
+      "bytes": 3717,
+      "sha256": "dbf4cf0765aedce2b1e73a5cb532a403c9cd061eedf8ebb810dfa01f2c48f994"
+    },
+    {
+      "file": "web-native-third-console.txt",
+      "bytes": 714,
+      "sha256": "ca33307120f5aeb3c5ef5ca451f9fcad4ee2e7f386beb9518bee09ffa24af536"
+    },
+    {
+      "file": "web-native-third-report.json",
+      "bytes": 3245,
+      "sha256": "89f0b3ac03f7cc3e49245062cae85f353e09dce84669d2db89f186bec8b2a885"
+    },
+    {
+      "file": "web-qualification.mjs.source.txt",
+      "bytes": 10521,
+      "sha256": "c68fbe624097d134db6c1e01881083234f2936ab698a6f6ef72f21568102764b"
+    }
+  ]
+}

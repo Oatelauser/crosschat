@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "scope": "Exploratory true DSH Web UI and adapter qualification; not node/star acceptance",
+  "root": "D:\\workspace\\CC\\cc-c20-web-aDdrRs",
+  "status": "failed",
+  "productHead": "fc065c14bb1f722340b63946dd20bed0234680a3",
+  "version": "0.2.1-rc.5",
+  "hostPid": 31304,
+  "nativeId": "session-dd6eed76-5589-4014-97c5-5f870f1e3efa",
+  "browser": "existing Playwright Chromium 1243",
+  "browserPid": 40420,
+  "browserEndpointOwnerVerified": true,
+  "lastBody": "探索未至之境\n预览版\n选择工作区\n标准模式\n选择一个工作区开始\n预览版说明\n\nDeepSeek Harness 目前的 0.2 版本仍处于预览阶段，还有许多地方需要持续改进和打磨，希望听取广大开发者和用户的反馈建议。现在，新的桌面端面向广泛用户，开发者相关的进阶功能可在配置中开启使用。预计 DeepSeek Harness 的产品功能以及插件 API 都会继续快速迭代、持续演化，并逐渐趋于稳定。\n\n我们期待与全球用户和开发者一起，在开源、可复用、可组合的基础设施之上，共同探索智能上限。欢迎大家用 DeepSeek Harness 将想法变成现实，与社区一起丰富插件生态。\n\n继续",
+  "error": {
+    "message": "Timed out waiting for native title rendered in true Web UI",
+    "stack": "Error: Timed out waiting for native title rendered in true Web UI\n    at pollDsh (file:///D:/workspace/CC/cc-dsh-rename-20261105/test/helpers/dsh-live-fixture.mjs:154:9)\n    at async file:///D:/workspace/CC/cc-dsh-rename-20261105/node_modules/.cache/c20-dsh-20261105/probe-web.mjs:39:2"
+  },
+  "browserExit": {
+    "code": 0,
+    "signal": null
+  },
+  "browserProcessesAfter": 0,
+  "nativeLogs": {
+    "stdout": "dsh web: http://127.0.0.1:62256/?token=[fixture-token-redacted]\n",
+    "stderr": ""
+  },
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  },
+  "browserLogs": "\r\nDevTools listening on ws://127.0.0.1:62263/devtools/browser/6ad8d057-8491-4393-9c74-beffe7d708f7\r\n[40420:27736:1105/173304.142:ERROR:content\\browser\\network_service_instance_impl.cc:655] Network service crashed or was terminated, restarting service.\r\n[40420:27736:1105/173304.233:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[40420:27736:1105/173304.233:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[40420:27736:1105/173306.463:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[40420:27736:1105/173306.463:WARNING:ui\\aura\\window.cc:1464] StackChildLayerRelativeTo called with unmanaged layer(s). child=WebContentsViewAura child_managed=0 target=WebContentsViewAura target_managed=0\r\n[40420:9996:1105/173310.448:ERROR:google_apis\\gcm\\engine\\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\r\n",
+  "unsafe": false
+}
