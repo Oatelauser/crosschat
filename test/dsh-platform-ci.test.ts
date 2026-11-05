@@ -84,4 +84,22 @@ describe('DSH communication sequence keeps the runner identity across builds', (
     expect(result.baseline.runId).not.toBe(result.candidate.runId);
     expect(removed).toEqual(['baseline', 'candidate']);
   });
+
+  it('retains a candidate with the wrong runner identity instead of deleting it or trying another build', async () => {
+    const baseline = parseDshNpmManifest(pinned.package, 'linux', 'x64');
+    const candidate = { ...baseline, version: '0.2.1-rc.5' };
+    const installed: string[] = [], removed: string[] = [];
+    const result = await runDshBuildSequence({ baseline, candidate }, {
+      install: async (_artifact: unknown, label: string) => { installed.push(label); return { root: label }; },
+      probe: async (installation: { root: string }, artifact: { version: string }) => ({
+        ...communicationReport(installation.root === 'candidate' ? 'win32' : 'linux', 'x64', artifact.version),
+        process: { code: 0, signal: null, timedOut: false },
+      }),
+      remove: async (installation: { root: string }) => { removed.push(installation.root); },
+    }, { platform: 'linux', arch: 'x64' });
+    expect(result).toMatchObject({ platform: 'linux', arch: 'x64', classification: { kind: 'infrastructure', notify: false },
+      installationCleanup: 'incomplete', retainedInstallation: { label: 'candidate', root: 'candidate' },
+      candidate: { platform: 'linux', arch: 'x64', category: 'infrastructure', status: 'failed' } });
+    expect(installed).toEqual(['baseline', 'candidate']); expect(removed).toEqual(['baseline']);
+  });
 });

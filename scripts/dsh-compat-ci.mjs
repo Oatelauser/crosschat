@@ -1054,9 +1054,10 @@ export async function runDshDesktopAttempt({ output, label, artifact, installati
 /** Every child gets a new directory and UUID; stale PASS files are never read. */
 export async function runDshProbeAttempt({ output, label, artifact, target = DEFAULT_DSH_NPM_TARGET }, execute) {
   if (!isDshNpmTarget(target?.platform, target?.arch)) throw new Error('Unplanned Harness npm probe target');
+  const expected = { platform: target.platform, arch: target.arch };
   return runNpmProbeAttempt({ output, label, artifact }, execute, {
-    valid: (report, build, runId) => validReport(report, build, runId, target),
-    fail: (version, stage, error) => infrastructure(version, stage, error, target),
+    valid: (report, build, runId) => validReport(report, build, runId, expected),
+    fail: (version, stage, error) => infrastructure(version, stage, error, expected),
   });
 }
 
@@ -1102,7 +1103,8 @@ function classify(baseline, candidate, retry) {
 
 /** One install, evidence and removal cycle per build; the next install waits for a proven release. */
 async function serialSequence(builds, config) {
-  const summary = { schema: 1, tool: config.tool, platform: 'win32', arch: 'x64', builds, scope: config.scope, installationCleanup: 'incomplete' };
+  const target = config.target ?? DEFAULT_DSH_NPM_TARGET;
+  const summary = { schema: 1, tool: config.tool, platform: target.platform, arch: target.arch, builds, scope: config.scope, installationCleanup: 'incomplete' };
   async function attempt(artifact, label) {
     let installation;
     try { installation = await config.operations.install(artifact, label); }
@@ -1141,12 +1143,14 @@ async function serialSequence(builds, config) {
   return summary;
 }
 
-export function runDshBuildSequence(builds, operations) {
+export function runDshBuildSequence(builds, operations, target = DEFAULT_DSH_NPM_TARGET) {
+  if (!isDshNpmTarget(target?.platform, target?.arch)) throw new Error('Unplanned Harness npm sequence target');
+  const expected = { platform: target.platform, arch: target.arch };
   return serialSequence(builds, {
-    tool, scope, operations,
-    verify: (report, artifact) => validReport(report, artifact) && processMatches(report),
+    tool, scope, operations, target: expected,
+    verify: (report, artifact) => validReport(report, artifact, undefined, expected) && processMatches(report),
     released: hasDshRuntimeReleaseProof,
-    fail: (version, phase, error) => infrastructure(version, phase === 'process' ? 'probe-process' : 'probe-report', error),
+    fail: (version, phase, error) => infrastructure(version, phase === 'process' ? 'probe-process' : 'probe-report', error, expected),
   });
 }
 
@@ -1243,14 +1247,16 @@ async function ownedChild(parent, target, owner) {
 
 async function main() {
   if (process.env.CROSSCHAT_LIVE !== '1') throw new Error('CROSSCHAT_LIVE=1 is required for official Harness downloads and isolated probes');
-  if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Only Windows x64 is configured; platform matrix work remains separate');
   const suite = resolveDshCiSuite(process.env.DSH_COMPAT_SUITE);
+  const target = { platform: process.platform, arch: process.arch };
+  if (!isDshNpmTarget(target.platform, target.arch)) throw new Error('Unplanned Harness npm runner platform/architecture');
+  if (suite.tool === DSH_ONBOARDING_TOOL && target.platform !== 'win32') throw new Error('POSIX from-zero onboarding awaits real terminal wiring; no installation started');
   const output = resolve(process.env.DSH_COMPAT_EVIDENCE ?? suite.evidenceDirectory); await mkdir(output, { recursive: true });
   const temp = await realpath(tmpdir()); const root = await realpath(await mkdtemp(join(temp, 'crosschat-dsh-ci-'))); const owner = randomUUID();
   await writeFile(join(root, '.fixture-owner'), owner);
   const installations = []; const archives = new Map();
   let npmCache;
-  let summary = { schema: 1, tool: suite.tool, platform: 'win32', arch: 'x64', scope: suite.scope, builds: {}, classification: { kind: 'infrastructure', notify: false }, installationCleanup: 'incomplete' };
+  let summary = { schema: 1, tool: suite.tool, platform: target.platform, arch: target.arch, scope: suite.scope, builds: {}, classification: { kind: 'infrastructure', notify: false }, installationCleanup: 'incomplete' };
   async function archive(artifact) {
     const key = createHash('sha256').update(artifact.integrity).digest('hex');
     if (!archives.has(key)) {
@@ -1269,7 +1275,7 @@ async function main() {
     const pinned = JSON.parse(await readFile(new URL('./dsh-compat-baseline.json', import.meta.url), 'utf8'));
     const builds = { baseline: parseDshNpmManifest(pinned.package, process.platform, process.arch), packageManager: parsePnpmManifest(pinned.packageManager) }; summary.builds = builds;
     builds.candidate = parseDshNpmManifest(JSON.parse((await fetchBytes('https://registry.npmjs.org/@deepseek-ai/dsh/latest', 2 * 1024 * 1024)).toString('utf8')), process.platform, process.arch);
-    const npmCLI = join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'); await access(npmCLI);
+    const npmCLI = join(dirname(process.execPath), ...(process.platform === 'win32' ? [] : ['..', 'lib']), 'node_modules', 'npm', 'bin', 'npm-cli.js'); await access(npmCLI);
     summary = await suite.sequence(builds, {
       async install(artifact, label) {
         const runtime = join(root, `install-${label}`); await mkdir(runtime); await writeFile(join(runtime, '.fixture-owner'), owner);
@@ -1294,7 +1300,7 @@ async function main() {
       },
       async probe(installation, artifact, label) {
         installation.safe = false;
-        return suite.attempt({ output, label, artifact }, async ({ reportPath, runId, directory }) => {
+        return suite.attempt({ output, label, artifact, target }, async ({ reportPath, runId, directory }) => {
           const result = await runDshProcess(process.execPath, [join(repositoryRoot, 'scripts', suite.script), '--report', reportPath], {
             env: { ...(await prepareDshProfile(join(root, `controller-${label}`), 'http://127.0.0.1:1/v1')), CROSSCHAT_LIVE: '1', DSH_RUNTIME_DIR: installation.root,
               DSH_TASK_ROOT: root, DSH_EXPECTED_VERSION: artifact.version, DSH_EXPECTED_RUN_ID: runId }, timeout: suite.timeoutMs,
@@ -1307,7 +1313,7 @@ async function main() {
         try { await rm(await ownedChild(root, installation.root, owner), { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); installation.removed = true; }
         catch (error) { installation.safe = false; throw error; }
       },
-    });
+    }, target);
   } catch (error) {
     summary.error = message(error); summary.classification = { kind: error?.category === 'unsupported' ? 'unsupported-release' : 'infrastructure', notify: false };
     if (error?.category === 'unsupported') summary.unsupportedVersion = error.version;

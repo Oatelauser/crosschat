@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-platform-20261105
+
+ ✓ test/dsh-platform-ci.test.ts (16 tests) 25ms
+
+ Test Files  1 passed (1)
+      Tests  16 passed (16)
+   Start at  10:04:56
+   Duration  339ms (transform 76ms, setup 0ms, collect 106ms, tests 25ms, environment 0ms, prepare 79ms)
+
