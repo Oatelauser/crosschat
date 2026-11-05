@@ -84,7 +84,7 @@ async function fixture(timeoutMs = 300) {
   };
   let item: DiscoverySession = await read();
   requests.length = 0; state.details = 0;
-  const adopt = vi.fn(async () => undefined);
+  const adopt = vi.fn<(item: DiscoverySession, tool: string, signal?: AbortSignal) => Promise<void>>(async () => undefined);
   // A retained detail snapshot makes the separate native revalidation observable.
   const operations = createNativeSessionOperations({ discovery: { execute: async () => ({ op: 'detail',
     providers: [{ providerId: 'dsh', capabilities: item.capabilities }], detail: { item, completeness: 'complete', errors: [], observedAt: 1 } }) },

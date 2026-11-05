@@ -5,7 +5,7 @@ import type { DshOptions } from './client.js';
 import { isEndpointTypeFor } from '../tool-types.js';
 
 export interface DshConnection { registration: DshRegistration; request(path: string, body?: unknown): Promise<unknown> }
-export interface DshOperation { connections(): Promise<DshConnection[]>; check(): void }
+export interface DshOperation { readonly signal: AbortSignal; connections(): Promise<DshConnection[]>; check(): void }
 
 /** Experimental window mirrors engines.dsh with includePrerelease enabled. */
 export function supportsDshVersion(version: string): boolean {
@@ -119,7 +119,7 @@ export async function withDshOperation<T>(options: DshOptions, use: (operation: 
     return results;
   };
   try {
-    return await use({ check, connections: () => connections ??= connect() });
+    return await use({ signal: controller.signal, check, connections: () => connections ??= connect() });
   } catch (error) {
     if (error instanceof MultichatError) throw error;
     check();

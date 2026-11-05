@@ -26,4 +26,8 @@ C15读取官方rc.2/rc.5的agent、api-session-controller、session-title、sess
 
 ## 当前开发阶段
 
-新增test/dsh-native-operations.test.ts，隔离HTTP桥覆盖精确目标、四态恢复、同ID跨类型/重复实例、实际URL替换、版本变化、执行前消失、取消及uncertain零重发。第一次11失败来自fixture凭据不符合既有64位hex合同，原始输出保留，修正fixture并保持产品校验。正式行为RED为10失败/1通过，现有实现未发出独立原生探测、旧确认未被端点/版本变化撤销。待实现GREEN并完成相应检查，不把隔离桥当作真实DSH增强验收。
+新增test/dsh-native-operations.test.ts，隔离HTTP桥覆盖精确目标、四态恢复、同ID跨类型/重复实例、实际URL替换、版本变化、执行前消失、取消及uncertain零重发。第一次11失败来自fixture凭据不符合既有64位hex合同，原始输出保留，修正fixture并保持产品校验。正式行为RED为10失败/1通过；首轮GREEN为11通过，相关七文件99通过。随后自审补出三条行为RED：名称/创建信息变化，以及最终原生响应等待期间登记被替换；保存30b2ceb再修复，不覆盖RED。
+
+2026-11-05本地第二轮GREEN：DSH14例通过；含第三Provider探测失败/空上下文后恢复且不影响独立改名的两例，七文件定向104通过。Node22.23.4、最多2worker的单次完整npm run check退出0：lint、205模块/694边无环/无边界违规、build、2844通过/11原有跳过，241文件通过/3跳过。实际原生读取前后核对同一完整类型/实例/版本/profile及会话元数据，读取结束再次核对选中类型的完整登记集；不把该检查称为跨进程锁或OS身份认证。记录见[本轮检查索引](evidence/c15-dsh-operations-20261105/local-validation.json)。
+
+当前已完成C24入星只读核验的本地实现和C21对应隔离回归切片，尚待正式npm/Web原生链路、C18手动成员接线及C22增强验收；不是父项关闭。C20原生改名未启用，选择事件缺口保留，CLI/JSON字段、命令/用户步骤、持久文件均未新增。下一步使用隔离正式npm runtime与loopback模型验证，不操作日用Desktop。未推送、建PR或触发外部Actions。

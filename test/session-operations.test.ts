@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createNativeSessionOperations } from '../src/application/session-operations.js';
+import type { NativeOperationProvider } from '../src/application/session-operations.js';
 import type { DiscoveryEndpoint, DiscoverySession } from '../src/application/discovery/model.js';
 
 function fixture(probe: () => Promise<{ state: 'executable' }> = async () => ({ state: 'executable' }), lostWrite = false) {
@@ -23,6 +24,31 @@ function fixture(probe: () => Promise<{ state: 'executable' }> = async () => ({ 
 }
 
 describe('native session operation interface', () => {
+  it.each(['error', 'empty'] as const)('an invalid %s adoption proof disables only adoption and recovers read-only', async (failure) => {
+    const item: DiscoverySession = { ref: { contextId: 'local', providerId: 'third', nativeId: 'exact-session' }, name: 'before',
+      rawStatus: { type: 'idle' }, capabilities: { discovery: true, delivery: true, launch: false, diagnostics: false }, attributes: {} };
+    let recovered = false;
+    const adopt = vi.fn(async () => undefined);
+    const rename = vi.fn(async () => undefined);
+    const inspectAdoption: NonNullable<NativeOperationProvider['inspectAdoption']> = async () => {
+      if (!recovered && failure === 'error') throw new Error('native source unavailable');
+      return { availability: { state: 'executable' }, ...(recovered ? { contextKey: 'verified-owner' } : {}) };
+    };
+    const operations = createNativeSessionOperations({ discovery: { execute: async () => ({ op: 'detail',
+      providers: [{ providerId: item.ref.providerId, capabilities: item.capabilities }],
+      detail: { item, completeness: 'complete', errors: [], observedAt: 1 } }) }, adopt,
+      providers: [{ providerId: 'third', tool: 'third', canAdopt: () => ({ allowed: true }), inspectAdoption,
+        rename: { contextKey: () => 'rename-owner', probe: async () => ({ state: 'executable' }), apply: rename } }] });
+    const before = await operations.describe(item.ref);
+    expect(before.actions).toMatchObject({ adopt: { state: 'unavailable' }, rename: { state: 'executable' } });
+    expect(await operations.apply({ ref: item.ref, operation: 'adopt', expectedRevision: before.revision })).toMatchObject({ kind: 'rejected' });
+    recovered = true;
+    expect((await operations.describe(item.ref)).actions.adopt.state).toBe('executable');
+    expect(await operations.apply({ ref: item.ref, operation: 'adopt', expectedRevision: before.revision })).toMatchObject({ kind: 'rejected' });
+    expect(adopt).not.toHaveBeenCalled();
+    expect(rename).not.toHaveBeenCalled();
+  });
+
   it('a failed rename probe only disables rename and recovers without replaying changes', async () => {
     let failing = true;
     const f = fixture(async () => { if (failing) throw new Error('native endpoint down'); return { state: 'executable' }; });
