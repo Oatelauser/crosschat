@@ -1,5 +1,7 @@
 # C11/C12：DSH四目标从零接入托管终验
 
+当前补记：2026-11-05后续：ef8ef98文档提交的普通41981774584为Windows/Ubuntu成功、macOS一项迟到响应测试失败；macOS既有continue-on-error使run总体success，不等于三job全绿。[托管RED与受控时序复现](late-response-red-validation.json)保留。0ad2d1e保存RED，现只把该测试的150ms猜测改为返回后显式释放响应，finally等待真实取消/锁释放；正常及父线程停顿200ms两例都通过，30ms产品截止/未决记录/清理断言不放宽。[126项定向、完整2828通过/11原有跳过](late-response-green-validation.json)及原生10个blob相同已核验。最新修复推送后的普通CI按新head逐job确认，不能用e1旧绿或ef总体success追认；四目标原生通过保持，不追加原生dispatch，main合入/新周更仍未授权。
+
 2026-11-05（UTC+8）。用户明确批准推送0d0f91a、创建草稿PR与候选分支四目标C11；已履行，见[启动回执](launch-validation.json)和[PR #4](https://github.com/Oatelauser/crosschat/pull/4)。main合入、新POSIX从零周更和发布不在本次授权内。root独立开发、自审，未派worker，用户保留的DSH软件/PATH未动。
 
 ## 原生结果

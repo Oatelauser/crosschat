@@ -1,5 +1,7 @@
 # DSH 优先完成计划
 
+2026-11-05后续：ef8ef98文档提交的普通41981774584为Windows/Ubuntu成功、macOS一项迟到响应测试失败；macOS既有continue-on-error使run总体success，不等于三job全绿。[托管RED与受控时序复现](evidence/c12-onboarding-hosted-20261105/late-response-red-validation.json)保留。0ad2d1e保存RED，现只把该测试的150ms猜测改为返回后显式释放响应，finally等待真实取消/锁释放；正常及父线程停顿200ms两例都通过，30ms产品截止/未决记录/清理断言不放宽。[126项定向、完整2828通过/11原有跳过](evidence/c12-onboarding-hosted-20261105/late-response-green-validation.json)及原生10个blob相同已核验。最新修复推送后的普通CI按新head逐job确认，不能用e1旧绿或ef总体success追认；四目标原生通过保持，不追加原生dispatch，main合入/新周更仍未授权。
+
 2026-11-05当前：用户批准的推送、[草稿PR #4](https://github.com/Oatelauser/crosschat/pull/4)与C11四目标首验已完成；原生41978059319（0d0f91a、attempt1）四probe success，每目标rc.2/rc.5各六阶段、四artifact/156成员、八fresh UUID及正常清理已验收，无强停/retry/Issue。首轮普通Windows/macOS失败保留；e1f4d00仅修测试fixture启动/等待预算，本地125定向/完整2827通过11原有跳过，修复后普通41980572627三job全绿。[终验与边界](evidence/c12-onboarding-hosted-20261105/review.md)保留，实际原生源码/工作流10个blob与修复head相同。最终证据/指南提交只含文档，其普通CI按PR另核实；main合入与新POSIX从零周五14:07仍待明确决定，不发布。此DSH npm/Web四目标六阶段切片移出活动实施，25父项/11CI索引保持，main a1e6464原公共故障与C00跨机问题不追认完成。
 
 2026-11-04本地集成候选已准备：按用户明确移交，在独立worktree合并完整开发线与固定main，32处冲突全部解决；[候选说明](dsh-local-integration-20261104.md)保留取舍、首败与验证。完整check **2761通过/11原有跳过，235文件通过/3跳过，204模块688边**；相对开发线只纳入main既有POSIX产品修复，DSH桥/工装、CLI/TUI及类型源码未改，包元数据继承main已有1.13.1，不代表新发布。当前等待本地候选审阅，尚未推送/PR/main合并/Actions，C05/C11托管及C04完整生命周期仍开放。C04本轮根已由用户删除并只读核实，DSH安装保留。下方历次结果按各自证据理解。

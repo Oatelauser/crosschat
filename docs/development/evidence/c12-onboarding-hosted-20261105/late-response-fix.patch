@@ -1,0 +1,39 @@
+diff --git a/test/dsh-compat-ci.test.ts b/test/dsh-compat-ci.test.ts
+index 30e27f6..e455ef6 100644
+--- a/test/dsh-compat-ci.test.ts
++++ b/test/dsh-compat-ci.test.ts
+@@ -1664,16 +1664,28 @@ describe('DeepSeek Harness official Windows desktop installer metadata and strea
+     });
+   });
+ 
+-  it('cancels a late response, releases its lock and reports it as undecided at return', async () => {
++  it.each([0, 200])('cancels a late response, releases its lock and reports it as undecided at return (parent stall %ims)', async (stallMs) => {
+     await isolated(async (output) => {
+       const target = join(output, 'owned-desktop-download'); await mkdir(target);
+       let lateCanceled = false;
+       const lateBody = new ReadableStream<Uint8Array>({ cancel: () => { lateCanceled = true; } });
+-      const failure: unknown = await download(async () => new Promise((resolve) => setTimeout(() => resolve(response(lateBody)), 150)), { directory: target, timeoutMs: 30 }).catch((error: unknown) => error);
+-      expect(notesOf(failure)).toContain('the official response had not settled at return');
+-      await new Promise((resolve) => setTimeout(resolve, 300));
+-      expect(lateCanceled).toBe(true);
+-      expect(lateBody.locked).toBe(false);
++      let releaseResponse!: () => void;
++      const arrival = new Promise<ReturnType<typeof response>>((resolve) => { releaseResponse = () => resolve(response(lateBody)); });
++      try {
++        // Keep headers pending until return; elapsed timers cannot establish that
++        // ordering when a busy runner processes several overdue timers together.
++        const failure: unknown = await download(() => {
++          if (stallMs) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, stallMs);
++          return arrival;
++        }, { directory: target, timeoutMs: 30 }).catch((error: unknown) => error);
++        expect(failure).toMatchObject({ message: 'Desktop installer exceeded its 30ms deadline' });
++        expect(notesOf(failure)).toContain('the official response had not settled at return');
++        expect(lateCanceled).toBe(false);
++      } finally {
++        releaseResponse();
++        // A cancel hook firing is not yet proof that the owner released its lock.
++        await vi.waitFor(() => { expect(lateCanceled).toBe(true); expect(lateBody.locked).toBe(false); }, { timeout: 1000, interval: 5 });
++      }
+       expect(readdirSync(target)).toEqual([]);
+     });
+   });
