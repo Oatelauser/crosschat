@@ -12,7 +12,7 @@ import { createLocalDiscoveryService } from '../src/application/discovery/local.
 const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); });
 
-async function fixture(profile = 'web', version = '0.2.1-rc.5', serviceAvailable = true) {
+async function fixture(profile = 'web', version = '0.2.1-rc.5', serviceAvailable = true, freshServiceProxy = false) {
   const home = await mkdtemp(join(tmpdir(), 'crosschat-dsh-title-'));
   cleanup.push(() => rm(home, { recursive: true, force: true }));
   const id = 'root/+?雪', session = { id, header: { id, createdAt: 123, cwd: '/original' } };
@@ -25,9 +25,22 @@ async function fixture(profile = 'web', version = '0.2.1-rc.5', serviceAvailable
     title = name; return { title: name };
   });
   const titleService = { rename };
+  const get = (key: string) => key === 'profileContext' ? { name: profile } : key === 'sessionTitle' && available
+    ? freshServiceProxy ? new Proxy(titleService, {}) : titleService : key === 'sessionProjections' ? { stateOf: () => title } : undefined;
+  type Scope = { get: typeof get; effect(setup: () => () => void): unknown };
+  type Binding = { dependencies: string[]; callback(scope: Scope): unknown; effects: Array<() => void>; active: boolean };
+  const bindings = new Set<Binding>();
+  const activate = (binding: Binding) => {
+    if (binding.active || !binding.dependencies.every((key) => get(key) !== undefined)) return;
+    binding.active = true;
+    binding.callback({ get, effect: (setup) => { binding.effects.push(setup()); } });
+  };
   const ctx = { agents: { get: (key: string) => agents.get(key), roots: () => [...agents.values()] },
-    get: (key: string) => key === 'profileContext' ? { name: profile } : key === 'sessionTitle' && available ? titleService
-      : key === 'sessionProjections' ? { stateOf: () => title } : undefined,
+    get,
+    inject: (dependencies: string[], callback: (scope: Scope) => unknown) => {
+      const binding: Binding = { dependencies, callback, effects: [], active: false }; bindings.add(binding); activate(binding);
+      return { dispose: async () => { for (const close of binding.effects.splice(0).reverse()) close(); bindings.delete(binding); } };
+    },
     effect: () => undefined,
   };
   const bridge = await mountDshBridge(ctx, { getDshRuntimeVersion: () => version, createUserMessage: () => ({ id: randomUUID(), role: 'user' }) }, { home });
@@ -45,7 +58,10 @@ async function fixture(profile = 'web', version = '0.2.1-rc.5', serviceAvailable
   const operations = createNativeSessionOperations({ discovery: createLocalDiscoveryService({ home }), providers, adopt, renamed });
   const ref = { contextId: 'local', providerId: 'dsh', nativeId: id, endpointType: profile === 'desktop' ? 'desktop' : 'host' };
   return { path, headers, input, rename, agents, session, ctx, title: () => title, operations, ref, adopt, renamed,
-    setService: (value: boolean) => { available = value; } };
+    setService: (value: boolean) => {
+      for (const binding of bindings) { for (const close of binding.effects.splice(0).reverse()) close(); binding.active = false; }
+      available = value; for (const binding of bindings) activate(binding);
+    } };
 }
 
 describe('Harness exact live native title bridge', () => {
@@ -106,6 +122,14 @@ describe('Harness exact live native title bridge', () => {
 });
 
 describe('production DSH title operation adapter', () => {
+  it('keeps confirmation stable across fresh Cordis service proxies for the same loaded service', async () => {
+    const f = await fixture('web', '0.2.1-rc.5', true, true);
+    expect(f.ctx.get('sessionTitle')).not.toBe(f.ctx.get('sessionTitle'));
+    const first = await f.operations.describe(f.ref), second = await f.operations.describe(f.ref);
+    expect(second.actions.rename.state).toBe('executable'); expect(second.revision).toBe(first.revision);
+    expect(await f.operations.apply({ ref: f.ref, operation: 'rename', name: 'after', expectedRevision: first.revision })).toMatchObject({ kind: 'applied' });
+    expect(f.rename).toHaveBeenCalledTimes(1);
+  });
   it('qualifies a concrete native target, writes once and confirms the native name before updating node metadata', async () => {
     const f = await fixture(), description = await f.operations.describe(f.ref);
     expect(description.actions).toMatchObject({ adopt: { state: 'executable' }, rename: { state: 'executable' } });
