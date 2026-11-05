@@ -20,3 +20,9 @@
 487f0a1保存行为RED：首次12失败/2通过，补活Agent代次后13失败/2通过。产品**bd0779c**已实现GET/POST title子资源，使用当前Host的同步SessionTitle服务，不走resolveAgent；WeakMap只保留对象活代次，不写文件。输入、鉴权/Origin、Host/profile/版本、实例/创建信息/活对象变化、读取零写、原生异常后uncertain零重试共15条新用例通过。首次扩大到旧Adapter测试时，新worktree尚无dist，13条旧诊断用例因MODULE_NOT_FOUND失败；原始输出保留，不当作桥的行为RED。随后npm run build及相关ESLint通过，四文件定向119通过，见[原始定向结果](evidence/c20-dsh-rename-20261105/bridge-targeted-green.txt)。本段未运行完整check，尚有客户端/原生界面等开发待办。
 
 GET里的executable只说明这个底层桥可以对当前活对象调用已核实的原生方法；用户操作Provider尚未登记rename，仍按待核实禁用。不能把15条模拟Host或119条定向检查当作真正DSH/Web界面通过。下一步为Adapter四态/context/revision/最终确认与错误回执、正式Web界面及node/星册/按名寻址证据；未推送/发布或启用用户操作，无活DSH测试Host或浏览器。
+
+## 客户端接线检查点
+
+32e073e保存Adapter行为RED（4失败/16通过），最终产品**fc065c14bb1f722340b63946dd20bed0234680a3**已实现src/dsh/rename.ts；当前仅受控验收显式注入，生产Provider工厂仍未登记。共同原生事实收在DSH Adapter的withVerifiedDshTarget单次有界生命周期，入星检查与改名共用，未另造状态/恢复机制。标题确认同时绑定活Agent及当前原生标题服务的内存代次；服务失效/恢复后旧确认不沿用。服务错误、明示写前拒绝和写不明分别保留，零自动重试；其它端点与未核实版本不继承Web能力。
+
+新桥＋Adapter共20例通过，含C18边界/旧Adapter的三文件92通过；首次build、相关lint通过，随后单次完整npm run check退出0：**2865通过/11原有跳过，242文件通过/3跳过**，lint/import graph/build均通过，见[完整原始检查](evidence/c20-dsh-rename-20261105/full-check-adapter.txt)。本轮真实Web界面正在独占profile/loopback桩中探测；尚未有原生通过结论，node/星册/按名寻址、最终TUI改名及两平台版本组合仍未完成，不能据此启用生产改名或关闭C20。
