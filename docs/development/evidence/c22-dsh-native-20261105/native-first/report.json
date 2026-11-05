@@ -1,0 +1,162 @@
+{
+  "schema": 1,
+  "scope": "Two same-host independent logical node processes, two formal npm/Web Hosts, two isolated terminal operators; not physical cross-machine acceptance",
+  "platform": "win32",
+  "node": "v22.23.4",
+  "root": "D:\\workspace\\CC\\cc-c22-hNlrdV",
+  "productHead": "037ed4925b80ff17a399b9dafd3c1050188a6ffc",
+  "checks": [
+    {
+      "name": "two-node-identities-and-remote-exact-source-isolation",
+      "status": "passed"
+    }
+  ],
+  "status": "failed",
+  "identities": [
+    {
+      "nodePid": 12316,
+      "hostPid": 43236,
+      "machineId": "11111111111111111111111111111111",
+      "nativeId": "session-dd2db0a0-2a5b-4a3b-9f14-31e328831873",
+      "instanceVersion": "0.2.1-rc.5"
+    },
+    {
+      "nodePid": 36940,
+      "hostPid": 24200,
+      "machineId": "22222222222222222222222222222222",
+      "nativeId": "session-ab2585af-f1f1-4b6b-9f55-49fc8373e0e0",
+      "instanceVersion": "0.2.1-rc.5"
+    }
+  ],
+  "error": {
+    "name": "Error",
+    "message": "ConPTY output did not match c22-alpha; log: D:\\workspace\\CC\\cc-dsh-enhancement-20261105\\node_modules\\.cache\\c22-dsh-20261105\\native-first\\terminal-0.jsonl; output tail:                                                     │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\r\n<stars> 0项 · 完整\u001b[K\r\nEnter 进入星的成员列表；k 发节点钥，K 管理钥，x 撤销凭证；增删改从本列表发起。\u001b[K\r\n:资源  /筛选  Esc返回  q退出\u001b[K\u001b[112C",
+    "stack": "Error: ConPTY output did not match c22-alpha; log: D:\\workspace\\CC\\cc-dsh-enhancement-20261105\\node_modules\\.cache\\c22-dsh-20261105\\native-first\\terminal-0.jsonl; output tail:                                                     │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\r\n<stars> 0项 · 完整\u001b[K\r\nEnter 进入星的成员列表；k 发节点钥，K 管理钥，x 撤销凭证；增删改从本列表发起。\u001b[K\r\n:资源  /筛选  Esc返回  q退出\u001b[K\u001b[112C\n    at Timeout._onTimeout (file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/tui-pty-driver.mjs:140:18)\n    at listOnTimeout (node:internal/timers:585:17)\n    at process.processTimers (node:internal/timers:521:7)"
+  },
+  "terminals": [
+    {
+      "index": 0,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "index": 0,
+      "pid": 12316,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "messages": [
+        {
+          "event": "ready",
+          "pid": 12316,
+          "machineId": "11111111111111111111111111111111",
+          "pipes": [
+            {
+              "starId": "c22-alpha",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-alpha"
+            },
+            {
+              "starId": "c22-beta",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-beta"
+            }
+          ]
+        },
+        {
+          "event": "stopped",
+          "pid": 12316,
+          "failures": []
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "index": 1,
+      "pid": 36940,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "messages": [
+        {
+          "event": "ready",
+          "pid": 36940,
+          "machineId": "22222222222222222222222222222222",
+          "pipes": [
+            {
+              "starId": "c22-alpha",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-alpha"
+            },
+            {
+              "starId": "c22-beta",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-beta"
+            }
+          ]
+        },
+        {
+          "event": "stopped",
+          "pid": 36940,
+          "failures": []
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "hosts": [
+    {
+      "pid": 24200,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "logs": {
+        "stdout": "dsh web: http://127.0.0.1:52073/?token=[fixture-token-redacted]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "pid": 43236,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "logs": {
+        "stdout": "dsh web: http://127.0.0.1:52062/?token=[fixture-token-redacted]\n",
+        "stderr": ""
+      }
+    }
+  ],
+  "cleanupFailures": [],
+  "unsafe": false,
+  "outerRemoved": true
+}

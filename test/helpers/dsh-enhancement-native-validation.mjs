@@ -8,6 +8,7 @@ import process from 'node:process';
 import {fileURLToPath,URL} from 'node:url';
 import {setTimeout,clearTimeout} from 'node:timers';
 import {createTcpSessionOperation} from '../../dist/application/tcp/session-operations.js';
+import {tcpContextId} from '../../dist/application/tcp/reading.js';
 import {connectAttachPipe} from '../../dist/serve/attach-client.js';
 import {Broker} from '../../dist/serve/broker.js';
 import {loadBrokerFile,writeBrokerFile} from '../../dist/serve/registry.js';
@@ -52,6 +53,7 @@ try{
   state.ready=await pollDsh(()=>{if(state.error)throw Object.assign(state.error,{terminal:true});const failed=state.messages.find(m=>m.event==='failure');if(failed)throw Object.assign(new Error(failed.message),{terminal:true});if(child.exitCode!==null)throw Object.assign(new Error('Owned node exited: '+state.stderr),{terminal:true});return state.messages.find(m=>m.event==='ready');},'independent node '+index+' online',20000);
  }
  assert.notEqual(workers[0].child.pid,workers[1].child.pid);assert.notEqual(fixtures[0].pid,fixtures[1].pid);
+ assert.equal(new Set(workers.flatMap(worker=>worker.ready.pipes.map(pipe=>pipe.path))).size,4,'Logical nodes require distinct owned attach namespaces on this shared Windows host');
  report.identities=workers.map((worker,index)=>({nodePid:worker.child.pid,hostPid:fixtures[index].pid,machineId:machineIds[index],nativeId:native[index].id,instanceVersion:fixtures[index].info.version}));
  const operators=[];
  for(let index=0;index<2;index++){
@@ -67,9 +69,9 @@ try{
  });
  await check('two-independent-terminal-observers-open-the-same-authoritative-star',async()=>{
   for(let index=0;index<2;index++){
-   const input=join(root,'terminal-'+index+'.json'),events=join(root,'terminal-'+index+'.jsonl');await writeFile(input,JSON.stringify({home:operators[index].home,owner}));
+   const input=join(root,'terminal-'+index+'.json'),events=join(root,'terminal-'+index+'.jsonl'),label='C22-OPERATOR-'+index;await writeFile(input,JSON.stringify({task:'c22-dsh-terminal',home:operators[index].home,owner,contexts:[{id:tcpContextId(entriesFor(index+2)[0]),kind:'tcp',label}]}));
    const pty=await launchPty({executable:process.execPath,args:[fileURLToPath(new URL('./dsh-native-members-pty.mjs',import.meta.url)),root,input,events],env:{...fixtures[index].env,HOME:operators[index].home,USERPROFILE:operators[index].home},columns:140,rows:36,logPath:join(cache,'terminal-'+index+'.jsonl')});
-   const terminal={pty,events,index};terminals.push(terminal);await pty.waitForOutput('C18-NATIVE-MEMBERS');let mark=pty.output.length;pty.write(':stars\r');await pty.waitForOutput(stars[0],10000,mark);mark=pty.output.length;pty.write('/'+stars[0]+'\r');await pty.waitForOutput(/1\/1/u,10000,mark);mark=pty.output.length;pty.write('\r');await pty.waitForOutput('按在线 / 下线分组',10000,mark);
+   const terminal={pty,events,index};terminals.push(terminal);await pty.waitForOutput(label);let mark=pty.output.length;pty.write(':stars\r');await pty.waitForOutput(stars[0],10000,mark);mark=pty.output.length;pty.write('/'+stars[0]+'\r');await pty.waitForOutput(/1\/1/u,10000,mark);mark=pty.output.length;pty.write('\r');await pty.waitForOutput('按在线 / 下线分组',10000,mark);
    await pollDsh(async()=>(await readEvents(events)).some(e=>e.event==='read'&&e.resource==='members'),'terminal member page ready',10000);
   }
  });

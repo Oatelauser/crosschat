@@ -1,0 +1,52 @@
+two-node-identities-and-remote-exact-source-isolation
+{"status":"failed","checks":1,"error":"ConPTY output did not match c22-alpha; log: D:\\workspace\\CC\\cc-dsh-enhancement-20261105\\node_modules\\.cache\\c22-dsh-20261105\\native-first\\terminal-0.jsonl; output tail:                                                     │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\r\n<stars> 0项 · 完整\u001b[K\r\nEnter 进入星的成员列表；k 发节点钥，K 管理钥，x 撤销凭证；增删改从本列表发起。\u001b[K\r\n:资源  /筛选  Esc返回  q退出\u001b[K\u001b[112C","outerRemoved":true,"unsafe":false}
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: ConPTY output did not match c22-alpha; log: D:\workspace\CC\cc-dsh-enhancement-20261105\node_modules\.cache\c22-dsh-20261105\native-first\terminal-0.jsonl; output tail:                                                     │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+│                                                                                                                                          │
+
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+<stars> 0项 · 完整[K
+
+Enter 进入星的成员列表；k 发节点钥，K 管理钥，x 撤销凭证；增删改从本列表发起。[K
+
+:资源  /筛选  Esc返回  q退出[K[112C
+
+'failed' !== 'passed'
+
+    at file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:141:8 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'failed',
+  expected: 'passed',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.23.4

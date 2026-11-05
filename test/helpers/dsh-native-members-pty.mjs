@@ -14,6 +14,8 @@ import { createResourceRegistry, defaultResources } from '../../dist/tui/resourc
 
 const [root, input, events] = process.argv.slice(2), config = JSON.parse(await readFile(input, 'utf8'));
 assert.equal(await realpath(root), root); assert.equal(await readFile(join(root, '.fixture-owner'), 'utf8'), config.owner);
+if (config.contexts !== undefined) assert(config.task === 'c22-dsh-terminal' && Array.isArray(config.contexts) && config.contexts.length === 1
+  && config.contexts.every(context => context.kind === 'tcp' && typeof context.id === 'string' && context.id.startsWith('tcp:star:') && typeof context.label === 'string'));
 for (const path of [input, events, config.home]) {
   const inside = relative(root, await realpath(path).catch((error) => error.code === 'ENOENT' ? resolve(path) : Promise.reject(error)));
   assert(inside && inside !== '..' && !inside.startsWith('../') && !inside.startsWith('..\\') && !isAbsolute(inside));
@@ -40,7 +42,7 @@ for (const binding of bindings.values()) {
 const warmup = render(createElement(Text, null, 'C18 native terminal baseline'), { interactive: true, patchConsole: false, exitOnCtrlC: false });
 await warmup.waitUntilRenderFlush(); warmup.unmount(); await warmup.waitUntilExit();
 const before = snapshot();
-const code = await runTui({ home: config.home, contexts: [{ id: 'local', kind: 'local', label: 'C18-NATIVE-MEMBERS' }],
+const code = await runTui({ home: config.home, contexts: config.contexts ?? [{ id: 'local', kind: 'local', label: 'C18-NATIVE-MEMBERS' }],
   registry: createResourceRegistry(defaultResources.map((resource) => bindings.get(resource.id)?.resource ?? resource)),
   adapters: Object.fromEntries([...bindings].map(([id, binding]) => [id, binding.adapter])), clipboard: async (value) => record({ event: 'clipboard', value }) });
 await record({ event: 'exit', code, before, after: snapshot() }); process.exitCode = code;
