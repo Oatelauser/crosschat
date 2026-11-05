@@ -1,0 +1,1 @@
+{"platform":"linux","arch":"x64","node":"v22.14.0","scope":"Owned POSIX PTY fixtures; no DSH or user session","status":"failed","checks":[],"error":"ConPTY fixtures require Windows."}
