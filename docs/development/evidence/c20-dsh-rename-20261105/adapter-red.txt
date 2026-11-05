@@ -1,0 +1,119 @@
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-rename-20261105
+
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > reads capabilities without a write and calls the public title service with the same live session 59ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > does not enable desktop solely because a native rename method exists 19ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > does not enable custom solely because a native rename method exists 18ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > keeps an unverified version or unavailable native service disabled 26ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed instance before a native write 13ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed creation before a native write 11ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed live-object before a native write 12ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects changed missing before a native write 14ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 11ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 12ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 12ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 9ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > rejects invalid name before the native title service 12ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > requires the existing authentication and forbids browser-origin writes 13ms
+ ✓ test/dsh-rename-bridge.test.ts > Harness exact live native title bridge > keeps a native error after admission uncertain and never repeats the public call 12ms
+ × test/dsh-rename-bridge.test.ts > production DSH title operation adapter > qualifies a concrete native target, writes once and confirms the native name before updating node metadata 31ms
+   → expected { Object (adopt, rename) } to match object { Object (adopt, rename) }
+(1 matching property omitted from actual)
+ × test/dsh-rename-bridge.test.ts > production DSH title operation adapter > invalidates an old confirmation if the live Agent is replaced under identical native identity metadata 27ms
+   → expected 'needs-verification' to be 'executable' // Object.is equality
+ × test/dsh-rename-bridge.test.ts > production DSH title operation adapter > recovers a missing native service read-only without disabling adoption or replaying a pending rename 43ms
+   → expected 'needs-verification' to be 'executable' // Object.is equality
+ ✓ test/dsh-rename-bridge.test.ts > production DSH title operation adapter > does not inherit native Web rename capability in the Desktop endpoint 18ms
+ × test/dsh-rename-bridge.test.ts > production DSH title operation adapter > keeps an admitted native setter failure uncertain with zero automatic repeats 25ms
+   → expected { kind: 'rejected', …(1) } to match object { kind: 'uncertain' }
+(1 matching property omitted from actual)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-rename-bridge.test.ts > production DSH title operation adapter > qualifies a concrete native target, writes once and confirms the native name before updating node metadata
+AssertionError: expected { Object (adopt, rename) } to match object { Object (adopt, rename) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "adopt": {
+      "state": "executable",
+    },
+    "rename": {
+-     "state": "executable",
++     "state": "needs-verification",
+    },
+  }
+
+ ❯ test/dsh-rename-bridge.test.ts:110:33
+    108|   it('qualifies a concrete native target, writes once and confirms the…
+    109|     const f = await fixture(), description = await f.operations.descri…
+    110|     expect(description.actions).toMatchObject({ adopt: { state: 'execu…
+       |                                 ^
+    111|     expect(f.rename).not.toHaveBeenCalled();
+    112|     expect(await f.operations.apply({ ref: f.ref, operation: 'rename',…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  test/dsh-rename-bridge.test.ts > production DSH title operation adapter > invalidates an old confirmation if the live Agent is replaced under identical native identity metadata
+AssertionError: expected 'needs-verification' to be 'executable' // Object.is equality
+
+Expected: "executable"
+Received: "needs-verification"
+
+ ❯ test/dsh-rename-bridge.test.ts:120:94
+    118|     const f = await fixture(), description = await f.operations.descri…
+    119|     f.agents.set(f.session.id, { id: f.session.id, status: 'idle', ses…
+    120|     const current = await f.operations.describe(f.ref); expect(current…
+       |                                                                                              ^
+    121|     expect(await f.operations.apply({ ref: f.ref, operation: 'rename',…
+    122|     expect(f.rename).not.toHaveBeenCalled(); expect(f.renamed).not.toH…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  test/dsh-rename-bridge.test.ts > production DSH title operation adapter > recovers a missing native service read-only without disabling adoption or replaying a pending rename
+AssertionError: expected 'needs-verification' to be 'executable' // Object.is equality
+
+Expected: "executable"
+Received: "needs-verification"
+
+ ❯ test/dsh-rename-bridge.test.ts:129:91
+    127|     const missing = await f.operations.describe(f.ref); expect(missing…
+    128|     expect(await f.operations.apply({ ref: f.ref, operation: 'rename',…
+    129|     f.setService(true); expect((await f.operations.describe(f.ref)).ac…
+       |                                                                                           ^
+    130|   });
+    131| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  test/dsh-rename-bridge.test.ts > production DSH title operation adapter > keeps an admitted native setter failure uncertain with zero automatic repeats
+AssertionError: expected { kind: 'rejected', …(1) } to match object { kind: 'uncertain' }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "kind": "uncertain",
++   "kind": "rejected",
+  }
+
+ ❯ test/dsh-rename-bridge.test.ts:141:130
+    139|     const f = await fixture(), description = await f.operations.descri…
+    140|     f.rename.mockImplementationOnce(() => { throw new Error('Native co…
+    141|     expect(await f.operations.apply({ ref: f.ref, operation: 'rename',…
+       |                                                                                                                                  ^
+    142|     await f.operations.describe(f.ref); expect(f.rename).toHaveBeenCal…
+    143|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 16 passed (20)
+   Start at  16:50:44
+   Duration  916ms (transform 179ms, setup 0ms, collect 299ms, tests 398ms, environment 0ms, prepare 87ms)
+

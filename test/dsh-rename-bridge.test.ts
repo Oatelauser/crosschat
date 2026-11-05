@@ -4,6 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mountDshBridge } from '../integrations/dsh/bridge.js';
+import { createDshRenameAdapter } from '../src/dsh/rename.js';
+import { createNativeOperationProviders } from '../src/application/native-operation-providers.js';
+import { createNativeSessionOperations } from '../src/application/session-operations.js';
+import { createLocalDiscoveryService } from '../src/application/discovery/local.js';
 
 const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); });
@@ -13,6 +17,7 @@ async function fixture(profile = 'web', version = '0.2.1-rc.5', serviceAvailable
   cleanup.push(() => rm(home, { recursive: true, force: true }));
   const id = 'root/+?雪', session = { id, header: { id, createdAt: 123, cwd: '/original' } };
   let title = 'before';
+  let available = serviceAvailable;
   const agent = { id, status: 'idle', session };
   const agents = new Map([[id, agent]]);
   const rename = vi.fn((target: typeof session, name: string) => {
@@ -20,7 +25,7 @@ async function fixture(profile = 'web', version = '0.2.1-rc.5', serviceAvailable
     title = name; return { title: name };
   });
   const ctx = { agents: { get: (key: string) => agents.get(key), roots: () => [...agents.values()] },
-    get: (key: string) => key === 'profileContext' ? { name: profile } : key === 'sessionTitle' && serviceAvailable ? { rename }
+    get: (key: string) => key === 'profileContext' ? { name: profile } : key === 'sessionTitle' && available ? { rename }
       : key === 'sessionProjections' ? { stateOf: () => title } : undefined,
     effect: () => undefined,
   };
@@ -33,7 +38,13 @@ async function fixture(profile = 'web', version = '0.2.1-rc.5', serviceAvailable
   const observed: unknown = await (await fetch(path, { headers })).json();
   const targetRevision = typeof observed === 'object' && observed !== null && 'targetRevision' in observed ? observed.targetRevision : 'not-implemented';
   const input = () => ({ name: 'after', instanceId: registration.instanceId, createdAt: session.header.createdAt, targetRevision });
-  return { path, headers, input, rename, agents, session, ctx, title: () => title };
+  const providers = createNativeOperationProviders({ dsh: { home } }).map((provider) => provider.providerId === 'dsh'
+    ? { ...provider, rename: createDshRenameAdapter({ home }) } : provider);
+  const adopt = vi.fn(), renamed = vi.fn();
+  const operations = createNativeSessionOperations({ discovery: createLocalDiscoveryService({ home }), providers, adopt, renamed });
+  const ref = { contextId: 'local', providerId: 'dsh', nativeId: id, endpointType: profile === 'desktop' ? 'desktop' : 'host' };
+  return { path, headers, input, rename, agents, session, ctx, title: () => title, operations, ref, adopt, renamed,
+    setService: (value: boolean) => { available = value; } };
 }
 
 describe('Harness exact live native title bridge', () => {
@@ -90,5 +101,44 @@ describe('Harness exact live native title bridge', () => {
     const response = await fetch(f.path, { method: 'POST', headers: f.headers, body: JSON.stringify(f.input()) });
     expect(response.status).toBe(500); expect(await response.json()).toMatchObject({ error: { code: 'DSH_WRITE_UNCERTAIN' } });
     expect(f.rename).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('production DSH title operation adapter', () => {
+  it('qualifies a concrete native target, writes once and confirms the native name before updating node metadata', async () => {
+    const f = await fixture(), description = await f.operations.describe(f.ref);
+    expect(description.actions).toMatchObject({ adopt: { state: 'executable' }, rename: { state: 'executable' } });
+    expect(f.rename).not.toHaveBeenCalled();
+    expect(await f.operations.apply({ ref: f.ref, operation: 'rename', name: 'after', expectedRevision: description.revision })).toMatchObject({ kind: 'applied' });
+    expect(f.rename).toHaveBeenCalledExactlyOnceWith(f.session, 'after'); expect(f.title()).toBe('after');
+    expect(f.renamed).toHaveBeenCalledWith(expect.objectContaining({ name: 'after' }), expect.anything()); expect(f.adopt).not.toHaveBeenCalled();
+  });
+
+  it('invalidates an old confirmation if the live Agent is replaced under identical native identity metadata', async () => {
+    const f = await fixture(), description = await f.operations.describe(f.ref);
+    f.agents.set(f.session.id, { id: f.session.id, status: 'idle', session: { ...f.session } });
+    const current = await f.operations.describe(f.ref); expect(current.actions.rename.state).toBe('executable'); expect(current.revision).not.toBe(description.revision);
+    expect(await f.operations.apply({ ref: f.ref, operation: 'rename', name: 'after', expectedRevision: description.revision })).toMatchObject({ kind: 'rejected' });
+    expect(f.rename).not.toHaveBeenCalled(); expect(f.renamed).not.toHaveBeenCalled();
+  });
+
+  it('recovers a missing native service read-only without disabling adoption or replaying a pending rename', async () => {
+    const f = await fixture(), description = await f.operations.describe(f.ref); f.setService(false);
+    const missing = await f.operations.describe(f.ref); expect(missing.actions.adopt.state).toBe('executable'); expect(missing.actions.rename.state).not.toBe('executable');
+    expect(await f.operations.apply({ ref: f.ref, operation: 'rename', name: 'after', expectedRevision: description.revision })).toMatchObject({ kind: 'rejected' });
+    f.setService(true); expect((await f.operations.describe(f.ref)).actions.rename.state).toBe('executable'); expect(f.rename).not.toHaveBeenCalled();
+  });
+
+  it('does not inherit native Web rename capability in the Desktop endpoint', async () => {
+    const f = await fixture('desktop'), description = await f.operations.describe(f.ref);
+    expect(description.actions).toMatchObject({ adopt: { state: 'executable' }, rename: { state: 'needs-verification' } });
+    expect(f.rename).not.toHaveBeenCalled();
+  });
+
+  it('keeps an admitted native setter failure uncertain with zero automatic repeats', async () => {
+    const f = await fixture(), description = await f.operations.describe(f.ref);
+    f.rename.mockImplementationOnce(() => { throw new Error('Native completion unavailable'); });
+    expect(await f.operations.apply({ ref: f.ref, operation: 'rename', name: 'after', expectedRevision: description.revision })).toMatchObject({ kind: 'uncertain' });
+    await f.operations.describe(f.ref); expect(f.rename).toHaveBeenCalledTimes(1); expect(f.renamed).not.toHaveBeenCalled();
   });
 });
