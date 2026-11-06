@@ -1,5 +1,6 @@
 // Keyboard-only operator A, independent operator B API, and public resource events.
 import assert from 'node:assert/strict';
+import {openDshRenameForm} from './dsh-enhancement-terminal-ready.mjs';
 
 export async function runDshTerminalChecks({terminals,fixtures,native,machineIds,stars,operators,target,describe,member,expectTerminals,report,readEvents,pollDsh}) {
  const terminal=terminals[0],pty=terminal.pty,star=stars[0],source=fixtures[0];
@@ -13,8 +14,9 @@ export async function runDshTerminalChecks({terminals,fixtures,native,machineIds
  const before=await source.snapshot(native[0].id),other=await fixtures[1].snapshot(native[1].id);
  // Keep a stable native-ID filter while the visible name changes in another process.
  await send('/'+native[0].id+'\r',/1\/1/u);
+ let outputMark=pty.output.length;
  const firstCopy=await copy();assert(firstCopy.includes('--tool dsh'));assert(firstCopy.includes(star));
- let mark=(await events()).length;await send('e','原生会话新名称');
+ let mark=(await events()).length;await openDshRenameForm({pty,from:outputMark});
  const initial=await waitEvent(e=>e.event==='preview'&&e.action==='rename-session'&&e.result.enabled,mark),rowId=exact(initial);
  const staleName='C22StaleForm'+Date.now();await send(staleName,staleName);
  const externalName='C22Other'+String(Date.now()).slice(-6),description=await describe(0,star,1);
@@ -34,8 +36,9 @@ export async function runDshTerminalChecks({terminals,fixtures,native,machineIds
  await send('\x1b','已取消操作');
  report.terminalMembershipRestores.push(await restoreMembership());
  await pollDsh(async()=>(await events()).some(e=>e.event==='read'&&e.resource==='members'&&e.page.rows.some(row=>row.id===rowId&&row.cells.name===externalName)),'cancel returns to same native-ID filtered selection');
+ outputMark=pty.output.length;
  const recoveredCopy=await copy();assert(recoveredCopy.includes(native[0].id));assert(recoveredCopy.includes('--tool dsh'));assert(recoveredCopy.includes(star));
- mark=(await events()).length;await send('e','原生会话新名称');
+ mark=(await events()).length;await openDshRenameForm({pty,from:outputMark});
  const reopened=await waitEvent(e=>e.event==='preview'&&e.action==='rename-session'&&e.result.enabled,mark);assert.equal(exact(reopened),rowId);
  const finalName='C22Key'+String(Date.now()).slice(-6);await send(finalName,finalName);await send('\t\t\r');
  const mutation=await waitEvent(e=>e.event==='mutation'&&e.action==='rename-session',mark);assert.equal(exact(mutation),rowId);assert.equal(mutation.values.name,finalName);
