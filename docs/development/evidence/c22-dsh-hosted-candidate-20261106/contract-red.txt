@@ -1,0 +1,30 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test test/dsh-enhancement-contract.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-enhancement-20261105
+
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-enhancement-contract.test.ts [ test/dsh-enhancement-contract.test.ts ]
+Error: Cannot find module '../scripts/dsh-enhancement-contract.mjs' imported from 'D:/workspace/CC/cc-dsh-enhancement-20261105/test/dsh-enhancement-contract.test.ts'
+ ❯ test/dsh-enhancement-contract.test.ts:2:1
+      1| import { describe, expect, it } from 'vitest';
+      2| import { DSH_ENHANCEMENT_CHECKS, DSH_ENHANCEMENT_SCOPE, validateDshEnh…
+       | ^
+      3| 
+      4| const binding = { runId: '11111111-1111-4111-8111-111111111111', sourc…
+
+Caused by: Error: Failed to load url ../scripts/dsh-enhancement-contract.mjs (resolved id: ../scripts/dsh-enhancement-contract.mjs) in D:/workspace/CC/cc-dsh-enhancement-20261105/test/dsh-enhancement-contract.test.ts. Does the file exist?
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/config.js:22739:33
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  09:59:33
+   Duration  246ms (transform 39ms, setup 0ms, collect 0ms, tests 0ms, environment 0ms, prepare 80ms)
+
