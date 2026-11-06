@@ -1,0 +1,64 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test test/dsh-enhancement-terminal-ready.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-enhancement-20261105
+
+ ❯ test/dsh-enhancement-terminal-ready.test.ts (3 tests | 2 failed) 10ms
+   × native rename waits for fresh external terminal readiness > does not treat clipboard completion or the failed ARM disabled marker as readiness 7ms
+     → expected [ 'e' ] to deeply equal []
+   × native rename waits for fresh external terminal readiness > ignores old enabled output and never presses e after readiness timeout 2ms
+     → expected [ 'e' ] to deeply equal []
+   ✓ native rename waits for fresh external terminal readiness > requires a fresh form after its single keypress and never retries after form timeout 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-enhancement-terminal-ready.test.ts > native rename waits for fresh external terminal readiness > does not treat clipboard completion or the failed ARM disabled marker as readiness
+AssertionError: expected [ 'e' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "e",
++ ]
+
+ ❯ test/dsh-enhancement-terminal-ready.test.ts:30:25
+     28|     const opened = openDshRenameForm({ pty: host.pty, from: 0 }).then(…
+     29|     host.emit('已复制完整值\r\n<e> 原生改名 ×             <?> 全部按键\r\n'); await …
+     30|     expect(host.writes).toEqual([]); expect(complete).toBe(false);
+       |                         ^
+     31|     host.emit('<e> 原生改名              <?> 全部按键\r\n'); await flush();
+     32|     expect(host.writes).toEqual(['e']); expect(complete).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/dsh-enhancement-terminal-ready.test.ts > native rename waits for fresh external terminal readiness > ignores old enabled output and never presses e after readiness timeout
+AssertionError: expected [ 'e' ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "e",
++ ]
+
+ ❯ test/dsh-enhancement-terminal-ready.test.ts:40:57
+     38|     const rejected = expect(opened).rejects.toThrow('PTY readiness tim…
+     39|     host.emit('<e> 原生改名 ×             <?> 全部按键\r\n'); await flush();
+     40|     host.timeout(); await rejected; expect(host.writes).toEqual([]);
+       |                                                         ^
+     41|   });
+     42|   it('requires a fresh form after its single keypress and never retrie…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  10:55:05
+   Duration  354ms (transform 87ms, setup 0ms, collect 83ms, tests 10ms, environment 0ms, prepare 103ms)
+
