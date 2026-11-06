@@ -1,0 +1,39 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test test/dsh-enhancement-ci.test.ts test/dsh-enhancement-contract.test.ts test/dsh-enhancement-platform.test.ts test/dsh-enhancement-workflow.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-enhancement-20261105
+
+ ✓ test/dsh-enhancement-ci.test.ts (8 tests) 19ms
+ ✓ test/dsh-enhancement-contract.test.ts (15 tests) 6ms
+ ❯ test/dsh-enhancement-platform.test.ts (4 tests | 1 failed) 10ms
+   × C22 owned attach namespaces > fits the actual nested runner and validation layout without relocating native profiles 6ms
+     → (0 , buildC22NodeDirectory) is not a function
+   ✓ C22 owned attach namespaces > keeps four real production endpoints distinct on every planned OS 2ms
+   ✓ C22 owned attach namespaces > binds all three ownership axes without delimiter ambiguity 0ms
+   ✓ C22 owned attach namespaces > rejects unsafe endpoint budgets and unplanned platforms 1ms
+ ✓ test/dsh-enhancement-workflow.test.ts (2 tests) 6ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-enhancement-platform.test.ts > C22 owned attach namespaces > fits the actual nested runner and validation layout without relocating native profiles
+TypeError: (0 , buildC22NodeDirectory) is not a function
+ ❯ test/dsh-enhancement-platform.test.ts:18:25
+     16|     expect(() => buildC22AttachPath('darwin', originalTcpDirectory, la…
+     17|     const paths = machines.flatMap((machine, index) => stars.map(star …
+     18|       const directory = buildC22NodeDirectory(root, index);
+       |                         ^
+     19|       expect(directory).toBe(root + '/n' + index);
+     20|       const endpoint = buildC22AttachPath('darwin', directory, buildC2…
+ ❯ test/dsh-enhancement-platform.test.ts:17:62
+ ❯ test/dsh-enhancement-platform.test.ts:17:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 28 passed (29)
+   Start at  10:06:41
+   Duration  882ms (transform 370ms, setup 0ms, collect 640ms, tests 41ms, environment 1ms, prepare 287ms)
+

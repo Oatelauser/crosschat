@@ -1,0 +1,230 @@
+{
+  "schema": 1,
+  "scope": "Two same-host independent logical node processes, two formal npm/Web Hosts, two isolated terminal operators; not physical cross-machine acceptance",
+  "platform": "win32",
+  "node": "v22.23.4",
+  "root": "D:\\workspace\\CC\\cc-c22-Yru2Vo",
+  "productHead": "361298ab72975dfda7cee7b7819e5f64b5a984dd",
+  "checks": [
+    {
+      "name": "two-node-identities-and-remote-exact-source-isolation",
+      "status": "passed"
+    },
+    {
+      "name": "two-independent-terminal-observers-open-the-same-authoritative-star",
+      "status": "passed"
+    },
+    {
+      "name": "explicit-adoption-refreshes-both-operators-and-isolates-the-other-star",
+      "status": "passed"
+    },
+    {
+      "name": "permanent-membership-survives-two-temporary-window-claims-and-erase-release",
+      "status": "passed"
+    },
+    {
+      "name": "temporary-window-release-is-exact-and-independent-across-stars",
+      "status": "passed"
+    },
+    {
+      "name": "native-rename-syncs-both-operators-without-changing-the-other-node",
+      "status": "passed"
+    },
+    {
+      "name": "lost-native-write-receipt-is-uncertain-and-readonly-recovery-never-replays",
+      "status": "passed"
+    }
+  ],
+  "status": "failed",
+  "identities": [
+    {
+      "nodePid": 42112,
+      "hostPid": 32284,
+      "machineId": "11111111111111111111111111111111",
+      "nativeId": "session-5f943d8e-f16b-4580-b7a8-23f0aa38753a",
+      "instanceVersion": "0.2.1-rc.5"
+    },
+    {
+      "nodePid": 43964,
+      "hostPid": 42984,
+      "machineId": "22222222222222222222222222222222",
+      "nativeId": "session-c7b02787-4894-4ca5-8663-eaec1df4bbf6",
+      "instanceVersion": "0.2.1-rc.5"
+    }
+  ],
+  "renamed": "C22LostAck1793929128534",
+  "lostReceiptResult": {
+    "kind": "uncertain",
+    "message": "修改请求已发出，结果待核实；请刷新，不要自动重试。"
+  },
+  "nativeReceiptFault": {
+    "titlePosts": 1,
+    "acceptedWrites": 1,
+    "droppedReceipts": 1,
+    "readonlyRequests": 103,
+    "registrationRestored": true,
+    "proxyClosed": true
+  },
+  "lostBrokerResult": {
+    "kind": "uncertain",
+    "message": "修改请求未取得可核实的完成回执；可能已经生效，请刷新并核实目标，不要直接重复执行。"
+  },
+  "error": {
+    "name": "Error",
+    "message": "ConPTY output did not match C22BrokerAck1793929132976; log: D:\\workspace\\CC\\cc-dsh-enhancement-20261105\\docs\\development\\evidence\\c22-dsh-enhancement-20261106\\native-second\\terminal-1.jsonl; output tail:                              │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\r\n<members> 1/2 · 完整 · 自动刷新\u001b[K\r\n按在线 / 下线分组；a 选择节点会话入星，e 按原生能力改名，Ctrl+D 删除成员。k/K 发钥，x 撤销凭证。\u001b[K\r\n:资源  /筛选  Esc返回  q退出\u001b[K\u001b[112C",
+    "stack": "Error: ConPTY output did not match C22BrokerAck1793929132976; log: D:\\workspace\\CC\\cc-dsh-enhancement-20261105\\docs\\development\\evidence\\c22-dsh-enhancement-20261106\\native-second\\terminal-1.jsonl; output tail:                              │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\r\n<members> 1/2 · 完整 · 自动刷新\u001b[K\r\n按在线 / 下线分组；a 选择节点会话入星，e 按原生能力改名，Ctrl+D 删除成员。k/K 发钥，x 撤销凭证。\u001b[K\r\n:资源  /筛选  Esc返回  q退出\u001b[K\u001b[112C\n    at Timeout._onTimeout (file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/tui-pty-driver.mjs:140:18)\n    at listOnTimeout (node:internal/timers:585:17)\n    at process.processTimers (node:internal/timers:521:7)"
+  },
+  "terminals": [
+    {
+      "index": 0,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    },
+    {
+      "index": 1,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "index": 0,
+      "pid": 42112,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "messages": [
+        {
+          "event": "ready",
+          "pid": 42112,
+          "machineId": "11111111111111111111111111111111",
+          "pipes": [
+            {
+              "starId": "c22-alpha",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-1001bb30-8b9c-4519-8ae3-e51793e7d0cb-11111111-c22-alpha"
+            },
+            {
+              "starId": "c22-beta",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-1001bb30-8b9c-4519-8ae3-e51793e7d0cb-11111111-c22-beta"
+            }
+          ]
+        },
+        {
+          "event": "stopped",
+          "pid": 42112,
+          "failures": []
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "index": 1,
+      "pid": 43964,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "messages": [
+        {
+          "event": "ready",
+          "pid": 43964,
+          "machineId": "22222222222222222222222222222222",
+          "pipes": [
+            {
+              "starId": "c22-alpha",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-1001bb30-8b9c-4519-8ae3-e51793e7d0cb-22222222-c22-alpha"
+            },
+            {
+              "starId": "c22-beta",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-1001bb30-8b9c-4519-8ae3-e51793e7d0cb-22222222-c22-beta"
+            }
+          ]
+        },
+        {
+          "event": "stopped",
+          "pid": 43964,
+          "failures": []
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "hosts": [
+    {
+      "pid": 42984,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "logs": {
+        "stdout": "dsh web: http://127.0.0.1:49679/?token=[fixture-token-redacted]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "pid": 32284,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "logs": {
+        "stdout": "dsh web: http://127.0.0.1:56697/?token=[fixture-token-redacted]\n",
+        "stderr": ""
+      }
+    }
+  ],
+  "cleanupFailures": [],
+  "unsafe": false,
+  "outerRemoved": true
+}

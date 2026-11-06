@@ -14,6 +14,8 @@ import { createResourceRegistry, defaultResources } from '../../dist/tui/resourc
 
 const [root, input, events] = process.argv.slice(2), config = JSON.parse(await readFile(input, 'utf8'));
 assert.equal(await realpath(root), root); assert.equal(await readFile(join(root, '.fixture-owner'), 'utf8'), config.owner);
+if (config.contexts !== undefined) assert(config.task === 'c22-dsh-terminal' && Array.isArray(config.contexts) && config.contexts.length === 1
+  && config.contexts.every(context => context.kind === 'tcp' && typeof context.id === 'string' && context.id.startsWith('tcp:star:') && typeof context.label === 'string'));
 for (const path of [input, events, config.home]) {
   const inside = relative(root, await realpath(path).catch((error) => error.code === 'ENOENT' ? resolve(path) : Promise.reject(error)));
   assert(inside && inside !== '..' && !inside.startsWith('../') && !inside.startsWith('..\\') && !isAbsolute(inside));
@@ -24,23 +26,32 @@ const snapshot = () => ({ raw: process.stdin.isRaw === true, resize: process.std
 const baseDir = join(config.home, '.crosschat'), tcp = createTcpApplication({ baseDir });
 const resources = createTcpResources({ tcp, management: createTcpManagement({ baseDir, catalog: tcp, discovery: createLocalDiscoveryService({ home: config.home }) }) });
 const bindings = new Map(Object.values(resources).map((binding) => [binding.resource.id, binding]));
+// Only public, non-secret selection/input metadata from this owned fixture.
+const actionEvidence = (request) => ({ route: request.route, targetId: request.target?.id,
+  operationTarget: request.target?.copyValues?.operationTarget,
+  ...(request.action.id === 'rename-session' ? { values: { name: request.values?.name ?? '' } } : {}) });
 for (const binding of bindings.values()) {
   const read = binding.adapter.read, check = binding.adapter.checkAction, mutate = binding.adapter.mutate, describe = binding.adapter.describeActions;
   binding.adapter.read = async (request) => { const page = await read(request); await record({ event: 'read', resource: binding.resource.id, page }); return page; };
   if (check) binding.adapter.checkAction = async (request) => {
-    const result = await check(request); await record({ event: 'preview', action: request.action.id, result }); return result;
+    const result = await check(request); await record({ event: 'preview', action: request.action.id, ...actionEvidence(request), result }); return result;
   };
   if (describe) binding.adapter.describeActions = async (request) => {
     const result = await describe(request); await record({ event: 'availability', result }); return result;
   };
   if (mutate) binding.adapter.mutate = async (request) => {
-    const result = await mutate(request); await record({ event: 'mutation', action: request.action.id, result }); return result;
+    await record({ event: 'mutation-start', action: request.action.id, ...actionEvidence(request) });
+    try {
+      const result = await mutate(request); await record({ event: 'mutation', action: request.action.id, ...actionEvidence(request), result }); return result;
+    } catch (error) {
+      await record({ event: 'mutation-error', action: request.action.id, ...actionEvidence(request), message: error.message }); throw error;
+    }
   };
 }
 const warmup = render(createElement(Text, null, 'C18 native terminal baseline'), { interactive: true, patchConsole: false, exitOnCtrlC: false });
 await warmup.waitUntilRenderFlush(); warmup.unmount(); await warmup.waitUntilExit();
 const before = snapshot();
-const code = await runTui({ home: config.home, contexts: [{ id: 'local', kind: 'local', label: 'C18-NATIVE-MEMBERS' }],
+const code = await runTui({ home: config.home, contexts: config.contexts ?? [{ id: 'local', kind: 'local', label: 'C18-NATIVE-MEMBERS' }],
   registry: createResourceRegistry(defaultResources.map((resource) => bindings.get(resource.id)?.resource ?? resource)),
   adapters: Object.fromEntries([...bindings].map(([id, binding]) => [id, binding.adapter])), clipboard: async (value) => record({ event: 'clipboard', value }) });
 await record({ event: 'exit', code, before, after: snapshot() }); process.exitCode = code;

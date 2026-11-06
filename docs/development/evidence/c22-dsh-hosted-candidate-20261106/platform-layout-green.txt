@@ -1,0 +1,15 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test test/dsh-enhancement-platform.test.ts test/dsh-enhancement-workflow.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-enhancement-20261105
+
+ ✓ test/dsh-enhancement-workflow.test.ts (2 tests) 5ms
+ ✓ test/dsh-enhancement-platform.test.ts (4 tests) 10ms
+
+ Test Files  2 passed (2)
+      Tests  6 passed (6)
+   Start at  10:07:37
+   Duration  672ms (transform 304ms, setup 0ms, collect 484ms, tests 15ms, environment 0ms, prepare 151ms)
+

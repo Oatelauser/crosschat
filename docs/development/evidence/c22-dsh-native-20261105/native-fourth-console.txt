@@ -1,0 +1,25 @@
+two-node-identities-and-remote-exact-source-isolation
+two-independent-terminal-observers-open-the-same-authoritative-star
+explicit-adoption-refreshes-both-operators-and-isolates-the-other-star
+permanent-membership-survives-two-temporary-window-claims-and-erase-release
+temporary-window-release-is-exact-and-independent-across-stars
+native-rename-syncs-both-operators-without-changing-the-other-node
+{"status":"failed","checks":6,"error":"Cannot read properties of undefined (reading 'throwIfAborted')","outerRemoved":true,"unsafe":false}
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Cannot read properties of undefined (reading 'throwIfAborted')
+
+'failed' !== 'passed'
+
+    at file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:155:8 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'failed',
+  expected: 'passed',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.23.4

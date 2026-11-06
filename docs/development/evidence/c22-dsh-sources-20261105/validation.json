@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "observedAt": "2026-11-05T14:52:40.683Z",
+  "baseHead": "7229efb17cb047205eb79b9df15f27edd71f4231",
+  "branch": "codex/dsh-enhancement-validation-20261105",
+  "scope": "Two independent loopback HTTP native sources with identical opaque IDs; not native multi-node acceptance",
+  "testFile": "test/dsh-native-operations.test.ts",
+  "testFileBlob": "682a87055e75290b7e1af61cb36ff5a0d4b4428f",
+  "productAndWorkflowsChanged": false,
+  "targeted": {
+    "passed": 17,
+    "exitCode": 0
+  },
+  "fullCheck": {
+    "passed": 2873,
+    "skipped": 11,
+    "filesPassed": 242,
+    "filesSkipped": 3,
+    "modules": 206,
+    "edges": 699,
+    "exitCode": 0,
+    "node": "v22.23.4",
+    "maxWorkers": 2
+  },
+  "nativeMultiNodeAccepted": false,
+  "newExternalExecution": false,
+  "newPersistentRuntimeDataFile": false,
+  "newUserCommandOrStep": false,
+  "artifacts": [
+    {
+      "file": "initial-build.txt",
+      "bytes": 49,
+      "sha256": "caee18acaf6cfeac30a8769f25fbefd2a722f1499048ebd53a6a1d2c55e3ba95"
+    },
+    {
+      "file": "independent-sources-first.txt",
+      "bytes": 311,
+      "sha256": "a762bc381003b27cdb9353f6e2a0e905ece0baf78e95a4fc7593204dbd714425"
+    },
+    {
+      "file": "independent-sources-full-check.txt",
+      "bytes": 30959,
+      "sha256": "8ff62b92a433e113e4879e4654d98a4adc30b6f4fdf2b2a16c8fb4d643218d2a"
+    },
+    {
+      "file": ".gitattributes",
+      "bytes": 26,
+      "sha256": "11b9f1f626d619b3bf9fd7f000e86a0cd80c42552203ec6dde71d737eddeddfb"
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "observedAt": "2026-11-05T15:08:41.021Z",
+  "sourceHead": "d304bebc85ec735f7a5d71bb0221ba6abcf75838",
+  "sourceFiles": [
+    {
+      "file": "test/helpers/dsh-enhancement-node.mjs",
+      "blob": "09af3a75cd421a136dfd0724f04f5a2c70f7546d"
+    },
+    {
+      "file": "test/helpers/dsh-enhancement-native-validation.mjs",
+      "blob": "69ad0b879f4c4eb2d4bbeef606841d8d31d86858"
+    },
+    {
+      "file": "test/helpers/dsh-native-members-pty.mjs",
+      "blob": "b62bf7a2f23f6e23d33916cab96879febac72923"
+    },
+    {
+      "file": "test/helpers/dsh-live-fixture.mjs",
+      "blob": "e3e5e8a19799550ff3ec95cea45a8086d1ad4e08"
+    },
+    {
+      "file": "test/helpers/dsh-runtime-driver.mjs",
+      "blob": "5b46392c2342a10f47c4e173e6e03c932c7d48af"
+    },
+    {
+      "file": "integrations/dsh/bridge.js",
+      "blob": "52304348ce8b2e88f121f18a14ca468c5a196dcf"
+    },
+    {
+      "file": "src/dsh/native-operations.ts",
+      "blob": "8df300a95b4010790c15beb107f11250e993d319"
+    },
+    {
+      "file": "src/dsh/rename.ts",
+      "blob": "3d3c24d0402db032a8ab71f25b9c61b60923ae00"
+    }
+  ],
+  "scope": "Two same-host independent logical node processes, two formal npm/Web Hosts, two isolated terminal operators; not physical cross-machine acceptance",
+  "status": "failed",
+  "checks": [],
+  "error": "Logical nodes require distinct owned attach namespaces on this shared Windows host\n\n2 !== 4\n",
+  "outerRemoved": true,
+  "unsafe": false,
+  "hosts": [
+    {
+      "pid": 31164,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      }
+    },
+    {
+      "pid": 19628,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      }
+    }
+  ],
+  "nodeExits": [
+    {
+      "pid": 43748,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    {
+      "pid": 9976,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "native-second/report.json",
+      "bytes": 3106,
+      "sha256": "fe29cfa414f3323493d8cb1fe6d96527bde1f40a641d4235affc5cbfd50b4c52",
+      "sourceBytes": 3106,
+      "sourceSha256": "fe29cfa414f3323493d8cb1fe6d96527bde1f40a641d4235affc5cbfd50b4c52"
+    },
+    {
+      "file": "native-second-console.txt",
+      "bytes": 691,
+      "sha256": "c2ac82579399d10bbfb1ef88950e6674b582d4989be4ec488bc4d03555627d43",
+      "sourceBytes": 691,
+      "sourceSha256": "c2ac82579399d10bbfb1ef88950e6674b582d4989be4ec488bc4d03555627d43"
+    }
+  ]
+}

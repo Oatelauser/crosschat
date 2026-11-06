@@ -1,0 +1,406 @@
+{
+  "schema": 1,
+  "verifiedAt": "2026-11-05T15:23:11.824Z",
+  "sourceHead": "439c54a0145ffa0134e1073fba6644704de1eabe",
+  "sourceFiles": [
+    {
+      "file": "test/helpers/dsh-enhancement-node.mjs",
+      "blob": "1850d20d94718c41f1f7dff7363ecf51bd5f6db4"
+    },
+    {
+      "file": "test/helpers/dsh-enhancement-native-validation.mjs",
+      "blob": "79dc76f378dc395c90e8374774244aff9bc41e32"
+    },
+    {
+      "file": "test/helpers/dsh-native-members-pty.mjs",
+      "blob": "b62bf7a2f23f6e23d33916cab96879febac72923"
+    },
+    {
+      "file": "test/helpers/dsh-live-fixture.mjs",
+      "blob": "e3e5e8a19799550ff3ec95cea45a8086d1ad4e08"
+    },
+    {
+      "file": "test/helpers/dsh-runtime-driver.mjs",
+      "blob": "5b46392c2342a10f47c4e173e6e03c932c7d48af"
+    },
+    {
+      "file": "integrations/dsh/bridge.js",
+      "blob": "52304348ce8b2e88f121f18a14ca468c5a196dcf"
+    },
+    {
+      "file": "src/dsh/native-operations.ts",
+      "blob": "8df300a95b4010790c15beb107f11250e993d319"
+    },
+    {
+      "file": "src/dsh/rename.ts",
+      "blob": "3d3c24d0402db032a8ab71f25b9c61b60923ae00"
+    },
+    {
+      "file": "test/helpers/dsh-enhancement-faults.mjs",
+      "blob": "9b07dbc7212710dd42ff9bba659eeeb3d7ec16d1"
+    }
+  ],
+  "scope": "Two same-host independent logical node processes, two formal npm/Web Hosts, two isolated terminal operators; not physical cross-machine acceptance",
+  "status": "passed",
+  "checks": [
+    {
+      "name": "two-node-identities-and-remote-exact-source-isolation",
+      "status": "passed"
+    },
+    {
+      "name": "two-independent-terminal-observers-open-the-same-authoritative-star",
+      "status": "passed"
+    },
+    {
+      "name": "explicit-adoption-refreshes-both-operators-and-isolates-the-other-star",
+      "status": "passed"
+    },
+    {
+      "name": "permanent-membership-survives-two-temporary-window-claims-and-erase-release",
+      "status": "passed"
+    },
+    {
+      "name": "temporary-window-release-is-exact-and-independent-across-stars",
+      "status": "passed"
+    },
+    {
+      "name": "native-rename-syncs-both-operators-without-changing-the-other-node",
+      "status": "passed"
+    },
+    {
+      "name": "lost-native-write-receipt-is-uncertain-and-readonly-recovery-never-replays",
+      "status": "passed"
+    },
+    {
+      "name": "bridge-loss-and-recovery-stay-local-and-reject-old-confirmations",
+      "status": "passed"
+    },
+    {
+      "name": "exact-removal-does-not-change-other-node-or-native-chat",
+      "status": "passed"
+    }
+  ],
+  "nativeReceiptFault": {
+    "titlePosts": 1,
+    "acceptedWrites": 1,
+    "droppedReceipts": 1,
+    "readonlyRequests": 99,
+    "registrationRestored": true,
+    "proxyClosed": true
+  },
+  "lostReceiptResult": {
+    "kind": "uncertain",
+    "message": "修改请求已发出，结果待核实；请刷新，不要自动重试。"
+  },
+  "processes": {
+    "hostExits": [
+      {
+        "pid": 26028,
+        "cleanup": {
+          "runtimeStopped": true,
+          "registrationRemoved": true,
+          "removed": true,
+          "forced": false
+        }
+      },
+      {
+        "pid": 4200,
+        "cleanup": {
+          "runtimeStopped": true,
+          "registrationRemoved": true,
+          "removed": true,
+          "forced": false
+        }
+      }
+    ],
+    "nodeExits": [
+      {
+        "pid": 31584,
+        "exit": {
+          "code": 0,
+          "signal": null
+        }
+      },
+      {
+        "pid": 41836,
+        "exit": {
+          "code": 0,
+          "signal": null
+        }
+      }
+    ],
+    "terminalExits": [
+      {
+        "index": 0,
+        "exit": {
+          "event": "exit",
+          "code": 0,
+          "before": {
+            "raw": false,
+            "resize": 0,
+            "listeners": {
+              "SIGINT": 1,
+              "SIGTERM": 1,
+              "uncaughtException": 0,
+              "unhandledRejection": 0
+            }
+          },
+          "after": {
+            "raw": false,
+            "resize": 0,
+            "listeners": {
+              "SIGINT": 1,
+              "SIGTERM": 1,
+              "uncaughtException": 0,
+              "unhandledRejection": 0
+            }
+          }
+        }
+      },
+      {
+        "index": 1,
+        "exit": {
+          "event": "exit",
+          "code": 0,
+          "before": {
+            "raw": false,
+            "resize": 0,
+            "listeners": {
+              "SIGINT": 1,
+              "SIGTERM": 1,
+              "uncaughtException": 0,
+              "unhandledRejection": 0
+            }
+          },
+          "after": {
+            "raw": false,
+            "resize": 0,
+            "listeners": {
+              "SIGINT": 1,
+              "SIGTERM": 1,
+              "uncaughtException": 0,
+              "unhandledRejection": 0
+            }
+          }
+        }
+      }
+    ],
+    "outerRemoved": true,
+    "unsafe": false
+  },
+  "fullCheck": {
+    "passed": 2873,
+    "skipped": 11,
+    "filesPassed": 242,
+    "filesSkipped": 3,
+    "modules": 206,
+    "edges": 699,
+    "exitCode": 0,
+    "node": "v22.23.4",
+    "maxWorkers": 2
+  },
+  "history": [
+    "native-first: remote operator wired to local catalog; failed, all resources reclaimed",
+    "native-second: logical node attach label omitted star, four-pipe guard failed; all resources reclaimed",
+    "native-third: eight native checks passed",
+    "native-fourth: fault fixture omitted reader AbortSignal before issuing a write; failed, all resources reclaimed",
+    "native-fifth: nine native checks including one admitted title write with its response dropped passed"
+  ],
+  "boundaries": {
+    "physicalCrossMachine": false,
+    "browserOrDesktopStarted": false,
+    "newUserCommandOrStep": false,
+    "newPersistentRuntimeDataFile": false,
+    "productOrWorkflowCodeChanged": false,
+    "pushed": false,
+    "newHostedNativeRun": false
+  },
+  "pauseRequestedAfterCurrentSmallTask": true,
+  "artifacts": [
+    {
+      "file": ".gitattributes",
+      "bytes": 26,
+      "sha256": "11b9f1f626d619b3bf9fd7f000e86a0cd80c42552203ec6dde71d737eddeddfb"
+    },
+    {
+      "file": "development-plan-before-local-acceptance.txt",
+      "bytes": 4667,
+      "sha256": "e21f8f7aa6fb4cf0c7751e1125ac699e7cfe07d3ac46a9422ef9a7c456b0b825"
+    },
+    {
+      "file": "final-full-check.txt",
+      "bytes": 31195,
+      "sha256": "78f752ba4954767d66987312543f1e689c273bc2b6e6da426bf7e26f3c78fac5"
+    },
+    {
+      "file": "native-fifth/report.json",
+      "bytes": 6200,
+      "sha256": "1c4c4f27b1e8b791d571e7b0ea5055baf9ac347229ec552bc67516c0c8486b75"
+    },
+    {
+      "file": "native-fifth/terminal-0-application.jsonl",
+      "bytes": 68140,
+      "sha256": "8e7c5f0625235d436cc14c1fd75df0766ad877607665f1941fc94e90f965fc63"
+    },
+    {
+      "file": "native-fifth/terminal-0.jsonl",
+      "bytes": 115422,
+      "sha256": "2e038b0da9a0a8c258f693ac5709f3a189613904f21c58c41656f014cd34778b"
+    },
+    {
+      "file": "native-fifth/terminal-1-application.jsonl",
+      "bytes": 59294,
+      "sha256": "5398b303b12b94f823863cf0bbb17f592753dd986cd3bc3fca4b82f1b4ee0b6d"
+    },
+    {
+      "file": "native-fifth/terminal-1.jsonl",
+      "bytes": 100304,
+      "sha256": "bfa3d886ae509dd135a39446324c8d778b86befe41a718877676188297f5802e"
+    },
+    {
+      "file": "native-fifth-console.txt",
+      "bytes": 671,
+      "sha256": "8010029978d46aa04338da7a569d4fe8d2ea886e133a65cc9d1736233a8ca6b0"
+    },
+    {
+      "file": "native-fifth-validation.json",
+      "bytes": 4897,
+      "sha256": "76d57b9a5f7a4037159bf13a813d4e665db9bc0be34870c5bf2ed3cb8066ee4e"
+    },
+    {
+      "file": "native-first/report.json",
+      "bytes": 9282,
+      "sha256": "340ad751c7bf804d9220404ee349c0525e5a645da36ab4fd8e697a189f944be4"
+    },
+    {
+      "file": "native-first/terminal-0-application.jsonl",
+      "bytes": 3812,
+      "sha256": "800acea06c7d6300cfdd7722dabd1ec9112171a3b058ff69ebddf775f07205fc"
+    },
+    {
+      "file": "native-first/terminal-0.jsonl",
+      "bytes": 24548,
+      "sha256": "15a781456cef634a662eee3c46255e8fc90e207f0cf0d6e6edb90fdd1da8427b"
+    },
+    {
+      "file": "native-first-console.txt",
+      "bytes": 5824,
+      "sha256": "a9706d01ca72961a5a572f673532fa0934560e54d387ed371be3fb5c68d8669d"
+    },
+    {
+      "file": "native-first-lint.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "native-first-validation.json",
+      "bytes": 5871,
+      "sha256": "1f8d88d594e51547114e1d5f5b17430fcf53059fe854c8662520c2f34c208f7c"
+    },
+    {
+      "file": "native-fourth/report.json",
+      "bytes": 6122,
+      "sha256": "af6007a7b2cb91b7c809307f536b2ef2cb1263ebadf695491d44615a266d241d"
+    },
+    {
+      "file": "native-fourth/terminal-0-application.jsonl",
+      "bytes": 36888,
+      "sha256": "5542300e2bdc02d1a5819e0da781ca2adf1824d3c4b4af264f745f31b1da2b51"
+    },
+    {
+      "file": "native-fourth/terminal-0.jsonl",
+      "bytes": 70052,
+      "sha256": "67f5fb39d48249a3bbf5c56a4c9b57602bd29e8a3a64df1dd884a796e72eb111"
+    },
+    {
+      "file": "native-fourth/terminal-1-application.jsonl",
+      "bytes": 36888,
+      "sha256": "0c4f3c6ba08aa095147f41cdbea348ed863648811a95aef87cb671465636c2e3"
+    },
+    {
+      "file": "native-fourth/terminal-1.jsonl",
+      "bytes": 77480,
+      "sha256": "b88e178c096c286cd51228f0368945f5ffa3e4b410e2e66b81a981dd535f3cb9"
+    },
+    {
+      "file": "native-fourth-console.txt",
+      "bytes": 1030,
+      "sha256": "2a3ed7f6514d89dfb59b33c5de80f255ae256189b81dd3a449e7984a249ab787"
+    },
+    {
+      "file": "native-fourth-lint-green.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "native-fourth-lint.txt",
+      "bytes": 316,
+      "sha256": "57e3148527e10ba552871242bb1d0ce26692dedb418637f447e7301c673ee22e"
+    },
+    {
+      "file": "native-fourth-validation.json",
+      "bytes": 4618,
+      "sha256": "764032232293e928174ca721bedb44659467a9690cbe87dc3adcfe8465be61c2"
+    },
+    {
+      "file": "native-helper-lint.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "native-second/report.json",
+      "bytes": 3106,
+      "sha256": "fe29cfa414f3323493d8cb1fe6d96527bde1f40a641d4235affc5cbfd50b4c52"
+    },
+    {
+      "file": "native-second-console.txt",
+      "bytes": 691,
+      "sha256": "c2ac82579399d10bbfb1ef88950e6674b582d4989be4ec488bc4d03555627d43"
+    },
+    {
+      "file": "native-second-lint.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "native-second-validation.json",
+      "bytes": 2630,
+      "sha256": "10e26ad2d517bfc1b91a489bece770078b64ba25f4b32e8b27865bb53e780119"
+    },
+    {
+      "file": "native-third/report.json",
+      "bytes": 5733,
+      "sha256": "d6eb0494763e29cac4f985d037ab82068bb14e24af90ead81df4f9e15ab7d191"
+    },
+    {
+      "file": "native-third/terminal-0-application.jsonl",
+      "bytes": 48214,
+      "sha256": "3968ed9bb8f67283e59e774b2bd8ec775ecade0e9a8404221381da78fbe78f2b"
+    },
+    {
+      "file": "native-third/terminal-0.jsonl",
+      "bytes": 85115,
+      "sha256": "2d51f53e619572242222669bec1c8794eb7a15009d4db1075b14a7d130c5d267"
+    },
+    {
+      "file": "native-third/terminal-1-application.jsonl",
+      "bytes": 36888,
+      "sha256": "47bd7e5eb7029c59e8926f37f3c298fb6756e989b16fec1a04e0a70c87d8ffcd"
+    },
+    {
+      "file": "native-third/terminal-1.jsonl",
+      "bytes": 70134,
+      "sha256": "eb15a077f9533c0a19acf467926fd5b0ffefd23e09b5b83311934f8b09634478"
+    },
+    {
+      "file": "native-third-console.txt",
+      "bytes": 595,
+      "sha256": "01c0409ff80e3b6edc4e8838a23278ce9d92952e42714ba5f26d4a223eaf77c2"
+    },
+    {
+      "file": "native-third-validation.json",
+      "bytes": 4636,
+      "sha256": "37604de56d39ca6fa01589682da7ac1ad92821407d7463d4ec1a8c347f4655c6"
+    }
+  ]
+}

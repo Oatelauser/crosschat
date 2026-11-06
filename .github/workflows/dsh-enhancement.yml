@@ -1,0 +1,54 @@
+name: DeepSeek Harness enhancement candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dsh-enhancement-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON('[{"runner":"windows-latest","platform":"win32","arch":"x64"},{"runner":"ubuntu-24.04","platform":"linux","arch":"x64"},{"runner":"macos-15-intel","platform":"darwin","arch":"x64"},{"runner":"macos-15","platform":"darwin","arch":"arm64"}]') }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+          architecture: ${{ matrix.arch }}
+      - uses: actions/setup-python@v6
+        if: matrix.platform != 'win32'
+        with:
+          python-version: '3.12'
+          architecture: ${{ matrix.arch }}
+      - name: Verify actual runner target
+        run: node -e "const a=require('node:assert/strict'); a.equal(process.platform,process.env.DSH_EXPECTED_PLATFORM); a.equal(process.arch,process.env.DSH_EXPECTED_ARCH)"
+        env:
+          DSH_EXPECTED_PLATFORM: ${{ matrix.platform }}
+          DSH_EXPECTED_ARCH: ${{ matrix.arch }}
+      - name: Verify native POSIX terminal before installing DSH
+        if: matrix.platform != 'win32'
+        run: node test/helpers/tui-posix-pty-selftest.mjs dsh-enhancement-evidence/terminal-preflight
+      - run: npm ci
+      - run: npm run build
+      - run: node scripts/dsh-enhancement-ci.mjs
+        env:
+          CROSSCHAT_LIVE: '1'
+          DSH_EXPECTED_PLATFORM: ${{ matrix.platform }}
+          DSH_EXPECTED_ARCH: ${{ matrix.arch }}
+          TMPDIR: ${{ matrix.platform != 'win32' && '/tmp' || '' }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dsh-enhancement-${{ matrix.platform }}-${{ matrix.arch }}
+          path: dsh-enhancement-evidence/
+          if-no-files-found: warn
+          retention-days: 21

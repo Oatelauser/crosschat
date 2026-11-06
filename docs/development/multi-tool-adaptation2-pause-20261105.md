@@ -1,0 +1,19 @@
+# 多工具适配2暂停记录：2026-11-05
+
+2026-11-06增强托管候选已本地完成：独立manual-only四目标rc.5/Node22.23.4 workflow、固定包SRI/安装复用、fresh run严格报告及POSIX短路径/正常进程组释放校验已接通。33定向、最终完整2906通过/11原有跳过；新runner边界下Windows正式11项通过（重用依赖，非新安装）。详见[候选与外部步骤](dsh-enhancement-hosted-candidate-20261106.md)。未推送/建PR/触发原生Actions，未改既有定时；下一步待用户批准具体推送草稿PR与普通CI范围。新workflow须默认分支注册后才可dispatch，不把POSIX/托管/跨机记通过。
+
+
+2026-11-06恢复：用户明确继续并允许按任务使用subagent。本地C21/C22新增broker最终回执丢失、真实多端表单与选择保持组合，正式11项通过；明确成员恢复须显式adopt，不改生产。见[增量验收](dsh-enhancement-validation-20261106.md)。第五轮临时目录曾被自动审批拒绝删除，现用户手动删除且只读核实不存在，清理缺口关闭；最终第七轮资源正常回收。下一项准备增强托管工装/平台候选，尚无新推送/PR/Actions授权；其它平台/Desktop/跨机及原负责人保持。
+
+
+2026-11-06交接：用户要求将全部未完成任务、背景及当前开发交给Codex Desktop「多工具适配3」，见[完整交接包](multi-tool-handoff-to-adaptation3-20261106.md)。当前C22分支361298a及25父项/11CI索引、原负责人和全部批准/证据一并转交；原会话停止开发。2026-11-05的暂停仍有效，接收方先读包确认，等待用户在新会话明确继续。本次不开发产品、不触发Actions或发布。
+
+用户要求“这个小任务完成就准备暂停任务”。当前九项DSH正式npm/Web本地增强验证及必要完整检查已完成，现暂停；不继续新小单、派worker、推送或触发外部Actions。
+
+- 当前开发：D:/workspace/CC/cc-dsh-enhancement-20261105，codex/dsh-enhancement-validation-20261105，代码检查点439c54a0145ffa0134e1073fba6644704de1eabe；后续归档提交后须重新核实HEAD。
+- [正式结果与断点](dsh-enhancement-validation-progress-20261105.md)：两个隔离Host/独立node/ConPTY操作端，九项原生通过；丢回执实际写一次，结果uncertain，恢复不重发。最终完整2873通过/11原有跳过。
+- [全部原始证据与摘要](evidence/c22-dsh-native-20261105/validation.json)：五轮历史保留，进程自然退出、桥登记撤销、原生运行根删除、代理恢复/关闭均已核实。代码和证据保留，日用DSH不动。
+- PR #5已获批合入main 7229efb，合入前后三平台普通CI通过。当前C22分支没有推送/新PR/原生Actions；没有发布或改变定时。
+- 下一项为broker回执丢失及更完整多端组合，随后才准备增强托管增量。其它版本/平台/Desktop、C00跨机及原负责人边界保持；25父项/11CI索引不关闭。
+
+等待用户明确继续；不自动恢复。

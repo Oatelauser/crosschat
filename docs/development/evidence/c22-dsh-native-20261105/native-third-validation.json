@@ -1,0 +1,157 @@
+{
+  "schema": 1,
+  "observedAt": "2026-11-05T15:10:41.094Z",
+  "sourceHead": "70799c8def47d8db349dc1670cc6e490e738cba8",
+  "sourceFiles": [
+    {
+      "file": "test/helpers/dsh-enhancement-node.mjs",
+      "blob": "1850d20d94718c41f1f7dff7363ecf51bd5f6db4"
+    },
+    {
+      "file": "test/helpers/dsh-enhancement-native-validation.mjs",
+      "blob": "69ad0b879f4c4eb2d4bbeef606841d8d31d86858"
+    },
+    {
+      "file": "test/helpers/dsh-native-members-pty.mjs",
+      "blob": "b62bf7a2f23f6e23d33916cab96879febac72923"
+    },
+    {
+      "file": "test/helpers/dsh-live-fixture.mjs",
+      "blob": "e3e5e8a19799550ff3ec95cea45a8086d1ad4e08"
+    },
+    {
+      "file": "test/helpers/dsh-runtime-driver.mjs",
+      "blob": "5b46392c2342a10f47c4e173e6e03c932c7d48af"
+    },
+    {
+      "file": "integrations/dsh/bridge.js",
+      "blob": "52304348ce8b2e88f121f18a14ca468c5a196dcf"
+    },
+    {
+      "file": "src/dsh/native-operations.ts",
+      "blob": "8df300a95b4010790c15beb107f11250e993d319"
+    },
+    {
+      "file": "src/dsh/rename.ts",
+      "blob": "3d3c24d0402db032a8ab71f25b9c61b60923ae00"
+    }
+  ],
+  "scope": "Two same-host independent logical node processes, two formal npm/Web Hosts, two isolated terminal operators; not physical cross-machine acceptance",
+  "status": "passed",
+  "checks": [
+    {
+      "name": "two-node-identities-and-remote-exact-source-isolation",
+      "status": "passed"
+    },
+    {
+      "name": "two-independent-terminal-observers-open-the-same-authoritative-star",
+      "status": "passed"
+    },
+    {
+      "name": "explicit-adoption-refreshes-both-operators-and-isolates-the-other-star",
+      "status": "passed"
+    },
+    {
+      "name": "permanent-membership-survives-two-temporary-window-claims-and-erase-release",
+      "status": "passed"
+    },
+    {
+      "name": "temporary-window-release-is-exact-and-independent-across-stars",
+      "status": "passed"
+    },
+    {
+      "name": "native-rename-syncs-both-operators-without-changing-the-other-node",
+      "status": "passed"
+    },
+    {
+      "name": "bridge-loss-and-recovery-stay-local-and-reject-old-confirmations",
+      "status": "passed"
+    },
+    {
+      "name": "exact-removal-does-not-change-other-node-or-native-chat",
+      "status": "passed"
+    }
+  ],
+  "outerRemoved": true,
+  "unsafe": false,
+  "hosts": [
+    {
+      "pid": 2760,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      }
+    },
+    {
+      "pid": 34388,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      }
+    }
+  ],
+  "nodeExits": [
+    {
+      "pid": 41012,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    {
+      "pid": 13588,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "native-third/report.json",
+      "bytes": 5733,
+      "sha256": "d6eb0494763e29cac4f985d037ab82068bb14e24af90ead81df4f9e15ab7d191",
+      "sourceBytes": 5733,
+      "sourceSha256": "d6eb0494763e29cac4f985d037ab82068bb14e24af90ead81df4f9e15ab7d191"
+    },
+    {
+      "file": "native-third/terminal-0-application.jsonl",
+      "bytes": 48214,
+      "sha256": "3968ed9bb8f67283e59e774b2bd8ec775ecade0e9a8404221381da78fbe78f2b",
+      "sourceBytes": 48214,
+      "sourceSha256": "3968ed9bb8f67283e59e774b2bd8ec775ecade0e9a8404221381da78fbe78f2b"
+    },
+    {
+      "file": "native-third/terminal-0.jsonl",
+      "bytes": 85115,
+      "sha256": "2d51f53e619572242222669bec1c8794eb7a15009d4db1075b14a7d130c5d267",
+      "sourceBytes": 85115,
+      "sourceSha256": "2d51f53e619572242222669bec1c8794eb7a15009d4db1075b14a7d130c5d267"
+    },
+    {
+      "file": "native-third/terminal-1-application.jsonl",
+      "bytes": 36888,
+      "sha256": "47bd7e5eb7029c59e8926f37f3c298fb6756e989b16fec1a04e0a70c87d8ffcd",
+      "sourceBytes": 36888,
+      "sourceSha256": "47bd7e5eb7029c59e8926f37f3c298fb6756e989b16fec1a04e0a70c87d8ffcd"
+    },
+    {
+      "file": "native-third/terminal-1.jsonl",
+      "bytes": 70134,
+      "sha256": "eb15a077f9533c0a19acf467926fd5b0ffefd23e09b5b83311934f8b09634478",
+      "sourceBytes": 70134,
+      "sourceSha256": "eb15a077f9533c0a19acf467926fd5b0ffefd23e09b5b83311934f8b09634478"
+    },
+    {
+      "file": "native-third-console.txt",
+      "bytes": 595,
+      "sha256": "01c0409ff80e3b6edc4e8838a23278ce9d92952e42714ba5f26d4a223eaf77c2",
+      "sourceBytes": 595,
+      "sourceSha256": "01c0409ff80e3b6edc4e8838a23278ce9d92952e42714ba5f26d4a223eaf77c2"
+    }
+  ]
+}

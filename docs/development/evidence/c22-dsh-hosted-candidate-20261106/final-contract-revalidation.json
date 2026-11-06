@@ -1,0 +1,13 @@
+{
+  "binding": {
+    "runId": "5ad6a248-7808-4a4f-882f-02d811ca30e4",
+    "sourceHead": "0f61b95ecb6199e3cd98cb29772cf90531b9e31a",
+    "platform": "win32",
+    "arch": "x64",
+    "version": "0.2.1-rc.5"
+  },
+  "validation": {
+    "valid": true
+  },
+  "note": "Revalidated the earlier Windows native report under the final POSIX-gated validator; not a new native run."
+}

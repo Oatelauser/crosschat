@@ -1,0 +1,9 @@
+two-node-identities-and-remote-exact-source-isolation
+two-independent-terminal-observers-open-the-same-authoritative-star
+explicit-adoption-refreshes-both-operators-and-isolates-the-other-star
+permanent-membership-survives-two-temporary-window-claims-and-erase-release
+temporary-window-release-is-exact-and-independent-across-stars
+native-rename-syncs-both-operators-without-changing-the-other-node
+bridge-loss-and-recovery-stay-local-and-reject-old-confirmations
+exact-removal-does-not-change-other-node-or-native-chat
+{"status":"passed","checks":8,"outerRemoved":true,"unsafe":false}

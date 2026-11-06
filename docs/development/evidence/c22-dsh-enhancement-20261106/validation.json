@@ -1,0 +1,194 @@
+{
+  "schema": 1,
+  "date": "2026-11-06",
+  "status": "passed",
+  "baseHead": "361298ab72975dfda7cee7b7819e5f64b5a984dd",
+  "checks": [
+    {
+      "name": "two-node-identities-and-remote-exact-source-isolation",
+      "status": "passed"
+    },
+    {
+      "name": "two-independent-terminal-observers-open-the-same-authoritative-star",
+      "status": "passed"
+    },
+    {
+      "name": "explicit-adoption-refreshes-both-operators-and-isolates-the-other-star",
+      "status": "passed"
+    },
+    {
+      "name": "permanent-membership-survives-two-temporary-window-claims-and-erase-release",
+      "status": "passed"
+    },
+    {
+      "name": "temporary-window-release-is-exact-and-independent-across-stars",
+      "status": "passed"
+    },
+    {
+      "name": "native-rename-syncs-both-operators-without-changing-the-other-node",
+      "status": "passed"
+    },
+    {
+      "name": "lost-native-write-receipt-is-uncertain-and-readonly-recovery-never-replays",
+      "status": "passed"
+    },
+    {
+      "name": "lost-broker-receipt-is-uncertain-and-other-operator-observes-one-write",
+      "status": "passed"
+    },
+    {
+      "name": "bridge-loss-and-recovery-stay-local-and-reject-old-confirmations",
+      "status": "passed"
+    },
+    {
+      "name": "cross-operator-confirmation-recovery-and-keyboard-selection-stay-exact",
+      "status": "passed"
+    },
+    {
+      "name": "exact-removal-does-not-change-other-node-or-native-chat",
+      "status": "passed"
+    }
+  ],
+  "scope": "Two same-host independent logical node processes, two formal npm/Web Hosts, two isolated terminal operators; not physical cross-machine acceptance",
+  "brokerReceiptFault": {
+    "requests": 1,
+    "acceptedReceipts": 1,
+    "droppedReceipts": 1,
+    "correlations": [
+      {
+        "id": "d43c373e-df77-430b-841c-276f6e88b89b",
+        "starId": "c22-alpha",
+        "machineId": "11111111111111111111111111111111",
+        "providerId": "dsh",
+        "nativeId": "session-40237c8b-c982-4ddd-995e-1865e9deccfc",
+        "endpointType": "host"
+      }
+    ],
+    "configRestored": true,
+    "proxyClosed": true
+  },
+  "lostBrokerResult": {
+    "kind": "uncertain",
+    "message": "修改请求未取得可核实的完成回执；可能已经生效，请刷新并核实目标，不要直接重复执行。"
+  },
+  "crossOperatorTerminal": {
+    "rowId": "[\"member\",\"tcp:star:c22-alpha:127.0.0.1%3A59752\",\"c22-alpha\",\"11111111111111111111111111111111\",\"dsh\",\"session-40237c8b-c982-4ddd-995e-1865e9deccfc\",\"host\"]",
+    "nativeId": "session-40237c8b-c982-4ddd-995e-1865e9deccfc",
+    "machineId": "11111111111111111111111111111111",
+    "starId": "c22-alpha",
+    "firstCopy": "crosschat send --via tcp:c22-alpha:11111111111111111111111111111111:session-40237c8b-c982-4ddd-995e-1865e9deccfc --tool dsh --body \"<正文>\"",
+    "recoveredCopy": "crosschat send --via tcp:c22-alpha:11111111111111111111111111111111:session-40237c8b-c982-4ddd-995e-1865e9deccfc --tool dsh --body \"<正文>\"",
+    "finalCopy": "crosschat send --via tcp:c22-alpha:11111111111111111111111111111111:session-40237c8b-c982-4ddd-995e-1865e9deccfc --tool dsh --body \"<正文>\"",
+    "blockedPreview": {
+      "event": "preview",
+      "action": "rename-session",
+      "route": {
+        "resourceId": "members",
+        "contextId": "tcp:star:c22-alpha:127.0.0.1%3A59752",
+        "query": {
+          "starId": "c22-alpha"
+        }
+      },
+      "targetId": "[\"member\",\"tcp:star:c22-alpha:127.0.0.1%3A59752\",\"c22-alpha\",\"11111111111111111111111111111111\",\"dsh\",\"session-40237c8b-c982-4ddd-995e-1865e9deccfc\",\"host\"]",
+      "operationTarget": "{\n  \"rowId\": \"[\\\"member\\\",\\\"tcp:star:c22-alpha:127.0.0.1%3A59752\\\",\\\"c22-alpha\\\",\\\"11111111111111111111111111111111\\\",\\\"dsh\\\",\\\"session-40237c8b-c982-4ddd-995e-1865e9deccfc\\\",\\\"host\\\"]\",\n  \"starId\": \"c22-alpha\",\n  \"machineId\": \"11111111111111111111111111111111\",\n  \"providerId\": \"dsh\",\n  \"nativeId\": \"session-40237c8b-c982-4ddd-995e-1865e9deccfc\",\n  \"endpointType\": \"host\"\n}",
+      "values": {
+        "name": "C22StaleForm1793929880405"
+      },
+      "result": {
+        "enabled": false,
+        "reason": "当前原生会话来源不可核实。",
+        "nextStep": "刷新当前资源并核对完整目标后重新操作。",
+        "fields": [],
+        "impact": [
+          "连接：tcp:star:c22-alpha:127.0.0.1%3A59752",
+          "星：c22-alpha · c22-alpha"
+        ]
+      }
+    },
+    "mutation": {
+      "event": "mutation",
+      "action": "rename-session",
+      "route": {
+        "resourceId": "members",
+        "contextId": "tcp:star:c22-alpha:127.0.0.1%3A59752",
+        "query": {
+          "starId": "c22-alpha"
+        }
+      },
+      "targetId": "[\"member\",\"tcp:star:c22-alpha:127.0.0.1%3A59752\",\"c22-alpha\",\"11111111111111111111111111111111\",\"dsh\",\"session-40237c8b-c982-4ddd-995e-1865e9deccfc\",\"host\"]",
+      "operationTarget": "{\n  \"rowId\": \"[\\\"member\\\",\\\"tcp:star:c22-alpha:127.0.0.1%3A59752\\\",\\\"c22-alpha\\\",\\\"11111111111111111111111111111111\\\",\\\"dsh\\\",\\\"session-40237c8b-c982-4ddd-995e-1865e9deccfc\\\",\\\"host\\\"]\",\n  \"starId\": \"c22-alpha\",\n  \"machineId\": \"11111111111111111111111111111111\",\n  \"providerId\": \"dsh\",\n  \"nativeId\": \"session-40237c8b-c982-4ddd-995e-1865e9deccfc\",\n  \"endpointType\": \"host\"\n}",
+      "values": {
+        "name": "C22Key883885"
+      },
+      "result": {
+        "message": "原生名称及星内路由已确认更新。"
+      }
+    },
+    "successfulRenames": 2,
+    "scope": "No automatic submission across another operator rename or bridge recovery; explicit confirmation while unavailable rejects; cancel and reopen preserve native-ID filter and selected target."
+  },
+  "terminalMembershipRestores": [
+    {
+      "kind": "applied",
+      "message": "所选节点的精确会话已作为永久成员入星。"
+    },
+    {
+      "kind": "applied",
+      "message": "所选节点的精确会话已作为永久成员入星。"
+    }
+  ],
+  "finalRunCleanup": {
+    "unsafe": false,
+    "outerRemoved": true,
+    "failures": []
+  },
+  "sourceSha256": {
+    "dsh-enhancement-native-validation.mjs": "b4fe98548b3d6ba2f82b6e47577b3e1b467e1b0787a3c90ac395f3ff8cd8cee3",
+    "dsh-enhancement-broker-faults.mjs": "b0716af126954a1d14fb7efa5ad6f82afc256cae5885f59cb0b9676189d7dfc3",
+    "dsh-enhancement-terminal-checks.mjs": "073be7d1edd7d8d152a2b64445ca1a20cfbac26b70de066e705149eb673f5622",
+    "dsh-native-members-pty.mjs": "5bfa8fe009c988613be96d4842e8e265f4b08bb6ae5b7326a4b11397f7d262c2"
+  },
+  "history": [
+    "first: local multi-star context rejected before write; cleaned",
+    "second: exact broker write/uncertain passed, full title exceeded terminal column; cleaned",
+    "third: fault endpoint replacement invalidated terminal context; cleaned",
+    "fourth: broker check passed; test expected dsh-host instead of canonical dsh; cleaned",
+    "fifth: bridge recovery lacked explicit member re-adoption; native write uncertain; form q cleanup failed, terminal exit125/host0; retained root",
+    "sixth: same uncertain reproduced with native event evidence; escape-before-q cleanup successful",
+    "seventh: explicit member restoration and full eleven checks passed; normal cleanup"
+  ],
+  "cleanupBlocked": {
+    "root": "D:/workspace/CC/cc-c22-LMNEd3",
+    "owner": "24824b49-cd09-41b8-be7f-805433fbb2d5",
+    "automaticApproval": "blocked by policy",
+    "retried": false,
+    "note": "Fifth run process disposal completed; preserved unsafe report. Do not retry deletion using another tool.",
+    "resolution": {
+      "userReportedDeleted": true,
+      "verifiedAbsent": true,
+      "verifiedAt": "2026-11-06T02:01:46.670905+00:00",
+      "agentRetriedDeletion": false
+    }
+  },
+  "boundaries": {
+    "productionChanged": false,
+    "workflowChanged": false,
+    "pushed": false,
+    "hostedNative": false,
+    "physicalCrossMachine": false,
+    "desktop": false
+  },
+  "reviewLimits": [
+    "Exact selected target verified within native-ID-filtered scenario; filter value and scroll position not independently observed.",
+    "Two explicit adopt operations restore membership; no automatic write refers to native rename/form submission only."
+  ],
+  "fullCheck": {
+    "passed": 2873,
+    "skipped": 11,
+    "filesPassed": 242,
+    "filesSkipped": 3,
+    "exitCode": 0,
+    "node": "22.23.4",
+    "raw": "final-full-check.txt"
+  }
+}

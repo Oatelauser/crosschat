@@ -1,0 +1,116 @@
+{
+  "schema": 1,
+  "observedAt": "2026-11-05T15:07:42.225Z",
+  "sourceHead": "037ed4925b80ff17a399b9dafd3c1050188a6ffc",
+  "sourceFiles": [
+    {
+      "file": "test/helpers/dsh-enhancement-node.mjs",
+      "blob": "6800c46314f5ffde006d66a7a0d38de34f8621cd"
+    },
+    {
+      "file": "test/helpers/dsh-enhancement-native-validation.mjs",
+      "blob": "9e869d64029127044a8a40b1759fa0454b8834e4"
+    },
+    {
+      "file": "test/helpers/dsh-native-members-pty.mjs",
+      "blob": "c6ac2654ced5711df09daf17c9ba04a919d00039"
+    },
+    {
+      "file": "test/helpers/dsh-live-fixture.mjs",
+      "blob": "e3e5e8a19799550ff3ec95cea45a8086d1ad4e08"
+    },
+    {
+      "file": "test/helpers/dsh-runtime-driver.mjs",
+      "blob": "5b46392c2342a10f47c4e173e6e03c932c7d48af"
+    },
+    {
+      "file": "integrations/dsh/bridge.js",
+      "blob": "52304348ce8b2e88f121f18a14ca468c5a196dcf"
+    },
+    {
+      "file": "src/dsh/native-operations.ts",
+      "blob": "8df300a95b4010790c15beb107f11250e993d319"
+    },
+    {
+      "file": "src/dsh/rename.ts",
+      "blob": "3d3c24d0402db032a8ab71f25b9c61b60923ae00"
+    }
+  ],
+  "scope": "Two same-host independent logical node processes, two formal npm/Web Hosts, two isolated terminal operators; not physical cross-machine acceptance",
+  "status": "failed",
+  "checks": [
+    {
+      "name": "two-node-identities-and-remote-exact-source-isolation",
+      "status": "passed"
+    }
+  ],
+  "error": "ConPTY output did not match c22-alpha; log: D:\\workspace\\CC\\cc-dsh-enhancement-20261105\\node_modules\\.cache\\c22-dsh-20261105\\native-first\\terminal-0.jsonl; output tail:                                                     │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\r\n<stars> 0项 · 完整\u001b[K\r\nEnter 进入星的成员列表；k 发节点钥，K 管理钥，x 撤销凭证；增删改从本列表发起。\u001b[K\r\n:资源  /筛选  Esc返回  q退出\u001b[K\u001b[112C",
+  "outerRemoved": true,
+  "unsafe": false,
+  "hosts": [
+    {
+      "pid": 24200,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      }
+    },
+    {
+      "pid": 43236,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      }
+    }
+  ],
+  "nodeExits": [
+    {
+      "pid": 12316,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    {
+      "pid": 36940,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "native-first/report.json",
+      "bytes": 9282,
+      "sha256": "340ad751c7bf804d9220404ee349c0525e5a645da36ab4fd8e697a189f944be4",
+      "sourceBytes": 9282,
+      "sourceSha256": "340ad751c7bf804d9220404ee349c0525e5a645da36ab4fd8e697a189f944be4"
+    },
+    {
+      "file": "native-first/terminal-0-application.jsonl",
+      "bytes": 3812,
+      "sha256": "800acea06c7d6300cfdd7722dabd1ec9112171a3b058ff69ebddf775f07205fc",
+      "sourceBytes": 3812,
+      "sourceSha256": "800acea06c7d6300cfdd7722dabd1ec9112171a3b058ff69ebddf775f07205fc"
+    },
+    {
+      "file": "native-first/terminal-0.jsonl",
+      "bytes": 24548,
+      "sha256": "15a781456cef634a662eee3c46255e8fc90e207f0cf0d6e6edb90fdd1da8427b",
+      "sourceBytes": 24548,
+      "sourceSha256": "15a781456cef634a662eee3c46255e8fc90e207f0cf0d6e6edb90fdd1da8427b"
+    },
+    {
+      "file": "native-first-console.txt",
+      "bytes": 5824,
+      "sha256": "a9706d01ca72961a5a572f673532fa0934560e54d387ed371be3fb5c68d8669d",
+      "sourceBytes": 5824,
+      "sourceSha256": "a9706d01ca72961a5a572f673532fa0934560e54d387ed371be3fb5c68d8669d"
+    }
+  ]
+}
