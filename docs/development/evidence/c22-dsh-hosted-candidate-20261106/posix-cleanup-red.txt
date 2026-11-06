@@ -1,0 +1,56 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test test/dsh-enhancement-contract.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-enhancement-20261105
+
+ ❯ test/dsh-enhancement-contract.test.ts (17 tests | 2 failed) 11ms
+   × C22 enhancement evidence contract > requires explicit normal process-group cleanup on linux terminals 7ms
+     → expected true to be false // Object.is equality
+   × C22 enhancement evidence contract > requires explicit normal process-group cleanup on darwin terminals 1ms
+     → expected true to be false // Object.is equality
+   ✓ C22 enhancement evidence contract > accepts eleven ordered checks only for the bound run and qualified release 1ms
+   ✓ C22 enhancement evidence contract > rejects mismatched runId 0ms
+   ✓ C22 enhancement evidence contract > rejects mismatched sourceHead 0ms
+   ✓ C22 enhancement evidence contract > rejects mismatched platform 0ms
+   ✓ C22 enhancement evidence contract > rejects mismatched arch 0ms
+   ✓ C22 enhancement evidence contract > rejects mismatched version 0ms
+   ✓ C22 enhancement evidence contract > rejects mismatched node 0ms
+   ✓ C22 enhancement evidence contract > rejects an unplanned target even when report and caller agree 0ms
+   ✓ C22 enhancement evidence contract > rejects missing, duplicated or reordered checks 0ms
+   ✓ C22 enhancement evidence contract > rejects scope changes or extra claims 0ms
+   ✓ C22 enhancement evidence contract > rejects malformed input and invalid run identity 0ms
+   ✓ C22 enhancement evidence contract > requires two normally released hosts, nodes and restored terminals 0ms
+   ✓ C22 enhancement evidence contract > requires both receipt faults to prove one accepted write and restored transport 0ms
+   ✓ C22 enhancement evidence contract > rejects missing root release, unsafe cleanup or reported cleanup failures 0ms
+   ✓ C22 enhancement evidence contract > recognizes a cleanly released failed run without turning it into acceptance 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-enhancement-contract.test.ts > C22 enhancement evidence contract > requires explicit normal process-group cleanup on linux terminals
+ FAIL  test/dsh-enhancement-contract.test.ts > C22 enhancement evidence contract > requires explicit normal process-group cleanup on darwin terminals
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ test/dsh-enhancement-contract.test.ts:23:67
+     21|     expect(validateDshEnhancementReport(report, expected)).toEqual({ v…
+     22|     const missing = { ...report, terminals: passed().terminals };
+     23|     expect(validateDshEnhancementReport(missing, expected).valid).toBe…
+       |                                                                   ^
+     24|     const forced = structuredClone(report); forced.terminals[0].transp…
+     25|     expect(validateDshEnhancementReport(forced, expected).valid).toBe(…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 15 passed (17)
+   Start at  10:12:08
+   Duration  272ms (transform 45ms, setup 0ms, collect 48ms, tests 11ms, environment 0ms, prepare 85ms)
+

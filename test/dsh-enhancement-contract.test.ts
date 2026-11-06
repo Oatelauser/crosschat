@@ -14,6 +14,18 @@ function passed() {
     cleanupFailures: [], unsafe: false, outerRemoved: true };
 }
 describe('C22 enhancement evidence contract', () => {
+  it.each(['linux', 'darwin'])('requires explicit normal process-group cleanup on %s terminals', platform => {
+    const expected = { ...binding, platform };
+    const report = { ...passed(), platform, terminals: passed().terminals.map(terminal => ({ ...terminal,
+      transportCleanup: { forced: false, groupReleased: true } })) };
+    expect(validateDshEnhancementReport(report, expected)).toEqual({ valid: true });
+    const missing = { ...report, terminals: passed().terminals };
+    expect(validateDshEnhancementReport(missing, expected).valid).toBe(false);
+    const forced = structuredClone(report); forced.terminals[0].transportCleanup.forced = true;
+    expect(validateDshEnhancementReport(forced, expected).valid).toBe(false);
+    const unreleased = structuredClone(report); unreleased.terminals[1].transportCleanup.groupReleased = false;
+    expect(validateDshEnhancementReport(unreleased, expected).valid).toBe(false);
+  });
   it('accepts eleven ordered checks only for the bound run and qualified release', () => {
     expect(DSH_ENHANCEMENT_CHECKS).toHaveLength(11);
     expect(validateDshEnhancementReport(passed(), binding)).toEqual({ valid: true });
