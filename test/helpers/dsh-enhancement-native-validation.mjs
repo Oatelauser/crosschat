@@ -170,10 +170,12 @@ try{
 finally{
  const failures=[];
  for(const terminal of terminals){
-  try{if(terminal.pty){terminal.pty.write('\x1b');await new Promise(done=>setTimeout(done,100));terminal.pty.write('q');const exited=await bounded(terminal.pty.exited,10000,'Terminal did not exit');assert.deepEqual(exited,{code:0,hostCode:0});const event=(await readEvents(terminal.events)).find(e=>e.event==='exit');assert(event);assert.deepEqual(event.after,event.before);terminal.exit=event;await terminal.pty.dispose();}}catch(error){unsafe=true;failures.push(error.message);try{await terminal.pty?.dispose();}catch(failure){failures.push(failure.message);}}
+  try{if(terminal.pty){terminal.pty.write('\x1b');await new Promise(done=>setTimeout(done,100));terminal.pty.write('q');const exited=await bounded(terminal.pty.exited,10000,'Terminal did not exit');assert.deepEqual(exited,{code:0,hostCode:0});
+   if(process.platform!=='win32'){terminal.transportCleanup=terminal.pty.events.find(e=>e.event==='cleanup');assert.equal(terminal.transportCleanup?.groupReleased,true,'POSIX terminal process group release is unconfirmed');assert.equal(terminal.transportCleanup.forced,false,'POSIX terminal required forced cleanup');}
+   const event=(await readEvents(terminal.events)).find(e=>e.event==='exit');assert(event);assert.deepEqual(event.after,event.before);terminal.exit=event;await terminal.pty.dispose();}}catch(error){unsafe=true;failures.push(error.message);try{await terminal.pty?.dispose();}catch(failure){failures.push(failure.message);}}
   try{await copyFile(terminal.events,join(cache,'terminal-'+terminal.index+'-application.jsonl'));}catch(error){failures.push(error.message);}
  }
- report.terminals=terminals.map(t=>({index:t.index,exit:t.exit}));
+ report.terminals=terminals.map(t=>({index:t.index,exit:t.exit,transportCleanup:t.transportCleanup}));
  for(const pipe of pipes)try{pipe.close();}catch(error){failures.push(error.message);}for(const socket of sockets)try{socket.close();}catch(error){failures.push(error.message);}
  for(const worker of workers){try{if(worker.child.connected)worker.child.send({op:'stop'});worker.exit=await bounded(worker.exited,15000,'Node release unconfirmed');assert.deepEqual(worker.exit,{code:0,signal:null});}catch(error){unsafe=true;failures.push(error.message);try{worker.child.kill();await bounded(worker.exited,5000,'Forced node release unconfirmed');}catch(failure){failures.push(failure.message);}}}
  report.nodes=workers.map(w=>({index:w.index,pid:w.child.pid,exit:w.exit,messages:w.messages,stdout:redacted(w.stdout),stderr:redacted(w.stderr)}));

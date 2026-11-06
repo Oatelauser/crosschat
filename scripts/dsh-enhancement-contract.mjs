@@ -49,6 +49,8 @@ export function validateDshEnhancementReport(value,binding){
   if(!Array.isArray(resources)||resources.length>2||(value.status==='passed'&&resources.length!==2)||!resources.every(validate))return fail('Invalid '+field+' release evidence');
   const ids=resources.map(resource=>field==='terminals'?resource.index:resource.pid);if(new Set(ids).size!==ids.length)return fail('Duplicate '+field+' identity');
  }
+ if(binding.platform!=='win32'&&!value.terminals.every(terminal=>record(terminal.transportCleanup)
+  &&terminal.transportCleanup.forced===false&&terminal.transportCleanup.groupReleased===true))return fail('POSIX terminal process-group release is unconfirmed');
  if(new Set([...value.hosts,...value.nodes].map(resource=>resource.pid)).size!==value.hosts.length+value.nodes.length)return fail('Host and node process identities overlap');
  const native=value.nativeReceiptFault,broker=value.brokerReceiptFault;
  if(value.status==='passed'||native!==undefined){
