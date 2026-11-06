@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "updatedAt": "2026-11-06T02:18:30.759527+00:00",
+  "status": "local-candidate-ready-hosted-not-run",
+  "sourceHead": "14d2c2f",
+  "sourceSha256": {
+    ".github/workflows/dsh-enhancement.yml": "4b8de9d02332ffd6c632bddc3535a478c91d85385f974efba3b617801667fd38",
+    "scripts/dsh-enhancement-ci.mjs": "1f9099bd19dc04d578308c66ea6d4e5f22aa68df420e644fe41493e3d818d234",
+    "scripts/dsh-enhancement-contract.mjs": "70379c05a181d2757833262dc2e2db1a33c3fa5d6364f83d7995ee608f78132c",
+    "scripts/dsh-enhancement-pins.json": "3e5298c9d27fc309d0dfb5f584237f64d3fb32375273bcddfcf96590a06f3036",
+    "test/helpers/dsh-enhancement-platform.mjs": "9b47a257772c0476b8b5d94097307ad90f3ee7ccf2b4b08817e93befc516b596",
+    "test/helpers/dsh-enhancement-native-validation.mjs": "8177583c9441acba09a42d4e426c6f5ae96fb5606e62d990947f66ca644577bc",
+    "test/helpers/dsh-enhancement-node.mjs": "ba346882de9cd20b71602cf7715ea1db0ca050e229767050e29d9808f1277437",
+    "test/dsh-enhancement-ci.test.ts": "1b1918eba628bec8486361ff4766bba74e5454be27aa34089c983d64c7e0da2e",
+    "test/dsh-enhancement-contract.test.ts": "9e15ef21a62688b6324637a310a8ab1fb6375ac386776f6e68d71b54ea261928",
+    "test/dsh-enhancement-platform.test.ts": "5d20bf70d877fd58734c8a20007ba4ac022e80d87219b5bb72a5d788fabcfcfa",
+    "test/dsh-enhancement-workflow.test.ts": "80a1a8a288efa8a332be3f40b5a888c9e968a84a941b995e773201245299c7be"
+  },
+  "redGreenCheckpoints": {
+    "initialRed": "890aa81",
+    "nestedPathRed": "3bbe965",
+    "candidateGreen": "0f61b95",
+    "posixReleaseRed": "5ff8b33",
+    "posixReleaseGreen": "14d2c2f"
+  },
+  "targeted": {
+    "files": 4,
+    "passed": 33,
+    "raw": "final-targeted-green.txt"
+  },
+  "fullCheck": {
+    "exitCode": 0,
+    "passed": 2906,
+    "skipped": 11,
+    "filesPassed": 246,
+    "filesSkipped": 3,
+    "node": "22.23.4",
+    "maxWorkers": 2,
+    "raw": "final-full-check.txt"
+  },
+  "native": {
+    "status": "passed",
+    "sourceHead": "0f61b95ecb6199e3cd98cb29772cf90531b9e31a",
+    "runId": "5ad6a248-7808-4a4f-882f-02d811ca30e4",
+    "target": "win32/x64",
+    "checks": 11,
+    "released": true,
+    "outerRemoved": true,
+    "unsafe": false,
+    "reusedDependency": true,
+    "installationLifecycleTested": false,
+    "finalValidatorRechecked": true
+  },
+  "reviewFindingsResolved": [
+    "Actual nested POSIX socket paths overflow despite short labels: owned root/n0,n1 via existing configFile seam",
+    "POSIX host can exit0 after forced process-group release: explicit cleanup event required",
+    "Parallel archive failures must settle all downloads before root cleanup"
+  ],
+  "plannedTargets": [
+    {
+      "runner": "windows-latest",
+      "platform": "win32",
+      "arch": "x64"
+    },
+    {
+      "runner": "ubuntu-24.04",
+      "platform": "linux",
+      "arch": "x64"
+    },
+    {
+      "runner": "macos-15-intel",
+      "platform": "darwin",
+      "arch": "x64"
+    },
+    {
+      "runner": "macos-15",
+      "platform": "darwin",
+      "arch": "arm64"
+    }
+  ],
+  "external": {
+    "remoteMain": "7229efb17cb047205eb79b9df15f27edd71f4231",
+    "branchPushed": false,
+    "prCreated": false,
+    "nativeDispatched": false,
+    "scheduleAdded": false,
+    "issuesWritten": false,
+    "hostedValidated": false,
+    "newWorkflowDispatchRequiresDefaultBranch": true
+  },
+  "previousBlockedCleanup": {
+    "root": "D:/workspace/CC/cc-c22-LMNEd3",
+    "userDeleted": true,
+    "verifiedAbsent": true
+  },
+  "boundaries": {
+    "srcChanged": false,
+    "integrationsChanged": false,
+    "existingWorkflowsChanged": false,
+    "desktopValidated": false,
+    "posixNativeValidated": false,
+    "physicalCrossMachineValidated": false
+  }
+}
