@@ -1,0 +1,461 @@
+{
+  "schema": 1,
+  "scope": "Two same-host independent logical node processes, two formal npm/Web Hosts, two isolated terminal operators; not physical cross-machine acceptance",
+  "platform": "win32",
+  "node": "v22.23.4",
+  "root": "D:\\workspace\\CC\\cc-c22-VkZiTo",
+  "productHead": "361298ab72975dfda7cee7b7819e5f64b5a984dd",
+  "checks": [
+    {
+      "name": "two-node-identities-and-remote-exact-source-isolation",
+      "status": "passed"
+    },
+    {
+      "name": "two-independent-terminal-observers-open-the-same-authoritative-star",
+      "status": "passed"
+    },
+    {
+      "name": "explicit-adoption-refreshes-both-operators-and-isolates-the-other-star",
+      "status": "passed"
+    },
+    {
+      "name": "permanent-membership-survives-two-temporary-window-claims-and-erase-release",
+      "status": "passed"
+    },
+    {
+      "name": "temporary-window-release-is-exact-and-independent-across-stars",
+      "status": "passed"
+    },
+    {
+      "name": "native-rename-syncs-both-operators-without-changing-the-other-node",
+      "status": "passed"
+    },
+    {
+      "name": "lost-native-write-receipt-is-uncertain-and-readonly-recovery-never-replays",
+      "status": "passed"
+    },
+    {
+      "name": "lost-broker-receipt-is-uncertain-and-other-operator-observes-one-write",
+      "status": "passed"
+    },
+    {
+      "name": "bridge-loss-and-recovery-stay-local-and-reject-old-confirmations",
+      "status": "passed"
+    },
+    {
+      "name": "cross-operator-confirmation-recovery-and-keyboard-selection-stay-exact",
+      "status": "passed"
+    },
+    {
+      "name": "exact-removal-does-not-change-other-node-or-native-chat",
+      "status": "passed"
+    }
+  ],
+  "status": "passed",
+  "identities": [
+    {
+      "nodePid": 35076,
+      "hostPid": 15524,
+      "machineId": "11111111111111111111111111111111",
+      "nativeId": "session-40237c8b-c982-4ddd-995e-1865e9deccfc",
+      "instanceVersion": "0.2.1-rc.5"
+    },
+    {
+      "nodePid": 44632,
+      "hostPid": 22516,
+      "machineId": "22222222222222222222222222222222",
+      "nativeId": "session-127fb3b8-0c2a-4491-aa59-0b0938dd8fc8",
+      "instanceVersion": "0.2.1-rc.5"
+    }
+  ],
+  "renamed": "C22Key883885",
+  "lostReceiptResult": {
+    "kind": "uncertain",
+    "message": "修改请求已发出，结果待核实；请刷新，不要自动重试。"
+  },
+  "nativeReceiptFault": {
+    "titlePosts": 1,
+    "acceptedWrites": 1,
+    "droppedReceipts": 1,
+    "readonlyRequests": 101,
+    "registrationRestored": true,
+    "proxyClosed": true
+  },
+  "lostBrokerResult": {
+    "kind": "uncertain",
+    "message": "修改请求未取得可核实的完成回执；可能已经生效，请刷新并核实目标，不要直接重复执行。"
+  },
+  "brokerReceiptFault": {
+    "requests": 1,
+    "acceptedReceipts": 1,
+    "droppedReceipts": 1,
+    "correlations": [
+      {
+        "id": "d43c373e-df77-430b-841c-276f6e88b89b",
+        "starId": "c22-alpha",
+        "machineId": "11111111111111111111111111111111",
+        "providerId": "dsh",
+        "nativeId": "session-40237c8b-c982-4ddd-995e-1865e9deccfc",
+        "endpointType": "host"
+      }
+    ],
+    "configRestored": true,
+    "proxyClosed": true
+  },
+  "terminalMembershipRestores": [
+    {
+      "kind": "applied",
+      "message": "所选节点的精确会话已作为永久成员入星。"
+    },
+    {
+      "kind": "applied",
+      "message": "所选节点的精确会话已作为永久成员入星。"
+    }
+  ],
+  "externalTerminalRename": {
+    "result": {
+      "kind": "applied",
+      "message": "原生名称及星内路由已确认更新。"
+    },
+    "snapshot": {
+      "id": "session-40237c8b-c982-4ddd-995e-1865e9deccfc",
+      "sameAgent": true,
+      "status": "idle",
+      "header": {
+        "version": 4,
+        "id": "session-40237c8b-c982-4ddd-995e-1865e9deccfc",
+        "createdAt": 1793929853006,
+        "cwd": "D:\\workspace\\CC\\cc-c22-VkZiTo\\run-gCsOCM\\workspace",
+        "isSeeded": false,
+        "agentPreset": "standard"
+      },
+      "events": [
+        {
+          "type": "permission/preset",
+          "seq": 0,
+          "time": 1793929853014,
+          "data": {
+            "preset": "danger-full-access"
+          }
+        },
+        {
+          "type": "sandbox/mode",
+          "seq": 1,
+          "time": 1793929853017,
+          "data": {
+            "mode": "danger-full-access"
+          }
+        },
+        {
+          "type": "approval/policy",
+          "seq": 2,
+          "time": 1793929853018,
+          "data": {
+            "policy": "never"
+          }
+        },
+        {
+          "type": "session/title",
+          "seq": 3,
+          "time": 1793929853034,
+          "data": {
+            "title": "C22Alpha1793929853000",
+            "messageSeqs": [],
+            "source": {
+              "kind": "user"
+            }
+          }
+        },
+        {
+          "type": "model/selection",
+          "seq": 4,
+          "time": 1793929853036,
+          "data": {
+            "provider": "deepseek-official",
+            "model": "deepseek-flash",
+            "reasoningEffort": "off"
+          }
+        },
+        {
+          "type": "session/title",
+          "seq": 5,
+          "time": 1793929858855,
+          "data": {
+            "title": "C22Renamed1793929858826",
+            "messageSeqs": [],
+            "source": {
+              "kind": "user"
+            }
+          }
+        },
+        {
+          "type": "session/title",
+          "seq": 6,
+          "time": 1793929860936,
+          "data": {
+            "title": "C22LostAck1793929860837",
+            "messageSeqs": [],
+            "source": {
+              "kind": "user"
+            }
+          }
+        },
+        {
+          "type": "session/title",
+          "seq": 7,
+          "time": 1793929865380,
+          "data": {
+            "title": "C22Broker865258",
+            "messageSeqs": [],
+            "source": {
+              "kind": "user"
+            }
+          }
+        },
+        {
+          "type": "session/title",
+          "seq": 8,
+          "time": 1793929880512,
+          "data": {
+            "title": "C22Other880467",
+            "messageSeqs": [],
+            "source": {
+              "kind": "user"
+            }
+          }
+        }
+      ],
+      "inbox": {
+        "nextTurn": [],
+        "nextStep": []
+      }
+    }
+  },
+  "crossOperatorTerminal": {
+    "rowId": "[\"member\",\"tcp:star:c22-alpha:127.0.0.1%3A59752\",\"c22-alpha\",\"11111111111111111111111111111111\",\"dsh\",\"session-40237c8b-c982-4ddd-995e-1865e9deccfc\",\"host\"]",
+    "nativeId": "session-40237c8b-c982-4ddd-995e-1865e9deccfc",
+    "machineId": "11111111111111111111111111111111",
+    "starId": "c22-alpha",
+    "firstCopy": "crosschat send --via tcp:c22-alpha:11111111111111111111111111111111:session-40237c8b-c982-4ddd-995e-1865e9deccfc --tool dsh --body \"<正文>\"",
+    "recoveredCopy": "crosschat send --via tcp:c22-alpha:11111111111111111111111111111111:session-40237c8b-c982-4ddd-995e-1865e9deccfc --tool dsh --body \"<正文>\"",
+    "finalCopy": "crosschat send --via tcp:c22-alpha:11111111111111111111111111111111:session-40237c8b-c982-4ddd-995e-1865e9deccfc --tool dsh --body \"<正文>\"",
+    "blockedPreview": {
+      "event": "preview",
+      "action": "rename-session",
+      "route": {
+        "resourceId": "members",
+        "contextId": "tcp:star:c22-alpha:127.0.0.1%3A59752",
+        "query": {
+          "starId": "c22-alpha"
+        }
+      },
+      "targetId": "[\"member\",\"tcp:star:c22-alpha:127.0.0.1%3A59752\",\"c22-alpha\",\"11111111111111111111111111111111\",\"dsh\",\"session-40237c8b-c982-4ddd-995e-1865e9deccfc\",\"host\"]",
+      "operationTarget": "{\n  \"rowId\": \"[\\\"member\\\",\\\"tcp:star:c22-alpha:127.0.0.1%3A59752\\\",\\\"c22-alpha\\\",\\\"11111111111111111111111111111111\\\",\\\"dsh\\\",\\\"session-40237c8b-c982-4ddd-995e-1865e9deccfc\\\",\\\"host\\\"]\",\n  \"starId\": \"c22-alpha\",\n  \"machineId\": \"11111111111111111111111111111111\",\n  \"providerId\": \"dsh\",\n  \"nativeId\": \"session-40237c8b-c982-4ddd-995e-1865e9deccfc\",\n  \"endpointType\": \"host\"\n}",
+      "values": {
+        "name": "C22StaleForm1793929880405"
+      },
+      "result": {
+        "enabled": false,
+        "reason": "当前原生会话来源不可核实。",
+        "nextStep": "刷新当前资源并核对完整目标后重新操作。",
+        "fields": [],
+        "impact": [
+          "连接：tcp:star:c22-alpha:127.0.0.1%3A59752",
+          "星：c22-alpha · c22-alpha"
+        ]
+      }
+    },
+    "mutation": {
+      "event": "mutation",
+      "action": "rename-session",
+      "route": {
+        "resourceId": "members",
+        "contextId": "tcp:star:c22-alpha:127.0.0.1%3A59752",
+        "query": {
+          "starId": "c22-alpha"
+        }
+      },
+      "targetId": "[\"member\",\"tcp:star:c22-alpha:127.0.0.1%3A59752\",\"c22-alpha\",\"11111111111111111111111111111111\",\"dsh\",\"session-40237c8b-c982-4ddd-995e-1865e9deccfc\",\"host\"]",
+      "operationTarget": "{\n  \"rowId\": \"[\\\"member\\\",\\\"tcp:star:c22-alpha:127.0.0.1%3A59752\\\",\\\"c22-alpha\\\",\\\"11111111111111111111111111111111\\\",\\\"dsh\\\",\\\"session-40237c8b-c982-4ddd-995e-1865e9deccfc\\\",\\\"host\\\"]\",\n  \"starId\": \"c22-alpha\",\n  \"machineId\": \"11111111111111111111111111111111\",\n  \"providerId\": \"dsh\",\n  \"nativeId\": \"session-40237c8b-c982-4ddd-995e-1865e9deccfc\",\n  \"endpointType\": \"host\"\n}",
+      "values": {
+        "name": "C22Key883885"
+      },
+      "result": {
+        "message": "原生名称及星内路由已确认更新。"
+      }
+    },
+    "successfulRenames": 2,
+    "scope": "No automatic submission across another operator rename or bridge recovery; explicit confirmation while unavailable rejects; cancel and reopen preserve native-ID filter and selected target."
+  },
+  "rosters": [
+    {
+      "starId": "c22-alpha",
+      "members": [
+        {
+          "sessionId": "session-127fb3b8-0c2a-4491-aa59-0b0938dd8fc8",
+          "name": "C22Beta1793929853000",
+          "tool": "dsh",
+          "endpointType": "host",
+          "machine": "22222222222222222222222222222222"
+        }
+      ]
+    },
+    {
+      "starId": "c22-beta",
+      "members": []
+    }
+  ],
+  "terminals": [
+    {
+      "index": 0,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    },
+    {
+      "index": 1,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "index": 0,
+      "pid": 35076,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "messages": [
+        {
+          "event": "ready",
+          "pid": 35076,
+          "machineId": "11111111111111111111111111111111",
+          "pipes": [
+            {
+              "starId": "c22-alpha",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-f2f7365a-635f-40ad-b42b-003794465c22-11111111-c22-alpha"
+            },
+            {
+              "starId": "c22-beta",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-f2f7365a-635f-40ad-b42b-003794465c22-11111111-c22-beta"
+            }
+          ]
+        },
+        {
+          "event": "stopped",
+          "pid": 35076,
+          "failures": []
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "index": 1,
+      "pid": 44632,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "messages": [
+        {
+          "event": "ready",
+          "pid": 44632,
+          "machineId": "22222222222222222222222222222222",
+          "pipes": [
+            {
+              "starId": "c22-alpha",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-f2f7365a-635f-40ad-b42b-003794465c22-22222222-c22-alpha"
+            },
+            {
+              "starId": "c22-beta",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-f2f7365a-635f-40ad-b42b-003794465c22-22222222-c22-beta"
+            }
+          ]
+        },
+        {
+          "event": "stopped",
+          "pid": 44632,
+          "failures": []
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "hosts": [
+    {
+      "pid": 22516,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "logs": {
+        "stdout": "dsh web: http://127.0.0.1:54029/?token=[fixture-token-redacted]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "pid": 15524,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "logs": {
+        "stdout": "dsh web: http://127.0.0.1:54019/?token=[fixture-token-redacted]\n",
+        "stderr": ""
+      }
+    }
+  ],
+  "cleanupFailures": [],
+  "unsafe": false,
+  "outerRemoved": true
+}

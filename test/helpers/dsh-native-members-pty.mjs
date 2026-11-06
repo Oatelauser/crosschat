@@ -26,17 +26,26 @@ const snapshot = () => ({ raw: process.stdin.isRaw === true, resize: process.std
 const baseDir = join(config.home, '.crosschat'), tcp = createTcpApplication({ baseDir });
 const resources = createTcpResources({ tcp, management: createTcpManagement({ baseDir, catalog: tcp, discovery: createLocalDiscoveryService({ home: config.home }) }) });
 const bindings = new Map(Object.values(resources).map((binding) => [binding.resource.id, binding]));
+// Only public, non-secret selection/input metadata from this owned fixture.
+const actionEvidence = (request) => ({ route: request.route, targetId: request.target?.id,
+  operationTarget: request.target?.copyValues?.operationTarget,
+  ...(request.action.id === 'rename-session' ? { values: { name: request.values?.name ?? '' } } : {}) });
 for (const binding of bindings.values()) {
   const read = binding.adapter.read, check = binding.adapter.checkAction, mutate = binding.adapter.mutate, describe = binding.adapter.describeActions;
   binding.adapter.read = async (request) => { const page = await read(request); await record({ event: 'read', resource: binding.resource.id, page }); return page; };
   if (check) binding.adapter.checkAction = async (request) => {
-    const result = await check(request); await record({ event: 'preview', action: request.action.id, result }); return result;
+    const result = await check(request); await record({ event: 'preview', action: request.action.id, ...actionEvidence(request), result }); return result;
   };
   if (describe) binding.adapter.describeActions = async (request) => {
     const result = await describe(request); await record({ event: 'availability', result }); return result;
   };
   if (mutate) binding.adapter.mutate = async (request) => {
-    const result = await mutate(request); await record({ event: 'mutation', action: request.action.id, result }); return result;
+    await record({ event: 'mutation-start', action: request.action.id, ...actionEvidence(request) });
+    try {
+      const result = await mutate(request); await record({ event: 'mutation', action: request.action.id, ...actionEvidence(request), result }); return result;
+    } catch (error) {
+      await record({ event: 'mutation-error', action: request.action.id, ...actionEvidence(request), message: error.message }); throw error;
+    }
   };
 }
 const warmup = render(createElement(Text, null, 'C18 native terminal baseline'), { interactive: true, patchConsole: false, exitOnCtrlC: false });

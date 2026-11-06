@@ -1,0 +1,232 @@
+{
+  "schema": 1,
+  "scope": "Two same-host independent logical node processes, two formal npm/Web Hosts, two isolated terminal operators; not physical cross-machine acceptance",
+  "platform": "win32",
+  "node": "v22.23.4",
+  "root": "D:\\workspace\\CC\\cc-c22-LMNEd3",
+  "productHead": "361298ab72975dfda7cee7b7819e5f64b5a984dd",
+  "checks": [
+    {
+      "name": "two-node-identities-and-remote-exact-source-isolation",
+      "status": "passed"
+    },
+    {
+      "name": "two-independent-terminal-observers-open-the-same-authoritative-star",
+      "status": "passed"
+    },
+    {
+      "name": "explicit-adoption-refreshes-both-operators-and-isolates-the-other-star",
+      "status": "passed"
+    },
+    {
+      "name": "permanent-membership-survives-two-temporary-window-claims-and-erase-release",
+      "status": "passed"
+    },
+    {
+      "name": "temporary-window-release-is-exact-and-independent-across-stars",
+      "status": "passed"
+    },
+    {
+      "name": "native-rename-syncs-both-operators-without-changing-the-other-node",
+      "status": "passed"
+    },
+    {
+      "name": "lost-native-write-receipt-is-uncertain-and-readonly-recovery-never-replays",
+      "status": "passed"
+    },
+    {
+      "name": "lost-broker-receipt-is-uncertain-and-other-operator-observes-one-write",
+      "status": "passed"
+    },
+    {
+      "name": "bridge-loss-and-recovery-stay-local-and-reject-old-confirmations",
+      "status": "passed"
+    }
+  ],
+  "status": "failed",
+  "identities": [
+    {
+      "nodePid": 35704,
+      "hostPid": 26652,
+      "machineId": "11111111111111111111111111111111",
+      "nativeId": "session-8e5854ef-1169-43a1-9af9-9a7d6e9d108e",
+      "instanceVersion": "0.2.1-rc.5"
+    },
+    {
+      "nodePid": 3204,
+      "hostPid": 32128,
+      "machineId": "22222222222222222222222222222222",
+      "nativeId": "session-cf2006e5-3a88-4281-8143-be144258cb86",
+      "instanceVersion": "0.2.1-rc.5"
+    }
+  ],
+  "renamed": "C22Broker561548",
+  "lostReceiptResult": {
+    "kind": "uncertain",
+    "message": "修改请求已发出，结果待核实；请刷新，不要自动重试。"
+  },
+  "nativeReceiptFault": {
+    "titlePosts": 1,
+    "acceptedWrites": 1,
+    "droppedReceipts": 1,
+    "readonlyRequests": 106,
+    "registrationRestored": true,
+    "proxyClosed": true
+  },
+  "lostBrokerResult": {
+    "kind": "uncertain",
+    "message": "修改请求未取得可核实的完成回执；可能已经生效，请刷新并核实目标，不要直接重复执行。"
+  },
+  "brokerReceiptFault": {
+    "requests": 1,
+    "acceptedReceipts": 1,
+    "droppedReceipts": 1,
+    "correlations": [
+      {
+        "id": "2fb6430d-a669-4f0d-a2a8-585d05e1d656",
+        "starId": "c22-alpha",
+        "machineId": "11111111111111111111111111111111",
+        "providerId": "dsh",
+        "nativeId": "session-8e5854ef-1169-43a1-9af9-9a7d6e9d108e",
+        "endpointType": "host"
+      }
+    ],
+    "configRestored": true,
+    "proxyClosed": true
+  },
+  "error": {
+    "name": "AssertionError",
+    "message": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'uncertain'\n- 'applied'\n",
+    "stack": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ 'uncertain'\n- 'applied'\n\n    at runDshTerminalChecks (file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-terminal-checks.mjs:19:9)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:152:3\n    at async check (file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:31:32)\n    at async file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:151:2"
+  },
+  "terminals": [
+    {
+      "index": 0
+    },
+    {
+      "index": 1,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "index": 0,
+      "pid": 35704,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "messages": [
+        {
+          "event": "ready",
+          "pid": 35704,
+          "machineId": "11111111111111111111111111111111",
+          "pipes": [
+            {
+              "starId": "c22-alpha",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-24824b49-cd09-41b8-be7f-805433fbb2d5-11111111-c22-alpha"
+            },
+            {
+              "starId": "c22-beta",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-24824b49-cd09-41b8-be7f-805433fbb2d5-11111111-c22-beta"
+            }
+          ]
+        },
+        {
+          "event": "stopped",
+          "pid": 35704,
+          "failures": []
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "index": 1,
+      "pid": 3204,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "messages": [
+        {
+          "event": "ready",
+          "pid": 3204,
+          "machineId": "22222222222222222222222222222222",
+          "pipes": [
+            {
+              "starId": "c22-alpha",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-24824b49-cd09-41b8-be7f-805433fbb2d5-22222222-c22-alpha"
+            },
+            {
+              "starId": "c22-beta",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-24824b49-cd09-41b8-be7f-805433fbb2d5-22222222-c22-beta"
+            }
+          ]
+        },
+        {
+          "event": "stopped",
+          "pid": 3204,
+          "failures": []
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "hosts": [
+    {
+      "pid": 32128,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": false,
+        "forced": false
+      },
+      "logs": {
+        "stdout": "dsh web: http://127.0.0.1:56056/?token=[fixture-token-redacted]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "pid": 26652,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": false,
+        "forced": false
+      },
+      "logs": {
+        "stdout": "dsh web: http://127.0.0.1:57585/?token=[fixture-token-redacted]\n",
+        "stderr": ""
+      }
+    }
+  ],
+  "cleanupFailures": [
+    "Terminal did not exit"
+  ],
+  "unsafe": true
+}

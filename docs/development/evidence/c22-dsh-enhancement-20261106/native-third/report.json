@@ -1,0 +1,230 @@
+{
+  "schema": 1,
+  "scope": "Two same-host independent logical node processes, two formal npm/Web Hosts, two isolated terminal operators; not physical cross-machine acceptance",
+  "platform": "win32",
+  "node": "v22.23.4",
+  "root": "D:\\workspace\\CC\\cc-c22-v752hK",
+  "productHead": "361298ab72975dfda7cee7b7819e5f64b5a984dd",
+  "checks": [
+    {
+      "name": "two-node-identities-and-remote-exact-source-isolation",
+      "status": "passed"
+    },
+    {
+      "name": "two-independent-terminal-observers-open-the-same-authoritative-star",
+      "status": "passed"
+    },
+    {
+      "name": "explicit-adoption-refreshes-both-operators-and-isolates-the-other-star",
+      "status": "passed"
+    },
+    {
+      "name": "permanent-membership-survives-two-temporary-window-claims-and-erase-release",
+      "status": "passed"
+    },
+    {
+      "name": "temporary-window-release-is-exact-and-independent-across-stars",
+      "status": "passed"
+    },
+    {
+      "name": "native-rename-syncs-both-operators-without-changing-the-other-node",
+      "status": "passed"
+    },
+    {
+      "name": "lost-native-write-receipt-is-uncertain-and-readonly-recovery-never-replays",
+      "status": "passed"
+    }
+  ],
+  "status": "failed",
+  "identities": [
+    {
+      "nodePid": 36892,
+      "hostPid": 43260,
+      "machineId": "11111111111111111111111111111111",
+      "nativeId": "session-43ce0edb-70c7-4c1d-9592-b86bdce203c0",
+      "instanceVersion": "0.2.1-rc.5"
+    },
+    {
+      "nodePid": 43884,
+      "hostPid": 32488,
+      "machineId": "22222222222222222222222222222222",
+      "nativeId": "session-786afb30-0e53-4621-b365-1c7733b3c788",
+      "instanceVersion": "0.2.1-rc.5"
+    }
+  ],
+  "renamed": "C22LostAck1793929195294",
+  "lostReceiptResult": {
+    "kind": "uncertain",
+    "message": "修改请求已发出，结果待核实；请刷新，不要自动重试。"
+  },
+  "nativeReceiptFault": {
+    "titlePosts": 1,
+    "acceptedWrites": 1,
+    "droppedReceipts": 1,
+    "readonlyRequests": 101,
+    "registrationRestored": true,
+    "proxyClosed": true
+  },
+  "lostBrokerResult": {
+    "kind": "uncertain",
+    "message": "修改请求未取得可核实的完成回执；可能已经生效，请刷新并核实目标，不要直接重复执行。"
+  },
+  "error": {
+    "name": "Error",
+    "message": "Timed out waiting for independent terminal background refresh",
+    "stack": "Error: Timed out waiting for independent terminal background refresh\n    at pollDsh (file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-live-fixture.mjs:154:9)\n    at async file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:84:108\n    at async Promise.all (index 0)\n    at async expectTerminals (file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:84:3)\n    at async file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:137:83\n    at async withLostBrokerReceipt (file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-broker-faults.mjs:49:3)\n    at async file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:128:29\n    at async check (file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:31:32)\n    at async file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:126:2"
+  },
+  "terminals": [
+    {
+      "index": 0,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    },
+    {
+      "index": 1,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "index": 0,
+      "pid": 36892,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "messages": [
+        {
+          "event": "ready",
+          "pid": 36892,
+          "machineId": "11111111111111111111111111111111",
+          "pipes": [
+            {
+              "starId": "c22-alpha",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-86659464-4d8f-4055-9d1f-2418c7e33d60-11111111-c22-alpha"
+            },
+            {
+              "starId": "c22-beta",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-86659464-4d8f-4055-9d1f-2418c7e33d60-11111111-c22-beta"
+            }
+          ]
+        },
+        {
+          "event": "stopped",
+          "pid": 36892,
+          "failures": []
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "index": 1,
+      "pid": 43884,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "messages": [
+        {
+          "event": "ready",
+          "pid": 43884,
+          "machineId": "22222222222222222222222222222222",
+          "pipes": [
+            {
+              "starId": "c22-alpha",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-86659464-4d8f-4055-9d1f-2418c7e33d60-22222222-c22-alpha"
+            },
+            {
+              "starId": "c22-beta",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-86659464-4d8f-4055-9d1f-2418c7e33d60-22222222-c22-beta"
+            }
+          ]
+        },
+        {
+          "event": "stopped",
+          "pid": 43884,
+          "failures": []
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "hosts": [
+    {
+      "pid": 32488,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "logs": {
+        "stdout": "dsh web: http://127.0.0.1:63745/?token=[fixture-token-redacted]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "pid": 43260,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "logs": {
+        "stdout": "dsh web: http://127.0.0.1:58497/?token=[fixture-token-redacted]\n",
+        "stderr": ""
+      }
+    }
+  ],
+  "cleanupFailures": [],
+  "unsafe": false,
+  "outerRemoved": true
+}

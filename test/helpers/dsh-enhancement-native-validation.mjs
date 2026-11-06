@@ -16,6 +16,10 @@ import {SenderConn,requestMemberRemoveExact} from '../../dist/serve/via-tcp.js';
 import {createDshFixture,pollDsh} from './dsh-live-fixture.mjs';
 import {launchPty} from './tui-pty-driver.mjs';
 import {withLostDshTitleReceipt} from './dsh-enhancement-faults.mjs';
+import {runDshTerminalChecks} from './dsh-enhancement-terminal-checks.mjs';
+import {withLostBrokerReceipt} from './dsh-enhancement-broker-faults.mjs';
+import {createTcpApplication} from '../../dist/application/tcp/index.js';
+import {createTcpManagement} from '../../dist/application/tcp/management.js';
 
 assert.equal(process.env.CROSSCHAT_LIVE,'1');assert.equal(process.version,'v22.23.4');
 for(const name of ['DSH_C22_REPORT','DSH_RUNTIME_DIR','DSH_TASK_ROOT'])assert(isAbsolute(process.env[name]??''),name+' must be absolute');
@@ -119,22 +123,45 @@ try{
   });
   assert.equal(report.nativeReceiptFault.registrationRestored,true);assert.equal(report.nativeReceiptFault.proxyClosed,true);
  });
+ await check('lost-broker-receipt-is-uncertain-and-other-operator-observes-one-write',async()=>{
+  const name='C22Broker'+String(Date.now()).slice(-6),before=await fixtures[0].snapshot(native[0].id);
+  const faultHome=join(root,'operator-fault'),faultTcp=join(faultHome,'.crosschat','tcp');await mkdir(faultTcp,{recursive:true});await copyFile(join(operators[0].home,'.crosschat','tcp','node.json'),join(faultTcp,'node.json'));
+  report.brokerReceiptFault=await withLostBrokerReceipt({home:faultHome,starId:stars[0],expectedPort:port,target:target(0),name},async fault=>{
+   const baseDir=join(faultHome,'.crosschat'),catalog=createTcpApplication({baseDir});
+   const management=createTcpManagement({baseDir,catalog,operateSession:createTcpSessionOperation({baseDir,timeoutMs:10000})});
+   const proxyConfig=JSON.parse(await readFile(join(baseDir,'tcp','node.json'),'utf8'));
+   const request={contextId:tcpContextId(proxyConfig.brokers[0]),starId:stars[0],action:'rename-session',sessionTarget:{machineId:machineIds[0],providerId:'dsh',nativeId:native[0].id,endpointType:'host'},values:{name}};
+   const preview=await management.preview(request);assert.equal(preview.enabled,true,JSON.stringify(preview));
+   const result=await management.apply({...request,expectedPreviewRevision:preview.revision});assert.equal(result.kind,'uncertain');report.lostBrokerResult=result;
+   assert.equal(fault.state.requests,1);assert.equal(fault.state.acceptedReceipts,1);assert.equal(fault.state.droppedReceipts,1);assert.equal(fault.state.correlations.length,1);
+   await pollDsh(()=>member(stars[0],0)?.name===name,'broker committed exact renamed member');
+   assert.equal((await describe(0,stars[0],1)).actions.rename.state,'executable');await expectTerminals([name,native[1].title]);
+   const after=await fixtures[0].snapshot(native[0].id);assert.equal(after.sameAgent,true);assert.deepEqual(after.events.slice(0,before.events.length),before.events);assert.equal(after.events.length,before.events.length+1);assert.equal(after.events.at(-1).type,'session/title');
+   fault.recover();for(let index=0;index<2;index++)assert.equal((await describe(0,stars[0],index)).actions.rename.state,'executable');
+   await expectTerminals([name,native[1].title]);assert.equal(fault.state.requests,1);assert.equal((await fixtures[0].snapshot(native[0].id)).events.length,after.events.length);
+   assert.deepEqual((await fixtures[1].snapshot(native[1].id)).events,snapshots[1].events);report.renamed=name;
+  });
+  assert.equal(report.brokerReceiptFault.configRestored,true);assert.equal(report.brokerReceiptFault.proxyClosed,true);
+ });
  await check('bridge-loss-and-recovery-stay-local-and-reject-old-confirmations',async()=>{
   const original=await describe(0);await fixtures[0].controller('/bridge',{enabled:false});assert.equal((await describe(0)).actions.adopt.state,'unavailable');assert.equal((await describe(1)).actions.adopt.state,'executable');
   await fixtures[0].controller('/bridge',{enabled:true});const recovered=await pollDsh(async()=>{const d=await describe(0);return d.actions.adopt.state==='executable'&&d;},'source recovery');assert.notEqual(recovered.revision,original.revision);
   const result=await operators[0].operate(target(0),{kind:'apply',operation:'rename',name:'must-not-replay',expectedRevision:original.revision});assert.equal(result.result.kind,'rejected');assert.equal(member(stars[0],0).name,report.renamed);assert.equal((await fixtures[0].snapshot(native[0].id)).sameAgent,true);
  });
+ await check('cross-operator-confirmation-recovery-and-keyboard-selection-stay-exact',async()=>{
+  await runDshTerminalChecks({terminals,fixtures,native,machineIds,stars,operators,target,describe,member,expectTerminals,report,readEvents,pollDsh});
+ });
  await check('exact-removal-does-not-change-other-node-or-native-chat',async()=>{
   const conn=await SenderConn.open('ws://127.0.0.1:'+port,keys[0][3],undefined,10000);sockets.push(conn);
   assert.equal((await requestMemberRemoveExact(conn,{sessionId:native[0].id,machine:machineIds[0],tool:'dsh',endpointType:'host'},10000)).ok,true);await pollDsh(()=>!member(stars[0],0),'selected exact roster removed');assert(member(stars[0],1));
-  const first=await fixtures[0].snapshot(native[0].id),second=await fixtures[1].snapshot(native[1].id);assert.equal(first.sameAgent,true);assert.equal(second.sameAgent,true);assert.equal(first.events.length,snapshots[0].events.length+2);assert.deepEqual(second.events,snapshots[1].events);assert.equal(fixtures[0].model.requests.length,0);assert.equal(fixtures[1].model.requests.length,0);
+  const first=await fixtures[0].snapshot(native[0].id),second=await fixtures[1].snapshot(native[1].id);assert.equal(first.sameAgent,true);assert.equal(second.sameAgent,true);assert.equal(first.events.length,snapshots[0].events.length+5);assert.deepEqual(second.events,snapshots[1].events);assert.equal(fixtures[0].model.requests.length,0);assert.equal(fixtures[1].model.requests.length,0);
  });
  report.rosters=stars.map(starId=>({starId,members:roster(starId)}));report.status='passed';
 }catch(error){report.error={name:error.name,message:error.message,stack:error.stack};}
 finally{
  const failures=[];
  for(const terminal of terminals){
-  try{if(terminal.pty){terminal.pty.write('q');const exited=await bounded(terminal.pty.exited,10000,'Terminal did not exit');assert.deepEqual(exited,{code:0,hostCode:0});const event=(await readEvents(terminal.events)).find(e=>e.event==='exit');assert(event);assert.deepEqual(event.after,event.before);terminal.exit=event;await terminal.pty.dispose();}}catch(error){unsafe=true;failures.push(error.message);try{await terminal.pty?.dispose();}catch(failure){failures.push(failure.message);}}
+  try{if(terminal.pty){terminal.pty.write('\x1b');await new Promise(done=>setTimeout(done,100));terminal.pty.write('q');const exited=await bounded(terminal.pty.exited,10000,'Terminal did not exit');assert.deepEqual(exited,{code:0,hostCode:0});const event=(await readEvents(terminal.events)).find(e=>e.event==='exit');assert(event);assert.deepEqual(event.after,event.before);terminal.exit=event;await terminal.pty.dispose();}}catch(error){unsafe=true;failures.push(error.message);try{await terminal.pty?.dispose();}catch(failure){failures.push(failure.message);}}
   try{await copyFile(terminal.events,join(cache,'terminal-'+terminal.index+'-application.jsonl'));}catch(error){failures.push(error.message);}
  }
  report.terminals=terminals.map(t=>({index:t.index,exit:t.exit}));

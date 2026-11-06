@@ -1,0 +1,226 @@
+{
+  "schema": 1,
+  "scope": "Two same-host independent logical node processes, two formal npm/Web Hosts, two isolated terminal operators; not physical cross-machine acceptance",
+  "platform": "win32",
+  "node": "v22.23.4",
+  "root": "D:\\workspace\\CC\\cc-c22-t2O97s",
+  "productHead": "361298ab72975dfda7cee7b7819e5f64b5a984dd",
+  "checks": [
+    {
+      "name": "two-node-identities-and-remote-exact-source-isolation",
+      "status": "passed"
+    },
+    {
+      "name": "two-independent-terminal-observers-open-the-same-authoritative-star",
+      "status": "passed"
+    },
+    {
+      "name": "explicit-adoption-refreshes-both-operators-and-isolates-the-other-star",
+      "status": "passed"
+    },
+    {
+      "name": "permanent-membership-survives-two-temporary-window-claims-and-erase-release",
+      "status": "passed"
+    },
+    {
+      "name": "temporary-window-release-is-exact-and-independent-across-stars",
+      "status": "passed"
+    },
+    {
+      "name": "native-rename-syncs-both-operators-without-changing-the-other-node",
+      "status": "passed"
+    },
+    {
+      "name": "lost-native-write-receipt-is-uncertain-and-readonly-recovery-never-replays",
+      "status": "passed"
+    }
+  ],
+  "status": "failed",
+  "identities": [
+    {
+      "nodePid": 9580,
+      "hostPid": 14160,
+      "machineId": "11111111111111111111111111111111",
+      "nativeId": "session-906ad339-f23c-4255-900d-75521a9b27bf",
+      "instanceVersion": "0.2.1-rc.5"
+    },
+    {
+      "nodePid": 44836,
+      "hostPid": 37096,
+      "machineId": "22222222222222222222222222222222",
+      "nativeId": "session-7732b375-7339-4b95-9a4c-e1c9bec4bfae",
+      "instanceVersion": "0.2.1-rc.5"
+    }
+  ],
+  "renamed": "C22LostAck1793929064565",
+  "lostReceiptResult": {
+    "kind": "uncertain",
+    "message": "修改请求已发出，结果待核实；请刷新，不要自动重试。"
+  },
+  "nativeReceiptFault": {
+    "titlePosts": 1,
+    "acceptedWrites": 1,
+    "droppedReceipts": 1,
+    "readonlyRequests": 118,
+    "registrationRestored": true,
+    "proxyClosed": true
+  },
+  "error": {
+    "name": "AssertionError",
+    "message": "Expected values to be strictly equal:\n\nfalse !== true\n",
+    "stack": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\nfalse !== true\n\n    at file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:131:59\n    at async withLostBrokerReceipt (file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-broker-faults.mjs:49:3)\n    at async file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:127:29\n    at async check (file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:30:32)\n    at async file:///D:/workspace/CC/cc-dsh-enhancement-20261105/test/helpers/dsh-enhancement-native-validation.mjs:125:2"
+  },
+  "terminals": [
+    {
+      "index": 0,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    },
+    {
+      "index": 1,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "index": 0,
+      "pid": 9580,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "messages": [
+        {
+          "event": "ready",
+          "pid": 9580,
+          "machineId": "11111111111111111111111111111111",
+          "pipes": [
+            {
+              "starId": "c22-alpha",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-39409dd1-8274-417a-88af-eb2873ff15c6-11111111-c22-alpha"
+            },
+            {
+              "starId": "c22-beta",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-39409dd1-8274-417a-88af-eb2873ff15c6-11111111-c22-beta"
+            }
+          ]
+        },
+        {
+          "event": "stopped",
+          "pid": 9580,
+          "failures": []
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "index": 1,
+      "pid": 44836,
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "messages": [
+        {
+          "event": "ready",
+          "pid": 44836,
+          "machineId": "22222222222222222222222222222222",
+          "pipes": [
+            {
+              "starId": "c22-alpha",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-39409dd1-8274-417a-88af-eb2873ff15c6-22222222-c22-alpha"
+            },
+            {
+              "starId": "c22-beta",
+              "path": "\\\\.\\pipe\\crosschat-attach-c22-39409dd1-8274-417a-88af-eb2873ff15c6-22222222-c22-beta"
+            }
+          ]
+        },
+        {
+          "event": "stopped",
+          "pid": 44836,
+          "failures": []
+        }
+      ],
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "hosts": [
+    {
+      "pid": 37096,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "logs": {
+        "stdout": "dsh web: http://127.0.0.1:60198/?token=[fixture-token-redacted]\n",
+        "stderr": ""
+      }
+    },
+    {
+      "pid": 14160,
+      "cleanup": {
+        "runtimeStopped": true,
+        "registrationRemoved": true,
+        "removed": true,
+        "forced": false
+      },
+      "logs": {
+        "stdout": "dsh web: http://127.0.0.1:54230/?token=[fixture-token-redacted]\n",
+        "stderr": ""
+      }
+    }
+  ],
+  "cleanupFailures": [],
+  "unsafe": false,
+  "outerRemoved": true
+}
