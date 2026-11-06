@@ -20,21 +20,28 @@ import {runDshTerminalChecks} from './dsh-enhancement-terminal-checks.mjs';
 import {withLostBrokerReceipt} from './dsh-enhancement-broker-faults.mjs';
 import {createTcpApplication} from '../../dist/application/tcp/index.js';
 import {createTcpManagement} from '../../dist/application/tcp/management.js';
+import {DSH_ENHANCEMENT_SCOPE} from '../../scripts/dsh-enhancement-contract.mjs';
+import {assertC22AttachPath,buildC22NodeDirectory,buildC22AttachLabel,buildC22AttachPath} from './dsh-enhancement-platform.mjs';
 
 assert.equal(process.env.CROSSCHAT_LIVE,'1');assert.equal(process.version,'v22.23.4');
 for(const name of ['DSH_C22_REPORT','DSH_RUNTIME_DIR','DSH_TASK_ROOT'])assert(isAbsolute(process.env[name]??''),name+' must be absolute');
 const output=resolve(process.env.DSH_C22_REPORT),cache=dirname(output);await mkdir(cache,{recursive:true});
 const parent=await realpath(process.env.DSH_TASK_ROOT),root=await realpath(await mkdtemp(join(parent,'cc-c22-'))),owner=randomUUID();
 await writeFile(join(root,'.fixture-owner'),owner);
-const report={schema:1,scope:'Two same-host independent logical node processes, two formal npm/Web Hosts, two isolated terminal operators; not physical cross-machine acceptance',platform:process.platform,node:process.version,root,productHead:process.env.DSH_PRODUCT_HEAD,checks:[],status:'failed'};
+const report={schema:1,tool:'dsh-enhancement',runId:process.env.DSH_EXPECTED_RUN_ID??randomUUID(),sourceHead:process.env.DSH_PRODUCT_HEAD,
+ scope:DSH_ENHANCEMENT_SCOPE,platform:process.platform,arch:process.arch,version:'0.2.1-rc.5',node:process.version,root,
+ productHead:process.env.DSH_PRODUCT_HEAD,checks:[],status:'failed',stage:'setup'};
 const fixtures=[],workers=[],terminals=[],pipes=[],sockets=[];let broker,unsafe=false;
-const check=async(name,work)=>{await work();report.checks.push({name,status:'passed'});process.stdout.write(name+'\n');};
+const check=async(name,work)=>{report.stage='validation';report.check=name;const started=globalThis.performance.now();await work();report.checks.push({name,status:'passed',elapsedMs:Math.round(globalThis.performance.now()-started)});process.stdout.write(name+'\n');};
 const bounded=(promise,milliseconds,label)=>{let timer;return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(label)),milliseconds);})]).finally(()=>clearTimeout(timer));};
 const readEvents=async file=>{try{return(await readFile(file,'utf8')).trim().split('\n').filter(Boolean).map(JSON.parse);}catch(error){if(error.code==='ENOENT')return [];throw error;}};
 const redacted=value=>{let text=value;for(const fixture of fixtures)if(fixture.info?.token)text=text.replaceAll(fixture.info.token,'[fixture-token-redacted]');return text.replace(/([?&]token=)[^&\s"'\\]+/gu,'$1[fixture-token-redacted]');};
 try{
  for(let index=0;index<2;index++){
-  const fixture=await createDshFixture({runtime:process.env.DSH_RUNTIME_DIR,parentRoot:root},()=>{throw new Error('Enhancement management must not call the model');});fixtures.push(fixture);
+  let fixture;
+  try{fixture=await createDshFixture({runtime:process.env.DSH_RUNTIME_DIR,parentRoot:root},()=>{throw new Error('Enhancement management must not call the model');});}
+  catch(error){report.startupCleanup=error.cleanup;if(!error.cleanup?.runtimeStopped||!error.cleanup?.registrationRemoved||error.cleanup?.forced)unsafe=true;throw error;}
+  fixtures.push(fixture);
   assert.equal(fixture.info.version,'0.2.1-rc.5');
  }
  const native=await Promise.all(fixtures.map((fixture,index)=>fixture.createSession('C22'+(index===0?'Alpha':'Beta')+Date.now())));
@@ -49,8 +56,9 @@ try{
  const roster=star=>loadBrokerFile(registryFile).stars.find(s=>s.starId===star).roster;
  const member=(star,index)=>roster(star).find(m=>m.machine===machineIds[index]&&m.sessionId===native[index].id&&m.tool==='dsh'&&m.endpointType==='host');
  for(let index=0;index<2;index++){
-  const fixture=fixtures[index],tcp=join(fixture.env.HOME,'.crosschat','tcp');await mkdir(tcp,{recursive:true});await writeFile(join(tcp,'node.json'),JSON.stringify({brokers:entriesFor(index)}));
-  const input=join(root,'node-'+index+'.json');await writeFile(input,JSON.stringify({task:'c22-dsh-node',owner,home:await realpath(fixture.env.HOME),machineId:machineIds[index]}),{mode:0o600});
+  const fixture=fixtures[index],tcp=buildC22NodeDirectory(root,index);await mkdir(tcp,{recursive:true});await writeFile(join(tcp,'node.json'),JSON.stringify({brokers:entriesFor(index)}));
+  for(const entry of entriesFor(index))buildC22AttachPath(process.platform,tcp,buildC22AttachLabel(owner,machineIds[index],entry.starId));
+  const input=join(root,'node-'+index+'.json');await writeFile(input,JSON.stringify({task:'c22-dsh-node',owner,home:await realpath(fixture.env.HOME),tcpDir:tcp,machineId:machineIds[index]}),{mode:0o600});
   const child=fork(fileURLToPath(new URL('./dsh-enhancement-node.mjs',import.meta.url)),[root,input],{env:{...fixture.env,CROSSCHAT_LIVE:'1'},windowsHide:true,stdio:['ignore','pipe','pipe','ipc']});
   const state={child,index,stdout:'',stderr:'',messages:[]};workers.push(state);
   child.stdout.on('data',chunk=>{state.stdout=(state.stdout+chunk).slice(-32000);});child.stderr.on('data',chunk=>{state.stderr=(state.stderr+chunk).slice(-32000);});
@@ -59,6 +67,7 @@ try{
  }
  assert.notEqual(workers[0].child.pid,workers[1].child.pid);assert.notEqual(fixtures[0].pid,fixtures[1].pid);
  assert.equal(new Set(workers.flatMap(worker=>worker.ready.pipes.map(pipe=>pipe.path))).size,4,'Logical nodes require distinct owned attach namespaces on this shared Windows host');
+ for(const pipe of workers.flatMap(worker=>worker.ready.pipes))assertC22AttachPath(pipe.path,process.platform);
  report.identities=workers.map((worker,index)=>({nodePid:worker.child.pid,hostPid:fixtures[index].pid,machineId:machineIds[index],nativeId:native[index].id,instanceVersion:fixtures[index].info.version}));
  const operators=[];
  for(let index=0;index<2;index++){
@@ -156,8 +165,8 @@ try{
   assert.equal((await requestMemberRemoveExact(conn,{sessionId:native[0].id,machine:machineIds[0],tool:'dsh',endpointType:'host'},10000)).ok,true);await pollDsh(()=>!member(stars[0],0),'selected exact roster removed');assert(member(stars[0],1));
   const first=await fixtures[0].snapshot(native[0].id),second=await fixtures[1].snapshot(native[1].id);assert.equal(first.sameAgent,true);assert.equal(second.sameAgent,true);assert.equal(first.events.length,snapshots[0].events.length+5);assert.deepEqual(second.events,snapshots[1].events);assert.equal(fixtures[0].model.requests.length,0);assert.equal(fixtures[1].model.requests.length,0);
  });
- report.rosters=stars.map(starId=>({starId,members:roster(starId)}));report.status='passed';
-}catch(error){report.error={name:error.name,message:error.message,stack:error.stack};}
+ report.rosters=stars.map(starId=>({starId,members:roster(starId)}));report.status='passed';report.stage='done';delete report.check;
+}catch(error){report.category=report.stage==='setup'||error.category==='infrastructure'?'infrastructure':'validation-failed';report.error={name:error.name,message:error.message,stack:error.stack};}
 finally{
  const failures=[];
  for(const terminal of terminals){
@@ -174,7 +183,7 @@ finally{
   try{if(unsafe)await fixture.stop();else await fixture.close();}catch(error){unsafe=true;failures.push(error.message);}
   report.hosts.push({pid:fixture.pid,cleanup:fixture.cleanup,logs:{stdout:redacted(fixture.logs.stdout),stderr:redacted(fixture.logs.stderr)}});
  }
- if(failures.length)report.status='failed';report.cleanupFailures=failures;report.unsafe=unsafe;
+ if(failures.length){report.status='failed';report.stage='cleanup';report.category='infrastructure';report.error??={message:failures.join('; ')};}report.cleanupFailures=failures;report.unsafe=unsafe;
  await writeFile(output,redacted(JSON.stringify(report,null,2))+'\n');
  if(!unsafe){try{const actual=await realpath(root),inside=relative(parent,actual);assert.equal(actual,root);assert(inside&&!inside.startsWith('..')&&!isAbsolute(inside));assert.equal(await readFile(join(root,'.fixture-owner'),'utf8'),owner);await rm(root,{recursive:true,force:true});report.outerRemoved=true;}catch(error){report.outerRemoved=false;report.cleanupFailures.push(error.message);report.status='failed';}await writeFile(output,redacted(JSON.stringify(report,null,2))+'\n');}
 }

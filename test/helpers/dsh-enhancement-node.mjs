@@ -9,6 +9,7 @@ import {listDshThreads} from '../../dist/dsh/client.js';
 import {deliverToDshSession} from '../../dist/dsh/deliver.js';
 import {FileInbox} from '../../dist/serve/file-channel.js';
 import {attachPipePath,NodeClient} from '../../dist/serve/node.js';
+import {buildC22AttachLabel} from './dsh-enhancement-platform.mjs';
 
 assert.equal(process.env.CROSSCHAT_LIVE,'1');assert(process.send);
 const [root,input]=process.argv.slice(2),owner=await readFile(join(root,'.fixture-owner'),'utf8');
@@ -17,9 +18,16 @@ const childPath=relative(root,await realpath(input));assert(childPath&&!childPat
 const config=JSON.parse(await readFile(input,'utf8'));assert.equal(config.owner,owner);assert.equal(config.task,'c22-dsh-node');
 assert(/^[a-f0-9]{32}$/u.test(config.machineId));assert.equal(await realpath(config.home),config.home);
 const homePath=relative(root,config.home);assert(homePath&&!homePath.startsWith('..')&&!isAbsolute(homePath));
-const baseDir=join(config.home,'.crosschat'),tcpDir=join(baseDir,'tcp'),configFile=join(tcpDir,'node.json');
+const baseDir=join(config.home,'.crosschat');
+let tcpDir=join(baseDir,'tcp');
+if(config.tcpDir!==undefined){
+ assert(typeof config.tcpDir==='string'&&isAbsolute(config.tcpDir));
+ tcpDir=await realpath(config.tcpDir);assert.equal(tcpDir,config.tcpDir);
+ const inside=relative(root,tcpDir);assert(inside&&inside!=='..'&&!inside.startsWith('../')&&!inside.startsWith('..\\')&&!isAbsolute(inside),'C22 node state directory must remain inside its owned root');
+}
+const configFile=join(tcpDir,'node.json');
 const nodeConfig=JSON.parse(await readFile(configFile,'utf8'));assert.equal(nodeConfig.brokers.length,2);
-const attachLabel=entry=>'c22-'+owner+'-'+config.machineId.slice(0,8)+'-'+entry.starId;
+const attachLabel=entry=>buildC22AttachLabel(owner,config.machineId,entry.starId);
 const discovery=createLocalDiscoveryService({home:config.home}),states=[];let closing;
 const close=()=>closing??=(async()=>{
  const failures=[];
