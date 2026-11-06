@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "date": "2026-11-06",
-  "status": "passed-with-historical-cleanup-block",
+  "status": "passed",
   "baseHead": "361298ab72975dfda7cee7b7819e5f64b5a984dd",
   "checks": [
     {
@@ -162,7 +162,13 @@
     "owner": "24824b49-cd09-41b8-be7f-805433fbb2d5",
     "automaticApproval": "blocked by policy",
     "retried": false,
-    "note": "Fifth run process disposal completed; preserved unsafe report. Do not retry deletion using another tool."
+    "note": "Fifth run process disposal completed; preserved unsafe report. Do not retry deletion using another tool.",
+    "resolution": {
+      "userReportedDeleted": true,
+      "verifiedAbsent": true,
+      "verifiedAt": "2026-11-06T02:01:46.670905+00:00",
+      "agentRetriedDeletion": false
+    }
   },
   "boundaries": {
     "productionChanged": false,
