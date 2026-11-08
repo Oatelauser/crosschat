@@ -1,7 +1,7 @@
-import { Buffer } from 'node:buffer';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -12,7 +12,10 @@ async function driverFixture(result: Record<string, unknown> = { application: 'a
   cleanups.push(() => rm(root, { recursive: true, force: true }));
   const source = (await readFile(new URL('./helpers/dsh-runtime-driver.mjs', import.meta.url), 'utf8'))
     .replace("import { getDshRuntimeVersion } from '@deepseek-ai/dsh-app-boot';", "const getDshRuntimeVersion = () => 'controlled-unit-runtime';");
-  const driver = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+  const driverPath = join(root, 'dsh-runtime-driver.mjs');
+  await writeFile(driverPath, source);
+  await writeFile(join(root, 'dsh-runtime-snapshot.mjs'), await readFile(new URL('./helpers/dsh-runtime-snapshot.mjs', import.meta.url), 'utf8'));
+  const driver = await import(pathToFileURL(driverPath).href);
   const setBundleEnabled = vi.fn(async () => result);
   const context = { agents: {}, sessionController: {}, webServer: { port: 12345 }, pluginManager: { setBundleEnabled }, effect: (setup: () => () => Promise<void>) => { cleanups.push(setup()); } };
   const file = join(root, 'controller.json');
