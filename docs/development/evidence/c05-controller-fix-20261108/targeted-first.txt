@@ -1,0 +1,16 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test test/dsh-runtime-snapshot.test.ts test/dsh-live-fixture.test.ts test/dsh-enhancement-contract.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-schedule-controller-20261108
+
+ ✓ test/dsh-runtime-snapshot.test.ts (19 tests) 24ms
+ ✓ test/dsh-live-fixture.test.ts (26 tests) 168ms
+ ✓ test/dsh-enhancement-contract.test.ts (17 tests) 7ms
+
+ Test Files  3 passed (3)
+      Tests  62 passed (62)
+   Start at  21:28:46
+   Duration  874ms (transform 159ms, setup 0ms, collect 229ms, tests 199ms, environment 1ms, prepare 322ms)
+

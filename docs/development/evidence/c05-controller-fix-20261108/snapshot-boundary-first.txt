@@ -1,0 +1,59 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test test/dsh-runtime-snapshot.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-schedule-controller-20261108
+
+stderr | test/dsh-runtime-snapshot.test.ts > DSH fixture exact native snapshot > cancels the read on timeout and removes its listeners after a late lease
+Promise returned by `expect(actual).rejects.toThrow(expected)` was not awaited. Vitest currently auto-awaits hanging assertions at the end of the test, but this will cause the test to fail in Vitest 3. Please remember to await the assertion.
+    at D:/workspace/CC/cc-dsh-schedule-controller-20261108/test/dsh-runtime-snapshot.test.ts:122:35
+
+ ❯ test/dsh-runtime-snapshot.test.ts (18 tests | 1 failed) 24ms
+   ✓ DSH fixture exact native snapshot > retains the complete legacy inspect snapshot and the same live Agent 2ms
+   ✓ DSH fixture exact native snapshot > reads the exact live full log when the new Controller no longer has inspect 1ms
+   ✓ DSH fixture exact native snapshot > keeps the complete observed log detached after releasing its lease 2ms
+   ✓ DSH fixture exact native snapshot > rejects prepared snapshots while releasing the owned observation 1ms
+   ✓ DSH fixture exact native snapshot > rejects wrong-id snapshots while releasing the owned observation 0ms
+   ✓ DSH fixture exact native snapshot > rejects owner-replaced snapshots while releasing the owned observation 0ms
+   ✓ DSH fixture exact native snapshot > rejects event-read snapshots while releasing the owned observation 0ms
+   ✓ DSH fixture exact native snapshot > rejects event-clone snapshots while releasing the owned observation 0ms
+   ✓ DSH fixture exact native snapshot > never observes a missing live Agent or manufactures missing read capabilities 1ms
+   ✓ DSH fixture exact native snapshot > does not replace a failed legacy read with a newer read of another observation 0ms
+   ✓ DSH fixture exact native snapshot > rejects an Agent replacement while a legacy inspect is pending 0ms
+   ✓ DSH fixture exact native snapshot > does not start an already cancelled read 0ms
+   ✓ DSH fixture exact native snapshot > owns and releases an observation that arrives after caller cancellation 0ms
+   ✓ DSH fixture exact native snapshot > rejects observation failures without claiming a lease or retrying 0ms
+   ✓ DSH fixture exact native snapshot > cancels the read on request-aborted and removes its listeners after a late lease 1ms
+   ✓ DSH fixture exact native snapshot > cancels the read on response-closed and removes its listeners after a late lease 1ms
+   × DSH fixture exact native snapshot > cancels the read on timeout and removes its listeners after a late lease 9ms
+     → expected false to be true // Object.is equality
+   ✓ DSH fixture exact native snapshot > removes request cancellation listeners and timeout after a successful snapshot 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-runtime-snapshot.test.ts > DSH fixture exact native snapshot > cancels the read on timeout and removes its listeners after a late lease
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ test/dsh-runtime-snapshot.test.ts:126:62
+    124|     else if (reason === 'request-aborted') request.emit('aborted');
+    125|     else response.emit('close');
+    126|     expect(f.observeSession.mock.calls[0][1].signal.aborted).toBe(true…
+       |                                                              ^
+    127|     pending.resolve(f.observation); await rejected;
+    128|     expect(request.listenerCount('aborted')).toBe(0); expect(response.…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 17 passed (18)
+   Start at  21:27:45
+   Duration  332ms (transform 60ms, setup 0ms, collect 65ms, tests 24ms, environment 0ms, prepare 93ms)
+
