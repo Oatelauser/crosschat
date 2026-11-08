@@ -1,5 +1,7 @@
 # C21/C22 2026-11-06 增量验收
 
+后续：本地增量已随PR #6合入；首轮托管与终端就绪修复见[当前记录](dsh-enhancement-terminal-readiness-20261106.md)。下文保留原本地增量时点的范围、结果与授权。
+
 已完成 Windows rc.5 npm/Web 本地 broker 回执丢失与多操作端真实键盘组合，共11项通过。原九项为前置回归，不重复登记为新增完成。主会话负责集成，两名 subagent 分别开发故障代理、终端场景并提供只读审查。
 
 - 独立 fault operator 的 loopback WS 代理精确核对完整星/node/Provider/原生ID/endpointType及 caller `id`，实际 rename 请求1、broker applied回执1、丢弃1。生产管理接口返回 uncertain；另两个操作端观察新名。恢复只读后请求及原生title事件不增加。

@@ -1,0 +1,59 @@
+{
+  "sourceAndAuthoredRecordFormatting": "passed",
+  "rawWhitespacePreserved": true,
+  "worktrees": [
+    {
+      "worktree": "D:\\workspace\\CC\\cc-dsh-enhancement-20261105",
+      "stagedFilesBeforeThisRecord": 106,
+      "rawWarningCount": 94,
+      "rawPaths": [
+        "docs/development/evidence/c22-merge-20261106/job-127675463005.txt",
+        "docs/development/evidence/c22-merge-20261106/job-127675463241.txt",
+        "docs/development/evidence/c22-merge-20261106/job-127675463355.txt",
+        "docs/development/evidence/c22-native-hosted-20261106/job-127677277982.txt",
+        "docs/development/evidence/c22-native-hosted-20261106/job-127677278252.txt",
+        "docs/development/evidence/c22-native-hosted-20261106/job-127677278286.txt",
+        "docs/development/evidence/c22-native-hosted-20261106/job-127677278607.txt",
+        "docs/development/evidence/c22-terminal-readiness-20261106/final-full-check.txt"
+      ]
+    },
+    {
+      "worktree": "D:\\workspace\\CC\\multichat",
+      "stagedFilesBeforeThisRecord": 111,
+      "rawWarningCount": 97,
+      "rawPaths": [
+        "docs/development/evidence/c22-merge-20261106/job-127675463005.txt",
+        "docs/development/evidence/c22-merge-20261106/job-127675463241.txt",
+        "docs/development/evidence/c22-merge-20261106/job-127675463355.txt",
+        "docs/development/evidence/c22-native-hosted-20261106/job-127677277982.txt",
+        "docs/development/evidence/c22-native-hosted-20261106/job-127677278252.txt",
+        "docs/development/evidence/c22-native-hosted-20261106/job-127677278286.txt",
+        "docs/development/evidence/c22-native-hosted-20261106/job-127677278607.txt",
+        "docs/development/evidence/c22-terminal-readiness-20261106/final-full-check.txt",
+        "docs/development/evidence/c22-terminal-readiness-20261106/targeted-green.txt",
+        "docs/development/evidence/c22-terminal-readiness-20261106/terminal-ready-green.txt",
+        "docs/development/evidence/c22-terminal-readiness-20261106/terminal-ready-red.txt"
+      ]
+    }
+  ],
+  "candidateChangedCodePaths": [
+    "test/dsh-enhancement-terminal-ready.test.ts",
+    "test/helpers/dsh-enhancement-terminal-checks.mjs",
+    "test/helpers/dsh-enhancement-terminal-ready.mjs"
+  ],
+  "uniqueParentRows": 25,
+  "ciIndexes": [
+    "C00",
+    "C02",
+    "C03",
+    "C04",
+    "C05",
+    "C06",
+    "C11",
+    "C12",
+    "C21",
+    "C22",
+    "O06c"
+  ],
+  "notes": "Full staged diff check reports only original job-log trailing spaces and npm raw log final blank lines. Evidence is preserved without rewriting raw."
+}

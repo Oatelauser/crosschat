@@ -1,0 +1,12 @@
+{"at":1793932959125,"direction":"host","event":"ready","pid":2383}
+{"at":1793932959154,"direction":"host","event":"output","data":"eyJ0dHkiOnRydWUsImNvbHVtbnMiOjgwLCJyb3dzIjoyNH0NCg=="}
+{"at":1793932959155,"direction":"driver","op":"resize","columns":40,"rows":12}
+{"at":1793932959156,"direction":"host","event":"output","data":"eyJ0dHkiOnRydWUsImNvbHVtbnMiOjQwLCJyb3dzIjoxMn0NCg=="}
+{"at":1793932959156,"direction":"driver","op":"write","data":"5Lit5paH8J+YgA=="}
+{"at":1793932959157,"direction":"host","event":"output","data":"eyJpbnB1dCI6IuS4reaWh/CfmIAifQ0K"}
+{"at":1793932959157,"direction":"driver","op":"write","data":"RE9ORQ=="}
+{"at":1793932959157,"direction":"host","event":"output","data":"eyJpbnB1dCI6IuS4reaWh/CfmIBET05FIn0NCg=="}
+{"at":1793932959158,"direction":"host","event":"output","data":"UkVTVE9SRUQ="}
+{"at":1793932959161,"direction":"host","event":"cleanup","forced":false,"groupReleased":true}
+{"at":1793932959161,"direction":"host","event":"exit","code":0}
+{"at":1793932959172,"direction":"driver","event":"host-exit","code":0}

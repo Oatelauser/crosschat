@@ -1,0 +1,8 @@
+{
+  "reviewDate": "2026-11-08",
+  "command": "git ls-remote origin refs/heads/main refs/heads/codex/dsh-enhancement-terminal-readiness-20261106",
+  "exitCode": 0,
+  "main": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+  "repairBranchRemoteRef": null,
+  "readOnly": true
+}

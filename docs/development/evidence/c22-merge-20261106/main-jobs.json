@@ -1,0 +1,281 @@
+{
+  "total_count": 3,
+  "jobs": [
+    {
+      "id": 127675463005,
+      "run_id": 42151469051,
+      "workflow_name": "CI",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/Oatelauser/crosschat/actions/runs/42151469051",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOU4pSes8AAAAdugz1XQ",
+      "head_sha": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+      "url": "https://api.github.com/repos/Oatelauser/crosschat/actions/jobs/127675463005",
+      "html_url": "https://github.com/Oatelauser/crosschat/actions/runs/42151469051/job/127675463005",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-06T02:37:09Z",
+      "started_at": "2026-11-06T02:37:11Z",
+      "completed_at": "2026-11-06T02:39:11Z",
+      "name": "check (ubuntu-latest)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-06T02:37:12Z",
+          "completed_at": "2026-11-06T02:37:12Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-06T02:37:12Z",
+          "completed_at": "2026-11-06T02:37:14Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-06T02:37:14Z",
+          "completed_at": "2026-11-06T02:37:14Z"
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-06T02:37:14Z",
+          "completed_at": "2026-11-06T02:37:40Z"
+        },
+        {
+          "name": "Run npm run check",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-06T02:37:40Z",
+          "completed_at": "2026-11-06T02:39:09Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-11-06T02:39:09Z",
+          "completed_at": "2026-11-06T02:39:09Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-11-06T02:39:09Z",
+          "completed_at": "2026-11-06T02:39:09Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-11-06T02:39:09Z",
+          "completed_at": "2026-11-06T02:39:09Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/Oatelauser/crosschat/check-runs/127675463005",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000001313,
+      "runner_name": "GitHub Actions 1000001313",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 127675463241,
+      "run_id": 42151469051,
+      "workflow_name": "CI",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/Oatelauser/crosschat/actions/runs/42151469051",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOU4pSes8AAAAdugz2SQ",
+      "head_sha": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+      "url": "https://api.github.com/repos/Oatelauser/crosschat/actions/jobs/127675463241",
+      "html_url": "https://github.com/Oatelauser/crosschat/actions/runs/42151469051/job/127675463241",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-06T02:37:09Z",
+      "started_at": "2026-11-06T02:37:11Z",
+      "completed_at": "2026-11-06T02:40:22Z",
+      "name": "check (macos-latest)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-06T02:37:11Z",
+          "completed_at": "2026-11-06T02:37:12Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-06T02:37:12Z",
+          "completed_at": "2026-11-06T02:37:15Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-06T02:37:15Z",
+          "completed_at": "2026-11-06T02:37:16Z"
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-06T02:37:16Z",
+          "completed_at": "2026-11-06T02:37:59Z"
+        },
+        {
+          "name": "Run npm run check",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-06T02:37:59Z",
+          "completed_at": "2026-11-06T02:40:18Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-11-06T02:40:18Z",
+          "completed_at": "2026-11-06T02:40:18Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-11-06T02:40:18Z",
+          "completed_at": "2026-11-06T02:40:19Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-11-06T02:40:19Z",
+          "completed_at": "2026-11-06T02:40:20Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/Oatelauser/crosschat/check-runs/127675463241",
+      "labels": [
+        "macos-latest"
+      ],
+      "runner_id": 1000001314,
+      "runner_name": "GitHub Actions 1000001314",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 127675463355,
+      "run_id": 42151469051,
+      "workflow_name": "CI",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/Oatelauser/crosschat/actions/runs/42151469051",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOU4pSes8AAAAdugz2uw",
+      "head_sha": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+      "url": "https://api.github.com/repos/Oatelauser/crosschat/actions/jobs/127675463355",
+      "html_url": "https://github.com/Oatelauser/crosschat/actions/runs/42151469051/job/127675463355",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-06T02:37:09Z",
+      "started_at": "2026-11-06T02:37:12Z",
+      "completed_at": "2026-11-06T02:40:57Z",
+      "name": "check (windows-latest)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-06T02:37:13Z",
+          "completed_at": "2026-11-06T02:37:15Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-06T02:37:15Z",
+          "completed_at": "2026-11-06T02:37:31Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-06T02:37:31Z",
+          "completed_at": "2026-11-06T02:37:36Z"
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-06T02:37:36Z",
+          "completed_at": "2026-11-06T02:38:25Z"
+        },
+        {
+          "name": "Run npm run check",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-06T02:38:25Z",
+          "completed_at": "2026-11-06T02:40:52Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-11-06T02:40:52Z",
+          "completed_at": "2026-11-06T02:40:52Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-11-06T02:40:52Z",
+          "completed_at": "2026-11-06T02:40:55Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-11-06T02:40:55Z",
+          "completed_at": "2026-11-06T02:40:55Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/Oatelauser/crosschat/check-runs/127675463355",
+      "labels": [
+        "windows-latest"
+      ],
+      "runner_id": 1000001315,
+      "runner_name": "GitHub Actions 1000001315",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    }
+  ]
+}

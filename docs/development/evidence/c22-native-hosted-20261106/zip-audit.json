@@ -1,0 +1,347 @@
+{
+  "runId": 42152027504,
+  "sourceHead": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+  "artifacts": [
+    {
+      "name": "dsh-enhancement-win32-x64",
+      "members": [
+        {
+          "path": "install-process.json",
+          "bytes": 116490,
+          "crc": 3508999783
+        },
+        {
+          "path": "package-lock.json",
+          "bytes": 408984,
+          "crc": 4252633929
+        },
+        {
+          "path": "process.json",
+          "bytes": 6652,
+          "crc": 974041858
+        },
+        {
+          "path": "report-fb111f13-e882-4dc3-95a8-b12350d38f1b.json",
+          "bytes": 15882,
+          "crc": 2371853520
+        },
+        {
+          "path": "summary.json",
+          "bytes": 19012,
+          "crc": 3461154889
+        },
+        {
+          "path": "terminal-0-application.jsonl",
+          "bytes": 224879,
+          "crc": 3805162168
+        },
+        {
+          "path": "terminal-0.jsonl",
+          "bytes": 400844,
+          "crc": 2767202513
+        },
+        {
+          "path": "terminal-1-application.jsonl",
+          "bytes": 235258,
+          "crc": 3373383224
+        },
+        {
+          "path": "terminal-1.jsonl",
+          "bytes": 341877,
+          "crc": 3835362672
+        }
+      ],
+      "id": 13473477805,
+      "sha256": "10180893d787da80eb09a884f7306688f1f0baa1c30d643e20fa7f798cc42242",
+      "zipBytes": 126483,
+      "officialDigest": "sha256:10180893d787da80eb09a884f7306688f1f0baa1c30d643e20fa7f798cc42242",
+      "status": "passed"
+    },
+    {
+      "name": "dsh-enhancement-linux-x64",
+      "members": [
+        {
+          "path": "install-process.json",
+          "bytes": 115715,
+          "crc": 4031603047
+        },
+        {
+          "path": "package-lock.json",
+          "bytes": 408912,
+          "crc": 2737128576
+        },
+        {
+          "path": "process.json",
+          "bytes": 928,
+          "crc": 2631679606
+        },
+        {
+          "path": "report-4666b6e1-3a90-40ab-ae55-7f254a24eb22.json",
+          "bytes": 14621,
+          "crc": 2152900109
+        },
+        {
+          "path": "summary.json",
+          "bytes": 18077,
+          "crc": 2996347993
+        },
+        {
+          "path": "terminal-0-application.jsonl",
+          "bytes": 167173,
+          "crc": 4210722009
+        },
+        {
+          "path": "terminal-0.jsonl",
+          "bytes": 360550,
+          "crc": 581017558
+        },
+        {
+          "path": "terminal-1-application.jsonl",
+          "bytes": 179323,
+          "crc": 3993070798
+        },
+        {
+          "path": "terminal-1.jsonl",
+          "bytes": 274803,
+          "crc": 3961338722
+        },
+        {
+          "path": "terminal-preflight/arguments.jsonl",
+          "bytes": 1272,
+          "crc": 2288434465
+        },
+        {
+          "path": "terminal-preflight/control.jsonl",
+          "bytes": 543,
+          "crc": 3850331490
+        },
+        {
+          "path": "terminal-preflight/dispose.jsonl",
+          "bytes": 444,
+          "crc": 4242089588
+        },
+        {
+          "path": "terminal-preflight/force.jsonl",
+          "bytes": 442,
+          "crc": 3957492289
+        },
+        {
+          "path": "terminal-preflight/nonzero.jsonl",
+          "bytes": 375,
+          "crc": 3399725048
+        },
+        {
+          "path": "terminal-preflight/report.json",
+          "bytes": 837,
+          "crc": 1915497722
+        },
+        {
+          "path": "terminal-preflight/startup.jsonl",
+          "bytes": 282,
+          "crc": 2444414245
+        },
+        {
+          "path": "terminal-preflight/terminal.jsonl",
+          "bytes": 1052,
+          "crc": 1988164139
+        }
+      ],
+      "id": 13472369712,
+      "sha256": "2039173917b4a88aa673d57cdba3f2a3cee9738baf224a84c761bf839a4ede0c",
+      "zipBytes": 131718,
+      "officialDigest": "sha256:2039173917b4a88aa673d57cdba3f2a3cee9738baf224a84c761bf839a4ede0c",
+      "status": "passed"
+    },
+    {
+      "name": "dsh-enhancement-darwin-x64",
+      "members": [
+        {
+          "path": "install-process.json",
+          "bytes": 115913,
+          "crc": 2616037547
+        },
+        {
+          "path": "process.json",
+          "bytes": 6518,
+          "crc": 574789489
+        },
+        {
+          "path": "package-lock.json",
+          "bytes": 408928,
+          "crc": 3634563092
+        },
+        {
+          "path": "report-252cd445-b0d0-4f35-aa8d-5290d69ca21d.json",
+          "bytes": 13105,
+          "crc": 1559522996
+        },
+        {
+          "path": "summary.json",
+          "bytes": 15793,
+          "crc": 2288469569
+        },
+        {
+          "path": "terminal-0-application.jsonl",
+          "bytes": 204987,
+          "crc": 96194341
+        },
+        {
+          "path": "terminal-0.jsonl",
+          "bytes": 357101,
+          "crc": 2854145571
+        },
+        {
+          "path": "terminal-1-application.jsonl",
+          "bytes": 201584,
+          "crc": 3457443199
+        },
+        {
+          "path": "terminal-1.jsonl",
+          "bytes": 317976,
+          "crc": 2549051000
+        },
+        {
+          "path": "terminal-preflight/arguments.jsonl",
+          "bytes": 1201,
+          "crc": 1795049633
+        },
+        {
+          "path": "terminal-preflight/control.jsonl",
+          "bytes": 543,
+          "crc": 1383462342
+        },
+        {
+          "path": "terminal-preflight/dispose.jsonl",
+          "bytes": 444,
+          "crc": 455066291
+        },
+        {
+          "path": "terminal-preflight/force.jsonl",
+          "bytes": 442,
+          "crc": 578143075
+        },
+        {
+          "path": "terminal-preflight/nonzero.jsonl",
+          "bytes": 375,
+          "crc": 4116090981
+        },
+        {
+          "path": "terminal-preflight/report.json",
+          "bytes": 838,
+          "crc": 1852114184
+        },
+        {
+          "path": "terminal-preflight/startup.jsonl",
+          "bytes": 283,
+          "crc": 3856755059
+        },
+        {
+          "path": "terminal-preflight/terminal.jsonl",
+          "bytes": 1052,
+          "crc": 1606798457
+        }
+      ],
+      "id": 13472971674,
+      "sha256": "6073ec21c7e2560c5dca9b9c48c8563b1776539312084ca7e1ec72357118c72c",
+      "zipBytes": 126077,
+      "officialDigest": "sha256:6073ec21c7e2560c5dca9b9c48c8563b1776539312084ca7e1ec72357118c72c",
+      "status": "passed"
+    },
+    {
+      "name": "dsh-enhancement-darwin-arm64",
+      "members": [
+        {
+          "path": "package-lock.json",
+          "bytes": 408928,
+          "crc": 654874938
+        },
+        {
+          "path": "report-e5efb8d0-2ae8-4c91-b8e2-7c797bd0d85c.json",
+          "bytes": 13097,
+          "crc": 2620413863
+        },
+        {
+          "path": "process.json",
+          "bytes": 6517,
+          "crc": 3373774643
+        },
+        {
+          "path": "install-process.json",
+          "bytes": 115713,
+          "crc": 3076107225
+        },
+        {
+          "path": "summary.json",
+          "bytes": 15787,
+          "crc": 2737885246
+        },
+        {
+          "path": "terminal-0-application.jsonl",
+          "bytes": 193784,
+          "crc": 815837610
+        },
+        {
+          "path": "terminal-0.jsonl",
+          "bytes": 333225,
+          "crc": 2610303965
+        },
+        {
+          "path": "terminal-1-application.jsonl",
+          "bytes": 201670,
+          "crc": 2924393401
+        },
+        {
+          "path": "terminal-1.jsonl",
+          "bytes": 301560,
+          "crc": 589296616
+        },
+        {
+          "path": "terminal-preflight/arguments.jsonl",
+          "bytes": 1201,
+          "crc": 2514599515
+        },
+        {
+          "path": "terminal-preflight/control.jsonl",
+          "bytes": 543,
+          "crc": 2928910700
+        },
+        {
+          "path": "terminal-preflight/dispose.jsonl",
+          "bytes": 444,
+          "crc": 1131450570
+        },
+        {
+          "path": "terminal-preflight/force.jsonl",
+          "bytes": 442,
+          "crc": 1553979830
+        },
+        {
+          "path": "terminal-preflight/nonzero.jsonl",
+          "bytes": 375,
+          "crc": 1943768676
+        },
+        {
+          "path": "terminal-preflight/report.json",
+          "bytes": 840,
+          "crc": 1407294090
+        },
+        {
+          "path": "terminal-preflight/terminal.jsonl",
+          "bytes": 1052,
+          "crc": 1620400787
+        },
+        {
+          "path": "terminal-preflight/startup.jsonl",
+          "bytes": 283,
+          "crc": 281213647
+        }
+      ],
+      "id": 13473226420,
+      "sha256": "55c85828f4c31d222cbb6f36e429f3e6dad533351b2d63176365c3601f6f499b",
+      "zipBytes": 126446,
+      "officialDigest": "sha256:55c85828f4c31d222cbb6f36e429f3e6dad533351b2d63176365c3601f6f499b",
+      "status": "passed"
+    }
+  ],
+  "failures": []
+}

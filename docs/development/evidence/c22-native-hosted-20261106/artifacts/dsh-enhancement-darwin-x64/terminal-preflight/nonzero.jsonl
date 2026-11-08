@@ -1,0 +1,5 @@
+{"at":1793932982037,"direction":"host","event":"ready","pid":7177}
+{"at":1793932982158,"direction":"host","event":"output","data":"Tk9OWkVSTw0K"}
+{"at":1793932982163,"direction":"host","event":"cleanup","forced":false,"groupReleased":true}
+{"at":1793932982163,"direction":"host","event":"exit","code":7}
+{"at":1793932982175,"direction":"driver","event":"host-exit","code":0}

@@ -1,5 +1,12 @@
 # C22 增强托管候选：2026-11-06
 
+2026-11-08整理：用户第二次选择A的范围已履行，[PR #6合入及main普通CI](evidence/c22-merge-20261106/review.md)通过，main为cba0e71。[一次原生四目标42152027504](evidence/c22-native-hosted-20261106/review.md)已结束：Linux11/11通过并移出活动；Windows、macOS Intel/ARM各9/11后在终端表单就绪处失败，四目标资源均正常回收。修复代码fa34b22已本地完成，3项RED/GREEN、36定向、Windows正式11项与完整2909通过/11原有跳过已验，见[修复候选](dsh-enhancement-terminal-readiness-20261106.md)。修复分支未推送，托管修复/另三目标仍保留；未再触发原生Actions、未改定时或发布。下一外部步骤为具体修复分支推送/草稿PR及普通CI决定，旧授权不重复询问。25父项/11CI索引及原负责人保持。
+
+以下为初始候选及当时外部决定的历史快照，原始证据保留；后续合入、首验失败和修复以上述记录为准。
+
+2026-11-06用户选择A后已完成：候选ae99b50推送、[草稿PR #6](https://github.com/Oatelauser/crosschat/pull/6)创建、[普通CI42150057110](https://github.com/Oatelauser/crosschat/actions/runs/42150057110)三job实际success（Windows2906/11，Ubuntu与macOS2901/16）。源head/测试合并对象双亲和原始日志已核对，见[外部结果](evidence/c22-hosted-20261106/review.md)。推送/草稿/普通CI授权已履行，不重复询问；PR保持draft，main7229efb未改，合入和原生四目标Actions仍待单独决定，增强托管原生/其它平台/Desktop/物理跨机未追认。
+
+
 当前本地候选已实现；没有推送、PR、新原生 Actions、合入或定时变更。旧的通信和从零 workflow、src/integrations 与产品命令均未改。用户已允许按任务分工，本轮由主会话实现 runner 和集成，两名 subagent 实现报告合同、平台接缝及交叉审查。
 
 ## 候选行为

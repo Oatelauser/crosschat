@@ -1,0 +1,2 @@
+{"at":1793932984020,"direction":"host","event":"error","message":"[Errno 2] No such file or directory: '/Users/runner/work/crosschat/crosschat/dsh-enhancement-evidence/terminal-preflight/missing-executable'"}
+{"at":1793932984023,"direction":"driver","event":"host-exit","code":null}

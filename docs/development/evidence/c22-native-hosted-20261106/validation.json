@@ -1,0 +1,92 @@
+{
+  "sourceHead": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+  "runId": 42152027504,
+  "status": "failed",
+  "runAttempt": 1,
+  "evidenceAudit": "passed",
+  "completedChecks": 38,
+  "fullyPassedTargetChecks": 11,
+  "targets": [
+    {
+      "name": "dsh-enhancement-win32-x64",
+      "runId": "fb111f13-e882-4dc3-95a8-b12350d38f1b",
+      "status": "failed",
+      "category": "validation-failed",
+      "checks": 9,
+      "released": true
+    },
+    {
+      "name": "dsh-enhancement-linux-x64",
+      "runId": "4666b6e1-3a90-40ab-ae55-7f254a24eb22",
+      "status": "passed",
+      "category": null,
+      "checks": 11,
+      "released": true
+    },
+    {
+      "name": "dsh-enhancement-darwin-x64",
+      "runId": "252cd445-b0d0-4f35-aa8d-5290d69ca21d",
+      "status": "failed",
+      "category": "validation-failed",
+      "checks": 9,
+      "released": true
+    },
+    {
+      "name": "dsh-enhancement-darwin-arm64",
+      "runId": "e5efb8d0-2ae8-4c91-b8e2-7c797bd0d85c",
+      "status": "failed",
+      "category": "validation-failed",
+      "checks": 9,
+      "released": true
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "dsh-enhancement-win32-x64",
+      "id": 13473477805,
+      "sha256": "10180893d787da80eb09a884f7306688f1f0baa1c30d643e20fa7f798cc42242",
+      "zipBytes": 126483,
+      "officialDigest": "sha256:10180893d787da80eb09a884f7306688f1f0baa1c30d643e20fa7f798cc42242",
+      "status": "passed"
+    },
+    {
+      "name": "dsh-enhancement-linux-x64",
+      "id": 13472369712,
+      "sha256": "2039173917b4a88aa673d57cdba3f2a3cee9738baf224a84c761bf839a4ede0c",
+      "zipBytes": 131718,
+      "officialDigest": "sha256:2039173917b4a88aa673d57cdba3f2a3cee9738baf224a84c761bf839a4ede0c",
+      "status": "passed"
+    },
+    {
+      "name": "dsh-enhancement-darwin-x64",
+      "id": 13472971674,
+      "sha256": "6073ec21c7e2560c5dca9b9c48c8563b1776539312084ca7e1ec72357118c72c",
+      "zipBytes": 126077,
+      "officialDigest": "sha256:6073ec21c7e2560c5dca9b9c48c8563b1776539312084ca7e1ec72357118c72c",
+      "status": "passed"
+    },
+    {
+      "name": "dsh-enhancement-darwin-arm64",
+      "id": 13473226420,
+      "sha256": "55c85828f4c31d222cbb6f36e429f3e6dad533351b2d63176365c3601f6f499b",
+      "zipBytes": 126446,
+      "officialDigest": "sha256:55c85828f4c31d222cbb6f36e429f3e6dad533351b2d63176365c3601f6f499b",
+      "status": "passed"
+    }
+  ],
+  "allResourcesReleased": true,
+  "retryPerformed": false,
+  "evidence": [
+    "run.json",
+    "jobs.json",
+    "zip-audit.json",
+    "json-audit.json",
+    "readiness-diagnosis.json"
+  ],
+  "limits": [
+    "Same-host logical nodes",
+    "Official npm/Web rc.5 only",
+    "No browser/Desktop/real model",
+    "No repair hosted revalidation"
+  ]
+}

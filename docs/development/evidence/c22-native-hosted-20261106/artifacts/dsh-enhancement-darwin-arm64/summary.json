@@ -1,0 +1,345 @@
+{
+  "schema": 1,
+  "tool": "dsh-enhancement",
+  "platform": "darwin",
+  "arch": "arm64",
+  "version": "0.2.1-rc.5",
+  "scope": {
+    "officialNpmRuntime": true,
+    "ordinaryWebSessions": true,
+    "scriptedLocalModel": true,
+    "nativeTty": true,
+    "independentLogicalNodes": 2,
+    "terminalObservers": 2,
+    "desktop": false,
+    "browserUI": false,
+    "physicalCrossMachine": false,
+    "modelIntelligence": false
+  },
+  "status": "failed",
+  "category": "validation-failed",
+  "notify": false,
+  "installationCleanup": "removed",
+  "attempt": {
+    "status": "failed",
+    "category": "validation-failed",
+    "released": true,
+    "runId": "e5efb8d0-2ae8-4c91-b8e2-7c797bd0d85c",
+    "reportPath": "/Users/runner/work/crosschat/crosschat/dsh-enhancement-evidence/report-e5efb8d0-2ae8-4c91-b8e2-7c797bd0d85c.json",
+    "report": {
+      "schema": 1,
+      "tool": "dsh-enhancement",
+      "runId": "e5efb8d0-2ae8-4c91-b8e2-7c797bd0d85c",
+      "sourceHead": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+      "scope": {
+        "officialNpmRuntime": true,
+        "ordinaryWebSessions": true,
+        "scriptedLocalModel": true,
+        "nativeTty": true,
+        "independentLogicalNodes": 2,
+        "terminalObservers": 2,
+        "desktop": false,
+        "browserUI": false,
+        "physicalCrossMachine": false,
+        "modelIntelligence": false
+      },
+      "platform": "darwin",
+      "arch": "arm64",
+      "version": "0.2.1-rc.5",
+      "node": "v22.23.4",
+      "root": "/private/tmp/c22-QAZgwu/cc-c22-6BgLKy",
+      "productHead": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+      "checks": [
+        {
+          "name": "two-node-identities-and-remote-exact-source-isolation",
+          "status": "passed",
+          "elapsedMs": 113
+        },
+        {
+          "name": "two-independent-terminal-observers-open-the-same-authoritative-star",
+          "status": "passed",
+          "elapsedMs": 1450
+        },
+        {
+          "name": "explicit-adoption-refreshes-both-operators-and-isolates-the-other-star",
+          "status": "passed",
+          "elapsedMs": 1983
+        },
+        {
+          "name": "permanent-membership-survives-two-temporary-window-claims-and-erase-release",
+          "status": "passed",
+          "elapsedMs": 16
+        },
+        {
+          "name": "temporary-window-release-is-exact-and-independent-across-stars",
+          "status": "passed",
+          "elapsedMs": 57
+        },
+        {
+          "name": "native-rename-syncs-both-operators-without-changing-the-other-node",
+          "status": "passed",
+          "elapsedMs": 1963
+        },
+        {
+          "name": "lost-native-write-receipt-is-uncertain-and-readonly-recovery-never-replays",
+          "status": "passed",
+          "elapsedMs": 4009
+        },
+        {
+          "name": "lost-broker-receipt-is-uncertain-and-other-operator-observes-one-write",
+          "status": "passed",
+          "elapsedMs": 14113
+        },
+        {
+          "name": "bridge-loss-and-recovery-stay-local-and-reject-old-confirmations",
+          "status": "passed",
+          "elapsedMs": 491
+        }
+      ],
+      "status": "failed",
+      "stage": "validation",
+      "identities": [
+        {
+          "nodePid": 3082,
+          "hostPid": 2925,
+          "machineId": "11111111111111111111111111111111",
+          "nativeId": "session-dca349aa-5eb7-47da-adb1-1fb281dfd595",
+          "instanceVersion": "0.2.1-rc.5"
+        },
+        {
+          "nodePid": 3085,
+          "hostPid": 2933,
+          "machineId": "22222222222222222222222222222222",
+          "nativeId": "session-5fa4aca8-4fbe-409a-9ca4-580555d8fe1c",
+          "instanceVersion": "0.2.1-rc.5"
+        }
+      ],
+      "check": "cross-operator-confirmation-recovery-and-keyboard-selection-stay-exact",
+      "renamed": "C22Broker094161",
+      "lostReceiptResult": {
+        "kind": "uncertain",
+        "message": "修改请求已发出，结果待核实；请刷新，不要自动重试。"
+      },
+      "nativeReceiptFault": {
+        "titlePosts": 1,
+        "acceptedWrites": 1,
+        "droppedReceipts": 1,
+        "readonlyRequests": 101,
+        "registrationRestored": true,
+        "proxyClosed": true
+      },
+      "lostBrokerResult": {
+        "kind": "uncertain",
+        "message": "修改请求未取得可核实的完成回执；可能已经生效，请刷新并核实目标，不要直接重复执行。"
+      },
+      "brokerReceiptFault": {
+        "requests": 1,
+        "acceptedReceipts": 1,
+        "droppedReceipts": 1,
+        "correlations": [
+          {
+            "id": "7a76d245-ff96-4430-b4a6-fa7453e3e241",
+            "starId": "c22-alpha",
+            "machineId": "11111111111111111111111111111111",
+            "providerId": "dsh",
+            "nativeId": "session-dca349aa-5eb7-47da-adb1-1fb281dfd595",
+            "endpointType": "host"
+          }
+        ],
+        "configRestored": true,
+        "proxyClosed": true
+      },
+      "terminalMembershipRestores": [
+        {
+          "kind": "applied",
+          "message": "所选节点的精确会话已作为永久成员入星。"
+        }
+      ],
+      "category": "validation-failed",
+      "error": {
+        "name": "Error",
+        "message": "POSIX PTY output did not match 原生会话新名称; log: /Users/runner/work/crosschat/crosschat/dsh-enhancement-evidence/terminal-0.jsonl; output tail:                                     │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\r\n<members> 1/1 · 完整 · 自动刷新\r\n按在线 / 下线分组；a 选择节点会话入星，e 按原生能力改名，Ctrl+D 删除成员。k/K 发钥，x 撤销凭证。\r\n:资源  /筛选  Esc返回  q退出\u001b[?2026l",
+        "stack": "Error: POSIX PTY output did not match 原生会话新名称; log: /Users/runner/work/crosschat/crosschat/dsh-enhancement-evidence/terminal-0.jsonl; output tail:                                     │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\r\n<members> 1/1 · 完整 · 自动刷新\r\n按在线 / 下线分组；a 选择节点会话入星，e 按原生能力改名，Ctrl+D 删除成员。k/K 发钥，x 撤销凭证。\r\n:资源  /筛选  Esc返回  q退出\u001b[?2026l\n    at Timeout._onTimeout (file:///Users/runner/work/crosschat/crosschat/test/helpers/tui-pty-driver.mjs:140:18)\n    at listOnTimeout (node:internal/timers:585:17)\n    at process.processTimers (node:internal/timers:521:7)"
+      },
+      "terminals": [
+        {
+          "index": 0,
+          "exit": {
+            "event": "exit",
+            "code": 0,
+            "before": {
+              "raw": false,
+              "resize": 0,
+              "listeners": {
+                "SIGINT": 1,
+                "SIGTERM": 1,
+                "uncaughtException": 0,
+                "unhandledRejection": 0
+              }
+            },
+            "after": {
+              "raw": false,
+              "resize": 0,
+              "listeners": {
+                "SIGINT": 1,
+                "SIGTERM": 1,
+                "uncaughtException": 0,
+                "unhandledRejection": 0
+              }
+            }
+          },
+          "transportCleanup": {
+            "event": "cleanup",
+            "forced": false,
+            "groupReleased": true
+          }
+        },
+        {
+          "index": 1,
+          "exit": {
+            "event": "exit",
+            "code": 0,
+            "before": {
+              "raw": false,
+              "resize": 0,
+              "listeners": {
+                "SIGINT": 1,
+                "SIGTERM": 1,
+                "uncaughtException": 0,
+                "unhandledRejection": 0
+              }
+            },
+            "after": {
+              "raw": false,
+              "resize": 0,
+              "listeners": {
+                "SIGINT": 1,
+                "SIGTERM": 1,
+                "uncaughtException": 0,
+                "unhandledRejection": 0
+              }
+            }
+          },
+          "transportCleanup": {
+            "event": "cleanup",
+            "forced": false,
+            "groupReleased": true
+          }
+        }
+      ],
+      "nodes": [
+        {
+          "index": 0,
+          "pid": 3082,
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "messages": [
+            {
+              "event": "ready",
+              "pid": 3082,
+              "machineId": "11111111111111111111111111111111",
+              "pipes": [
+                {
+                  "starId": "c22-alpha",
+                  "path": "/private/tmp/c22-QAZgwu/cc-c22-6BgLKy/n0/attach-c22-35347fa5049ff7a5a62665ef.sock"
+                },
+                {
+                  "starId": "c22-beta",
+                  "path": "/private/tmp/c22-QAZgwu/cc-c22-6BgLKy/n0/attach-c22-b383001b74146f820086ed32.sock"
+                }
+              ]
+            },
+            {
+              "event": "stopped",
+              "pid": 3082,
+              "failures": []
+            }
+          ],
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "index": 1,
+          "pid": 3085,
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "messages": [
+            {
+              "event": "ready",
+              "pid": 3085,
+              "machineId": "22222222222222222222222222222222",
+              "pipes": [
+                {
+                  "starId": "c22-alpha",
+                  "path": "/private/tmp/c22-QAZgwu/cc-c22-6BgLKy/n1/attach-c22-0d3cf6d35540daae47d551c9.sock"
+                },
+                {
+                  "starId": "c22-beta",
+                  "path": "/private/tmp/c22-QAZgwu/cc-c22-6BgLKy/n1/attach-c22-cffb1ea0a61d9e0c6edb5f27.sock"
+                }
+              ]
+            },
+            {
+              "event": "stopped",
+              "pid": 3085,
+              "failures": []
+            }
+          ],
+          "stdout": "",
+          "stderr": ""
+        }
+      ],
+      "hosts": [
+        {
+          "pid": 2933,
+          "cleanup": {
+            "runtimeStopped": true,
+            "registrationRemoved": true,
+            "removed": true,
+            "forced": false
+          },
+          "logs": {
+            "stdout": "dsh web: http://127.0.0.1:49224/?token=[fixture-token-redacted]\n",
+            "stderr": ""
+          }
+        },
+        {
+          "pid": 2925,
+          "cleanup": {
+            "runtimeStopped": true,
+            "registrationRemoved": true,
+            "removed": true,
+            "forced": false
+          },
+          "logs": {
+            "stdout": "dsh web: http://127.0.0.1:49219/?token=[fixture-token-redacted]\n",
+            "stderr": ""
+          }
+        }
+      ],
+      "cleanupFailures": [],
+      "unsafe": false,
+      "outerRemoved": true
+    }
+  },
+  "pins": {
+    "runtime": {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.5",
+      "url": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.5.tgz",
+      "integrity": "sha512-WkyJZv4zl9sCAxSzRctGm58m0rilGqwR6pniBiLOz5CPDfHfDuAUicg0AAazXI7oj/Cph6/cjNTncA/rpLTXpw=="
+    },
+    "manager": {
+      "name": "pnpm",
+      "version": "11.28.5",
+      "url": "https://registry.npmjs.org/pnpm/-/pnpm-11.28.5.tgz",
+      "integrity": "sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng=="
+    }
+  },
+  "sourceHead": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+  "taskRootCleanup": "removed"
+}
