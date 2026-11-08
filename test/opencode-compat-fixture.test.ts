@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { afterEach, describe, expect, it } from 'vitest';
 import { assessStartupEvidence, classifyCompatibility, parseArtifactManifest } from '../scripts/opencode-compat-report.mjs';
 import { createMockModel, textStream, toolStream } from './helpers/opencode-mock-model.mjs';
@@ -76,5 +77,44 @@ describe('model-only HTTP fixture', () => {
     expect(stream).toContain('tool_calls');
     expect(stream).toContain('node --version');
     expect(stream).toContain('[DONE]');
+  });
+});
+
+describe('OpenCode compatibility workflow trust boundary', () => {
+  it('keeps probes read-only and separates CLI/Desktop evidence from issue reporting', async () => {
+    const workflow = await readFile(new URL('../.github/workflows/opencode-compat.yml', import.meta.url), 'utf8');
+    const probe = workflow.split('\n  probe:')[1]?.split('\n  desktop-probe:')[0] ?? '';
+    const desktop = workflow.split('\n  desktop-probe:')[1]?.split('\n  report:')[0] ?? '';
+    const report = workflow.split('\n  report:')[1] ?? '';
+
+    expect(probe).not.toBe('');
+    expect(desktop).not.toBe('');
+    expect(report).not.toBe('');
+    expect(workflow).toMatch(/^ {2}schedule:/m);
+    expect(workflow).toMatch(/^ {2}workflow_dispatch:/m);
+    expect(workflow).not.toMatch(/pull_request|workflow_run|\bsecrets\./);
+    expect(workflow).toMatch(/^permissions:\r?\n {2}contents: read/m);
+
+    expect(probe).toMatch(/matrix:\r?\n {8}os: \[ubuntu-latest, windows-latest\]/);
+    expect(probe).toMatch(/runs-on: \$\{\{ matrix\.os \}\}/);
+    expect(probe).toContain('node scripts/opencode-compat-ci.mjs');
+    expect(probe).toMatch(/persist-credentials: false/);
+    expect(probe).not.toMatch(/issues: write|contents: write|GITHUB_TOKEN|GH_TOKEN/);
+    expect(probe).toContain('name: opencode-compat-${{ matrix.os }}');
+    expect(probe).toContain('path: opencode-compat-evidence/');
+
+    expect(desktop).toMatch(/runs-on: windows-latest/);
+    expect(desktop).toContain('node scripts/opencode-desktop-compat-ci.mjs');
+    expect(desktop).toMatch(/persist-credentials: false/);
+    expect(desktop).not.toMatch(/issues: write|contents: write|GITHUB_TOKEN|GH_TOKEN/);
+    expect(desktop).toContain('name: opencode-compat-desktop-windows-latest');
+    expect(desktop).toContain('path: opencode-desktop-compat-evidence/');
+    expect(desktop).not.toContain('path: opencode-compat-evidence/');
+
+    expect(report).toMatch(/needs: \[probe, desktop-probe\]/);
+    expect(report).toMatch(/issues: write/);
+    expect(report).toContain('actions/download-artifact@v4');
+    expect(report).toContain('path: evidence');
+    expect(report).not.toMatch(/actions\/checkout|npm (ci|run)|node scripts\/opencode-|CROSSCHAT_LIVE|OPENCODE_BIN/);
   });
 });
