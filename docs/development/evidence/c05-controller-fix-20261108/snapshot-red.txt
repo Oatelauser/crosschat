@@ -1,0 +1,33 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test test/dsh-runtime-snapshot.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-schedule-controller-20261108
+
+ ❯ test/dsh-runtime-snapshot.test.ts (2 tests | 1 failed) 7ms
+   ✓ DSH fixture exact native snapshot > retains the complete legacy inspect snapshot and the same live Agent 2ms
+   × DSH fixture exact native snapshot > reads the exact live full log when the new Controller no longer has inspect 3ms
+     → ctx.sessionController.inspect is not a function
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/dsh-runtime-snapshot.test.ts > DSH fixture exact native snapshot > reads the exact live full log when the new Controller no longer has inspect
+TypeError: ctx.sessionController.inspect is not a function
+ ❯ snapshotDshRuntimeSession test/helpers/dsh-runtime-snapshot.mjs:5:49
+      3|   const agent = ctx.agents.get(id);
+      4|   if (!agent) throw new Error('Fixture session is not live');
+      5|   const inspected = await ctx.sessionController.inspect(id);
+       |                                                 ^
+      6|   return { id, sameAgent: originalAgents.get(id) === agent, status: ag…
+      7|     inbox: { nextTurn: agent.inbox.nextTurn, nextStep: agent.inbox.nex…
+ ❯ test/dsh-runtime-snapshot.test.ts:25:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  21:24:10
+   Duration  341ms (transform 78ms, setup 0ms, collect 81ms, tests 7ms, environment 0ms, prepare 92ms)
+

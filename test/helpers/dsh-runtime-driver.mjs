@@ -4,6 +4,7 @@ import { writeFile } from 'node:fs/promises';
 import process from 'node:process';
 import { setImmediate } from 'node:timers';
 import { getDshRuntimeVersion } from '@deepseek-ai/dsh-app-boot';
+import { snapshotDshRuntimeSession } from './dsh-runtime-snapshot.mjs';
 
 export const name = 'crosschat-dsh-test-driver';
 export const inject = ['agents', 'sessionController', 'webServer', 'pluginManager'];
@@ -22,12 +23,7 @@ export async function apply(ctx, config) {
   }
   const originalAgents = new Map();
   const send = (response, value, status = 200) => { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify(value)); };
-  const snapshot = async (id) => {
-    const agent = ctx.agents.get(id);
-    if (!agent) throw new Error('Fixture session is not live');
-    const inspected = await ctx.sessionController.inspect(id);
-    return { id, sameAgent: originalAgents.get(id) === agent, status: agent.status, header: inspected.meta, events: inspected.events, inbox: { nextTurn: agent.inbox.nextTurn, nextStep: agent.inbox.nextStep } };
-  };
+  const snapshot = (id) => snapshotDshRuntimeSession(ctx, originalAgents, id);
   const server = createServer((request, response) => {
     void (async () => {
       if (request.headers.authorization !== `Bearer ${config.token}` || request.headers.origin !== undefined) { send(response, { error: 'AUTH_REQUIRED' }, 401); request.resume(); return; }

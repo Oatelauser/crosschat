@@ -285,6 +285,7 @@ export async function createDshFixture(options, respond) {
     const appBoot = pathToFileURL(createRequire(entry).resolve('@deepseek-ai/dsh-app-boot')).href;
     const source = await readFile(new URL('./dsh-runtime-driver.mjs', import.meta.url), 'utf8');
     await writeFile(driver, source.replace("from '@deepseek-ai/dsh-app-boot'", `from ${JSON.stringify(appBoot)}`));
+    await writeFile(join(root, 'dsh-runtime-snapshot.mjs'), await readFile(new URL('./dsh-runtime-snapshot.mjs', import.meta.url), 'utf8'));
     const patch = [
       { id: 'session-title-llm', disabled: true },
       { id: 'crosschat-dsh-bridge', config: { home: env.HOME } },
