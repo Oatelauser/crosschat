@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "tool": "dsh-onboarding",
+  "platform": "win32",
+  "arch": "x64",
+  "runId": "43eba073-3997-4c03-9cd3-9ce6753a76d0",
+  "version": "0.2.2-rc.1",
+  "scope": {
+    "officialNpmRuntime": true,
+    "officialPluginManager": true,
+    "ordinaryWebSessions": true,
+    "scriptedLocalModel": true,
+    "skillLifecycle": true,
+    "diagnostics": true,
+    "tui": true,
+    "browserUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "status": "failed",
+  "category": "compatibility",
+  "stage": "onboarding",
+  "check": "native-skill-load-and-current-source",
+  "startedAt": "2026-11-08T13:52:29.788Z",
+  "checks": [
+    {
+      "name": "official-profile-plugin-and-skill-installation",
+      "status": "passed",
+      "elapsedMs": 7752
+    }
+  ],
+  "error": "Expected values to be strictly equal:\n\nfalse !== true\n",
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  },
+  "finishedAt": "2026-11-08T13:52:38.592Z",
+  "process": {
+    "code": 1,
+    "signal": null,
+    "timedOut": false
+  }
+}

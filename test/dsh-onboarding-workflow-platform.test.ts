@@ -50,6 +50,12 @@ function matrix(schedule?: string) {
 }
 
 describe('from-zero hosted target selection', () => {
+  it('pins the dedicated onboarding probe to the Harness-supported Node LTS', () => {
+    const probe = workflow.split('\n  report:\n')[0]!;
+    expect(probe.match(/^\s+node-version:\s+.+$/gm)).toEqual(["          node-version: '24.22.2'"]);
+    expect(probe).toContain("a.equal(process.versions.node,'24.22.2')");
+  });
+
   it('runs four targets manually, preserves Windows weekly and separates POSIX weekly', () => {
     expect(matrix()).toEqual(all); expect(matrix('7 5 * * 5')).toEqual([all[0]]);
     expect(matrix('7 6 * * 5')).toEqual(posix); expect(matrix('unexpected')).toEqual([]);

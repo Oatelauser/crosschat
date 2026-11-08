@@ -1,0 +1,45 @@
+import assert from 'node:assert/strict';
+import {mkdir,readFile,writeFile,copyFile} from 'node:fs/promises';
+import {join} from 'node:path';
+import {resolveDshCiSuite,hasDshRuntimeReleaseProof} from '../../../scripts/dsh-compat-ci.mjs';
+import {DSH_ONBOARDING_CHECKS,validDshOnboardingProcessReport} from '../../../scripts/dsh-onboarding-contract.mjs';
+const repo='D:/workspace/CC/cc-dsh-schedule-controller-20261108';
+const evidence=join(repo,'docs/development/evidence/c05-controller-fix-20261108');
+const read=async name=>JSON.parse(await readFile(join(evidence,name),'utf8'));
+const state=JSON.parse(await readFile(join(repo,'node_modules/.cache/c05-controller-20261108/native-state.json'),'utf8'));
+assert(state.safe&&!state.removed&&!state.activeSuite);
+const summary=await read('native-path-corrected/results.json');
+assert.equal(summary.sourceHead,'c3c115bd42e8d1b7a964034c1759103337bf85b7');
+assert.equal(summary.node,'24.9.0');assert.equal(summary.version,state.artifact.version);
+const communicationChecks=['official-plugin-installation-and-owned-web-runtime','public-web-session-controller-creates-interactive-sessions','messages-model-and-native-shell-identity-bootstrap','authenticated-production-discovery-and-pagination','idle-production-delivery-wakes-the-existing-session','busy-native-queue-and-steer-step-boundaries','native-shell-send-and-conversation-reply-have-full-session-identities','missing-target-does-not-create-or-resume-a-replacement'];
+const accepted=[];
+for(const [name,subdir,checks] of [['communication','candidate-MqHmUn',communicationChecks],['onboarding','candidate-P6VswU',DSH_ONBOARDING_CHECKS]]){
+ const report=await read(`native-path-corrected/${name}/attempt.json`);
+ const original=await read(`native-path-corrected/${name}/${subdir}/report.json`);
+ assert.equal(report.runId,original.runId);assert.equal(report.status,'passed');assert.equal(report.category,null);assert.equal(report.stage,'done');
+ assert.deepEqual(report.checks.map(check=>check.name),checks);
+ assert(report.checks.every(check=>check.status==='passed'&&Number.isFinite(check.elapsedMs)&&check.elapsedMs>=0));
+ assert.equal(report.version,state.artifact.version);assert.equal(report.platform,'win32');assert.equal(report.arch,'x64');
+ assert.deepEqual(report.scope,resolveDshCiSuite(name).scope);
+ assert(hasDshRuntimeReleaseProof(report.cleanup));assert.deepEqual(report.process,{code:0,signal:null,timedOut:false});
+ assert.deepEqual(original.cleanup,report.cleanup);
+ if(name==='onboarding')assert(validDshOnboardingProcessReport(report,state.artifact));
+ else{assert.equal(report.bootstrapCallerSource.association,'verified');assert.equal(report.bootstrapCallerSource.basis,'native');assert.equal(report.lifecycle.status,'passed');assert(report.lifecycle.previousPortClosed&&report.lifecycle.previousCredentialRejected&&report.lifecycle.freshAck);}
+ accepted.push({suite:name,runId:report.runId,checks:report.checks.length,source:report.source??report.bootstrapCallerSource,cleanup:report.cleanup});
+}
+assert.equal(new Set(accepted.map(item=>item.runId)).size,2);
+const full=await read('final-full-check-process.json');assert.equal(full.exitCode,0);assert.equal(full.node,'22.23.4');
+const bad=await read('native-diagnosis-launch/report.json'),good=await read('native-diagnosis/report.json');
+assert.equal(bad.pathHasUndefinedComponent,true);assert.equal(bad.identity.check,'native-shell-bootstrap');
+assert(bad.toolEvidence.some(item=>item.content?.includes('SyntaxError: Unexpected token')));
+assert.equal(good.identity.ready,true);assert.equal(good.sameAgent,true);assert(bad.safe&&good.safe);
+const artifacts=await read('native-setup/official-artifacts.json'),lock=await read('native-setup/package-lock.json');
+for(const [name,key]of [['@deepseek-ai/dsh','native'],['pnpm','manager']]){
+ assert.equal(lock.packages[`node_modules/${name}`].version,artifacts[key].version);
+ assert.equal(lock.packages[`node_modules/${name}`].integrity,artifacts[key].integrity);
+}
+const sources=join(evidence,'development-drivers');await mkdir(sources,{recursive:true});
+for(const name of ['run-native.mjs','diagnose-native.mjs','diagnose-launch.mjs','audit-native.mjs'])await copyFile(join(repo,'node_modules/.cache/c05-controller-20261108',name),join(sources,name+'.txt'));
+const validation={status:'passed-local-development-slice',sourceHead:summary.sourceHead,platform:'win32',arch:'x64',harness:summary.version,node:'24.9.0',pnpm:'11.28.5',ordinaryCheck:{...full,testsPassed:2928,testsSkipped:11,filesPassed:248,filesSkipped:3,modules:206,edges:699},native:accepted,officialLockIntegrityMatched:true,firstFailuresRetained:true,temporaryLauncherFailure:{cause:'Case-sensitive access to Windows env.Path discarded the inherited path; PowerShell fallback stripped native Node -e argument quotes',negativeReplay:'native-diagnosis-launch/report.json',positiveControl:'native-diagnosis/report.json',productionChanged:false,assertionsChanged:false},cleanup:await read('cleanup.json'),independentReview:{through:'c4d5ce4',standardsFindings:0,specFindings:0,finalLoaderReview:'Interrupted by subagent 429; root reviewed the loader and ran full/native checks'},workflowModified:false,node24_22_2Qualified:false,hostedNewVersionQualified:false,otherPlatformsQualified:false,desktopQualified:false,renameEligibilityChanged:false,remaining:'Node runtime workflow decision and four-target hosted baseline/candidate verification'};
+await writeFile(join(evidence,'validation.json'),JSON.stringify(validation,null,2)+'\n');
+console.log(JSON.stringify({status:validation.status,native:accepted.map(item=>({suite:item.suite,checks:item.checks,runId:item.runId})),lockIntegrityMatched:true}));

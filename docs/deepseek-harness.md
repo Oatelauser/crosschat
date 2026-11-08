@@ -10,7 +10,7 @@ crosschat 通过官方 Host 插件桥发现并投递到 Harness 当前运行的�
 
 Windows/Linux x64与macOS Intel/ARM已完成[四目标npm/Web通信托管首验](https://github.com/Oatelauser/crosschat/actions/runs/41961856141)：rc.2与rc.5每目标各八项通过，包含原生身份、精确发现、queue/steer、完整回信、插件启停及隔离清理。此范围不含浏览器聊天界面或正式Desktop。
 
-Windows/Linux x64与macOS Intel/ARM还已通过[四目标六阶段从零托管首验](https://github.com/Oatelauser/crosschat/actions/runs/41978059319)：每目标rc.2与rc.5各六阶段，覆盖实际skill加载、原生来源与双向回信、同源诊断/真实终端、更新、官方插件移除和crosschat卸载后的profile/聊天保留。四份artifact、八个独立运行身份及原生/登记/安装/缓存正常清理已核对，无强停或兼容性重试，见[托管证据](development/evidence/c12-onboarding-hosted-20261105/native-validation.json)。Linux本机WSL的[六阶段证据](development/evidence/c12-posix-onboarding-20261105/linux-short-verification.json)另行保留。浏览器UI、正式Desktop完整生命周期、真实定时事件与其它版本不计为本次通过；历史失败及边界保留在[本轮说明](development/evidence/c12-posix-onboarding-20261105/review.md)。
+Windows/Linux x64与macOS Intel/ARM还已通过[四目标六阶段从零托管首验](https://github.com/Oatelauser/crosschat/actions/runs/41978059319)：每目标rc.2与rc.5各六阶段，覆盖实际skill加载、原生来源与双向回信、同源诊断/真实终端、更新、官方插件移除和crosschat卸载后的profile/聊天保留。四份artifact、八个独立运行身份及原生/登记/安装/缓存正常清理已核对，无强停或兼容性重试，见[托管证据](development/evidence/c12-onboarding-hosted-20261105/native-validation.json)。Linux本机WSL的[六阶段证据](development/evidence/c12-posix-onboarding-20261105/linux-short-verification.json)另行保留。浏览器UI、正式Desktop完整生命周期与其它版本继续分别验收；历史失败及边界保留在[本轮说明](development/evidence/c12-posix-onboarding-20261105/review.md)。后续真实定时检查已发生，所取新候选 `0.2.2-rc.1` 因测试控制器接口变化未完成完整序列，不能用已验rc.2/rc.5结果推定新版兼容。
 
 先按[官方指引](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/apps/cli/README.md)安装 Harness 及其插件管理所需的 pnpm，并安装本次开发版本的 crosschat。确认 `crosschat dsh-bridge-path` 能输出实际存在的 bundle 目录。
 
@@ -66,11 +66,13 @@ doctor 文本、JSON 和 TUI 还会复用发现侧的桥握手，核对每个活
 
 ## 运行与维护
 
-开发候选 `836b379` 已补充 npm/Web 手动入星的原生核验：在 TUI 中进入所选星的成员页，沿既有 `a` 选择 node 的完整会话后确认。读取能力不写册；实例、端点或会话信息变化后，旧确认会被拒绝，需要刷新重核。桥恢复只恢复可用动作，不自动重新入星。新手动成员永久、两星各自管理，精确删册保留原生聊天；live roots 不代表窗口选择，也没有自动跟随 Web 标签的能力。
+npm/Web 手动入星已接入原生核验：在 TUI 中进入所选星的成员页，沿既有 `a` 选择 node 的完整会话后确认。读取能力不写册；实例、端点或会话信息变化后，旧确认会被拒绝，需要刷新重核。桥恢复只恢复可用动作，不自动重新入星；手动成员仍沿既有TUI选择或显式adopt恢复。新手动成员永久、两星各自管理，精确删册保留原生聊天；live roots 不代表窗口选择，也没有自动跟随 Web 标签的能力。
 
-当前分支的 Windows x64 npm `0.2.1-rc.5` 已通过正式 Host、生产桥与真实 ConPTY 的入星/退星/断桥恢复检查；这是本地开发候选，尚未发布，Desktop 和其它平台增强未因此通过。具体版本、失败记录与范围见[增强验证](development/dsh-native-operations-progress-20261105.md#2026-11-05原生与终端切片收口)。
+npm `0.2.1-rc.5` 的 Windows x64 本地增强已通过正式Host、生产桥、两个独立逻辑node和两个真实终端的11项受控检查，覆盖两星隔离、永久成员叠加临时窗口保护、改名、断桥恢复及精确删册。固定rc.5的托管增强已在Windows/Linux x64、macOS Intel/ARM四目标各通过11项检查，见[增强托管运行](https://github.com/Oatelauser/crosschat/actions/runs/42484433153)。每个目标的两个node位于同一台机器，不代表物理跨机、浏览器UI或正式Desktop增强验收。
 
-该候选还已接通 rc.5 Web 的既有 TUI `e` 原生改名动作：绑定同一活会话及实际标题服务代次，更新后核对 node、星册及原生名称，再沿新名称投递。Windows 本地已验证真实 Web 标题自动同步、ConPTY 取消零写/确认、同一 Agent 和按新名称投递；见[改名验收与证据](development/dsh-native-rename-progress-20261105.md#windows-rc5本地切片验收)。rc.2、Desktop 和其它版本显示待核实，其它平台原生增强与托管 CI 继续保留。服务失效或目标变化后刷新重核；写入结果待核实时核对原生界面与星册，不自动重试。不新增 wrapper、用户命令参数或 crosschat 持久数据文件。
+rc.5 Web 已接通既有 TUI `e` 原生改名动作：绑定同一活会话及实际标题服务代次，更新后核对node、星册及原生名称，再沿新名称投递。Windows本地已验证真实Web标题自动同步、ConPTY取消零写/确认、同一Agent和按新名称投递；见[改名验收与证据](development/dsh-native-rename-progress-20261105.md#windows-rc5本地切片验收)。rc.2、Desktop和其它版本保持待核实。另一操作端改名或桥恢复均不会自动提交已打开的表单；取消后重新打开仍核对同一完整目标。已验的完整原生ID筛选场景中，选中行与复制命令保持一致；筛选值和滚动位置尚未独立观察。
+
+写入结果为 `uncertain`（待核实）时，先沿既有流程核对原生标题与权威星册。原生桥已写入但HTTP回执丢失、broker到操作端的关联回执丢失，均已分别验证：每次原生改名只写一次，另一操作端可观察权威结果，恢复只读且零自动重发。刷新、重连或能力恢复只更新已核实状态，不重放改名、入星或删册请求。服务失效或目标变化后仍须刷新重核。
 
 四类东西分开归属：crosschat npm 包（含桥目录与 skill 源）、复制进 Harness 的 skill 副本、所选 profile 里的插件引用、桥运行时登记。crosschat 只写最后一项和技能副本；登记默认在用户主目录的 `~/.crosschat/dsh/instances`，不随 Harness 的 `DSH_HOME` 迁移，插件配置里已有的显式 `home` 会原样传给桥（`options.home ?? homedir()`）；skill 副本由 `crosschat install-skills`、TUI 维护和 `crosschat uninstall` 共用同一目标计划覆盖安装或移除（Claude、Codex、Harness 三处，项目 `.agents/skills` 不在其中），插件引用由 Harness 自己的插件管理器写进 profile。
 

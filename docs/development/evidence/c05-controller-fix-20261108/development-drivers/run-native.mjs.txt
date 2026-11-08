@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
+import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import {dirname,join} from 'node:path';
+import {prepareDshProfile} from '../../../test/helpers/dsh-live-fixture.mjs';
+import {resolveDshCiSuite,runDshProcess} from '../../../scripts/dsh-compat-ci.mjs';
+const repo='D:/workspace/CC/cc-dsh-schedule-controller-20261108';
+const statePath=join(repo,'node_modules/.cache/c05-controller-20261108/native-state.json');
+const state=JSON.parse(await readFile(statePath,'utf8'));assert(state.installed&&state.safe&&!state.removed);
+assert.equal(await readFile(join(state.root,'.fixture-owner'),'utf8'),state.owner);
+const evidence=join(repo,'docs/development/evidence/c05-controller-fix-20261108/native-path-corrected');await mkdir(evidence,{recursive:true});
+const sourceHead=execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8',windowsHide:true}).trim();
+await writeFile(join(evidence,'started.json'),JSON.stringify({sourceHead,node:'24.9.0',version:'0.2.2-rc.1',runtime:state.runtime,loopbackOnly:true})+'\n',{flag:'wx'});
+const results=[];
+for(const name of ['communication','onboarding']){
+ const suite=resolveDshCiSuite(name),output=join(evidence,name);await mkdir(output,{recursive:true});
+ state.safe=false;state.activeSuite=name;await writeFile(statePath,JSON.stringify(state,null,2)+'\n');
+ const attempt=await suite.attempt({output,label:'candidate',artifact:state.artifact,target:{platform:'win32',arch:'x64'}},async({reportPath,runId,directory})=>{
+  const env=await prepareDshProfile(join(state.root,'controller-'+name),'http://127.0.0.1:1/v1');
+  const inheritedPath=Object.entries(env).find(([key])=>key.toLowerCase()==='path')?.[1];assert.equal(typeof inheritedPath,'string');
+  for(const key of Object.keys(env))if(key.toLowerCase()==='path')delete env[key];
+  env.PATH=dirname(state.nodeExecutable)+';'+inheritedPath;
+  assert(!env.PATH.split(';').includes('undefined'));
+  const result=await runDshProcess(state.nodeExecutable,[join(repo,'scripts',suite.script),'--report',reportPath],{
+   env:{...env,CROSSCHAT_LIVE:'1',DSH_RUNTIME_DIR:state.runtime,DSH_TASK_ROOT:state.root,DSH_EXPECTED_VERSION:state.artifact.version,DSH_EXPECTED_RUN_ID:runId},timeout:suite.timeoutMs});
+  await writeFile(join(directory,'process.json'),JSON.stringify(result,null,2)+'\n');return result;
+ });
+ const release=attempt.cleanup;
+ state.safe=release?.runtimeStopped===true&&release?.registrationRemoved===true&&release?.removed===true&&release?.forced===false;
+ delete state.activeSuite;await writeFile(statePath,JSON.stringify(state,null,2)+'\n');
+ await writeFile(join(output,'attempt.json'),JSON.stringify(attempt,null,2)+'\n');
+ results.push({suite:name,status:attempt.status,category:attempt.category,stage:attempt.stage,check:attempt.check,checks:attempt.checks?.length,runId:attempt.runId,safe:state.safe,error:attempt.error});
+ console.log(JSON.stringify(results.at(-1)));
+ if(!state.safe)break;
+}
+await writeFile(join(evidence,'results.json'),JSON.stringify({sourceHead,node:'24.9.0',version:'0.2.2-rc.1',results},null,2)+'\n');
+process.exitCode=results.length===2&&results.every(r=>r.status==='passed')?0:1;

@@ -1,0 +1,19 @@
+{
+  "native": {
+    "name": "@deepseek-ai/dsh",
+    "version": "0.2.2-rc.1",
+    "url": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.2-rc.1.tgz",
+    "integrity": "sha512-ijR9UEVYkG15Q/Q79JzvzLBzQOQfc63VLr9n6flpwHPhr5IKn2UxthnSoto/P9l7qGd7pPvI1Ra6TW7LH3oKpg==",
+    "file": "D:\\workspace\\CC\\cc-c05-tEWvDv\\ccb7f3a4d4de0769fd2f20ef0aa410f2d40aaec982911d653acbe4156230f8e6.tgz",
+    "sha256": "ad21968aed0337a326b853507a23b30eacbbec4d67ab07f3b6fde69b75b19cd6"
+  },
+  "manager": {
+    "name": "pnpm",
+    "version": "11.28.5",
+    "url": "https://registry.npmjs.org/pnpm/-/pnpm-11.28.5.tgz",
+    "integrity": "sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng==",
+    "file": "D:\\workspace\\CC\\cc-c05-tEWvDv\\6887ad16c4109e7f2cc6fbba523edb192d495198cce92d8adad84b39fb2ed0d3.tgz",
+    "sha256": "1ef4e447a68713656064f3f174c0f44719960a043a3fe2299169d08cf1dbf8ee"
+  },
+  "nodeEngine": ">=24.9.0"
+}

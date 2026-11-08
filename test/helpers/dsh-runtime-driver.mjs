@@ -4,6 +4,7 @@ import { writeFile } from 'node:fs/promises';
 import process from 'node:process';
 import { setImmediate } from 'node:timers';
 import { getDshRuntimeVersion } from '@deepseek-ai/dsh-app-boot';
+import { snapshotDshRuntimeRequest } from './dsh-runtime-snapshot.mjs';
 
 export const name = 'crosschat-dsh-test-driver';
 export const inject = ['agents', 'sessionController', 'webServer', 'pluginManager'];
@@ -22,12 +23,7 @@ export async function apply(ctx, config) {
   }
   const originalAgents = new Map();
   const send = (response, value, status = 200) => { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify(value)); };
-  const snapshot = async (id) => {
-    const agent = ctx.agents.get(id);
-    if (!agent) throw new Error('Fixture session is not live');
-    const inspected = await ctx.sessionController.inspect(id);
-    return { id, sameAgent: originalAgents.get(id) === agent, status: agent.status, header: inspected.meta, events: inspected.events, inbox: { nextTurn: agent.inbox.nextTurn, nextStep: agent.inbox.nextStep } };
-  };
+  const snapshot = (id, request, response) => snapshotDshRuntimeRequest(ctx, originalAgents, id, request, response);
   const server = createServer((request, response) => {
     void (async () => {
       if (request.headers.authorization !== `Bearer ${config.token}` || request.headers.origin !== undefined) { send(response, { error: 'AUTH_REQUIRED' }, 401); request.resume(); return; }
@@ -57,9 +53,9 @@ export async function apply(ctx, config) {
       const match = /^\/sessions\/([^/]+)(\/(?:prompt|idle))?$/.exec(path);
       if (!match) return send(response, { error: 'NOT_FOUND' }, 404);
       const id = decodeURIComponent(match[1]);
-      if (request.method === 'GET' && !match[2]) return send(response, await snapshot(id));
+      if (request.method === 'GET' && !match[2]) return send(response, await snapshot(id, request, response));
       if (request.method === 'POST' && match[2] === '/prompt') return send(response, await ctx.sessionController.prompt({ sessionId: id, requestId: body.requestId, mode: 'queue', content: [{ type: 'text', text: body.text }] }, new globalThis.AbortController().signal));
-      if (request.method === 'POST' && match[2] === '/idle') { const agent = ctx.agents.get(id); if (!agent) throw new Error('Fixture agent disappeared'); await agent.whenIdle(); return send(response, await snapshot(id)); }
+      if (request.method === 'POST' && match[2] === '/idle') { const agent = ctx.agents.get(id); if (!agent) throw new Error('Fixture agent disappeared'); await agent.whenIdle(); return send(response, await snapshot(id, request, response)); }
       return send(response, { error: 'NOT_FOUND' }, 404);
     })().catch((error) => { if (!response.headersSent && !response.destroyed) send(response, { error: error instanceof Error ? error.message : String(error) }, 500); });
   });

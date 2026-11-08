@@ -28,13 +28,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '24.22.2'
           architecture: ${{ matrix.arch }}
       - name: Verify actual runner target
         run: node -e "const a=require('node:assert/strict'); a.equal(process.platform,process.env.DSH_EXPECTED_PLATFORM); a.equal(process.arch,process.env.DSH_EXPECTED_ARCH)"
         env:
           DSH_EXPECTED_PLATFORM: ${{ matrix.platform }}
           DSH_EXPECTED_ARCH: ${{ matrix.arch }}
+      - name: Verify supported Node runtime
+        run: node -e "const a=require('node:assert/strict'); a.equal(process.versions.node,'24.22.2')"
       - run: npm ci
       - run: npm run build
       - run: node scripts/dsh-compat-ci.mjs

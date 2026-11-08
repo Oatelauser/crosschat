@@ -1,0 +1,8 @@
+{
+  "code": 1,
+  "signal": null,
+  "timedOut": false,
+  "stdout": "PASS official-plugin-installation-and-owned-web-runtime\nPASS public-web-session-controller-creates-interactive-sessions\n{\"status\":\"failed\",\"version\":\"0.2.2-rc.1\",\"checks\":2,\"check\":\"native-shell-bootstrap\",\"report\":\"D:\\\\workspace\\\\CC\\\\cc-dsh-schedule-controller-20261108\\\\docs\\\\development\\\\evidence\\\\c05-controller-fix-20261108\\\\native-new-first\\\\communication\\\\candidate-6A4BhF\\\\report.json\"}\n",
+  "stderr": "",
+  "pid": 14644
+}

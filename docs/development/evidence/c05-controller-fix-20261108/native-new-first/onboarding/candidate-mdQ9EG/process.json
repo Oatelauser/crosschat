@@ -1,0 +1,8 @@
+{
+  "code": 1,
+  "signal": null,
+  "timedOut": false,
+  "stdout": "PASS official-profile-plugin-and-skill-installation\n{\"status\":\"failed\",\"check\":\"native-skill-load-and-current-source\",\"passed\":1,\"reportPath\":\"D:\\\\workspace\\\\CC\\\\cc-dsh-schedule-controller-20261108\\\\docs\\\\development\\\\evidence\\\\c05-controller-fix-20261108\\\\native-new-first\\\\onboarding\\\\candidate-mdQ9EG\\\\report.json\"}\n",
+  "stderr": "",
+  "pid": 17336
+}

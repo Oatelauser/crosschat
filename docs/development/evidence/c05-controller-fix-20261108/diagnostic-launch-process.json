@@ -1,0 +1,17 @@
+{
+  "before": {
+    "keys": [
+      "Path"
+    ],
+    "upperPresent": false,
+    "mixedPresent": true
+  },
+  "result": {
+    "code": 1,
+    "signal": null,
+    "timedOut": false,
+    "stdout": "",
+    "stderr": "node:internal/child_process:1120\r\n    result.error = new ErrnoException(result.error, 'spawnSync ' + options.file);\r\n                   ^\r\n\r\n<ref *1> Error: spawnSync git ENOENT\r\n    at Object.spawnSync (node:internal/child_process:1120:20)\r\n    at spawnSync (node:child_process:911:24)\r\n    at execFileSync (node:child_process:954:15)\r\n    at file:///D:/workspace/CC/cc-dsh-schedule-controller-20261108/node_modules/.cache/c05-controller-20261108/diagnose-native.mjs:15:18 {\r\n  errno: -4058,\r\n  code: 'ENOENT',\r\n  syscall: 'spawnSync git',\r\n  path: 'git',\r\n  spawnargs: [ 'rev-parse', 'HEAD' ],\r\n  error: [Circular *1],\r\n  status: null,\r\n  signal: null,\r\n  output: null,\r\n  pid: 0,\r\n  stdout: undefined,\r\n  stderr: undefined\r\n}\r\n\r\nNode.js v24.9.0\r\n",
+    "pid": 22244
+  }
+}

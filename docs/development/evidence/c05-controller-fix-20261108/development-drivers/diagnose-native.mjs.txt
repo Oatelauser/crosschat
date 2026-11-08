@@ -1,0 +1,64 @@
+import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
+import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import {join} from 'node:path';
+import {createDshFixture,dshIdentityBootstrapCommand,assessDshCallerSourceIdentity,diagnoseDshCallerSource} from '../../../test/helpers/dsh-live-fixture.mjs';
+const repo='D:/workspace/CC/cc-dsh-schedule-controller-20261108';
+const statePath=join(repo,'node_modules/.cache/c05-controller-20261108/native-state.json');
+const state=JSON.parse(await readFile(statePath,'utf8'));
+assert(state.installed&&state.safe&&!state.removed);
+assert.equal(await readFile(join(state.root,'.fixture-owner'),'utf8'),state.owner);
+assert.equal(process.version,'v24.9.0');
+const label=process.argv[2]??'native-diagnosis';assert(/^[a-z-]+$/.test(label));
+const evidence=join(repo,'docs/development/evidence/c05-controller-fix-20261108',label);
+await mkdir(evidence,{recursive:true});
+const sourceHead=process.env.C05_SOURCE_HEAD??execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8',windowsHide:true}).trim();
+assert(/^[a-f0-9]{40}$/.test(sourceHead));
+const report={sourceHead,node:process.version,version:state.artifact.version,diagnosisOnly:true,startedAt:new Date().toISOString(),pathHasUndefinedComponent:process.env.PATH?.split(';').includes('undefined')??null};
+await writeFile(join(evidence,'started.json'),JSON.stringify(report,null,2)+'\n',{flag:'wx'});
+let fixture,skillIssued=false,identityIssued=false;
+state.safe=false;state.activeSuite='diagnosis';await writeFile(statePath,JSON.stringify(state,null,2)+'\n');
+const respond=()=>{
+ if(!skillIssued){skillIssued=true;return {tool:{name:'skill',id:'diagnostic-skill',input:{name:'crosschat'}}};}
+ if(!identityIssued){identityIssued=true;return {tool:{name:'pwsh',id:'diagnostic-identity',input:{description:'Run the existing isolated identity bootstrap',command:dshIdentityBootstrapCommand()}}};}
+ return {text:'diagnostic-finished'};
+};
+const redact=(value)=>{
+ let text=typeof value==='string'?value:JSON.stringify(value);
+ if(fixture?.info?.token)text=text.replaceAll(fixture.info.token,'[fixture-token-redacted]');
+ return text.replace(/([?&]token=)[^&\s"'\\]+/g,'$1[fixture-token-redacted]').replace(/\b[a-f0-9]{64}\b/gi,'[hex64-redacted]');
+};
+try{
+ fixture=await createDshFixture({runtime:state.runtime,parentRoot:state.root},respond);
+ const installed=await fixture.cli(['install-skills']);assert.equal(installed.code,0);
+ const session=await fixture.createSession('C05 diagnostic source identity');
+ await fixture.prompt(session.id,'Read the isolated crosschat skill then run the existing identity bootstrap.');
+ await fixture.idle(session.id);
+ const expected={session:session.id,profile:'web',dshHome:fixture.env.DSH_HOME};
+ report.identity=assessDshCallerSourceIdentity(fixture.model.requests,expected);
+ report.sourceDiagnostic=diagnoseDshCallerSource(fixture.model.requests,expected);
+ report.requests=fixture.model.requests.length;report.modelErrors=fixture.model.errors;
+ report.toolAdvertisements=fixture.model.requests.slice(0,1).flatMap(body=>(body.tools??[]).filter(t=>['pwsh','bash','skill'].includes(t.name)).map(t=>({name:t.name,required:t.input_schema?.required,properties:Object.keys(t.input_schema?.properties??{})})));
+ const blocks=fixture.model.requests.flatMap(body=>body.messages.flatMap(message=>Array.isArray(message.content)?message.content.filter(part=>['tool_use','tool_result'].includes(part.type)):[]));
+ let budget=32768;const seen=new Set();report.toolEvidence=[];
+ for(const block of blocks){
+  const key=JSON.stringify(block);if(seen.has(key))continue;seen.add(key);
+  if(report.toolEvidence.length>=8||budget<=0)break;
+  if(block.type==='tool_use'){report.toolEvidence.push({type:block.type,id:block.id,name:block.name,inputKeys:Object.keys(block.input??{})});continue;}
+  const content=redact(block.content);const text=content.slice(0,Math.min(8192,budget));budget-=text.length;
+  report.toolEvidence.push({type:block.type,id:block.tool_use_id,is_error:block.is_error,content:text,truncated:text.length!==content.length});
+ }
+ report.sameAgent=(await fixture.snapshot(session.id)).sameAgent;
+}catch(error){report.error=redact(error.message);}
+finally{
+ if(fixture){
+  try{await fixture.close();}catch(error){report.cleanupError=redact(error.message);}
+  report.cleanup=fixture.cleanup;
+ }
+ state.safe=report.cleanup?.runtimeStopped===true&&report.cleanup?.registrationRemoved===true&&report.cleanup?.removed===true&&report.cleanup?.forced===false;
+ delete state.activeSuite;await writeFile(statePath,JSON.stringify(state,null,2)+'\n');
+ report.finishedAt=new Date().toISOString();report.safe=state.safe;
+ await writeFile(join(evidence,'report.json'),redact(report)+'\n',{flag:'wx'});
+ console.log(JSON.stringify({identity:report.identity,requests:report.requests,safe:state.safe,error:report.error}));
+ if(!state.safe||report.error)process.exitCode=1;
+}
