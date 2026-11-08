@@ -1,5 +1,7 @@
 # C22 终端动作就绪修复
 
+2026-11-08后续授权：[持续推进约定](dsh-continuation-authorization-20261108.md)已生效。优先subagent推进C22修复推送/PR、CI、合入与既有手动原生复验，完成继续下一单；用户暂停、需产品拍板、用户操作修改或crosschat配置文件修改（skill除外）时先停下交具体方案。下方旧的逐次外部审批状态按历史时点保留。
+
 2026-11-06开发与验证，2026-11-08完成审查/归档。[PR #6](https://github.com/Oatelauser/crosschat/pull/6) 已合入main `cba0e71133ae6d4c47af8dba0068ca03c939f679`，main普通三平台CI通过；[一次原生四目标首验](evidence/c22-native-hosted-20261106/review.md) 为Linux11/11通过、Windows/macOS Intel/macOS ARM各9/11后失败。
 
 ## 原因与改动
