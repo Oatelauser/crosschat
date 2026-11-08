@@ -1,0 +1,46 @@
+import {readFile,readdir,writeFile} from 'node:fs/promises';
+import {resolve,join,basename} from 'node:path';
+import assert from 'node:assert/strict';
+import {fileURLToPath} from 'node:url';
+import {validateDshEnhancementReport,DSH_ENHANCEMENT_SCOPE} from '../../../scripts/dsh-enhancement-contract.mjs';
+const repo=fileURLToPath(new URL('../../../',import.meta.url));
+const root=join(repo,'docs/development/evidence/c22-native-hosted-20261106'),runId=Number(process.argv[2]);
+assert(Number.isSafeInteger(runId)&&runId>0,'Expected Actions run ID');
+const sha='cba0e71133ae6d4c47af8dba0068ca03c939f679',targets=[['win32','x64'],['linux','x64'],['darwin','x64'],['darwin','arm64']];
+const json=async file=>JSON.parse(await readFile(file,'utf8'));
+const pins=await json(join(repo,'scripts/dsh-enhancement-pins.json')),baseline=await json(join(repo,'scripts/dsh-compat-baseline.json'));
+const zip=await json(join(root,'zip-audit.json'));assert.equal(zip.runId,runId);assert.equal(zip.sourceHead,sha);assert.deepEqual(zip.failures,[]);
+const review={runId,sourceHead:sha,targets:[],failures:[],totalChecks:0,completedChecks:0},uuids=new Set();
+for(const [platform,arch]of targets){
+ const name=`dsh-enhancement-${platform}-${arch}`,dir=join(root,'artifacts',name);
+ try{
+  const zipItem=zip.artifacts.filter(a=>a.name===name);assert.equal(zipItem.length,1);assert.equal(zipItem[0].status,'passed');
+  const summary=await json(join(dir,'summary.json')),attempt=summary.attempt;
+  for(const [key,value]of Object.entries({schema:1,tool:'dsh-enhancement',platform,arch,version:'0.2.1-rc.5',sourceHead:sha,notify:false,installationCleanup:'removed',taskRootCleanup:'removed'}))assert.deepEqual(summary[key],value,key);
+  assert(['passed','failed'].includes(summary.status));
+  assert(summary.status==='passed'?summary.category===null:['validation-failed','infrastructure'].includes(summary.category));
+  assert.deepEqual(summary.scope,DSH_ENHANCEMENT_SCOPE);
+  for(const key of ['error','cleanupError','retainedTaskRoot'])assert.equal(summary[key],undefined,key);
+  assert.equal(attempt.released,true);assert.equal(attempt.status,summary.status);assert.equal(attempt.category,summary.category);
+  assert(!uuids.has(attempt.runId),'Repeated run UUID');uuids.add(attempt.runId);
+  const filename=`report-${attempt.runId}.json`,files=await readdir(dir);assert.deepEqual(files.filter(f=>/^report-.*\.json$/.test(f)),[filename]);
+  assert.equal(attempt.reportPath.split(/[\\/]/).at(-1),filename);
+  const report=await json(join(dir,filename));assert.deepEqual(report,attempt.report);assert.equal(report.productHead,sha);
+  assert.deepEqual(validateDshEnhancementReport(report,{runId:attempt.runId,sourceHead:sha,platform,arch,version:'0.2.1-rc.5'}),{valid:true});
+  assert.equal(report.status,summary.status);
+  assert.equal(summary.category,report.status==='passed'?null:report.category==='infrastructure'||['setup','cleanup'].includes(report.stage)?'infrastructure':'validation-failed');
+  for(const file of ['process.json','install-process.json']){const p=await json(join(dir,file));assert.equal(p.code,file==='process.json'&&report.status==='failed'?1:0);assert.equal(p.signal,null);assert.equal(p.timedOut,false);}
+  assert.deepEqual(summary.pins.runtime,{name:pins.package.name,version:pins.package.version,url:pins.package.dist.tarball,integrity:pins.package.dist.integrity});
+  assert.deepEqual(summary.pins.manager,{name:baseline.packageManager.name,version:baseline.packageManager.version,url:baseline.packageManager.dist.tarball,integrity:baseline.packageManager.dist.integrity});
+  const lock=await json(join(dir,'package-lock.json'));for(const [name,version]of [['@deepseek-ai/dsh','0.2.1-rc.5'],['pnpm','11.28.5']])assert.equal(lock.packages['node_modules/'+name].version,version);
+  for(const index of [0,1])for(const suffix of ['.jsonl','-application.jsonl'])assert(files.includes(`terminal-${index}${suffix}`));
+  if(platform!=='win32')assert((await readdir(join(dir,'terminal-preflight'))).length>0,'Missing POSIX preflight');
+  review.completedChecks+=report.checks.length;
+  if(report.status==='passed'){assert.equal(report.checks.length,11);review.totalChecks+=11;}
+  else review.failures.push(name+': valid failed report: '+report.error.message);
+  review.targets.push({name,runId:attempt.runId,status:report.status,category:summary.category,checks:report.checks.length,released:true,
+   ...(report.status==='failed'?{error:report.error.message}:{})});
+ }catch(error){review.failures.push(name+': '+error.message);review.targets.push({name,status:'failed',error:error.message});}
+}
+review.status=review.failures.length?'failed':'passed';
+await writeFile(join(root,'json-audit.json'),JSON.stringify(review,null,2)+'\n');console.log(JSON.stringify(review,null,2));process.exitCode=review.failures.length?1:0;

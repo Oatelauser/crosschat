@@ -1,0 +1,458 @@
+{
+  "schema": 1,
+  "tool": "dsh-enhancement",
+  "platform": "win32",
+  "arch": "x64",
+  "version": "0.2.1-rc.5",
+  "scope": {
+    "officialNpmRuntime": true,
+    "ordinaryWebSessions": true,
+    "scriptedLocalModel": true,
+    "nativeTty": true,
+    "independentLogicalNodes": 2,
+    "terminalObservers": 2,
+    "desktop": false,
+    "browserUI": false,
+    "physicalCrossMachine": false,
+    "modelIntelligence": false
+  },
+  "status": "failed",
+  "category": "validation-failed",
+  "notify": false,
+  "installationCleanup": "removed",
+  "attempt": {
+    "status": "failed",
+    "category": "validation-failed",
+    "released": true,
+    "runId": "fb111f13-e882-4dc3-95a8-b12350d38f1b",
+    "reportPath": "D:\\a\\crosschat\\crosschat\\dsh-enhancement-evidence\\report-fb111f13-e882-4dc3-95a8-b12350d38f1b.json",
+    "report": {
+      "schema": 1,
+      "tool": "dsh-enhancement",
+      "runId": "fb111f13-e882-4dc3-95a8-b12350d38f1b",
+      "sourceHead": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+      "scope": {
+        "officialNpmRuntime": true,
+        "ordinaryWebSessions": true,
+        "scriptedLocalModel": true,
+        "nativeTty": true,
+        "independentLogicalNodes": 2,
+        "terminalObservers": 2,
+        "desktop": false,
+        "browserUI": false,
+        "physicalCrossMachine": false,
+        "modelIntelligence": false
+      },
+      "platform": "win32",
+      "arch": "x64",
+      "version": "0.2.1-rc.5",
+      "node": "v22.23.4",
+      "root": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\c22-FQq2CH\\cc-c22-yiSsxa",
+      "productHead": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+      "checks": [
+        {
+          "name": "two-node-identities-and-remote-exact-source-isolation",
+          "status": "passed",
+          "elapsedMs": 233
+        },
+        {
+          "name": "two-independent-terminal-observers-open-the-same-authoritative-star",
+          "status": "passed",
+          "elapsedMs": 10776
+        },
+        {
+          "name": "explicit-adoption-refreshes-both-operators-and-isolates-the-other-star",
+          "status": "passed",
+          "elapsedMs": 1996
+        },
+        {
+          "name": "permanent-membership-survives-two-temporary-window-claims-and-erase-release",
+          "status": "passed",
+          "elapsedMs": 8
+        },
+        {
+          "name": "temporary-window-release-is-exact-and-independent-across-stars",
+          "status": "passed",
+          "elapsedMs": 10
+        },
+        {
+          "name": "native-rename-syncs-both-operators-without-changing-the-other-node",
+          "status": "passed",
+          "elapsedMs": 1993
+        },
+        {
+          "name": "lost-native-write-receipt-is-uncertain-and-readonly-recovery-never-replays",
+          "status": "passed",
+          "elapsedMs": 4978
+        },
+        {
+          "name": "lost-broker-receipt-is-uncertain-and-other-operator-observes-one-write",
+          "status": "passed",
+          "elapsedMs": 14101
+        },
+        {
+          "name": "bridge-loss-and-recovery-stay-local-and-reject-old-confirmations",
+          "status": "passed",
+          "elapsedMs": 945
+        }
+      ],
+      "status": "failed",
+      "stage": "validation",
+      "identities": [
+        {
+          "nodePid": 5096,
+          "hostPid": 2268,
+          "machineId": "11111111111111111111111111111111",
+          "nativeId": "session-e46edff8-ec73-4131-be75-ef9524543fab",
+          "instanceVersion": "0.2.1-rc.5"
+        },
+        {
+          "nodePid": 1728,
+          "hostPid": 948,
+          "machineId": "22222222222222222222222222222222",
+          "nativeId": "session-a4a261ed-e445-4539-b87b-9326f2c6b42e",
+          "instanceVersion": "0.2.1-rc.5"
+        }
+      ],
+      "check": "cross-operator-confirmation-recovery-and-keyboard-selection-stay-exact",
+      "renamed": "C22Broker719519",
+      "lostReceiptResult": {
+        "kind": "uncertain",
+        "message": "修改请求已发出，结果待核实；请刷新，不要自动重试。"
+      },
+      "nativeReceiptFault": {
+        "titlePosts": 1,
+        "acceptedWrites": 1,
+        "droppedReceipts": 1,
+        "readonlyRequests": 109,
+        "registrationRestored": true,
+        "proxyClosed": true
+      },
+      "lostBrokerResult": {
+        "kind": "uncertain",
+        "message": "修改请求未取得可核实的完成回执；可能已经生效，请刷新并核实目标，不要直接重复执行。"
+      },
+      "brokerReceiptFault": {
+        "requests": 1,
+        "acceptedReceipts": 1,
+        "droppedReceipts": 1,
+        "correlations": [
+          {
+            "id": "6e242b77-4b76-4b1b-81d0-329a837cb7d2",
+            "starId": "c22-alpha",
+            "machineId": "11111111111111111111111111111111",
+            "providerId": "dsh",
+            "nativeId": "session-e46edff8-ec73-4131-be75-ef9524543fab",
+            "endpointType": "host"
+          }
+        ],
+        "configRestored": true,
+        "proxyClosed": true
+      },
+      "terminalMembershipRestores": [
+        {
+          "kind": "applied",
+          "message": "所选节点的精确会话已作为永久成员入星。"
+        },
+        {
+          "kind": "applied",
+          "message": "所选节点的精确会话已作为永久成员入星。"
+        }
+      ],
+      "externalTerminalRename": {
+        "result": {
+          "kind": "applied",
+          "message": "原生名称及星内路由已确认更新。"
+        },
+        "snapshot": {
+          "id": "session-e46edff8-ec73-4131-be75-ef9524543fab",
+          "sameAgent": true,
+          "status": "idle",
+          "header": {
+            "version": 4,
+            "id": "session-e46edff8-ec73-4131-be75-ef9524543fab",
+            "createdAt": 1793933698682,
+            "cwd": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\c22-FQq2CH\\cc-c22-yiSsxa\\run-VEYcDe\\workspace",
+            "isSeeded": false,
+            "agentPreset": "standard"
+          },
+          "events": [
+            {
+              "type": "permission/preset",
+              "seq": 0,
+              "time": 1793933698693,
+              "data": {
+                "preset": "danger-full-access"
+              }
+            },
+            {
+              "type": "sandbox/mode",
+              "seq": 1,
+              "time": 1793933698697,
+              "data": {
+                "mode": "danger-full-access"
+              }
+            },
+            {
+              "type": "approval/policy",
+              "seq": 2,
+              "time": 1793933698698,
+              "data": {
+                "policy": "never"
+              }
+            },
+            {
+              "type": "session/title",
+              "seq": 3,
+              "time": 1793933698725,
+              "data": {
+                "title": "C22Alpha1793933698671",
+                "messageSeqs": [],
+                "source": {
+                  "kind": "user"
+                }
+              }
+            },
+            {
+              "type": "model/selection",
+              "seq": 4,
+              "time": 1793933698730,
+              "data": {
+                "provider": "deepseek-official",
+                "model": "deepseek-flash",
+                "reasoningEffort": "off"
+              }
+            },
+            {
+              "type": "session/title",
+              "seq": 5,
+              "time": 1793933712644,
+              "data": {
+                "title": "C22Renamed1793933712591",
+                "messageSeqs": [],
+                "source": {
+                  "kind": "user"
+                }
+              }
+            },
+            {
+              "type": "session/title",
+              "seq": 6,
+              "time": 1793933714673,
+              "data": {
+                "title": "C22LostAck1793933714541",
+                "messageSeqs": [],
+                "source": {
+                  "kind": "user"
+                }
+              }
+            },
+            {
+              "type": "session/title",
+              "seq": 7,
+              "time": 1793933719674,
+              "data": {
+                "title": "C22Broker719519",
+                "messageSeqs": [],
+                "source": {
+                  "kind": "user"
+                }
+              }
+            },
+            {
+              "type": "session/title",
+              "seq": 8,
+              "time": 1793933735216,
+              "data": {
+                "title": "C22Other735149",
+                "messageSeqs": [],
+                "source": {
+                  "kind": "user"
+                }
+              }
+            }
+          ],
+          "inbox": {
+            "nextTurn": [],
+            "nextStep": []
+          }
+        }
+      },
+      "category": "validation-failed",
+      "error": {
+        "name": "Error",
+        "message": "ConPTY output did not match 原生会话新名称; log: D:\\a\\crosschat\\crosschat\\dsh-enhancement-evidence\\terminal-0.jsonl; output tail:                                                                                                                                     │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\u001b[90m\r\n└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\u001b[36m\r\n<members> 1/1 · 完整 · 自动刷新\u001b[K\u001b[33m\r\n按在线 / 下线分组；a 选择节点会话入星，e 按原生能力改名，Ctrl+D 删除成员。k/K 发钥，x 撤销凭证。\u001b[K\u001b[90m\r\n:资源  /筛选  Esc返回  q退出\u001b[K\u001b[112C\u001b[?2026h\u001b[m\u001b[?2026l",
+        "stack": "Error: ConPTY output did not match 原生会话新名称; log: D:\\a\\crosschat\\crosschat\\dsh-enhancement-evidence\\terminal-0.jsonl; output tail:                                                                                                                                     │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\u001b[90m\r\n└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\u001b[36m\r\n<members> 1/1 · 完整 · 自动刷新\u001b[K\u001b[33m\r\n按在线 / 下线分组；a 选择节点会话入星，e 按原生能力改名，Ctrl+D 删除成员。k/K 发钥，x 撤销凭证。\u001b[K\u001b[90m\r\n:资源  /筛选  Esc返回  q退出\u001b[K\u001b[112C\u001b[?2026h\u001b[m\u001b[?2026l\n    at Timeout._onTimeout (file:///D:/a/crosschat/crosschat/test/helpers/tui-pty-driver.mjs:140:18)\n    at listOnTimeout (node:internal/timers:585:17)\n    at process.processTimers (node:internal/timers:521:7)"
+      },
+      "terminals": [
+        {
+          "index": 0,
+          "exit": {
+            "event": "exit",
+            "code": 0,
+            "before": {
+              "raw": false,
+              "resize": 0,
+              "listeners": {
+                "SIGINT": 1,
+                "SIGTERM": 1,
+                "uncaughtException": 0,
+                "unhandledRejection": 0
+              }
+            },
+            "after": {
+              "raw": false,
+              "resize": 0,
+              "listeners": {
+                "SIGINT": 1,
+                "SIGTERM": 1,
+                "uncaughtException": 0,
+                "unhandledRejection": 0
+              }
+            }
+          }
+        },
+        {
+          "index": 1,
+          "exit": {
+            "event": "exit",
+            "code": 0,
+            "before": {
+              "raw": false,
+              "resize": 0,
+              "listeners": {
+                "SIGINT": 1,
+                "SIGTERM": 1,
+                "uncaughtException": 0,
+                "unhandledRejection": 0
+              }
+            },
+            "after": {
+              "raw": false,
+              "resize": 0,
+              "listeners": {
+                "SIGINT": 1,
+                "SIGTERM": 1,
+                "uncaughtException": 0,
+                "unhandledRejection": 0
+              }
+            }
+          }
+        }
+      ],
+      "nodes": [
+        {
+          "index": 0,
+          "pid": 5096,
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "messages": [
+            {
+              "event": "ready",
+              "pid": 5096,
+              "machineId": "11111111111111111111111111111111",
+              "pipes": [
+                {
+                  "starId": "c22-alpha",
+                  "path": "\\\\.\\pipe\\crosschat-attach-c22-feda68dfa03428640b956ba1"
+                },
+                {
+                  "starId": "c22-beta",
+                  "path": "\\\\.\\pipe\\crosschat-attach-c22-8e62f065ba669e9b7adda2f2"
+                }
+              ]
+            },
+            {
+              "event": "stopped",
+              "pid": 5096,
+              "failures": []
+            }
+          ],
+          "stdout": "",
+          "stderr": ""
+        },
+        {
+          "index": 1,
+          "pid": 1728,
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "messages": [
+            {
+              "event": "ready",
+              "pid": 1728,
+              "machineId": "22222222222222222222222222222222",
+              "pipes": [
+                {
+                  "starId": "c22-alpha",
+                  "path": "\\\\.\\pipe\\crosschat-attach-c22-720453ec8a1dd013f27d15ab"
+                },
+                {
+                  "starId": "c22-beta",
+                  "path": "\\\\.\\pipe\\crosschat-attach-c22-fe1fb935813a5f4e5aaa3361"
+                }
+              ]
+            },
+            {
+              "event": "stopped",
+              "pid": 1728,
+              "failures": []
+            }
+          ],
+          "stdout": "",
+          "stderr": ""
+        }
+      ],
+      "hosts": [
+        {
+          "pid": 948,
+          "cleanup": {
+            "runtimeStopped": true,
+            "registrationRemoved": true,
+            "removed": true,
+            "forced": false
+          },
+          "logs": {
+            "stdout": "dsh web: http://127.0.0.1:59931/?token=[fixture-token-redacted]\n",
+            "stderr": ""
+          }
+        },
+        {
+          "pid": 2268,
+          "cleanup": {
+            "runtimeStopped": true,
+            "registrationRemoved": true,
+            "removed": true,
+            "forced": false
+          },
+          "logs": {
+            "stdout": "dsh web: http://127.0.0.1:59926/?token=[fixture-token-redacted]\n",
+            "stderr": ""
+          }
+        }
+      ],
+      "cleanupFailures": [],
+      "unsafe": false,
+      "outerRemoved": true
+    }
+  },
+  "pins": {
+    "runtime": {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.5",
+      "url": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.5.tgz",
+      "integrity": "sha512-WkyJZv4zl9sCAxSzRctGm58m0rilGqwR6pniBiLOz5CPDfHfDuAUicg0AAazXI7oj/Cph6/cjNTncA/rpLTXpw=="
+    },
+    "manager": {
+      "name": "pnpm",
+      "version": "11.28.5",
+      "url": "https://registry.npmjs.org/pnpm/-/pnpm-11.28.5.tgz",
+      "integrity": "sha512-SEVj0wtMKtJ8tIqpT/KzAtvOvI/2vyiBbCWJiG4UbOf3bzVPO8GkOOb16XaMMCqgpvet2CMpA81M+BQmy8FNng=="
+    }
+  },
+  "sourceHead": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+  "taskRootCleanup": "removed"
+}

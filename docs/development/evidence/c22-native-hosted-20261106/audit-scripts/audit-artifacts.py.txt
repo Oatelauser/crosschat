@@ -1,0 +1,52 @@
+import sys,json,hashlib,zipfile,stat,re
+from pathlib import Path,PurePosixPath
+
+base=Path(__file__).resolve().parent
+repo=base.parents[2]
+dest=repo/'docs/development/evidence/c22-native-hosted-20261106/artifacts'
+run=int(sys.argv[1]); sha='cba0e71133ae6d4c47af8dba0068ca03c939f679'
+names=['dsh-enhancement-'+x for x in ['win32-x64','linux-x64','darwin-x64','darwin-arm64']]
+raw=json.loads((base/'artifact-list.json').read_text(encoding='utf-8-sig'))
+items=raw.get('artifacts',[]) if isinstance(raw,dict) else raw
+review={'runId':run,'sourceHead':sha,'artifacts':[],'failures':[]}
+for name in names:
+    evidence={'name':name,'members':[]};review['artifacts'].append(evidence)
+    try:
+        matches=[a for a in items if a.get('name')==name]
+        assert len(matches)==1,'Missing or duplicate artifact metadata'
+        meta=matches[0];assert meta.get('expired') is False,'Expired artifact'
+        wr=meta.get('workflow_run') or {}
+        if 'id' in wr: assert wr['id']==run,'Artifact workflow run mismatch'
+        if 'head_sha' in wr: assert wr['head_sha']==sha,'Artifact source mismatch'
+        source=base/'artifacts'/(name+'.zip'); digest=hashlib.sha256(source.read_bytes()).hexdigest()
+        evidence.update(id=meta.get('id'),sha256=digest,zipBytes=source.stat().st_size,officialDigest=meta.get('digest'))
+        if meta.get('digest'): assert meta['digest']=='sha256:'+digest,'Official artifact digest mismatch'
+        assert source.stat().st_size<=128*1024*1024,'ZIP too large'
+        with zipfile.ZipFile(source) as z:
+            infos=z.infolist();assert len(infos)<=1000,'Too many ZIP members'
+            seen=set();total=0
+            for info in infos:
+                p=PurePosixPath(info.filename)
+                assert not p.is_absolute() and '..' not in p.parts and '\\' not in info.filename and ':' not in info.filename,'Unsafe ZIP path'
+                assert info.filename and '\x00' not in info.filename,'Invalid ZIP name'
+                key=str(p).casefold();assert key not in seen,'Duplicate ZIP path';seen.add(key)
+                assert not stat.S_ISLNK(info.external_attr>>16),'ZIP symlink'
+                assert info.file_size<=16*1024*1024,'Oversized ZIP member'
+                total+=info.file_size;assert total<=128*1024*1024,'Expanded ZIP budget exceeded'
+                assert not info.flag_bits&1,'Encrypted ZIP member'
+                evidence['members'].append({'path':info.filename,'bytes':info.file_size,'crc':info.CRC})
+            for info in infos:
+                if info.is_dir(): continue
+                p=PurePosixPath(info.filename)
+                assert p.suffix.lower() in ['.json','.jsonl','.log','.txt'], 'Unexpected artifact member type'
+                data=z.read(info);target=dest/name/Path(*p.parts)
+                target.parent.mkdir(parents=True,exist_ok=True)
+                if target.exists(): assert target.read_bytes()==data,'Existing archived member differs'
+                else: target.write_bytes(data)
+        evidence['status']='passed'
+    except Exception as error:
+        evidence['status']='failed';review['failures'].append(name+': '+str(error))
+dest.parent.mkdir(parents=True,exist_ok=True)
+(dest.parent/'zip-audit.json').write_text(json.dumps(review,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+print(json.dumps({'artifacts':len(review['artifacts']),'failures':review['failures']}))
+sys.exit(bool(review['failures']))

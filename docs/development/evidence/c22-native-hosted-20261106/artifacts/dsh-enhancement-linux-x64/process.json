@@ -1,0 +1,8 @@
+{
+  "code": 0,
+  "signal": null,
+  "timedOut": false,
+  "stdout": "two-node-identities-and-remote-exact-source-isolation\ntwo-independent-terminal-observers-open-the-same-authoritative-star\nexplicit-adoption-refreshes-both-operators-and-isolates-the-other-star\npermanent-membership-survives-two-temporary-window-claims-and-erase-release\ntemporary-window-release-is-exact-and-independent-across-stars\nnative-rename-syncs-both-operators-without-changing-the-other-node\nlost-native-write-receipt-is-uncertain-and-readonly-recovery-never-replays\nlost-broker-receipt-is-uncertain-and-other-operator-observes-one-write\nbridge-loss-and-recovery-stay-local-and-reject-old-confirmations\ncross-operator-confirmation-recovery-and-keyboard-selection-stay-exact\nexact-removal-does-not-change-other-node-or-native-chat\n{\"status\":\"passed\",\"checks\":11,\"outerRemoved\":true,\"unsafe\":false}\n",
+  "stderr": "",
+  "pid": 2537
+}

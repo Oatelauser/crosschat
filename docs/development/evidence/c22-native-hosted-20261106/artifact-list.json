@@ -1,0 +1,85 @@
+{
+  "total_count": 4,
+  "artifacts": [
+    {
+      "id": 13473477805,
+      "node_id": "MDg6QXJ0aWZhY3QxMzQ3MzQ3NzgwNQ==",
+      "name": "dsh-enhancement-win32-x64",
+      "size_in_bytes": 126483,
+      "url": "https://api.github.com/repos/Oatelauser/crosschat/actions/artifacts/13473477805",
+      "archive_download_url": "https://api.github.com/repos/Oatelauser/crosschat/actions/artifacts/13473477805/zip",
+      "expired": false,
+      "digest": "sha256:10180893d787da80eb09a884f7306688f1f0baa1c30d643e20fa7f798cc42242",
+      "created_at": "2026-11-06T02:56:51Z",
+      "updated_at": "2026-11-06T02:56:51Z",
+      "expires_at": "2026-11-27T02:56:49Z",
+      "workflow_run": {
+        "id": 42152027504,
+        "repository_id": 1401574010,
+        "head_repository_id": 1401574010,
+        "head_branch": "main",
+        "head_sha": "cba0e71133ae6d4c47af8dba0068ca03c939f679"
+      }
+    },
+    {
+      "id": 13473226420,
+      "node_id": "MDg6QXJ0aWZhY3QxMzQ3MzIyNjQyMA==",
+      "name": "dsh-enhancement-darwin-arm64",
+      "size_in_bytes": 126446,
+      "url": "https://api.github.com/repos/Oatelauser/crosschat/actions/artifacts/13473226420",
+      "archive_download_url": "https://api.github.com/repos/Oatelauser/crosschat/actions/artifacts/13473226420/zip",
+      "expired": false,
+      "digest": "sha256:55c85828f4c31d222cbb6f36e429f3e6dad533351b2d63176365c3601f6f499b",
+      "created_at": "2026-11-06T02:45:28Z",
+      "updated_at": "2026-11-06T02:45:28Z",
+      "expires_at": "2026-11-27T02:45:27Z",
+      "workflow_run": {
+        "id": 42152027504,
+        "repository_id": 1401574010,
+        "head_repository_id": 1401574010,
+        "head_branch": "main",
+        "head_sha": "cba0e71133ae6d4c47af8dba0068ca03c939f679"
+      }
+    },
+    {
+      "id": 13472971674,
+      "node_id": "MDg6QXJ0aWZhY3QxMzQ3Mjk3MTY3NA==",
+      "name": "dsh-enhancement-darwin-x64",
+      "size_in_bytes": 126077,
+      "url": "https://api.github.com/repos/Oatelauser/crosschat/actions/artifacts/13472971674",
+      "archive_download_url": "https://api.github.com/repos/Oatelauser/crosschat/actions/artifacts/13472971674/zip",
+      "expired": false,
+      "digest": "sha256:6073ec21c7e2560c5dca9b9c48c8563b1776539312084ca7e1ec72357118c72c",
+      "created_at": "2026-11-06T02:48:10Z",
+      "updated_at": "2026-11-06T02:48:10Z",
+      "expires_at": "2026-11-27T02:48:09Z",
+      "workflow_run": {
+        "id": 42152027504,
+        "repository_id": 1401574010,
+        "head_repository_id": 1401574010,
+        "head_branch": "main",
+        "head_sha": "cba0e71133ae6d4c47af8dba0068ca03c939f679"
+      }
+    },
+    {
+      "id": 13472369712,
+      "node_id": "MDg6QXJ0aWZhY3QxMzQ3MjM2OTcxMg==",
+      "name": "dsh-enhancement-linux-x64",
+      "size_in_bytes": 131718,
+      "url": "https://api.github.com/repos/Oatelauser/crosschat/actions/artifacts/13472369712",
+      "archive_download_url": "https://api.github.com/repos/Oatelauser/crosschat/actions/artifacts/13472369712/zip",
+      "expired": false,
+      "digest": "sha256:2039173917b4a88aa673d57cdba3f2a3cee9738baf224a84c761bf839a4ede0c",
+      "created_at": "2026-11-06T02:45:06Z",
+      "updated_at": "2026-11-06T02:45:06Z",
+      "expires_at": "2026-11-27T02:45:05Z",
+      "workflow_run": {
+        "id": 42152027504,
+        "repository_id": 1401574010,
+        "head_repository_id": 1401574010,
+        "head_branch": "main",
+        "head_sha": "cba0e71133ae6d4c47af8dba0068ca03c939f679"
+      }
+    }
+  ]
+}

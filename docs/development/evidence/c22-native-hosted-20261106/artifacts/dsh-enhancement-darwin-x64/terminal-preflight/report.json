@@ -1,0 +1,37 @@
+{
+  "platform": "darwin",
+  "arch": "x64",
+  "node": "v22.23.4",
+  "scope": "Owned POSIX PTY fixtures; no DSH or user session",
+  "status": "passed",
+  "checks": [
+    {
+      "name": "real-tty-unicode-resize-and-normal-exit",
+      "status": "passed"
+    },
+    {
+      "name": "literal-argv-and-split-utf8-output",
+      "status": "passed"
+    },
+    {
+      "name": "nonzero-child-exit-remains-visible",
+      "status": "passed"
+    },
+    {
+      "name": "raw-control-input-restores-and-exits",
+      "status": "passed"
+    },
+    {
+      "name": "dispose-reaps-owned-child-and-is-idempotent",
+      "status": "passed"
+    },
+    {
+      "name": "dispose-escalates-an-owned-term-resistant-child",
+      "status": "passed"
+    },
+    {
+      "name": "startup-failure-does-not-return-a-controller",
+      "status": "passed"
+    }
+  ]
+}

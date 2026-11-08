@@ -1,0 +1,32 @@
+{
+  "pullRequest": 6,
+  "merged": true,
+  "mainHead": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+  "sourceHead": "ae99b507b2ab16075eef42ce3b73b3e044d78d3a",
+  "tree": "c1e8a2f182c9e49349242a10b14973872f8001a8",
+  "ordinaryRun": 42151469051,
+  "status": "passed",
+  "jobs": [
+    {
+      "id": 127675463005,
+      "name": "check (ubuntu-latest)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 127675463241,
+      "name": "check (macos-latest)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 127675463355,
+      "name": "check (windows-latest)",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "nativeRun": 42152027504,
+  "nativeResult": "failed",
+  "releasePerformed": false
+}

@@ -1,0 +1,557 @@
+{
+  "total_count": 4,
+  "jobs": [
+    {
+      "id": 127677277982,
+      "run_id": 42152027504,
+      "workflow_name": "DeepSeek Harness enhancement candidate",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/Oatelauser/crosschat/actions/runs/42152027504",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOU4pSes8AAAAduiinHg",
+      "head_sha": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+      "url": "https://api.github.com/repos/Oatelauser/crosschat/actions/jobs/127677277982",
+      "html_url": "https://github.com/Oatelauser/crosschat/actions/runs/42152027504/job/127677277982",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-06T02:42:32Z",
+      "started_at": "2026-11-06T02:42:34Z",
+      "completed_at": "2026-11-06T02:45:09Z",
+      "name": "probe (ubuntu-24.04, linux, x64)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-06T02:42:35Z",
+          "completed_at": "2026-11-06T02:42:36Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-06T02:42:36Z",
+          "completed_at": "2026-11-06T02:42:38Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-06T02:42:38Z",
+          "completed_at": "2026-11-06T02:42:38Z"
+        },
+        {
+          "name": "Run actions/setup-python@v6",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-06T02:42:38Z",
+          "completed_at": "2026-11-06T02:42:38Z"
+        },
+        {
+          "name": "Verify actual runner target",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-06T02:42:38Z",
+          "completed_at": "2026-11-06T02:42:38Z"
+        },
+        {
+          "name": "Verify native POSIX terminal before installing DSH",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-06T02:42:38Z",
+          "completed_at": "2026-11-06T02:42:40Z"
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-06T02:42:40Z",
+          "completed_at": "2026-11-06T02:43:23Z"
+        },
+        {
+          "name": "Run npm run build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-11-06T02:43:23Z",
+          "completed_at": "2026-11-06T02:43:33Z"
+        },
+        {
+          "name": "Run node scripts/dsh-enhancement-ci.mjs",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-11-06T02:43:33Z",
+          "completed_at": "2026-11-06T02:45:05Z"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-11-06T02:45:05Z",
+          "completed_at": "2026-11-06T02:45:06Z"
+        },
+        {
+          "name": "Post Run actions/setup-python@v6",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18,
+          "started_at": "2026-11-06T02:45:06Z",
+          "completed_at": "2026-11-06T02:45:06Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19,
+          "started_at": "2026-11-06T02:45:06Z",
+          "completed_at": "2026-11-06T02:45:06Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20,
+          "started_at": "2026-11-06T02:45:06Z",
+          "completed_at": "2026-11-06T02:45:07Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21,
+          "started_at": "2026-11-06T02:45:07Z",
+          "completed_at": "2026-11-06T02:45:07Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/Oatelauser/crosschat/check-runs/127677277982",
+      "labels": [
+        "ubuntu-24.04"
+      ],
+      "runner_id": 1000001316,
+      "runner_name": "GitHub Actions 1000001316",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 127677278252,
+      "run_id": 42152027504,
+      "workflow_name": "DeepSeek Harness enhancement candidate",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/Oatelauser/crosschat/actions/runs/42152027504",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOU4pSes8AAAAduiioLA",
+      "head_sha": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+      "url": "https://api.github.com/repos/Oatelauser/crosschat/actions/jobs/127677278252",
+      "html_url": "https://github.com/Oatelauser/crosschat/actions/runs/42152027504/job/127677278252",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-11-06T02:42:32Z",
+      "started_at": "2026-11-06T02:42:35Z",
+      "completed_at": "2026-11-06T02:45:32Z",
+      "name": "probe (macos-15, darwin, arm64)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-06T02:42:35Z",
+          "completed_at": "2026-11-06T02:42:37Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-06T02:42:37Z",
+          "completed_at": "2026-11-06T02:42:39Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-06T02:42:39Z",
+          "completed_at": "2026-11-06T02:42:41Z"
+        },
+        {
+          "name": "Run actions/setup-python@v6",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-06T02:42:41Z",
+          "completed_at": "2026-11-06T02:42:41Z"
+        },
+        {
+          "name": "Verify actual runner target",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-06T02:42:41Z",
+          "completed_at": "2026-11-06T02:42:41Z"
+        },
+        {
+          "name": "Verify native POSIX terminal before installing DSH",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-06T02:42:41Z",
+          "completed_at": "2026-11-06T02:42:43Z"
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-06T02:42:43Z",
+          "completed_at": "2026-11-06T02:43:25Z"
+        },
+        {
+          "name": "Run npm run build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-11-06T02:43:25Z",
+          "completed_at": "2026-11-06T02:43:36Z"
+        },
+        {
+          "name": "Run node scripts/dsh-enhancement-ci.mjs",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 9,
+          "started_at": "2026-11-06T02:43:36Z",
+          "completed_at": "2026-11-06T02:45:26Z"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-11-06T02:45:26Z",
+          "completed_at": "2026-11-06T02:45:28Z"
+        },
+        {
+          "name": "Post Run actions/setup-python@v6",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 18,
+          "started_at": "2026-11-06T02:45:28Z",
+          "completed_at": "2026-11-06T02:45:28Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 19,
+          "started_at": "2026-11-06T02:45:28Z",
+          "completed_at": "2026-11-06T02:45:28Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20,
+          "started_at": "2026-11-06T02:45:28Z",
+          "completed_at": "2026-11-06T02:45:29Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21,
+          "started_at": "2026-11-06T02:45:29Z",
+          "completed_at": "2026-11-06T02:45:30Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/Oatelauser/crosschat/check-runs/127677278252",
+      "labels": [
+        "macos-15"
+      ],
+      "runner_id": 1000001318,
+      "runner_name": "GitHub Actions 1000001318",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 127677278286,
+      "run_id": 42152027504,
+      "workflow_name": "DeepSeek Harness enhancement candidate",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/Oatelauser/crosschat/actions/runs/42152027504",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOU4pSes8AAAAduiioTg",
+      "head_sha": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+      "url": "https://api.github.com/repos/Oatelauser/crosschat/actions/jobs/127677278286",
+      "html_url": "https://github.com/Oatelauser/crosschat/actions/runs/42152027504/job/127677278286",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-11-06T02:42:32Z",
+      "started_at": "2026-11-06T02:42:35Z",
+      "completed_at": "2026-11-06T02:56:55Z",
+      "name": "probe (windows-latest, win32, x64)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-06T02:42:36Z",
+          "completed_at": "2026-11-06T02:42:37Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-06T02:42:37Z",
+          "completed_at": "2026-11-06T02:42:43Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-06T02:42:43Z",
+          "completed_at": "2026-11-06T02:43:12Z"
+        },
+        {
+          "name": "Run actions/setup-python@v6",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 4,
+          "started_at": "2026-11-06T02:43:12Z",
+          "completed_at": "2026-11-06T02:43:12Z"
+        },
+        {
+          "name": "Verify actual runner target",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-06T02:43:12Z",
+          "completed_at": "2026-11-06T02:43:12Z"
+        },
+        {
+          "name": "Verify native POSIX terminal before installing DSH",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 6,
+          "started_at": "2026-11-06T02:43:12Z",
+          "completed_at": "2026-11-06T02:43:12Z"
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-06T02:43:12Z",
+          "completed_at": "2026-11-06T02:44:21Z"
+        },
+        {
+          "name": "Run npm run build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-11-06T02:44:21Z",
+          "completed_at": "2026-11-06T02:44:33Z"
+        },
+        {
+          "name": "Run node scripts/dsh-enhancement-ci.mjs",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 9,
+          "started_at": "2026-11-06T02:44:33Z",
+          "completed_at": "2026-11-06T02:56:49Z"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-11-06T02:56:49Z",
+          "completed_at": "2026-11-06T02:56:51Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 19,
+          "started_at": "2026-11-06T02:56:51Z",
+          "completed_at": "2026-11-06T02:56:51Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20,
+          "started_at": "2026-11-06T02:56:51Z",
+          "completed_at": "2026-11-06T02:56:53Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21,
+          "started_at": "2026-11-06T02:56:53Z",
+          "completed_at": "2026-11-06T02:56:53Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/Oatelauser/crosschat/check-runs/127677278286",
+      "labels": [
+        "windows-latest"
+      ],
+      "runner_id": 1000001317,
+      "runner_name": "GitHub Actions 1000001317",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 127677278607,
+      "run_id": 42152027504,
+      "workflow_name": "DeepSeek Harness enhancement candidate",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/Oatelauser/crosschat/actions/runs/42152027504",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOU4pSes8AAAAduiipjw",
+      "head_sha": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+      "url": "https://api.github.com/repos/Oatelauser/crosschat/actions/jobs/127677278607",
+      "html_url": "https://github.com/Oatelauser/crosschat/actions/runs/42152027504/job/127677278607",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-11-06T02:42:32Z",
+      "started_at": "2026-11-06T02:42:36Z",
+      "completed_at": "2026-11-06T02:48:13Z",
+      "name": "probe (macos-15-intel, darwin, x64)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-06T02:42:36Z",
+          "completed_at": "2026-11-06T02:42:38Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-06T02:42:38Z",
+          "completed_at": "2026-11-06T02:42:43Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-06T02:42:43Z",
+          "completed_at": "2026-11-06T02:43:00Z"
+        },
+        {
+          "name": "Run actions/setup-python@v6",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-06T02:43:00Z",
+          "completed_at": "2026-11-06T02:43:00Z"
+        },
+        {
+          "name": "Verify actual runner target",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-06T02:43:00Z",
+          "completed_at": "2026-11-06T02:43:00Z"
+        },
+        {
+          "name": "Verify native POSIX terminal before installing DSH",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-06T02:43:00Z",
+          "completed_at": "2026-11-06T02:43:04Z"
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-06T02:43:04Z",
+          "completed_at": "2026-11-06T02:44:21Z"
+        },
+        {
+          "name": "Run npm run build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-11-06T02:44:21Z",
+          "completed_at": "2026-11-06T02:44:56Z"
+        },
+        {
+          "name": "Run node scripts/dsh-enhancement-ci.mjs",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 9,
+          "started_at": "2026-11-06T02:44:56Z",
+          "completed_at": "2026-11-06T02:48:09Z"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-11-06T02:48:09Z",
+          "completed_at": "2026-11-06T02:48:10Z"
+        },
+        {
+          "name": "Post Run actions/setup-python@v6",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 18,
+          "started_at": "2026-11-06T02:48:10Z",
+          "completed_at": "2026-11-06T02:48:10Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 19,
+          "started_at": "2026-11-06T02:48:10Z",
+          "completed_at": "2026-11-06T02:48:10Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20,
+          "started_at": "2026-11-06T02:48:10Z",
+          "completed_at": "2026-11-06T02:48:11Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21,
+          "started_at": "2026-11-06T02:48:11Z",
+          "completed_at": "2026-11-06T02:48:11Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/Oatelauser/crosschat/check-runs/127677278607",
+      "labels": [
+        "macos-15-intel"
+      ],
+      "runner_id": 1000001319,
+      "runner_name": "GitHub Actions 1000001319",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    }
+  ]
+}

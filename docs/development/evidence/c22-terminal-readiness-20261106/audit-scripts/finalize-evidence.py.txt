@@ -1,0 +1,204 @@
+import base64
+import hashlib
+import json
+import pathlib
+import re
+import shutil
+import zipfile
+
+PRODUCT = pathlib.Path('D:/workspace/CC/cc-dsh-enhancement-20261105')
+AUTHORITY = pathlib.Path('D:/workspace/CC/multichat')
+DOC = pathlib.Path('docs/development')
+EVIDENCE = DOC / 'evidence'
+MAIN = 'cba0e71133ae6d4c47af8dba0068ca03c939f679'
+FIX = 'fa34b2204bb5fa7d745db527f779fd5a58b8a69c'
+
+
+def read(path):
+    return json.loads(path.read_text(encoding='utf-8-sig'))
+
+
+def write(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+
+def copy_evidence(folder):
+    source = AUTHORITY / EVIDENCE / folder
+    target = PRODUCT / EVIDENCE / folder
+    for path in source.rglob('*'):
+        if not path.is_file():
+            continue
+        dest = target / path.relative_to(source)
+        if dest.exists():
+            assert dest.read_bytes() == path.read_bytes(), str(dest)
+        else:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, dest)
+
+
+for folder in ('c22-merge-20261106', 'c22-native-hosted-20261106'):
+    copy_evidence(folder)
+
+native = PRODUCT / EVIDENCE / 'c22-native-hosted-20261106'
+run = read(native / 'run.json')
+assert (run['id'], run['head_sha'], run['event'], run['run_attempt'], run['status'], run['conclusion']) == (
+    42152027504, MAIN, 'workflow_dispatch', 1, 'completed', 'failure')
+jobs = read(native / 'jobs.json')['jobs']
+assert len(jobs) == 4 and sum(j['conclusion'] == 'success' for j in jobs) == 1
+assert all(j['status'] == 'completed' for j in jobs)
+zip_audit = read(native / 'zip-audit.json')
+assert zip_audit['failures'] == [] and len(zip_audit['artifacts']) == 4
+for item in zip_audit['artifacts']:
+    path = native / 'archives' / (item['name'] + '.zip')
+    assert path.stat().st_size == item['zipBytes']
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == item['sha256']
+    assert item['officialDigest'] == 'sha256:' + item['sha256']
+    with zipfile.ZipFile(path) as archive:
+        assert archive.testzip() is None
+        assert len(archive.infolist()) == len(item['members'])
+audit = read(native / 'json-audit.json')
+assert audit['status'] == 'failed' and audit['completedChecks'] == 38 and audit['totalChecks'] == 11
+assert len(audit['targets']) == 4 and all(t['released'] for t in audit['targets'])
+
+ansi = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
+diagnosis = []
+for target, ordinal, gap in (('darwin-arm64', 1, 7), ('darwin-x64', 1, 59), ('win32-x64', 2, 63)):
+    directory = native / 'artifacts' / ('dsh-enhancement-' + target)
+    rows = [json.loads(line) for line in (directory / 'terminal-0.jsonl').read_text(encoding='utf-8-sig').splitlines()]
+    writes = [(i, e, base64.b64decode(e['data']).decode('utf-8')) for i, e in enumerate(rows)
+              if e.get('direction') == 'driver' and e.get('op') == 'write']
+    keys = [x for x in writes if x[2] == 'e']
+    index, event, _ = keys[-1]
+    previous = [x for x in writes if x[0] < index][-1]
+    following = next(x for x in writes if x[0] > index)
+
+    def output(first, last):
+        return ansi.sub('', ''.join(base64.b64decode(x['data']).decode('utf-8', errors='replace')
+                                   for x in rows[first:last] if x.get('direction') == 'host' and x.get('event') == 'output'))
+
+    before = output(0, index)
+    after = output(index, following[0])
+    last_action_at = before.rfind('<e> 原生改名')
+    last_action = before[last_action_at:last_action_at + len('<e> 原生改名 ×')]
+    app = [json.loads(line) for line in (directory / 'terminal-0-application.jsonl').read_text(encoding='utf-8-sig').splitlines()]
+    previews = [x for x in app if x.get('event') == 'preview' and x.get('action') == 'rename-session']
+    mutation_starts = sum(x.get('event') == 'mutation-start' for x in app)
+    assert len(keys) == ordinal and previous[2] == 'y' and event['at'] - previous[1]['at'] == gap
+    assert last_action == '<e> 原生改名 ×'
+    assert '正在核实所选会话的原生操作能力' in after and '原生会话新名称' not in after
+    assert mutation_starts == 0 and following[2] == '\x1b'
+    assert len(previews) == (2 if target == 'win32-x64' else 0)
+    diagnosis.append({
+        'target': target, 'failedFormOrdinal': ordinal, 'copyToKeyMs': gap,
+        'copyAt': previous[1]['at'], 'keyAt': event['at'], 'cleanupEscapeAt': following[1]['at'],
+        'lastRenderedAction': last_action, 'capabilityCheckingNoticeAfterKey': True,
+        'freshFormBeforeTimeoutCleanup': False, 'terminalRenamePreviewCount': len(previews),
+        'terminalMutationStartCount': mutation_starts,
+        'log': 'artifacts/dsh-enhancement-' + target + '/terminal-0.jsonl',
+    })
+write(native / 'readiness-diagnosis.json', {'runId': 42152027504, 'sourceHead': MAIN, 'targets': diagnosis})
+write(native / 'validation.json', {
+    'sourceHead': MAIN, 'runId': 42152027504, 'status': 'failed', 'runAttempt': 1,
+    'evidenceAudit': 'passed', 'completedChecks': 38, 'fullyPassedTargetChecks': 11,
+    'targets': [{k: v for k, v in t.items() if k != 'error'} for t in audit['targets']],
+    'artifacts': [{k: v for k, v in a.items() if k != 'members'} for a in zip_audit['artifacts']],
+    'allResourcesReleased': True, 'retryPerformed': False,
+    'evidence': ['run.json', 'jobs.json', 'zip-audit.json', 'json-audit.json', 'readiness-diagnosis.json'],
+    'limits': ['Same-host logical nodes', 'Official npm/Web rc.5 only', 'No browser/Desktop/real model', 'No repair hosted revalidation'],
+})
+
+merge = PRODUCT / EVIDENCE / 'c22-merge-20261106'
+merged = read(merge / 'merged.json')
+assert merged['pr']['merged'] and merged['pr']['state'] == 'closed' and not merged['pr']['draft']
+assert merged['ref']['object']['sha'] == MAIN and merged['commit']['sha'] == MAIN
+assert [p['sha'] for p in merged['commit']['parents']] == [
+    '7229efb17cb047205eb79b9df15f27edd71f4231', 'ae99b507b2ab16075eef42ce3b73b3e044d78d3a']
+assert merged['commit']['tree']['sha'] == merged['sourceTree'] == 'c1e8a2f182c9e49349242a10b14973872f8001a8'
+main_run = read(merge / 'main-run.json')
+assert (main_run['id'], main_run['head_sha'], main_run['conclusion']) == (42151469051, MAIN, 'success')
+main_jobs = read(merge / 'main-jobs.json')['jobs']
+assert len(main_jobs) == 3 and all(j['status'] == 'completed' and j['conclusion'] == 'success' for j in main_jobs)
+write(merge / 'validation.json', {
+    'pullRequest': 6, 'merged': True, 'mainHead': MAIN, 'sourceHead': merged['pr']['head']['sha'],
+    'tree': merged['sourceTree'], 'ordinaryRun': 42151469051, 'status': 'passed',
+    'jobs': [{k: j[k] for k in ('id', 'name', 'status', 'conclusion')} for j in main_jobs],
+    'nativeRun': 42152027504, 'nativeResult': 'failed', 'releasePerformed': False,
+})
+
+repair = PRODUCT / EVIDENCE / 'c22-terminal-readiness-20261106'
+attempt = read(repair / 'local-native-first/attempt.json')
+assert (attempt['status'], attempt['category'], attempt['released']) == ('passed', None, True)
+report = attempt['report']
+assert report['sourceHead'] == FIX and report['productHead'] == FIX
+assert report['node'] == 'v22.23.4' and report['platform'] == 'win32' and report['arch'] == 'x64'
+assert len(report['checks']) == 11 and all(c['status'] == 'passed' for c in report['checks'])
+assert report['outerRemoved'] and not report['unsafe'] and not pathlib.Path(report['root']).exists()
+assert attempt['reusedDependency'] and not attempt['installationLifecycleTested']
+process = read(repair / 'local-native-first/process.json')
+assert process['code'] == 0 and process['signal'] is None and not process['timedOut']
+full_log = (repair / 'final-full-check.txt').read_text(encoding='utf-8-sig')
+assert re.search(r'Tests\s+2909 passed \| 11 skipped', full_log)
+assert re.search(r'Test Files\s+247 passed \| 3 skipped', full_log)
+assert '206 modules, 699 edges; no cycles or boundary violations.' in full_log
+assert '> eslint src test' in full_log and '> tsc' in full_log
+write(repair / 'validation.json', {
+    'codeHead': FIX, 'baseMain': MAIN, 'branch': 'codex/dsh-enhancement-terminal-readiness-20261106',
+    'red': {'commit': '5f7b690', 'failed': 2, 'passed': 1, 'log': 'terminal-ready-red.txt'},
+    'green': {'passed': 3, 'log': 'terminal-ready-green.txt'},
+    'targeted': {'passed': 36, 'files': 5, 'log': 'targeted-green.txt'},
+    'fullCheck': {'status': 'passed', 'node': '22.23.4', 'passed': 2909, 'skipped': 11,
+                  'filesPassed': 247, 'filesSkipped': 3, 'modules': 206, 'edges': 699,
+                  'log': 'final-full-check.txt', 'exitCode': None,
+                  'exitCodeNote': 'Completed raw log confirms every phase and final test summary; original tool session unavailable after context transition.'},
+    'localNative': {'status': 'passed', 'runId': attempt['runId'], 'checks': 11, 'sourceHead': FIX,
+                    'platform': 'win32', 'arch': 'x64', 'released': True, 'unsafe': False,
+                    'outerRemoved': True, 'reusedDependency': True, 'installationLifecycleTested': False},
+    'rootReview': 'No actionable finding in readiness/disabled/old output/single-key boundaries at owned 140-column fixture scope.',
+    'additionalSubagentReviews': 'Both attempts blocked by tool authentication; not counted as independent reviews.',
+    'hostedRevalidation': 'not-run', 'pushed': False, 'newPullRequest': False, 'newNativeRun': False,
+})
+
+# Evidence is copied byte-for-byte; never read or stage unrelated user files.
+for folder in ('c22-merge-20261106', 'c22-native-hosted-20261106', 'c22-terminal-readiness-20261106'):
+    shutil.copytree(PRODUCT / EVIDENCE / folder, AUTHORITY / EVIDENCE / folder, dirs_exist_ok=True)
+shutil.copy2(PRODUCT / DOC / 'dsh-enhancement-terminal-readiness-20261106.md', AUTHORITY / DOC / 'dsh-enhancement-terminal-readiness-20261106.md')
+
+latest = '2026-11-08整理：用户第二次选择A的范围已履行，[PR #6合入及main普通CI](evidence/c22-merge-20261106/review.md)通过，main为cba0e71。[一次原生四目标42152027504](evidence/c22-native-hosted-20261106/review.md)已结束：Linux11/11通过并移出活动；Windows、macOS Intel/ARM各9/11后在终端表单就绪处失败，四目标资源均正常回收。修复代码fa34b22已本地完成，3项RED/GREEN、36定向、Windows正式11项与完整2909通过/11原有跳过已验，见[修复候选](dsh-enhancement-terminal-readiness-20261106.md)。修复分支未推送，托管修复/另三目标仍保留；未再触发原生Actions、未改定时或发布。下一外部步骤为具体修复分支推送/草稿PR及普通CI决定，旧授权不重复询问。25父项/11CI索引及原负责人保持。'
+for name in ('tool-compatibility-ci-tasks.md', 'dsh-completion-plan-20261103.md'):
+    path = AUTHORITY / DOC / name
+    text = path.read_text(encoding='utf-8-sig')
+    title = next(line for line in text.splitlines() if line.startswith('# '))
+    assert latest not in text
+    text = text.replace(title + '\n', title + '\n\n' + latest + '\n\n以下早期阶段记录按各自时点保留；其中旧暂停、草稿、未合入或未运行状态由上述最新结果接续。\n', 1)
+    if name.startswith('tool-'):
+        lines = text.splitlines()
+        for i, line in enumerate(lines):
+            if '| C21 |' in line:
+                parts = line.split(' | ')
+                parts[-1] = 'DSH同ID独立来源隔离及Windows原生/回执丢失/多端键盘组合已本地验收并随PR #6合入。首轮增强托管Linux11/11通过；另三目标终端就绪失败保留。工装修复fa34b22：3运行回归、36定向、Windows正式11项及完整2909/11通过，见[修复](dsh-enhancement-terminal-readiness-20261106.md)；未推送/托管复验。未知Provider及其它入口/平台组合继续保留 |'
+                lines[i] = ' | '.join(parts)
+            elif '| C22 |' in line:
+                parts = line.split(' | ')
+                parts[-1] = 'Windows rc.5本地11项与原九项切片已验收并移出活动；工装随PR #6合入main cba0e71，普通三平台CI逐job通过。一次[四目标原生首验](evidence/c22-native-hosted-20261106/review.md)仅Linux11/11通过并移出活动，Windows/macOS Intel/ARM各9/11后失败，四目标正常回收。两处终端表单就绪修复fa34b22已本地验收，完整2909/11，未推送；修复托管与其余三目标、其它版本/Desktop/工具仍保留，不计物理跨机通过 |'
+                lines[i] = ' | '.join(parts)
+        text = '\n'.join(lines) + '\n'
+    path.write_text(text, encoding='utf-8')
+
+candidate = AUTHORITY / DOC / 'dsh-enhancement-hosted-candidate-20261106.md'
+text = candidate.read_text(encoding='utf-8-sig')
+title = text.splitlines()[0]
+text = text.replace(title + '\n', title + '\n\n' + latest + '\n\n以下为初始候选及当时外部决定的历史快照，原始证据保留；后续合入、首验失败和修复以上述记录为准。\n', 1)
+candidate.write_text(text, encoding='utf-8')
+for name in ('dsh-enhancement-hosted-candidate-20261106.md', 'dsh-enhancement-validation-20261106.md'):
+    if name.startswith('dsh-enhancement-validation'):
+        path = AUTHORITY / DOC / name
+        text = path.read_text(encoding='utf-8-sig')
+        title = text.splitlines()[0]
+        text = text.replace(title + '\n', title + '\n\n后续：本地增量已随PR #6合入；首轮托管与终端就绪修复见[当前记录](dsh-enhancement-terminal-readiness-20261106.md)。下文保留原本地增量时点的范围、结果与授权。\n', 1)
+        path.write_text(text, encoding='utf-8')
+    shutil.copy2(AUTHORITY / DOC / name, PRODUCT / DOC / name)
+
+print(json.dumps({'main': MAIN, 'nativeRun': run['id'], 'nativeResult': run['conclusion'], 'localFix': FIX,
+                  'fullPassed': 2909, 'localNativePassed': 11, 'targetsDiagnosed': len(diagnosis),
+                  'copiesSynchronized': True}, ensure_ascii=False))

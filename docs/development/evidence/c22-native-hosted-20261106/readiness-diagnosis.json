@@ -1,0 +1,48 @@
+{
+  "runId": 42152027504,
+  "sourceHead": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+  "targets": [
+    {
+      "target": "darwin-arm64",
+      "failedFormOrdinal": 1,
+      "copyToKeyMs": 7,
+      "copyAt": 1793933108932,
+      "keyAt": 1793933108939,
+      "cleanupEscapeAt": 1793933118949,
+      "lastRenderedAction": "<e> 原生改名 ×",
+      "capabilityCheckingNoticeAfterKey": true,
+      "freshFormBeforeTimeoutCleanup": false,
+      "terminalRenamePreviewCount": 0,
+      "terminalMutationStartCount": 0,
+      "log": "artifacts/dsh-enhancement-darwin-arm64/terminal-0.jsonl"
+    },
+    {
+      "target": "darwin-x64",
+      "failedFormOrdinal": 1,
+      "copyToKeyMs": 59,
+      "copyAt": 1793933257952,
+      "keyAt": 1793933258011,
+      "cleanupEscapeAt": 1793933268017,
+      "lastRenderedAction": "<e> 原生改名 ×",
+      "capabilityCheckingNoticeAfterKey": true,
+      "freshFormBeforeTimeoutCleanup": false,
+      "terminalRenamePreviewCount": 0,
+      "terminalMutationStartCount": 0,
+      "log": "artifacts/dsh-enhancement-darwin-x64/terminal-0.jsonl"
+    },
+    {
+      "target": "win32-x64",
+      "failedFormOrdinal": 2,
+      "copyToKeyMs": 63,
+      "copyAt": 1793933739606,
+      "keyAt": 1793933739669,
+      "cleanupEscapeAt": 1793933749672,
+      "lastRenderedAction": "<e> 原生改名 ×",
+      "capabilityCheckingNoticeAfterKey": true,
+      "freshFormBeforeTimeoutCleanup": false,
+      "terminalRenamePreviewCount": 2,
+      "terminalMutationStartCount": 0,
+      "log": "artifacts/dsh-enhancement-win32-x64/terminal-0.jsonl"
+    }
+  ]
+}

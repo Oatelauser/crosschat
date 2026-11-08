@@ -1,0 +1,52 @@
+{
+  "codeHead": "fa34b2204bb5fa7d745db527f779fd5a58b8a69c",
+  "baseMain": "cba0e71133ae6d4c47af8dba0068ca03c939f679",
+  "branch": "codex/dsh-enhancement-terminal-readiness-20261106",
+  "red": {
+    "commit": "5f7b690",
+    "failed": 2,
+    "passed": 1,
+    "log": "terminal-ready-red.txt"
+  },
+  "green": {
+    "passed": 3,
+    "log": "terminal-ready-green.txt"
+  },
+  "targeted": {
+    "passed": 36,
+    "files": 5,
+    "log": "targeted-green.txt"
+  },
+  "fullCheck": {
+    "status": "passed",
+    "node": "22.23.4",
+    "passed": 2909,
+    "skipped": 11,
+    "filesPassed": 247,
+    "filesSkipped": 3,
+    "modules": 206,
+    "edges": 699,
+    "log": "final-full-check.txt",
+    "exitCode": null,
+    "exitCodeNote": "Completed raw log confirms every phase and final test summary; original tool session unavailable after context transition."
+  },
+  "localNative": {
+    "status": "passed",
+    "runId": "9913e2ac-7681-40c9-a84c-d1dab7691f93",
+    "checks": 11,
+    "sourceHead": "fa34b2204bb5fa7d745db527f779fd5a58b8a69c",
+    "platform": "win32",
+    "arch": "x64",
+    "released": true,
+    "unsafe": false,
+    "outerRemoved": true,
+    "reusedDependency": true,
+    "installationLifecycleTested": false
+  },
+  "rootReview": "No actionable finding in readiness/disabled/old output/single-key boundaries at owned 140-column fixture scope.",
+  "additionalSubagentReviews": "Both attempts blocked by tool authentication; not counted as independent reviews.",
+  "hostedRevalidation": "not-run",
+  "pushed": false,
+  "newPullRequest": false,
+  "newNativeRun": false
+}

@@ -1,0 +1,18 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test test/dsh-enhancement-terminal-ready.test.ts test/dsh-enhancement-ci.test.ts test/dsh-enhancement-contract.test.ts test/dsh-enhancement-platform.test.ts test/dsh-enhancement-workflow.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-dsh-enhancement-20261105
+
+ ✓ test/dsh-enhancement-ci.test.ts (10 tests) 31ms
+ ✓ test/dsh-enhancement-contract.test.ts (17 tests) 6ms
+ ✓ test/dsh-enhancement-platform.test.ts (4 tests) 12ms
+ ✓ test/dsh-enhancement-workflow.test.ts (2 tests) 6ms
+ ✓ test/dsh-enhancement-terminal-ready.test.ts (3 tests) 4ms
+
+ Test Files  5 passed (5)
+      Tests  36 passed (36)
+   Start at  10:56:49
+   Duration  1.03s (transform 458ms, setup 0ms, collect 761ms, tests 58ms, environment 1ms, prepare 372ms)
+

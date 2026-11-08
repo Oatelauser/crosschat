@@ -1,0 +1,279 @@
+﻿2026-11-06T02:42:35.5156826Z Current runner version: '2.338.2'
+2026-11-06T02:42:35.5190821Z ##[group]Runner Image Provisioner
+2026-11-06T02:42:35.5192279Z Hosted Compute Agent
+2026-11-06T02:42:35.5193292Z Version: 20261028.624
+2026-11-06T02:42:35.5194386Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-06T02:42:35.5195639Z Build Date: 2026-10-28T21:51:42Z
+2026-11-06T02:42:35.5196838Z Worker ID: {e1f4c244-beb7-4d6d-9b5f-16b99ad0e393}
+2026-11-06T02:42:35.5197996Z Region: northcentralus
+2026-11-06T02:42:35.5199054Z Cloud: Azure
+2026-11-06T02:42:35.5199920Z ##[endgroup]
+2026-11-06T02:42:35.5202325Z ##[group]Operating System
+2026-11-06T02:42:35.5203440Z Ubuntu
+2026-11-06T02:42:35.5204323Z 24.04.5
+2026-11-06T02:42:35.5205240Z LTS
+2026-11-06T02:42:35.5206239Z ##[endgroup]
+2026-11-06T02:42:35.5207190Z ##[group]Runner Image
+2026-11-06T02:42:35.5208231Z Image: ubuntu-24.04
+2026-11-06T02:42:35.5209138Z Version: 20261101.360.1
+2026-11-06T02:42:35.5211327Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261101.360/images/ubuntu/Ubuntu2404-Readme.md
+2026-11-06T02:42:35.5214904Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261101.360
+2026-11-06T02:42:35.5216594Z ##[endgroup]
+2026-11-06T02:42:35.5218472Z ##[group]GITHUB_TOKEN Permissions
+2026-11-06T02:42:35.5221412Z Contents: read
+2026-11-06T02:42:35.5222610Z Metadata: read
+2026-11-06T02:42:35.5223711Z ##[endgroup]
+2026-11-06T02:42:35.5226227Z Secret source: Actions
+2026-11-06T02:42:35.5227870Z Cache mode: write
+2026-11-06T02:42:35.5229029Z Prepare workflow directory
+2026-11-06T02:42:35.5621314Z Prepare all required actions
+2026-11-06T02:42:35.5688598Z Getting action download info
+2026-11-06T02:42:35.8536566Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-11-06T02:42:35.9896365Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-11-06T02:42:36.0841358Z Download action repository 'actions/setup-python@v6' (SHA:ece7cb06caefa5fff74198d8649806c4678c61a1)
+2026-11-06T02:42:36.2319421Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-06T02:42:36.4863493Z Complete job name: probe (ubuntu-24.04, linux, x64)
+2026-11-06T02:42:36.5887657Z ##[group]Run actions/checkout@v4
+2026-11-06T02:42:36.5888972Z with:
+2026-11-06T02:42:36.5889802Z   repository: Oatelauser/crosschat
+2026-11-06T02:42:36.5899087Z   token: ***
+2026-11-06T02:42:36.5899918Z   ssh-strict: true
+2026-11-06T02:42:36.5900734Z   ssh-user: git
+2026-11-06T02:42:36.5901703Z   persist-credentials: true
+2026-11-06T02:42:36.5902628Z   clean: true
+2026-11-06T02:42:36.5903468Z   sparse-checkout-cone-mode: true
+2026-11-06T02:42:36.5904457Z   fetch-depth: 1
+2026-11-06T02:42:36.5905270Z   fetch-tags: false
+2026-11-06T02:42:36.5906103Z   show-progress: true
+2026-11-06T02:42:36.5906936Z   lfs: false
+2026-11-06T02:42:36.5907729Z   submodules: false
+2026-11-06T02:42:36.5908595Z   set-safe-directory: true
+2026-11-06T02:42:36.5909573Z   allow-unsafe-pr-checkout: false
+2026-11-06T02:42:36.5910855Z ##[endgroup]
+2026-11-06T02:42:36.8073758Z Syncing repository: Oatelauser/crosschat
+2026-11-06T02:42:36.8077324Z ##[group]Getting Git version info
+2026-11-06T02:42:36.8079252Z Working directory is '/home/runner/work/crosschat/crosschat'
+2026-11-06T02:42:36.8081844Z [command]/usr/bin/git version
+2026-11-06T02:42:36.8116456Z git version 2.56.0
+2026-11-06T02:42:36.8137469Z ##[endgroup]
+2026-11-06T02:42:36.8152691Z Temporarily overriding HOME='/home/runner/work/_temp/bb864f0f-782d-4710-9a84-853acd680b8a' before making global git config changes
+2026-11-06T02:42:36.8157740Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-06T02:42:36.8161305Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/crosschat/crosschat
+2026-11-06T02:42:36.8203203Z Deleting the contents of '/home/runner/work/crosschat/crosschat'
+2026-11-06T02:42:36.8208808Z ##[group]Initializing the repository
+2026-11-06T02:42:36.8212620Z [command]/usr/bin/git init /home/runner/work/crosschat/crosschat
+2026-11-06T02:42:36.8294571Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-06T02:42:36.8296590Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-06T02:42:36.8298651Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-06T02:42:36.8300211Z hint: call:
+2026-11-06T02:42:36.8301043Z hint:
+2026-11-06T02:42:36.8302402Z hint: 	git config --global init.defaultBranch <name>
+2026-11-06T02:42:36.8303885Z hint:
+2026-11-06T02:42:36.8305447Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-06T02:42:36.8307495Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-06T02:42:36.8309138Z hint:
+2026-11-06T02:42:36.8310088Z hint: 	git branch -m <name>
+2026-11-06T02:42:36.8311698Z hint:
+2026-11-06T02:42:36.8313742Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-06T02:42:36.8317011Z Initialized empty Git repository in /home/runner/work/crosschat/crosschat/.git/
+2026-11-06T02:42:36.8324899Z [command]/usr/bin/git remote add origin https://github.com/Oatelauser/crosschat
+2026-11-06T02:42:36.8394960Z ##[endgroup]
+2026-11-06T02:42:36.8397176Z ##[group]Disabling automatic garbage collection
+2026-11-06T02:42:36.8399169Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-06T02:42:36.8434092Z ##[endgroup]
+2026-11-06T02:42:36.8436160Z ##[group]Setting up auth
+2026-11-06T02:42:36.8440583Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-06T02:42:36.8479228Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-06T02:42:36.8852072Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-06T02:42:36.8896337Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-06T02:42:36.9176454Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-06T02:42:36.9224049Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-06T02:42:36.9482829Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-06T02:42:36.9533877Z ##[endgroup]
+2026-11-06T02:42:36.9535441Z ##[group]Fetching the repository
+2026-11-06T02:42:36.9547352Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +cba0e71133ae6d4c47af8dba0068ca03c939f679:refs/remotes/origin/main
+2026-11-06T02:42:37.8918551Z From https://github.com/Oatelauser/crosschat
+2026-11-06T02:42:37.8932930Z  * [new ref]         cba0e71133ae6d4c47af8dba0068ca03c939f679 -> origin/main
+2026-11-06T02:42:37.8935262Z ##[endgroup]
+2026-11-06T02:42:37.8936075Z ##[group]Determining the checkout info
+2026-11-06T02:42:37.8936953Z ##[endgroup]
+2026-11-06T02:42:37.8953454Z [command]/usr/bin/git sparse-checkout disable
+2026-11-06T02:42:37.9003643Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-06T02:42:37.9052405Z ##[group]Checking out the ref
+2026-11-06T02:42:37.9059654Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-11-06T02:42:38.0684359Z Switched to a new branch 'main'
+2026-11-06T02:42:38.0690811Z branch 'main' set up to track 'origin/main'.
+2026-11-06T02:42:38.0706024Z ##[endgroup]
+2026-11-06T02:42:38.0765730Z [command]/usr/bin/git log -1 --format=%H
+2026-11-06T02:42:38.0804654Z cba0e71133ae6d4c47af8dba0068ca03c939f679
+2026-11-06T02:42:38.1188980Z ##[group]Run actions/setup-node@v4
+2026-11-06T02:42:38.1189346Z with:
+2026-11-06T02:42:38.1189617Z   node-version: 22.23.4
+2026-11-06T02:42:38.1190137Z   architecture: x64
+2026-11-06T02:42:38.1190414Z   always-auth: false
+2026-11-06T02:42:38.1190700Z   check-latest: false
+2026-11-06T02:42:38.1193567Z   token: ***
+2026-11-06T02:42:38.1193849Z ##[endgroup]
+2026-11-06T02:42:38.2617008Z Found in cache @ /opt/hostedtoolcache/node/22.23.4/x64
+2026-11-06T02:42:38.2621255Z (node:2319) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-06T02:42:38.2622375Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-06T02:42:38.2623798Z ##[group]Environment details
+2026-11-06T02:42:38.6630053Z node: v22.23.4
+2026-11-06T02:42:38.6631132Z npm: 10.9.9
+2026-11-06T02:42:38.6631906Z yarn: 1.22.22
+2026-11-06T02:42:38.6632864Z ##[endgroup]
+2026-11-06T02:42:38.6835150Z ##[group]Run actions/setup-python@v6
+2026-11-06T02:42:38.6835475Z with:
+2026-11-06T02:42:38.6835696Z   python-version: 3.12
+2026-11-06T02:42:38.6835932Z   architecture: x64
+2026-11-06T02:42:38.6836178Z   check-latest: false
+2026-11-06T02:42:38.6838750Z   token: ***
+2026-11-06T02:42:38.6838991Z   update-environment: true
+2026-11-06T02:42:38.6839258Z   allow-prereleases: false
+2026-11-06T02:42:38.6839526Z   freethreaded: false
+2026-11-06T02:42:38.6839796Z ##[endgroup]
+2026-11-06T02:42:38.8222570Z ##[group]Installed versions
+2026-11-06T02:42:38.8310409Z Successfully set up CPython (3.12.16)
+2026-11-06T02:42:38.8311205Z ##[endgroup]
+2026-11-06T02:42:38.8592007Z ##[group]Run node -e "const a=require('node:assert/strict'); a.equal(process.platform,process.env.DSH_EXPECTED_PLATFORM); a.equal(process.arch,process.env.DSH_EXPECTED_ARCH)"
+2026-11-06T02:42:38.8593651Z [36;1mnode -e "const a=require('node:assert/strict'); a.equal(process.platform,process.env.DSH_EXPECTED_PLATFORM); a.equal(process.arch,process.env.DSH_EXPECTED_ARCH)"[0m
+2026-11-06T02:42:38.8644658Z shell: /usr/bin/bash -e {0}
+2026-11-06T02:42:38.8644984Z env:
+2026-11-06T02:42:38.8645270Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:42:38.8645943Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.16/x64/lib/pkgconfig
+2026-11-06T02:42:38.8646642Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:42:38.8647048Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:42:38.8647435Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:42:38.8648142Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.16/x64/lib
+2026-11-06T02:42:38.8648497Z   DSH_EXPECTED_PLATFORM: linux
+2026-11-06T02:42:38.8648910Z   DSH_EXPECTED_ARCH: x64
+2026-11-06T02:42:38.8649207Z ##[endgroup]
+2026-11-06T02:42:38.9151969Z ##[group]Run node test/helpers/tui-posix-pty-selftest.mjs dsh-enhancement-evidence/terminal-preflight
+2026-11-06T02:42:38.9152786Z [36;1mnode test/helpers/tui-posix-pty-selftest.mjs dsh-enhancement-evidence/terminal-preflight[0m
+2026-11-06T02:42:38.9177581Z shell: /usr/bin/bash -e {0}
+2026-11-06T02:42:38.9177865Z env:
+2026-11-06T02:42:38.9178157Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:42:38.9178647Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.16/x64/lib/pkgconfig
+2026-11-06T02:42:38.9179075Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:42:38.9179454Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:42:38.9179826Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:42:38.9180198Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.16/x64/lib
+2026-11-06T02:42:38.9180524Z ##[endgroup]
+2026-11-06T02:42:39.1742479Z PASS real-tty-unicode-resize-and-normal-exit
+2026-11-06T02:42:39.3266580Z PASS literal-argv-and-split-utf8-output
+2026-11-06T02:42:39.3986681Z PASS nonzero-child-exit-remains-visible
+2026-11-06T02:42:39.4726181Z PASS raw-control-input-restores-and-exits
+2026-11-06T02:42:39.5461699Z PASS dispose-reaps-owned-child-and-is-idempotent
+2026-11-06T02:42:40.6411013Z PASS dispose-escalates-an-owned-term-resistant-child
+2026-11-06T02:42:40.6740026Z PASS startup-failure-does-not-return-a-controller
+2026-11-06T02:42:40.6755227Z {"platform":"linux","arch":"x64","node":"v22.23.4","scope":"Owned POSIX PTY fixtures; no DSH or user session","status":"passed","checks":[{"name":"real-tty-unicode-resize-and-normal-exit","status":"passed"},{"name":"literal-argv-and-split-utf8-output","status":"passed"},{"name":"nonzero-child-exit-remains-visible","status":"passed"},{"name":"raw-control-input-restores-and-exits","status":"passed"},{"name":"dispose-reaps-owned-child-and-is-idempotent","status":"passed"},{"name":"dispose-escalates-an-owned-term-resistant-child","status":"passed"},{"name":"startup-failure-does-not-return-a-controller","status":"passed"}]}
+2026-11-06T02:42:40.6834764Z ##[group]Run npm ci
+2026-11-06T02:42:40.6835026Z [36;1mnpm ci[0m
+2026-11-06T02:42:40.6857493Z shell: /usr/bin/bash -e {0}
+2026-11-06T02:42:40.6857745Z env:
+2026-11-06T02:42:40.6858022Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:42:40.6858473Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.16/x64/lib/pkgconfig
+2026-11-06T02:42:40.6858925Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:42:40.6859305Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:42:40.6859675Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:42:40.6860046Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.16/x64/lib
+2026-11-06T02:42:40.6860369Z ##[endgroup]
+2026-11-06T02:43:23.1061416Z 
+2026-11-06T02:43:23.1064346Z added 203 packages, and audited 204 packages in 42s
+2026-11-06T02:43:23.1064808Z 
+2026-11-06T02:43:23.1065225Z 77 packages are looking for funding
+2026-11-06T02:43:23.1065663Z   run `npm fund` for details
+2026-11-06T02:43:23.2779148Z 
+2026-11-06T02:43:23.2780064Z 11 vulnerabilities (8 moderate, 1 high, 2 critical)
+2026-11-06T02:43:23.2788523Z 
+2026-11-06T02:43:23.2788863Z To address issues that do not require attention, run:
+2026-11-06T02:43:23.2789350Z   npm audit fix
+2026-11-06T02:43:23.2789523Z 
+2026-11-06T02:43:23.2789909Z To address all issues (including breaking changes), run:
+2026-11-06T02:43:23.2790445Z   npm audit fix --force
+2026-11-06T02:43:23.2790674Z 
+2026-11-06T02:43:23.2790858Z Run `npm audit` for details.
+2026-11-06T02:43:23.3576297Z ##[group]Run npm run build
+2026-11-06T02:43:23.3576598Z [36;1mnpm run build[0m
+2026-11-06T02:43:23.3628125Z shell: /usr/bin/bash -e {0}
+2026-11-06T02:43:23.3628391Z env:
+2026-11-06T02:43:23.3628671Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:43:23.3629120Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.16/x64/lib/pkgconfig
+2026-11-06T02:43:23.3629547Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:43:23.3629925Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:43:23.3630297Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:43:23.3630672Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.16/x64/lib
+2026-11-06T02:43:23.3631003Z ##[endgroup]
+2026-11-06T02:43:23.4690029Z 
+2026-11-06T02:43:23.4690724Z > @oatelauser/crosschat@1.13.1 build
+2026-11-06T02:43:23.4691110Z > tsc
+2026-11-06T02:43:23.4691243Z 
+2026-11-06T02:43:33.9422553Z ##[group]Run node scripts/dsh-enhancement-ci.mjs
+2026-11-06T02:43:33.9423205Z [36;1mnode scripts/dsh-enhancement-ci.mjs[0m
+2026-11-06T02:43:33.9454497Z shell: /usr/bin/bash -e {0}
+2026-11-06T02:43:33.9454902Z env:
+2026-11-06T02:43:33.9455333Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:43:33.9456022Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.16/x64/lib/pkgconfig
+2026-11-06T02:43:33.9456716Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:43:33.9457323Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:43:33.9457909Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:43:33.9458496Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.16/x64/lib
+2026-11-06T02:43:33.9458987Z   CROSSCHAT_LIVE: 1
+2026-11-06T02:43:33.9459305Z   DSH_EXPECTED_PLATFORM: linux
+2026-11-06T02:43:33.9460030Z   DSH_EXPECTED_ARCH: x64
+2026-11-06T02:43:33.9460400Z   TMPDIR: /tmp
+2026-11-06T02:43:33.9460762Z ##[endgroup]
+2026-11-06T02:43:34.1646583Z [dsh-ci] enhancement-rc5 npm install started; limit=1200000ms
+2026-11-06T02:44:23.5218444Z [dsh-ci] enhancement-rc5 npm install exited 0 after 49357ms
+2026-11-06T02:45:05.5216826Z {"status":"passed","category":null,"notify":false}
+2026-11-06T02:45:05.5527984Z ##[group]Run actions/upload-artifact@v4
+2026-11-06T02:45:05.5528288Z with:
+2026-11-06T02:45:05.5528564Z   name: dsh-enhancement-linux-x64
+2026-11-06T02:45:05.5528839Z   path: dsh-enhancement-evidence/
+2026-11-06T02:45:05.5529097Z   if-no-files-found: warn
+2026-11-06T02:45:05.5529333Z   retention-days: 21
+2026-11-06T02:45:05.5529558Z   compression-level: 6
+2026-11-06T02:45:05.5529787Z   overwrite: false
+2026-11-06T02:45:05.5530007Z   include-hidden-files: false
+2026-11-06T02:45:05.5530243Z env:
+2026-11-06T02:45:05.5530504Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:45:05.5530964Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.16/x64/lib/pkgconfig
+2026-11-06T02:45:05.5531384Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:45:05.5532044Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:45:05.5532433Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.16/x64
+2026-11-06T02:45:05.5532862Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.16/x64/lib
+2026-11-06T02:45:05.5533189Z ##[endgroup]
+2026-11-06T02:45:05.7270828Z (node:2684) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-06T02:45:05.7272225Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-06T02:45:05.7382830Z With the provided path, there will be 17 files uploaded
+2026-11-06T02:45:05.7387905Z Artifact name is valid!
+2026-11-06T02:45:05.7388422Z Root directory input is valid!
+2026-11-06T02:45:05.9996507Z Beginning upload of artifact content to blob storage
+2026-11-06T02:45:06.0582451Z (node:2684) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-06T02:45:06.1968167Z Uploaded bytes 131718
+2026-11-06T02:45:06.2500212Z Finished uploading artifact content to blob storage!
+2026-11-06T02:45:06.2502041Z SHA256 digest of uploaded artifact zip is 2039173917b4a88aa673d57cdba3f2a3cee9738baf224a84c761bf839a4ede0c
+2026-11-06T02:45:06.2503219Z Finalizing artifact upload
+2026-11-06T02:45:06.6595690Z Artifact dsh-enhancement-linux-x64.zip successfully finalized. Artifact ID 13472369712
+2026-11-06T02:45:06.6597153Z Artifact dsh-enhancement-linux-x64 has been successfully uploaded! Final size is 131718 bytes. Artifact ID is 13472369712
+2026-11-06T02:45:06.6603302Z Artifact download URL: https://github.com/Oatelauser/crosschat/actions/runs/42152027504/artifacts/13472369712
+2026-11-06T02:45:06.6828669Z Post job cleanup.
+2026-11-06T02:45:06.8308902Z Post job cleanup.
+2026-11-06T02:45:06.9627381Z (node:2706) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-06T02:45:06.9628694Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-06T02:45:06.9879252Z Post job cleanup.
+2026-11-06T02:45:07.0836338Z [command]/usr/bin/git version
+2026-11-06T02:45:07.0883801Z git version 2.56.0
+2026-11-06T02:45:07.0923398Z Temporarily overriding HOME='/home/runner/work/_temp/827a501c-5076-4bee-ae3e-1f057422e278' before making global git config changes
+2026-11-06T02:45:07.0924948Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-06T02:45:07.0927058Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/crosschat/crosschat
+2026-11-06T02:45:07.0970657Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-06T02:45:07.1012539Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-06T02:45:07.1305163Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-06T02:45:07.1338347Z http.https://github.com/.extraheader
+2026-11-06T02:45:07.1351659Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-11-06T02:45:07.1390909Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-06T02:45:07.1714019Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-06T02:45:07.1764928Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-06T02:45:07.2230664Z Cleaning up orphan processes
+2026-11-06T02:45:07.2624880Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
