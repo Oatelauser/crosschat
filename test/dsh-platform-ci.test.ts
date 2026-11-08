@@ -56,6 +56,13 @@ async function hostedReport(summary: unknown, existing: unknown = [], file = { s
 }
 
 describe('DSH npm platform boundaries', () => {
+  it('pins the dedicated communication probe to the Harness-supported Node LTS', async () => {
+    const workflow = (await readFile(new URL('../.github/workflows/dsh-compat.yml', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+    const probe = workflow.split('\n  report:\n')[0]!;
+    expect(probe.match(/^\s+node-version:\s+.+$/gm)).toEqual(["          node-version: '24.22.2'"]);
+    expect(probe).toContain("a.equal(process.versions.node,'24.22.2')");
+  });
+
   it.each([['linux', 'x64'], ['darwin', 'x64'], ['darwin', 'arm64']])(
     'verifies the same pinned official npm archive for %s/%s without claiming native execution', (platform, arch) => {
       const artifact = parseDshNpmManifest(pinned.package, platform, arch);

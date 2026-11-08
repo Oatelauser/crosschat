@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '24.22.2'
           architecture: ${{ matrix.arch }}
       - uses: actions/setup-python@v6
         if: matrix.platform != 'win32'
@@ -40,6 +40,8 @@ jobs:
         env:
           DSH_EXPECTED_PLATFORM: ${{ matrix.platform }}
           DSH_EXPECTED_ARCH: ${{ matrix.arch }}
+      - name: Verify supported Node runtime
+        run: node -e "const a=require('node:assert/strict'); a.equal(process.versions.node,'24.22.2')"
       - name: Verify native POSIX terminal before installing DSH
         if: matrix.platform != 'win32'
         run: node test/helpers/tui-posix-pty-selftest.mjs dsh-onboarding-evidence/terminal-preflight
