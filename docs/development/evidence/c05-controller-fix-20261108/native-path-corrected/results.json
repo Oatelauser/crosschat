@@ -1,0 +1,25 @@
+{
+  "sourceHead": "c3c115bd42e8d1b7a964034c1759103337bf85b7",
+  "node": "24.9.0",
+  "version": "0.2.2-rc.1",
+  "results": [
+    {
+      "suite": "communication",
+      "status": "passed",
+      "category": null,
+      "stage": "done",
+      "checks": 8,
+      "runId": "fa2731ba-74de-448c-a8f4-bc4665bc15a8",
+      "safe": true
+    },
+    {
+      "suite": "onboarding",
+      "status": "passed",
+      "category": null,
+      "stage": "done",
+      "checks": 6,
+      "runId": "041b71a3-1a61-4b15-85d2-3d160986dd06",
+      "safe": true
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "sourceHead": "c3c115bd42e8d1b7a964034c1759103337bf85b7",
+  "node": "24.9.0",
+  "version": "0.2.2-rc.1",
+  "results": [
+    {
+      "suite": "communication",
+      "status": "failed",
+      "category": "infrastructure",
+      "stage": "model-fixture",
+      "check": "native-shell-bootstrap",
+      "checks": 2,
+      "runId": "9aab9d92-0ac5-4a77-860c-934da10ddb9f",
+      "safe": true,
+      "error": "The actual shell output does not prove the current native Harness identity"
+    },
+    {
+      "suite": "onboarding",
+      "status": "failed",
+      "category": "compatibility",
+      "stage": "onboarding",
+      "check": "native-skill-load-and-current-source",
+      "checks": 1,
+      "runId": "43eba073-3997-4c03-9cd3-9ce6753a76d0",
+      "safe": true,
+      "error": "Expected values to be strictly equal:\n\nfalse !== true\n"
+    }
+  ]
+}

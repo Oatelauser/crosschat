@@ -1,0 +1,14 @@
+import {readFile,writeFile} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
+import {dirname,join} from 'node:path';
+import {prepareDshProfile} from '../../../test/helpers/dsh-live-fixture.mjs';
+import {runDshProcess} from '../../../scripts/dsh-compat-ci.mjs';
+const repo='D:/workspace/CC/cc-dsh-schedule-controller-20261108';
+const state=JSON.parse(await readFile(join(repo,'node_modules/.cache/c05-controller-20261108/native-state.json'),'utf8'));
+const env=await prepareDshProfile(join(state.root,'controller-diagnosis'),'http://127.0.0.1:1/v1');
+const before={keys:Object.keys(env).filter(key=>key.toLowerCase()==='path'),upperPresent:typeof env.PATH==='string',mixedPresent:typeof env.Path==='string'};
+env.PATH=dirname(state.nodeExecutable)+';'+env.PATH;
+const sourceHead=execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8',windowsHide:true}).trim();
+const result=await runDshProcess(state.nodeExecutable,[join(repo,'node_modules/.cache/c05-controller-20261108/diagnose-native.mjs'),'native-diagnosis-launch'],{env:{...env,CROSSCHAT_LIVE:'1',C05_SOURCE_HEAD:sourceHead},timeout:120000});
+await writeFile(join(repo,'docs/development/evidence/c05-controller-fix-20261108/diagnostic-path-process.json'),JSON.stringify({before,result},null,2)+'\n',{flag:'wx'});
+console.log(JSON.stringify({before,code:result.code,stdout:result.stdout,stderr:result.stderr}));

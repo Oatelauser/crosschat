@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "tool": "dsh-onboarding",
+  "platform": "win32",
+  "arch": "x64",
+  "runId": "041b71a3-1a61-4b15-85d2-3d160986dd06",
+  "version": "0.2.2-rc.1",
+  "scope": {
+    "officialNpmRuntime": true,
+    "officialPluginManager": true,
+    "ordinaryWebSessions": true,
+    "scriptedLocalModel": true,
+    "skillLifecycle": true,
+    "diagnostics": true,
+    "tui": true,
+    "browserUI": false,
+    "desktop": false,
+    "modelIntelligence": false
+  },
+  "status": "passed",
+  "category": null,
+  "stage": "done",
+  "startedAt": "2026-11-08T14:10:06.270Z",
+  "checks": [
+    {
+      "name": "official-profile-plugin-and-skill-installation",
+      "status": "passed",
+      "elapsedMs": 5792
+    },
+    {
+      "name": "native-skill-load-and-current-source",
+      "status": "passed",
+      "elapsedMs": 1118
+    },
+    {
+      "name": "native-roundtrip-and-typed-discovery",
+      "status": "passed",
+      "elapsedMs": 3748
+    },
+    {
+      "name": "same-source-diagnostics-and-real-terminal",
+      "status": "passed",
+      "elapsedMs": 4400
+    },
+    {
+      "name": "skill-update-and-profile-preserving-shutdown",
+      "status": "passed",
+      "elapsedMs": 438
+    },
+    {
+      "name": "official-plugin-and-crosschat-removal-with-owned-cleanup",
+      "status": "passed",
+      "elapsedMs": 805
+    }
+  ],
+  "source": {
+    "status": "identified",
+    "sourceTool": "dsh",
+    "basis": "native",
+    "association": "verified",
+    "scope": "instance",
+    "shouldAsk": false
+  },
+  "cleanup": {
+    "runtimeStopped": true,
+    "registrationRemoved": true,
+    "removed": true,
+    "forced": false
+  },
+  "finishedAt": "2026-11-08T14:10:22.573Z",
+  "process": {
+    "code": 0,
+    "signal": null,
+    "timedOut": false
+  }
+}

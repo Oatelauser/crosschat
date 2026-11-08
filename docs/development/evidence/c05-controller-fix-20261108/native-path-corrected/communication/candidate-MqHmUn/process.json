@@ -1,0 +1,8 @@
+{
+  "code": 0,
+  "signal": null,
+  "timedOut": false,
+  "stdout": "PASS official-plugin-installation-and-owned-web-runtime\nPASS public-web-session-controller-creates-interactive-sessions\nPASS messages-model-and-native-shell-identity-bootstrap\nPASS authenticated-production-discovery-and-pagination\nPASS idle-production-delivery-wakes-the-existing-session\nPASS busy-native-queue-and-steer-step-boundaries\nPASS native-shell-send-and-conversation-reply-have-full-session-identities\nPASS missing-target-does-not-create-or-resume-a-replacement\n{\"status\":\"passed\",\"version\":\"0.2.2-rc.1\",\"checks\":8,\"report\":\"D:\\\\workspace\\\\CC\\\\cc-dsh-schedule-controller-20261108\\\\docs\\\\development\\\\evidence\\\\c05-controller-fix-20261108\\\\native-path-corrected\\\\communication\\\\candidate-MqHmUn\\\\report.json\"}\n",
+  "stderr": "",
+  "pid": 9064
+}
