@@ -5,6 +5,7 @@ import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import * as desktopCI from '../scripts/opencode-desktop-compat-ci.mjs';
 import {
+  desktopLifecycleFailure,
   desktopRegressionIdentity,
   parseDesktopArtifactManifest,
   runDesktopBuildSequence,
@@ -28,6 +29,30 @@ function failed(version: string) {
 }
 
 describe('OpenCode Desktop CI evidence', () => {
+  it('preserves PowerShell lifecycle exit, timeout and output when a helper fails', () => {
+    const failure = desktopLifecycleFailure({ code: null, signal: 'SIGTERM', timedOut: true,
+      stdout: '{"protocolCommand":"C:\\private\\uninstall.exe /S"}', stderr: 'parser diagnostic' }, 'inspect Windows installation state');
+    expect(failure).toContain('inspect Windows installation state');
+    expect(failure).toContain('exitCode=null, signal=SIGTERM, timedOut=true');
+    expect(failure).toContain('stderr (last 17 bytes): parser diagnostic');
+    expect(failure).toContain('stdoutBytes=49');
+    expect(failure).not.toContain('private');
+
+    const longError = 'x'.repeat(5000);
+    const bounded = desktopLifecycleFailure({ code: 1, signal: null, timedOut: false, stdout: '', stderr: longError }, 'verify signature');
+    expect(bounded).toContain('stderr (last 4000 bytes):');
+    expect(bounded).toHaveLength('Desktop Windows lifecycle helper "verify signature" failed (exitCode=1, signal=none, timedOut=false, stdoutBytes=0): stderr (last 4000 bytes): '.length + 4000);
+    const unicodeError = '\u754c'.repeat(5000);
+    const unicodeFailure = desktopLifecycleFailure({ code: 1, signal: null, timedOut: false, stdout: '', stderr: unicodeError }, 'probe');
+    expect(unicodeFailure).toContain('stderr (last 3999 bytes):');
+    const unicodeOutput = unicodeFailure.split('stderr (last 3999 bytes): ')[1];
+    expect(Buffer.byteLength(unicodeOutput, 'utf8')).toBe(3999);
+    expect(unicodeOutput).toBe(unicodeError.slice(-1333));
+
+    expect(desktopLifecycleFailure({ code: 1, signal: null, timedOut: false, stdout: '', stderr: '' }, 'probe'))
+      .toContain('no stderr output');
+  });
+
   it('pins the official Windows desktop installer and its distinct desktop source commit', () => {
     expect(parseDesktopArtifactManifest(manifest(), 'win32', 'x64')).toEqual(baseline);
     expect(() => parseDesktopArtifactManifest({ ...manifest(), name: 'cli' }, 'win32', 'x64')).toThrow();

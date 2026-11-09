@@ -53,6 +53,19 @@ function infrastructure(version, stage, error) {
     error: errorMessage(error) };
 }
 
+export function desktopLifecycleFailure(result, operation) {
+  const stdoutBytes = Buffer.byteLength(result.stdout ?? '', 'utf8');
+  const stderrBytes = Buffer.from(result.stderr ?? '', 'utf8');
+  let stderrStart = Math.max(0, stderrBytes.length - 4000);
+  let stderr = stderrBytes.subarray(stderrStart).toString('utf8');
+  while (Buffer.byteLength(stderr, 'utf8') > 4000) {
+    stderrStart += 1;
+    stderr = stderrBytes.subarray(stderrStart).toString('utf8');
+  }
+  const output = stderr ? `stderr (last ${Buffer.byteLength(stderr, 'utf8')} bytes): ${stderr}` : 'no stderr output';
+  return `Desktop Windows lifecycle helper "${operation}" failed (exitCode=${result.code}, signal=${result.signal ?? 'none'}, timedOut=${result.timedOut}, stdoutBytes=${stdoutBytes}): ${output}`;
+}
+
 /** A report is usable for uninstall only after the probe proves that its owned runtime has released it. */
 export function hasDesktopRuntimeReleaseProof(cleanup) {
   return record(cleanup) && cleanup.appStopped === true && cleanup.serviceStopped === true && cleanup.removed === true
@@ -161,14 +174,14 @@ $effects=@($paths | Select-Object -Unique | ForEach-Object {@{path=$_;exists=(Te
 @{installKey=(Test-Path -LiteralPath ('HKCU:\Software\'+$g));uninstallKey=(Test-Path -LiteralPath $base);protocolKey=(Test-Path -LiteralPath $protocol);machineInstallKey=(Test-Path -LiteralPath ('HKLM:\Software\'+$g));machineUninstallKey=(Test-Path -LiteralPath ('HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\'+$g));quiet=$quiet;protocolCommand=$command;protocolIcon=$icon;sideEffects=$effects} | ConvertTo-Json -Depth 8
 `;
 
-async function powershell(script, env) {
+async function powershell(script, env, operation) {
   const executable = join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   const result = await runCommand(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { env, timeout: 30000 });
-  if (result.code !== 0 || result.timedOut) throw new Error(`Desktop Windows lifecycle helper failed: ${result.stderr.slice(-4000)}`);
+  if (result.code !== 0 || result.timedOut) throw new Error(desktopLifecycleFailure(result, operation));
   return JSON.parse(result.stdout.replace(/^\uFEFF/, ''));
 }
 
-async function windowsState(env) { return powershell(windowsStateScript, env); }
+async function windowsState(env) { return powershell(windowsStateScript, env, 'inspect Windows installation state'); }
 function assertCleanWindows(state) {
   if (state.installKey || state.uninstallKey || state.protocolKey || state.machineInstallKey || state.machineUninstallKey
     || state.sideEffects.some((item) => item.exists)) throw new Error(`OpenCode Desktop installation, protocol, shortcut or installer cache already exists (GUID ${guid}); refusing to replace it`);
@@ -176,7 +189,7 @@ function assertCleanWindows(state) {
 
 async function signature(path, env) {
   const result = await powershell(String.raw`$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$s=Get-AuthenticodeSignature -LiteralPath $env:CROSSCHAT_DESKTOP_VERIFY_FILE;@{status=$s.Status.ToString();subject=$s.SignerCertificate.Subject}|ConvertTo-Json`,
-    { ...env, CROSSCHAT_DESKTOP_VERIFY_FILE: path });
+    { ...env, CROSSCHAT_DESKTOP_VERIFY_FILE: path }, 'verify Authenticode signature');
   validateDesktopSignature(result);
   return result;
 }
@@ -213,7 +226,7 @@ foreach($entry in $before.sideEffects){
 @{cleaned=$true}|ConvertTo-Json
 `;
   await powershell(script, { ...context.env, CROSSCHAT_DESKTOP_OWNED_BINARY: context.binary,
-    CROSSCHAT_DESKTOP_BEFORE: JSON.stringify(context.before), CROSSCHAT_DESKTOP_INSTALLER_SHA: context.artifact.sha256 });
+    CROSSCHAT_DESKTOP_BEFORE: JSON.stringify(context.before), CROSSCHAT_DESKTOP_INSTALLER_SHA: context.artifact.sha256 }, 'remove owned installer side effects');
 }
 
 async function main() {
