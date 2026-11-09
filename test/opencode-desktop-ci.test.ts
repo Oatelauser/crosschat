@@ -53,6 +53,18 @@ describe('OpenCode Desktop CI evidence', () => {
       .toContain('no stderr output');
   });
 
+  it('labels Windows state snapshots by their lifecycle checkpoint', async () => {
+    const source = await readFile(new URL('../scripts/opencode-desktop-compat-ci.mjs', import.meta.url), 'utf8');
+    expect(source).toContain('async function windowsState(env, operation)');
+    for (const operation of [
+      'windowsState(env, `inspect ${label} installation state before install`)',
+      'windowsState(env, `inspect ${label} installation state after install`)',
+      'windowsState(context.env, `inspect ${context.label} installation state before uninstall`)',
+      'windowsState(context.env, `verify ${context.label} Windows uninstaller registration removal`)',
+      'windowsState(context.env, `inspect ${context.label} Windows installation state after uninstall`)',
+    ]) expect(source).toContain(operation);
+  });
+
   it('pins the official Windows desktop installer and its distinct desktop source commit', () => {
     expect(parseDesktopArtifactManifest(manifest(), 'win32', 'x64')).toEqual(baseline);
     expect(() => parseDesktopArtifactManifest({ ...manifest(), name: 'cli' }, 'win32', 'x64')).toThrow();

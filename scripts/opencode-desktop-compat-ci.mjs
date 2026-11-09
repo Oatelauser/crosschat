@@ -181,7 +181,7 @@ async function powershell(script, env, operation) {
   return JSON.parse(result.stdout.replace(/^\uFEFF/, ''));
 }
 
-async function windowsState(env) { return powershell(windowsStateScript, env, 'inspect Windows installation state'); }
+async function windowsState(env, operation) { return powershell(windowsStateScript, env, operation); }
 function assertCleanWindows(state) {
   if (state.installKey || state.uninstallKey || state.protocolKey || state.machineInstallKey || state.machineUninstallKey
     || state.sideEffects.some((item) => item.exists)) throw new Error(`OpenCode Desktop installation, protocol, shortcut or installer cache already exists (GUID ${guid}); refusing to replace it`);
@@ -264,14 +264,14 @@ async function main() {
         uninstaller: join(taskRoot, 'install', 'Uninstall OpenCode.exe'), started: false, removed: false };
       contexts.push(context);
       if (/\s/.test(taskRoot)) throw new Error('NSIS /D requires this probe to use an owned task path without spaces');
-      context.before = await windowsState(env); assertCleanWindows(context.before);
+      context.before = await windowsState(env, `inspect ${label} installation state before install`); assertCleanWindows(context.before);
       const archive = await installer(artifact, env);
       try {
         context.started = true;
         const installed = await runCommand(archive, ['/S', '--no-desktop-shortcut', `/D=${join(taskRoot, 'install')}`], { env, cwd: taskRoot, timeout: 180000 });
         if (installed.code !== 0 || installed.timedOut) throw new Error(`Official desktop installer failed (${installed.code})`);
         await access(context.binary); await access(context.uninstaller);
-        context.afterInstall = await windowsState(env); ownsQuietUninstall(context.afterInstall, context);
+        context.afterInstall = await windowsState(env, `inspect ${label} installation state after install`); ownsQuietUninstall(context.afterInstall, context);
         context.signature = await signature(context.binary, env);
         await writeFile(join(output, `${label}-installation.json`), JSON.stringify({ before: context.before, afterInstall: context.afterInstall, signature: context.signature }, null, 2));
         return context;
@@ -292,15 +292,15 @@ async function main() {
     },
     async uninstall(context) {
       if (context.removed) return;
-      const before = await windowsState(context.env); ownsQuietUninstall(before, context);
+      const before = await windowsState(context.env, `inspect ${context.label} installation state before uninstall`); ownsQuietUninstall(before, context);
       await signature(context.uninstaller, context.env);
       const removed = await runCommand(context.uninstaller, ['/currentuser', '/S'], { env: context.env, cwd: context.taskRoot, timeout: 180000 });
       if (removed.code !== 0 || removed.timedOut) throw new Error(`Owned desktop uninstaller failed (${removed.code})`);
       let state; const deadline = Date.now() + 30000;
-      do { state = await windowsState(context.env); if (!state.installKey && !state.uninstallKey) break; await delay(500); } while (Date.now() < deadline);
+      do { state = await windowsState(context.env, `verify ${context.label} Windows uninstaller registration removal`); if (!state.installKey && !state.uninstallKey) break; await delay(500); } while (Date.now() < deadline);
       if (state.installKey || state.uninstallKey) throw new Error('Owned desktop uninstall did not remove its installer registration');
       await removeOwnedSideEffects(context);
-      context.afterUninstall = await windowsState(context.env); assertCleanWindows(context.afterUninstall);
+      context.afterUninstall = await windowsState(context.env, `inspect ${context.label} Windows installation state after uninstall`); assertCleanWindows(context.afterUninstall);
       context.removed = true;
       await writeFile(join(output, `${context.label}-uninstallation.json`), JSON.stringify({ afterUninstall: context.afterUninstall, exitCode: removed.code }, null, 2));
     },
