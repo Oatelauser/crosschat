@@ -236,17 +236,37 @@ describe('OpenCode Desktop CI evidence', () => {
     expect(calls).toEqual(['uninstaller-identity', 'uninstall-registration', 'protocol-snapshot', 'uninstall']);
   });
 
+  it('does not attempt partial-install cleanup without a generated uninstaller', async () => {
+    const calls: string[] = [];
+    const cleanup = Reflect.get(desktopCI, 'cleanupPartialDesktopInstallation');
+    expect(cleanup).toBeTypeOf('function');
+    const removed = await (cleanup as (context: object, operations: Record<string, unknown>) => Promise<boolean>)({}, {
+      hasUninstaller: async () => false,
+      captureUninstallerIdentity: async () => { calls.push('uninstaller-identity'); },
+      verifyUninstallRegistration: async () => { calls.push('uninstall-registration'); },
+      captureProtocolRegistration: async () => { calls.push('protocol-snapshot'); },
+      uninstall: async () => { calls.push('uninstall'); },
+    });
+    expect(removed).toBe(false);
+    expect(calls).toEqual([]);
+  });
+
   it('does not run a partial-install uninstaller when ownership verification fails', async () => {
     const calls: string[] = [];
     const cleanup = Reflect.get(desktopCI, 'cleanupPartialDesktopInstallation');
     expect(cleanup).toBeTypeOf('function');
-    await expect((cleanup as (context: object, operations: Record<string, unknown>) => Promise<boolean>)({}, {
+    const context = {};
+    const operations = {
       hasUninstaller: async () => true,
       captureUninstallerIdentity: async () => { calls.push('uninstaller-identity'); },
       verifyUninstallRegistration: async () => { throw new Error('install registration points elsewhere'); },
       captureProtocolRegistration: async () => { calls.push('protocol-snapshot'); },
       uninstall: async () => { calls.push('uninstall'); },
-    })).rejects.toThrow('install registration points elsewhere');
+    };
+    await expect((cleanup as (context: object, operations: Record<string, unknown>) => Promise<boolean>)(context, operations))
+      .rejects.toThrow('install registration points elsewhere');
+    await expect((cleanup as (context: object, operations: Record<string, unknown>) => Promise<boolean>)(context, operations))
+      .rejects.toThrow('Desktop install ownership capture did not complete; refusing to retry');
     expect(calls).toEqual(['uninstaller-identity']);
   });
 

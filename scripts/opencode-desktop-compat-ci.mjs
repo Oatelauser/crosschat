@@ -154,6 +154,25 @@ export function hasDesktopRuntimeReleaseProof(cleanup) {
     && (cleanup.errors === undefined || (Array.isArray(cleanup.errors) && cleanup.errors.length === 0));
 }
 
+export async function captureOwnedDesktopInstallation(context, operations) {
+  if (context.ownedInstallationVerified === true && context.protocolSnapshotCaptured === true) return true;
+  if (context.ownershipCaptureStarted === true) throw new Error('Desktop install ownership capture did not complete; refusing to retry');
+  context.ownershipCaptureStarted = true;
+  if (!await operations.hasUninstaller(context)) return false;
+  await operations.captureUninstallerIdentity(context);
+  await operations.verifyUninstallRegistration(context);
+  await operations.captureProtocolRegistration(context);
+  context.protocolSnapshotCaptured = true;
+  context.ownedInstallationVerified = true;
+  return true;
+}
+
+export async function cleanupPartialDesktopInstallation(context, operations) {
+  if (!await captureOwnedDesktopInstallation(context, operations)) return false;
+  await operations.uninstall(context);
+  return true;
+}
+
 /** The child receives an empty, unique evidence directory; an earlier invocation's report is never an input. */
 export async function runDesktopProbeAttempt({ output, label, version }, execute) {
   if (!/^(baseline|candidate|retry)$/.test(label)) throw new Error('Invalid desktop probe attempt label');
@@ -180,6 +199,7 @@ export async function runDesktopBuildSequence(builds, operations) {
     const installation = await operations.install(artifact, label);
     let report;
     try {
+      await operations.captureInstalled?.(installation, artifact, label);
       report = await operations.probe(installation, artifact, label);
       if (!validReport(report, artifact)) report = infrastructure(artifact.version, 'probe-report', 'Probe report tool, version or platform does not match the installed desktop artifact');
     } catch (error) { report = infrastructure(artifact.version, 'probe-runner', error); }
@@ -542,6 +562,15 @@ async function sha256File(path) {
   return createHash('sha256').update(await readFile(path)).digest('hex');
 }
 
+async function captureGeneratedUninstaller(context) {
+  const actualPath = await realpath(context.uninstaller);
+  const sha256 = await sha256File(actualPath);
+  const signature = await signatureMetadata(actualPath, context.env);
+  validateGeneratedUninstaller({ expectedPath: context.uninstaller, actualPath, installedSha256: sha256, currentSha256: sha256, signature });
+  context.uninstallerSha256 = sha256;
+  context.uninstallerSignature = signature;
+}
+
 function ownsQuietUninstall(state, context) {
   const expected = `"${context.uninstaller}" /currentuser /S`;
   if (typeof state.quiet !== 'string' || state.quiet.toLowerCase() !== expected.toLowerCase()) throw new Error('Desktop uninstall registry does not point to this exact owned installation');
@@ -604,38 +633,48 @@ async function main() {
     async install(artifact, label) {
       const taskRoot = join(root, label); const env = await prepareDesktopProfile(taskRoot);
       const context = { artifact, label, taskRoot, env, binary: join(taskRoot, 'install', 'OpenCode.exe'),
-        uninstaller: join(taskRoot, 'install', 'Uninstall OpenCode.exe'), started: false, removed: false };
+        uninstaller: join(taskRoot, 'install', 'Uninstall OpenCode.exe'), started: false, removed: false,
+        ownedInstallationVerified: false, protocolSnapshotCaptured: false };
       contexts.push(context);
       if (/\s/.test(taskRoot)) throw new Error('NSIS /D requires this probe to use an owned task path without spaces');
       context.before = await windowsState(env, `inspect ${label} installation state before install`);
       assertCleanWindows(context.before, protocolSnapshot, await protocolMatchesSnapshot(context.before, protocolSnapshot, root, env));
       const archive = await installer(artifact, env);
+      const ownership = {
+        hasUninstaller: async () => exists(context.uninstaller),
+        captureUninstallerIdentity: async () => captureGeneratedUninstaller(context),
+        verifyUninstallRegistration: async () => {
+          context.afterInstall = await windowsState(env, `inspect ${label} installation state after install`);
+          ownsQuietUninstall(context.afterInstall, context);
+        },
+        captureProtocolRegistration: async () => {
+          context.protocolInstalledSnapshot = await captureInstalledProtocolRegistration(context, protocolSnapshot, root);
+          context.protocolSnapshotCaptured = true;
+        },
+        uninstall: async () => operations.uninstall(context),
+      };
       try {
         context.started = true;
         const installed = await runCommand(archive, ['/S', '--no-desktop-shortcut', `/D=${join(taskRoot, 'install')}`], { env, cwd: taskRoot, timeout: 180000 });
         if (installed.code !== 0 || installed.timedOut) throw new Error(`Official desktop installer failed (${installed.code})`);
         await access(context.binary); await access(context.uninstaller);
-        const installedUninstallerPath = await realpath(context.uninstaller);
-        context.uninstallerSha256 = await sha256File(installedUninstallerPath);
-        context.uninstallerSignature = await signatureMetadata(installedUninstallerPath, env);
-        validateGeneratedUninstaller({ expectedPath: context.uninstaller, actualPath: installedUninstallerPath,
-          installedSha256: context.uninstallerSha256, currentSha256: context.uninstallerSha256, signature: context.uninstallerSignature });
-        context.afterInstall = await windowsState(env, `inspect ${label} installation state after install`); ownsQuietUninstall(context.afterInstall, context);
+        if (!await captureOwnedDesktopInstallation(context, ownership)) throw new Error('Official desktop installer did not create its recorded uninstaller');
         context.signature = await signature(context.binary, env);
         await writeFile(join(output, `${label}-installation.json`), JSON.stringify({ before: context.before, afterInstall: context.afterInstall,
           signature: context.signature, generatedUninstaller: { sha256: context.uninstallerSha256, signature: context.uninstallerSignature } }, null, 2));
         return context;
       } catch (error) {
         const uninstallerExists = await exists(context.uninstaller);
-        if (!uninstallerExists) {
-          try { context.protocolInstalledSnapshot = await captureInstalledProtocolRegistration(context, protocolSnapshot, root); }
-          catch (cleanup) { throw new AggregateError([error, cleanup], 'Desktop installation and its protocol snapshot failed'); }
-        }
         if (uninstallerExists) {
-          try { await operations.uninstall(context); }
+          try { await cleanupPartialDesktopInstallation(context, ownership); }
           catch (cleanup) { throw new AggregateError([error, cleanup], 'Desktop installation and its cleanup failed'); }
         }
         throw error;
+      }
+    },
+    async captureInstalled(context) {
+      if (context.ownedInstallationVerified !== true || context.protocolSnapshotCaptured !== true) {
+        throw new Error('Desktop install ownership and protocol snapshots must be captured before the native probe');
       }
     },
     async probe(context, artifact, label) {
@@ -647,8 +686,8 @@ async function main() {
     },
     async uninstall(context) {
       if (context.removed) return;
+      if (context.ownedInstallationVerified !== true) throw new Error('Desktop installation ownership was not verified before uninstall');
       const before = await windowsState(context.env, `inspect ${context.label} installation state before uninstall`); ownsQuietUninstall(before, context);
-      context.protocolInstalledSnapshot = await captureInstalledProtocolRegistration(context, protocolSnapshot, root);
       const actualUninstallerPath = await realpath(context.uninstaller);
       const currentUninstallerSha256 = await sha256File(actualUninstallerPath);
       const uninstallerSignature = await signatureMetadata(actualUninstallerPath, context.env);
