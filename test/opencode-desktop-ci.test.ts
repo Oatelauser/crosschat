@@ -209,6 +209,47 @@ describe('OpenCode Desktop CI evidence', () => {
     expect(desktopRegressionIdentity(summary)?.marker).toBe('<!-- opencode-desktop-compat:2.1.4:win32:visible-session-incoming -->');
   });
 
+  it('captures installed ownership before probing the native Desktop', async () => {
+    const calls: string[] = [];
+    await runDesktopBuildSequence({ baseline, candidate }, {
+      install: async (_artifact: unknown, label: string) => { calls.push(`install:${label}`); return { label }; },
+      captureInstalled: async (installation: { label: string }) => { calls.push(`capture:${installation.label}`); },
+      probe: async (installation: { label: string }, artifact: typeof baseline) => { calls.push(`probe:${installation.label}`); return passed(artifact.version); },
+      uninstall: async (installation: { label: string }) => { calls.push(`uninstall:${installation.label}`); },
+    });
+    expect(calls.slice(0, 4)).toEqual(['install:baseline', 'capture:baseline', 'probe:baseline', 'uninstall:baseline']);
+  });
+
+  it('captures and verifies a generated uninstaller before cleaning a failed partial installation', async () => {
+    const context = {};
+    const calls: string[] = [];
+    const cleanup = Reflect.get(desktopCI, 'cleanupPartialDesktopInstallation');
+    expect(cleanup).toBeTypeOf('function');
+    const removed = await (cleanup as (context: object, operations: Record<string, unknown>) => Promise<boolean>)(context, {
+      hasUninstaller: async () => true,
+      captureUninstallerIdentity: async () => { calls.push('uninstaller-identity'); },
+      verifyUninstallRegistration: async () => { calls.push('uninstall-registration'); },
+      captureProtocolRegistration: async () => { calls.push('protocol-snapshot'); },
+      uninstall: async () => { calls.push('uninstall'); },
+    });
+    expect(removed).toBe(true);
+    expect(calls).toEqual(['uninstaller-identity', 'uninstall-registration', 'protocol-snapshot', 'uninstall']);
+  });
+
+  it('does not run a partial-install uninstaller when ownership verification fails', async () => {
+    const calls: string[] = [];
+    const cleanup = Reflect.get(desktopCI, 'cleanupPartialDesktopInstallation');
+    expect(cleanup).toBeTypeOf('function');
+    await expect((cleanup as (context: object, operations: Record<string, unknown>) => Promise<boolean>)({}, {
+      hasUninstaller: async () => true,
+      captureUninstallerIdentity: async () => { calls.push('uninstaller-identity'); },
+      verifyUninstallRegistration: async () => { throw new Error('install registration points elsewhere'); },
+      captureProtocolRegistration: async () => { calls.push('protocol-snapshot'); },
+      uninstall: async () => { calls.push('uninstall'); },
+    })).rejects.toThrow('install registration points elsewhere');
+    expect(calls).toEqual(['uninstaller-identity']);
+  });
+
   it('retains the installation and stops all later attempts when a probe crashes with unknown release state', async () => {
     const calls: string[] = [];
     const summary = await runDesktopBuildSequence({ baseline, candidate }, {
