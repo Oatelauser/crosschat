@@ -101,6 +101,43 @@ describe('OpenCode Desktop CI evidence', () => {
     expect(protocolAclRestoreSecurityInformation).toBe(7);
   });
 
+  it('recognizes only OpenCode changing the protocol default command to this exact owned binary', () => {
+    const compare = Reflect.get(desktopCI, 'protocolSnapshotsDifferOnlyByOwnedCommand');
+    expect(compare).toBeTypeOf('function');
+    type RegistryValue = { name: string; kind: string; value: string };
+    type RegistryKey = { relative: string; sddl: string; values: RegistryValue[] };
+    type Snapshot = { values: Buffer; acl: RegistryKey[] };
+    const binary = 'C:\\temp\\crosschat-opencode\\baseline\\install\\OpenCode.exe';
+    const original: Snapshot = {
+      values: Buffer.from('original registry export'),
+      acl: [
+        { relative: '', sddl: 'root-acl', values: [{ name: '', kind: 'String', data: 'URL:opencode' }, { name: 'URL Protocol', kind: 'String', data: '' }] },
+        { relative: 'shell', sddl: 'shell-acl', values: [] },
+        { relative: 'shell\\open', sddl: 'open-acl', values: [] },
+        { relative: 'shell\\open\\command', sddl: 'command-acl', values: [{ name: '', kind: 'String', data: '"D:\\previous\\OpenCode.exe" "%1"' }] },
+      ],
+    };
+    const clone = (snapshot: Snapshot): Snapshot => ({ values: Buffer.from(snapshot.values),
+      acl: snapshot.acl.map((key) => ({ ...key, values: key.values.map((value) => ({ ...value })) })) });
+    const current = clone(original);
+    current.values = Buffer.from('current registry export');
+    current.acl[3].values[0].data = `"${binary}" "%1"`;
+    const compareSnapshots = compare as (before: Snapshot, after: Snapshot, path: string) => boolean;
+    expect(compareSnapshots(original, current, binary)).toBe(true);
+
+    const extraValue = clone(current);
+    extraValue.acl[1].values.push({ name: 'unexpected', kind: 'String', data: 'keep me' });
+    expect(compareSnapshots(original, extraValue, binary)).toBe(false);
+
+    const changedAcl = clone(current);
+    changedAcl.acl[3].sddl = 'changed-acl';
+    expect(compareSnapshots(original, changedAcl, binary)).toBe(false);
+
+    const otherCommand = clone(current);
+    otherCommand.acl[3].values[0].data = '"C:\\temp\\other\\OpenCode.exe" "%1"';
+    expect(compareSnapshots(original, otherCommand, binary)).toBe(false);
+  });
+
   it('restores owner, group and DACL sections with the rights required by Windows', async () => {
     const source = await readFile(new URL('../scripts/opencode-desktop-compat-ci.mjs', import.meta.url), 'utf8');
     expect(source).toContain('RegistryRights]::ChangePermissions -bor [System.Security.AccessControl.RegistryRights]::TakeOwnership');
