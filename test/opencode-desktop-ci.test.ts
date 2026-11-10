@@ -18,6 +18,7 @@ import {
   protocolSnapshotsMatch,
   requireApprovedCandidateVersion,
   runDesktopBuildSequence,
+  validateGeneratedUninstaller,
   validateDesktopSignature,
 } from '../scripts/opencode-desktop-compat-ci.mjs';
 
@@ -180,6 +181,15 @@ describe('OpenCode Desktop CI evidence', () => {
     expect(validateDesktopSignature({ status: 'Valid', subject: publisher, thumbprint: 'new' })).toBe(true);
     expect(() => validateDesktopSignature({ status: 'NotSigned', subject: publisher })).toThrow();
     expect(() => validateDesktopSignature({ status: 'Valid', subject: 'CN="Anomaly Innovations, Inc https://anoma.ly/", O="Other Publisher"' })).toThrow();
+  });
+
+  it('accepts only the unchanged installer-generated uninstaller at its exact owned path', () => {
+    const path = 'C:\\temp\\crosschat-opencode\\candidate\\install\\Uninstall OpenCode.exe';
+    const sha256 = 'd'.repeat(64);
+    expect(validateGeneratedUninstaller({ expectedPath: path, actualPath: path.replaceAll('\\', '/'), installedSha256: sha256, currentSha256: sha256 })).toBe(true);
+    expect(() => validateGeneratedUninstaller({ expectedPath: path, actualPath: 'C:\\temp\\other\\Uninstall OpenCode.exe', installedSha256: sha256, currentSha256: sha256 })).toThrow();
+    expect(() => validateGeneratedUninstaller({ expectedPath: path, actualPath: path, installedSha256: sha256, currentSha256: 'e'.repeat(64) })).toThrow();
+    expect(() => validateGeneratedUninstaller({ expectedPath: path, actualPath: path, installedSha256: 'missing', currentSha256: 'missing' })).toThrow();
   });
 
   it('uninstalls each same-GUID build before installing the next, and retries the identical candidate artifact', async () => {
