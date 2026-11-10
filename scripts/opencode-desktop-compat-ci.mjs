@@ -44,6 +44,15 @@ export function requireApprovedCandidateVersion(artifact, expectedVersion) {
   return artifact;
 }
 
+export function desktopArtifactDownloadTimeout(value) {
+  if (value === undefined) return 120000;
+  const timeout = Number(value);
+  if (!Number.isSafeInteger(timeout) || timeout < 1000 || timeout > 600000) {
+    throw new Error('OpenCode Desktop artifact download timeout must be between 1000 and 600000 milliseconds');
+  }
+  return timeout;
+}
+
 export function validateDesktopSignature(signature) {
   if (!record(signature) || signature.status !== 'Valid' || typeof signature.subject !== 'string'
     || !/(?:^|,\s*)O="Anomaly Innovations, Inc https:\/\/anoma\.ly\/"(?:,|$)/.test(signature.subject)) {
@@ -558,7 +567,8 @@ async function main() {
       if (details.size === artifact.size && createHash('sha256').update(await readFile(existing)).digest('hex') === artifact.sha256) path = existing;
     }
     if (!path) {
-      const bytes = await fetchBytes(artifact.url, artifact.size);
+      const timeout = desktopArtifactDownloadTimeout(process.env.OPENCODE_DESKTOP_ARTIFACT_DOWNLOAD_TIMEOUT_MS);
+      const bytes = await fetchBytes(artifact.url, artifact.size, timeout);
       if (bytes.length !== artifact.size || createHash('sha256').update(bytes).digest('hex') !== artifact.sha256) throw new Error('Desktop official installer checksum or size mismatch');
       path = join(root, `${artifact.sha256}.exe`); await writeFile(path, bytes);
     }
