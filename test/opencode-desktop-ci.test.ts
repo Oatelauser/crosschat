@@ -15,6 +15,7 @@ import {
   protocolRestorationAction,
   protocolAclRestoreSecurityInformation,
   protocolSnapshotsMatch,
+  requireApprovedCandidateVersion,
   runDesktopBuildSequence,
   validateDesktopSignature,
 } from '../scripts/opencode-desktop-compat-ci.mjs';
@@ -143,6 +144,11 @@ describe('OpenCode Desktop CI evidence', () => {
 
   it('pins the official Windows desktop installer and its distinct desktop source commit', () => {
     expect(parseDesktopArtifactManifest(manifest(), 'win32', 'x64')).toEqual(baseline);
+    const approved = parseDesktopArtifactManifest(manifest('2.2.6'), 'win32', 'x64');
+    expect(requireApprovedCandidateVersion(approved, '2.2.6')).toBe(approved);
+    expect(requireApprovedCandidateVersion(approved, undefined)).toBe(approved);
+    expect(() => requireApprovedCandidateVersion(approved, '2.2.7')).toThrow('differs from the approved version 2.2.7');
+    expect(() => requireApprovedCandidateVersion(approved, 'latest')).toThrow('approved version must be an exact release version');
     expect(() => parseDesktopArtifactManifest({ ...manifest(), name: 'cli' }, 'win32', 'x64')).toThrow();
     expect(() => parseDesktopArtifactManifest(manifest(), 'linux', 'x64')).toThrow();
   });
