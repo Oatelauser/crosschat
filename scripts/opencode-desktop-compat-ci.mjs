@@ -548,7 +548,7 @@ async function main() {
   const owner = randomUUID(); await writeFile(join(root, '.desktop-ci-owner'), owner);
   const existingFlag = process.argv.indexOf('--installer-existing');
   const existing = existingFlag < 0 ? process.env.OPENCODE_DESKTOP_INSTALLER_EXISTING : process.argv[existingFlag + 1];
-  const downloads = new Map(); const contexts = []; let summary;
+  const downloads = new Map(); const contexts = []; let protocolSnapshot; let summary;
   async function installer(artifact, env) {
     if (downloads.has(artifact.sha256)) return downloads.get(artifact.sha256);
     let path;
