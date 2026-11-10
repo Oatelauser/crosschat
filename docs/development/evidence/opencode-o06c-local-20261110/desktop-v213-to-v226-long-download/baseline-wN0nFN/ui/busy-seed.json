@@ -1,0 +1,8 @@
+{
+  "url": "oc://renderer/index.html",
+  "title": "OpenCode",
+  "text": "W\ncrosschat_desktop_fixture_sender\nW\ncrosschat_desktop_fixture_receiver\ncrosschat_desktop_fixture_busy\nW\ncrosschat_desktop_fixture_idle\ncrosschat_desktop_fixture_busy\n0\ncrosschat_desktop_fixture_busy-start\n14:07\n工作中\n工作中\n添加后续消息，输入 / 使用命令，输入 @ 添加上下文...\nScripted test model\nDefault",
+  "routes": {
+    "opencode.desktop.window.d2564100-6292-4102-9eb4-0b536cef5970.last-active-url": "/server/c2lkZWNhcg/session/ses_e3beec119ffedqAqvAksLQaVMJ"
+  }
+}

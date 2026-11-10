@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import { access, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path';
 import process from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL, URL } from 'node:url';
@@ -51,6 +51,14 @@ export function desktopArtifactDownloadTimeout(value) {
     throw new Error('OpenCode Desktop artifact download timeout must be between 1000 and 600000 milliseconds');
   }
   return timeout;
+}
+
+export function desktopInstallerCachePath(directory, artifact) {
+  if (typeof directory !== 'string' || !win32.isAbsolute(directory)) throw new Error('OpenCode Desktop installer cache must be an absolute Windows path');
+  if (!record(artifact) || typeof artifact.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(artifact.sha256)) {
+    throw new Error('OpenCode Desktop installer cache requires a valid SHA-256');
+  }
+  return join(win32.resolve(directory), `${artifact.sha256}.exe`);
 }
 
 export function validateDesktopSignature(signature) {
@@ -119,7 +127,58 @@ export const protocolAclRestoreSecurityInformation = 1 | 2 | 4;
 export function protocolSnapshotsMatch(expected, actual) {
   return Buffer.isBuffer(expected?.values) && Buffer.isBuffer(actual?.values)
     && expected.values.equals(actual.values)
-    && compareProtocolAclSnapshots(expected.acl, actual.acl).matches;
+    && compareProtocolAclSnapshots(expected.acl, actual.acl).matches
+    && ((expected.registryValues === undefined && actual.registryValues === undefined)
+      || (expected.registryValues !== undefined && actual.registryValues !== undefined
+        && JSON.stringify(expected.registryValues) === JSON.stringify(actual.registryValues)));
+}
+
+export function protocolSnapshotsDifferOnlyByOwnedCommand(original, actual, binary) {
+  try {
+    if (!compareProtocolAclSnapshots(original?.acl, actual?.acl).matches
+      || !Array.isArray(original?.registryValues) || !Array.isArray(actual?.registryValues)) return false;
+    const beforeKeys = normalizedProtocolValues(original.registryValues);
+    const afterKeys = normalizedProtocolValues(actual.registryValues);
+    if (beforeKeys.length !== afterKeys.length || beforeKeys.some((item, index) => item.relative !== afterKeys[index].relative)) return false;
+    let changedCommand = false;
+    for (let keyIndex = 0; keyIndex < beforeKeys.length; keyIndex++) {
+      const before = beforeKeys[keyIndex];
+      const after = afterKeys[keyIndex];
+      if (before.values.length !== after.values.length) return false;
+      let changedDefault = false;
+      for (let valueIndex = 0; valueIndex < before.values.length; valueIndex++) {
+        const prior = before.values[valueIndex];
+        const current = after.values[valueIndex];
+        if (prior.name !== current.name || prior.kind !== current.kind) return false;
+        if (JSON.stringify(prior.data) === JSON.stringify(current.data)) continue;
+        if (changedDefault || before.relative !== 'shell\\open\\command' || prior.name !== ''
+          || prior.kind !== 'String' || current.kind !== 'String' || typeof current.data !== 'string') return false;
+        const expectedCommand = `"${win32.resolve(binary)}" "%1"`;
+        if (current.data.toLowerCase() !== expectedCommand.toLowerCase()) return false;
+        changedDefault = true;
+      }
+      if (changedDefault) {
+        if (changedCommand) return false;
+        changedCommand = true;
+      }
+    }
+    return changedCommand;
+  } catch {
+    return false;
+  }
+}
+
+export function installedProtocolSnapshotAction({ originalPresent, currentPresent, matchesOriginal, onlyOwnedCommandChange, currentCommand, expectedCommand }) {
+  if (!currentPresent) return originalPresent ? 'refuse' : 'none';
+  const exactOwnedCommand = typeof currentCommand === 'string' && typeof expectedCommand === 'string'
+    && currentCommand.toLowerCase() === expectedCommand.toLowerCase();
+  if (originalPresent) return matchesOriginal || (onlyOwnedCommandChange && exactOwnedCommand) ? 'capture' : 'refuse';
+  return exactOwnedCommand ? 'capture' : 'refuse';
+}
+
+export function observedProtocolSnapshotAction(installed, actual, binary) {
+  if (protocolSnapshotsMatch(installed, actual)) return 'unchanged';
+  return protocolSnapshotsDifferOnlyByOwnedCommand(installed, actual, binary) ? 'capture-owned-command' : 'refuse';
 }
 
 function validReport(report, artifact) {
@@ -210,6 +269,7 @@ export async function runDesktopBuildSequence(builds, operations) {
       summary.retainedInstallation = { label, version: artifact.version, taskRoot: installation.taskRoot, reason };
       throw new Error(reason);
     }
+    await operations.prepareUninstall?.(installation, artifact, label);
     await operations.uninstall(installation, artifact, label);
     return report;
   }
@@ -300,7 +360,15 @@ $items=[System.Collections.Generic.List[object]]::new()
 $sections=[System.Security.AccessControl.AccessControlSections]::Owner -bor [System.Security.AccessControl.AccessControlSections]::Group -bor [System.Security.AccessControl.AccessControlSections]::Access
 function Visit-ProtocolKey([Microsoft.Win32.RegistryKey]$key,[string]$relative){
   $sddl=$key.GetAccessControl($sections).GetSecurityDescriptorSddlForm($sections)
-  $items.Add(@{relative=$relative;sddl=$sddl})
+  $values=[System.Collections.Generic.List[object]]::new()
+  foreach($valueName in ($key.GetValueNames() | Sort-Object)){
+    $kind=$key.GetValueKind($valueName).ToString()
+    $data=$key.GetValue($valueName,$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    if($data -is [byte[]]){$data=[Convert]::ToBase64String($data)}
+    elseif($data -is [string[]]){$data=@($data)}
+    $values.Add(@{name=[string]$valueName;kind=$kind;data=$data})
+  }
+  $items.Add(@{relative=$relative;sddl=$sddl;values=@($values.ToArray())})
   foreach($name in $key.GetSubKeyNames()){
     $child=$key.OpenSubKey($name)
     $next=if($relative){$relative+'\'+$name}else{$name}
@@ -352,8 +420,18 @@ function normalizedProtocolAcl(value) {
   return items.map(({ relative, sddl }) => ({ relative, sddl })).sort((a, b) => a.relative.localeCompare(b.relative));
 }
 
+function normalizedProtocolValues(value) {
+  if (!Array.isArray(value) || !value.length || value.some((key) => !record(key) || typeof key.relative !== 'string'
+    || !Array.isArray(key.values) || key.values.some((item) => !record(item) || typeof item.name !== 'string'
+      || typeof item.kind !== 'string' || !Object.hasOwn(item, 'data')))) throw new Error('OpenCode protocol value snapshot is malformed');
+  return value.map((key) => ({ relative: key.relative, values: key.values.map((item) => ({
+    name: item.name, kind: item.kind, data: item.data,
+  })).sort((a, b) => a.name.localeCompare(b.name)) })).sort((a, b) => a.relative.localeCompare(b.relative));
+}
+
 async function readProtocolAcl(env) {
-  return normalizedProtocolAcl(await powershell(protocolAclReadScript, env, 'read OpenCode protocol ACL'));
+  const items = await powershell(protocolAclReadScript, env, 'read OpenCode protocol ACL and values');
+  return { acl: normalizedProtocolAcl(items), registryValues: normalizedProtocolValues(items) };
 }
 
 async function registryExport(path, env) {
@@ -367,10 +445,12 @@ async function snapshotProtocolRegistration(root, env) {
   const state = await windowsState(env, 'inspect Windows protocol and Desktop install baseline');
   if (!canSnapshotExistingProtocol(state)) throw new Error(`OpenCode Desktop installation, shortcut or installer cache already exists (GUID ${guid}); refusing to snapshot or replace it`);
   if (!state.protocolKey) return undefined;
-  const snapshot = { present: true, registryFile: join(root, 'opencode-protocol-before.reg'), aclFile: join(root, 'opencode-protocol-before-acl.json') };
+  const snapshot = { present: true, registryFile: join(root, 'opencode-protocol-before.reg'), aclFile: join(root, 'opencode-protocol-before-acl.json'),
+    valuesFile: join(root, 'opencode-protocol-before-values.json') };
   const stable = await readStableProtocolSnapshot(root, env, 'capture original OpenCode protocol registration');
   await writeFile(snapshot.registryFile, stable.values);
   await writeFile(snapshot.aclFile, JSON.stringify(stable.acl, null, 2) + '\n');
+  await writeFile(snapshot.valuesFile, JSON.stringify(stable.registryValues, null, 2) + '\n');
   return snapshot;
 }
 
@@ -380,11 +460,11 @@ async function readStableProtocolSnapshot(root, env, operation) {
     const secondFile = join(root, `opencode-protocol-${randomUUID()}-second.reg`);
     try {
       const firstValues = await registryExport(firstFile, env);
-      const firstAcl = await readProtocolAcl(env);
+      const firstTree = await readProtocolAcl(env);
       const secondValues = await registryExport(secondFile, env);
-      const secondAcl = await readProtocolAcl(env);
-      const first = { values: firstValues, acl: firstAcl };
-      const second = { values: secondValues, acl: secondAcl };
+      const secondTree = await readProtocolAcl(env);
+      const first = { values: firstValues, ...firstTree };
+      const second = { values: secondValues, ...secondTree };
       if (protocolSnapshotsMatch(first, second)) return first;
     } catch (error) {
       if (!isProtocolAclSnapshotRace(error) || attempt === 3) throw error;
@@ -399,26 +479,71 @@ async function readStableProtocolSnapshot(root, env, operation) {
 async function protocolMatchesSnapshot(state, snapshot, root, env) {
   if (snapshot === undefined) return state.protocolKey === false;
   if (!state.protocolKey) return false;
-  const [expectedValues, expectedAcl, actual] = await Promise.all([
-    readFile(snapshot.registryFile), readFile(snapshot.aclFile, 'utf8').then((text) => JSON.parse(text)),
-    readStableProtocolSnapshot(root, env, 'verify OpenCode protocol registration'),
+  const [expected, actual] = await Promise.all([
+    loadProtocolSnapshot(snapshot), readStableProtocolSnapshot(root, env, 'verify OpenCode protocol registration'),
   ]);
-  return protocolSnapshotsMatch({ values: expectedValues, acl: expectedAcl }, actual);
+  return protocolSnapshotsMatch(expected, actual);
+}
+
+async function loadProtocolSnapshot(snapshot) {
+  const [values, acl, registryValues] = await Promise.all([
+    readFile(snapshot.registryFile), readFile(snapshot.aclFile, 'utf8').then((text) => JSON.parse(text)),
+    readFile(snapshot.valuesFile, 'utf8').then((text) => JSON.parse(text)),
+  ]);
+  return { values, acl, registryValues };
+}
+
+async function writeProtocolSnapshot(label, root, stable) {
+  const snapshot = { present: true, registryFile: join(root, `opencode-protocol-after-${label}.reg`),
+    aclFile: join(root, `opencode-protocol-after-${label}-acl.json`), valuesFile: join(root, `opencode-protocol-after-${label}-values.json`) };
+  await writeFile(snapshot.registryFile, stable.values);
+  await writeFile(snapshot.aclFile, JSON.stringify(stable.acl, null, 2) + '\n');
+  await writeFile(snapshot.valuesFile, JSON.stringify(stable.registryValues, null, 2) + '\n');
+  return snapshot;
+}
+
+function protocolCommandValue(snapshot) {
+  const values = snapshot?.registryValues?.find((key) => key.relative === 'shell\\open\\command')?.values;
+  const command = values?.find((value) => value.name === '')?.data;
+  return typeof command === 'string' ? command : undefined;
 }
 
 async function captureInstalledProtocolRegistration(context, snapshot, root) {
   const state = await windowsState(context.env, `snapshot ${context.label} installed protocol registration`);
-  if (!state.protocolKey || await protocolMatchesSnapshot(state, snapshot, root, context.env)) return undefined;
-  const expected = `"${context.binary}"`;
-  if (typeof state.protocolCommand !== 'string' || !state.protocolCommand.toLowerCase().startsWith(expected.toLowerCase())) {
-    throw new Error('OpenCode protocol registration changed to an unknown owner during installation');
-  }
-  const installed = { present: true, registryFile: join(root, `opencode-protocol-after-${context.label}.reg`),
-    aclFile: join(root, `opencode-protocol-after-${context.label}-acl.json`) };
-  const stable = await readStableProtocolSnapshot(root, context.env, `capture ${context.label} installed protocol registration`);
-  await writeFile(installed.registryFile, stable.values);
-  await writeFile(installed.aclFile, JSON.stringify(stable.acl, null, 2) + '\n');
+  if (!state.protocolKey && snapshot === undefined) return undefined;
+  const [original, current] = await Promise.all([
+    snapshot === undefined ? undefined : loadProtocolSnapshot(snapshot),
+    state.protocolKey ? readStableProtocolSnapshot(root, context.env, `snapshot ${context.label} installed protocol registration`) : undefined,
+  ]);
+  const matchesOriginal = original !== undefined && current !== undefined && protocolSnapshotsMatch(original, current);
+  const onlyOwnedCommandChange = original !== undefined && current !== undefined
+    && protocolSnapshotsDifferOnlyByOwnedCommand(original, current, context.binary);
+  const action = installedProtocolSnapshotAction({ originalPresent: snapshot !== undefined, currentPresent: state.protocolKey,
+    matchesOriginal, onlyOwnedCommandChange, currentCommand: protocolCommandValue(current),
+    expectedCommand: `"${win32.resolve(context.binary)}" "%1"` });
+  if (action === 'none') return undefined;
+  if (action === 'refuse') throw new Error('OpenCode protocol registration changed beyond its exact owned command during installation');
+  const installed = await writeProtocolSnapshot(context.label, root, current);
+  context.protocolInstalledSnapshot = installed;
   return installed;
+}
+
+async function captureObservedOpenCodeProtocolChange(context, snapshot, root) {
+  const state = await windowsState(context.env, `inspect ${context.label} protocol after native probe`);
+  if (!state.protocolKey) {
+    if (snapshot === undefined && context.protocolInstalledSnapshot === undefined) return;
+    throw new Error('OpenCode removed a pre-existing protocol registration during the native probe; refusing to continue');
+  }
+  const expectedSnapshot = context.protocolInstalledSnapshot ?? snapshot;
+  if (expectedSnapshot === undefined) throw new Error('OpenCode created a protocol registration after the install snapshot; refusing to overwrite unverified user data');
+  const [installed, actual] = await Promise.all([
+    loadProtocolSnapshot(expectedSnapshot),
+    readStableProtocolSnapshot(root, context.env, `inspect ${context.label} protocol after native probe`),
+  ]);
+  const action = observedProtocolSnapshotAction(installed, actual, context.binary);
+  if (action === 'unchanged') return;
+  if (action === 'refuse') throw new Error('OpenCode protocol registration changed beyond its exact owned command; refusing to remove user data');
+  context.protocolInstalledSnapshot = await writeProtocolSnapshot(context.label, root, actual);
 }
 
 async function removeOwnedProtocolRegistration(context, installedSnapshot, root) {
@@ -503,12 +628,14 @@ async function restoreProtocolTree(context, snapshot, root) {
     const original = snapshot === undefined ? undefined : {
       values: await readFile(snapshot.registryFile),
       acl: JSON.parse(await readFile(snapshot.aclFile, 'utf8')),
+      registryValues: JSON.parse(await readFile(snapshot.valuesFile, 'utf8')),
     };
     const originalValuesMatch = original !== undefined && actual.values.equals(original.values);
     const originalAclMatches = originalValuesMatch && compareProtocolAclSnapshots(original.acl, actual.acl).matches;
     const installedSnapshot = context.protocolInstalledSnapshot === undefined ? undefined : {
       values: await readFile(context.protocolInstalledSnapshot.registryFile),
       acl: JSON.parse(await readFile(context.protocolInstalledSnapshot.aclFile, 'utf8')),
+      registryValues: JSON.parse(await readFile(context.protocolInstalledSnapshot.valuesFile, 'utf8')),
     };
     const installedSnapshotMatches = installedSnapshot !== undefined && protocolSnapshotsMatch(installedSnapshot, actual);
     const action = protocolRestorationAction({ originalValuesMatch, originalAclMatches, installedSnapshotMatches });
@@ -614,16 +741,25 @@ async function main() {
   async function installer(artifact, env) {
     if (downloads.has(artifact.sha256)) return downloads.get(artifact.sha256);
     let path;
+    const cached = process.env.OPENCODE_DESKTOP_INSTALLER_CACHE_DIRECTORY === undefined ? undefined
+      : desktopInstallerCachePath(process.env.OPENCODE_DESKTOP_INSTALLER_CACHE_DIRECTORY, artifact);
     if (existing) {
       if (!isAbsolute(existing)) throw new Error('Existing installer path must be absolute');
       const details = await stat(existing);
       if (details.size === artifact.size && createHash('sha256').update(await readFile(existing)).digest('hex') === artifact.sha256) path = existing;
     }
+    if (!path && cached) {
+      try {
+        const details = await stat(cached);
+        if (details.size === artifact.size && createHash('sha256').update(await readFile(cached)).digest('hex') === artifact.sha256) path = cached;
+      } catch (error) { if (error?.code !== 'ENOENT') throw error; }
+    }
     if (!path) {
       const timeout = desktopArtifactDownloadTimeout(process.env.OPENCODE_DESKTOP_ARTIFACT_DOWNLOAD_TIMEOUT_MS);
       const bytes = await fetchBytes(artifact.url, artifact.size, timeout);
       if (bytes.length !== artifact.size || createHash('sha256').update(bytes).digest('hex') !== artifact.sha256) throw new Error('Desktop official installer checksum or size mismatch');
-      path = join(root, `${artifact.sha256}.exe`); await writeFile(path, bytes);
+      path = cached ?? join(root, `${artifact.sha256}.exe`);
+      await mkdir(dirname(path), { recursive: true }); await writeFile(path, bytes);
     }
     await signature(path, env);
     downloads.set(artifact.sha256, path);
@@ -676,6 +812,9 @@ async function main() {
       if (context.ownedInstallationVerified !== true || context.protocolSnapshotCaptured !== true) {
         throw new Error('Desktop install ownership and protocol snapshots must be captured before the native probe');
       }
+    },
+    async prepareUninstall(context) {
+      await captureObservedOpenCodeProtocolChange(context, protocolSnapshot, root);
     },
     async probe(context, artifact, label) {
       return runDesktopProbeAttempt({ output, label, version: artifact.version }, ({ reportPath, evidencePath }) => {

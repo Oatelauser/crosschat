@@ -1,0 +1,8 @@
+{
+  "url": "oc://renderer/index.html",
+  "title": "crosschat_desktop_fixture_busy · OpenCode",
+  "text": "W\ncrosschat_desktop_fixture_sender\nW\ncrosschat_desktop_fixture_receiver\nW\ncrosschat_desktop_fixture_busy\nW\ncrosschat_desktop_fixture_idle\nW\nworkspace\ncrosschat_desktop_fixture_busy\n11\ncrosschat_desktop_fixture_busy-start\nScripted test model\n<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3be8f1e3ffeYUpdQ5Gs725q2c\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA002；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_steered\n</cross-session-message>\nScripted test model\n\ncrosschat_desktop_fixture_steer-finished\n\nScripted test model\n·\n0 秒\n·\n142.9 tok/s\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3be8f1e3ffeYUpdQ5Gs725q2c\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA002；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_queued\n</cross-session-message>\nScripted test model\n工作中\n工作中\n工作中\n移至背景\nCTRL\nB\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\"> <crosschat-reply-hint reply-as=\"opencode/ses_e3be8f1e3ffeYUpdQ5Gs725q2c\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA002；核实目标类型后使用该引用回复。</crosschat-reply-hint> crosschat_desktop_fixture_queued </cross-session-message>\n引导\n添加后续消息，输入 / 使用命令，输入 @ 添加上下文...\nCrosschat desktop fixture\n/\nScripted test model\nDefault",
+  "routes": {
+    "opencode.desktop.window.8d008b03-bbfe-48d8-b378-25a97b280c42.last-active-url": "/server/c2lkZWNhcg/session/ses_e3be8f1e3ffeYUpdQ5Gs725q2c"
+  }
+}
