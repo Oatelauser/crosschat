@@ -33,6 +33,17 @@ export function parseDesktopArtifactManifest(input, platform, arch) {
   return { version: input.version, filename, url: file.url, sha256: file.sha256, size: file.size, sourceCommit: input.metadata.github.sha };
 }
 
+export function requireApprovedCandidateVersion(artifact, expectedVersion) {
+  if (expectedVersion === undefined) return artifact;
+  if (typeof expectedVersion !== 'string' || !/^2\.\d+\.\d+$/.test(expectedVersion)) {
+    throw new Error('OpenCode Desktop approved version must be an exact release version');
+  }
+  if (artifact.version !== expectedVersion) {
+    throw new Error(`Official OpenCode Desktop latest ${artifact.version} differs from the approved version ${expectedVersion}`);
+  }
+  return artifact;
+}
+
 export function validateDesktopSignature(signature) {
   if (!record(signature) || signature.status !== 'Valid' || typeof signature.subject !== 'string'
     || !/(?:^|,\s*)O="Anomaly Innovations, Inc https:\/\/anoma\.ly\/"(?:,|$)/.test(signature.subject)) {
@@ -623,8 +634,12 @@ async function main() {
   }
   try {
     protocolSnapshot = await snapshotProtocolRegistration(root, process.env);
-    const builds = { baseline: parseDesktopArtifactManifest(JSON.parse(await readFile(new URL('./opencode-desktop-baseline.json', import.meta.url), 'utf8')), process.platform, process.arch),
-      candidate: parseDesktopArtifactManifest(JSON.parse((await fetchBytes('https://opencode.ai/update/api/latest/desktop/opencode', 256 * 1024, 30000)).toString()), process.platform, process.arch) };
+    const baseline = parseDesktopArtifactManifest(JSON.parse(await readFile(new URL('./opencode-desktop-baseline.json', import.meta.url), 'utf8')), process.platform, process.arch);
+    const candidate = requireApprovedCandidateVersion(
+      parseDesktopArtifactManifest(JSON.parse((await fetchBytes('https://opencode.ai/update/api/latest/desktop/opencode', 256 * 1024, 30000)).toString()), process.platform, process.arch),
+      process.env.OPENCODE_DESKTOP_EXPECTED_CANDIDATE_VERSION,
+    );
+    const builds = { baseline, candidate };
     summary = await runDesktopBuildSequence(builds, operations);
   } catch (error) {
     summary = { schema: 1, tool, platform: process.platform, arch: process.arch, classification: { kind: error?.category === 'unsupported' ? 'unsupported-release' : 'infrastructure', notify: false }, error: errorMessage(error) };
