@@ -4,7 +4,7 @@
 
 2026-11-10 更新：O06c 的 PR #10 本地候选已补强 Windows Desktop 生命周期工装。当前实现对既有 HKCU `opencode` 协议注册做两次完整值/Owner/Group/DACL 稳定采样；安装后的卸载仅在当前值与 ACL 匹配本次安装快照时移除，未知差异拒绝覆盖；ACL 回滚恢复 Owner、Group、DACL，并先打开全部子键句柄、从叶到根应用。Windows 注册表没有条件式整树删除/导入，代码在破坏操作前重读并拒绝已观察到的差异，但无法排除其他进程恰在最终复核后并发写入的窗口。
 
-本机已按用户批准的 v2.1.3→v2.2.6 范围运行 Desktop baseline→candidate。2.1.3 baseline 通过；2.2.6 正式包原生行为检查 11/11 通过，探测进程与运行根正常释放。整轮最初被 runner 判为 infrastructure：官方安装器生成的 `Uninstall OpenCode.exe` 是 `NotSigned`，旧实现错误要求该生成文件有独立 Authenticode 发布者签名。GREEN 修复 `9c3e1b0` 保留有效签名检查，并把未签名卸载器限定到精确安装路径、安装后 SHA-256 与当前散列一致、且注册记录仍指向该安装；定向 22/22、全量 248 文件/2940 项通过（3 文件和 11 项跳过；导入图 206 模块/699 边）。已按精确注册记录手动运行该官方生成卸载器，退出码 0；安装/卸载项和进程清除，原协议值及四个节点的 Owner/Group/DACL 均与原快照一致。两项隔离 profile 文件（安装目标快捷方式和官方安装包 updater 缓存）仍留在带 owner 标记的临时根，文件删除命令在执行前被自动审批策略拦截；故不能宣称整轮及临时根清理完成。详细报告见[本机候选手动卸载记录](evidence/opencode-o06c-local-20261110/desktop-v213-to-v226-long-download/candidate-manual-uninstallation.json)。
+最终本机完整 runner 已按用户批准的 v2.1.3→v2.2.6 范围完成 baseline→candidate，分类为 `compatible`（`notify=false`）：两个版本各 11/11 原生行为检查通过。正式 Desktop 均经官方卸载器卸载，退出码为 0；安装/卸载登记、副作用文件、探测进程和运行根均清除，原协议注册恢复；下载根清理结果为 `removed`。最终报告见[完整重跑证据](evidence/opencode-o06c-local-20261110/desktop-v213-to-v226-final/summary.json)。先前长下载轮次因官方安装器生成的 NSIS 卸载器 `NotSigned` 被旧 runner 错误拒绝，且留有两项隔离 profile 文件；修复 `9c3e1b0` 保留签名校验，并将未签名卸载器限制为精确安装路径、安装后 SHA-256 未变化且卸载登记仍指向该安装。该轮及其手动卸载记录保留为历史，不覆盖最终完整重跑。定向 22/22、全量 248 文件/2940 项通过（3 文件和 11 项跳过；导入图 206 模块/699 边）。最终卸载报告确认原协议注册恢复；ACL 快照/恢复保护已在工装实现中，但这组最终摘要未单独归档原始 SDDL 对比值。
 
 ## 目标与用户要求
 
@@ -22,7 +22,7 @@
 | 任务 | 内容 | 出口 |
 | --- | --- | --- |
 | O08 用户从零验证 | [CLI](../opencode-cli.md)和[桌面](../opencode-desktop.md)指南已提供。等待用户重新安装，配置自己的模型并验证发现、投递、原生 shell 回信及忙闲行为。 | 真实使用独立验收；不要求把 key 发到聊天或放入 CI。 |
-| O06c 完整 CI 实跑 | CLI Windows/Linux 8/8 托管通过；PR #10 的 Desktop 诊断修复及协议值/ACL 精确恢复候选位于本地分支 `codex/opencode-desktop-ci-diagnostics-20261109`。本机修复提交 `0bb4308`（RED）和 `9c3e1b0`（GREEN）；定向 22/22、全量 248 个文件通过/3 个跳过、2940 项通过/11 项跳过，导入图 206 模块/699 边。v2.1.3 baseline 和 v2.2.6 的 11 项 Desktop 原生行为检查均通过；官方卸载退出码 0，协议值/ACL 原样恢复。 | runner 首轮因生成的未签名 NSIS 卸载器被错误拒绝而判为 infrastructure；已校正验证方式，详见[候选手动卸载记录](evidence/opencode-o06c-local-20261110/desktop-v213-to-v226-long-download/candidate-manual-uninstallation.json)。自动审批策略拦截两个隔离 profile 副作用文件删除，owner 标记临时根仍保留，因此本机 runner 整轮和清理仍未通过；待清理后重跑完整 baseline→candidate。没有推送这些新提交或触发 Actions；PR #10 的 hosted Ubuntu send-handle 失败与重跑通过证据仍保留在既有 raw 文件。 |
+| O06c 完整 CI 实跑 | CLI Windows/Linux 8/8 托管通过；PR #10 的 Desktop 诊断修复及精确协议注册恢复候选位于本地分支 `codex/opencode-desktop-ci-diagnostics-20261109`。本机修复提交 `0bb4308`（RED）和 `9c3e1b0`（GREEN）；定向 22/22、全量 248 个文件通过/3 个跳过、2940 项通过/11 项跳过，导入图 206 模块/699 边。 | Windows x64 官方 Desktop v2.1.3→v2.2.6 完整 runner 已通过：baseline 和 candidate 各 11/11，分类 `compatible`；两次官方卸载退出码 0，协议注册恢复，运行根和下载根清理完成。见[最终完整重跑报告](evidence/opencode-o06c-local-20261110/desktop-v213-to-v226-final/summary.json)及目录内安装/卸载记录。较早 `long-download` 轮次的签名误判与残留历史仍原样保留。当前分支本地提交尚未推送，本轮新改动的 hosted CI 尚未运行；PR #10 既有 hosted Ubuntu send-handle 失败与重跑通过证据保留在原始记录中，后续推送和托管运行按具体候选等待用户决定。 |
 
 每批交付都执行所属软件的清理，不能仅因代码完成就把测试安装留给用户。若工具再次拒绝清理，准确记录未完成项及拒绝原因；不绕过拒绝，也不视为用户已接受残留。
 
