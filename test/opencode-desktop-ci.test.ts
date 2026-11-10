@@ -9,6 +9,7 @@ import {
   desktopStateMatchesBaseline,
   desktopLifecycleFailure,
   desktopRegressionIdentity,
+  desktopArtifactDownloadTimeout,
   compareProtocolAclSnapshots,
   isProtocolAclSnapshotRace,
   parseDesktopArtifactManifest,
@@ -152,6 +153,14 @@ describe('OpenCode Desktop CI evidence', () => {
     expect(() => requireApprovedCandidateVersion(approved, 'latest')).toThrow('approved version must be an exact release version');
     expect(() => parseDesktopArtifactManifest({ ...manifest(), name: 'cli' }, 'win32', 'x64')).toThrow();
     expect(() => parseDesktopArtifactManifest(manifest(), 'linux', 'x64')).toThrow();
+  });
+
+  it('bounds an optional desktop installer download timeout without changing the default', () => {
+    expect(desktopArtifactDownloadTimeout(undefined)).toBe(120000);
+    expect(desktopArtifactDownloadTimeout('600000')).toBe(600000);
+    expect(() => desktopArtifactDownloadTimeout('0')).toThrow('between 1000 and 600000 milliseconds');
+    expect(() => desktopArtifactDownloadTimeout('600001')).toThrow('between 1000 and 600000 milliseconds');
+    expect(() => desktopArtifactDownloadTimeout('slow')).toThrow('between 1000 and 600000 milliseconds');
   });
 
   it('rejects a mutable/unrelated download, invalid digest/size/source and an unapproved major', () => {
