@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "result": "native-probe-passed-manual-uninstall-verified-residual-cleanup-incomplete",
+  "version": "2.2.6",
+  "runner": {
+    "classification": {
+      "kind": "infrastructure",
+      "notify": false
+    },
+    "error": "Desktop Authenticode signature is not valid for the expected publisher organization",
+    "cause": "The signed official installer generated an unsigned NSIS uninstaller; the runner required that generated uninstaller to have a publisher signature."
+  },
+  "candidateProbe": {
+    "report": "candidate-GuUatk/report.json",
+    "status": "passed",
+    "stage": "done",
+    "checksPassed": 11,
+    "checksTotal": 11,
+    "appStopped": true,
+    "serviceStopped": true,
+    "probeRootRemoved": true,
+    "forcedAppStop": false,
+    "cleanupErrors": []
+  },
+  "manualUninstallation": {
+    "authorizedOfficialUninstaller": true,
+    "version": "2.2.6",
+    "uninstallerPath": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-jWxwnO\\candidate\\install\\Uninstall OpenCode.exe",
+    "uninstallerAuthenticode": "NotSigned",
+    "uninstallerSha256": "94f56a817ca24ed4ff248b0718bfa348bfbdd40c021f661a7e9425c954d684ce",
+    "pathMatchedOwnedInstall": true,
+    "quietUninstallRecordMatchedExactPathAndArguments": true,
+    "twoPreExecutionSha256SamplesMatched": true,
+    "arguments": [
+      "/currentuser",
+      "/S"
+    ],
+    "exitCode": 0,
+    "uninstallerRemoved": true,
+    "installDirectoryRemoved": true,
+    "installRegistryKeyRemoved": true,
+    "uninstallRegistryKeyRemoved": true,
+    "candidateProcessesRemaining": []
+  },
+  "protocolRegistration": {
+    "valuesMatchOriginalSnapshot": true,
+    "ownerGroupDaclNodeCount": 4,
+    "ownerGroupDaclMatchOriginalSnapshot": true,
+    "protocolCommandUnchanged": true
+  },
+  "remainingOwnedProfileArtifacts": [
+    {
+      "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-jWxwnO\\candidate\\profile\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\OpenCode.lnk",
+      "wasAbsentBeforeInstall": true,
+      "targetMatchesRemovedCandidateBinary": true
+    },
+    {
+      "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-jWxwnO\\candidate\\profile\\AppData\\Local\\@opencodedesktop-updater\\installer.exe",
+      "wasAbsentBeforeInstall": true,
+      "sha256MatchesOfficialCandidateInstaller": true,
+      "officialCandidateSha256": "ac52d2403711eee195924f7b5ac6d8609415bb07b9fff3b1206004a1f8a02906"
+    }
+  ],
+  "cleanup": {
+    "taskRoot": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-jWxwnO",
+    "retainedWithOwnerMarker": true,
+    "sideEffectFileRemovalAttempt": "blocked before execution by automatic approval policy",
+    "complete": false
+  }
+}
