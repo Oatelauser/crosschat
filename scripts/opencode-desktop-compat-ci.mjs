@@ -58,7 +58,7 @@ export function desktopInstallerCachePath(directory, artifact) {
   if (!record(artifact) || typeof artifact.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(artifact.sha256)) {
     throw new Error('OpenCode Desktop installer cache requires a valid SHA-256');
   }
-  return join(win32.resolve(directory), `${artifact.sha256}.exe`);
+  return win32.join(win32.resolve(directory), `${artifact.sha256}.exe`);
 }
 
 export function validateDesktopSignature(signature) {

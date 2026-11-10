@@ -10,7 +10,9 @@
 
 2026-11-10再次复核发现安装阶段仍须比较完整注册表树：只核验 protocol command 会把同期其它注册表改动误收为安装器所有。新增测试后 RED 2 项、GREEN 30/30；安装前后及探测前后现均比较完整 registry values 与 Owner/Group/DACL，只接受完全不变或仅精确默认命令切到本次 `OpenCode.exe`。完整 Node 22.23.4 `npm run check` 通过（248 文件通过/3 跳过，2948 项通过/11 跳过；导入图 206 模块/699 边）。首次修复后原生轮次 baseline 11/11 通过，但官方 candidate 下载超时且未安装；随后使用从官方固定 URL 下载并逐个复核 SHA-256/size 的 v2.1.3 与 v2.2.6 包重跑，baseline/candidate 各 11/11，分类 `compatible`（`notify=false`）。两次官方卸载退出码均为 0，安装/卸载登记和副作用文件均清除，协议值及 ACL 恢复，runner 自有根删除；最终报告见[修复后完整原生重跑](evidence/opencode-o06c-local-20261110/desktop-v213-to-v226-review-rerun-final/summary.json)。
 
-当前仍有两处本机测试临时根需要清理：较早一次失败轮的 `C:\Users\yangsheng\AppData\Local\Temp\crosschat-opencode-desktop-ci-NkUyHW`（原 protocol 已按完整值/Owner/Group/DACL 基线精确恢复，OpenCode 安装器、卸载器和相关进程均不存在），以及本轮两个官方 SHA-256 固定安装包的临时缓存 `C:\Users\yangsheng\AppData\Local\Temp\crosschat-opencode-installer-cache-20261110`。递归删除请求被自动审批拦截，代理未改用其它路径删除；在这两处目录清除前，不能把本机临时数据清理标为完成。用户此前确认删除的 `jWxwnO` 两个 profile 残留与该旧轮根均无关，已单独核验不存在。
+推送到 PR #10 后，普通三平台 CI 的 Windows 通过，Ubuntu 与 macOS 在新增缓存路径断言上失败：实现用 POSIX `join` 拼 Windows 路径，Linux/macOS 输出混合分隔符。改用 `win32.join` 后，Node 22.23.4 定向 30/30、完整 `npm run check` 通过（248 文件通过/3 跳过，2948 项通过/11 跳过）。失败 job 原始日志已按 job 分别读取；修复提交将触发新的普通三平台 CI，当前结果待核验。PR #10 仍为 draft；标题/正文编辑表单尚未提交，远端正文仍保留原始候选描述。
+
+用户于2026-11-10确认已删除上述旧失败轮根 `C:\Users\yangsheng\AppData\Local\Temp\crosschat-opencode-desktop-ci-NkUyHW` 与官方安装包缓存 `C:\Users\yangsheng\AppData\Local\Temp\crosschat-opencode-installer-cache-20261110`；随后只读核实两路径均不存在。旧根协议值/ACL 已精确恢复，未发现相关 OpenCode 安装器、卸载器或进程。此前确认删除的 `jWxwnO` 两个 profile 残留也仍不存在；本机临时数据清理已关闭。
 
 ## 目标与用户要求
 
@@ -28,7 +30,7 @@
 | 任务 | 内容 | 出口 |
 | --- | --- | --- |
 | O08 用户从零验证 | [CLI](../opencode-cli.md)和[桌面](../opencode-desktop.md)指南已提供。等待用户重新安装，配置自己的模型并验证发现、投递、原生 shell 回信及忙闲行为。 | 真实使用独立验收；不要求把 key 发到聊天或放入 CI。 |
-| O06c 完整 CI 实跑 | CLI Windows/Linux 8/8 托管通过；PR #10 的 Desktop 诊断修复及精确协议注册恢复候选位于本地分支 `codex/opencode-desktop-ci-diagnostics-20261109`。修复后 Node 22.23.4 `npm run check` 通过（248 文件/3 跳过，2948 项/11 跳过）；Windows Desktop v2.1.3→v2.2.6 原生 runner 两版本各 11/11，分类 `compatible`，完整安装/官方卸载/协议恢复结果见[修复后完整原生重跑](evidence/opencode-o06c-local-20261110/desktop-v213-to-v226-review-rerun-final/summary.json)。较早超时与协议改动拒绝轮次保留为历史，用户已删除的 `jWxwnO` 残留未复现。 | 本地候选新增安装前后完整 registry values 与 Owner/Group/DACL 所有权快照，拒绝探测前未知变更；本机代码与验收现已通过。仍有旧失败轮运行根和两包临时缓存待清理，删除请求被自动审批拦截，故清理状态未关闭。当前分支本地提交尚未推送，本轮新改动的 hosted CI 尚未运行；PR #10 既有 hosted Ubuntu send-handle 失败与重跑通过证据保留在原始记录中。推送更新 PR #10/运行新托管 CI 需要针对当前具体候选另行决定。 |
+| O06c 完整 CI 实跑 | CLI Windows/Linux 8/8 托管通过；PR #10 的 Desktop 诊断修复及精确协议注册恢复候选位于本地分支 `codex/opencode-desktop-ci-diagnostics-20261109`。修复后 Node 22.23.4 `npm run check` 通过（248 文件/3 跳过，2948 项/11 跳过）；Windows Desktop v2.1.3→v2.2.6 原生 runner 两版本各 11/11，分类 `compatible`，完整安装/官方卸载/协议恢复结果见[修复后完整原生重跑](evidence/opencode-o06c-local-20261110/desktop-v213-to-v226-review-rerun-final/summary.json)。较早超时与协议改动拒绝轮次保留为历史，用户已删除的临时目录经复核不存在。 | 本地候选新增安装前后完整 registry values 与 Owner/Group/DACL 所有权快照，拒绝探测前未知变更；本机代码和完整检查通过。PR #10 推送后 Windows 普通 CI 通过，Ubuntu/macOS 因 POSIX join 产生混合 Windows 路径失败；已改用 `win32.join`，完整检查再次通过，新提交推送后的普通 CI 结果待核验。用户已删除旧失败轮运行根和两包临时缓存，均核实不存在，本机临时数据清理已关闭。PR #10 仍为 draft，描述编辑表单待用户提交，远端当前正文仍旧；本地/远端未合入。 |
 
 每批交付都执行所属软件的清理，不能仅因代码完成就把测试安装留给用户。若工具再次拒绝清理，准确记录未完成项及拒绝原因；不绕过拒绝，也不视为用户已接受残留。
 
