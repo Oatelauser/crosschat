@@ -106,27 +106,34 @@ describe('OpenCode Desktop CI evidence', () => {
     expect(compare).toBeTypeOf('function');
     type RegistryValue = { name: string; kind: string; value: string };
     type RegistryKey = { relative: string; sddl: string; values: RegistryValue[] };
-    type Snapshot = { values: Buffer; acl: RegistryKey[] };
+    type Snapshot = { values: Buffer; acl: Array<{ relative: string; sddl: string }>; registryValues: RegistryKey[] };
     const binary = 'C:\\temp\\crosschat-opencode\\baseline\\install\\OpenCode.exe';
     const original: Snapshot = {
       values: Buffer.from('original registry export'),
       acl: [
-        { relative: '', sddl: 'root-acl', values: [{ name: '', kind: 'String', data: 'URL:opencode' }, { name: 'URL Protocol', kind: 'String', data: '' }] },
-        { relative: 'shell', sddl: 'shell-acl', values: [] },
-        { relative: 'shell\\open', sddl: 'open-acl', values: [] },
-        { relative: 'shell\\open\\command', sddl: 'command-acl', values: [{ name: '', kind: 'String', data: '"D:\\previous\\OpenCode.exe" "%1"' }] },
+        { relative: '', sddl: 'root-acl' },
+        { relative: 'shell', sddl: 'shell-acl' },
+        { relative: 'shell\\open', sddl: 'open-acl' },
+        { relative: 'shell\\open\\command', sddl: 'command-acl' },
+      ],
+      registryValues: [
+        { relative: '', values: [{ name: '', kind: 'String', data: 'URL:opencode' }, { name: 'URL Protocol', kind: 'String', data: '' }] },
+        { relative: 'shell', values: [] },
+        { relative: 'shell\\open', values: [] },
+        { relative: 'shell\\open\\command', values: [{ name: '', kind: 'String', data: '"D:\\previous\\OpenCode.exe" "%1"' }] },
       ],
     };
     const clone = (snapshot: Snapshot): Snapshot => ({ values: Buffer.from(snapshot.values),
-      acl: snapshot.acl.map((key) => ({ ...key, values: key.values.map((value) => ({ ...value })) })) });
+      acl: snapshot.acl.map((key) => ({ ...key })),
+      registryValues: snapshot.registryValues.map((key) => ({ ...key, values: key.values.map((value) => ({ ...value })) })) });
     const current = clone(original);
     current.values = Buffer.from('current registry export');
-    current.acl[3].values[0].data = `"${binary}" "%1"`;
+    current.registryValues[3].values[0].data = `"${binary}" "%1"`;
     const compareSnapshots = compare as (before: Snapshot, after: Snapshot, path: string) => boolean;
     expect(compareSnapshots(original, current, binary)).toBe(true);
 
     const extraValue = clone(current);
-    extraValue.acl[1].values.push({ name: 'unexpected', kind: 'String', data: 'keep me' });
+    extraValue.registryValues[1].values.push({ name: 'unexpected', kind: 'String', data: 'keep me' });
     expect(compareSnapshots(original, extraValue, binary)).toBe(false);
 
     const changedAcl = clone(current);
@@ -134,7 +141,7 @@ describe('OpenCode Desktop CI evidence', () => {
     expect(compareSnapshots(original, changedAcl, binary)).toBe(false);
 
     const otherCommand = clone(current);
-    otherCommand.acl[3].values[0].data = '"C:\\temp\\other\\OpenCode.exe" "%1"';
+    otherCommand.registryValues[3].values[0].data = '"C:\\temp\\other\\OpenCode.exe" "%1"';
     expect(compareSnapshots(original, otherCommand, binary)).toBe(false);
   });
 
@@ -252,9 +259,10 @@ describe('OpenCode Desktop CI evidence', () => {
       install: async (_artifact: unknown, label: string) => { calls.push(`install:${label}`); return { label }; },
       captureInstalled: async (installation: { label: string }) => { calls.push(`capture:${installation.label}`); },
       probe: async (installation: { label: string }, artifact: typeof baseline) => { calls.push(`probe:${installation.label}`); return passed(artifact.version); },
+      prepareUninstall: async (installation: { label: string }) => { calls.push(`prepare-uninstall:${installation.label}`); },
       uninstall: async (installation: { label: string }) => { calls.push(`uninstall:${installation.label}`); },
     });
-    expect(calls.slice(0, 4)).toEqual(['install:baseline', 'capture:baseline', 'probe:baseline', 'uninstall:baseline']);
+    expect(calls.slice(0, 5)).toEqual(['install:baseline', 'capture:baseline', 'probe:baseline', 'prepare-uninstall:baseline', 'uninstall:baseline']);
   });
 
   it('captures and verifies a generated uninstaller before cleaning a failed partial installation', async () => {
