@@ -10,6 +10,7 @@ import {
   desktopLifecycleFailure,
   desktopRegressionIdentity,
   desktopArtifactDownloadTimeout,
+  desktopInstallerCachePath,
   compareProtocolAclSnapshots,
   isProtocolAclSnapshotRace,
   parseDesktopArtifactManifest,
@@ -98,14 +99,18 @@ describe('OpenCode Desktop CI evidence', () => {
     expect(protocolSnapshotsMatch({ values, acl }, { values: Buffer.from(values), acl: [...acl] })).toBe(true);
     expect(protocolSnapshotsMatch({ values, acl }, { values: Buffer.from('changed'), acl })).toBe(false);
     expect(protocolSnapshotsMatch({ values, acl }, { values, acl: [{ relative: '', sddl: 'O:otherG:groupD:(A;;KA;;;user)' }] })).toBe(false);
+    const registryValues = [{ relative: '', values: [{ name: '', kind: 'String', data: 'URL:opencode' }] }];
+    expect(protocolSnapshotsMatch({ values, acl, registryValues }, { values: Buffer.from(values), acl: [...acl], registryValues: structuredClone(registryValues) })).toBe(true);
+    expect(protocolSnapshotsMatch({ values, acl, registryValues }, { values: Buffer.from(values), acl: [...acl],
+      registryValues: [{ relative: '', values: [{ name: '', kind: 'String', data: 'changed' }] }] })).toBe(false);
     expect(protocolAclRestoreSecurityInformation).toBe(7);
   });
 
   it('recognizes only OpenCode changing the protocol default command to this exact owned binary', () => {
     const compare = Reflect.get(desktopCI, 'protocolSnapshotsDifferOnlyByOwnedCommand');
     expect(compare).toBeTypeOf('function');
-    type RegistryValue = { name: string; kind: string; value: string };
-    type RegistryKey = { relative: string; sddl: string; values: RegistryValue[] };
+    type RegistryValue = { name: string; kind: string; data: unknown };
+    type RegistryKey = { relative: string; values: RegistryValue[] };
     type Snapshot = { values: Buffer; acl: Array<{ relative: string; sddl: string }>; registryValues: RegistryKey[] };
     const binary = 'C:\\temp\\crosschat-opencode\\baseline\\install\\OpenCode.exe';
     const original: Snapshot = {
@@ -143,6 +148,48 @@ describe('OpenCode Desktop CI evidence', () => {
     const otherCommand = clone(current);
     otherCommand.registryValues[3].values[0].data = '"C:\\temp\\other\\OpenCode.exe" "%1"';
     expect(compareSnapshots(original, otherCommand, binary)).toBe(false);
+  });
+
+  it('captures an install-time protocol checkpoint even when the original registration is unchanged', () => {
+    const classify = Reflect.get(desktopCI, 'installedProtocolSnapshotAction');
+    expect(classify).toBeTypeOf('function');
+    const decision = classify as (input: Record<string, unknown>) => string;
+    expect(decision({ originalPresent: true, currentPresent: true, matchesOriginal: true,
+      onlyOwnedCommandChange: false, currentCommand: '"C:\\old\\OpenCode.exe" "%1"', expectedCommand: '"C:\\new\\OpenCode.exe" "%1"' })).toBe('capture');
+    expect(decision({ originalPresent: true, currentPresent: true, matchesOriginal: false,
+      onlyOwnedCommandChange: false, currentCommand: '"C:\\new\\OpenCode.exe" "%1"', expectedCommand: '"C:\\new\\OpenCode.exe" "%1"' })).toBe('refuse');
+    expect(decision({ originalPresent: true, currentPresent: true, matchesOriginal: false,
+      onlyOwnedCommandChange: true, currentCommand: '"C:\\new\\OpenCode.exe" "%1"', expectedCommand: '"C:\\new\\OpenCode.exe" "%1"' })).toBe('capture');
+    expect(decision({ originalPresent: true, currentPresent: false, matchesOriginal: false,
+      onlyOwnedCommandChange: false, currentCommand: undefined, expectedCommand: '"C:\\new\\OpenCode.exe" "%1"' })).toBe('refuse');
+    expect(decision({ originalPresent: false, currentPresent: false, matchesOriginal: false,
+      onlyOwnedCommandChange: false, currentCommand: undefined, expectedCommand: '"C:\\new\\OpenCode.exe" "%1"' })).toBe('none');
+  });
+
+  it('only adopts the exact OpenCode command mutation from the pre-probe snapshot', () => {
+    const classify = Reflect.get(desktopCI, 'observedProtocolSnapshotAction');
+    expect(classify).toBeTypeOf('function');
+    const decide = classify as (before: unknown, actual: unknown, binary: string) => string;
+    const before = { values: Buffer.from('before'), acl: [{ relative: '', sddl: 'same' }], registryValues: [
+      { relative: '', values: [{ name: '', kind: 'String', data: 'URL:opencode' }] },
+      { relative: 'shell\\open\\command', values: [{ name: '', kind: 'String', data: '"C:\\old\\OpenCode.exe" "%1"' }] },
+    ] };
+    const clone = () => ({ values: Buffer.from(before.values), acl: before.acl.map((key) => ({ ...key })),
+      registryValues: before.registryValues.map((key) => ({ ...key, values: key.values.map((value) => ({ ...value })) })) });
+    const changed = clone();
+    changed.values = Buffer.from('after');
+    changed.registryValues[1].values[0].data = '"C:\\new\\OpenCode.exe" "%1"';
+    expect(decide(before, before, 'C:\\new\\OpenCode.exe')).toBe('unchanged');
+    expect(decide(before, changed, 'C:\\new\\OpenCode.exe')).toBe('capture-owned-command');
+
+    const unrelated = clone();
+    unrelated.values = Buffer.from('after');
+    unrelated.registryValues[0].values[0].data = 'changed';
+    expect(decide(before, unrelated, 'C:\\new\\OpenCode.exe')).toBe('refuse');
+    const otherCommand = clone();
+    otherCommand.values = Buffer.from('after');
+    otherCommand.registryValues[1].values[0].data = '"C:\\other\\OpenCode.exe" "%1"';
+    expect(decide(before, otherCommand, 'C:\\new\\OpenCode.exe')).toBe('refuse');
   });
 
   it('restores owner, group and DACL sections with the rights required by Windows', async () => {
@@ -206,6 +253,14 @@ describe('OpenCode Desktop CI evidence', () => {
     expect(() => desktopArtifactDownloadTimeout('0')).toThrow('between 1000 and 600000 milliseconds');
     expect(() => desktopArtifactDownloadTimeout('600001')).toThrow('between 1000 and 600000 milliseconds');
     expect(() => desktopArtifactDownloadTimeout('slow')).toThrow('between 1000 and 600000 milliseconds');
+  });
+
+  it('maps an absolute cache directory to an artifact-specific Windows path', () => {
+    const artifact = { sha256: 'a'.repeat(64) };
+    expect(desktopInstallerCachePath('C:\\cache\\opencode', artifact))
+      .toBe(`C:\\cache\\opencode\\${artifact.sha256}.exe`);
+    expect(() => desktopInstallerCachePath('relative-cache', artifact)).toThrow('absolute Windows path');
+    expect(() => desktopInstallerCachePath('C:\\cache', { sha256: 'invalid' })).toThrow('SHA-256');
   });
 
   it('rejects a mutable/unrelated download, invalid digest/size/source and an unapproved major', () => {
