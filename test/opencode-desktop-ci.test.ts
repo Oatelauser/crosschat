@@ -62,8 +62,10 @@ describe('OpenCode Desktop CI evidence', () => {
   it('restores ACLs only when registry values still match the original snapshot', () => {
     expect(protocolRestorationAction({ originalValuesMatch: true, originalAclMatches: true, installedSnapshotMatches: false }))
       .toBe('keep');
-    expect(protocolRestorationAction({ originalValuesMatch: true, originalAclMatches: false, installedSnapshotMatches: false }))
+    expect(protocolRestorationAction({ originalValuesMatch: true, originalAclMatches: false, installedSnapshotMatches: true }))
       .toBe('restore-original-acl');
+    expect(protocolRestorationAction({ originalValuesMatch: true, originalAclMatches: false, installedSnapshotMatches: false }))
+      .toBe('refuse');
     expect(protocolRestorationAction({ originalValuesMatch: false, originalAclMatches: false, installedSnapshotMatches: true }))
       .toBe('remove-installed-registration');
     expect(protocolRestorationAction({ originalValuesMatch: false, originalAclMatches: false, installedSnapshotMatches: false }))
@@ -94,6 +96,13 @@ describe('OpenCode Desktop CI evidence', () => {
     expect(protocolSnapshotsMatch({ values, acl }, { values: Buffer.from('changed'), acl })).toBe(false);
     expect(protocolSnapshotsMatch({ values, acl }, { values, acl: [{ relative: '', sddl: 'O:otherG:groupD:(A;;KA;;;user)' }] })).toBe(false);
     expect(protocolAclRestoreSecurityInformation).toBe(7);
+  });
+
+  it('restores owner, group and DACL sections with the rights required by Windows', async () => {
+    const source = await readFile(new URL('../scripts/opencode-desktop-compat-ci.mjs', import.meta.url), 'utf8');
+    expect(source).toContain('RegistryRights]::ChangePermissions -bor [System.Security.AccessControl.RegistryRights]::TakeOwnership');
+    expect(source).toContain('RegSetKeySecurity($entry.key.Handle,${protocolAclRestoreSecurityInformation},$entry.binary)');
+    expect(source).toContain('Sort-Object depth -Descending');
   });
 
   it('preserves PowerShell lifecycle exit, timeout and output when a helper fails', () => {
