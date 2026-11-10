@@ -41,6 +41,53 @@ export function validateDesktopSignature(signature) {
   return true;
 }
 
+function noDesktopArtifacts(state) {
+  return record(state) && state.installKey === false && state.uninstallKey === false
+    && state.machineInstallKey === false && state.machineUninstallKey === false
+    && Array.isArray(state.sideEffects) && state.sideEffects.every((item) => record(item) && item.exists === false);
+}
+
+export function canSnapshotExistingProtocol(state) {
+  return noDesktopArtifacts(state) && typeof state.protocolKey === 'boolean';
+}
+
+export function desktopStateMatchesBaseline(state, protocolWasPresent, protocolMatchesSnapshot) {
+  return noDesktopArtifacts(state) && state.protocolKey === protocolWasPresent
+    && (!protocolWasPresent || protocolMatchesSnapshot === true);
+}
+
+export function protocolRestorationAction({ originalValuesMatch, originalAclMatches, installedSnapshotMatches }) {
+  if (originalValuesMatch === true) {
+    if (originalAclMatches === true) return 'keep';
+    return installedSnapshotMatches === true ? 'restore-original-acl' : 'refuse';
+  }
+  return installedSnapshotMatches === true ? 'remove-installed-registration' : 'refuse';
+}
+
+export function compareProtocolAclSnapshots(expected, actual) {
+  const expectedItems = normalizedProtocolAcl(expected);
+  const actualItems = normalizedProtocolAcl(actual);
+  const expectedByPath = new Map(expectedItems.map((item) => [item.relative, item.sddl]));
+  const actualByPath = new Map(actualItems.map((item) => [item.relative, item.sddl]));
+  const missing = expectedItems.filter((item) => !actualByPath.has(item.relative)).map((item) => item.relative);
+  const extra = actualItems.filter((item) => !expectedByPath.has(item.relative)).map((item) => item.relative);
+  const changed = expectedItems.filter((item) => actualByPath.has(item.relative) && actualByPath.get(item.relative) !== item.sddl)
+    .map((item) => item.relative);
+  return { matches: missing.length === 0 && extra.length === 0 && changed.length === 0, missing, extra, changed };
+}
+
+export function isProtocolAclSnapshotRace(error) {
+  return /(?:Protocol key changed during ACL snapshot|OpenCode protocol ACL key disappeared during verification)/.test(errorMessage(error));
+}
+
+export const protocolAclRestoreSecurityInformation = 1 | 2 | 4;
+
+export function protocolSnapshotsMatch(expected, actual) {
+  return Buffer.isBuffer(expected?.values) && Buffer.isBuffer(actual?.values)
+    && expected.values.equals(actual.values)
+    && compareProtocolAclSnapshots(expected.acl, actual.acl).matches;
+}
+
 function validReport(report, artifact) {
   return record(report) && report.schema === 1 && report.tool === tool && report.platform === 'win32' && report.arch === 'x64'
     && report.version === artifact.version && (report.status === 'passed' ? report.stage === 'done'
@@ -165,10 +212,20 @@ $protocol='HKCU:\Software\Classes\opencode'; $quiet=$null; $command=$null; $icon
 if(Test-Path -LiteralPath $base){$quiet=(Get-ItemProperty -LiteralPath $base).QuietUninstallString}
 if(Test-Path -LiteralPath ($protocol+'\shell\open\command')){$command=(Get-Item -LiteralPath ($protocol+'\shell\open\command')).GetValue('')}
 if(Test-Path -LiteralPath ($protocol+'\DefaultIcon')){$icon=(Get-Item -LiteralPath ($protocol+'\DefaultIcon')).GetValue('')}
-$profiles=@($env:APPDATA,(Join-Path $env:USERPROFILE 'AppData\Roaming'),[Environment]::GetFolderPath('ApplicationData')) | Select-Object -Unique
-$locals=@($env:LOCALAPPDATA,(Join-Path $env:USERPROFILE 'AppData\Local'),[Environment]::GetFolderPath('LocalApplicationData')) | Select-Object -Unique
+$profiles=@($env:APPDATA)
+$locals=@($env:LOCALAPPDATA)
+if(-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)){
+  $profiles+=Join-Path $env:USERPROFILE 'AppData\Roaming'
+  $locals+=Join-Path $env:USERPROFILE 'AppData\Local'
+}
+$appData=[Environment]::GetFolderPath('ApplicationData'); if(-not [string]::IsNullOrWhiteSpace($appData)){$profiles+=$appData}
+$localAppData=[Environment]::GetFolderPath('LocalApplicationData'); if(-not [string]::IsNullOrWhiteSpace($localAppData)){$locals+=$localAppData}
+$profiles=@($profiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+$locals=@($locals | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
 $paths=@(); foreach($p in $profiles){$paths+=Join-Path $p 'Microsoft\Windows\Start Menu\Programs\OpenCode.lnk'}
-$paths+=Join-Path ([Environment]::GetFolderPath('Desktop')) 'OpenCode.lnk'
+$desktop=[Environment]::GetFolderPath('Desktop')
+if([string]::IsNullOrWhiteSpace($desktop) -and -not [string]::IsNullOrWhiteSpace($env:USERPROFILE)){$desktop=Join-Path $env:USERPROFILE 'Desktop'}
+if(-not [string]::IsNullOrWhiteSpace($desktop)){$paths+=Join-Path $desktop 'OpenCode.lnk'}
 foreach($p in $locals){$paths+=Join-Path $p '@opencodedesktop-updater\installer.exe'}
 $effects=@($paths | Select-Object -Unique | ForEach-Object {@{path=$_;exists=(Test-Path -LiteralPath $_);parentExists=(Test-Path -LiteralPath (Split-Path -Parent $_))}})
 @{installKey=(Test-Path -LiteralPath ('HKCU:\Software\'+$g));uninstallKey=(Test-Path -LiteralPath $base);protocolKey=(Test-Path -LiteralPath $protocol);machineInstallKey=(Test-Path -LiteralPath ('HKLM:\Software\'+$g));machineUninstallKey=(Test-Path -LiteralPath ('HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\'+$g));quiet=$quiet;protocolCommand=$command;protocolIcon=$icon;sideEffects=$effects} | ConvertTo-Json -Depth 8
@@ -182,9 +239,256 @@ async function powershell(script, env, operation) {
 }
 
 async function windowsState(env, operation) { return powershell(windowsStateScript, env, operation); }
-function assertCleanWindows(state) {
-  if (state.installKey || state.uninstallKey || state.protocolKey || state.machineInstallKey || state.machineUninstallKey
-    || state.sideEffects.some((item) => item.exists)) throw new Error(`OpenCode Desktop installation, protocol, shortcut or installer cache already exists (GUID ${guid}); refusing to replace it`);
+
+const protocolAclReadScript = String.raw`
+$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+$items=[System.Collections.Generic.List[object]]::new()
+$sections=[System.Security.AccessControl.AccessControlSections]::Owner -bor [System.Security.AccessControl.AccessControlSections]::Group -bor [System.Security.AccessControl.AccessControlSections]::Access
+function Visit-ProtocolKey([Microsoft.Win32.RegistryKey]$key,[string]$relative){
+  $sddl=$key.GetAccessControl($sections).GetSecurityDescriptorSddlForm($sections)
+  $items.Add(@{relative=$relative;sddl=$sddl})
+  foreach($name in $key.GetSubKeyNames()){
+    $child=$key.OpenSubKey($name)
+    $next=if($relative){$relative+'\'+$name}else{$name}
+    if($null -eq $child){throw "Protocol key changed during ACL snapshot at $next"}
+    try{Visit-ProtocolKey $child $next}
+    finally{$child.Dispose()}
+  }
+}
+$root=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Classes\opencode')
+if($null -eq $root){throw 'OpenCode protocol ACL key disappeared during verification: <root>'}
+try{Visit-ProtocolKey $root ''}finally{$root.Dispose()}
+ConvertTo-Json -InputObject @($items.ToArray()) -Depth 6
+`;
+
+const protocolAclRestoreScript = String.raw`
+$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+$base='Software\Classes\opencode';$items=ConvertFrom-Json -InputObject (Get-Content -LiteralPath $env:CROSSCHAT_DESKTOP_PROTOCOL_ACL -Raw)
+$rights=[System.Security.AccessControl.RegistryRights]::ReadKey -bor [System.Security.AccessControl.RegistryRights]::ChangePermissions -bor [System.Security.AccessControl.RegistryRights]::TakeOwnership
+$permissionCheck=[Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree
+Add-Type -TypeDefinition 'using System.Runtime.InteropServices; using Microsoft.Win32.SafeHandles; public static class CrosschatRegistrySecurityNative { [DllImport("advapi32.dll", SetLastError=true)] public static extern int RegSetKeySecurity(SafeRegistryHandle hKey, int securityInformation, byte[] securityDescriptor); }'
+ $opened=[System.Collections.Generic.List[object]]::new()
+try{
+  foreach($item in $items){
+    $relative=[string]$item.relative
+    $path=if([string]::IsNullOrEmpty($relative)){$base}else{$base+'\'+$relative}
+    $key=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($path,$permissionCheck,$rights)
+    if($null -eq $key){throw 'Protocol key required for ACL restoration is absent'}
+    $depth=if($relative){$relative.Split([char]92).Count}else{0}
+    $opened.Add(@{depth=$depth;key=$key;binary=$null})
+    $descriptor=New-Object System.Security.AccessControl.RawSecurityDescriptor([string]$item.sddl)
+    $binary=[byte[]]::new($descriptor.BinaryLength);$descriptor.GetBinaryForm($binary,0)
+    $opened[$opened.Count-1].binary=$binary
+  }
+  foreach($entry in ($opened | Sort-Object depth -Descending)){
+    $result=[CrosschatRegistrySecurityNative]::RegSetKeySecurity($entry.key.Handle,${protocolAclRestoreSecurityInformation},$entry.binary)
+    if($result -ne 0){throw "Could not restore protocol key owner, group, and DACL (Win32 $result)"}
+  }
+}finally{
+  foreach($entry in $opened){$entry.key.Dispose()}
+}
+@{restored=$true}|ConvertTo-Json
+`;
+
+function normalizedProtocolAcl(value) {
+  const items = Array.isArray(value) ? value : [value];
+  if (!items.length || items.some((item) => !record(item) || typeof item.relative !== 'string' || typeof item.sddl !== 'string')) {
+    throw new Error('OpenCode protocol ACL snapshot is malformed');
+  }
+  return items.map(({ relative, sddl }) => ({ relative, sddl })).sort((a, b) => a.relative.localeCompare(b.relative));
+}
+
+async function readProtocolAcl(env) {
+  return normalizedProtocolAcl(await powershell(protocolAclReadScript, env, 'read OpenCode protocol ACL'));
+}
+
+async function registryExport(path, env) {
+  const executable = join(process.env.SystemRoot, 'System32', 'reg.exe');
+  const result = await runCommand(executable, ['export', 'HKCU\\Software\\Classes\\opencode', path, '/y'], { env, timeout: 30000 });
+  if (result.code !== 0 || result.timedOut || result.signal !== null) throw new Error(`Could not export the exact OpenCode protocol registration (${result.code})`);
+  return await readFile(path);
+}
+
+async function snapshotProtocolRegistration(root, env) {
+  const state = await windowsState(env, 'inspect Windows protocol and Desktop install baseline');
+  if (!canSnapshotExistingProtocol(state)) throw new Error(`OpenCode Desktop installation, shortcut or installer cache already exists (GUID ${guid}); refusing to snapshot or replace it`);
+  if (!state.protocolKey) return undefined;
+  const snapshot = { present: true, registryFile: join(root, 'opencode-protocol-before.reg'), aclFile: join(root, 'opencode-protocol-before-acl.json') };
+  const stable = await readStableProtocolSnapshot(root, env, 'capture original OpenCode protocol registration');
+  await writeFile(snapshot.registryFile, stable.values);
+  await writeFile(snapshot.aclFile, JSON.stringify(stable.acl, null, 2) + '\n');
+  return snapshot;
+}
+
+async function readStableProtocolSnapshot(root, env, operation) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const firstFile = join(root, `opencode-protocol-${randomUUID()}-first.reg`);
+    const secondFile = join(root, `opencode-protocol-${randomUUID()}-second.reg`);
+    try {
+      const firstValues = await registryExport(firstFile, env);
+      const firstAcl = await readProtocolAcl(env);
+      const secondValues = await registryExport(secondFile, env);
+      const secondAcl = await readProtocolAcl(env);
+      const first = { values: firstValues, acl: firstAcl };
+      const second = { values: secondValues, acl: secondAcl };
+      if (protocolSnapshotsMatch(first, second)) return first;
+    } catch (error) {
+      if (!isProtocolAclSnapshotRace(error) || attempt === 3) throw error;
+    } finally {
+      await Promise.all([rm(firstFile, { force: true }), rm(secondFile, { force: true })]);
+    }
+    if (attempt < 3) await delay(125 * (attempt + 1));
+  }
+  throw new Error(`OpenCode protocol registration changed during ${operation}; refusing to use an unstable snapshot`);
+}
+
+async function protocolMatchesSnapshot(state, snapshot, root, env) {
+  if (snapshot === undefined) return state.protocolKey === false;
+  if (!state.protocolKey) return false;
+  const [expectedValues, expectedAcl, actual] = await Promise.all([
+    readFile(snapshot.registryFile), readFile(snapshot.aclFile, 'utf8').then((text) => JSON.parse(text)),
+    readStableProtocolSnapshot(root, env, 'verify OpenCode protocol registration'),
+  ]);
+  return protocolSnapshotsMatch({ values: expectedValues, acl: expectedAcl }, actual);
+}
+
+async function captureInstalledProtocolRegistration(context, snapshot, root) {
+  const state = await windowsState(context.env, `snapshot ${context.label} installed protocol registration`);
+  if (!state.protocolKey || await protocolMatchesSnapshot(state, snapshot, root, context.env)) return undefined;
+  const expected = `"${context.binary}"`;
+  if (typeof state.protocolCommand !== 'string' || !state.protocolCommand.toLowerCase().startsWith(expected.toLowerCase())) {
+    throw new Error('OpenCode protocol registration changed to an unknown owner during installation');
+  }
+  const installed = { present: true, registryFile: join(root, `opencode-protocol-after-${context.label}.reg`),
+    aclFile: join(root, `opencode-protocol-after-${context.label}-acl.json`) };
+  const stable = await readStableProtocolSnapshot(root, context.env, `capture ${context.label} installed protocol registration`);
+  await writeFile(installed.registryFile, stable.values);
+  await writeFile(installed.aclFile, JSON.stringify(stable.acl, null, 2) + '\n');
+  return installed;
+}
+
+async function removeOwnedProtocolRegistration(context, installedSnapshot, root) {
+  const expected = `"${context.binary}"`;
+  const script = String.raw`
+$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+$protocol='HKCU:\Software\Classes\opencode';$expected=[IO.Path]::GetFullPath($env:CROSSCHAT_DESKTOP_OWNED_BINARY)
+if(Test-Path -LiteralPath $protocol){
+  $reg=Join-Path $env:SystemRoot 'System32\reg.exe';$currentFile=$env:CROSSCHAT_DESKTOP_PROTOCOL_VERIFY_FILE
+  try{
+    & $reg export 'HKCU\Software\Classes\opencode' $currentFile /y | Out-Null
+    if($LASTEXITCODE -ne 0){throw 'Could not re-read the installed OpenCode protocol registration'}
+    $expectedBytes=[IO.File]::ReadAllBytes($env:CROSSCHAT_DESKTOP_PROTOCOL_INSTALLED_REG)
+    $currentBytes=[IO.File]::ReadAllBytes($currentFile)
+    if($expectedBytes.Length -ne $currentBytes.Length -or [Convert]::ToBase64String($expectedBytes) -cne [Convert]::ToBase64String($currentBytes)){
+      throw 'OpenCode protocol values changed after the installed snapshot; refusing to remove user data'
+    }
+    $sections=[System.Security.AccessControl.AccessControlSections]::Owner -bor [System.Security.AccessControl.AccessControlSections]::Group -bor [System.Security.AccessControl.AccessControlSections]::Access
+    $aclItems=ConvertFrom-Json -InputObject (Get-Content -LiteralPath $env:CROSSCHAT_DESKTOP_PROTOCOL_INSTALLED_ACL -Raw)
+    $actualItems=[System.Collections.Generic.List[object]]::new()
+    function Visit-ProtocolKey([Microsoft.Win32.RegistryKey]$key,[string]$relative){
+      $actualItems.Add(@{relative=$relative;sddl=$key.GetAccessControl($sections).GetSecurityDescriptorSddlForm($sections)})
+      foreach($name in $key.GetSubKeyNames()){
+        $next=if($relative){$relative+'\'+$name}else{$name}
+        $child=$key.OpenSubKey($name)
+        if($null -eq $child){throw "OpenCode protocol ACL key disappeared during verification: $next"}
+        try{Visit-ProtocolKey $child $next}finally{$child.Dispose()}
+      }
+    }
+    $rootKey=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Classes\opencode')
+    if($null -eq $rootKey){throw 'OpenCode protocol ACL key disappeared during verification: <root>'}
+    try{Visit-ProtocolKey $rootKey ''}finally{$rootKey.Dispose()}
+    if($actualItems.Count -ne $aclItems.Count){throw 'OpenCode protocol ACL tree changed after the installed snapshot; refusing to remove user data'}
+    foreach($item in $aclItems){
+      $actual=@($actualItems | Where-Object { $_.relative -ceq [string]$item.relative })
+      if($actual.Count -ne 1){throw 'OpenCode protocol ACL tree changed after the installed snapshot; refusing to remove user data'}
+      if($actual[0].sddl -cne [string]$item.sddl){throw 'OpenCode protocol ACL changed after the installed snapshot; refusing to remove user data'}
+    }
+  }finally{if(Test-Path -LiteralPath $currentFile){Remove-Item -LiteralPath $currentFile -Force}}
+  $commandKey=$protocol+'\shell\open\command'
+  if(-not (Test-Path -LiteralPath $commandKey)){throw 'OpenCode protocol command key is missing; owner cannot be verified'}
+  $command=(Get-Item -LiteralPath $commandKey).GetValue('')
+  if(-not ($command -is [string]) -or -not $command.StartsWith('"'+$expected+'"',[StringComparison]::OrdinalIgnoreCase)){throw 'Refusing to remove protocol registration not owned by this install'}
+  Remove-Item -LiteralPath $protocol -Recurse -Force
+}
+@{removed=$true}|ConvertTo-Json
+`;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const state = await windowsState(context.env, `verify ${context.label} protocol ownership before removal`);
+      if (!state.protocolKey) return;
+      if (!installedSnapshot || !await protocolMatchesSnapshot(state, installedSnapshot, root, context.env)) {
+        throw new Error('OpenCode protocol registration changed after installation; refusing to remove user data');
+      }
+      if (typeof state.protocolCommand !== 'string' || !state.protocolCommand.toLowerCase().startsWith(expected.toLowerCase())) {
+        throw new Error('OpenCode protocol registration changed to an unknown owner; refusing to replace it');
+      }
+  // Registry has no conditional tree-delete API, so recheck the complete values and ACL immediately before removal.
+      await powershell(script, { ...context.env, CROSSCHAT_DESKTOP_OWNED_BINARY: context.binary,
+        CROSSCHAT_DESKTOP_PROTOCOL_INSTALLED_REG: installedSnapshot.registryFile,
+        CROSSCHAT_DESKTOP_PROTOCOL_INSTALLED_ACL: installedSnapshot.aclFile,
+        CROSSCHAT_DESKTOP_PROTOCOL_VERIFY_FILE: join(root, `opencode-protocol-remove-check-${randomUUID()}.reg`) }, 'remove exact owned OpenCode protocol registration');
+      return;
+    } catch (error) {
+      if (!isProtocolAclSnapshotRace(error) || attempt === 3) throw error;
+      await delay(125 * (attempt + 1));
+    }
+  }
+}
+
+async function restoreProtocolTree(context, snapshot, root) {
+  let state = await windowsState(context.env, `inspect ${context.label} protocol after uninstall`);
+  if (!state.protocolKey) {
+    if (snapshot !== undefined) {
+      const executable = join(process.env.SystemRoot, 'System32', 'reg.exe');
+      const result = await runCommand(executable, ['import', snapshot.registryFile], { env: context.env, timeout: 30000 });
+      if (result.code !== 0 || result.timedOut || result.signal !== null) throw new Error(`Could not restore the original OpenCode protocol registration (${result.code})`);
+      await powershell(protocolAclRestoreScript, { ...context.env, CROSSCHAT_DESKTOP_PROTOCOL_ACL: snapshot.aclFile }, 'restore original OpenCode protocol ACL');
+    }
+  } else {
+    const actual = await readStableProtocolSnapshot(root, context.env, `inspect ${context.label} protocol before restoration`);
+    const original = snapshot === undefined ? undefined : {
+      values: await readFile(snapshot.registryFile),
+      acl: JSON.parse(await readFile(snapshot.aclFile, 'utf8')),
+    };
+    const originalValuesMatch = original !== undefined && actual.values.equals(original.values);
+    const originalAclMatches = originalValuesMatch && compareProtocolAclSnapshots(original.acl, actual.acl).matches;
+    const installedSnapshot = context.protocolInstalledSnapshot === undefined ? undefined : {
+      values: await readFile(context.protocolInstalledSnapshot.registryFile),
+      acl: JSON.parse(await readFile(context.protocolInstalledSnapshot.aclFile, 'utf8')),
+    };
+    const installedSnapshotMatches = installedSnapshot !== undefined && protocolSnapshotsMatch(installedSnapshot, actual);
+    const action = protocolRestorationAction({ originalValuesMatch, originalAclMatches, installedSnapshotMatches });
+    if (action === 'restore-original-acl') {
+      await powershell(protocolAclRestoreScript, { ...context.env, CROSSCHAT_DESKTOP_PROTOCOL_ACL: snapshot.aclFile }, 'restore original OpenCode protocol ACL');
+    } else if (action === 'remove-installed-registration') {
+      await removeOwnedProtocolRegistration(context, context.protocolInstalledSnapshot, root);
+      state = await windowsState(context.env, `inspect ${context.label} protocol after removing installed registration`);
+      if (snapshot !== undefined && !state.protocolKey) {
+        const executable = join(process.env.SystemRoot, 'System32', 'reg.exe');
+        const result = await runCommand(executable, ['import', snapshot.registryFile], { env: context.env, timeout: 30000 });
+        if (result.code !== 0 || result.timedOut || result.signal !== null) throw new Error(`Could not restore the original OpenCode protocol registration (${result.code})`);
+        await powershell(protocolAclRestoreScript, { ...context.env, CROSSCHAT_DESKTOP_PROTOCOL_ACL: snapshot.aclFile }, 'restore original OpenCode protocol ACL');
+      }
+    } else if (action === 'refuse') {
+      throw new Error('OpenCode protocol registration differs from both snapshots; refusing to replace user data');
+    }
+  }
+  state = await windowsState(context.env, `verify ${context.label} original protocol registration restoration`);
+  const matches = await protocolMatchesSnapshot(state, snapshot, root, context.env);
+  if (!matches) throw new Error('OpenCode protocol registration does not match the pre-test snapshot');
+  return { state, matches };
+}
+
+async function restoreProtocolRegistration(context, snapshot, root) {
+  const { state, matches } = await restoreProtocolTree(context, snapshot, root);
+  if (!matches) throw new Error('OpenCode Desktop uninstall did not restore the exact pre-test protocol registration');
+  return state;
+}
+
+function assertCleanWindows(state, snapshot, protocolMatches) {
+  if (!desktopStateMatchesBaseline(state, snapshot !== undefined, protocolMatches)) {
+    throw new Error(`OpenCode Desktop installation, protocol, shortcut or installer cache differs from the verified baseline (GUID ${guid}); refusing to continue`);
+  }
 }
 
 async function signature(path, env) {
@@ -204,12 +508,6 @@ async function removeOwnedSideEffects(context) {
   const script = String.raw`
 $ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 $expected=[IO.Path]::GetFullPath($env:CROSSCHAT_DESKTOP_OWNED_BINARY);$before=ConvertFrom-Json $env:CROSSCHAT_DESKTOP_BEFORE
-$protocol='HKCU:\Software\Classes\opencode'
-if(Test-Path -LiteralPath $protocol){
-  $command=(Get-Item -LiteralPath ($protocol+'\shell\open\command')).GetValue('')
-  if(-not $command.StartsWith('"'+$expected+'"',[StringComparison]::OrdinalIgnoreCase)){throw 'Refusing to remove protocol registration owned by another executable'}
-  Remove-Item -LiteralPath $protocol -Recurse -Force
-}
 foreach($entry in $before.sideEffects){
   if($entry.exists){throw 'Refusing to remove a pre-existing desktop artifact'}
   if(-not (Test-Path -LiteralPath $entry.path)){continue}
@@ -264,7 +562,8 @@ async function main() {
         uninstaller: join(taskRoot, 'install', 'Uninstall OpenCode.exe'), started: false, removed: false };
       contexts.push(context);
       if (/\s/.test(taskRoot)) throw new Error('NSIS /D requires this probe to use an owned task path without spaces');
-      context.before = await windowsState(env, `inspect ${label} installation state before install`); assertCleanWindows(context.before);
+      context.before = await windowsState(env, `inspect ${label} installation state before install`);
+      assertCleanWindows(context.before, protocolSnapshot, await protocolMatchesSnapshot(context.before, protocolSnapshot, root, env));
       const archive = await installer(artifact, env);
       try {
         context.started = true;
@@ -276,7 +575,12 @@ async function main() {
         await writeFile(join(output, `${label}-installation.json`), JSON.stringify({ before: context.before, afterInstall: context.afterInstall, signature: context.signature }, null, 2));
         return context;
       } catch (error) {
-        if (await exists(context.uninstaller)) {
+        const uninstallerExists = await exists(context.uninstaller);
+        if (!uninstallerExists) {
+          try { context.protocolInstalledSnapshot = await captureInstalledProtocolRegistration(context, protocolSnapshot, root); }
+          catch (cleanup) { throw new AggregateError([error, cleanup], 'Desktop installation and its protocol snapshot failed'); }
+        }
+        if (uninstallerExists) {
           try { await operations.uninstall(context); }
           catch (cleanup) { throw new AggregateError([error, cleanup], 'Desktop installation and its cleanup failed'); }
         }
@@ -293,16 +597,21 @@ async function main() {
     async uninstall(context) {
       if (context.removed) return;
       const before = await windowsState(context.env, `inspect ${context.label} installation state before uninstall`); ownsQuietUninstall(before, context);
+      context.protocolInstalledSnapshot = await captureInstalledProtocolRegistration(context, protocolSnapshot, root);
       await signature(context.uninstaller, context.env);
       const removed = await runCommand(context.uninstaller, ['/currentuser', '/S'], { env: context.env, cwd: context.taskRoot, timeout: 180000 });
       if (removed.code !== 0 || removed.timedOut) throw new Error(`Owned desktop uninstaller failed (${removed.code})`);
       let state; const deadline = Date.now() + 30000;
       do { state = await windowsState(context.env, `verify ${context.label} Windows uninstaller registration removal`); if (!state.installKey && !state.uninstallKey) break; await delay(500); } while (Date.now() < deadline);
       if (state.installKey || state.uninstallKey) throw new Error('Owned desktop uninstall did not remove its installer registration');
+      state = await restoreProtocolRegistration(context, protocolSnapshot, root);
       await removeOwnedSideEffects(context);
-      context.afterUninstall = await windowsState(context.env, `inspect ${context.label} Windows installation state after uninstall`); assertCleanWindows(context.afterUninstall);
+      context.afterUninstall = await windowsState(context.env, `inspect ${context.label} Windows installation state after uninstall`);
+      const protocolMatches = await protocolMatchesSnapshot(context.afterUninstall, protocolSnapshot, root, context.env);
+      assertCleanWindows(context.afterUninstall, protocolSnapshot, protocolMatches);
       context.removed = true;
-      await writeFile(join(output, `${context.label}-uninstallation.json`), JSON.stringify({ afterUninstall: context.afterUninstall, exitCode: removed.code }, null, 2));
+      await writeFile(join(output, `${context.label}-uninstallation.json`), JSON.stringify({ afterUninstall: context.afterUninstall,
+        protocolRegistrationRestored: protocolMatches, exitCode: removed.code }, null, 2));
     },
   };
   async function cleanupTaskRoot() {
@@ -313,12 +622,23 @@ async function main() {
     await rm(target, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
   }
   try {
+    protocolSnapshot = await snapshotProtocolRegistration(root, process.env);
     const builds = { baseline: parseDesktopArtifactManifest(JSON.parse(await readFile(new URL('./opencode-desktop-baseline.json', import.meta.url), 'utf8')), process.platform, process.arch),
       candidate: parseDesktopArtifactManifest(JSON.parse((await fetchBytes('https://opencode.ai/update/api/latest/desktop/opencode', 256 * 1024, 30000)).toString()), process.platform, process.arch) };
     summary = await runDesktopBuildSequence(builds, operations);
   } catch (error) {
     summary = { schema: 1, tool, platform: process.platform, arch: process.arch, classification: { kind: error?.category === 'unsupported' ? 'unsupported-release' : 'infrastructure', notify: false }, error: errorMessage(error) };
   } finally {
+    for (const context of contexts) {
+      if (!context.started || context.removed) continue;
+      try {
+        await restoreProtocolTree(context, protocolSnapshot, root);
+        summary.protocolRegistrationRestoredAfterFailure = context.label;
+      } catch (error) {
+        summary.protocolRestoreError = errorMessage(error);
+        summary.classification = { kind: 'infrastructure', notify: false };
+      }
+    }
     try {
       await cleanupTaskRoot();
       summary.downloadCleanup = 'removed';
