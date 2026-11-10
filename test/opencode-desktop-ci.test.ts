@@ -132,6 +132,7 @@ describe('OpenCode Desktop CI evidence', () => {
 
   it('labels Windows state snapshots by their lifecycle checkpoint', async () => {
     const source = await readFile(new URL('../scripts/opencode-desktop-compat-ci.mjs', import.meta.url), 'utf8');
+    expect(source).toMatch(/\blet protocolSnapshot;/);
     expect(source).toContain('async function windowsState(env, operation)');
     for (const operation of [
       'windowsState(env, `inspect ${label} installation state before install`)',
