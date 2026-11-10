@@ -186,10 +186,13 @@ describe('OpenCode Desktop CI evidence', () => {
   it('accepts only the unchanged installer-generated uninstaller at its exact owned path', () => {
     const path = 'C:\\temp\\crosschat-opencode\\candidate\\install\\Uninstall OpenCode.exe';
     const sha256 = 'd'.repeat(64);
-    expect(validateGeneratedUninstaller({ expectedPath: path, actualPath: path.replaceAll('\\', '/'), installedSha256: sha256, currentSha256: sha256 })).toBe(true);
-    expect(() => validateGeneratedUninstaller({ expectedPath: path, actualPath: 'C:\\temp\\other\\Uninstall OpenCode.exe', installedSha256: sha256, currentSha256: sha256 })).toThrow();
-    expect(() => validateGeneratedUninstaller({ expectedPath: path, actualPath: path, installedSha256: sha256, currentSha256: 'e'.repeat(64) })).toThrow();
-    expect(() => validateGeneratedUninstaller({ expectedPath: path, actualPath: path, installedSha256: 'missing', currentSha256: 'missing' })).toThrow();
+    const input = { expectedPath: path, actualPath: path.replaceAll('\\', '/'), installedSha256: sha256, currentSha256: sha256 };
+    expect(validateGeneratedUninstaller({ ...input, signature: { status: 'NotSigned' } })).toBe(true);
+    expect(validateGeneratedUninstaller({ ...input, signature: { status: 'Valid', subject: publisher } })).toBe(true);
+    expect(() => validateGeneratedUninstaller({ ...input, actualPath: 'C:\\temp\\other\\Uninstall OpenCode.exe', signature: { status: 'NotSigned' } })).toThrow();
+    expect(() => validateGeneratedUninstaller({ ...input, currentSha256: 'e'.repeat(64), signature: { status: 'NotSigned' } })).toThrow();
+    expect(() => validateGeneratedUninstaller({ ...input, installedSha256: 'missing', currentSha256: 'missing', signature: { status: 'NotSigned' } })).toThrow();
+    expect(() => validateGeneratedUninstaller({ ...input, signature: { status: 'HashMismatch' } })).toThrow();
   });
 
   it('uninstalls each same-GUID build before installing the next, and retries the identical candidate artifact', async () => {

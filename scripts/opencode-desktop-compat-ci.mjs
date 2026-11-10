@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import { access, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path';
 import process from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL, URL } from 'node:url';
@@ -58,6 +58,20 @@ export function validateDesktopSignature(signature) {
     || !/(?:^|,\s*)O="Anomaly Innovations, Inc https:\/\/anoma\.ly\/"(?:,|$)/.test(signature.subject)) {
     throw new Error('Desktop Authenticode signature is not valid for the expected publisher organization');
   }
+  return true;
+}
+
+export function validateGeneratedUninstaller({ expectedPath, actualPath, installedSha256, currentSha256, signature }) {
+  if (typeof expectedPath !== 'string' || typeof actualPath !== 'string'
+    || win32.resolve(expectedPath).toLowerCase() !== win32.resolve(actualPath).toLowerCase()) {
+    throw new Error('Desktop generated uninstaller does not resolve to this owned installation path');
+  }
+  if (typeof installedSha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(installedSha256)
+    || typeof currentSha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(currentSha256)
+    || installedSha256.toLowerCase() !== currentSha256.toLowerCase()) {
+    throw new Error('Desktop generated uninstaller changed after the verified installation');
+  }
+  if (signature?.status !== 'NotSigned') validateDesktopSignature(signature);
   return true;
 }
 
@@ -512,10 +526,20 @@ function assertCleanWindows(state, snapshot, protocolMatches) {
 }
 
 async function signature(path, env) {
-  const result = await powershell(String.raw`$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$s=Get-AuthenticodeSignature -LiteralPath $env:CROSSCHAT_DESKTOP_VERIFY_FILE;@{status=$s.Status.ToString();subject=$s.SignerCertificate.Subject}|ConvertTo-Json`,
-    { ...env, CROSSCHAT_DESKTOP_VERIFY_FILE: path }, 'verify Authenticode signature');
+  const result = await signatureMetadata(path, env);
   validateDesktopSignature(result);
   return result;
+}
+
+async function signatureMetadata(path, env) {
+  return powershell(String.raw`$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$s=Get-AuthenticodeSignature -LiteralPath $env:CROSSCHAT_DESKTOP_VERIFY_FILE;@{status=$s.Status.ToString();subject=$s.SignerCertificate.Subject}|ConvertTo-Json`,
+    { ...env, CROSSCHAT_DESKTOP_VERIFY_FILE: path }, 'inspect Authenticode signature');
+}
+
+async function sha256File(path) {
+  const info = await stat(path);
+  if (!info.isFile() || info.size < 1 || info.size > 64 * 1024 * 1024) throw new Error('Desktop generated uninstaller is not a bounded regular file');
+  return createHash('sha256').update(await readFile(path)).digest('hex');
 }
 
 function ownsQuietUninstall(state, context) {
@@ -591,9 +615,15 @@ async function main() {
         const installed = await runCommand(archive, ['/S', '--no-desktop-shortcut', `/D=${join(taskRoot, 'install')}`], { env, cwd: taskRoot, timeout: 180000 });
         if (installed.code !== 0 || installed.timedOut) throw new Error(`Official desktop installer failed (${installed.code})`);
         await access(context.binary); await access(context.uninstaller);
+        const installedUninstallerPath = await realpath(context.uninstaller);
+        context.uninstallerSha256 = await sha256File(installedUninstallerPath);
+        context.uninstallerSignature = await signatureMetadata(installedUninstallerPath, env);
+        validateGeneratedUninstaller({ expectedPath: context.uninstaller, actualPath: installedUninstallerPath,
+          installedSha256: context.uninstallerSha256, currentSha256: context.uninstallerSha256, signature: context.uninstallerSignature });
         context.afterInstall = await windowsState(env, `inspect ${label} installation state after install`); ownsQuietUninstall(context.afterInstall, context);
         context.signature = await signature(context.binary, env);
-        await writeFile(join(output, `${label}-installation.json`), JSON.stringify({ before: context.before, afterInstall: context.afterInstall, signature: context.signature }, null, 2));
+        await writeFile(join(output, `${label}-installation.json`), JSON.stringify({ before: context.before, afterInstall: context.afterInstall,
+          signature: context.signature, generatedUninstaller: { sha256: context.uninstallerSha256, signature: context.uninstallerSignature } }, null, 2));
         return context;
       } catch (error) {
         const uninstallerExists = await exists(context.uninstaller);
@@ -619,7 +649,11 @@ async function main() {
       if (context.removed) return;
       const before = await windowsState(context.env, `inspect ${context.label} installation state before uninstall`); ownsQuietUninstall(before, context);
       context.protocolInstalledSnapshot = await captureInstalledProtocolRegistration(context, protocolSnapshot, root);
-      await signature(context.uninstaller, context.env);
+      const actualUninstallerPath = await realpath(context.uninstaller);
+      const currentUninstallerSha256 = await sha256File(actualUninstallerPath);
+      const uninstallerSignature = await signatureMetadata(actualUninstallerPath, context.env);
+      validateGeneratedUninstaller({ expectedPath: context.uninstaller, actualPath: actualUninstallerPath,
+        installedSha256: context.uninstallerSha256, currentSha256: currentUninstallerSha256, signature: uninstallerSignature });
       const removed = await runCommand(context.uninstaller, ['/currentuser', '/S'], { env: context.env, cwd: context.taskRoot, timeout: 180000 });
       if (removed.code !== 0 || removed.timedOut) throw new Error(`Owned desktop uninstaller failed (${removed.code})`);
       let state; const deadline = Date.now() + 30000;
