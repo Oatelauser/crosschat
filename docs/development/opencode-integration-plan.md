@@ -2,6 +2,8 @@
 
 2026-10-23。状态：OpenCode CLI 开发验证及用户清理已完成，[验收证据与清理核对](opencode-cli-validation-20261023.md)已归档。用户指示“已经清理了，开始下一个”，按既定顺序授权桌面正式包；Windows 桌面 11/11、当批全仓 1782 项检查已通过，应用已卸载，[桌面验证与清理历史](opencode-desktop-validation-20261023.md)已归档。17:01 的[本机只读复核](evidence/tool-integration-cleanup-20261023.json)确认外层下载及四个 UIA 目录均不存在，旧残留清理关闭。完整 CI 实跑和用户真实模型的从零安装验收仍独立待验证；完整接入以[统一规范](tool-integration-standard.md)为准，剩余整改与类型寻址见[总表 C08—C14](tool-compatibility-ci-tasks.md)。
 
+2026-11-10 更新：O06c 的 PR #10 本地候选已补强 Windows Desktop 生命周期工装。当前实现对既有 HKCU `opencode` 协议注册做两次完整值/Owner/Group/DACL 稳定采样；安装后的卸载仅在当前值与 ACL 匹配本次安装快照时移除，未知差异拒绝覆盖；ACL 回滚恢复 Owner、Group、DACL，并先打开全部子键句柄、从叶到根应用。Windows 注册表没有条件式整树删除/导入，代码在破坏操作前重读并拒绝已观察到的差异，但无法排除其他进程恰在最终复核后并发写入的窗口。
+
 ## 目标与用户要求
 
 - 首批 CLI 已完成；当前实施桌面正式发布包。发现、原生投递、调用方身份和回信必须一起接通。
@@ -18,7 +20,7 @@
 | 任务 | 内容 | 出口 |
 | --- | --- | --- |
 | O08 用户从零验证 | [CLI](../opencode-cli.md)和[桌面](../opencode-desktop.md)指南已提供。等待用户重新安装，配置自己的模型并验证发现、投递、原生 shell 回信及忙闲行为。 | 真实使用独立验收；不要求把 key 发到聊天或放入 CI。 |
-| O06c 完整 CI 实跑 | 工装及定向测试已通过、实际桌面 11/11、官方卸载完成；仍待独立 Windows runner 执行桌面 CI 全套串行安装/卸载，以及 CLI Windows/Linux、Desktop Windows 的 GitHub 首轮和报告链。 | 保存实际 Actions run 和每轮生命周期证据；不将单次桌面探针或报告 job 的 Ubuntu 平台当全部通过。旧本机残留已确认不存在，不继续挂清理活动项；历史拒绝回执保留。 |
+| O06c 完整 CI 实跑 | CLI Windows/Linux 8/8 托管通过；PR #10 的 Desktop 诊断修复及协议值/ACL 精确恢复候选现位于本地分支 `codex/opencode-desktop-ci-diagnostics-20261109`，提交 `ec038c2`、`bb4fa9d`、`1f89462`。RED 用例曾复现未知 ACL 被覆盖；修复后定向 20/20、完整 `npm run check` 通过（248 个文件通过、3 个跳过，2938 项通过、11 项跳过；导入图206模块/699边）。 | Desktop runner 的本机 baseline→candidate 原生安装尚未运行：官方 latest 端点当前报告 v2.2.6，而之前明确批准的本机 Desktop 版本为 v2.1.3；不得把 v2.1.3 原生增强验收当作该 runner 对 v2.2.6 的证据。按 Windows 注册表并发写入的非原子窗口说明，须先取得版本与残余竞态范围决定。没有推送 PR 新提交，也没有触发 Actions；PR #10 的 hosted Ubuntu send-handle 失败与重跑通过证据仍分别保留在既有 raw 文件。 |
 
 每批交付都执行所属软件的清理，不能仅因代码完成就把测试安装留给用户。若工具再次拒绝清理，准确记录未完成项及拒绝原因；不绕过拒绝，也不视为用户已接受残留。
 
