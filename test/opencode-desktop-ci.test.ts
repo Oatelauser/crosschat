@@ -5,9 +5,16 @@ import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import * as desktopCI from '../scripts/opencode-desktop-compat-ci.mjs';
 import {
+  canSnapshotExistingProtocol,
+  desktopStateMatchesBaseline,
   desktopLifecycleFailure,
   desktopRegressionIdentity,
+  compareProtocolAclSnapshots,
+  isProtocolAclSnapshotRace,
   parseDesktopArtifactManifest,
+  protocolRestorationAction,
+  protocolAclRestoreSecurityInformation,
+  protocolSnapshotsMatch,
   runDesktopBuildSequence,
   validateDesktopSignature,
 } from '../scripts/opencode-desktop-compat-ci.mjs';
@@ -29,6 +36,66 @@ function failed(version: string) {
 }
 
 describe('OpenCode Desktop CI evidence', () => {
+  it('allows only an unchanged, snapshotted protocol key through the otherwise-empty install baseline', () => {
+    const empty = { installKey: false, uninstallKey: false, protocolKey: false, machineInstallKey: false,
+      machineUninstallKey: false, sideEffects: [] };
+    expect(canSnapshotExistingProtocol(empty)).toBe(true);
+    expect(desktopStateMatchesBaseline(empty, false, false)).toBe(true);
+
+    const existingProtocol = { ...empty, protocolKey: true };
+    expect(canSnapshotExistingProtocol(existingProtocol)).toBe(true);
+    expect(desktopStateMatchesBaseline(existingProtocol, true, true)).toBe(true);
+    expect(desktopStateMatchesBaseline(existingProtocol, true, false)).toBe(false);
+    expect(desktopStateMatchesBaseline(existingProtocol, false, false)).toBe(false);
+    expect(desktopStateMatchesBaseline({ ...empty, protocolKey: true }, false, false)).toBe(false);
+
+    for (const changed of [
+      { ...existingProtocol, installKey: true }, { ...existingProtocol, uninstallKey: true },
+      { ...existingProtocol, machineInstallKey: true }, { ...existingProtocol, machineUninstallKey: true },
+      { ...existingProtocol, sideEffects: [{ path: 'OpenCode.lnk', exists: true }] },
+    ]) {
+      expect(canSnapshotExistingProtocol(changed)).toBe(false);
+      expect(desktopStateMatchesBaseline(changed, true, true)).toBe(false);
+    }
+  });
+
+  it('restores ACLs only when registry values still match the original snapshot', () => {
+    expect(protocolRestorationAction({ originalValuesMatch: true, originalAclMatches: true, installedSnapshotMatches: false }))
+      .toBe('keep');
+    expect(protocolRestorationAction({ originalValuesMatch: true, originalAclMatches: false, installedSnapshotMatches: false }))
+      .toBe('restore-original-acl');
+    expect(protocolRestorationAction({ originalValuesMatch: false, originalAclMatches: false, installedSnapshotMatches: true }))
+      .toBe('remove-installed-registration');
+    expect(protocolRestorationAction({ originalValuesMatch: false, originalAclMatches: false, installedSnapshotMatches: false }))
+      .toBe('refuse');
+  });
+
+  it('compares complete protocol ACL trees and identifies only transient key disappearance', () => {
+    const original = [
+      { relative: '', sddl: 'root' },
+      { relative: 'shell', sddl: 'shell' },
+      { relative: 'shell\\open', sddl: 'open' },
+      { relative: 'shell\\open\\command', sddl: 'command' },
+    ];
+    expect(compareProtocolAclSnapshots(original, [...original].reverse())).toEqual({ matches: true, missing: [], extra: [], changed: [] });
+    expect(compareProtocolAclSnapshots(original, original.slice(0, 3))).toMatchObject({ matches: false, missing: ['shell\\open\\command'] });
+    expect(compareProtocolAclSnapshots(original, [...original, { relative: 'extra', sddl: 'extra' }]))
+      .toMatchObject({ matches: false, extra: ['extra'] });
+    expect(compareProtocolAclSnapshots(original, original.map((item) => item.relative === 'shell' ? { ...item, sddl: 'changed' } : item)))
+      .toMatchObject({ matches: false, changed: ['shell'] });
+    expect(isProtocolAclSnapshotRace(new Error('OpenCode protocol ACL key disappeared during verification: shell\\open'))).toBe(true);
+    expect(isProtocolAclSnapshotRace(new Error('OpenCode protocol ACL changed after the installed snapshot'))).toBe(false);
+  });
+
+  it('accepts a protocol snapshot only when registry values and the complete ACL tree stay stable', () => {
+    const values = Buffer.from('Windows Registry Editor Version 5.00\r\n[HKEY_CURRENT_USER\\Software\\Classes\\opencode]\r\n');
+    const acl = [{ relative: '', sddl: 'O:ownerG:groupD:(A;;KA;;;user)' }];
+    expect(protocolSnapshotsMatch({ values, acl }, { values: Buffer.from(values), acl: [...acl] })).toBe(true);
+    expect(protocolSnapshotsMatch({ values, acl }, { values: Buffer.from('changed'), acl })).toBe(false);
+    expect(protocolSnapshotsMatch({ values, acl }, { values, acl: [{ relative: '', sddl: 'O:otherG:groupD:(A;;KA;;;user)' }] })).toBe(false);
+    expect(protocolAclRestoreSecurityInformation).toBe(7);
+  });
+
   it('preserves PowerShell lifecycle exit, timeout and output when a helper fails', () => {
     const failure = desktopLifecycleFailure({ code: null, signal: 'SIGTERM', timedOut: true,
       stdout: '{"protocolCommand":"C:\\private\\uninstall.exe /S"}', stderr: 'parser diagnostic' }, 'inspect Windows installation state');
