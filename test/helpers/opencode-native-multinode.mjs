@@ -5,7 +5,7 @@ import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative, resolve, isAbsolute } from 'node:path';
 import { clearTimeout, setTimeout } from 'node:timers';
 import process from 'node:process';
-import { fileURLToPath, URL } from 'node:url';
+import { fileURLToPath, pathToFileURL, URL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createElement } from 'react';
 import { render, Text } from 'ink';
@@ -274,7 +274,8 @@ export async function validateOpenCodeNativeMultinode({ binary, fixture, session
       const offset = (await readEvents(terminal.events)).length;
       await waitFor(async () => (await readEvents(terminal.events)).slice(offset).some((event) => event.event === 'read' && event.resource === 'members'
         && names.every((name) => event.rows.some((row) => row.name === name))), `operator ${terminal.index} refresh for ${names.join(', ')}`);
-      for (const name of names) await terminal.pty.waitForOutput(name, 10000);
+      // The terminal clips long name cells; the read event above asserts each complete value.
+      for (const name of names) await terminal.pty.waitForOutput(name.slice(0, 16), 10000);
     }));
 
     await check('two-independent-node-identities-and-exact-operation-routing', async () => {
@@ -460,4 +461,4 @@ export async function validateOpenCodeNativeMultinode({ binary, fixture, session
   return report;
 }
 
-if (process.argv.includes('--tui-child')) await tuiChild();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href && process.argv.includes('--tui-child')) await tuiChild();

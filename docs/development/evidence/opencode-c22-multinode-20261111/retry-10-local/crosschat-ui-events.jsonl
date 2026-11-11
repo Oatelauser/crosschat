@@ -1,0 +1,3 @@
+{"event":"clipboard","value":"crosschat send --to ses_e34be6edeffepDTRNKPiIHsTOd --tool opencode --body \"<正文>\""}
+{"event":"clipboard","value":"{\n  \"contextId\": \"local\",\n  \"providerId\": \"opencode\",\n  \"nativeId\": \"ses_e34be6edeffepDTRNKPiIHsTOd\",\n  \"endpointType\": \"shared\"\n}"}
+{"event":"exit","code":0,"before":{"raw":false,"resize":0,"listeners":{"SIGINT":1,"SIGTERM":1,"uncaughtException":0,"unhandledRejection":0}},"after":{"raw":false,"resize":0,"listeners":{"SIGINT":1,"SIGTERM":1,"uncaughtException":0,"unhandledRejection":0}}}
