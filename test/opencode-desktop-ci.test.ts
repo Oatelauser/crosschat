@@ -228,6 +228,7 @@ describe('OpenCode Desktop CI evidence', () => {
     expect(source).toMatch(/\blet protocolSnapshot;/);
     expect(source).toContain('async function windowsState(env, operation)');
     const phases = [
+      'crosschat-desktop-state:started',
       'crosschat-desktop-state:registry:start',
       'crosschat-desktop-state:registry:done',
       'crosschat-desktop-state:folder-paths:start',

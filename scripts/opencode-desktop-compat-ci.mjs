@@ -321,11 +321,15 @@ async function exists(path) { try { await access(path); return true; } catch { r
 
 const windowsStateScript = String.raw`
 $ErrorActionPreference='Stop'; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+[Console]::Error.WriteLine('crosschat-desktop-state:started')
 $g='d074f30d-5f88-5885-b075-be1348cc7676'; $base='HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\'+$g
 $protocol='HKCU:\Software\Classes\opencode'; $quiet=$null; $command=$null; $icon=$null
+[Console]::Error.WriteLine('crosschat-desktop-state:registry:start')
 if(Test-Path -LiteralPath $base){$quiet=(Get-ItemProperty -LiteralPath $base).QuietUninstallString}
 if(Test-Path -LiteralPath ($protocol+'\shell\open\command')){$command=(Get-Item -LiteralPath ($protocol+'\shell\open\command')).GetValue('')}
 if(Test-Path -LiteralPath ($protocol+'\DefaultIcon')){$icon=(Get-Item -LiteralPath ($protocol+'\DefaultIcon')).GetValue('')}
+[Console]::Error.WriteLine('crosschat-desktop-state:registry:done')
+[Console]::Error.WriteLine('crosschat-desktop-state:folder-paths:start')
 $profiles=@($env:APPDATA)
 $locals=@($env:LOCALAPPDATA)
 if(-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)){
@@ -336,12 +340,16 @@ $appData=[Environment]::GetFolderPath('ApplicationData'); if(-not [string]::IsNu
 $localAppData=[Environment]::GetFolderPath('LocalApplicationData'); if(-not [string]::IsNullOrWhiteSpace($localAppData)){$locals+=$localAppData}
 $profiles=@($profiles | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
 $locals=@($locals | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+[Console]::Error.WriteLine('crosschat-desktop-state:folder-paths:done')
+[Console]::Error.WriteLine('crosschat-desktop-state:side-effects:start')
 $paths=@(); foreach($p in $profiles){$paths+=Join-Path $p 'Microsoft\Windows\Start Menu\Programs\OpenCode.lnk'}
 $desktop=[Environment]::GetFolderPath('Desktop')
 if([string]::IsNullOrWhiteSpace($desktop) -and -not [string]::IsNullOrWhiteSpace($env:USERPROFILE)){$desktop=Join-Path $env:USERPROFILE 'Desktop'}
 if(-not [string]::IsNullOrWhiteSpace($desktop)){$paths+=Join-Path $desktop 'OpenCode.lnk'}
 foreach($p in $locals){$paths+=Join-Path $p '@opencodedesktop-updater\installer.exe'}
 $effects=@($paths | Select-Object -Unique | ForEach-Object {@{path=$_;exists=(Test-Path -LiteralPath $_);parentExists=(Test-Path -LiteralPath (Split-Path -Parent $_))}})
+[Console]::Error.WriteLine('crosschat-desktop-state:side-effects:done')
+[Console]::Error.WriteLine('crosschat-desktop-state:json:start')
 @{installKey=(Test-Path -LiteralPath ('HKCU:\Software\'+$g));uninstallKey=(Test-Path -LiteralPath $base);protocolKey=(Test-Path -LiteralPath $protocol);machineInstallKey=(Test-Path -LiteralPath ('HKLM:\Software\'+$g));machineUninstallKey=(Test-Path -LiteralPath ('HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\'+$g));quiet=$quiet;protocolCommand=$command;protocolIcon=$icon;sideEffects=$effects} | ConvertTo-Json -Depth 8
 `;
 
