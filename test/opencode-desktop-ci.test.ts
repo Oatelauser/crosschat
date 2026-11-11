@@ -227,6 +227,17 @@ describe('OpenCode Desktop CI evidence', () => {
     const source = await readFile(new URL('../scripts/opencode-desktop-compat-ci.mjs', import.meta.url), 'utf8');
     expect(source).toMatch(/\blet protocolSnapshot;/);
     expect(source).toContain('async function windowsState(env, operation)');
+    const phases = [
+      'crosschat-desktop-state:registry:start',
+      'crosschat-desktop-state:registry:done',
+      'crosschat-desktop-state:folder-paths:start',
+      'crosschat-desktop-state:folder-paths:done',
+      'crosschat-desktop-state:side-effects:start',
+      'crosschat-desktop-state:side-effects:done',
+      'crosschat-desktop-state:json:start',
+    ].map((phase) => source.indexOf(phase));
+    expect(phases.every((index) => index >= 0)).toBe(true);
+    expect(phases).toEqual([...phases].sort((left, right) => left - right));
     for (const operation of [
       'windowsState(env, `inspect ${label} installation state before install`)',
       'windowsState(env, `inspect ${label} installation state after install`)',
