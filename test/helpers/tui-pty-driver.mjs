@@ -9,26 +9,26 @@ import { clearTimeout, setTimeout } from 'node:timers';
 import { fileURLToPath } from 'node:url';
 
 const hostScript = join(dirname(fileURLToPath(import.meta.url)), 'tui-pty-host.ps1');
-const posixHostScript = join(dirname(fileURLToPath(import.meta.url)), 'tui-pty-host.py');
+const linuxHostScript = join(dirname(fileURLToPath(import.meta.url)), 'tui-pty-host.py');
 
-/** Native PTY fixture host. All inputs and outputs belong to the spawned fixture. */
+/** Each platform host owns its terminal and child tree; one controller owns their JSONL protocol. */
 export async function launchPty({ executable, args = [], cwd = process.cwd(), columns = 80, rows = 24, env = {}, logPath }) {
-  if (!['win32', 'linux', 'darwin'].includes(process.platform)) throw new Error('Unplanned PTY fixture platform.');
-  const windows = process.platform === 'win32';
-  const hostName = windows ? 'ConPTY' : 'POSIX PTY';
+  const linux = process.platform === 'linux';
+  if (!linux && process.platform !== 'win32') throw new Error('PTY fixtures require Windows ConPTY or Linux python3.');
+  for (const dimension of [columns, rows]) if (!Number.isInteger(dimension) || dimension < 1 || dimension > 32767) throw new Error('Invalid PTY dimensions.');
   const evidenceDirectory = logPath ? undefined : mkdtempSync(join(tmpdir(), 'crosschat-tui-pty-'));
   logPath ??= join(evidenceDirectory, 'events.jsonl');
   const environment = { ...process.env, ...env };
   delete environment.CROSSCHAT_LIVE;
-  const hostArgs = windows ? [
+  const label = linux ? 'POSIX PTY' : 'ConPTY';
+  const hostArgs = linux ? [linuxHostScript, Buffer.from(JSON.stringify({ executable, args, cwd, columns, rows })).toString('base64')] : [
     '-NoLogo', '-NoProfile', '-NonInteractive', '-File', hostScript,
     '-Executable', executable,
     '-ArgumentsBase64', Buffer.from(JSON.stringify(args)).toString('base64'),
     '-WorkingDirectory', cwd,
     '-Columns', String(columns), '-Rows', String(rows),
-  ] : ['-I', '-u', posixHostScript, Buffer.from(JSON.stringify({ executable, args, cwd, columns, rows })).toString('base64')];
-  const host = spawn(windows ? 'pwsh' : 'python3', hostArgs,
-    { cwd, env: environment, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  ];
+  const host = spawn(linux ? 'python3' : 'pwsh', hostArgs, { cwd, env: environment, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
 
   let output = '';
   let stderr = '';
@@ -36,6 +36,7 @@ export async function launchPty({ executable, args = [], cwd = process.cwd(), co
   let childExit;
   let childPid;
   let failure;
+  let disposal;
   const events = [];
   const pending = new Set();
   const decoder = new StringDecoder('utf8');
@@ -45,14 +46,21 @@ export async function launchPty({ executable, args = [], cwd = process.cwd(), co
   let resolveExit;
   let rejectExit;
   const exited = new Promise((resolve, reject) => { resolveExit = resolve; rejectExit = reject; });
+  let resolveClosed;
+  const closed = new Promise((resolve) => { resolveClosed = resolve; });
   // The host may fail before the caller receives the controller.
   void exited.catch(() => {});
-  const record = (value) => appendFileSync(logPath, JSON.stringify({ at: Date.now(), ...value }) + '\n');
+  const record = (value) => {
+    try { appendFileSync(logPath, JSON.stringify({ at: Date.now(), ...value }) + '\n'); }
+    catch (error) { fail(error); }
+  };
   function fail(error) {
     failure ??= error;
     rejectReady(failure);
     for (const wait of pending) { clearTimeout(wait.timer); wait.reject(failure); }
     pending.clear();
+    // Closing control stdin asks either host to release its owned terminal and process tree.
+    host.stdin.end();
   }
   function matches(pattern, from = 0) {
     const text = output.slice(from);
@@ -66,12 +74,14 @@ export async function launchPty({ executable, args = [], cwd = process.cwd(), co
     }
   }
   function event(value) {
+    if (value === null || typeof value !== 'object' || typeof value.event !== 'string') throw new Error('Malformed PTY host event.');
+    if (failure && value.event === 'output') return;
     record({ direction: 'host', ...value });
     events.push(value);
     if (value.event === 'ready') { childPid = value.pid; resolveReady(); }
     else if (value.event === 'output') {
       output += decoder.write(Buffer.from(value.data, 'base64'));
-      if (output.length > 8 * 1024 * 1024) fail(new Error('Fixture exceeded the 8 MiB output limit.'));
+      if (output.length > 8 * 1024 * 1024) { output = output.slice(0, 8 * 1024 * 1024); fail(new Error('Fixture exceeded the 8 MiB output limit.')); }
       notify();
     } else if (value.event === 'exit') childExit = value;
     else if (value.event === 'error') fail(new Error(value.message));
@@ -85,11 +95,12 @@ export async function launchPty({ executable, args = [], cwd = process.cwd(), co
       const line = lines.slice(0, newline).trim();
       lines = lines.slice(newline + 1);
       if (!line) continue;
-      try { event(JSON.parse(line)); } catch (error) { fail(new Error(`Invalid ${hostName} host event: ${line}`, { cause: error })); }
+      try { event(JSON.parse(line)); } catch (error) { fail(new Error(`Invalid ${label} host event`, { cause: error })); }
     }
+    if (lines.length > 1024 * 1024) { lines = ''; fail(new Error(`${label} host event exceeded the 1 MiB limit.`)); }
   });
   host.stderr.setEncoding('utf8');
-  host.stderr.on('data', (chunk) => { stderr += chunk; });
+  host.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-64000); });
   host.stdin.on('error', (error) => {
     if (!hostClosed && !(childExit && error.code === 'EPIPE')) fail(error);
   });
@@ -98,27 +109,54 @@ export async function launchPty({ executable, args = [], cwd = process.cwd(), co
     hostClosed = true;
     record({ direction: 'driver', event: 'host-exit', code: hostCode });
     output += decoder.end();
-    if (!childExit || hostCode !== 0) fail(new Error(`${hostName} host exited ${hostCode}: ${stderr || lines || 'no child exit event'}`));
+    if (!childExit || hostCode !== 0) fail(new Error(`${label} host exited ${hostCode}: ${stderr || lines || 'no child exit event'}`));
+    if (linux && childExit?.cleanup?.complete !== true) fail(new Error('POSIX PTY host could not confirm owned process cleanup.'));
     notify();
     if (failure) rejectExit(failure);
     else resolveExit({ code: childExit.code, hostCode });
     for (const wait of pending) { clearTimeout(wait.timer); wait.reject(new Error(`Fixture exited before output matched ${String(wait.pattern)}`)); }
     pending.clear();
+    resolveClosed();
   });
   const send = (value) => {
-    if (hostClosed) throw new Error('The ConPTY host is already closed.');
+    if (failure) throw failure;
+    if (hostClosed || host.stdin.writableEnded) throw new Error(`The ${label} host is already closing or closed.`);
     record({ direction: 'driver', ...value });
     host.stdin.write(JSON.stringify(value) + '\n');
   };
+  async function waitUntilClosed(milliseconds) {
+    let timer;
+    try { return await Promise.race([closed.then(() => true), new Promise((resolve) => { timer = setTimeout(() => resolve(false), milliseconds); })]); }
+    finally { clearTimeout(timer); }
+  }
+  async function dispose() {
+    if (disposal) return disposal;
+    disposal = (async () => {
+      if (!hostClosed && !host.stdin.writableEnded) {
+        send({ op: 'terminate' });
+        host.stdin.end();
+      }
+      if (!await waitUntilClosed(6000)) {
+        host.kill();
+        if (!await waitUntilClosed(3000)) {
+          host.kill('SIGKILL');
+          await waitUntilClosed(1000);
+          throw new Error(`${label} host exceeded its cleanup deadline; fixture release is unconfirmed.`);
+        }
+      }
+      if (linux && childExit?.cleanup?.complete !== true) throw new Error('POSIX PTY process cleanup was not confirmed.');
+    })();
+    return disposal;
+  }
   let startupTimer;
   try {
     await Promise.race([
       ready,
-      new Promise((_, reject) => { startupTimer = setTimeout(() => reject(new Error(`${hostName} startup timed out: ${stderr}`)), 20_000); }),
+      new Promise((_, reject) => { startupTimer = setTimeout(() => reject(new Error(`${label} startup timed out: ${stderr}`)), 20_000); }),
     ]);
   } catch (error) {
-    host.stdin.end();
-    host.kill();
+    try { await dispose(); }
+    catch (cleanupError) { throw new AggregateError([error, cleanupError], `${label} startup and cleanup failed`, { cause: error }); }
     throw error;
   } finally { clearTimeout(startupTimer); }
   return {
@@ -137,21 +175,11 @@ export async function launchPty({ executable, args = [], cwd = process.cwd(), co
         const wait = { pattern, from, resolve, reject, timer: undefined };
         wait.timer = setTimeout(() => {
           pending.delete(wait);
-          reject(new Error(`${hostName} output did not match ${String(pattern)}; log: ${logPath}; output tail: ${output.slice(-2000)}`));
+          reject(new Error(`${label} output did not match ${String(pattern)}; log: ${logPath}; output tail: ${output.slice(-2000)}`));
         }, timeout);
         pending.add(wait);
       });
     },
-    async dispose() {
-      if (hostClosed) return;
-      send({ op: 'terminate' });
-      host.stdin.end();
-      let timer;
-      await Promise.race([
-        exited.catch(() => {}),
-        new Promise((resolve) => { timer = setTimeout(() => { host.kill(); resolve(); }, 3000); }),
-      ]);
-      clearTimeout(timer);
-    },
+    dispose,
   };
 }

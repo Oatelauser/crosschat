@@ -28,8 +28,8 @@ function alive(pid) {
   catch (error) { if (error.code === 'ESRCH') return false; throw error; }
 }
 
-async function launchProbe(root, source) {
-  const pty = await launchPty({ executable: process.execPath, args: ['-e', source], cwd: root, columns: 92, rows: 28,
+async function launchProbe(root, source, command = { executable: process.execPath, args: ['-e', source] }) {
+  const pty = await launchPty({ ...command, cwd: root, columns: 92, rows: 28,
     env: cleanEnvironment(), logPath: join(root, 'events.jsonl') });
   const fields = (await readFile(`/proc/${pty.childPid}/stat`, 'utf8')).split(') ')[1].split(' ');
   const hostPid = Number(fields[1]);
@@ -105,8 +105,8 @@ test('POSIX PTY releases descendants holding the slave after the leader exits', 
 
 test('POSIX PTY releases a live child after it closes its terminal descriptors', linux, async (context) => {
   const root = await temporaryRoot(context);
-  const source = "console.log('CLOSING_TTY'); setTimeout(() => { for (const fd of [0,1,2]) require('node:fs').closeSync(fd); setInterval(() => {}, 1000); }, 100);";
-  const { pty, finish } = await launchProbe(root, source);
+  const source = "import os, time; print('CLOSING_TTY', flush=True); time.sleep(0.1); [os.close(fd) for fd in [0, 1, 2]]; time.sleep(30)";
+  const { pty, finish } = await launchProbe(root, source, { executable: 'python3', args: ['-c', source] });
   try {
     await pty.waitForOutput('CLOSING_TTY', 5000);
     await within(pty.exited, 6000);
