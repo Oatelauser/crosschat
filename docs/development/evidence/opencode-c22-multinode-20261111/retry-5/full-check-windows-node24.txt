@@ -1,0 +1,18 @@
+
+> @oatelauser/crosschat@1.13.1 check
+> npm run lint && npm run check:imports && npm run build && npm test
+
+
+> @oatelauser/crosschat@1.13.1 lint
+> eslint src test
+
+
+D:\workspace\CC\cc-opencode-native-20261111\test\helpers\opencode-native-multinode.mjs
+  60:20  error  'Buffer' is not defined                                                                    no-undef
+  61:16  error  Unexpected control character(s) in regular expression: \x1b                                no-control-regex
+  61:56  error  Unexpected control character(s) in regular expression: \x00, \x08, \x0b, \x0c, \x0e, \x1f  no-control-regex
+  72:78  error  'setTimeout' is not defined                                                                no-undef
+  73:15  error  'clearTimeout' is not defined                                                              no-undef
+
+✖ 5 problems (5 errors, 0 warnings)
+

@@ -1,0 +1,14 @@
+
+> @oatelauser/crosschat@1.13.1 check
+> npm run lint && npm run check:imports && npm run build && npm test
+
+
+> @oatelauser/crosschat@1.13.1 lint
+> eslint src test
+
+
+D:\workspace\CC\cc-opencode-native-20261111\test\helpers\opencode-native-multinode.mjs
+  326:74  error  'URL' is not defined  no-undef
+
+✖ 1 problem (1 error, 0 warnings)
+

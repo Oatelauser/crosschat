@@ -9,6 +9,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createOpenCodeFixture, poll, repositoryRoot } from '../test/helpers/opencode-live-fixture.mjs';
 import { textStream } from '../test/helpers/opencode-mock-model.mjs';
 import { validateOpenCodeNativeEnhancement } from '../test/helpers/opencode-native-enhancement.mjs';
+import { validateOpenCodeNativeMultinode } from '../test/helpers/opencode-native-multinode.mjs';
 import { launchPty } from '../test/helpers/tui-pty-driver.mjs';
 
 const self = fileURLToPath(import.meta.url);
@@ -142,6 +143,9 @@ async function main() {
       waitForNativeTitle: async (title) => native.waitForOutput(title, 30000, renameOutputStart),
     });
     result.tests.push({ name: 'OpenCode CLI live session passed TCP TUI membership, exact rename and renamed-route validation', passed: true });
+    result.nativeMultinode = await validateOpenCodeNativeMultinode({ binary, fixture, session,
+      evidenceDirectory: join(evidence, 'native-multinode') });
+    result.tests.push({ name: 'OpenCode two-node, two-operator TCP observers refresh the same authoritative star', passed: true });
     let nativeFinished = false;
     void native.exited.then(() => { nativeFinished = true; }, () => { nativeFinished = true; });
     native.write('\x03');

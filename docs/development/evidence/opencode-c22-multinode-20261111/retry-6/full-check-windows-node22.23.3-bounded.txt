@@ -1,0 +1,10 @@
+
+> @oatelauser/crosschat@1.13.1 check
+> npm run lint && npm run check:imports && npm run build && npm test
+
+
+> @oatelauser/crosschat@1.13.1 lint
+> eslint src test
+
+'eslint' is not recognized as an internal or external command,
+operable program or batch file.

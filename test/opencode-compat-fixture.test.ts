@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { afterEach, describe, expect, it } from 'vitest';
-import { assessStartupEvidence, classifyCompatibility, parseArtifactManifest } from '../scripts/opencode-compat-report.mjs';
+import { assessNativeEnhancement, assessStartupEvidence, classifyCompatibility, parseArtifactManifest } from '../scripts/opencode-compat-report.mjs';
 import { createMockModel, textStream, toolStream } from './helpers/opencode-mock-model.mjs';
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -21,6 +21,16 @@ describe('OpenCode compatibility evidence', () => {
     const failure = { status: 'failed', stage: 'contract', version: '2.1.4', check: 'native-queue', category: 'compatibility' };
     expect(classifyCompatibility(ok, failure, { ...failure, check: 'reply' })).toMatchObject({ kind: 'inconclusive', notify: false });
     expect(classifyCompatibility(ok, failure, { ...failure, version: '2.1.5' })).toMatchObject({ kind: 'inconclusive', notify: false });
+  });
+
+  it('requires the pinned native enhancement report and complete cleanup before passing C22', () => {
+    const report = { version: '2.1.3', fixtureRemoved: true, tests: [{ passed: true }, { passed: true }],
+      nativeMultinode: { status: 'passed', cleanup: { complete: true } } };
+    expect(assessNativeEnhancement(report, 0, '2.1.3')).toEqual({ status: 'passed', version: '2.1.3', checks: 2 });
+    expect(assessNativeEnhancement(report, 1, '2.1.3').status).toBe('failed');
+    expect(assessNativeEnhancement({ ...report, version: '2.2.7' }, 0, '2.1.3').status).toBe('failed');
+    expect(assessNativeEnhancement({ ...report, fixtureRemoved: false }, 0, '2.1.3').status).toBe('failed');
+    expect(assessNativeEnhancement({ ...report, nativeMultinode: { status: 'failed', cleanup: { complete: true } } }, 0, '2.1.3').status).toBe('failed');
   });
 
   it('pins the official candidate URL and checksum from one validated manifest', () => {
@@ -83,6 +93,7 @@ describe('model-only HTTP fixture', () => {
 describe('OpenCode compatibility workflow trust boundary', () => {
   it('keeps probes read-only and separates CLI/Desktop evidence from issue reporting', async () => {
     const workflow = await readFile(new URL('../.github/workflows/opencode-compat.yml', import.meta.url), 'utf8');
+    const runner = await readFile(new URL('../scripts/opencode-compat-ci.mjs', import.meta.url), 'utf8');
     const probe = workflow.split('\n  probe:')[1]?.split('\n  desktop-probe:')[0] ?? '';
     const desktop = workflow.split('\n  desktop-probe:')[1]?.split('\n  report:')[0] ?? '';
     const report = workflow.split('\n  report:')[1] ?? '';
@@ -91,19 +102,32 @@ describe('OpenCode compatibility workflow trust boundary', () => {
     expect(desktop).not.toBe('');
     expect(report).not.toBe('');
     expect(workflow).toMatch(/^ {2}schedule:/m);
+    expect(workflow).toContain("cron: '37 3 * * 2,5'");
     expect(workflow).toMatch(/^ {2}workflow_dispatch:/m);
+    expect(workflow).toContain('default: full');
+    expect(workflow).toContain('- c22-cli');
     expect(workflow).not.toMatch(/pull_request|workflow_run|\bsecrets\./);
     expect(workflow).toMatch(/^permissions:\r?\n {2}contents: read/m);
 
     expect(probe).toMatch(/matrix:\r?\n {8}os: \[ubuntu-latest, windows-latest\]/);
     expect(probe).toMatch(/runs-on: \$\{\{ matrix\.os \}\}/);
     expect(probe).toContain('node scripts/opencode-compat-ci.mjs');
+    expect(probe).toContain("OPENCODE_C22_NATIVE: ${{ github.event_name == 'workflow_dispatch' && inputs.scope == 'c22-cli' && '1' || '0' }}");
+    expect(probe).toContain("timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.scope == 'c22-cli' && 45 || 25 }}");
     expect(probe).toMatch(/persist-credentials: false/);
     expect(probe).not.toMatch(/issues: write|contents: write|GITHUB_TOKEN|GH_TOKEN/);
     expect(probe).toContain('name: opencode-compat-${{ matrix.os }}');
     expect(probe).toContain('path: opencode-compat-evidence/');
+    expect(runner).toContain("process.env.OPENCODE_C22_NATIVE === '1'");
+    expect(runner).toContain("process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch'");
+    expect(runner).toContain("join(output, 'c22-native-multinode')");
+    expect(runner).toContain('timeout: 60 * 60 * 1000');
+    expect(runner).toContain('assessNativeEnhancement(report, invocation?.code ?? null, artifact.version)');
+    expect(runner).toContain('process.exitCode = 1');
+    expect(runner).toContain("classifyCompatibility(results.baseline, results.candidate, results.retry)");
 
     expect(desktop).toMatch(/runs-on: windows-latest/);
+    expect(desktop).toContain("if: ${{ github.event_name != 'workflow_dispatch' || inputs.scope != 'c22-cli' }}");
     expect(desktop).toContain('node scripts/opencode-desktop-compat-ci.mjs');
     expect(desktop).toMatch(/persist-credentials: false/);
     expect(desktop).not.toMatch(/issues: write|contents: write|GITHUB_TOKEN|GH_TOKEN/);

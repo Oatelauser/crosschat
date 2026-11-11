@@ -1,0 +1,3 @@
+{"event":"read","resource":"stars","rows":[{"id":"[\"star\",\"tcp:star:opencode-c22-a-a8a8af01:127.0.0.1%3A49245\",\"opencode-c22-a-a8a8af01\"]","name":"opencode-c22-a-f2e4"}],"completeness":"complete"}
+{"event":"read","resource":"members","rows":[],"completeness":"complete"}
+{"event":"exit","code":0,"before":{"raw":false,"resize":0,"listeners":{"SIGINT":1,"SIGTERM":1,"uncaughtException":0,"unhandledRejection":0}},"after":{"raw":false,"resize":0,"listeners":{"SIGINT":1,"SIGTERM":1,"uncaughtException":0,"unhandledRejection":0}}}

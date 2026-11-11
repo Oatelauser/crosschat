@@ -33,6 +33,21 @@ export function classifyCompatibility(baseline, candidate, retry) {
   return { kind: 'regression', notify: true };
 }
 
+export function assessNativeEnhancement(report, exitCode, expectedVersion) {
+  const tests = report?.tests;
+  const passed = exitCode === 0
+    && report?.version === expectedVersion
+    && report?.fixtureRemoved === true
+    && report?.nativeMultinode?.status === 'passed'
+    && report?.nativeMultinode?.cleanup?.complete === true
+    && Array.isArray(tests)
+    && tests.length > 0
+    && tests.every((test) => test?.passed === true)
+    && report?.failure === undefined
+    && report?.cleanupErrors === undefined;
+  return { status: passed ? 'passed' : 'failed', version: report?.version ?? null, checks: tests?.length ?? 0 };
+}
+
 function record(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
 
 /** Resolve once, then download that immutable artifact; never follow a second "latest" lookup. */

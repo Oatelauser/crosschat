@@ -7,7 +7,7 @@ import process from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { TextDecoder } from 'node:util';
 import { URL } from 'node:url';
-import { classifyCompatibility, parseArtifactManifest } from './opencode-compat-report.mjs';
+import { assessNativeEnhancement, classifyCompatibility, parseArtifactManifest } from './opencode-compat-report.mjs';
 import { repositoryRoot, runCommand } from '../test/helpers/opencode-live-fixture.mjs';
 
 if (process.env.CROSSCHAT_LIVE !== '1') throw new Error('CROSSCHAT_LIVE=1 is required for official binary downloads and isolated live probes');
@@ -63,6 +63,31 @@ async function probe(binary, artifact, label) {
   catch { return { status: 'failed', category: 'infrastructure', stage: 'probe-runner', version: artifact.version, error: 'Probe did not produce a valid report' }; }
 }
 
+async function probeNativeEnhancement(binary, artifact) {
+  const evidenceDirectory = join(output, 'c22-native-multinode');
+  const reportPath = join(evidenceDirectory, 'result.json');
+  await mkdir(evidenceDirectory, { recursive: true });
+  let invocation;
+  let report;
+  let error;
+  try {
+    invocation = await runCommand(process.execPath, [join(repositoryRoot, 'scripts', 'opencode-pty-smoke.mjs'),
+      '--binary', binary, '--evidence', evidenceDirectory], {
+      env: { ...process.env, CROSSCHAT_LIVE: '1', OPENCODE_BIN: binary, OPENCODE_EXPECTED_VERSION: artifact.version },
+      // The workflow's 45-minute job limit owns hard cancellation and runner teardown.
+      timeout: 60 * 60 * 1000,
+    });
+  } catch (caught) { error = caught instanceof Error ? caught.message : String(caught); }
+  try { report = JSON.parse(await readFile(reportPath, 'utf8')); }
+  catch { error ??= 'C22 native probe did not produce a valid result report'; }
+  const assessed = assessNativeEnhancement(report, invocation?.code ?? null, artifact.version);
+  results.c22Native = { ...assessed, evidence: relative(output, reportPath), ...(invocation?.timedOut ? { timedOut: true } : {}), ...(error ? { error } : {}) };
+  if (assessed.status !== 'passed') {
+    process.exitCode = 1;
+    process.stdout.write(`C22 native probe failed for OpenCode ${artifact.version}; see ${results.c22Native.evidence}\n`);
+  } else process.stdout.write(`C22 native probe passed for OpenCode ${artifact.version} (${assessed.checks} checks)\n`);
+}
+
 async function cleanupDownloadRoot() {
   const target = await realpath(root);
   const child = relative(temp, target);
@@ -77,6 +102,10 @@ try {
   builds.candidate = parseArtifactManifest(JSON.parse(new TextDecoder().decode(await fetchWithRetry('https://opencode.ai/update/api/latest/cli/opencode', 30000))), process.platform, process.arch);
   const baselineBinary = await install(builds.baseline, 'baseline');
   results.baseline = await probe(baselineBinary, builds.baseline, 'baseline');
+  if (process.env.OPENCODE_C22_NATIVE === '1') {
+    if (process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch') throw new Error('The C22 native probe is only allowed on workflow_dispatch');
+    await probeNativeEnhancement(baselineBinary, builds.baseline);
+  }
   const candidateBinary = builds.candidate.sha256 === builds.baseline.sha256 && builds.candidate.version === builds.baseline.version ? baselineBinary : await install(builds.candidate, 'candidate');
   results.candidate = await probe(candidateBinary, builds.candidate, 'candidate');
   if (results.candidate.status !== 'passed') results.retry = await probe(candidateBinary, builds.candidate, 'retry');

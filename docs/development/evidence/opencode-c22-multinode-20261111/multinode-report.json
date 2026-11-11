@@ -1,0 +1,71 @@
+{
+  "scope": "Two same-host OpenCode services and logical nodes; two isolated operator HOME/TUI instances; not physical cross-machine acceptance",
+  "starIds": [
+    "opencode-c22-a-a8a8af01",
+    "opencode-c22-b-c023abdd"
+  ],
+  "checks": [],
+  "cleanup": {
+    "complete": true,
+    "errors": [],
+    "secondProfileRemoved": true
+  },
+  "status": "failed",
+  "error": "Expected \"actual\" to be strictly unequal to:\n\nundefined",
+  "operators": [
+    {
+      "index": 0,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    },
+    {
+      "index": 1,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    }
+  ]
+}

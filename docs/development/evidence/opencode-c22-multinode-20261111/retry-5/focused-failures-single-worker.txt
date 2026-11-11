@@ -1,0 +1,19 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test --pool=forks --maxWorkers=1 --minWorkers=1 test/tui-main-sessions.test.ts test/doctor-json-cli.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-opencode-native-20261111
+
+ ✓ test/doctor-json-cli.test.ts (3 tests) 4081ms
+   ✓ doctor JSON CLI extension > diagnoses the exact custom Harness copy installed by the shared maintenance plan without repairing it  2107ms
+   ✓ doctor JSON CLI extension > returns the structured checks and preserves the existing default report and exit severity  1042ms
+   ✓ doctor JSON CLI extension > emits valid structured findings with exit one for a failed check and rejects extra options  932ms
+ ✓ test/tui-main-sessions.test.ts (3 tests) 1102ms
+   ✓ default local sessions wiring > installs the real session resource through injectable safe application sources after entering local  934ms
+
+ Test Files  2 passed (2)
+      Tests  6 passed (6)
+   Start at  21:56:33
+   Duration  5.93s (transform 659ms, setup 0ms, collect 309ms, tests 5.18s, environment 0ms, prepare 155ms)
+
