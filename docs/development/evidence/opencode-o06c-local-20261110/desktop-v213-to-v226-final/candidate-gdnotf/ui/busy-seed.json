@@ -1,0 +1,8 @@
+{
+  "url": "oc://renderer/index.html",
+  "title": "crosschat_desktop_fixture_busy · OpenCode",
+  "text": "W\ncrosschat_desktop_fixture_sender\nW\ncrosschat_desktop_fixture_receiver\nW\ncrosschat_desktop_fixture_busy\nW\ncrosschat_desktop_fixture_idle\nW\nworkspace\ncrosschat_desktop_fixture_busy\n0\ncrosschat_desktop_fixture_busy-start\n工作中\n工作中\n工作中\n添加后续消息，输入 / 使用命令，输入 @ 添加上下文...\nCrosschat desktop fixture\n/\nScripted test model\nDefault",
+  "routes": {
+    "opencode.desktop.window.32eb5e02-4e8f-4c15-8fbe-0e72fa1b1003.last-active-url": "/server/c2lkZWNhcg/session/ses_e3bb517ddffeNd3O5o8zPlaor7"
+  }
+}

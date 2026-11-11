@@ -1,0 +1,87 @@
+{
+  "before": {
+    "uninstallKey": false,
+    "protocolKey": true,
+    "protocolCommand": "\"D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-20261023-988a66bc46cd42609ca8a12db062e168\\install\\OpenCode.exe\" \"%1\"",
+    "installKey": false,
+    "sideEffects": [
+      {
+        "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-cS2tTK\\baseline\\appdata\\Microsoft\\Windows\\Start Menu\\Programs\\OpenCode.lnk",
+        "parentExists": false,
+        "exists": false
+      },
+      {
+        "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-cS2tTK\\baseline\\profile\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\OpenCode.lnk",
+        "parentExists": false,
+        "exists": false
+      },
+      {
+        "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-cS2tTK\\baseline\\profile\\Desktop\\OpenCode.lnk",
+        "parentExists": false,
+        "exists": false
+      },
+      {
+        "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-cS2tTK\\baseline\\localappdata\\@opencodedesktop-updater\\installer.exe",
+        "parentExists": false,
+        "exists": false
+      },
+      {
+        "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-cS2tTK\\baseline\\profile\\AppData\\Local\\@opencodedesktop-updater\\installer.exe",
+        "parentExists": false,
+        "exists": false
+      }
+    ],
+    "quiet": null,
+    "machineInstallKey": false,
+    "machineUninstallKey": false,
+    "protocolIcon": null
+  },
+  "afterInstall": {
+    "uninstallKey": true,
+    "protocolKey": true,
+    "protocolCommand": "\"D:\\workspace\\CC\\multichat\\node_modules\\.cache\\crosschat-opencode-desktop-20261023-988a66bc46cd42609ca8a12db062e168\\install\\OpenCode.exe\" \"%1\"",
+    "installKey": true,
+    "sideEffects": [
+      {
+        "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-cS2tTK\\baseline\\appdata\\Microsoft\\Windows\\Start Menu\\Programs\\OpenCode.lnk",
+        "parentExists": false,
+        "exists": false
+      },
+      {
+        "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-cS2tTK\\baseline\\profile\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\OpenCode.lnk",
+        "parentExists": true,
+        "exists": true
+      },
+      {
+        "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-cS2tTK\\baseline\\profile\\Desktop\\OpenCode.lnk",
+        "parentExists": true,
+        "exists": false
+      },
+      {
+        "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-cS2tTK\\baseline\\localappdata\\@opencodedesktop-updater\\installer.exe",
+        "parentExists": false,
+        "exists": false
+      },
+      {
+        "path": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-cS2tTK\\baseline\\profile\\AppData\\Local\\@opencodedesktop-updater\\installer.exe",
+        "parentExists": true,
+        "exists": true
+      }
+    ],
+    "quiet": "\"C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-cS2tTK\\baseline\\install\\Uninstall OpenCode.exe\" /currentuser /S",
+    "machineInstallKey": false,
+    "machineUninstallKey": false,
+    "protocolIcon": null
+  },
+  "signature": {
+    "status": "Valid",
+    "subject": "CN=\"Anomaly Innovations, Inc https://anoma.ly/\", O=\"Anomaly Innovations, Inc https://anoma.ly/\", L=Dover, S=Delaware, C=US"
+  },
+  "generatedUninstaller": {
+    "sha256": "ef306a08343414f681b98f084dfda124492119ceabca689fd4318dff0fd799d0",
+    "signature": {
+      "status": "Valid",
+      "subject": "CN=\"Anomaly Innovations, Inc https://anoma.ly/\", O=\"Anomaly Innovations, Inc https://anoma.ly/\", L=Dover, S=Delaware, C=US"
+    }
+  }
+}

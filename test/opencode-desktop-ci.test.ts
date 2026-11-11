@@ -5,9 +5,21 @@ import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import * as desktopCI from '../scripts/opencode-desktop-compat-ci.mjs';
 import {
+  canSnapshotExistingProtocol,
+  desktopStateMatchesBaseline,
+  desktopLifecycleFailure,
   desktopRegressionIdentity,
+  desktopArtifactDownloadTimeout,
+  desktopInstallerCachePath,
+  compareProtocolAclSnapshots,
+  isProtocolAclSnapshotRace,
   parseDesktopArtifactManifest,
+  protocolRestorationAction,
+  protocolAclRestoreSecurityInformation,
+  protocolSnapshotsMatch,
+  requireApprovedCandidateVersion,
   runDesktopBuildSequence,
+  validateGeneratedUninstaller,
   validateDesktopSignature,
 } from '../scripts/opencode-desktop-compat-ci.mjs';
 
@@ -28,10 +40,239 @@ function failed(version: string) {
 }
 
 describe('OpenCode Desktop CI evidence', () => {
+  it('allows only an unchanged, snapshotted protocol key through the otherwise-empty install baseline', () => {
+    const empty = { installKey: false, uninstallKey: false, protocolKey: false, machineInstallKey: false,
+      machineUninstallKey: false, sideEffects: [] };
+    expect(canSnapshotExistingProtocol(empty)).toBe(true);
+    expect(desktopStateMatchesBaseline(empty, false, false)).toBe(true);
+
+    const existingProtocol = { ...empty, protocolKey: true };
+    expect(canSnapshotExistingProtocol(existingProtocol)).toBe(true);
+    expect(desktopStateMatchesBaseline(existingProtocol, true, true)).toBe(true);
+    expect(desktopStateMatchesBaseline(existingProtocol, true, false)).toBe(false);
+    expect(desktopStateMatchesBaseline(existingProtocol, false, false)).toBe(false);
+    expect(desktopStateMatchesBaseline({ ...empty, protocolKey: true }, false, false)).toBe(false);
+
+    for (const changed of [
+      { ...existingProtocol, installKey: true }, { ...existingProtocol, uninstallKey: true },
+      { ...existingProtocol, machineInstallKey: true }, { ...existingProtocol, machineUninstallKey: true },
+      { ...existingProtocol, sideEffects: [{ path: 'OpenCode.lnk', exists: true }] },
+    ]) {
+      expect(canSnapshotExistingProtocol(changed)).toBe(false);
+      expect(desktopStateMatchesBaseline(changed, true, true)).toBe(false);
+    }
+  });
+
+  it('restores ACLs only when registry values still match the original snapshot', () => {
+    expect(protocolRestorationAction({ originalValuesMatch: true, originalAclMatches: true, installedSnapshotMatches: false }))
+      .toBe('keep');
+    expect(protocolRestorationAction({ originalValuesMatch: true, originalAclMatches: false, installedSnapshotMatches: true }))
+      .toBe('restore-original-acl');
+    expect(protocolRestorationAction({ originalValuesMatch: true, originalAclMatches: false, installedSnapshotMatches: false }))
+      .toBe('refuse');
+    expect(protocolRestorationAction({ originalValuesMatch: false, originalAclMatches: false, installedSnapshotMatches: true }))
+      .toBe('remove-installed-registration');
+    expect(protocolRestorationAction({ originalValuesMatch: false, originalAclMatches: false, installedSnapshotMatches: false }))
+      .toBe('refuse');
+  });
+
+  it('compares complete protocol ACL trees and identifies only transient key disappearance', () => {
+    const original = [
+      { relative: '', sddl: 'root' },
+      { relative: 'shell', sddl: 'shell' },
+      { relative: 'shell\\open', sddl: 'open' },
+      { relative: 'shell\\open\\command', sddl: 'command' },
+    ];
+    expect(compareProtocolAclSnapshots(original, [...original].reverse())).toEqual({ matches: true, missing: [], extra: [], changed: [] });
+    expect(compareProtocolAclSnapshots(original, original.slice(0, 3))).toMatchObject({ matches: false, missing: ['shell\\open\\command'] });
+    expect(compareProtocolAclSnapshots(original, [...original, { relative: 'extra', sddl: 'extra' }]))
+      .toMatchObject({ matches: false, extra: ['extra'] });
+    expect(compareProtocolAclSnapshots(original, original.map((item) => item.relative === 'shell' ? { ...item, sddl: 'changed' } : item)))
+      .toMatchObject({ matches: false, changed: ['shell'] });
+    expect(isProtocolAclSnapshotRace(new Error('OpenCode protocol ACL key disappeared during verification: shell\\open'))).toBe(true);
+    expect(isProtocolAclSnapshotRace(new Error('OpenCode protocol ACL changed after the installed snapshot'))).toBe(false);
+  });
+
+  it('accepts a protocol snapshot only when registry values and the complete ACL tree stay stable', () => {
+    const values = Buffer.from('Windows Registry Editor Version 5.00\r\n[HKEY_CURRENT_USER\\Software\\Classes\\opencode]\r\n');
+    const acl = [{ relative: '', sddl: 'O:ownerG:groupD:(A;;KA;;;user)' }];
+    expect(protocolSnapshotsMatch({ values, acl }, { values: Buffer.from(values), acl: [...acl] })).toBe(true);
+    expect(protocolSnapshotsMatch({ values, acl }, { values: Buffer.from('changed'), acl })).toBe(false);
+    expect(protocolSnapshotsMatch({ values, acl }, { values, acl: [{ relative: '', sddl: 'O:otherG:groupD:(A;;KA;;;user)' }] })).toBe(false);
+    const registryValues = [{ relative: '', values: [{ name: '', kind: 'String', data: 'URL:opencode' }] }];
+    expect(protocolSnapshotsMatch({ values, acl, registryValues }, { values: Buffer.from(values), acl: [...acl], registryValues: structuredClone(registryValues) })).toBe(true);
+    expect(protocolSnapshotsMatch({ values, acl, registryValues }, { values: Buffer.from(values), acl: [...acl],
+      registryValues: [{ relative: '', values: [{ name: '', kind: 'String', data: 'changed' }] }] })).toBe(false);
+    expect(protocolAclRestoreSecurityInformation).toBe(7);
+  });
+
+  it('recognizes only OpenCode changing the protocol default command to this exact owned binary', () => {
+    const compare = Reflect.get(desktopCI, 'protocolSnapshotsDifferOnlyByOwnedCommand');
+    expect(compare).toBeTypeOf('function');
+    type RegistryValue = { name: string; kind: string; data: unknown };
+    type RegistryKey = { relative: string; values: RegistryValue[] };
+    type Snapshot = { values: Buffer; acl: Array<{ relative: string; sddl: string }>; registryValues: RegistryKey[] };
+    const binary = 'C:\\temp\\crosschat-opencode\\baseline\\install\\OpenCode.exe';
+    const original: Snapshot = {
+      values: Buffer.from('original registry export'),
+      acl: [
+        { relative: '', sddl: 'root-acl' },
+        { relative: 'shell', sddl: 'shell-acl' },
+        { relative: 'shell\\open', sddl: 'open-acl' },
+        { relative: 'shell\\open\\command', sddl: 'command-acl' },
+      ],
+      registryValues: [
+        { relative: '', values: [{ name: '', kind: 'String', data: 'URL:opencode' }, { name: 'URL Protocol', kind: 'String', data: '' }] },
+        { relative: 'shell', values: [] },
+        { relative: 'shell\\open', values: [] },
+        { relative: 'shell\\open\\command', values: [{ name: '', kind: 'String', data: '"D:\\previous\\OpenCode.exe" "%1"' }] },
+      ],
+    };
+    const clone = (snapshot: Snapshot): Snapshot => ({ values: Buffer.from(snapshot.values),
+      acl: snapshot.acl.map((key) => ({ ...key })),
+      registryValues: snapshot.registryValues.map((key) => ({ ...key, values: key.values.map((value) => ({ ...value })) })) });
+    const current = clone(original);
+    current.values = Buffer.from('current registry export');
+    current.registryValues[3].values[0].data = `"${binary}" "%1"`;
+    const compareSnapshots = compare as (before: Snapshot, after: Snapshot, path: string) => boolean;
+    expect(compareSnapshots(original, current, binary)).toBe(true);
+
+    const extraValue = clone(current);
+    extraValue.registryValues[1].values.push({ name: 'unexpected', kind: 'String', data: 'keep me' });
+    expect(compareSnapshots(original, extraValue, binary)).toBe(false);
+
+    const changedAcl = clone(current);
+    changedAcl.acl[3].sddl = 'changed-acl';
+    expect(compareSnapshots(original, changedAcl, binary)).toBe(false);
+
+    const otherCommand = clone(current);
+    otherCommand.registryValues[3].values[0].data = '"C:\\temp\\other\\OpenCode.exe" "%1"';
+    expect(compareSnapshots(original, otherCommand, binary)).toBe(false);
+  });
+
+  it('captures an install-time protocol checkpoint even when the original registration is unchanged', () => {
+    const classify = Reflect.get(desktopCI, 'installedProtocolSnapshotAction');
+    expect(classify).toBeTypeOf('function');
+    const decision = classify as (input: Record<string, unknown>) => string;
+    expect(decision({ originalPresent: true, currentPresent: true, matchesOriginal: true,
+      onlyOwnedCommandChange: false, currentCommand: '"C:\\old\\OpenCode.exe" "%1"', expectedCommand: '"C:\\new\\OpenCode.exe" "%1"' })).toBe('capture');
+    expect(decision({ originalPresent: true, currentPresent: true, matchesOriginal: false,
+      onlyOwnedCommandChange: false, currentCommand: '"C:\\new\\OpenCode.exe" "%1"', expectedCommand: '"C:\\new\\OpenCode.exe" "%1"' })).toBe('refuse');
+    expect(decision({ originalPresent: true, currentPresent: true, matchesOriginal: false,
+      onlyOwnedCommandChange: true, currentCommand: '"C:\\new\\OpenCode.exe" "%1"', expectedCommand: '"C:\\new\\OpenCode.exe" "%1"' })).toBe('capture');
+    expect(decision({ originalPresent: true, currentPresent: false, matchesOriginal: false,
+      onlyOwnedCommandChange: false, currentCommand: undefined, expectedCommand: '"C:\\new\\OpenCode.exe" "%1"' })).toBe('refuse');
+    expect(decision({ originalPresent: false, currentPresent: false, matchesOriginal: false,
+      onlyOwnedCommandChange: false, currentCommand: undefined, expectedCommand: '"C:\\new\\OpenCode.exe" "%1"' })).toBe('none');
+  });
+
+  it('only adopts the exact OpenCode command mutation from the pre-probe snapshot', () => {
+    const classify = Reflect.get(desktopCI, 'observedProtocolSnapshotAction');
+    expect(classify).toBeTypeOf('function');
+    const decide = classify as (before: unknown, actual: unknown, binary: string) => string;
+    const before = { values: Buffer.from('before'), acl: [{ relative: '', sddl: 'same' }], registryValues: [
+      { relative: '', values: [{ name: '', kind: 'String', data: 'URL:opencode' }] },
+      { relative: 'shell\\open\\command', values: [{ name: '', kind: 'String', data: '"C:\\old\\OpenCode.exe" "%1"' }] },
+    ] };
+    const clone = () => ({ values: Buffer.from(before.values), acl: before.acl.map((key) => ({ ...key })),
+      registryValues: before.registryValues.map((key) => ({ ...key, values: key.values.map((value) => ({ ...value })) })) });
+    const changed = clone();
+    changed.values = Buffer.from('after');
+    changed.registryValues[1].values[0].data = '"C:\\new\\OpenCode.exe" "%1"';
+    expect(decide(before, before, 'C:\\new\\OpenCode.exe')).toBe('unchanged');
+    expect(decide(before, changed, 'C:\\new\\OpenCode.exe')).toBe('capture-owned-command');
+
+    const unrelated = clone();
+    unrelated.values = Buffer.from('after');
+    unrelated.registryValues[0].values[0].data = 'changed';
+    expect(decide(before, unrelated, 'C:\\new\\OpenCode.exe')).toBe('refuse');
+    const otherCommand = clone();
+    otherCommand.values = Buffer.from('after');
+    otherCommand.registryValues[1].values[0].data = '"C:\\other\\OpenCode.exe" "%1"';
+    expect(decide(before, otherCommand, 'C:\\new\\OpenCode.exe')).toBe('refuse');
+  });
+
+  it('restores owner, group and DACL sections with the rights required by Windows', async () => {
+    const source = await readFile(new URL('../scripts/opencode-desktop-compat-ci.mjs', import.meta.url), 'utf8');
+    expect(source).toContain('RegistryRights]::ChangePermissions -bor [System.Security.AccessControl.RegistryRights]::TakeOwnership');
+    expect(source).toContain('RegSetKeySecurity($entry.key.Handle,${protocolAclRestoreSecurityInformation},$entry.binary)');
+    expect(source).toContain('Sort-Object depth -Descending');
+  });
+
+  it('preserves PowerShell lifecycle exit, timeout and output when a helper fails', () => {
+    const failure = desktopLifecycleFailure({ code: null, signal: 'SIGTERM', timedOut: true,
+      stdout: '{"protocolCommand":"C:\\private\\uninstall.exe /S"}', stderr: 'parser diagnostic' }, 'inspect Windows installation state');
+    expect(failure).toContain('inspect Windows installation state');
+    expect(failure).toContain('exitCode=null, signal=SIGTERM, timedOut=true');
+    expect(failure).toContain('stderr (last 17 bytes): parser diagnostic');
+    expect(failure).toContain('stdoutBytes=49');
+    expect(failure).not.toContain('private');
+
+    const longError = 'x'.repeat(5000);
+    const bounded = desktopLifecycleFailure({ code: 1, signal: null, timedOut: false, stdout: '', stderr: longError }, 'verify signature');
+    expect(bounded).toContain('stderr (last 4000 bytes):');
+    expect(bounded).toHaveLength('Desktop Windows lifecycle helper "verify signature" failed (exitCode=1, signal=none, timedOut=false, stdoutBytes=0): stderr (last 4000 bytes): '.length + 4000);
+    const unicodeError = '\u754c'.repeat(5000);
+    const unicodeFailure = desktopLifecycleFailure({ code: 1, signal: null, timedOut: false, stdout: '', stderr: unicodeError }, 'probe');
+    expect(unicodeFailure).toContain('stderr (last 3999 bytes):');
+    const unicodeOutput = unicodeFailure.split('stderr (last 3999 bytes): ')[1];
+    expect(Buffer.byteLength(unicodeOutput, 'utf8')).toBe(3999);
+    expect(unicodeOutput).toBe(unicodeError.slice(-1333));
+
+    expect(desktopLifecycleFailure({ code: 1, signal: null, timedOut: false, stdout: '', stderr: '' }, 'probe'))
+      .toContain('no stderr output');
+  });
+
+  it('labels Windows state snapshots by their lifecycle checkpoint', async () => {
+    const source = await readFile(new URL('../scripts/opencode-desktop-compat-ci.mjs', import.meta.url), 'utf8');
+    expect(source).toMatch(/\blet protocolSnapshot;/);
+    expect(source).toContain('async function windowsState(env, operation)');
+    const phases = [
+      'crosschat-desktop-state:started',
+      'crosschat-desktop-state:registry:start',
+      'crosschat-desktop-state:registry:done',
+      'crosschat-desktop-state:folder-paths:start',
+      'crosschat-desktop-state:folder-paths:done',
+      'crosschat-desktop-state:side-effects:start',
+      'crosschat-desktop-state:side-effects:done',
+      'crosschat-desktop-state:json:start',
+    ].map((phase) => source.indexOf(phase));
+    expect(phases.every((index) => index >= 0)).toBe(true);
+    expect(phases).toEqual([...phases].sort((left, right) => left - right));
+    for (const operation of [
+      'windowsState(env, `inspect ${label} installation state before install`)',
+      'windowsState(env, `inspect ${label} installation state after install`)',
+      'windowsState(context.env, `inspect ${context.label} installation state before uninstall`)',
+      'windowsState(context.env, `verify ${context.label} Windows uninstaller registration removal`)',
+      'windowsState(context.env, `inspect ${context.label} Windows installation state after uninstall`)',
+    ]) expect(source).toContain(operation);
+  });
+
   it('pins the official Windows desktop installer and its distinct desktop source commit', () => {
     expect(parseDesktopArtifactManifest(manifest(), 'win32', 'x64')).toEqual(baseline);
+    const approved = parseDesktopArtifactManifest(manifest('2.2.6'), 'win32', 'x64');
+    expect(requireApprovedCandidateVersion(approved, '2.2.6')).toBe(approved);
+    expect(requireApprovedCandidateVersion(approved, undefined)).toBe(approved);
+    expect(() => requireApprovedCandidateVersion(approved, '2.2.7')).toThrow('differs from the approved version 2.2.7');
+    expect(() => requireApprovedCandidateVersion(approved, 'latest')).toThrow('approved version must be an exact release version');
     expect(() => parseDesktopArtifactManifest({ ...manifest(), name: 'cli' }, 'win32', 'x64')).toThrow();
     expect(() => parseDesktopArtifactManifest(manifest(), 'linux', 'x64')).toThrow();
+  });
+
+  it('bounds an optional desktop installer download timeout without changing the default', () => {
+    expect(desktopArtifactDownloadTimeout(undefined)).toBe(120000);
+    expect(desktopArtifactDownloadTimeout('600000')).toBe(600000);
+    expect(() => desktopArtifactDownloadTimeout('0')).toThrow('between 1000 and 600000 milliseconds');
+    expect(() => desktopArtifactDownloadTimeout('600001')).toThrow('between 1000 and 600000 milliseconds');
+    expect(() => desktopArtifactDownloadTimeout('slow')).toThrow('between 1000 and 600000 milliseconds');
+  });
+
+  it('maps an absolute cache directory to an artifact-specific Windows path', () => {
+    const artifact = { sha256: 'a'.repeat(64) };
+    expect(desktopInstallerCachePath('C:\\cache\\opencode', artifact))
+      .toBe(`C:\\cache\\opencode\\${artifact.sha256}.exe`);
+    expect(() => desktopInstallerCachePath('relative-cache', artifact)).toThrow('absolute Windows path');
+    expect(() => desktopInstallerCachePath('C:\\cache', { sha256: 'invalid' })).toThrow('SHA-256');
   });
 
   it('rejects a mutable/unrelated download, invalid digest/size/source and an unapproved major', () => {
@@ -53,6 +294,18 @@ describe('OpenCode Desktop CI evidence', () => {
     expect(() => validateDesktopSignature({ status: 'Valid', subject: 'CN="Anomaly Innovations, Inc https://anoma.ly/", O="Other Publisher"' })).toThrow();
   });
 
+  it('accepts only the unchanged installer-generated uninstaller at its exact owned path', () => {
+    const path = 'C:\\temp\\crosschat-opencode\\candidate\\install\\Uninstall OpenCode.exe';
+    const sha256 = 'd'.repeat(64);
+    const input = { expectedPath: path, actualPath: path.replaceAll('\\', '/'), installedSha256: sha256, currentSha256: sha256 };
+    expect(validateGeneratedUninstaller({ ...input, signature: { status: 'NotSigned' } })).toBe(true);
+    expect(validateGeneratedUninstaller({ ...input, signature: { status: 'Valid', subject: publisher } })).toBe(true);
+    expect(() => validateGeneratedUninstaller({ ...input, actualPath: 'C:\\temp\\other\\Uninstall OpenCode.exe', signature: { status: 'NotSigned' } })).toThrow();
+    expect(() => validateGeneratedUninstaller({ ...input, currentSha256: 'e'.repeat(64), signature: { status: 'NotSigned' } })).toThrow();
+    expect(() => validateGeneratedUninstaller({ ...input, installedSha256: 'missing', currentSha256: 'missing', signature: { status: 'NotSigned' } })).toThrow();
+    expect(() => validateGeneratedUninstaller({ ...input, signature: { status: 'HashMismatch' } })).toThrow();
+  });
+
   it('uninstalls each same-GUID build before installing the next, and retries the identical candidate artifact', async () => {
     const calls: string[] = [];
     const candidateArtifacts: unknown[] = [];
@@ -65,6 +318,68 @@ describe('OpenCode Desktop CI evidence', () => {
     expect(candidateArtifacts).toEqual([candidate, candidate]);
     expect(summary.classification).toEqual({ kind: 'regression', notify: true });
     expect(desktopRegressionIdentity(summary)?.marker).toBe('<!-- opencode-desktop-compat:2.1.4:win32:visible-session-incoming -->');
+  });
+
+  it('captures installed ownership before probing the native Desktop', async () => {
+    const calls: string[] = [];
+    await runDesktopBuildSequence({ baseline, candidate }, {
+      install: async (_artifact: unknown, label: string) => { calls.push(`install:${label}`); return { label }; },
+      captureInstalled: async (installation: { label: string }) => { calls.push(`capture:${installation.label}`); },
+      probe: async (installation: { label: string }, artifact: typeof baseline) => { calls.push(`probe:${installation.label}`); return passed(artifact.version); },
+      prepareUninstall: async (installation: { label: string }) => { calls.push(`prepare-uninstall:${installation.label}`); },
+      uninstall: async (installation: { label: string }) => { calls.push(`uninstall:${installation.label}`); },
+    });
+    expect(calls.slice(0, 5)).toEqual(['install:baseline', 'capture:baseline', 'probe:baseline', 'prepare-uninstall:baseline', 'uninstall:baseline']);
+  });
+
+  it('captures and verifies a generated uninstaller before cleaning a failed partial installation', async () => {
+    const context = {};
+    const calls: string[] = [];
+    const cleanup = Reflect.get(desktopCI, 'cleanupPartialDesktopInstallation');
+    expect(cleanup).toBeTypeOf('function');
+    const removed = await (cleanup as (context: object, operations: Record<string, unknown>) => Promise<boolean>)(context, {
+      hasUninstaller: async () => true,
+      captureUninstallerIdentity: async () => { calls.push('uninstaller-identity'); },
+      verifyUninstallRegistration: async () => { calls.push('uninstall-registration'); },
+      captureProtocolRegistration: async () => { calls.push('protocol-snapshot'); },
+      uninstall: async () => { calls.push('uninstall'); },
+    });
+    expect(removed).toBe(true);
+    expect(calls).toEqual(['uninstaller-identity', 'uninstall-registration', 'protocol-snapshot', 'uninstall']);
+  });
+
+  it('does not attempt partial-install cleanup without a generated uninstaller', async () => {
+    const calls: string[] = [];
+    const cleanup = Reflect.get(desktopCI, 'cleanupPartialDesktopInstallation');
+    expect(cleanup).toBeTypeOf('function');
+    const removed = await (cleanup as (context: object, operations: Record<string, unknown>) => Promise<boolean>)({}, {
+      hasUninstaller: async () => false,
+      captureUninstallerIdentity: async () => { calls.push('uninstaller-identity'); },
+      verifyUninstallRegistration: async () => { calls.push('uninstall-registration'); },
+      captureProtocolRegistration: async () => { calls.push('protocol-snapshot'); },
+      uninstall: async () => { calls.push('uninstall'); },
+    });
+    expect(removed).toBe(false);
+    expect(calls).toEqual([]);
+  });
+
+  it('does not run a partial-install uninstaller when ownership verification fails', async () => {
+    const calls: string[] = [];
+    const cleanup = Reflect.get(desktopCI, 'cleanupPartialDesktopInstallation');
+    expect(cleanup).toBeTypeOf('function');
+    const context = {};
+    const operations = {
+      hasUninstaller: async () => true,
+      captureUninstallerIdentity: async () => { calls.push('uninstaller-identity'); },
+      verifyUninstallRegistration: async () => { throw new Error('install registration points elsewhere'); },
+      captureProtocolRegistration: async () => { calls.push('protocol-snapshot'); },
+      uninstall: async () => { calls.push('uninstall'); },
+    };
+    await expect((cleanup as (context: object, operations: Record<string, unknown>) => Promise<boolean>)(context, operations))
+      .rejects.toThrow('install registration points elsewhere');
+    await expect((cleanup as (context: object, operations: Record<string, unknown>) => Promise<boolean>)(context, operations))
+      .rejects.toThrow('Desktop install ownership capture did not complete; refusing to retry');
+    expect(calls).toEqual(['uninstaller-identity']);
   });
 
   it('retains the installation and stops all later attempts when a probe crashes with unknown release state', async () => {

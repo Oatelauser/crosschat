@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "tool": "opencode-desktop",
+  "platform": "win32",
+  "arch": "x64",
+  "classification": {
+    "kind": "infrastructure",
+    "notify": false
+  },
+  "error": "Official OpenCode Desktop latest 2.2.6 differs from the approved version 2.2.7",
+  "downloadCleanup": "removed"
+}

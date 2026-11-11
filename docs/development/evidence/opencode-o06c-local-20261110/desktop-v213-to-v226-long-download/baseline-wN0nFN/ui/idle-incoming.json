@@ -1,0 +1,8 @@
+{
+  "url": "oc://renderer/index.html",
+  "title": "OpenCode",
+  "text": "W\ncrosschat_desktop_fixture_sender\nW\ncrosschat_desktop_fixture_receiver\nW\ncrosschat_desktop_fixture_busy\nW\ncrosschat_desktop_fixture_idle\ncrosschat_desktop_fixture_idle\n11\ncrosschat_desktop_fixture_bootstrap\nBuild · Scripted test model\n · \n14:07\n使用了\n1\n个\nShell\n\ncrosschat_desktop_fixture_model-ACK:bootstrap\n\nBuild · Scripted test model · 1 秒\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3beec10fffePV4oGLMrMpzS4x\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_idle-message\n</cross-session-message>\nBuild · Scripted test model\n · \n14:07\n\ncrosschat_desktop_fixture_model-ACK:idle-message\n\nBuild · Scripted test model · 0 秒\n随便问点什么， / 可查看命令， @ 可添加上下文…\nScripted test model\nDefault",
+  "routes": {
+    "opencode.desktop.window.d2564100-6292-4102-9eb4-0b536cef5970.last-active-url": "/server/c2lkZWNhcg/session/ses_e3beec10fffePV4oGLMrMpzS4x"
+  }
+}

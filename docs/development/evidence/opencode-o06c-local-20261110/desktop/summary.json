@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "tool": "opencode-desktop",
+  "platform": "win32",
+  "arch": "x64",
+  "classification": {
+    "kind": "infrastructure",
+    "notify": false
+  },
+  "error": "protocolSnapshot is not defined",
+  "downloadCleanup": "removed"
+}

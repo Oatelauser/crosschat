@@ -1,0 +1,192 @@
+﻿2026-11-09T01:45:39.6982379Z Current runner version: '2.338.2'
+2026-11-09T01:45:39.7004069Z ##[group]Runner Image Provisioner
+2026-11-09T01:45:39.7004749Z Hosted Compute Agent
+2026-11-09T01:45:39.7005190Z Version: 20261103.629
+2026-11-09T01:45:39.7005802Z Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+2026-11-09T01:45:39.7006406Z Build Date: 2026-11-03T17:26:59Z
+2026-11-09T01:45:39.7006938Z Worker ID: {ab755b7c-245b-45a0-a3c8-934a3385063f}
+2026-11-09T01:45:39.7007520Z Region: centralus
+2026-11-09T01:45:39.7007929Z Cloud: Azure
+2026-11-09T01:45:39.7008329Z ##[endgroup]
+2026-11-09T01:45:39.7009389Z ##[group]Operating System
+2026-11-09T01:45:39.7010066Z Microsoft Windows Server 2025
+2026-11-09T01:45:39.7010542Z 10.0.26100
+2026-11-09T01:45:39.7010968Z Datacenter
+2026-11-09T01:45:39.7011368Z ##[endgroup]
+2026-11-09T01:45:39.7011893Z ##[group]Runner Image
+2026-11-09T01:45:39.7012472Z Image: windows-2025-vs2026
+2026-11-09T01:45:39.7013114Z Version: 20261103.298.1
+2026-11-09T01:45:39.7014282Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20261103.298/images/windows/Windows2025-VS2026-Readme.md
+2026-11-09T01:45:39.7015763Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20261103.298
+2026-11-09T01:45:39.7016624Z ##[endgroup]
+2026-11-09T01:45:39.7017813Z ##[group]GITHUB_TOKEN Permissions
+2026-11-09T01:45:39.7019635Z Contents: read
+2026-11-09T01:45:39.7020168Z Metadata: read
+2026-11-09T01:45:39.7020583Z ##[endgroup]
+2026-11-09T01:45:39.7022222Z Secret source: Actions
+2026-11-09T01:45:39.7022952Z Cache mode: write
+2026-11-09T01:45:39.7023493Z Prepare workflow directory
+2026-11-09T01:45:39.7306436Z Prepare all required actions
+2026-11-09T01:45:39.7345374Z Getting action download info
+2026-11-09T01:45:39.9494133Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-11-09T01:45:40.1346956Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-11-09T01:45:40.2609732Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-09T01:45:40.5595424Z Complete job name: desktop-probe
+2026-11-09T01:45:40.6854236Z ##[group]Run actions/checkout@v4
+2026-11-09T01:45:40.6855058Z with:
+2026-11-09T01:45:40.6855371Z   persist-credentials: false
+2026-11-09T01:45:40.6855770Z   repository: Oatelauser/crosschat
+2026-11-09T01:45:40.6858919Z   token: ***
+2026-11-09T01:45:40.6859227Z   ssh-strict: true
+2026-11-09T01:45:40.6859537Z   ssh-user: git
+2026-11-09T01:45:40.6859827Z   clean: true
+2026-11-09T01:45:40.6860140Z   sparse-checkout-cone-mode: true
+2026-11-09T01:45:40.6860511Z   fetch-depth: 1
+2026-11-09T01:45:40.6860809Z   fetch-tags: false
+2026-11-09T01:45:40.6861117Z   show-progress: true
+2026-11-09T01:45:40.6861429Z   lfs: false
+2026-11-09T01:45:40.6861715Z   submodules: false
+2026-11-09T01:45:40.6862033Z   set-safe-directory: true
+2026-11-09T01:45:40.6862390Z   allow-unsafe-pr-checkout: false
+2026-11-09T01:45:40.6862964Z ##[endgroup]
+2026-11-09T01:45:40.8122203Z Syncing repository: Oatelauser/crosschat
+2026-11-09T01:45:40.8123500Z ##[group]Getting Git version info
+2026-11-09T01:45:40.8124017Z Working directory is 'D:\a\crosschat\crosschat'
+2026-11-09T01:45:40.8753001Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-09T01:45:41.4226499Z git version 2.56.0.windows.4
+2026-11-09T01:45:41.4274728Z ##[endgroup]
+2026-11-09T01:45:41.4292450Z Temporarily overriding HOME='D:\a\_temp\f13433b5-7e16-4073-95a4-8eb47b43c342' before making global git config changes
+2026-11-09T01:45:41.4294246Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T01:45:41.4302537Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\crosschat\crosschat
+2026-11-09T01:45:41.4899392Z Deleting the contents of 'D:\a\crosschat\crosschat'
+2026-11-09T01:45:41.4904203Z ##[group]Initializing the repository
+2026-11-09T01:45:41.4911357Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\crosschat\crosschat
+2026-11-09T01:45:41.7570702Z Initialized empty Git repository in D:/a/crosschat/crosschat/.git/
+2026-11-09T01:45:41.7613933Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/Oatelauser/crosschat
+2026-11-09T01:45:41.8244466Z ##[endgroup]
+2026-11-09T01:45:41.8245499Z ##[group]Disabling automatic garbage collection
+2026-11-09T01:45:41.8251842Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-11-09T01:45:41.8545893Z ##[endgroup]
+2026-11-09T01:45:41.8546836Z ##[group]Setting up auth
+2026-11-09T01:45:41.8555599Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T01:45:41.8847096Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-09T01:45:43.2690230Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T01:45:43.3002804Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-09T01:45:43.7379598Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T01:45:43.7690995Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-09T01:45:44.2311932Z [command]"C:\Program Files\Git\bin\git.exe" config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+2026-11-09T01:45:44.2639626Z ##[endgroup]
+2026-11-09T01:45:44.2640246Z ##[group]Fetching the repository
+2026-11-09T01:45:44.2651703Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +cd47544997fe563b65ff3a12ea28e04ed2913dcf:refs/remotes/origin/main
+2026-11-09T01:45:46.0546211Z From https://github.com/Oatelauser/crosschat
+2026-11-09T01:45:46.0546912Z  * [new ref]         cd47544997fe563b65ff3a12ea28e04ed2913dcf -> origin/main
+2026-11-09T01:45:46.0582313Z ##[endgroup]
+2026-11-09T01:45:46.0582784Z ##[group]Determining the checkout info
+2026-11-09T01:45:46.0584851Z ##[endgroup]
+2026-11-09T01:45:46.0592985Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-11-09T01:45:46.1046884Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-11-09T01:45:46.1360412Z ##[group]Checking out the ref
+2026-11-09T01:45:46.1368361Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force -B main refs/remotes/origin/main
+2026-11-09T01:45:46.6439302Z Switched to a new branch 'main'
+2026-11-09T01:45:46.6532815Z branch 'main' set up to track 'origin/main'.
+2026-11-09T01:45:46.6590710Z ##[endgroup]
+2026-11-09T01:45:46.7002058Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-11-09T01:45:46.7283748Z cd47544997fe563b65ff3a12ea28e04ed2913dcf
+2026-11-09T01:45:46.7324318Z ##[group]Removing auth
+2026-11-09T01:45:46.7331982Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T01:45:46.7646108Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-09T01:45:47.2494583Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T01:45:47.2774514Z http.https://github.com/.extraheader
+2026-11-09T01:45:47.2813930Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all http.https://github.com/.extraheader
+2026-11-09T01:45:47.3151402Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-09T01:45:47.7698410Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T01:45:47.8017095Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-09T01:45:48.2776792Z ##[endgroup]
+2026-11-09T01:45:48.3183596Z ##[group]Run actions/setup-node@v4
+2026-11-09T01:45:48.3183905Z with:
+2026-11-09T01:45:48.3184060Z   node-version: 22
+2026-11-09T01:45:48.3184242Z   always-auth: false
+2026-11-09T01:45:48.3184401Z   check-latest: false
+2026-11-09T01:45:48.3186314Z   token: ***
+2026-11-09T01:45:48.3186468Z ##[endgroup]
+2026-11-09T01:45:48.4772067Z Found in cache @ C:\hostedtoolcache\windows\node\22.23.4\x64
+2026-11-09T01:45:48.4778198Z (node:5684) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-09T01:45:48.4778739Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-09T01:45:48.4780894Z ##[group]Environment details
+2026-11-09T01:45:53.5100670Z node: v22.23.4
+2026-11-09T01:45:53.5101137Z npm: 10.9.9
+2026-11-09T01:45:53.5101389Z yarn: 1.22.22
+2026-11-09T01:45:53.5101904Z ##[endgroup]
+2026-11-09T01:45:53.5377451Z ##[group]Run npm ci
+2026-11-09T01:45:53.5377730Z [36;1mnpm ci[0m
+2026-11-09T01:45:53.6402303Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-09T01:45:53.6402607Z ##[endgroup]
+2026-11-09T01:46:34.9978681Z 
+2026-11-09T01:46:34.9986217Z added 202 packages, and audited 203 packages in 41s
+2026-11-09T01:46:34.9986520Z 
+2026-11-09T01:46:34.9986671Z 77 packages are looking for funding
+2026-11-09T01:46:34.9986912Z   run `npm fund` for details
+2026-11-09T01:46:35.1446520Z 
+2026-11-09T01:46:35.1447132Z 11 vulnerabilities (8 moderate, 1 high, 2 critical)
+2026-11-09T01:46:35.1447391Z 
+2026-11-09T01:46:35.1447565Z To address issues that do not require attention, run:
+2026-11-09T01:46:35.1447824Z   npm audit fix
+2026-11-09T01:46:35.1447925Z 
+2026-11-09T01:46:35.1448077Z To address all issues (including breaking changes), run:
+2026-11-09T01:46:35.1448339Z   npm audit fix --force
+2026-11-09T01:46:35.1448451Z 
+2026-11-09T01:46:35.1448613Z Run `npm audit` for details.
+2026-11-09T01:46:36.5575824Z ##[group]Run npm run build
+2026-11-09T01:46:36.5576132Z [36;1mnpm run build[0m
+2026-11-09T01:46:36.5659880Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-09T01:46:36.5660192Z ##[endgroup]
+2026-11-09T01:46:37.1307011Z 
+2026-11-09T01:46:37.1307741Z > @oatelauser/crosschat@1.13.1 build
+2026-11-09T01:46:37.1308019Z > tsc
+2026-11-09T01:46:37.1308119Z 
+2026-11-09T01:46:46.6071444Z ##[group]Run node scripts/opencode-desktop-compat-ci.mjs
+2026-11-09T01:46:46.6071879Z [36;1mnode scripts/opencode-desktop-compat-ci.mjs[0m
+2026-11-09T01:46:46.6128918Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-09T01:46:46.6129199Z env:
+2026-11-09T01:46:46.6129355Z   CROSSCHAT_LIVE: 1
+2026-11-09T01:46:46.6129519Z ##[endgroup]
+2026-11-09T01:47:17.3305341Z {"kind":"infrastructure","notify":false}
+2026-11-09T01:47:17.4132349Z ##[error]Process completed with exit code 1.
+2026-11-09T01:47:17.4297522Z ##[group]Run actions/upload-artifact@v4
+2026-11-09T01:47:17.4297824Z with:
+2026-11-09T01:47:17.4298029Z   name: opencode-compat-desktop-windows-latest
+2026-11-09T01:47:17.4298292Z   path: opencode-desktop-compat-evidence/
+2026-11-09T01:47:17.4298514Z   if-no-files-found: warn
+2026-11-09T01:47:17.4298691Z   retention-days: 21
+2026-11-09T01:47:17.4298860Z   compression-level: 6
+2026-11-09T01:47:17.4299024Z   overwrite: false
+2026-11-09T01:47:17.4299186Z   include-hidden-files: false
+2026-11-09T01:47:17.4299566Z ##[endgroup]
+2026-11-09T01:47:17.5899558Z (node:9016) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-09T01:47:17.5900219Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-09T01:47:17.5951252Z With the provided path, there will be 1 file uploaded
+2026-11-09T01:47:17.5955111Z Artifact name is valid!
+2026-11-09T01:47:17.5956616Z Root directory input is valid!
+2026-11-09T01:47:17.8900420Z Beginning upload of artifact content to blob storage
+2026-11-09T01:47:17.9052305Z (node:9016) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-09T01:47:18.0573827Z Uploaded bytes 604
+2026-11-09T01:47:18.1039347Z Finished uploading artifact content to blob storage!
+2026-11-09T01:47:18.1040646Z SHA256 digest of uploaded artifact zip is 23d627c8921fd1fa00d55b5fb883080c5737c28080d06498d34ebf4b5bcb2272
+2026-11-09T01:47:18.1041714Z Finalizing artifact upload
+2026-11-09T01:47:18.4930007Z Artifact opencode-compat-desktop-windows-latest.zip successfully finalized. Artifact ID 13644091637
+2026-11-09T01:47:18.4931454Z Artifact opencode-compat-desktop-windows-latest has been successfully uploaded! Final size is 604 bytes. Artifact ID is 13644091637
+2026-11-09T01:47:18.4941177Z Artifact download URL: https://github.com/Oatelauser/crosschat/actions/runs/42547240629/artifacts/13644091637
+2026-11-09T01:47:18.5280517Z Post job cleanup.
+2026-11-09T01:47:18.6723225Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-09T01:47:18.7016973Z git version 2.56.0.windows.4
+2026-11-09T01:47:18.7073565Z Temporarily overriding HOME='D:\a\_temp\a78d0fc5-445d-4580-a5d1-dff875796850' before making global git config changes
+2026-11-09T01:47:18.7074221Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-09T01:47:18.7082609Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\crosschat\crosschat
+2026-11-09T01:47:18.7433071Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-09T01:47:18.7842528Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-09T01:47:19.2185867Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-09T01:47:19.2500288Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-09T01:47:19.7412775Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-09T01:47:19.7741213Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-11-09T01:47:20.2463701Z Cleaning up orphan processes
+2026-11-09T01:47:20.2541807Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
