@@ -33,8 +33,17 @@ def emit(value):
             pending = pending[written:]
         except BlockingIOError:
             remaining = deadline - time.monotonic()
-            if remaining <= 0 or not select.select([], [sys.stdout.fileno()], [], remaining)[1]:
-                raise RuntimeError("PTY event consumer did not drain its output pipe")
+            try:
+                writable = remaining > 0 and select.select([], [sys.stdout.fileno()], [], remaining)[1]
+            except (OSError, ValueError):
+                return False
+            if not writable:
+                return False
+        except OSError as error:
+            if error.errno in (errno.EPIPE, errno.EBADF, errno.ECONNRESET):
+                return False
+            raise
+    return True
 
 
 def dimensions(columns, rows):
@@ -68,6 +77,13 @@ class PtyHost:
         self.kill_at = None
         self.forced = False
         self.signal_requested = False
+        self.adopted_children = {}
+        self.events_available = True
+
+    def emit_event(self, value):
+        if self.events_available and not emit(value):
+            self.events_available = False
+            self.request_stop()
 
     def signal_group(self, signum):
         if self.child is None:
@@ -86,18 +102,51 @@ class PtyHost:
         except ProcessLookupError:
             return False
 
-    def reap_descendants(self):
-        if self.child is None or self.child.poll() is None:
+    def adopted_child_pids(self):
+        # This process launches only the fixture leader. With subreaping enabled,
+        # any additional direct children belong to the same fixture, including
+        # descendants which created a new process group/session. Read this host's
+        # own child list rather than inspecting unrelated processes.
+        with open(f"/proc/self/task/{os.getpid()}/children", "rb") as child_list:
+            content = child_list.read(1024 * 1024 + 1)
+        if len(content) > 1024 * 1024:
+            raise RuntimeError("Owned PTY child list exceeded its 1 MiB limit")
+        return {int(value) for value in content.split()
+                if self.child is None or int(value) != self.child.pid}
+
+    def signal_adopted_child(self, descriptor, signum):
+        try:
+            signal.pidfd_send_signal(descriptor, signum, None, 0)
+        except ProcessLookupError:
+            pass
+
+    def collect_adopted_children(self):
+        if self.child is None:
             return
-        # Popen first reaps the exact leader and preserves its real exit status.
-        # Any same-group adopted children are exclusively this fixture's children.
-        while True:
+        # Popen exclusively reaps the exact leader, preserving its exit status.
+        self.child.poll()
+        for pid in self.adopted_child_pids():
+            if pid not in self.adopted_children:
+                try:
+                    descriptor = os.pidfd_open(pid, 0)
+                except ProcessLookupError:
+                    continue
+                self.adopted_children[pid] = descriptor
+                if self.kill_at is None:
+                    self.signal_adopted_child(descriptor, signal.SIGTERM)
+                else:
+                    self.forced = True
+                    self.signal_adopted_child(descriptor, signal.SIGKILL)
+        for pid, descriptor in list(self.adopted_children.items()):
             try:
-                pid, _status = os.waitpid(-self.child.pid, os.WNOHANG)
+                reaped, _status = os.waitpid(pid, os.WNOHANG)
             except ChildProcessError:
-                return
-            if pid == 0:
-                return
+                # A no-longer-waitable child must not retain an open ownership
+                # handle. Signals above used its exact pidfd, never a bare PID.
+                reaped = pid
+            if reaped == pid:
+                os.close(descriptor)
+                del self.adopted_children[pid]
 
     def request_stop(self):
         if self.stop_at is None:
@@ -129,7 +178,7 @@ class PtyHost:
                 raise
             data = b""
         if data:
-            emit({"event": "output", "data": base64.b64encode(data).decode("ascii")})
+            self.emit_event({"event": "output", "data": base64.b64encode(data).decode("ascii")})
             return True
         self.close_master()
         self.request_stop()
@@ -171,7 +220,7 @@ class PtyHost:
             size = dimensions(command.get("columns"), command.get("rows"))
             if self.stop_at is None and self.master_open:
                 fcntl.ioctl(self.master, termios.TIOCSWINSZ, size)
-                emit({"event": "resized", "columns": command["columns"], "rows": command["rows"]})
+                self.emit_event({"event": "resized", "columns": command["columns"], "rows": command["rows"]})
         else:
             raise ValueError("Unsupported PTY control operation")
 
@@ -205,6 +254,8 @@ class PtyHost:
                 or not isinstance(directory, str) or not directory):
             raise ValueError("PTY fixture needs an executable, string arguments and working directory")
         size = dimensions(self.spec.get("columns"), self.spec.get("rows"))
+        if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
+            raise RuntimeError("Linux PTY ownership cleanup requires Python pidfd support")
         become_subreaper()
         self.master, self.slave = pty.openpty()
         fcntl.ioctl(self.master, termios.TIOCSWINSZ, size)
@@ -225,19 +276,21 @@ class PtyHost:
         self.control_open = True
         signal.signal(signal.SIGTERM, lambda _signum, _frame: setattr(self, "signal_requested", True))
         signal.signal(signal.SIGINT, lambda _signum, _frame: setattr(self, "signal_requested", True))
-        emit({"event": "ready", "pid": self.child.pid})
+        self.emit_event({"event": "ready", "pid": self.child.pid})
 
     def advance_cleanup(self):
-        self.reap_descendants()
-        if not self.group_alive():
+        self.collect_adopted_children()
+        if not self.group_alive() and not self.adopted_children and not self.adopted_child_pids():
             return True
         now = time.monotonic()
         if self.kill_at is None and now >= self.stop_at + TERM_GRACE_SECONDS:
             self.forced = True
             self.kill_at = now
             self.signal_group(signal.SIGKILL)
+            for descriptor in self.adopted_children.values():
+                self.signal_adopted_child(descriptor, signal.SIGKILL)
         if self.kill_at is not None and now >= self.kill_at + KILL_GRACE_SECONDS:
-            raise RuntimeError("Owned PTY process group did not exit after SIGKILL")
+            raise RuntimeError("Owned PTY processes did not exit after SIGKILL")
         return False
 
     def run(self):
@@ -272,6 +325,9 @@ class PtyHost:
             return {"complete": True, "descendantsStopped": True}
         finally:
             self.selector.close()
+            for descriptor in self.adopted_children.values():
+                os.close(descriptor)
+            self.adopted_children.clear()
             for descriptor in (self.master, self.slave):
                 if descriptor is not None:
                     os.close(descriptor)

@@ -6,6 +6,8 @@ import { join } from 'node:path';
 import process from 'node:process';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { launchPty } from '../test/helpers/tui-pty-driver.mjs';
 
 const linux = { skip: process.platform !== 'linux' };
@@ -117,6 +119,58 @@ test('POSIX PTY disposal releases a descendant that starts a separate session', 
   } finally {
     if (descendant && alive(descendant)) process.kill(descendant, 'SIGKILL');
     await finish();
+  }
+});
+
+test('POSIX PTY host cleans its process group after its event reader disconnects', linux, async (context) => {
+  const root = await temporaryRoot(context);
+  const source = "process.on('SIGTERM', () => {}); process.on('SIGHUP', () => {}); console.log('CHILD_PID:'+process.pid); setTimeout(() => { process.stdout.write('OWNED_OUTPUT\\n', () => { for (const fd of [0,1,2]) require('node:fs').closeSync(fd); setInterval(() => {}, 1000); }); }, 500);";
+  const spec = Buffer.from(JSON.stringify({ executable: process.execPath, args: ['-e', source], cwd: root, columns: 80, rows: 24 })).toString('base64');
+  const host = spawn('python3', [fileURLToPath(new URL('../test/helpers/tui-pty-host.py', import.meta.url)), spec], {
+    cwd: root, env: cleanEnvironment(), stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  const hostPid = host.pid;
+  let childPid;
+  let hostCode;
+  let hostClosed;
+  const closed = new Promise((resolve) => { hostClosed = resolve; });
+  let buffer = '';
+  const ready = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('PTY host did not report its owned child')), 5000);
+    host.stdout.setEncoding('utf8');
+    host.stdout.on('data', (chunk) => {
+      buffer += chunk;
+      let newline;
+      while ((newline = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, newline);
+        buffer = buffer.slice(newline + 1);
+        try {
+          const event = JSON.parse(line);
+          if (event.event === 'output' && Buffer.from(event.data, 'base64').includes(Buffer.from('CHILD_PID:'))) {
+            childPid = Number(/CHILD_PID:(\d+)/.exec(Buffer.from(event.data, 'base64').toString('utf8'))?.[1]);
+            clearTimeout(timer);
+            resolve();
+            host.stdout.destroy();
+          }
+        } catch (error) { clearTimeout(timer); reject(error); }
+      }
+    });
+    host.on('error', (error) => { clearTimeout(timer); reject(error); });
+  });
+  host.on('close', (code) => { hostCode = code; hostClosed(); });
+  try {
+    await ready;
+    await within(closed, 6000);
+    assert.equal(hostCode, 0, 'a closed event channel does not fail owned process cleanup');
+    assert.equal(alive(childPid), false, 'event delivery failure must not interrupt owned process teardown');
+  } finally {
+    if (hostPid && alive(hostPid)) {
+      if (childPid) {
+        try { process.kill(-childPid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+      }
+      process.kill(hostPid, 'SIGKILL');
+    }
+    await within(closed, 2000);
   }
 });
 
