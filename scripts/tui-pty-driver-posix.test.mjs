@@ -126,7 +126,7 @@ test('POSIX PTY host cleans its process group after its event reader disconnects
   const root = await temporaryRoot(context);
   const source = "process.on('SIGTERM', () => {}); process.on('SIGHUP', () => {}); console.log('CHILD_PID:'+process.pid); setTimeout(() => { process.stdout.write('OWNED_OUTPUT\\n', () => { for (const fd of [0,1,2]) require('node:fs').closeSync(fd); setInterval(() => {}, 1000); }); }, 500);";
   const spec = Buffer.from(JSON.stringify({ executable: process.execPath, args: ['-e', source], cwd: root, columns: 80, rows: 24 })).toString('base64');
-  const host = spawn('python3', [fileURLToPath(new URL('../test/helpers/tui-pty-host.py', import.meta.url)), spec], {
+  const host = spawn('python3', [fileURLToPath(new URL('../test/helpers/tui-pty-host-linux.py', import.meta.url)), spec], {
     cwd: root, env: cleanEnvironment(), stdio: ['pipe', 'pipe', 'pipe'],
   });
   const hostPid = host.pid;

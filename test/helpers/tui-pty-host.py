@@ -1,13 +1,10 @@
-"""Linux PTY fixture host. The child session is the sole process owner boundary."""
-
+"""Single-threaded POSIX fixture host for the existing JSON PTY driver protocol."""
 import base64
-import ctypes
 import errno
 import fcntl
 import json
 import os
 import pty
-import select
 import selectors
 import signal
 import struct
@@ -17,349 +14,173 @@ import termios
 import time
 
 
-TERM_GRACE_SECONDS = 0.5
-KILL_GRACE_SECONDS = 1.0
-MAX_CONTROL_BYTES = 16 * 1024 * 1024
-MAX_INPUT_BYTES = 8 * 1024 * 1024
-EVENT_WRITE_TIMEOUT_SECONDS = 0.5
-
-
 def emit(value):
-    pending = memoryview((json.dumps(value, separators=(",", ":")) + "\n").encode("utf8"))
-    deadline = time.monotonic() + EVENT_WRITE_TIMEOUT_SECONDS
-    while pending:
-        try:
-            written = os.write(sys.stdout.fileno(), pending)
-            pending = pending[written:]
-        except BlockingIOError:
-            remaining = deadline - time.monotonic()
-            try:
-                writable = remaining > 0 and select.select([], [sys.stdout.fileno()], [], remaining)[1]
-            except (OSError, ValueError):
-                return False
-            if not writable:
-                return False
-        except OSError as error:
-            if error.errno in (errno.EPIPE, errno.EBADF, errno.ECONNRESET):
-                return False
-            raise
-    return True
+    sys.stdout.write(json.dumps(value) + "\n")
+    sys.stdout.flush()
 
 
 def dimensions(columns, rows):
-    if (type(columns) is not int or type(rows) is not int
-            or not 1 <= columns <= 32767 or not 1 <= rows <= 32767):
-        raise ValueError("PTY dimensions must be integers from 1 to 32767")
+    if any(type(value) is not int or not 1 <= value <= 1000 for value in (columns, rows)):
+        raise ValueError("Fixture dimensions must be integers from 1 to 1000")
     return struct.pack("HHHH", rows, columns, 0, 0)
 
 
-def become_subreaper():
-    # Adopt this child's orphaned descendants so they cannot remain zombies under
-    # a container/WSL PID 1. Reaping below is restricted to the owned process group.
-    libc = ctypes.CDLL(None, use_errno=True)
-    if libc.prctl(36, 1, 0, 0, 0) != 0:  # Linux PR_SET_CHILD_SUBREAPER
-        code = ctypes.get_errno()
-        raise OSError(code, os.strerror(code))
+def own_terminal():
+    # This Python host has one thread. The child gets its own session and
+    # controlling terminal before exec; Popen still reports exec failures.
+    os.setsid()
+    fcntl.ioctl(0, termios.TIOCSCTTY, 0)
 
 
-class PtyHost:
-    def __init__(self, spec):
-        self.spec = spec
-        self.child = None
-        self.master = None
-        self.slave = None
-        self.selector = selectors.DefaultSelector()
-        self.control_open = False
-        self.master_open = False
-        self.control_buffer = bytearray()
-        self.input_buffer = bytearray()
-        self.stop_at = None
-        self.kill_at = None
-        self.forced = False
-        self.signal_requested = False
-        self.adopted_children = {}
-        self.events_available = True
+def main():
+    master = slave = None
+    child = None
+    selector = selectors.DefaultSelector()
+    requested = False
+    forced = False
+    stopping_at = None
+    master_open = True
+    pending = bytearray()
+    control = bytearray()
 
-    def emit_event(self, value):
-        if self.events_available and not emit(value):
-            self.events_available = False
-            self.request_stop()
+    def request_stop(*_):
+        nonlocal requested
+        requested = True
 
-    def signal_group(self, signum):
-        if self.child is None:
-            return
-        try:
-            os.killpg(self.child.pid, signum)
-        except ProcessLookupError:
-            pass
-
-    def group_alive(self):
-        if self.child is None:
+    def group_exists():
+        if child is None:
             return False
         try:
-            os.killpg(self.child.pid, 0)
+            os.killpg(child.pid, 0)
             return True
         except ProcessLookupError:
             return False
 
-    def adopted_child_pids(self):
-        # This process launches only the fixture leader. With subreaping enabled,
-        # any additional direct children belong to the same fixture, including
-        # descendants which created a new process group/session. Read this host's
-        # own child list rather than inspecting unrelated processes.
-        with open(f"/proc/self/task/{os.getpid()}/children", "rb") as child_list:
-            content = child_list.read(1024 * 1024 + 1)
-        if len(content) > 1024 * 1024:
-            raise RuntimeError("Owned PTY child list exceeded its 1 MiB limit")
-        return {int(value) for value in content.split()
-                if self.child is None or int(value) != self.child.pid}
-
-    def signal_adopted_child(self, descriptor, signum):
+    def send_signal(number):
         try:
-            signal.pidfd_send_signal(descriptor, signum, None, 0)
+            os.killpg(child.pid, number)
         except ProcessLookupError:
             pass
 
-    def collect_adopted_children(self):
-        if self.child is None:
-            return
-        # Popen exclusively reaps the exact leader, preserving its exit status.
-        self.child.poll()
-        for pid in self.adopted_child_pids():
-            if pid not in self.adopted_children:
-                try:
-                    descriptor = os.pidfd_open(pid, 0)
-                except ProcessLookupError:
-                    continue
-                self.adopted_children[pid] = descriptor
-                if self.kill_at is None:
-                    self.signal_adopted_child(descriptor, signal.SIGTERM)
-                else:
-                    self.forced = True
-                    self.signal_adopted_child(descriptor, signal.SIGKILL)
-        for pid, descriptor in list(self.adopted_children.items()):
-            try:
-                reaped, _status = os.waitpid(pid, os.WNOHANG)
-            except ChildProcessError:
-                # A no-longer-waitable child must not retain an open ownership
-                # handle. Signals above used its exact pidfd, never a bare PID.
-                reaped = pid
-            if reaped == pid:
-                os.close(descriptor)
-                del self.adopted_children[pid]
-
-    def request_stop(self):
-        if self.stop_at is None:
-            self.stop_at = time.monotonic()
-            self.input_buffer.clear()
-            self.signal_group(signal.SIGTERM)
-            self.update_master_interest()
-
-    def update_master_interest(self):
-        if self.master_open:
-            mask = selectors.EVENT_READ
-            if self.input_buffer:
-                mask |= selectors.EVENT_WRITE
-            self.selector.modify(self.master, mask, "pty")
-
-    def close_master(self):
-        if self.master_open:
-            self.selector.unregister(self.master)
-            self.master_open = False
-            self.input_buffer.clear()
-
-    def read_output(self):
+    def read_output():
+        nonlocal master_open
         try:
-            data = os.read(self.master, 65536)
+            data = os.read(master, 65536)
         except BlockingIOError:
             return False
         except OSError as error:
             if error.errno != errno.EIO:
                 raise
             data = b""
-        if data:
-            self.emit_event({"event": "output", "data": base64.b64encode(data).decode("ascii")})
-            return True
-        self.close_master()
-        self.request_stop()
-        return False
-
-    def write_input(self):
-        if not self.input_buffer:
-            return
-        try:
-            written = os.write(self.master, self.input_buffer)
-        except BlockingIOError:
-            return
-        except OSError as error:
-            if error.errno != errno.EIO:
-                raise
-            self.close_master()
-            self.request_stop()
-            return
-        del self.input_buffer[:written]
-        self.update_master_interest()
-
-    def command(self, command):
-        if not isinstance(command, dict):
-            raise ValueError("PTY control command must be an object")
-        operation = command.get("op")
-        if operation == "terminate":
-            self.request_stop()
-        elif operation == "write":
-            data = command.get("data")
-            if not isinstance(data, str):
-                raise ValueError("PTY write data must be base64 text")
-            decoded = base64.b64decode(data, validate=True)
-            if len(self.input_buffer) + len(decoded) > MAX_INPUT_BYTES:
-                raise ValueError("PTY input exceeded the 8 MiB pending limit")
-            if self.stop_at is None and self.master_open:
-                self.input_buffer.extend(decoded)
-                self.update_master_interest()
-        elif operation == "resize":
-            size = dimensions(command.get("columns"), command.get("rows"))
-            if self.stop_at is None and self.master_open:
-                fcntl.ioctl(self.master, termios.TIOCSWINSZ, size)
-                self.emit_event({"event": "resized", "columns": command["columns"], "rows": command["rows"]})
-        else:
-            raise ValueError("Unsupported PTY control operation")
-
-    def read_control(self):
-        try:
-            data = os.read(sys.stdin.fileno(), 65536)
-        except BlockingIOError:
-            return
         if not data:
-            self.selector.unregister(sys.stdin.fileno())
-            self.control_open = False
-            if self.control_buffer.strip():
-                raise ValueError("PTY control input ended with an incomplete command")
-            self.request_stop()
-            return
-        self.control_buffer.extend(data)
-        if len(self.control_buffer) > MAX_CONTROL_BYTES:
-            raise ValueError("PTY control input exceeded the 16 MiB limit")
-        while b"\n" in self.control_buffer:
-            line, remainder = self.control_buffer.split(b"\n", 1)
-            self.control_buffer = bytearray(remainder)
-            if line.strip():
-                self.command(json.loads(line))
+            master_open = False
+            selector.unregister(master)
+            return False
+        emit({"event": "output", "data": base64.b64encode(data).decode("ascii")})
+        return True
 
-    def start(self):
-        executable = self.spec.get("executable")
-        args = self.spec.get("args")
-        directory = self.spec.get("cwd")
-        if (not isinstance(executable, str) or not executable
-                or not isinstance(args, list) or not all(isinstance(value, str) for value in args)
-                or not isinstance(directory, str) or not directory):
-            raise ValueError("PTY fixture needs an executable, string arguments and working directory")
-        size = dimensions(self.spec.get("columns"), self.spec.get("rows"))
-        if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
-            raise RuntimeError("Linux PTY ownership cleanup requires Python pidfd support")
-        become_subreaper()
-        self.master, self.slave = pty.openpty()
-        fcntl.ioctl(self.master, termios.TIOCSWINSZ, size)
-
-        def attach_terminal():
-            fcntl.ioctl(0, termios.TIOCSCTTY, 0)
-
-        self.child = subprocess.Popen([executable, *args], cwd=directory, stdin=self.slave,
-                                      stdout=self.slave, stderr=self.slave, close_fds=True,
-                                      start_new_session=True, preexec_fn=attach_terminal)
-        os.close(self.slave)
-        self.slave = None
-        os.set_blocking(self.master, False)
-        os.set_blocking(sys.stdin.fileno(), False)
-        self.selector.register(self.master, selectors.EVENT_READ, "pty")
-        self.master_open = True
-        self.selector.register(sys.stdin.fileno(), selectors.EVENT_READ, "control")
-        self.control_open = True
-        signal.signal(signal.SIGTERM, lambda _signum, _frame: setattr(self, "signal_requested", True))
-        signal.signal(signal.SIGINT, lambda _signum, _frame: setattr(self, "signal_requested", True))
-        self.emit_event({"event": "ready", "pid": self.child.pid})
-
-    def advance_cleanup(self):
-        self.collect_adopted_children()
-        if not self.group_alive() and not self.adopted_children and not self.adopted_child_pids():
-            return True
-        now = time.monotonic()
-        if self.kill_at is None and now >= self.stop_at + TERM_GRACE_SECONDS:
-            self.forced = True
-            self.kill_at = now
-            self.signal_group(signal.SIGKILL)
-            for descriptor in self.adopted_children.values():
-                self.signal_adopted_child(descriptor, signal.SIGKILL)
-        if self.kill_at is not None and now >= self.kill_at + KILL_GRACE_SECONDS:
-            raise RuntimeError("Owned PTY processes did not exit after SIGKILL")
-        return False
-
-    def run(self):
-        self.start()
-        while True:
-            if self.signal_requested or self.child.poll() is not None:
-                self.request_stop()
-            if self.stop_at is not None and self.advance_cleanup():
-                # All writers are gone; only drain bytes already buffered in the PTY.
-                while self.master_open and self.read_output():
-                    pass
-                return
-            for key, mask in self.selector.select(timeout=0.05):
-                if key.data == "control":
-                    self.read_control()
-                elif self.master_open:
-                    if mask & selectors.EVENT_READ:
-                        self.read_output()
-                    if self.master_open and mask & selectors.EVENT_WRITE:
-                        self.write_input()
-
-    def close(self):
-        try:
-            self.request_stop()
-            # Errors also take the same bounded ownership cleanup path.
-            while not self.advance_cleanup():
-                if self.master_open:
-                    self.read_output()
-                time.sleep(0.02)
-            if self.child is not None:
-                self.child.wait(timeout=0)
-            return {"complete": True, "descendantsStopped": True}
-        finally:
-            self.selector.close()
-            for descriptor in self.adopted_children.values():
-                os.close(descriptor)
-            self.adopted_children.clear()
-            for descriptor in (self.master, self.slave):
-                if descriptor is not None:
-                    os.close(descriptor)
-
-
-def main():
-    os.set_blocking(sys.stdout.fileno(), False)
-    host = None
-    failure = None
-    cleanup = {"complete": True, "descendantsStopped": True}
+    signal.signal(signal.SIGTERM, request_stop)
+    signal.signal(signal.SIGINT, request_stop)
     try:
-        spec = json.loads(base64.b64decode(sys.argv[1], validate=True))
-        if not isinstance(spec, dict):
-            raise ValueError("PTY fixture specification must be an object")
-        host = PtyHost(spec)
-        host.run()
+        if len(sys.argv) != 2 or len(sys.argv[1]) > 1024 * 1024:
+            raise ValueError("Expected one bounded launch payload")
+        launch = json.loads(base64.b64decode(sys.argv[1], validate=True).decode("utf-8"))
+        if (not isinstance(launch, dict) or not isinstance(launch.get("executable"), str)
+                or not launch["executable"] or not isinstance(launch.get("args"), list)
+                or not all(isinstance(value, str) for value in launch["args"])
+                or not isinstance(launch.get("cwd"), str) or not os.path.isabs(launch["cwd"])):
+            raise ValueError("Invalid fixture executable, argv or working directory")
+        size = dimensions(launch.get("columns"), launch.get("rows"))
+        master, slave = pty.openpty()
+        fcntl.ioctl(master, termios.TIOCSWINSZ, size)
+        environment = os.environ.copy()
+        if environment.get("TERM") in (None, "dumb"):
+            environment["TERM"] = "xterm-256color"
+        child = subprocess.Popen([launch["executable"], *launch["args"]],
+                                 stdin=slave, stdout=slave, stderr=slave,
+                                 cwd=launch["cwd"], env=environment, shell=False,
+                                 close_fds=True, preexec_fn=own_terminal)
+        os.close(slave)
+        slave = None
+        os.set_blocking(master, False)
+        os.set_blocking(0, False)
+        selector.register(master, selectors.EVENT_READ, "terminal")
+        selector.register(0, selectors.EVENT_READ, "control")
+        emit({"event": "ready", "pid": child.pid})
+        while True:
+            code = child.poll()
+            if (requested or code is not None) and stopping_at is None:
+                stopping_at = time.monotonic()
+                send_signal(signal.SIGTERM)
+            if stopping_at is not None:
+                elapsed = time.monotonic() - stopping_at
+                if code is not None and not group_exists():
+                    while master_open and read_output():
+                        pass
+                    break
+                if elapsed >= 1.0 and not forced:
+                    forced = True
+                    send_signal(signal.SIGKILL)
+                if elapsed >= 2.2:
+                    raise RuntimeError("Owned fixture process group did not release")
+            for key, events in selector.select(0.03):
+                if key.data == "terminal":
+                    if events & selectors.EVENT_READ and master_open:
+                        read_output()
+                    if events & selectors.EVENT_WRITE and pending and master_open:
+                        try:
+                            del pending[:os.write(master, pending)]
+                        except BlockingIOError:
+                            pass
+                        if not pending:
+                            selector.modify(master, selectors.EVENT_READ, "terminal")
+                else:
+                    data = os.read(0, 65536)
+                    if not data:
+                        selector.unregister(0)
+                        request_stop()
+                        continue
+                    control.extend(data)
+                    if len(control) > 1024 * 1024:
+                        raise ValueError("Fixture control input exceeds its budget")
+                    while b"\n" in control:
+                        line, _, control = control.partition(b"\n")
+                        value = json.loads(line.decode("utf-8"))
+                        if not isinstance(value, dict):
+                            raise ValueError("Invalid fixture control record")
+                        if value.get("op") == "terminate":
+                            request_stop()
+                        elif value.get("op") == "resize":
+                            size = dimensions(value.get("columns"), value.get("rows"))
+                            if master_open:
+                                fcntl.ioctl(master, termios.TIOCSWINSZ, size)
+                        elif value.get("op") == "write" and isinstance(value.get("data"), str):
+                            data = base64.b64decode(value["data"], validate=True)
+                            if len(pending) + len(data) > 1024 * 1024:
+                                raise ValueError("Fixture terminal input exceeds its budget")
+                            pending.extend(data)
+                            if pending and master_open:
+                                selector.modify(master, selectors.EVENT_READ | selectors.EVENT_WRITE, "terminal")
+                        else:
+                            raise ValueError("Unknown fixture control operation")
+        emit({"event": "cleanup", "forced": forced, "groupReleased": True})
+        emit({"event": "exit", "code": child.returncode})
+        return 0
     except Exception as error:
-        failure = error
+        try:
+            emit({"event": "error", "message": str(error)})
+        except BrokenPipeError:
+            pass
+        return 1
     finally:
-        if host is not None:
-            try:
-                cleanup = host.close()
-            except Exception as error:
-                cleanup = {"complete": False, "descendantsStopped": False}
-                failure = failure or error
-    if failure is not None:
-        emit({"event": "error", "message": str(failure)})
-    code = host.child.returncode if host is not None and host.child is not None else None
-    emit({"event": "exit", "code": code if code is not None and code >= 0 else None,
-          "signal": signal.Signals(-code).name if code is not None and code < 0 else None,
-          "forced": host.forced if host is not None else False, "cleanup": cleanup})
-    return 1 if failure is not None or not cleanup["complete"] else 0
+        if child is not None:
+            if group_exists():
+                send_signal(signal.SIGKILL)
+            child.wait(timeout=2)
+        selector.close()
+        for descriptor in (master, slave):
+            if descriptor is not None:
+                os.close(descriptor)
 
 
 if __name__ == "__main__":

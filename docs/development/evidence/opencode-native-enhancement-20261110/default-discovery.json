@@ -1,0 +1,94 @@
+{
+  "op": "list",
+  "providers": [
+    {
+      "providerId": "claude",
+      "capabilities": {
+        "discovery": true,
+        "delivery": true,
+        "launch": false,
+        "diagnostics": false,
+        "deliveryModes": [
+          "queue",
+          "steer"
+        ]
+      }
+    },
+    {
+      "providerId": "codex",
+      "capabilities": {
+        "discovery": true,
+        "delivery": true,
+        "launch": false,
+        "diagnostics": false,
+        "deliveryModes": [
+          "queue",
+          "steer"
+        ]
+      }
+    },
+    {
+      "providerId": "opencode",
+      "capabilities": {
+        "discovery": true,
+        "delivery": true,
+        "launch": false,
+        "diagnostics": false,
+        "deliveryModes": [
+          "queue",
+          "steer"
+        ]
+      }
+    },
+    {
+      "providerId": "dsh",
+      "capabilities": {
+        "discovery": true,
+        "delivery": true,
+        "launch": false,
+        "diagnostics": false,
+        "deliveryModes": [
+          "queue",
+          "steer"
+        ]
+      }
+    }
+  ],
+  "page": {
+    "completeness": "partial",
+    "observedAt": 1794276513642,
+    "errors": [],
+    "items": [
+      {
+        "ref": {
+          "contextId": "local",
+          "providerId": "opencode",
+          "nativeId": "ses_e3cc92951ffeKmhv1xKnKr5943",
+          "endpointType": "shared"
+        },
+        "name": "OpenCode PTY Inbox",
+        "rawStatus": {
+          "type": "inactive"
+        },
+        "capabilities": {
+          "discovery": true,
+          "delivery": true,
+          "launch": false,
+          "diagnostics": false,
+          "deliveryModes": [
+            "queue",
+            "steer"
+          ]
+        },
+        "attributes": {
+          "location": {
+            "directory": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-compat-zczzxM\\workspace"
+          },
+          "projectID": "c00a68d94ea71ff9b52392f3604e12fcbca255c0",
+          "cwd": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-compat-zczzxM\\workspace"
+        }
+      }
+    ],
+    "nextCursor": "eyJjb250ZXh0SWQiOiJsb2NhbCIsImZpbHRlcktleSI6IltbXCJvcGVuY29kZVwiXSxcIlwiXSIsInBlbmRpbmciOlt7InByb3ZpZGVySWQiOiJvcGVuY29kZSIsImN1cnNvciI6ImV5SmhjbU5vYVhabFpDSTZJbVpoYkhObElpd2lZVzVqYUc5eUlqcDdJbWxrSWpvaWMyVnpYMlV6WTJNNU1qazFNV1ptWlV0dGFIWXhlRXR1UzNJMU9UUXpJaXdpZEdsdFpTSTZNVGM1TkRJM05qVXhNelEyTUN3aVpHbHlaV04wYVc5dUlqb2libVY0ZENKOWZRIn1dLCJlcnJvcnMiOltdLCJpbmNvbXBsZXRlIjpmYWxzZX0"
+  }
+}

@@ -9,26 +9,30 @@ import { clearTimeout, setTimeout } from 'node:timers';
 import { fileURLToPath } from 'node:url';
 
 const hostScript = join(dirname(fileURLToPath(import.meta.url)), 'tui-pty-host.ps1');
-const linuxHostScript = join(dirname(fileURLToPath(import.meta.url)), 'tui-pty-host.py');
+const posixHostScript = join(dirname(fileURLToPath(import.meta.url)), 'tui-pty-host.py');
+const linuxHostScript = join(dirname(fileURLToPath(import.meta.url)), 'tui-pty-host-linux.py');
 
 /** Each platform host owns its terminal and child tree; one controller owns their JSONL protocol. */
 export async function launchPty({ executable, args = [], cwd = process.cwd(), columns = 80, rows = 24, env = {}, logPath }) {
   const linux = process.platform === 'linux';
-  if (!linux && process.platform !== 'win32') throw new Error('PTY fixtures require Windows ConPTY or Linux python3.');
-  for (const dimension of [columns, rows]) if (!Number.isInteger(dimension) || dimension < 1 || dimension > 32767) throw new Error('Invalid PTY dimensions.');
+  const windows = process.platform === 'win32';
+  if (!linux && !windows && process.platform !== 'darwin') throw new Error('PTY fixtures require Windows ConPTY or a POSIX PTY host.');
+  const maximumDimension = process.platform === 'darwin' ? 1000 : 32767;
+  for (const dimension of [columns, rows]) if (!Number.isInteger(dimension) || dimension < 1 || dimension > maximumDimension) throw new Error('Invalid PTY dimensions.');
   const evidenceDirectory = logPath ? undefined : mkdtempSync(join(tmpdir(), 'crosschat-tui-pty-'));
   logPath ??= join(evidenceDirectory, 'events.jsonl');
   const environment = { ...process.env, ...env };
   delete environment.CROSSCHAT_LIVE;
-  const label = linux ? 'POSIX PTY' : 'ConPTY';
-  const hostArgs = linux ? [linuxHostScript, Buffer.from(JSON.stringify({ executable, args, cwd, columns, rows })).toString('base64')] : [
+  const label = windows ? 'ConPTY' : 'POSIX PTY';
+  const payload = Buffer.from(JSON.stringify({ executable, args, cwd, columns, rows })).toString('base64');
+  const hostArgs = linux ? [linuxHostScript, payload] : windows ? [
     '-NoLogo', '-NoProfile', '-NonInteractive', '-File', hostScript,
     '-Executable', executable,
     '-ArgumentsBase64', Buffer.from(JSON.stringify(args)).toString('base64'),
     '-WorkingDirectory', cwd,
     '-Columns', String(columns), '-Rows', String(rows),
-  ];
-  const host = spawn(linux ? 'python3' : 'pwsh', hostArgs, { cwd, env: environment, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  ] : ['-I', '-u', posixHostScript, payload];
+  const host = spawn(windows ? 'pwsh' : 'python3', hostArgs, { cwd, env: environment, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
 
   let output = '';
   let stderr = '';

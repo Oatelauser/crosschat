@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createNativeSessionOperations } from '../src/application/session-operations.js';
 import type { NativeOperationProvider } from '../src/application/session-operations.js';
+import { createNativeOperationProviders } from '../src/application/native-operation-providers.js';
 import type { DiscoveryEndpoint, DiscoverySession } from '../src/application/discovery/model.js';
 
 function fixture(probe: () => Promise<{ state: 'executable' }> = async () => ({ state: 'executable' }), lostWrite = false) {
@@ -59,6 +60,36 @@ describe('native session operation interface', () => {
     expect((await f.operations.describe(f.item.ref)).actions.rename.state).toBe('executable');
     expect(f.rename).not.toHaveBeenCalled();
     expect(f.adopt).not.toHaveBeenCalled();
+  });
+
+  it('adopts an exact OpenCode session while leaving unverified rename disabled', async () => {
+    const item: DiscoverySession = { ref: { contextId: 'node:machine-full', providerId: 'opencode', nativeId: 'ses_opaque/native@雪', endpointType: 'shared' },
+      name: null, rawStatus: { type: 'idle' }, capabilities: { discovery: true, delivery: true, launch: false, diagnostics: false }, attributes: { version: '2.1.3' } };
+    const discovery: DiscoveryEndpoint = { execute: vi.fn(async () => ({ op: 'detail', providers: [{ providerId: 'opencode', capabilities: item.capabilities }],
+      detail: { item, completeness: 'complete', errors: [], observedAt: 42 } })) };
+    const adopt = vi.fn(async () => undefined);
+    const operations = createNativeSessionOperations({ discovery, adopt, providers: createNativeOperationProviders() });
+
+    const description = await operations.describe(item.ref);
+    expect(description.actions).toMatchObject({ adopt: { state: 'executable' }, rename: { state: 'unavailable' } });
+    await expect(operations.apply({ ref: item.ref, operation: 'adopt', expectedRevision: description.revision })).resolves.toMatchObject({ kind: 'applied' });
+    expect(adopt).toHaveBeenCalledOnce();
+    expect(adopt.mock.calls[0]?.slice(0, 2)).toEqual([item, 'opencode']);
+    expect(discovery.execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses OpenCode adoption when native delivery is not verified', async () => {
+    const item: DiscoverySession = { ref: { contextId: 'node:machine-full', providerId: 'opencode', nativeId: 'ses_opaque/native@雪', endpointType: 'shared' },
+      name: null, rawStatus: { type: 'idle' }, capabilities: { discovery: true, delivery: false, launch: false, diagnostics: false }, attributes: {} };
+    const discovery: DiscoveryEndpoint = { execute: vi.fn(async () => ({ op: 'detail', providers: [{ providerId: 'opencode', capabilities: item.capabilities }],
+      detail: { item, completeness: 'complete', errors: [], observedAt: 42 } })) };
+    const adopt = vi.fn(async () => undefined);
+    const operations = createNativeSessionOperations({ discovery, adopt, providers: createNativeOperationProviders() });
+
+    const description = await operations.describe(item.ref);
+    expect(description.actions.adopt).toMatchObject({ state: 'unavailable', reason: expect.stringContaining('未声明原生投递能力') });
+    await expect(operations.apply({ ref: item.ref, operation: 'adopt', expectedRevision: description.revision })).resolves.toMatchObject({ kind: 'rejected' });
+    expect(adopt).not.toHaveBeenCalled();
   });
 
   it('a timed out native write returns uncertain and subsequent recovery stays read-only', async () => {

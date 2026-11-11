@@ -1,0 +1,1053 @@
+{
+  "schema": 1,
+  "tool": "opencode-desktop",
+  "platform": "win32",
+  "arch": "x64",
+  "builds": {
+    "baseline": {
+      "version": "2.1.3",
+      "filename": "opencode-desktop-win-x64.exe",
+      "url": "https://opencode.ai/files/bin/2.1.3/opencode-desktop-win-x64.exe",
+      "sha256": "18ed79327878bd373a65e9ce96020439bd7618661a11d62046aeab53422f6912",
+      "size": 250321424,
+      "sourceCommit": "37d973754ba6cc31732f93421c0c18b675841573"
+    },
+    "candidate": {
+      "version": "2.1.3",
+      "filename": "opencode-desktop-win-x64.exe",
+      "url": "https://opencode.ai/files/bin/2.1.3/opencode-desktop-win-x64.exe",
+      "sha256": "18ed79327878bd373a65e9ce96020439bd7618661a11d62046aeab53422f6912",
+      "size": 250321424,
+      "sourceCommit": "37d973754ba6cc31732f93421c0c18b675841573"
+    }
+  },
+  "baseline": {
+    "schema": 1,
+    "tool": "opencode-desktop",
+    "platform": "win32",
+    "arch": "x64",
+    "version": "2.1.3",
+    "startedAt": "2026-11-10T04:11:34.978Z",
+    "status": "passed",
+    "stage": "done",
+    "checks": [
+      {
+        "name": "official-desktop-startup",
+        "status": "passed",
+        "elapsedMs": 1736,
+        "detail": {
+          "appPid": 40356,
+          "servicePid": 28992,
+          "onboarding": "seeded-complete"
+        }
+      },
+      {
+        "name": "owned-app-service-and-cdp",
+        "status": "passed",
+        "elapsedMs": 4251,
+        "detail": {
+          "app": {
+            "ProcessId": 40356,
+            "ParentProcessId": 34160,
+            "ExecutablePath": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\baseline\\install\\OpenCode.exe"
+          },
+          "native": {
+            "ProcessId": 28992,
+            "ParentProcessId": 40356,
+            "ExecutablePath": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\baseline\\run-OAOJUE\\profile\\.local\\desktop\\cli\\2.1.3-x64\\opencode-cli.exe"
+          },
+          "cdp": [
+            {
+              "LocalAddress": "127.0.0.1",
+              "OwningProcess": 40356
+            }
+          ],
+          "service": [
+            {
+              "LocalAddress": "127.0.0.1",
+              "OwningProcess": 28992
+            }
+          ],
+          "bundledSHA256": "044e20f6346c75101e6c33e159e037888bcea476666ed27c90af6a468b84d28c",
+          "serviceSHA256": "044e20f6346c75101e6c33e159e037888bcea476666ed27c90af6a468b84d28c"
+        }
+      },
+      {
+        "name": "native-session-create-and-real-home-selection",
+        "status": "passed",
+        "elapsedMs": 1315,
+        "detail": {
+          "sender": "ses_e3c586fd5ffeWtqfMdVKxAgXE2",
+          "receiver": "ses_e3c586fc7ffeV4YLcw7Ow7bl6H",
+          "busy": "ses_e3c586fbeffemp36Q6h2JCsKqd",
+          "idle": "ses_e3c586fb6ffek78QNRVhCg0kWC"
+        }
+      },
+      {
+        "name": "scripted-provider-and-native-shell-bootstrap",
+        "status": "passed",
+        "elapsedMs": 640
+      },
+      {
+        "name": "tcp-membership-rename-and-live-desktop-refresh",
+        "status": "passed",
+        "elapsedMs": 5250,
+        "detail": {
+          "provider": "opencode",
+          "endpointType": "shared",
+          "nativeId": "ses_e3c586fb6ffek78QNRVhCg0kWC",
+          "starId": "opencode-native-validation-star",
+          "operations": [
+            {
+              "name": "tui-adopt-exact-selected-session",
+              "status": "passed",
+              "member": {
+                "sessionId": "ses_e3c586fb6ffek78QNRVhCg0kWC",
+                "name": "crosschat_desktop_fixture_idle",
+                "tool": "opencode",
+                "endpointType": "shared",
+                "machine": "ec542c2c28e742d1902810f989d21f8b"
+              }
+            },
+            {
+              "name": "tcp-rename-live-native-title",
+              "status": "passed",
+              "title": "CROSSCHAT_OPENCODE_RENAME_3944de9d55",
+              "descriptionRevision": "128cc434b4b8bead03e4889dc3a16e3c4209d4cb9b6a111a3f95c223b31dc314",
+              "result": {
+                "kind": "applied",
+                "message": "原生名称及星内路由已确认更新。"
+              },
+              "member": {
+                "sessionId": "ses_e3c586fb6ffek78QNRVhCg0kWC",
+                "name": "CROSSCHAT_OPENCODE_RENAME_3944de9d55",
+                "tool": "opencode",
+                "endpointType": "shared",
+                "machine": "ec542c2c28e742d1902810f989d21f8b"
+              },
+              "nativeUiRefresh": {
+                "screenshot": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\native-rename-desktop.png",
+                "dom": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\native-rename-desktop.json",
+                "markers": [
+                  "CROSSCHAT_OPENCODE_RENAME_3944de9d55"
+                ]
+              }
+            },
+            {
+              "name": "renamed-star-route-delivers-to-same-native-session",
+              "status": "passed",
+              "routeMarker": "CROSSCHAT_OPENCODE_RENAMED_ROUTE_44b984342a",
+              "receipt": {
+                "op": "receipt",
+                "id": "opencode-renamed-route-253bfb46d382",
+                "status": "delivered",
+                "turn": "1",
+                "replyRef": "mc2_rigIb3BlbmNvZGUec2VzX2UzYzU4NmZiNmZmZWs3OFFOUlZoQ2cwa1dDCKFdou-SxLc_AR9vcGVuY29kZS1uYXRpdmUtdmFsaWRhdGlvbi1zdGFyBnNoYXJlZA",
+                "output": "{\"status\":\"delivered\",\"to\":\"opencode/ses_e3c586fb6ffek78QNRVhCg0kWC\",\"turn\":1,\"replyRef\":\"mc2_rigIb3BlbmNvZGUec2VzX2UzYzU4NmZiNmZmZWs3OFFOUlZoQ2cwa1dDCKFdou-SxLc_AR9vcGVuY29kZS1uYXRpdmUtdmFsaWRhdGlvbi1zdGFyBnNoYXJlZA\",\"queued\":true}"
+              },
+              "nativeId": "ses_e3c586fb6ffek78QNRVhCg0kWC",
+              "remainingSessionCount": 4
+            },
+            {
+              "name": "tui-removes-roster-with-native-chat-retained",
+              "status": "passed",
+              "nativeId": "ses_e3c586fb6ffek78QNRVhCg0kWC",
+              "title": "CROSSCHAT_OPENCODE_RENAME_3944de9d55"
+            }
+          ],
+          "cleanup": {
+            "complete": true,
+            "brokerStopped": true,
+            "nodeStopped": true,
+            "tuiStopped": true,
+            "crosschatRoot": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\baseline\\run-OAOJUE\\.crosschat",
+            "removedByFixtureOwner": true
+          },
+          "initialTitle": "crosschat_desktop_fixture_idle",
+          "tui": {
+            "code": 0,
+            "terminalRestored": true,
+            "evidence": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\native-enhancement\\membership-tui.json"
+          }
+        }
+      },
+      {
+        "name": "authenticated-service-discovery-and-pagination",
+        "status": "passed",
+        "elapsedMs": 674,
+        "detail": {
+          "pages": 3,
+          "nativeIds": [
+            "ses_e3c586fb6ffek78QNRVhCg0kWC",
+            "ses_e3c586fbeffemp36Q6h2JCsKqd",
+            "ses_e3c586fc7ffeV4YLcw7Ow7bl6H",
+            "ses_e3c586fd5ffeWtqfMdVKxAgXE2"
+          ]
+        }
+      },
+      {
+        "name": "idle-delivery-and-visible-model-ack",
+        "status": "passed",
+        "elapsedMs": 2577,
+        "detail": {
+          "receipt": {
+            "status": "delivered",
+            "to": "opencode/ses_e3c586fb6ffek78QNRVhCg0kWC",
+            "turn": 1,
+            "replyRef": "mc2_riAIb3BlbmNvZGUec2VzX2UzYzU4NmZiNmZmZWs3OFFOUlZoQ2cwa1dDCOyYniYDpfNrAQZzaGFyZWQ",
+            "queued": true
+          },
+          "evidence": {
+            "screenshot": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\idle-incoming.png",
+            "dom": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\idle-incoming.json",
+            "markers": [
+              "crosschat_desktop_fixture_idle-message",
+              "crosschat_desktop_fixture_model-ACK:idle-message"
+            ],
+            "acknowledgement": "crosschat_desktop_fixture_model-ACK:idle-message"
+          }
+        }
+      },
+      {
+        "name": "native-shell-identity-and-conversation-reply",
+        "status": "passed",
+        "elapsedMs": 5904,
+        "detail": {
+          "sentRef": {
+            "v": 1,
+            "f": {
+              "p": "opencode",
+              "id": "ses_e3c586fd5ffeWtqfMdVKxAgXE2",
+              "endpointType": "shared"
+            },
+            "t": {
+              "p": "opencode",
+              "id": "ses_e3c586fc7ffeV4YLcw7Ow7bl6H",
+              "endpointType": "shared"
+            },
+            "n": "422ed559a81e5a20",
+            "c": 1
+          },
+          "replyRef": {
+            "v": 1,
+            "f": {
+              "p": "opencode",
+              "id": "ses_e3c586fd5ffeWtqfMdVKxAgXE2",
+              "endpointType": "shared"
+            },
+            "t": {
+              "p": "opencode",
+              "id": "ses_e3c586fc7ffeV4YLcw7Ow7bl6H",
+              "endpointType": "shared"
+            },
+            "n": "422ed559a81e5a20",
+            "c": 2
+          },
+          "incoming": {
+            "screenshot": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\native-shell-receiver.png",
+            "dom": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\native-shell-receiver.json",
+            "markers": [
+              "crosschat_desktop_fixture_roundtrip-request"
+            ]
+          },
+          "reply": {
+            "screenshot": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\native-shell-sender-reply.png",
+            "dom": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\native-shell-sender-reply.json",
+            "markers": [
+              "crosschat_desktop_fixture_roundtrip-reply"
+            ]
+          }
+        }
+      },
+      {
+        "name": "native-queue-and-steer-step-boundaries",
+        "status": "passed",
+        "elapsedMs": 6651,
+        "detail": {
+          "queued": {
+            "status": "delivered",
+            "to": "opencode/ses_e3c586fbeffemp36Q6h2JCsKqd",
+            "turn": 1,
+            "replyRef": "mc2_riAIb3BlbmNvZGUec2VzX2UzYzU4NmZiZWZmZW1wMzZRNmgySkNzS3FkCEUh63dYMhWIAQZzaGFyZWQ",
+            "queued": true
+          },
+          "steered": {
+            "status": "delivered",
+            "to": "opencode/ses_e3c586fbeffemp36Q6h2JCsKqd",
+            "turn": 2,
+            "replyRef": "mc2_riAIb3BlbmNvZGUec2VzX2UzYzU4NmZiZWZmZW1wMzZRNmgySkNzS3FkCEUh63dYMhWIAgZzaGFyZWQ",
+            "queued": false
+          },
+          "seed": {
+            "screenshot": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\busy-seed.png",
+            "dom": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\busy-seed.json",
+            "markers": [
+              "crosschat_desktop_fixture_busy-start"
+            ]
+          },
+          "final": {
+            "screenshot": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\busy-queue-steer.png",
+            "dom": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\busy-queue-steer.json",
+            "markers": [
+              "crosschat_desktop_fixture_busy-start",
+              "crosschat_desktop_fixture_queued",
+              "crosschat_desktop_fixture_steered"
+            ]
+          },
+          "modelSteps": 3
+        }
+      },
+      {
+        "name": "service-restart-reconnects-visible-existing-session",
+        "status": "passed",
+        "elapsedMs": 7850,
+        "detail": {
+          "previous": {
+            "appPid": 40356,
+            "servicePid": 28992,
+            "serviceId": "2482480b-1adf-4812-b6ec-333de9022cf9",
+            "url": "http://127.0.0.1:57430"
+          },
+          "appPid": 40356,
+          "servicePid": 16464,
+          "serviceId": "b0b7e615-e665-4e60-b1f6-8f56b44b508a",
+          "samePassword": true,
+          "receipt": {
+            "status": "delivered",
+            "to": "opencode/ses_e3c586fb6ffek78QNRVhCg0kWC",
+            "turn": 2,
+            "replyRef": "mc2_riAIb3BlbmNvZGUec2VzX2UzYzU4NmZiNmZmZWs3OFFOUlZoQ2cwa1dDCOyYniYDpfNrAgZzaGFyZWQ",
+            "queued": true
+          },
+          "proof": {
+            "app": {
+              "ProcessId": 40356,
+              "ParentProcessId": 34160,
+              "ExecutablePath": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\baseline\\install\\OpenCode.exe"
+            },
+            "native": {
+              "ProcessId": 16464,
+              "ParentProcessId": 40356,
+              "ExecutablePath": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\baseline\\run-OAOJUE\\profile\\.local\\desktop\\cli\\2.1.3-x64\\opencode-cli.exe"
+            },
+            "cdp": [
+              {
+                "LocalAddress": "127.0.0.1",
+                "OwningProcess": 40356
+              }
+            ],
+            "service": [
+              {
+                "LocalAddress": "127.0.0.1",
+                "OwningProcess": 16464
+              }
+            ],
+            "bundledSHA256": "044e20f6346c75101e6c33e159e037888bcea476666ed27c90af6a468b84d28c",
+            "serviceSHA256": "044e20f6346c75101e6c33e159e037888bcea476666ed27c90af6a468b84d28c"
+          },
+          "evidence": {
+            "screenshot": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\service-reconnected.png",
+            "dom": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\service-reconnected.json",
+            "markers": [
+              "crosschat_desktop_fixture_after-service-restart",
+              "crosschat_desktop_fixture_model-ACK:after-service-restart"
+            ],
+            "acknowledgement": "crosschat_desktop_fixture_model-ACK:after-service-restart"
+          }
+        }
+      },
+      {
+        "name": "desktop-reopen-preserves-service-and-selected-session",
+        "status": "passed",
+        "elapsedMs": 9378,
+        "detail": {
+          "restart": {
+            "previousAppPid": 40356,
+            "previousCDPPort": 57429,
+            "servicePid": 16464,
+            "serviceId": "b0b7e615-e665-4e60-b1f6-8f56b44b508a",
+            "serviceURL": "http://127.0.0.1:57430",
+            "appPid": 39492,
+            "cdpPort": 49222,
+            "forcedAppStop": false,
+            "cdpReady": true
+          },
+          "originalId": "ses_e3c586fb6ffek78QNRVhCg0kWC",
+          "receipt": {
+            "status": "delivered",
+            "to": "opencode/ses_e3c586fb6ffek78QNRVhCg0kWC",
+            "turn": 3,
+            "replyRef": "mc2_riAIb3BlbmNvZGUec2VzX2UzYzU4NmZiNmZmZWs3OFFOUlZoQ2cwa1dDCOyYniYDpfNrAwZzaGFyZWQ",
+            "queued": true
+          },
+          "proof": {
+            "app": {
+              "ProcessId": 39492,
+              "ParentProcessId": 34160,
+              "ExecutablePath": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\baseline\\install\\OpenCode.exe"
+            },
+            "native": {
+              "ProcessId": 16464,
+              "ParentProcessId": 40356,
+              "ExecutablePath": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\baseline\\run-OAOJUE\\profile\\.local\\desktop\\cli\\2.1.3-x64\\opencode-cli.exe"
+            },
+            "cdp": [
+              {
+                "LocalAddress": "127.0.0.1",
+                "OwningProcess": 39492
+              }
+            ],
+            "service": [
+              {
+                "LocalAddress": "127.0.0.1",
+                "OwningProcess": 16464
+              }
+            ],
+            "bundledSHA256": "044e20f6346c75101e6c33e159e037888bcea476666ed27c90af6a468b84d28c",
+            "serviceSHA256": "044e20f6346c75101e6c33e159e037888bcea476666ed27c90af6a468b84d28c"
+          },
+          "evidence": {
+            "screenshot": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\desktop-reopened.png",
+            "dom": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\baseline-5YBlSy\\ui\\desktop-reopened.json",
+            "markers": [
+              "crosschat_desktop_fixture_after-desktop-reopen",
+              "crosschat_desktop_fixture_model-ACK:after-desktop-reopen"
+            ],
+            "acknowledgement": "crosschat_desktop_fixture_model-ACK:after-desktop-reopen"
+          }
+        }
+      },
+      {
+        "name": "missing-target-does-not-create-session",
+        "status": "passed",
+        "elapsedMs": 2429
+      }
+    ],
+    "scope": {
+      "runtime": "unmodified official installed Desktop and its bundled native CLI, default local sidecar only",
+      "ui": "official renderer controlled through externally enabled loopback CDP; real Home DOM session selection",
+      "identity": "native shell OPENCODE_SESSION_ID and full conversation reference endpoints",
+      "model": "scripted local provider; no real API key or model intelligence assertion",
+      "onboarding": "official firstLaunchOnboardingComplete setting seeded; first-run onboarding not tested",
+      "recovery": "Desktop-only reopen and ordinary service stop/start with the same configuration, database, port and credentials",
+      "excluded": [
+        "remote/WSL/manual server selection",
+        "rotated credentials",
+        "changed service port",
+        "database corruption",
+        "cloud login"
+      ]
+    },
+    "logs": {
+      "modelRequests": [
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_bootstrap"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_bootstrap"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_bootstrap\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c586fb6ffek78QNRVhCg0kWC\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 mc2_rigIb3BlbmNvZGUec2VzX2UzYzU4NmZiNmZmZWs3OFFOUlZoQ2cwa1dDCKFdou-SxLc_AR9vcGVuY29kZS1uYXRpdmUtdmFsaWRhdGlvbi1zdGFyBnNoYXJlZA；核实目标类型后使用该引用回复。</crosschat-reply-hint>\nCROSSCHAT_OPENCODE_RENAMED_ROUTE_44b984342a\n</cross-session-message>"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_bootstrap\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c586fb6ffek78QNRVhCg0kWC\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 mc2_rigIb3BlbmNvZGUec2VzX2UzYzU4NmZiNmZmZWs3OFFOUlZoQ2cwa1dDCKFdou-SxLc_AR9vcGVuY29kZS1uYXRpdmUtdmFsaWRhdGlvbi1zdGFyBnNoYXJlZA；核实目标类型后使用该引用回复。</crosschat-reply-hint>\nCROSSCHAT_OPENCODE_RENAMED_ROUTE_44b984342a\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c586fb6ffek78QNRVhCg0kWC\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_idle-message\n</cross-session-message>"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_begin-roundtrip"
+        },
+        {
+          "model": "test-model",
+          "userText": "<cross-session-message from-name=\"opencode/ses_e3c5\" turn=\"1\" from-tool=\"opencode\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c586fc7ffeV4YLcw7Ow7bl6H\">回复请运行: crosschat send --conversation cA001 --tool opencode --body \"<你的回复>\"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>\ncrosschat_desktop_fixture_roundtrip-request\n</cross-session-message>"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_begin-roundtrip"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_begin-roundtrip\n<cross-session-message from-name=\"opencode/ses_e3c5\" turn=\"2\" from-tool=\"opencode\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c586fd5ffeWtqfMdVKxAgXE2\">回复请运行: crosschat send --conversation cA001 --tool opencode --body \"<你的回复>\"（长文/特殊字符走 stdin）</crosschat-reply-hint>\ncrosschat_desktop_fixture_roundtrip-reply\n</cross-session-message>"
+        },
+        {
+          "model": "test-model",
+          "userText": "<cross-session-message from-name=\"opencode/ses_e3c5\" turn=\"1\" from-tool=\"opencode\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c586fc7ffeV4YLcw7Ow7bl6H\">回复请运行: crosschat send --conversation cA001 --tool opencode --body \"<你的回复>\"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>\ncrosschat_desktop_fixture_roundtrip-request\n</cross-session-message>"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_busy-start"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_busy-start\n<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c586fbeffemp36Q6h2JCsKqd\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA002；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_steered\n</cross-session-message>"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_busy-start\n<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c586fbeffemp36Q6h2JCsKqd\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA002；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_steered\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c586fbeffemp36Q6h2JCsKqd\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA002；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_queued\n</cross-session-message>"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_bootstrap\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c586fb6ffek78QNRVhCg0kWC\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 mc2_rigIb3BlbmNvZGUec2VzX2UzYzU4NmZiNmZmZWs3OFFOUlZoQ2cwa1dDCKFdou-SxLc_AR9vcGVuY29kZS1uYXRpdmUtdmFsaWRhdGlvbi1zdGFyBnNoYXJlZA；核实目标类型后使用该引用回复。</crosschat-reply-hint>\nCROSSCHAT_OPENCODE_RENAMED_ROUTE_44b984342a\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c586fb6ffek78QNRVhCg0kWC\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_idle-message\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c586fb6ffek78QNRVhCg0kWC\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_after-service-restart\n</cross-session-message>"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_bootstrap\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c586fb6ffek78QNRVhCg0kWC\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 mc2_rigIb3BlbmNvZGUec2VzX2UzYzU4NmZiNmZmZWs3OFFOUlZoQ2cwa1dDCKFdou-SxLc_AR9vcGVuY29kZS1uYXRpdmUtdmFsaWRhdGlvbi1zdGFyBnNoYXJlZA；核实目标类型后使用该引用回复。</crosschat-reply-hint>\nCROSSCHAT_OPENCODE_RENAMED_ROUTE_44b984342a\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c586fb6ffek78QNRVhCg0kWC\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_idle-message\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c586fb6ffek78QNRVhCg0kWC\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_after-service-restart\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"3\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c586fb6ffek78QNRVhCg0kWC\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_after-desktop-reopen\n</cross-session-message>"
+        }
+      ],
+      "desktop": {
+        "stdout": "\r\n\r\n",
+        "stderr": "\r\nDevTools listening on ws://127.0.0.1:57429/devtools/browser/807fdf65-837e-4178-9d87-b0b55d1baba2\r\n(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.\n\r\nDevTools listening on ws://127.0.0.1:49222/devtools/browser/ed1031a8-f511-4320-b870-6a8daf6f1b46\r\n(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.\n",
+        "desktop": {
+          "files": {
+            "profile\\.local\\desktop\\logs\\20261110T041135\\crash.log": "[2026-11-10 12:11:36.317] [info]  (crash)   crash reporter started {\n  path: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\baseline\\\\run-OAOJUE\\\\profile\\\\.local\\\\desktop\\\\Crashpad'\n}\r\n",
+            "profile\\.local\\desktop\\logs\\20261110T041135\\main.log": "[2026-11-10 12:11:35.754] [info]  (main) app starting {\n  version: '2.1.3',\n  packaged: true,\n  onboardingTest: false,\n  marks: {\n    entry: 1794283895566,\n    ready: 1794283895623,\n    window: 1794283895664,\n    served: 1794283895727,\n    bundle: 1794283895750,\n    onboarding: 1794283895751,\n    logging: 1794283895754\n  }\n}\r\n[2026-11-10 12:11:35.770] [info]  (main) layers ready {\n  marks: {\n    entry: 1794283895566,\n    ready: 1794283895623,\n    window: 1794283895664,\n    served: 1794283895727,\n    bundle: 1794283895750,\n    onboarding: 1794283895751,\n    logging: 1794283895754,\n    storage: 1794283895768,\n    init: 1794283895769,\n    layers: 1794283895770\n  }\n}\r\n[2026-11-10 12:11:35.773] [info]  (main) main window visible {\n  window: '471be8a8-8c8f-44a8-a507-6c7433e46a4c',\n  shownAt: 1794283895657\n}\r\n[2026-11-10 12:11:35.787] [info]  (main) starting v2 background service\r\n[2026-11-10 12:11:35.787] [info]  (main) v2 CLI executable resolved {\n  bundled: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\baseline\\\\install\\\\resources\\\\opencode-cli.exe',\n  packaged: true\n}\r\n[2026-11-10 12:11:35.788] [info]  (main) v2 CLI version bundled { version: '2.1.3' }\r\n[2026-11-10 12:11:35.887] [info]  (main)    v2 CLI executable staged {\n  source: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\baseline\\\\install\\\\resources\\\\opencode-cli.exe',\n  path: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\baseline\\\\run-OAOJUE\\\\profile\\\\.local\\\\desktop\\\\cli\\\\2.1.3-x64\\\\opencode-cli.exe',\n  version: '2.1.3'\n}\r\n[2026-11-10 12:11:35.968] [info]  (main)    auto updater configured {\n  channel: 'latest',\n  allowPrerelease: false,\n  allowDowngrade: true,\n  currentVersion: '2.1.3'\n}\r\n[2026-11-10 12:11:35.969] [info]  (main)    updater state changed { from: 'idle', to: 'checking' }\r\n[2026-11-10 12:11:35.969] [info]  (main)    Checking for update {}\r\n[2026-11-10 12:11:35.971] [info]  (main)    v2 CLI background service starting { reason: 'missing' }\r\n[2026-11-10 12:11:36.035] [info]  (main)    Generated new staging user ID: 277d0a55-65b4-57bb-9e2c-2aaba0556ba6 {}\r\n[2026-11-10 12:11:36.710] [info]  (main)    v2 CLI background service ready {\n  version: '2.1.3',\n  probed: false,\n  url: 'http://127.0.0.1:57430',\n  hostname: '127.0.0.1',\n  port: '57430'\n}\r\n[2026-11-10 12:11:37.099] [info]  (main)    Found version 2.2.6 (url: https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-arm64.exe, https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-x64.exe) {}\r\n[2026-11-10 12:11:37.100] [info]  (main)    updater state changed { from: 'checking', to: 'downloading' }\r\n[2026-11-10 12:11:37.101] [info]  (main)    Downloading update from https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-arm64.exe, https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-x64.exe {}\r\n[2026-11-10 12:11:37.101] [debug] (main)    updater cache dir: C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\baseline\\run-OAOJUE\\localappdata\\@opencodedesktop-updater {}\r\n[2026-11-10 12:11:37.103] [warn]  (main)    disableWebInstaller is set to false, you should set it to true if you do not plan on using a web installer. This will default to true in a future version. {}\r\n[2026-11-10 12:11:37.104] [info]  (main)    Download block maps (old: \"https://opencode.ai/files/bin/2.1.3/opencode-desktop-win-x64.exe.blockmap\", new: https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-x64.exe.blockmap) {}\r\n[2026-11-10 12:11:37.435] [error] (main)    Cannot download differentially, fallback to full download: Error: Cannot download \"https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-x64.exe.blockmap\", status 404: Not Found\n    at ClientRequest.<anonymous> (C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\baseline\\install\\resources\\app.asar\\node_modules\\builder-util-runtime\\out\\httpExecutor.js:245:34)\n    at ClientRequest.emit (node:events:514:28)\n    at SimpleURLLoaderWrapper.<anonymous> (node:electron/js2c/browser_init:1:137831)\n    at SimpleURLLoaderWrapper.emit (node:events:514:28) {}\r\n[2026-11-10 12:12:04.791] [info]  (main)    starting v2 background service\r\n[2026-11-10 12:12:04.793] [info]  (main)    v2 CLI background service starting { reason: 'missing' }\r\n[2026-11-10 12:12:04.986] [info]  (main)    v2 CLI background service ready {\n  probed: false,\n  url: 'http://127.0.0.1:57430',\n  hostname: '127.0.0.1',\n  port: '57430'\n}\r\n",
+            "profile\\.local\\desktop\\logs\\20261110T041135\\network.log": "[2026-11-10 12:11:35.799] [info]  (network) net log started {\n  path: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\baseline\\\\run-OAOJUE\\\\profile\\\\.local\\\\desktop\\\\logs\\\\20261110T041135\\\\network.netlog'\n}\r\n",
+            "profile\\.local\\desktop\\logs\\20261110T041135\\renderer.log": "[2026-11-10 12:11:41.684] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:11:41.894] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:11:42.070] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:11:42.238] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:11:42.671] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:11:47.101] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:11:51.454] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:11:54.040] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:11:57.522] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:12:04.787] [info]            [global-sdk] event stream disconnected [object Object]\r\n",
+            "profile\\.local\\desktop\\logs\\20261110T041212\\crash.log": "[2026-11-10 12:12:13.535] [info]  (crash)   crash reporter started {\n  path: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\baseline\\\\run-OAOJUE\\\\profile\\\\.local\\\\desktop\\\\Crashpad'\n}\r\n",
+            "profile\\.local\\desktop\\logs\\20261110T041212\\main.log": "[2026-11-10 12:12:12.991] [info]  (main) app starting {\n  version: '2.1.3',\n  packaged: true,\n  onboardingTest: false,\n  marks: {\n    entry: 1794283932409,\n    ready: 1794283932871,\n    window: 1794283932913,\n    served: 1794283932968,\n    bundle: 1794283932987,\n    onboarding: 1794283932988,\n    logging: 1794283932991\n  }\n}\r\n[2026-11-10 12:12:13.003] [info]  (main) layers ready {\n  marks: {\n    entry: 1794283932409,\n    ready: 1794283932871,\n    window: 1794283932913,\n    served: 1794283932968,\n    bundle: 1794283932987,\n    onboarding: 1794283932988,\n    logging: 1794283932991,\n    storage: 1794283933001,\n    init: 1794283933002,\n    layers: 1794283933003\n  }\n}\r\n[2026-11-10 12:12:13.005] [info]  (main) main window visible {\n  window: '471be8a8-8c8f-44a8-a507-6c7433e46a4c',\n  shownAt: 1794283932906\n}\r\n[2026-11-10 12:12:13.021] [info]  (main) starting v2 background service\r\n[2026-11-10 12:12:13.021] [info]  (main) v2 CLI executable resolved {\n  bundled: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\baseline\\\\install\\\\resources\\\\opencode-cli.exe',\n  packaged: true\n}\r\n[2026-11-10 12:12:13.022] [info]  (main) v2 CLI version bundled { version: '2.1.3' }\r\n[2026-11-10 12:12:13.023] [info]  (main) v2 CLI staged executable reused {\n  path: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\baseline\\\\run-OAOJUE\\\\profile\\\\.local\\\\desktop\\\\cli\\\\2.1.3-x64\\\\opencode-cli.exe',\n  version: '2.1.3'\n}\r\n[2026-11-10 12:12:13.027] [info]  (main) v2 CLI background service ready {\n  version: '2.1.3',\n  probed: true,\n  url: 'http://127.0.0.1:57430',\n  hostname: '127.0.0.1',\n  port: '57430'\n}\r\n[2026-11-10 12:12:13.126] [info]  (main) auto updater configured {\n  channel: 'latest',\n  allowPrerelease: false,\n  allowDowngrade: true,\n  currentVersion: '2.1.3'\n}\r\n[2026-11-10 12:12:13.127] [info]  (main) updater state changed { from: 'idle', to: 'checking' }\r\n[2026-11-10 12:12:13.128] [info]  (main) Checking for update {}\r\n[2026-11-10 12:12:14.151] [info]  (main)    Found version 2.2.6 (url: https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-arm64.exe, https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-x64.exe) {}\r\n[2026-11-10 12:12:14.151] [info]  (main)    updater state changed { from: 'checking', to: 'downloading' }\r\n[2026-11-10 12:12:14.152] [info]  (main)    Downloading update from https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-arm64.exe, https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-x64.exe {}\r\n[2026-11-10 12:12:14.152] [debug] (main)    updater cache dir: C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\baseline\\run-OAOJUE\\localappdata\\@opencodedesktop-updater {}\r\n[2026-11-10 12:12:14.160] [warn]  (main)    disableWebInstaller is set to false, you should set it to true if you do not plan on using a web installer. This will default to true in a future version. {}\r\n[2026-11-10 12:12:14.161] [info]  (main)    Download block maps (old: \"https://opencode.ai/files/bin/2.1.3/opencode-desktop-win-x64.exe.blockmap\", new: https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-x64.exe.blockmap) {}\r\n[2026-11-10 12:12:14.500] [error] (main)    Cannot download differentially, fallback to full download: Error: Cannot download \"https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-x64.exe.blockmap\", status 404: Not Found\n    at ClientRequest.<anonymous> (C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\baseline\\install\\resources\\app.asar\\node_modules\\builder-util-runtime\\out\\httpExecutor.js:245:34)\n    at ClientRequest.emit (node:events:514:28)\n    at SimpleURLLoaderWrapper.<anonymous> (node:electron/js2c/browser_init:1:137831)\n    at SimpleURLLoaderWrapper.emit (node:events:514:28) {}\r\n",
+            "profile\\.local\\desktop\\logs\\20261110T041212\\network.log": "[2026-11-10 12:12:13.133] [info]  (network) net log started {\n  path: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\baseline\\\\run-OAOJUE\\\\profile\\\\.local\\\\desktop\\\\logs\\\\20261110T041212\\\\network.netlog'\n}\r\n",
+            "profile\\.local\\desktop\\logs\\20261110T041212\\renderer.log": "[2026-11-10 12:12:14.142] [info]            Slow network is detected. See https://www.chromestatus.com/feature/5636954674692096 for more details. Fallback font will be used while loading: oc://renderer/assets/Inter.ttf\r\n"
+          },
+          "errors": []
+        },
+        "readiness": ""
+      }
+    },
+    "cleanup": {
+      "ownedRoot": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\baseline\\run-OAOJUE",
+      "appPid": 39492,
+      "servicePid": 16464,
+      "appStopped": true,
+      "serviceStopped": true,
+      "removed": true,
+      "forcedAppStop": false,
+      "errors": [],
+      "serviceStopExitCode": 0,
+      "runProcesses": {
+        "state": "clear",
+        "processes": []
+      }
+    },
+    "finishedAt": "2026-11-10T04:12:24.783Z"
+  },
+  "candidate": {
+    "schema": 1,
+    "tool": "opencode-desktop",
+    "platform": "win32",
+    "arch": "x64",
+    "version": "2.1.3",
+    "startedAt": "2026-11-10T04:12:54.126Z",
+    "status": "passed",
+    "stage": "done",
+    "checks": [
+      {
+        "name": "official-desktop-startup",
+        "status": "passed",
+        "elapsedMs": 1731,
+        "detail": {
+          "appPid": 28796,
+          "servicePid": 26852,
+          "onboarding": "seeded-complete"
+        }
+      },
+      {
+        "name": "owned-app-service-and-cdp",
+        "status": "passed",
+        "elapsedMs": 4498,
+        "detail": {
+          "app": {
+            "ProcessId": 28796,
+            "ParentProcessId": 6172,
+            "ExecutablePath": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\candidate\\install\\OpenCode.exe"
+          },
+          "native": {
+            "ProcessId": 26852,
+            "ParentProcessId": 28796,
+            "ExecutablePath": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\candidate\\run-l206rI\\profile\\.local\\desktop\\cli\\2.1.3-x64\\opencode-cli.exe"
+          },
+          "cdp": [
+            {
+              "LocalAddress": "127.0.0.1",
+              "OwningProcess": 28796
+            }
+          ],
+          "service": [
+            {
+              "LocalAddress": "127.0.0.1",
+              "OwningProcess": 26852
+            }
+          ],
+          "bundledSHA256": "044e20f6346c75101e6c33e159e037888bcea476666ed27c90af6a468b84d28c",
+          "serviceSHA256": "044e20f6346c75101e6c33e159e037888bcea476666ed27c90af6a468b84d28c"
+        }
+      },
+      {
+        "name": "native-session-create-and-real-home-selection",
+        "status": "passed",
+        "elapsedMs": 1010,
+        "detail": {
+          "sender": "ses_e3c5739b5ffeqLomld2G0qIwq1",
+          "receiver": "ses_e3c5739a6ffebaeKFNWhyITDC1",
+          "busy": "ses_e3c57399bffed69aOTNTOSm3wG",
+          "idle": "ses_e3c573992ffeLkWlW6lpym1dSe"
+        }
+      },
+      {
+        "name": "scripted-provider-and-native-shell-bootstrap",
+        "status": "passed",
+        "elapsedMs": 659
+      },
+      {
+        "name": "tcp-membership-rename-and-live-desktop-refresh",
+        "status": "passed",
+        "elapsedMs": 5001,
+        "detail": {
+          "provider": "opencode",
+          "endpointType": "shared",
+          "nativeId": "ses_e3c573992ffeLkWlW6lpym1dSe",
+          "starId": "opencode-native-validation-star",
+          "operations": [
+            {
+              "name": "tui-adopt-exact-selected-session",
+              "status": "passed",
+              "member": {
+                "sessionId": "ses_e3c573992ffeLkWlW6lpym1dSe",
+                "name": "crosschat_desktop_fixture_idle",
+                "tool": "opencode",
+                "endpointType": "shared",
+                "machine": "ec542c2c28e742d1902810f989d21f8b"
+              }
+            },
+            {
+              "name": "tcp-rename-live-native-title",
+              "status": "passed",
+              "title": "CROSSCHAT_OPENCODE_RENAME_c664286f53",
+              "descriptionRevision": "897a8c8497980d19aad0eb703d406b9ca22cc64e9134f2ce2b79e4a8bec0fc7b",
+              "result": {
+                "kind": "applied",
+                "message": "原生名称及星内路由已确认更新。"
+              },
+              "member": {
+                "sessionId": "ses_e3c573992ffeLkWlW6lpym1dSe",
+                "name": "CROSSCHAT_OPENCODE_RENAME_c664286f53",
+                "tool": "opencode",
+                "endpointType": "shared",
+                "machine": "ec542c2c28e742d1902810f989d21f8b"
+              },
+              "nativeUiRefresh": {
+                "screenshot": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\native-rename-desktop.png",
+                "dom": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\native-rename-desktop.json",
+                "markers": [
+                  "CROSSCHAT_OPENCODE_RENAME_c664286f53"
+                ]
+              }
+            },
+            {
+              "name": "renamed-star-route-delivers-to-same-native-session",
+              "status": "passed",
+              "routeMarker": "CROSSCHAT_OPENCODE_RENAMED_ROUTE_86b15f136d",
+              "receipt": {
+                "op": "receipt",
+                "id": "opencode-renamed-route-3398fcd6600b",
+                "status": "delivered",
+                "turn": "1",
+                "replyRef": "mc2_rigIb3BlbmNvZGUec2VzX2UzYzU3Mzk5MmZmZUxrV2xXNmxweW0xZFNlCLStEf1Po189AR9vcGVuY29kZS1uYXRpdmUtdmFsaWRhdGlvbi1zdGFyBnNoYXJlZA",
+                "output": "{\"status\":\"delivered\",\"to\":\"opencode/ses_e3c573992ffeLkWlW6lpym1dSe\",\"turn\":1,\"replyRef\":\"mc2_rigIb3BlbmNvZGUec2VzX2UzYzU3Mzk5MmZmZUxrV2xXNmxweW0xZFNlCLStEf1Po189AR9vcGVuY29kZS1uYXRpdmUtdmFsaWRhdGlvbi1zdGFyBnNoYXJlZA\",\"queued\":true}"
+              },
+              "nativeId": "ses_e3c573992ffeLkWlW6lpym1dSe",
+              "remainingSessionCount": 4
+            },
+            {
+              "name": "tui-removes-roster-with-native-chat-retained",
+              "status": "passed",
+              "nativeId": "ses_e3c573992ffeLkWlW6lpym1dSe",
+              "title": "CROSSCHAT_OPENCODE_RENAME_c664286f53"
+            }
+          ],
+          "cleanup": {
+            "complete": true,
+            "brokerStopped": true,
+            "nodeStopped": true,
+            "tuiStopped": true,
+            "crosschatRoot": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\candidate\\run-l206rI\\.crosschat",
+            "removedByFixtureOwner": true
+          },
+          "initialTitle": "crosschat_desktop_fixture_idle",
+          "tui": {
+            "code": 0,
+            "terminalRestored": true,
+            "evidence": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\native-enhancement\\membership-tui.json"
+          }
+        }
+      },
+      {
+        "name": "authenticated-service-discovery-and-pagination",
+        "status": "passed",
+        "elapsedMs": 665,
+        "detail": {
+          "pages": 3,
+          "nativeIds": [
+            "ses_e3c573992ffeLkWlW6lpym1dSe",
+            "ses_e3c57399bffed69aOTNTOSm3wG",
+            "ses_e3c5739a6ffebaeKFNWhyITDC1",
+            "ses_e3c5739b5ffeqLomld2G0qIwq1"
+          ]
+        }
+      },
+      {
+        "name": "idle-delivery-and-visible-model-ack",
+        "status": "passed",
+        "elapsedMs": 2697,
+        "detail": {
+          "receipt": {
+            "status": "delivered",
+            "to": "opencode/ses_e3c573992ffeLkWlW6lpym1dSe",
+            "turn": 1,
+            "replyRef": "mc2_riAIb3BlbmNvZGUec2VzX2UzYzU3Mzk5MmZmZUxrV2xXNmxweW0xZFNlCF7uukAxS7bDAQZzaGFyZWQ",
+            "queued": true
+          },
+          "evidence": {
+            "screenshot": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\idle-incoming.png",
+            "dom": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\idle-incoming.json",
+            "markers": [
+              "crosschat_desktop_fixture_idle-message",
+              "crosschat_desktop_fixture_model-ACK:idle-message"
+            ],
+            "acknowledgement": "crosschat_desktop_fixture_model-ACK:idle-message"
+          }
+        }
+      },
+      {
+        "name": "native-shell-identity-and-conversation-reply",
+        "status": "passed",
+        "elapsedMs": 5305,
+        "detail": {
+          "sentRef": {
+            "v": 1,
+            "f": {
+              "p": "opencode",
+              "id": "ses_e3c5739b5ffeqLomld2G0qIwq1",
+              "endpointType": "shared"
+            },
+            "t": {
+              "p": "opencode",
+              "id": "ses_e3c5739a6ffebaeKFNWhyITDC1",
+              "endpointType": "shared"
+            },
+            "n": "113515da6eeb6b4f",
+            "c": 1
+          },
+          "replyRef": {
+            "v": 1,
+            "f": {
+              "p": "opencode",
+              "id": "ses_e3c5739b5ffeqLomld2G0qIwq1",
+              "endpointType": "shared"
+            },
+            "t": {
+              "p": "opencode",
+              "id": "ses_e3c5739a6ffebaeKFNWhyITDC1",
+              "endpointType": "shared"
+            },
+            "n": "113515da6eeb6b4f",
+            "c": 2
+          },
+          "incoming": {
+            "screenshot": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\native-shell-receiver.png",
+            "dom": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\native-shell-receiver.json",
+            "markers": [
+              "crosschat_desktop_fixture_roundtrip-request"
+            ]
+          },
+          "reply": {
+            "screenshot": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\native-shell-sender-reply.png",
+            "dom": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\native-shell-sender-reply.json",
+            "markers": [
+              "crosschat_desktop_fixture_roundtrip-reply"
+            ]
+          }
+        }
+      },
+      {
+        "name": "native-queue-and-steer-step-boundaries",
+        "status": "passed",
+        "elapsedMs": 6317,
+        "detail": {
+          "queued": {
+            "status": "delivered",
+            "to": "opencode/ses_e3c57399bffed69aOTNTOSm3wG",
+            "turn": 1,
+            "replyRef": "mc2_riAIb3BlbmNvZGUec2VzX2UzYzU3Mzk5YmZmZWQ2OWFPVE5UT1NtM3dHCFUIwq_qZpGpAQZzaGFyZWQ",
+            "queued": true
+          },
+          "steered": {
+            "status": "delivered",
+            "to": "opencode/ses_e3c57399bffed69aOTNTOSm3wG",
+            "turn": 2,
+            "replyRef": "mc2_riAIb3BlbmNvZGUec2VzX2UzYzU3Mzk5YmZmZWQ2OWFPVE5UT1NtM3dHCFUIwq_qZpGpAgZzaGFyZWQ",
+            "queued": false
+          },
+          "seed": {
+            "screenshot": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\busy-seed.png",
+            "dom": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\busy-seed.json",
+            "markers": [
+              "crosschat_desktop_fixture_busy-start"
+            ]
+          },
+          "final": {
+            "screenshot": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\busy-queue-steer.png",
+            "dom": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\busy-queue-steer.json",
+            "markers": [
+              "crosschat_desktop_fixture_busy-start",
+              "crosschat_desktop_fixture_queued",
+              "crosschat_desktop_fixture_steered"
+            ]
+          },
+          "modelSteps": 3
+        }
+      },
+      {
+        "name": "service-restart-reconnects-visible-existing-session",
+        "status": "passed",
+        "elapsedMs": 8147,
+        "detail": {
+          "previous": {
+            "appPid": 28796,
+            "servicePid": 26852,
+            "serviceId": "c42d32d1-f8b9-437d-b590-57fb37779c96",
+            "url": "http://127.0.0.1:49974"
+          },
+          "appPid": 28796,
+          "servicePid": 18488,
+          "serviceId": "84aa8a17-7ce3-4899-a6db-06b701a7ecbe",
+          "samePassword": true,
+          "receipt": {
+            "status": "delivered",
+            "to": "opencode/ses_e3c573992ffeLkWlW6lpym1dSe",
+            "turn": 2,
+            "replyRef": "mc2_riAIb3BlbmNvZGUec2VzX2UzYzU3Mzk5MmZmZUxrV2xXNmxweW0xZFNlCF7uukAxS7bDAgZzaGFyZWQ",
+            "queued": true
+          },
+          "proof": {
+            "app": {
+              "ProcessId": 28796,
+              "ParentProcessId": 6172,
+              "ExecutablePath": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\candidate\\install\\OpenCode.exe"
+            },
+            "native": {
+              "ProcessId": 18488,
+              "ParentProcessId": 28796,
+              "ExecutablePath": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\candidate\\run-l206rI\\profile\\.local\\desktop\\cli\\2.1.3-x64\\opencode-cli.exe"
+            },
+            "cdp": [
+              {
+                "LocalAddress": "127.0.0.1",
+                "OwningProcess": 28796
+              }
+            ],
+            "service": [
+              {
+                "LocalAddress": "127.0.0.1",
+                "OwningProcess": 18488
+              }
+            ],
+            "bundledSHA256": "044e20f6346c75101e6c33e159e037888bcea476666ed27c90af6a468b84d28c",
+            "serviceSHA256": "044e20f6346c75101e6c33e159e037888bcea476666ed27c90af6a468b84d28c"
+          },
+          "evidence": {
+            "screenshot": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\service-reconnected.png",
+            "dom": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\service-reconnected.json",
+            "markers": [
+              "crosschat_desktop_fixture_after-service-restart",
+              "crosschat_desktop_fixture_model-ACK:after-service-restart"
+            ],
+            "acknowledgement": "crosschat_desktop_fixture_model-ACK:after-service-restart"
+          }
+        }
+      },
+      {
+        "name": "desktop-reopen-preserves-service-and-selected-session",
+        "status": "passed",
+        "elapsedMs": 8774,
+        "detail": {
+          "restart": {
+            "previousAppPid": 28796,
+            "previousCDPPort": 49973,
+            "servicePid": 18488,
+            "serviceId": "84aa8a17-7ce3-4899-a6db-06b701a7ecbe",
+            "serviceURL": "http://127.0.0.1:49974",
+            "appPid": 23480,
+            "cdpPort": 60499,
+            "forcedAppStop": false,
+            "cdpReady": true
+          },
+          "originalId": "ses_e3c573992ffeLkWlW6lpym1dSe",
+          "receipt": {
+            "status": "delivered",
+            "to": "opencode/ses_e3c573992ffeLkWlW6lpym1dSe",
+            "turn": 3,
+            "replyRef": "mc2_riAIb3BlbmNvZGUec2VzX2UzYzU3Mzk5MmZmZUxrV2xXNmxweW0xZFNlCF7uukAxS7bDAwZzaGFyZWQ",
+            "queued": true
+          },
+          "proof": {
+            "app": {
+              "ProcessId": 23480,
+              "ParentProcessId": 6172,
+              "ExecutablePath": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\candidate\\install\\OpenCode.exe"
+            },
+            "native": {
+              "ProcessId": 18488,
+              "ParentProcessId": 28796,
+              "ExecutablePath": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\candidate\\run-l206rI\\profile\\.local\\desktop\\cli\\2.1.3-x64\\opencode-cli.exe"
+            },
+            "cdp": [
+              {
+                "LocalAddress": "127.0.0.1",
+                "OwningProcess": 23480
+              }
+            ],
+            "service": [
+              {
+                "LocalAddress": "127.0.0.1",
+                "OwningProcess": 18488
+              }
+            ],
+            "bundledSHA256": "044e20f6346c75101e6c33e159e037888bcea476666ed27c90af6a468b84d28c",
+            "serviceSHA256": "044e20f6346c75101e6c33e159e037888bcea476666ed27c90af6a468b84d28c"
+          },
+          "evidence": {
+            "screenshot": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\desktop-reopened.png",
+            "dom": "D:\\workspace\\CC\\multichat\\docs\\development\\evidence\\opencode-native-enhancement-20261110\\desktop-fixed-v213-acl-json-fix-20261110\\candidate-cHa05I\\ui\\desktop-reopened.json",
+            "markers": [
+              "crosschat_desktop_fixture_after-desktop-reopen",
+              "crosschat_desktop_fixture_model-ACK:after-desktop-reopen"
+            ],
+            "acknowledgement": "crosschat_desktop_fixture_model-ACK:after-desktop-reopen"
+          }
+        }
+      },
+      {
+        "name": "missing-target-does-not-create-session",
+        "status": "passed",
+        "elapsedMs": 2449
+      }
+    ],
+    "scope": {
+      "runtime": "unmodified official installed Desktop and its bundled native CLI, default local sidecar only",
+      "ui": "official renderer controlled through externally enabled loopback CDP; real Home DOM session selection",
+      "identity": "native shell OPENCODE_SESSION_ID and full conversation reference endpoints",
+      "model": "scripted local provider; no real API key or model intelligence assertion",
+      "onboarding": "official firstLaunchOnboardingComplete setting seeded; first-run onboarding not tested",
+      "recovery": "Desktop-only reopen and ordinary service stop/start with the same configuration, database, port and credentials",
+      "excluded": [
+        "remote/WSL/manual server selection",
+        "rotated credentials",
+        "changed service port",
+        "database corruption",
+        "cloud login"
+      ]
+    },
+    "logs": {
+      "modelRequests": [
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_bootstrap"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_bootstrap"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_bootstrap\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c573992ffeLkWlW6lpym1dSe\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 mc2_rigIb3BlbmNvZGUec2VzX2UzYzU3Mzk5MmZmZUxrV2xXNmxweW0xZFNlCLStEf1Po189AR9vcGVuY29kZS1uYXRpdmUtdmFsaWRhdGlvbi1zdGFyBnNoYXJlZA；核实目标类型后使用该引用回复。</crosschat-reply-hint>\nCROSSCHAT_OPENCODE_RENAMED_ROUTE_86b15f136d\n</cross-session-message>"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_bootstrap\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c573992ffeLkWlW6lpym1dSe\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 mc2_rigIb3BlbmNvZGUec2VzX2UzYzU3Mzk5MmZmZUxrV2xXNmxweW0xZFNlCLStEf1Po189AR9vcGVuY29kZS1uYXRpdmUtdmFsaWRhdGlvbi1zdGFyBnNoYXJlZA；核实目标类型后使用该引用回复。</crosschat-reply-hint>\nCROSSCHAT_OPENCODE_RENAMED_ROUTE_86b15f136d\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c573992ffeLkWlW6lpym1dSe\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_idle-message\n</cross-session-message>"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_begin-roundtrip"
+        },
+        {
+          "model": "test-model",
+          "userText": "<cross-session-message from-name=\"opencode/ses_e3c5\" turn=\"1\" from-tool=\"opencode\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c5739a6ffebaeKFNWhyITDC1\">回复请运行: crosschat send --conversation cA001 --tool opencode --body \"<你的回复>\"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>\ncrosschat_desktop_fixture_roundtrip-request\n</cross-session-message>"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_begin-roundtrip"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_begin-roundtrip\n<cross-session-message from-name=\"opencode/ses_e3c5\" turn=\"2\" from-tool=\"opencode\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c5739b5ffeqLomld2G0qIwq1\">回复请运行: crosschat send --conversation cA001 --tool opencode --body \"<你的回复>\"（长文/特殊字符走 stdin）</crosschat-reply-hint>\ncrosschat_desktop_fixture_roundtrip-reply\n</cross-session-message>"
+        },
+        {
+          "model": "test-model",
+          "userText": "<cross-session-message from-name=\"opencode/ses_e3c5\" turn=\"1\" from-tool=\"opencode\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c5739a6ffebaeKFNWhyITDC1\">回复请运行: crosschat send --conversation cA001 --tool opencode --body \"<你的回复>\"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>\ncrosschat_desktop_fixture_roundtrip-request\n</cross-session-message>"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_busy-start"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_busy-start\n<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c57399bffed69aOTNTOSm3wG\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA002；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_steered\n</cross-session-message>"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_busy-start\n<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c57399bffed69aOTNTOSm3wG\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA002；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_steered\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c57399bffed69aOTNTOSm3wG\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA002；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_queued\n</cross-session-message>"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_bootstrap\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c573992ffeLkWlW6lpym1dSe\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 mc2_rigIb3BlbmNvZGUec2VzX2UzYzU3Mzk5MmZmZUxrV2xXNmxweW0xZFNlCLStEf1Po189AR9vcGVuY29kZS1uYXRpdmUtdmFsaWRhdGlvbi1zdGFyBnNoYXJlZA；核实目标类型后使用该引用回复。</crosschat-reply-hint>\nCROSSCHAT_OPENCODE_RENAMED_ROUTE_86b15f136d\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c573992ffeLkWlW6lpym1dSe\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_idle-message\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c573992ffeLkWlW6lpym1dSe\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_after-service-restart\n</cross-session-message>"
+        },
+        {
+          "model": "test-model",
+          "userText": "crosschat_desktop_fixture_bootstrap\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c573992ffeLkWlW6lpym1dSe\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 mc2_rigIb3BlbmNvZGUec2VzX2UzYzU3Mzk5MmZmZUxrV2xXNmxweW0xZFNlCLStEf1Po189AR9vcGVuY29kZS1uYXRpdmUtdmFsaWRhdGlvbi1zdGFyBnNoYXJlZA；核实目标类型后使用该引用回复。</crosschat-reply-hint>\nCROSSCHAT_OPENCODE_RENAMED_ROUTE_86b15f136d\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c573992ffeLkWlW6lpym1dSe\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_idle-message\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c573992ffeLkWlW6lpym1dSe\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_after-service-restart\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"3\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c573992ffeLkWlW6lpym1dSe\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_after-desktop-reopen\n</cross-session-message>"
+        }
+      ],
+      "desktop": {
+        "stdout": "\r\n\r\n",
+        "stderr": "\r\nDevTools listening on ws://127.0.0.1:49973/devtools/browser/09bb5c6a-a426-45b2-ac86-a4f38fab74d0\r\n(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.\n\r\nDevTools listening on ws://127.0.0.1:60499/devtools/browser/1fc41e28-92b7-4dae-b81c-abe453c9d834\r\n(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.\n",
+        "desktop": {
+          "files": {
+            "profile\\.local\\desktop\\logs\\20261110T041254\\crash.log": "[2026-11-10 12:12:55.460] [info]  (crash)   crash reporter started {\n  path: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\candidate\\\\run-l206rI\\\\profile\\\\.local\\\\desktop\\\\Crashpad'\n}\r\n",
+            "profile\\.local\\desktop\\logs\\20261110T041254\\main.log": "[2026-11-10 12:12:54.913] [info]  (main) app starting {\n  version: '2.1.3',\n  packaged: true,\n  onboardingTest: false,\n  marks: {\n    entry: 1794283974740,\n    ready: 1794283974793,\n    window: 1794283974833,\n    served: 1794283974890,\n    bundle: 1794283974909,\n    onboarding: 1794283974911,\n    logging: 1794283974913\n  }\n}\r\n[2026-11-10 12:12:54.928] [info]  (main) layers ready {\n  marks: {\n    entry: 1794283974740,\n    ready: 1794283974793,\n    window: 1794283974833,\n    served: 1794283974890,\n    bundle: 1794283974909,\n    onboarding: 1794283974911,\n    logging: 1794283974913,\n    storage: 1794283974925,\n    init: 1794283974926,\n    layers: 1794283974928\n  }\n}\r\n[2026-11-10 12:12:54.931] [info]  (main) main window visible {\n  window: '8fecd956-a7e3-443a-be66-a66517eac46a',\n  shownAt: 1794283974826\n}\r\n[2026-11-10 12:12:54.944] [info]  (main) starting v2 background service\r\n[2026-11-10 12:12:54.945] [info]  (main) v2 CLI executable resolved {\n  bundled: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\candidate\\\\install\\\\resources\\\\opencode-cli.exe',\n  packaged: true\n}\r\n[2026-11-10 12:12:54.946] [info]  (main) v2 CLI version bundled { version: '2.1.3' }\r\n[2026-11-10 12:12:55.051] [info]  (main)    v2 CLI executable staged {\n  source: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\candidate\\\\install\\\\resources\\\\opencode-cli.exe',\n  path: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\candidate\\\\run-l206rI\\\\profile\\\\.local\\\\desktop\\\\cli\\\\2.1.3-x64\\\\opencode-cli.exe',\n  version: '2.1.3'\n}\r\n[2026-11-10 12:12:55.125] [info]  (main)    auto updater configured {\n  channel: 'latest',\n  allowPrerelease: false,\n  allowDowngrade: true,\n  currentVersion: '2.1.3'\n}\r\n[2026-11-10 12:12:55.126] [info]  (main)    updater state changed { from: 'idle', to: 'checking' }\r\n[2026-11-10 12:12:55.127] [info]  (main)    Checking for update {}\r\n[2026-11-10 12:12:55.128] [info]  (main)    v2 CLI background service starting { reason: 'missing' }\r\n[2026-11-10 12:12:55.192] [info]  (main)    Generated new staging user ID: cb8f6d83-2fc6-52d8-8812-0fd599d2a986 {}\r\n[2026-11-10 12:12:55.854] [info]  (main)    v2 CLI background service ready {\n  version: '2.1.3',\n  probed: false,\n  url: 'http://127.0.0.1:49974',\n  hostname: '127.0.0.1',\n  port: '49974'\n}\r\n[2026-11-10 12:12:56.271] [info]  (main)    Found version 2.2.6 (url: https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-arm64.exe, https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-x64.exe) {}\r\n[2026-11-10 12:12:56.271] [info]  (main)    updater state changed { from: 'checking', to: 'downloading' }\r\n[2026-11-10 12:12:56.272] [info]  (main)    Downloading update from https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-arm64.exe, https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-x64.exe {}\r\n[2026-11-10 12:12:56.273] [debug] (main)    updater cache dir: C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\candidate\\run-l206rI\\localappdata\\@opencodedesktop-updater {}\r\n[2026-11-10 12:12:56.274] [warn]  (main)    disableWebInstaller is set to false, you should set it to true if you do not plan on using a web installer. This will default to true in a future version. {}\r\n[2026-11-10 12:12:56.275] [info]  (main)    Download block maps (old: \"https://opencode.ai/files/bin/2.1.3/opencode-desktop-win-x64.exe.blockmap\", new: https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-x64.exe.blockmap) {}\r\n[2026-11-10 12:12:56.627] [error] (main)    Cannot download differentially, fallback to full download: Error: Cannot download \"https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-x64.exe.blockmap\", status 404: Not Found\n    at ClientRequest.<anonymous> (C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\candidate\\install\\resources\\app.asar\\node_modules\\builder-util-runtime\\out\\httpExecutor.js:245:34)\n    at ClientRequest.emit (node:events:514:28)\n    at SimpleURLLoaderWrapper.<anonymous> (node:electron/js2c/browser_init:1:137831)\n    at SimpleURLLoaderWrapper.emit (node:events:514:28) {}\r\n[2026-11-10 12:13:22.821] [info]  (main)    starting v2 background service\r\n[2026-11-10 12:13:22.823] [info]  (main)    v2 CLI background service starting { reason: 'missing' }\r\n[2026-11-10 12:13:23.022] [info]  (main)    v2 CLI background service ready {\n  probed: false,\n  url: 'http://127.0.0.1:49974',\n  hostname: '127.0.0.1',\n  port: '49974'\n}\r\n",
+            "profile\\.local\\desktop\\logs\\20261110T041254\\network.log": "[2026-11-10 12:12:54.956] [info]  (network) net log started {\n  path: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\candidate\\\\run-l206rI\\\\profile\\\\.local\\\\desktop\\\\logs\\\\20261110T041254\\\\network.netlog'\n}\r\n",
+            "profile\\.local\\desktop\\logs\\20261110T041254\\renderer.log": "[2026-11-10 12:13:00.720] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:13:00.941] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:13:01.133] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:13:01.315] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:13:01.659] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:13:06.062] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:13:10.236] [error]           ResizeObserver loop completed with undelivered notifications.\r\n[2026-11-10 12:13:10.417] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:13:13.069] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:13:15.879] [debug]           [tabs] update persisted session info [object Object]\r\n[2026-11-10 12:13:22.818] [info]            [global-sdk] event stream disconnected [object Object]\r\n",
+            "profile\\.local\\desktop\\logs\\20261110T041331\\crash.log": "[2026-11-10 12:13:31.805] [info]  (crash)   crash reporter started {\n  path: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\candidate\\\\run-l206rI\\\\profile\\\\.local\\\\desktop\\\\Crashpad'\n}\r\n",
+            "profile\\.local\\desktop\\logs\\20261110T041331\\main.log": "[2026-11-10 12:13:31.256] [info]  (main) app starting {\n  version: '2.1.3',\n  packaged: true,\n  onboardingTest: false,\n  marks: {\n    entry: 1794284011030,\n    ready: 1794284011137,\n    window: 1794284011170,\n    served: 1794284011233,\n    bundle: 1794284011251,\n    onboarding: 1794284011253,\n    logging: 1794284011255\n  }\n}\r\n[2026-11-10 12:13:31.270] [info]  (main) layers ready {\n  marks: {\n    entry: 1794284011030,\n    ready: 1794284011137,\n    window: 1794284011170,\n    served: 1794284011233,\n    bundle: 1794284011251,\n    onboarding: 1794284011253,\n    logging: 1794284011255,\n    storage: 1794284011267,\n    init: 1794284011268,\n    layers: 1794284011270\n  }\n}\r\n[2026-11-10 12:13:31.271] [info]  (main) main window visible {\n  window: '8fecd956-a7e3-443a-be66-a66517eac46a',\n  shownAt: 1794284011164\n}\r\n[2026-11-10 12:13:31.293] [info]  (main) starting v2 background service\r\n[2026-11-10 12:13:31.294] [info]  (main) v2 CLI executable resolved {\n  bundled: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\candidate\\\\install\\\\resources\\\\opencode-cli.exe',\n  packaged: true\n}\r\n[2026-11-10 12:13:31.295] [info]  (main) v2 CLI version bundled { version: '2.1.3' }\r\n[2026-11-10 12:13:31.295] [info]  (main) v2 CLI staged executable reused {\n  path: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\candidate\\\\run-l206rI\\\\profile\\\\.local\\\\desktop\\\\cli\\\\2.1.3-x64\\\\opencode-cli.exe',\n  version: '2.1.3'\n}\r\n[2026-11-10 12:13:31.300] [info]  (main) v2 CLI background service ready {\n  version: '2.1.3',\n  probed: true,\n  url: 'http://127.0.0.1:49974',\n  hostname: '127.0.0.1',\n  port: '49974'\n}\r\n[2026-11-10 12:13:31.389] [info]  (main) auto updater configured {\n  channel: 'latest',\n  allowPrerelease: false,\n  allowDowngrade: true,\n  currentVersion: '2.1.3'\n}\r\n[2026-11-10 12:13:31.390] [info]  (main) updater state changed { from: 'idle', to: 'checking' }\r\n[2026-11-10 12:13:31.390] [info]  (main) Checking for update {}\r\n[2026-11-10 12:13:32.401] [info]  (main)    Found version 2.2.6 (url: https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-arm64.exe, https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-x64.exe) {}\r\n[2026-11-10 12:13:32.402] [info]  (main)    updater state changed { from: 'checking', to: 'downloading' }\r\n[2026-11-10 12:13:32.402] [info]  (main)    Downloading update from https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-arm64.exe, https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-x64.exe {}\r\n[2026-11-10 12:13:32.403] [debug] (main)    updater cache dir: C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\candidate\\run-l206rI\\localappdata\\@opencodedesktop-updater {}\r\n[2026-11-10 12:13:32.408] [warn]  (main)    disableWebInstaller is set to false, you should set it to true if you do not plan on using a web installer. This will default to true in a future version. {}\r\n[2026-11-10 12:13:32.409] [info]  (main)    Download block maps (old: \"https://opencode.ai/files/bin/2.1.3/opencode-desktop-win-x64.exe.blockmap\", new: https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-x64.exe.blockmap) {}\r\n[2026-11-10 12:13:32.735] [error] (main)    Cannot download differentially, fallback to full download: Error: Cannot download \"https://opencode.ai/files/bin/2.2.6/opencode-desktop-win-x64.exe.blockmap\", status 404: Not Found\n    at ClientRequest.<anonymous> (C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\candidate\\install\\resources\\app.asar\\node_modules\\builder-util-runtime\\out\\httpExecutor.js:245:34)\n    at ClientRequest.emit (node:events:514:28)\n    at SimpleURLLoaderWrapper.<anonymous> (node:electron/js2c/browser_init:1:137831)\n    at SimpleURLLoaderWrapper.emit (node:events:514:28) {}\r\n",
+            "profile\\.local\\desktop\\logs\\20261110T041331\\network.log": "[2026-11-10 12:13:31.395] [info]  (network) net log started {\n  path: 'C:\\\\Users\\\\yangsheng\\\\AppData\\\\Local\\\\Temp\\\\crosschat-opencode-desktop-ci-zFhoHe\\\\candidate\\\\run-l206rI\\\\profile\\\\.local\\\\desktop\\\\logs\\\\20261110T041331\\\\network.netlog'\n}\r\n",
+            "profile\\.local\\desktop\\logs\\20261110T041331\\renderer.log": "[2026-11-10 12:13:32.327] [info]            Slow network is detected. See https://www.chromestatus.com/feature/5636954674692096 for more details. Fallback font will be used while loading: oc://renderer/assets/Inter.ttf\r\n"
+          },
+          "errors": []
+        },
+        "readiness": ""
+      }
+    },
+    "cleanup": {
+      "ownedRoot": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-desktop-ci-zFhoHe\\candidate\\run-l206rI",
+      "appPid": 23480,
+      "servicePid": 18488,
+      "appStopped": true,
+      "serviceStopped": true,
+      "removed": true,
+      "forcedAppStop": false,
+      "errors": [],
+      "serviceStopExitCode": 0,
+      "runProcesses": {
+        "state": "clear",
+        "processes": []
+      }
+    },
+    "finishedAt": "2026-11-10T04:13:42.524Z"
+  },
+  "classification": {
+    "kind": "compatible",
+    "notify": false
+  },
+  "downloadCleanup": "removed"
+}

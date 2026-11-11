@@ -1,0 +1,8 @@
+{
+  "url": "oc://renderer/index.html",
+  "title": "OpenCode",
+  "text": "W\ncrosschat_desktop_fixture_sender\nW\ncrosschat_desktop_fixture_receiver\nW\ncrosschat_desktop_fixture_busy\nW\nCROSSCHAT_OPENCODE_RENAME_c664286f53\nCROSSCHAT_OPENCODE_RENAME_c664286f53\n11\n\ncrosschat_desktop_fixture_model-ACK:bootstrap\n\nBuild · Scripted test model · 1 秒\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c573992ffeLkWlW6lpym1dSe\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 mc2_rigIb3BlbmNvZGUec2VzX2UzYzU3Mzk5MmZmZUxrV2xXNmxweW0xZFNlCLStEf1Po189AR9vcGVuY29kZS1uYXRpdmUtdmFsaWRhdGlvbi1zdGFyBnNoYXJlZA；核实目标类型后使用该引用回复。</crosschat-reply-hint>\nCROSSCHAT_OPENCODE_RENAMED_ROUTE_86b15f136d\n</cross-session-message>\nBuild · Scripted test model\n · \n12:13\n\ncrosschat_desktop_fixture_model-ACK:unmarked\n\nBuild · Scripted test model · 0 秒\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e3c573992ffeLkWlW6lpym1dSe\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_desktop_fixture_idle-message\n</cross-session-message>\nBuild · Scripted test model\n · \n12:13\n\ncrosschat_desktop_fixture_model-ACK:idle-message\n\nBuild · Scripted test model · 0 秒\n随便问点什么， / 可查看命令， @ 可添加上下文…\nScripted test model\nDefault",
+  "routes": {
+    "opencode.desktop.window.8fecd956-a7e3-443a-be66-a66517eac46a.last-active-url": "/server/c2lkZWNhcg/session/ses_e3c573992ffeLkWlW6lpym1dSe"
+  }
+}

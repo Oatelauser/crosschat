@@ -1,0 +1,94 @@
+{
+  "op": "list",
+  "providers": [
+    {
+      "providerId": "claude",
+      "capabilities": {
+        "discovery": true,
+        "delivery": true,
+        "launch": false,
+        "diagnostics": false,
+        "deliveryModes": [
+          "queue",
+          "steer"
+        ]
+      }
+    },
+    {
+      "providerId": "codex",
+      "capabilities": {
+        "discovery": true,
+        "delivery": true,
+        "launch": false,
+        "diagnostics": false,
+        "deliveryModes": [
+          "queue",
+          "steer"
+        ]
+      }
+    },
+    {
+      "providerId": "opencode",
+      "capabilities": {
+        "discovery": true,
+        "delivery": true,
+        "launch": false,
+        "diagnostics": false,
+        "deliveryModes": [
+          "queue",
+          "steer"
+        ]
+      }
+    },
+    {
+      "providerId": "dsh",
+      "capabilities": {
+        "discovery": true,
+        "delivery": true,
+        "launch": false,
+        "diagnostics": false,
+        "deliveryModes": [
+          "queue",
+          "steer"
+        ]
+      }
+    }
+  ],
+  "page": {
+    "completeness": "partial",
+    "observedAt": 1794372353069,
+    "errors": [],
+    "items": [
+      {
+        "ref": {
+          "contextId": "local",
+          "providerId": "opencode",
+          "nativeId": "ses_e3712cf1affeI5M1amElevKMAe",
+          "endpointType": "shared"
+        },
+        "name": "OpenCode PTY Inbox",
+        "rawStatus": {
+          "type": "inactive"
+        },
+        "capabilities": {
+          "discovery": true,
+          "delivery": true,
+          "launch": false,
+          "diagnostics": false,
+          "deliveryModes": [
+            "queue",
+            "steer"
+          ]
+        },
+        "attributes": {
+          "location": {
+            "directory": "/tmp/crosschat-opencode-compat-U3QzjW/workspace"
+          },
+          "projectID": "a6f97d50ceb30da614468da0c2741b72fda6f744",
+          "cwd": "/tmp/crosschat-opencode-compat-U3QzjW/workspace"
+        }
+      }
+    ],
+    "nextCursor": "eyJjb250ZXh0SWQiOiJsb2NhbCIsImZpbHRlcktleSI6IltbXCJvcGVuY29kZVwiXSxcIlwiXSIsInBlbmRpbmciOlt7InByb3ZpZGVySWQiOiJvcGVuY29kZSIsImN1cnNvciI6ImV5SmhjbU5vYVhabFpDSTZJbVpoYkhObElpd2lZVzVqYUc5eUlqcDdJbWxrSWpvaWMyVnpYMlV6TnpFeVkyWXhZV1ptWlVrMVRURmhiVVZzWlhaTFRVRmxJaXdpZEdsdFpTSTZNVGM1TkRNM01qTTFNREU0TkN3aVpHbHlaV04wYVc5dUlqb2libVY0ZENKOWZRIn1dLCJlcnJvcnMiOltdLCJpbmNvbXBsZXRlIjpmYWxzZX0"
+  }
+}

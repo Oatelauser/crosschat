@@ -108,7 +108,7 @@ C00按用户此前要求保留为待讨论：在DSH Windows基础路径准备期
 
 C14已批准公共合同供DSH下游消费，剩余DSH来源/端点的原生补验随C04/C13/C11对应入口收口；公共身份/短柄/状态写入仍按用户交接由Bug修复2负责，本会话不自动领取通信实现。涉及无法可靠确认入口的具体例外，仍须用户逐项决定。缺证据不计通过，也不以整项C14其它工具未完成冻结已确定的DSH工作。
 
-C02/C03/C06由Codex/Claude工具会话负责，原负责人可独立推进；本会话优先DSH，OpenCode的O06c/C16/C17/C19等不新增开发。DSH对应入口基础接入和配套CI先过再做其增强，受阻项保留，不等其它工具全部完成；共享父项DSH部分通过不等于父项整体关闭。O08始终是OpenCode独立用户验收，不排成DSH前置。
+C02/C03/C06由Codex/Claude工具会话负责，原负责人可独立推进；DSH已验收切片与剩余父项分别跟踪。OpenCode O06c/C16/C17/C19按各自CI、信号、原生TUI和改名边界推进；DSH对应入口基础接入和配套CI先过再做其增强，不等其它工具全部完成。O08始终是OpenCode独立用户验收，不排成DSH前置。
 
 当前基础范围为 Claude Code、Codex CLI/Desktop、OpenCode CLI/Desktop、Harness npm/Web 和正式 Desktop 的已声明支持组合；ZCode 仍暂缓，未来工具不无限扩张本次门槛。官方不支持、尚未验证、外部环境受阻必须单列，不能用“支持”掩盖缺口。若确需调整本批范围或跳过验收，另行记录用户决定，不自动把阻塞项当完成。O08 为用户独立真实模型验收，单独跟踪，不阻塞代理可完成的开发与 CI。
 
@@ -138,8 +138,8 @@ C09/C10/C11/C12 的**基础接入部分不依赖 C15—C24**；后者只在增�
 | 20 | C06 | Claude Code GitHub首轮，核实托管、定时、证据及独立Issue job；未跑的原生负向配置不列为通过。 | Codex/Claude工具会话负责；保留全局跟踪，可并行 | 原负责人独立推进，本会话不接管；工装及本地正式序列通过，托管未验收 |
 | 21 | O06c | 完成OpenCode CLI Windows/Linux、Desktop Windows的GitHub首轮；验证桌面基线→候选串行安装/卸载、artifact和报告链。 | 本会话；[OpenCode原计划](opencode-integration-plan.md)；默认分支/runner等外部条件单列；可提前验证既定范围 | 本会话DSH收口后再推进；工装已有，完整桌面序列及托管首轮待验收 |
 | 22 | C16 | OpenCode CLI可靠选择信号接共享监督：空白等待、首条输入、恢复/切换、多窗口、逐星模式和永久＋--rm。 | C15事件证据、C24对应能力、S01/S02/S06及C14；无可靠事件先记缺口，不阻断手动分支 | 本会话DSH收口后再推进；待实施；直接原生resume不自动归队 |
-| 23 | C17 | OpenCode CLI/Desktop接TUI定向node入星/退星，补原生精确核验、实时效果、权威确认及失败边界，不改聊天和其他星。 | C15/C24框架、S02/S03/S05/S06、基础C09与C14；不依赖C16自动跟随 | 本会话DSH收口后再推进；工具接线/专属验收待做，共享通道已验收 |
-| 24 | C19 | 核实并接OpenCode公开HTTP/client原生改名及活前端同步，重读名称并核实node/星内寻址；无法核实仅禁对应改名。 | C15/C24、S03/S04/S05/S06；不要求先实现C16自动跟随 | 本会话DSH收口后再推进；条件能力待核实，未实施 |
+| 23 | C17 | OpenCode CLI/Desktop接TUI定向node入星/退星，补原生精确核验、实时效果、权威确认及失败边界，不改聊天和其他星。 | C15/C24框架、S02/S03/S05/S06、基础C09与C14；不依赖C16自动跟随 | Windows v2.1.3 CLI/Desktop 与 WSL Ubuntu 22.04 Linux CLI 的本机原生入星/退星及聊天保留通过；报告见[OpenCode C17/C19进度](opencode-native-c17-c19-progress-20261111.md)。Linux Desktop、托管和其他平台仍开放，父项保持开放 |
+| 24 | C19 | 核实并接OpenCode公开HTTP/client原生改名及活前端同步，重读名称并核实node/星内寻址；无法核实仅禁对应改名。 | C15/C24、S03/S04/S05/S06；不要求先实现C16自动跟随 | v2.1.3改名API及CLI/Desktop同步已核实；Windows CLI/Desktop和WSL Linux CLI本机原生改名、写后核对及星内寻址通过。其他版本仍待核实；托管及其他平台证据见[OpenCode C17/C19进度](opencode-native-c17-c19-progress-20261111.md)，父项保持开放 |
 | 独立用户验收 | O08 | 用户重新安装 OpenCode CLI/Desktop，用自己的真实模型从零验证；不要求提供 key 或放入 CI。 | 用户；基础能力就绪后可独立进行，代理开发/CI不等待其时间安排 | 等待用户独立结果 |
 
 当前25项活动索引：C00、C02—C06、C08—C24、O06c、O08。已验收的Claude本地CI开发及规范制定按约定移出活动表；C14实施验证中，Claude的GitHub首轮仍由C06跟踪，所有CI待办保留。ZCode暂缓单列，不计为完成或本批阻塞项。

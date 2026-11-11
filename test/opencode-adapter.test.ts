@@ -7,6 +7,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { getOpenCodeThread, listOpenCodeThreadPage, listOpenCodeThreads } from '../src/opencode/client.js';
 import { deliverToOpenCodeSession } from '../src/opencode/deliver.js';
 import { createOpenCodeSessionReader } from '../src/application/sessions/opencode-reader.js';
+import { createNativeOperationProviders } from '../src/application/native-operation-providers.js';
+import { createNativeSessionOperations } from '../src/application/session-operations.js';
+import type { DiscoveryResponse, DiscoverySession } from '../src/application/discovery/model.js';
 import { connectOpenCode } from '../src/opencode/service.js';
 
 const cleanup: Array<() => Promise<void>> = [];
@@ -253,6 +256,102 @@ describe('OpenCode V2 durable inbox delivery', () => {
     const service = await fixture(() => controller.abort());
     await expect(deliverToOpenCodeSession('ses_one', 'message', { endpoint: { url: service.url }, env: {}, signal: controller.signal })).rejects.toMatchObject({ code: 'OPENCODE_WRITE_UNCERTAIN' });
     expect(service.calls.filter((call) => call.startsWith('POST'))).toHaveLength(1);
+  });
+});
+
+describe('OpenCode V2 native rename', () => {
+  function renameFixture(options: { updateTitle?: boolean; disconnect?: boolean; missingOnPatch?: boolean } = {}) {
+    let title = 'before';
+    let serverVersion = '2.1.3';
+    const calls: string[] = [];
+    const server = createServer((request, response) => {
+      calls.push(`${request.method} ${request.url}`);
+      const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
+      if (request.url === '/api/info') return reply(response, { version: serverVersion, pid: 765 });
+      if (request.url === '/api/session/active') return reply(response, { data: {} });
+      if (requestUrl.pathname === '/api/session/ses_one') {
+        if (request.method === 'GET') return reply(response, { data: info('ses_one', title) });
+        if (request.method === 'PATCH') {
+          if (options.missingOnPatch) return reply(response, { _tag: 'SessionNotFoundError', sessionID: 'ses_one' }, 404);
+          let body = '';
+          request.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+          request.on('end', () => {
+            expect(JSON.parse(body)).toEqual({ title: 'after' });
+            if (options.updateTitle !== false) title = 'after';
+            if (options.disconnect) return request.socket.destroy();
+            response.writeHead(204);
+            response.end();
+          });
+          return;
+        }
+      }
+      return reply(response, { data: [info('ses_one', title)], cursor: { next: null } });
+    });
+    return { server, calls, get title() { return title; }, set serverVersion(value: string) { serverVersion = value; } };
+  }
+
+  async function operationsFor(fixture: ReturnType<typeof renameFixture>) {
+    await new Promise<void>((resolve) => fixture.server.listen(0, '127.0.0.1', resolve));
+    const address = fixture.server.address();
+    if (address === null || typeof address === 'string') throw new Error('Missing fixture address.');
+    cleanup.push(async () => { fixture.server.closeAllConnections(); await new Promise<void>((resolve, reject) => fixture.server.close((error) => error ? reject(error) : resolve())); });
+    const item: DiscoverySession = {
+      ref: { contextId: 'isolated-local', providerId: 'opencode', endpointType: 'shared', nativeId: 'ses_one' },
+      name: 'before', rawStatus: { type: 'inactive' },
+      capabilities: { discovery: true, delivery: true, deliveryModes: ['queue', 'steer'], launch: false, diagnostics: false },
+      attributes: { location: { directory: '/isolated/work' }, cwd: '/isolated/work' },
+    };
+    const discovery = { execute: async (): Promise<DiscoveryResponse> => ({ op: 'detail', providers: [{ providerId: 'opencode', capabilities: item.capabilities }],
+      detail: { item: { ...item, name: fixture.title }, completeness: 'complete', observedAt: Date.now(), errors: [] } }) };
+    const url = `http://127.0.0.1:${address.port}`;
+    const operations = createNativeSessionOperations({ discovery, adopt: async () => undefined,
+      providers: createNativeOperationProviders({ opencode: { endpoint: { url }, env: {} } }), timeoutMs: 1_000 });
+    return { operations, item, url, fixture, calls: fixture.calls };
+  }
+
+  it('uses PATCH with a non-empty title, accepts 204, and confirms the reread', async () => {
+    const fixture = renameFixture();
+    const f = await operationsFor(fixture);
+    const before = await f.operations.describe(f.item.ref);
+    expect(before.actions.rename.state).toBe('executable');
+    await expect(f.operations.apply({ ref: f.item.ref, operation: 'rename', name: 'after', expectedRevision: before.revision })).resolves.toMatchObject({ kind: 'applied' });
+    expect(f.calls.filter((call) => call === 'PATCH /api/session/ses_one')).toHaveLength(1);
+    expect(fixture.title).toBe('after');
+  });
+
+  it('returns uncertain when 204 is received but the reread does not show the requested title', async () => {
+    const fixture = renameFixture({ updateTitle: false });
+    const f = await operationsFor(fixture);
+    const before = await f.operations.describe(f.item.ref);
+    await expect(f.operations.apply({ ref: f.item.ref, operation: 'rename', name: 'after', expectedRevision: before.revision })).resolves.toMatchObject({ kind: 'uncertain' });
+    expect(f.calls.filter((call) => call === 'PATCH /api/session/ses_one')).toHaveLength(1);
+  });
+
+  it('rejects an owner/version change before sending PATCH', async () => {
+    const fixture = renameFixture();
+    const f = await operationsFor(fixture);
+    const before = await f.operations.describe(f.item.ref);
+    fixture.serverVersion = '2.1.4';
+    expect((await f.operations.describe(f.item.ref)).actions.rename.state).toBe('needs-verification');
+    await expect(f.operations.apply({ ref: f.item.ref, operation: 'rename', name: 'after', expectedRevision: before.revision })).resolves.toMatchObject({ kind: 'rejected' });
+    expect(f.calls.filter((call) => call.startsWith('PATCH '))).toHaveLength(0);
+  });
+
+  it('reports a disconnected PATCH as uncertain without replaying it', async () => {
+    const fixture = renameFixture({ disconnect: true });
+    const f = await operationsFor(fixture);
+    const before = await f.operations.describe(f.item.ref);
+    await expect(f.operations.apply({ ref: f.item.ref, operation: 'rename', name: 'after', expectedRevision: before.revision })).resolves.toMatchObject({ kind: 'uncertain' });
+    expect(f.calls.filter((call) => call === 'PATCH /api/session/ses_one')).toHaveLength(1);
+    expect(fixture.title).toBe('after');
+  });
+
+  it('treats an authoritative missing-session response as rejected without retrying', async () => {
+    const fixture = renameFixture({ missingOnPatch: true });
+    const f = await operationsFor(fixture);
+    const before = await f.operations.describe(f.item.ref);
+    await expect(f.operations.apply({ ref: f.item.ref, operation: 'rename', name: 'after', expectedRevision: before.revision })).resolves.toMatchObject({ kind: 'rejected' });
+    expect(f.calls.filter((call) => call === 'PATCH /api/session/ses_one')).toHaveLength(1);
   });
 });
 

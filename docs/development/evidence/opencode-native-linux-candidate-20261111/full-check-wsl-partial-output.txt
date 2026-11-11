@@ -1,0 +1,256 @@
+
+> @oatelauser/crosschat@1.13.1 check
+> npm run lint && npm run check:imports && npm run build && npm test
+
+
+> @oatelauser/crosschat@1.13.1 lint
+> eslint src test
+
+
+> @oatelauser/crosschat@1.13.1 check:imports
+> node scripts/runtime-import-graph.mjs
+
+Runtime import graph: 207 modules, 703 edges; no cycles or boundary violations.
+
+> @oatelauser/crosschat@1.13.1 build
+> tsc
+
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test
+
+
+ RUN  v3.2.7 /mnt/d/workspace/CC/cc-opencode-native-20261111
+
+ ❯ test/serve-sessions.test.ts (37 tests | 2 failed) 9875ms
+   ✓ 018 broker：caps 协商与会话成员聚合 > info 广播 session-members 能力；032 非兼容：无 caps 的老节点（proto:1）被拒并教升级 35ms
+   ✓ 018 broker：caps 协商与会话成员聚合 > 成员声明→三段寻址命中：deliver 注入 sessionId（win 带杠 mid 形态） 27ms
+   ✓ 018 broker：caps 协商与会话成员聚合 > 非成员会话名→SESSION_NOT_MEMBER，教学指向启动器入星 25ms
+   × 018 broker：caps 协商与会话成员聚合 > 028 空数组重播=该机在册条目转下线（SESSION_OFFLINE 教学）；同 id 再声明=复活直达 5031ms
+     → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+   ✓ 018 broker：caps 协商与会话成员聚合 > alive-wins：旧名活会话在则正常投递，extends 休眠 25ms
+   ✓ 018 broker：caps 协商与会话成员聚合 > 死名→extends 指路：SESSION_SUPERSEDED 报"已由 <机器:会话> 接续" 23ms
+   ✓ 018 broker：caps 协商与会话成员聚合 > 同旧名先声明先得：后声明者收 EXTENDS_CONFLICT，映射指路先得者（linux 32-hex 形态） 24ms
+   ✓ 018 broker：caps 协商与会话成员聚合 > 028 顶替连接空声明→旧成员转下线（册位保留）；同 id 复活直达 26ms
+   ✓ 018 broker：caps 协商与会话成员聚合 > mid 前缀+会话三段（F0 归一：前缀寻址 linux 32-hex 机器） 22ms
+   ✓ 018 broker：caps 协商与会话成员聚合 > 未声明成员的节点：机器级投递 deliver 帧无 sessionId、形状照旧 22ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > attach→sessions 帧上行→三段直达按 sessionId 注入投递 30ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > attach 校验：冒号会话名拒收并教学；坏形状报错；detach 幂等 24ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 永久成员以 --rm 恢复后退出仍保留册位，再次明确选择才恢复在线 261ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 两个窗口声明同一临时会话时，只释放退出窗口自己的声明 74ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 窗口切走永久 A 后，历史仍可发现也不会对账复活 A；重新选择才上线 250ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > Claude 裸 resume 统一保留离线册位，启动器明确选择后才恢复且不被 --rm 降级 227ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 窗口断线只释放所属声明，旧连接关闭不能释放转移到新连接的声明 114ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 028 成员表变化即重播：detach（无 erase）后三段报 SESSION_OFFLINE（册位保留） 25ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 重连全量重播：broker 重启后无需重新 attach 即恢复会话寻址 79ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 028 claude 活性：扫描核验——死 claude 成员转下线（教学）、活成员续投  525ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > C14 Codex 活性：核实实际 CLI 端点后续投，原生不存在的同类成员转下线  528ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 029 临时成员异常死亡：对账验死报 member-remove 清册零痕迹（不留下线态）  725ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > delegates name following to a third provider without reviving a released manual membership 221ms
+   ✓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > leaves temporary members declared when provider liveness is unknown 75ms
+   ✓ C14 broker: explicit recipient tools and literal session names > selects same-name members independently by explicit tool and full native ID 22ms
+   ✓ C14 broker: explicit recipient tools and literal session names > reports same-tool name collisions with full IDs and a separate tool selector 21ms
+   × C14 broker: explicit recipient tools and literal session names > keeps slash-containing names literal within the explicitly selected tool 49ms
+     → expected { op: 'error', …(3) } to match object { op: 'deliver', …(1) }
+(3 matching properties omitted from actual)
+   ✓ C14 broker: explicit recipient tools and literal session names > keeps cross-tool successor lineages independent and teaches explicit tool commands 22ms
+   ✓ C14 broker: explicit recipient tools and literal session names > never classifies untyped legacy members as a known recipient endpoint 20ms
+   ✓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > 重声明保留星端原属性；临时清理只接受归属节点的精确临时 ID 71ms
+   ✓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > roster 落盘形态：条目含 tool+会话 id+名+机器+在线态；tmp 已 rename 收尾 216ms
+   ✓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > 028 下线成员随 roster 帧下发（offlineSessions 单列；sessions 保持活成员语义）  422ms
+   ✓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > 029 临时位随声明入册落盘并随切片回带（temporary 端到端透传） 220ms
+   ✓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > 边界1 跨机 resume：册在 M1、id 活在 M2 → MACHINE_BOUND 拒绝复活+教学（册位仍绑 M1） 23ms
+   ✓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > extends 胜复活：接任后原会话同 id 回归不夺回（名字剥离教学；id8 点对点直达） 20ms
+   ✓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > member-remove：按名删即册外无名；幂等零命中=成功注明；多名命中拒绝教 id8 21ms
+   ✓ 018 9b：老 broker（proto:1）降级的协议侧 > connect 携带 caps；info.caps 缺端点能力时拒绝类型化 attach，且不发 sessions 帧  319ms
+ ❯ test/doctor-json-cli.test.ts (3 tests | 1 failed) 13836ms
+   × doctor JSON CLI extension > diagnoses the exact custom Harness copy installed by the shared maintenance plan without repairing it 6435ms
+     → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+   ✓ doctor JSON CLI extension > returns the structured checks and preserves the existing default report and exit severity  3617ms
+   ✓ doctor JSON CLI extension > emits valid structured findings with exit one for a failed check and rejects extra options  3784ms
+ ❯ test/core-code-standards.test.ts (2 tests | 1 failed) 23183ms
+   × progressive typed lint rules > rejects floating promises, async void callbacks and value imports used only as types 23167ms
+     → Test timed out in 15000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+   ✓ progressive typed lint rules > accepts type-only imports and deliberately handled asynchronous work 16ms
+ ✓ test/remote-discovery-cli.test.ts (2 tests) 4233ms
+   ✓ built discover CLI endpoint > reads only JSON stdin and emits full anonymous metadata without draining outbox or exposing sockets  979ms
+   ✓ built discover CLI endpoint > rejects invalid JSON and oversized input before provider execution  3254ms
+ ✓ test/dsh-adapter.test.ts (57 tests) 17738ms
+   ✓ Harness read-only bridge diagnostics > reports no live bridge as info without creating or repairing registrations  455ms
+   ✓ Harness read-only bridge diagnostics > verifies every instance without listing or creating sessions and publishes only safe facts  743ms
+   ✓ Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_AUTH_REQUIRED'  521ms
+   ✓ Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_OWNER_MISMATCH'  645ms
+   ✓ Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_UNSUPPORTED_VERSION'  616ms
+   ✓ Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_UNSUPPORTED_PROTOCOL'  602ms
+   ✓ Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_PROTOCOL_ERROR'  587ms
+   ✓ Harness read-only bridge diagnostics > keeps other findings and warns without failing doctor for 'DSH_UNAVAILABLE'  501ms
+   ✓ Harness read-only bridge diagnostics > reports a corrupt registration without leaking or replacing its original bytes  429ms
+   ✓ Harness read-only bridge diagnostics > bounds a stalled handshake to one shared five-second budget without retrying  5386ms
+   ✓ Harness read-only bridge diagnostics > cancels an in-flight handshake and releases the owned process and connection  597ms
+   ✓ Harness read-only bridge diagnostics > uses the same native facts in the actual CLI text and JSON, HTTP 200  2457ms
+   ✓ Harness read-only bridge diagnostics > uses the same native facts in the actual CLI text and JSON, HTTP 401  3130ms
+ ✓ test/dsh-compat-ci.test.ts (108 tests | 1 skipped) 16938ms
+   ✓ DeepSeek Harness controlled desktop process > uses one bounded release after child and pipe failures without replacing the first cause  1003ms
+   ✓ DeepSeek Harness controlled desktop process > records later pipe, child and release problems without replacing the first cause  1002ms
+   ✓ DeepSeek Harness controlled desktop process > keeps late pipe errors owned after return without changing the snapshot  1001ms
+   ✓ DeepSeek Harness controlled desktop process > records a pipe error raised synchronously while releasing the pipes  1002ms
+   ✓ DeepSeek Harness controlled desktop process > lets the fixture end and await its own real child when the product cannot confirm release  1104ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > enforces the total deadline over headers and body and honors external cancellation  395ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > keeps late responses and late handles owned after the deadline  583ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late file close failure with the path and keeps the file owned  1103ms
+   ✓ DeepSeek Harness official Windows desktop installer metadata and streaming verification > reports a late file close that never settles as undecided at return  2004ms
+   ✓ DeepSeek Harness desktop installer admission > reports an unconfirmed signature child release and clears parent pipes  1003ms
+   ✓ DeepSeek Harness desktop installer admission > reports an unconfirmed signature child release on cancellation  1032ms
+   ✓ DeepSeek Harness desktop installer admission > owns a spawned child error without a close instead of returning early  1003ms
+   ✓ DeepSeek Harness desktop installer admission > keeps the overflow failure when a failed stop reports an error  1006ms
+   ✓ DeepSeek Harness desktop installer admission > keeps the signature failure and release state across the total deadline  1005ms
+ ✓ test/runtime-import-graph.test.ts (9 tests) 6380ms
+   ✓ core source architecture > has no runtime dependency cycle or broken local import  2475ms
+   ✓ core source architecture > keeps node configuration and connection selection independent of commands and clients  2047ms
+   ✓ core source architecture > keeps every application adapter independent of command and UI entry points  1835ms
+ ✓ test/serve-star-lifecycle.test.ts (11 tests) 16885ms
+   ✓ 033 热加星：不重启即托管即收发 > 在跑 serve + CLI --add-star 经管理插座：回执生效、自登记落位、聚合器播种、新星上 node/sender 完整收发  1530ms
+   ✓ 033 删星：即时收尾 + 直报已删 + 最后一颗可删 > 热删 beta：在跑连接收"星已删除"断开、node.json 摘条、死钥直报、邻星零中断  2321ms
+   ✓ 033 插座冷热路径与 stop 收口 > 回执超时绝不回落直写：插座连上但无回执 → 报错重试、台账零改动  10006ms
+   ✓ 033 插座冷热路径与 stop 收口 > stop 收口：serve 停机后状态 stopped、插座随进程撤（CLI 退冷路径）  1509ms
+   ✓ 036 按星机器名（--star --show-name）热闭环 > 按星只重挂该星：条目覆盖落 node.json、注册表该星 machineName 更新、邻星回落全局不变；--list 显示随条目；'' 清除回落全局  1510ms
+ ✓ test/tui-cli.test.ts (11 tests) 5418ms
+   ✓ CLI TUI command isolation > keeps "--help" independent from TUI and Ink modules  1259ms
+   ✓ CLI TUI command isolation > keeps "--version" independent from TUI and Ink modules  1280ms
+   ✓ CLI TUI command isolation > keeps "tui" independent from TUI and Ink modules  1190ms
+   ✓ CLI TUI command isolation > rejects unsupported TUI arguments without importing the renderer  1281ms
+ ✓ test/dsh-diagnostics.test.ts (20 tests) 6294ms
+   ✓ Harness profile plugin diagnostics > uses saved profile facts in the actual doctor CLI text and JSON (matching)  3131ms
+   ✓ Harness profile plugin diagnostics > uses saved profile facts in the actual doctor CLI text and JSON (different)  2887ms
+ ✓ test/conversation-state-concurrency.test.ts (11 tests) 8745ms
+   ✓ conversation state cross-process writes > a live writer on an aliased path blocks every other write path until it releases  2117ms
+   ✓ conversation state cross-process writes > a send that cannot take the lock delivers nothing, then succeeds once released  1114ms
+   ✓ conversation state cross-process writes > a stuck holder still exits within its barrier deadline  5069ms
+ ✓ test/uninstall.test.ts (12 tests) 6195ms
+   ✓ runUninstall > preserves native, historical and project data across actual CLI skill update/uninstall (default Harness home)  3308ms
+   ✓ runUninstall > preserves native, historical and project data across actual CLI skill update/uninstall (custom Harness home)  2873ms
+ ✓ test/serve-admin-key.test.ts (7 tests) 7088ms
+   ✓ 034 挑战应答全链与角色矩阵 > admin 握手（钥匙永不过线）→ 读/发/删全过 → 成员/星管逐格 → 重放拒绝 → 被吊钥 BAD_AUTH → 审计在场  2834ms
+   ✓ 034 挑战应答全链与角色矩阵 > CLI 远程管理路由：--via tcp:<星> 成员读（星钥）+ 星管写（adminKey 挑战应答）  1521ms
+   ✓ 034 set-port 无命令回归（旗标+插座 op 全删） > help 不再提供 --port 且提供 034 新面；解析拒绝（parseServeArgs 用例见 serve-cli 组）  1207ms
+   ✓ 034 set-port 无命令回归（旗标+插座 op 全删） > 管理插座 set-port op 已删（未知 op 拒绝、台账零改动）  1504ms
+ ✓ test/session-star.test.ts (40 tests) 7240ms
+   ✓ 018 批二：启动器入星链路 > spawn 会话→自动拉聚合器→attach→三段直达；退出即 detach  630ms
+   ✓ 018 批二：启动器入星链路 > 多星：--connect 可重复，两会话成员表各自 attach（win 带杠 mid 形态）  664ms
+   ✓ 018 批二：启动器入星链路 > 021 断连静默：聚合器被杀→重连提示落日志、控制台零输出、成员籍自动恢复  1838ms
+   ✓ 018 批二：9b 降级告警（不只日志） > NodeClient.warn 直打一行；warnIfBrokerLacksSessionCaps 对老 broker 出声、新 broker 静默  339ms
+   ✓ 028 双模式与命令面 > 双模式集成：永久退出留册、裸 resume 不归队、明确选择恢复；--rm 退出清册  1345ms
+ ✓ test/endpoint-protocol.test.ts (5 tests) 5497ms
+   ✓ endpoint identity capability guard > does not replay an uncertain lifecycle removal while readonly roster still reports the same temporary member  5421ms
+probe failed: root-not-exclusive:/tmp/c14w05-test-n0Nhmn/previous-run
+ ✓ test/serve-multistar.test.ts (20 tests) 4376ms
+   ✓ 032 多星握手与星域隔离 > 钥匙不属任何星 → BAD_AUTH（跨星错钥匙不放行）  519ms
+   ✓ 032 bootstrap 与 CLI > 033 serve 永不造星：空表首启零星合法（不建星、不写 node.json），教学指 --add-star  1503ms
+   ✓ 032 bootstrap 与 CLI > 内挂聚合器不写 status-node 文件（非独立进程）  1503ms
+usage: node scripts/codex-call-correlation-probe.mjs --root <owned temp dir> [--evidence <json>]
+ ✓ test/codex-call-correlation-probe.test.ts (56 tests) 4071ms
+   ✓ codex call correlation probe: bounded reads and processes > kills a timed-out child together with its descendant and waits for close  1555ms
+   ✓ codex call correlation probe: run root and main chain > keeps the root when the run is cancelled  306ms
+   ✓ codex call correlation probe: run root and main chain > keeps the run root when the launched process never closed  1221ms
+ ✓ test/tui-pty-driver-posix.test.ts (1 test) 2891ms
+   ✓ runs the real Linux PTY behavior suite with no failures or skipped cases  2890ms
+ ✓ test/broker-revocation.test.ts (12 tests) 3258ms
+   ✓ broker credential revocation > local remove-node immediately revokes every node/sender using that credential and retains offline permanent members in its star  747ms
+   ✓ broker credential revocation > remote remove-node has the same immediate effect while members and star admins retain their three-layer limits  579ms
+   ✓ broker credential revocation > local remove-admin-key closes only authenticated sessions of the removed credential, including unique-prefix selection  940ms
+ ✓ test/smoke.test.ts (2 tests) 2790ms
+   ✓ --version prints the package.json version  1507ms
+   ✓ unknown command exits non-zero and reports to stderr with the crosschat prefix  1282ms
+ ✓ test/cli-args.test.ts (18 tests) 2797ms
+   ✓ usage help scope > describes install-skills as Claude, Codex and Harness with its roots  1300ms
+   ✓ usage help scope > describes uninstall as removing all three skill copies  1484ms
+ ✓ test/local-service-inspection.test.ts (6 tests) 2022ms
+   ✓ owned service inspection and guard workers > reclaims a real wrapper and its controlled blocked probe when its read timeout expires  1554ms
+ ✓ test/caller-source-confirmations.test.ts (21 tests) 1859ms
+   ✓ source classification shared across native sessions > reports bounded busy without mutating state when an unrelated listener occupies its mutex port  1051ms
+ ✓ test/tui-controller.test.ts (25 tests) 1764ms
+ ✓ test/session-membership.test.ts (16 tests) 1886ms
+   ✓ session membership application boundary > adopts an anonymous full native ref through the shared aggregator and verifies broker roster authority  568ms
+   ✓ session membership application boundary > adopts and removes a typed Codex member without overwriting the same native ID on another endpoint  575ms
+ ✓ test/revocation-pause.test.ts (13 tests) 1651ms
+   ✓ explicit credential revocation pauses this star > stops one launcher supervisor without restarting it or disrupting another star  1206ms
+ ✓ test/serve-node.test.ts (30 tests) 1596ms
+   ✓ B0 starId handshake > 036 无 id 星（手编形状）：连接按 BAD_AUTH 拒——broker 机跑一次 serve 补 id  579ms
+ ✓ test/send-log.test.ts (10 tests) 1322ms
+   ✓ appendSendLog > rotates past 5MiB instead of truncating: the bulk moves whole to .old, the new entry starts a fresh file  1266ms
+ ✓ test/tui-main-observations.test.ts (3 tests) 2492ms
+   ✓ default local observation wiring > preserves native environment paths when the caller has not requested an isolated home  2068ms
+   ✓ default local observation wiring > installs the five real readonly resources lazily and preserves exact related routes  316ms
+ ✓ test/revocation-auth-race.test.ts (2 tests) 1063ms
+   ✓ revocation during current process lifecycles > a corrupt self-aggregator pause does not become an unhandled rejection in the broker  1034ms
+ ✓ test/local-service-owned-stop.test.ts (6 tests) 1284ms
+   ✓ TUI owned service stop process trees > bounds a nonresponding stop job and reclaims its full scanner tree on timeout  1015ms
+ ✓ test/ssh-target-lifecycle.test.ts (4 tests) 1222ms
+   ✓ SSH target identity and process completion > bounds a child that never closes, reports incomplete cleanup, and removes its owned listeners  1052ms
+ ✓ test/via-tcp.test.ts (36 tests) 1170ms
+   ✓ runViaTcpSend against a real broker > times out with TCP_TRANSPORT_FAILED and the 勿盲目重发 wording  417ms
+ ✓ test/dsh-rename-bridge.test.ts (26 tests) 1090ms
+ ✓ test/install-skills.test.ts (12 tests) 763ms
+ ✓ test/tui-workspaces.test.ts (10 tests) 1027ms
+   ✓ independent TUI workspaces > rechecks the role when history returns to a different star (updated)  305ms
+   ✓ independent TUI workspaces > rechecks the role when history returns to a different star (failed)  303ms
+ ❯ test/tui-main-sessions.test.ts (3 tests | 1 failed) 1236ms
+   × default local sessions wiring > installs the real session resource through injectable safe application sources after entering local 1023ms
+     → expected "spy" to be called once, but got 0 times
+   ✓ default local sessions wiring > rejects a remote session context instead of querying local sources 158ms
+   ✓ default local sessions wiring > keeps explicit adapter injection authoritative and rejects non-TTY before composing sources 54ms
+ ✓ test/tui-composition.test.ts (15 tests) 1000ms
+ ✓ test/serve-broker.test.ts (33 tests) 959ms
+ ✓ test/status-remote.test.ts (16 tests) 859ms
+   ✓ CLI：runViaTcpStatus 传输腿 > 版本偏差：旧 broker 对 status-query 无行为 → 超时教学  417ms
+ ✓ test/maintenance.test.ts (21 tests) 702ms
+   ✓ owned maintenance worker lifecycle > runs actual plans and filesystem effects through the default built worker using only isolated fixture paths  448ms
+ ✓ test/ssh-application.test.ts (15 tests) 808ms
+ ✓ test/tui-filters.test.ts (9 tests) 794ms
+ ✓ test/opencode-adapter.test.ts (31 tests) 838ms
+ ✓ test/dsh-bridge.test.ts (32 tests) 837ms
+ ✓ test/dsh-native-operations.test.ts (17 tests) 572ms
+ ✓ test/tui-observation-navigation.test.ts (4 tests) 669ms
+   ✓ observation resource routes > keeps related route caches separate, canonicalizes query order, clears associations on direct commands and restores the source  305ms
+ ✓ test/tcp-application.test.ts (13 tests) 523ms
+   ✓ TCP readonly application > preserves same-ID endpoint roster rows and exact endpoint references through snapshot projection  455ms
+ ✓ test/tui-form.test.ts (5 tests) 509ms
+ ✓ test/observation-overview.test.ts (18 tests) 309ms
+ ✓ test/codex-session-events.test.ts (2 tests) 503ms
+   ✓ Codex per-window native protocol selection > only successful native selection and first accepted input affect this window, never global notifications or failed resume  322ms
+ ✓ test/dsh-desktop-exit-observer.test.ts (19 tests) 495ms
+ ✓ test/tcp-session-operations.test.ts (7 tests) 512ms
+ ✓ test/core-diagnostics.test.ts (17 tests) 421ms
+ ✓ test/remote-discovery-tcp.test.ts (6 tests) 359ms
+ ✓ test/tui-sensitive-result.test.ts (2 tests) 380ms
+ ✓ test/tcp-peer-naming-transport.test.ts (8 tests) 398ms
+ ✓ test/serve-f0.test.ts (19 tests) 377ms
+ ✓ test/caller-source-providers.test.ts (14 tests) 311ms
+ ✓ test/broker-discovery.test.ts (17 tests) 537ms
+ ✓ test/opencode-desktop-fixture.test.ts (13 tests | 2 skipped) 333ms
+ ✓ test/local-service-worker-boundary.test.ts (8 tests) 329ms
+ ✓ test/tui-follow.test.ts (6 tests) 316ms
+ ✓ test/pipe-transport.test.ts (6 tests | 3 skipped) 314ms
+   ✓ PosixPipeTransport > reports PIPE_WRITE_UNCERTAIN when the server cuts the connection mid-write  305ms
+ ✓ test/serve-b21.test.ts (29 tests) 317ms
+ ✓ test/tui-layout-paging.test.tsx (3 tests) 287ms
+ ✓ test/tui-context-source.test.ts (7 tests) 278ms
+ ✓ test/ssh-native-authentication.test.ts (3 tests) 240ms
+ ✓ test/claude-compat-fixture.test.ts (20 tests) 249ms
+ ✓ test/remote-discovery-node.test.ts (8 tests) 239ms
+ ✓ test/session-membership-exact.test.ts (9 tests) 198ms
+ ✓ test/core-queries.test.ts (17 tests) 306ms
+ ✓ test/send-command.test.ts (57 tests) 216ms
+ ✓ test/claude-compat-ci.test.ts (15 tests) 205ms
+ ✓ test/tcp-exact-transport.test.ts (3 tests) 195ms
+ ✓ test/core-sessions-readers.test.ts (13 tests) 193ms
+ ✓ test/c14-conversation-refinement.test.ts (24 tests) 253ms
+ ✓ test/observation-logs.test.ts (11 tests) 138ms
+ ✓ test/core-services-background.test.ts (5 tests) 184ms
+ ✓ test/conversation-handle-ring.test.ts (9 tests) 124ms
+ ✓ test/conversations.test.ts (26 tests) 304ms
+ ✓ test/file-channel.test.ts (10 tests) 151ms
+ ✓ test/codex-aggregate-discovery.test.ts (11 tests) 165ms

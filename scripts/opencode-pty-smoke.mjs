@@ -3,14 +3,19 @@ import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { clearTimeout, setTimeout } from 'node:timers';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createOpenCodeFixture, poll, repositoryRoot } from '../test/helpers/opencode-live-fixture.mjs';
 import { textStream } from '../test/helpers/opencode-mock-model.mjs';
+import { validateOpenCodeNativeEnhancement } from '../test/helpers/opencode-native-enhancement.mjs';
 import { launchPty } from '../test/helpers/tui-pty-driver.mjs';
 
 const self = fileURLToPath(import.meta.url);
+
+export function supportsOpenCodePtySmokePlatform(platform) {
+  return platform === 'win32' || platform === 'linux';
+}
 
 async function crosschatTuiChild() {
   const home = process.env.OPENCODE_PTY_HOME;
@@ -55,7 +60,7 @@ async function within(promise, timeout, label) {
 }
 
 async function main() {
-  assert.equal(process.platform, 'win32', 'This optional smoke test requires Windows ConPTY.');
+  assert(supportsOpenCodePtySmokePlatform(process.platform), 'This optional smoke test requires Windows ConPTY or Linux PTY.');
   const binary = argument('--binary') ?? process.env.OPENCODE_BIN;
   const evidence = argument('--evidence');
   assert(binary && isAbsolute(binary), 'Provide an absolute --binary path to an already downloaded official OpenCode executable.');
@@ -83,7 +88,7 @@ async function main() {
       env, logPath: join(evidence, 'native-opencode-pty.jsonl') });
     await native.waitForOutput(/OpenCode|opencode|PTY Inbox/, 30000);
     const marker = 'CROSSCHAT_NATIVE_PTY_INCOMING';
-    const sent = await fixture.cli(['send', '--to', `opencode/${session.id}`, '--body', marker, '--json']);
+    const sent = await fixture.cli(['send', '--to', session.id, '--tool', 'opencode', '--body', marker, '--json']);
     assert.equal(sent.code, 0, sent.stderr);
     await native.waitForOutput(marker, 30000);
     await native.waitForOutput('OPENCODE_PTY_MODEL_ACK', 30000);
@@ -100,21 +105,25 @@ async function main() {
       if (expected) await ui.waitForOutput(expected, 15000, start);
     };
     await ui.waitForOutput('OpenCode 实际服务验证', 15000);
-    await input('\r', 'OpenCode PTY Inbox');
+    await input('\r\r', 'OpenCode PTY Inbox');
     await input('d', '原生引用');
     assert(ui.output.includes(session.id), 'read-only detail retains the complete real OpenCode id');
     await input('\x1b', ':sessions');
     await input('g', 'OpenCode 原生操作');
     await input('\x1b', ':sessions');
     await input('y', '已复制完整值');
-    await poll(async () => (await readFile(uiEvents, 'utf8')).includes(`opencode/${session.id}`), 'full native address copy');
-    await input('Y', '已复制完整值');
+    const commandTemplate = `crosschat send --to ${session.id} --tool opencode --body "<正文>"`;
+    await poll(async () => (await readFile(uiEvents, 'utf8')).trim().split('\n').some((line) => {
+      try { const event = JSON.parse(line); return event.event === 'clipboard' && event.value === commandTemplate; }
+      catch { return false; }
+    }), 'complete native send command copy');
+    await input('Y');
     await poll(async () => (await readFile(uiEvents, 'utf8')).includes('providerId'), 'full session reference copy');
     const copies = (await readFile(uiEvents, 'utf8')).trim().split('\n').map((line) => JSON.parse(line));
-    const address = copies.find((event) => event.event === 'clipboard' && event.value === `opencode/${session.id}`)?.value;
-    assert.equal(address, `opencode/${session.id}`);
+    const copiedCommand = copies.find((event) => event.event === 'clipboard' && event.value === commandTemplate)?.value;
+    assert.equal(copiedCommand, commandTemplate);
     assert(copies.some((event) => event.event === 'clipboard' && JSON.parse(event.value.startsWith('{') ? event.value : '{}').nativeId === session.id));
-    const copiedSend = await fixture.cli(['send', '--to', address, '--body', 'CROSSCHAT_TUI_COPIED_ADDRESS', '--json']);
+    const copiedSend = await fixture.cli(['send', '--to', session.id, '--tool', 'opencode', '--body', 'CROSSCHAT_TUI_COPIED_ADDRESS', '--json']);
     assert.equal(copiedSend.code, 0, copiedSend.stderr);
     await native.waitForOutput('CROSSCHAT_TUI_COPIED_ADDRESS', 30000);
     result.tests.push({ name: 'crosschat real OpenCode reader supports TUI detail, native guide and complete-address/reference copy', passed: true });
@@ -127,6 +136,12 @@ async function main() {
     const terminalExit = (await readFile(uiEvents, 'utf8')).trim().split('\n').map((line) => JSON.parse(line)).find((event) => event.event === 'exit');
     assert.deepEqual(terminalExit.after, terminalExit.before);
     result.tests.push({ name: 'crosschat real terminal exits with raw mode and owned listeners restored', passed: true });
+    const renameOutputStart = native.output.length;
+    result.nativeEnhancement = await validateOpenCodeNativeEnhancement({
+      fixture, session, evidenceDirectory: join(evidence, 'native-enhancement'),
+      waitForNativeTitle: async (title) => native.waitForOutput(title, 30000, renameOutputStart),
+    });
+    result.tests.push({ name: 'OpenCode CLI live session passed TCP TUI membership, exact rename and renamed-route validation', passed: true });
     let nativeFinished = false;
     void native.exited.then(() => { nativeFinished = true; }, () => { nativeFinished = true; });
     native.write('\x03');
@@ -161,5 +176,7 @@ async function main() {
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');
 }
 
-if (process.argv.includes('--tui-child')) await crosschatTuiChild();
-else await main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  if (process.argv.includes('--tui-child')) await crosschatTuiChild();
+  else await main();
+}
