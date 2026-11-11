@@ -103,6 +103,23 @@ test('POSIX PTY releases descendants holding the slave after the leader exits', 
   } finally { await finish(); }
 });
 
+test('POSIX PTY disposal releases a descendant that starts a separate session', linux, async (context) => {
+  const root = await temporaryRoot(context);
+  const grandchild = "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);";
+  const source = `const child = require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], {detached:true, stdio:'ignore'}); console.log('DESCENDANT:'+child.pid); setInterval(() => {}, 1000);`;
+  const { pty, finish } = await launchProbe(root, source);
+  let descendant;
+  try {
+    await pty.waitForOutput(/DESCENDANT:\d+/, 5000);
+    descendant = Number(/DESCENDANT:(\d+)/.exec(pty.output)[1]);
+    await within(pty.dispose(), 6000);
+    assert.equal(alive(descendant), false, 'dispose cannot report success with an adopted detached descendant alive');
+  } finally {
+    if (descendant && alive(descendant)) process.kill(descendant, 'SIGKILL');
+    await finish();
+  }
+});
+
 test('POSIX PTY releases a live child after it closes its terminal descriptors', linux, async (context) => {
   const root = await temporaryRoot(context);
   const source = "import os, time; print('CLOSING_TTY', flush=True); time.sleep(0.1); [os.close(fd) for fd in [0, 1, 2]]; time.sleep(30)";
