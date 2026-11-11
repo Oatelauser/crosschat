@@ -260,9 +260,10 @@ describe('OpenCode V2 durable inbox delivery', () => {
 });
 
 describe('OpenCode V2 native rename', () => {
-  function renameFixture(options: { updateTitle?: boolean; disconnect?: boolean; missingOnPatch?: boolean } = {}) {
+  function renameFixture(options: { updateTitle?: boolean; disconnect?: boolean; missingOnPatch?: boolean; afterPatchCommit?: () => void } = {}) {
     let title = 'before';
     let serverVersion = '2.1.3';
+    let cleanupRegistered = false;
     const calls: string[] = [];
     const server = createServer((request, response) => {
       calls.push(`${request.method} ${request.url}`);
@@ -278,6 +279,7 @@ describe('OpenCode V2 native rename', () => {
           request.on('end', () => {
             expect(JSON.parse(body)).toEqual({ title: 'after' });
             if (options.updateTitle !== false) title = 'after';
+            options.afterPatchCommit?.();
             if (options.disconnect) return request.socket.destroy();
             response.writeHead(204);
             response.end();
@@ -287,14 +289,18 @@ describe('OpenCode V2 native rename', () => {
       }
       return reply(response, { data: [info('ses_one', title)], cursor: { next: null } });
     });
-    return { server, calls, get title() { return title; }, set serverVersion(value: string) { serverVersion = value; } };
+    return { server, calls, get title() { return title; }, set serverVersion(value: string) { serverVersion = value; },
+      get cleanupRegistered() { return cleanupRegistered; }, markCleanupRegistered() { cleanupRegistered = true; } };
   }
 
-  async function operationsFor(fixture: ReturnType<typeof renameFixture>) {
-    await new Promise<void>((resolve) => fixture.server.listen(0, '127.0.0.1', resolve));
+  async function operationsFor(fixture: ReturnType<typeof renameFixture>, registrationFile?: string) {
+    if (!fixture.server.listening) await new Promise<void>((resolve) => fixture.server.listen(0, '127.0.0.1', resolve));
     const address = fixture.server.address();
     if (address === null || typeof address === 'string') throw new Error('Missing fixture address.');
-    cleanup.push(async () => { fixture.server.closeAllConnections(); await new Promise<void>((resolve, reject) => fixture.server.close((error) => error ? reject(error) : resolve())); });
+    if (!fixture.cleanupRegistered) {
+      fixture.markCleanupRegistered();
+      cleanup.push(async () => { fixture.server.closeAllConnections(); await new Promise<void>((resolve, reject) => fixture.server.close((error) => error ? reject(error) : resolve())); });
+    }
     const item: DiscoverySession = {
       ref: { contextId: 'isolated-local', providerId: 'opencode', endpointType: 'shared', nativeId: 'ses_one' },
       name: 'before', rawStatus: { type: 'inactive' },
@@ -304,10 +310,75 @@ describe('OpenCode V2 native rename', () => {
     const discovery = { execute: async (): Promise<DiscoveryResponse> => ({ op: 'detail', providers: [{ providerId: 'opencode', capabilities: item.capabilities }],
       detail: { item: { ...item, name: fixture.title }, completeness: 'complete', observedAt: Date.now(), errors: [] } }) };
     const url = `http://127.0.0.1:${address.port}`;
+    const opencode = registrationFile === undefined ? { endpoint: { url }, env: {} } : { registrationFile, env: {} };
     const operations = createNativeSessionOperations({ discovery, adopt: async () => undefined,
-      providers: createNativeOperationProviders({ opencode: { endpoint: { url }, env: {} } }), timeoutMs: 1_000 });
+      providers: createNativeOperationProviders({ opencode }), timeoutMs: 1_000 });
     return { operations, item, url, fixture, calls: fixture.calls };
   }
+
+  it('does not accept a rename confirmation from another registration for the same native ID', async () => {
+    const path = await directory();
+    const fixture = renameFixture();
+    const serviceA = join(path, 'service-a.json');
+    const serviceB = join(path, 'service-b.json');
+    const registration = { version: '2.1.3', url: 'http://placeholder', pid: 765 };
+    const a = await operationsFor(fixture);
+    await writeFile(serviceA, JSON.stringify({ ...registration, url: a.url, id: 'registration-a' }));
+    await writeFile(serviceB, JSON.stringify({ ...registration, url: a.url, id: 'registration-b' }));
+    const sourceA = await operationsFor(fixture, serviceA);
+    const sourceB = await operationsFor(fixture, serviceB);
+
+    expect(sourceA.item.ref).toEqual(sourceB.item.ref);
+    const confirmationA = await sourceA.operations.describe(sourceA.item.ref);
+    const confirmationB = await sourceB.operations.describe(sourceB.item.ref);
+    expect(confirmationA.actions.rename.state).toBe('executable');
+    expect(confirmationB.actions.rename.state).toBe('executable');
+    expect(confirmationA.revision).not.toBe(confirmationB.revision);
+
+    await expect(sourceB.operations.apply({ ref: sourceB.item.ref, operation: 'rename', name: 'after', expectedRevision: confirmationA.revision }))
+      .resolves.toMatchObject({ kind: 'rejected' });
+    expect(sourceA.calls.filter((call) => call.startsWith('PATCH '))).toHaveLength(0);
+    expect(fixture.title).toBe('before');
+  });
+
+  it('invalidates a rename confirmation when the registration ID changes without changing PID or URL', async () => {
+    const path = await directory();
+    const fixture = renameFixture();
+    const source = await operationsFor(fixture);
+    const registrationFile = join(path, 'service.json');
+    const registration = { version: '2.1.3', url: source.url, pid: 765 };
+    await writeFile(registrationFile, JSON.stringify({ ...registration, id: 'registration-before' }));
+    const registered = await operationsFor(fixture, registrationFile);
+    const oldConfirmation = await registered.operations.describe(registered.item.ref);
+    expect(oldConfirmation.actions.rename.state).toBe('executable');
+
+    await writeFile(registrationFile, JSON.stringify({ ...registration, id: 'registration-after' }));
+    await expect(registered.operations.apply({ ref: registered.item.ref, operation: 'rename', name: 'after', expectedRevision: oldConfirmation.revision }))
+      .resolves.toMatchObject({ kind: 'rejected' });
+    const refreshed = await registered.operations.describe(registered.item.ref);
+    expect(refreshed.actions.rename.state).toBe('executable');
+    expect(refreshed.revision).not.toBe(oldConfirmation.revision);
+    expect(registered.calls.filter((call) => call.startsWith('PATCH '))).toHaveLength(0);
+    expect(fixture.title).toBe('before');
+  });
+
+  it('recovers read-only after cancellation of a committed rename without replaying the old confirmation', async () => {
+    const controller = new AbortController();
+    const fixture = renameFixture({ disconnect: true, afterPatchCommit: () => controller.abort() });
+    const f = await operationsFor(fixture);
+    const confirmation = await f.operations.describe(f.item.ref);
+
+    await expect(f.operations.apply({ ref: f.item.ref, operation: 'rename', name: 'after', expectedRevision: confirmation.revision, signal: controller.signal }))
+      .resolves.toMatchObject({ kind: 'uncertain' });
+    expect(fixture.title).toBe('after');
+
+    const recovered = await f.operations.describe(f.item.ref);
+    expect(recovered.actions.rename.state).toBe('executable');
+    expect(recovered.revision).not.toBe(confirmation.revision);
+    await expect(f.operations.apply({ ref: f.item.ref, operation: 'rename', name: 'after', expectedRevision: confirmation.revision }))
+      .resolves.toMatchObject({ kind: 'rejected' });
+    expect(f.calls.filter((call) => call.startsWith('PATCH '))).toHaveLength(1);
+  });
 
   it('uses PATCH with a non-empty title, accepts 204, and confirms the reread', async () => {
     const fixture = renameFixture();

@@ -1,0 +1,98 @@
+
+ RUN  v3.2.7 /mnt/d/workspace/CC/cc-opencode-native-20261111
+
+ ❯ test/serve-sessions.test.ts (37 tests | 2 failed | 32 skipped) 198ms
+   ↓ 018 broker：caps 协商与会话成员聚合 > info 广播 session-members 能力；032 非兼容：无 caps 的老节点（proto:1）被拒并教升级
+   ↓ 018 broker：caps 协商与会话成员聚合 > 成员声明→三段寻址命中：deliver 注入 sessionId（win 带杠 mid 形态）
+   ↓ 018 broker：caps 协商与会话成员聚合 > 非成员会话名→SESSION_NOT_MEMBER，教学指向启动器入星
+   ↓ 018 broker：caps 协商与会话成员聚合 > 028 空数组重播=该机在册条目转下线（SESSION_OFFLINE 教学）；同 id 再声明=复活直达
+   ↓ 018 broker：caps 协商与会话成员聚合 > alive-wins：旧名活会话在则正常投递，extends 休眠
+   ↓ 018 broker：caps 协商与会话成员聚合 > 死名→extends 指路：SESSION_SUPERSEDED 报"已由 <机器:会话> 接续"
+   ↓ 018 broker：caps 协商与会话成员聚合 > 同旧名先声明先得：后声明者收 EXTENDS_CONFLICT，映射指路先得者（linux 32-hex 形态）
+   ↓ 018 broker：caps 协商与会话成员聚合 > 028 顶替连接空声明→旧成员转下线（册位保留）；同 id 复活直达
+   ↓ 018 broker：caps 协商与会话成员聚合 > mid 前缀+会话三段（F0 归一：前缀寻址 linux 32-hex 机器）
+   ↓ 018 broker：caps 协商与会话成员聚合 > 未声明成员的节点：机器级投递 deliver 帧无 sessionId、形状照旧
+   ↓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > attach→sessions 帧上行→三段直达按 sessionId 注入投递
+   ↓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > attach 校验：冒号会话名拒收并教学；坏形状报错；detach 幂等
+   ↓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 永久成员以 --rm 恢复后退出仍保留册位，再次明确选择才恢复在线
+   ↓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 两个窗口声明同一临时会话时，只释放退出窗口自己的声明
+   ↓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 窗口切走永久 A 后，历史仍可发现也不会对账复活 A；重新选择才上线
+   ↓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > Claude 裸 resume 统一保留离线册位，启动器明确选择后才恢复且不被 --rm 降级
+   ↓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 窗口断线只释放所属声明，旧连接关闭不能释放转移到新连接的声明
+   ↓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 028 成员表变化即重播：detach（无 erase）后三段报 SESSION_OFFLINE（册位保留）
+   ↓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 重连全量重播：broker 重启后无需重新 attach 即恢复会话寻址
+   ↓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 028 claude 活性：扫描核验——死 claude 成员转下线（教学）、活成员续投
+   ↓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > C14 Codex 活性：核实实际 CLI 端点后续投，原生不存在的同类成员转下线
+   ↓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > 029 临时成员异常死亡：对账验死报 member-remove 清册零痕迹（不留下线态）
+   ↓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > delegates name following to a third provider without reviving a released manual membership
+   ↓ 018 NodeClient 聚合器：attach IPC / 重播 / 双活性 > leaves temporary members declared when provider liveness is unknown
+   ✓ C14 broker: explicit recipient tools and literal session names > selects same-name members independently by explicit tool and full native ID 56ms
+   ✓ C14 broker: explicit recipient tools and literal session names > reports same-tool name collisions with full IDs and a separate tool selector 29ms
+   × C14 broker: explicit recipient tools and literal session names > keeps slash-containing names literal within the explicitly selected tool 60ms
+     → expected { op: 'error', …(3) } to match object { op: 'deliver', …(1) }
+(3 matching properties omitted from actual)
+   × C14 broker: explicit recipient tools and literal session names > keeps cross-tool successor lineages independent and teaches explicit tool commands 24ms
+     → expected { op: 'error', …(3) } to match object { code: 'SESSION_SUPERSEDED' }
+(3 matching properties omitted from actual)
+   ✓ C14 broker: explicit recipient tools and literal session names > never classifies untyped legacy members as a known recipient endpoint 26ms
+   ↓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > 重声明保留星端原属性；临时清理只接受归属节点的精确临时 ID
+   ↓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > roster 落盘形态：条目含 tool+会话 id+名+机器+在线态；tmp 已 rename 收尾
+   ↓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > 028 下线成员随 roster 帧下发（offlineSessions 单列；sessions 保持活成员语义）
+   ↓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > 029 临时位随声明入册落盘并随切片回带（temporary 端到端透传）
+   ↓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > 边界1 跨机 resume：册在 M1、id 活在 M2 → MACHINE_BOUND 拒绝复活+教学（册位仍绑 M1）
+   ↓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > extends 胜复活：接任后原会话同 id 回归不夺回（名字剥离教学；id8 点对点直达）
+   ↓ 028 册（roster）：落盘/跨机拒绝/extends 胜复活/member-remove > member-remove：按名删即册外无名；幂等零命中=成功注明；多名命中拒绝教 id8
+   ↓ 018 9b：老 broker（proto:1）降级的协议侧 > connect 携带 caps；info.caps 缺端点能力时拒绝类型化 attach，且不发 sessions 帧
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/serve-sessions.test.ts > C14 broker: explicit recipient tools and literal session names > keeps slash-containing names literal within the explicitly selected tool
+AssertionError: expected { op: 'error', …(3) } to match object { op: 'deliver', …(1) }
+(3 matching properties omitted from actual)
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[32m-   "op": "deliver",[39m
+[32m-   "sessionId": "sess-slash",[39m
+[31m+   "op": "error",[39m
+[2m  }[22m
+
+ ❯ test/serve-sessions.test.ts:822:80
+    820|       { sessionId: 'sess-notes', name: 'notes', tool: 'codex', endpoin…
+    821|     ]));
+    822|     expect(await deliver(sender, node, 'q9', 'win-box:codex/notes', 'c…
+       |                                                                                ^
+    823|       op: 'deliver', sessionId: 'sess-slash',
+    824|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/serve-sessions.test.ts > C14 broker: explicit recipient tools and literal session names > keeps cross-tool successor lineages independent and teaches explicit tool commands
+AssertionError: expected { op: 'error', …(3) } to match object { code: 'SESSION_SUPERSEDED' }
+(3 matching properties omitted from actual)
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[32m-   "code": "SESSION_SUPERSEDED",[39m
+[31m+   "code": "SESSION_NOT_MEMBER",[39m
+[2m  }[22m
+
+ ❯ test/serve-sessions.test.ts:841:20
+    839|     ]));
+    840|     const claude = await deliver(sender, node, 'r1', 'win-box:boss', '…
+    841|     expect(claude).toMatchObject({ code: 'SESSION_SUPERSEDED' });
+       |                    ^
+    842|     expect(claude.op === 'error' && claude.message).toContain('tcp:<星>…
+    843|     const codex = await deliver(sender, node, 'r2', 'win-box:boss', 'c…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 passed | 32 skipped (37)
+   Start at  17:58:35
+   Duration  6.41s (transform 2.18s, setup 0ms, collect 3.15s, tests 198ms, environment 0ms, prepare 1.95s)
