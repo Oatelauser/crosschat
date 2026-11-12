@@ -100,7 +100,7 @@ export async function validateOpenCodeNativeEnhancement({ fixture, session, wait
     report.initialTitle = initial.data.title ?? null;
 
     const now = new Date().toISOString();
-    broker = new Broker({ registryFile, statusFile: join(tcpDir, 'status-broker.json'), machineId: () => brokerMachineId,
+    broker = new Broker({ registryFile, statusFile: join(tcpDir, 'status-broker.json'), listenHost: '127.0.0.1', machineId: () => brokerMachineId,
       hostname: () => 'opencode-native-broker', version: 'native-validation', now: Date.now, log: () => {}, port: 0,
       deliverLocal: async () => { throw new Error('OpenCode native validation must use the owned node'); } });
     writeFileSyncOwned(registryFile, { stars: [{ starId, name: starName, nodes: [{ label: 'opencode-native-node', key, addedAt: now }], roster: [] }] });

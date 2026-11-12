@@ -1,0 +1,17 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test test/opencode-pty-smoke.test.ts test/broker-bind-address.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-opencode-native-20261111
+
+ ✓ test/broker-bind-address.test.ts (1 test) 25ms
+ ✓ test/opencode-pty-smoke.test.ts (3 tests) 942ms
+   ✓ OpenCode native PTY smoke platform support > does not run the C22 TUI child when its helper is imported by another child process  589ms
+   ✓ OpenCode native PTY smoke platform support > binds the enhancement fixture broker to loopback before starting a native node  351ms
+
+ Test Files  2 passed (2)
+      Tests  4 passed (4)
+   Start at  10:15:07
+   Duration  2.72s (transform 838ms, setup 0ms, collect 1.97s, tests 967ms, environment 0ms, prepare 220ms)
+
