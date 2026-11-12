@@ -28,9 +28,10 @@
     "evidenceDirectory": "run-43048480770/"
   },
   "localRepair": {
-    "state": "uncommitted and unpushed",
+    "state": "committed locally; unpushed",
+    "commit": "3b96ce8",
     "changes": [
-      "TUI member cell assertion accepts the visible 16-character prefix while the authoritative event still checks the complete member name.",
+      "TUI member assertion accepts a conservative 16-character visible prefix while the authoritative event still checks the complete member name; the column width is not assumed to be 16.",
       "C22 helper runs --tui-child only when it is the directly executed module; importing it from a child process no longer starts another TUI child.",
       "A regression test verifies the imported helper remains inert when process.argv contains --tui-child."
     ]
@@ -109,6 +110,22 @@
       "testsPassed": 2
     }
   },
+  "ordinaryCiFollowup": {
+    "investigatedOn": "2026-11-12",
+    "head": "64f74f6",
+    "runId": "43048318000",
+    "jobs": {
+      "windows": "passed",
+      "ubuntu": "failed",
+      "macos": "passed"
+    },
+    "failure": "test/conversations.test.ts:212 ENOENT reading an isolated conversation shard",
+    "localFocusedRecheck": "WSL Ubuntu 22.04 / Node 22.14.0: 46 tests across 2 files passed",
+    "controlledProbe": "Lock contention reproduced the absent shard, then normal recording recovered after release",
+    "originalRootCauseConfirmed": false,
+    "sharedConversationImplementationChanged": false,
+    "evidence": "ordinary-ci-43048318000/review.md"
+  },
   "externalActions": {
     "performed": "User-approved c22-cli dispatch to draft PR #11, run 43048480770",
     "furtherPushOrDispatch": "not authorized"
@@ -116,6 +133,7 @@
   "limits": [
     "Hosted C22 did not pass on Ubuntu or Windows; the C22 fixture failed before the multi-node sequence and was nevertheless cleaned up on both runners.",
     "The later full-check repeat contains one unrelated Windows Node inspector child failure; its focused 19-test rerun passed, but no root cause is established.",
+    "Ordinary Ubuntu CI at 64f74f6 failed on a missing conversation shard. Focused Linux rechecks pass; original root cause remains unconfirmed.",
     "No hosted C22 green rerun, macOS, Desktop lifecycle, other OpenCode version, or physical cross-machine validation is claimed."
   ]
 }
