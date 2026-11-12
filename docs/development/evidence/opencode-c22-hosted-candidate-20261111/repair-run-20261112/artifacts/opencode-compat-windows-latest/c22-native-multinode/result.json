@@ -1,0 +1,284 @@
+{
+  "tests": [
+    {
+      "name": "default CLI discovery composition reads the real OpenCode native session",
+      "passed": true
+    },
+    {
+      "name": "official OpenCode interactive session displays real crosschat input and model acknowledgment",
+      "passed": true
+    },
+    {
+      "name": "crosschat real OpenCode reader supports TUI detail, native guide and complete-address/reference copy",
+      "passed": true
+    },
+    {
+      "name": "address copied from TUI delivers through the real CLI and appears in native OpenCode",
+      "passed": true
+    },
+    {
+      "name": "crosschat real terminal exits with raw mode and owned listeners restored",
+      "passed": true
+    },
+    {
+      "name": "OpenCode CLI live session passed TCP TUI membership, exact rename and renamed-route validation",
+      "passed": true
+    },
+    {
+      "name": "OpenCode two-node, two-operator TCP observers refresh the same authoritative star",
+      "passed": true
+    },
+    {
+      "name": "official OpenCode interactive terminal exits after owned Ctrl+C input",
+      "passed": true
+    }
+  ],
+  "evidence": "D:\\a\\crosschat\\crosschat\\opencode-compat-evidence\\c22-native-multinode",
+  "fixtureRemoved": true,
+  "fixtureRoot": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\crosschat-opencode-compat-ZHjqoJ",
+  "servicePid": 1700,
+  "version": "2.1.3",
+  "sessionId": "ses_e32a094edffeUGYx4bJ7aj5cOg",
+  "nativeEnhancement": {
+    "provider": "opencode",
+    "endpointType": "shared",
+    "nativeId": "ses_e32a094edffeUGYx4bJ7aj5cOg",
+    "starId": "opencode-native-validation-star",
+    "operations": [
+      {
+        "name": "tui-adopt-exact-selected-session",
+        "status": "passed",
+        "member": {
+          "sessionId": "ses_e32a094edffeUGYx4bJ7aj5cOg",
+          "name": "OpenCode PTY Inbox",
+          "tool": "opencode",
+          "endpointType": "shared",
+          "machine": "e58eac0eec1548c7ae17b1ff23545af0"
+        }
+      },
+      {
+        "name": "tcp-rename-live-native-title",
+        "status": "passed",
+        "title": "CROSSCHAT_OPENCODE_RENAME_74b02e3d49",
+        "descriptionRevision": "24aa495a6eda51c7e1fbd05c56a3a3b6bb0045e5b9d1e0e7f0c0fc8732ac125d",
+        "result": {
+          "kind": "applied",
+          "message": "原生名称及星内路由已确认更新。"
+        },
+        "member": {
+          "sessionId": "ses_e32a094edffeUGYx4bJ7aj5cOg",
+          "name": "CROSSCHAT_OPENCODE_RENAME_74b02e3d49",
+          "tool": "opencode",
+          "endpointType": "shared",
+          "machine": "e58eac0eec1548c7ae17b1ff23545af0"
+        },
+        "nativeUiRefresh": "\u001b[?9001h\u001b[?1004h\u001b[?2031h\u001b[>0q\u001b[?u\u001b]99;i=opentui-notifications:p=?;\u001b\\\u001b[2J\u001b[m\u001b]0;C:\\Users\\runneradmin\\AppData\\Local\\Temp\\crosschat-opencode-download-pdbEgk\\baseline\\opencode.exe\u0007\u001b[?25l\u001b]1337;Capabilities\u001b\\\u001b]7501;?\u001b\\\u001b]66;w=1; \u001b\\\u001b]66;s=2; \u001b\\\u001b[?1049h\u001b[>4;1m\u001b[?2027h\u001b[?2004h\u001b[?1004h\u001b[?1000h\u001b[?1002h\u001b[?1003h\u001b[?1006h\u001b[H\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\u001b[112C\u001b[14t\u001b[?2026h\u001b]22;default\u001b\\\u001b[?2026l\u001b[38;2;255;255;255m\u001b[H                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                \u001b[30;225H\u001b]7501;state=idle:app=opencode\u001b\\\u001b[m\u001b[?2026h\u001b[?2026l\u001b[38;2;255;255;255m\u001b[48;2;10;10;10m\u001b[H                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                \u001b[30;225H\u001b[m\u001b]0;OpenCode\u0007\u001b]0;OC | OpenCode PTY Inbox\u0007\u001b[?2026h\u001b[38;2;255;255;255m\u001b[48;2;30;30;30m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[38;2;255;255;255m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[38;2;255;255;255m\u001b[22m\u001b[11X\u001b[38;2;128;128;128m\u001b[48;2;10;10;10m\u001b[11C + \u001b[38;2;92;156;245m\u001b[48;2;20;20;20m\u001b[3;3H┃\u001b[107X\u001b[4;3H┃  \u001b[38;2;238;238;238m<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\u001b[35X\u001b[38;2;92;156;245m\u001b[5;3H┃  \u001b[38;2;238;238;238m<crosschat-reply-hint reply-as=\"opencode/ses_e32a094edffeUGYx4bJ7aj5cOg\">回复收件类型待核实，暂不能生成可\u001b[38;2;92;156;245m\u001b[6;3H┃  \u001b[38;2;238;238;238m直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\u001b[16X\u001b[38;2;92;156;245m\u001b[7;3H┃  \u001b[38;2;238;238;238mCROSSCHAT_NATIVE_PTY_INCOMING\u001b[76X\u001b[38;2;92;156;245m\u001b[8;3H┃  \u001b[38;2;238;238;238m</cross-session-message>\u001b[81X\u001b[81C\u001b]12;#eeeeee\u0007\u001b[1 q\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[m\u001b[38;2;92;156;245m\u001b[48;2;20;20;20m\u001b[9;3H┃\u001b[107X\u001b[48;2;10;10;10m\u001b[13;6HBuild \u001b[38;2;128;128;128m· Scripted test model · 74ms · 30.3 tok/s\u001b[38;2;73;75;79m\u001b[24;3H┃\u001b[38;2;255;255;255m\u001b[48;2;30;30;30m\u001b[107X\u001b[38;2;73;75;79m\u001b[48;2;10;10;10m\u001b[25;3H┃\u001b[38;2;255;255;255m\u001b[48;2;30;30;30m\u001b[107X\u001b[38;2;73;75;79m\u001b[48;2;10;10;10m\u001b[26;3H┃\u001b[38;2;255;255;255m\u001b[48;2;30;30;30m\u001b[107X\u001b[38;2;73;75;79m\u001b[48;2;10;10;10m\u001b[27;3H┃\u001b[38;2;255;255;255m\u001b[48;2;30;30;30m  \u001b[38;2;32;35;38mBuild \u001b[38;2;34;34;34m· \u001b[38;2;38;38;38mScripted test model \u001b[38;2;34;34;34mCrosschat compatibility fixture\u001b[46X\u001b[38;2;73;75;79m\u001b[48;2;10;10;10m\u001b[28;3H╹\u001b[38;2;30;30;30m▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\u001b[38;2;128;128;128m\u001b[29;3H~/workspace\u001b[73C11 (0%)\u001b[38;2;238;238;238m\u001b[2Cctrl+p \u001b[38;2;128;128;128mcommands\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[38;2;78;98;126m\u001b[48;2;10;10;10m\u001b[24;3H┃\u001b[25;3H┃\u001b[26;3H┃\u001b[27;3H┃\u001b[38;2;49;69;97m\u001b[48;2;30;30;30m\u001b[2CBuild\u001b[38;2;60;60;60m\u001b[1C·\u001b[38;2;94;94;94m\u001b[1CScripted test model\u001b[38;2;60;60;60m\u001b[1CCrosschat compatibility fixture\u001b[38;2;78;98;126m\u001b[48;2;10;10;10m\u001b[28;3H╹\u001b[25;6H\u001b[?25h\u001b[m\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[38;2;82;115;161m\u001b[48;2;10;10;10m\u001b[24;3H┃\u001b[25;3H┃\u001b[26;3H┃\u001b[27;3H┃\u001b[38;2;62;95;140m\u001b[48;2;30;30;30m\u001b[2CBuild\u001b[38;2;80;80;80m\u001b[1C·\u001b[38;2;137;137;137m\u001b[1CScripted test model\u001b[38;2;80;80;80m\u001b[1CCrosschat compatibility fixture\u001b[38;2;82;115;161m\u001b[48;2;10;10;10m\u001b[28;3H╹\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[38;2;238;238;238m\u001b[48;2;10;10;10m\u001b[11;6HOPENCODE_PTY_MODEL_ACK\u001b[38;2;85;128;188m\u001b[24;3H┃\u001b[25;3H┃\u001b[26;3H┃\u001b[27;3H┃\u001b[38;2;72;114;174m\u001b[48;2;30;30;30m\u001b[2CBuild\u001b[38;2;96;96;96m\u001b[1C·\u001b[38;2;169;169;169m\u001b[1CScripted test model\u001b[38;2;96;96;96m\u001b[1CCrosschat compatibility fixture\u001b[38;2;85;128;188m\u001b[48;2;10;10;10m\u001b[28;3H╹\u001b[25;6H\u001b[?25h\u001b[?25l\u001b[8;20;60t\u001b[?2026h\u001b[m\u001b[38;2;255;255;255m\u001b[48;2;10;10;10m\u001b[H  \u001b[38;2;92;156;245m\u001b[48;2;20;20;20m┃  \u001b[38;2;238;238;238m直接执行的命令。保留会话引用 cA000；核实目标类型后使用 \u001b[38;2;255;255;255m\u001b[48;2;10;10;10m  \u001b[38;2;92;156;245m\u001b[48;2;20;20;20m┃  \u001b[38;2;238;238;238mCROSSCHAT_NATIVE_PTY_INCOMING                          \u001b[38;2;255;255;255m\u001b[48;2;10;10;10m  \u001b[38;2;92;156;245m\u001b[48;2;20;20;20m┃  \u001b[38;2;238;238;238m</cross-session-message>                               \u001b[38;2;255;255;255m\u001b[48;2;10;10;10m  \u001b[38;2;92;156;245m\u001b[48;2;20;20;20m┃                                                         \u001b[38;2;255;255;255m\u001b[48;2;10;10;10m                                                                 \u001b[38;2;238;238;238mOPENCODE_PTY_MODEL_ACK                                 \u001b[38;2;255;255;255m                                                                 \u001b[38;2;92;156;245mBuild \u001b[38;2;128;128;128m· Scripted test model · 74ms · 30.3 tok/s        \u001b[38;2;255;255;255m                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          \u001b[38;2;85;128;188m┃\u001b[38;2;255;255;255m\u001b[48;2;30;30;30m                                                         \u001b[48;2;10;10;10m  \u001b[38;2;88;141;214m┃\u001b[38;2;255;255;255m\u001b[48;2;30;30;30m  \u001b[38;2;81;133;206mBuild \u001b[38;2;110;110;110m· \u001b[38;2;200;200;200mScripted test model \u001b[38;2;110;110;110mCrosschat compatibility fix\u001b[?2026l\u001b[m\r\n\u001b[38;2;110;110;110m\u001b[48;2;30;30;30m\u001b[19;60Hxtu\u001b[38;2;88;141;214m\u001b[48;2;10;10;10m╹\u001b[38;2;110;110;110m\u001b[48;2;30;30;30me\u001b[K\u001b[1C\u001b[?25h\u001b[?25l\u001b[?2026h\u001b[m\u001b[38;2;91;150;232m\u001b[48;2;10;10;10m\u001b[20;3H┃\u001b[38;2;87;147;229m\u001b[48;2;30;30;30m\u001b[2CBuild\u001b[38;2;121;121;121m\u001b[1C·\u001b[38;2;223;223;223m\u001b[1CScripted test model\u001b[38;2;121;121;121m\u001b[1CCrosschat compatibility fix\u001b[?2026l\u001b[m\r\n\u001b[38;2;121;121;121m\u001b[48;2;30;30;30m\u001b[19;60Hxtu\u001b[38;2;91;150;232m\u001b[48;2;10;10;10m╹\u001b[38;2;121;121;121m\u001b[48;2;30;30;30me\u001b[K\u001b[1C\u001b[?25h\u001b[?25l\u001b[?2026h\u001b[m\u001b[38;2;92;155;243m\u001b[48;2;10;10;10m\u001b[20;3H┃\u001b[48;2;30;30;30m\u001b[2CBuild\u001b[38;2;127;127;127m\u001b[1C·\u001b[38;2;236;236;236m\u001b[1CScripted test model\u001b[38;2;127;127;127m\u001b[1CCrosschat compatibility fix\u001b[?2026l\u001b[m\r\n\u001b[38;2;127;127;127m\u001b[48;2;30;30;30m\u001b[19;60Hxtu\u001b[38;2;92;155;243m\u001b[48;2;10;10;10m╹\u001b[38;2;127;127;127m\u001b[48;2;30;30;30me\u001b[K\u001b[1C\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[38;2;255;255;255m\u001b[48;2;10;10;10m\u001b[H  \u001b[38;2;92;156;245m\u001b[48;2;20;20;20m┃                                                                                                             \u001b[38;2;255;255;255m\u001b[48;2;10;10;10m                                                                                                                     \u001b[38;2;238;238;238mOPENCODE_PTY_MODEL_ACK                                                                                     \u001b[38;2;255;255;255m                                                                                                                     \u001b[38;2;92;156;245mBuild \u001b[38;2;128;128;128m· Scripted test model · 74ms · 30.3 tok/s                                                            \u001b[38;2;255;255;255m                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  \u001b[38;2;85;128;188m┃\u001b[38;2;255;255;255m\u001b[48;2;30;30;30m                                                                                                             \u001b[48;2;10;10;10m  \u001b[38;2;88;141;214m┃\u001b[38;2;255;255;255m\u001b[48;2;30;30;30m  \u001b[38;2;81;133;206mBuild \u001b[38;2;110;110;110m· \u001b[38;2;200;200;200mScripted test model \u001b[38;2;110;110;110mCrosschat compatibility fix                                                    tu\u001b[38;2;91;150;232m\u001b[48;2;10;10;10m┃\u001b[38;2;110;110;110m\u001b[48;2;30;30;30me \u001b[38;2;87;147;229mBuild \u001b[38;2;121;121;121m· \u001b[38;2;223;223;223mScripted test model \u001b[38;2;121;121;121mCrosschat compatibility fix                                                    tu\u001b[38;2;92;155;243m\u001b[48;2;10;10;10m┃\u001b[38;2;121;121;121m\u001b[48;2;30;30;30me \u001b[38;2;92;155;243mBuild \u001b[38;2;127;127;127m· \u001b[38;2;236;236;236mScripted test model \u001b[38;2;127;127;127mCrosschat compatibility fix                                                    tu\u001b[38;2;92;155;243m\u001b[48;2;10;10;10m╹\u001b[38;2;127;127;127m\u001b[48;2;30;30;30me\u001b[K\u001b[m\r\n\u001b[K\r\n\u001b[K\r\n\u001b[K\r\n  \u001b[38;2;92;156;245m\u001b[48;2;10;10;10m┃\u001b[m\u001b[K\r\n  \u001b[38;2;92;156;245m\u001b[48;2;10;10;10m┃\u001b[m\u001b[K\r\n  \u001b[38;2;92;156;245m\u001b[48;2;10;10;10m┃\u001b[m\u001b[K\r\n  \u001b[38;2;92;156;245m\u001b[48;2;10;10;10m┃\u001b[m  \u001b[38;2;92;156;245m\u001b[48;2;30;30;30mBuild\u001b[m \u001b[38;2;128;128;128m\u001b[48;2;30;30;30m·\u001b[m \u001b[38;2;238;238;238m\u001b[48;2;30;30;30mScripted test model\u001b[m \u001b[38;2;128;128;128m\u001b[48;2;30;30;30mCrosschat compatibility fixture\u001b[m\u001b[K\r\n  \u001b[38;2;92;156;245m\u001b[48;2;10;10;10m╹\u001b[m\u001b[K\r\n\u001b[K\r\n\u001b[K\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?25l\u001b[38;2;255;255;255m\u001b[48;2;30;30;30m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[38;2;255;255;255m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[38;2;255;255;255m\u001b[22m           \u001b[11X\u001b[38;2;128;128;128m\u001b[48;2;10;10;10m +                                                                              \u001b[38;2;255;255;255m                                                                                                                  \u001b[38;2;92;156;245m\u001b[48;2;20;20;20m┃                                                                                                           \u001b[K\u001b[38;2;255;255;255m\u001b[48;2;10;10;10m    \u001b[38;2;92;156;245m\u001b[48;2;20;20;20m┃  \u001b[38;2;238;238;238m<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">                                   \u001b[K\u001b[38;2;255;255;255m\u001b[48;2;10;10;10m    \u001b[38;2;92;156;245m\u001b[48;2;20;20;20m┃  \u001b[38;2;238;238;238m<crosschat-reply-hint reply-as=\"opencode/ses_e32a094edffeUGYx4bJ7aj5cOg\">回复收件类型待核实，暂不能生成可\u001b[38;2;255;255;255m\u001b[48;2;10;10;10m    \u001b[38;2;92;156;245m\u001b[48;2;20;20;20m┃  \u001b[38;2;238;238;238m直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>                \u001b[K\u001b[38;2;255;255;255m\u001b[48;2;10;10;10m    \u001b[38;2;92;156;245m\u001b[48;2;20;20;20m┃  \u001b[38;2;238;238;238mCROSSCHAT_NATIVE_PTY_INCOMING                                                                            \u001b[K\u001b[38;2;255;255;255m\u001b[48;2;10;10;10m    \u001b[38;2;92;156;245m\u001b[48;2;20;20;20m┃  \u001b[38;2;238;238;238m</cross-session-message>                                                                                 \u001b[K\u001b[38;2;255;255;255m\u001b[48;2;10;10;10m    \u001b[38;2;92;156;245m\u001b[48;2;20;20;20m┃                                                                                                           \u001b[K\u001b[38;2;255;255;255m\u001b[48;2;10;10;10m                                                                                                                       \u001b[38;2;238;238;238mOPENCODE_PTY_MODEL_ACK                                                                                     \u001b[38;2;255;255;255m                                                                                                                     \u001b[38;2;92;156;245mBuild \u001b[38;2;128;128;128m· Scripted test model · 74ms · 30.3 tok/s                                                            \u001b[38;2;255;255;255m\r\n\u001b[108X\u001b[108C\u001b[?2026l\u001b[m\u001b[38;2;255;255;255m\u001b[48;2;10;10;10m                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \u001b[38;2;92;156;245m┃\u001b[38;2;255;255;255m\u001b[48;2;30;30;30m                                                                                                           \u001b[K\u001b[48;2;10;10;10m    \u001b[38;2;92;156;245m┃\u001b[38;2;255;255;255m\u001b[48;2;30;30;30m                                                                                                           \u001b[K\u001b[48;2;10;10;10m    \u001b[38;2;92;156;245m┃\u001b[38;2;255;255;255m\u001b[48;2;30;30;30m                                                                                                           \u001b[K\u001b[48;2;10;10;10m    \u001b[38;2;92;156;245m┃\u001b[38;2;255;255;255m\u001b[48;2;30;30;30m  \u001b[38;2;92;156;245mBuild \u001b[38;2;128;128;128m· \u001b[38;2;238;238;238mScripted test model \u001b[38;2;128;128;128mCrosschat compatibility fixture                                              \u001b[K\u001b[38;2;255;255;255m\u001b[48;2;10;10;10m    \u001b[38;2;92;156;245m╹\u001b[38;2;30;30;30m▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  \u001b[38;2;255;255;255m  \u001b[38;2;128;128;128m~/workspace                                                                         11 (0%)  \u001b[38;2;238;238;238mctrl+p \u001b[38;2;128;128;128mcommands  \u001b[38;2;255;255;255m                                                                                                                \u001b[25;6H\u001b[?25h\u001b]7501;state=working:app=opencode:title=T3BlbkNvZGUgUFRZIEluYm94\u001b\\\u001b[m\u001b]7501;state=working:id=ses_e32a094edffeUGYx4bJ7aj5cOg:app=opencode:title=T3BlbkNvZGUgUFRZIEluYm94\u001b\\\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[48;2;32;32;32m\u001b[H \u001b[38;2;240;229;222m⠋ \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[38;2;92;156;245m\u001b[48;2;20;20;20m\u001b[15;3H┃\u001b[107X\u001b[16;3H┃  \u001b[38;2;238;238;238m<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\u001b[35X\u001b[38;2;92;156;245m\u001b[17;3H┃  \u001b[38;2;238;238;238m<crosschat-reply-hint reply-as=\"opencode/ses_e32a094edffeUGYx4bJ7aj5cOg\">回复收件类型待核实，暂不能生成可\u001b[38;2;92;156;245m\u001b[18;3H┃  \u001b[38;2;238;238;238m直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\u001b[16X\u001b[38;2;92;156;245m\u001b[19;3H┃  \u001b[38;2;238;238;238mCROSSCHAT_TUI_COPIED_ADDRESS\u001b[77X\u001b[38;2;92;156;245m\u001b[20;3H┃  \u001b[38;2;238;238;238m</cross-session-message>\u001b[81X\u001b[38;2;92;156;245m\u001b[21;3H┃\u001b[107X\u001b[38;2;255;255;255m\u001b[48;2;10;10;10m\u001b[29;3H \u001b[38;2;92;156;245m■\u001b[38;2;25;36;52m⬝⬝⬝⬝⬝⬝⬝ \u001b[38;2;238;238;238mesc \u001b[38;2;128;128;128minterrupt\u001b[25;6H\u001b[?25h\u001b]7501;state=clear:id=ses_e32a094edffeUGYx4bJ7aj5cOg\u001b\\\u001b[m\u001b]7501;state=idle:app=opencode\u001b\\\u001b[?2026h\u001b[?2026l\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[48;2;52;49;56m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[38;2;92;156;245m\u001b[48;2;20;20;20m\u001b[2;3H┃  \u001b[38;2;238;238;238m<crosschat-reply-hint reply-as=\"opencode/ses_e32a094edffeUGYx4bJ7aj5cOg\">回复收件类型待核实，暂不能生成可\u001b[3;6H直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\u001b[4;6HCROSSCHAT_NATIVE_PTY_INCOMING\u001b[41X\u001b[5;7H/cro\u001b[1Cs-session-message>\u001b[81X\u001b[38;2;255;255;255m\u001b[6;6H\u001b[89X\u001b[48;2;10;10;10m\u001b[7;3H\u001b[108X\n   \u001b[38;2;238;238;238mOPENCODE_PTY_MODEL_ACK\u001b[83X\u001b[38;2;255;255;255m\u001b[9;3H\u001b[108X\u001b[38;2;92;156;245m\u001b[10;6HBuild \u001b[38;2;128;128;128m· Scripted test model · 74ms · 30.3 tok/s\u001b[38;2;255;255;255m\u001b[11;6H\u001b[22X\u001b[38;2;92;156;245m\u001b[48;2;20;20;20m\u001b[12;3H┃\u001b[107X\u001b[13;3H┃  \u001b[38;2;238;238;238m<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\u001b[35X\u001b[38;2;92;156;245m\u001b[14;3H┃  \u001b[38;2;238;238;238m<crosschat-reply-hint reply-as=\"opencode/ses_e32a094edffeUGYx4bJ7aj5cOg\">回复收件类型待核实，暂不能生成可\u001b[15;6H直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\u001b[16;6HCROSSCHAT_TUI_COPIED_ADDRESS\u001b[42X\u001b[17;7H/cro\u001b[1Cs-session-message>\u001b[81X\u001b[38;2;255;255;255m\u001b[18;6H\u001b[89X\u001b[48;2;10;10;10m\u001b[19;3H\u001b[108X\n   \u001b[38;2;238;238;238mOPENCODE_PTY_MODEL_ACK\u001b[83X\u001b[38;2;255;255;255m\u001b[21;3H\u001b[108X\u001b[38;2;92;156;245m\u001b[22;6HBuild \u001b[38;2;128;128;128m· Scripted test model · 32ms · 55.6 tok/s\u001b[29;3H~/workspace\u001b[12X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;56;53;63m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;60;55;69m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;63;57;73m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;63;58;74m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[m\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[48;2;64;58;74m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;63;58;74m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[m\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[48;2;63;57;73m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;62;57;73m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[m\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[48;2;62;56;72m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;61;56;72m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;60;55;71m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[m\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[48;2;59;54;69m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[m\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[48;2;59;53;69m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;58;52;68m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;58;52;67m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;56;51;66m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;55;50;64m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;53;48;62m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[m\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[48;2;52;47;60m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[m\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[48;2;51;46;59m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;50;45;57m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;49;45;57m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;47;43;55m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;47;43;54m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[m\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[48;2;45;42;52m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;45;41;51m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;44;41;50m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;43;40;49m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[m\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[48;2;42;39;47m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;41;38;46m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[m\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[48;2;40;38;45m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;40;37;44m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;39;37;43m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;38;36;42m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;38;36;41m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;37;35;40m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[m\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[48;2;36;35;39m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;36;34;38m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;35;34;37m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;35;33;37m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;34;33;36m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;34;33;35m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[m\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[48;2;33;32;35m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;33;32;34m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;32;32;33m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;32;31;33m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;32;31;32m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[m\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[48;2;31;31;32m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;31;31;31m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;31;30;31m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[m\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[48;2;30;30;31m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[48;2;30;30;30m\u001b[H \u001b[38;2;157;124;216m\u001b[1m•\u001b[39m\u001b[22m \u001b[38;2;238;238;238m\u001b[1mOpenCode PTY Inbox\u001b[39m\u001b[22m\u001b[11X\u001b[25;6H\u001b[?25h\u001b[?2026h\u001b[?2026l\u001b[?25l\u001b[m\u001b[38;2;255;255;255m\u001b[48;2;30;30;30m\u001b[H \u001b[1C \u001b[18C\u001b[11X\u001b[25;6H\u001b[?25h\u001b[m\u001b]0;OC | CROSSCHAT_OPENCODE_RENAME_74b02e3d49\u0007\u001b[?2026h\u001b[?2026l"
+      },
+      {
+        "name": "renamed-star-route-delivers-to-same-native-session",
+        "status": "passed",
+        "routeMarker": "CROSSCHAT_OPENCODE_RENAMED_ROUTE_f708aec658",
+        "receipt": {
+          "op": "receipt",
+          "id": "opencode-renamed-route-7ac2ce3c1ac5",
+          "status": "delivered",
+          "turn": "1",
+          "replyRef": "mc2_rigIb3BlbmNvZGUec2VzX2UzMmEwOTRlZGZmZVVHWXg0Yko3YWo1Y09nCAaDRluGgZsfAR9vcGVuY29kZS1uYXRpdmUtdmFsaWRhdGlvbi1zdGFyBnNoYXJlZA",
+          "output": "{\"status\":\"delivered\",\"to\":\"opencode/ses_e32a094edffeUGYx4bJ7aj5cOg\",\"turn\":1,\"replyRef\":\"mc2_rigIb3BlbmNvZGUec2VzX2UzMmEwOTRlZGZmZVVHWXg0Yko3YWo1Y09nCAaDRluGgZsfAR9vcGVuY29kZS1uYXRpdmUtdmFsaWRhdGlvbi1zdGFyBnNoYXJlZA\",\"queued\":true}"
+        },
+        "nativeId": "ses_e32a094edffeUGYx4bJ7aj5cOg",
+        "remainingSessionCount": 1
+      },
+      {
+        "name": "tui-removes-roster-with-native-chat-retained",
+        "status": "passed",
+        "nativeId": "ses_e32a094edffeUGYx4bJ7aj5cOg",
+        "title": "CROSSCHAT_OPENCODE_RENAME_74b02e3d49"
+      }
+    ],
+    "cleanup": {
+      "complete": true,
+      "brokerStopped": true,
+      "nodeStopped": true,
+      "tuiStopped": true,
+      "crosschatRoot": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\crosschat-opencode-compat-ZHjqoJ\\.crosschat",
+      "removedByFixtureOwner": true
+    },
+    "initialTitle": "OpenCode PTY Inbox",
+    "tui": {
+      "code": 0,
+      "terminalRestored": true,
+      "evidence": "D:\\a\\crosschat\\crosschat\\opencode-compat-evidence\\c22-native-multinode\\native-enhancement\\membership-tui.json"
+    }
+  },
+  "nativeMultinode": {
+    "scope": "Two same-host OpenCode services and logical nodes; two isolated operator HOME/TUI instances; not physical cross-machine acceptance",
+    "starIds": [
+      "opencode-c22-a-042f25e3",
+      "opencode-c22-b-99d5ba19"
+    ],
+    "checks": [
+      {
+        "name": "two-independent-node-identities-and-exact-operation-routing",
+        "status": "passed"
+      },
+      {
+        "name": "two-operator-tui-refreshes-and-star-isolation",
+        "status": "passed"
+      },
+      {
+        "name": "broker-committed-rename-lost-receipt-is-uncertain-and-readonly-recovery-does-not-replay",
+        "status": "passed"
+      },
+      {
+        "name": "offline-confirmation-is-rejected-and-recovery-does-not-submit-the-held-form",
+        "status": "passed"
+      }
+    ],
+    "cleanup": {
+      "complete": true,
+      "errors": [],
+      "secondProfileRemoved": true
+    },
+    "renamed": "OpenCodeC226b06b3a7",
+    "operations": {
+      "nodeMachineIds": [
+        "11111111222222223333333344444444",
+        "55555555666666667777777788888888"
+      ],
+      "nodeServicePids": [
+        1700,
+        6592
+      ],
+      "nativeIds": [
+        "ses_e32a094edffeUGYx4bJ7aj5cOg",
+        "ses_e32a05ff8ffeY9F8nMS12eO1QY"
+      ],
+      "starId": "opencode-c22-a-042f25e3",
+      "observers": 2,
+      "exactMembers": [
+        {
+          "sessionId": "ses_e32a094edffeUGYx4bJ7aj5cOg",
+          "name": "OpenCodeC226b06b3a7",
+          "tool": "opencode",
+          "endpointType": "shared",
+          "machine": "11111111222222223333333344444444"
+        },
+        {
+          "sessionId": "ses_e32a05ff8ffeY9F8nMS12eO1QY",
+          "name": "C22Second",
+          "tool": "opencode",
+          "endpointType": "shared",
+          "machine": "55555555666666667777777788888888"
+        }
+      ],
+      "secondStarRosterCount": 0
+    },
+    "brokerReceiptFault": {
+      "requests": 1,
+      "acceptedReceipts": 1,
+      "droppedReceipts": 1,
+      "correlations": [
+        {
+          "id": "ca4bfbef-aa1b-4041-ad25-d9c4e7f78d32",
+          "starId": "opencode-c22-a-042f25e3",
+          "machineId": "55555555666666667777777788888888",
+          "providerId": "opencode",
+          "nativeId": "ses_e32a05ff8ffeY9F8nMS12eO1QY",
+          "endpointType": "shared"
+        }
+      ],
+      "configRestored": true,
+      "proxyClosed": true,
+      "operation": {
+        "nativeId": "ses_e32a05ff8ffeY9F8nMS12eO1QY",
+        "machineId": "55555555666666667777777788888888",
+        "name": "OpenCodeC22Lostf53f1122",
+        "result": "uncertain",
+        "nativeTitlePatches": 1,
+        "readonlyRecovery": true,
+        "observedByOperators": 2
+      },
+      "status": "passed"
+    },
+    "actionAvailability": {
+      "shortcut": "e",
+      "enabled": true,
+      "observedSelectedTuiOutputEvent": 7
+    },
+    "offlineConfirmation": {
+      "nativeId": "ses_e32a094edffeUGYx4bJ7aj5cOg",
+      "enabled": false,
+      "reason": "所选完整节点当前不在线或原生引用无效。",
+      "blockedName": "OpenCodeC22Blockedbebada",
+      "noMutationStarted": true
+    },
+    "recoveryStage": "complete",
+    "recovery": {
+      "nativeId": "ses_e32a094edffeUGYx4bJ7aj5cOg",
+      "machineId": "11111111222222223333333344444444",
+      "blockedName": "OpenCodeC22Blockedbebada",
+      "lastConfirmedTitleRetained": "OpenCodeC226b06b3a7",
+      "noMutationStarted": true,
+      "actionRecovered": true
+    },
+    "status": "passed",
+    "operators": [
+      {
+        "index": 0,
+        "exit": {
+          "event": "exit",
+          "code": 0,
+          "before": {
+            "raw": false,
+            "resize": 0,
+            "listeners": {
+              "SIGINT": 1,
+              "SIGTERM": 1,
+              "uncaughtException": 0,
+              "unhandledRejection": 0
+            }
+          },
+          "after": {
+            "raw": false,
+            "resize": 0,
+            "listeners": {
+              "SIGINT": 1,
+              "SIGTERM": 1,
+              "uncaughtException": 0,
+              "unhandledRejection": 0
+            }
+          }
+        }
+      },
+      {
+        "index": 1,
+        "exit": {
+          "event": "exit",
+          "code": 0,
+          "before": {
+            "raw": false,
+            "resize": 0,
+            "listeners": {
+              "SIGINT": 1,
+              "SIGTERM": 1,
+              "uncaughtException": 0,
+              "unhandledRejection": 0
+            }
+          },
+          "after": {
+            "raw": false,
+            "resize": 0,
+            "listeners": {
+              "SIGINT": 1,
+              "SIGTERM": 1,
+              "uncaughtException": 0,
+              "unhandledRejection": 0
+            }
+          }
+        }
+      }
+    ]
+  },
+  "nativeExitCode": 0
+}
