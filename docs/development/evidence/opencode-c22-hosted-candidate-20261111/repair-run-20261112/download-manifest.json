@@ -1,0 +1,84 @@
+{
+  "tempRoot": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-c22-hosted-verify-KhVvTO",
+  "artifacts": [
+    {
+      "id": 13907111901,
+      "name": "opencode-compat-ubuntu-latest",
+      "bytes": 74303,
+      "sha256": "a8cf9161f066b3da7bc0e1c09c4f4307f008f6ee04135f426b7b42f7cbf73141",
+      "apiDigest": "sha256:a8cf9161f066b3da7bc0e1c09c4f4307f008f6ee04135f426b7b42f7cbf73141",
+      "archive": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-c22-hosted-verify-KhVvTO\\opencode-compat-ubuntu-latest.zip"
+    },
+    {
+      "id": 13906871846,
+      "name": "opencode-compat-windows-latest",
+      "bytes": 59136,
+      "sha256": "3e86da9f7cc9f1baadc6b32d53b15164dcc3f6469850ddc1a8c7dac215deb410",
+      "apiDigest": "sha256:3e86da9f7cc9f1baadc6b32d53b15164dcc3f6469850ddc1a8c7dac215deb410",
+      "archive": "C:\\Users\\YANGSH~1\\AppData\\Local\\Temp\\crosschat-c22-hosted-verify-KhVvTO\\opencode-compat-windows-latest.zip"
+    }
+  ],
+  "runs": [
+    {
+      "id": "43134505721",
+      "head": "b94c17a9c1193109a2d62ba2f77391960e35fee1",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 130906461085,
+          "name": "check (macos-latest)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 130906461314,
+          "name": "check (ubuntu-latest)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 130906461519,
+          "name": "check (windows-latest)",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": "43134592145",
+      "head": "b94c17a9c1193109a2d62ba2f77391960e35fee1",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "id": 130906761146,
+          "name": "probe (ubuntu-latest)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 130906761468,
+          "name": "probe (windows-latest)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 130906762574,
+          "name": "desktop-probe",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "id": 130907810526,
+          "name": "report",
+          "status": "completed",
+          "conclusion": "skipped"
+        }
+      ]
+    }
+  ],
+  "temporaryArchiveRootRemoved": true,
+  "cleanupStatus": "User reported manual deletion; read-only Test-Path verified absent on 2026-11-12. Original automatic cleanup rejection retained; no retry performed.",
+  "extractedEvidenceFiles": 34
+}

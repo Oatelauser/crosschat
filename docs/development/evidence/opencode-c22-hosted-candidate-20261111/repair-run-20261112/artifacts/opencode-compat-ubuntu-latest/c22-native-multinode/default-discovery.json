@@ -1,0 +1,94 @@
+{
+  "op": "list",
+  "providers": [
+    {
+      "providerId": "claude",
+      "capabilities": {
+        "discovery": true,
+        "delivery": true,
+        "launch": false,
+        "diagnostics": false,
+        "deliveryModes": [
+          "queue",
+          "steer"
+        ]
+      }
+    },
+    {
+      "providerId": "codex",
+      "capabilities": {
+        "discovery": true,
+        "delivery": true,
+        "launch": false,
+        "diagnostics": false,
+        "deliveryModes": [
+          "queue",
+          "steer"
+        ]
+      }
+    },
+    {
+      "providerId": "opencode",
+      "capabilities": {
+        "discovery": true,
+        "delivery": true,
+        "launch": false,
+        "diagnostics": false,
+        "deliveryModes": [
+          "queue",
+          "steer"
+        ]
+      }
+    },
+    {
+      "providerId": "dsh",
+      "capabilities": {
+        "discovery": true,
+        "delivery": true,
+        "launch": false,
+        "diagnostics": false,
+        "deliveryModes": [
+          "queue",
+          "steer"
+        ]
+      }
+    }
+  ],
+  "page": {
+    "completeness": "partial",
+    "observedAt": 1794446886837,
+    "errors": [],
+    "items": [
+      {
+        "ref": {
+          "contextId": "local",
+          "providerId": "opencode",
+          "nativeId": "ses_e32a178e5ffeOVFloeWN6qAV5D",
+          "endpointType": "shared"
+        },
+        "name": "OpenCode PTY Inbox",
+        "rawStatus": {
+          "type": "inactive"
+        },
+        "capabilities": {
+          "discovery": true,
+          "delivery": true,
+          "launch": false,
+          "diagnostics": false,
+          "deliveryModes": [
+            "queue",
+            "steer"
+          ]
+        },
+        "attributes": {
+          "location": {
+            "directory": "/tmp/crosschat-opencode-compat-Tf4tLg/workspace"
+          },
+          "projectID": "da9d3297765017d7a50099c6aab3862a7ef8b9bb",
+          "cwd": "/tmp/crosschat-opencode-compat-Tf4tLg/workspace"
+        }
+      }
+    ],
+    "nextCursor": "eyJjb250ZXh0SWQiOiJsb2NhbCIsImZpbHRlcktleSI6IltbXCJvcGVuY29kZVwiXSxcIlwiXSIsInBlbmRpbmciOlt7InByb3ZpZGVySWQiOiJvcGVuY29kZSIsImN1cnNvciI6ImV5SmhjbU5vYVhabFpDSTZJbVpoYkhObElpd2lZVzVqYUc5eUlqcDdJbWxrSWpvaWMyVnpYMlV6TW1FeE56aGxOV1ptWlU5V1JteHZaVmRPTm5GQlZqVkVJaXdpZEdsdFpTSTZNVGM1TkRRME5qZzROalk0TlN3aVpHbHlaV04wYVc5dUlqb2libVY0ZENKOWZRIn1dLCJlcnJvcnMiOltdLCJpbmNvbXBsZXRlIjpmYWxzZX0"
+  }
+}

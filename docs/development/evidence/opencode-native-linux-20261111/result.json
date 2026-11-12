@@ -1,0 +1,19 @@
+{
+  "tests": [
+    {
+      "name": "default CLI discovery composition reads the real OpenCode native session",
+      "passed": true
+    },
+    {
+      "name": "official OpenCode interactive session displays real crosschat input and model acknowledgment",
+      "passed": true
+    }
+  ],
+  "evidence": "/mnt/d/workspace/CC/multichat/docs/development/evidence/opencode-native-linux-20261111",
+  "fixtureRemoved": true,
+  "fixtureRoot": "/tmp/crosschat-opencode-compat-V5SNld",
+  "servicePid": 620,
+  "version": "2.1.3",
+  "sessionId": "ses_e3714df5dffeU9RMZtaNrTKCyD",
+  "failure": "POSIX PTY output did not match 已复制完整值; log: /mnt/d/workspace/CC/multichat/docs/development/evidence/opencode-native-linux-20261111/crosschat-opencode-pty.jsonl; output tail:                                                                             │\r\n│                                                                                                              │\r\n│                                                                                                              │\r\n│                                                                                                              │\r\n│                                                                                                              │\r\n│                                                                                                              │\r\n│                                                                                                              │\r\n│                                                                                                              │\r\n│                                                                                                              │\r\n│                                                                                                              │\r\n│                                                                                                              │\r\n│                                                                                                              │\r\n│                                                                                                              │\r\n│                                                                                                              │\r\n│                                                                                                              │\r\n│                                                                                                              │\r\n\u001b[90m└──────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\u001b[39m\r\n\u001b[36m<sessions> 1/1 · 完整\u001b[39m\r\n\u001b[33m已复制完整值\u001b[39m\r\n\u001b[90m:资源  /筛选  Esc返回  q退出\u001b[39m\u001b[?2026l"
+}

@@ -1,0 +1,15 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test test/conversations.test.ts
+
+
+ RUN  v3.2.7 /mnt/d/workspace/CC/cc-opencode-native-20261111
+
+ ✓ test/conversations.test.ts (26 tests) 287ms
+ ✓ test/status-conversations.test.ts (20 tests) 19ms
+
+ Test Files  2 passed (2)
+      Tests  46 passed (46)
+   Start at  09:16:47
+   Duration  4.06s (transform 1.17s, setup 0ms, collect 1.72s, tests 306ms, environment 0ms, prepare 3.79s)
+

@@ -1,0 +1,19 @@
+{
+  "tests": [
+    {
+      "name": "default CLI discovery composition reads the real OpenCode native session",
+      "passed": true
+    },
+    {
+      "name": "official OpenCode interactive session displays real crosschat input and model acknowledgment",
+      "passed": true
+    }
+  ],
+  "evidence": "D:\\a\\crosschat\\crosschat\\opencode-compat-evidence\\c22-native-multinode",
+  "fixtureRemoved": true,
+  "fixtureRoot": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\crosschat-opencode-compat-vc0WxO",
+  "servicePid": 4236,
+  "version": "2.1.3",
+  "sessionId": "ses_e34c66793ffernosfpeB0ScnZf",
+  "failure": "Fixture exited before output matched OpenCode 实际服务验证"
+}

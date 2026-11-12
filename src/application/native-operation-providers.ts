@@ -2,15 +2,18 @@ import { defaultMembershipProviders } from './session-membership/providers.js';
 import type { NativeOperationProvider } from './session-operations.js';
 import { createCodexRenameAdapter } from '../codex/rename.js';
 import type { CodexRenameOptions } from '../codex/rename.js';
+import { createOpenCodeRenameAdapter } from '../opencode/rename.js';
+import type { OpenCodeRenameOptions } from '../opencode/rename.js';
 import { MultichatError } from '../errors.js';
 import { createDshAdoptionInspector } from '../dsh/native-operations.js';
 import type { DshOptions } from '../dsh/client.js';
 import { createDshRenameAdapter } from '../dsh/rename.js';
 
 /** Tool-specific native capabilities live here; common TUI code stays provider-independent. */
-export function createNativeOperationProviders(options: { codex?: CodexRenameOptions; dsh?: DshOptions } = {}): readonly NativeOperationProvider[] {
+export function createNativeOperationProviders(options: { codex?: CodexRenameOptions; dsh?: DshOptions; opencode?: OpenCodeRenameOptions } = {}): readonly NativeOperationProvider[] {
   return defaultMembershipProviders.map((provider) => provider.providerId === 'codex'
     ? { ...provider, rename: createCodexRenameAdapter(options.codex) }
+    : provider.providerId === 'opencode' ? { ...provider, rename: createOpenCodeRenameAdapter(options.opencode) }
     : provider.providerId === 'claude' ? { ...provider, rename: {
       contextKey: (item) => JSON.stringify(['claude-messaging', item.attributes.pid ?? null, item.attributes.startedAt ?? null]),
       // Official SDK 0.3.310 changes the persisted title, but the live 2.1.310

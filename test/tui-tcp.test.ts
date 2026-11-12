@@ -79,6 +79,23 @@ describe('TCP resource lists and readonly navigation', () => {
     expect(f.resources.sessions.adapter.watch).toBeTypeOf('function');
     expect(f.resources.members.adapter.watch).toBeTypeOf('function');
   });
+  it('preserves the full OpenCode reference when the selected remote session is adopted', async () => {
+    const f = fixtures();
+    const ref = { contextId: `node:${machines[1].machineId}`, providerId: 'opencode', nativeId: 'ses_opaque/native@雪', endpointType: 'shared' };
+    f.sessions.items = [session(1, { id: 'opencode-session', machineId: machines[1].machineId, providerId: 'opencode', endpointType: 'shared', nativeId: ref.nativeId,
+      ref, member: null, membership: 'not-member', discovered: true, name: null })];
+    const page = await f.resources.sessions.adapter.read({ context, route: { resourceId: 'sessions', contextId: context.id, query: { starId: star.starId, scope: 'discoverable' } }, signal: signal() });
+    const selected = request(f.resources.sessions.resource, page, 'adopt-session', 0);
+
+    expect(await f.resources.sessions.adapter.checkAction!(selected)).toMatchObject({ enabled: true });
+    expect(f.management.preview).toHaveBeenCalledWith(expect.objectContaining({ contextId: context.id, starId: star.starId, sessionTarget: {
+      machineId: machines[1].machineId, providerId: 'opencode', nativeId: ref.nativeId, endpointType: 'shared',
+    } }));
+    await f.resources.sessions.adapter.mutate!(selected);
+    expect(f.management.apply).toHaveBeenCalledWith(expect.objectContaining({ contextId: context.id, action: 'adopt-session', starId: star.starId, expectedPreviewRevision: 'confirmed-preview-revision', sessionTarget: {
+      machineId: machines[1].machineId, providerId: 'opencode', nativeId: ref.nativeId, endpointType: 'shared',
+    } }));
+  });
   it('defaults a selected star to members and exposes three explicit star views on every internal list', async () => {
     const f = fixtures();
     const stars = await f.resources.stars.adapter.read({ context, route: { resourceId: 'stars', contextId: context.id }, signal: signal() });

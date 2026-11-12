@@ -1,0 +1,44 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test test/opencode-pty-smoke.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-opencode-native-20261111
+
+ ❯ test/opencode-pty-smoke.test.ts (3 tests | 1 failed) 816ms
+   ✓ OpenCode native PTY smoke platform support > supports the native Windows and Linux PTY hosts only 1ms
+   ✓ OpenCode native PTY smoke platform support > does not run the C22 TUI child when its helper is imported by another child process  531ms
+   × OpenCode native PTY smoke platform support > binds the enhancement fixture broker to loopback before starting a native node 283ms
+     → expected { address: '0.0.0.0', …(2) } to match object { address: '127.0.0.1' }
+(2 matching properties omitted from actual)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/opencode-pty-smoke.test.ts > OpenCode native PTY smoke platform support > binds the enhancement fixture broker to loopback before starting a native node
+AssertionError: expected { address: '0.0.0.0', …(2) } to match object { address: '127.0.0.1' }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "address": "127.0.0.1",
++   "address": "0.0.0.0",
+  }
+
+ ❯ test/opencode-pty-smoke.test.ts:51:38
+     49|     `], { cwd: repositoryRoot, timeout: 10000 });
+     50|     expect(child.code, child.stderr).toBe(0);
+     51|     expect(JSON.parse(child.stdout)).toMatchObject({ address: '127.0.0…
+       |                                      ^
+     52|   });
+     53| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  10:14:38
+   Duration  2.56s (transform 582ms, setup 0ms, collect 1.49s, tests 816ms, environment 0ms, prepare 109ms)
+

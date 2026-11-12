@@ -1,0 +1,8 @@
+{
+  "url": "oc://renderer/index.html",
+  "title": "OpenCode",
+  "text": "W\ncrosschat_desktop_fixture_sender\nW\ncrosschat_desktop_fixture_receiver\nW\ncrosschat_desktop_fixture_busy\nW\nCROSSCHAT_OPENCODE_RENAME_c664286f53\nCROSSCHAT_OPENCODE_RENAME_c664286f53\n11\ncrosschat_desktop_fixture_bootstrap\nBuild · Scripted test model\n · \n12:13\n\ncrosschat_desktop_fixture_model-ACK:bootstrap\n\nBuild · Scripted test model · 1 秒\n移至背景\nCTRL\nB\n随便问点什么， / 可查看命令， @ 可添加上下文…\nScripted test model\nDefault",
+  "routes": {
+    "opencode.desktop.window.8fecd956-a7e3-443a-be66-a66517eac46a.last-active-url": "/server/c2lkZWNhcg/session/ses_e3c573992ffeLkWlW6lpym1dSe"
+  }
+}

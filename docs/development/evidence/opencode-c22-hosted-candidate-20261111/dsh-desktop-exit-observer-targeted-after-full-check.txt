@@ -1,0 +1,14 @@
+
+> @oatelauser/crosschat@1.13.1 test
+> vitest run --dir test test/dsh-desktop-exit-observer.test.ts
+
+
+ RUN  v3.2.7 D:/workspace/CC/cc-opencode-native-20261111
+
+ ✓ test/dsh-desktop-exit-observer.test.ts (19 tests) 405ms
+
+ Test Files  1 passed (1)
+      Tests  19 passed (19)
+   Start at  23:51:04
+   Duration  837ms (transform 97ms, setup 0ms, collect 154ms, tests 405ms, environment 0ms, prepare 119ms)
+

@@ -1,0 +1,145 @@
+{
+  "status": "passed",
+  "binary": "C:\\Users\\yangsheng\\AppData\\Local\\Temp\\crosschat-opencode-c22-download-21fb62508d704c1a8e8d5308a498d2fa\\cli\\opencode.exe",
+  "evidence": "D:\\workspace\\CC\\cc-opencode-native-20261111\\docs\\development\\evidence\\opencode-c22-multinode-20261111\\retry-6",
+  "version": "2.1.3",
+  "nativeMultinode": {
+    "scope": "Two same-host OpenCode services and logical nodes; two isolated operator HOME/TUI instances; not physical cross-machine acceptance",
+    "starIds": [
+      "opencode-c22-a-ce931e46",
+      "opencode-c22-b-5a8b9320"
+    ],
+    "checks": [
+      {
+        "name": "two-independent-node-identities-and-exact-operation-routing",
+        "status": "passed"
+      },
+      {
+        "name": "two-operator-tui-refreshes-and-star-isolation",
+        "status": "passed"
+      },
+      {
+        "name": "offline-confirmation-is-rejected-and-recovery-does-not-submit-the-held-form",
+        "status": "passed"
+      }
+    ],
+    "cleanup": {
+      "complete": true,
+      "errors": [],
+      "secondProfileRemoved": true
+    },
+    "renamed": "OpenCodeC22eeb5dd34",
+    "operations": {
+      "nodeMachineIds": [
+        "11111111222222223333333344444444",
+        "55555555666666667777777788888888"
+      ],
+      "nodeServicePids": [
+        39208,
+        7044
+      ],
+      "nativeIds": [
+        "ses_e3511954dffepzZXe9X8xcjGlL",
+        "ses_e3511941bffebFNNHalGyoKpaL"
+      ],
+      "starId": "opencode-c22-a-ce931e46",
+      "observers": 2,
+      "exactMembers": [
+        {
+          "sessionId": "ses_e3511954dffepzZXe9X8xcjGlL",
+          "name": "OpenCodeC22eeb5dd34",
+          "tool": "opencode",
+          "endpointType": "shared",
+          "machine": "11111111222222223333333344444444"
+        },
+        {
+          "sessionId": "ses_e3511941bffebFNNHalGyoKpaL",
+          "name": "C22Second",
+          "tool": "opencode",
+          "endpointType": "shared",
+          "machine": "55555555666666667777777788888888"
+        }
+      ],
+      "secondStarRosterCount": 0
+    },
+    "actionAvailability": {
+      "shortcut": "e",
+      "enabled": true,
+      "observedSelectedTuiOutputEvent": 2
+    },
+    "offlineConfirmation": {
+      "nativeId": "ses_e3511954dffepzZXe9X8xcjGlL",
+      "enabled": false,
+      "reason": "所选完整节点当前不在线或原生引用无效。",
+      "blockedName": "OpenCodeC22Blockedc7cf4d",
+      "noMutationStarted": true
+    },
+    "recoveryStage": "complete",
+    "recovery": {
+      "nativeId": "ses_e3511954dffepzZXe9X8xcjGlL",
+      "machineId": "11111111222222223333333344444444",
+      "blockedName": "OpenCodeC22Blockedc7cf4d",
+      "lastConfirmedTitleRetained": "OpenCodeC22eeb5dd34",
+      "noMutationStarted": true,
+      "actionRecovered": true
+    },
+    "status": "passed",
+    "operators": [
+      {
+        "index": 0,
+        "exit": {
+          "event": "exit",
+          "code": 0,
+          "before": {
+            "raw": false,
+            "resize": 0,
+            "listeners": {
+              "SIGINT": 1,
+              "SIGTERM": 1,
+              "uncaughtException": 0,
+              "unhandledRejection": 0
+            }
+          },
+          "after": {
+            "raw": false,
+            "resize": 0,
+            "listeners": {
+              "SIGINT": 1,
+              "SIGTERM": 1,
+              "uncaughtException": 0,
+              "unhandledRejection": 0
+            }
+          }
+        }
+      },
+      {
+        "index": 1,
+        "exit": {
+          "event": "exit",
+          "code": 0,
+          "before": {
+            "raw": false,
+            "resize": 0,
+            "listeners": {
+              "SIGINT": 1,
+              "SIGTERM": 1,
+              "uncaughtException": 0,
+              "unhandledRejection": 0
+            }
+          },
+          "after": {
+            "raw": false,
+            "resize": 0,
+            "listeners": {
+              "SIGINT": 1,
+              "SIGTERM": 1,
+              "uncaughtException": 0,
+              "unhandledRejection": 0
+            }
+          }
+        }
+      }
+    ]
+  },
+  "fixtureRemoved": true
+}

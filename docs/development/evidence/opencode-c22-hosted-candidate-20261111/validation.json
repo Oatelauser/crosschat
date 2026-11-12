@@ -1,0 +1,268 @@
+{
+  "schema": 2,
+  "date": "2026-11-11",
+  "scope": "OpenCode C22 Windows/Linux hosted behavior checks passed at b94c17a. A subsequently identified fixture listener isolation gap is repaired locally at cd4963e; hosted verification of that repair is pending.",
+  "branch": "codex/opencode-native-c17-c19-20261111",
+  "baseHead": "92e955733dec8ac42627f509efda682a71be2047",
+  "hostedCandidate": {
+    "commit": "64f74f6",
+    "pullRequest": 11,
+    "workflow": "opencode-compat.yml",
+    "input": "c22-cli",
+    "runId": "43048480770",
+    "runUrl": "https://github.com/Oatelauser/crosschat/actions/runs/43048480770",
+    "result": "failed",
+    "jobs": {
+      "ubuntu-x64-compatibility": "passed",
+      "windows-x64-compatibility": "passed",
+      "ubuntu-x64-c22-probe": "failed",
+      "windows-x64-c22-probe": "failed",
+      "desktop-lifecycle": "skipped by c22-cli",
+      "issue-report": "skipped for PR branch"
+    },
+    "compatibilityClassification": "compatible; notify=false",
+    "c22Failure": "Fixture exited before output matched OpenCode actual service validation",
+    "c22BaselineVersion": "2.1.3",
+    "candidateVersion": "2.2.7",
+    "fixtureRemovedOnBothPlatforms": true,
+    "evidenceDirectory": "run-43048480770/"
+  },
+  "localRepair": {
+    "state": "pushed under explicit user approval; hosted behavior checks passed at b94c17a",
+    "commit": "3b96ce8",
+    "changes": [
+      "TUI member assertion accepts a conservative 16-character visible prefix while the authoritative event still checks the complete member name; the column width is not assumed to be 16.",
+      "C22 helper runs --tui-child only when it is the directly executed module; importing it from a child process no longer starts another TUI child.",
+      "A regression test verifies the imported helper remains inert when process.argv contains --tui-child."
+    ]
+  },
+  "runtime": {
+    "node": "22.23.3",
+    "officialArchive": "https://nodejs.org/dist/v22.23.3/node-v22.23.3-win-x64.zip",
+    "sha256": "2b0ff57b049cda1bbcea2240eec20467018713c1efe1f7360c2681859b90ed71",
+    "checksumSource": "https://nodejs.org/dist/v22.23.3/SHASUMS256.txt",
+    "installation": "temporary extracted runtime; not added to PATH permanently"
+  },
+  "tooling": {
+    "eslint": "9.39.4",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  },
+  "checks": {
+    "localC22Retry11": {
+      "officialOpenCodeVersion": "2.1.3",
+      "platform": "Windows x64",
+      "nativeSmokeChecksPassed": 8,
+      "multiNodeChecksPassed": 4,
+      "fixtureRemoved": true,
+      "multiNodeCleanupComplete": true,
+      "scope": "same-host logical nodes; no physical cross-machine claim",
+      "evidence": "../opencode-c22-multinode-20261111/retry-11-local/"
+    },
+    "fullCheckFirstRun": {
+      "command": "npm run check",
+      "status": "passed",
+      "lint": "passed",
+      "importGraph": {
+        "modules": 207,
+        "edges": 703
+      },
+      "build": "passed",
+      "vitest": {
+        "filesPassed": 250,
+        "filesSkipped": 4,
+        "testsPassed": 2946,
+        "testsSkipped": 12
+      },
+      "exitCode": 0,
+      "rawOutput": "not captured"
+    },
+    "fullCheckEvidenceCaptureRepeat": {
+      "command": "npm run check",
+      "status": "failed",
+      "vitest": {
+        "filesPassed": 249,
+        "filesFailed": 1,
+        "filesSkipped": 4,
+        "testsPassed": 2945,
+        "testsFailed": 1,
+        "testsSkipped": 12
+      },
+      "failure": {
+        "test": "test/dsh-desktop-exit-observer.test.ts",
+        "expectedExitCode": 0,
+        "actualExitCode": 3221225477,
+        "hex": "0xC0000005"
+      },
+      "raw": "full-check-windows-node22.23.3-bounded-repeat-red.txt"
+    },
+    "focusedFailureRecheck": {
+      "command": "npm test -- test/dsh-desktop-exit-observer.test.ts",
+      "status": "passed",
+      "filesPassed": 1,
+      "testsPassed": 19,
+      "exitCode": 0,
+      "raw": "dsh-desktop-exit-observer-targeted-after-full-check.txt"
+    },
+    "opencodeHelperRegression": {
+      "includedIn": "fullCheckFirstRun and fullCheckEvidenceCaptureRepeat",
+      "file": "test/opencode-pty-smoke.test.ts",
+      "testsPassed": 2
+    }
+  },
+  "ordinaryCiFollowup": {
+    "investigatedOn": "2026-11-12",
+    "head": "64f74f6",
+    "runId": "43048318000",
+    "jobs": {
+      "windows": "passed",
+      "ubuntu": "failed",
+      "macos": "passed"
+    },
+    "failure": "test/conversations.test.ts:212 ENOENT reading an isolated conversation shard",
+    "localFocusedRecheck": "WSL Ubuntu 22.04 / Node 22.14.0: 46 tests across 2 files passed",
+    "controlledProbe": "Lock contention reproduced the absent shard, then normal recording recovered after release",
+    "originalRootCauseConfirmed": false,
+    "sharedConversationImplementationChanged": false,
+    "evidence": "ordinary-ci-43048318000/review.md"
+  },
+  "externalActions": {
+    "performed": [
+      "Original c22-cli run 43048480770",
+      "Explicitly approved push of 3b96ce8 and b94c17a to existing draft PR #11",
+      "Explicitly approved c22-cli run 43134592145",
+      "Push-triggered ordinary three-platform CI 43134505721"
+    ],
+    "authorizationFulfilled": true,
+    "newLocalCommits": "19ee5eb and cd4963e not pushed; any new push, dispatch, PR ready/merge or schedule change requires a concrete decision",
+    "mergePerformed": false,
+    "scheduleChanged": false
+  },
+  "limits": [
+    "The first hosted C22 run 43048480770 failed before the multi-node sequence. Its raw logs and cleanup evidence remain historical.",
+    "Hosted behavior checks passed on Windows/Linux at b94c17a; the later fixture loopback repair cd4963e has not been pushed or run on hosted runners. Do not transfer the earlier green to the later head or claim complete loopback qualification.",
+    "The later local full-check repeat contains an unrelated Windows Node inspector child failure; focused 19-test rerun passed but its root cause is unconfirmed.",
+    "Ordinary Ubuntu CI at 64f74f6 failed on a missing conversation shard. Focused Linux rechecks and later three-platform CI pass; original root cause remains unconfirmed and shared conversation code was not changed.",
+    "C22 qualifies only CLI 2.1.3 same-host services/logical nodes. No macOS, Desktop lifecycle, C22 on 2.2.7, or physical cross-machine acceptance is claimed. Fixture machine IDs are fixed, not fresh UUIDs."
+  ],
+  "updatedOn": "2026-11-12",
+  "hostedRepair": {
+    "head": "b94c17a9c1193109a2d62ba2f77391960e35fee1",
+    "pullRequest": 11,
+    "pullRequestState": "open draft; unmerged",
+    "workflow": "opencode-compat.yml",
+    "input": "c22-cli",
+    "runId": "43134592145",
+    "runUrl": "https://github.com/Oatelauser/crosschat/actions/runs/43134592145",
+    "runnerConclusions": {
+      "ubuntu-x64": "success",
+      "windows-x64": "success",
+      "desktop": "skipped",
+      "issue-report": "skipped"
+    },
+    "perPlatform": {
+      "compatibility": {
+        "baseline": "2.1.3",
+        "candidate": "2.2.7",
+        "checksPerVersion": 8,
+        "classification": "compatible",
+        "notify": false
+      },
+      "c22": {
+        "version": "2.1.3",
+        "nativeSmokeChecks": 8,
+        "multiNodeChecks": 4,
+        "requests": 1,
+        "acceptedReceipts": 1,
+        "droppedReceipts": 1,
+        "nativeTitlePatches": 1,
+        "result": "uncertain",
+        "readonlyRecovery": true,
+        "observedByOperators": 2,
+        "offlineMutationBlocked": true,
+        "heldFormNotSubmittedAfterRecovery": true,
+        "operatorExitCodes": [
+          0,
+          0
+        ],
+        "terminalRestored": true,
+        "fixtureRemoved": true,
+        "secondProfileRemoved": true,
+        "multiNodeCleanupComplete": true
+      }
+    },
+    "ordinaryCi": {
+      "runId": "43134505721",
+      "allActualJobs": "success",
+      "windows": {
+        "testsPassed": 2946,
+        "testsSkipped": 12,
+        "filesPassed": 250,
+        "filesSkipped": 4
+      },
+      "ubuntu": {
+        "testsPassed": 2942,
+        "testsSkipped": 16,
+        "filesPassed": 251,
+        "filesSkipped": 3
+      },
+      "macos": {
+        "testsPassed": 2941,
+        "testsSkipped": 17,
+        "filesPassed": 250,
+        "filesSkipped": 4,
+        "existingContinueOnError": true
+      },
+      "importGraph": {
+        "modules": 207,
+        "edges": 703
+      }
+    },
+    "artifactCount": 2,
+    "artifactMembers": 34,
+    "artifactDigestsVerified": true,
+    "copiedEvidenceHashesVerified": true,
+    "independentBehaviorAudit": "passed; no behavior acceptance blocker",
+    "evidenceDirectory": "repair-run-20261112/",
+    "qualification": "Behavior evidence accepted for same-host logical-node Windows/Linux CLI 2.1.3 slice; approved loopback isolation has a separately recorded fixture repair awaiting hosted verification."
+  },
+  "fixtureIsolationFollowup": {
+    "finding": "The single-node native-enhancement fixture omitted listenHost and inherited the production wildcard bind. The C22 multi-node broker already bound loopback.",
+    "affectedHostedHead": "b94c17a",
+    "observedAddressBefore": "0.0.0.0",
+    "reproducerCommit": "19ee5eb",
+    "repairCommit": "cd4963e",
+    "observedAddressAfter": "127.0.0.1",
+    "change": "Only test/helpers/opencode-native-enhancement.mjs Broker dependencies now explicitly set listenHost=127.0.0.1; production default, workflow and user configuration are unchanged.",
+    "regression": "A separate Node child starts the actual fixture Broker, observes its listener address, then stops through helper finally without starting OpenCode.",
+    "redRaw": "repair-run-20261112/loopback-red.txt",
+    "greenRaw": "repair-run-20261112/loopback-green.txt",
+    "targetedTestsPassed": 4,
+    "fullCheck": {
+      "head": "cd4963e",
+      "command": "npm run check",
+      "runtime": "Node 22.23.3",
+      "boundedWorkers": "max2/min1",
+      "exitCode": 0,
+      "lint": "passed",
+      "build": "passed",
+      "importGraph": {
+        "modules": 207,
+        "edges": 703
+      },
+      "vitest": {
+        "testsPassed": 2947,
+        "testsSkipped": 12,
+        "filesPassed": 250,
+        "filesSkipped": 4
+      },
+      "raw": "repair-run-20261112/loopback-full-check.txt"
+    },
+    "pushOrHostedRerun": "not yet authorized or performed",
+    "review": {
+      "standardsUnresolvedFindings": 0,
+      "specUnresolvedFindings": 0,
+      "originalLoopbackFindingFixedLocally": true
+    }
+  }
+}

@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: '37 3 * * 2,5'
   workflow_dispatch:
+    inputs:
+      scope:
+        description: Select the manual probe scope
+        required: true
+        type: choice
+        default: full
+        options:
+          - full
+          - c22-cli
 
 concurrency:
   group: opencode-compat-${{ github.ref }}
@@ -20,7 +29,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.scope == 'c22-cli' && 45 || 25 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,6 +43,7 @@ jobs:
         run: node scripts/opencode-compat-ci.mjs
         env:
           CROSSCHAT_LIVE: '1'
+          OPENCODE_C22_NATIVE: ${{ github.event_name == 'workflow_dispatch' && inputs.scope == 'c22-cli' && '1' || '0' }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -43,6 +53,7 @@ jobs:
           retention-days: 21
 
   desktop-probe:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.scope != 'c22-cli' }}
     runs-on: windows-latest
     timeout-minutes: 40
     steps:

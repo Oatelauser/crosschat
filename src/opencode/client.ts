@@ -23,6 +23,20 @@ export interface OpenCodePageOptions extends OpenCodeOptions {
   limit?: number;
 }
 
+export async function getOpenCodeThreadFromConnection(connection: OpenCodeConnection, id: string): Promise<OpenCodeThread | null> {
+  const path = openCodeSessionPath(id);
+  let result: unknown;
+  try { result = await connection.request(path); }
+  catch (error) {
+    if (isRecord(error) && error.code === 'OPENCODE_SESSION_NOT_FOUND') return null;
+    throw error;
+  }
+  if (!isRecord(result)) throw openCodeError('PROTOCOL_ERROR', 'OpenCode session detail response is malformed.');
+  const item = thread(result.data, await activeSessions(connection));
+  if (item.id !== id) throw openCodeError('PROTOCOL_ERROR', 'OpenCode session detail did not match the requested native ID.');
+  return item;
+}
+
 function thread(value: unknown, active: Record<string, unknown>): OpenCodeThread {
   if (!isRecord(value) || typeof value.id !== 'string' || value.id === ''
     || !isRecord(value.location) || typeof value.location.directory !== 'string'
@@ -89,16 +103,6 @@ export function openCodeSessionPath(id: string): string {
 }
 
 export async function getOpenCodeThread(id: string, options: OpenCodeOptions = {}): Promise<OpenCodeThread | null> {
-  const path = openCodeSessionPath(id);
   const connection = await connectOpenCode(options);
-  let result: unknown;
-  try { result = await connection.request(path); }
-  catch (error) {
-    if (isRecord(error) && error.code === 'OPENCODE_SESSION_NOT_FOUND') return null;
-    throw error;
-  }
-  if (!isRecord(result)) throw openCodeError('PROTOCOL_ERROR', 'OpenCode session detail response is malformed.');
-  const item = thread(result.data, await activeSessions(connection));
-  if (item.id !== id) throw openCodeError('PROTOCOL_ERROR', 'OpenCode session detail did not match the requested native ID.');
-  return item;
+  return getOpenCodeThreadFromConnection(connection, id);
 }

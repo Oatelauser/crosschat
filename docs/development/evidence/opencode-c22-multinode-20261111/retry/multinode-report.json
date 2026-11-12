@@ -1,0 +1,76 @@
+{
+  "scope": "Two same-host OpenCode services and logical nodes; two isolated operator HOME/TUI instances; not physical cross-machine acceptance",
+  "starIds": [
+    "opencode-c22-a-e3ba43f7",
+    "opencode-c22-b-843a397d"
+  ],
+  "checks": [
+    {
+      "name": "two-independent-node-identities-and-exact-operation-routing",
+      "status": "passed"
+    }
+  ],
+  "cleanup": {
+    "complete": true,
+    "errors": [],
+    "secondProfileRemoved": true
+  },
+  "status": "failed",
+  "error": "ConPTY output did not match OpenCode C22 primary node; log: D:\\workspace\\CC\\cc-opencode-native-20261111\\docs\\development\\evidence\\opencode-c22-multinode-20261111\\retry\\operator-0-pty.jsonl; output tail:                              │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n│                                                                                                                                          │\r\n└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘\r\n<members> 1/2 · 完整 · 自动刷新\u001b[K\r\n按在线 / 下线分组；a 选择节点会话入星，e 按原生能力改名，Ctrl+D 删除成员。k/K 发钥，x 撤销凭证。\u001b[K\r\n:资源  /筛选  Esc返回  q退出\u001b[K\u001b[112C",
+  "operators": [
+    {
+      "index": 0,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    },
+    {
+      "index": 1,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,264 @@
+{
+  "schema": 1,
+  "platform": "win32",
+  "arch": "x64",
+  "builds": {
+    "baseline": {
+      "version": "2.1.3",
+      "filename": "opencode-windows-x64.zip",
+      "url": "https://opencode.ai/files/bin/2.1.3/opencode-windows-x64.zip",
+      "sha256": "f764199c917dd54483bd629507e6879afe11ddc33d2749ec19bea8bd64ae0b01",
+      "size": 117161271
+    },
+    "candidate": {
+      "version": "2.2.7",
+      "filename": "opencode-windows-x64.zip",
+      "url": "https://opencode.ai/files/bin/2.2.7/opencode-windows-x64.zip",
+      "sha256": "91398e0e2c2bc72f6c93dbdae426a0710884ed3277a08558200753c7a995daa8",
+      "size": 124794067
+    }
+  },
+  "baseline": {
+    "schema": 1,
+    "tool": "opencode-cli",
+    "platform": "win32",
+    "arch": "x64",
+    "version": "2.1.3",
+    "startedAt": "2026-11-11T15:28:20.608Z",
+    "status": "passed",
+    "stage": "done",
+    "checks": [
+      {
+        "name": "native-session-create",
+        "status": "passed",
+        "elapsedMs": 49
+      },
+      {
+        "name": "scripted-provider-and-native-shell-bootstrap",
+        "status": "passed",
+        "elapsedMs": 814
+      },
+      {
+        "name": "authenticated-service-discovery",
+        "status": "passed",
+        "elapsedMs": 889
+      },
+      {
+        "name": "idle-delivery-and-model-wakeup",
+        "status": "passed",
+        "elapsedMs": 1009
+      },
+      {
+        "name": "native-queue-and-steer-boundaries",
+        "status": "passed",
+        "elapsedMs": 1446
+      },
+      {
+        "name": "native-shell-identity-and-bidirectional-reply",
+        "status": "passed",
+        "elapsedMs": 1394
+      },
+      {
+        "name": "service-restart-preserves-exact-session",
+        "status": "passed",
+        "elapsedMs": 1298
+      },
+      {
+        "name": "missing-target-is-explicit",
+        "status": "passed",
+        "elapsedMs": 441
+      }
+    ],
+    "scope": "real service, real crosschat CLI, real shell tool; scripted model; no desktop UI or model intelligence assertion",
+    "modelRequests": [
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_bootstrap"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_bootstrap"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_bootstrap\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c6886effe2MEEbU0GK4uzis\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_fixture_idle-message\n</cross-session-message>"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_busy-start"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_busy-start\n<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c68879ffe3z01G7wkrjL6lw\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA001；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_fixture_steered\n</cross-session-message>"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_busy-start\n<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c68879ffe3z01G7wkrjL6lw\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA001；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_fixture_steered\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c68879ffe3z01G7wkrjL6lw\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA001；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_fixture_queued\n</cross-session-message>"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_begin-roundtrip"
+      },
+      {
+        "model": "test-model",
+        "userText": "<cross-session-message from-name=\"opencode/ses_e34c\" turn=\"1\" from-tool=\"opencode\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c68882ffes6sppshO2naARA\">回复请运行: crosschat send --conversation cA002 --tool opencode --body \"<你的回复>\"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>\ncrosschat_fixture_roundtrip-request\n</cross-session-message>"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_begin-roundtrip"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_begin-roundtrip\n<cross-session-message from-name=\"opencode/ses_e34c\" turn=\"2\" from-tool=\"opencode\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c68892ffeSkTqEjKzaBsV5H\">回复请运行: crosschat send --conversation cA002 --tool opencode --body \"<你的回复>\"（长文/特殊字符走 stdin）</crosschat-reply-hint>\ncrosschat_fixture_roundtrip-reply\n</cross-session-message>"
+      },
+      {
+        "model": "test-model",
+        "userText": "<cross-session-message from-name=\"opencode/ses_e34c\" turn=\"1\" from-tool=\"opencode\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c68882ffes6sppshO2naARA\">回复请运行: crosschat send --conversation cA002 --tool opencode --body \"<你的回复>\"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>\ncrosschat_fixture_roundtrip-request\n</cross-session-message>"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_bootstrap\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c6886effe2MEEbU0GK4uzis\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_fixture_idle-message\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c6886effe2MEEbU0GK4uzis\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_fixture_after-restart\n</cross-session-message>"
+      }
+    ],
+    "serviceLogs": {
+      "stdout": "server listening on http://127.0.0.1:50714\nserver listening on http://127.0.0.1:50714\n",
+      "stderr": ""
+    },
+    "cleanup": {
+      "removed": true,
+      "ownedRoot": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\crosschat-opencode-compat-2OUma0",
+      "ownedProcesses": [
+        6752,
+        10204
+      ]
+    },
+    "finishedAt": "2026-11-11T15:28:30.886Z"
+  },
+  "c22Native": {
+    "status": "failed",
+    "version": "2.1.3",
+    "checks": 2,
+    "evidence": "c22-native-multinode\\result.json"
+  },
+  "candidate": {
+    "schema": 1,
+    "tool": "opencode-cli",
+    "platform": "win32",
+    "arch": "x64",
+    "version": "2.2.7",
+    "startedAt": "2026-11-11T15:28:43.531Z",
+    "status": "passed",
+    "stage": "done",
+    "checks": [
+      {
+        "name": "native-session-create",
+        "status": "passed",
+        "elapsedMs": 69
+      },
+      {
+        "name": "scripted-provider-and-native-shell-bootstrap",
+        "status": "passed",
+        "elapsedMs": 729
+      },
+      {
+        "name": "authenticated-service-discovery",
+        "status": "passed",
+        "elapsedMs": 815
+      },
+      {
+        "name": "idle-delivery-and-model-wakeup",
+        "status": "passed",
+        "elapsedMs": 418
+      },
+      {
+        "name": "native-queue-and-steer-boundaries",
+        "status": "passed",
+        "elapsedMs": 1256
+      },
+      {
+        "name": "native-shell-identity-and-bidirectional-reply",
+        "status": "passed",
+        "elapsedMs": 1183
+      },
+      {
+        "name": "service-restart-preserves-exact-session",
+        "status": "passed",
+        "elapsedMs": 1199
+      },
+      {
+        "name": "missing-target-is-explicit",
+        "status": "passed",
+        "elapsedMs": 439
+      }
+    ],
+    "scope": "real service, real crosschat CLI, real shell tool; scripted model; no desktop UI or model intelligence assertion",
+    "modelRequests": [
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_bootstrap"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_bootstrap"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_bootstrap\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c62e69ffendfcc2HcPpfMTB\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_fixture_idle-message\n</cross-session-message>"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_busy-start"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_busy-start\n<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c62e75ffezKEA73iepqrQH0\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA001；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_fixture_steered\n</cross-session-message>"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_busy-start\n<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c62e75ffezKEA73iepqrQH0\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA001；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_fixture_steered\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c62e75ffezKEA73iepqrQH0\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA001；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_fixture_queued\n</cross-session-message>"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_begin-roundtrip"
+      },
+      {
+        "model": "test-model",
+        "userText": "<cross-session-message from-name=\"opencode/ses_e34c\" turn=\"1\" from-tool=\"opencode\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c62e82ffebeodahGZPk0AZk\">回复请运行: crosschat send --conversation cA002 --tool opencode --body \"<你的回复>\"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>\ncrosschat_fixture_roundtrip-request\n</cross-session-message>"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_begin-roundtrip"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_begin-roundtrip\n<cross-session-message from-name=\"opencode/ses_e34c\" turn=\"2\" from-tool=\"opencode\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c62e91ffeWCfAYywV1R3mNh\">回复请运行: crosschat send --conversation cA002 --tool opencode --body \"<你的回复>\"（长文/特殊字符走 stdin）</crosschat-reply-hint>\ncrosschat_fixture_roundtrip-reply\n</cross-session-message>"
+      },
+      {
+        "model": "test-model",
+        "userText": "<cross-session-message from-name=\"opencode/ses_e34c\" turn=\"1\" from-tool=\"opencode\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c62e82ffebeodahGZPk0AZk\">回复请运行: crosschat send --conversation cA002 --tool opencode --body \"<你的回复>\"（长正文/含敏感字符可省 --body 改管道喂 stdin）</crosschat-reply-hint>\ncrosschat_fixture_roundtrip-request\n</cross-session-message>"
+      },
+      {
+        "model": "test-model",
+        "userText": "crosschat_fixture_bootstrap\n<cross-session-message from-name=\"human\" turn=\"1\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c62e69ffendfcc2HcPpfMTB\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_fixture_idle-message\n</cross-session-message>\n<cross-session-message from-name=\"human\" turn=\"2\" from-tool=\"pending\">\n<crosschat-reply-hint reply-as=\"opencode/ses_e34c62e69ffendfcc2HcPpfMTB\">回复收件类型待核实，暂不能生成可直接执行的命令。保留会话引用 cA000；核实目标类型后使用该引用回复。</crosschat-reply-hint>\ncrosschat_fixture_after-restart\n</cross-session-message>"
+      }
+    ],
+    "serviceLogs": {
+      "stdout": "server listening on http://127.0.0.1:50799\nserver listening on http://127.0.0.1:50799\n",
+      "stderr": ""
+    },
+    "cleanup": {
+      "removed": true,
+      "ownedRoot": "C:\\Users\\runneradmin\\AppData\\Local\\Temp\\crosschat-opencode-compat-F4jMc9",
+      "ownedProcesses": [
+        1332,
+        10128
+      ]
+    },
+    "finishedAt": "2026-11-11T15:28:52.693Z"
+  },
+  "classification": {
+    "kind": "compatible",
+    "notify": false
+  },
+  "downloadCleanup": "removed"
+}

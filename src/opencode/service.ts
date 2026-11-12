@@ -19,6 +19,11 @@ export interface OpenCodeOptions {
   timeoutMs?: number;
 }
 
+export interface OpenCodeRequestOptions {
+  method?: 'GET' | 'POST' | 'PATCH';
+  response?: 'json' | 'empty';
+}
+
 interface Registration {
   id?: string;
   url: string;
@@ -29,7 +34,7 @@ interface Registration {
 
 export interface OpenCodeConnection {
   serviceIdentity?: { registrationId?: string; pid: number; version: string; url: string };
-  request(path: string, body?: unknown): Promise<unknown>;
+  request(path: string, body?: unknown, options?: OpenCodeRequestOptions): Promise<unknown>;
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -133,16 +138,17 @@ export async function connectOpenCode(options: OpenCodeOptions = {}): Promise<Op
     : `Basic ${Buffer.from(`${endpoint.username ?? 'opencode'}:${endpoint.token}`).toString('base64')}`;
 
   const connection: OpenCodeConnection = {
-    async request(path, body) {
+    async request(path, body, requestOptions = {}) {
       cancelled(options.signal);
-      const write = body !== undefined;
+      const method = requestOptions.method ?? (body === undefined ? 'GET' : 'POST');
+      const write = method !== 'GET';
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       const onAbort = () => controller.abort();
       options.signal?.addEventListener('abort', onAbort, { once: true });
       try {
         const response = await fetch(new URL(path, base), {
-          method: write ? 'POST' : 'GET',
+          method,
           headers: { accept: 'application/json', ...(write ? { 'content-type': 'application/json' } : {}), ...(authorization === undefined ? {} : { authorization }) },
           ...(write ? { body: JSON.stringify(body) } : {}),
           signal: controller.signal,
@@ -167,6 +173,13 @@ export async function connectOpenCode(options: OpenCodeOptions = {}): Promise<Op
           if (response.status === 409 || response.status === 422 || response.status === 429) throw openCodeError('INPUT_REJECTED', 'OpenCode rejected this input without an admission receipt.');
           if (write) throw openCodeError('WRITE_UNCERTAIN', 'OpenCode input acceptance could not be confirmed; the write was not retried.');
           throw openCodeError(response.status >= 500 ? 'UNAVAILABLE' : 'PROTOCOL_ERROR', 'OpenCode service did not return a successful API response.');
+        }
+        if (requestOptions.response === 'empty') {
+          if (response.status !== 204) {
+            await response.body?.cancel().catch(() => undefined);
+            throw openCodeError('PROTOCOL_ERROR', 'OpenCode returned an unexpected response to the write.');
+          }
+          return undefined;
         }
         return await responseJson(response);
       } catch (error) {

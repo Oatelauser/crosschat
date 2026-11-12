@@ -1,0 +1,50 @@
+[
+  {
+    "path": ".github",
+    "blob_href": "https://github.com/Oatelauser/crosschat/blob/64f74f680b45e59d40a19d132cc7b867ea2d92b4/.github",
+    "start_line": 2,
+    "start_column": null,
+    "end_line": 2,
+    "end_column": null,
+    "annotation_level": "warning",
+    "title": "",
+    "message": "Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/",
+    "raw_details": ""
+  },
+  {
+    "path": ".github",
+    "blob_href": "https://github.com/Oatelauser/crosschat/blob/64f74f680b45e59d40a19d132cc7b867ea2d92b4/.github",
+    "start_line": 423,
+    "start_column": null,
+    "end_line": 423,
+    "end_column": null,
+    "annotation_level": "failure",
+    "title": "",
+    "message": "Process completed with exit code 1.",
+    "raw_details": ""
+  },
+  {
+    "path": "test/conversations.test.ts",
+    "blob_href": "https://github.com/Oatelauser/crosschat/blob/64f74f680b45e59d40a19d132cc7b867ea2d92b4/test/conversations.test.ts",
+    "start_line": 212,
+    "start_column": null,
+    "end_line": 212,
+    "end_column": null,
+    "annotation_level": "failure",
+    "title": "test/conversations.test.ts > conversation short handles (F2) > refreshes the handle ref as the conversation advances (rides recordConversation)",
+    "message": "Error: ENOENT: no such file or directory, open '/tmp/crosschat-conv-CvXDrc/case-QYrECJ/conversations/9b4e8bf1bfd5fdf6454b91bcf40a3ff2e35ee954ddf05ddb1d83dc7d562d3115.json'\n ❯ test/conversations.test.ts:212:30\n\n⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\nSerialized Error: { errno: -2, code: 'ENOENT', syscall: 'open', path: '/tmp/crosschat-conv-CvXDrc/case-QYrECJ/conversations/9b4e8bf1bfd5fdf6454b91bcf40a3ff2e35ee954ddf05ddb1d83dc7d562d3115.json' }\n",
+    "raw_details": ""
+  },
+  {
+    "path": ".github",
+    "blob_href": "https://github.com/Oatelauser/crosschat/blob/64f74f680b45e59d40a19d132cc7b867ea2d92b4/.github",
+    "start_line": 1,
+    "start_column": null,
+    "end_line": 1,
+    "end_column": null,
+    "annotation_level": "notice",
+    "title": "",
+    "message": "\"The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more information, see https://github.com/actions/runner-images/issues/14748\"",
+    "raw_details": ""
+  }
+]

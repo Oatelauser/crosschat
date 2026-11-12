@@ -124,6 +124,8 @@ export interface BrokerDeps {
   discover?: DiscoveryEndpoint['execute'];
   /** 显式端口（0 = 随机，测试用）；缺省读注册表再缺省 DEFAULT_PORT。 */
   port?: number;
+  /** Bind address override for isolated local fixtures; production keeps the wildcard default. */
+  listenHost?: string;
   heartbeatMs?: number;
   pongTimeoutMs?: number;
   connectTimeoutMs?: number;
@@ -291,8 +293,9 @@ const ADMIN_OP_MATRIX: Record<string, readonly ('member' | 'admin')[]> = {
 export class Broker {
   private readonly nodeNames: NodeNameChanges;
   private readonly sessionOperations: SessionOperationRoutes;
-  private readonly d: Required<Omit<BrokerDeps, 'port' | 'fileInbox' | 'scanStatus' | 'discover' | 'spawnLocalAggregator' | 'stopLocalAggregator'>> & {
+  private readonly d: Required<Omit<BrokerDeps, 'port' | 'listenHost' | 'fileInbox' | 'scanStatus' | 'discover' | 'spawnLocalAggregator' | 'stopLocalAggregator'>> & {
     port?: number;
+    listenHost?: string;
     fileInbox?: FileInbox;
     scanStatus?: () => Promise<StatusPayload>;
     discover?: DiscoveryEndpoint['execute'];
@@ -354,7 +357,7 @@ export class Broker {
       online: new Map<string, Session>(),
     }));
     const wantPort = this.d.port ?? doc.port ?? DEFAULT_PORT;
-    const wss = new WebSocketServer({ host: '0.0.0.0', port: wantPort, maxPayload: MAX_PAYLOAD_BYTES });
+    const wss = new WebSocketServer({ host: this.d.listenHost ?? '0.0.0.0', port: wantPort, maxPayload: MAX_PAYLOAD_BYTES });
     try {
       await new Promise<void>((resolve, reject) => {
         wss.once('listening', () => resolve());

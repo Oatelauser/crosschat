@@ -1,0 +1,169 @@
+{
+  "scope": "Two same-host OpenCode services and logical nodes; two isolated operator HOME/TUI instances; not physical cross-machine acceptance",
+  "starIds": [
+    "opencode-c22-a-632a4381",
+    "opencode-c22-b-87d2f67f"
+  ],
+  "checks": [
+    {
+      "name": "two-independent-node-identities-and-exact-operation-routing",
+      "status": "passed"
+    },
+    {
+      "name": "two-operator-tui-refreshes-and-star-isolation",
+      "status": "passed"
+    },
+    {
+      "name": "broker-committed-rename-lost-receipt-is-uncertain-and-readonly-recovery-does-not-replay",
+      "status": "passed"
+    },
+    {
+      "name": "offline-confirmation-is-rejected-and-recovery-does-not-submit-the-held-form",
+      "status": "passed"
+    }
+  ],
+  "cleanup": {
+    "complete": true,
+    "errors": [],
+    "secondProfileRemoved": true
+  },
+  "renamed": "OpenCodeC22b6b029a9",
+  "operations": {
+    "nodeMachineIds": [
+      "11111111222222223333333344444444",
+      "55555555666666667777777788888888"
+    ],
+    "nodeServicePids": [
+      24488,
+      27856
+    ],
+    "nativeIds": [
+      "ses_e34f9bf1cffePzPalTb5Q3Pth5",
+      "ses_e34f9be06ffexvQAuOEU3IeyAg"
+    ],
+    "starId": "opencode-c22-a-632a4381",
+    "observers": 2,
+    "exactMembers": [
+      {
+        "sessionId": "ses_e34f9bf1cffePzPalTb5Q3Pth5",
+        "name": "OpenCodeC22b6b029a9",
+        "tool": "opencode",
+        "endpointType": "shared",
+        "machine": "11111111222222223333333344444444"
+      },
+      {
+        "sessionId": "ses_e34f9be06ffexvQAuOEU3IeyAg",
+        "name": "C22Second",
+        "tool": "opencode",
+        "endpointType": "shared",
+        "machine": "55555555666666667777777788888888"
+      }
+    ],
+    "secondStarRosterCount": 0
+  },
+  "brokerReceiptFault": {
+    "requests": 1,
+    "acceptedReceipts": 1,
+    "droppedReceipts": 1,
+    "correlations": [
+      {
+        "id": "0681dbb9-c838-4dd4-8ea9-992e2dfd1d69",
+        "starId": "opencode-c22-a-632a4381",
+        "machineId": "55555555666666667777777788888888",
+        "providerId": "opencode",
+        "nativeId": "ses_e34f9be06ffexvQAuOEU3IeyAg",
+        "endpointType": "shared"
+      }
+    ],
+    "configRestored": true,
+    "proxyClosed": true,
+    "operation": {
+      "nativeId": "ses_e34f9be06ffexvQAuOEU3IeyAg",
+      "machineId": "55555555666666667777777788888888",
+      "name": "OpenCodeC22Lost84a94ced",
+      "result": "uncertain",
+      "nativeTitlePatches": 1,
+      "readonlyRecovery": true,
+      "observedByOperators": 2
+    },
+    "status": "passed"
+  },
+  "actionAvailability": {
+    "shortcut": "e",
+    "enabled": true,
+    "observedSelectedTuiOutputEvent": 2
+  },
+  "offlineConfirmation": {
+    "nativeId": "ses_e34f9bf1cffePzPalTb5Q3Pth5",
+    "enabled": false,
+    "reason": "所选完整节点当前不在线或原生引用无效。",
+    "blockedName": "OpenCodeC22Blocked7878fb",
+    "noMutationStarted": true
+  },
+  "recoveryStage": "complete",
+  "recovery": {
+    "nativeId": "ses_e34f9bf1cffePzPalTb5Q3Pth5",
+    "machineId": "11111111222222223333333344444444",
+    "blockedName": "OpenCodeC22Blocked7878fb",
+    "lastConfirmedTitleRetained": "OpenCodeC22b6b029a9",
+    "noMutationStarted": true,
+    "actionRecovered": true
+  },
+  "status": "passed",
+  "operators": [
+    {
+      "index": 0,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    },
+    {
+      "index": 1,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    }
+  ]
+}

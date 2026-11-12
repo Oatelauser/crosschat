@@ -1,0 +1,126 @@
+{
+  "scope": "Two same-host OpenCode services and logical nodes; two isolated operator HOME/TUI instances; not physical cross-machine acceptance",
+  "starIds": [
+    "opencode-c22-a-df08caae",
+    "opencode-c22-b-91957b2c"
+  ],
+  "checks": [
+    {
+      "name": "two-independent-node-identities-and-exact-operation-routing",
+      "status": "passed"
+    },
+    {
+      "name": "two-operator-tui-refreshes-and-star-isolation",
+      "status": "passed"
+    }
+  ],
+  "cleanup": {
+    "complete": true,
+    "errors": [],
+    "secondProfileRemoved": true
+  },
+  "renamed": "OpenCodeC222c571c2d",
+  "operations": {
+    "nodeMachineIds": [
+      "11111111222222223333333344444444",
+      "55555555666666667777777788888888"
+    ],
+    "nodeServicePids": [
+      25516,
+      48816
+    ],
+    "nativeIds": [
+      "ses_e352289e2ffeAEoHU6nmcWJmkd",
+      "ses_e352288b4ffe8S0Js5B3u3J1wS"
+    ],
+    "starId": "opencode-c22-a-df08caae",
+    "observers": 2,
+    "exactMembers": [
+      {
+        "sessionId": "ses_e352289e2ffeAEoHU6nmcWJmkd",
+        "name": "OpenCodeC222c571c2d",
+        "tool": "opencode",
+        "endpointType": "shared",
+        "machine": "11111111222222223333333344444444"
+      },
+      {
+        "sessionId": "ses_e352288b4ffe8S0Js5B3u3J1wS",
+        "name": "C22Second",
+        "tool": "opencode",
+        "endpointType": "shared",
+        "machine": "55555555666666667777777788888888"
+      }
+    ],
+    "secondStarRosterCount": 0
+  },
+  "actionAvailability": {
+    "shortcut": "e",
+    "enabled": true
+  },
+  "offlineConfirmation": {
+    "nativeId": "ses_e352289e2ffeAEoHU6nmcWJmkd",
+    "enabled": false,
+    "reason": "所选完整节点当前不在线或原生引用无效。",
+    "blockedName": "OpenCodeC22Blockedaa20ef",
+    "noMutationStarted": true
+  },
+  "recoveryStage": "offline-confirmation-rejected",
+  "status": "failed",
+  "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'OpenCodeC222c571c2d'\n- 'C22Primary'\n",
+  "operators": [
+    {
+      "index": 0,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    },
+    {
+      "index": 1,
+      "exit": {
+        "event": "exit",
+        "code": 0,
+        "before": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        },
+        "after": {
+          "raw": false,
+          "resize": 0,
+          "listeners": {
+            "SIGINT": 1,
+            "SIGTERM": 1,
+            "uncaughtException": 0,
+            "unhandledRejection": 0
+          }
+        }
+      }
+    }
+  ]
+}
