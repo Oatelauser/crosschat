@@ -69,6 +69,17 @@ describe('saved Codex target diagnostics', () => {
     expect(JSON.stringify(result)).not.toContain('SECRET');
   });
 
+  it('reports a missing Desktop IPC transport separately from a saved thread without an owner', async () => {
+    const result = await diagnoseCodexTarget('worker', { desktop: {
+      listMetadata: async () => ({ data: [row('native', 'worker')], nextCursor: null, completeness: 'complete', observedAt: 1 }),
+      openThread: async () => { throw new DesktopIpcError('CODEX_DESKTOP_UNAVAILABLE', 'Desktop transport is unavailable', 'prewrite', false); },
+    } });
+    expect(result).toMatchObject({ kind: 'saved', code: 'CODEX_DESKTOP_UNAVAILABLE',
+      candidates: [{ status: 'probe-failed', failure: { stage: 'owner', code: 'CODEX_DESKTOP_UNAVAILABLE', ipcStage: 'prewrite' } }] });
+    expect(result.message).toContain('IPC 通道不可用');
+    expect(result.message).toContain('CODEX_DESKTOP_UNAVAILABLE');
+  });
+
   it('finds a saved target beyond the old 20-row window and probes only the matched opaque ID', async () => {
     const session = owner('native/last');
     const listMetadata = vi.fn(async ({ cursor }: { cursor?: string }) => cursor === undefined

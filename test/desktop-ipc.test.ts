@@ -1,3 +1,4 @@
+import { getEventListeners } from 'node:events';
 import { Duplex } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { DesktopIpcError, openDesktopThread } from '../src/codex/desktop-ipc.js';
@@ -134,6 +135,40 @@ describe('Desktop IPC thread session', () => {
     const invalid = fixture({ ownerError: 'request-version-mismatch' });
     await expect(openDesktopThread(target, invalid.options)).rejects.toMatchObject({ stage: 'prewrite' });
     expect(missing.socket.destroyed).toBe(true);
+  });
+
+  it('reports an absent Desktop transport separately when the Desktop endpoint is required', async () => {
+    const connect = () => { throw Object.assign(new Error('absent'), { code: 'ENOENT' }); };
+    await expect(openDesktopThread(target, { connect, requireTransport: true })).rejects.toMatchObject({
+      code: 'CODEX_DESKTOP_UNAVAILABLE', stage: 'prewrite', ownerBound: false,
+    });
+    await expect(openDesktopThread(target, { ...fixture({ ownerError: 'no-client-found' }).options, requireTransport: true })).resolves.toBeNull();
+  });
+
+  it.each([
+    ['ENOENT', true], ['ENOENT', undefined],
+    ['ECONNREFUSED', true], ['ECONNREFUSED', undefined],
+  ] as const)('handles asynchronous %s before connect with requireTransport=%s', async (code, requireTransport) => {
+    let writes = 0;
+    const controller = new AbortController();
+    const socket = new Duplex({
+      read() { /* Connection fails before any data arrives. */ },
+      write(_chunk, _encoding, callback) { writes++; callback(); },
+    });
+    const pending = openDesktopThread(target, {
+      connect: () => socket, signal: controller.signal,
+      ...(requireTransport === true ? { requireTransport: true } : {}),
+    });
+    queueMicrotask(() => socket.emit('error', Object.assign(new Error('absent'), { code })));
+    if (requireTransport) {
+      await expect(pending).rejects.toMatchObject({
+        code: 'CODEX_DESKTOP_UNAVAILABLE', stage: 'prewrite', ownerBound: false,
+      });
+    } else await expect(pending).resolves.toBeNull();
+    expect(writes).toBe(0);
+    expect(socket.destroyed).toBe(true);
+    expect(socket.listenerCount('connect')).toBe(0);
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
   });
 
   it('never promotes an incomplete canonical tail or an unconfirmed submission to idle', async () => {

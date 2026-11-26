@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { CodexSession } from '../src/codex/client.js';
 import type { DesktopMetadataRow } from '../src/codex/desktop-metadata.js';
-import type { DesktopThreadSession } from '../src/codex/desktop-ipc.js';
+import { openDesktopThread } from '../src/codex/desktop-ipc.js';
+import type { DesktopIpcOptions, DesktopThreadSession } from '../src/codex/desktop-ipc.js';
 import { listCodexThreadPage } from '../src/codex/aggregate-discovery.js';
 import { createCodexSessionReader } from '../src/application/sessions/codex-reader.js';
 import { listCodexThreads } from '../src/codex/discovery.js';
@@ -105,6 +106,21 @@ describe('read-only Desktop and CLI aggregate discovery', () => {
       listMetadata: async () => { throw new Error('database unavailable'); }, openThread: vi.fn(async () => null),
     } });
     expect(page).toMatchObject({ data: [{ id: 'cli' }], completeness: 'partial', errors: [{ source: 'desktop', kind: 'unavailable' }] });
+    expect(session.close).toHaveBeenCalledOnce();
+  });
+
+  it('reports an absent Desktop transport while retaining available CLI threads', async () => {
+    const session = cli();
+    session.listThreadPage = vi.fn(async () => ({ data: [{ id: 'cli', name: null, rawStatus: { type: 'idle' }, attributes: {} }], nextCursor: null }));
+    const openThread = vi.fn((id: string, options?: DesktopIpcOptions) => openDesktopThread(id, {
+      ...options,
+      connect: () => { throw Object.assign(new Error('pipe absent'), { code: 'ENOENT' }); },
+    }));
+    const page = await listCodexThreadPage({ sessionFactory: async () => session, desktop: {
+      listMetadata: async () => ({ data: [metadata('saved', 'worker')], nextCursor: null, completeness: 'complete', observedAt: 1 }), openThread,
+    } });
+    expect(page).toMatchObject({ data: [{ id: 'cli' }], completeness: 'partial', errors: [{ source: 'desktop', kind: 'unavailable' }] });
+    expect(openThread).toHaveBeenCalledWith('saved', expect.objectContaining({ requireTransport: true }));
     expect(session.close).toHaveBeenCalledOnce();
   });
 

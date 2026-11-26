@@ -29,6 +29,8 @@ export interface DesktopIpcOptions {
   signal?: AbortSignal;
   pipePath?: string;
   codexHome?: string;
+  /** Fail when the IPC transport is absent instead of reporting an absent owner. */
+  requireTransport?: boolean;
   /** Isolated transport seam. A returned stream emits connect/error like a Socket. */
   connect?: (pipePath: string) => Duplex;
   timeoutMs?: number;
@@ -364,7 +366,7 @@ class DesktopConnection implements DesktopThreadSession {
   }
 }
 
-/** null means a positively absent transport/owner, never a failure after binding. */
+/** null means a positively absent owner; optional desktop probes can require the transport. */
 export async function openDesktopThread(threadId: string, options: DesktopIpcOptions = {}): Promise<DesktopThreadSession | null> {
   if (!text(threadId)) throw new DesktopIpcError('CODEX_DESKTOP_PROTOCOL_ERROR', 'A complete native thread ID is required.', 'prewrite', false);
   if ([options.timeoutMs, options.snapshotTimeoutMs].some((value) => value !== undefined && (!Number.isSafeInteger(value) || value < 1 || value > 2_147_483_647))) {
@@ -375,7 +377,10 @@ export async function openDesktopThread(threadId: string, options: DesktopIpcOpt
   let socket: Duplex;
   try { socket = (options.connect ?? createConnection)(pipe); }
   catch (cause) {
-    if (ABSENT_CODES.has(errno(cause) ?? '')) return null;
+    if (ABSENT_CODES.has(errno(cause) ?? '')) {
+      if (options.requireTransport) throw new DesktopIpcError('CODEX_DESKTOP_UNAVAILABLE', 'The Codex Desktop IPC transport is unavailable.', 'prewrite', false, { cause });
+      return null;
+    }
     throw new DesktopIpcError('CODEX_DESKTOP_UNAVAILABLE', 'Desktop IPC could not be opened.', 'prewrite', false, { cause });
   }
   const session = new DesktopConnection(threadId, socket, options);
@@ -385,7 +390,10 @@ export async function openDesktopThread(threadId: string, options: DesktopIpcOpt
     return null;
   } catch (cause) {
     await session.close();
-    if (session.ownerId === '' && ABSENT_CODES.has(errno(cause) ?? '')) return null;
+    if (session.ownerId === '' && ABSENT_CODES.has(errno(cause) ?? '')) {
+      if (options.requireTransport) throw new DesktopIpcError('CODEX_DESKTOP_UNAVAILABLE', 'The Codex Desktop IPC transport is unavailable.', 'prewrite', false, { cause });
+      return null;
+    }
     if (cause instanceof DesktopIpcError || cause instanceof DOMException && cause.name === 'AbortError') throw cause;
     throw new DesktopIpcError('CODEX_DESKTOP_UNAVAILABLE', 'Desktop IPC initialization failed.', 'prewrite', session.ownerId !== '', { cause });
   }

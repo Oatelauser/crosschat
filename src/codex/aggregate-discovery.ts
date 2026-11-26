@@ -159,7 +159,7 @@ export async function readDesktopCandidates(
         let session: DesktopThreadSession | null = null;
         let stage: 'owner' | 'snapshot' = 'owner';
         try {
-          session = await (configuration.openThread ?? openDesktopThread)(row.id, { codexHome: options.codexHome, pipePath: configuration.pipePath,
+          session = await (configuration.openThread ?? openDesktopThread)(row.id, { codexHome: options.codexHome, pipePath: configuration.pipePath, requireTransport: true,
             timeoutMs: configuration.probeTimeoutMs ?? 1_000, snapshotTimeoutMs: configuration.probeTimeoutMs ?? 1_000, signal: options.signal });
           checkAbort(options.signal);
           if (session === null) {

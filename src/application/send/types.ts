@@ -41,7 +41,7 @@ export interface SendDeps {
   /** Read-only explanation, used only after normal --to name resolution misses. */
   diagnoseCodexTarget?(query: string): Promise<CodexTargetDiagnosis>;
   deliverClaude(target: ClaudeDeliveryTarget, content: string, options?: DeliveryOptions): Promise<{ status: 'delivered' }>;
-  deliverCodex(threadId: string, content: string, options?: DeliveryOptions): Promise<{ status: 'accepted'; turnId: string; queued?: boolean }>;
+  deliverCodex(threadId: string, content: string, options?: DeliveryOptions): Promise<{ status: 'accepted'; turnId?: string; queued?: boolean }>;
   /** Send-log file: the rate limiter counts this pair's tail-window entries (014 evaporation). */
   sendLogFile: string;
   /** Outbox root for parking busy/locked codex deliveries (~/.crosschat/outbox). */

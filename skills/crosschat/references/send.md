@@ -20,3 +20,5 @@ crosschat send --to "会话名" --delivery steer --body "用户让我转达的�
 正文直接写内容，无需自行套 `cross-session-message` 或 `crosschat-*` 标签。多行、特殊字符和文件内容按 [advanced.md](advanced.md) 走 stdin 或文件通道。
 
 发送后按 [delivery.md](delivery.md) 判断结果并继续自己的任务。
+
+Codex Desktop 的旧 IPC 不可用且当前宿主已暴露官方会话工具时，按 [Desktop 原生宿主接入](codex-desktop-native.md) 使用可选桥。该桥的 `--tool codex-desktop` 参数只属于桥入口；1.13.2 的普通 `crosschat send` 不接受此参数。

@@ -104,9 +104,11 @@ export async function diagnoseCodexTarget(
   const failure = candidate.failure;
   const code = candidate.status === 'available' ? 'CODEX_TARGET_DISCOVERY_CHANGED'
     : candidate.status === 'owner-missing' ? 'CODEX_DESKTOP_OWNER_UNAVAILABLE'
+      : failure?.code === 'CODEX_DESKTOP_UNAVAILABLE' ? 'CODEX_DESKTOP_UNAVAILABLE'
       : candidate.status === 'unsupported' ? 'CODEX_DESKTOP_UNSUPPORTED' : 'CODEX_TARGET_PROBE_FAILED';
   const explanation = candidate.status === 'available' ? '名称列表采样已变化，现在可探测，但未自动发送；请重试原命令'
     : candidate.status === 'owner-missing' ? '已找到保存记录，但当前没有可达的 Desktop owner'
+      : failure?.code === 'CODEX_DESKTOP_UNAVAILABLE' ? '已找到保存记录，但当前 Codex Desktop IPC 通道不可用'
       : candidate.status === 'unsupported' ? '已找到保存记录，但 Desktop owner 不支持外部输入'
         : '已找到保存记录，但 Desktop 只读探测失败';
   return { ...base, kind: 'saved', code, candidates: [candidate],

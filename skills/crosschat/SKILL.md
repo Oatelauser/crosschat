@@ -21,6 +21,7 @@ description: 使用 crosschat 与本机或跨机的 Claude Code、Codex 桌面�
 | 遇到的场景 | 读取 |
 |---|---|
 | 主动联系另一个会话、查名字或 ID | [发送与本机寻址](references/send.md) |
+| Codex Desktop 旧 IPC 不可用，当前宿主有官方会话工具 | [Desktop 原生宿主接入](references/codex-desktop-native.md) |
 | 收到信封、照回复提示回信、短柄/ref 失效 | [按信封回复](references/reply.md) |
 | 主动发送到另一台机器、选择 TCP/SSH 地址 | [跨机寻址](references/remote.md) |
 | 正文多行、含引号或特殊字符、内容很大、发送文件 | [正文与文件](references/advanced.md) |

@@ -14,9 +14,10 @@
 - `CODEX_DESKTOP_OWNER_UNAVAILABLE`：名称已命中保存记录，但本次未找到 Desktop owner；在桌面打开目标后再试。该结果只描述 Desktop，不能推断 CLI 也不可达。
 - `CODEX_TARGET_PROBE_FAILED` / `CODEX_DISCOVERY_UNAVAILABLE`：目标探测或记录来源读取失败，不能当作名称不存在。按报错中的 `stage` 和 `code` 排查，保留原目标与模式。
 - `CODEX_TARGET_DISCOVERY_CHANGED`：首次名单与补查期间状态发生变化，补查已能探测目标；本条仍未发送。核对目标后可重新执行原命令。
-- `CODEX_DESKTOP_UNAVAILABLE` / `CODEX_DESKTOP_TIMEOUT`：桌面通道或已绑定的 owner 不可达。确认目标桌面会话仍打开，再按错误信息处理；启动另一个 CLI daemon 不会恢复桌面 owner。
+- `CODEX_DESKTOP_UNAVAILABLE` / `CODEX_DESKTOP_TIMEOUT`：桌面通道或已绑定的 owner 不可达。当前宿主已暴露官方会话工具时，按 [Desktop 原生宿主接入](codex-desktop-native.md) 使用可选桥；否则保留错误上下文排查 Desktop 插件加载。启动另一个 CLI daemon 不会恢复桌面 owner。
 - `CODEX_DESKTOP_UNSUPPORTED` / `CODEX_DESKTOP_PROTOCOL_ERROR` / `CODEX_DESKTOP_REQUEST_REJECTED`：当前桌面协议能力或请求不匹配，保留错误上下文排查。不要把 `steer` 改成 `queue` 来掩盖失败。
 - `OUTBOX_BUSY`：本地队列锁被占用，本条没有成功寄存；等待占用结束后再发送。`OUTBOX_FULL` 则按报错中的 mailbox 路径取回已有内容，先处理积压。
 - `OUTBOX_INVALID_THREAD_ID`：当前原生 ID 不能安全用作本地寄存文件键。保留完整 ID 并报告适配问题，不通过截断、改写 ID 或改投其他会话绕过。
 - `CALLER_IDENTITY_CONFLICT`：同时存在 Claude 与 Codex 身份变量。先确认当前实际宿主，只在发送命令的子进程中移除另一端残留身份；保留当前会话的真实身份和原回复路由。无法确定宿主时报告冲突，不靠改名、改引用或重启其他会话绕过。
+- `CODEX_APP_TOOLS_SCOPE_UNSUPPORTED`：原生宿主桥仅支持本机显式 steer；按 [原生宿主接入](codex-desktop-native.md) 核对参数与宿主能力。
 - 其他错误码：错误信息已写明原因与出路，按信息处理即可。

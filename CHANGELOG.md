@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+## [1.13.2] - 2026-11-26
+
+### 修复
+
+- 增加 Codex Desktop 可选原生宿主桥：当前宿主通过官方会话工具投递，crosschat 管理信封、通信对、限流与日志。支持本机按名称或完整 ID 显式 `steer`；旧 IPC 不可用时可使用此入口。
+- 区分 Desktop 通道缺失与目标 owner 缺失，保留现有默认发送和 CLI 路由。
+- 原生发送严格核验当前发送方、目标和状态；写入结果不明时不重试，受理不虚构 native turnId，回执保持 `unconfirmed`。
+- 从 1.13.1 单独移植本次修复；普通 CLI 参数和会话存储格式保持，未合入主线其它工具适配。用法见 `skills/crosschat/references/codex-desktop-native.md`，范围与验证见 `docs/development/release-1.13.2.md`。
+
 ## [1.13.1] - 2026-10-27
 
 ### 修复
